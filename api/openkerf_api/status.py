@@ -7,7 +7,7 @@ engine internals is defensive: the driver interface only guarantees `status()`,
 other attribute is probed with getattr/try.
 """
 
-from meerk40t.core.units import UNITS_PER_MM
+from meerk40t.core.units import UNITS_PER_MM, Length
 
 
 def _safe(fn, default=None):
@@ -56,9 +56,23 @@ class StatusReader:
             "path": _attr(device, "path"),
             "active": _attr(device, "path") == active_path,
             "laser_status": _attr(device, "laser_status"),
+            "bed": self.bed(device),
             "position": self.position(device),
             "spooler": self.spooler_snapshot(device),
         }
+
+    def bed(self, device) -> dict:
+        """Bed size in mm. Devices store these as strings like "320mm"."""
+        return {
+            "width_mm": self._length_mm(_attr(device, "bedwidth")),
+            "height_mm": self._length_mm(_attr(device, "bedheight")),
+        }
+
+    @staticmethod
+    def _length_mm(value):
+        if value is None:
+            return None
+        return _safe(lambda: Length(value).mm)
 
     def position(self, device) -> dict:
         """

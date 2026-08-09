@@ -15,12 +15,28 @@ def test_device_snapshot_shape(kernel):
     device = next(iter(kernel.services("device")))
     snap = StatusReader(kernel).device_snapshot(device, getattr(kernel.device, "path", None))
 
-    assert set(snap) == {"label", "path", "active", "laser_status", "position", "spooler"}
+    assert set(snap) == {
+        "label",
+        "path",
+        "active",
+        "laser_status",
+        "bed",
+        "position",
+        "spooler",
+    }
     assert snap["active"] is True
     assert set(snap["position"]) == {"native", "mm", "state"}
     assert snap["spooler"]["present"] is True
     assert snap["spooler"]["queue_length"] == 0
     assert snap["spooler"]["jobs"] == []
+
+
+def test_bed_size_is_reported_in_mm(kernel):
+    device = next(iter(kernel.services("device")))
+    bed = StatusReader(kernel).bed(device)
+
+    assert bed["width_mm"] > 0
+    assert bed["height_mm"] > 0
 
 
 def test_position_is_reported_in_native_units_and_mm(kernel):

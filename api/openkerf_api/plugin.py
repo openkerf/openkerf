@@ -26,6 +26,13 @@ def plugin(kernel, lifecycle=None):
             help=_("address to bind to (0.0.0.0 exposes the API to the LAN)"),
         )
         @kernel.console_option(
+            "frontend",
+            "f",
+            type=str,
+            default=None,
+            help=_("directory with the built frontend to serve at /"),
+        )
+        @kernel.console_option(
             "quit",
             "q",
             type=bool,
@@ -36,7 +43,14 @@ def plugin(kernel, lifecycle=None):
             "openkerf", help=_("starts the OpenKerf read-only API (default port 8080)")
         )
         def openkerf_api(
-            command, channel, _, port=8080, bind="127.0.0.1", quit=False, **kwargs
+            command,
+            channel,
+            _,
+            port=8080,
+            bind="127.0.0.1",
+            frontend=None,
+            quit=False,
+            **kwargs,
         ):
             global _server
 
@@ -59,7 +73,7 @@ def plugin(kernel, lifecycle=None):
                 channel(_("OpenKerf API needs fastapi and uvicorn: {error}").format(error=e))
                 return
 
-            server = ApiServer(kernel, port=port, bind=bind)
+            server = ApiServer(kernel, port=port, bind=bind, frontend=frontend)
             try:
                 server.start()
             except OSError as e:

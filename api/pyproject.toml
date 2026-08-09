@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 dependencies = [
-    "meerk40t",
+    # Pin — verhogen is een bewuste stap, zie "Upstream-versiebeheer" in CLAUDE.md.
+    "meerk40t>=0.9.9000,<0.10",
     "fastapi>=0.110",
     "uvicorn>=0.27",
     "websockets>=12",

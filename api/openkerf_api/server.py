@@ -14,6 +14,7 @@ import asyncio
 import json
 import threading
 import time
+from pathlib import Path
 
 from .status import StatusReader
 
@@ -88,10 +89,11 @@ class EventBridge:
 class ApiServer:
     """Owns the uvicorn thread, the signal subscriptions and the event bridge."""
 
-    def __init__(self, kernel, port=8080, bind="127.0.0.1"):
+    def __init__(self, kernel, port=8080, bind="127.0.0.1", frontend=None):
         self.kernel = kernel
         self.port = port
         self.bind = bind
+        self.frontend = Path(frontend).expanduser() if frontend else None
         self.reader = StatusReader(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
@@ -136,10 +138,6 @@ class ApiServer:
         def devices():
             return self.reader.snapshot()["devices"]
 
-        @app.get("/", response_class=HTMLResponse)
-        def index():
-            return _DEV_PAGE
-
         @app.websocket("/api/ws")
         async def websocket_endpoint(websocket: WebSocket):
             await websocket.accept()
@@ -161,6 +159,20 @@ class ApiServer:
                 pass
             finally:
                 self.bridge.remove_client(websocket)
+
+        # The static mount has to come last: mounted at "/" it swallows every
+        # path that no earlier route claimed.
+        if self.frontend is not None and self.frontend.is_dir():
+            from fastapi.staticfiles import StaticFiles
+
+            app.mount(
+                "/", StaticFiles(directory=str(self.frontend), html=True), name="frontend"
+            )
+        else:
+
+            @app.get("/", response_class=HTMLResponse)
+            def index():
+                return _DEV_PAGE
 
         return app
 
