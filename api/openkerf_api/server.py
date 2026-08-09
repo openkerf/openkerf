@@ -1,0 +1,286 @@
+"""
+The OpenKerf read-only API server.
+
+A FastAPI app running on uvicorn in its own thread, next to (never inside) the
+MeerK40t kernel. It exposes REST snapshots and a WebSocket that pushes live
+status, and it bridges kernel signals — which are dispatched on the kernel
+thread at ~20 Hz — onto the server's asyncio loop.
+
+Phase 1 is deliberately read-only: there is no endpoint that moves the head,
+starts a job or executes a console command.
+"""
+
+import asyncio
+import json
+import threading
+import time
+from pathlib import Path
+
+from .status import StatusReader
+
+# Kernel signals worth forwarding to connected clients. Every one of these is
+# emitted by the engine itself; we only listen.
+SIGNALS = (
+    "pipe;usb_status",
+    "pipe;running",
+    "driver;position",
+    "spooler;queue",
+    "spooler;completed",
+    "warn_state_update",
+)
+
+HEARTBEAT_SECONDS = 2.0
+
+
+class EventBridge:
+    """
+    Fan-out of kernel signals to WebSocket clients.
+
+    Kernel signals arrive on the kernel thread; WebSocket sends must happen on
+    the server's asyncio loop. Everything crosses that boundary through
+    `loop.call_soon_threadsafe`.
+    """
+
+    def __init__(self):
+        self._loop = None
+        self._clients = set()
+        self._lock = threading.Lock()
+
+    def bind_loop(self, loop):
+        self._loop = loop
+
+    def add_client(self, websocket):
+        with self._lock:
+            self._clients.add(websocket)
+
+    def remove_client(self, websocket):
+        with self._lock:
+            self._clients.discard(websocket)
+
+    @property
+    def client_count(self):
+        with self._lock:
+            return len(self._clients)
+
+    def publish_threadsafe(self, event: dict):
+        """Called from the kernel thread."""
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(self.broadcast(event))
+            )
+        except RuntimeError:
+            # Loop shut down between the check and the call.
+            pass
+
+    async def broadcast(self, event: dict):
+        payload = json.dumps(event, default=str)
+        with self._lock:
+            clients = list(self._clients)
+        for websocket in clients:
+            try:
+                await websocket.send_text(payload)
+            except Exception:
+                self.remove_client(websocket)
+
+
+class ApiServer:
+    """Owns the uvicorn thread, the signal subscriptions and the event bridge."""
+
+    def __init__(self, kernel, port=8080, bind="127.0.0.1", frontend=None):
+        self.kernel = kernel
+        self.port = port
+        self.bind = bind
+        self.frontend = Path(frontend).expanduser() if frontend else None
+        self.reader = StatusReader(kernel)
+        self.bridge = EventBridge()
+        self.channel = kernel.channel("openkerf-api")
+
+        self._server = None
+        self._thread = None
+        self._listeners = []
+
+    # ------------------------------------------------------------------ app
+
+    def build_app(self):
+        from contextlib import asynccontextmanager
+
+        from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+        from fastapi.responses import HTMLResponse
+
+        @asynccontextmanager
+        async def lifespan(app):
+            self.bridge.bind_loop(asyncio.get_running_loop())
+            heartbeat = asyncio.create_task(self._heartbeat())
+            try:
+                yield
+            finally:
+                heartbeat.cancel()
+
+        app = FastAPI(
+            title="OpenKerf API",
+            version="0.1.0",
+            description="Read-only status API on top of the MeerK40t engine.",
+            lifespan=lifespan,
+        )
+
+        @app.get("/api/health")
+        def health():
+            return {"ok": True, "clients": self.bridge.client_count}
+
+        @app.get("/api/status")
+        def status():
+            return self.reader.snapshot()
+
+        @app.get("/api/devices")
+        def devices():
+            return self.reader.snapshot()["devices"]
+
+        @app.websocket("/api/ws")
+        async def websocket_endpoint(websocket: WebSocket):
+            await websocket.accept()
+            self.bridge.add_client(websocket)
+            try:
+                await websocket.send_text(
+                    json.dumps(
+                        {"type": "snapshot", "data": self.reader.snapshot()},
+                        default=str,
+                    )
+                )
+                while True:
+                    # Read-only: incoming frames are drained and ignored, so a
+                    # client cannot command the machine over this socket.
+                    await websocket.receive_text()
+            except WebSocketDisconnect:
+                pass
+            except Exception:
+                pass
+            finally:
+                self.bridge.remove_client(websocket)
+
+        # The static mount has to come last: mounted at "/" it swallows every
+        # path that no earlier route claimed.
+        if self.frontend is not None and self.frontend.is_dir():
+            from fastapi.staticfiles import StaticFiles
+
+            app.mount(
+                "/", StaticFiles(directory=str(self.frontend), html=True), name="frontend"
+            )
+        else:
+
+            @app.get("/", response_class=HTMLResponse)
+            def index():
+                return _DEV_PAGE
+
+        return app
+
+    async def _heartbeat(self):
+        """Push a full snapshot periodically so clients converge after a miss."""
+        while True:
+            await asyncio.sleep(HEARTBEAT_SECONDS)
+            if self.bridge.client_count:
+                await self.bridge.broadcast(
+                    {"type": "snapshot", "data": self.reader.snapshot()}
+                )
+
+    # ------------------------------------------------------------- lifecycle
+
+    def start(self):
+        import uvicorn
+
+        app = self.build_app()
+        config = uvicorn.Config(
+            app, host=self.bind, port=self.port, log_level="warning", access_log=False
+        )
+        self._server = uvicorn.Server(config)
+        self._thread = threading.Thread(
+            target=self._server.run, name="openkerf-api", daemon=True
+        )
+        self._thread.start()
+        self._attach_signals()
+        self.channel(f"OpenKerf API listening on http://{self.bind}:{self.port}/")
+
+    def stop(self):
+        self._detach_signals()
+        if self._server is not None:
+            self._server.should_exit = True
+        if self._thread is not None:
+            self._thread.join(timeout=5)
+        self._thread = None
+        self._server = None
+        self.channel("OpenKerf API stopped.")
+
+    def is_running(self):
+        return self._thread is not None and self._thread.is_alive()
+
+    # ---------------------------------------------------------------- signals
+
+    def _attach_signals(self):
+        for code in SIGNALS:
+            handler = self._make_handler(code)
+            self.kernel.listen(code, handler)
+            self._listeners.append((code, handler))
+
+    def _detach_signals(self):
+        for code, handler in self._listeners:
+            try:
+                self.kernel.unlisten(code, handler)
+            except Exception:
+                pass
+        self._listeners.clear()
+
+    def _make_handler(self, code):
+        def handler(origin, *args):
+            self.bridge.publish_threadsafe(
+                {
+                    "type": "signal",
+                    "code": code,
+                    "origin": origin,
+                    "args": list(args),
+                    "time": time.time(),
+                }
+            )
+
+        return handler
+
+
+_DEV_PAGE = """<!doctype html>
+<meta charset="utf-8">
+<title>OpenKerf API — live status</title>
+<style>
+  body { font: 13px/1.45 "IBM Plex Sans", system-ui, sans-serif;
+         background: #16181B; color: #E8EAED; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 16px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px;
+         background: #9AA3AE; margin-right: 8px; vertical-align: middle; }
+  .dot.on { background: #4CAF6D; }
+  pre { font: 12px/1.5 "IBM Plex Mono", ui-monospace, monospace;
+        background: #1E2126; border: 1px solid #33383F; border-radius: 10px;
+        padding: 16px; overflow-x: auto; }
+  h2 { font-size: 13px; color: #9AA3AE; font-weight: 500; margin: 24px 0 8px; }
+</style>
+<h1><span class="dot" id="dot"></span>OpenKerf API — live status</h1>
+<h2>Snapshot</h2>
+<pre id="snapshot">verbinden…</pre>
+<h2>Laatste signalen</h2>
+<pre id="events">—</pre>
+<script>
+  const events = [];
+  const ws = new WebSocket(`ws://${location.host}/api/ws`);
+  ws.onopen = () => document.getElementById("dot").classList.add("on");
+  ws.onclose = () => document.getElementById("dot").classList.remove("on");
+  ws.onmessage = (msg) => {
+    const payload = JSON.parse(msg.data);
+    if (payload.type === "snapshot") {
+      document.getElementById("snapshot").textContent =
+        JSON.stringify(payload.data, null, 2);
+    } else {
+      events.unshift(`${payload.code}  ${JSON.stringify(payload.args)}`);
+      document.getElementById("events").textContent =
+        events.slice(0, 15).join("\\n");
+    }
+  };
+</script>
+"""
