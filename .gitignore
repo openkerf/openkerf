@@ -1,0 +1,26 @@
+# Upstream MeerK40t-clone — geen submodule, bewust buiten versiebeheer.
+# Herstellen met: git clone --depth 100 https://github.com/meerk40t/meerk40t.git meerk40t
+meerk40t/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+.svelte-kit/
+frontend/build/
+
+# Editors & OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
