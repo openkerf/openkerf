@@ -1,0 +1,338 @@
+"""
+De gedeelde presetcatalogus (`openkerf/presetariat`).
+
+Ophalen, filteren op wat jouw machine is, en importeren in de eigen
+bibliotheek. Andersom kun je een eigen preset aandragen.
+
+Drie dingen zijn hier bewust:
+
+1. **Een preset uit de catalogus is een startpunt, geen instelling.** Machines
+   verschillen; een buis van twee jaar oud haalt niet wat hij nieuw haalde.
+   Daarom reist de herkomst mee (`testraster` weegt zwaarder dan `handmatig`)
+   en importeren we altijd als bron `geimporteerd`, nooit als `testraster`.
+2. **Het netwerk mag de app niet ophouden.** De catalogus wordt lokaal
+   opgeslagen; is het netwerk weg, dan werk je met wat je had.
+3. **Delen gaat via een voorgevuld voorstel op GitHub, niet via een device
+   flow.** Dat laatste vraagt een geregistreerde OAuth-app die er nog niet is;
+   een flow bouwen die niemand kan doorlopen levert schijnzekerheid op. Dit
+   werkt vandaag, zonder dat iemand een token hoeft te regelen.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from .library import LibraryError
+
+CATALOGUE_URL = (
+    "https://raw.githubusercontent.com/openkerf/presetariat/main/presets.json"
+)
+REPO_URL = "https://github.com/openkerf/presetariat"
+
+CACHE_MAX_AGE = 6 * 3600
+
+
+class Presetariat:
+    def __init__(self, library, cache_path: Path | str, url: str = CATALOGUE_URL):
+        self.library = library
+        self.cache_path = Path(cache_path)
+        self.url = url
+
+    # ------------------------------------------------------------ catalogus
+
+    def catalogue(self, refresh: bool = False) -> dict:
+        """
+        De catalogus, uit de cache tenzij die oud is of er om ververst wordt.
+
+        Faalt het ophalen, dan geven we de cache terug mét de reden — een lege
+        lijst zou eruitzien alsof er geen presets bestaan.
+        """
+        cached = self._read_cache()
+        fresh_enough = (
+            cached is not None
+            and not refresh
+            and time.time() - cached.get("fetched_at", 0) < CACHE_MAX_AGE
+        )
+        if fresh_enough:
+            return {**cached, "stale": False, "error": None}
+
+        try:
+            with urllib.request.urlopen(self.url, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, ValueError, OSError) as error:
+            if cached is None:
+                raise LibraryError(
+                    f"De catalogus is niet op te halen en er is geen eerdere kopie: {error}"
+                ) from error
+            return {**cached, "stale": True, "error": str(error)}
+
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("presets"), list
+        ):
+            raise LibraryError("De catalogus heeft een onverwachte vorm.")
+
+        payload["fetched_at"] = time.time()
+        self._write_cache(payload)
+        return {**payload, "stale": False, "error": None}
+
+    def browse(
+        self,
+        machine_id=None,
+        material: str | None = None,
+        operation: str | None = None,
+        refresh: bool = False,
+    ) -> dict:
+        """
+        De catalogus zoals hij voor deze machine relevant is.
+
+        Filteren op machine is geen kosmetiek: instellingen van een 40 W-diode
+        op een 100 W-CO2 loslaten levert onzin op.
+        """
+        catalogue = self.catalogue(refresh=refresh)
+        presets = list(catalogue["presets"])
+        profile = self._machine(machine_id) if machine_id is not None else None
+
+        if profile is not None:
+            presets = [p for p in presets if self._fits(p, profile)]
+        if material:
+            needle = material.strip().lower()
+            presets = [
+                p
+                for p in presets
+                if needle in str(p.get("material", "")).lower()
+                or any(needle in str(s).lower() for s in p.get("synonyms", []))
+            ]
+        if operation:
+            presets = [p for p in presets if p.get("operation") == operation]
+
+        known = self._imported_ids()
+        for preset in presets:
+            preset["imported"] = preset.get("id") in known
+
+        presets.sort(key=_confidence, reverse=True)
+        return {
+            "version": catalogue.get("version"),
+            "count": len(presets),
+            "total": catalogue.get("count", len(catalogue["presets"])),
+            "stale": catalogue.get("stale", False),
+            "error": catalogue.get("error"),
+            "machine_id": profile["id"] if profile else None,
+            "presets": presets,
+        }
+
+    def import_presets(self, ids: list[str], machine_id=None) -> dict:
+        """
+        Gekozen presets in de eigen bibliotheek zetten.
+
+        Al eerder geïmporteerd? Dan slaan we hem over in plaats van een tweede
+        regel te maken: de catalogus is een bron, geen tweede bibliotheek.
+        """
+        if not ids:
+            raise LibraryError("Kies eerst een preset.")
+        catalogue = self.catalogue()
+        by_id = {p.get("id"): p for p in catalogue["presets"]}
+        known = self._imported_ids()
+
+        imported, skipped, missing = [], [], []
+        for key in ids:
+            if key in known:
+                skipped.append(key)
+                continue
+            preset = by_id.get(key)
+            if preset is None:
+                missing.append(key)
+                continue
+            material = self._material_id(preset)
+            row = self.library.add_preset(
+                material_id=material,
+                machine_id=machine_id,
+                thickness_mm=preset.get("thickness_mm"),
+                operation=preset.get("operation"),
+                speed_mm_s=preset.get("speed_mm_s"),
+                power_percent=preset.get("power_percent"),
+                passes=preset.get("passes", 1),
+                air_assist=preset.get("air_assist", True),
+                focus_offset_mm=preset.get("focus_offset_mm", 0),
+                source="geimporteerd",
+                origin_id=key,
+                note=_note(preset),
+            )
+            imported.append(row)
+            known.add(key)
+
+        return {
+            "imported": imported,
+            "skipped": skipped,
+            "missing": missing,
+        }
+
+    # ---------------------------------------------------------------- delen
+
+    def as_contribution(self, preset_id: int) -> dict:
+        """Een eigen preset in het formaat van de catalogus, klaar om te delen."""
+        preset = self.library.preset(preset_id)
+        machine = None
+        if preset.get("machine_id"):
+            machine = self._machine(preset["machine_id"])
+        if machine is None or not machine.get("power_watt"):
+            raise LibraryError(
+                "Deze preset hoort bij geen machineprofiel met vermogen. Zonder "
+                "te weten op wat voor machine hij gemeten is, is hij voor "
+                "niemand anders bruikbaar."
+            )
+
+        kind = "testraster" if preset["source"] == "testraster" else "handmatig"
+        key = _slug(
+            preset["material_name"],
+            preset.get("thickness_mm"),
+            preset["operation"],
+            machine,
+        )
+        body = {
+            "id": key,
+            "material": preset["material_name"],
+            "synonyms": [],
+            "thickness_mm": preset.get("thickness_mm"),
+            "operation": preset["operation"],
+            "machine": {
+                "laser_type": machine.get("laser_type") or "co2-glass",
+                "power_watt": machine["power_watt"],
+                "lens_mm": machine.get("lens_mm"),
+            },
+            "speed_mm_s": preset["speed_mm_s"],
+            "power_percent": preset["power_percent"],
+            "passes": preset.get("passes", 1),
+            "air_assist": bool(preset.get("air_assist", True)),
+            "focus_offset_mm": preset.get("focus_offset_mm", 0),
+            "note": preset.get("note", ""),
+            "source": {"kind": kind},
+            "verified": False,
+        }
+        return {
+            "preset": body,
+            "filename": f"{key}.json",
+            "issue_url": _issue_url(body),
+            "repo_url": REPO_URL,
+        }
+
+
+    # --------------------------------------------------------------- intern
+
+    def _fits(self, preset: dict, profile: dict) -> bool:
+        machine = preset.get("machine") or {}
+        if machine.get("laser_type") and profile.get("laser_type"):
+            if machine["laser_type"] != profile["laser_type"]:
+                return False
+        watt, mine = machine.get("power_watt"), profile.get("power_watt")
+        if watt and mine:
+            # Ruim: een 80 W-preset is op een 60 W-machine nog een bruikbaar
+            # startpunt, op een 20 W-diode niet.
+            if not 0.5 <= float(watt) / float(mine) <= 2.0:
+                return False
+        return True
+
+    def _machine(self, machine_id) -> dict | None:
+        for row in self.library.machines():
+            if row["id"] == machine_id:
+                return row
+        raise LibraryError(f"Machineprofiel {machine_id} bestaat niet.")
+
+    def _imported_ids(self) -> set[str]:
+        return {
+            row["origin_id"]
+            for row in self.library.presets()
+            if row.get("origin_id")
+        }
+
+    def _material_id(self, preset: dict) -> int:
+        name = str(preset.get("material") or "").strip()
+        for row in self.library.materials():
+            if row["name"].lower() == name.lower():
+                return row["id"]
+            if any(s.lower() == name.lower() for s in row["synonyms"]):
+                return row["id"]
+        return self.library.add_material(name, preset.get("synonyms") or [])["id"]
+
+    def _read_cache(self) -> dict | None:
+        try:
+            return json.loads(self.cache_path.read_text())
+        except (OSError, ValueError):
+            return None
+
+    def _write_cache(self, payload: dict) -> None:
+        try:
+            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+            self.cache_path.write_text(json.dumps(payload))
+        except OSError:
+            # Geen cache is vervelend, geen reden om de aanroep te laten falen.
+            pass
+
+
+def _confidence(preset: dict) -> tuple:
+    """Nagebrand vóór gemeten, gemeten vóór gegokt."""
+    kind = (preset.get("source") or {}).get("kind")
+    return (
+        bool(preset.get("verified")),
+        {"testraster": 2, "fabrikant": 1}.get(kind, 0),
+    )
+
+
+def _note(preset: dict) -> str:
+    source = preset.get("source") or {}
+    parts = [f"Uit Presetariat ({source.get('kind', 'onbekend')})"]
+    if source.get("by"):
+        parts.append(f"door {source['by']}")
+    if preset.get("verified"):
+        parts.append("nagebrand door een tweede persoon")
+    note = str(preset.get("note") or "").strip()
+    return " — ".join([", ".join(parts)] + ([note] if note else []))
+
+
+def _slug(material: str, thickness, operation: str, machine: dict) -> str:
+    import re
+    import unicodedata
+
+    def clean(text: str) -> str:
+        text = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore")
+        return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", text.decode().lower()))
+
+    kind = {"co2-glass": "co2", "co2-rf": "co2rf", "diode": "diode", "fiber": "fiber"}
+    parts = [clean(material)]
+    if thickness:
+        # SQLite geeft 3.0 terug waar de catalogus 3 schrijft; anders zou
+        # dezelfde preset twee verschillende id's krijgen.
+        number = float(thickness)
+        text = str(int(number)) if number == int(number) else str(number)
+        parts.append(f"{text.replace('.', 'p')}mm")
+    parts.append(clean(operation))
+    parts.append(kind.get(machine.get("laser_type"), "co2"))
+    parts.append(f"{int(float(machine['power_watt']))}w")
+    return "-".join(p.strip("-") for p in parts if p.strip("-"))
+
+
+def _issue_url(preset: dict) -> str:
+    """
+    Een voorgevuld voorstel op GitHub.
+
+    Zonder eigen OAuth-app kunnen we geen pull request namens de gebruiker
+    openen; dit werkt wél, zonder dat iemand een token hoeft te regelen.
+    """
+    import urllib.parse
+
+    body = (
+        "Nieuwe preset voor de catalogus.\n\n"
+        f"Bestand: `presets/{preset['id']}.json`\n\n"
+        "```json\n" + json.dumps(preset, indent=2, ensure_ascii=False) + "\n```\n"
+    )
+    query = urllib.parse.urlencode(
+        {
+            "title": f"Preset: {preset['material']} — {preset['operation']}",
+            "body": body,
+            "labels": "preset",
+        }
+    )
+    return f"{REPO_URL}/issues/new?{query}"

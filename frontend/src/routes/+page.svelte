@@ -16,6 +16,8 @@
 	import ToolRail from '$components/ToolRail.svelte';
 	import Dialog from '$components/Dialog.svelte';
 	import MaterialLibrary from '$components/MaterialLibrary.svelte';
+	import Presetariat from '$components/Presetariat.svelte';
+	import { PresetariatStore } from '$lib/presetariat.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
 	import TestGridResult from '$components/TestGridResult.svelte';
 	import TextDialog from '$components/TextDialog.svelte';
@@ -37,6 +39,8 @@
 	// Bijsnijden: het volgende sleepkader knipt de geselecteerde afbeelding bij.
 	let cropping = $state(false);
 	let libraryOpen = $state(false);
+	let catalogueOpen = $state(false);
+	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let pendingFile = $state<File | null>(null);
 	let textOpen = $state(false);
 	let textAt = $state<{ x: number; y: number } | null>(null);
@@ -340,6 +344,7 @@
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
 		onOpenLibrary={() => (libraryOpen = true)}
+		onOpenCatalogue={() => (catalogueOpen = true)}
 		onPlaceImage={placeImage}
 	/>
 	<Canvas
@@ -492,7 +497,9 @@
 </Dialog>
 
 <Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
-	<MaterialLibrary
+	<Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
+
+<MaterialLibrary
 		{library}
 		operations={design.operations}
 		{canEdit}

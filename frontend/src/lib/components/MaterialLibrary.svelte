@@ -21,6 +21,7 @@
 	let targetOperation = $state<string>('');
 	let editing = $state<number | null>(null);
 	let addingMachine = $state(false);
+	let shareError = $state<string | null>(null);
 	let machineDraft = $state({ name: '', power_watt: '', lens_mm: '' });
 
 	let visible = $derived(library.presetsFor(materialId));
@@ -48,6 +49,24 @@
 			power_percent: Number(draft.power_percent)
 		});
 		if (created) draft = { ...draft, speed_mm_s: '', power_percent: '' };
+	}
+
+	/**
+	 * Een eigen preset aandragen bij de gedeelde catalogus.
+	 *
+	 * De API maakt er een catalogusregel van en levert een voorgevuld voorstel
+	 * op GitHub; wij openen dat, zodat de gebruiker zelf ziet wat hij deelt.
+	 */
+	async function share(preset: Preset) {
+		shareError = null;
+		const response = await fetch(`/api/presetariat/contribution/${preset.id}`);
+		if (!response.ok) {
+			shareError =
+				(await response.json().catch(() => null))?.detail ?? 'Delen lukte niet.';
+			return;
+		}
+		const shared = await response.json();
+		window.open(shared.issue_url, '_blank', 'noopener');
 	}
 
 	async function saveEdit(preset: Preset, fields: Record<string, unknown>) {
@@ -84,6 +103,9 @@
 		{/if}
 	</div>
 
+	{#if shareError}
+		<p class="error" role="alert">{shareError}</p>
+	{/if}
 	{#if library.error}
 		<p class="error" role="alert">{library.error}</p>
 	{/if}
@@ -170,6 +192,7 @@
 							<button class="mini" onclick={() => library.removePreset(preset.id)}>
 								Verwijderen
 							</button>
+							<button class="mini" onclick={() => share(preset)}>Delen</button>
 						</div>
 					{/if}
 

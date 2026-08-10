@@ -6,13 +6,15 @@
 		canEdit = false,
 		onOpenGrid,
 		onOpenLibrary,
-		onPlaceImage
+		onPlaceImage,
+		onOpenCatalogue
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
 		onPlaceImage?: (file: File) => void;
+		onOpenCatalogue?: () => void;
 	} = $props();
 
 	// Elk gereedschap tekent bij een klik op het bed; selecteren is de rust-stand.
@@ -60,6 +62,9 @@
 	     vinden is, vindt niemand. -->
 	<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => onOpenGrid?.()}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg>
+	</button>
+	<button class="tool" title="Presetariat — gedeelde instellingen" onclick={() => onOpenCatalogue?.()}>
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
 	</button>
 	<button class="tool" title="Materiaalbibliotheek" onclick={() => onOpenLibrary?.()}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/><path d="M4 9h6M14 9h6"/></svg>

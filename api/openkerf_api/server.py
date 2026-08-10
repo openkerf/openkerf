@@ -27,6 +27,7 @@ from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
 from .library import Library, LibraryError, default_path
+from .presetariat import Presetariat
 from .testgrid import TestGridGenerator, plan_grid
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
@@ -149,6 +150,9 @@ class ApiServer:
         self.commands = CommandRunner(kernel, self.document)
         self.machines = MachineManager(kernel, self.commands)
         self.library = Library(library_path or default_path(kernel))
+        self.presetariat = Presetariat(
+            self.library, Path(self.library.path).with_name("presetariat-cache.json")
+        )
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
         self.motion = MachineControl(kernel, self.commands)
@@ -599,6 +603,33 @@ class ApiServer:
                 return {**result, "preset": preset}
 
             return manage(run)
+
+        # ---------------------------------------------------------- presetariat
+
+        @app.get("/api/presetariat")
+        def browse_catalogue(
+            machine_id: int | None = None,
+            material: str | None = None,
+            operation: str | None = None,
+            refresh: bool = False,
+        ):
+            """De gedeelde catalogus, gefilterd op wat deze machine is."""
+            return manage(
+                self.presetariat.browse, machine_id, material, operation, refresh
+            )
+
+        @app.post("/api/presetariat/import", dependencies=write)
+        def import_catalogue_presets(body: dict):
+            return manage(
+                self.presetariat.import_presets,
+                body.get("ids") or [],
+                body.get("machine_id"),
+            )
+
+        @app.get("/api/presetariat/contribution/{preset_id}")
+        def preset_contribution(preset_id: int):
+            """Een eigen preset in catalogusvorm, met een voorgevuld voorstel."""
+            return manage(self.presetariat.as_contribution, preset_id)
 
         # ---------------------------------------------------------- testrasters
 
