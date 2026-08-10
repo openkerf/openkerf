@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { machineState } from '$lib/api';
+	import { Controller } from '$lib/control.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
 	import Canvas from '$components/Canvas.svelte';
 	import DesignPanel from '$components/DesignPanel.svelte';
@@ -10,7 +11,9 @@
 	import TopBar from '$components/TopBar.svelte';
 
 	const status = new StatusConnection();
+	const control = new Controller();
 	let tab = $state<'design' | 'job'>('job');
+	let preflight = $state(false);
 
 	let device = $derived(status.device);
 	// Niet `state` noemen: `$state` zou dan als store-referentie gelezen worden.
@@ -18,8 +21,20 @@
 
 	onMount(() => {
 		status.connect();
-		return () => status.close();
+		control.refreshCapabilities();
+		// De beschikbare acties hangen af van het actieve device, dus opnieuw
+		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
+		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
+		return () => {
+			clearInterval(poll);
+			status.close();
+		};
 	});
+
+	function requestStart() {
+		tab = 'job';
+		preflight = true;
+	}
 
 	function toggleTheme() {
 		const root = document.documentElement;
@@ -27,7 +42,15 @@
 	}
 </script>
 
-<TopBar {device} state={machine} onToggleTheme={toggleTheme} />
+<TopBar
+	{device}
+	state={machine}
+	canStart={(control.capabilities?.actions.start ?? false) && !control.needsToken}
+	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
+	onStart={requestStart}
+	onStop={() => control.stop()}
+	onToggleTheme={toggleTheme}
+/>
 
 <div class="main">
 	<ToolRail />
@@ -61,7 +84,13 @@
 			{#if tab === 'design'}
 				<DesignPanel />
 			{:else}
-				<JobPanel {device} events={status.events} />
+				<JobPanel
+					{device}
+					events={status.events}
+					{control}
+					activeJob={status.activeJob}
+					bind:preflight
+				/>
 			{/if}
 		</div>
 	</aside>

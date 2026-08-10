@@ -38,9 +38,24 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Bed-afmeting en het gridraster van het canvas | live (uit de device-instellingen) |
 | Kop-positie als kruisdraad op het bed | live |
 | Job-tab: spoolerwachtrij, voortgang, tijden, engine-signalen | live |
+| Ontwerp laden, job starten, pauze, hervatten, stop, wachtrij legen | live (fase 2) |
 | Bewerken-tab: materiaalkaart en lagen | **voorbeelddata**, expliciet gelabeld — komt in fase 3/4 |
-| Start job / Kader tonen | uitgeschakeld — schrijfacties zijn fase 2 |
+| Kader tonen | uitgeschakeld — beweging is fase 3 |
 | Tool-rail | zichtbaar, nog zonder gedrag (fase 3) |
+
+## Bediening en veiligheid
+
+De startknop opent geen dialoog maar een **pre-flight in het rechterpaneel**:
+geschatte tijd, aantal jobs in de wachtrij en een waarschuwing over deksel,
+koeling en air assist — pas daarna "Nu starten". Stoppen is één rode knop,
+zowel in de bovenbalk als in het paneel.
+
+Knoppen gaan uit als het actieve device de actie niet kent (`/api/capabilities`)
+of als er een token nodig is die nog niet ingevuld is. Een knop aanbieden die
+gegarandeerd 401 oplevert is een lege belofte, dus dat doen we niet.
+
+Als de API vanaf het netwerk bereikbaar is, vraagt het paneel om de token; die
+wordt in `localStorage` bewaard zodat de PWA er niet elke sessie om vraagt.
 
 ## Structuur
 
@@ -48,7 +63,9 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 src/lib/tokens.css          alle kleuren en maten uit DESIGN-SYSTEM.md
 src/lib/api.ts              types die de API-snapshot spiegelen + formatters
 src/lib/status.svelte.ts    WebSocket-verbinding met herverbind-backoff
-src/lib/components/         TopBar, ToolRail, Canvas, DesignPanel, JobPanel, StatusBar
+src/lib/control.svelte.ts   schrijfacties, token-opslag, foutafhandeling
+src/lib/components/         TopBar, ToolRail, Canvas, DesignPanel, JobPanel,
+                            JobControls, StatusBar
 src/routes/+page.svelte     de drie-zone compositie
 ```
 

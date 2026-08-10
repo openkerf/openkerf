@@ -1,11 +1,27 @@
 <script lang="ts">
-	import { formatDuration, type Device, type SignalEvent } from '$lib/api';
+	import { formatDuration, type Device, type Job, type SignalEvent } from '$lib/api';
+	import type { Controller } from '$lib/control.svelte';
+	import JobControls from './JobControls.svelte';
 
-	let { device, events }: { device: Device | null; events: SignalEvent[] } = $props();
+	let {
+		device,
+		events,
+		control,
+		activeJob,
+		preflight = $bindable()
+	}: {
+		device: Device | null;
+		events: SignalEvent[];
+		control: Controller;
+		activeJob: Job | null;
+		preflight: boolean;
+	} = $props();
 
 	let spooler = $derived(device?.spooler ?? null);
 	let jobs = $derived(spooler?.jobs ?? []);
 </script>
+
+<JobControls {control} {device} job={activeJob} bind:preflight />
 
 <div class="section">
 	<h2 class="section-title">Spooler</h2>

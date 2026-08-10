@@ -33,8 +33,13 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `GET /api/health` | liveness + aantal WebSocket-clients |
 | `GET /api/status` | volledige snapshot (kernel, devices, posities, spooler) |
 | `GET /api/devices` | alleen de devicelijst |
+| `GET /api/capabilities` | welke acties het **actieve** device ondersteunt + of een token nodig is |
 | `WS /api/ws` | live: snapshot bij connect, daarna signalen + heartbeat (2 s) |
-| `GET /` | kale devpagina die de WebSocket toont — handig om de keten te zien |
+| `POST /api/job/load` | multipart upload; laadt het bestand in de elementenboom |
+| `POST /api/job/start` | plant de operaties en zet de job in de spooler |
+| `POST /api/job/pause` · `/resume` · `/stop` | realtime jobcontrole |
+| `POST /api/spooler/clear` | wachtrij legen |
+| `GET /` | de frontend (met `-f`), anders een kale devpagina |
 
 Voorbeeld:
 
@@ -50,12 +55,31 @@ Voorbeeld:
 }
 ```
 
-## Read-only, met opzet
+## Schrijfacties: afgebakend en bewaakt
 
-Er is geen endpoint dat de kop beweegt, een job start of een console-commando
-uitvoert. Binnenkomende WebSocket-frames worden weggegooid. `test_api.py`
-bewaakt dat: een test faalt zodra er een andere HTTP-methode dan GET/HEAD
-bijkomt. Schrijfacties komen pas in fase 2, met de machine erbij.
+De schrijfroutes hierboven zijn de **volledige** lijst. Er is geen endpoint dat
+de kop beweegt, jogt of de laser aanzet — dat is fase 3 — en er is geen
+endpoint dat willekeurige console-commando's uitvoert. Binnenkomende
+WebSocket-frames worden weggegooid. Twee tests bewaken dat: één die de set
+POST-routes exact vastlegt, en één die eist dat elke POST-route de
+`require_write`-dependency draagt.
+
+**Token.** Lezen mag altijd. Schrijven mag zonder token zolang de API op
+loopback luistert; zodra je `-b 0.0.0.0` gebruikt (nodig voor de telefoon) is
+een token verplicht, als `Authorization: Bearer <token>` of `X-OpenKerf-Token`.
+De API genereert er een bij het starten en logt hem op het console-kanaal; met
+`-t <token>` geef je een eigen waarde mee.
+
+**Serialisatie.** Console-commando's muteren gedeelde kernelstaat en HTTP-verzoeken
+komen binnen op uvicorn-threads. Alle uitvoering loopt daarom door één
+`CommandRunner` met een lock, zodat twee verzoeken niet halverwege de
+plan-pijplijn door elkaar lopen.
+
+**Device-afhankelijkheid.** `pause`, `resume` en `estop` worden geregistreerd door
+de device-service (Ruida en Lihuiyu doen dat, het dummy-device niet), niet door
+de kernel. `/api/capabilities` zegt per actief device wat er kan; de frontend
+zet knoppen daarop uit. Een niet-ondersteunde actie geeft een nette 409 met de
+console-uitvoer erbij, geen 500.
 
 ## Hoe het aan de engine hangt
 
@@ -73,7 +97,7 @@ bijkomt. Schrijfacties komen pas in fase 2, met de machine erbij.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 13 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 33 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van

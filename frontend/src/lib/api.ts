@@ -40,6 +40,18 @@ export type Device = {
 	spooler: Spooler;
 };
 
+export type Capabilities = {
+	actions: {
+		start: boolean;
+		pause: boolean;
+		resume: boolean;
+		stop: boolean;
+		clear_queue: boolean;
+		load: boolean;
+	};
+	auth_required: boolean;
+};
+
 export type Snapshot = {
 	kernel: { name: string | null; version: string | null };
 	devices: Device[];
