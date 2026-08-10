@@ -22,6 +22,7 @@
 	);
 
 	let canEdit = $derived(!control.needsToken);
+	let hasSelection = $derived(design.selectedIds.length > 0);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
 	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
@@ -34,22 +35,36 @@
 
 	async function setPosition(x: number, y: number) {
 		const box = design.selectedSize;
-		if (!box || !design.selectedId || !canEdit) return;
-		await edits.move(design.selectedId, x - box.x, y - box.y);
+		if (!box || !hasSelection || !canEdit) return;
+		await edits.move(design.selectedIds, x - box.x, y - box.y);
 		await design.load();
 	}
 
 	async function setSize(width: number, height: number) {
 		const box = design.selectedSize;
-		if (!box || !design.selectedId || !canEdit) return;
-		await edits.resize(design.selectedId, box.x, box.y, width, height);
+		if (!box || !hasSelection || !canEdit) return;
+		await edits.resize(design.selectedIds, box.x, box.y, width, height);
 		await design.load();
 	}
 
 	async function nudge(dx: number, dy: number) {
-		if (!design.selectedId || !canEdit) return;
-		await edits.move(design.selectedId, dx, dy);
+		if (!hasSelection || !canEdit) return;
+		await edits.move(design.selectedIds, dx, dy);
 		await design.load();
+	}
+
+	async function rotate(angleDeg: number) {
+		if (!hasSelection || !canEdit) return;
+		await edits.rotate(design.selectedIds, angleDeg);
+		await design.load();
+	}
+
+	async function assign(operationId: string, assigned: boolean) {
+		if (!hasSelection || !canEdit) return;
+		const result = assigned
+			? await edits.assign(design.selectedIds, operationId)
+			: await edits.unassign(design.selectedIds, operationId);
+		if (result.ok) await design.load();
 	}
 	// De tab staat in de URL, zodat de terugknop en een bladwijzer werken.
 	// Lokale state is de bron van waarheid, de URL volgt. Andersom werkt niet:
@@ -65,7 +80,7 @@
 	function syncUrl() {
 		const url = new URL(window.location.href);
 		url.searchParams.set('tab', tab);
-		if (design.selectedId) url.searchParams.set('select', design.selectedId);
+		if (design.selectedIds.length) url.searchParams.set('select', design.selectedIds.join(','));
 		else url.searchParams.delete('select');
 		replaceState(url, {});
 	}
@@ -82,7 +97,11 @@
 		if ($page.url.searchParams.get('tab') === 'design') tab = 'design';
 		design.load().then(() => {
 			const wanted = $page.url.searchParams.get('select');
-			if (wanted) design.select(wanted);
+			if (wanted) {
+				const ids = wanted.split(',').filter(Boolean);
+				design.select(ids[0] ?? null);
+				ids.slice(1).forEach((id) => design.toggle(id));
+			}
 		});
 		// Pas ná mount koppelen: replaceState vóórdat de router klaar is breekt
 		// de render. De URL volgt daarom de actie, niet een effect.
@@ -129,7 +148,7 @@
 			ArrowDown: [0, step]
 		};
 		const move = moves[e.key];
-		if (move && design.selectedId && canEdit) {
+		if (move && hasSelection && canEdit) {
 			e.preventDefault();
 			nudge(move[0], move[1]);
 		}
@@ -180,7 +199,7 @@
 		</div>
 		<div class="panel-scroll">
 			{#if tab === 'design'}
-				<DesignPanel {design} {edits} {canEdit} onHistory={history} />
+				<DesignPanel {design} {edits} {canEdit} onHistory={history} onRotate={rotate} onAssign={assign} />
 			{:else}
 				<JobPanel
 					{device}

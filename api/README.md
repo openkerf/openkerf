@@ -35,7 +35,8 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `GET /api/status` | volledige snapshot (kernel, devices, posities, spooler) |
 | `GET /api/devices` | alleen de devicelijst |
 | `GET /api/design` | het ontwerp: elementcontouren (SVG-pad in Tats) + operaties |
-| `POST /api/design/elements/{id}/move` · `/resize` | element verplaatsen / exacte maten zetten |
+| `POST /api/design/move` · `/resize` · `/rotate` | selectie verplaatsen, exact maatvoeren, draaien |
+| `POST /api/design/assign` · `/unassign` | selectie in of uit een bewerking (laag) halen |
 | `POST /api/design/undo` · `/redo` | wijziging terugdraaien |
 | `GET /api/capabilities` | welke acties het **actieve** device ondersteunt + of een token nodig is |
 | `WS /api/ws` | live: snapshot bij connect, daarna signalen + heartbeat (2 s) |
@@ -117,9 +118,21 @@ element — net als de scene van MeerK40t zelf — en niet op "de kleur van de l
 ## Elementen bewerken
 
 Transformaties in MeerK40t werken op de **emphasized** selectie, niet op een
-argument. Elke bewerking zet daarom eerst de nadruk op de ene node die hij
+argument. Elke bewerking zet daarom eerst de nadruk op precies de nodes die hij
 bedoelt en voert daarna het console-commando uit; de selectie van de engine komt
-zo overeen met wat de gebruiker in de browser koos.
+zo overeen met wat de gebruiker in de browser koos. Omdat nadruk een verzameling
+is, werkt dezelfde code voor één element of twintig — `ids` is dan ook altijd
+een lijst (een losse string mag ook).
+
+Bij meerdere elementen werkt `resize` op de gezamenlijke omhullende en houdt de
+engine de onderlinge posities intact, net als bij het slepen van een groep.
+
+**Toewijzen aan een bewerking** gaat niet via een console-commando maar via
+`operation.add_reference(node)` binnen een `undoscope`, zoals de engine het zelf
+doet. Operaties bevatten geen elementen maar verwijzingen, dus een element kan
+in meerdere bewerkingen tegelijk zitten — en dat gebeurt ook: de engine
+classificeert nieuwe elementen automatisch in elke bewerking waarvan de kleur
+matcht.
 
 **Vertrouw een id niet na een undo.** Id's overleven een undo normaal gesproken
 prima. Maar undo herstelt een snapshot van de héle boom, en kan uitkomen op een
@@ -157,7 +170,7 @@ object zou anders zijn interne velden uitstorten in de response.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 79 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 90 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van

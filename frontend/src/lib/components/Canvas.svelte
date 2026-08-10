@@ -32,18 +32,26 @@
 	// Slepen. De voorbeeld-offset is puur visueel; pas bij loslaten gaat er één
 	// opdracht naar de engine, zodat we hem niet met tussenstanden bestoken.
 	type Drag = {
-		mode: 'move' | 'scale';
+		mode: 'move' | 'scale' | 'rotate';
 		corner: number;
 		startX: number;
 		startY: number;
 		dx: number;
 		dy: number;
+		/** Alleen bij roteren: middelpunt op het scherm en de gedraaide hoek. */
+		centerX: number;
+		centerY: number;
+		startAngle: number;
+		angle: number;
 		origin: { x: number; y: number; width: number; height: number };
 	};
 	let drag = $state<Drag | null>(null);
 
 	let preview = $derived.by(() => {
 		if (!drag || !selection) return null;
+		// Bij roteren blijft het kader waar het staat; alleen de draaiing is
+		// voorvertoning. De echte bounds kunnen we pas na de engine weten.
+		if (drag.mode === 'rotate') return { ...drag.origin };
 		if (drag.mode === 'move') {
 			return { ...drag.origin, x: drag.origin.x + drag.dx, y: drag.origin.y + drag.dy };
 		}
@@ -59,6 +67,10 @@
 	});
 
 	let outline = $derived(preview ?? selection);
+	let rotation = $derived(drag?.mode === 'rotate' ? drag.angle : 0);
+	let center = $derived(
+		outline ? { x: outline.x + outline.width / 2, y: outline.y + outline.height / 2 } : null
+	);
 
 	// Deel de voorvertoning zodat de bovenbalk de coördinaten live meetelt.
 	$effect(() => {
@@ -69,10 +81,18 @@
 		return 1 / scale;
 	}
 
-	function startDrag(event: PointerEvent, mode: 'move' | 'scale', corner = 0) {
+	function startDrag(event: PointerEvent, mode: 'move' | 'scale' | 'rotate', corner = 0) {
 		if (!canEdit || !selection) return;
 		event.stopPropagation();
 		(event.target as Element).setPointerCapture?.(event.pointerId);
+
+		// Voor roteren hebben we het middelpunt in schermcoördinaten nodig; het
+		// canvas schaalt mm naar pixels, dus reken die om via de SVG-rect.
+		const svg = (event.target as SVGElement).ownerSVGElement;
+		const rect = svg?.getBoundingClientRect();
+		const cx = rect ? rect.left + ((selection.x + selection.width / 2) / bed.width) * rect.width : 0;
+		const cy = rect ? rect.top + ((selection.y + selection.height / 2) / bed.height) * rect.height : 0;
+
 		drag = {
 			mode,
 			corner,
@@ -80,12 +100,24 @@
 			startY: event.clientY,
 			dx: 0,
 			dy: 0,
+			centerX: cx,
+			centerY: cy,
+			startAngle: Math.atan2(event.clientY - cy, event.clientX - cx),
+			angle: 0,
 			origin: { ...selection }
 		};
 	}
 
 	function moveDrag(event: PointerEvent) {
 		if (!drag) return;
+		if (drag.mode === 'rotate') {
+			const now = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX);
+			let degrees = ((now - drag.startAngle) * 180) / Math.PI;
+			// Shift klikt vast op stappen van 15 graden.
+			if (event.shiftKey) degrees = Math.round(degrees / 15) * 15;
+			drag.angle = degrees;
+			return;
+		}
 		drag.dx = (event.clientX - drag.startX) * mmPerPixel();
 		drag.dy = (event.clientY - drag.startY) * mmPerPixel();
 	}
@@ -96,14 +128,24 @@
 		const target = preview;
 		drag = null;
 		design.preview = null;
-		if (!design.selectedId || !target) return;
+		if (design.selectedIds.length === 0 || !target) return;
+
+		if (finished.mode === 'rotate') {
+			// Onder een halve graad is het getril, geen rotatie.
+			if (Math.abs(finished.angle) >= 0.5) {
+				await edits.rotate(design.selectedIds, finished.angle);
+				onEdited?.();
+			}
+			return;
+		}
+
 		// Onder een halve pixel is het een klik, geen sleep.
 		if (Math.abs(finished.dx) < 0.05 && Math.abs(finished.dy) < 0.05) return;
 
 		if (finished.mode === 'move') {
-			await edits.move(design.selectedId, finished.dx, finished.dy);
+			await edits.move(design.selectedIds, finished.dx, finished.dy);
 		} else if (target.width > 0.1 && target.height > 0.1) {
-			await edits.resize(design.selectedId, target.x, target.y, target.width, target.height);
+			await edits.resize(design.selectedIds, target.x, target.y, target.width, target.height);
 		}
 		onEdited?.();
 	}
@@ -166,7 +208,7 @@
 									d={element.path}
 									fill="none"
 									stroke={element.stroke ?? 'var(--text-2)'}
-									stroke-width={design.selectedId === element.id ? 2 : 1.2}
+									stroke-width={design.isSelected(element.id) ? 2 : 1.2}
 									vector-effect="non-scaling-stroke"
 								/>
 								<!-- Onzichtbare trefzone: een contour van 1 px is niet aan te
@@ -181,10 +223,12 @@
 									role="button"
 									tabindex="0"
 									aria-label="Selecteer {element.label}"
-									aria-pressed={design.selectedId === element.id}
+									aria-pressed={design.isSelected(element.id)}
 									onclick={(e) => {
 										e.stopPropagation();
-										design.select(element.id);
+										// Shift houdt de bestaande selectie vast.
+										if (e.shiftKey) design.toggle(element.id);
+										else design.select(element.id);
 									}}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -200,7 +244,14 @@
 					<!-- Selectiecontour: de kerflijn. Statisch gestreept, en alleen
 					     geanimeerd terwijl je sleept — zoals DESIGN-SYSTEM.md voorschrijft. -->
 					{#if outline}
-						<g class="selection">
+						<!-- Tijdens het roteren draait het hele kader mee als voorvertoning;
+						     de echte vorm volgt zodra de engine het heeft toegepast. -->
+						<g
+							class="selection"
+							transform={rotation && center
+								? `rotate(${rotation} ${center.x} ${center.y})`
+								: undefined}
+						>
 							<rect
 								class:kerf-anim={drag !== null}
 								x={outline.x}
@@ -226,7 +277,39 @@
 									onpointerup={endDrag}
 								/>
 							{/if}
-							{#each [[outline.x, outline.y], [outline.x + outline.width, outline.y], [outline.x, outline.y + outline.height], [outline.x + outline.width, outline.y + outline.height]] as [hx, hy], corner (corner)}
+							{#if canEdit && center}
+							<!-- Rotatiegreep: een steel boven het kader, zoals bij resizen
+							     een hoekgreep. Shift klikt vast op 15 graden. -->
+							<line
+								class="stalk"
+								x1={center.x}
+								y1={outline.y}
+								x2={center.x}
+								y2={outline.y - 8}
+							/>
+							<circle
+								class="rotator"
+								cx={center.x}
+								cy={outline.y - 8}
+								r="2"
+							/>
+							<!-- Ruimere trefzone eromheen: 2 mm is bij deze schaal maar een
+							     paar pixels, en dat is niet te pakken met een muis, laat
+							     staan met een vinger. -->
+							<circle
+								class="rotator-hit"
+								role="button"
+								tabindex="-1"
+								aria-label="Sleep om te draaien"
+								cx={center.x}
+								cy={outline.y - 8}
+								r="5"
+								onpointerdown={(e) => startDrag(e, 'rotate')}
+								onpointermove={moveDrag}
+								onpointerup={endDrag}
+							/>
+						{/if}
+						{#each [[outline.x, outline.y], [outline.x + outline.width, outline.y], [outline.x, outline.y + outline.height], [outline.x + outline.width, outline.y + outline.height]] as [hx, hy], corner (corner)}
 								<rect
 									class="handle"
 									class:grabbable={canEdit}
@@ -381,6 +464,30 @@
 	}
 	.selection .handle.grabbable {
 		cursor: nwse-resize;
+	}
+	.selection .stalk {
+		stroke: var(--accent);
+		stroke-width: 1;
+		stroke-dasharray: none;
+		vector-effect: non-scaling-stroke;
+	}
+	.selection .rotator {
+		fill: var(--surface-1);
+		stroke: var(--accent);
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+		cursor: grab;
+	}
+	.selection .rotator {
+		pointer-events: none;
+	}
+	.selection .rotator-hit {
+		fill: transparent;
+		stroke: none;
+		cursor: grab;
+	}
+	.selection .rotator-hit:active {
+		cursor: grabbing;
 	}
 	/* `rect.grab` en niet `.grab`: `.selection rect` hierboven is specifieker en
 	   won anders, waardoor het sleepvlak dezelfde gestreepte accentlijn kreeg

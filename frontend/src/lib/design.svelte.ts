@@ -60,7 +60,7 @@ export function isDesignSignal(code: string) {
 export class DesignStore {
 	design = $state<Design | null>(null);
 	loading = $state(false);
-	selectedId = $state<string | null>(null);
+	selectedIds = $state<string[]>([]);
 	/**
 	 * Voorvertoning tijdens het slepen, in mm. Het canvas schrijft hem, de
 	 * bovenbalk en statusbalk lezen hem — zo lopen de coördinaten mee terwijl
@@ -68,7 +68,7 @@ export class DesignStore {
 	 */
 	preview = $state<{ x: number; y: number; width: number; height: number } | null>(null);
 	/** Gezet door de pagina om de URL mee te laten lopen met de selectie. */
-	onSelect: ((id: string | null) => void) | null = null;
+	onSelect: ((ids: string[]) => void) | null = null;
 
 	#pending = false;
 
@@ -76,14 +76,36 @@ export class DesignStore {
 		return this.design?.elements ?? [];
 	}
 
+	/** Eerste selectie; voor panelen die één element tonen. */
 	get selected(): DesignElement | null {
-		return this.elements.find((e) => e.id === this.selectedId) ?? null;
+		return this.elements.find((e) => e.id === this.selectedIds[0]) ?? null;
+	}
+
+	get selectedId(): string | null {
+		return this.selectedIds[0] ?? null;
+	}
+
+	get selectedElements(): DesignElement[] {
+		return this.elements.filter((e) => this.selectedIds.includes(e.id));
+	}
+
+	isSelected(id: string) {
+		return this.selectedIds.includes(id);
 	}
 
 	select(id: string | null) {
-		if (this.selectedId === id) return;
-		this.selectedId = id;
-		this.onSelect?.(id);
+		const next = id ? [id] : [];
+		if (same(next, this.selectedIds)) return;
+		this.selectedIds = next;
+		this.onSelect?.(this.selectedIds);
+	}
+
+	/** Shift-klik: toevoegen of juist weghalen. */
+	toggle(id: string) {
+		this.selectedIds = this.selectedIds.includes(id)
+			? this.selectedIds.filter((x) => x !== id)
+			: [...this.selectedIds, id];
+		this.onSelect?.(this.selectedIds);
 	}
 
 	/** Wat de gebruiker nú ziet: de sleep-voorvertoning, anders de selectie. */
@@ -91,12 +113,18 @@ export class DesignStore {
 		return this.preview ?? this.selectedSize;
 	}
 
-	/** Maten van het geselecteerde element in mm, uit de bounds in Tats. */
+	/**
+	 * Omhullende van de hele selectie in mm. Bij meerdere elementen is dat het
+	 * gezamenlijke kader — precies waar de engine ook op werkt bij een resize.
+	 */
 	get selectedSize(): { x: number; y: number; width: number; height: number } | null {
-		const element = this.selected;
 		const perMm = this.design?.units_per_mm;
-		if (!element?.bounds || !perMm) return null;
-		const [x0, y0, x1, y1] = element.bounds;
+		const boxes = this.selectedElements.map((e) => e.bounds).filter(Boolean);
+		if (!perMm || boxes.length === 0) return null;
+		const x0 = Math.min(...boxes.map((b) => b![0]));
+		const y0 = Math.min(...boxes.map((b) => b![1]));
+		const x1 = Math.max(...boxes.map((b) => b![2]));
+		const y1 = Math.max(...boxes.map((b) => b![3]));
 		return {
 			x: x0 / perMm,
 			y: y0 / perMm,
@@ -137,9 +165,11 @@ export class DesignStore {
 			const response = await fetch('/api/design');
 			if (response.ok) {
 				this.design = await response.json();
-				// Een selectie die door een wijziging verdwenen is, laten we los;
-				// een id dat er nog is blijft geselecteerd.
-				if (this.selectedId && !this.selected) this.selectedId = null;
+				// Selecties die door een wijziging verdwenen zijn, laten we los;
+				// id's die er nog zijn blijven staan.
+				const alive = new Set(this.elements.map((e) => e.id));
+				const kept = this.selectedIds.filter((id) => alive.has(id));
+				if (kept.length !== this.selectedIds.length) this.selectedIds = kept;
 			}
 		} catch {
 			// Verbinding weg: de statusbalk meldt dat al, hier niets doen.
@@ -151,4 +181,8 @@ export class DesignStore {
 			}
 		}
 	}
+}
+
+function same(a: string[], b: string[]) {
+	return a.length === b.length && a.every((v, i) => v === b[i]);
 }
