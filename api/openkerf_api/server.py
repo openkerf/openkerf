@@ -27,6 +27,7 @@ from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .library import Library, LibraryError, default_path
 from .testgrid import TestGridGenerator, plan_grid
+from .machine import MachineControl
 from .machines import MachineError, MachineManager
 from .status import StatusReader
 
@@ -149,6 +150,7 @@ class ApiServer:
         self.library = Library(library_path or default_path(kernel))
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
+        self.motion = MachineControl(kernel, self.commands)
         self.design = DesignReader(
             kernel,
             keep_operations=self.drawing.user_operations,
@@ -265,6 +267,7 @@ class ApiServer:
             """
             return {
                 "actions": self.commands.capabilities(),
+                "motion": self.motion.capabilities(),
                 "auth_required": not self.local_only,
             }
 
@@ -341,6 +344,46 @@ class ApiServer:
             return FileResponse(
                 path, media_type="image/svg+xml", filename=path.name
             )
+
+        @app.patch("/api/design/elements/{element_id}/line", dependencies=write)
+        def update_line(element_id: str, body: dict):
+            """Een eindpunt verzetten; een lijn is twee punten, geen kader."""
+            return manage(lambda: self.drawing.update_line(element_id, **body))
+
+        @app.post("/api/design/align", dependencies=write)
+        def align_elements(body: dict):
+            return manage(self.drawing.align, body.get("ids"), body.get("mode"))
+
+        @app.post("/api/design/group", dependencies=write)
+        def group_elements(body: dict):
+            return manage(self.drawing.group, body.get("ids"))
+
+        @app.post("/api/design/ungroup", dependencies=write)
+        def ungroup_elements(body: dict):
+            return manage(self.drawing.ungroup, body.get("ids"))
+
+        # ------------------------------------------------------- beweging
+
+        @app.post("/api/machine/home", dependencies=write)
+        def machine_home(body: dict | None = None):
+            """Naar het nulpunt. De kop beweegt echt."""
+            return manage(self.motion.home, bool((body or {}).get("physical")))
+
+        @app.post("/api/machine/move", dependencies=write)
+        def machine_move(body: dict):
+            return manage(self.motion.move_to, body.get("x_mm"), body.get("y_mm"))
+
+        @app.post("/api/machine/jog", dependencies=write)
+        def machine_jog(body: dict):
+            return manage(self.motion.jog, body.get("dx_mm"), body.get("dy_mm"))
+
+        @app.post("/api/machine/unlock", dependencies=write)
+        def machine_unlock():
+            return manage(self.motion.unlock)
+
+        @app.post("/api/machine/lock", dependencies=write)
+        def machine_lock():
+            return manage(self.motion.lock)
 
         @app.patch("/api/design/elements/{element_id}/text", dependencies=write)
         def update_text(element_id: str, body: dict):

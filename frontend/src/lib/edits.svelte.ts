@@ -132,6 +132,34 @@ export class EditController {
 		return this.#send(`/api/design/elements/${encodeURIComponent(id)}/text`, 'PATCH', fields);
 	}
 
+	updateLine(id: string, fields: Record<string, number>) {
+		return this.#send(`/api/design/elements/${encodeURIComponent(id)}/line`, 'PATCH', fields);
+	}
+
+	align(ids: string[], mode: string) {
+		return this.#post('/api/design/align', { ids, mode });
+	}
+
+	group(ids: string[]) {
+		return this.#post('/api/design/group', { ids });
+	}
+
+	ungroup(ids: string[]) {
+		return this.#post('/api/design/ungroup', { ids });
+	}
+
+	home(physical = false) {
+		return this.#post('/api/machine/home', { physical });
+	}
+
+	jog(dxMm: number, dyMm: number) {
+		return this.#post('/api/machine/jog', { dx_mm: dxMm, dy_mm: dyMm });
+	}
+
+	unlock() {
+		return this.#post('/api/machine/unlock');
+	}
+
 	clear() {
 		return this.#post('/api/design/clear');
 	}

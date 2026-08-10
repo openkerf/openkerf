@@ -74,6 +74,50 @@
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
 
+	// Alleen bij precies één geselecteerde lijn: die bewerk je op zijn punten.
+	let selectedLine = $derived(
+		design.selectedIds.length === 1 ? (design.selected?.line ?? null) : null
+	);
+	let endpointDrag = $state<{ index: number } | null>(null);
+	let lineHandles = $derived.by(() => {
+		if (!selectedLine || !canEdit) return null;
+		const live = endpointPreview ?? selectedLine;
+		return [
+			{ x: live.x1_mm, y: live.y1_mm },
+			{ x: live.x2_mm, y: live.y2_mm }
+		];
+	});
+	let endpointPreview = $state<
+		{ x1_mm: number; y1_mm: number; x2_mm: number; y2_mm: number } | null
+	>(null);
+
+	function startEndpoint(event: PointerEvent, index: number) {
+		if (!selectedLine) return;
+		event.stopPropagation();
+		(event.target as Element).setPointerCapture?.(event.pointerId);
+		endpointDrag = { index };
+		endpointPreview = { ...selectedLine };
+	}
+
+	function moveEndpoint(event: PointerEvent) {
+		if (!endpointDrag || !endpointPreview) return;
+		const at = pointerMm(event, true);
+		endpointPreview =
+			endpointDrag.index === 0
+				? { ...endpointPreview, x1_mm: at.x, y1_mm: at.y }
+				: { ...endpointPreview, x2_mm: at.x, y2_mm: at.y };
+	}
+
+	async function endEndpoint() {
+		const drag = endpointDrag;
+		const target = endpointPreview;
+		endpointDrag = null;
+		endpointPreview = null;
+		if (!drag || !target || !design.selectedId) return;
+		await edits.updateLine(design.selectedId, target);
+		onEdited?.();
+	}
+
 	// Slepen. De voorbeeld-offset is puur visueel; pas bij loslaten gaat er één
 	// opdracht naar de engine, zodat we hem niet met tussenstanden bestoken.
 	type Drag = {
@@ -123,9 +167,10 @@
 	});
 
 	/** Waar op het bed is geklikt, in millimeters. */
-	function pointerMm(event: MouseEvent) {
-		const svg = event.currentTarget as SVGSVGElement;
-		const rect = svg.getBoundingClientRect();
+	function pointerMm(event: MouseEvent, fromChild = false) {
+		const target = event.currentTarget as SVGElement;
+		const svg = fromChild ? target.ownerSVGElement : (target as SVGSVGElement);
+		const rect = (svg ?? target).getBoundingClientRect();
 		return {
 			x: ((event.clientX - rect.left) / rect.width) * bed.width,
 			y: ((event.clientY - rect.top) / rect.height) * bed.height
@@ -135,6 +180,15 @@
 	// Klik plaatst een vorm van een vaste maat; daarna sleep of schaal je hem.
 	// Slepen om te tekenen komt samen met de sleepselectie.
 	const DEFAULT_MM = 20;
+
+	// Eerste punt van een lijn in aanbouw, plus waar de muis nu is voor de
+	// voorvertoning.
+	let lineStart = $state<{ x: number; y: number } | null>(null);
+	let hover = $state<{ x: number; y: number } | null>(null);
+
+	$effect(() => {
+		if (tool !== 'line') lineStart = null;
+	});
 
 	function drawAt(event: MouseEvent) {
 		const at = pointerMm(event);
@@ -150,13 +204,15 @@
 		} else if (tool === 'circle') {
 			onDrawn?.({ type: 'circle', cx_mm: at.x, cy_mm: at.y, r_mm: half });
 		} else if (tool === 'line') {
-			onDrawn?.({
-				type: 'line',
-				x1_mm: at.x - half,
-				y1_mm: at.y,
-				x2_mm: at.x + half,
-				y2_mm: at.y
-			});
+			// Een lijn heeft twee punten: eerste klik zet het begin, tweede het
+			// eind. Een vaste horizontale lijn plaatsen was onzin.
+			if (!lineStart) {
+				lineStart = at;
+				return;
+			}
+			const from = lineStart;
+			lineStart = null;
+			onDrawn?.({ type: 'line', x1_mm: from.x, y1_mm: from.y, x2_mm: at.x, y2_mm: at.y });
 		} else if (tool === 'text') {
 			// De opties (lettertype, hoogte, spatiëring) komen uit een eigen
 			// venster; een browserprompt kan alleen een kale regel tekst.
@@ -360,7 +416,10 @@
 						startBand(e);
 					}
 				}}
-				onpointermove={moveBand}
+				onpointermove={(e) => {
+					if (lineStart) hover = pointerMm(e);
+					moveBand(e);
+				}}
 				onpointerup={endBand}
 			>
 				<!-- Het ontwerp. Eén schaaltransform rekent Tats om naar mm; de
@@ -474,7 +533,9 @@
 								onpointerup={endDrag}
 							/>
 						{/if}
-						{#each [[outline.x, outline.y], [outline.x + outline.width, outline.y], [outline.x, outline.y + outline.height], [outline.x + outline.width, outline.y + outline.height]] as [hx, hy], corner (corner)}
+						<!-- Bij een lijn zijn de eindpunten de grepen; hoekgrepen van een
+						     denkbeeldig kader zouden daar bovenop liggen. -->
+						{#each selectedLine ? [] : [[outline.x, outline.y], [outline.x + outline.width, outline.y], [outline.x, outline.y + outline.height], [outline.x + outline.width, outline.y + outline.height]] as [hx, hy], corner (corner)}
 								<rect
 									class="handle"
 									class:grabbable={canEdit}
@@ -500,6 +561,35 @@
 							</text>
 						</g>
 					{/if}
+				{/if}
+
+				{#if lineStart && hover}
+					<line
+						class="pending"
+						x1={lineStart.x}
+						y1={lineStart.y}
+						x2={hover.x}
+						y2={hover.y}
+					/>
+				{/if}
+
+				{#if lineHandles}
+					<!-- Een lijn pak je bij een eindpunt, niet bij een hoek van een
+					     denkbeeldig kader. -->
+					{#each lineHandles as point, index (index)}
+						<circle
+							class="endpoint"
+							role="button"
+							tabindex="-1"
+							aria-label="Eindpunt {index + 1} verslepen"
+							cx={point.x}
+							cy={point.y}
+							r="2.5"
+							onpointerdown={(e) => startEndpoint(e, index)}
+							onpointermove={moveEndpoint}
+							onpointerup={endEndpoint}
+						/>
+					{/each}
 				{/if}
 
 				{#if band}
@@ -613,6 +703,19 @@
 	}
 	.hit {
 		cursor: pointer;
+	}
+	.pending {
+		stroke: var(--accent);
+		stroke-width: 1;
+		stroke-dasharray: 4 3;
+		vector-effect: non-scaling-stroke;
+	}
+	.endpoint {
+		fill: var(--surface-1);
+		stroke: var(--accent);
+		stroke-width: 1.5;
+		vector-effect: non-scaling-stroke;
+		cursor: grab;
 	}
 	.band {
 		fill: color-mix(in srgb, var(--accent) 12%, transparent);

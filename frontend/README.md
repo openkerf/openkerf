@@ -42,6 +42,9 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Canvas: het geladen ontwerp op het bed, op ware maat | live |
 | Selectie: klikken op een element, contour + maten | live |
 | Bewerken: slepen, schalen, draaien, pijltjes, ongedaan maken | live |
+| Lijnen: twee-punts plaatsen, eindpunten verslepen | live |
+| Uitlijnen, verdelen, groeperen en groep opheffen | live |
+| Machine bewegen: jog met stapgrootte, home, ontgrendelen | live |
 | Meervoudige selectie (shift-klik) | live |
 | Bewerking (laag) toekennen aan de selectie | live |
 | Bewerken-tab: lagen met snelheid/vermogen en elementaantal | live |

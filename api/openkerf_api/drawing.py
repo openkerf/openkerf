@@ -161,6 +161,73 @@ class Drawing:
         self._refresh()
         return {"id": node.id, "text": node.mktext}
 
+    def update_line(self, element_id: str, **fields) -> dict:
+        """Een eindpunt van een lijn verzetten, zonder hem opnieuw te tekenen."""
+        from meerk40t.core.units import UNITS_PER_MM
+
+        node = self._nodes([element_id])[0]
+        if node.type != "elem line":
+            raise DesignError("Dit element is geen lijn.")
+        with self.elements.undoscope("Lijn aanpassen"):
+            for name in ("x1_mm", "y1_mm", "x2_mm", "y2_mm"):
+                if fields.get(name) is not None:
+                    value = _finite(fields[name], name) * UNITS_PER_MM
+                    setattr(node, name[:2], value)
+            node.altered()
+        self._refresh()
+        return {"id": element_id}
+
+    ALIGNMENTS_2D = (
+        "top", "bottom", "left", "right", "center", "centerh", "centerv",
+        "spaceh", "spacev",
+    )
+
+    def align(self, element_ids, mode: str) -> dict:
+        if mode not in self.ALIGNMENTS_2D:
+            raise DesignError(
+                f"Onbekende uitlijning: {mode}. Kies uit {', '.join(self.ALIGNMENTS_2D)}."
+            )
+        nodes = self._nodes(element_ids)
+        if len(nodes) < 2:
+            raise DesignError("Uitlijnen heeft minstens twee elementen nodig.")
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Uitlijnen"):
+            self.runner.run(f"align {mode}")
+        self._refresh()
+        return {"aligned": [n.id for n in nodes], "mode": mode}
+
+    def group(self, element_ids) -> dict:
+        nodes = self._nodes(element_ids)
+        if len(nodes) < 2:
+            raise DesignError("Groeperen heeft minstens twee elementen nodig.")
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Groeperen"):
+            self.runner.run("group")
+        self.elements.validate_ids()
+        self._refresh()
+        return {"grouped": [n.id for n in nodes]}
+
+    def ungroup(self, element_ids) -> dict:
+        """
+        Groep opheffen. De elementen blijven; alleen het omhulsel verdwijnt.
+        """
+        nodes = self._nodes(element_ids)
+        groups = []
+        for node in nodes:
+            parent = getattr(node, "parent", None)
+            while parent is not None and getattr(parent, "type", None) != "group":
+                parent = getattr(parent, "parent", None)
+            if parent is not None and parent not in groups:
+                groups.append(parent)
+        if not groups:
+            raise DesignError("Deze selectie zit niet in een groep.")
+        self.elements.set_emphasis(groups)
+        with self.elements.undoscope("Groep opheffen"):
+            self.runner.run("ungroup")
+        self.elements.validate_ids()
+        self._refresh()
+        return {"ungrouped": len(groups)}
+
     def delete(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)

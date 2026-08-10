@@ -62,6 +62,28 @@ def _attr_or_none(node, name):
         return None
 
 
+def _line_of(node) -> dict | None:
+    """
+    De twee eindpunten van een lijn.
+
+    Uit de bounds alleen kun je niet zien welke kant een lijn op loopt, dus
+    zonder deze velden kan de UI geen eindpunt aanbieden om te verslepen.
+    """
+    if getattr(node, "type", None) != "elem line":
+        return None
+    from meerk40t.core.units import UNITS_PER_MM
+
+    try:
+        return {
+            "x1_mm": float(node.x1) / UNITS_PER_MM,
+            "y1_mm": float(node.y1) / UNITS_PER_MM,
+            "x2_mm": float(node.x2) / UNITS_PER_MM,
+            "y2_mm": float(node.y2) / UNITS_PER_MM,
+        }
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def _text_of(node) -> dict | None:
     """
     Bewerkbare vector-tekst.
@@ -213,6 +235,7 @@ class DesignReader:
             "hidden": bool(getattr(node, "hidden", False)),
             "group_id": _group_of(node),
             "text": _text_of(node),
+            "line": _line_of(node),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,
