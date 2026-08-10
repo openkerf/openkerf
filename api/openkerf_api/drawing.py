@@ -117,6 +117,50 @@ class Drawing:
         parts.append(f'"{text}"')
         return " ".join(parts)
 
+    ALIGNMENTS = ("start", "middle", "end")
+
+    def update_text(self, element_id: str, **fields) -> dict:
+        """
+        Bestaande vector-tekst bijwerken: inhoud, lettertype, hoogte,
+        spatiëring of uitlijning.
+
+        De engine bewaart de bron op de node en rendert opnieuw, dus tekst
+        hoeft niet verwijderd en opnieuw geplaatst te worden.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        node = self._nodes([element_id])[0]
+        if getattr(node, "mktext", None) is None:
+            raise DesignError("Dit element is geen bewerkbare tekst.")
+        registry = getattr(self.kernel.root, "fonts", None)
+        if registry is None:
+            raise DesignError("Geen lettertype-ondersteuning beschikbaar.")
+
+        text = node.mktext
+        with self.elements.undoscope("Tekst wijzigen"):
+            if fields.get("text") is not None:
+                new = str(fields["text"]).strip()
+                if not new:
+                    raise DesignError("Tekst mag niet leeg zijn.")
+                text = new
+            if fields.get("font"):
+                node.mkfont = str(fields["font"])
+            if fields.get("font_size_mm") is not None:
+                node.mkfontsize = _positive(fields["font_size_mm"], "font_size_mm") * UNITS_PER_MM
+            if fields.get("spacing") is not None:
+                node.mkfontspacing = _positive(fields["spacing"], "spacing")
+            if fields.get("align") is not None:
+                align = str(fields["align"])
+                if align not in self.ALIGNMENTS:
+                    raise DesignError(
+                        f"Uitlijning moet een van {', '.join(self.ALIGNMENTS)} zijn."
+                    )
+                node.mkalign = align
+            registry.update_linetext(node, text)
+        self.elements.validate_ids()
+        self._refresh()
+        return {"id": node.id, "text": node.mktext}
+
     def delete(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)
@@ -270,7 +314,15 @@ class Drawing:
             display = entry[1] if len(entry) > 1 else None
             if not path or not display or str(display).startswith("."):
                 continue
-            found.append({"file": str(path), "name": str(display)})
+            # De engine bewaart alleen de bestandsnaam op de node, dus die
+            # geven we mee — anders kan de UI niet zien welk font actief is.
+            found.append(
+                {
+                    "file": str(path),
+                    "name": str(display),
+                    "basename": str(path).rsplit("/", 1)[-1],
+                }
+            )
         found.sort(key=lambda f: f["name"].lower())
         return found
 

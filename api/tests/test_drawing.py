@@ -403,3 +403,79 @@ def test_estimating_leaves_no_plan_behind(kernel, drawing, client):
     client.get("/api/job/estimate")
 
     assert len(kernel.planner.default_plan.plan) == 0
+
+
+# ------------------------------------------------------ tekst bijwerken
+
+def test_text_reports_its_source(kernel, drawing):
+    """A path has no words in it; the engine keeps the source on the node."""
+    created = drawing.create("text", x_mm=20, y_mm=40, text="Hallo", font_size_mm=8)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+
+    assert element["text"]["text"] == "Hallo"
+    assert element["text"]["font_size_mm"] == pytest.approx(8, abs=0.1)
+    assert element["text"]["align"] == "start"
+
+
+def test_changing_the_words_rerenders(kernel, drawing):
+    created = drawing.create("text", x_mm=20, y_mm=40, text="Ab", font_size_mm=8)
+    before = bounds_mm(kernel, created["ids"][0])
+
+    drawing.update_text(created["ids"][0], text="Abcdefgh")
+
+    after = bounds_mm(kernel, created["ids"][0])
+    assert after[2] - after[0] > before[2] - before[0]
+
+
+def test_changing_the_size_rerenders(kernel, drawing):
+    created = drawing.create("text", x_mm=20, y_mm=40, text="Ab", font_size_mm=6)
+    before = bounds_mm(kernel, created["ids"][0])
+
+    drawing.update_text(created["ids"][0], font_size_mm=18)
+
+    after = bounds_mm(kernel, created["ids"][0])
+    assert (after[3] - after[1]) > (before[3] - before[1]) * 2
+
+
+def test_changing_the_font_rerenders(kernel, drawing):
+    created = drawing.create("text", x_mm=20, y_mm=40, text="Hallo wereld", font_size_mm=8)
+    other = [f for f in drawing.fonts()][3]
+
+    drawing.update_text(created["ids"][0], font=other["file"])
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    # De engine slaat alleen de bestandsnaam op, niet het volledige pad.
+    assert element["text"]["font"] == other["basename"]
+
+
+def test_alignment_is_validated(kernel, drawing):
+    created = drawing.create("text", x_mm=20, y_mm=40, text="Ab")
+
+    drawing.update_text(created["ids"][0], align="middle")
+    with pytest.raises(DesignError):
+        drawing.update_text(created["ids"][0], align="schuin")
+
+
+def test_only_text_elements_can_be_retyped(kernel, drawing):
+    rect = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    with pytest.raises(DesignError):
+        drawing.update_text(rect["ids"][0], text="Hallo")
+
+
+def test_text_update_over_http(kernel, client):
+    created = client.post(
+        "/api/design/elements",
+        json={"type": "text", "x_mm": 20, "y_mm": 40, "text": "Ab", "font_size_mm": 8},
+    ).json()
+
+    response = client.patch(
+        f"/api/design/elements/{created['ids'][0]}/text", json={"text": "Nieuw"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["text"] == "Nieuw"

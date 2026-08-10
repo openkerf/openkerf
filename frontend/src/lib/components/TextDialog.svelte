@@ -3,10 +3,25 @@
 
 	let {
 		open = $bindable(),
+		initial = null,
 		onConfirm
 	}: {
 		open: boolean;
-		onConfirm: (options: { text: string; font: string; font_size_mm: number; spacing: number }) => void;
+		/** Gevuld bij bewerken van bestaande tekst. */
+		initial?: {
+			text: string;
+			font: string;
+			font_size_mm: number | null;
+			spacing: number;
+			align: string;
+		} | null;
+		onConfirm: (options: {
+			text: string;
+			font: string;
+			font_size_mm: number;
+			spacing: number;
+			align: string;
+		}) => void;
 	} = $props();
 
 	type Font = { file: string; name: string };
@@ -17,7 +32,24 @@
 	let font = $state('');
 	let size = $state('10');
 	let spacing = $state('1');
+	let align = $state('start');
 	let loaded = false;
+	let filled = false;
+
+	// Bij bewerken beginnen met wat er staat, niet met lege velden.
+	$effect(() => {
+		if (!open) {
+			filled = false;
+			return;
+		}
+		if (filled || !initial) return;
+		filled = true;
+		text = initial.text;
+		size = String(initial.font_size_mm ?? 10);
+		spacing = String(initial.spacing ?? 1);
+		align = initial.align ?? 'start';
+		font = '';
+	});
 
 	// Pas laden als het venster voor het eerst opengaat: 200+ systeemfonts
 	// ophalen bij het starten van de app is verspilling.
@@ -41,7 +73,8 @@
 			text: text.trim(),
 			font,
 			font_size_mm: Number(size) || 10,
-			spacing: Number(spacing) || 1
+			spacing: Number(spacing) || 1,
+			align
 		});
 		text = '';
 		open = false;
@@ -75,7 +108,18 @@
 	</div>
 
 	<label class="field">
-		<span>Lettertype ({fonts.length} beschikbaar)</span>
+		<span>Uitlijning</span>
+		<select bind:value={align}>
+			<option value="start">Links</option>
+			<option value="middle">Gecentreerd</option>
+			<option value="end">Rechts</option>
+		</select>
+	</label>
+
+	<label class="field">
+		<span>
+			Lettertype ({fonts.length} beschikbaar){initial?.font ? ` — nu: ${initial.font}` : ''}
+		</span>
 		<input type="search" bind:value={filter} placeholder="Zoek een lettertype…" />
 	</label>
 	<div class="fonts">
@@ -93,7 +137,9 @@
 
 	<div class="actions">
 		<button class="btn" onclick={() => (open = false)}>Annuleren</button>
-		<button class="btn primary" disabled={!text.trim()} onclick={confirm}>Plaatsen</button>
+		<button class="btn primary" disabled={!text.trim()} onclick={confirm}>
+			{initial ? 'Bijwerken' : 'Plaatsen'}
+		</button>
 	</div>
 </Dialog>
 
@@ -110,7 +156,8 @@
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-3);
 	}
-	input {
+	input,
+	select {
 		font: inherit;
 		width: 100%;
 		padding: 7px 9px;

@@ -38,6 +38,7 @@
 	let pendingFile = $state<File | null>(null);
 	let textOpen = $state(false);
 	let textAt = $state<{ x: number; y: number } | null>(null);
+	let editingText = $state<string | null>(null);
 	let estimate = $state<number | null>(null);
 	let gridOpen = $state(false);
 
@@ -314,6 +315,10 @@
 					onRotate={rotate}
 					onAssign={assign}
 					onLayerChange={() => design.load()}
+					onEditText={(id) => {
+						editingText = id;
+						textOpen = true;
+					}}
 				/>
 			{:else}
 				<JobPanel
@@ -334,8 +339,15 @@
      zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->
 <TextDialog
 	bind:open={textOpen}
-	onConfirm={(options) => {
-		if (textAt) draw({ type: 'text', x_mm: textAt.x, y_mm: textAt.y, ...options });
+	initial={editingText ? (design.elements.find((e) => e.id === editingText)?.text ?? null) : null}
+	onConfirm={async (options) => {
+		if (editingText) {
+			// Tekst is een pad, maar de engine bewaart de bron en rendert opnieuw.
+			if ((await edits.updateText(editingText, options)).ok) await design.load();
+			editingText = null;
+		} else if (textAt) {
+			draw({ type: 'text', x_mm: textAt.x, y_mm: textAt.y, ...options });
+		}
 		textAt = null;
 	}}
 />

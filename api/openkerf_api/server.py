@@ -342,6 +342,11 @@ class ApiServer:
                 path, media_type="image/svg+xml", filename=path.name
             )
 
+        @app.patch("/api/design/elements/{element_id}/text", dependencies=write)
+        def update_text(element_id: str, body: dict):
+            """Bestaande tekst bijwerken in plaats van weggooien en opnieuw plaatsen."""
+            return manage(lambda: self.drawing.update_text(element_id, **body))
+
         @app.post("/api/design/elements/delete", dependencies=write)
         def delete_elements(body: dict):
             return manage(self.drawing.delete, body.get("ids"))
