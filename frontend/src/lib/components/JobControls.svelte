@@ -146,12 +146,15 @@
 		     knoppen zetten de kop echt in beweging. -->
 		<div class="motion">
 			<span class="rot-label">Bewegen</span>
+			<!-- Omgekeerde T, zoals de pijltjes op een toetsenbord: ↑ boven ↓,
+			     met ← en → ernaast. Home staat ernaast en niet in het midden,
+			     want dat is geen richting. -->
 			<div class="pad">
-				<button class="jog" aria-label="Naar boven" onclick={() => onJog?.(0, -step)}>↑</button>
-				<button class="jog" aria-label="Naar links" onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="jog up" aria-label="Naar boven" onclick={() => onJog?.(0, -step)}>↑</button>
+				<button class="jog left" aria-label="Naar links" onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="jog down" aria-label="Naar beneden" onclick={() => onJog?.(0, step)}>↓</button>
+				<button class="jog right" aria-label="Naar rechts" onclick={() => onJog?.(step, 0)}>→</button>
 				<button class="jog home" onclick={() => onHome?.()}>Home</button>
-				<button class="jog" aria-label="Naar rechts" onclick={() => onJog?.(step, 0)}>→</button>
-				<button class="jog" aria-label="Naar beneden" onclick={() => onJog?.(0, step)}>↓</button>
 			</div>
 			<div class="steps">
 				{#each [0.1, 1, 10, 50] as size (size)}
@@ -287,12 +290,18 @@
 	}
 	.pad {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(4, 40px);
+		grid-template-rows: repeat(2, 34px);
 		gap: 4px;
 		margin: var(--space-2) 0;
-		max-width: 170px;
 	}
-	.pad .jog:nth-child(1) { grid-column: 2; }
+	/* Expliciet plaatsen: met impliciete plaatsing schoof ↓ naar de eerste
+	   kolom in plaats van onder ↑. */
+	.pad .up { grid-area: 1 / 2; }
+	.pad .left { grid-area: 2 / 1; }
+	.pad .down { grid-area: 2 / 2; }
+	.pad .right { grid-area: 2 / 3; }
+	.pad .home { grid-area: 1 / 4 / 3 / 5; }
 	.jog {
 		padding: 8px 0;
 		border: 1px solid var(--line);
