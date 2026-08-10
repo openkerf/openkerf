@@ -341,3 +341,65 @@ def test_loading_replaces_rather_than_merges(kernel, client):
 
     assert len(list(kernel.elements.elems())) == 1
     assert client.get("/api/design").json()["dirty"] is False
+
+
+# --------------------------------------------------------- tekstopties
+
+def test_text_accepts_a_size(kernel, drawing):
+    small = drawing.create("text", x_mm=10, y_mm=40, text="Ab", font_size_mm=4)
+    large = drawing.create("text", x_mm=10, y_mm=80, text="Ab", font_size_mm=12)
+
+    def height(result):
+        b = kernel.elements.find_node(result["ids"][0]).bounds
+        return (b[3] - b[1]) / UNITS_PER_MM
+
+    assert height(large) > height(small) * 2
+
+
+def test_text_rejects_a_nonsense_size(drawing):
+    with pytest.raises(DesignError):
+        drawing.create("text", x_mm=10, y_mm=10, text="Ab", font_size_mm=0)
+
+
+def test_fonts_are_listed(kernel, drawing):
+    fonts = drawing.fonts()
+
+    assert isinstance(fonts, list)
+    # Hidden system fonts start with a dot and are filtered out.
+    assert all(not f["name"].startswith(".") for f in fonts)
+    assert all("file" in f and "name" in f for f in fonts)
+
+
+# --------------------------------------------------------- tijdschatting
+
+def test_estimate_before_starting(kernel, drawing, client):
+    kernel.console("rect 20mm 15mm 60mm 40mm\n")
+    kernel.console("element* cut -s 12 -p 650\n")
+
+    response = client.get("/api/job/estimate")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["seconds"] > 0
+    assert body["parts"] >= 1
+
+
+def test_estimating_does_not_dirty_the_document(kernel, client):
+    kernel.console("rect 20mm 15mm 60mm 40mm\n")
+    kernel.console("element* cut -s 12 -p 650\n")
+    client.get("/api/design/export.svg")
+    assert client.get("/api/design").json()["dirty"] is False
+
+    client.get("/api/job/estimate")
+
+    assert client.get("/api/design").json()["dirty"] is False
+
+
+def test_estimating_leaves_no_plan_behind(kernel, drawing, client):
+    """Otherwise the next start would spool a stale plan."""
+    kernel.console("rect 20mm 15mm 60mm 40mm\n")
+    kernel.console("element* cut -s 12 -p 650\n")
+
+    client.get("/api/job/estimate")
+
+    assert len(kernel.planner.default_plan.plan) == 0

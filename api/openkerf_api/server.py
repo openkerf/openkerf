@@ -322,6 +322,15 @@ class ApiServer:
 
             return manage(run)
 
+        @app.get("/api/design/fonts")
+        def list_fonts():
+            return manage(self.drawing.fonts)
+
+        @app.get("/api/job/estimate")
+        def estimate_job():
+            """Geschatte brandtijd van het huidige ontwerp, vóór starten."""
+            return manage(self.drawing.estimate)
+
         @app.get("/api/design/export.svg")
         def export_design(filename: str = "ontwerp.svg"):
             """Download the design as SVG — otherwise the work is fleeting."""

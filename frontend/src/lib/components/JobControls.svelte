@@ -18,6 +18,27 @@
 	let running = $derived(Boolean(job?.running));
 	let queued = $derived(device?.spooler.queue_length ?? 0);
 	let tokenDraft = $state('');
+	let estimate = $state<{ seconds: number; parts: number } | null>(null);
+	let estimating = $state(false);
+
+	// De schatting van de engine vóór het starten: de pre-flight toonde tot nu
+	// toe alleen de tijd van een al lopende job, wat precies te laat is.
+	async function loadEstimate() {
+		estimating = true;
+		try {
+			const response = await fetch('/api/job/estimate');
+			estimate = response.ok ? await response.json() : null;
+		} catch {
+			estimate = null;
+		} finally {
+			estimating = false;
+		}
+	}
+
+	$effect(() => {
+		if (preflight) loadEstimate();
+		else estimate = null;
+	});
 
 	// Zonder token levert elke schrijfactie een 401 op. Een knop aanbieden die
 	// gegarandeerd faalt is een lege belofte, dus die blokkeren we hier al.
@@ -51,7 +72,9 @@
 		<div class="preflight">
 			<div class="pf-time">
 				<span class="muted">Geschatte tijd</span>
-				<span class="v mono">{formatDuration(job?.estimate_seconds)}</span>
+				<span class="v mono">
+					{#if estimating}…{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
+				</span>
 			</div>
 			<div class="pf-row">In wachtrij: <span class="mono">{queued}</span></div>
 			<p class="pf-warn">

@@ -10,7 +10,8 @@
 		canEdit = false,
 		tool = 'select',
 		onEdited,
-		onDrawn
+		onDrawn,
+		onTextAt
 	}: {
 		device: Device | null;
 		design: DesignStore;
@@ -19,6 +20,7 @@
 		tool?: string;
 		onEdited?: () => void;
 		onDrawn?: (shape: Record<string, unknown>) => void;
+		onTextAt?: (at: { x: number; y: number }) => void;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -156,8 +158,9 @@
 				y2_mm: at.y
 			});
 		} else if (tool === 'text') {
-			const text = prompt('Welke tekst?');
-			if (text) onDrawn?.({ type: 'text', x_mm: at.x, y_mm: at.y, text });
+			// De opties (lettertype, hoogte, spatiëring) komen uit een eigen
+			// venster; een browserprompt kan alleen een kale regel tekst.
+			onTextAt?.({ x: at.x, y: at.y });
 		}
 	}
 

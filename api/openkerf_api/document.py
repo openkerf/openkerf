@@ -8,7 +8,9 @@ plus elke directe boomwijziging.
 """
 
 # Opdrachten die het ontwerp niet veranderen.
-READ_ONLY = {"version", "save", "flush", "channel", "help"}
+# `plan` bouwt een snijplan op uit de bestaande operaties; het raakt de
+# elementenboom niet, dus een tijdschatting maakt je ontwerp niet vuil.
+READ_ONLY = {"version", "save", "flush", "channel", "help", "plan"}
 
 
 class Document:

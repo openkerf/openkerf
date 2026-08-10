@@ -23,6 +23,13 @@ SHAPES = {
     "text": ("x_mm", "y_mm"),
 }
 
+# Extra's voor tekst, allemaal optioneel.
+TEXT_OPTIONS = {
+    "font": str,
+    "font_size_mm": float,
+    "spacing": float,
+}
+
 # Library operation names map onto MeerK40t's own console commands.
 OPERATIONS = {
     "cut": "cut",
@@ -95,7 +102,20 @@ class Drawing:
             raise DesignError("Aanhalingstekens in tekst worden nog niet ondersteund.")
         # linetext, niet text: bitmaptekst heeft geen geometrie en is dus
         # onzichtbaar op het canvas en niet te positioneren.
-        return f'linetext {_mm(v["x_mm"])} {_mm(v["y_mm"])} "{text}"'
+        parts = ["linetext", _mm(v["x_mm"]), _mm(v["y_mm"])]
+        font = str(fields.get("font") or "").strip()
+        if font:
+            if '"' in font:
+                raise DesignError("Ongeldige fontnaam.")
+            parts += ["-f", f'"{font}"']
+        size = fields.get("font_size_mm")
+        if size is not None:
+            parts += ["-s", _mm(_positive(size, "font_size_mm"))]
+        spacing = fields.get("spacing")
+        if spacing is not None:
+            parts += ["-g", f"{_positive(spacing, 'spacing'):g}"]
+        parts.append(f'"{text}"')
+        return " ".join(parts)
 
     def delete(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)
@@ -233,6 +253,53 @@ class Drawing:
         if not str(node.type).startswith(("op ", "effect ")):
             raise DesignError(f"{operation_id} is geen laag.")
         return node
+
+    def fonts(self) -> list[dict]:
+        """
+        Beschikbare vectorfonts.
+
+        De Hershey-plugin registreert zowel zijn eigen fonts als de systeem-TTF's;
+        namen die met een punt beginnen zijn verborgen systeemfonts.
+        """
+        registry = getattr(self.kernel.root, "fonts", None)
+        if registry is None:
+            return []
+        found = []
+        for entry in registry.available_fonts() or []:
+            path = entry[0] if len(entry) > 0 else None
+            display = entry[1] if len(entry) > 1 else None
+            if not path or not display or str(display).startswith("."):
+                continue
+            found.append({"file": str(path), "name": str(display)})
+        found.sort(key=lambda f: f["name"].lower())
+        return found
+
+    def estimate(self) -> dict:
+        """
+        Hoe lang gaat deze job duren, vóór je hem start.
+
+        De pre-flight liet tot nu toe alleen de schatting van een al lopende job
+        zien, wat precies te laat is. We draaien de planpijplijn zonder te
+        spoolen, tellen snij- en reistijd op, en gooien het plan weer weg.
+        """
+        self.runner.run("plan copy preprocess validate blob preopt optimize")
+        planner = getattr(self.kernel, "planner", None)
+        seconds = 0.0
+        pieces = 0
+        try:
+            plan = getattr(planner, "default_plan", None)
+            for item in getattr(plan, "plan", []) or []:
+                for name in ("duration_cut", "duration_travel"):
+                    fn = getattr(item, name, None)
+                    if callable(fn):
+                        try:
+                            seconds += float(fn())
+                        except Exception:
+                            pass
+                pieces += 1
+        finally:
+            self.runner.run("plan clear")
+        return {"seconds": round(seconds, 1), "parts": pieces}
 
     def export_svg(self, filename: str = "ontwerp.svg"):
         """
