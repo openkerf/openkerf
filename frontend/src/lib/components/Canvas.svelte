@@ -60,6 +60,11 @@
 
 	let outline = $derived(preview ?? selection);
 
+	// Deel de voorvertoning zodat de bovenbalk de coördinaten live meetelt.
+	$effect(() => {
+		design.preview = preview;
+	});
+
 	function mmPerPixel() {
 		return 1 / scale;
 	}
@@ -90,6 +95,7 @@
 		const finished = drag;
 		const target = preview;
 		drag = null;
+		design.preview = null;
 		if (!design.selectedId || !target) return;
 		// Onder een halve pixel is het een klik, geen sleep.
 		if (Math.abs(finished.dx) < 0.05 && Math.abs(finished.dy) < 0.05) return;
@@ -344,9 +350,21 @@
 	.hit {
 		cursor: pointer;
 	}
-	.hit:focus-visible {
+	/* De globale :focus-visible-regel uit tokens.css tekent een outline van 2 px
+	   met offset. Op een SVG-vorm rendert die als rechthoek om de bounding box,
+	   en juist tijdens het slepen ligt de focus op het sleepvlak of een
+	   hoekgreep — dat gaf een dikke rand om de hele selectie. Hier dus uit voor
+	   alle vormen in het canvas; wat geselecteerd is blijft zichtbaar via de
+	   kerflijn-contour, ook bij toetsenbordbediening. */
+	svg :focus,
+	svg :focus-visible {
 		outline: none;
-		stroke: color-mix(in srgb, var(--accent) 35%, transparent);
+	}
+	/* Toetsenbordfocus blijft wel zichtbaar: zonder muis moet je kunnen zien
+	   welk element je op het punt staat te selecteren. */
+	.hit:focus-visible {
+		stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+		stroke-width: 4;
 	}
 	/* De kerflijn als selectiecontour: statisch gestreept, animatie pas bij
 	   slepen — dat komt in de volgende plak. */
@@ -364,7 +382,12 @@
 	.selection .handle.grabbable {
 		cursor: nwse-resize;
 	}
-	.selection .grab {
+	/* `rect.grab` en niet `.grab`: `.selection rect` hierboven is specifieker en
+	   won anders, waardoor het sleepvlak dezelfde gestreepte accentlijn kreeg
+	   als de contour. Twee strepen over elkaar, en tijdens het slepen animeert
+	   alleen de contour — dan lopen ze uit fase en loopt de rand dicht tot een
+	   dikke balk. */
+	.selection rect.grab {
 		fill: transparent;
 		stroke: none;
 		cursor: move;

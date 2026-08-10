@@ -61,6 +61,12 @@ export class DesignStore {
 	design = $state<Design | null>(null);
 	loading = $state(false);
 	selectedId = $state<string | null>(null);
+	/**
+	 * Voorvertoning tijdens het slepen, in mm. Het canvas schrijft hem, de
+	 * bovenbalk en statusbalk lezen hem — zo lopen de coördinaten mee terwijl
+	 * je sleept, zonder dat er per muisbeweging een opdracht naar de engine gaat.
+	 */
+	preview = $state<{ x: number; y: number; width: number; height: number } | null>(null);
 	/** Gezet door de pagina om de URL mee te laten lopen met de selectie. */
 	onSelect: ((id: string | null) => void) | null = null;
 
@@ -78,6 +84,11 @@ export class DesignStore {
 		if (this.selectedId === id) return;
 		this.selectedId = id;
 		this.onSelect?.(id);
+	}
+
+	/** Wat de gebruiker nú ziet: de sleep-voorvertoning, anders de selectie. */
+	get liveBox() {
+		return this.preview ?? this.selectedSize;
 	}
 
 	/** Maten van het geselecteerde element in mm, uit de bounds in Tats. */

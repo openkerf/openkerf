@@ -32,17 +32,41 @@
 		await design.load();
 	}
 
+	async function setPosition(x: number, y: number) {
+		const box = design.selectedSize;
+		if (!box || !design.selectedId || !canEdit) return;
+		await edits.move(design.selectedId, x - box.x, y - box.y);
+		await design.load();
+	}
+
+	async function setSize(width: number, height: number) {
+		const box = design.selectedSize;
+		if (!box || !design.selectedId || !canEdit) return;
+		await edits.resize(design.selectedId, box.x, box.y, width, height);
+		await design.load();
+	}
+
 	async function nudge(dx: number, dy: number) {
 		if (!design.selectedId || !canEdit) return;
 		await edits.move(design.selectedId, dx, dy);
 		await design.load();
 	}
 	// De tab staat in de URL, zodat de terugknop en een bladwijzer werken.
-	let tab = $derived<'design' | 'job'>($page.url.searchParams.get('tab') === 'design' ? 'design' : 'job');
+	// Lokale state is de bron van waarheid, de URL volgt. Andersom werkt niet:
+	// replaceState maakt $page.url niet reactief, waardoor het paneel op de
+	// oude tab bleef staan terwijl de URL wél meeliep.
+	let tab = $state<'design' | 'job'>('job');
 
 	function selectTab(next: 'design' | 'job') {
-		const url = new URL($page.url);
-		url.searchParams.set('tab', next);
+		tab = next;
+		syncUrl();
+	}
+
+	function syncUrl() {
+		const url = new URL(window.location.href);
+		url.searchParams.set('tab', tab);
+		if (design.selectedId) url.searchParams.set('select', design.selectedId);
+		else url.searchParams.delete('select');
 		replaceState(url, {});
 	}
 
@@ -55,18 +79,14 @@
 	onMount(() => {
 		status.connect();
 		control.refreshCapabilities();
+		if ($page.url.searchParams.get('tab') === 'design') tab = 'design';
 		design.load().then(() => {
 			const wanted = $page.url.searchParams.get('select');
 			if (wanted) design.select(wanted);
 		});
 		// Pas ná mount koppelen: replaceState vóórdat de router klaar is breekt
 		// de render. De URL volgt daarom de actie, niet een effect.
-		design.onSelect = (id) => {
-			const url = new URL($page.url);
-			if (id) url.searchParams.set('select', id);
-			else url.searchParams.delete('select');
-			replaceState(url, {});
-		};
+		design.onSelect = () => syncUrl();
 		// De beschikbare acties hangen af van het actieve device, dus opnieuw
 		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
@@ -121,6 +141,10 @@
 	state={machine}
 	canStart={(control.capabilities?.actions.start ?? false) && !control.needsToken}
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
+	box={design.liveBox}
+	canEdit={canEdit && design.preview === null}
+	onSetPosition={setPosition}
+	onSetSize={setSize}
 	onStart={requestStart}
 	onStop={() => control.stop()}
 	onToggleTheme={toggleTheme}
