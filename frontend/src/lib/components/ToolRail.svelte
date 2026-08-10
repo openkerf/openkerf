@@ -1,5 +1,5 @@
 <script lang="ts">
-	export type Tool = 'select' | 'nodes' | 'measure' | 'rect' | 'circle' | 'line' | 'text';
+	export type Tool = 'select' | 'nodes' | 'measure' | 'pen' | 'rect' | 'circle' | 'line' | 'text';
 
 	let {
 		tool = $bindable(),
@@ -30,6 +30,7 @@
 		{ id: 'rect', label: 'Rechthoek', path: 'M4 6h16v12H4z' },
 		{ id: 'circle', label: 'Cirkel', path: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z' },
 		{ id: 'line', label: 'Lijn', path: 'M4 20L20 4' },
+		{ id: 'pen', label: 'Pen — klik punten, Enter sluit af', path: 'M4 20l4-1 11-11-3-3L5 16z' },
 		{ id: 'text', label: 'Tekst', path: 'M5 6h14M12 6v13' },
 		{ id: 'measure', label: 'Meten', path: 'M3 15L15 3l6 6L9 21z M7 11l2 2M11 7l2 2' }
 	];

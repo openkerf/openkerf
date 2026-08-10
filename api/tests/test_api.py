@@ -96,6 +96,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/library/presets",
         "/api/library/machines",
         "/api/library/presets/{preset_id}/apply",
+        "/api/design/path",
+        "/api/design/nest",
         "/api/design/generate/grid",
         "/api/design/generate/radial",
         "/api/design/generate/polygon",

@@ -61,6 +61,59 @@ class Drawing:
 
     # --------------------------------------------------------------- elements
 
+    def create_path(self, points, closed: bool = False, label=None) -> dict:
+        """
+        Een vrij pad uit losse punten — de pen.
+
+        Elk punt mag een bocht dragen: `[x, y]` is een rechte hoek, en
+        `[x, y, cx, cy]` trekt de lijn ernaartoe krom via dat controlepunt. Zo
+        kan de pen met één klik een hoek zetten en met slepen een bocht, zoals
+        elk tekenprogramma dat doet.
+
+        De geometrie gaat rechtstreeks naar de elementenboom. De `path`-opdracht
+        van de engine schaalt zijn d-string, en dan tekent een pad van 10 cm
+        zichzelf tientallen meters groot.
+        """
+        from meerk40t.core.geomstr import Geomstr
+        from meerk40t.core.units import UNITS_PER_MM
+
+        cleaned = []
+        for point in points or []:
+            if not isinstance(point, (list, tuple)) or len(point) not in (2, 4):
+                raise DesignError("Een punt is [x, y] of [x, y, cx, cy].")
+            cleaned.append([_finite(value, "punt") for value in point])
+        if len(cleaned) < 2:
+            raise DesignError("Een pad heeft minstens twee punten.")
+
+        def at(values, index=0):
+            return complex(
+                values[index] * UNITS_PER_MM, values[index + 1] * UNITS_PER_MM
+            )
+
+        geometry = Geomstr()
+        pairs = list(zip(cleaned, cleaned[1:]))
+        if closed:
+            pairs.append((cleaned[-1], cleaned[0]))
+        for start, end in pairs:
+            if len(end) == 4:
+                geometry.quad(at(start), at(end, 2), at(end))
+            else:
+                geometry.line(at(start), at(end))
+
+        with self.elements.undoscope("Pad tekenen"):
+            node = self.elements.elem_branch.add(
+                geometry=geometry,
+                type="elem path",
+                stroke=self.elements.default_stroke,
+                stroke_width=self.elements.default_strokewidth,
+                label=label,
+            )
+            self.elements.validate_ids()
+        self.user_operations  # noqa: B018 - documenteert dat lagen ongemoeid blijven
+        self.elements.set_emphasis([node])
+        self._refresh()
+        return {"ids": [node.id], "type": node.type}
+
     def create(self, kind: str, **fields) -> dict:
         if kind not in SHAPES:
             raise DesignError(

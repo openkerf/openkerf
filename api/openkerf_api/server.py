@@ -28,6 +28,7 @@ from .edits import DesignEditor, DesignError
 from .images import Images
 from .library import Library, LibraryError, default_path
 from .generators import Generators
+from .nesting import Nesting
 from .nodes import Nodes
 from .presetariat import Presetariat
 from .testgrid import TestGridGenerator, plan_grid
@@ -161,6 +162,7 @@ class ApiServer:
         self.images = Images(kernel, self.commands)
         self.nodes = Nodes(kernel, self.commands)
         self.generators = Generators(kernel, self.commands)
+        self.nesting = Nesting(kernel, self.editor)
         self.design = DesignReader(
             kernel,
             keep_operations=self.drawing.user_operations,
@@ -631,6 +633,26 @@ class ApiServer:
             return manage(run)
 
         # ----------------------------------------------------------- generatoren
+
+        @app.post("/api/design/path", dependencies=write, status_code=201)
+        def create_path(body: dict):
+            """Een vrij getekend pad: de pen."""
+            return manage(
+                self.drawing.create_path,
+                body.get("points"),
+                bool(body.get("closed")),
+                body.get("label"),
+            )
+
+        @app.post("/api/design/nest", dependencies=write)
+        def nest_elements(body: dict):
+            return manage(
+                self.nesting.nest,
+                body.get("ids") or [],
+                body.get("margin_mm", 3.0),
+                body.get("origin_x_mm", 0.0),
+                body.get("origin_y_mm", 0.0),
+            )
 
         @app.post("/api/design/generate/grid", dependencies=write)
         def generate_grid(body: dict):

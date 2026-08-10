@@ -148,6 +148,12 @@
 			{#if canEdit}
 				<div class="arrange">
 					<span class="rot-label">Pad</span>
+					<button
+						class="rot"
+						disabled={edits.busy || chosen.length < 2}
+						title="Leg de selectie dicht op elkaar om materiaal te sparen"
+						onclick={() => onArrange?.('nest')}
+					>Nesten</button>
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('offset')}>Offset…</button>
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('simplify')}>Vereenvoudigen</button>
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('hatch')}>Vulling</button>

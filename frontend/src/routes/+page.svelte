@@ -183,6 +183,11 @@
 			if ((await edits.offset(ids, Number(answer))).ok) await design.load();
 			return;
 		}
+		if (action === 'nest') {
+			await post('/api/design/nest', { ids, margin_mm: 3 });
+			await design.load();
+			return;
+		}
 		if (action === 'simplify' || action === 'hatch' || action === 'wobble') {
 			const result =
 				action === 'simplify' ? await edits.simplify(ids) : await edits.effect(ids, action);
@@ -361,6 +366,11 @@
 		onTextAt={(at) => {
 			textAt = at;
 			textOpen = true;
+		}}
+		onPath={async (points, closed) => {
+			if (!canEdit) return;
+			await post('/api/design/path', { points, closed });
+			await design.load();
 		}}
 		bind:cropping
 		onCrop={async (rect) => {

@@ -13,7 +13,8 @@
 		onDrawn,
 		onTextAt,
 		cropping = $bindable(false),
-		onCrop
+		onCrop,
+		onPath
 	}: {
 		device: Device | null;
 		design: DesignStore;
@@ -26,6 +27,7 @@
 		/** Aan tijdens bijsnijden: het sleepkader knipt in plaats van te selecteren. */
 		cropping?: boolean;
 		onCrop?: (rect: { x: number; y: number; width: number; height: number }) => void;
+		onPath?: (points: number[][], closed: boolean) => Promise<void> | void;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -147,6 +149,26 @@
 			cancelled = true;
 		};
 	});
+
+	// De pen: klikken zet een punt, Enter of een klik op het beginpunt sluit af.
+	// Escape gooit weg wat er staat — halverwege stoppen moet zonder rommel.
+	let penPoints = $state<{ x: number; y: number }[]>([]);
+
+	function penClick(at: { x: number; y: number }) {
+		const first = penPoints[0];
+		if (first && penPoints.length > 2 && Math.hypot(at.x - first.x, at.y - first.y) < 3) {
+			finishPen(true);
+			return;
+		}
+		penPoints = [...penPoints, at];
+	}
+
+	async function finishPen(closed: boolean) {
+		const points = penPoints;
+		penPoints = [];
+		if (points.length < 2) return;
+		await onPath?.(points.map((p) => [p.x, p.y]), closed);
+	}
 
 	// Meten: twee klikken, en de afstand blijft staan tot je opnieuw begint.
 	// Nuttig om te controleren of een uitsparing echt past voordat je snijdt.
@@ -421,6 +443,19 @@
 	);
 </script>
 
+<svelte:window
+	onkeydown={(e) => {
+		if (tool !== 'pen' || !penPoints.length) return;
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			finishPen(false);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			penPoints = [];
+		}
+	}}
+/>
+
 <!-- Wiel zoomt, alt of middelste knop pant. Toetsenbord: de zoomknoppen
      rechtsonder zijn gewone knoppen. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -477,6 +512,10 @@
 					: 'Positie van de laserkop onbekend'}
 				onclick={(e) => {
 					if (e.target !== e.currentTarget) return;
+					if (tool === 'pen' && canEdit) {
+						penClick(pointerMm(e));
+						return;
+					}
 					if (tool === 'measure') {
 						const at = pointerMm(e);
 						if (!measureFrom || measureTo) {
@@ -487,7 +526,7 @@
 						}
 						return;
 					}
-					if (tool !== 'select' && tool !== 'nodes' && canEdit) {
+					if (tool !== 'select' && tool !== 'nodes' && tool !== 'pen' && canEdit) {
 						drawAt(e);
 						return;
 					}
@@ -510,6 +549,7 @@
 				}}
 				onpointermove={(e) => {
 					if (tool === 'measure' && measureFrom && !measureTo) hover = pointerMm(e);
+					if (tool === 'pen' && penPoints.length) hover = pointerMm(e);
 					if (lineStart) hover = pointerMm(e);
 					moveBand(e);
 				}}
@@ -759,6 +799,18 @@
 					{/each}
 				{/if}
 
+				{#if tool === 'pen' && penPoints.length}
+					{@const live = hover ? [...penPoints, hover] : penPoints}
+					<polyline
+						class="pen-line"
+						points={live.map((p) => `${p.x},${p.y}`).join(' ')}
+						fill="none"
+					/>
+					{#each penPoints as point, index (index)}
+						<circle class="pen-dot" cx={point.x} cy={point.y} r="1.6" />
+					{/each}
+				{/if}
+
 				{#if tool === 'measure' && measureFrom}
 					{@const to = measureTo ?? hover ?? measureFrom}
 					<line
@@ -910,6 +962,12 @@
 		stroke-dasharray: 4 3;
 		vector-effect: non-scaling-stroke;
 	}
+	.pen-line {
+		stroke: var(--accent);
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+	}
+	.pen-dot { fill: var(--accent); }
 	.measure {
 		fill: var(--text-2);
 		font-size: 3.5px;
@@ -921,6 +979,12 @@
 		vector-effect: non-scaling-stroke;
 		cursor: grab;
 	}
+	.pen-line {
+		stroke: var(--accent);
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+	}
+	.pen-dot { fill: var(--accent); }
 	.measure {
 		stroke: var(--accent);
 		stroke-width: 1;
