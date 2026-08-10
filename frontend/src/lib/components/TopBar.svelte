@@ -96,6 +96,13 @@
 
 	<div class="spacer"></div>
 
+	<!-- Opslaan als SVG: MeerK40t's eigen schrijver, dus operaties komen bij
+	     terugladen weer mee. -->
+	<a class="btn" href="/api/design/export.svg" download="ontwerp.svg" title="Ontwerp opslaan">
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7M8 20v-6h8v6"/></svg>
+		Opslaan
+	</a>
+
 	<!-- Kader tonen beweegt de kop: dat is fase 3, niet fase 2. -->
 	<button class="btn" disabled title="Beschikbaar in fase 3">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
@@ -207,6 +214,7 @@
 		font-weight: 500;
 		transition: background var(--transition);
 	}
+	.btn { text-decoration: none; color: inherit; }
 	.btn:hover:not(:disabled) { background: var(--surface-2); }
 	.btn.primary {
 		background: var(--accent);

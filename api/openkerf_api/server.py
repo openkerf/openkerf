@@ -303,6 +303,16 @@ class ApiServer:
             kind = body.get("type")
             return manage(lambda: self.drawing.create(kind, **body))
 
+        @app.get("/api/design/export.svg")
+        def export_design(filename: str = "ontwerp.svg"):
+            """Download the design as SVG — otherwise the work is fleeting."""
+            from fastapi.responses import FileResponse
+
+            path = manage(self.drawing.export_svg, filename)
+            return FileResponse(
+                path, media_type="image/svg+xml", filename=path.name
+            )
+
         @app.post("/api/design/elements/delete", dependencies=write)
         def delete_elements(body: dict):
             return manage(self.drawing.delete, body.get("ids"))

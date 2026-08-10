@@ -256,3 +256,28 @@ def test_a_removed_layer_disappears_again(kernel, client):
     assert not any(
         o["id"] == created["id"] for o in client.get("/api/design").json()["operations"]
     )
+
+
+def test_export_writes_an_svg_that_carries_the_operations(kernel, client):
+    """
+    Without saving, all work is fleeting. MeerK40t's own writer keeps its
+    namespace, so operations survive a round trip.
+    """
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 20, "y_mm": 15, "width_mm": 60, "height_mm": 40},
+    )
+
+    response = client.get("/api/design/export.svg")
+
+    assert response.status_code == 200
+    body = response.text
+    assert body.startswith("<svg")
+    assert "meerk40t" in body
+
+
+def test_export_filename_cannot_escape_its_directory(kernel, client):
+    response = client.get("/api/design/export.svg", params={"filename": "../../etc/passwd"})
+
+    assert response.status_code == 200
+    assert response.headers["content-disposition"].count("passwd.svg") == 1

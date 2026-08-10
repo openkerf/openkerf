@@ -234,6 +234,26 @@ class Drawing:
             raise DesignError(f"{operation_id} is geen laag.")
         return node
 
+    def export_svg(self, filename: str = "ontwerp.svg"):
+        """
+        Schrijf het ontwerp weg als SVG.
+
+        MeerK40t's eigen schrijver, inclusief zijn namespace, dus operaties en
+        instellingen komen bij het terugladen weer mee. Het bestand gaat naar
+        een tijdelijke map; de browser haalt het op als download.
+        """
+        import tempfile
+        from pathlib import Path
+
+        safe = Path(filename).name or "ontwerp.svg"
+        if not safe.lower().endswith(".svg"):
+            safe += ".svg"
+        target = Path(tempfile.mkdtemp(prefix="openkerf-export-")) / safe
+        self.runner.run(f'save "{target}"')
+        if not target.is_file():
+            raise DesignError("De engine heeft geen bestand geschreven.")
+        return target
+
     def _refresh(self):
         self.elements.signal("rebuild_tree", "all")
         self.elements.signal("refresh_scene", "Scene")
