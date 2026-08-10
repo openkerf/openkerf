@@ -22,6 +22,7 @@ from pathlib import Path
 from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
+from .edits import DesignEditor, DesignError
 from .machines import MachineError, MachineManager
 from .status import StatusReader
 
@@ -133,6 +134,7 @@ class ApiServer:
         self.commands = CommandRunner(kernel)
         self.machines = MachineManager(kernel, self.commands)
         self.design = DesignReader(kernel)
+        self.editor = DesignEditor(kernel, self.commands)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
 
@@ -190,7 +192,7 @@ class ApiServer:
             """Same for machine management, where failures are our own."""
             try:
                 return action(*args)
-            except MachineError as e:
+            except (MachineError, DesignError) as e:
                 raise HTTPException(status_code=409, detail=str(e)) from e
             except CommandError as e:
                 raise HTTPException(
@@ -273,6 +275,33 @@ class ApiServer:
         @app.post("/api/spooler/clear", dependencies=write)
         def clear_queue():
             return act(self.commands.clear_queue)
+
+        # ------------------------------------------------------- design edits
+
+        @app.post("/api/design/elements/{element_id}/move", dependencies=write)
+        def move_element(element_id: str, body: dict):
+            return manage(
+                self.editor.move, element_id, body.get("dx_mm"), body.get("dy_mm")
+            )
+
+        @app.post("/api/design/elements/{element_id}/resize", dependencies=write)
+        def resize_element(element_id: str, body: dict):
+            return manage(
+                self.editor.resize,
+                element_id,
+                body.get("x_mm"),
+                body.get("y_mm"),
+                body.get("width_mm"),
+                body.get("height_mm"),
+            )
+
+        @app.post("/api/design/undo", dependencies=write)
+        def undo_design():
+            return manage(self.editor.undo)
+
+        @app.post("/api/design/redo", dependencies=write)
+        def redo_design():
+            return manage(self.editor.redo)
 
         # -------------------------------------------------------- machine setup
 

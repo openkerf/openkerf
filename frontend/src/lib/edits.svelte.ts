@@ -1,0 +1,88 @@
+/**
+ * Bewerkingen op elementen: verplaatsen, schalen, ongedaan maken.
+ *
+ * Let op de undo-eigenaardigheid van de engine: undo herstelt een snapshot van
+ * de boom, en de herstelde nodes komen terug zónder id. Hernummeren geeft
+ * daarna *andere* id's dan ervoor. De API meldt dat met `ids_invalidated`, en
+ * wij laten de selectie dan los — anders zou een bewaard id later een ander
+ * element kunnen aanwijzen.
+ */
+
+export type EditResult = { ok: boolean; idsInvalidated: boolean };
+
+export class EditController {
+	busy = $state(false);
+	error = $state<string | null>(null);
+
+	#token: () => string;
+
+	constructor(token: () => string) {
+		this.#token = token;
+	}
+
+	#headers(): Record<string, string> {
+		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+		const token = this.#token();
+		if (token) headers.Authorization = `Bearer ${token}`;
+		return headers;
+	}
+
+	async #post(path: string, body?: unknown): Promise<EditResult> {
+		this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch(path, {
+				method: 'POST',
+				headers: this.#headers(),
+				body: body === undefined ? undefined : JSON.stringify(body)
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return { ok: false, idsInvalidated: false };
+			}
+			const data = await response.json();
+			return { ok: true, idsInvalidated: Boolean(data?.ids_invalidated) };
+		} catch (e) {
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return { ok: false, idsInvalidated: false };
+		} finally {
+			this.busy = false;
+		}
+	}
+
+	move(id: string, dxMm: number, dyMm: number) {
+		return this.#post(`/api/design/elements/${encodeURIComponent(id)}/move`, {
+			dx_mm: dxMm,
+			dy_mm: dyMm
+		});
+	}
+
+	resize(id: string, xMm: number, yMm: number, widthMm: number, heightMm: number) {
+		return this.#post(`/api/design/elements/${encodeURIComponent(id)}/resize`, {
+			x_mm: xMm,
+			y_mm: yMm,
+			width_mm: widthMm,
+			height_mm: heightMm
+		});
+	}
+
+	undo() {
+		return this.#post('/api/design/undo');
+	}
+
+	redo() {
+		return this.#post('/api/design/redo');
+	}
+}
+
+async function describe(response: Response): Promise<string> {
+	if (response.status === 401) return 'Geen of onjuiste token — bewerken is geblokkeerd.';
+	try {
+		const body = await response.json();
+		if (typeof body.detail === 'string') return body.detail;
+		if (body.detail?.output?.length) return body.detail.output.join(' · ');
+	} catch {
+		/* val terug op de generieke tekst */
+	}
+	return `De engine weigerde de bewerking (${response.status}).`;
+}

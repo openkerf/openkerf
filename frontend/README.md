@@ -40,7 +40,8 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Job-tab: spoolerwachtrij, voortgang, tijden, engine-signalen | live |
 | Ontwerp laden, job starten, pauze, hervatten, stop, wachtrij legen | live (fase 2) |
 | Canvas: het geladen ontwerp op het bed, op ware maat | live |
-| Selectie: klikken op een element, contour + maten | live (read-only) |
+| Selectie: klikken op een element, contour + maten | live |
+| Bewerken: slepen, schalen met hoekgrepen, pijltjes, ongedaan maken | live |
 | Bewerken-tab: lagen met snelheid/vermogen en elementaantal | live |
 | Materiaalkaart | nog niet gebouwd — fase 4 |
 | Kader tonen | uitgeschakeld — beweging is fase 3 |
@@ -124,5 +125,20 @@ Twee dingen die niet vanzelf goed gaan:
   `find_node()`), niet uit de volgorde van de snapshot. Anders zou een selectie
   na het toevoegen van een element stilletjes naar een ander object wijzen.
 
-Verplaatsen en schalen komen in een volgende stap — dat betekent schrijfroutes
-naar de elementenboom en dat blijft bewust apart.
+## Bewerken
+
+Sleep het selectiekader om te verplaatsen, de hoekgrepen om te schalen (de
+tegenoverliggende hoek blijft liggen). Tijdens het slepen loopt de kerflijn —
+het enige moment waarop hij beweegt. Pijltjestoetsen verplaatsen 0,1 mm, met
+shift 1 mm.
+
+Er gaat **één** opdracht naar de engine, bij loslaten; tijdens het slepen is de
+contour een lokale voorvertoning. Anders zou elke muisbeweging een commando
+worden.
+
+Ongedaan maken zit in het Ontwerp-blok. Na een undo laat de frontend de selectie
+los: de engine geeft herstelde nodes nieuwe id's, dus een bewaard id zou een
+ander element kunnen aanwijzen.
+
+Bewerken vereist dezelfde token als de jobcontrole; zonder token zijn de grepen
+inactief en zegt het paneel waarom.

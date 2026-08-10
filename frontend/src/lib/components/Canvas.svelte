@@ -1,8 +1,21 @@
 <script lang="ts">
 	import type { Device } from '$lib/api';
 	import type { DesignStore } from '$lib/design.svelte';
+	import type { EditController } from '$lib/edits.svelte';
 
-	let { device, design }: { device: Device | null; design: DesignStore } = $props();
+	let {
+		device,
+		design,
+		edits,
+		canEdit = false,
+		onEdited
+	}: {
+		device: Device | null;
+		design: DesignStore;
+		edits: EditController;
+		canEdit?: boolean;
+		onEdited?: () => void;
+	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
 
@@ -15,6 +28,79 @@
 	let scale = $derived(640 / bed.width);
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
+
+	// Slepen. De voorbeeld-offset is puur visueel; pas bij loslaten gaat er één
+	// opdracht naar de engine, zodat we hem niet met tussenstanden bestoken.
+	type Drag = {
+		mode: 'move' | 'scale';
+		corner: number;
+		startX: number;
+		startY: number;
+		dx: number;
+		dy: number;
+		origin: { x: number; y: number; width: number; height: number };
+	};
+	let drag = $state<Drag | null>(null);
+
+	let preview = $derived.by(() => {
+		if (!drag || !selection) return null;
+		if (drag.mode === 'move') {
+			return { ...drag.origin, x: drag.origin.x + drag.dx, y: drag.origin.y + drag.dy };
+		}
+		// Schalen vanaf de tegenoverliggende hoek, zodat die blijft liggen.
+		const { x, y, width, height } = drag.origin;
+		const left = drag.corner % 2 === 0;
+		const top = drag.corner < 2;
+		const newX = left ? x + drag.dx : x;
+		const newY = top ? y + drag.dy : y;
+		const newWidth = left ? width - drag.dx : width + drag.dx;
+		const newHeight = top ? height - drag.dy : height + drag.dy;
+		return { x: newX, y: newY, width: newWidth, height: newHeight };
+	});
+
+	let outline = $derived(preview ?? selection);
+
+	function mmPerPixel() {
+		return 1 / scale;
+	}
+
+	function startDrag(event: PointerEvent, mode: 'move' | 'scale', corner = 0) {
+		if (!canEdit || !selection) return;
+		event.stopPropagation();
+		(event.target as Element).setPointerCapture?.(event.pointerId);
+		drag = {
+			mode,
+			corner,
+			startX: event.clientX,
+			startY: event.clientY,
+			dx: 0,
+			dy: 0,
+			origin: { ...selection }
+		};
+	}
+
+	function moveDrag(event: PointerEvent) {
+		if (!drag) return;
+		drag.dx = (event.clientX - drag.startX) * mmPerPixel();
+		drag.dy = (event.clientY - drag.startY) * mmPerPixel();
+	}
+
+	async function endDrag(event: PointerEvent) {
+		if (!drag) return;
+		const finished = drag;
+		const target = preview;
+		drag = null;
+		if (!design.selectedId || !target) return;
+		// Onder een halve pixel is het een klik, geen sleep.
+		if (Math.abs(finished.dx) < 0.05 && Math.abs(finished.dy) < 0.05) return;
+
+		if (finished.mode === 'move') {
+			await edits.move(design.selectedId, finished.dx, finished.dy);
+		} else if (target.width > 0.1 && target.height > 0.1) {
+			await edits.resize(design.selectedId, target.x, target.y, target.width, target.height);
+		}
+		onEdited?.();
+	}
 
 	// Linialen elke 50 mm.
 	let ticksX = $derived(
@@ -105,25 +191,58 @@
 						{/each}
 					</g>
 
-					<!-- Selectiecontour: de kerflijn, statisch gestreept. -->
-					{#if selection}
+					<!-- Selectiecontour: de kerflijn. Statisch gestreept, en alleen
+					     geanimeerd terwijl je sleept — zoals DESIGN-SYSTEM.md voorschrijft. -->
+					{#if outline}
 						<g class="selection">
 							<rect
-								x={selection.x}
-								y={selection.y}
-								width={selection.width}
-								height={selection.height}
+								class:kerf-anim={drag !== null}
+								x={outline.x}
+								y={outline.y}
+								width={Math.abs(outline.width)}
+								height={Math.abs(outline.height)}
 							/>
-							{#each [[selection.x, selection.y], [selection.x + selection.width, selection.y], [selection.x, selection.y + selection.height], [selection.x + selection.width, selection.y + selection.height]] as [hx, hy] (`${hx},${hy}`)}
-								<rect class="handle" x={hx - 1.2} y={hy - 1.2} width="2.4" height="2.4" />
+							<!-- Sleepvlak: het hele selectiekader verplaatst het element. -->
+							{#if canEdit}
+								<!-- Toetsenbord-equivalent: pijltjestoetsen verplaatsen de
+								     selectie (0,1 mm, met shift 1 mm). -->
+								<rect
+									class="grab"
+									role="button"
+									tabindex="-1"
+									aria-label="Sleep om te verplaatsen"
+									x={outline.x}
+									y={outline.y}
+									width={Math.abs(outline.width)}
+									height={Math.abs(outline.height)}
+									onpointerdown={(e) => startDrag(e, 'move')}
+									onpointermove={moveDrag}
+									onpointerup={endDrag}
+								/>
+							{/if}
+							{#each [[outline.x, outline.y], [outline.x + outline.width, outline.y], [outline.x, outline.y + outline.height], [outline.x + outline.width, outline.y + outline.height]] as [hx, hy], corner (corner)}
+								<rect
+									class="handle"
+									class:grabbable={canEdit}
+									role="button"
+									tabindex="-1"
+									aria-label="Sleep om te schalen"
+									x={hx - 1.2}
+									y={hy - 1.2}
+									width="2.4"
+									height="2.4"
+									onpointerdown={(e) => startDrag(e, 'scale', corner)}
+									onpointermove={moveDrag}
+									onpointerup={endDrag}
+								/>
 							{/each}
 							<text
 								class="mono"
-								x={selection.x + selection.width / 2}
-								y={selection.y + selection.height + 5}
+								x={outline.x + outline.width / 2}
+								y={outline.y + Math.abs(outline.height) + 5}
 								text-anchor="middle"
 							>
-								{selection.width.toFixed(1)} × {selection.height.toFixed(1)} mm
+								{Math.abs(outline.width).toFixed(1)} × {Math.abs(outline.height).toFixed(1)} mm
 							</text>
 						</g>
 					{/if}
@@ -241,6 +360,15 @@
 	.selection .handle {
 		fill: var(--surface-1);
 		stroke-dasharray: none;
+	}
+	.selection .handle.grabbable {
+		cursor: nwse-resize;
+	}
+	.selection .grab {
+		fill: transparent;
+		stroke: none;
+		cursor: move;
+		touch-action: none;
 	}
 	.selection text {
 		fill: var(--text-2);
