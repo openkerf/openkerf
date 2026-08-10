@@ -28,12 +28,19 @@ def lan_server(kernel):
 
 # --------------------------------------------------------------------- guard
 
+# POSTs that compute rather than change. They take a body, which is why they
+# are not GETs, but they touch neither the engine nor the database — see
+# test_preview_plans_without_drawing, which proves it for this one.
+READ_ONLY_POSTS = {"/api/library/testgrids/preview"}
+
+
 def test_every_mutating_route_requires_the_write_guard(local_client):
     """A new write endpoint must not slip in without authentication."""
     mutating = [
         route
         for route in local_client.app.routes
         if getattr(route, "methods", set()) & {"POST", "PATCH", "PUT", "DELETE"}
+        and route.path not in READ_ONLY_POSTS
     ]
     assert mutating, "there are write routes"
     for route in mutating:

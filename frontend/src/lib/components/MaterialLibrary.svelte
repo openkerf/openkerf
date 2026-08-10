@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { OPERATIONS, SOURCE_LABEL, type LibraryStore, type Preset } from '$lib/library.svelte';
 	import type { DesignOperation } from '$lib/design.svelte';
+	import TestGrid from './TestGrid.svelte';
 
 	let {
 		library,
@@ -179,6 +180,8 @@
 		{/if}
 	</div>
 {/if}
+
+<TestGrid {library} {canEdit} onGenerated={onApplied} />
 
 <style>
 	.section + .section { margin-top: var(--space-6); }

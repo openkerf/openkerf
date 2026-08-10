@@ -50,6 +50,8 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `GET`/`PATCH /api/machines/{path}/settings` | instellingen lezen en wijzigen (`?essential=true` voor de setup) |
 | `GET`/`POST`/`DELETE /api/library/materials` · `/presets` · `/machines` | de lokale materiaalbibliotheek |
 | `POST /api/library/presets/{id}/apply` | preset op een bewerking (laag) zetten |
+| `POST /api/library/testgrids/preview` | cellen uitrekenen zonder iets te tekenen |
+| `POST`/`GET`/`DELETE /api/library/testgrids` | testraster genereren, teruglezen, weggooien |
 | `GET /` | de frontend (met `-f`), anders een kale devpagina |
 
 Voorbeeld:
@@ -162,6 +164,26 @@ zonder migratie kan binnenkomen.
 verkeerd doen is een factor tien op een machine die brandt; `apply_settings`
 rekent het om en een test legt het vast.
 
+## Testrasters
+
+Een raster van vakjes dat vermogen (naar rechts) tegen snelheid (naar beneden)
+uitzet. **Elke cel krijgt een eigen operatie** met één vierkant eraan gekoppeld —
+zo modelleert MeerK40t nu eenmaal verschillende instellingen, en het betekent dat
+de bestaande `plan → spool`-route het raster zonder aanpassing brandt.
+
+`preview` rekent de cellen uit zonder de elementenboom aan te raken, zodat je
+ziet wat er komt voordat er iets in je ontwerp verschijnt. Het is een POST omdat
+er een body bij hoort, maar hij muteert niets; dat staat expliciet in de
+routebewaking van de tests.
+
+Genereren gebeurt binnen één `undoscope`, dus één keer ongedaan maken haalt het
+hele raster weg. Past het raster niet op het bed van het actieve device, dan
+weigert de API het met een 409 en blijft het ontwerp onaangeroerd.
+
+De cellen worden mét hun element- en operatie-id opgeslagen. Dat is wat de
+volgende plak nodig heeft: een tik op de foto terugvertalen naar de snelheid en
+het vermogen van dat vakje.
+
 ## Machine-setup
 
 De catalogus komt uit MeerK40t's `dev_info`-registry (9 families, 46 types) en de
@@ -187,7 +209,7 @@ object zou anders zijn interne velden uitstorten in de response.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 108 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 123 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van
