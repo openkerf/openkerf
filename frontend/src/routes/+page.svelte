@@ -6,6 +6,7 @@
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
+	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
 	import Canvas from '$components/Canvas.svelte';
 	import DesignPanel from '$components/DesignPanel.svelte';
@@ -17,6 +18,9 @@
 	const status = new StatusConnection();
 	const control = new Controller();
 	const design = new DesignStore();
+	const token = () =>
+		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
+	const library = new LibraryStore(token);
 	const edits = new EditController(() =>
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '')
 	);
@@ -94,6 +98,7 @@
 	onMount(() => {
 		status.connect();
 		control.refreshCapabilities();
+		library.load();
 		if ($page.url.searchParams.get('tab') === 'design') tab = 'design';
 		design.load().then(() => {
 			const wanted = $page.url.searchParams.get('select');
@@ -199,7 +204,16 @@
 		</div>
 		<div class="panel-scroll">
 			{#if tab === 'design'}
-				<DesignPanel {design} {edits} {canEdit} onHistory={history} onRotate={rotate} onAssign={assign} />
+				<DesignPanel
+					{design}
+					{edits}
+					{canEdit}
+					{library}
+					onHistory={history}
+					onRotate={rotate}
+					onAssign={assign}
+					onApplied={() => design.load()}
+				/>
 			{:else}
 				<JobPanel
 					{device}

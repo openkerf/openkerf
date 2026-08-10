@@ -141,3 +141,15 @@ def test_reader_skips_nodes_without_geometry(kernel):
             raise RuntimeError("no geometry here")
 
     assert DesignReader(kernel)._element(Broken(), "e0") is None
+
+
+def test_labels_have_their_placeholders_filled_in(drawing):
+    """
+    Operation labels are templates like "Engrave ({percent}, {speed}mm/s)".
+    Showing them raw leaked "{percent}" into the layer list.
+    """
+    snapshot = DesignReader(drawing).snapshot()
+
+    for entry in snapshot["operations"] + snapshot["elements"]:
+        assert "{" not in entry["label"], entry["label"]
+        assert entry["label"].strip()

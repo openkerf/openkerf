@@ -48,6 +48,8 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `GET /api/machines` · `POST /api/machines` | machines tonen / toevoegen |
 | `POST /api/machines/{path}/activate` · `/rename` · `DELETE` | machine kiezen, hernoemen, verwijderen |
 | `GET`/`PATCH /api/machines/{path}/settings` | instellingen lezen en wijzigen (`?essential=true` voor de setup) |
+| `GET`/`POST`/`DELETE /api/library/materials` · `/presets` · `/machines` | de lokale materiaalbibliotheek |
+| `POST /api/library/presets/{id}/apply` | preset op een bewerking (laag) zetten |
 | `GET /` | de frontend (met `-f`), anders een kale devpagina |
 
 Voorbeeld:
@@ -145,6 +147,21 @@ Daarom melden `/undo` en `/redo` `ids_invalidated: true` en laat de frontend de
 selectie los, in plaats van het risico te lopen een ander element aan te wijzen.
 Gemeld bij upstream.
 
+## Materiaalbibliotheek (fase 4)
+
+SQLite in één bestand naast de instellingen van de engine — geen dienst, geen
+poort, niets dat de gebruiker apart installeert. Het schema volgt het datamodel
+uit ARCHITECTUUR.md: `machine_profile`, `material` en `preset`, waarbij een
+preset naar het machineprofiel wijst waarop hij gemaakt is. Presets dragen van
+begin af aan een `source` (handmatig / geëxtrapoleerd / testraster /
+geïmporteerd) en een optionele `origin_id`, zodat de community-repo later
+zonder migratie kan binnenkomen.
+
+**Let op de vermogensschaal.** MeerK40t bewaart `power` op een schaal van
+0–1000, niet als percentage. Een preset van 65% wordt dus `power = 650`. Dat
+verkeerd doen is een factor tien op een machine die brandt; `apply_settings`
+rekent het om en een test legt het vast.
+
 ## Machine-setup
 
 De catalogus komt uit MeerK40t's `dev_info`-registry (9 families, 46 types) en de
@@ -170,7 +187,7 @@ object zou anders zijn interne velden uitstorten in de response.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 90 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 108 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van

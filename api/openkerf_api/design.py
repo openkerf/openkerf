@@ -26,6 +26,28 @@ def _plain(value):
         return str(value)
 
 
+def _label(node, fallback: str) -> str:
+    """
+    A readable name. `label` may contain placeholders like "{percent}" that the
+    engine fills in via display_label(); when there is no label at all, str()
+    renders the node's own formatter — the same text the wxPython tree shows.
+    """
+    try:
+        if getattr(node, "label", None):
+            resolved = node.display_label()
+            if resolved:
+                return resolved
+    except Exception:
+        pass
+    try:
+        rendered = str(node)
+        if rendered and "{" not in rendered:
+            return rendered
+    except Exception:
+        pass
+    return fallback
+
+
 def _color(value) -> str | None:
     if value is None:
         return None
@@ -94,7 +116,7 @@ class DesignReader:
         return {
             "id": element_id,
             "type": node.type,
-            "label": getattr(node, "label", None) or node.type.replace("elem ", ""),
+            "label": _label(node, node.type.replace("elem ", "")),
             "hidden": bool(getattr(node, "hidden", False)),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
@@ -126,7 +148,7 @@ class DesignReader:
         return {
             "id": operation_id,
             "type": op.type,
-            "label": getattr(op, "label", None) or op.type.replace("op ", ""),
+            "label": _label(op, op.type.replace("op ", "")),
             "color": _color(getattr(op, "color", None)),
             "speed": _plain(getattr(op, "speed", None)),
             "power": _plain(getattr(op, "power", None)),

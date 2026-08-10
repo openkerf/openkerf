@@ -70,6 +70,10 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/unassign",
         "/api/design/undo",
         "/api/design/redo",
+        "/api/library/materials",
+        "/api/library/presets",
+        "/api/library/machines",
+        "/api/library/presets/{preset_id}/apply",
     }
 
     methods = {

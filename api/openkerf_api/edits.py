@@ -145,6 +145,36 @@ class DesignEditor:
         self._refresh()
         return {"operation_id": operation_id, "removed": removed}
 
+    def apply_settings(
+        self, operation_id: str, speed=None, power_percent=None, passes=None
+    ) -> dict:
+        """
+        Write laser settings onto an operation — how a preset lands in the job.
+
+        MeerK40t stores power on a 0–1000 scale, not as a percentage, so a
+        preset of 65% becomes 650. Getting that wrong would be a factor of ten
+        on a machine that burns.
+        """
+        operation = self._operation(operation_id)
+        applied = {}
+        with self.elements.undoscope("Preset toepassen"):
+            if speed is not None:
+                operation.speed = _positive(speed, "speed")
+                applied["speed"] = operation.speed
+            if power_percent is not None:
+                percent = _finite(power_percent, "power_percent")
+                if not 0 < percent <= 100:
+                    raise DesignError("power_percent moet tussen 0 en 100 liggen.")
+                operation.power = percent * 10
+                applied["power"] = operation.power
+            if passes is not None:
+                count = int(_positive(passes, "passes"))
+                operation.passes_custom = True
+                operation.passes = count
+                applied["passes"] = count
+        self._refresh()
+        return {"operation_id": operation_id, "applied": applied}
+
     def _operation(self, operation_id: str):
         operation = self._node(operation_id)
         if not str(operation.type).startswith(("op ", "effect ")):
