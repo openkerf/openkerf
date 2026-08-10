@@ -63,6 +63,7 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/machines",
         "/api/machines/{path}/activate",
         "/api/machines/{path}/rename",
+        "/api/design/clear",
         "/api/design/elements",
         "/api/design/elements/delete",
         "/api/design/elements/duplicate",

@@ -281,3 +281,63 @@ def test_export_filename_cannot_escape_its_directory(kernel, client):
 
     assert response.status_code == 200
     assert response.headers["content-disposition"].count("passwd.svg") == 1
+
+
+# ------------------------------------------------------ opslaan-status
+
+def test_a_fresh_document_is_clean(client):
+    assert client.get("/api/design").json()["dirty"] is False
+
+
+def test_drawing_makes_the_document_dirty(client):
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 10, "height_mm": 10},
+    )
+
+    assert client.get("/api/design").json()["dirty"] is True
+
+
+def test_saving_marks_it_clean_again(client):
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 10, "height_mm": 10},
+    )
+
+    client.get("/api/design/export.svg")
+
+    assert client.get("/api/design").json()["dirty"] is False
+
+
+def test_clearing_empties_the_design(kernel, client):
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 10, "height_mm": 10},
+    )
+
+    response = client.post("/api/design/clear")
+
+    assert response.status_code == 200
+    assert list(kernel.elements.elems()) == []
+    assert client.get("/api/design").json()["dirty"] is False
+
+
+def test_loading_replaces_rather_than_merges(kernel, client):
+    """
+    `load` adds to the tree, so opening a file used to pile it on top of what
+    was already there. Clearing first is what makes it feel like opening.
+    """
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="50mm">'
+        b'<rect x="1" y="1" width="20" height="10"/></svg>'
+    )
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 90, "y_mm": 90, "width_mm": 10, "height_mm": 10},
+    )
+
+    client.post("/api/design/clear")
+    client.post("/api/job/load", files={"file": ("d.svg", svg, "image/svg+xml")})
+
+    assert len(list(kernel.elements.elems())) == 1
+    assert client.get("/api/design").json()["dirty"] is False

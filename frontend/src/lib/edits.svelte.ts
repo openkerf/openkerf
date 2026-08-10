@@ -128,6 +128,10 @@ export class EditController {
 		}
 	}
 
+	clear() {
+		return this.#post('/api/design/clear');
+	}
+
 	undo() {
 		return this.#post('/api/design/undo');
 	}

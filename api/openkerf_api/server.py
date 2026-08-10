@@ -22,6 +22,7 @@ from pathlib import Path
 from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
+from .document import Document
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .library import Library, LibraryError, default_path
@@ -142,7 +143,8 @@ class ApiServer:
         self.bind = bind
         self.frontend = Path(frontend).expanduser() if frontend else None
         self.reader = StatusReader(kernel)
-        self.commands = CommandRunner(kernel)
+        self.document = Document()
+        self.commands = CommandRunner(kernel, self.document)
         self.machines = MachineManager(kernel, self.commands)
         self.library = Library(library_path or default_path(kernel))
         self.editor = DesignEditor(kernel, self.commands)
@@ -249,7 +251,10 @@ class ApiServer:
         @app.get("/api/design")
         def design():
             """Element outlines and the operations that claim them."""
-            return self.design.snapshot()
+            snapshot = self.design.snapshot()
+            # Zodat de frontend weet of openen werk zou weggooien.
+            snapshot["dirty"] = self.document.dirty
+            return snapshot
 
         @app.get("/api/capabilities")
         def capabilities():
@@ -271,7 +276,10 @@ class ApiServer:
             target = self._upload_path(file.filename or "upload.svg")
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
-            return act(self.commands.load_file, str(target))
+            result = act(self.commands.load_file, str(target))
+            # Net geladen: het ontwerp is gelijk aan het bestand.
+            self.document.clean()
+            return result
 
         @app.post("/api/job/start", dependencies=write)
         def start_job():
@@ -303,12 +311,24 @@ class ApiServer:
             kind = body.get("type")
             return manage(lambda: self.drawing.create(kind, **body))
 
+        @app.post("/api/design/clear", dependencies=write)
+        def clear_design():
+            """Leeg het ontwerp — wat openen doet voordat het een bestand inleest."""
+            def run():
+                self.kernel.elements.clear_all()
+                self.drawing.user_operations.clear()
+                self.document.clean()
+                return {"cleared": True}
+
+            return manage(run)
+
         @app.get("/api/design/export.svg")
         def export_design(filename: str = "ontwerp.svg"):
             """Download the design as SVG — otherwise the work is fleeting."""
             from fastapi.responses import FileResponse
 
             path = manage(self.drawing.export_svg, filename)
+            self.document.clean()
             return FileResponse(
                 path, media_type="image/svg+xml", filename=path.name
             )

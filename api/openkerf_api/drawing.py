@@ -255,5 +255,7 @@ class Drawing:
         return target
 
     def _refresh(self):
+        if getattr(self.runner, "document", None) is not None:
+            self.runner.document.touch()
         self.elements.signal("rebuild_tree", "all")
         self.elements.signal("refresh_scene", "Scene")

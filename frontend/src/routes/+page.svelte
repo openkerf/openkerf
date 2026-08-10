@@ -34,6 +34,7 @@
 	let hasSelection = $derived(design.selectedIds.length > 0);
 	let tool = $state<Tool>('select');
 	let libraryOpen = $state(false);
+	let pendingFile = $state<File | null>(null);
 	let gridOpen = $state(false);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
@@ -63,6 +64,41 @@
 		if (!hasSelection || !canEdit) return;
 		await edits.move(design.selectedIds, dx, dy);
 		await design.load();
+	}
+
+	/**
+	 * Openen vervangt, het voegt niet toe.
+	 *
+	 * De engine laadt een bestand bovenop wat er al staat. Dat is soms handig
+	 * maar het is niet wat "openen" betekent, dus maken we eerst leeg — en
+	 * vragen we het eerst als daarmee onopgeslagen werk zou verdwijnen.
+	 */
+	async function openFile(file: File) {
+		if (!canEdit) return;
+		if (!design.isEmpty && design.dirty) {
+			pendingFile = file;
+			return;
+		}
+		await replaceWith(file);
+	}
+
+	async function replaceWith(file: File) {
+		if (!design.isEmpty) {
+			if (!(await edits.clear()).ok) return;
+		}
+		if (await control.load(file)) {
+			design.select(null);
+			await design.load();
+		}
+	}
+
+	async function saveThenOpen() {
+		const file = pendingFile;
+		pendingFile = null;
+		if (!file) return;
+		// Downloaden telt als opslaan: de API markeert het ontwerp schoon.
+		window.location.href = '/api/design/export.svg';
+		setTimeout(() => replaceWith(file), 800);
 	}
 
 	async function draw(shape: Record<string, unknown>) {
@@ -215,9 +251,7 @@
 	onSetSize={setSize}
 	onStart={requestStart}
 	onStop={() => control.stop()}
-	onOpenFile={async (file) => {
-		if (await control.load(file)) await design.load();
-	}}
+	onOpenFile={openFile}
 	onToggleTheme={toggleTheme}
 />
 
@@ -290,6 +324,29 @@
 
 <!-- Bibliotheken en gereedschappen als eigen venster: in 280px kun je niet
      zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->
+<!-- Openen zou werk weggooien: eerst vragen. -->
+<Dialog
+	title="Niet-opgeslagen wijzigingen"
+	open={pendingFile !== null}
+	width="420px"
+>
+	<p class="ask">
+		Dit ontwerp is gewijzigd sinds de laatste keer opslaan. Openen vervangt wat er nu staat.
+	</p>
+	<div class="ask-actions">
+		<button class="btn" onclick={() => (pendingFile = null)}>Annuleren</button>
+		<button
+			class="btn"
+			onclick={() => {
+				const file = pendingFile;
+				pendingFile = null;
+				if (file) replaceWith(file);
+			}}
+		>Zonder opslaan openen</button>
+		<button class="btn primary" onclick={saveThenOpen}>Opslaan en openen</button>
+	</div>
+</Dialog>
+
 <Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
 	<MaterialLibrary
 		{library}
@@ -340,6 +397,26 @@
 		bottom: -1px;
 		width: calc(100% - var(--space-8));
 		height: 2px;
+	}
+	:global(.ask) { margin: 0 0 var(--space-4); }
+	:global(.ask-actions) {
+		display: flex;
+		gap: var(--space-2);
+		justify-content: flex-end;
+		flex-wrap: wrap;
+	}
+	:global(.ask-actions .btn) {
+		padding: 8px 14px;
+		border-radius: var(--radius-field);
+		border: 1px solid var(--line);
+		background: var(--surface-1);
+		font-weight: 500;
+	}
+	:global(.ask-actions .btn:hover) { background: var(--surface-2); }
+	:global(.ask-actions .btn.primary) {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-ink);
 	}
 	.panel-scroll {
 		flex: 1;

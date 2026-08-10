@@ -178,3 +178,9 @@ Na de eerste testronde bijgesteld (zie DESIGN-SYSTEM.md):
   vindt niemand.
 - **Bovenbalk** — wat met het document als geheel te maken heeft: openen,
   opslaan, en de machine met start en stop.
+
+**Openen vervangt.** De engine laadt een bestand bovenop wat er al staat; dat is
+niet wat openen betekent, dus maakt de frontend eerst leeg. Zijn er
+onopgeslagen wijzigingen, dan vraagt hij eerst: opslaan en openen, zonder
+opslaan openen, of annuleren. Of er wijzigingen zijn komt uit `dirty` in
+`/api/design`.

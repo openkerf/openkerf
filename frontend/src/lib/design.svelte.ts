@@ -43,6 +43,8 @@ export type DesignOperation = {
 
 export type Design = {
 	units_per_mm: number;
+	/** Zijn er wijzigingen sinds het laatst opslaan of openen? */
+	dirty: boolean;
 	elements: DesignElement[];
 	operations: DesignOperation[];
 };
@@ -87,6 +89,14 @@ export class DesignStore {
 	}
 
 	/** Eerste selectie; voor panelen die één element tonen. */
+	get dirty() {
+		return this.design?.dirty ?? false;
+	}
+
+	get isEmpty() {
+		return this.elements.length === 0;
+	}
+
 	get selected(): DesignElement | null {
 		return this.elements.find((e) => e.id === this.selectedIds[0]) ?? null;
 	}
