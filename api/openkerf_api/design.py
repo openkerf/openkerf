@@ -62,6 +62,33 @@ def _attr_or_none(node, name):
         return None
 
 
+def _text_of(node) -> dict | None:
+    """
+    Bewerkbare vector-tekst.
+
+    `linetext` maakt een pad, maar de engine bewaart de bron op de node
+    (`mktext`, `mkfont`, `mkfontsize`, ...) en kan hem opnieuw renderen. Zonder
+    deze velden zou tekst na plaatsen bevroren zijn.
+    """
+    text = _attr_or_none(node, "mktext")
+    if text is None:
+        return None
+    from meerk40t.core.units import UNITS_PER_MM
+
+    size = _attr_or_none(node, "mkfontsize")
+    try:
+        size_mm = round(float(size) / UNITS_PER_MM, 2) if size is not None else None
+    except (TypeError, ValueError):
+        size_mm = None
+    return {
+        "text": str(text),
+        "font": str(_attr_or_none(node, "mkfont") or ""),
+        "font_size_mm": size_mm,
+        "spacing": _plain(_attr_or_none(node, "mkfontspacing")) or 1,
+        "align": str(_attr_or_none(node, "mkalign") or "start"),
+    }
+
+
 def _group_of(node) -> str | None:
     """
     De dichtstbijzijnde groep waar dit element in zit.
@@ -185,6 +212,7 @@ class DesignReader:
             "label": _label(node, node.type.replace("elem ", "")),
             "hidden": bool(getattr(node, "hidden", False)),
             "group_id": _group_of(node),
+            "text": _text_of(node),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,

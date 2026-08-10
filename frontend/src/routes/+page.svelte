@@ -18,6 +18,7 @@
 	import MaterialLibrary from '$components/MaterialLibrary.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
 	import TestGridResult from '$components/TestGridResult.svelte';
+	import TextDialog from '$components/TextDialog.svelte';
 	import TopBar from '$components/TopBar.svelte';
 
 	const status = new StatusConnection();
@@ -35,6 +36,10 @@
 	let tool = $state<Tool>('select');
 	let libraryOpen = $state(false);
 	let pendingFile = $state<File | null>(null);
+	let textOpen = $state(false);
+	let textAt = $state<{ x: number; y: number } | null>(null);
+	let editingText = $state<string | null>(null);
+	let estimate = $state<number | null>(null);
 	let gridOpen = $state(false);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
@@ -270,6 +275,10 @@
 		{tool}
 		onEdited={() => design.load()}
 		onDrawn={draw}
+		onTextAt={(at) => {
+			textAt = at;
+			textOpen = true;
+		}}
 	/>
 
 	<aside class="panel" aria-label="Eigenschappen">
@@ -306,6 +315,10 @@
 					onRotate={rotate}
 					onAssign={assign}
 					onLayerChange={() => design.load()}
+					onEditText={(id) => {
+						editingText = id;
+						textOpen = true;
+					}}
 				/>
 			{:else}
 				<JobPanel
@@ -324,6 +337,21 @@
 
 <!-- Bibliotheken en gereedschappen als eigen venster: in 280px kun je niet
      zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->
+<TextDialog
+	bind:open={textOpen}
+	initial={editingText ? (design.elements.find((e) => e.id === editingText)?.text ?? null) : null}
+	onConfirm={async (options) => {
+		if (editingText) {
+			// Tekst is een pad, maar de engine bewaart de bron en rendert opnieuw.
+			if ((await edits.updateText(editingText, options)).ok) await design.load();
+			editingText = null;
+		} else if (textAt) {
+			draw({ type: 'text', x_mm: textAt.x, y_mm: textAt.y, ...options });
+		}
+		textAt = null;
+	}}
+/>
+
 <!-- Openen zou werk weggooien: eerst vragen. -->
 <Dialog
 	title="Niet-opgeslagen wijzigingen"

@@ -48,6 +48,9 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Materiaalbibliotheek: materialen, presets, toepassen op een laag | live, in een eigen venster |
 | Testraster: bereik instellen, voorbeeld, genereren | live |
 | Testraster: foto toevoegen, beste vakje(s) aanwijzen, preset eruit | live |
+| Tekst met lettertype, hoogte, spatiëring en uitlijning | live |
+| Bestaande tekst bewerken (inhoud, font, maat) | live |
+| PWA: installeerbaar, app-schil offline | live |
 | Kader tonen | uitgeschakeld — beweging is fase 3 |
 | Tool-rail | zichtbaar, nog zonder gedrag (fase 3) |
 

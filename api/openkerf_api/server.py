@@ -322,6 +322,15 @@ class ApiServer:
 
             return manage(run)
 
+        @app.get("/api/design/fonts")
+        def list_fonts():
+            return manage(self.drawing.fonts)
+
+        @app.get("/api/job/estimate")
+        def estimate_job():
+            """Geschatte brandtijd van het huidige ontwerp, vóór starten."""
+            return manage(self.drawing.estimate)
+
         @app.get("/api/design/export.svg")
         def export_design(filename: str = "ontwerp.svg"):
             """Download the design as SVG — otherwise the work is fleeting."""
@@ -332,6 +341,11 @@ class ApiServer:
             return FileResponse(
                 path, media_type="image/svg+xml", filename=path.name
             )
+
+        @app.patch("/api/design/elements/{element_id}/text", dependencies=write)
+        def update_text(element_id: str, body: dict):
+            """Bestaande tekst bijwerken in plaats van weggooien en opnieuw plaatsen."""
+            return manage(lambda: self.drawing.update_text(element_id, **body))
 
         @app.post("/api/design/elements/delete", dependencies=write)
         def delete_elements(body: dict):

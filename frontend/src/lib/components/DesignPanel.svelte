@@ -9,7 +9,8 @@
 		onHistory,
 		onRotate,
 		onAssign,
-		onLayerChange
+		onLayerChange,
+		onEditText
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -18,6 +19,7 @@
 		onRotate?: (angleDeg: number) => void;
 		onAssign?: (operationId: string, assigned: boolean) => void;
 		onLayerChange?: () => void;
+		onEditText?: (id: string) => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -125,6 +127,12 @@
 				<div><dt>X</dt><dd>{size.x.toFixed(1)} mm</dd></div>
 				<div><dt>Y</dt><dd>{size.y.toFixed(1)} mm</dd></div>
 			</dl>
+			{#if canEdit && selected.text}
+				<button class="edit-text" onclick={() => onEditText?.(selected.id)}>
+					Tekst bewerken — “{selected.text.text}”
+				</button>
+			{/if}
+
 			{#if canEdit}
 				<div class="rotate">
 					<span class="rot-label">Draaien</span>
@@ -402,6 +410,18 @@
 		background: color-mix(in srgb, var(--danger) 14%, transparent);
 		font-size: var(--text-xs);
 	}
+	.edit-text {
+		display: block;
+		width: 100%;
+		margin-top: var(--space-3);
+		padding: 6px 8px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		font-size: var(--text-xs);
+		text-align: left;
+		color: var(--accent);
+	}
+	.edit-text:hover { background: var(--surface-2); }
 	.rotate {
 		display: flex;
 		align-items: center;

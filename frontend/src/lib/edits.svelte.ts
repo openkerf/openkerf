@@ -128,6 +128,10 @@ export class EditController {
 		}
 	}
 
+	updateText(id: string, fields: Record<string, unknown>) {
+		return this.#send(`/api/design/elements/${encodeURIComponent(id)}/text`, 'PATCH', fields);
+	}
+
 	clear() {
 		return this.#post('/api/design/clear');
 	}

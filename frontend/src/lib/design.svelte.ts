@@ -17,6 +17,14 @@ export type DesignElement = {
 	path: string;
 	/** Groep waar dit element in zit; een raster is één groep. */
 	group_id: string | null;
+	/** Gezet voor vector-tekst: de bron waaruit het pad gerenderd is. */
+	text: {
+		text: string;
+		font: string;
+		font_size_mm: number | null;
+		spacing: number;
+		align: 'start' | 'middle' | 'end' | string;
+	} | null;
 	operation_id: string | null;
 	operation_ids: string[];
 };
