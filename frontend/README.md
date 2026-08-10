@@ -137,8 +137,8 @@ contour een lokale voorvertoning. Anders zou elke muisbeweging een commando
 worden.
 
 Ongedaan maken zit in het Ontwerp-blok. Na een undo laat de frontend de selectie
-los: de engine geeft herstelde nodes nieuwe id's, dus een bewaard id zou een
-ander element kunnen aanwijzen.
+los: de boom kan dan uit een toestand komen waarin de id's anders liggen, dus een
+bewaard id zou een ander element kunnen aanwijzen.
 
 Bewerken vereist dezelfde token als de jobcontrole; zonder token zijn de grepen
 inactief en zegt het paneel waarom.

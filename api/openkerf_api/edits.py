@@ -6,11 +6,16 @@ argument. Each edit therefore sets emphasis to the one node it targets and then
 runs the console command, so the engine's own selection ends up matching what
 the user picked in the browser.
 
-Undo caveat, verified against the engine: undo restores a snapshot of the tree,
-and the restored nodes come back with `id = None`. Re-running `validate_ids()`
-then hands out *different* ids than before. Identity therefore does not survive
-an undo, which is why every undo/redo here reports `ids_invalidated`, and the
-frontend drops its selection rather than risk pointing at another element.
+Undo caveat, re-verified against the engine: ids normally *do* survive an undo.
+What undo restores is a whole-tree snapshot, so it can land on a state from
+before ids were assigned at all — then `validate_ids()` renumbers and hands out
+different ids than the client holds. Undo can also step back further than the
+last edit (observed: three moves, one undo, two of them gone), so the tree after
+an undo is not reliably the tree the client was looking at.
+
+Both are reasons not to trust a held id afterwards, which is why undo/redo
+report `ids_invalidated` and the frontend drops its selection instead of
+risking a stale id pointing at another element.
 """
 
 import math
@@ -92,7 +97,8 @@ class DesignEditor:
         return {
             "action": action,
             "applied": not exhausted,
-            # Restored nodes lose their ids, so anything the client held is stale.
+            # After an undo the tree may predate id assignment, or have jumped
+            # back further than one edit; treat held ids as stale either way.
             "ids_invalidated": not exhausted,
             "output": output,
         }
