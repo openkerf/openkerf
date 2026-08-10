@@ -62,6 +62,48 @@ def _attr_or_none(node, name):
         return None
 
 
+def _xy(point):
+    """
+    Punt uit een matrixtransformatie naar (x, y).
+
+    `point_in_matrix_space` geeft een Point terug; die is indexeerbaar maar
+    niet te slicen, dus uitpakken moet expliciet.
+    """
+    try:
+        return float(point[0]), float(point[1])
+    except (TypeError, IndexError):
+        return float(point.x), float(point.y)
+
+
+def _line_of(node) -> dict | None:
+    """
+    De twee eindpunten van een lijn.
+
+    Uit de bounds alleen kun je niet zien welke kant een lijn op loopt, dus
+    zonder deze velden kan de UI geen eindpunt aanbieden om te verslepen.
+    """
+    if getattr(node, "type", None) != "elem line":
+        return None
+    from meerk40t.core.units import UNITS_PER_MM
+
+    try:
+        # Draaien zet een matrix op de node en laat x1..y2 ongemoeid. Wie de
+        # ruwe punten tekent, zet de grepen dus op de plek van vóór de rotatie.
+        matrix = getattr(node, "matrix", None)
+        points = [(float(node.x1), float(node.y1)), (float(node.x2), float(node.y2))]
+        if matrix is not None:
+            points = [_xy(matrix.point_in_matrix_space(p)) for p in points]
+        (x1, y1), (x2, y2) = points
+        return {
+            "x1_mm": x1 / UNITS_PER_MM,
+            "y1_mm": y1 / UNITS_PER_MM,
+            "x2_mm": x2 / UNITS_PER_MM,
+            "y2_mm": y2 / UNITS_PER_MM,
+        }
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def _text_of(node) -> dict | None:
     """
     Bewerkbare vector-tekst.
@@ -213,6 +255,7 @@ class DesignReader:
             "hidden": bool(getattr(node, "hidden", False)),
             "group_id": _group_of(node),
             "text": _text_of(node),
+            "line": _line_of(node),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,

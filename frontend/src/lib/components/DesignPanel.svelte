@@ -10,7 +10,8 @@
 		onRotate,
 		onAssign,
 		onLayerChange,
-		onEditText
+		onEditText,
+		onArrange
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -20,6 +21,7 @@
 		onAssign?: (operationId: string, assigned: boolean) => void;
 		onLayerChange?: () => void;
 		onEditText?: (id: string) => void;
+		onArrange?: (action: string) => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -131,6 +133,29 @@
 				<button class="edit-text" onclick={() => onEditText?.(selected.id)}>
 					Tekst bewerken — “{selected.text.text}”
 				</button>
+			{/if}
+
+			{#if canEdit && chosen.length > 1}
+				<div class="arrange">
+					<span class="rot-label">Uitlijnen</span>
+					{#each [['left', 'Links'], ['centerh', 'Midden'], ['right', 'Rechts'], ['top', 'Boven'], ['centerv', 'Midden'], ['bottom', 'Onder']] as [mode, label] (mode)}
+						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.(mode)}>{label}</button>
+					{/each}
+					<span class="rot-label">Verdelen</span>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('spaceh')}>Horizontaal</button>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('spacev')}>Verticaal</button>
+				</div>
+			{/if}
+
+			{#if canEdit && (chosen.length > 1 || selected.group_id)}
+				<div class="arrange">
+					{#if chosen.length > 1}
+						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('group')}>Groeperen</button>
+					{/if}
+					{#if selected.group_id}
+						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('ungroup')}>Groep opheffen</button>
+					{/if}
+				</div>
 			{/if}
 
 			{#if canEdit}
@@ -422,6 +447,13 @@
 		color: var(--accent);
 	}
 	.edit-text:hover { background: var(--surface-2); }
+	.arrange {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1);
+		margin-top: var(--space-3);
+	}
 	.rotate {
 		display: flex;
 		align-items: center;

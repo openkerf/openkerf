@@ -11,6 +11,7 @@ red shape should land in the cut layer by itself.
 """
 
 from .commands import CommandRunner
+from .design import _xy
 from .edits import DesignError, _finite, _positive
 
 # What a shape needs, and the console command that draws it. Millimetres in,
@@ -160,6 +161,105 @@ class Drawing:
         self.elements.validate_ids()
         self._refresh()
         return {"id": node.id, "text": node.mktext}
+
+    def update_line(self, element_id: str, **fields) -> dict:
+        """Een eindpunt van een lijn verzetten, zonder hem opnieuw te tekenen."""
+        from meerk40t.core.units import UNITS_PER_MM
+
+        node = self._nodes([element_id])[0]
+        if node.type != "elem line":
+            raise DesignError("Dit element is geen lijn.")
+
+        # De client geeft punten zoals ze op het bed liggen; de node bewaart ze
+        # vóór zijn matrix. Zonder terugrekenen zou een gedraaide lijn
+        # verspringen zodra je een eindpunt verzet.
+        matrix = getattr(node, "matrix", None)
+        inverse = ~matrix if matrix is not None else None
+
+        def to_raw(x_mm, y_mm):
+            point = (x_mm * UNITS_PER_MM, y_mm * UNITS_PER_MM)
+            if inverse is None:
+                return point
+            return _xy(inverse.point_in_matrix_space(point))
+
+        current = {
+            "x1_mm": float(node.x1) / UNITS_PER_MM,
+            "y1_mm": float(node.y1) / UNITS_PER_MM,
+            "x2_mm": float(node.x2) / UNITS_PER_MM,
+            "y2_mm": float(node.y2) / UNITS_PER_MM,
+        }
+        if matrix is not None:
+            for index, prefix in ((0, "1"), (1, "2")):
+                px, py = _xy(
+                    matrix.point_in_matrix_space(
+                        (float(getattr(node, f"x{prefix}")), float(getattr(node, f"y{prefix}")))
+                    )
+                )
+                current[f"x{prefix}_mm"] = px / UNITS_PER_MM
+                current[f"y{prefix}_mm"] = py / UNITS_PER_MM
+
+        wanted = dict(current)
+        for name in ("x1_mm", "y1_mm", "x2_mm", "y2_mm"):
+            if fields.get(name) is not None:
+                wanted[name] = _finite(fields[name], name)
+
+        with self.elements.undoscope("Lijn aanpassen"):
+            node.x1, node.y1 = to_raw(wanted["x1_mm"], wanted["y1_mm"])
+            node.x2, node.y2 = to_raw(wanted["x2_mm"], wanted["y2_mm"])
+            node.altered()
+        self._refresh()
+        return {"id": element_id}
+
+    ALIGNMENTS_2D = (
+        "top", "bottom", "left", "right", "center", "centerh", "centerv",
+        "spaceh", "spacev",
+    )
+
+    def align(self, element_ids, mode: str) -> dict:
+        if mode not in self.ALIGNMENTS_2D:
+            raise DesignError(
+                f"Onbekende uitlijning: {mode}. Kies uit {', '.join(self.ALIGNMENTS_2D)}."
+            )
+        nodes = self._nodes(element_ids)
+        if len(nodes) < 2:
+            raise DesignError("Uitlijnen heeft minstens twee elementen nodig.")
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Uitlijnen"):
+            self.runner.run(f"align {mode}")
+        self._refresh()
+        return {"aligned": [n.id for n in nodes], "mode": mode}
+
+    def group(self, element_ids) -> dict:
+        nodes = self._nodes(element_ids)
+        if len(nodes) < 2:
+            raise DesignError("Groeperen heeft minstens twee elementen nodig.")
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Groeperen"):
+            self.runner.run("group")
+        self.elements.validate_ids()
+        self._refresh()
+        return {"grouped": [n.id for n in nodes]}
+
+    def ungroup(self, element_ids) -> dict:
+        """
+        Groep opheffen. De elementen blijven; alleen het omhulsel verdwijnt.
+        """
+        nodes = self._nodes(element_ids)
+        groups = []
+        for node in nodes:
+            parent = getattr(node, "parent", None)
+            while parent is not None and getattr(parent, "type", None) != "group":
+                parent = getattr(parent, "parent", None)
+            if parent is not None and parent not in groups:
+                groups.append(parent)
+        if not groups:
+            raise DesignError("Deze selectie zit niet in een groep.")
+        self.elements.set_emphasis(groups)
+        with self.elements.undoscope("Groep opheffen"):
+            self.runner.run("ungroup")
+        self.elements.validate_ids()
+        self._refresh()
+        return {"ungrouped": len(groups)}
 
     def delete(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)

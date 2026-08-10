@@ -7,7 +7,7 @@ from meerk40t.core.units import UNITS_PER_MM
 
 from openkerf_api.design import DesignReader
 from openkerf_api.drawing import Drawing
-from openkerf_api.edits import DesignError
+from openkerf_api.edits import DesignEditor, DesignError
 from openkerf_api.server import ApiServer
 
 
@@ -479,3 +479,125 @@ def test_text_update_over_http(kernel, client):
 
     assert response.status_code == 200
     assert response.json()["text"] == "Nieuw"
+
+
+# ------------------------------------------------------------ lijnen
+
+def test_a_line_reports_both_endpoints(kernel, drawing):
+    """Bounds alone cannot say which way a line runs."""
+    created = drawing.create("line", x1_mm=10, y1_mm=10, x2_mm=40, y2_mm=30)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+
+    assert element["line"] == pytest.approx(
+        {"x1_mm": 10, "y1_mm": 10, "x2_mm": 40, "y2_mm": 30}, abs=0.01
+    )
+
+
+def test_moving_one_endpoint(kernel, drawing):
+    created = drawing.create("line", x1_mm=10, y1_mm=10, x2_mm=40, y2_mm=30)
+
+    drawing.update_line(created["ids"][0], x2_mm=80, y2_mm=60)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    assert element["line"]["x2_mm"] == pytest.approx(80, abs=0.01)
+    assert element["line"]["x1_mm"] == pytest.approx(10, abs=0.01)
+    assert bounds_mm(kernel, created["ids"][0]) == [10.0, 10.0, 80.0, 60.0]
+
+
+def test_only_lines_have_endpoints(kernel, drawing):
+    rect = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    with pytest.raises(DesignError):
+        drawing.update_line(rect["ids"][0], x1_mm=0)
+
+
+# --------------------------------------------------- uitlijnen/groeperen
+
+def three_rects(drawing):
+    return [
+        drawing.create("rect", x_mm=10 + i * 30, y_mm=50 + i * 10, width_mm=20, height_mm=10)[
+            "ids"
+        ][0]
+        for i in range(3)
+    ]
+
+
+def test_align_top(kernel, drawing):
+    ids = three_rects(drawing)
+
+    drawing.align(ids, "top")
+
+    tops = {bounds_mm(kernel, i)[1] for i in ids}
+    assert len(tops) == 1
+
+
+def test_align_needs_two_elements(drawing):
+    one = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    with pytest.raises(DesignError):
+        drawing.align(one["ids"], "top")
+
+
+def test_unknown_alignment_is_refused(drawing):
+    ids = three_rects(drawing)
+    with pytest.raises(DesignError):
+        drawing.align(ids, "diagonaal")
+
+
+def test_group_and_ungroup(kernel, drawing):
+    ids = three_rects(drawing)
+
+    drawing.group(ids)
+    grouped = {
+        e["group_id"] for e in DesignReader(kernel).snapshot()["elements"] if e["id"] in ids
+    }
+    assert len(grouped) == 1 and grouped.pop() is not None
+
+    drawing.ungroup(ids)
+    loose = {
+        e["group_id"] for e in DesignReader(kernel).snapshot()["elements"] if e["id"] in ids
+    }
+    assert loose == {None}
+
+
+def test_ungrouping_something_loose_is_refused(drawing):
+    ids = three_rects(drawing)
+    with pytest.raises(DesignError):
+        drawing.ungroup(ids)
+
+
+def test_endpoints_follow_a_rotation(kernel, drawing):
+    """
+    Rotating sets a matrix on the node and leaves x1..y2 alone, so reporting
+    the raw points would put the handles where the line used to be.
+    """
+    created = drawing.create("line", x1_mm=10, y1_mm=10, x2_mm=50, y2_mm=10)
+    DesignEditor(kernel).rotate(created["ids"], 90)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    line = element["line"]
+    bounds = bounds_mm(kernel, created["ids"][0])
+
+    # Both endpoints must sit on the rotated shape, not the original one.
+    for x, y in ((line["x1_mm"], line["y1_mm"]), (line["x2_mm"], line["y2_mm"])):
+        assert bounds[0] - 0.1 <= x <= bounds[2] + 0.1
+        assert bounds[1] - 0.1 <= y <= bounds[3] + 0.1
+
+
+def test_moving_an_endpoint_of_a_rotated_line(kernel, drawing):
+    """The client speaks in bed coordinates; the node stores pre-matrix ones."""
+    created = drawing.create("line", x1_mm=10, y1_mm=10, x2_mm=50, y2_mm=10)
+    DesignEditor(kernel).rotate(created["ids"], 90)
+
+    drawing.update_line(created["ids"][0], x2_mm=70, y2_mm=70)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    assert element["line"]["x2_mm"] == pytest.approx(70, abs=0.1)
+    assert element["line"]["y2_mm"] == pytest.approx(70, abs=0.1)

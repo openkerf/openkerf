@@ -130,6 +130,21 @@
 		if (await edits.duplicate(design.selectedIds)) await design.load();
 	}
 
+	async function arrange(action: string) {
+		if (!canEdit || !hasSelection) return;
+		const ids = design.selectedIds;
+		const result =
+			action === 'group'
+				? await edits.group(ids)
+				: action === 'ungroup'
+					? await edits.ungroup(ids)
+					: await edits.align(ids, action);
+		if (result.ok) {
+			if (action === 'ungroup') design.select(null);
+			await design.load();
+		}
+	}
+
 	async function rotate(angleDeg: number) {
 		if (!hasSelection || !canEdit) return;
 		await edits.rotate(design.selectedIds, angleDeg);
@@ -315,6 +330,7 @@
 					onRotate={rotate}
 					onAssign={assign}
 					onLayerChange={() => design.load()}
+					onArrange={arrange}
 					onEditText={(id) => {
 						editingText = id;
 						textOpen = true;
@@ -327,6 +343,15 @@
 					{control}
 					activeJob={status.activeJob}
 					bind:preflight
+					onJog={async (dx, dy) => {
+						await edits.jog(dx, dy);
+					}}
+					onHome={async () => {
+						await edits.home();
+					}}
+					onUnlock={async () => {
+						await edits.unlock();
+					}}
 				/>
 			{/if}
 		</div>

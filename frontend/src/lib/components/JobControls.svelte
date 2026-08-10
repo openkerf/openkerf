@@ -6,18 +6,25 @@
 		control,
 		device,
 		job,
-		preflight = $bindable()
+		preflight = $bindable(),
+		onJog,
+		onHome,
+		onUnlock
 	}: {
 		control: Controller;
 		device: Device | null;
 		job: Job | null;
 		preflight: boolean;
+		onJog?: (dxMm: number, dyMm: number) => void;
+		onHome?: () => void;
+		onUnlock?: () => void;
 	} = $props();
 
 	let actions = $derived(control.capabilities?.actions ?? null);
 	let running = $derived(Boolean(job?.running));
 	let queued = $derived(device?.spooler.queue_length ?? 0);
 	let tokenDraft = $state('');
+	let step = $state(10);
 	let estimate = $state<{ seconds: number; parts: number } | null>(null);
 	let estimating = $state(false);
 
@@ -134,6 +141,32 @@
 
 	{/if}
 
+	{#if !control.needsToken}
+		<!-- Beweging: nodig om uit te lijnen en het nulpunt te zetten. Deze
+		     knoppen zetten de kop echt in beweging. -->
+		<div class="motion">
+			<span class="rot-label">Bewegen</span>
+			<!-- Omgekeerde T, zoals de pijltjes op een toetsenbord: ↑ boven ↓,
+			     met ← en → ernaast. Home staat ernaast en niet in het midden,
+			     want dat is geen richting. -->
+			<div class="pad">
+				<button class="jog up" aria-label="Naar boven" onclick={() => onJog?.(0, -step)}>↑</button>
+				<button class="jog left" aria-label="Naar links" onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="jog down" aria-label="Naar beneden" onclick={() => onJog?.(0, step)}>↓</button>
+				<button class="jog right" aria-label="Naar rechts" onclick={() => onJog?.(step, 0)}>→</button>
+				<button class="jog home" onclick={() => onHome?.()}>Home</button>
+			</div>
+			<div class="steps">
+				{#each [0.1, 1, 10, 50] as size (size)}
+					<button class="rot mono" class:on={step === size} onclick={() => (step = size)}>
+						{size} mm
+					</button>
+				{/each}
+				<button class="rot" onclick={() => onUnlock?.()}>Ontgrendelen</button>
+			</div>
+		</div>
+	{/if}
+
 	{#if actions && !actions.pause}
 		<p class="hint">
 			Dit apparaat kent geen pauze/hervatten — die commando's komen van de device-service.
@@ -248,6 +281,45 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
+	.motion { margin-top: var(--space-4); }
+	.rot-label {
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-2);
+	}
+	.pad {
+		display: grid;
+		grid-template-columns: repeat(4, 40px);
+		grid-template-rows: repeat(2, 34px);
+		gap: 4px;
+		margin: var(--space-2) 0;
+	}
+	/* Expliciet plaatsen: met impliciete plaatsing schoof ↓ naar de eerste
+	   kolom in plaats van onder ↑. */
+	.pad .up { grid-area: 1 / 2; }
+	.pad .left { grid-area: 2 / 1; }
+	.pad .down { grid-area: 2 / 2; }
+	.pad .right { grid-area: 2 / 3; }
+	.pad .home { grid-area: 1 / 4 / 3 / 5; }
+	.jog {
+		padding: 8px 0;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+		font-weight: 500;
+	}
+	.jog:hover { background: var(--surface-2); }
+	.jog.home { font-size: var(--text-xs); }
+	.steps { display: flex; flex-wrap: wrap; gap: 4px; }
+	.rot {
+		font-size: var(--text-xs);
+		padding: 3px 7px;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background: var(--surface-1);
+	}
+	.rot.on { border-color: var(--accent); color: var(--accent); }
 	.hint {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);
