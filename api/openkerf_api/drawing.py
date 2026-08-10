@@ -43,6 +43,9 @@ class Drawing:
         self.runner = runner or CommandRunner(kernel)
         # Zelfgemaakte lagen, zodat ze zichtbaar blijven zolang ze leeg zijn.
         self.user_operations: set[str] = set()
+        # Callable die de operaties van testrasters teruggeeft; die staan op
+        # slot omdat hun waarden de sweep zijn.
+        self.grid_operations = lambda: {}
 
     @property
     def elements(self):
@@ -161,8 +164,21 @@ class Drawing:
         self._refresh()
         return {"id": operation.id, "type": operation.type}
 
+    # Wat je aan een rasterlaag nog wél mag veranderen.
+    GRID_EDITABLE = {"output"}
+
     def update_operation(self, operation_id: str, **fields) -> dict:
         operation = self._operation(operation_id)
+        if self._is_grid_cell(operation, operation_id):
+            blocked = sorted(
+                k for k, v in fields.items() if v is not None and k not in self.GRID_EDITABLE
+            )
+            if blocked:
+                raise DesignError(
+                    "Dit is een cel van een testraster; snelheid en vermogen liggen "
+                    f"vast omdat ze de test zijn. Alleen meebranden is te wijzigen "
+                    f"({', '.join(blocked)} geweigerd)."
+                )
         applied = {}
         with self.elements.undoscope("Laag wijzigen"):
             if "label" in fields and fields["label"] is not None:
@@ -196,6 +212,19 @@ class Drawing:
         self.user_operations.discard(operation_id)
         self._refresh()
         return {"removed": operation_id}
+
+    def _is_grid_cell(self, operation, operation_id: str) -> bool:
+        """Zelfde verificatie als de snapshot: id én instellingen moeten kloppen."""
+        cell = self.grid_operations().get(operation_id)
+        if not cell:
+            return False
+        try:
+            return (
+                abs(float(operation.speed) - float(cell["speed_mm_s"])) <= 0.01
+                and abs(float(operation.power) - float(cell["power_percent"]) * 10) <= 0.1
+            )
+        except (TypeError, ValueError):
+            return False
 
     def _operation(self, operation_id: str):
         node = self.elements.find_node(operation_id)

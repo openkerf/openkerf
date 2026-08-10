@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS test_grid (
     -- weet welk vakje bij welke snelheid en vermogen hoort.
     cells         TEXT NOT NULL,
     photo_path    TEXT,
+    group_id      TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -104,6 +105,14 @@ class Library:
         self.photos.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.executescript(SCHEMA)
+            self._migrate(db)
+
+    @staticmethod
+    def _migrate(db):
+        """Kolommen die later bijkwamen, voor databases van vóór die versie."""
+        existing = {row["name"] for row in db.execute("PRAGMA table_info(test_grid)")}
+        if "group_id" not in existing:
+            db.execute("ALTER TABLE test_grid ADD COLUMN group_id TEXT")
 
     def _connect(self):
         db = sqlite3.connect(self.path)
@@ -263,7 +272,7 @@ class Library:
                 """SELECT g.*, m.name AS material_name
                    FROM test_grid g
                    LEFT JOIN material m ON m.id = g.material_id
-                   ORDER BY g.created_at DESC"""
+                   ORDER BY g.created_at DESC, g.id DESC"""  # created_at heeft secondenresolutie
             ).fetchall()
         return [_grid_row(r) for r in rows]
 
@@ -279,6 +288,31 @@ class Library:
         if row is None:
             raise LibraryError(f"Testraster {grid_id} bestaat niet.")
         return _grid_row(row)
+
+    def set_grid_group(self, grid_id: int, group_id: str | None) -> None:
+        with self._connect() as db:
+            db.execute(
+                "UPDATE test_grid SET group_id = ? WHERE id = ?", (group_id, grid_id)
+            )
+
+    def grid_operations(self) -> dict:
+        """Welke operatie bij welk raster hoort — voor het lagenpaneel."""
+        mapping = {}
+        # test_grids() staat nieuwste eerst; setdefault laat de nieuwste winnen.
+        # Element-id's worden per document uitgedeeld, dus een oud raster kan
+        # dezelfde operatie-id's dragen als het huidige.
+        for grid in self.test_grids():
+            for cell in grid["cells"]:
+                op = cell.get("operation_id")
+                if op:
+                    mapping.setdefault(op, {
+                        "grid_id": grid["id"],
+                        "row": cell["row"],
+                        "column": cell["column"],
+                        "speed_mm_s": cell["speed_mm_s"],
+                        "power_percent": cell["power_percent"],
+                    })
+        return mapping
 
     def add_test_grid(self, plan: dict, cells: list[dict]) -> dict:
         with self._connect() as db:

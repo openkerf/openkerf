@@ -377,3 +377,122 @@ def test_choosing_nothing_is_a_422(client, grid_with_material):
         f"/api/library/testgrids/{grid_with_material['id']}/presets", json={"cells": []}
     )
     assert response.status_code == 422
+
+
+# --------------------------------------------- raster als één object
+
+def test_a_grid_becomes_one_group(kernel, client):
+    """Half a grid dragging around makes no sense; it moves as one thing."""
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    assert grid["group_id"]
+    group = kernel.elements.find_node(grid["group_id"])
+    assert group is not None and group.type == "group"
+    # Every cell square sits inside the group.
+    inside = {n.id for n in group.flat()}
+    for cell in grid["cells"]:
+        assert cell["element_id"] in inside
+
+
+def test_cells_keep_their_own_operations_inside_the_group(kernel, client):
+    """Grouping is presentation; the sweep still needs one operation per cell."""
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    for cell in grid["cells"]:
+        operation = kernel.elements.find_node(cell["operation_id"])
+        assert operation.speed == cell["speed_mm_s"]
+
+
+def test_grid_layers_are_marked_as_such(client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    operations = client.get("/api/design").json()["operations"]
+    marked = [o for o in operations if o.get("grid")]
+
+    assert len(marked) == len(grid["cells"])
+    assert {o["grid"]["grid_id"] for o in marked} == {grid["id"]}
+    assert all("row" in o["grid"] and "column" in o["grid"] for o in marked)
+
+
+def test_speed_and_power_of_a_grid_cell_are_locked(client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    operation_id = grid["cells"][0]["operation_id"]
+
+    for blocked in ({"speed": 50}, {"power_percent": 20}, {"label": "eigen naam"}):
+        response = client.patch(f"/api/design/operations/{operation_id}", json=blocked)
+        assert response.status_code == 409, blocked
+        assert "testraster" in str(response.json()["detail"])
+
+
+def test_burning_a_single_cell_can_be_switched_off(kernel, client):
+    """A row that clearly cuts straight through can be skipped."""
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    operation_id = grid["cells"][0]["operation_id"]
+
+    response = client.patch(f"/api/design/operations/{operation_id}", json={"output": False})
+
+    assert response.status_code == 200
+    assert kernel.elements.find_node(operation_id).output is False
+
+
+def test_removing_a_grid_clears_the_design_but_keeps_the_record(kernel, client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    assert list(kernel.elements.elems())
+
+    response = client.post(f"/api/library/testgrids/{grid['id']}/remove-from-design")
+
+    assert response.status_code == 200
+    assert list(kernel.elements.elems()) == []
+    for cell in grid["cells"]:
+        assert kernel.elements.find_node(cell["operation_id"]) is None
+    # The grid itself survives: the photo and preset provenance hang off it.
+    assert client.get(f"/api/library/testgrids/{grid['id']}").status_code == 200
+
+
+def test_removing_a_grid_takes_the_label_layer_too(kernel, client):
+    """Otherwise every generated grid leaves a Raster-labels layer behind."""
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    client.post(f"/api/library/testgrids/{grid['id']}/remove-from-design")
+
+    labels = [o for o in kernel.elements.ops() if getattr(o, "label", None) == "Raster-labels"]
+    assert labels == []
+
+
+def test_a_stale_grid_id_does_not_lock_an_unrelated_layer(kernel, client, tmp_path):
+    """
+    Grid-to-operation links live in the database and outlive a restart, while
+    element ids are handed out per document. An id from an old grid can land on
+    a new operation by coincidence; that must not silently lock it.
+    """
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    borrowed = grid["cells"][0]["operation_id"]
+    client.post(f"/api/library/testgrids/{grid['id']}/remove-from-design")
+
+    # A fresh layer that happens to carry the same id, with different settings.
+    fresh = client.post(
+        "/api/design/operations", json={"type": "cut", "speed": 99, "power_percent": 33}
+    ).json()
+    node = kernel.elements.find_node(fresh["id"])
+    node.id = borrowed
+    kernel.elements.signal("rebuild_tree", "all")
+
+    marked = [o for o in client.get("/api/design").json()["operations"] if o.get("grid")]
+    assert all(o["id"] != borrowed for o in marked)
+    assert client.patch(f"/api/design/operations/{borrowed}", json={"speed": 50}).status_code == 200
+
+
+def test_the_newest_grid_wins_a_shared_operation_id(client):
+    """
+    Two grids in the library can carry the same operation ids, because ids are
+    handed out per document. The grid on the canvas now is the newest one, so
+    its cells must be the ones recognised.
+    """
+    first = client.post("/api/library/testgrids", json=BASE).json()
+    client.post(f"/api/library/testgrids/{first['id']}/remove-from-design")
+    second = client.post("/api/library/testgrids", json=BASE).json()
+
+    marked = [o for o in client.get("/api/design").json()["operations"] if o.get("grid")]
+
+    assert len(marked) == len(second["cells"])
+    assert {o["grid"]["grid_id"] for o in marked} == {second["id"]}

@@ -29,6 +29,14 @@ export type DesignOperation = {
 	passes: number | null;
 	output: boolean;
 	element_ids: string[];
+	/** Gezet als deze laag een cel van een testraster is. */
+	grid?: {
+		grid_id: number;
+		row: number;
+		column: number;
+		speed_mm_s: number;
+		power_percent: number;
+	} | null;
 };
 
 export type Design = {

@@ -182,6 +182,44 @@ class TestGridGenerator:
         self.elements.signal("refresh_scene", "Scene")
         return drawn
 
+    def group_drawn(self, drawn: list[dict]) -> str | None:
+        """
+        Vouw het hele raster tot één groep.
+
+        Een raster is één ding: half verslepen slaat nergens op, en als losse
+        vierkanten vult het de selectie en het canvas met ruis. De cellen
+        houden wél elk hun eigen operatie — anders brandt de sweep niet.
+        """
+        nodes = [
+            node
+            for node in (
+                self.elements.find_node(entry["element_id"]) for entry in drawn
+            )
+            if node is not None
+        ]
+        labels = [
+            node
+            for node in self.elements.elems()
+            if node.type == "elem path" and node not in nodes
+        ]
+        members = nodes + [n for n in labels if self._is_label(n)]
+        if len(members) < 2:
+            return None
+        self.elements.set_emphasis(members)
+        self.kernel.console("group\n")
+        self.elements.validate_ids()
+        for node in self.elements.elem_branch.flat():
+            if node.type == "group" and any(c in members for c in node.children):
+                return node.id
+        return None
+
+    def _is_label(self, node) -> bool:
+        for reference in getattr(node, "_references", []) or []:
+            parent = getattr(reference, "parent", None)
+            if parent is not None and getattr(parent, "label", None) == "Raster-labels":
+                return True
+        return False
+
     def _draw_cells(self, plan: dict, cells: list[dict]) -> list[dict]:
         op_type = OPERATION_TYPES[plan["operation"]]
         drawn = []

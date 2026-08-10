@@ -72,12 +72,15 @@ def _color(value) -> str | None:
 class DesignReader:
     """Builds a render-ready snapshot of the element tree."""
 
-    def __init__(self, kernel, keep_operations=None):
+    def __init__(self, kernel, keep_operations=None, grid_operations=None):
         self.kernel = kernel
         # Operaties die de gebruiker zelf aanmaakte. Een verse boom bevat 201
         # lege standaardoperaties, dus lege lagen tonen we normaal niet — maar
         # een laag die je net zelf maakte moet niet meteen onzichtbaar zijn.
         self.keep_operations = keep_operations if keep_operations is not None else set()
+        # Callable die {operatie-id: {grid_id, row, column, ...}} teruggeeft.
+        # Rasteroperaties worden in de UI tot één regel samengevouwen.
+        self.grid_operations = grid_operations or (lambda: {})
 
     @property
     def elements(self):
@@ -92,6 +95,7 @@ class DesignReader:
         # which would make a selection point at the wrong element.
         self.elements.validate_ids()
 
+        grids = self.grid_operations()
         element_ids = {}
         elements = []
         for index, node in enumerate(self.elements.elems()):
@@ -103,6 +107,8 @@ class DesignReader:
         operations = []
         for index, op in enumerate(self.elements.ops()):
             entry = self._operation(op, op.id or f"o{index}", element_ids)
+            if entry is not None:
+                entry["grid"] = self._grid_for(op, grids.get(entry["id"]))
             # An operation with no elements is not a layer the user sees; the
             # engine keeps a stack of unused defaults around.
             if entry is not None and (
@@ -128,6 +134,28 @@ class DesignReader:
             "elements": elements,
             "operations": operations,
         }
+
+    @staticmethod
+    def _grid_for(op, cell):
+        """
+        Alleen markeren als de operatie ook echt die cel is.
+
+        De koppeling komt uit de database en overleeft een herstart, terwijl
+        element-id's per document worden uitgedeeld. Een id uit een oud raster
+        kan dus toevallig op een nieuwe operatie passen; dan zou die ten
+        onrechte op slot gaan. De instellingen moeten daarom kloppen.
+        """
+        if not cell:
+            return None
+        speed = _attr_or_none(op, "speed")
+        power = _attr_or_none(op, "power")
+        if speed is None or power is None:
+            return None
+        if abs(float(speed) - float(cell["speed_mm_s"])) > 0.01:
+            return None
+        if abs(float(power) - float(cell["power_percent"]) * 10) > 0.1:
+            return None
+        return cell
 
     def _element(self, node, element_id) -> dict | None:
         path = self._path(node)

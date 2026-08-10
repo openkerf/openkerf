@@ -144,10 +144,15 @@ class ApiServer:
         self.reader = StatusReader(kernel)
         self.commands = CommandRunner(kernel)
         self.machines = MachineManager(kernel, self.commands)
+        self.library = Library(library_path or default_path(kernel))
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
-        self.design = DesignReader(kernel, keep_operations=self.drawing.user_operations)
-        self.library = Library(library_path or default_path(kernel))
+        self.design = DesignReader(
+            kernel,
+            keep_operations=self.drawing.user_operations,
+            grid_operations=lambda: self.library.grid_operations(),
+        )
+        self.drawing.grid_operations = lambda: self.library.grid_operations()
         self.grids = TestGridGenerator(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
@@ -435,6 +440,12 @@ class ApiServer:
                 plan, cells = plan_grid(**body)
                 drawn = self.grids.draw(plan, cells)
                 grid = self.library.add_test_grid(plan, drawn)
+                # Het raster is één object op het canvas; de cellen houden hun
+                # eigen operaties, want die zijn de sweep.
+                group_id = self.grids.group_drawn(drawn)
+                if group_id:
+                    self.library.set_grid_group(grid["id"], group_id)
+                    grid = self.library.test_grid(grid["id"])
                 return grid
 
             return manage(run)
@@ -446,6 +457,37 @@ class ApiServer:
         @app.get("/api/library/testgrids/{grid_id}")
         def get_test_grid(grid_id: int):
             return manage(self.library.test_grid, grid_id)
+
+        @app.post("/api/library/testgrids/{grid_id}/remove-from-design", dependencies=write)
+        def remove_grid_from_design(grid_id: int):
+            """
+            Haal het raster van het canvas: de groep én al zijn cel-operaties.
+
+            Het bewaarde raster blijft bestaan — daar hangen de foto en de
+            herkomst van de presets aan.
+            """
+            def run():
+                grid = self.library.test_grid(grid_id)
+                removed = {"elements": 0, "operations": 0}
+                if grid.get("group_id"):
+                    node = self.kernel.elements.find_node(grid["group_id"])
+                    if node is not None:
+                        removed["elements"] = len(list(node.flat())) - 1
+                        node.remove_node(children=True, destroy=True)
+                for cell in grid["cells"]:
+                    for key in ("element_id", "operation_id"):
+                        node = self.kernel.elements.find_node(cell.get(key) or "")
+                        if node is not None:
+                            node.remove_node(children=True, destroy=True)
+                            removed["operations" if key == "operation_id" else "elements"] += 1
+                for op in list(self.kernel.elements.ops()):
+                    if getattr(op, "label", None) == "Raster-labels" and not list(op.children):
+                        op.remove_node()
+                self.library.set_grid_group(grid_id, None)
+                self.kernel.elements.signal("rebuild_tree", "all")
+                return removed
+
+            return manage(run)
 
         @app.delete("/api/library/testgrids/{grid_id}", dependencies=write)
         def remove_test_grid(grid_id: int):

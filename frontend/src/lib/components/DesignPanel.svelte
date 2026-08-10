@@ -34,6 +34,31 @@
 	let selectedIds = $derived(design.selectedIds);
 
 	let editingLayer = $state<string | null>(null);
+	let openGrid = $state<number | null>(null);
+
+	// Rasterlagen zijn geen gewone lagen: ze horen bij één testraster en hun
+	// snelheid en vermogen zíjn de test. Eén regel per raster dus.
+	let plainLayers = $derived(operations.filter((o) => !o.grid));
+	let gridGroups = $derived.by(() => {
+		const byGrid = new Map<number, typeof operations>();
+		for (const op of operations) {
+			if (!op.grid) continue;
+			const list = byGrid.get(op.grid.grid_id) ?? [];
+			list.push(op);
+			byGrid.set(op.grid.grid_id, list);
+		}
+		return [...byGrid.entries()].map(([id, ops]) => ({ id, ops }));
+	});
+
+	async function removeGrid(gridId: number) {
+		const token =
+			typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
+		await fetch(`/api/library/testgrids/${gridId}/remove-from-design`, {
+			method: 'POST',
+			headers: token ? { Authorization: `Bearer ${token}` } : {}
+		});
+		onLayerChange?.();
+	}
 	let newLayerType = $state('cut');
 
 	async function addLayer() {
@@ -150,7 +175,7 @@
 				</div>
 			{/if}
 		</div>
-		{#each operations as op, index (op.id)}
+		{#each plainLayers as op, index (op.id)}
 			<div class="layer" class:muted-row={!op.output}>
 				<span class="chip mono" style="background: {design.colorFor(op.id)}">{index + 1}</span>
 				{#if canEdit && selectedIds.length}
@@ -242,6 +267,42 @@
 						<span>Meebranden</span>
 					</label>
 					<button class="danger" onclick={() => dropLayer(op.id)}>Laag verwijderen</button>
+				</div>
+			{/if}
+		{/each}
+
+		{#each gridGroups as group (group.id)}
+			<div class="layer grid-row">
+				<span class="chip mono grid-chip">R</span>
+				<div class="layer-name">
+					<div class="op">Testraster #{group.id}</div>
+					<div class="obj">{group.ops.length} cellen · snelheid en vermogen liggen vast</div>
+				</div>
+				<button
+					class="eye"
+					aria-label="Cellen van raster {group.id} tonen"
+					onclick={() => (openGrid = openGrid === group.id ? null : group.id)}
+				>{openGrid === group.id ? '−' : '+'}</button>
+			</div>
+
+			{#if openGrid === group.id}
+				<div class="cells">
+					{#each group.ops as op (op.id)}
+						<label class="cell" title="rij {op.grid?.row}, kolom {op.grid?.column}">
+							<input
+								type="checkbox"
+								checked={op.output}
+								disabled={!canEdit || edits.busy}
+								onchange={(e) => patchLayer(op.id, { output: e.currentTarget.checked })}
+							/>
+							<span class="mono">{op.grid?.speed_mm_s}·{op.grid?.power_percent}%</span>
+						</label>
+					{/each}
+					{#if canEdit}
+						<button class="danger cells-remove" onclick={() => removeGrid(group.id)}>
+							Raster uit ontwerp verwijderen
+						</button>
+					{/if}
 				</div>
 			{/if}
 		{/each}
@@ -376,6 +437,35 @@
 	.rot:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
+	}
+	.grid-row .grid-chip { background: var(--text-2); }
+	.cells {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+		padding: var(--space-2);
+		border: 1px solid var(--line);
+		border-top: none;
+		border-radius: 0 0 var(--radius-field) var(--radius-field);
+		margin-bottom: 6px;
+	}
+	.cell {
+		display: flex;
+		align-items: center;
+		gap: 3px;
+		font-size: 10px;
+		color: var(--text-2);
+		padding: 2px 4px;
+		border-radius: 3px;
+		background: var(--surface-2);
+	}
+	.cell input { width: 12px; height: 12px; accent-color: var(--accent); }
+	.cells-remove {
+		flex-basis: 100%;
+		text-align: left;
+		font-size: var(--text-xs);
+		color: var(--danger);
+		margin-top: var(--space-1);
 	}
 	.addrow { display: flex; gap: var(--space-1); align-items: center; }
 	.addrow select {
