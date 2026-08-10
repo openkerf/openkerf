@@ -46,7 +46,8 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Bewerking (laag) toekennen aan de selectie | live |
 | Bewerken-tab: lagen met snelheid/vermogen en elementaantal | live |
 | Materiaalbibliotheek: materialen, presets, toepassen op een laag | live (fase 4, eerste plak) |
-| Testraster-wizard | nog niet gebouwd — volgende plak |
+| Testraster: bereik instellen, voorbeeld, genereren | live |
+| Testraster: foto en beste vakje aanwijzen | nog niet gebouwd — volgende plak |
 | Kader tonen | uitgeschakeld — beweging is fase 3 |
 | Tool-rail | zichtbaar, nog zonder gedrag (fase 3) |
 

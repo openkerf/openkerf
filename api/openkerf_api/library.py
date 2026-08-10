@@ -11,6 +11,7 @@ reusable once you know which machine produced it, so machine_profile is a
 separate table that presets point at.
 """
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -48,6 +49,29 @@ CREATE TABLE IF NOT EXISTS preset (
     source        TEXT NOT NULL DEFAULT 'handmatig',
     origin_id     TEXT,
     note          TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS test_grid (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id   INTEGER REFERENCES material(id) ON DELETE SET NULL,
+    machine_id    INTEGER REFERENCES machine_profile(id) ON DELETE SET NULL,
+    thickness_mm  REAL,
+    operation     TEXT NOT NULL,
+    speed_min     REAL NOT NULL,
+    speed_max     REAL NOT NULL,
+    speed_steps   INTEGER NOT NULL,
+    power_min     REAL NOT NULL,
+    power_max     REAL NOT NULL,
+    power_steps   INTEGER NOT NULL,
+    cell_mm       REAL NOT NULL,
+    gap_mm        REAL NOT NULL,
+    origin_x_mm   REAL NOT NULL,
+    origin_y_mm   REAL NOT NULL,
+    -- Elke cel met haar positie en instellingen, zodat de foto-overlay later
+    -- weet welk vakje bij welke snelheid en vermogen hoort.
+    cells         TEXT NOT NULL,
+    photo_path    TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -227,12 +251,78 @@ class Library:
                 raise LibraryError(f"Preset {preset_id} bestaat niet.")
         return {"removed": preset_id}
 
+    # ------------------------------------------------------------ testrasters
+
+    def test_grids(self) -> list[dict]:
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT g.*, m.name AS material_name
+                   FROM test_grid g
+                   LEFT JOIN material m ON m.id = g.material_id
+                   ORDER BY g.created_at DESC"""
+            ).fetchall()
+        return [_grid_row(r) for r in rows]
+
+    def test_grid(self, grid_id: int) -> dict:
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT g.*, m.name AS material_name
+                   FROM test_grid g
+                   LEFT JOIN material m ON m.id = g.material_id
+                   WHERE g.id = ?""",
+                (grid_id,),
+            ).fetchone()
+        if row is None:
+            raise LibraryError(f"Testraster {grid_id} bestaat niet.")
+        return _grid_row(row)
+
+    def add_test_grid(self, plan: dict, cells: list[dict]) -> dict:
+        with self._connect() as db:
+            cursor = db.execute(
+                """INSERT INTO test_grid (material_id, machine_id, thickness_mm, operation,
+                        speed_min, speed_max, speed_steps, power_min, power_max, power_steps,
+                        cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    plan.get("material_id"),
+                    plan.get("machine_id"),
+                    plan.get("thickness_mm"),
+                    plan["operation"],
+                    plan["speed_min"],
+                    plan["speed_max"],
+                    plan["speed_steps"],
+                    plan["power_min"],
+                    plan["power_max"],
+                    plan["power_steps"],
+                    plan["cell_mm"],
+                    plan["gap_mm"],
+                    plan["origin_x_mm"],
+                    plan["origin_y_mm"],
+                    json.dumps(cells),
+                ),
+            )
+            grid_id = cursor.lastrowid
+        return self.test_grid(grid_id)
+
+    def remove_test_grid(self, grid_id: int) -> dict:
+        with self._connect() as db:
+            cursor = db.execute("DELETE FROM test_grid WHERE id = ?", (grid_id,))
+            if not cursor.rowcount:
+                raise LibraryError(f"Testraster {grid_id} bestaat niet.")
+        return {"removed": grid_id}
+
     # ---------------------------------------------------------------- helpers
 
     @staticmethod
     def _one(db, table: str, row_id: int) -> dict:
         row = db.execute(f"SELECT * FROM {table} WHERE id = ?", (row_id,)).fetchone()
         return dict(row)
+
+
+def _grid_row(row) -> dict:
+    data = dict(row)
+    data["cells"] = json.loads(data["cells"])
+    return data
 
 
 def _preset_row(row) -> dict:

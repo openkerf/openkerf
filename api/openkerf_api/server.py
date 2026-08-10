@@ -24,6 +24,7 @@ from .commands import CommandError, CommandRunner
 from .design import DesignReader
 from .edits import DesignEditor, DesignError
 from .library import Library, LibraryError, default_path
+from .testgrid import TestGridGenerator, plan_grid
 from .machines import MachineError, MachineManager
 from .status import StatusReader
 
@@ -145,6 +146,7 @@ class ApiServer:
         self.design = DesignReader(kernel)
         self.editor = DesignEditor(kernel, self.commands)
         self.library = Library(library_path or default_path(kernel))
+        self.grids = TestGridGenerator(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
 
@@ -378,6 +380,40 @@ class ApiServer:
                 return {**result, "preset": preset}
 
             return manage(run)
+
+        # ---------------------------------------------------------- testrasters
+
+        @app.post("/api/library/testgrids/preview")
+        def preview_test_grid(body: dict):
+            """Work out the cells without drawing anything, so it can be shown first."""
+            def run():
+                plan, cells = plan_grid(**body)
+                return {"plan": plan, "cells": cells}
+
+            return manage(run)
+
+        @app.post("/api/library/testgrids", dependencies=write, status_code=201)
+        def create_test_grid(body: dict):
+            """Plan the grid, draw it into the design, and remember it."""
+            def run():
+                plan, cells = plan_grid(**body)
+                drawn = self.grids.draw(plan, cells)
+                grid = self.library.add_test_grid(plan, drawn)
+                return grid
+
+            return manage(run)
+
+        @app.get("/api/library/testgrids")
+        def list_test_grids():
+            return self.library.test_grids()
+
+        @app.get("/api/library/testgrids/{grid_id}")
+        def get_test_grid(grid_id: int):
+            return manage(self.library.test_grid, grid_id)
+
+        @app.delete("/api/library/testgrids/{grid_id}", dependencies=write)
+        def remove_test_grid(grid_id: int):
+            return manage(self.library.remove_test_grid, grid_id)
 
         # -------------------------------------------------------- machine setup
 
