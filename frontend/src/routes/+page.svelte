@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
@@ -14,7 +16,14 @@
 	const status = new StatusConnection();
 	const control = new Controller();
 	const design = new DesignStore();
-	let tab = $state<'design' | 'job'>('job');
+	// De tab staat in de URL, zodat de terugknop en een bladwijzer werken.
+	let tab = $derived<'design' | 'job'>($page.url.searchParams.get('tab') === 'design' ? 'design' : 'job');
+
+	function selectTab(next: 'design' | 'job') {
+		const url = new URL($page.url);
+		url.searchParams.set('tab', next);
+		replaceState(url, {});
+	}
 	let preflight = $state(false);
 
 	let device = $derived(status.device);
@@ -42,7 +51,7 @@
 	});
 
 	function requestStart() {
-		tab = 'job';
+		selectTab('job');
 		preflight = true;
 	}
 
@@ -72,7 +81,7 @@
 				class="tab"
 				role="tab"
 				aria-selected={tab === 'design'}
-				onclick={() => (tab = 'design')}
+				onclick={() => selectTab('design')}
 			>
 				Bewerken
 				{#if tab === 'design'}
@@ -81,7 +90,7 @@
 					>
 				{/if}
 			</button>
-			<button class="tab" role="tab" aria-selected={tab === 'job'} onclick={() => (tab = 'job')}>
+			<button class="tab" role="tab" aria-selected={tab === 'job'} onclick={() => selectTab('job')}>
 				Job
 				{#if tab === 'job'}
 					<svg aria-hidden="true"

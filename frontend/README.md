@@ -83,9 +83,20 @@ npm run build     # static build naar build/
 
 ## Machine-setup (`/setup`)
 
-Een wizard in vier stappen: **machines** (wat heb je al, welke is actief) →
-**type** (zoekbare catalogus uit MeerK40t, gegroepeerd per familie) → **naam** →
-**basisinstellingen** (werkgebied en verbinding) → klaar.
+Een wizard waarin **elke stap een eigen route** is:
+
+| Route | Stap |
+|---|---|
+| `/setup` | machines: wat heb je al, welke is actief |
+| `/setup/type` | zoekbare catalogus uit MeerK40t, gegroepeerd per familie |
+| `/setup/naam?type=<key>` | naam geven, voorgevuld uit de catalogus |
+| `/setup/instellen?machine=<path>` | werkgebied en verbinding |
+| `/setup/klaar?machine=<path>` | afronding |
+
+Wat een stap nodig heeft staat in de URL, niet in component-state. Daardoor werken de
+browser-terugknop, een bladwijzer en verversen alle drie, en toont een stap zonder de
+benodigde parameter een nette uitleg met een weg terug in plaats van een half formulier.
+De paneel-tab op het werkgebied zit om dezelfde reden in de URL (`/?tab=design`).
 
 De machinechip in de bovenbalk linkt hierheen en toont "Machine instellen" als er
 nog niets is, zodat een lege installatie geen doodlopende weg is. Instelvelden
