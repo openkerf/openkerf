@@ -34,6 +34,7 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `GET /api/health` | liveness + aantal WebSocket-clients |
 | `GET /api/status` | volledige snapshot (kernel, devices, posities, spooler) |
 | `GET /api/devices` | alleen de devicelijst |
+| `GET /api/design` | het ontwerp: elementcontouren (SVG-pad in Tats) + operaties |
 | `GET /api/capabilities` | welke acties het **actieve** device ondersteunt + of een token nodig is |
 | `WS /api/ws` | live: snapshot bij connect, daarna signalen + heartbeat (2 s) |
 | `POST /api/job/load` | multipart upload; laadt het bestand in de elementenboom |
@@ -99,6 +100,18 @@ console-uitvoer erbij, geen 500.
 - **Heartbeat** van 2 s stuurt een volledige snapshot, zodat een client die een
   signaal mist alsnog convergeert.
 
+## Ontwerp uitlezen
+
+`GET /api/design` levert per element een SVG-pad **in de interne eenheid van de
+engine** (Tat, 65535 per inch) plus `units_per_mm`. Omrekenen zou betekenen dat
+we padstrings moeten herschrijven; de frontend zet er één schaaltransform
+omheen.
+
+Elementen horen bij **meerdere** operaties tegelijk: MeerK40t classificeert een
+element automatisch in elke operatie waarvan de kleur matcht. `operation_ids`
+geeft ze allemaal. Daarom kleurt het canvas op de eigen streekkleur van het
+element — net als de scene van MeerK40t zelf — en niet op "de kleur van de laag".
+
 ## Machine-setup
 
 De catalogus komt uit MeerK40t's `dev_info`-registry (9 families, 46 types) en de
@@ -124,7 +137,7 @@ object zou anders zijn interne velden uitstorten in de response.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 55 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 64 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Device } from '$lib/api';
+	import type { DesignStore } from '$lib/design.svelte';
 
-	let { device }: { device: Device | null } = $props();
+	let { device, design }: { device: Device | null; design: DesignStore } = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
 
@@ -53,6 +54,24 @@
 					? `Laserkop op ${head[0].toFixed(1)}, ${head[1].toFixed(1)} millimeter`
 					: 'Positie van de laserkop onbekend'}
 			>
+				<!-- Het ontwerp. Eén schaaltransform rekent Tats om naar mm; de
+				     paddata zelf blijft onaangeroerd zoals de engine hem gaf. -->
+				{#if design.design}
+					<g transform="scale({1 / design.design.units_per_mm})">
+						{#each design.elements as element (element.id)}
+							{#if !element.hidden}
+								<path
+									d={element.path}
+									fill="none"
+									stroke={element.stroke ?? 'var(--text-2)'}
+									stroke-width="1.2"
+									vector-effect="non-scaling-stroke"
+								/>
+							{/if}
+						{/each}
+					</g>
+				{/if}
+
 				{#if head}
 					<!-- Live kop-positie. Er is nog geen ontwerp om te tonen: fase 1
 					     leest alleen status, het canvas zelf komt in fase 3. -->

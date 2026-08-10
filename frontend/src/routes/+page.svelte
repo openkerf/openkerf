@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
+	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
 	import Canvas from '$components/Canvas.svelte';
 	import DesignPanel from '$components/DesignPanel.svelte';
@@ -12,6 +13,7 @@
 
 	const status = new StatusConnection();
 	const control = new Controller();
+	const design = new DesignStore();
 	let tab = $state<'design' | 'job'>('job');
 	let preflight = $state(false);
 
@@ -22,6 +24,7 @@
 	onMount(() => {
 		status.connect();
 		control.refreshCapabilities();
+		design.load();
 		// De beschikbare acties hangen af van het actieve device, dus opnieuw
 		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
@@ -29,6 +32,13 @@
 			clearInterval(poll);
 			status.close();
 		};
+	});
+
+	// De engine seint dat de elementenboom wijzigde; dan pas opnieuw ophalen.
+	// De store slikt bursts zelf, dus een signaal per wijziging is prima.
+	$effect(() => {
+		const latest = status.events[0];
+		if (latest && isDesignSignal(latest.code)) design.load();
 	});
 
 	function requestStart() {
@@ -54,7 +64,7 @@
 
 <div class="main">
 	<ToolRail />
-	<Canvas {device} />
+	<Canvas {device} {design} />
 
 	<aside class="panel" aria-label="Eigenschappen">
 		<div class="tabs" role="tablist">
@@ -82,7 +92,7 @@
 		</div>
 		<div class="panel-scroll">
 			{#if tab === 'design'}
-				<DesignPanel />
+				<DesignPanel {design} />
 			{:else}
 				<JobPanel
 					{device}

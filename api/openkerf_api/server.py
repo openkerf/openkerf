@@ -21,6 +21,7 @@ from pathlib import Path
 
 from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
+from .design import DesignReader
 from .machines import MachineError, MachineManager
 from .status import StatusReader
 
@@ -33,6 +34,10 @@ SIGNALS = (
     "spooler;queue",
     "spooler;completed",
     "warn_state_update",
+    # Design changes, so the canvas knows when to refetch.
+    "tree_changed",
+    "rebuild_tree",
+    "element_property_update",
 )
 
 HEARTBEAT_SECONDS = 2.0
@@ -127,6 +132,7 @@ class ApiServer:
         self.reader = StatusReader(kernel)
         self.commands = CommandRunner(kernel)
         self.machines = MachineManager(kernel, self.commands)
+        self.design = DesignReader(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
 
@@ -218,6 +224,11 @@ class ApiServer:
         @app.get("/api/devices")
         def devices():
             return self.reader.snapshot()["devices"]
+
+        @app.get("/api/design")
+        def design():
+            """Element outlines and the operations that claim them."""
+            return self.design.snapshot()
 
         @app.get("/api/capabilities")
         def capabilities():
