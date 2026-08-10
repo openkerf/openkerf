@@ -415,6 +415,68 @@ class ApiServer:
         def remove_test_grid(grid_id: int):
             return manage(self.library.remove_test_grid, grid_id)
 
+        @app.post("/api/library/testgrids/{grid_id}/photo", dependencies=write)
+        async def upload_grid_photo(grid_id: int, file: UploadFile):
+            """The photo of the burned grid — usually taken on a phone."""
+            suffix = Path(file.filename or "").suffix
+            data = await file.read()
+            if not data:
+                raise HTTPException(status_code=422, detail="Lege foto.")
+            return manage(self.library.set_grid_photo, grid_id, suffix, data)
+
+        @app.get("/api/library/testgrids/{grid_id}/photo")
+        def get_grid_photo(grid_id: int):
+            from fastapi.responses import FileResponse
+
+            grid = manage(self.library.test_grid, grid_id)
+            path = grid.get("photo_path")
+            if not path or not Path(path).is_file():
+                raise HTTPException(status_code=404, detail="Nog geen foto.")
+            return FileResponse(path)
+
+        @app.post("/api/library/testgrids/{grid_id}/presets", dependencies=write, status_code=201)
+        def presets_from_cells(grid_id: int, body: dict):
+            """
+            Turn the cells the user pointed at into presets.
+
+            This closes the loop: the resulting preset carries source
+            "testraster" and points back at the grid it came from, which is
+            what earns it the "geverifieerd" badge.
+            """
+            chosen = body.get("cells")
+            if not isinstance(chosen, list) or not chosen:
+                raise HTTPException(status_code=422, detail="Kies minstens één vakje.")
+
+            def run():
+                grid = self.library.test_grid(grid_id)
+                if grid["material_id"] is None:
+                    raise LibraryError(
+                        "Dit raster hoort bij geen materiaal; koppel er eerst een aan."
+                    )
+                by_position = {(c["row"], c["column"]): c for c in grid["cells"]}
+                created = []
+                for pick in chosen:
+                    key = (pick.get("row"), pick.get("column"))
+                    cell = by_position.get(key)
+                    if cell is None:
+                        raise LibraryError(f"Cel {key} hoort niet bij dit raster.")
+                    preset = self.library.add_preset(
+                        material_id=grid["material_id"],
+                        machine_id=grid["machine_id"],
+                        thickness_mm=grid["thickness_mm"],
+                        operation=grid["operation"],
+                        speed_mm_s=cell["speed_mm_s"],
+                        power_percent=cell["power_percent"],
+                        source="testraster",
+                        origin_id=f"testgrid:{grid_id}",
+                        note=str(pick.get("note") or ""),
+                    )
+                    self.library.mark_cell(grid_id, key[0], key[1], preset["id"])
+                    created.append(preset)
+                return {"presets": created}
+
+            return manage(run)
+
         # -------------------------------------------------------- machine setup
 
         @app.get("/api/machines/catalog")

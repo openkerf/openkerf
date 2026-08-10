@@ -75,6 +75,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/library/machines",
         "/api/library/presets/{preset_id}/apply",
         "/api/library/testgrids",
+        "/api/library/testgrids/{grid_id}/photo",
+        "/api/library/testgrids/{grid_id}/presets",
         # Rekent alleen; zie READ_ONLY_POSTS in test_write_actions.py.
         "/api/library/testgrids/preview",
     }

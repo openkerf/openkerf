@@ -2,6 +2,7 @@
 	import { OPERATIONS, SOURCE_LABEL, type LibraryStore, type Preset } from '$lib/library.svelte';
 	import type { DesignOperation } from '$lib/design.svelte';
 	import TestGrid from './TestGrid.svelte';
+	import TestGridResult from './TestGridResult.svelte';
 
 	let {
 		library,
@@ -182,6 +183,8 @@
 {/if}
 
 <TestGrid {library} {canEdit} onGenerated={onApplied} />
+
+<TestGridResult {library} {canEdit} />
 
 <style>
 	.section + .section { margin-top: var(--space-6); }

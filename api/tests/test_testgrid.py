@@ -256,3 +256,124 @@ def test_labels_stay_on_the_bed(kernel, client):
         x0, y0, _, _ = (v / per_mm for v in element["bounds"])
         assert x0 >= 0, f"{element['label']} steekt links buiten het bed"
         assert y0 >= 0, f"{element['label']} steekt boven het bed uit"
+
+
+# ------------------------------------------------- foto en preset-extractie
+
+PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+@pytest.fixture
+def grid_with_material(client):
+    material = client.post("/api/library/materials", json={"name": "Multiplex"}).json()
+    return client.post(
+        "/api/library/testgrids",
+        json={**BASE, "material_id": material["id"], "thickness_mm": 3},
+    ).json()
+
+
+def test_photo_is_stored_and_served(client, grid_with_material):
+    grid_id = grid_with_material["id"]
+
+    upload = client.post(
+        f"/api/library/testgrids/{grid_id}/photo",
+        files={"file": ("raster.png", PNG, "image/png")},
+    )
+
+    assert upload.status_code == 200
+    assert upload.json()["photo_path"].endswith(f"grid-{grid_id}.png")
+    assert client.get(f"/api/library/testgrids/{grid_id}/photo").status_code == 200
+
+
+def test_photo_before_upload_is_a_404(client, grid_with_material):
+    response = client.get(f"/api/library/testgrids/{grid_with_material['id']}/photo")
+    assert response.status_code == 404
+
+
+def test_odd_photo_formats_are_refused(client, grid_with_material):
+    response = client.post(
+        f"/api/library/testgrids/{grid_with_material['id']}/photo",
+        files={"file": ("raster.exe", b"MZ", "application/octet-stream")},
+    )
+    assert response.status_code == 409
+
+
+def test_a_chosen_cell_becomes_a_verified_preset(client, grid_with_material):
+    grid_id = grid_with_material["id"]
+    cell = grid_with_material["cells"][4]
+
+    response = client.post(
+        f"/api/library/testgrids/{grid_id}/presets",
+        json={"cells": [{"row": cell["row"], "column": cell["column"]}]},
+    )
+
+    assert response.status_code == 201
+    preset = response.json()["presets"][0]
+    assert preset["speed_mm_s"] == cell["speed_mm_s"]
+    assert preset["power_percent"] == cell["power_percent"]
+    assert preset["source"] == "testraster"
+    assert preset["origin_id"] == f"testgrid:{grid_id}"
+    assert preset["thickness_mm"] == 3
+    assert preset["material_name"] == "Multiplex"
+
+
+def test_several_cells_can_be_chosen_at_once(client, grid_with_material):
+    """Cutting often has a "just enough" and a "with margin" setting."""
+    grid_id = grid_with_material["id"]
+    picks = [
+        {"row": c["row"], "column": c["column"], "note": note}
+        for c, note in zip(grid_with_material["cells"][:2], ("net goed", "ruim"))
+    ]
+
+    created = client.post(
+        f"/api/library/testgrids/{grid_id}/presets", json={"cells": picks}
+    ).json()["presets"]
+
+    assert len(created) == 2
+    assert {p["note"] for p in created} == {"net goed", "ruim"}
+
+
+def test_the_grid_remembers_which_cell_produced_which_preset(client, grid_with_material):
+    grid_id = grid_with_material["id"]
+    cell = grid_with_material["cells"][7]
+
+    preset = client.post(
+        f"/api/library/testgrids/{grid_id}/presets",
+        json={"cells": [{"row": cell["row"], "column": cell["column"]}]},
+    ).json()["presets"][0]
+
+    stored = client.get(f"/api/library/testgrids/{grid_id}").json()
+    marked = [c for c in stored["cells"] if c.get("preset_id") == preset["id"]]
+    assert len(marked) == 1
+    assert (marked[0]["row"], marked[0]["column"]) == (cell["row"], cell["column"])
+
+
+def test_a_grid_without_a_material_cannot_produce_presets(client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    response = client.post(
+        f"/api/library/testgrids/{grid['id']}/presets",
+        json={"cells": [{"row": 0, "column": 0}]},
+    )
+
+    assert response.status_code == 409
+    assert "materiaal" in str(response.json()["detail"])
+
+
+def test_a_cell_outside_the_grid_is_refused(client, grid_with_material):
+    response = client.post(
+        f"/api/library/testgrids/{grid_with_material['id']}/presets",
+        json={"cells": [{"row": 99, "column": 99}]},
+    )
+    assert response.status_code == 409
+
+
+def test_choosing_nothing_is_a_422(client, grid_with_material):
+    response = client.post(
+        f"/api/library/testgrids/{grid_with_material['id']}/presets", json={"cells": []}
+    )
+    assert response.status_code == 422

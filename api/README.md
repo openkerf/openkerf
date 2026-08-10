@@ -52,6 +52,8 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `POST /api/library/presets/{id}/apply` | preset op een bewerking (laag) zetten |
 | `POST /api/library/testgrids/preview` | cellen uitrekenen zonder iets te tekenen |
 | `POST`/`GET`/`DELETE /api/library/testgrids` | testraster genereren, teruglezen, weggooien |
+| `POST`/`GET /api/library/testgrids/{id}/photo` | foto van het gebrande raster opslaan en teruggeven |
+| `POST /api/library/testgrids/{id}/presets` | gekozen vakjes omzetten in geverifieerde presets |
 | `GET /` | de frontend (met `-f`), anders een kale devpagina |
 
 Voorbeeld:
@@ -194,9 +196,16 @@ twee keer branden — één keer op de instelling van de cel, één keer op die 
 andere laag. Dat maakt de test waardeloos en verbrandt materiaal. Een test legt
 vast dat elke cel in precies één operatie zit.
 
-De cellen worden mét hun element- en operatie-id opgeslagen. Dat is wat de
-volgende plak nodig heeft: een tik op de foto terugvertalen naar de snelheid en
-het vermogen van dat vakje.
+**De verificatielus is rond.** Foto's landen als bestand in `openkerf-photos/`
+naast de database — dat houdt de database klein en de foto's gewoon te bekijken
+met een verkenner. Een tik op een vakje in de overlay wordt via de opgeslagen
+celposities teruggerekend naar snelheid en vermogen, en levert een preset op met
+bron `testraster` en `origin_id = testgrid:<id>`. Dat is precies wat de badge
+"Geverifieerd" op de materiaalkaart oplevert.
+
+Je mag **meerdere** vakjes aanwijzen: bij snijden wil je vaak een "net goed" en
+een "ruim", elk met een eigen notitie. Het raster onthoudt welke cel welke preset
+opleverde, zodat de herkomst terug te zoeken is.
 
 ## Machine-setup
 
@@ -223,7 +232,7 @@ object zou anders zijn interne velden uitstorten in de response.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 127 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 136 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van
