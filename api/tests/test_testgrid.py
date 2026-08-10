@@ -92,7 +92,10 @@ def test_generating_draws_a_square_and_an_operation_per_cell(kernel, client):
     assert response.status_code == 201
     grid = response.json()
     assert len(grid["cells"]) == 9
-    assert len(list(kernel.elements.elems())) == 9
+    # Nine squares plus the axis labels drawn beside them.
+    drawn = {n.id for n in kernel.elements.elems()}
+    assert {c["element_id"] for c in grid["cells"]} <= drawn
+    assert len(drawn) == 9 + BASE["speed_steps"] + BASE["power_steps"]
 
     snapshot = DesignReader(kernel).snapshot()
     labels = {op["label"] for op in snapshot["operations"]}
@@ -133,11 +136,12 @@ def test_a_grid_that_does_not_fit_the_bed_is_refused(kernel, client):
 
 def test_generating_is_undoable(kernel, client):
     client.post("/api/library/testgrids", json=BASE)
-    assert len(list(kernel.elements.elems())) == 9
+    before = len(list(kernel.elements.elems()))
+    assert before >= 9
 
     client.post("/api/design/undo")
 
-    assert len(list(kernel.elements.elems())) < 9
+    assert len(list(kernel.elements.elems())) < before
 
 
 # ----------------------------------------------------------------- stored
@@ -186,3 +190,69 @@ def test_removing_a_grid(client):
 
 def test_unknown_grid_is_a_409(client):
     assert client.get("/api/library/testgrids/999").status_code == 409
+
+
+def test_cells_are_not_also_classified_into_other_operations(kernel, client):
+    """
+    The engine auto-classifies new elements into every operation whose colour
+    matches. Left alone, each grid square would land in a pre-existing layer as
+    well, and the job would burn the grid twice — once per cell setting and
+    once at that layer's — which ruins the test and the material.
+    """
+    kernel.console("rect 200mm 150mm 10mm 10mm\n")
+    kernel.console("element* cut -s 20 -p 30\n")
+
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    snapshot = DesignReader(kernel).snapshot()
+    by_id = {e["id"]: e for e in snapshot["elements"]}
+    for cell in grid["cells"]:
+        assert by_id[cell["element_id"]]["operation_ids"] == [cell["operation_id"]]
+
+
+def test_the_axes_are_labelled(kernel, client):
+    """A grid you cannot read afterwards is not a test."""
+    client.post("/api/library/testgrids", json=BASE)
+
+    snapshot = DesignReader(kernel).snapshot()
+    labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"]
+
+    assert labels, "there is a layer holding the axis labels"
+    # One per row plus one per column.
+    assert len(labels[0]["element_ids"]) == BASE["speed_steps"] + BASE["power_steps"]
+
+
+def test_labels_sit_outside_the_grid(kernel, client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    snapshot = DesignReader(kernel).snapshot()
+    per_mm = snapshot["units_per_mm"]
+    label_ids = {
+        e
+        for op in snapshot["operations"]
+        if op["label"] == "Raster-labels"
+        for e in op["element_ids"]
+    }
+    cell_ids = {c["element_id"] for c in grid["cells"]}
+
+    for element in snapshot["elements"]:
+        if element["id"] not in label_ids:
+            continue
+        x0, y0, _, _ = (v / per_mm for v in element["bounds"])
+        # Left of the first column or above the first row.
+        assert x0 < 10 or y0 < 10, (x0, y0)
+    assert label_ids.isdisjoint(cell_ids)
+
+
+def test_labels_stay_on_the_bed(kernel, client):
+    """
+    At full size "25 mm/s" is nearly 20mm wide and ran off the left edge of the
+    bed, where it would never burn. Labels scale with the cell instead.
+    """
+    client.post("/api/library/testgrids", json={**BASE, "origin_x_mm": 20, "origin_y_mm": 20})
+
+    snapshot = DesignReader(kernel).snapshot()
+    per_mm = snapshot["units_per_mm"]
+    for element in snapshot["elements"]:
+        x0, y0, _, _ = (v / per_mm for v in element["bounds"])
+        assert x0 >= 0, f"{element['label']} steekt links buiten het bed"
+        assert y0 >= 0, f"{element['label']} steekt boven het bed uit"

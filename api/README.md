@@ -180,6 +180,20 @@ Genereren gebeurt binnen één `undoscope`, dus één keer ongedaan maken haalt 
 hele raster weg. Past het raster niet op het bed van het actieve device, dan
 weigert de API het met een 409 en blijft het ontwerp onaangeroerd.
 
+**Aslabels.** Snelheid links, vermogen boven, als vector-tekst (`linetext`,
+Hershey-fonts) in een eigen engrave-laag. Bitmap-tekst (`text`) is hier
+onbruikbaar: die heeft headless geen bounds en geen `as_geometry`, dus hij is
+onzichtbaar op ons canvas én niet te positioneren. De labels schalen mee met het
+vakje (0,35 × celmaat), want op ware grootte is "25 mm/s" bijna 20 mm breed en
+steekt hij links van het bed uit.
+
+**Classificatie staat uit tijdens het genereren.** De engine stopt elk nieuw
+element automatisch in élke operatie waarvan de kleur matcht. Zonder die
+schakelaar belandde elke cel óók in een bestaande laag, en zou de job het raster
+twee keer branden — één keer op de instelling van de cel, één keer op die van de
+andere laag. Dat maakt de test waardeloos en verbrandt materiaal. Een test legt
+vast dat elke cel in precies één operatie zit.
+
 De cellen worden mét hun element- en operatie-id opgeslagen. Dat is wat de
 volgende plak nodig heeft: een tik op de foto terugvertalen naar de snelheid en
 het vermogen van dat vakje.
@@ -209,7 +223,7 @@ object zou anders zijn interne velden uitstorten in de response.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 123 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 127 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van
