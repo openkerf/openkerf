@@ -148,6 +148,18 @@
 		};
 	});
 
+	// Meten: twee klikken, en de afstand blijft staan tot je opnieuw begint.
+	// Nuttig om te controleren of een uitsparing echt past voordat je snijdt.
+	let measureFrom = $state<{ x: number; y: number } | null>(null);
+	let measureTo = $state<{ x: number; y: number } | null>(null);
+
+	let measured = $derived.by(() => {
+		if (!measureFrom || !measureTo) return null;
+		const dx = measureTo.x - measureFrom.x;
+		const dy = measureTo.y - measureFrom.y;
+		return { dx, dy, length: Math.hypot(dx, dy) };
+	});
+
 	function startNode(event: PointerEvent, index: number) {
 		event.stopPropagation();
 		(event.target as Element).setPointerCapture?.(event.pointerId);
@@ -465,7 +477,17 @@
 					: 'Positie van de laserkop onbekend'}
 				onclick={(e) => {
 					if (e.target !== e.currentTarget) return;
-					if (tool !== 'select' && canEdit) {
+					if (tool === 'measure') {
+						const at = pointerMm(e);
+						if (!measureFrom || measureTo) {
+							measureFrom = at;
+							measureTo = null;
+						} else {
+							measureTo = at;
+						}
+						return;
+					}
+					if (tool !== 'select' && tool !== 'nodes' && canEdit) {
 						drawAt(e);
 						return;
 					}
@@ -487,6 +509,7 @@
 					}
 				}}
 				onpointermove={(e) => {
+					if (tool === 'measure' && measureFrom && !measureTo) hover = pointerMm(e);
 					if (lineStart) hover = pointerMm(e);
 					moveBand(e);
 				}}
@@ -736,6 +759,25 @@
 					{/each}
 				{/if}
 
+				{#if tool === 'measure' && measureFrom}
+					{@const to = measureTo ?? hover ?? measureFrom}
+					<line
+						class="measure"
+						x1={measureFrom.x}
+						y1={measureFrom.y}
+						x2={to.x}
+						y2={to.y}
+					/>
+					<text
+						class="measure-label"
+						x={(measureFrom.x + to.x) / 2}
+						y={(measureFrom.y + to.y) / 2 - 2}
+						text-anchor="middle"
+					>
+						{Math.hypot(to.x - measureFrom.x, to.y - measureFrom.y).toFixed(1)} mm
+					</text>
+				{/if}
+
 				{#if cropping}
 					<!-- Vangt de muis af, anders start het slepen op de afbeelding zelf. -->
 					<rect
@@ -878,6 +920,17 @@
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
 		cursor: grab;
+	}
+	.measure {
+		stroke: var(--accent);
+		stroke-width: 1;
+		stroke-dasharray: 3 2;
+		vector-effect: non-scaling-stroke;
+	}
+	.measure-label {
+		font-size: 4px;
+		fill: var(--accent);
+		font-family: var(--font-mono, monospace);
 	}
 	.knot {
 		fill: var(--surface-1);

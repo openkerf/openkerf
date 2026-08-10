@@ -6,7 +6,7 @@
 
 	let {
 		device,
-		state,
+		state: machineState,
 		canStart,
 		canStop,
 		box = null,
@@ -43,10 +43,19 @@
 		onSetPosition?.(axis === 'x' ? value : box.x, axis === 'y' ? value : box.y);
 	}
 
+	// Verhouding vasthouden. Zonder dit vervormt een logo zodra je één maat
+	// intikt, en dat merk je pas als het gebrand is.
+	let linked = $state(true);
+
 	function commitSize(axis: 'width' | 'height', raw: string) {
 		if (!box) return;
 		const value = Number(raw);
 		if (!Number.isFinite(value) || value <= 0) return;
+		if (linked && box.width > 0 && box.height > 0) {
+			const factor = value / (axis === 'width' ? box.width : box.height);
+			onSetSize?.(box.width * factor, box.height * factor);
+			return;
+		}
 		onSetSize?.(
 			axis === 'width' ? value : box.width,
 			axis === 'height' ? value : box.height
@@ -60,9 +69,9 @@
 	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
 	     leidt naar de setup — ook de route als er nog géén machine is. -->
 	<a class="machine" href="/setup" title="Machine kiezen of instellen">
-		<span class="dot {state}" aria-hidden="true"></span>
+		<span class="dot {machineState}" aria-hidden="true"></span>
 		<span>{device?.label ?? 'Machine instellen'}</span>
-		<span class="muted">{STATE_LABEL[state]}</span>
+		<span class="muted">{STATE_LABEL[machineState]}</span>
 	</a>
 
 	{#if box}
@@ -94,6 +103,22 @@
 					/>
 				</label>
 			{/each}
+			<button
+				class="link"
+				aria-pressed={linked}
+				disabled={!canEdit}
+				title={linked ? 'Verhouding vast' : 'Breedte en hoogte los'}
+				onclick={() => (linked = !linked)}
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+					{#if linked}
+						<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+						<path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+					{:else}
+						<path d="M9 12H5a3 3 0 0 1 0-6h4M15 12h4a3 3 0 0 1 0 6h-4" />
+					{/if}
+				</svg>
+			</button>
 			<span class="unit">mm</span>
 		</div>
 	{/if}

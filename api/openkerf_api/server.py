@@ -27,6 +27,7 @@ from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
 from .library import Library, LibraryError, default_path
+from .generators import Generators
 from .nodes import Nodes
 from .presetariat import Presetariat
 from .testgrid import TestGridGenerator, plan_grid
@@ -159,6 +160,7 @@ class ApiServer:
         self.motion = MachineControl(kernel, self.commands)
         self.images = Images(kernel, self.commands)
         self.nodes = Nodes(kernel, self.commands)
+        self.generators = Generators(kernel, self.commands)
         self.design = DesignReader(
             kernel,
             keep_operations=self.drawing.user_operations,
@@ -365,6 +367,13 @@ class ApiServer:
         def adjust_image(element_id: str, body: dict):
             if body.get("dpi") is not None:
                 return manage(self.images.set_dpi, element_id, body["dpi"])
+            if body.get("factor") is not None:
+                return manage(
+                    self.images.enhance,
+                    element_id,
+                    body.get("adjustment"),
+                    body["factor"],
+                )
             return manage(self.images.adjust, element_id, body.get("adjustment"))
 
         @app.get("/api/design/elements/{element_id}/nodes")
@@ -620,6 +629,69 @@ class ApiServer:
                 return {**result, "preset": preset}
 
             return manage(run)
+
+        # ----------------------------------------------------------- generatoren
+
+        @app.post("/api/design/generate/grid", dependencies=write)
+        def generate_grid(body: dict):
+            """De selectie in rijen en kolommen herhalen."""
+            return manage(
+                self.generators.grid,
+                body.get("ids") or [],
+                body.get("columns"),
+                body.get("rows"),
+                body.get("gap_x_mm", 5.0),
+                body.get("gap_y_mm", 5.0),
+            )
+
+        @app.post("/api/design/generate/radial", dependencies=write)
+        def generate_radial(body: dict):
+            return manage(
+                self.generators.radial,
+                body.get("ids") or [],
+                body.get("repeats"),
+                body.get("radius_mm"),
+                body.get("start_deg", 0.0),
+                body.get("end_deg", 360.0),
+                body.get("rotate", True),
+            )
+
+        @app.post("/api/design/generate/polygon", dependencies=write, status_code=201)
+        def generate_polygon(body: dict):
+            return manage(
+                self.generators.polygon,
+                body.get("corners"),
+                body.get("cx_mm"),
+                body.get("cy_mm"),
+                body.get("radius_mm"),
+                body.get("inner_radius_mm"),
+                body.get("start_deg", 0.0),
+            )
+
+        @app.post("/api/design/generate/box", dependencies=write, status_code=201)
+        def generate_box(body: dict):
+            return manage(
+                self.generators.box,
+                body.get("width_mm"),
+                body.get("depth_mm"),
+                body.get("height_mm"),
+                body.get("thickness_mm"),
+                body.get("finger_mm", 10.0),
+                body.get("kerf_mm", 0.0),
+                body.get("gap_mm", 5.0),
+                body.get("lid", True),
+            )
+
+        @app.post("/api/design/generate/qrcode", dependencies=write, status_code=201)
+        def generate_qrcode(body: dict):
+            return manage(
+                self.generators.qrcode,
+                body.get("text"),
+                body.get("x_mm", 0.0),
+                body.get("y_mm", 0.0),
+                body.get("size_mm", 30.0),
+                body.get("border", 2),
+            )
 
         # ---------------------------------------------------------- presetariat
 

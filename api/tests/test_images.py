@@ -192,3 +192,52 @@ def test_a_crop_without_size_is_refused(client, loaded):
         json={"x_mm": 0, "y_mm": 0, "width_mm": 0, "height_mm": 10},
     )
     assert response.status_code == 409
+
+
+@pytest.mark.parametrize("adjustment", ["contrast", "color"])
+def test_a_slider_adjustment_changes_the_pixels(client, loaded, adjustment):
+    before = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
+
+    response = client.post(
+        f"/api/design/elements/{loaded['id']}/image",
+        json={"adjustment": adjustment, "factor": 1.8},
+    )
+
+    assert response.status_code == 200
+    after = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
+    assert after != before
+
+
+def test_an_absurd_strength_is_refused(client, loaded):
+    for factor in (-1, 12, "veel"):
+        response = client.post(
+            f"/api/design/elements/{loaded['id']}/image",
+            json={"adjustment": "contrast", "factor": factor},
+        )
+        assert response.status_code == 409, factor
+
+
+def test_brightness_is_not_offered(client, loaded):
+    """
+    Het `image brightness`-commando van de engine leest zijn factor op de
+    verkeerde plek uit de argumentenlijst en doet daardoor altijd niets. Een
+    schuifje aanbieden dat gegarandeerd niet werkt, is erger dan geen schuifje.
+    """
+    response = client.post(
+        f"/api/design/elements/{loaded['id']}/image",
+        json={"adjustment": "brightness", "factor": 1.5},
+    )
+
+    assert response.status_code == 409
+
+
+def test_a_strength_of_one_leaves_the_image_alone(client, loaded):
+    """Anders is een schuifje niet te gebruiken om naar een resultaat te zoeken."""
+    before = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
+
+    client.post(
+        f"/api/design/elements/{loaded['id']}/image",
+        json={"adjustment": "contrast", "factor": 1.0},
+    )
+
+    assert client.get(f"/api/design/elements/{loaded['id']}/image.png").content == before

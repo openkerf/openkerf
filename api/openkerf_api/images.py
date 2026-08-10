@@ -32,6 +32,14 @@ ADJUSTMENTS = (
 # externe library nodig), dus we vragen de kernel wat er echt geregistreerd is.
 VECTORISERS = ("vectrace", "potrace")
 
+# Bewerkingen met een sterkte. 1.0 laat de afbeelding zoals hij is; lager is
+# zwakker, hoger sterker. Dit zijn de schuifjes die xTool Studio ook heeft.
+# `brightness` staat er bewust NIET bij: dat commando leest zijn factor uit de
+# ruwe argumentenlijst op de verkeerde plek en faalt daardoor altijd. Upstream-
+# bevinding, genoteerd in CLAUDE.md; wij bieden geen knop aan die gegarandeerd
+# niets doet.
+FACTORS = ("contrast", "sharpness", "color")
+
 
 class Images:
     def __init__(self, kernel, runner: CommandRunner | None = None):
@@ -63,6 +71,33 @@ class Images:
         self.elements.signal("rebuild_tree", "all")
         self.elements.signal("refresh_scene", "Scene")
         return {"id": element_id, "adjustment": adjustment}
+
+    def enhance(self, element_id: str, adjustment: str, factor) -> dict:
+        """
+        Helderheid, contrast, scherpte of verzadiging met een sterkte.
+
+        Anders dan de vaste bewerkingen is dit een schuifje: 1,0 verandert
+        niets, en dat maakt het bruikbaar om naar een resultaat toe te werken
+        in plaats van er één keer overheen te gaan.
+        """
+        if adjustment not in FACTORS:
+            raise DesignError(
+                f"Onbekende bewerking: {adjustment}. Kies uit {', '.join(FACTORS)}."
+            )
+        try:
+            strength = float(factor)
+        except (TypeError, ValueError) as e:
+            raise DesignError("De sterkte moet een getal zijn.") from e
+        if not 0 <= strength <= 5:
+            raise DesignError("De sterkte moet tussen 0 en 5 liggen.")
+
+        node = self._node(element_id)
+        self.elements.set_emphasis([node])
+        with self.elements.undoscope(f"Afbeelding {adjustment}"):
+            self.runner.run(f"image {adjustment} {strength}")
+        self.elements.signal("rebuild_tree", "all")
+        self.elements.signal("refresh_scene", "Scene")
+        return {"id": element_id, "adjustment": adjustment, "factor": strength}
 
     def set_dpi(self, element_id: str, dpi) -> dict:
         """

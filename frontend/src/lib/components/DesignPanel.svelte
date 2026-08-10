@@ -15,7 +15,8 @@
 		onImage,
 		onImageDpi,
 		onVectorise,
-		onCrop
+		onCrop,
+		onImageFactor
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -30,6 +31,7 @@
 		onImageDpi?: (dpi: number) => void;
 		onVectorise?: () => void;
 		onCrop?: () => void;
+		onImageFactor?: (adjustment: string, factor: number) => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -167,6 +169,23 @@
 					<button class="rot" disabled={edits.busy} onclick={() => onCrop?.()}>
 						Bijsnijden
 					</button>
+					{#each [['contrast', 'Contrast'], ['sharpness', 'Scherpte'], ['color', 'Verzadiging']] as [key, label] (key)}
+						<label class="slider">
+							<span>{label}</span>
+							<input
+								type="range"
+								min="0.2"
+								max="3"
+								step="0.1"
+								value="1"
+								disabled={edits.busy}
+								onchange={(e) => {
+									onImageFactor?.(key, Number(e.currentTarget.value));
+									e.currentTarget.value = '1';
+								}}
+							/>
+						</label>
+					{/each}
 					<label class="dpi mono">
 						DPI
 						<input
@@ -550,6 +569,15 @@
 		color: var(--accent);
 	}
 	.edit-text:hover { background: var(--surface-2); }
+	.slider {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		font-size: 10px;
+		color: var(--text-2);
+	}
+	.slider input { flex: 1; }
 	.dpi { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-2); }
 	.dpi input {
 		width: 4.5em;

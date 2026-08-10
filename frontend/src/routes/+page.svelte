@@ -17,6 +17,7 @@
 	import Dialog from '$components/Dialog.svelte';
 	import MaterialLibrary from '$components/MaterialLibrary.svelte';
 	import Presetariat from '$components/Presetariat.svelte';
+	import Generators from '$components/Generators.svelte';
 	import { PresetariatStore } from '$lib/presetariat.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
 	import TestGridResult from '$components/TestGridResult.svelte';
@@ -40,6 +41,7 @@
 	let cropping = $state(false);
 	let libraryOpen = $state(false);
 	let catalogueOpen = $state(false);
+	let generatorsOpen = $state(false);
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let pendingFile = $state<File | null>(null);
 	let textOpen = $state(false);
@@ -345,6 +347,7 @@
 		onOpenGrid={() => (gridOpen = true)}
 		onOpenLibrary={() => (libraryOpen = true)}
 		onOpenCatalogue={() => (catalogueOpen = true)}
+		onOpenGenerators={() => (generatorsOpen = true)}
 		onPlaceImage={placeImage}
 	/>
 	<Canvas
@@ -409,6 +412,15 @@
 					onLayerChange={() => design.load()}
 					onArrange={arrange}
 					onCrop={() => (cropping = true)}
+					onImageFactor={async (adjustment, factor) => {
+						const id = design.selectedId;
+						if (!id) return;
+						await post(`/api/design/elements/${encodeURIComponent(id)}/image`, {
+							adjustment,
+							factor
+						});
+						await design.load();
+					}}
 					onVectorise={async () => {
 						const id = design.selectedId;
 						if (!id) return;
@@ -504,6 +516,24 @@
 
 <Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
 	<Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
+
+<Generators
+	bind:open={generatorsOpen}
+	hasSelection={design.selectedIds.length > 0}
+	busy={edits.busy}
+	onGenerate={async (what, body) => {
+		const response = await post(`/api/design/generate/${what}`, {
+			...body,
+			ids: design.selectedIds
+		});
+		if (!response.ok) {
+			const detail = await response.json().catch(() => null);
+			return detail?.detail ?? 'Dat lukte niet.';
+		}
+		await design.load();
+		return null;
+	}}
+/>
 
 <MaterialLibrary
 		{library}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	export type Tool = 'select' | 'nodes' | 'rect' | 'circle' | 'line' | 'text';
+	export type Tool = 'select' | 'nodes' | 'measure' | 'rect' | 'circle' | 'line' | 'text';
 
 	let {
 		tool = $bindable(),
@@ -7,7 +7,8 @@
 		onOpenGrid,
 		onOpenLibrary,
 		onPlaceImage,
-		onOpenCatalogue
+		onOpenCatalogue,
+		onOpenGenerators
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
@@ -15,6 +16,7 @@
 		onOpenLibrary?: () => void;
 		onPlaceImage?: (file: File) => void;
 		onOpenCatalogue?: () => void;
+		onOpenGenerators?: () => void;
 	} = $props();
 
 	// Elk gereedschap tekent bij een klik op het bed; selecteren is de rust-stand.
@@ -28,7 +30,8 @@
 		{ id: 'rect', label: 'Rechthoek', path: 'M4 6h16v12H4z' },
 		{ id: 'circle', label: 'Cirkel', path: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z' },
 		{ id: 'line', label: 'Lijn', path: 'M4 20L20 4' },
-		{ id: 'text', label: 'Tekst', path: 'M5 6h14M12 6v13' }
+		{ id: 'text', label: 'Tekst', path: 'M5 6h14M12 6v13' },
+		{ id: 'measure', label: 'Meten', path: 'M3 15L15 3l6 6L9 21z M7 11l2 2M11 7l2 2' }
 	];
 </script>
 
@@ -65,6 +68,9 @@
 	<hr />
 	<!-- Gereedschappen begin je links; een gereedschap dat alleen rechts te
 	     vinden is, vindt niemand. -->
+	<button class="tool" title="Generatoren — raster, cirkel, veelhoek, doos, QR" disabled={!canEdit} onclick={() => onOpenGenerators?.()}>
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
+	</button>
 	<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => onOpenGrid?.()}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg>
 	</button>
