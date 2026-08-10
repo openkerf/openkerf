@@ -1,10 +1,11 @@
 """
-Editing elements: move, resize, undo, redo.
+Editing elements: move, resize, rotate, layer assignment, undo, redo.
 
 Element transforms in MeerK40t act on the *emphasized* selection, not on an
-argument. Each edit therefore sets emphasis to the one node it targets and then
-runs the console command, so the engine's own selection ends up matching what
-the user picked in the browser.
+argument. Each edit therefore sets emphasis to exactly the nodes it targets and
+then runs the console command, so the engine's own selection ends up matching
+what the user picked in the browser. Emphasis is a set, so the same code path
+handles one element or twenty.
 
 Undo caveat, re-verified against the engine: ids normally *do* survive an undo.
 What undo restores is a whole-tree snapshot, so it can land on a state from
@@ -49,6 +50,14 @@ def _mm(value: float) -> str:
     return f"{value:.4f}mm"
 
 
+def _ids(value) -> list[str]:
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)) or not value:
+        raise DesignError("Geef minstens één element op.")
+    return [str(v) for v in value]
+
+
 class DesignEditor:
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
@@ -58,38 +67,106 @@ class DesignEditor:
     def elements(self):
         return self.kernel.elements
 
-    def _target(self, element_id: str):
-        node = self.elements.find_node(element_id)
+    def _node(self, node_id: str):
+        node = self.elements.find_node(node_id)
         if node is None:
             raise DesignError(
-                f"Element {element_id} bestaat niet (meer). Vernieuw het ontwerp."
+                f"Element {node_id} bestaat niet (meer). Vernieuw het ontwerp."
             )
-        self.elements.set_emphasis([node])
         return node
 
-    def move(self, element_id: str, dx_mm, dy_mm) -> dict:
+    def _target(self, element_ids) -> list:
+        nodes = [self._node(node_id) for node_id in _ids(element_ids)]
+        self.elements.set_emphasis(nodes)
+        return nodes
+
+    # ------------------------------------------------------------ transforms
+
+    def move(self, element_ids, dx_mm, dy_mm) -> dict:
         dx = _finite(dx_mm, "dx_mm")
         dy = _finite(dy_mm, "dy_mm")
-        self._target(element_id)
+        ids = _ids(element_ids)
+        self._target(ids)
         self.runner.run(f"translate {_mm(dx)} {_mm(dy)}")
-        return {"id": element_id, "moved": [dx, dy]}
+        return {"ids": ids, "moved": [dx, dy]}
 
-    def resize(self, element_id: str, x_mm, y_mm, width_mm, height_mm) -> dict:
+    def resize(self, element_ids, x_mm, y_mm, width_mm, height_mm) -> dict:
         x = _finite(x_mm, "x_mm")
         y = _finite(y_mm, "y_mm")
         width = _positive(width_mm, "width_mm")
         height = _positive(height_mm, "height_mm")
-        self._target(element_id)
+        ids = _ids(element_ids)
+        # With several elements the engine resizes their combined bounding box
+        # and keeps their relative positions, like dragging a group.
+        self._target(ids)
         self.runner.run(f"resize {_mm(x)} {_mm(y)} {_mm(width)} {_mm(height)}")
-        return {"id": element_id, "bounds": [x, y, width, height]}
+        return {"ids": ids, "bounds": [x, y, width, height]}
+
+    def rotate(self, element_ids, angle_deg) -> dict:
+        angle = _finite(angle_deg, "angle_deg")
+        ids = _ids(element_ids)
+        self._target(ids)
+        self.runner.run(f"rotate {angle:.4f}deg")
+        return {"ids": ids, "rotated": angle}
+
+    # --------------------------------------------------------------- layers
+
+    def assign(self, element_ids, operation_id: str) -> dict:
+        """
+        Put elements into an existing operation — a layer in the UI.
+
+        Operations hold ReferenceNodes rather than the elements themselves, so
+        this adds a reference; an element can legitimately sit in several
+        operations at once.
+        """
+        operation = self._operation(operation_id)
+        nodes = [self._node(node_id) for node_id in _ids(element_ids)]
+
+        added = 0
+        with self.elements.undoscope("Toewijzen aan bewerking"):
+            for node in nodes:
+                if not self._referenced(operation, node):
+                    operation.add_reference(node)
+                    added += 1
+        self._refresh()
+        return {"operation_id": operation_id, "added": added}
+
+    def unassign(self, element_ids, operation_id: str) -> dict:
+        operation = self._operation(operation_id)
+        targets = {id(self._node(node_id)) for node_id in _ids(element_ids)}
+
+        removed = 0
+        with self.elements.undoscope("Verwijderen uit bewerking"):
+            for reference in list(operation.children):
+                node = getattr(reference, "node", None)
+                if node is not None and id(node) in targets:
+                    reference.remove_node()
+                    removed += 1
+        self._refresh()
+        return {"operation_id": operation_id, "removed": removed}
+
+    def _operation(self, operation_id: str):
+        operation = self._node(operation_id)
+        if not str(operation.type).startswith(("op ", "effect ")):
+            raise DesignError(f"{operation_id} is geen bewerking.")
+        return operation
+
+    @staticmethod
+    def _referenced(operation, node) -> bool:
+        return any(getattr(c, "node", None) is node for c in operation.children)
+
+    def _refresh(self):
+        """Tell the rest of the engine the tree changed, as the GUI does."""
+        self.elements.signal("rebuild_tree", "all")
+        self.elements.signal("refresh_scene", "Scene")
+
+    # -------------------------------------------------------------- history
 
     def undo(self) -> dict:
-        output = self.runner.run("undo")
-        return self._history("undo", output)
+        return self._history("undo", self.runner.run("undo"))
 
     def redo(self) -> dict:
-        output = self.runner.run("redo")
-        return self._history("redo", output)
+        return self._history("redo", self.runner.run("redo"))
 
     def _history(self, action: str, output: list[str]) -> dict:
         # The console reports exhaustion as text rather than an error.

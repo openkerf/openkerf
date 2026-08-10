@@ -133,7 +133,7 @@ def test_move_over_http(kernel, editor, client):
     element_id = first_id(kernel)
 
     response = client.post(
-        f"/api/design/elements/{element_id}/move", json={"dx_mm": 5, "dy_mm": 0}
+        "/api/design/move", json={"ids": [element_id], "dx_mm": 5, "dy_mm": 0}
     )
 
     assert response.status_code == 200
@@ -144,7 +144,7 @@ def test_bad_payload_is_a_409(kernel, editor, client):
     element_id = first_id(kernel)
 
     response = client.post(
-        f"/api/design/elements/{element_id}/move", json={"dx_mm": "kaas", "dy_mm": 0}
+        "/api/design/move", json={"ids": [element_id], "dx_mm": "kaas", "dy_mm": 0}
     )
 
     assert response.status_code == 409
@@ -152,9 +152,143 @@ def test_bad_payload_is_a_409(kernel, editor, client):
 
 def test_undo_over_http(kernel, editor, client):
     element_id = first_id(kernel)
-    client.post(f"/api/design/elements/{element_id}/move", json={"dx_mm": 5, "dy_mm": 0})
+    client.post("/api/design/move", json={"ids": [element_id], "dx_mm": 5, "dy_mm": 0})
 
     response = client.post("/api/design/undo")
 
     assert response.status_code == 200
     assert response.json()["ids_invalidated"] is True
+
+
+# ---------------------------------------------------- multiple selection
+
+def test_move_accepts_several_elements(kernel, editor):
+    kernel.console("circle 120mm 50mm 15mm\n")
+    ids = [e["id"] for e in DesignReader(kernel).snapshot()["elements"]]
+    before = [bounds_mm(kernel, i) for i in ids]
+
+    editor.move(ids, 10, 0)
+
+    for element_id, was in zip(ids, before):
+        now = bounds_mm(kernel, element_id)
+        assert now[0] == pytest.approx(was[0] + 10, abs=0.05)
+
+
+def test_move_requires_at_least_one_element(editor):
+    for empty in ([], None, ""):
+        with pytest.raises(DesignError):
+            editor.move(empty, 1, 1)
+
+
+def test_a_bare_id_still_works(kernel, editor):
+    """The single-element form stays valid, so callers need not wrap it."""
+    element_id = first_id(kernel)
+
+    editor.move(element_id, 5, 0)
+
+    assert bounds_mm(kernel, element_id)[0] == 25.0
+
+
+# ---------------------------------------------------------------- rotating
+
+def test_rotate_changes_the_bounding_box(kernel, editor):
+    element_id = first_id(kernel)
+    before = bounds_mm(kernel, element_id)
+
+    editor.rotate(element_id, 45)
+
+    after = bounds_mm(kernel, element_id)
+    assert after != before
+    # A rotated rectangle covers a wider box than the axis-aligned original.
+    assert (after[2] - after[0]) > (before[2] - before[0])
+
+
+def test_rotate_rejects_nonsense(kernel, editor):
+    with pytest.raises(DesignError):
+        editor.rotate(first_id(kernel), "scheef")
+
+
+def test_rotate_over_http(kernel, editor, client):
+    element_id = first_id(kernel)
+    before = bounds_mm(kernel, element_id)
+
+    response = client.post(
+        "/api/design/rotate", json={"ids": [element_id], "angle_deg": 90}
+    )
+
+    assert response.status_code == 200
+    assert bounds_mm(kernel, element_id) != before
+
+
+# ------------------------------------------------------ layer assignment
+
+def operations(kernel):
+    return DesignReader(kernel).snapshot()["operations"]
+
+
+def test_assign_puts_an_element_back_in_an_operation(kernel, editor):
+    """
+    The engine auto-classifies new elements into every operation whose colour
+    matches, so an unassigned element has to be made first.
+    """
+    kernel.console("element* cut -s 12 -p 65\n")
+    snapshot = DesignReader(kernel).snapshot()
+    element_id = snapshot["elements"][0]["id"]
+    operation_id = snapshot["operations"][0]["id"]
+    editor.unassign([element_id], operation_id)
+    assert operation_id not in _membership(kernel)[element_id]
+
+    result = editor.assign([element_id], operation_id)
+
+    assert result["added"] == 1
+    assert operation_id in _membership(kernel)[element_id]
+
+
+def _membership(kernel):
+    return {e["id"]: e["operation_ids"] for e in DesignReader(kernel).snapshot()["elements"]}
+
+
+def test_assign_is_idempotent(kernel, editor):
+    kernel.console("element* cut -s 12 -p 65\n")
+    snapshot = DesignReader(kernel).snapshot()
+    element_id = snapshot["elements"][0]["id"]
+    operation_id = snapshot["operations"][0]["id"]
+
+    editor.assign([element_id], operation_id)
+    result = editor.assign([element_id], operation_id)
+
+    assert result["added"] == 0
+
+
+def test_unassign_removes_the_reference(kernel, editor):
+    kernel.console("element* cut -s 12 -p 65\n")
+    snapshot = DesignReader(kernel).snapshot()
+    element_id = snapshot["elements"][0]["id"]
+    operation_id = snapshot["operations"][0]["id"]
+
+    result = editor.unassign([element_id], operation_id)
+
+    assert result["removed"] >= 1
+    after = {e["id"]: e["operation_ids"] for e in DesignReader(kernel).snapshot()["elements"]}
+    assert operation_id not in after.get(element_id, [])
+
+
+def test_assign_refuses_a_non_operation(kernel, editor):
+    element_id = first_id(kernel)
+    with pytest.raises(DesignError):
+        editor.assign([element_id], element_id)
+
+
+def test_assign_over_http(kernel, editor, client):
+    kernel.console("element* cut -s 12 -p 65\n")
+    snapshot = DesignReader(kernel).snapshot()
+    element_id = snapshot["elements"][0]["id"]
+    operation_id = snapshot["operations"][0]["id"]
+    client.post("/api/design/unassign", json={"ids": [element_id], "operation_id": operation_id})
+
+    response = client.post(
+        "/api/design/assign", json={"ids": [element_id], "operation_id": operation_id}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["added"] == 1

@@ -96,14 +96,14 @@
 		const target = preview;
 		drag = null;
 		design.preview = null;
-		if (!design.selectedId || !target) return;
+		if (design.selectedIds.length === 0 || !target) return;
 		// Onder een halve pixel is het een klik, geen sleep.
 		if (Math.abs(finished.dx) < 0.05 && Math.abs(finished.dy) < 0.05) return;
 
 		if (finished.mode === 'move') {
-			await edits.move(design.selectedId, finished.dx, finished.dy);
+			await edits.move(design.selectedIds, finished.dx, finished.dy);
 		} else if (target.width > 0.1 && target.height > 0.1) {
-			await edits.resize(design.selectedId, target.x, target.y, target.width, target.height);
+			await edits.resize(design.selectedIds, target.x, target.y, target.width, target.height);
 		}
 		onEdited?.();
 	}
@@ -166,7 +166,7 @@
 									d={element.path}
 									fill="none"
 									stroke={element.stroke ?? 'var(--text-2)'}
-									stroke-width={design.selectedId === element.id ? 2 : 1.2}
+									stroke-width={design.isSelected(element.id) ? 2 : 1.2}
 									vector-effect="non-scaling-stroke"
 								/>
 								<!-- Onzichtbare trefzone: een contour van 1 px is niet aan te
@@ -181,10 +181,12 @@
 									role="button"
 									tabindex="0"
 									aria-label="Selecteer {element.label}"
-									aria-pressed={design.selectedId === element.id}
+									aria-pressed={design.isSelected(element.id)}
 									onclick={(e) => {
 										e.stopPropagation();
-										design.select(element.id);
+										// Shift houdt de bestaande selectie vast.
+										if (e.shiftKey) design.toggle(element.id);
+										else design.select(element.id);
 									}}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {

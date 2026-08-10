@@ -50,20 +50,30 @@ export class EditController {
 		}
 	}
 
-	move(id: string, dxMm: number, dyMm: number) {
-		return this.#post(`/api/design/elements/${encodeURIComponent(id)}/move`, {
-			dx_mm: dxMm,
-			dy_mm: dyMm
-		});
+	move(ids: string[] | string, dxMm: number, dyMm: number) {
+		return this.#post('/api/design/move', { ids, dx_mm: dxMm, dy_mm: dyMm });
 	}
 
-	resize(id: string, xMm: number, yMm: number, widthMm: number, heightMm: number) {
-		return this.#post(`/api/design/elements/${encodeURIComponent(id)}/resize`, {
+	resize(ids: string[] | string, xMm: number, yMm: number, widthMm: number, heightMm: number) {
+		return this.#post('/api/design/resize', {
+			ids,
 			x_mm: xMm,
 			y_mm: yMm,
 			width_mm: widthMm,
 			height_mm: heightMm
 		});
+	}
+
+	rotate(ids: string[] | string, angleDeg: number) {
+		return this.#post('/api/design/rotate', { ids, angle_deg: angleDeg });
+	}
+
+	assign(ids: string[] | string, operationId: string) {
+		return this.#post('/api/design/assign', { ids, operation_id: operationId });
+	}
+
+	unassign(ids: string[] | string, operationId: string) {
+		return this.#post('/api/design/unassign', { ids, operation_id: operationId });
 	}
 
 	undo() {

@@ -6,18 +6,32 @@
 		design,
 		edits,
 		canEdit = false,
-		onHistory
+		onHistory,
+		onRotate,
+		onAssign
 	}: {
 		design: DesignStore;
 		edits: EditController;
 		canEdit?: boolean;
 		onHistory?: (action: 'undo' | 'redo') => void;
+		onRotate?: (angleDeg: number) => void;
+		onAssign?: (operationId: string, assigned: boolean) => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
 	let operations = $derived(design.operations);
 	let selected = $derived(design.selected);
 	let size = $derived(design.selectedSize);
+	let chosen = $derived(design.selectedElements);
+	let selectedIds = $derived(design.selectedIds);
+
+	// Een bewerking is "aan" voor de selectie als élk gekozen element erin zit.
+	function membership(operationId: string): 'all' | 'some' | 'none' {
+		if (chosen.length === 0) return 'none';
+		const inside = chosen.filter((e) => e.operation_ids.includes(operationId)).length;
+		if (inside === 0) return 'none';
+		return inside === chosen.length ? 'all' : 'some';
+	}
 
 	function describe(op: { speed: number | null; power: number | null }) {
 		const parts: string[] = [];
@@ -58,7 +72,9 @@
 		<h2 class="section-title">Selectie</h2>
 		<div class="selected">
 			<div class="head">
-				<span class="name">{selected.label}</span>
+				<span class="name">
+					{chosen.length > 1 ? `${chosen.length} elementen` : selected.label}
+				</span>
 				<button class="clear" onclick={() => design.select(null)}>Wis</button>
 			</div>
 			<dl class="figures mono">
@@ -67,8 +83,22 @@
 				<div><dt>X</dt><dd>{size.x.toFixed(1)} mm</dd></div>
 				<div><dt>Y</dt><dd>{size.y.toFixed(1)} mm</dd></div>
 			</dl>
+			{#if canEdit}
+				<div class="rotate">
+					<span class="rot-label">Draaien</span>
+					{#each [-90, -1, 1, 90] as angle (angle)}
+						<button
+							class="rot"
+							disabled={edits.busy}
+							onclick={() => onRotate?.(angle)}
+						>{angle > 0 ? `+${angle}` : angle}°</button>
+					{/each}
+				</div>
+			{/if}
+
 			<p class="hint">
-				Zit in {selected.operation_ids.length} laag{selected.operation_ids.length === 1
+				{chosen.length > 1 ? 'Samen' : 'Zit'} in {selected.operation_ids.length} laag{selected
+					.operation_ids.length === 1
 					? ''
 					: 'en'}.
 				{#if canEdit}
@@ -88,6 +118,19 @@
 		{#each operations as op, index (op.id)}
 			<div class="layer" class:muted-row={!op.output}>
 				<span class="chip mono" style="background: {design.colorFor(op.id)}">{index + 1}</span>
+				{#if canEdit && selectedIds.length}
+					<!-- Toewijzen: de selectie in of uit deze bewerking halen. -->
+					<input
+						type="checkbox"
+						class="assign"
+						title="Selectie in deze bewerking"
+						aria-label="Selectie toewijzen aan {op.label}"
+						checked={membership(op.id) === 'all'}
+						indeterminate={membership(op.id) === 'some'}
+						disabled={edits.busy}
+						onchange={(e) => onAssign?.(op.id, e.currentTarget.checked)}
+					/>
+				{/if}
 				<div class="layer-name">
 					<div class="op">{op.label}</div>
 					<div class="obj">
@@ -203,6 +246,40 @@
 		border-radius: var(--radius-field);
 		background: color-mix(in srgb, var(--danger) 14%, transparent);
 		font-size: var(--text-xs);
+	}
+	.rotate {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		margin-top: var(--space-3);
+	}
+	.rot-label {
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-2);
+		margin-right: var(--space-1);
+	}
+	.rot {
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
+		padding: 3px 7px;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background: var(--surface-1);
+	}
+	.rot:hover:not(:disabled) {
+		background: var(--surface-2);
+	}
+	.rot:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+	.assign {
+		width: 15px;
+		height: 15px;
+		flex: none;
+		accent-color: var(--accent);
 	}
 	.selected {
 		border: 1px solid var(--accent);

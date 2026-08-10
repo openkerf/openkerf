@@ -41,7 +41,9 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Ontwerp laden, job starten, pauze, hervatten, stop, wachtrij legen | live (fase 2) |
 | Canvas: het geladen ontwerp op het bed, op ware maat | live |
 | Selectie: klikken op een element, contour + maten | live |
-| Bewerken: slepen, schalen met hoekgrepen, pijltjes, ongedaan maken | live |
+| Bewerken: slepen, schalen, draaien, pijltjes, ongedaan maken | live |
+| Meervoudige selectie (shift-klik) | live |
+| Bewerking (laag) toekennen aan de selectie | live |
 | Bewerken-tab: lagen met snelheid/vermogen en elementaantal | live |
 | Materiaalkaart | nog niet gebouwd — fase 4 |
 | Kader tonen | uitgeschakeld — beweging is fase 3 |
@@ -139,6 +141,18 @@ worden.
 Ongedaan maken zit in het Ontwerp-blok. Na een undo laat de frontend de selectie
 los: de boom kan dan uit een toestand komen waarin de id's anders liggen, dus een
 bewaard id zou een ander element kunnen aanwijzen.
+
+**Meervoudige selectie** met shift-klik. Het kader is dan de gezamenlijke
+omhullende; slepen, schalen en draaien werken op de hele groep. De kop van het
+selectieblok telt hoeveel elementen er gekozen zijn.
+
+**Draaien** met de knoppen −90°, −1°, +1° en +90° in het selectieblok. De engine
+draait om het middelpunt van de selectie.
+
+**Laag toekennen** met het vinkje voor elke laagrij: aan zet de hele selectie in
+die bewerking, uit haalt hem eruit. Zit maar een deel van de selectie erin, dan
+staat het vinkje op onbepaald — dat is eerlijk, want in MeerK40t kan elk element
+in meerdere bewerkingen zitten.
 
 Bewerken vereist dezelfde token als de jobcontrole; zonder token zijn de grepen
 inactief en zegt het paneel waarom.

@@ -278,22 +278,35 @@ class ApiServer:
 
         # ------------------------------------------------------- design edits
 
-        @app.post("/api/design/elements/{element_id}/move", dependencies=write)
-        def move_element(element_id: str, body: dict):
+        @app.post("/api/design/move", dependencies=write)
+        def move_elements(body: dict):
             return manage(
-                self.editor.move, element_id, body.get("dx_mm"), body.get("dy_mm")
+                self.editor.move, body.get("ids"), body.get("dx_mm"), body.get("dy_mm")
             )
 
-        @app.post("/api/design/elements/{element_id}/resize", dependencies=write)
-        def resize_element(element_id: str, body: dict):
+        @app.post("/api/design/resize", dependencies=write)
+        def resize_elements(body: dict):
             return manage(
                 self.editor.resize,
-                element_id,
+                body.get("ids"),
                 body.get("x_mm"),
                 body.get("y_mm"),
                 body.get("width_mm"),
                 body.get("height_mm"),
             )
+
+        @app.post("/api/design/rotate", dependencies=write)
+        def rotate_elements(body: dict):
+            return manage(self.editor.rotate, body.get("ids"), body.get("angle_deg"))
+
+        @app.post("/api/design/assign", dependencies=write)
+        def assign_elements(body: dict):
+            """Add the elements to an operation — a layer in the UI."""
+            return manage(self.editor.assign, body.get("ids"), body.get("operation_id"))
+
+        @app.post("/api/design/unassign", dependencies=write)
+        def unassign_elements(body: dict):
+            return manage(self.editor.unassign, body.get("ids"), body.get("operation_id"))
 
         @app.post("/api/design/undo", dependencies=write)
         def undo_design():
