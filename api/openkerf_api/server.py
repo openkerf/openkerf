@@ -421,6 +421,19 @@ class ApiServer:
         def add_preset(body: dict):
             return manage(lambda: self.library.add_preset(**body))
 
+        @app.patch("/api/library/presets/{preset_id}", dependencies=write)
+        def update_preset(preset_id: int, body: dict):
+            return manage(lambda: self.library.update_preset(preset_id, **body))
+
+        @app.get("/api/library/suggest")
+        def suggest_grid_range(
+            material_id: int | None = None,
+            operation: str | None = None,
+            thickness_mm: float | None = None,
+        ):
+            """Voorstel voor een rasterbereik rond bestaande presets."""
+            return self.library.suggest_range(material_id, operation, thickness_mm)
+
         @app.delete("/api/library/presets/{preset_id}", dependencies=write)
         def remove_preset(preset_id: int):
             return manage(self.library.remove_preset, preset_id)

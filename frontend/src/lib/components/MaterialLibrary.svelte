@@ -19,6 +19,9 @@
 	let newMaterial = $state('');
 	let draft = $state({ operation: 'snijden', thickness_mm: '3', speed_mm_s: '', power_percent: '' });
 	let targetOperation = $state<string>('');
+	let editing = $state<number | null>(null);
+	let addingMachine = $state(false);
+	let machineDraft = $state({ name: '', power_watt: '', lens_mm: '' });
 
 	let visible = $derived(library.presetsFor(materialId));
 	let chosenOperation = $derived(
@@ -45,6 +48,23 @@
 			power_percent: Number(draft.power_percent)
 		});
 		if (created) draft = { ...draft, speed_mm_s: '', power_percent: '' };
+	}
+
+	async function saveEdit(preset: Preset, fields: Record<string, unknown>) {
+		if (await library.updatePreset(preset.id, fields)) editing = null;
+	}
+
+	async function createMachine() {
+		if (!machineDraft.name.trim()) return;
+		const created = await library.addMachineProfile({
+			name: machineDraft.name.trim(),
+			power_watt: machineDraft.power_watt === '' ? null : Number(machineDraft.power_watt),
+			lens_mm: machineDraft.lens_mm === '' ? null : Number(machineDraft.lens_mm)
+		});
+		if (created) {
+			machineDraft = { name: '', power_watt: '', lens_mm: '' };
+			addingMachine = false;
+		}
 	}
 
 	async function apply(preset: Preset) {
@@ -143,9 +163,52 @@
 							>
 								Toepassen{chosenOperation ? ` op ${chosenOperation.label}` : ''}
 							</button>
+							<button
+								class="mini"
+								onclick={() => (editing = editing === preset.id ? null : preset.id)}
+							>{editing === preset.id ? 'Sluiten' : 'Bewerken'}</button>
 							<button class="mini" onclick={() => library.removePreset(preset.id)}>
 								Verwijderen
 							</button>
+						</div>
+					{/if}
+
+					{#if canEdit && editing === preset.id}
+						<!-- Materiaal, bewerking en bron liggen vast: dat is de identiteit
+						     van een preset, geen instelling. -->
+						<div class="edit">
+							<label><span>Snelheid (mm/s)</span>
+								<input class="mono" type="number" step="0.1" value={preset.speed_mm_s}
+									onchange={(e) => saveEdit(preset, { speed_mm_s: Number(e.currentTarget.value) })} />
+							</label>
+							<label><span>Vermogen (%)</span>
+								<input class="mono" type="number" step="1" min="1" max="100" value={preset.power_percent}
+									onchange={(e) => saveEdit(preset, { power_percent: Number(e.currentTarget.value) })} />
+							</label>
+							<label><span>Passes</span>
+								<input class="mono" type="number" step="1" min="1" value={preset.passes}
+									onchange={(e) => saveEdit(preset, { passes: Number(e.currentTarget.value) })} />
+							</label>
+							<label><span>Dikte (mm)</span>
+								<input class="mono" type="number" step="0.1" value={preset.thickness_mm ?? ''}
+									onchange={(e) => saveEdit(preset, { thickness_mm: Number(e.currentTarget.value) })} />
+							</label>
+							<label class="wide"><span>Notitie</span>
+								<input type="text" value={preset.note}
+									onchange={(e) => saveEdit(preset, { note: e.currentTarget.value })} />
+							</label>
+							<label class="wide"><span>Machineprofiel</span>
+								<select value={preset.machine_name ?? ''}
+									onchange={(e) => {
+										const found = library.machines.find((m) => m.name === e.currentTarget.value);
+										saveEdit(preset, { machine_id: found?.id ?? null });
+									}}>
+									<option value="">—</option>
+									{#each library.machines as machine (machine.id)}
+										<option value={machine.name}>{machine.name}</option>
+									{/each}
+								</select>
+							</label>
 						</div>
 					{/if}
 				</article>
@@ -179,6 +242,41 @@
 		{/if}
 	</div>
 {/if}
+
+<div class="section">
+	<div class="section-head">
+		<h2 class="section-title">Machineprofielen</h2>
+		{#if canEdit}
+			<button class="mini" onclick={() => (addingMachine = !addingMachine)}>
+				{addingMachine ? 'Annuleren' : 'Profiel toevoegen'}
+			</button>
+		{/if}
+	</div>
+	<p class="muted">
+		Een preset is pas herbruikbaar als je weet op welke machine hij gemaakt is — daarom
+		staat het profiel los van de preset.
+	</p>
+	{#if library.machines.length}
+		<ul class="profiles">
+			{#each library.machines as machine (machine.id)}
+				<li>
+					<span>{machine.name}</span>
+					<span class="mono">{machine.power_watt ? `${machine.power_watt} W` : ''}</span>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+	{#if addingMachine}
+		<div class="grid">
+			<label class="wide"><span>Naam</span><input bind:value={machineDraft.name} placeholder="bijv. 5030 CO2" /></label>
+			<label><span>Vermogen (W)</span><input class="mono" bind:value={machineDraft.power_watt} /></label>
+			<label><span>Lens (mm)</span><input class="mono" bind:value={machineDraft.lens_mm} /></label>
+		</div>
+		<button class="btn" disabled={library.busy || !machineDraft.name.trim()} onclick={createMachine}>
+			Opslaan
+		</button>
+	{/if}
+</div>
 
 <style>
 	.section + .section { margin-top: var(--space-6); }
@@ -280,6 +378,28 @@
 		padding: 8px 10px;
 		border-top: 1px solid var(--line);
 	}
+	.edit {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+		padding: var(--space-3);
+		border-top: 1px solid var(--line);
+		background: var(--surface-2);
+	}
+	.edit label { display: grid; gap: 2px; font-size: 10px; color: var(--text-2); }
+	.edit label.wide { grid-column: 1 / -1; }
+	.edit input, .edit select { width: 100%; }
+	.profiles { list-style: none; margin: var(--space-2) 0; padding: 0; }
+	.profiles li {
+		display: flex;
+		justify-content: space-between;
+		padding: 6px 8px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		margin-bottom: 4px;
+		font-size: var(--text-xs);
+	}
+	.grid label.wide { grid-column: 1 / -1; }
 	.new-preset {
 		margin-top: var(--space-4);
 		padding-top: var(--space-3);

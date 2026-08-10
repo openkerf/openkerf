@@ -36,6 +36,12 @@
 						<span class="badge">In gebruik</span>
 					{:else}
 						<button class="btn" onclick={() => useMachine(machine)}>Gebruiken</button>
+					{/if}
+					<!-- Instellingen waren alleen tijdens het aanmaken te bereiken. -->
+					<a class="btn" href="/setup/instellen?machine={encodeURIComponent(machine.path)}">
+						Instellingen
+					</a>
+					{#if !machine.active}
 						<button class="btn subtle" onclick={() => removeMachine(machine)}>Verwijderen</button>
 					{/if}
 				</li>

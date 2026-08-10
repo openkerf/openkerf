@@ -257,6 +257,78 @@ class Library:
             raise LibraryError(f"Preset {preset_id} bestaat niet.")
         return _preset_row(row)
 
+    # Wat je aan een bestaande preset mag bijstellen.
+    PRESET_FIELDS = {
+        "thickness_mm": lambda v: _number(v, "thickness_mm", optional=True),
+        "speed_mm_s": lambda v: _number(v, "speed_mm_s", positive=True),
+        "power_percent": lambda v: _percent(v),
+        "passes": lambda v: int(_number(v, "passes", positive=True)),
+        "air_assist": lambda v: 1 if v else 0,
+        "focus_offset_mm": lambda v: _number(v, "focus_offset_mm"),
+        "note": lambda v: str(v or ""),
+        "machine_id": lambda v: v,
+    }
+
+    def update_preset(self, preset_id: int, **fields) -> dict:
+        """
+        Bijstellen van een bestaande preset.
+
+        Materiaal en bewerking liggen vast: dat is een andere preset. Bron ook —
+        die zegt hoe de waarden tot stand kwamen, en dat verandert niet doordat
+        je een getal bijwerkt.
+        """
+        self.preset(preset_id)
+        updates = {k: v for k, v in fields.items() if k in self.PRESET_FIELDS and v is not None}
+        rejected = sorted(set(fields) - set(self.PRESET_FIELDS) - {"id"})
+        if rejected:
+            raise LibraryError(
+                f"Niet te wijzigen: {', '.join(rejected)}. Materiaal, bewerking en "
+                "bron horen bij de identiteit van een preset."
+            )
+        if not updates:
+            return self.preset(preset_id)
+        columns = ", ".join(f"{k} = ?" for k in updates)
+        values = [self.PRESET_FIELDS[k](v) for k, v in updates.items()]
+        with self._connect() as db:
+            db.execute(f"UPDATE preset SET {columns} WHERE id = ?", (*values, preset_id))
+        return self.preset(preset_id)
+
+    def suggest_range(self, material_id=None, operation=None, thickness_mm=None) -> dict:
+        """
+        Een rasterbereik rond wat je al weet.
+
+        ARCHITECTUUR.md: de app stelt het bereik voor op basis van bestaande
+        (vaak geëxtrapoleerde) presets rond het verwachte werkpunt. Zonder
+        presets vallen we terug op iets breeds maar redelijks.
+        """
+        presets = self.presets(material_id, operation)
+        if thickness_mm is not None:
+            near = [
+                p
+                for p in presets
+                if p["thickness_mm"] is not None
+                and abs(p["thickness_mm"] - float(thickness_mm)) < 0.51
+            ]
+            presets = near or presets
+        if not presets:
+            return {
+                "based_on": 0,
+                "speed_min": 5,
+                "speed_max": 25,
+                "power_min": 40,
+                "power_max": 80,
+            }
+        speeds = [p["speed_mm_s"] for p in presets]
+        powers = [p["power_percent"] for p in presets]
+        return {
+            "based_on": len(presets),
+            # Een halve slag eromheen: genoeg om het werkpunt te omsluiten.
+            "speed_min": max(0.1, round(min(speeds) * 0.5, 1)),
+            "speed_max": round(max(speeds) * 1.5, 1),
+            "power_min": max(1.0, round(min(powers) * 0.7, 1)),
+            "power_max": min(100.0, round(max(powers) * 1.3, 1)),
+        }
+
     def remove_preset(self, preset_id: int) -> dict:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM preset WHERE id = ?", (preset_id,))
@@ -399,6 +471,13 @@ def _preset_row(row) -> dict:
     data = dict(row)
     data["air_assist"] = bool(data["air_assist"])
     return data
+
+
+def _percent(value):
+    number = _number(value, "power_percent", positive=True)
+    if number > 100:
+        raise LibraryError("power_percent kan niet boven 100.")
+    return number
 
 
 def _number(value, name: str, positive: bool = False, optional: bool = False):

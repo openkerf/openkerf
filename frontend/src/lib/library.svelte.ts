@@ -43,6 +43,7 @@ export const SOURCE_LABEL: Record<Preset['source'], { text: string; tone: string
 export class LibraryStore {
 	materials = $state<Material[]>([]);
 	presets = $state<Preset[]>([]);
+	machines = $state<{ id: number; name: string; power_watt: number | null }[]>([]);
 	busy = $state(false);
 	error = $state<string | null>(null);
 
@@ -79,12 +80,14 @@ export class LibraryStore {
 	}
 
 	async load() {
-		const [materials, presets] = await Promise.all([
+		const [materials, presets, machines] = await Promise.all([
 			this.#request('/api/library/materials'),
-			this.#request('/api/library/presets')
+			this.#request('/api/library/presets'),
+			this.#request('/api/library/machines')
 		]);
 		if (materials) this.materials = materials;
 		if (presets) this.presets = presets;
+		if (machines) this.machines = machines;
 	}
 
 	async addMaterial(name: string) {
@@ -105,6 +108,33 @@ export class LibraryStore {
 		});
 		if (created) await this.load();
 		return created;
+	}
+
+	async updatePreset(id: number, fields: Record<string, unknown>) {
+		const updated = await this.#request(`/api/library/presets/${id}`, {
+			method: 'PATCH',
+			headers: this.#headers(true),
+			body: JSON.stringify(fields)
+		});
+		if (updated) await this.load();
+		return updated;
+	}
+
+	async addMachineProfile(profile: Record<string, unknown>) {
+		const created = await this.#request('/api/library/machines', {
+			method: 'POST',
+			headers: this.#headers(true),
+			body: JSON.stringify(profile)
+		});
+		if (created) await this.load();
+		return created;
+	}
+
+	suggest(materialId: number | null, operation: string, thicknessMm: number | null) {
+		const params = new URLSearchParams({ operation });
+		if (materialId !== null) params.set('material_id', String(materialId));
+		if (thicknessMm !== null) params.set('thickness_mm', String(thicknessMm));
+		return this.#request(`/api/library/suggest?${params}`);
 	}
 
 	async removePreset(id: number) {
