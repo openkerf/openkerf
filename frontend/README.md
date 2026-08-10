@@ -78,3 +78,14 @@ hexwaarden, zodat de themawissel en straks het Konva-canvas dezelfde bron delen.
 npm run check     # svelte-check, 0 errors
 npm run build     # static build naar build/
 ```
+
+## Machine-setup (`/setup`)
+
+Een wizard in vier stappen: **machines** (wat heb je al, welke is actief) →
+**type** (zoekbare catalogus uit MeerK40t, gegroepeerd per familie) → **naam** →
+**basisinstellingen** (werkgebied en verbinding) → klaar.
+
+De machinechip in de bovenbalk linkt hierheen en toont "Machine instellen" als er
+nog niets is, zodat een lege installatie geen doodlopende weg is. Instelvelden
+worden gegenereerd uit wat de API teruggeeft — label, tip, type en eventuele
+keuzelijst — dus er staat geen enkele machine-eigenschap hardcoded in de frontend.

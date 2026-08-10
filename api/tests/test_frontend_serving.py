@@ -24,6 +24,17 @@ def test_frontend_is_served_at_root(kernel, tmp_path):
         assert client.get("/api/health").json()["ok"] is True
 
 
+def test_client_routes_fall_back_to_index(kernel, tmp_path):
+    """/setup exists only in the browser, so it must serve the app shell."""
+    (tmp_path / "index.html").write_text("<h1>OpenKerf</h1>")
+
+    server = ApiServer(kernel, frontend=str(tmp_path))
+    with TestClient(server.build_app()) as client:
+        assert client.get("/setup").text == "<h1>OpenKerf</h1>"
+        # A missing asset must still 404 — serving HTML as JS breaks the page.
+        assert client.get("/_app/immutable/gone.js").status_code == 404
+
+
 def test_missing_frontend_directory_falls_back(kernel, tmp_path):
     server = ApiServer(kernel, frontend=str(tmp_path / "does-not-exist"))
     with TestClient(server.build_app()) as client:

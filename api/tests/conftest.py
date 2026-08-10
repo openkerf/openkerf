@@ -16,7 +16,7 @@ def _bootstrap(profile="OpenKerf_TEST"):
     kernel = Kernel("MeerK40t", "0.0.0-testing", profile, ansi=False, ignore_settings=True)
 
     from meerk40t.core import core, svg_io
-    from meerk40t.device import dummydevice
+    from meerk40t.device import basedevice, dummydevice
     from meerk40t.extra import coolant
     from meerk40t.fill import fills
     from meerk40t.image import imagetools
@@ -26,6 +26,7 @@ def _bootstrap(profile="OpenKerf_TEST"):
     # coolant before the drivers: Ruida's service claims a coolant channel at init.
     for mod in (
         kernelserver,
+        basedevice,  # registers the `device` commands (add/activate/duplicate)
         dummydevice,
         core,
         imagetools,

@@ -1,6 +1,7 @@
 # openkerf-api
 
-Fase 1 van OpenKerf: een **read-only** status-API naast de MeerK40t-engine.
+De API-laag van OpenKerf, naast de MeerK40t-engine: live status, jobcontrole en
+machinebeheer.
 
 Dit pakket wijzigt niets in MeerK40t. Het registreert zichzelf via de setuptools
 entry-pointgroep `meerk40t.extension`, waardoor MeerK40t het bij het opstarten
@@ -39,6 +40,10 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `POST /api/job/start` | plant de operaties en zet de job in de spooler |
 | `POST /api/job/pause` · `/resume` · `/stop` | realtime jobcontrole |
 | `POST /api/spooler/clear` | wachtrij legen |
+| `GET /api/machines/catalog` | MeerK40t's eigen machinecatalogus, gegroepeerd per familie |
+| `GET /api/machines` · `POST /api/machines` | machines tonen / toevoegen |
+| `POST /api/machines/{path}/activate` · `/rename` · `DELETE` | machine kiezen, hernoemen, verwijderen |
+| `GET`/`PATCH /api/machines/{path}/settings` | instellingen lezen en wijzigen (`?essential=true` voor de setup) |
 | `GET /` | de frontend (met `-f`), anders een kale devpagina |
 
 Voorbeeld:
@@ -94,10 +99,32 @@ console-uitvoer erbij, geen 500.
 - **Heartbeat** van 2 s stuurt een volledige snapshot, zodat een client die een
   signaal mist alsnog convergeert.
 
+## Machine-setup
+
+De catalogus komt uit MeerK40t's `dev_info`-registry (9 families, 46 types) en de
+instellingen uit de `choices/*`-sheets die elk device zelf registreert. Niets is
+hardcoded, dus nieuwe upstream-devices en -instellingen verschijnen vanzelf.
+
+Twee dingen die de engine niet vanzelf goed doet, en die hier opgevangen worden:
+
+1. **`device add -l "<label>"` crasht upstream.** `basedevice.py` doet `dict(choices)`
+   op een *lijst* van dicts, wat er `{"attr": "default"}` van maakt; het device
+   struikelt daarna over `'str' object has no attribute 'get'`. De wxPython-GUI
+   gebruikt exact dit pad. Wij maken de machine zonder label aan en zetten
+   `device.label` daarna zelf. `test_create_applies_a_custom_label` faalt zodra
+   iemand die omweg weghaalt voordat upstream gerepareerd is.
+2. **Verbindingsinstellingen staan in geen enkele sheet.** Ruida maakt `interface`
+   en `address` met een kale `setting()`-aanroep, dus de sheet-mechaniek van de GUI
+   ziet ze niet — terwijl USB-of-UDP kiezen juist de kern van de eerste setup is.
+   Die halen we er op naam bij, met het type afgeleid uit de huidige waarde.
+
+Waarden worden JSON-veilig gemaakt: Ruida typeert `bedwidth` als `Length`, en dat
+object zou anders zijn interne velden uitstorten in de response.
+
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 33 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 55 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van
