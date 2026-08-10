@@ -9,14 +9,17 @@
 
 	let machinePath = $derived($page.url.searchParams.get('machine') ?? '');
 	let values = $state<Record<string, unknown>>({});
+	let essentialOnly = $state(true);
 
-	onMount(async () => {
+	async function reload() {
 		if (!machinePath) return;
-		const sheets = await store.loadSettings(machinePath, true);
+		const sheets = await store.loadSettings(machinePath, essentialOnly);
 		values = Object.fromEntries(
 			sheets.flatMap((sheet) => sheet.fields.map((field) => [field.attr, field.value]))
 		);
-	});
+	}
+
+	onMount(reload);
 
 	async function save() {
 		if (Object.keys(values).length) {
@@ -38,8 +41,20 @@
 	{:else}
 		<h1>Basisinstellingen</h1>
 		<p class="muted">
-			Werkgebied en verbinding. De rest van de instellingen blijft beschikbaar in MeerK40t.
+			Werkgebied en verbinding. Alles wat de engine van dit apparaat kent staat achter
+			"Alle instellingen".
 		</p>
+		<label class="toggle">
+			<input
+				type="checkbox"
+				checked={!essentialOnly}
+				onchange={(e) => {
+					essentialOnly = !e.currentTarget.checked;
+					reload();
+				}}
+			/>
+			<span>Alle instellingen tonen</span>
+		</label>
 		{#each store.settings as sheet (sheet.sheet)}
 			{#each sheet.fields as field (field.attr)}
 				<SettingFieldInput {field} bind:value={values[field.attr]} />
@@ -53,3 +68,15 @@
 		</div>
 	{/if}
 </section>
+
+<style>
+	.toggle {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin: var(--space-3) 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.toggle input { width: 15px; height: 15px; accent-color: var(--accent); }
+</style>

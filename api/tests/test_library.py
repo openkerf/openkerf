@@ -259,3 +259,84 @@ def test_machine_profile_round_trip(client):
 
     assert created.status_code == 201
     assert client.get("/api/library/machines").json()[0]["power_watt"] == 60
+
+
+# ------------------------------------------------------- preset bijstellen
+
+def test_update_a_preset(library, stocked):
+    _, preset = stocked
+
+    updated = library.update_preset(preset["id"], speed_mm_s=14, power_percent=70, note="sneller")
+
+    assert updated["speed_mm_s"] == 14
+    assert updated["power_percent"] == 70
+    assert updated["note"] == "sneller"
+
+
+def test_identity_fields_cannot_be_changed(library, stocked):
+    """Ander materiaal of andere bewerking is een andere preset, geen wijziging."""
+    _, preset = stocked
+
+    for bad in ({"material_id": 99}, {"operation": "graveren-raster"}, {"source": "testraster"}):
+        with pytest.raises(LibraryError):
+            library.update_preset(preset["id"], **bad)
+
+
+def test_update_validates_like_creation(library, stocked):
+    _, preset = stocked
+    for bad in ({"speed_mm_s": 0}, {"power_percent": 150}, {"speed_mm_s": "snel"}):
+        with pytest.raises(LibraryError):
+            library.update_preset(preset["id"], **bad)
+
+
+def test_updating_an_unknown_preset_is_refused(library):
+    with pytest.raises(LibraryError):
+        library.update_preset(999, speed_mm_s=10)
+
+
+# ------------------------------------------------------ bereik voorstellen
+
+def test_suggestion_without_presets_is_a_sane_default(library):
+    suggestion = library.suggest_range()
+
+    assert suggestion["based_on"] == 0
+    assert suggestion["speed_min"] < suggestion["speed_max"]
+    assert 0 < suggestion["power_min"] < suggestion["power_max"] <= 100
+
+
+def test_suggestion_brackets_the_presets_it_knows(library, stocked):
+    material, _ = stocked  # 12 mm/s @ 65%
+
+    suggestion = library.suggest_range(material_id=material["id"], operation="snijden")
+
+    assert suggestion["based_on"] == 1
+    assert suggestion["speed_min"] < 12 < suggestion["speed_max"]
+    assert suggestion["power_min"] < 65 < suggestion["power_max"]
+
+
+def test_suggestion_stays_within_a_hundred_percent(library):
+    material = library.add_material("Dun papier")
+    library.add_preset(
+        material_id=material["id"], operation="snijden", speed_mm_s=100, power_percent=95
+    )
+
+    suggestion = library.suggest_range(material_id=material["id"])
+
+    assert suggestion["power_max"] <= 100
+
+
+def test_suggestion_prefers_the_same_thickness(library):
+    material = library.add_material("Multiplex")
+    library.add_preset(
+        material_id=material["id"], operation="snijden", thickness_mm=3,
+        speed_mm_s=12, power_percent=60,
+    )
+    library.add_preset(
+        material_id=material["id"], operation="snijden", thickness_mm=9,
+        speed_mm_s=3, power_percent=95,
+    )
+
+    thin = library.suggest_range(material_id=material["id"], thickness_mm=3)
+
+    assert thin["based_on"] == 1
+    assert thin["speed_max"] < 30

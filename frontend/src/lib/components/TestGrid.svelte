@@ -85,6 +85,29 @@
 
 	// Eerst rekenen, dan pas tekenen: je ziet wat er komt voordat er iets in het
 	// ontwerp verschijnt.
+	/**
+	 * Bereik voorstellen rond wat de bibliotheek al weet.
+	 *
+	 * ARCHITECTUUR.md: de app stelt het bereik voor rond het verwachte
+	 * werkpunt. Zonder presets komt er een breed maar redelijk startpunt.
+	 */
+	async function suggest() {
+		const thickness = form.thickness_mm === '' ? null : Number(form.thickness_mm);
+		const range = await library.suggest(form.material_id, form.operation, thickness);
+		if (!range) return;
+		form = {
+			...form,
+			speed_min: String(range.speed_min),
+			speed_max: String(range.speed_max),
+			power_min: String(range.power_min),
+			power_max: String(range.power_max)
+		};
+		suggestedFrom = range.based_on;
+		preview = null;
+	}
+
+	let suggestedFrom = $state<number | null>(null);
+
 	async function showPreview() {
 		preview = await send('/api/library/testgrids/preview');
 	}
@@ -172,7 +195,16 @@
 			</div>
 		{/if}
 
+		{#if suggestedFrom !== null}
+			<p class="muted">
+				{suggestedFrom
+					? `Bereik voorgesteld op basis van ${suggestedFrom} bestaande preset${suggestedFrom === 1 ? '' : 's'}.`
+					: 'Nog geen presets voor deze combinatie; dit is een breed startpunt.'}
+			</p>
+		{/if}
+
 		<div class="actions">
+			<button class="btn" disabled={busy} onclick={suggest}>Bereik voorstellen</button>
 			<button class="btn" disabled={busy} onclick={showPreview}>Voorbeeld</button>
 			<button class="btn primary" disabled={busy} onclick={generate}>
 				{busy ? 'Bezig…' : 'Genereren'}
