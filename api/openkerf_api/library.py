@@ -98,6 +98,10 @@ class Library:
     def __init__(self, path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Foto's als bestand naast de database: dat houdt de database klein en
+        # de foto's gewoon te bekijken met een verkenner.
+        self.photos = self.path.parent / "openkerf-photos"
+        self.photos.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.executescript(SCHEMA)
 
@@ -310,6 +314,38 @@ class Library:
             if not cursor.rowcount:
                 raise LibraryError(f"Testraster {grid_id} bestaat niet.")
         return {"removed": grid_id}
+
+    def set_grid_photo(self, grid_id: int, suffix: str, data: bytes) -> dict:
+        """Store the photo of a burned grid and remember where it went."""
+        grid = self.test_grid(grid_id)
+        safe = (suffix or "").lower()
+        if safe not in (".jpg", ".jpeg", ".png", ".webp", ".heic"):
+            raise LibraryError(f"Onbekend fotoformaat: {suffix or '(geen)'}")
+        target = self.photos / f"grid-{grid['id']}{safe}"
+        target.write_bytes(data)
+        with self._connect() as db:
+            db.execute(
+                "UPDATE test_grid SET photo_path = ? WHERE id = ?",
+                (str(target), grid_id),
+            )
+        return self.test_grid(grid_id)
+
+    def mark_cell(self, grid_id: int, row: int, column: int, preset_id: int) -> dict:
+        """Record which preset came out of which cell, for provenance."""
+        grid = self.test_grid(grid_id)
+        cells = grid["cells"]
+        for cell in cells:
+            if cell["row"] == row and cell["column"] == column:
+                cell["preset_id"] = preset_id
+                break
+        else:
+            raise LibraryError(f"Cel {row},{column} hoort niet bij raster {grid_id}.")
+        with self._connect() as db:
+            db.execute(
+                "UPDATE test_grid SET cells = ? WHERE id = ?",
+                (json.dumps(cells), grid_id),
+            )
+        return self.test_grid(grid_id)
 
     # ---------------------------------------------------------------- helpers
 
