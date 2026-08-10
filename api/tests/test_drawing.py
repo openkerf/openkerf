@@ -7,7 +7,7 @@ from meerk40t.core.units import UNITS_PER_MM
 
 from openkerf_api.design import DesignReader
 from openkerf_api.drawing import Drawing
-from openkerf_api.edits import DesignError
+from openkerf_api.edits import DesignEditor, DesignError
 from openkerf_api.server import ApiServer
 
 
@@ -567,3 +567,37 @@ def test_ungrouping_something_loose_is_refused(drawing):
     ids = three_rects(drawing)
     with pytest.raises(DesignError):
         drawing.ungroup(ids)
+
+
+def test_endpoints_follow_a_rotation(kernel, drawing):
+    """
+    Rotating sets a matrix on the node and leaves x1..y2 alone, so reporting
+    the raw points would put the handles where the line used to be.
+    """
+    created = drawing.create("line", x1_mm=10, y1_mm=10, x2_mm=50, y2_mm=10)
+    DesignEditor(kernel).rotate(created["ids"], 90)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    line = element["line"]
+    bounds = bounds_mm(kernel, created["ids"][0])
+
+    # Both endpoints must sit on the rotated shape, not the original one.
+    for x, y in ((line["x1_mm"], line["y1_mm"]), (line["x2_mm"], line["y2_mm"])):
+        assert bounds[0] - 0.1 <= x <= bounds[2] + 0.1
+        assert bounds[1] - 0.1 <= y <= bounds[3] + 0.1
+
+
+def test_moving_an_endpoint_of_a_rotated_line(kernel, drawing):
+    """The client speaks in bed coordinates; the node stores pre-matrix ones."""
+    created = drawing.create("line", x1_mm=10, y1_mm=10, x2_mm=50, y2_mm=10)
+    DesignEditor(kernel).rotate(created["ids"], 90)
+
+    drawing.update_line(created["ids"][0], x2_mm=70, y2_mm=70)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    assert element["line"]["x2_mm"] == pytest.approx(70, abs=0.1)
+    assert element["line"]["y2_mm"] == pytest.approx(70, abs=0.1)

@@ -11,6 +11,7 @@ red shape should land in the cut layer by itself.
 """
 
 from .commands import CommandRunner
+from .design import _xy
 from .edits import DesignError, _finite, _positive
 
 # What a shape needs, and the console command that draws it. Millimetres in,
@@ -168,11 +169,43 @@ class Drawing:
         node = self._nodes([element_id])[0]
         if node.type != "elem line":
             raise DesignError("Dit element is geen lijn.")
+
+        # De client geeft punten zoals ze op het bed liggen; de node bewaart ze
+        # vóór zijn matrix. Zonder terugrekenen zou een gedraaide lijn
+        # verspringen zodra je een eindpunt verzet.
+        matrix = getattr(node, "matrix", None)
+        inverse = ~matrix if matrix is not None else None
+
+        def to_raw(x_mm, y_mm):
+            point = (x_mm * UNITS_PER_MM, y_mm * UNITS_PER_MM)
+            if inverse is None:
+                return point
+            return _xy(inverse.point_in_matrix_space(point))
+
+        current = {
+            "x1_mm": float(node.x1) / UNITS_PER_MM,
+            "y1_mm": float(node.y1) / UNITS_PER_MM,
+            "x2_mm": float(node.x2) / UNITS_PER_MM,
+            "y2_mm": float(node.y2) / UNITS_PER_MM,
+        }
+        if matrix is not None:
+            for index, prefix in ((0, "1"), (1, "2")):
+                px, py = _xy(
+                    matrix.point_in_matrix_space(
+                        (float(getattr(node, f"x{prefix}")), float(getattr(node, f"y{prefix}")))
+                    )
+                )
+                current[f"x{prefix}_mm"] = px / UNITS_PER_MM
+                current[f"y{prefix}_mm"] = py / UNITS_PER_MM
+
+        wanted = dict(current)
+        for name in ("x1_mm", "y1_mm", "x2_mm", "y2_mm"):
+            if fields.get(name) is not None:
+                wanted[name] = _finite(fields[name], name)
+
         with self.elements.undoscope("Lijn aanpassen"):
-            for name in ("x1_mm", "y1_mm", "x2_mm", "y2_mm"):
-                if fields.get(name) is not None:
-                    value = _finite(fields[name], name) * UNITS_PER_MM
-                    setattr(node, name[:2], value)
+            node.x1, node.y1 = to_raw(wanted["x1_mm"], wanted["y1_mm"])
+            node.x2, node.y2 = to_raw(wanted["x2_mm"], wanted["y2_mm"])
             node.altered()
         self._refresh()
         return {"id": element_id}

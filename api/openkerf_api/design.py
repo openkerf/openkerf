@@ -62,6 +62,19 @@ def _attr_or_none(node, name):
         return None
 
 
+def _xy(point):
+    """
+    Punt uit een matrixtransformatie naar (x, y).
+
+    `point_in_matrix_space` geeft een Point terug; die is indexeerbaar maar
+    niet te slicen, dus uitpakken moet expliciet.
+    """
+    try:
+        return float(point[0]), float(point[1])
+    except (TypeError, IndexError):
+        return float(point.x), float(point.y)
+
+
 def _line_of(node) -> dict | None:
     """
     De twee eindpunten van een lijn.
@@ -74,11 +87,18 @@ def _line_of(node) -> dict | None:
     from meerk40t.core.units import UNITS_PER_MM
 
     try:
+        # Draaien zet een matrix op de node en laat x1..y2 ongemoeid. Wie de
+        # ruwe punten tekent, zet de grepen dus op de plek van vóór de rotatie.
+        matrix = getattr(node, "matrix", None)
+        points = [(float(node.x1), float(node.y1)), (float(node.x2), float(node.y2))]
+        if matrix is not None:
+            points = [_xy(matrix.point_in_matrix_space(p)) for p in points]
+        (x1, y1), (x2, y2) = points
         return {
-            "x1_mm": float(node.x1) / UNITS_PER_MM,
-            "y1_mm": float(node.y1) / UNITS_PER_MM,
-            "x2_mm": float(node.x2) / UNITS_PER_MM,
-            "y2_mm": float(node.y2) / UNITS_PER_MM,
+            "x1_mm": x1 / UNITS_PER_MM,
+            "y1_mm": y1 / UNITS_PER_MM,
+            "x2_mm": x2 / UNITS_PER_MM,
+            "y2_mm": y2 / UNITS_PER_MM,
         }
     except (AttributeError, TypeError, ValueError):
         return None

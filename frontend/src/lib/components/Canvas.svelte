@@ -573,6 +573,29 @@
 					/>
 				{/if}
 
+				{#if endpointPreview}
+					<!-- De lijn zelf volgt de greep tijdens het slepen; alleen een
+					     verspringend bolletje zegt niets over wat je maakt. -->
+					<line
+						class="pending"
+						x1={endpointPreview.x1_mm}
+						y1={endpointPreview.y1_mm}
+						x2={endpointPreview.x2_mm}
+						y2={endpointPreview.y2_mm}
+					/>
+					<text
+						class="mono measure"
+						x={(endpointPreview.x1_mm + endpointPreview.x2_mm) / 2}
+						y={(endpointPreview.y1_mm + endpointPreview.y2_mm) / 2 - 3}
+						text-anchor="middle"
+					>
+						{Math.hypot(
+							endpointPreview.x2_mm - endpointPreview.x1_mm,
+							endpointPreview.y2_mm - endpointPreview.y1_mm
+						).toFixed(1)} mm
+					</text>
+				{/if}
+
 				{#if lineHandles}
 					<!-- Een lijn pak je bij een eindpunt, niet bij een hoek van een
 					     denkbeeldig kader. -->
@@ -709,6 +732,10 @@
 		stroke-width: 1;
 		stroke-dasharray: 4 3;
 		vector-effect: non-scaling-stroke;
+	}
+	.measure {
+		fill: var(--text-2);
+		font-size: 3.5px;
 	}
 	.endpoint {
 		fill: var(--surface-1);
