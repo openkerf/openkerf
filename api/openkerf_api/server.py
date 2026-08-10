@@ -6,16 +6,21 @@ MeerK40t kernel. It exposes REST snapshots and a WebSocket that pushes live
 status, and it bridges kernel signals — which are dispatched on the kernel
 thread at ~20 Hz — onto the server's asyncio loop.
 
-Phase 1 is deliberately read-only: there is no endpoint that moves the head,
-starts a job or executes a console command.
+Reading is open. Writing — loading a file, spooling a job, pause/resume/stop —
+sits behind a token as soon as the API is bound beyond loopback, and every
+write runs through the serialised CommandRunner.
 """
 
 import asyncio
 import json
+import shutil
+import tempfile
 import threading
 import time
 from pathlib import Path
 
+from .auth import extract_token, generate_token, is_loopback, token_matches
+from .commands import CommandError, CommandRunner
 from .status import StatusReader
 
 # Kernel signals worth forwarding to connected clients. Every one of these is
@@ -89,14 +94,21 @@ class EventBridge:
 class ApiServer:
     """Owns the uvicorn thread, the signal subscriptions and the event bridge."""
 
-    def __init__(self, kernel, port=8080, bind="127.0.0.1", frontend=None):
+    def __init__(self, kernel, port=8080, bind="127.0.0.1", frontend=None, token=None):
         self.kernel = kernel
         self.port = port
         self.bind = bind
         self.frontend = Path(frontend).expanduser() if frontend else None
         self.reader = StatusReader(kernel)
+        self.commands = CommandRunner(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
+
+        # Loopback means "this computer only", so a token would be friction
+        # without added safety. Anything wider and writes must be authenticated.
+        self.local_only = is_loopback(bind)
+        self.token = token or generate_token()
+        self._upload_dir = None
 
         self._server = None
         self._thread = None
@@ -107,8 +119,40 @@ class ApiServer:
     def build_app(self):
         from contextlib import asynccontextmanager
 
-        from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+        from fastapi import (
+            Depends,
+            FastAPI,
+            HTTPException,
+            Request,
+            UploadFile,
+            WebSocket,
+            WebSocketDisconnect,
+        )
         from fastapi.responses import HTMLResponse
+
+        def require_write(request: Request):
+            if self.local_only:
+                return
+            if not token_matches(extract_token(request.headers), self.token):
+                raise HTTPException(
+                    status_code=401,
+                    detail=(
+                        "Write actions need a token when the API is not bound to "
+                        "localhost. Send it as 'Authorization: Bearer <token>'."
+                    ),
+                )
+
+        write = [Depends(require_write)]
+
+        def act(action, *args):
+            """Run a write action and turn engine-side failure into a 409."""
+            try:
+                return {"ok": True, "output": action(*args)}
+            except CommandError as e:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"command": e.command, "output": e.output},
+                ) from e
 
         @asynccontextmanager
         async def lifespan(app):
@@ -137,6 +181,50 @@ class ApiServer:
         @app.get("/api/devices")
         def devices():
             return self.reader.snapshot()["devices"]
+
+        @app.get("/api/capabilities")
+        def capabilities():
+            """
+            Which control actions the *active* device supports. pause/resume/
+            estop are registered by the Ruida service, not by the kernel, so
+            this changes when the user switches device.
+            """
+            return {
+                "actions": self.commands.capabilities(),
+                "auth_required": not self.local_only,
+            }
+
+        # ---------------------------------------------------------- write API
+
+        @app.post("/api/job/load", dependencies=write)
+        async def load_job(file: UploadFile):
+            """Upload a design and load it into the element tree."""
+            target = self._upload_path(file.filename or "upload.svg")
+            with target.open("wb") as handle:
+                shutil.copyfileobj(file.file, handle)
+            return act(self.commands.load_file, str(target))
+
+        @app.post("/api/job/start", dependencies=write)
+        def start_job():
+            """Plan the current operations and hand the job to the spooler."""
+            return act(self.commands.start_job)
+
+        @app.post("/api/job/pause", dependencies=write)
+        def pause_job():
+            return act(self.commands.pause)
+
+        @app.post("/api/job/resume", dependencies=write)
+        def resume_job():
+            return act(self.commands.resume)
+
+        @app.post("/api/job/stop", dependencies=write)
+        def stop_job():
+            """Realtime abort. Must stay reachable in one call, always."""
+            return act(self.commands.stop)
+
+        @app.post("/api/spooler/clear", dependencies=write)
+        def clear_queue():
+            return act(self.commands.clear_queue)
 
         @app.websocket("/api/ws")
         async def websocket_endpoint(websocket: WebSocket):
@@ -201,6 +289,16 @@ class ApiServer:
         self._thread.start()
         self._attach_signals()
         self.channel(f"OpenKerf API listening on http://{self.bind}:{self.port}/")
+        if self.local_only:
+            self.channel("Write actions are open (bound to localhost).")
+        else:
+            self.channel(f"Write actions need this token: {self.token}")
+
+    def _upload_path(self, filename: str) -> Path:
+        """Uploads land in a private temp dir; only the basename is honoured."""
+        if self._upload_dir is None:
+            self._upload_dir = Path(tempfile.mkdtemp(prefix="openkerf-uploads-"))
+        return self._upload_dir / Path(filename).name
 
     def stop(self):
         self._detach_signals()
@@ -210,6 +308,9 @@ class ApiServer:
             self._thread.join(timeout=5)
         self._thread = None
         self._server = None
+        if self._upload_dir is not None:
+            shutil.rmtree(self._upload_dir, ignore_errors=True)
+            self._upload_dir = None
         self.channel("OpenKerf API stopped.")
 
     def is_running(self):

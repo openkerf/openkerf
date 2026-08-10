@@ -42,14 +42,32 @@ def test_websocket_sends_snapshot_on_connect(client):
         assert payload["data"]["devices"]
 
 
-def test_no_write_endpoints_exist(client):
-    """Phase 1 is read-only — guard against accidentally adding a mutation."""
+def test_write_routes_are_limited_to_the_known_set(client):
+    """
+    Phase 2 adds writes deliberately. Anything beyond this list — moving the
+    head, toggling the laser — is a later phase and must be a conscious change.
+    See test_write_actions.py for the auth guard on each of these.
+    """
+    posts = {
+        route.path
+        for route in client.app.routes
+        if "POST" in getattr(route, "methods", set())
+    }
+    assert posts == {
+        "/api/job/load",
+        "/api/job/start",
+        "/api/job/pause",
+        "/api/job/resume",
+        "/api/job/stop",
+        "/api/spooler/clear",
+    }
+
     methods = {
         method
         for route in client.app.routes
         for method in getattr(route, "methods", set())
     }
-    assert methods <= {"GET", "HEAD"}
+    assert methods <= {"GET", "HEAD", "POST"}
 
 
 def test_console_command_is_registered(kernel):

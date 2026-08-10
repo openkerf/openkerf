@@ -5,8 +5,20 @@
 	let {
 		device,
 		state,
+		canStart,
+		canStop,
+		onStart,
+		onStop,
 		onToggleTheme
-	}: { device: Device | null; state: MachineState; onToggleTheme: () => void } = $props();
+	}: {
+		device: Device | null;
+		state: MachineState;
+		canStart: boolean;
+		canStop: boolean;
+		onStart: () => void;
+		onStop: () => void;
+		onToggleTheme: () => void;
+	} = $props();
 </script>
 
 <header class="topbar">
@@ -21,13 +33,18 @@
 
 	<div class="spacer"></div>
 
-	<!-- Fase 1 is read-only: de acties staan er, maar de API kent nog geen
-	     schrijfroutes. Uitgeschakeld tonen is eerlijker dan verbergen. -->
-	<button class="btn" disabled title="Beschikbaar in fase 2">
+	<!-- Kader tonen beweegt de kop: dat is fase 3, niet fase 2. -->
+	<button class="btn" disabled title="Beschikbaar in fase 3">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
 		Kader tonen
 	</button>
-	<button class="btn primary" disabled title="Beschikbaar in fase 2">
+	<!-- Stoppen kan altijd, overal, in één tik. -->
+	<button class="btn danger" disabled={!canStop} onclick={onStop} title="Job direct afbreken">
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+		Stop
+	</button>
+	<!-- Opent geen dialoog maar de pre-flight in het rechterpaneel. -->
+	<button class="btn primary" disabled={!canStart} onclick={onStart}>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
 		Start job
 	</button>
@@ -96,6 +113,12 @@
 		color: var(--accent-ink);
 	}
 	.btn.primary:hover:not(:disabled) { filter: brightness(1.06); }
+	.btn.danger {
+		background: var(--danger);
+		border-color: var(--danger);
+		color: #fff;
+	}
+	.btn.danger:hover:not(:disabled) { filter: brightness(1.06); }
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	.iconbtn {
 		display: grid;

@@ -17,12 +17,23 @@ def _bootstrap(profile="OpenKerf_TEST"):
 
     from meerk40t.core import core, svg_io
     from meerk40t.device import dummydevice
+    from meerk40t.extra import coolant
     from meerk40t.fill import fills
     from meerk40t.image import imagetools
     from meerk40t.network import kernelserver
     from meerk40t.ruida import plugin as ruidadevice
 
-    for mod in (kernelserver, dummydevice, core, imagetools, fills, svg_io, ruidadevice):
+    # coolant before the drivers: Ruida's service claims a coolant channel at init.
+    for mod in (
+        kernelserver,
+        dummydevice,
+        core,
+        imagetools,
+        fills,
+        coolant,
+        svg_io,
+        ruidadevice,
+    ):
         kernel.add_plugin(mod.plugin)
     kernel.add_plugin(openkerf_plugin)
 

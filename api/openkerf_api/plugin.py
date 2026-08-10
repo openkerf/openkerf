@@ -33,6 +33,13 @@ def plugin(kernel, lifecycle=None):
             help=_("directory with the built frontend to serve at /"),
         )
         @kernel.console_option(
+            "token",
+            "t",
+            type=str,
+            default=None,
+            help=_("token for write actions (generated when omitted)"),
+        )
+        @kernel.console_option(
             "quit",
             "q",
             type=bool,
@@ -49,6 +56,7 @@ def plugin(kernel, lifecycle=None):
             port=8080,
             bind="127.0.0.1",
             frontend=None,
+            token=None,
             quit=False,
             **kwargs,
         ):
@@ -73,7 +81,9 @@ def plugin(kernel, lifecycle=None):
                 channel(_("OpenKerf API needs fastapi and uvicorn: {error}").format(error=e))
                 return
 
-            server = ApiServer(kernel, port=port, bind=bind, frontend=frontend)
+            server = ApiServer(
+                kernel, port=port, bind=bind, frontend=frontend, token=token
+            )
             try:
                 server.start()
             except OSError as e:
@@ -83,6 +93,16 @@ def plugin(kernel, lifecycle=None):
             channel(
                 _("OpenKerf API on http://{bind}:{port}/").format(bind=bind, port=port)
             )
+            if server.local_only:
+                channel(_("Write actions are open (localhost only)."))
+            else:
+                # The machine is now controllable from the network. Say so, and
+                # say what the token is — it is the only thing standing in front.
+                channel(
+                    _("Reachable from the network. Token for write actions: {token}").format(
+                        token=server.token
+                    )
+                )
 
     elif lifecycle == "shutdown":
         if _server is not None:
