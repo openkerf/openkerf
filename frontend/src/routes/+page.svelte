@@ -6,6 +6,7 @@
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
+	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
 	import Canvas from '$components/Canvas.svelte';
@@ -27,6 +28,7 @@
 
 	let canEdit = $derived(!control.needsToken);
 	let hasSelection = $derived(design.selectedIds.length > 0);
+	let tool = $state<Tool>('select');
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
 	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
@@ -55,6 +57,30 @@
 		if (!hasSelection || !canEdit) return;
 		await edits.move(design.selectedIds, dx, dy);
 		await design.load();
+	}
+
+	async function draw(shape: Record<string, unknown>) {
+		if (!canEdit) return;
+		const result = await edits.draw(shape);
+		if (result.ok) {
+			await design.load();
+			// Terug naar selecteren: één vorm per klik is voorspelbaarder dan
+			// per ongeluk een rij vormen achterlaten.
+			tool = 'select';
+		}
+	}
+
+	async function removeSelection() {
+		if (!hasSelection || !canEdit) return;
+		if (await edits.remove(design.selectedIds)) {
+			design.select(null);
+			await design.load();
+		}
+	}
+
+	async function duplicateSelection() {
+		if (!hasSelection || !canEdit) return;
+		if (await edits.duplicate(design.selectedIds)) await design.load();
 	}
 
 	async function rotate(angleDeg: number) {
@@ -144,6 +170,18 @@
 			design.select(null);
 			return;
 		}
+		const typing = (e.target as HTMLElement | null)?.closest('input, textarea, select');
+		if (typing) return;
+		if ((e.key === 'Delete' || e.key === 'Backspace') && hasSelection && canEdit) {
+			e.preventDefault();
+			removeSelection();
+			return;
+		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && hasSelection && canEdit) {
+			e.preventDefault();
+			duplicateSelection();
+			return;
+		}
 		// Pijltjes verplaatsen 0,1 mm; met shift 1 mm (toegankelijkheidseis).
 		const step = e.shiftKey ? 1 : 0.1;
 		const moves: Record<string, [number, number]> = {
@@ -175,8 +213,16 @@
 />
 
 <div class="main">
-	<ToolRail />
-	<Canvas {device} {design} {edits} {canEdit} onEdited={() => design.load()} />
+	<ToolRail bind:tool {canEdit} />
+	<Canvas
+		{device}
+		{design}
+		{edits}
+		{canEdit}
+		{tool}
+		onEdited={() => design.load()}
+		onDrawn={draw}
+	/>
 
 	<aside class="panel" aria-label="Eigenschappen">
 		<div class="tabs" role="tablist">
@@ -213,6 +259,7 @@
 					onRotate={rotate}
 					onAssign={assign}
 					onApplied={() => design.load()}
+					onLayerChange={() => design.load()}
 				/>
 			{:else}
 				<JobPanel

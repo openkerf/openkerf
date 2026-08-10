@@ -72,8 +72,12 @@ def _color(value) -> str | None:
 class DesignReader:
     """Builds a render-ready snapshot of the element tree."""
 
-    def __init__(self, kernel):
+    def __init__(self, kernel, keep_operations=None):
         self.kernel = kernel
+        # Operaties die de gebruiker zelf aanmaakte. Een verse boom bevat 201
+        # lege standaardoperaties, dus lege lagen tonen we normaal niet — maar
+        # een laag die je net zelf maakte moet niet meteen onzichtbaar zijn.
+        self.keep_operations = keep_operations if keep_operations is not None else set()
 
     @property
     def elements(self):
@@ -101,7 +105,9 @@ class DesignReader:
             entry = self._operation(op, op.id or f"o{index}", element_ids)
             # An operation with no elements is not a layer the user sees; the
             # engine keeps a stack of unused defaults around.
-            if entry is not None and entry["element_ids"]:
+            if entry is not None and (
+                entry["element_ids"] or entry["id"] in self.keep_operations
+            ):
                 operations.append(entry)
 
         # Which operations claim each element. This is genuinely many-to-many:

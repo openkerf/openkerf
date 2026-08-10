@@ -1,0 +1,210 @@
+"""
+Drawing elements and managing layers.
+
+The basics a laser app cannot do without: put a shape or a line of text on the
+bed, remove it again, duplicate it, and create the operations that decide how it
+is burned.
+
+Everything goes through console commands so the engine stays the single source
+of truth — including its automatic classification, which is wanted here: a new
+red shape should land in the cut layer by itself.
+"""
+
+from .commands import CommandRunner
+from .edits import DesignError, _finite, _positive
+
+# What a shape needs, and the console command that draws it. Millimetres in,
+# because that is what the user sees.
+SHAPES = {
+    "rect": ("x_mm", "y_mm", "width_mm", "height_mm"),
+    "ellipse": ("cx_mm", "cy_mm", "rx_mm", "ry_mm"),
+    "circle": ("cx_mm", "cy_mm", "r_mm"),
+    "line": ("x1_mm", "y1_mm", "x2_mm", "y2_mm"),
+    "text": ("x_mm", "y_mm"),
+}
+
+# Library operation names map onto MeerK40t's own console commands.
+OPERATIONS = {
+    "cut": "cut",
+    "engrave": "engrave",
+    "raster": "raster",
+    "image": "imageop",
+    "dots": "dots",
+}
+
+
+def _mm(value: float) -> str:
+    return f"{value:.4f}mm"
+
+
+class Drawing:
+    def __init__(self, kernel, runner: CommandRunner | None = None):
+        self.kernel = kernel
+        self.runner = runner or CommandRunner(kernel)
+        # Zelfgemaakte lagen, zodat ze zichtbaar blijven zolang ze leeg zijn.
+        self.user_operations: set[str] = set()
+
+    @property
+    def elements(self):
+        return self.kernel.elements
+
+    # --------------------------------------------------------------- elements
+
+    def create(self, kind: str, **fields) -> dict:
+        if kind not in SHAPES:
+            raise DesignError(
+                f"Onbekende vorm: {kind}. Kies uit {', '.join(sorted(SHAPES))}."
+            )
+        values = {}
+        for name in SHAPES[kind]:
+            positive = name.startswith(("width", "height", "r", "rx", "ry"))
+            values[name] = (
+                _positive(fields.get(name), name)
+                if positive
+                else _finite(fields.get(name), name)
+            )
+
+        before = {id(n) for n in self.elements.elems()}
+        with self.elements.undoscope(f"{kind} tekenen"):
+            self.runner.run(self._command(kind, values, fields))
+        created = [n for n in self.elements.elems() if id(n) not in before]
+        if not created:
+            raise DesignError("De engine heeft niets getekend.")
+
+        self.elements.validate_ids()
+        self.elements.set_emphasis(created)
+        self._refresh()
+        return {"ids": [n.id for n in created], "type": created[0].type}
+
+    def _command(self, kind: str, v: dict, fields: dict) -> str:
+        if kind == "rect":
+            return f"rect {_mm(v['x_mm'])} {_mm(v['y_mm'])} {_mm(v['width_mm'])} {_mm(v['height_mm'])}"
+        if kind == "circle":
+            return f"circle {_mm(v['cx_mm'])} {_mm(v['cy_mm'])} {_mm(v['r_mm'])}"
+        if kind == "ellipse":
+            return f"ellipse {_mm(v['cx_mm'])} {_mm(v['cy_mm'])} {_mm(v['rx_mm'])} {_mm(v['ry_mm'])}"
+        if kind == "line":
+            return f"line {_mm(v['x1_mm'])} {_mm(v['y1_mm'])} {_mm(v['x2_mm'])} {_mm(v['y2_mm'])}"
+        text = str(fields.get("text") or "").strip()
+        if not text:
+            raise DesignError("Tekst mag niet leeg zijn.")
+        if '"' in text:
+            raise DesignError("Aanhalingstekens in tekst worden nog niet ondersteund.")
+        # linetext, niet text: bitmaptekst heeft geen geometrie en is dus
+        # onzichtbaar op het canvas en niet te positioneren.
+        return f'linetext {_mm(v["x_mm"])} {_mm(v["y_mm"])} "{text}"'
+
+    def delete(self, element_ids) -> dict:
+        nodes = self._nodes(element_ids)
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Verwijderen"):
+            # `delete` alleen bestaat niet op de basiscontext; `element delete`
+            # werkt op de nadruk-selectie.
+            self.runner.run("element delete")
+        self._refresh()
+        return {"removed": [n.id for n in nodes]}
+
+    def duplicate(self, element_ids) -> dict:
+        nodes = self._nodes(element_ids)
+        before = {id(n) for n in self.elements.elems()}
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Dupliceren"):
+            self.runner.run("copy")
+        created = [n for n in self.elements.elems() if id(n) not in before]
+        if not created:
+            raise DesignError("De engine heeft niets gedupliceerd.")
+        self.elements.validate_ids()
+        self.elements.set_emphasis(created)
+        self._refresh()
+        return {"ids": [n.id for n in created]}
+
+    def _nodes(self, element_ids):
+        from .edits import _ids
+
+        nodes = []
+        for node_id in _ids(element_ids):
+            node = self.elements.find_node(node_id)
+            if node is None:
+                raise DesignError(f"Element {node_id} bestaat niet (meer).")
+            nodes.append(node)
+        return nodes
+
+    # ------------------------------------------------------------- operations
+
+    def create_operation(self, kind: str, label=None, speed=None, power_percent=None) -> dict:
+        command = OPERATIONS.get(kind)
+        if command is None:
+            raise DesignError(
+                f"Onbekend laagtype: {kind}. Kies uit {', '.join(sorted(OPERATIONS))}."
+            )
+        parts = [command]
+        if speed is not None:
+            parts += ["-s", f"{_positive(speed, 'speed'):g}"]
+        if power_percent is not None:
+            percent = _finite(power_percent, "power_percent")
+            if not 0 < percent <= 100:
+                raise DesignError("power_percent moet tussen 0 en 100 liggen.")
+            # De console verwacht de 0-1000 schaal van de engine.
+            parts += ["-p", f"{percent * 10:g}"]
+
+        before = {id(o) for o in self.elements.ops()}
+        with self.elements.undoscope("Laag toevoegen"):
+            self.runner.run(" ".join(parts))
+        created = [o for o in self.elements.ops() if id(o) not in before]
+        if not created:
+            raise DesignError("De engine heeft geen laag aangemaakt.")
+        operation = created[0]
+        if label:
+            operation.label = str(label)
+        self.elements.validate_ids()
+        self.user_operations.add(operation.id)
+        self._refresh()
+        return {"id": operation.id, "type": operation.type}
+
+    def update_operation(self, operation_id: str, **fields) -> dict:
+        operation = self._operation(operation_id)
+        applied = {}
+        with self.elements.undoscope("Laag wijzigen"):
+            if "label" in fields and fields["label"] is not None:
+                operation.label = str(fields["label"])
+                applied["label"] = operation.label
+            if fields.get("speed") is not None:
+                operation.speed = _positive(fields["speed"], "speed")
+                applied["speed"] = operation.speed
+            if fields.get("power_percent") is not None:
+                percent = _finite(fields["power_percent"], "power_percent")
+                if not 0 < percent <= 100:
+                    raise DesignError("power_percent moet tussen 0 en 100 liggen.")
+                operation.power = percent * 10
+                applied["power"] = operation.power
+            if fields.get("passes") is not None:
+                operation.passes_custom = True
+                operation.passes = int(_positive(fields["passes"], "passes"))
+                applied["passes"] = operation.passes
+            if fields.get("output") is not None:
+                operation.output = bool(fields["output"])
+                applied["output"] = operation.output
+        self._refresh()
+        return {"id": operation_id, "applied": applied}
+
+    def delete_operation(self, operation_id: str) -> dict:
+        operation = self._operation(operation_id)
+        with self.elements.undoscope("Laag verwijderen"):
+            # Alleen de operatie verdwijnt; de elementen zelf blijven staan,
+            # want die kunnen in meerdere lagen zitten.
+            operation.remove_node()
+        self.user_operations.discard(operation_id)
+        self._refresh()
+        return {"removed": operation_id}
+
+    def _operation(self, operation_id: str):
+        node = self.elements.find_node(operation_id)
+        if node is None:
+            raise DesignError(f"Laag {operation_id} bestaat niet (meer).")
+        if not str(node.type).startswith(("op ", "effect ")):
+            raise DesignError(f"{operation_id} is geen laag.")
+        return node
+
+    def _refresh(self):
+        self.elements.signal("rebuild_tree", "all")
+        self.elements.signal("refresh_scene", "Scene")

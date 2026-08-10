@@ -12,7 +12,8 @@
 		onHistory,
 		onRotate,
 		onAssign,
-		onApplied
+		onApplied,
+		onLayerChange
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -22,6 +23,7 @@
 		onRotate?: (angleDeg: number) => void;
 		onAssign?: (operationId: string, assigned: boolean) => void;
 		onApplied?: () => void;
+		onLayerChange?: () => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -30,6 +32,21 @@
 	let size = $derived(design.selectedSize);
 	let chosen = $derived(design.selectedElements);
 	let selectedIds = $derived(design.selectedIds);
+
+	let editingLayer = $state<string | null>(null);
+	let newLayerType = $state('cut');
+
+	async function addLayer() {
+		if (await edits.addLayer(newLayerType)) onLayerChange?.();
+	}
+
+	async function patchLayer(id: string, fields: Record<string, unknown>) {
+		if (await edits.updateLayer(id, fields)) onLayerChange?.();
+	}
+
+	async function dropLayer(id: string) {
+		if (await edits.removeLayer(id)) onLayerChange?.();
+	}
 
 	// Een bewerking is "aan" voor de selectie als élk gekozen element erin zit.
 	function membership(operationId: string): 'all' | 'some' | 'none' {
@@ -120,7 +137,19 @@
 
 {#if operations.length}
 	<div class="section">
-		<h2 class="section-title">Lagen</h2>
+		<div class="section-head">
+			<h2 class="section-title">Lagen</h2>
+			{#if canEdit}
+				<div class="addrow">
+					<select bind:value={newLayerType} aria-label="Type nieuwe laag">
+						{#each [['cut', 'Snijden'], ['engrave', 'Graveren'], ['raster', 'Raster'], ['dots', 'Punten']] as [value, label] (value)}
+							<option {value}>{label}</option>
+						{/each}
+					</select>
+					<button class="mini" disabled={edits.busy} onclick={addLayer}>Toevoegen</button>
+				</div>
+			{/if}
+		</div>
 		{#each operations as op, index (op.id)}
 			<div class="layer" class:muted-row={!op.output}>
 				<span class="chip mono" style="background: {design.colorFor(op.id)}">{index + 1}</span>
@@ -149,7 +178,72 @@
 						<span class="pill mono">{value}</span>
 					{/each}
 				</div>
+				{#if canEdit}
+					<button
+						class="eye"
+						title={editingLayer === op.id ? 'Sluiten' : 'Laag bewerken'}
+						aria-label="Laag {op.label} bewerken"
+						onclick={() => (editingLayer = editingLayer === op.id ? null : op.id)}
+					>⋯</button>
+				{/if}
 			</div>
+
+			{#if canEdit && editingLayer === op.id}
+				<div class="layer-edit">
+					<label>
+						<span>Naam</span>
+						<input
+							type="text"
+							value={op.label}
+							onchange={(e) => patchLayer(op.id, { label: e.currentTarget.value })}
+						/>
+					</label>
+					<label>
+						<span>Snelheid (mm/s)</span>
+						<input
+							class="mono"
+							type="number"
+							step="1"
+							min="0.1"
+							value={op.speed ?? ''}
+							onchange={(e) => patchLayer(op.id, { speed: Number(e.currentTarget.value) })}
+						/>
+					</label>
+					<label>
+						<span>Vermogen (%)</span>
+						<input
+							class="mono"
+							type="number"
+							step="1"
+							min="1"
+							max="100"
+							value={op.power !== null ? Math.round(op.power / 10) : ''}
+							onchange={(e) =>
+								patchLayer(op.id, { power_percent: Number(e.currentTarget.value) })}
+						/>
+					</label>
+					<label>
+						<span>Passes</span>
+						<input
+							class="mono"
+							type="number"
+							step="1"
+							min="1"
+							value={op.passes ?? 1}
+							onchange={(e) => patchLayer(op.id, { passes: Number(e.currentTarget.value) })}
+						/>
+					</label>
+					<label class="check">
+						<input
+							type="checkbox"
+							checked={op.output}
+							onchange={(e) => patchLayer(op.id, { output: e.currentTarget.checked })}
+						/>
+						<span>Meebranden</span>
+					</label>
+					<button class="danger" onclick={() => dropLayer(op.id)}>Laag verwijderen</button>
+				</div>
+			{/if}
 		{/each}
 		<p class="hint">
 			Lagen bewerken en elementen verslepen komt later in fase 3; dit is wat de engine nu heeft.
@@ -282,6 +376,53 @@
 	.rot:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
+	}
+	.addrow { display: flex; gap: var(--space-1); align-items: center; }
+	.addrow select {
+		font: inherit;
+		font-size: var(--text-xs);
+		padding: 2px 4px;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	.layer-edit {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+		padding: var(--space-3);
+		margin-top: -1px;
+		border: 1px solid var(--accent);
+		border-radius: 0 0 var(--radius-field) var(--radius-field);
+	}
+	.layer-edit label { display: grid; gap: 2px; font-size: 10px; color: var(--text-2); }
+	.layer-edit label.check {
+		grid-template-columns: auto 1fr;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
+	}
+	.layer-edit input[type='text'],
+	.layer-edit input[type='number'] {
+		font: inherit;
+		width: 100%;
+		padding: 4px 6px;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	.layer-edit .danger {
+		grid-column: 1 / -1;
+		font-size: var(--text-xs);
+		color: var(--danger);
+		text-align: left;
+	}
+	.eye {
+		color: var(--text-2);
+		width: 20px;
+		flex: none;
 	}
 	.assign {
 		width: 15px;

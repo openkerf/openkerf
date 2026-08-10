@@ -22,6 +22,7 @@ from pathlib import Path
 from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
+from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .library import Library, LibraryError, default_path
 from .testgrid import TestGridGenerator, plan_grid
@@ -143,8 +144,9 @@ class ApiServer:
         self.reader = StatusReader(kernel)
         self.commands = CommandRunner(kernel)
         self.machines = MachineManager(kernel, self.commands)
-        self.design = DesignReader(kernel)
         self.editor = DesignEditor(kernel, self.commands)
+        self.drawing = Drawing(kernel, self.commands)
+        self.design = DesignReader(kernel, keep_operations=self.drawing.user_operations)
         self.library = Library(library_path or default_path(kernel))
         self.grids = TestGridGenerator(kernel)
         self.bridge = EventBridge()
@@ -287,6 +289,40 @@ class ApiServer:
         @app.post("/api/spooler/clear", dependencies=write)
         def clear_queue():
             return act(self.commands.clear_queue)
+
+        # ------------------------------------------------ tekenen en lagen
+
+        @app.post("/api/design/elements", dependencies=write, status_code=201)
+        def create_element(body: dict):
+            """Draw a shape or a line of text on the bed."""
+            kind = body.get("type")
+            return manage(lambda: self.drawing.create(kind, **body))
+
+        @app.post("/api/design/elements/delete", dependencies=write)
+        def delete_elements(body: dict):
+            return manage(self.drawing.delete, body.get("ids"))
+
+        @app.post("/api/design/elements/duplicate", dependencies=write)
+        def duplicate_elements(body: dict):
+            return manage(self.drawing.duplicate, body.get("ids"))
+
+        @app.post("/api/design/operations", dependencies=write, status_code=201)
+        def create_operation(body: dict):
+            return manage(
+                self.drawing.create_operation,
+                body.get("type"),
+                body.get("label"),
+                body.get("speed"),
+                body.get("power_percent"),
+            )
+
+        @app.patch("/api/design/operations/{operation_id}", dependencies=write)
+        def update_operation(operation_id: str, body: dict):
+            return manage(lambda: self.drawing.update_operation(operation_id, **body))
+
+        @app.delete("/api/design/operations/{operation_id}", dependencies=write)
+        def delete_operation(operation_id: str):
+            return manage(self.drawing.delete_operation, operation_id)
 
         # ------------------------------------------------------- design edits
 

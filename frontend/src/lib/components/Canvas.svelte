@@ -8,13 +8,17 @@
 		design,
 		edits,
 		canEdit = false,
-		onEdited
+		tool = 'select',
+		onEdited,
+		onDrawn
 	}: {
 		device: Device | null;
 		design: DesignStore;
 		edits: EditController;
 		canEdit?: boolean;
+		tool?: string;
 		onEdited?: () => void;
+		onDrawn?: (shape: Record<string, unknown>) => void;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -76,6 +80,47 @@
 	$effect(() => {
 		design.preview = preview;
 	});
+
+	/** Waar op het bed is geklikt, in millimeters. */
+	function pointerMm(event: MouseEvent) {
+		const svg = event.currentTarget as SVGSVGElement;
+		const rect = svg.getBoundingClientRect();
+		return {
+			x: ((event.clientX - rect.left) / rect.width) * bed.width,
+			y: ((event.clientY - rect.top) / rect.height) * bed.height
+		};
+	}
+
+	// Klik plaatst een vorm van een vaste maat; daarna sleep of schaal je hem.
+	// Slepen om te tekenen komt samen met de sleepselectie.
+	const DEFAULT_MM = 20;
+
+	function drawAt(event: MouseEvent) {
+		const at = pointerMm(event);
+		const half = DEFAULT_MM / 2;
+		if (tool === 'rect') {
+			onDrawn?.({
+				type: 'rect',
+				x_mm: at.x - half,
+				y_mm: at.y - half,
+				width_mm: DEFAULT_MM,
+				height_mm: DEFAULT_MM
+			});
+		} else if (tool === 'circle') {
+			onDrawn?.({ type: 'circle', cx_mm: at.x, cy_mm: at.y, r_mm: half });
+		} else if (tool === 'line') {
+			onDrawn?.({
+				type: 'line',
+				x1_mm: at.x - half,
+				y1_mm: at.y,
+				x2_mm: at.x + half,
+				y2_mm: at.y
+			});
+		} else if (tool === 'text') {
+			const text = prompt('Welke tekst?');
+			if (text) onDrawn?.({ type: 'text', x_mm: at.x, y_mm: at.y, text });
+		}
+	}
 
 	function mmPerPixel() {
 		return 1 / scale;
@@ -194,8 +239,13 @@
 					? `Laserkop op ${head[0].toFixed(1)}, ${head[1].toFixed(1)} millimeter`
 					: 'Positie van de laserkop onbekend'}
 				onclick={(e) => {
+					if (e.target !== e.currentTarget) return;
+					if (tool !== 'select' && canEdit) {
+						drawAt(e);
+						return;
+					}
 					// Klikken naast een element heft de selectie op.
-					if (e.target === e.currentTarget) design.select(null);
+					design.select(null);
 				}}
 			>
 				<!-- Het ontwerp. Eén schaaltransform rekent Tats om naar mm; de
