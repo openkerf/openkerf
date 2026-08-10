@@ -62,6 +62,24 @@ def _attr_or_none(node, name):
         return None
 
 
+def _group_of(node) -> str | None:
+    """
+    De dichtstbijzijnde groep waar dit element in zit.
+
+    Het canvas tekent elementen plat, dus zonder deze verwijzing zou je de
+    losse vierkanten van een testraster elk apart kunnen verslepen — terwijl
+    het raster juist één ding is.
+    """
+    parent = _attr_or_none(node, "parent")
+    depth = 0
+    while parent is not None and depth < 20:
+        if getattr(parent, "type", None) == "group":
+            return getattr(parent, "id", None)
+        parent = _attr_or_none(parent, "parent")
+        depth += 1
+    return None
+
+
 def _color(value) -> str | None:
     if value is None:
         return None
@@ -166,6 +184,7 @@ class DesignReader:
             "type": node.type,
             "label": _label(node, node.type.replace("elem ", "")),
             "hidden": bool(getattr(node, "hidden", False)),
+            "group_id": _group_of(node),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,

@@ -15,6 +15,8 @@ export type DesignElement = {
 	fill: string | null;
 	bounds: [number, number, number, number] | null;
 	path: string;
+	/** Groep waar dit element in zit; een raster is één groep. */
+	group_id: string | null;
 	operation_id: string | null;
 	operation_ids: string[];
 };
@@ -101,8 +103,18 @@ export class DesignStore {
 		return this.selectedIds.includes(id);
 	}
 
+	/**
+	 * Een groep is één ding. Klik je een lid aan, dan krijg je de hele groep —
+	 * anders sleep je een los vierkant uit een testraster.
+	 */
+	#expand(id: string): string[] {
+		const element = this.elements.find((e) => e.id === id);
+		if (!element?.group_id) return [id];
+		return this.elements.filter((e) => e.group_id === element.group_id).map((e) => e.id);
+	}
+
 	select(id: string | null) {
-		const next = id ? [id] : [];
+		const next = id ? this.#expand(id) : [];
 		if (same(next, this.selectedIds)) return;
 		this.selectedIds = next;
 		this.onSelect?.(this.selectedIds);
@@ -110,9 +122,11 @@ export class DesignStore {
 
 	/** Shift-klik: toevoegen of juist weghalen. */
 	toggle(id: string) {
-		this.selectedIds = this.selectedIds.includes(id)
-			? this.selectedIds.filter((x) => x !== id)
-			: [...this.selectedIds, id];
+		const members = this.#expand(id);
+		const inside = members.every((m) => this.selectedIds.includes(m));
+		this.selectedIds = inside
+			? this.selectedIds.filter((x) => !members.includes(x))
+			: [...this.selectedIds, ...members.filter((m) => !this.selectedIds.includes(m))];
 		this.onSelect?.(this.selectedIds);
 	}
 
