@@ -60,6 +60,11 @@
 
 	let outline = $derived(preview ?? selection);
 
+	// Deel de voorvertoning zodat de bovenbalk de coördinaten live meetelt.
+	$effect(() => {
+		design.preview = preview;
+	});
+
 	function mmPerPixel() {
 		return 1 / scale;
 	}
@@ -90,6 +95,7 @@
 		const finished = drag;
 		const target = preview;
 		drag = null;
+		design.preview = null;
 		if (!design.selectedId || !target) return;
 		// Onder een halve pixel is het een klik, geen sleep.
 		if (Math.abs(finished.dx) < 0.05 && Math.abs(finished.dy) < 0.05) return;
@@ -344,9 +350,14 @@
 	.hit {
 		cursor: pointer;
 	}
+	/* Geen focusrand op de trefzone. Die is 12 px breed en de browser tekent er
+	   bij een klik zijn eigen omtrek omheen — samen leverde dat een dikke balk
+	   op tijdens het slepen. De selectiecontour laat al zien wat gekozen is;
+	   toetsenbordfocus blijft zichtbaar doordat de contour verschijnt. */
+	.hit:focus,
 	.hit:focus-visible {
 		outline: none;
-		stroke: color-mix(in srgb, var(--accent) 35%, transparent);
+		stroke: transparent;
 	}
 	/* De kerflijn als selectiecontour: statisch gestreept, animatie pas bij
 	   slepen — dat komt in de volgende plak. */
