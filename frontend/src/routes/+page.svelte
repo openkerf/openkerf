@@ -87,6 +87,23 @@
 		await replaceWith(file);
 	}
 
+	/** Een project draagt ook de bibliotheek-context, dus eigen route. */
+	async function openProject(file: File) {
+		if (!canEdit) return;
+		const form = new FormData();
+		form.append('file', file);
+		const token = localStorage.getItem('openkerf.token') ?? '';
+		const response = await fetch('/api/project/open', {
+			method: 'POST',
+			headers: token ? { Authorization: `Bearer ${token}` } : {},
+			body: form
+		});
+		if (response.ok) {
+			design.select(null);
+			await Promise.all([design.load(), library.load()]);
+		}
+	}
+
 	async function replaceWith(file: File) {
 		if (!design.isEmpty) {
 			if (!(await edits.clear()).ok) return;
@@ -133,6 +150,18 @@
 	async function arrange(action: string) {
 		if (!canEdit || !hasSelection) return;
 		const ids = design.selectedIds;
+		if (action === 'offset') {
+			const answer = prompt('Offset in mm (negatief = naar binnen)', '2');
+			if (!answer) return;
+			if ((await edits.offset(ids, Number(answer))).ok) await design.load();
+			return;
+		}
+		if (action === 'simplify' || action === 'hatch' || action === 'wobble') {
+			const result =
+				action === 'simplify' ? await edits.simplify(ids) : await edits.effect(ids, action);
+			if (result.ok) await design.load();
+			return;
+		}
 		const result =
 			action === 'group'
 				? await edits.group(ids)
@@ -280,6 +309,7 @@
 	onStart={requestStart}
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
+	onOpenProject={openProject}
 	onToggleTheme={toggleTheme}
 />
 

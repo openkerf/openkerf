@@ -14,6 +14,7 @@
 		onStart,
 		onStop,
 		onOpenFile,
+		onOpenProject,
 		onSetPosition,
 		onSetSize,
 		onToggleTheme
@@ -27,6 +28,7 @@
 		onStart: () => void;
 		onStop: () => void;
 		onOpenFile?: (file: File) => void;
+		onOpenProject?: (file: File) => void;
 		onSetPosition?: (x: number, y: number) => void;
 		onSetSize?: (width: number, height: number) => void;
 		onToggleTheme: () => void;
@@ -113,6 +115,25 @@
 			}}
 		/>
 	</label>
+
+	<label class="btn file" title="Project openen (ontwerp + bibliotheek)">
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M8 12h8"/></svg>
+		Project
+		<input
+			type="file"
+			accept=".openkerf,.zip"
+			onchange={(e) => {
+				const input = e.currentTarget as HTMLInputElement;
+				const file = input.files?.[0];
+				input.value = '';
+				if (file) onOpenProject?.(file);
+			}}
+		/>
+	</label>
+	<a class="btn" href="/api/project/export.openkerf" download="project.openkerf" title="Project opslaan">
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v6h6"/></svg>
+		Project opslaan
+	</a>
 
 	<!-- Opslaan als SVG: MeerK40t's eigen schrijver, dus operaties komen bij
 	     terugladen weer mee. -->

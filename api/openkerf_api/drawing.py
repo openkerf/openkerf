@@ -309,6 +309,56 @@ class Drawing:
         self._refresh()
         return {"ids": [n.id for n in created], "operation": operation}
 
+    EFFECTS = {"hatch": "effect-hatch", "wobble": "effect-wobble"}
+
+    def offset(self, element_ids, distance_mm) -> dict:
+        """Een parallelle contour op afstand — voor kerfcompensatie of een rand."""
+        distance = _finite(distance_mm, "distance_mm")
+        if distance == 0:
+            raise DesignError("Een offset van nul levert niets op.")
+        nodes = self._nodes(element_ids)
+        before = {id(n) for n in self.elements.elems()}
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Offset"):
+            self.runner.run(f"offset {distance:.4f}mm")
+        created = [n for n in self.elements.elems() if id(n) not in before]
+        if not created:
+            raise DesignError("De engine heeft geen offset gemaakt.")
+        self.elements.validate_ids()
+        self.elements.set_emphasis(created)
+        self._refresh()
+        return {"ids": [n.id for n in created], "distance_mm": distance}
+
+    def simplify(self, element_ids) -> dict:
+        """Minder knooppunten, zelfde vorm — scheelt tijd bij ingewikkelde paden."""
+        nodes = self._nodes(element_ids)
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope("Vereenvoudigen"):
+            self.runner.run("simplify")
+        self._refresh()
+        return {"simplified": [n.id for n in nodes]}
+
+    def add_effect(self, element_ids, effect: str) -> dict:
+        """
+        Vulling (hatch) of wobble op de selectie.
+
+        Een effect is in MeerK40t geen elementeigenschap maar een knoop in de
+        operatieboom die naar de elementen verwijst, dus het verschijnt als een
+        eigen laag.
+        """
+        command = self.EFFECTS.get(effect)
+        if command is None:
+            raise DesignError(
+                f"Onbekend effect: {effect}. Kies uit {', '.join(sorted(self.EFFECTS))}."
+            )
+        nodes = self._nodes(element_ids)
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope(f"{effect} toevoegen"):
+            self.runner.run(command)
+        self.elements.validate_ids()
+        self._refresh()
+        return {"effect": effect, "ids": [n.id for n in nodes]}
+
     def delete(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)
@@ -520,6 +570,114 @@ class Drawing:
         if not target.is_file():
             raise DesignError("De engine heeft geen bestand geschreven.")
         return target
+
+    def export_project(self, library, filename: str = "project.openkerf"):
+        """
+        Een projectbestand: het ontwerp plus de bibliotheek-context.
+
+        Een SVG bewaart de vormen en operaties, maar niet welk materiaal of
+        welk testraster erbij hoorde — die leven in de lokale database. Een
+        project is daarom een zip met de SVG en een JSON ernaast.
+        """
+        import json
+        import tempfile
+        import zipfile
+        from pathlib import Path
+
+        safe = Path(filename).name or "project.openkerf"
+        if not safe.lower().endswith(".openkerf"):
+            safe += ".openkerf"
+        target = Path(tempfile.mkdtemp(prefix="openkerf-project-")) / safe
+
+        design = self.export_svg("design.svg")
+        context = {
+            "version": 1,
+            "materials": library.materials(),
+            "presets": library.presets(),
+            "machines": library.machines(),
+            "test_grids": library.test_grids(),
+        }
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as bundle:
+            bundle.write(design, "design.svg")
+            bundle.writestr("library.json", json.dumps(context, indent=1, default=str))
+        return target
+
+    def import_project(self, path, library) -> dict:
+        """
+        Een project openen: het ontwerp vervangen en ontbrekende
+        bibliotheekgegevens aanvullen.
+
+        Bestaande materialen en presets blijven staan; we vullen alleen aan wat
+        er niet is, zodat openen van een project andermans werk niet overschrijft.
+        """
+        import json
+        import zipfile
+        from pathlib import Path
+
+        source = Path(path)
+        if not zipfile.is_zipfile(source):
+            raise DesignError("Dit is geen OpenKerf-project.")
+        with zipfile.ZipFile(source) as bundle:
+            names = set(bundle.namelist())
+            if "design.svg" not in names:
+                raise DesignError("Het project bevat geen ontwerp.")
+            svg = bundle.read("design.svg")
+            context = (
+                json.loads(bundle.read("library.json")) if "library.json" in names else {}
+            )
+
+        import tempfile
+
+        scratch = Path(tempfile.mkdtemp(prefix="openkerf-open-")) / "design.svg"
+        scratch.write_bytes(svg)
+        self.elements.clear_all()
+        self.user_operations.clear()
+        self.runner.run(f'load "{scratch}"')
+        self.elements.validate_ids()
+        self._refresh()
+
+        added = self._merge_library(context, library)
+        return {"imported": True, "library": added}
+
+    @staticmethod
+    def _merge_library(context: dict, library) -> dict:
+        known = {m["name"] for m in library.materials()}
+        materials = 0
+        mapping = {m["name"]: m["id"] for m in library.materials()}
+        for material in context.get("materials", []):
+            if material.get("name") and material["name"] not in known:
+                created = library.add_material(material["name"], material.get("synonyms"))
+                mapping[created["name"]] = created["id"]
+                materials += 1
+
+        existing = {
+            (p["material_name"], p["operation"], p["speed_mm_s"], p["power_percent"])
+            for p in library.presets()
+        }
+        presets = 0
+        for preset in context.get("presets", []):
+            key = (
+                preset.get("material_name"),
+                preset.get("operation"),
+                preset.get("speed_mm_s"),
+                preset.get("power_percent"),
+            )
+            material_id = mapping.get(preset.get("material_name"))
+            if key in existing or material_id is None:
+                continue
+            library.add_preset(
+                material_id=material_id,
+                thickness_mm=preset.get("thickness_mm"),
+                operation=preset.get("operation"),
+                speed_mm_s=preset.get("speed_mm_s"),
+                power_percent=preset.get("power_percent"),
+                passes=preset.get("passes") or 1,
+                source=preset.get("source") or "geimporteerd",
+                origin_id=preset.get("origin_id"),
+                note=preset.get("note") or "",
+            )
+            presets += 1
+        return {"materials": materials, "presets": presets}
 
     def _refresh(self):
         if getattr(self.runner, "document", None) is not None:

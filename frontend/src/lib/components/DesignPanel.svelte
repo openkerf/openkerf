@@ -137,6 +137,20 @@
 
 			{#if canEdit}
 				<div class="arrange">
+					<span class="rot-label">Pad</span>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('offset')}>Offset…</button>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('simplify')}>Vereenvoudigen</button>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('hatch')}>Vulling</button>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('wobble')}>Wobble</button>
+				</div>
+			{/if}
+
+			{#if selected.effect}
+				<p class="hint">Zit in effect: {selected.effect.label}</p>
+			{/if}
+
+			{#if canEdit}
+				<div class="arrange">
 					<span class="rot-label">Spiegelen</span>
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('mirror-h')}>Horizontaal</button>
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('mirror-v')}>Verticaal</button>

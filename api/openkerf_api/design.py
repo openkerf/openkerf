@@ -131,6 +131,29 @@ def _text_of(node) -> dict | None:
     }
 
 
+def _effect_of(node) -> dict | None:
+    """
+    Een hatch- of wobble-effect waar dit element in zit.
+
+    Effects zijn geen operaties maar containers in de elementenboom: het
+    commando hangt de node aan `first_node.parent` en neemt de vormen als
+    kinderen op. Wie ze in de operatieboom zoekt, vindt ze niet.
+    """
+    parent = _attr_or_none(node, "parent")
+    depth = 0
+    while parent is not None and depth < 20:
+        kind = getattr(parent, "type", "") or ""
+        if kind.startswith("effect "):
+            return {
+                "id": getattr(parent, "id", None),
+                "type": kind.replace("effect ", ""),
+                "label": _label(parent, kind),
+            }
+        parent = _attr_or_none(parent, "parent")
+        depth += 1
+    return None
+
+
 def _group_of(node) -> str | None:
     """
     De dichtstbijzijnde groep waar dit element in zit.
@@ -256,6 +279,7 @@ class DesignReader:
             "group_id": _group_of(node),
             "text": _text_of(node),
             "line": _line_of(node),
+            "effect": _effect_of(node),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,

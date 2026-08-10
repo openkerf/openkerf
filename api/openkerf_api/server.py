@@ -325,6 +325,26 @@ class ApiServer:
 
             return manage(run)
 
+        @app.get("/api/project/export.openkerf")
+        def export_project(filename: str = "project.openkerf"):
+            """Ontwerp plus bibliotheek-context in één bestand."""
+            from fastapi.responses import FileResponse
+
+            path = manage(self.drawing.export_project, self.library, filename)
+            self.document.clean()
+            return FileResponse(
+                path, media_type="application/zip", filename=path.name
+            )
+
+        @app.post("/api/project/open", dependencies=write)
+        async def open_project(file: UploadFile):
+            target = self._upload_path(file.filename or "project.openkerf")
+            with target.open("wb") as handle:
+                shutil.copyfileobj(file.file, handle)
+            result = manage(self.drawing.import_project, str(target), self.library)
+            self.document.clean()
+            return result
+
         @app.get("/api/design/fonts")
         def list_fonts():
             return manage(self.drawing.fonts)
@@ -349,6 +369,18 @@ class ApiServer:
         def update_line(element_id: str, body: dict):
             """Een eindpunt verzetten; een lijn is twee punten, geen kader."""
             return manage(lambda: self.drawing.update_line(element_id, **body))
+
+        @app.post("/api/design/offset", dependencies=write)
+        def offset_elements(body: dict):
+            return manage(self.drawing.offset, body.get("ids"), body.get("distance_mm"))
+
+        @app.post("/api/design/simplify", dependencies=write)
+        def simplify_elements(body: dict):
+            return manage(self.drawing.simplify, body.get("ids"))
+
+        @app.post("/api/design/effect", dependencies=write)
+        def add_effect(body: dict):
+            return manage(self.drawing.add_effect, body.get("ids"), body.get("effect"))
 
         @app.post("/api/design/mirror", dependencies=write)
         def mirror_elements(body: dict):
