@@ -5,6 +5,8 @@
 
 	let elements = $derived(design.elements);
 	let operations = $derived(design.operations);
+	let selected = $derived(design.selected);
+	let size = $derived(design.selectedSize);
 
 	function describe(op: { speed: number | null; power: number | null }) {
 		const parts: string[] = [];
@@ -24,6 +26,29 @@
 		<p class="muted mono">{elements.length} element{elements.length === 1 ? '' : 'en'}</p>
 	{/if}
 </div>
+
+{#if selected && size}
+	<div class="section">
+		<h2 class="section-title">Selectie</h2>
+		<div class="selected">
+			<div class="head">
+				<span class="name">{selected.label}</span>
+				<button class="clear" onclick={() => design.select(null)}>Wis</button>
+			</div>
+			<dl class="figures mono">
+				<div><dt>Breedte</dt><dd>{size.width.toFixed(1)} mm</dd></div>
+				<div><dt>Hoogte</dt><dd>{size.height.toFixed(1)} mm</dd></div>
+				<div><dt>X</dt><dd>{size.x.toFixed(1)} mm</dd></div>
+				<div><dt>Y</dt><dd>{size.y.toFixed(1)} mm</dd></div>
+			</dl>
+			<p class="hint">
+				Zit in {selected.operation_ids.length} laag{selected.operation_ids.length === 1
+					? ''
+					: 'en'}. Verplaatsen en schalen komt in de volgende stap.
+			</p>
+		</div>
+	</div>
+{/if}
 
 {#if operations.length}
 	<div class="section">
@@ -121,5 +146,43 @@
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
+	}
+	.selected {
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-card);
+		padding: var(--space-3);
+	}
+	.selected .head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
+	.selected .name {
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.clear {
+		font-size: var(--text-xs);
+		color: var(--accent);
+		flex: none;
+	}
+	.figures {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+		margin: var(--space-3) 0 0;
+	}
+	.figures dt {
+		font-family: var(--font-ui);
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-2);
+	}
+	.figures dd {
+		margin: 1px 0 0;
 	}
 </style>

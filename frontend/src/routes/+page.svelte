@@ -24,6 +24,7 @@
 		url.searchParams.set('tab', next);
 		replaceState(url, {});
 	}
+
 	let preflight = $state(false);
 
 	let device = $derived(status.device);
@@ -33,7 +34,18 @@
 	onMount(() => {
 		status.connect();
 		control.refreshCapabilities();
-		design.load();
+		design.load().then(() => {
+			const wanted = $page.url.searchParams.get('select');
+			if (wanted) design.select(wanted);
+		});
+		// Pas ná mount koppelen: replaceState vóórdat de router klaar is breekt
+		// de render. De URL volgt daarom de actie, niet een effect.
+		design.onSelect = (id) => {
+			const url = new URL($page.url);
+			if (id) url.searchParams.set('select', id);
+			else url.searchParams.delete('select');
+			replaceState(url, {});
+		};
 		// De beschikbare acties hangen af van het actieve device, dus opnieuw
 		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
@@ -60,6 +72,12 @@
 		root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
 	}
 </script>
+
+<svelte:window
+	on:keydown={(e) => {
+		if (e.key === 'Escape') design.select(null);
+	}}
+/>
 
 <TopBar
 	{device}

@@ -39,7 +39,8 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Kop-positie als kruisdraad op het bed | live |
 | Job-tab: spoolerwachtrij, voortgang, tijden, engine-signalen | live |
 | Ontwerp laden, job starten, pauze, hervatten, stop, wachtrij legen | live (fase 2) |
-| Canvas: het geladen ontwerp op het bed, op ware maat | live (fase 3, eerste plak) |
+| Canvas: het geladen ontwerp op het bed, op ware maat | live |
+| Selectie: klikken op een element, contour + maten | live (read-only) |
 | Bewerken-tab: lagen met snelheid/vermogen en elementaantal | live |
 | Materiaalkaart | nog niet gebouwd — fase 4 |
 | Kader tonen | uitgeschakeld — beweging is fase 3 |
@@ -96,9 +97,32 @@ Een wizard waarin **elke stap een eigen route** is:
 Wat een stap nodig heeft staat in de URL, niet in component-state. Daardoor werken de
 browser-terugknop, een bladwijzer en verversen alle drie, en toont een stap zonder de
 benodigde parameter een nette uitleg met een weg terug in plaats van een half formulier.
-De paneel-tab op het werkgebied zit om dezelfde reden in de URL (`/?tab=design`).
+De paneel-tab en de selectie zitten om dezelfde reden in de URL
+(`/?tab=design&select=meerk40t:133`) — een selectie is daarmee deelbaar en
+overleeft een verversing.
 
 De machinechip in de bovenbalk linkt hierheen en toont "Machine instellen" als er
 nog niets is, zodat een lege installatie geen doodlopende weg is. Instelvelden
 worden gegenereerd uit wat de API teruggeeft — label, tip, type en eventuele
 keuzelijst — dus er staat geen enkele machine-eigenschap hardcoded in de frontend.
+
+## Selectie op het canvas
+
+Klikken op een contour selecteert het element: de omtrek krijgt de kerflijn
+(statisch gestreept, animatie pas bij slepen), met greep-blokjes op de hoeken en
+de maat eronder in mono. Het rechterpaneel toont breedte, hoogte en positie in
+mm. Escape of een klik naast het ontwerp heft de selectie op.
+
+Twee dingen die niet vanzelf goed gaan:
+
+- **Een contour van 1 pixel is niet aan te klikken.** Boven elk pad ligt een
+  onzichtbare trefzone van 12 px (`stroke="transparent"`, `pointer-events` op de
+  streek), zodat aanklikken ook op een touchscreen lukt. Die zones zijn
+  focusbaar en met Enter of spatie te selecteren.
+- **Identiteit moet een wijziging overleven.** De id's komen van de engine zelf
+  (`elements.validate_ids()` → `meerk40t:N`, terug op te zoeken met
+  `find_node()`), niet uit de volgorde van de snapshot. Anders zou een selectie
+  na het toevoegen van een element stilletjes naar een ander object wijzen.
+
+Verplaatsen en schalen komen in een volgende stap — dat betekent schrijfroutes
+naar de elementenboom en dat blijft bewust apart.
