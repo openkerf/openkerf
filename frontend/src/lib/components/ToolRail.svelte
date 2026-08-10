@@ -3,8 +3,15 @@
 
 	let {
 		tool = $bindable(),
-		canEdit = false
-	}: { tool: Tool; canEdit?: boolean } = $props();
+		canEdit = false,
+		onOpenGrid,
+		onOpenLibrary
+	}: {
+		tool: Tool;
+		canEdit?: boolean;
+		onOpenGrid?: () => void;
+		onOpenLibrary?: () => void;
+	} = $props();
 
 	// Elk gereedschap tekent bij een klik op het bed; selecteren is de rust-stand.
 	const TOOLS: { id: Tool; label: string; path: string }[] = [
@@ -31,8 +38,13 @@
 		</button>
 	{/each}
 	<hr />
-	<button class="tool" title="Testraster — via het paneel rechts" disabled>
+	<!-- Gereedschappen begin je links; een gereedschap dat alleen rechts te
+	     vinden is, vindt niemand. -->
+	<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => onOpenGrid?.()}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg>
+	</button>
+	<button class="tool" title="Materiaalbibliotheek" onclick={() => onOpenLibrary?.()}>
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/><path d="M4 9h6M14 9h6"/></svg>
 	</button>
 </nav>
 

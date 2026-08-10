@@ -14,6 +14,10 @@
 	import JobPanel from '$components/JobPanel.svelte';
 	import StatusBar from '$components/StatusBar.svelte';
 	import ToolRail from '$components/ToolRail.svelte';
+	import Dialog from '$components/Dialog.svelte';
+	import MaterialLibrary from '$components/MaterialLibrary.svelte';
+	import TestGrid from '$components/TestGrid.svelte';
+	import TestGridResult from '$components/TestGridResult.svelte';
 	import TopBar from '$components/TopBar.svelte';
 
 	const status = new StatusConnection();
@@ -29,6 +33,8 @@
 	let canEdit = $derived(!control.needsToken);
 	let hasSelection = $derived(design.selectedIds.length > 0);
 	let tool = $state<Tool>('select');
+	let libraryOpen = $state(false);
+	let gridOpen = $state(false);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
 	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
@@ -213,7 +219,12 @@
 />
 
 <div class="main">
-	<ToolRail bind:tool {canEdit} />
+	<ToolRail
+		bind:tool
+		{canEdit}
+		onOpenGrid={() => (gridOpen = true)}
+		onOpenLibrary={() => (libraryOpen = true)}
+	/>
 	<Canvas
 		{device}
 		{design}
@@ -254,11 +265,9 @@
 					{design}
 					{edits}
 					{canEdit}
-					{library}
 					onHistory={history}
 					onRotate={rotate}
 					onAssign={assign}
-					onApplied={() => design.load()}
 					onLayerChange={() => design.load()}
 				/>
 			{:else}
@@ -275,6 +284,22 @@
 </div>
 
 <StatusBar {device} state={machine} job={status.activeJob} connected={status.connected} />
+
+<!-- Bibliotheken en gereedschappen als eigen venster: in 280px kun je niet
+     zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->
+<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
+	<MaterialLibrary
+		{library}
+		operations={design.operations}
+		{canEdit}
+		onApplied={() => design.load()}
+	/>
+</Dialog>
+
+<Dialog title="Testraster" bind:open={gridOpen} width="640px">
+	<TestGrid {library} {canEdit} onGenerated={() => design.load()} />
+	<TestGridResult {library} {canEdit} />
+</Dialog>
 
 <style>
 	.main {

@@ -1,28 +1,22 @@
 <script lang="ts">
 	import type { DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
-	import type { LibraryStore } from '$lib/library.svelte';
-	import MaterialLibrary from './MaterialLibrary.svelte';
 
 	let {
 		design,
 		edits,
 		canEdit = false,
-		library,
 		onHistory,
 		onRotate,
 		onAssign,
-		onApplied,
 		onLayerChange
 	}: {
 		design: DesignStore;
 		edits: EditController;
 		canEdit?: boolean;
-		library: LibraryStore;
 		onHistory?: (action: 'undo' | 'redo') => void;
 		onRotate?: (angleDeg: number) => void;
 		onAssign?: (operationId: string, assigned: boolean) => void;
-		onApplied?: () => void;
 		onLayerChange?: () => void;
 	} = $props();
 
@@ -311,8 +305,6 @@
 		</p>
 	</div>
 {/if}
-
-<MaterialLibrary {library} {operations} {canEdit} {onApplied} />
 
 <style>
 	.section + .section {
