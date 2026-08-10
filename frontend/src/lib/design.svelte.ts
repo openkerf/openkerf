@@ -120,6 +120,22 @@ export class DesignStore {
 		this.onSelect?.(this.selectedIds);
 	}
 
+	/**
+	 * Meerdere elementen in één keer, bijvoorbeeld uit een sleepkader.
+	 *
+	 * Niet select() gevolgd door toggle(): die tweede zou een groep die de
+	 * eerste net toevoegde meteen weer weghalen, waardoor een sleepkader over
+	 * een groep niets leek te selecteren.
+	 */
+	selectMany(ids: string[]) {
+		const expanded = new Set<string>();
+		for (const id of ids) this.#expand(id).forEach((member) => expanded.add(member));
+		const next = [...expanded];
+		if (same(next, this.selectedIds)) return;
+		this.selectedIds = next;
+		this.onSelect?.(this.selectedIds);
+	}
+
 	/** Shift-klik: toevoegen of juist weghalen. */
 	toggle(id: string) {
 		const members = this.#expand(id);

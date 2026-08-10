@@ -176,3 +176,5 @@ Na de eerste testronde bijgesteld (zie DESIGN-SYSTEM.md):
 - **Tool-rail links** — waar je een handeling begint: tekenen, tekst, én het
   testraster en de bibliotheek. Een gereedschap dat alleen rechts te vinden is,
   vindt niemand.
+- **Bovenbalk** — wat met het document als geheel te maken heeft: openen,
+  opslaan, en de machine met start en stop.

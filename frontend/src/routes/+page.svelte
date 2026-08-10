@@ -215,6 +215,9 @@
 	onSetSize={setSize}
 	onStart={requestStart}
 	onStop={() => control.stop()}
+	onOpenFile={async (file) => {
+		if (await control.load(file)) await design.load();
+	}}
 	onToggleTheme={toggleTheme}
 />
 

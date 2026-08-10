@@ -236,6 +236,9 @@
 
 	// Sleepselectie: alles wat het kader raakt, wordt geselecteerd.
 	let band = $state<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+	// Na het loslaten vuurt er nog een klik op dezelfde plek. Zonder deze vlag
+	// wist die de selectie die het sleepkader net gemaakt heeft.
+	let bandJustEnded = false;
 
 	function startBand(event: PointerEvent) {
 		const at = pointerMm(event);
@@ -260,6 +263,7 @@
 		const dragged = box.x1 - box.x0 > 0.5 || box.y1 - box.y0 > 0.5;
 		band = null;
 		if (!dragged || !design.design) return;
+		bandJustEnded = true;
 
 		const perMm = design.design.units_per_mm;
 		const hit = design.elements.filter((element) => {
@@ -268,8 +272,7 @@
 			// Overlap, niet volledig omsluiten: zo hoef je niet exact te slepen.
 			return ex0 <= box.x1 && ex1 >= box.x0 && ey0 <= box.y1 && ey1 >= box.y0;
 		});
-		design.select(hit[0]?.id ?? null);
-		hit.slice(1).forEach((element) => design.toggle(element.id));
+		design.selectMany(hit.map((element) => element.id));
 	}
 
 	// Linialen elke 50 mm.
@@ -341,8 +344,13 @@
 						drawAt(e);
 						return;
 					}
-					// Klikken naast een element heft de selectie op.
-					if (!band) design.select(null);
+					// Klikken naast een element heft de selectie op — behalve de klik
+					// die direct volgt op een sleepkader.
+					if (bandJustEnded) {
+						bandJustEnded = false;
+						return;
+					}
+					design.select(null);
 				}}
 				onpointerdown={(e) => {
 					if (e.target === e.currentTarget && tool === 'select' && !e.altKey && e.button === 0) {
