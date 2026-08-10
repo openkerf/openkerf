@@ -454,7 +454,13 @@
 	</aside>
 </div>
 
-<StatusBar {device} state={machine} job={status.activeJob} connected={status.connected} />
+<StatusBar
+	{device}
+	state={machine}
+	job={status.activeJob}
+	connected={status.connected}
+	{control}
+/>
 
 <!-- Bibliotheken en gereedschappen als eigen venster: in 280px kun je niet
      zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->

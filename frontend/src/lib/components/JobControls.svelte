@@ -54,6 +54,9 @@
 		control.needsToken ? 'Eerst een token invullen' : undefined
 	);
 
+	// De kop verzetten terwijl er gebrand wordt, verpest op zijn best de job.
+	let movingBlocked = $derived(running ? 'Kan niet tijdens een lopende job' : undefined);
+
 	async function confirmStart() {
 		if (await control.start()) preflight = false;
 	}
@@ -150,11 +153,11 @@
 			     met ← en → ernaast. Home staat ernaast en niet in het midden,
 			     want dat is geen richting. -->
 			<div class="pad">
-				<button class="jog up" aria-label="Naar boven" onclick={() => onJog?.(0, -step)}>↑</button>
-				<button class="jog left" aria-label="Naar links" onclick={() => onJog?.(-step, 0)}>←</button>
-				<button class="jog down" aria-label="Naar beneden" onclick={() => onJog?.(0, step)}>↓</button>
-				<button class="jog right" aria-label="Naar rechts" onclick={() => onJog?.(step, 0)}>→</button>
-				<button class="jog home" onclick={() => onHome?.()}>Home</button>
+				<button class="jog up" aria-label="Naar boven" disabled={running} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
+				<button class="jog left" aria-label="Naar links" disabled={running} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="jog down" aria-label="Naar beneden" disabled={running} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
+				<button class="jog right" aria-label="Naar rechts" disabled={running} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
+				<button class="jog home" disabled={running} title={movingBlocked} onclick={() => onHome?.()}>Home</button>
 			</div>
 			<div class="steps">
 				{#each [0.1, 1, 10, 50] as size (size)}

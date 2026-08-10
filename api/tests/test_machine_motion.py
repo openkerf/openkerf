@@ -73,3 +73,29 @@ def test_motion_over_http(client):
 def test_a_nonsense_jog_over_http_is_a_409(client):
     response = client.post("/api/machine/jog", json={"dx_mm": "links", "dy_mm": 0})
     assert response.status_code == 409
+
+
+def test_moving_is_refused_while_a_job_is_running(kernel, motion):
+    """
+    De UI zet de jogknoppen uit tijdens een job, maar de UI is een advies: een
+    tweede tabblad of een curl-opdracht komt er zo langs. De kop verzetten
+    tijdens het branden verpest de job.
+    """
+
+    class RunningJob:
+        def is_running(self):
+            return True
+
+    class Busy:
+        is_idle = False
+        queue = [RunningJob()]
+
+    kernel.device.spooler = Busy()
+
+    for call in (
+        lambda: motion.jog(5, 0),
+        lambda: motion.home(),
+        lambda: motion.move_to(10, 10),
+    ):
+        with pytest.raises(DesignError, match="loopt een job"):
+            call()
