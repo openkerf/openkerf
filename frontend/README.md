@@ -39,7 +39,9 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Kop-positie als kruisdraad op het bed | live |
 | Job-tab: spoolerwachtrij, voortgang, tijden, engine-signalen | live |
 | Ontwerp laden, job starten, pauze, hervatten, stop, wachtrij legen | live (fase 2) |
-| Bewerken-tab: materiaalkaart en lagen | **voorbeelddata**, expliciet gelabeld — komt in fase 3/4 |
+| Canvas: het geladen ontwerp op het bed, op ware maat | live (fase 3, eerste plak) |
+| Bewerken-tab: lagen met snelheid/vermogen en elementaantal | live |
+| Materiaalkaart | nog niet gebouwd — fase 4 |
 | Kader tonen | uitgeschakeld — beweging is fase 3 |
 | Tool-rail | zichtbaar, nog zonder gedrag (fase 3) |
 

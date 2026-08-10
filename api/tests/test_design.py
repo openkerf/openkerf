@@ -1,0 +1,117 @@
+"""The design snapshot the canvas renders from."""
+
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+
+from openkerf_api.design import DesignReader
+from openkerf_api.server import ApiServer
+
+
+@pytest.fixture
+def client(kernel):
+    with TestClient(ApiServer(kernel).build_app()) as c:
+        yield c
+
+
+@pytest.fixture
+def drawing(kernel):
+    kernel.console("rect 1cm 1cm 4cm 2cm\n")
+    kernel.console("circle 8cm 3cm 1cm\n")
+    kernel.console("element* cut -s 12 -p 65\n")
+    return kernel
+
+
+def test_empty_document_yields_no_elements(kernel):
+    snapshot = DesignReader(kernel).snapshot()
+
+    assert snapshot["elements"] == []
+    assert snapshot["units_per_mm"] > 0
+
+
+def test_elements_carry_svg_path_data(drawing):
+    snapshot = DesignReader(drawing).snapshot()
+
+    assert len(snapshot["elements"]) == 2
+    for element in snapshot["elements"]:
+        assert element["path"].startswith("M ")
+        assert element["id"]
+        assert element["type"].startswith("elem ")
+        assert len(element["bounds"]) == 4
+
+
+def test_geometry_is_in_native_units_so_the_scale_matches(drawing):
+    """A 1cm offset must land on 10mm once units_per_mm is applied."""
+    snapshot = DesignReader(drawing).snapshot()
+    units_per_mm = snapshot["units_per_mm"]
+    rect = next(e for e in snapshot["elements"] if e["type"] == "elem rect")
+
+    x0, y0, x1, y1 = rect["bounds"]
+
+    assert x0 / units_per_mm == pytest.approx(10.0, abs=0.1)
+    assert (x1 - x0) / units_per_mm == pytest.approx(40.0, abs=0.1)
+    assert (y1 - y0) / units_per_mm == pytest.approx(20.0, abs=0.1)
+
+
+def test_operations_reference_their_elements(drawing):
+    snapshot = DesignReader(drawing).snapshot()
+
+    assert snapshot["operations"], "the cut operation is a layer"
+    element_ids = {e["id"] for e in snapshot["elements"]}
+    for operation in snapshot["operations"]:
+        assert operation["element_ids"]
+        assert set(operation["element_ids"]) <= element_ids
+
+
+def test_unused_operations_are_left_out(drawing):
+    """The engine keeps a stack of default operations; they are not layers."""
+    total_ops = len(list(drawing.elements.ops()))
+    reported = len(DesignReader(drawing).snapshot()["operations"])
+
+    assert 0 < reported < total_ops
+
+
+def test_elements_can_belong_to_several_operations(drawing):
+    """
+    MeerK40t classifies an element into every operation whose colour matches,
+    so membership is many-to-many. The canvas must not assume one owner.
+    """
+    snapshot = DesignReader(drawing).snapshot()
+
+    for element in snapshot["elements"]:
+        assert element["operation_ids"]
+        assert element["operation_id"] == element["operation_ids"][0]
+
+    claimed = max(len(e["operation_ids"]) for e in snapshot["elements"])
+    assert claimed >= 1
+
+
+def test_snapshot_is_json_serialisable(drawing):
+    """Bounds come back as numpy floats and colours as Color objects."""
+    payload = json.dumps(DesignReader(drawing).snapshot())
+
+    assert "np.float64" not in payload
+    assert "Color(" not in payload
+
+
+def test_endpoint_returns_the_design(drawing, client):
+    response = client.get("/api/design")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["elements"]) == 2
+    assert body["operations"]
+
+
+def test_reader_skips_nodes_without_geometry(kernel):
+    """A node whose geometry raises must not take the whole snapshot down."""
+
+    class Broken:
+        type = "elem path"
+        bounds = (0, 0, 1, 1)
+
+        def as_geometry(self, **kws):
+            raise RuntimeError("no geometry here")
+
+    assert DesignReader(kernel)._element(Broken(), "e0") is None
