@@ -146,8 +146,14 @@ bewaard id zou een ander element kunnen aanwijzen.
 omhullende; slepen, schalen en draaien werken op de hele groep. De kop van het
 selectieblok telt hoeveel elementen er gekozen zijn.
 
-**Draaien** met de knoppen −90°, −1°, +1° en +90° in het selectieblok. De engine
-draait om het middelpunt van de selectie.
+**Draaien** kan op twee manieren: met de knoppen −90°, −1°, +1° en +90° in het
+selectieblok, of door aan de ronde greep boven het kader te slepen. Tijdens het
+slepen draait het kader mee als voorvertoning en toont het label de hoek; shift
+klikt vast op stappen van 15°. De engine draait om het middelpunt van de
+selectie.
+
+Net als bij verplaatsen gaat er één opdracht naar de engine, bij loslaten. Onder
+een halve graad telt het als getril en gebeurt er niets.
 
 **Laag toekennen** met het vinkje voor elke laagrij: aan zet de hele selectie in
 die bewerking, uit haalt hem eruit. Zit maar een deel van de selectie erin, dan
