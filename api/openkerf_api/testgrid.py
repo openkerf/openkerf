@@ -164,6 +164,27 @@ class TestGridGenerator:
             )
 
         drawn = []
+        # Zonder dit belandt elke cel óók in elke bestaande operatie waarvan de
+        # kleur matcht — de engine classificeert nieuwe elementen automatisch.
+        # Het raster zou dan dubbel gebrand worden: één keer op de instelling van
+        # de cel en één keer op die van de andere laag. Dat maakt de test
+        # waardeloos en verbrandt materiaal.
+        classify = getattr(self.elements, "classify_new", None)
+        if classify is not None:
+            self.elements.classify_new = False
+        try:
+            drawn = self._draw_cells(plan, cells)
+        finally:
+            if classify is not None:
+                self.elements.classify_new = classify
+
+        self.elements.signal("rebuild_tree", "all")
+        self.elements.signal("refresh_scene", "Scene")
+        return drawn
+
+    def _draw_cells(self, plan: dict, cells: list[dict]) -> list[dict]:
+        op_type = OPERATION_TYPES[plan["operation"]]
+        drawn = []
         with self.elements.undoscope("Testraster genereren"):
             for cell in cells:
                 node = self._square(cell)
@@ -181,15 +202,105 @@ class TestGridGenerator:
                 drawn.append({**cell, "element_id": None, "operation_id": None,
                               "_node": node, "_op": operation})
 
+            self._label_axes(plan, cells)
+
         # Ids only exist once the engine has handed them out.
         self.elements.validate_ids()
         for entry in drawn:
             entry["element_id"] = entry.pop("_node").id
             entry["operation_id"] = entry.pop("_op").id
-
-        self.elements.signal("rebuild_tree", "all")
-        self.elements.signal("refresh_scene", "Scene")
         return drawn
+
+    def _label_axes(self, plan: dict, cells: list[dict]):
+        """
+        Engrave the axis labels: speed down the left, power across the top.
+
+        Without them the grid is unreadable once it is off the machine — every
+        square looks the same and you cannot tell which settings made it. The
+        labels go in their own engrave operation, so they are not part of the
+        sweep.
+        """
+        speeds = {c["row"]: c["speed_mm_s"] for c in cells}
+        powers = {c["column"]: c["power_percent"] for c in cells}
+        pitch = plan["cell_mm"] + plan["gap_mm"]
+        # Schaal mee met het vakje. Op ware grootte is "25 mm/s" bijna 20 mm
+        # breed en steekt hij links van het bed uit.
+        text_height = max(2.0, plan["cell_mm"] * 0.35)
+
+        # Pas aanmaken als er echt tekst getekend wordt: zonder vectorfont zou
+        # er anders een lege laag achterblijven.
+        labels = None
+
+        for row, speed in sorted(speeds.items()):
+            node = self._text(f"{speed:g} mm/s", text_height)
+            if node is None:
+                return  # Geen vectorfont beschikbaar; het raster blijft bruikbaar.
+            labels = labels or self.elements.op_branch.add(
+                type="op engrave", speed=80, power=300, label="Raster-labels"
+            )
+            self._place(
+                node,
+                right=plan["origin_x_mm"] - 2,
+                middle=plan["origin_y_mm"] + row * pitch + plan["cell_mm"] / 2,
+            )
+            labels.add_reference(node)
+
+        for column, power in sorted(powers.items()):
+            node = self._text(f"{power:g}%", text_height)
+            if node is None or labels is None:
+                return
+            self._place(
+                node,
+                center=plan["origin_x_mm"] + column * pitch + plan["cell_mm"] / 2,
+                bottom=plan["origin_y_mm"] - 2,
+            )
+            labels.add_reference(node)
+
+    def _text(self, text: str, height_mm: float):
+        """Vector text via the Hershey fonts; bitmap text has no geometry."""
+        before = {id(n) for n in self.elements.elems()}
+        try:
+            self.kernel.console(f'linetext 0mm 0mm "{text}"\n')
+        except Exception:
+            return None
+        node = next(
+            (n for n in self.elements.elems() if id(n) not in before and n.bounds), None
+        )
+        if node is None:
+            return None
+        return self._scale_to_height(node, height_mm)
+
+    def _scale_to_height(self, node, height_mm: float):
+        from meerk40t.core.units import UNITS_PER_MM
+
+        x0, y0, x1, y1 = (v / UNITS_PER_MM for v in node.bounds)
+        current = y1 - y0
+        if current <= 0:
+            return node
+        factor = height_mm / current
+        self.elements.set_emphasis([node])
+        self.kernel.console(
+            f"resize {x0:.4f}mm {y0:.4f}mm "
+            f"{max(0.1, (x1 - x0) * factor):.4f}mm {height_mm:.4f}mm\n"
+        )
+        return node
+
+    def _place(self, node, right=None, center=None, middle=None, bottom=None):
+        """Move a freshly drawn label to where it belongs, measured from its bounds."""
+        from meerk40t.core.units import UNITS_PER_MM
+
+        x0, y0, x1, y1 = (v / UNITS_PER_MM for v in node.bounds)
+        dx = dy = 0.0
+        if right is not None:
+            dx = right - x1
+        if center is not None:
+            dx = center - (x0 + x1) / 2
+        if bottom is not None:
+            dy = bottom - y1
+        if middle is not None:
+            dy = middle - (y0 + y1) / 2
+        self.elements.set_emphasis([node])
+        self.kernel.console(f"translate {dx:.4f}mm {dy:.4f}mm\n")
 
     def _square(self, cell: dict):
         before = set(id(n) for n in self.elements.elems())
