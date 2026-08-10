@@ -123,6 +123,56 @@
 		onEdited?.();
 	}
 
+	// Knooppunten: de punten van de vorm zelf, niet het omhullende kader. Ze
+	// komen van de API omdat de engine de vorm als segmenten bewaart en een
+	// rechthoek pas punten krijgt zodra je er een pad van maakt.
+	let nodePoints = $state<{ index: number; x_mm: number; y_mm: number }[]>([]);
+	let nodeDrag = $state<{ index: number; x: number; y: number } | null>(null);
+
+	$effect(() => {
+		const id = tool === 'nodes' && design.selectedIds.length === 1 ? design.selectedId : null;
+		// design.revision: na een wijziging kunnen de punten verschoven zijn.
+		void design.revision;
+		if (!id) {
+			nodePoints = [];
+			return;
+		}
+		let cancelled = false;
+		fetch(`/api/design/elements/${encodeURIComponent(id)}/nodes`)
+			.then((r) => (r.ok ? r.json() : null))
+			.then((data) => {
+				if (!cancelled) nodePoints = data?.editable ? data.points : [];
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	function startNode(event: PointerEvent, index: number) {
+		event.stopPropagation();
+		(event.target as Element).setPointerCapture?.(event.pointerId);
+		const point = nodePoints.find((p) => p.index === index);
+		if (point) nodeDrag = { index, x: point.x_mm, y: point.y_mm };
+	}
+
+	function moveNode(event: PointerEvent) {
+		if (!nodeDrag) return;
+		const at = pointerMm(event, true);
+		nodeDrag = { ...nodeDrag, x: at.x, y: at.y };
+	}
+
+	async function endNode() {
+		const drag = nodeDrag;
+		nodeDrag = null;
+		const id = design.selectedId;
+		if (!drag || !id) return;
+		const moved = await edits.moveNode(id, drag.index, drag.x, drag.y);
+		// Een vorm wordt bij het verslepen een pad en krijgt dan een nieuw id;
+		// zonder dit verliest de gebruiker zijn selectie midden in het werk.
+		if (moved?.id && moved.id !== id) design.select(moved.id);
+		onEdited?.();
+	}
+
 	// Slepen. De voorbeeld-offset is puur visueel; pas bij loslaten gaat er één
 	// opdracht naar de engine, zodat we hem niet met tussenstanden bestoken.
 	type Drag = {
@@ -668,6 +718,24 @@
 					{/each}
 				{/if}
 
+				{#if tool === 'nodes' && nodePoints.length}
+					{#each nodePoints as point (point.index)}
+						{@const live = nodeDrag?.index === point.index ? nodeDrag : null}
+						<circle
+							class="knot"
+							role="button"
+							tabindex="-1"
+							aria-label="Knooppunt {point.index + 1} verslepen"
+							cx={live ? live.x : point.x_mm}
+							cy={live ? live.y : point.y_mm}
+							r="2.5"
+							onpointerdown={(e) => startNode(e, point.index)}
+							onpointermove={moveNode}
+							onpointerup={endNode}
+						/>
+					{/each}
+				{/if}
+
 				{#if cropping}
 					<!-- Vangt de muis af, anders start het slepen op de afbeelding zelf. -->
 					<rect
@@ -811,6 +879,14 @@
 		vector-effect: non-scaling-stroke;
 		cursor: grab;
 	}
+	.knot {
+		fill: var(--surface-1);
+		stroke: var(--accent);
+		stroke-width: 1.5;
+		vector-effect: non-scaling-stroke;
+		cursor: grab;
+	}
+	.knot:hover { fill: var(--accent); }
 	.crop-catch {
 		fill: rgb(0 0 0 / 0.18);
 		cursor: crosshair;

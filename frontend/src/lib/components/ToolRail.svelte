@@ -1,5 +1,5 @@
 <script lang="ts">
-	export type Tool = 'select' | 'rect' | 'circle' | 'line' | 'text';
+	export type Tool = 'select' | 'nodes' | 'rect' | 'circle' | 'line' | 'text';
 
 	let {
 		tool = $bindable(),
@@ -20,6 +20,11 @@
 	// Elk gereedschap tekent bij een klik op het bed; selecteren is de rust-stand.
 	const TOOLS: { id: Tool; label: string; path: string }[] = [
 		{ id: 'select', label: 'Selecteren', path: 'M4 3l7 18 2.5-7.5L21 11z' },
+		{
+			id: 'nodes',
+			label: 'Knooppunten',
+			path: 'M5 19L19 5M5 19h.01M19 5h.01M12 12h.01'
+		},
 		{ id: 'rect', label: 'Rechthoek', path: 'M4 6h16v12H4z' },
 		{ id: 'circle', label: 'Cirkel', path: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z' },
 		{ id: 'line', label: 'Lijn', path: 'M4 20L20 4' },

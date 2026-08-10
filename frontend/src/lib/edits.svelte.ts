@@ -136,6 +136,35 @@ export class EditController {
 		return this.#send(`/api/design/elements/${encodeURIComponent(id)}/line`, 'PATCH', fields);
 	}
 
+	/** Eén knooppunt verleggen. Geeft het id terug: een vorm wordt hierdoor een
+	 *  pad en krijgt dan een nieuw id. */
+	async moveNode(
+		id: string,
+		index: number,
+		xMm: number,
+		yMm: number
+	): Promise<{ id: string } | null> {
+		this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch(`/api/design/elements/${encodeURIComponent(id)}/nodes`, {
+				method: 'PATCH',
+				headers: this.#headers(),
+				body: JSON.stringify({ index, x_mm: xMm, y_mm: yMm })
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return null;
+			}
+			return await response.json();
+		} catch (e) {
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return null;
+		} finally {
+			this.busy = false;
+		}
+	}
+
 	offset(ids: string[], distanceMm: number) {
 		return this.#post('/api/design/offset', { ids, distance_mm: distanceMm });
 	}

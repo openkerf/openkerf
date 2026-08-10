@@ -27,6 +27,7 @@ from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
 from .library import Library, LibraryError, default_path
+from .nodes import Nodes
 from .presetariat import Presetariat
 from .testgrid import TestGridGenerator, plan_grid
 from .machine import MachineControl
@@ -157,6 +158,7 @@ class ApiServer:
         self.drawing = Drawing(kernel, self.commands)
         self.motion = MachineControl(kernel, self.commands)
         self.images = Images(kernel, self.commands)
+        self.nodes = Nodes(kernel, self.commands)
         self.design = DesignReader(
             kernel,
             keep_operations=self.drawing.user_operations,
@@ -364,6 +366,21 @@ class ApiServer:
             if body.get("dpi") is not None:
                 return manage(self.images.set_dpi, element_id, body["dpi"])
             return manage(self.images.adjust, element_id, body.get("adjustment"))
+
+        @app.get("/api/design/elements/{element_id}/nodes")
+        def element_nodes(element_id: str):
+            """De knooppunten van een vorm, om ze los te kunnen verslepen."""
+            return manage(self.nodes.points, element_id)
+
+        @app.patch("/api/design/elements/{element_id}/nodes", dependencies=write)
+        def move_element_node(element_id: str, body: dict):
+            return manage(
+                self.nodes.move_point,
+                element_id,
+                body.get("index"),
+                body.get("x_mm"),
+                body.get("y_mm"),
+            )
 
         @app.post("/api/design/elements/{element_id}/crop", dependencies=write)
         def crop_image(element_id: str, body: dict):
