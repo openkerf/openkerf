@@ -261,6 +261,54 @@ class Drawing:
         self._refresh()
         return {"ungrouped": len(groups)}
 
+    BOOLEAN = ("union", "difference", "intersection", "xor")
+
+    def mirror(self, element_ids, axis: str) -> dict:
+        """
+        Spiegelen om het midden van de selectie.
+
+        Er is geen `mirror`-commando; de engine doet dit met een negatieve
+        schaalfactor.
+        """
+        if axis not in ("horizontal", "vertical"):
+            raise DesignError("Spiegelas moet 'horizontal' of 'vertical' zijn.")
+        nodes = self._nodes(element_ids)
+        self.elements.set_emphasis(nodes)
+        factors = "-1 1" if axis == "horizontal" else "1 -1"
+        with self.elements.undoscope("Spiegelen"):
+            self.runner.run(f"scale {factors}")
+        self._refresh()
+        return {"mirrored": [n.id for n in nodes], "axis": axis}
+
+    def boolean(self, element_ids, operation: str) -> dict:
+        """
+        Vormen samenvoegen, aftrekken, snijden of uitsluiten.
+
+        De commando's komen uit `extra/cag.py` en werken op een keten, niet los:
+        `element union` pakt de nadruk-selectie. Het resultaat is één nieuw pad;
+        de oorspronkelijke vormen verdwijnen.
+        """
+        if operation not in self.BOOLEAN:
+            raise DesignError(
+                f"Onbekende bewerking: {operation}. Kies uit {', '.join(self.BOOLEAN)}."
+            )
+        nodes = self._nodes(element_ids)
+        if len(nodes) < 2:
+            raise DesignError(f"{operation} heeft minstens twee vormen nodig.")
+        before = {id(n) for n in self.elements.elems()}
+        self.elements.set_emphasis(nodes)
+        with self.elements.undoscope(operation):
+            self.runner.run(f"element {operation}")
+        created = [n for n in self.elements.elems() if id(n) not in before]
+        if not created:
+            raise DesignError(
+                f"{operation} leverde niets op — overlappen de vormen wel?"
+            )
+        self.elements.validate_ids()
+        self.elements.set_emphasis(created)
+        self._refresh()
+        return {"ids": [n.id for n in created], "operation": operation}
+
     def delete(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)

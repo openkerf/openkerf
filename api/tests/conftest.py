@@ -17,7 +17,7 @@ def _bootstrap(profile="OpenKerf_TEST"):
 
     from meerk40t.core import core, svg_io
     from meerk40t.device import basedevice, dummydevice
-    from meerk40t.extra import coolant, hershey
+    from meerk40t.extra import cag, coolant, hershey
     from meerk40t.fill import fills
     from meerk40t.image import imagetools
     from meerk40t.network import kernelserver
@@ -31,6 +31,7 @@ def _bootstrap(profile="OpenKerf_TEST"):
         core,
         imagetools,
         fills,
+        cag,  # union/difference/intersection/xor
         coolant,
         hershey,  # levert `linetext`: vector-tekst voor de rasterlabels
         svg_io,

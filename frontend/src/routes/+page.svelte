@@ -138,9 +138,17 @@
 				? await edits.group(ids)
 				: action === 'ungroup'
 					? await edits.ungroup(ids)
-					: await edits.align(ids, action);
+					: action === 'mirror-h'
+						? await edits.mirror(ids, 'horizontal')
+						: action === 'mirror-v'
+							? await edits.mirror(ids, 'vertical')
+							: ['union', 'difference', 'intersection', 'xor'].includes(action)
+								? await edits.boolean(ids, action)
+								: await edits.align(ids, action);
 		if (result.ok) {
-			if (action === 'ungroup') design.select(null);
+			// Booleaans levert een nieuw pad op; de oude selectie bestaat niet meer.
+			if (action === 'ungroup' || ['union', 'difference', 'intersection', 'xor'].includes(action))
+				design.select(null);
 			await design.load();
 		}
 	}

@@ -44,6 +44,7 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Bewerken: slepen, schalen, draaien, pijltjes, ongedaan maken | live |
 | Lijnen: twee-punts plaatsen, eindpunten verslepen | live |
 | Uitlijnen, verdelen, groeperen en groep opheffen | live |
+| Spiegelen en booleaanse bewerkingen | live |
 | Machine bewegen: jog met stapgrootte, home, ontgrendelen | live |
 | Meervoudige selectie (shift-klik) | live |
 | Bewerking (laag) toekennen aan de selectie | live |

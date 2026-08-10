@@ -350,6 +350,15 @@ class ApiServer:
             """Een eindpunt verzetten; een lijn is twee punten, geen kader."""
             return manage(lambda: self.drawing.update_line(element_id, **body))
 
+        @app.post("/api/design/mirror", dependencies=write)
+        def mirror_elements(body: dict):
+            return manage(self.drawing.mirror, body.get("ids"), body.get("axis"))
+
+        @app.post("/api/design/boolean", dependencies=write)
+        def boolean_elements(body: dict):
+            """Verenigen, verschil, doorsnede of uitsluiten."""
+            return manage(self.drawing.boolean, body.get("ids"), body.get("operation"))
+
         @app.post("/api/design/align", dependencies=write)
         def align_elements(body: dict):
             return manage(self.drawing.align, body.get("ids"), body.get("mode"))

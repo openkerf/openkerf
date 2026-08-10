@@ -135,7 +135,23 @@
 				</button>
 			{/if}
 
+			{#if canEdit}
+				<div class="arrange">
+					<span class="rot-label">Spiegelen</span>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('mirror-h')}>Horizontaal</button>
+					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('mirror-v')}>Verticaal</button>
+				</div>
+			{/if}
+
 			{#if canEdit && chosen.length > 1}
+				<div class="arrange">
+					<!-- Booleaans: het resultaat is één pad, de vormen verdwijnen. -->
+					<span class="rot-label">Combineren</span>
+					{#each [['union', 'Verenigen'], ['difference', 'Verschil'], ['intersection', 'Doorsnede'], ['xor', 'Uitsluiten']] as [op, label] (op)}
+						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.(op)}>{label}</button>
+					{/each}
+				</div>
+
 				<div class="arrange">
 					<span class="rot-label">Uitlijnen</span>
 					{#each [['left', 'Links'], ['centerh', 'Midden'], ['right', 'Rechts'], ['top', 'Boven'], ['centerv', 'Midden'], ['bottom', 'Onder']] as [mode, label] (mode)}
