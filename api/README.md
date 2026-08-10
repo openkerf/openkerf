@@ -121,14 +121,16 @@ argument. Elke bewerking zet daarom eerst de nadruk op de ene node die hij
 bedoelt en voert daarna het console-commando uit; de selectie van de engine komt
 zo overeen met wat de gebruiker in de browser koos.
 
-**Undo gooit id's weg.** Geverifieerd gedrag: undo herstelt een snapshot van de
-boom, en de herstelde nodes komen terug met `id = None`. Opnieuw hernummeren
-geeft daarna *andere* id's dan ervoor. Identiteit overleeft een undo dus niet.
-Daarom melden `/undo` en `/redo` `ids_invalidated: true`, en laat de frontend de
-selectie los in plaats van het risico te lopen een ander element aan te wijzen.
+**Vertrouw een id niet na een undo.** Id's overleven een undo normaal gesproken
+prima. Maar undo herstelt een snapshot van de héle boom, en kan uitkomen op een
+toestand van vóórdat er id's waren toegekend — dan hernummert `validate_ids()`
+en krijgt de client andere id's dan hij vasthoudt. Daar komt bij dat undo verder
+terug kan springen dan één bewerking: waargenomen is dat na drie verplaatsingen
+één undo er twee ongedaan maakte.
 
-De undo-granulariteit is die van de engine: waargenomen is dat één undo na een
-verplaatsing én een resize helemaal terugging naar de oorspronkelijke vorm.
+Daarom melden `/undo` en `/redo` `ids_invalidated: true` en laat de frontend de
+selectie los, in plaats van het risico te lopen een ander element aan te wijzen.
+Gemeld bij upstream.
 
 ## Machine-setup
 

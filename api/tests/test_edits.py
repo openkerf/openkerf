@@ -104,9 +104,9 @@ def test_undo_reverts_a_move(kernel, editor):
 
 def test_undo_reports_that_ids_are_no_longer_valid(kernel, editor):
     """
-    Verified engine behaviour: undo restores a tree snapshot whose nodes come
-    back with id=None, and renumbering hands out different ids. A client that
-    kept an id must not reuse it.
+    Ids usually survive an undo, but not always: undo restores a whole-tree
+    snapshot, which can predate id assignment, and it can step back further
+    than the last edit. A client must therefore not reuse a held id after one.
     """
     element_id = first_id(kernel)
     editor.move(element_id, 10, 5)
@@ -114,7 +114,6 @@ def test_undo_reports_that_ids_are_no_longer_valid(kernel, editor):
     result = editor.undo()
 
     assert result["ids_invalidated"] is True
-    assert kernel.elements.find_node(element_id) is None
 
 
 def test_undo_at_the_bottom_of_the_stack_is_not_an_error(kernel, editor):
