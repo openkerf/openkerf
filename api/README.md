@@ -35,6 +35,8 @@ bind-adres hier een optie, zodat de PWA op telefoon of tablet erbij kan.
 | `GET /api/status` | volledige snapshot (kernel, devices, posities, spooler) |
 | `GET /api/devices` | alleen de devicelijst |
 | `GET /api/design` | het ontwerp: elementcontouren (SVG-pad in Tats) + operaties |
+| `POST /api/design/elements/{id}/move` · `/resize` | element verplaatsen / exacte maten zetten |
+| `POST /api/design/undo` · `/redo` | wijziging terugdraaien |
 | `GET /api/capabilities` | welke acties het **actieve** device ondersteunt + of een token nodig is |
 | `WS /api/ws` | live: snapshot bij connect, daarna signalen + heartbeat (2 s) |
 | `POST /api/job/load` | multipart upload; laadt het bestand in de elementenboom |
@@ -112,6 +114,22 @@ element automatisch in elke operatie waarvan de kleur matcht. `operation_ids`
 geeft ze allemaal. Daarom kleurt het canvas op de eigen streekkleur van het
 element — net als de scene van MeerK40t zelf — en niet op "de kleur van de laag".
 
+## Elementen bewerken
+
+Transformaties in MeerK40t werken op de **emphasized** selectie, niet op een
+argument. Elke bewerking zet daarom eerst de nadruk op de ene node die hij
+bedoelt en voert daarna het console-commando uit; de selectie van de engine komt
+zo overeen met wat de gebruiker in de browser koos.
+
+**Undo gooit id's weg.** Geverifieerd gedrag: undo herstelt een snapshot van de
+boom, en de herstelde nodes komen terug met `id = None`. Opnieuw hernummeren
+geeft daarna *andere* id's dan ervoor. Identiteit overleeft een undo dus niet.
+Daarom melden `/undo` en `/redo` `ids_invalidated: true`, en laat de frontend de
+selectie los in plaats van het risico te lopen een ander element aan te wijzen.
+
+De undo-granulariteit is die van de engine: waargenomen is dat één undo na een
+verplaatsing én een resize helemaal terugging naar de oorspronkelijke vorm.
+
 ## Machine-setup
 
 De catalogus komt uit MeerK40t's `dev_info`-registry (9 families, 46 types) en de
@@ -137,7 +155,7 @@ object zou anders zijn interne velden uitstorten in de response.
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 64 tests, draait op een echte MeerK40t-kernel
+python -m pytest tests -q      # 79 tests, draait op een echte MeerK40t-kernel
 ```
 
 De tests starten een kernel via `tests/conftest.py` (naar het model van

@@ -5,6 +5,7 @@
 	import { machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
+	import { EditController } from '$lib/edits.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
 	import Canvas from '$components/Canvas.svelte';
 	import DesignPanel from '$components/DesignPanel.svelte';
@@ -16,6 +17,26 @@
 	const status = new StatusConnection();
 	const control = new Controller();
 	const design = new DesignStore();
+	const edits = new EditController(() =>
+		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '')
+	);
+
+	let canEdit = $derived(!control.needsToken);
+
+	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
+	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
+	// een ánder element kunnen aanwijzen, dus die laten we los.
+	async function history(action: 'undo' | 'redo') {
+		const result = action === 'undo' ? await edits.undo() : await edits.redo();
+		if (result.idsInvalidated) design.select(null);
+		await design.load();
+	}
+
+	async function nudge(dx: number, dy: number) {
+		if (!design.selectedId || !canEdit) return;
+		await edits.move(design.selectedId, dx, dy);
+		await design.load();
+	}
 	// De tab staat in de URL, zodat de terugknop en een bladwijzer werken.
 	let tab = $derived<'design' | 'job'>($page.url.searchParams.get('tab') === 'design' ? 'design' : 'job');
 
@@ -74,8 +95,24 @@
 </script>
 
 <svelte:window
-	on:keydown={(e) => {
-		if (e.key === 'Escape') design.select(null);
+	onkeydown={(e) => {
+		if (e.key === 'Escape') {
+			design.select(null);
+			return;
+		}
+		// Pijltjes verplaatsen 0,1 mm; met shift 1 mm (toegankelijkheidseis).
+		const step = e.shiftKey ? 1 : 0.1;
+		const moves: Record<string, [number, number]> = {
+			ArrowLeft: [-step, 0],
+			ArrowRight: [step, 0],
+			ArrowUp: [0, -step],
+			ArrowDown: [0, step]
+		};
+		const move = moves[e.key];
+		if (move && design.selectedId && canEdit) {
+			e.preventDefault();
+			nudge(move[0], move[1]);
+		}
 	}}
 />
 
@@ -91,7 +128,7 @@
 
 <div class="main">
 	<ToolRail />
-	<Canvas {device} {design} />
+	<Canvas {device} {design} {edits} {canEdit} onEdited={() => design.load()} />
 
 	<aside class="panel" aria-label="Eigenschappen">
 		<div class="tabs" role="tablist">
@@ -119,7 +156,7 @@
 		</div>
 		<div class="panel-scroll">
 			{#if tab === 'design'}
-				<DesignPanel {design} />
+				<DesignPanel {design} {edits} {canEdit} onHistory={history} />
 			{:else}
 				<JobPanel
 					{device}

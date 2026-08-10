@@ -1,7 +1,18 @@
 <script lang="ts">
 	import type { DesignStore } from '$lib/design.svelte';
+	import type { EditController } from '$lib/edits.svelte';
 
-	let { design }: { design: DesignStore } = $props();
+	let {
+		design,
+		edits,
+		canEdit = false,
+		onHistory
+	}: {
+		design: DesignStore;
+		edits: EditController;
+		canEdit?: boolean;
+		onHistory?: (action: 'undo' | 'redo') => void;
+	} = $props();
 
 	let elements = $derived(design.elements);
 	let operations = $derived(design.operations);
@@ -17,7 +28,22 @@
 </script>
 
 <div class="section">
-	<h2 class="section-title">Ontwerp</h2>
+	<div class="section-head">
+		<h2 class="section-title">Ontwerp</h2>
+		{#if canEdit}
+			<div class="history">
+				<button class="mini" disabled={edits.busy} onclick={() => onHistory?.('undo')}>
+					Ongedaan maken
+				</button>
+				<button class="mini" disabled={edits.busy} onclick={() => onHistory?.('redo')}>
+					Opnieuw
+				</button>
+			</div>
+		{/if}
+	</div>
+	{#if edits.error}
+		<p class="edit-error" role="alert">{edits.error}</p>
+	{/if}
 	{#if elements.length === 0}
 		<p class="empty">
 			Nog geen ontwerp geladen. Gebruik “Ontwerp laden…” in de Job-tab.
@@ -44,7 +70,13 @@
 			<p class="hint">
 				Zit in {selected.operation_ids.length} laag{selected.operation_ids.length === 1
 					? ''
-					: 'en'}. Verplaatsen en schalen komt in de volgende stap.
+					: 'en'}.
+				{#if canEdit}
+					Sleep het kader om te verplaatsen, de hoeken om te schalen. Pijltjes: 0,1 mm,
+					met shift 1 mm.
+				{:else}
+					Bewerken vereist een token.
+				{/if}
 			</p>
 		</div>
 	</div>
@@ -146,6 +178,31 @@
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
+	}
+	.section-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-2);
+	}
+	.history {
+		display: flex;
+		gap: var(--space-1);
+	}
+	.mini {
+		font-size: var(--text-xs);
+		color: var(--accent);
+	}
+	.mini:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+	.edit-error {
+		margin: 0 0 var(--space-2);
+		padding: var(--space-2);
+		border-radius: var(--radius-field);
+		background: color-mix(in srgb, var(--danger) 14%, transparent);
+		font-size: var(--text-xs);
 	}
 	.selected {
 		border: 1px solid var(--accent);
