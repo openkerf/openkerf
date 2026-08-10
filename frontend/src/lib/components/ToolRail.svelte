@@ -5,12 +5,14 @@
 		tool = $bindable(),
 		canEdit = false,
 		onOpenGrid,
-		onOpenLibrary
+		onOpenLibrary,
+		onPlaceImage
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
+		onPlaceImage?: (file: File) => void;
 	} = $props();
 
 	// Elk gereedschap tekent bij een klik op het bed; selecteren is de rust-stand.
@@ -37,6 +39,22 @@
 			</svg>
 		</button>
 	{/each}
+	<!-- Een afbeelding plaatsen voegt toe aan het ontwerp; "Openen" vervángt het. -->
+	<label class="tool file" class:off={!canEdit} title="Afbeelding plaatsen">
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
+		<input
+			type="file"
+			accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
+			disabled={!canEdit}
+			onchange={(e) => {
+				const input = e.currentTarget as HTMLInputElement;
+				const file = input.files?.[0];
+				input.value = '';
+				if (file) onPlaceImage?.(file);
+			}}
+		/>
+	</label>
+
 	<hr />
 	<!-- Gereedschappen begin je links; een gereedschap dat alleen rechts te
 	     vinden is, vindt niemand. -->
@@ -80,6 +98,20 @@
 	.tool[aria-pressed='true'] {
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 		color: var(--accent);
+	}
+	.tool.file input {
+		position: absolute;
+		width: 0;
+		height: 0;
+		opacity: 0;
+	}
+	.tool.file {
+		position: relative;
+		cursor: pointer;
+	}
+	.tool.file.off {
+		opacity: 0.35;
+		cursor: not-allowed;
 	}
 	hr {
 		width: 28px;

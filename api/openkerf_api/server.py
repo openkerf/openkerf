@@ -25,6 +25,7 @@ from .design import DesignReader
 from .document import Document
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
+from .images import Images
 from .library import Library, LibraryError, default_path
 from .testgrid import TestGridGenerator, plan_grid
 from .machine import MachineControl
@@ -151,6 +152,7 @@ class ApiServer:
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
         self.motion = MachineControl(kernel, self.commands)
+        self.images = Images(kernel, self.commands)
         self.design = DesignReader(
             kernel,
             keep_operations=self.drawing.user_operations,
@@ -344,6 +346,41 @@ class ApiServer:
             result = manage(self.drawing.import_project, str(target), self.library)
             self.document.clean()
             return result
+
+        @app.get("/api/design/elements/{element_id}/image.png")
+        def element_image(element_id: str):
+            """De pixels van een afbeelding, zodat het canvas hem kan tonen."""
+            from fastapi.responses import FileResponse
+
+            path = manage(self.images.render_png, element_id)
+            return FileResponse(path, media_type="image/png")
+
+        @app.post("/api/design/elements/{element_id}/image", dependencies=write)
+        def adjust_image(element_id: str, body: dict):
+            if body.get("dpi") is not None:
+                return manage(self.images.set_dpi, element_id, body["dpi"])
+            return manage(self.images.adjust, element_id, body.get("adjustment"))
+
+        @app.post("/api/design/elements/{element_id}/crop", dependencies=write)
+        def crop_image(element_id: str, body: dict):
+            return manage(
+                self.images.crop,
+                element_id,
+                body.get("x_mm"),
+                body.get("y_mm"),
+                body.get("width_mm"),
+                body.get("height_mm"),
+            )
+
+        @app.post("/api/design/elements/{element_id}/vectorise", dependencies=write)
+        def vectorise_image(element_id: str, body: dict | None = None):
+            method = (body or {}).get("method") or "vectrace"
+            return manage(self.images.vectorise, element_id, method)
+
+        @app.get("/api/design/vectorisers")
+        def list_vectorisers():
+            """Welke vectoriseerders geladen zijn — potrace kan ontbreken."""
+            return {"methods": self.images.vectorisers()}
 
         @app.get("/api/design/fonts")
         def list_fonts():

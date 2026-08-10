@@ -19,6 +19,7 @@ def _bootstrap(profile="OpenKerf_TEST"):
     from meerk40t.device import basedevice, dummydevice
     from meerk40t.extra import cag, coolant, hershey
     from meerk40t.fill import fills
+    from meerk40t.extra import potrace, vectrace
     from meerk40t.image import imagetools
     from meerk40t.network import kernelserver
     from meerk40t.ruida import plugin as ruidadevice
@@ -30,6 +31,8 @@ def _bootstrap(profile="OpenKerf_TEST"):
         dummydevice,
         core,
         imagetools,
+        vectrace,  # `vectrace`: afbeelding naar paden
+        potrace,
         fills,
         cag,  # union/difference/intersection/xor
         coolant,

@@ -11,7 +11,11 @@
 		onAssign,
 		onLayerChange,
 		onEditText,
-		onArrange
+		onArrange,
+		onImage,
+		onImageDpi,
+		onVectorise,
+		onCrop
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -22,6 +26,10 @@
 		onLayerChange?: () => void;
 		onEditText?: (id: string) => void;
 		onArrange?: (action: string) => void;
+		onImage?: (adjustment: string) => void;
+		onImageDpi?: (dpi: number) => void;
+		onVectorise?: () => void;
+		onCrop?: () => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -142,6 +150,34 @@
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('simplify')}>Vereenvoudigen</button>
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('hatch')}>Vulling</button>
 					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('wobble')}>Wobble</button>
+				</div>
+			{/if}
+
+			{#if canEdit && selected.image}
+				<div class="arrange">
+					<span class="rot-label">Afbeelding</span>
+					{#each ['grayscale', 'dither', 'invert', 'contrast', 'sharpen', 'halftone'] as adjustment (adjustment)}
+						<button class="rot" disabled={edits.busy} onclick={() => onImage?.(adjustment)}>
+							{adjustment}
+						</button>
+					{/each}
+					<button class="rot" disabled={edits.busy} onclick={() => onVectorise?.()}>
+						Vectoriseren
+					</button>
+					<button class="rot" disabled={edits.busy} onclick={() => onCrop?.()}>
+						Bijsnijden
+					</button>
+					<label class="dpi mono">
+						DPI
+						<input
+							type="number"
+							min="10"
+							max="2000"
+							step="10"
+							value={selected.image.dpi ?? 96}
+							onchange={(e) => onImageDpi?.(Number(e.currentTarget.value))}
+						/>
+					</label>
 				</div>
 			{/if}
 
@@ -315,6 +351,43 @@
 							onchange={(e) => patchLayer(op.id, { passes: Number(e.currentTarget.value) })}
 						/>
 					</label>
+					{#if op.type === 'op raster' || op.type === 'op image'}
+						<!-- Alleen rasteren gebruikt deze; bij snijden zijn ze zinloos. -->
+						<label>
+							<span>DPI</span>
+							<input
+								class="mono"
+								type="number"
+								step="10"
+								min="10"
+								max="2000"
+								value={op.dpi ?? 500}
+								onchange={(e) => patchLayer(op.id, { dpi: Number(e.currentTarget.value) })}
+							/>
+						</label>
+						<label>
+							<span>Overscan (mm)</span>
+							<input
+								class="mono"
+								type="number"
+								step="0.5"
+								min="0"
+								max="50"
+								value={parseFloat(op.overscan ?? '0.5') || 0}
+								onchange={(e) =>
+									patchLayer(op.id, { overscan_mm: Number(e.currentTarget.value) })}
+							/>
+						</label>
+						<label class="check">
+							<input
+								type="checkbox"
+								checked={op.bidirectional}
+								onchange={(e) =>
+									patchLayer(op.id, { bidirectional: e.currentTarget.checked })}
+							/>
+							<span>Heen en weer graveren</span>
+						</label>
+					{/if}
 					<label class="check">
 						<input
 							type="checkbox"
@@ -477,6 +550,16 @@
 		color: var(--accent);
 	}
 	.edit-text:hover { background: var(--surface-2); }
+	.dpi { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-2); }
+	.dpi input {
+		width: 4.5em;
+		font: inherit;
+		padding: 2px 4px;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
 	.arrange {
 		display: flex;
 		flex-wrap: wrap;

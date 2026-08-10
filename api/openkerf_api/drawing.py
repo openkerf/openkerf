@@ -462,6 +462,23 @@ class Drawing:
             if fields.get("output") is not None:
                 operation.output = bool(fields["output"])
                 applied["output"] = operation.output
+            if fields.get("dpi") is not None:
+                # Lijnafstand van een rastergravure; te hoog kost uren.
+                dpi = _positive(fields["dpi"], "dpi")
+                if not 10 <= dpi <= 2000:
+                    raise DesignError("dpi moet tussen 10 en 2000 liggen.")
+                operation.dpi = dpi
+                applied["dpi"] = dpi
+            if fields.get("overscan_mm") is not None:
+                distance = _finite(fields["overscan_mm"], "overscan_mm")
+                if not 0 <= distance <= 50:
+                    raise DesignError("overscan_mm moet tussen 0 en 50 liggen.")
+                # De engine wil een lengte mét eenheid, geen kaal getal.
+                operation.overscan = f"{distance}mm"
+                applied["overscan"] = operation.overscan
+            if fields.get("bidirectional") is not None:
+                operation.bidirectional = bool(fields["bidirectional"])
+                applied["bidirectional"] = operation.bidirectional
         self._refresh()
         return {"id": operation_id, "applied": applied}
 

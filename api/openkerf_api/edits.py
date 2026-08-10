@@ -146,7 +146,14 @@ class DesignEditor:
         return {"operation_id": operation_id, "removed": removed}
 
     def apply_settings(
-        self, operation_id: str, speed=None, power_percent=None, passes=None
+        self,
+        operation_id: str,
+        speed=None,
+        power_percent=None,
+        passes=None,
+        dpi=None,
+        overscan_mm=None,
+        bidirectional=None,
     ) -> dict:
         """
         Write laser settings onto an operation — how a preset lands in the job.
@@ -172,6 +179,24 @@ class DesignEditor:
                 operation.passes_custom = True
                 operation.passes = count
                 applied["passes"] = count
+            if dpi is not None:
+                # DPI bepaalt de lijnafstand van een rastergravure: te hoog kost
+                # uren, te laag geeft strepen.
+                value = _positive(dpi, "dpi")
+                if not 10 <= value <= 2000:
+                    raise DesignError("dpi moet tussen 10 en 2000 liggen.")
+                operation.dpi = value
+                applied["dpi"] = value
+            if overscan_mm is not None:
+                distance = _finite(overscan_mm, "overscan_mm")
+                if not 0 <= distance <= 50:
+                    raise DesignError("overscan_mm moet tussen 0 en 50 liggen.")
+                # Overscan is een lengte-met-eenheid in de engine, geen getal.
+                operation.overscan = f"{distance}mm"
+                applied["overscan"] = operation.overscan
+            if bidirectional is not None:
+                operation.bidirectional = bool(bidirectional)
+                applied["bidirectional"] = operation.bidirectional
         self._refresh()
         return {"operation_id": operation_id, "applied": applied}
 

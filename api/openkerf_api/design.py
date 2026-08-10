@@ -131,6 +131,28 @@ def _text_of(node) -> dict | None:
     }
 
 
+def _image_of(node) -> dict | None:
+    """Kader en resolutie van een afbeelding, in millimeters."""
+    if getattr(node, "type", None) != "elem image":
+        return None
+    from meerk40t.core.units import UNITS_PER_MM
+
+    bounds = getattr(node, "bounds", None)
+    if not bounds:
+        return None
+    x0, y0, x1, y1 = (v / UNITS_PER_MM for v in bounds)
+    image = _attr_or_none(node, "active_image") or _attr_or_none(node, "image")
+    size = getattr(image, "size", None) if image is not None else None
+    return {
+        "x_mm": x0,
+        "y_mm": y0,
+        "width_mm": x1 - x0,
+        "height_mm": y1 - y0,
+        "pixels": list(size) if size else None,
+        "dpi": _plain(_attr_or_none(node, "dpi")),
+    }
+
+
 def _effect_of(node) -> dict | None:
     """
     Een hatch- of wobble-effect waar dit element in zit.
@@ -269,9 +291,13 @@ class DesignReader:
 
     def _element(self, node, element_id) -> dict | None:
         path = self._path(node)
-        if path is None:
+        image = _image_of(node)
+        # Afbeeldingen hebben geen pad; zonder deze uitzondering vielen ze uit
+        # de snapshot en waren ze onzichtbaar op het canvas.
+        if path is None and image is None:
             return None
         return {
+            "image": image,
             "id": element_id,
             "type": node.type,
             "label": _label(node, node.type.replace("elem ", "")),
@@ -283,7 +309,7 @@ class DesignReader:
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,
-            "path": path,
+            "path": path or "",
         }
 
     def _path(self, node) -> str | None:
@@ -315,6 +341,11 @@ class DesignReader:
             "speed": _plain(getattr(op, "speed", None)),
             "power": _plain(getattr(op, "power", None)),
             "passes": _plain(getattr(op, "passes", None)),
+            # Alleen zinvol voor raster/afbeelding, maar elke operatie draagt de
+            # velden; de frontend toont ze op type.
+            "dpi": _plain(getattr(op, "dpi", None)),
+            "overscan": _plain(getattr(op, "overscan", None)),
+            "bidirectional": bool(getattr(op, "bidirectional", True)),
             "output": bool(getattr(op, "output", True)),
             "element_ids": referenced,
         }

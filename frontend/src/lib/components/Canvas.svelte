@@ -11,7 +11,9 @@
 		tool = 'select',
 		onEdited,
 		onDrawn,
-		onTextAt
+		onTextAt,
+		cropping = $bindable(false),
+		onCrop
 	}: {
 		device: Device | null;
 		design: DesignStore;
@@ -21,6 +23,9 @@
 		onEdited?: () => void;
 		onDrawn?: (shape: Record<string, unknown>) => void;
 		onTextAt?: (at: { x: number; y: number }) => void;
+		/** Aan tijdens bijsnijden: het sleepkader knipt in plaats van te selecteren. */
+		cropping?: boolean;
+		onCrop?: (rect: { x: number; y: number; width: number; height: number }) => void;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -324,6 +329,17 @@
 		if (!dragged || !design.design) return;
 		bandJustEnded = true;
 
+		if (cropping) {
+			cropping = false;
+			onCrop?.({
+				x: box.x0,
+				y: box.y0,
+				width: box.x1 - box.x0,
+				height: box.y1 - box.y0
+			});
+			return;
+		}
+
 		const perMm = design.design.units_per_mm;
 		const hit = design.elements.filter((element) => {
 			if (!element.bounds || element.hidden) return false;
@@ -412,6 +428,10 @@
 					design.select(null);
 				}}
 				onpointerdown={(e) => {
+					if (cropping && e.button === 0) {
+						startBand(e);
+						return;
+					}
 					if (e.target === e.currentTarget && tool === 'select' && !e.altKey && e.button === 0) {
 						startBand(e);
 					}
@@ -427,7 +447,40 @@
 				{#if design.design}
 					<g transform="scale({1 / design.design.units_per_mm})">
 						{#each design.elements as element (element.id)}
-							{#if !element.hidden}
+							{#if !element.hidden && element.image}
+								<!-- Afbeeldingen hebben geen pad; de pixels komen van de API.
+								     De transform hierboven rekent in Tats, dus terugschalen. -->
+								<image
+									href="/api/design/elements/{encodeURIComponent(element.id)}/image.png?v={design.revision}"
+									x={element.image.x_mm * (design.design?.units_per_mm ?? 1)}
+									y={element.image.y_mm * (design.design?.units_per_mm ?? 1)}
+									width={element.image.width_mm * (design.design?.units_per_mm ?? 1)}
+									height={element.image.height_mm * (design.design?.units_per_mm ?? 1)}
+									preserveAspectRatio="none"
+								/>
+								<rect
+									class="hit"
+									role="button"
+									tabindex="0"
+									aria-label="Selecteer afbeelding"
+									x={element.image.x_mm * (design.design?.units_per_mm ?? 1)}
+									y={element.image.y_mm * (design.design?.units_per_mm ?? 1)}
+									width={element.image.width_mm * (design.design?.units_per_mm ?? 1)}
+									height={element.image.height_mm * (design.design?.units_per_mm ?? 1)}
+									fill="transparent"
+									onclick={(e) => {
+										e.stopPropagation();
+										if (e.shiftKey) design.toggle(element.id);
+										else design.select(element.id);
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											design.select(element.id);
+										}
+									}}
+								/>
+							{:else if !element.hidden}
 								<path
 									d={element.path}
 									fill="none"
@@ -615,6 +668,20 @@
 					{/each}
 				{/if}
 
+				{#if cropping}
+					<!-- Vangt de muis af, anders start het slepen op de afbeelding zelf. -->
+					<rect
+						class="crop-catch"
+						x="0"
+						y="0"
+						width={bed.width}
+						height={bed.height}
+						onpointerdown={(e) => startBand(e as PointerEvent)}
+						onpointermove={(e) => moveBand(e as PointerEvent)}
+						onpointerup={endBand}
+						role="presentation"
+					/>
+				{/if}
 				{#if band}
 					<rect
 						class="band"
@@ -743,6 +810,10 @@
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
 		cursor: grab;
+	}
+	.crop-catch {
+		fill: rgb(0 0 0 / 0.18);
+		cursor: crosshair;
 	}
 	.band {
 		fill: color-mix(in srgb, var(--accent) 12%, transparent);

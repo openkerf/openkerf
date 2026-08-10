@@ -27,6 +27,15 @@ export type DesignElement = {
 	} | null;
 	/** Gezet voor een lijn: de twee eindpunten, want een lijn is geen kader. */
 	line: { x1_mm: number; y1_mm: number; x2_mm: number; y2_mm: number } | null;
+	/** Gezet voor een afbeelding: kader en resolutie. */
+	image: {
+		x_mm: number;
+		y_mm: number;
+		width_mm: number;
+		height_mm: number;
+		pixels: [number, number] | null;
+		dpi: number | null;
+	} | null;
 	/** Hatch of wobble waar dit element in zit. */
 	effect: { id: string | null; type: string; label: string } | null;
 	operation_id: string | null;
@@ -41,6 +50,10 @@ export type DesignOperation = {
 	speed: number | null;
 	power: number | null;
 	passes: number | null;
+	/** Alleen zinvol bij raster- en afbeeldingslagen. */
+	dpi: number | null;
+	overscan: string | null;
+	bidirectional: boolean;
 	output: boolean;
 	element_ids: string[];
 	/** Gezet als deze laag een cel van een testraster is. */
@@ -214,6 +227,10 @@ export class DesignStore {
 		return operations[index].color ?? LAYER_COLORS[index % LAYER_COLORS.length];
 	}
 
+	/** Loopt op bij elke herlaadslag; het canvas hangt hem aan afbeeldings-URL's
+	 *  zodat een bewerkte afbeelding niet uit de browsercache komt. */
+	revision = $state(0);
+
 	async load() {
 		// Signalen komen in bursts binnen; één herlaadslag per burst is genoeg.
 		if (this.loading) {
@@ -225,6 +242,7 @@ export class DesignStore {
 			const response = await fetch('/api/design');
 			if (response.ok) {
 				this.design = await response.json();
+				this.revision += 1;
 				// Selecties die door een wijziging verdwenen zijn, laten we los;
 				// id's die er nog zijn blijven staan.
 				const alive = new Set(this.elements.map((e) => e.id));

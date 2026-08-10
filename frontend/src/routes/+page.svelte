@@ -34,6 +34,8 @@
 	let canEdit = $derived(!control.needsToken);
 	let hasSelection = $derived(design.selectedIds.length > 0);
 	let tool = $state<Tool>('select');
+	// Bijsnijden: het volgende sleepkader knipt de geselecteerde afbeelding bij.
+	let cropping = $state(false);
 	let libraryOpen = $state(false);
 	let pendingFile = $state<File | null>(null);
 	let textOpen = $state(false);
@@ -87,6 +89,19 @@
 		await replaceWith(file);
 	}
 
+	/** Schrijfroutes dragen het token; één plek in plaats van bij elke aanroep. */
+	async function post(path: string, body: unknown) {
+		const token = localStorage.getItem('openkerf.token') ?? '';
+		return fetch(path, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				...(token ? { Authorization: `Bearer ${token}` } : {})
+			},
+			body: JSON.stringify(body)
+		});
+	}
+
 	/** Een project draagt ook de bibliotheek-context, dus eigen route. */
 	async function openProject(file: File) {
 		if (!canEdit) return;
@@ -112,6 +127,12 @@
 			design.select(null);
 			await design.load();
 		}
+	}
+
+	/** Plaatsen voegt toe: de engine laadt bovenop wat er al staat. */
+	async function placeImage(file: File) {
+		if (!canEdit) return;
+		if (await control.load(file)) await design.load();
 	}
 
 	async function saveThenOpen() {
@@ -319,6 +340,7 @@
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
 		onOpenLibrary={() => (libraryOpen = true)}
+		onPlaceImage={placeImage}
 	/>
 	<Canvas
 		{device}
@@ -331,6 +353,18 @@
 		onTextAt={(at) => {
 			textAt = at;
 			textOpen = true;
+		}}
+		bind:cropping
+		onCrop={async (rect) => {
+			const id = design.selectedId;
+			if (!id) return;
+			await post(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
+				x_mm: rect.x,
+				y_mm: rect.y,
+				width_mm: rect.width,
+				height_mm: rect.height
+			});
+			await design.load();
 		}}
 	/>
 
@@ -369,6 +403,25 @@
 					onAssign={assign}
 					onLayerChange={() => design.load()}
 					onArrange={arrange}
+					onCrop={() => (cropping = true)}
+					onVectorise={async () => {
+						const id = design.selectedId;
+						if (!id) return;
+						await post(`/api/design/elements/${encodeURIComponent(id)}/vectorise`, { method: 'vectrace' });
+						await design.load();
+					}}
+					onImage={async (adjustment) => {
+						const id = design.selectedId;
+						if (!id) return;
+						await post(`/api/design/elements/${encodeURIComponent(id)}/image`, { adjustment });
+						await design.load();
+					}}
+					onImageDpi={async (dpi) => {
+						const id = design.selectedId;
+						if (!id) return;
+						await post(`/api/design/elements/${encodeURIComponent(id)}/image`, { dpi });
+						await design.load();
+					}}
 					onEditText={(id) => {
 						editingText = id;
 						textOpen = true;

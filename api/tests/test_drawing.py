@@ -749,3 +749,34 @@ def test_unknown_effect_is_refused(drawing):
     created = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
     with pytest.raises(DesignError):
         drawing.add_effect(created["ids"], "glitter")
+
+
+def test_raster_settings_can_be_changed(client):
+    """
+    DPI en overscan bepalen hoe een gravure eruitziet en hoe lang hij duurt;
+    zonder deze velden moest je terug naar MeerK40t.
+    """
+    created = client.post("/api/design/operations", json={"type": "raster"}).json()
+
+    response = client.patch(
+        f"/api/design/operations/{created['id']}",
+        json={"dpi": 333, "overscan_mm": 2.5, "bidirectional": False},
+    )
+
+    assert response.status_code == 200
+    operation = next(
+        o
+        for o in client.get("/api/design").json()["operations"]
+        if o["id"] == created["id"]
+    )
+    assert operation["dpi"] == 333
+    assert operation["overscan"] == "2.5mm"
+    assert operation["bidirectional"] is False
+
+
+def test_absurd_raster_settings_are_refused(client):
+    created = client.post("/api/design/operations", json={"type": "raster"}).json()
+
+    for body in ({"dpi": 5}, {"dpi": 9000}, {"overscan_mm": -1}, {"overscan_mm": 500}):
+        response = client.patch(f"/api/design/operations/{created['id']}", json=body)
+        assert response.status_code == 409, body
