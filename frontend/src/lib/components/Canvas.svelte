@@ -350,14 +350,21 @@
 	.hit {
 		cursor: pointer;
 	}
-	/* Geen focusrand op de trefzone. Die is 12 px breed en de browser tekent er
-	   bij een klik zijn eigen omtrek omheen — samen leverde dat een dikke balk
-	   op tijdens het slepen. De selectiecontour laat al zien wat gekozen is;
-	   toetsenbordfocus blijft zichtbaar doordat de contour verschijnt. */
-	.hit:focus,
-	.hit:focus-visible {
+	/* De globale :focus-visible-regel uit tokens.css tekent een outline van 2 px
+	   met offset. Op een SVG-vorm rendert die als rechthoek om de bounding box,
+	   en juist tijdens het slepen ligt de focus op het sleepvlak of een
+	   hoekgreep — dat gaf een dikke rand om de hele selectie. Hier dus uit voor
+	   alle vormen in het canvas; wat geselecteerd is blijft zichtbaar via de
+	   kerflijn-contour, ook bij toetsenbordbediening. */
+	svg :focus,
+	svg :focus-visible {
 		outline: none;
-		stroke: transparent;
+	}
+	/* Toetsenbordfocus blijft wel zichtbaar: zonder muis moet je kunnen zien
+	   welk element je op het punt staat te selecteren. */
+	.hit:focus-visible {
+		stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+		stroke-width: 4;
 	}
 	/* De kerflijn als selectiecontour: statisch gestreept, animatie pas bij
 	   slepen — dat komt in de volgende plak. */
@@ -375,7 +382,12 @@
 	.selection .handle.grabbable {
 		cursor: nwse-resize;
 	}
-	.selection .grab {
+	/* `rect.grab` en niet `.grab`: `.selection rect` hierboven is specifieker en
+	   won anders, waardoor het sleepvlak dezelfde gestreepte accentlijn kreeg
+	   als de contour. Twee strepen over elkaar, en tijdens het slepen animeert
+	   alleen de contour — dan lopen ze uit fase en loopt de rand dicht tot een
+	   dikke balk. */
+	.selection rect.grab {
 		fill: transparent;
 		stroke: none;
 		cursor: move;
