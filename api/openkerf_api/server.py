@@ -23,6 +23,7 @@ from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
 from .edits import DesignEditor, DesignError
+from .library import Library, LibraryError, default_path
 from .machines import MachineError, MachineManager
 from .status import StatusReader
 
@@ -125,7 +126,15 @@ def _spa_files(directory: str):
 class ApiServer:
     """Owns the uvicorn thread, the signal subscriptions and the event bridge."""
 
-    def __init__(self, kernel, port=8080, bind="127.0.0.1", frontend=None, token=None):
+    def __init__(
+        self,
+        kernel,
+        port=8080,
+        bind="127.0.0.1",
+        frontend=None,
+        token=None,
+        library_path=None,
+    ):
         self.kernel = kernel
         self.port = port
         self.bind = bind
@@ -135,6 +144,7 @@ class ApiServer:
         self.machines = MachineManager(kernel, self.commands)
         self.design = DesignReader(kernel)
         self.editor = DesignEditor(kernel, self.commands)
+        self.library = Library(library_path or default_path(kernel))
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
 
@@ -192,7 +202,7 @@ class ApiServer:
             """Same for machine management, where failures are our own."""
             try:
                 return action(*args)
-            except (MachineError, DesignError) as e:
+            except (MachineError, DesignError, LibraryError) as e:
                 raise HTTPException(status_code=409, detail=str(e)) from e
             except CommandError as e:
                 raise HTTPException(
@@ -315,6 +325,59 @@ class ApiServer:
         @app.post("/api/design/redo", dependencies=write)
         def redo_design():
             return manage(self.editor.redo)
+
+        # ------------------------------------------------- materiaalbibliotheek
+
+        @app.get("/api/library/materials")
+        def list_materials():
+            return self.library.materials()
+
+        @app.post("/api/library/materials", dependencies=write, status_code=201)
+        def add_material(body: dict):
+            return manage(self.library.add_material, body.get("name"), body.get("synonyms"))
+
+        @app.delete("/api/library/materials/{material_id}", dependencies=write)
+        def remove_material(material_id: int):
+            return manage(self.library.remove_material, material_id)
+
+        @app.get("/api/library/presets")
+        def list_presets(material_id: int | None = None, operation: str | None = None):
+            return self.library.presets(material_id, operation)
+
+        @app.post("/api/library/presets", dependencies=write, status_code=201)
+        def add_preset(body: dict):
+            return manage(lambda: self.library.add_preset(**body))
+
+        @app.delete("/api/library/presets/{preset_id}", dependencies=write)
+        def remove_preset(preset_id: int):
+            return manage(self.library.remove_preset, preset_id)
+
+        @app.get("/api/library/machines")
+        def list_machine_profiles():
+            return self.library.machines()
+
+        @app.post("/api/library/machines", dependencies=write, status_code=201)
+        def add_machine_profile(body: dict):
+            return manage(lambda: self.library.add_machine(**body))
+
+        @app.post("/api/library/presets/{preset_id}/apply", dependencies=write)
+        def apply_preset(preset_id: int, body: dict):
+            """Write a preset's speed, power and passes onto an operation."""
+            operation_id = body.get("operation_id")
+            if not operation_id:
+                raise HTTPException(status_code=422, detail="'operation_id' ontbreekt.")
+
+            def run():
+                preset = self.library.preset(preset_id)
+                result = self.editor.apply_settings(
+                    operation_id,
+                    speed=preset["speed_mm_s"],
+                    power_percent=preset["power_percent"],
+                    passes=preset["passes"],
+                )
+                return {**result, "preset": preset}
+
+            return manage(run)
 
         # -------------------------------------------------------- machine setup
 

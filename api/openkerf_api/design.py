@@ -26,6 +26,42 @@ def _plain(value):
         return str(value)
 
 
+def _label(node, fallback: str) -> str:
+    """
+    A readable name.
+
+    A plain `label` is the user's own name and wins. Templated labels like
+    "Engrave ({percent}, {speed}mm/s)" are not: `display_label()` blanks keys
+    it cannot resolve, which leaves "Engrave (, 12.0mm/s)". `str(node)` renders
+    the node's formatter against the full default map and produces what the
+    wxPython tree shows, so templates go through there instead.
+    """
+    label = _attr_or_none(node, "label")
+    if label and "{" not in label:
+        return label
+    try:
+        rendered = str(node)
+        if rendered and "{" not in rendered:
+            return rendered
+    except Exception:
+        pass
+    if label:
+        try:
+            resolved = node.display_label()
+            if resolved:
+                return resolved
+        except Exception:
+            pass
+    return fallback
+
+
+def _attr_or_none(node, name):
+    try:
+        return getattr(node, name, None)
+    except Exception:
+        return None
+
+
 def _color(value) -> str | None:
     if value is None:
         return None
@@ -94,7 +130,7 @@ class DesignReader:
         return {
             "id": element_id,
             "type": node.type,
-            "label": getattr(node, "label", None) or node.type.replace("elem ", ""),
+            "label": _label(node, node.type.replace("elem ", "")),
             "hidden": bool(getattr(node, "hidden", False)),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
@@ -126,7 +162,7 @@ class DesignReader:
         return {
             "id": operation_id,
             "type": op.type,
-            "label": getattr(op, "label", None) or op.type.replace("op ", ""),
+            "label": _label(op, op.type.replace("op ", "")),
             "color": _color(getattr(op, "color", None)),
             "speed": _plain(getattr(op, "speed", None)),
             "power": _plain(getattr(op, "power", None)),
