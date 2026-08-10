@@ -434,13 +434,51 @@
 		design.selectMany(hit.map((element) => element.id));
 	}
 
-	// Linialen elke 50 mm.
-	let ticksX = $derived(
-		Array.from({ length: Math.floor(bed.width / 50) + 1 }, (_, i) => i * 50)
-	);
-	let ticksY = $derived(
-		Array.from({ length: Math.floor(bed.height / 50) + 1 }, (_, i) => i * 50)
-	);
+	// Linialen. Twee dingen die de vorige versie niet deed: de streepjes staan
+	// op het bed uitgelijnd (het bed wordt gecentreerd én gepand, dus alleen de
+	// pan verrekenen klopt niet), en de stapgrootte volgt de zoom — op 50 mm
+	// vast zie je uitgezoomd een muur van cijfers en ingezoomd bijna niets.
+	let canvasWidth = $state(0);
+	let canvasHeight = $state(0);
+
+	const STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+	/** Breedte van de liniaalstrook; ook in de CSS gebruikt. */
+	const RULER = 20;
+
+	/** Linkerbovenhoek van het bed in schermpixels, binnen het canvasvlak. */
+	let bedOrigin = $derived({
+		x: (canvasWidth - bed.width * scale) / 2 + pan.x,
+		y: (canvasHeight - bed.height * scale) / 2 + pan.y
+	});
+
+	/** De kleinste stap waarbij twee labels minstens 55 px uit elkaar staan. */
+	let rulerStep = $derived(STEPS.find((step) => step * scale >= 55) ?? 500);
+
+	function ticks(lengthMm: number, step: number) {
+		const marks = [];
+		for (let value = 0; value <= lengthMm + 0.001; value += step / 5) {
+			const major = Math.abs(value % step) < 0.001;
+			marks.push({ value, major, label: major ? String(Math.round(value)) : '' });
+		}
+		return marks;
+	}
+
+	let ticksX = $derived(ticks(bed.width, rulerStep));
+	let ticksY = $derived(ticks(bed.height, rulerStep));
+
+	/** Waar de muis staat, als streepje op beide linialen. */
+	let pointer = $state<{ x: number; y: number } | null>(null);
+
+	// Niet via pointerMm: die rekent vanaf de SVG, en dit gebeurt op het
+	// omhullende vlak dat óók de linialen bevat. Rekenen vanaf de bedhoek.
+	function pointerOnRulers(event: PointerEvent) {
+		if (!frame) return null;
+		const rect = frame.getBoundingClientRect();
+		return {
+			x: (event.clientX - rect.left - RULER - bedOrigin.x) / scale,
+			y: (event.clientY - rect.top - RULER - bedOrigin.y) / scale
+		};
+	}
 </script>
 
 <svelte:window
@@ -473,21 +511,44 @@
 			startPan(e);
 		}
 	}}
-	onpointermove={movePan}
+	onpointermove={(e) => {
+		movePan(e);
+		pointer = pointerOnRulers(e);
+	}}
+	onpointerleave={() => (pointer = null)}
 	onpointerup={() => (panning = null)}
 >
-	<div class="ruler-x" aria-hidden="true" style="padding-left: {pan.x}px">
-		{#each ticksX as tick (tick)}
-			<span style="width: {50 * scale}px">{tick}</span>
+	<div class="corner" aria-hidden="true">mm</div>
+	<svg class="ruler-x" aria-hidden="true">
+		{#each ticksX as tick (tick.value)}
+			{@const at = bedOrigin.x + tick.value * scale}
+			{#if at >= -40 && at <= canvasWidth + 40}
+				<line x1={at} x2={at} y1={tick.major ? 8 : 14} y2="20" />
+				{#if tick.label}
+					<text x={at + 2} y="9">{tick.label}</text>
+				{/if}
+			{/if}
 		{/each}
-	</div>
-	<div class="ruler-y" aria-hidden="true" style="padding-top: {pan.y}px">
-		{#each ticksY as tick (tick)}
-			<span style="height: {50 * scale}px">{tick}</span>
+		{#if pointer}
+			<line class="here" x1={bedOrigin.x + pointer.x * scale} x2={bedOrigin.x + pointer.x * scale} y1="0" y2="20" />
+		{/if}
+	</svg>
+	<svg class="ruler-y" aria-hidden="true">
+		{#each ticksY as tick (tick.value)}
+			{@const at = bedOrigin.y + tick.value * scale}
+			{#if at >= -40 && at <= canvasHeight + 40}
+				<line y1={at} y2={at} x1={tick.major ? 8 : 14} x2="20" />
+				{#if tick.label}
+					<text x="2" y={at - 2} transform="rotate(-90 2 {at - 2})">{tick.label}</text>
+				{/if}
+			{/if}
 		{/each}
-	</div>
+		{#if pointer}
+			<line class="here" y1={bedOrigin.y + pointer.y * scale} y2={bedOrigin.y + pointer.y * scale} x1="0" x2="20" />
+		{/if}
+	</svg>
 
-	<div class="canvas">
+	<div class="canvas" bind:clientWidth={canvasWidth} bind:clientHeight={canvasHeight}>
 		<div
 			class="bed"
 			style="width: {bed.width * scale}px; height: {bed.height * scale}px;
@@ -901,7 +962,6 @@
 		right: 0;
 		height: 20px;
 		border-bottom: 1px solid var(--line);
-		display: flex;
 	}
 	.ruler-y {
 		top: 20px;
@@ -910,15 +970,39 @@
 		width: 20px;
 		border-right: 1px solid var(--line);
 	}
-	.ruler-x span {
-		flex: none;
-		padding: 4px 0 0 3px;
-		border-left: 1px solid var(--line);
+	.ruler-x line,
+	.ruler-y line {
+		stroke: var(--line-strong, var(--line));
+		stroke-width: 1;
+		shape-rendering: crispEdges;
 	}
-	.ruler-y span {
-		display: block;
-		padding: 3px 0 0 2px;
-		border-top: 1px solid var(--line);
+	.ruler-x .here,
+	.ruler-y .here {
+		stroke: var(--accent);
+	}
+	.ruler-x text,
+	.ruler-y text {
+		fill: var(--text-2);
+		font-size: 9px;
+		font-family: var(--font-mono);
+		dominant-baseline: hanging;
+	}
+	.corner {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 20px;
+		height: 20px;
+		z-index: 3;
+		display: grid;
+		place-items: center;
+		font-size: 8px;
+		font-family: var(--font-mono);
+		color: var(--text-2);
+		background: var(--surface-1);
+		border-right: 1px solid var(--line);
+		border-bottom: 1px solid var(--line);
+		user-select: none;
 	}
 	.canvas {
 		position: absolute;

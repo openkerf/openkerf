@@ -162,7 +162,7 @@ class ApiServer:
         self.motion = MachineControl(kernel, self.commands)
         self.images = Images(kernel, self.commands)
         self.nodes = Nodes(kernel, self.commands)
-        self.generators = Generators(kernel, self.commands)
+        self.generators = Generators(kernel, self.commands, self.drawing)
         self.nesting = Nesting(kernel, self.editor)
         self.autosave = Autosave(
             kernel,
@@ -730,6 +730,33 @@ class ApiServer:
                 body.get("kerf_mm", 0.0),
                 body.get("gap_mm", 5.0),
                 body.get("lid", True),
+            )
+
+        @app.post("/api/design/generate/arctext", dependencies=write, status_code=201)
+        def generate_arc_text(body: dict):
+            """Tekst langs een boog; daarna een pad, geen tekst meer."""
+            return manage(
+                self.generators.arc_text,
+                body.get("text"),
+                body.get("cx_mm"),
+                body.get("cy_mm"),
+                body.get("radius_mm"),
+                body.get("font_size_mm", 10.0),
+                body.get("font"),
+                body.get("spacing"),
+                bool(body.get("inside")),
+            )
+
+        @app.post("/api/design/generate/barcode", dependencies=write, status_code=201)
+        def generate_barcode(body: dict):
+            return manage(
+                self.generators.barcode,
+                body.get("text"),
+                body.get("kind") or "code128",
+                body.get("x_mm", 0.0),
+                body.get("y_mm", 0.0),
+                body.get("width_mm", 60.0),
+                body.get("height_mm", 20.0),
             )
 
         @app.post("/api/design/generate/qrcode", dependencies=write, status_code=201)

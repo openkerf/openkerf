@@ -18,13 +18,16 @@ specifiek product; de doos maakt een categorie.
 
 from __future__ import annotations
 
+import math
+
 from .edits import DesignError, _finite, _positive
 
 
 class Generators:
-    def __init__(self, kernel, runner):
+    def __init__(self, kernel, runner, drawing=None):
         self.kernel = kernel
         self.runner = runner
+        self.drawing = drawing
 
     @property
     def elements(self):
@@ -109,6 +112,165 @@ class Generators:
         with self.elements.undoscope("Veelhoek"):
             self.runner.run(command)
         return self._added("polygon", 1)
+
+    # ----------------------------------------------------------- boogtekst
+
+    def arc_text(
+        self,
+        text,
+        cx_mm,
+        cy_mm,
+        radius_mm,
+        font_size_mm=10.0,
+        font=None,
+        spacing=None,
+        inside=False,
+    ) -> dict:
+        """
+        Tekst langs een boog, bijvoorbeeld voor een rond bordje of een deksel.
+
+        De engine kent geen boogtekst. We laten hem de tekst gewoon recht
+        zetten en buigen daarna de geometrie: elk punt schuift naar de cirkel,
+        waarbij de afstand tot de basislijn de afstand tot het middelpunt
+        wordt. Zo blijft de letterhoogte kloppen en rekt niets uit.
+
+        Na het buigen is het **geen tekst meer maar een pad**: de bron wordt
+        losgelaten, want de engine zou de tekst bij de eerstvolgende wijziging
+        opnieuw recht renderen en de boog stilletjes wegpoetsen.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        radius = _positive(radius_mm, "radius_mm")
+        cx = _finite(cx_mm, "cx_mm") * UNITS_PER_MM
+        cy = _finite(cy_mm, "cy_mm") * UNITS_PER_MM
+        size = _positive(font_size_mm, "font_size_mm")
+
+        drawn = self.drawing.create(
+            "text",
+            x_mm=0,
+            y_mm=0,
+            text=text,
+            font_size_mm=size,
+            font=font,
+            spacing=spacing,
+        )
+        node = self.elements.find_node(drawn["ids"][0])
+        geometry = node.as_geometry()
+        bounds = node.bounds
+        if not bounds:
+            raise DesignError("De tekst leverde geen vorm op.")
+        x0, _, x1, y1 = bounds
+        span = x1 - x0
+        if span >= 2 * math.pi * radius * UNITS_PER_MM * 0.98:
+            raise DesignError(
+                "Deze tekst is te lang voor deze straal; hij zou over zichzelf "
+                "heen lopen. Kies een grotere straal of een kleinere letter."
+            )
+
+        middle = (x0 + x1) / 2
+        baseline = y1  # onderkant van de tekst
+        scale = radius * UNITS_PER_MM
+
+        def bend(point):
+            if point != point:  # NaN: geen punt maar een markering
+                return point
+            angle = (point.real - middle) / scale
+            above = baseline - point.imag
+            if inside:
+                distance = scale - above
+                return complex(
+                    cx + distance * math.sin(-angle), cy + distance * math.cos(-angle)
+                )
+            distance = scale + above
+            return complex(
+                cx + distance * math.sin(angle), cy - distance * math.cos(angle)
+            )
+
+        segments = geometry.segments[: geometry.index]
+        for row in segments:
+            # Kolom 2 draagt het segmenttype, geen punt; die blijft met rust.
+            for column in (0, 1, 3, 4):
+                row[column] = bend(complex(row[column]))
+
+        with self.elements.undoscope("Boogtekst"):
+            node.geometry = geometry
+            node.matrix.reset()
+            # De bron loslaten: anders rendert de engine de tekst bij de
+            # volgende wijziging weer recht.
+            for attribute in ("mktext", "mkfont", "mkfontsize"):
+                if hasattr(node, attribute):
+                    setattr(node, attribute, None)
+            node.altered()
+            self.elements.validate_ids()
+        self._refresh()
+        return {"generator": "arc_text", "ids": [node.id] if node.id else []}
+
+    # --------------------------------------------------------------- barcode
+
+    def barcode(
+        self, text, kind="code128", x_mm=0.0, y_mm=0.0, width_mm=60.0, height_mm=20.0
+    ) -> dict:
+        """
+        Een streepjescode als vlakken.
+
+        De codering komt uit `python-barcode`; de streepjes tekenen we zelf, net
+        als bij de QR-code. Een gegraveerde bitmap wordt op hout vaag, en een
+        streepjescode die niet scant is nutteloos.
+        """
+        content = str(text or "").strip()
+        if not content:
+            raise DesignError("Een streepjescode zonder inhoud bestaat niet.")
+        width = _positive(width_mm, "width_mm")
+        height = _positive(height_mm, "height_mm")
+        x0 = _finite(x_mm, "x_mm")
+        y0 = _finite(y_mm, "y_mm")
+
+        try:
+            import barcode as barcodes
+        except ImportError as e:  # pragma: no cover - alleen bij kale installatie
+            raise DesignError(
+                "Streepjescodes vragen het pakket 'python-barcode'."
+            ) from e
+
+        if kind not in barcodes.PROVIDED_BARCODES:
+            raise DesignError(
+                f"Onbekend type: {kind}. Kies uit {', '.join(barcodes.PROVIDED_BARCODES)}."
+            )
+        try:
+            bits = "".join(barcodes.get_barcode_class(kind)(content).build())
+        except Exception as e:
+            # EAN en vrienden stellen eisen aan lengte en controlecijfer; die
+            # melding is voor de gebruiker nuttiger dan een 500.
+            raise DesignError(f"'{content}' past niet in een {kind}: {e}") from e
+        if "1" not in bits:
+            raise DesignError("De codering leverde geen streepjes op.")
+
+        step = width / len(bits)
+        bars, index = [], 0
+        while index < len(bits):
+            if bits[index] == "0":
+                index += 1
+                continue
+            run = index
+            while run < len(bits) and bits[run] == "1":
+                run += 1
+            left = x0 + index * step
+            right = x0 + run * step
+            bars.append(
+                [(left, y0), (right, y0), (right, y0 + height), (left, y0 + height)]
+            )
+            index = run
+
+        with self.elements.undoscope("Streepjescode"):
+            node = self._add_polygon(bars, f"{kind} — {content[:24]}", subpaths=True)
+            self.elements.validate_ids()
+        self._refresh()
+        return {
+            "generator": "barcode",
+            "kind": kind,
+            "ids": [node.id] if node.id else [],
+            "bars": len(bars),
+        }
 
     # ---------------------------------------------------------------- doos
 

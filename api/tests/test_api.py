@@ -104,6 +104,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/generate/polygon",
         "/api/design/generate/box",
         "/api/design/generate/qrcode",
+        "/api/design/generate/arctext",
+        "/api/design/generate/barcode",
         "/api/presetariat/import",
         "/api/library/testgrids",
         "/api/library/testgrids/{grid_id}/photo",

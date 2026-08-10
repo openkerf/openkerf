@@ -13,7 +13,7 @@
 		onGenerate: (what: string, body: Record<string, unknown>) => Promise<string | null>;
 	} = $props();
 
-	type Tab = 'grid' | 'radial' | 'polygon' | 'box' | 'qrcode';
+	type Tab = 'grid' | 'radial' | 'polygon' | 'box' | 'qrcode' | 'barcode' | 'arctext';
 	let tab = $state<Tab>('grid');
 	let error = $state<string | null>(null);
 
@@ -30,13 +30,27 @@
 		lid: true
 	});
 	let qr = $state({ text: '', size_mm: '30' });
+	let bar = $state({ text: '', kind: 'code128', width_mm: '60', height_mm: '20' });
+	let arc = $state({
+		text: '',
+		cx_mm: '100',
+		cy_mm: '100',
+		radius_mm: '40',
+		font_size_mm: '10',
+		inside: false
+	});
+
+	// De typen die python-barcode aankan en die op een laser zinnig zijn.
+	const BARCODES = ['code128', 'code39', 'ean13', 'ean8', 'upca', 'itf', 'issn'];
 
 	const TABS: { id: Tab; label: string; needsSelection: boolean }[] = [
 		{ id: 'grid', label: 'Raster', needsSelection: true },
 		{ id: 'radial', label: 'Cirkel', needsSelection: true },
 		{ id: 'polygon', label: 'Veelhoek', needsSelection: false },
 		{ id: 'box', label: 'Doos', needsSelection: false },
-		{ id: 'qrcode', label: 'QR-code', needsSelection: false }
+		{ id: 'qrcode', label: 'QR-code', needsSelection: false },
+		{ id: 'barcode', label: 'Streepjescode', needsSelection: false },
+		{ id: 'arctext', label: 'Boogtekst', needsSelection: false }
 	];
 
 	let current = $derived(TABS.find((t) => t.id === tab)!);
@@ -131,7 +145,7 @@
 			thickness_mm: n(box.thickness_mm), finger_mm: n(box.finger_mm),
 			kerf_mm: n(box.kerf_mm), lid: box.lid
 		})}>Panelen maken</button>
-	{:else}
+	{:else if tab === 'qrcode'}
 		<p class="lead">
 			Een QR-code als vlakken, niet als plaatje: gegraveerde bitmaps worden op
 			hout vaak vaag, gevulde vierkanten niet.
@@ -142,6 +156,47 @@
 		</div>
 		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run({
 			text: qr.text.trim(), size_mm: n(qr.size_mm)
+		})}>Plaatsen</button>
+	{:else if tab === 'barcode'}
+		<p class="lead">
+			Een streepjescode als vlakken. EAN en UPC stellen eisen aan lengte en
+			controlecijfer; klopt het niet, dan zegt de app dat in plaats van een code
+			te maken die niet scant.
+		</p>
+		<div class="fields">
+			<label class="wide"><span>Inhoud</span><input type="text" placeholder="OPENKERF-1" bind:value={bar.text} /></label>
+			<label>
+				<span>Type</span>
+				<select bind:value={bar.kind}>
+					{#each BARCODES as item (item)}
+						<option value={item}>{item}</option>
+					{/each}
+				</select>
+			</label>
+			<label><span>Breedte (mm)</span><input class="mono" type="number" step="1" bind:value={bar.width_mm} /></label>
+			<label><span>Hoogte (mm)</span><input class="mono" type="number" step="1" bind:value={bar.height_mm} /></label>
+		</div>
+		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run({
+			text: bar.text.trim(), kind: bar.kind,
+			width_mm: n(bar.width_mm), height_mm: n(bar.height_mm)
+		})}>Plaatsen</button>
+	{:else}
+		<p class="lead">
+			Tekst langs een boog, voor een rond bordje of een deksel. Let op: hierna is
+			het een pad en geen tekst meer — de engine zou de tekst anders bij de
+			eerstvolgende wijziging weer recht renderen en de boog wegpoetsen.
+		</p>
+		<div class="fields">
+			<label class="wide"><span>Tekst</span><input type="text" placeholder="OPENKERF" bind:value={arc.text} /></label>
+			<label><span>Midden X (mm)</span><input class="mono" type="number" bind:value={arc.cx_mm} /></label>
+			<label><span>Midden Y (mm)</span><input class="mono" type="number" bind:value={arc.cy_mm} /></label>
+			<label><span>Straal (mm)</span><input class="mono" type="number" step="1" bind:value={arc.radius_mm} /></label>
+			<label><span>Letterhoogte (mm)</span><input class="mono" type="number" step="0.5" bind:value={arc.font_size_mm} /></label>
+			<label class="check"><input type="checkbox" bind:checked={arc.inside} /><span>Onderlangs</span></label>
+		</div>
+		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run({
+			text: arc.text.trim(), cx_mm: n(arc.cx_mm), cy_mm: n(arc.cy_mm),
+			radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm), inside: arc.inside
 		})}>Plaatsen</button>
 	{/if}
 </Dialog>
@@ -173,7 +228,8 @@
 	.fields label { display: grid; gap: 2px; font-size: 10px; color: var(--text-2); }
 	.fields .wide { grid-column: 1 / -1; }
 	.fields .check { display: flex; align-items: center; gap: 6px; align-self: end; }
-	input {
+	input,
+	select {
 		font: inherit;
 		width: 100%;
 		padding: 6px 8px;
