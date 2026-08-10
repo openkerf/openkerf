@@ -27,6 +27,7 @@ from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
 from .library import Library, LibraryError, default_path
+from .autosave import Autosave
 from .generators import Generators
 from .nesting import Nesting
 from .nodes import Nodes
@@ -163,6 +164,12 @@ class ApiServer:
         self.nodes = Nodes(kernel, self.commands)
         self.generators = Generators(kernel, self.commands)
         self.nesting = Nesting(kernel, self.editor)
+        self.autosave = Autosave(
+            kernel,
+            self.drawing,
+            self.document,
+            Path(self.library.path).with_name("openkerf-herstel.svg"),
+        )
         self.design = DesignReader(
             kernel,
             keep_operations=self.drawing.user_operations,
@@ -634,6 +641,27 @@ class ApiServer:
 
         # ----------------------------------------------------------- generatoren
 
+        @app.get("/api/design/autosave")
+        def autosave_state():
+            """Of er werk van een vorige sessie klaarstaat."""
+            return self.autosave.state()
+
+        @app.post("/api/design/autosave/restore", dependencies=write)
+        def restore_autosave():
+            def run():
+                if any(True for _ in self.kernel.elements.elems()):
+                    raise LibraryError(
+                        "Er staat al iets op het canvas. Maak eerst leeg; "
+                        "herstellen bovenop bestaand werk geeft een mengelmoes."
+                    )
+                return self.autosave.restore()
+
+            return manage(run)
+
+        @app.delete("/api/design/autosave", dependencies=write)
+        def discard_autosave():
+            return self.autosave.discard()
+
         @app.post("/api/design/path", dependencies=write, status_code=201)
         def create_path(body: dict):
             """Een vrij getekend pad: de pen."""
@@ -1020,6 +1048,10 @@ class ApiServer:
 
     def _make_handler(self, code):
         def handler(origin, *args):
+            # Boomwijzigingen zijn ook het sein om automatisch te bewaren; de
+            # rem zit in Autosave, want slepen levert tientallen signalen op.
+            if code in ("tree_changed", "rebuild_tree", "element_property_update"):
+                self.autosave.touch()
             self.bridge.publish_threadsafe(
                 {
                     "type": "signal",

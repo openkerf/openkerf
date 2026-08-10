@@ -44,6 +44,9 @@
 	let generatorsOpen = $state(false);
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let pendingFile = $state<File | null>(null);
+	// Werk van een vorige sessie. Nooit stilzwijgend terugladen: wie met een
+	// leeg canvas wil beginnen, moet dat kunnen.
+	let recovery = $state<{ exists: boolean; when: string | null } | null>(null);
 	let textOpen = $state(false);
 	let textAt = $state<{ x: number; y: number } | null>(null);
 	let editingText = $state<string | null>(null);
@@ -93,6 +96,11 @@
 			return;
 		}
 		await replaceWith(file);
+	}
+
+	function authHeaders(): Record<string, string> {
+		const token = localStorage.getItem('openkerf.token') ?? '';
+		return token ? { Authorization: `Bearer ${token}` } : {};
 	}
 
 	/** Schrijfroutes dragen het token; één plek in plaats van bij elke aanroep. */
@@ -257,7 +265,16 @@
 		control.refreshCapabilities();
 		library.load();
 		if ($page.url.searchParams.get('tab') === 'design') tab = 'design';
-		design.load().then(() => {
+		design.load().then(async () => {
+			// Alleen aanbieden als er niets staat: over bestaand werk heen
+			// terugzetten geeft een mengelmoes, en dat weigert de API ook.
+			if (design.isEmpty) {
+				const response = await fetch('/api/design/autosave');
+				if (response.ok) {
+					const state = await response.json();
+					if (state.exists) recovery = state;
+				}
+			}
 			const wanted = $page.url.searchParams.get('select');
 			if (wanted) {
 				const ids = wanted.split(',').filter(Boolean);
@@ -500,6 +517,35 @@
 		textAt = null;
 	}}
 />
+
+<!-- Werk van een vorige sessie: aanbieden, niet opdringen. -->
+<Dialog
+	title="Werk van een vorige sessie"
+	open={recovery?.exists === true}
+	width="420px"
+>
+	<p class="ask">
+		Er staat een automatisch bewaard ontwerp van {recovery?.when}. Terugzetten?
+	</p>
+	<div class="ask-actions">
+		<button
+			class="btn"
+			onclick={async () => {
+				await fetch('/api/design/autosave', { method: 'DELETE', headers: authHeaders() });
+				recovery = null;
+			}}
+		>Weggooien</button>
+		<button class="btn" onclick={() => (recovery = null)}>Later</button>
+		<button
+			class="btn primary"
+			onclick={async () => {
+				recovery = null;
+				await post('/api/design/autosave/restore', {});
+				await design.load();
+			}}
+		>Terugzetten</button>
+	</div>
+</Dialog>
 
 <!-- Openen zou werk weggooien: eerst vragen. -->
 <Dialog
