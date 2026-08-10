@@ -136,6 +136,14 @@ export class EditController {
 		return this.#send(`/api/design/elements/${encodeURIComponent(id)}/line`, 'PATCH', fields);
 	}
 
+	mirror(ids: string[], axis: 'horizontal' | 'vertical') {
+		return this.#post('/api/design/mirror', { ids, axis });
+	}
+
+	boolean(ids: string[], operation: string) {
+		return this.#post('/api/design/boolean', { ids, operation });
+	}
+
 	align(ids: string[], mode: string) {
 		return this.#post('/api/design/align', { ids, mode });
 	}

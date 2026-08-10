@@ -601,3 +601,90 @@ def test_moving_an_endpoint_of_a_rotated_line(kernel, drawing):
     )
     assert element["line"]["x2_mm"] == pytest.approx(70, abs=0.1)
     assert element["line"]["y2_mm"] == pytest.approx(70, abs=0.1)
+
+
+# --------------------------------------------------- spiegelen en boolean
+
+def test_mirroring_flips_the_shape_not_its_bounds(kernel, drawing):
+    """
+    A mirror about the centre leaves the bounding box alone, so bounds prove
+    nothing — the path has to be checked.
+    """
+    created = drawing.create("line", x1_mm=10, y1_mm=10, x2_mm=50, y2_mm=30)
+    before = DesignReader(kernel).snapshot()["elements"][0]["path"]
+
+    drawing.mirror(created["ids"], "horizontal")
+
+    after = DesignReader(kernel).snapshot()["elements"][0]["path"]
+    assert after != before
+    assert bounds_mm(kernel, created["ids"][0]) == [10.0, 10.0, 50.0, 30.0]
+
+
+def test_mirror_axis_is_validated(drawing):
+    created = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    with pytest.raises(DesignError):
+        drawing.mirror(created["ids"], "diagonaal")
+
+
+def two_overlapping(drawing):
+    a = drawing.create("rect", x_mm=10, y_mm=10, width_mm=40, height_mm=40)
+    b = drawing.create("rect", x_mm=30, y_mm=30, width_mm=40, height_mm=40)
+    return a["ids"] + b["ids"]
+
+
+@pytest.mark.parametrize("operation", ["union", "difference", "intersection", "xor"])
+def test_boolean_operations_produce_one_path(kernel, drawing, operation):
+    ids = two_overlapping(drawing)
+
+    result = drawing.boolean(ids, operation)
+
+    assert len(result["ids"]) == 1
+    remaining = list(kernel.elements.elems())
+    assert len(remaining) == 1
+    assert remaining[0].type == "elem path"
+
+
+def test_union_covers_both_shapes(kernel, drawing):
+    ids = two_overlapping(drawing)
+
+    result = drawing.boolean(ids, "union")
+
+    assert bounds_mm(kernel, result["ids"][0]) == [10.0, 10.0, 70.0, 70.0]
+
+
+def test_intersection_is_only_the_overlap(kernel, drawing):
+    ids = two_overlapping(drawing)
+
+    result = drawing.boolean(ids, "intersection")
+
+    assert bounds_mm(kernel, result["ids"][0]) == [30.0, 30.0, 50.0, 50.0]
+
+
+def test_boolean_needs_two_shapes(drawing):
+    one = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    with pytest.raises(DesignError):
+        drawing.boolean(one["ids"], "union")
+
+
+def test_unknown_boolean_is_refused(drawing):
+    ids = two_overlapping(drawing)
+    with pytest.raises(DesignError):
+        drawing.boolean(ids, "samenvoegen")
+
+
+def test_boolean_over_http(kernel, client):
+    a = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 40, "height_mm": 40},
+    ).json()["ids"]
+    b = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 30, "y_mm": 30, "width_mm": 40, "height_mm": 40},
+    ).json()["ids"]
+
+    response = client.post(
+        "/api/design/boolean", json={"ids": a + b, "operation": "union"}
+    )
+
+    assert response.status_code == 200
+    assert len(list(kernel.elements.elems())) == 1

@@ -69,6 +69,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/elements/duplicate",
         "/api/design/operations",
         "/api/design/align",
+        "/api/design/mirror",
+        "/api/design/boolean",
         "/api/design/group",
         "/api/design/ungroup",
         "/api/design/move",
