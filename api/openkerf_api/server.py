@@ -21,6 +21,7 @@ from pathlib import Path
 
 from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
+from .machines import MachineError, MachineManager
 from .status import StatusReader
 
 # Kernel signals worth forwarding to connected clients. Every one of these is
@@ -91,6 +92,30 @@ class EventBridge:
                 self.remove_client(websocket)
 
 
+def _spa_files(directory: str):
+    """
+    Static files with a single-page-app fallback.
+
+    The frontend is client-routed: /setup exists only in the browser, so an
+    unknown path has to return index.html instead of a 404. Real missing
+    assets (a stale .js hash) still need to 404, or the browser would try to
+    execute HTML as JavaScript.
+    """
+    from fastapi.staticfiles import StaticFiles
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    class SPAStaticFiles(StaticFiles):
+        async def get_response(self, path, scope):
+            try:
+                return await super().get_response(path, scope)
+            except StarletteHTTPException as e:
+                if e.status_code != 404 or "." in Path(path).name:
+                    raise
+                return await super().get_response("index.html", scope)
+
+    return SPAStaticFiles(directory=directory, html=True)
+
+
 class ApiServer:
     """Owns the uvicorn thread, the signal subscriptions and the event bridge."""
 
@@ -101,6 +126,7 @@ class ApiServer:
         self.frontend = Path(frontend).expanduser() if frontend else None
         self.reader = StatusReader(kernel)
         self.commands = CommandRunner(kernel)
+        self.machines = MachineManager(kernel, self.commands)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
 
@@ -152,6 +178,17 @@ class ApiServer:
                 raise HTTPException(
                     status_code=409,
                     detail={"command": e.command, "output": e.output},
+                ) from e
+
+        def manage(action, *args):
+            """Same for machine management, where failures are our own."""
+            try:
+                return action(*args)
+            except MachineError as e:
+                raise HTTPException(status_code=409, detail=str(e)) from e
+            except CommandError as e:
+                raise HTTPException(
+                    status_code=409, detail={"command": e.command, "output": e.output}
                 ) from e
 
         @asynccontextmanager
@@ -226,6 +263,47 @@ class ApiServer:
         def clear_queue():
             return act(self.commands.clear_queue)
 
+        # -------------------------------------------------------- machine setup
+
+        @app.get("/api/machines/catalog")
+        def machine_catalog():
+            """MeerK40t's own machine catalogue, grouped by family."""
+            return self.machines.catalog()
+
+        @app.get("/api/machines")
+        def machine_list():
+            return self.machines.list()
+
+        @app.post("/api/machines", dependencies=write, status_code=201)
+        def machine_create(body: dict):
+            info = body.get("info")
+            if not info:
+                raise HTTPException(status_code=422, detail="'info' ontbreekt.")
+            return manage(self.machines.create, info, body.get("label"))
+
+        @app.post("/api/machines/{path}/activate", dependencies=write)
+        def machine_activate(path: str):
+            return manage(self.machines.activate, path)
+
+        @app.post("/api/machines/{path}/rename", dependencies=write)
+        def machine_rename(path: str, body: dict):
+            label = (body.get("label") or "").strip()
+            if not label:
+                raise HTTPException(status_code=422, detail="'label' ontbreekt.")
+            return manage(self.machines.rename, path, label)
+
+        @app.delete("/api/machines/{path}", dependencies=write)
+        def machine_remove(path: str):
+            return manage(self.machines.remove, path)
+
+        @app.get("/api/machines/{path}/settings")
+        def machine_settings(path: str, essential: bool = False):
+            return manage(self.machines.settings, path, essential)
+
+        @app.patch("/api/machines/{path}/settings", dependencies=write)
+        def machine_update_settings(path: str, body: dict):
+            return manage(self.machines.update_settings, path, body)
+
         @app.websocket("/api/ws")
         async def websocket_endpoint(websocket: WebSocket):
             await websocket.accept()
@@ -251,11 +329,7 @@ class ApiServer:
         # The static mount has to come last: mounted at "/" it swallows every
         # path that no earlier route claimed.
         if self.frontend is not None and self.frontend.is_dir():
-            from fastapi.staticfiles import StaticFiles
-
-            app.mount(
-                "/", StaticFiles(directory=str(self.frontend), html=True), name="frontend"
-            )
+            app.mount("/", _spa_files(str(self.frontend)), name="frontend")
         else:
 
             @app.get("/", response_class=HTMLResponse)

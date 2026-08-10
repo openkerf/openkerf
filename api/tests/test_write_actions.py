@@ -28,15 +28,15 @@ def lan_server(kernel):
 
 # --------------------------------------------------------------------- guard
 
-def test_every_post_route_requires_the_write_guard(local_client):
+def test_every_mutating_route_requires_the_write_guard(local_client):
     """A new write endpoint must not slip in without authentication."""
-    posts = [
+    mutating = [
         route
         for route in local_client.app.routes
-        if "POST" in getattr(route, "methods", set())
+        if getattr(route, "methods", set()) & {"POST", "PATCH", "PUT", "DELETE"}
     ]
-    assert posts, "phase 2 adds write routes"
-    for route in posts:
+    assert mutating, "there are write routes"
+    for route in mutating:
         names = [getattr(d.call, "__name__", "") for d in route.dependant.dependencies]
         assert "require_write" in names, f"{route.path} has no write guard"
 

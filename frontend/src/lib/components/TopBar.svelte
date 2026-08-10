@@ -24,12 +24,13 @@
 <header class="topbar">
 	<div class="brand" title="OpenKerf"><Logo />OpenKerf</div>
 
-	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". -->
-	<div class="machine">
+	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
+	     leidt naar de setup — ook de route als er nog géén machine is. -->
+	<a class="machine" href="/setup" title="Machine kiezen of instellen">
 		<span class="dot {state}" aria-hidden="true"></span>
-		<span>{device?.label ?? 'Geen machine'}</span>
+		<span>{device?.label ?? 'Machine instellen'}</span>
 		<span class="muted">{STATE_LABEL[state]}</span>
-	</div>
+	</a>
 
 	<div class="spacer"></div>
 
@@ -79,6 +80,12 @@
 		padding: 6px 10px;
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
+		color: inherit;
+		text-decoration: none;
+		transition: background var(--transition);
+	}
+	.machine:hover {
+		background: var(--line);
 	}
 	.muted {
 		color: var(--text-2);

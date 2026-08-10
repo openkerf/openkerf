@@ -60,6 +60,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/job/resume",
         "/api/job/stop",
         "/api/spooler/clear",
+        "/api/machines",
+        "/api/machines/{path}/activate",
+        "/api/machines/{path}/rename",
     }
 
     methods = {
@@ -67,7 +70,7 @@ def test_write_routes_are_limited_to_the_known_set(client):
         for route in client.app.routes
         for method in getattr(route, "methods", set())
     }
-    assert methods <= {"GET", "HEAD", "POST"}
+    assert methods <= {"GET", "HEAD", "POST", "PATCH", "DELETE"}
 
 
 def test_console_command_is_registered(kernel):
