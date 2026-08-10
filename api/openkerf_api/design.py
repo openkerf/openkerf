@@ -44,17 +44,25 @@ class DesignReader:
         return self.kernel.elements
 
     def snapshot(self) -> dict:
+        # Give every node a stable identifier. The engine's own mechanism:
+        # existing ids are kept, missing ones get "meerk40t:N", duplicates are
+        # reassigned. SVG loading calls this too, so it is the identity the
+        # rest of MeerK40t already uses — and `elements.find_node(id)` resolves
+        # it back. Index-based ids would shift the moment the tree changes,
+        # which would make a selection point at the wrong element.
+        self.elements.validate_ids()
+
         element_ids = {}
         elements = []
         for index, node in enumerate(self.elements.elems()):
-            entry = self._element(node, f"e{index}")
+            entry = self._element(node, node.id or f"e{index}")
             if entry is not None:
                 element_ids[id(node)] = entry["id"]
                 elements.append(entry)
 
         operations = []
         for index, op in enumerate(self.elements.ops()):
-            entry = self._operation(op, f"o{index}", element_ids)
+            entry = self._operation(op, op.id or f"o{index}", element_ids)
             # An operation with no elements is not a layer the user sees; the
             # engine keeps a stack of unused defaults around.
             if entry is not None and entry["element_ids"]:

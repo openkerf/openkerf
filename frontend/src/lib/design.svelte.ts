@@ -60,11 +60,38 @@ export function isDesignSignal(code: string) {
 export class DesignStore {
 	design = $state<Design | null>(null);
 	loading = $state(false);
+	selectedId = $state<string | null>(null);
+	/** Gezet door de pagina om de URL mee te laten lopen met de selectie. */
+	onSelect: ((id: string | null) => void) | null = null;
 
 	#pending = false;
 
 	get elements() {
 		return this.design?.elements ?? [];
+	}
+
+	get selected(): DesignElement | null {
+		return this.elements.find((e) => e.id === this.selectedId) ?? null;
+	}
+
+	select(id: string | null) {
+		if (this.selectedId === id) return;
+		this.selectedId = id;
+		this.onSelect?.(id);
+	}
+
+	/** Maten van het geselecteerde element in mm, uit de bounds in Tats. */
+	get selectedSize(): { x: number; y: number; width: number; height: number } | null {
+		const element = this.selected;
+		const perMm = this.design?.units_per_mm;
+		if (!element?.bounds || !perMm) return null;
+		const [x0, y0, x1, y1] = element.bounds;
+		return {
+			x: x0 / perMm,
+			y: y0 / perMm,
+			width: (x1 - x0) / perMm,
+			height: (y1 - y0) / perMm
+		};
 	}
 
 	get operations() {
@@ -97,7 +124,12 @@ export class DesignStore {
 		this.loading = true;
 		try {
 			const response = await fetch('/api/design');
-			if (response.ok) this.design = await response.json();
+			if (response.ok) {
+				this.design = await response.json();
+				// Een selectie die door een wijziging verdwenen is, laten we los;
+				// een id dat er nog is blijft geselecteerd.
+				if (this.selectedId && !this.selected) this.selectedId = null;
+			}
 		} catch {
 			// Verbinding weg: de statusbalk meldt dat al, hier niets doen.
 		} finally {

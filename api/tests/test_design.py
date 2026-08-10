@@ -72,6 +72,32 @@ def test_unused_operations_are_left_out(drawing):
     assert 0 < reported < total_ops
 
 
+def test_ids_survive_a_change_to_the_tree(drawing):
+    """
+    Selection needs identity that outlives an edit. Index-based ids would
+    shift as soon as an element is added, pointing the selection elsewhere.
+    """
+    reader = DesignReader(drawing)
+    before = {e["id"]: e["type"] for e in reader.snapshot()["elements"]}
+
+    drawing.console("rect 15cm 1cm 2cm 2cm\n")
+    after = {e["id"]: e["type"] for e in reader.snapshot()["elements"]}
+
+    assert len(after) == len(before) + 1
+    for element_id, element_type in before.items():
+        assert after.get(element_id) == element_type
+
+
+def test_ids_resolve_back_to_a_node(drawing):
+    snapshot = DesignReader(drawing).snapshot()
+    element_id = snapshot["elements"][0]["id"]
+
+    node = drawing.elements.find_node(element_id)
+
+    assert node is not None
+    assert node.type == snapshot["elements"][0]["type"]
+
+
 def test_elements_can_belong_to_several_operations(drawing):
     """
     MeerK40t classifies an element into every operation whose colour matches,

@@ -14,6 +14,7 @@
 	// Vaste schaal: het bed vult 640px breed, hoogte volgt de verhouding.
 	let scale = $derived(640 / bed.width);
 	let head = $derived(device?.position.mm ?? null);
+	let selection = $derived(design.selectedSize);
 
 	// Linialen elke 50 mm.
 	let ticksX = $derived(
@@ -46,6 +47,11 @@
 				bed {bed.width.toFixed(0)} × {bed.height.toFixed(0)} mm
 			</span>
 
+			<!-- Klikken op het lege canvas deselecteert. Het toetsenbord-equivalent
+			     is Escape, afgevangen op window-niveau; de elementen zelf zijn
+			     focusbaar en met Enter/spatie te selecteren. -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<svg
 				viewBox="0 0 {bed.width} {bed.height}"
 				style="position: absolute; inset: 0; width: 100%; height: 100%"
@@ -53,6 +59,10 @@
 				aria-label={head
 					? `Laserkop op ${head[0].toFixed(1)}, ${head[1].toFixed(1)} millimeter`
 					: 'Positie van de laserkop onbekend'}
+				onclick={(e) => {
+					// Klikken naast een element heft de selectie op.
+					if (e.target === e.currentTarget) design.select(null);
+				}}
 			>
 				<!-- Het ontwerp. Eén schaaltransform rekent Tats om naar mm; de
 				     paddata zelf blijft onaangeroerd zoals de engine hem gaf. -->
@@ -64,12 +74,59 @@
 									d={element.path}
 									fill="none"
 									stroke={element.stroke ?? 'var(--text-2)'}
-									stroke-width="1.2"
+									stroke-width={design.selectedId === element.id ? 2 : 1.2}
 									vector-effect="non-scaling-stroke"
+								/>
+								<!-- Onzichtbare trefzone: een contour van 1 px is niet aan te
+								     klikken, zeker niet op een touchscreen. -->
+								<path
+									class="hit"
+									d={element.path}
+									fill="none"
+									stroke="transparent"
+									stroke-width="12"
+									vector-effect="non-scaling-stroke"
+									role="button"
+									tabindex="0"
+									aria-label="Selecteer {element.label}"
+									aria-pressed={design.selectedId === element.id}
+									onclick={(e) => {
+										e.stopPropagation();
+										design.select(element.id);
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											design.select(element.id);
+										}
+									}}
 								/>
 							{/if}
 						{/each}
 					</g>
+
+					<!-- Selectiecontour: de kerflijn, statisch gestreept. -->
+					{#if selection}
+						<g class="selection">
+							<rect
+								x={selection.x}
+								y={selection.y}
+								width={selection.width}
+								height={selection.height}
+							/>
+							{#each [[selection.x, selection.y], [selection.x + selection.width, selection.y], [selection.x, selection.y + selection.height], [selection.x + selection.width, selection.y + selection.height]] as [hx, hy] (`${hx},${hy}`)}
+								<rect class="handle" x={hx - 1.2} y={hy - 1.2} width="2.4" height="2.4" />
+							{/each}
+							<text
+								class="mono"
+								x={selection.x + selection.width / 2}
+								y={selection.y + selection.height + 5}
+								text-anchor="middle"
+							>
+								{selection.width.toFixed(1)} × {selection.height.toFixed(1)} mm
+							</text>
+						</g>
+					{/if}
 				{/if}
 
 				{#if head}
@@ -164,6 +221,30 @@
 		fill: none;
 		stroke: var(--accent);
 		stroke-width: 1;
+	}
+	.hit {
+		cursor: pointer;
+	}
+	.hit:focus-visible {
+		outline: none;
+		stroke: color-mix(in srgb, var(--accent) 35%, transparent);
+	}
+	/* De kerflijn als selectiecontour: statisch gestreept, animatie pas bij
+	   slepen — dat komt in de volgende plak. */
+	.selection rect {
+		fill: none;
+		stroke: var(--accent);
+		stroke-width: 1;
+		stroke-dasharray: 6 4;
+		vector-effect: non-scaling-stroke;
+	}
+	.selection .handle {
+		fill: var(--surface-1);
+		stroke-dasharray: none;
+	}
+	.selection text {
+		fill: var(--text-2);
+		font-size: 3.5px;
 	}
 	.empty {
 		position: absolute;
