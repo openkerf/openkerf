@@ -28,24 +28,38 @@ def _plain(value):
 
 def _label(node, fallback: str) -> str:
     """
-    A readable name. `label` may contain placeholders like "{percent}" that the
-    engine fills in via display_label(); when there is no label at all, str()
-    renders the node's own formatter — the same text the wxPython tree shows.
+    A readable name.
+
+    A plain `label` is the user's own name and wins. Templated labels like
+    "Engrave ({percent}, {speed}mm/s)" are not: `display_label()` blanks keys
+    it cannot resolve, which leaves "Engrave (, 12.0mm/s)". `str(node)` renders
+    the node's formatter against the full default map and produces what the
+    wxPython tree shows, so templates go through there instead.
     """
-    try:
-        if getattr(node, "label", None):
-            resolved = node.display_label()
-            if resolved:
-                return resolved
-    except Exception:
-        pass
+    label = _attr_or_none(node, "label")
+    if label and "{" not in label:
+        return label
     try:
         rendered = str(node)
         if rendered and "{" not in rendered:
             return rendered
     except Exception:
         pass
+    if label:
+        try:
+            resolved = node.display_label()
+            if resolved:
+                return resolved
+        except Exception:
+            pass
     return fallback
+
+
+def _attr_or_none(node, name):
+    try:
+        return getattr(node, name, None)
+    except Exception:
+        return None
 
 
 def _color(value) -> str | None:
