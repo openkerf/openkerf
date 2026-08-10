@@ -688,3 +688,64 @@ def test_boolean_over_http(kernel, client):
 
     assert response.status_code == 200
     assert len(list(kernel.elements.elems())) == 1
+
+
+# ------------------------------------------------- padbewerkingen/effects
+
+def test_offset_makes_a_second_contour(kernel, drawing):
+    created = drawing.create("rect", x_mm=20, y_mm=20, width_mm=40, height_mm=30)
+
+    result = drawing.offset(created["ids"], 3)
+
+    assert result["ids"] and result["ids"][0] != created["ids"][0]
+    assert len(list(kernel.elements.elems())) == 2
+    outer = bounds_mm(kernel, result["ids"][0])
+    inner = bounds_mm(kernel, created["ids"][0])
+    assert outer[0] < inner[0] and outer[2] > inner[2]
+
+
+def test_offset_of_nothing_is_refused(drawing):
+    created = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    with pytest.raises(DesignError):
+        drawing.offset(created["ids"], 0)
+
+
+def test_simplify_leaves_the_element_in_place(kernel, drawing):
+    created = drawing.create("rect", x_mm=10, y_mm=10, width_mm=40, height_mm=30)
+    before = bounds_mm(kernel, created["ids"][0])
+
+    drawing.simplify(created["ids"])
+
+    assert bounds_mm(kernel, created["ids"][0]) == before
+
+
+@pytest.mark.parametrize("effect", ["hatch", "wobble"])
+def test_an_effect_wraps_the_element(kernel, drawing, effect):
+    """
+    Effects are containers in the *element* tree, not operations: the command
+    hangs the node on first_node.parent and takes the shapes as children.
+    Looking for them among the operations finds nothing.
+    """
+    created = drawing.create("rect", x_mm=10, y_mm=10, width_mm=40, height_mm=30)
+
+    drawing.add_effect(created["ids"], effect)
+
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    assert element["effect"] is not None
+    assert element["effect"]["type"] == effect
+
+
+def test_an_element_without_an_effect_says_so(kernel, drawing):
+    created = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    element = next(
+        e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
+    )
+    assert element["effect"] is None
+
+
+def test_unknown_effect_is_refused(drawing):
+    created = drawing.create("rect", x_mm=10, y_mm=10, width_mm=10, height_mm=10)
+    with pytest.raises(DesignError):
+        drawing.add_effect(created["ids"], "glitter")

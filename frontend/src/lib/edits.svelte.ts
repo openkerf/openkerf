@@ -136,6 +136,18 @@ export class EditController {
 		return this.#send(`/api/design/elements/${encodeURIComponent(id)}/line`, 'PATCH', fields);
 	}
 
+	offset(ids: string[], distanceMm: number) {
+		return this.#post('/api/design/offset', { ids, distance_mm: distanceMm });
+	}
+
+	simplify(ids: string[]) {
+		return this.#post('/api/design/simplify', { ids });
+	}
+
+	effect(ids: string[], effect: string) {
+		return this.#post('/api/design/effect', { ids, effect });
+	}
+
 	mirror(ids: string[], axis: 'horizontal' | 'vertical') {
 		return this.#post('/api/design/mirror', { ids, axis });
 	}

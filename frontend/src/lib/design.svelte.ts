@@ -27,6 +27,8 @@ export type DesignElement = {
 	} | null;
 	/** Gezet voor een lijn: de twee eindpunten, want een lijn is geen kader. */
 	line: { x1_mm: number; y1_mm: number; x2_mm: number; y2_mm: number } | null;
+	/** Hatch of wobble waar dit element in zit. */
+	effect: { id: string | null; type: string; label: string } | null;
 	operation_id: string | null;
 	operation_ids: string[];
 };
