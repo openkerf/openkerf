@@ -8,13 +8,17 @@
 		design,
 		edits,
 		canEdit = false,
-		onEdited
+		tool = 'select',
+		onEdited,
+		onDrawn
 	}: {
 		device: Device | null;
 		design: DesignStore;
 		edits: EditController;
 		canEdit?: boolean;
+		tool?: string;
 		onEdited?: () => void;
+		onDrawn?: (shape: Record<string, unknown>) => void;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -24,8 +28,47 @@
 		height: device?.bed?.height_mm ?? FALLBACK.height
 	});
 
-	// Vaste schaal: het bed vult 640px breed, hoogte volgt de verhouding.
-	let scale = $derived(640 / bed.width);
+	// Passend: het bed vult 640px breed. Zoom en pan komen daar bovenop, zodat
+	// werken op een bed van 500x300 mm niet betekent dat je op 2px per mm zit.
+	let fitScale = $derived(640 / bed.width);
+	let zoom = $state(1);
+	let pan = $state({ x: 0, y: 0 });
+	let scale = $derived(fitScale * zoom);
+
+	function zoomAt(factor: number, clientX?: number, clientY?: number) {
+		const next = Math.min(20, Math.max(0.2, zoom * factor));
+		if (next === zoom) return;
+		if (clientX !== undefined && clientY !== undefined && frame) {
+			// Houd het punt onder de cursor op zijn plek.
+			const rect = frame.getBoundingClientRect();
+			const px = clientX - rect.left - pan.x;
+			const py = clientY - rect.top - pan.y;
+			const ratio = next / zoom;
+			pan = { x: pan.x - px * (ratio - 1), y: pan.y - py * (ratio - 1) };
+		}
+		zoom = next;
+	}
+
+	function fit() {
+		zoom = 1;
+		pan = { x: 0, y: 0 };
+	}
+
+	let frame = $state<HTMLElement | null>(null);
+	let panning = $state<{ x: number; y: number; from: { x: number; y: number } } | null>(null);
+
+	function startPan(event: PointerEvent) {
+		panning = { x: event.clientX, y: event.clientY, from: { ...pan } };
+		(event.target as Element).setPointerCapture?.(event.pointerId);
+	}
+
+	function movePan(event: PointerEvent) {
+		if (!panning) return;
+		pan = {
+			x: panning.from.x + (event.clientX - panning.x),
+			y: panning.from.y + (event.clientY - panning.y)
+		};
+	}
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
 
@@ -76,6 +119,47 @@
 	$effect(() => {
 		design.preview = preview;
 	});
+
+	/** Waar op het bed is geklikt, in millimeters. */
+	function pointerMm(event: MouseEvent) {
+		const svg = event.currentTarget as SVGSVGElement;
+		const rect = svg.getBoundingClientRect();
+		return {
+			x: ((event.clientX - rect.left) / rect.width) * bed.width,
+			y: ((event.clientY - rect.top) / rect.height) * bed.height
+		};
+	}
+
+	// Klik plaatst een vorm van een vaste maat; daarna sleep of schaal je hem.
+	// Slepen om te tekenen komt samen met de sleepselectie.
+	const DEFAULT_MM = 20;
+
+	function drawAt(event: MouseEvent) {
+		const at = pointerMm(event);
+		const half = DEFAULT_MM / 2;
+		if (tool === 'rect') {
+			onDrawn?.({
+				type: 'rect',
+				x_mm: at.x - half,
+				y_mm: at.y - half,
+				width_mm: DEFAULT_MM,
+				height_mm: DEFAULT_MM
+			});
+		} else if (tool === 'circle') {
+			onDrawn?.({ type: 'circle', cx_mm: at.x, cy_mm: at.y, r_mm: half });
+		} else if (tool === 'line') {
+			onDrawn?.({
+				type: 'line',
+				x1_mm: at.x - half,
+				y1_mm: at.y,
+				x2_mm: at.x + half,
+				y2_mm: at.y
+			});
+		} else if (tool === 'text') {
+			const text = prompt('Welke tekst?');
+			if (text) onDrawn?.({ type: 'text', x_mm: at.x, y_mm: at.y, text });
+		}
+	}
 
 	function mmPerPixel() {
 		return 1 / scale;
@@ -150,6 +234,47 @@
 		onEdited?.();
 	}
 
+	// Sleepselectie: alles wat het kader raakt, wordt geselecteerd.
+	let band = $state<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+	// Na het loslaten vuurt er nog een klik op dezelfde plek. Zonder deze vlag
+	// wist die de selectie die het sleepkader net gemaakt heeft.
+	let bandJustEnded = false;
+
+	function startBand(event: PointerEvent) {
+		const at = pointerMm(event);
+		band = { x1: at.x, y1: at.y, x2: at.x, y2: at.y };
+		(event.target as Element).setPointerCapture?.(event.pointerId);
+	}
+
+	function moveBand(event: PointerEvent) {
+		if (!band) return;
+		const at = pointerMm(event);
+		band = { ...band, x2: at.x, y2: at.y };
+	}
+
+	function endBand() {
+		if (!band) return;
+		const box = {
+			x0: Math.min(band.x1, band.x2),
+			y0: Math.min(band.y1, band.y2),
+			x1: Math.max(band.x1, band.x2),
+			y1: Math.max(band.y1, band.y2)
+		};
+		const dragged = box.x1 - box.x0 > 0.5 || box.y1 - box.y0 > 0.5;
+		band = null;
+		if (!dragged || !design.design) return;
+		bandJustEnded = true;
+
+		const perMm = design.design.units_per_mm;
+		const hit = design.elements.filter((element) => {
+			if (!element.bounds || element.hidden) return false;
+			const [ex0, ey0, ex1, ey1] = element.bounds.map((v) => v / perMm);
+			// Overlap, niet volledig omsluiten: zo hoef je niet exact te slepen.
+			return ex0 <= box.x1 && ex1 >= box.x0 && ey0 <= box.y1 && ey1 >= box.y0;
+		});
+		design.selectMany(hit.map((element) => element.id));
+	}
+
 	// Linialen elke 50 mm.
 	let ticksX = $derived(
 		Array.from({ length: Math.floor(bed.width / 50) + 1 }, (_, i) => i * 50)
@@ -159,13 +284,32 @@
 	);
 </script>
 
-<div class="canvas-wrap">
-	<div class="ruler-x" aria-hidden="true">
+<!-- Wiel zoomt, alt of middelste knop pant. Toetsenbord: de zoomknoppen
+     rechtsonder zijn gewone knoppen. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	class="canvas-wrap"
+	bind:this={frame}
+	onwheel={(e) => {
+		e.preventDefault();
+		zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY);
+	}}
+	onpointerdown={(e) => {
+		// Middelste knop of alt: slepen om te pannen.
+		if (e.button === 1 || e.altKey) {
+			e.preventDefault();
+			startPan(e);
+		}
+	}}
+	onpointermove={movePan}
+	onpointerup={() => (panning = null)}
+>
+	<div class="ruler-x" aria-hidden="true" style="padding-left: {pan.x}px">
 		{#each ticksX as tick (tick)}
 			<span style="width: {50 * scale}px">{tick}</span>
 		{/each}
 	</div>
-	<div class="ruler-y" aria-hidden="true">
+	<div class="ruler-y" aria-hidden="true" style="padding-top: {pan.y}px">
 		{#each ticksY as tick (tick)}
 			<span style="height: {50 * scale}px">{tick}</span>
 		{/each}
@@ -175,7 +319,8 @@
 		<div
 			class="bed"
 			style="width: {bed.width * scale}px; height: {bed.height * scale}px;
-			       background-size: {50 * scale}px {50 * scale}px"
+			       background-size: {50 * scale}px {50 * scale}px;
+			       transform: translate({pan.x}px, {pan.y}px)"
 		>
 			<span class="bed-label mono">
 				bed {bed.width.toFixed(0)} × {bed.height.toFixed(0)} mm
@@ -194,9 +339,26 @@
 					? `Laserkop op ${head[0].toFixed(1)}, ${head[1].toFixed(1)} millimeter`
 					: 'Positie van de laserkop onbekend'}
 				onclick={(e) => {
-					// Klikken naast een element heft de selectie op.
-					if (e.target === e.currentTarget) design.select(null);
+					if (e.target !== e.currentTarget) return;
+					if (tool !== 'select' && canEdit) {
+						drawAt(e);
+						return;
+					}
+					// Klikken naast een element heft de selectie op — behalve de klik
+					// die direct volgt op een sleepkader.
+					if (bandJustEnded) {
+						bandJustEnded = false;
+						return;
+					}
+					design.select(null);
 				}}
+				onpointerdown={(e) => {
+					if (e.target === e.currentTarget && tool === 'select' && !e.altKey && e.button === 0) {
+						startBand(e);
+					}
+				}}
+				onpointermove={moveBand}
+				onpointerup={endBand}
 			>
 				<!-- Het ontwerp. Eén schaaltransform rekent Tats om naar mm; de
 				     paddata zelf blijft onaangeroerd zoals de engine hem gaf. -->
@@ -337,6 +499,16 @@
 					{/if}
 				{/if}
 
+				{#if band}
+					<rect
+						class="band"
+						x={Math.min(band.x1, band.x2)}
+						y={Math.min(band.y1, band.y2)}
+						width={Math.abs(band.x2 - band.x1)}
+						height={Math.abs(band.y2 - band.y1)}
+					/>
+				{/if}
+
 				{#if head}
 					<!-- Live kop-positie. Er is nog geen ontwerp om te tonen: fase 1
 					     leest alleen status, het canvas zelf komt in fase 3. -->
@@ -348,6 +520,12 @@
 				{/if}
 			</svg>
 		</div>
+	</div>
+
+	<div class="zoom">
+		<button title="Uitzoomen" aria-label="Uitzoomen" onclick={() => zoomAt(1 / 1.25)}>−</button>
+		<button class="val mono" title="Passend maken" onclick={fit}>{Math.round(zoom * 100)}%</button>
+		<button title="Inzoomen" aria-label="Inzoomen" onclick={() => zoomAt(1.25)}>+</button>
 	</div>
 
 	{#if !device}
@@ -432,6 +610,41 @@
 	}
 	.hit {
 		cursor: pointer;
+	}
+	.band {
+		fill: color-mix(in srgb, var(--accent) 12%, transparent);
+		stroke: var(--accent);
+		stroke-width: 1;
+		stroke-dasharray: 4 3;
+		vector-effect: non-scaling-stroke;
+	}
+	.zoom {
+		position: absolute;
+		right: var(--space-3);
+		bottom: var(--space-3);
+		display: flex;
+		gap: 2px;
+		padding: 2px;
+		background: var(--surface-1);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		box-shadow: var(--shadow-float);
+		z-index: 3;
+	}
+	.zoom button {
+		min-width: 28px;
+		height: 28px;
+		border-radius: 4px;
+		color: var(--text-2);
+	}
+	.zoom button:hover {
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	.zoom .val {
+		font-size: 11px;
+		padding: 0 6px;
+		color: var(--text-1);
 	}
 	/* De globale :focus-visible-regel uit tokens.css tekent een outline van 2 px
 	   met offset. Op een SVG-vorm rendert die als rechthoek om de bounding box,

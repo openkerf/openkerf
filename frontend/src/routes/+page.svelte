@@ -6,6 +6,7 @@
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
+	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
 	import Canvas from '$components/Canvas.svelte';
@@ -13,6 +14,10 @@
 	import JobPanel from '$components/JobPanel.svelte';
 	import StatusBar from '$components/StatusBar.svelte';
 	import ToolRail from '$components/ToolRail.svelte';
+	import Dialog from '$components/Dialog.svelte';
+	import MaterialLibrary from '$components/MaterialLibrary.svelte';
+	import TestGrid from '$components/TestGrid.svelte';
+	import TestGridResult from '$components/TestGridResult.svelte';
 	import TopBar from '$components/TopBar.svelte';
 
 	const status = new StatusConnection();
@@ -27,6 +32,10 @@
 
 	let canEdit = $derived(!control.needsToken);
 	let hasSelection = $derived(design.selectedIds.length > 0);
+	let tool = $state<Tool>('select');
+	let libraryOpen = $state(false);
+	let pendingFile = $state<File | null>(null);
+	let gridOpen = $state(false);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
 	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
@@ -55,6 +64,65 @@
 		if (!hasSelection || !canEdit) return;
 		await edits.move(design.selectedIds, dx, dy);
 		await design.load();
+	}
+
+	/**
+	 * Openen vervangt, het voegt niet toe.
+	 *
+	 * De engine laadt een bestand bovenop wat er al staat. Dat is soms handig
+	 * maar het is niet wat "openen" betekent, dus maken we eerst leeg — en
+	 * vragen we het eerst als daarmee onopgeslagen werk zou verdwijnen.
+	 */
+	async function openFile(file: File) {
+		if (!canEdit) return;
+		if (!design.isEmpty && design.dirty) {
+			pendingFile = file;
+			return;
+		}
+		await replaceWith(file);
+	}
+
+	async function replaceWith(file: File) {
+		if (!design.isEmpty) {
+			if (!(await edits.clear()).ok) return;
+		}
+		if (await control.load(file)) {
+			design.select(null);
+			await design.load();
+		}
+	}
+
+	async function saveThenOpen() {
+		const file = pendingFile;
+		pendingFile = null;
+		if (!file) return;
+		// Downloaden telt als opslaan: de API markeert het ontwerp schoon.
+		window.location.href = '/api/design/export.svg';
+		setTimeout(() => replaceWith(file), 800);
+	}
+
+	async function draw(shape: Record<string, unknown>) {
+		if (!canEdit) return;
+		const result = await edits.draw(shape);
+		if (result.ok) {
+			await design.load();
+			// Terug naar selecteren: één vorm per klik is voorspelbaarder dan
+			// per ongeluk een rij vormen achterlaten.
+			tool = 'select';
+		}
+	}
+
+	async function removeSelection() {
+		if (!hasSelection || !canEdit) return;
+		if (await edits.remove(design.selectedIds)) {
+			design.select(null);
+			await design.load();
+		}
+	}
+
+	async function duplicateSelection() {
+		if (!hasSelection || !canEdit) return;
+		if (await edits.duplicate(design.selectedIds)) await design.load();
 	}
 
 	async function rotate(angleDeg: number) {
@@ -144,6 +212,18 @@
 			design.select(null);
 			return;
 		}
+		const typing = (e.target as HTMLElement | null)?.closest('input, textarea, select');
+		if (typing) return;
+		if ((e.key === 'Delete' || e.key === 'Backspace') && hasSelection && canEdit) {
+			e.preventDefault();
+			removeSelection();
+			return;
+		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && hasSelection && canEdit) {
+			e.preventDefault();
+			duplicateSelection();
+			return;
+		}
 		// Pijltjes verplaatsen 0,1 mm; met shift 1 mm (toegankelijkheidseis).
 		const step = e.shiftKey ? 1 : 0.1;
 		const moves: Record<string, [number, number]> = {
@@ -171,12 +251,26 @@
 	onSetSize={setSize}
 	onStart={requestStart}
 	onStop={() => control.stop()}
+	onOpenFile={openFile}
 	onToggleTheme={toggleTheme}
 />
 
 <div class="main">
-	<ToolRail />
-	<Canvas {device} {design} {edits} {canEdit} onEdited={() => design.load()} />
+	<ToolRail
+		bind:tool
+		{canEdit}
+		onOpenGrid={() => (gridOpen = true)}
+		onOpenLibrary={() => (libraryOpen = true)}
+	/>
+	<Canvas
+		{device}
+		{design}
+		{edits}
+		{canEdit}
+		{tool}
+		onEdited={() => design.load()}
+		onDrawn={draw}
+	/>
 
 	<aside class="panel" aria-label="Eigenschappen">
 		<div class="tabs" role="tablist">
@@ -208,11 +302,10 @@
 					{design}
 					{edits}
 					{canEdit}
-					{library}
 					onHistory={history}
 					onRotate={rotate}
 					onAssign={assign}
-					onApplied={() => design.load()}
+					onLayerChange={() => design.load()}
 				/>
 			{:else}
 				<JobPanel
@@ -228,6 +321,45 @@
 </div>
 
 <StatusBar {device} state={machine} job={status.activeJob} connected={status.connected} />
+
+<!-- Bibliotheken en gereedschappen als eigen venster: in 280px kun je niet
+     zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->
+<!-- Openen zou werk weggooien: eerst vragen. -->
+<Dialog
+	title="Niet-opgeslagen wijzigingen"
+	open={pendingFile !== null}
+	width="420px"
+>
+	<p class="ask">
+		Dit ontwerp is gewijzigd sinds de laatste keer opslaan. Openen vervangt wat er nu staat.
+	</p>
+	<div class="ask-actions">
+		<button class="btn" onclick={() => (pendingFile = null)}>Annuleren</button>
+		<button
+			class="btn"
+			onclick={() => {
+				const file = pendingFile;
+				pendingFile = null;
+				if (file) replaceWith(file);
+			}}
+		>Zonder opslaan openen</button>
+		<button class="btn primary" onclick={saveThenOpen}>Opslaan en openen</button>
+	</div>
+</Dialog>
+
+<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
+	<MaterialLibrary
+		{library}
+		operations={design.operations}
+		{canEdit}
+		onApplied={() => design.load()}
+	/>
+</Dialog>
+
+<Dialog title="Testraster" bind:open={gridOpen} width="640px">
+	<TestGrid {library} {canEdit} onGenerated={() => design.load()} />
+	<TestGridResult {library} {canEdit} />
+</Dialog>
 
 <style>
 	.main {
@@ -265,6 +397,26 @@
 		bottom: -1px;
 		width: calc(100% - var(--space-8));
 		height: 2px;
+	}
+	:global(.ask) { margin: 0 0 var(--space-4); }
+	:global(.ask-actions) {
+		display: flex;
+		gap: var(--space-2);
+		justify-content: flex-end;
+		flex-wrap: wrap;
+	}
+	:global(.ask-actions .btn) {
+		padding: 8px 14px;
+		border-radius: var(--radius-field);
+		border: 1px solid var(--line);
+		background: var(--surface-1);
+		font-weight: 500;
+	}
+	:global(.ask-actions .btn:hover) { background: var(--surface-2); }
+	:global(.ask-actions .btn.primary) {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-ink);
 	}
 	.panel-scroll {
 		flex: 1;

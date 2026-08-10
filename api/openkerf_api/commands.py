@@ -33,9 +33,11 @@ class CommandError(RuntimeError):
 
 
 class CommandRunner:
-    def __init__(self, kernel):
+    def __init__(self, kernel, document=None):
         self.kernel = kernel
         self._lock = threading.Lock()
+        # Gezet door de server; elke schrijvende opdracht maakt het ontwerp vuil.
+        self.document = document
 
     def run(self, command: str) -> list[str]:
         """Execute one console line and return its output. Raises CommandError."""
@@ -49,6 +51,8 @@ class CommandRunner:
             finally:
                 channel.unwatch(captured.append)
 
+        if self.document is not None:
+            self.document.touch(command)
         output = [ANSI.sub("", str(line)).strip() for line in captured]
         output = [line for line in output if line]
         for line in output:

@@ -153,3 +153,28 @@ def test_labels_have_their_placeholders_filled_in(drawing):
     for entry in snapshot["operations"] + snapshot["elements"]:
         assert "{" not in entry["label"], entry["label"]
         assert entry["label"].strip()
+
+
+def test_elements_report_the_group_they_belong_to(kernel):
+    """
+    Without this the canvas draws a grid as loose squares, and each one can be
+    dragged out of the grid on its own.
+    """
+    kernel.console("rect 10mm 10mm 10mm 10mm\n")
+    kernel.console("rect 30mm 10mm 10mm 10mm\n")
+    kernel.elements.set_emphasis(list(kernel.elements.elems()))
+    kernel.console("group\n")
+
+    snapshot = DesignReader(kernel).snapshot()
+
+    groups = {e["group_id"] for e in snapshot["elements"]}
+    assert len(groups) == 1
+    assert groups.pop() is not None
+
+
+def test_a_loose_element_has_no_group(kernel):
+    kernel.console("rect 10mm 10mm 10mm 10mm\n")
+
+    snapshot = DesignReader(kernel).snapshot()
+
+    assert snapshot["elements"][0]["group_id"] is None

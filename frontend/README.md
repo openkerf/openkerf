@@ -45,7 +45,7 @@ meerk40t --no-gui -d -e "openkerf -p 8080 -f $(pwd)/build"
 | Meervoudige selectie (shift-klik) | live |
 | Bewerking (laag) toekennen aan de selectie | live |
 | Bewerken-tab: lagen met snelheid/vermogen en elementaantal | live |
-| Materiaalbibliotheek: materialen, presets, toepassen op een laag | live (fase 4, eerste plak) |
+| Materiaalbibliotheek: materialen, presets, toepassen op een laag | live, in een eigen venster |
 | Testraster: bereik instellen, voorbeeld, genereren | live |
 | Testraster: foto toevoegen, beste vakje(s) aanwijzen, preset eruit | live |
 | Kader tonen | uitgeschakeld — beweging is fase 3 |
@@ -164,3 +164,23 @@ in meerdere bewerkingen zitten.
 
 Bewerken vereist dezelfde token als de jobcontrole; zonder token zijn de grepen
 inactief en zegt het paneel waarom.
+
+## Waar staat wat
+
+Na de eerste testronde bijgesteld (zie DESIGN-SYSTEM.md):
+
+- **Rechterpaneel** — het hier-en-nu: selectie, lagen van dit ontwerp, en in de
+  Job-tab de machinebediening en de lopende job.
+- **Eigen venster** — materiaalbibliotheek en testraster. Daar zoek en vergelijk
+  je, en 280px is daar te smal voor. Openen met Escape of een klik ernaast dicht.
+- **Tool-rail links** — waar je een handeling begint: tekenen, tekst, én het
+  testraster en de bibliotheek. Een gereedschap dat alleen rechts te vinden is,
+  vindt niemand.
+- **Bovenbalk** — wat met het document als geheel te maken heeft: openen,
+  opslaan, en de machine met start en stop.
+
+**Openen vervangt.** De engine laadt een bestand bovenop wat er al staat; dat is
+niet wat openen betekent, dus maakt de frontend eerst leeg. Zijn er
+onopgeslagen wijzigingen, dan vraagt hij eerst: opslaan en openen, zonder
+opslaan openen, of annuleren. Of er wijzigingen zijn komt uit `dirty` in
+`/api/design`.

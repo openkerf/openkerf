@@ -187,6 +187,8 @@ class DesignEditor:
 
     def _refresh(self):
         """Tell the rest of the engine the tree changed, as the GUI does."""
+        if getattr(self.runner, "document", None) is not None:
+            self.runner.document.touch()
         self.elements.signal("rebuild_tree", "all")
         self.elements.signal("refresh_scene", "Scene")
 

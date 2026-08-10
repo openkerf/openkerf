@@ -76,6 +76,62 @@ export class EditController {
 		return this.#post('/api/design/unassign', { ids, operation_id: operationId });
 	}
 
+	/** Tekenen: de vorm komt op het bed en is meteen geselecteerd. */
+	draw(shape: Record<string, unknown>) {
+		return this.#post('/api/design/elements', shape);
+	}
+
+	remove(ids: string[] | string) {
+		return this.#post('/api/design/elements/delete', { ids });
+	}
+
+	duplicate(ids: string[] | string) {
+		return this.#post('/api/design/elements/duplicate', { ids });
+	}
+
+	addLayer(type: string, label?: string, speed?: number, powerPercent?: number) {
+		return this.#post('/api/design/operations', {
+			type,
+			label,
+			speed,
+			power_percent: powerPercent
+		});
+	}
+
+	async updateLayer(id: string, fields: Record<string, unknown>) {
+		return this.#send(`/api/design/operations/${encodeURIComponent(id)}`, 'PATCH', fields);
+	}
+
+	async removeLayer(id: string) {
+		return this.#send(`/api/design/operations/${encodeURIComponent(id)}`, 'DELETE');
+	}
+
+	async #send(path: string, method: string, body?: unknown): Promise<EditResult> {
+		this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch(path, {
+				method,
+				headers: this.#headers(),
+				body: body === undefined ? undefined : JSON.stringify(body)
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return { ok: false, idsInvalidated: false };
+			}
+			return { ok: true, idsInvalidated: false };
+		} catch (e) {
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return { ok: false, idsInvalidated: false };
+		} finally {
+			this.busy = false;
+		}
+	}
+
+	clear() {
+		return this.#post('/api/design/clear');
+	}
+
 	undo() {
 		return this.#post('/api/design/undo');
 	}

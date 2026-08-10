@@ -22,6 +22,8 @@ from pathlib import Path
 from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
+from .document import Document
+from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .library import Library, LibraryError, default_path
 from .testgrid import TestGridGenerator, plan_grid
@@ -141,11 +143,18 @@ class ApiServer:
         self.bind = bind
         self.frontend = Path(frontend).expanduser() if frontend else None
         self.reader = StatusReader(kernel)
-        self.commands = CommandRunner(kernel)
+        self.document = Document()
+        self.commands = CommandRunner(kernel, self.document)
         self.machines = MachineManager(kernel, self.commands)
-        self.design = DesignReader(kernel)
-        self.editor = DesignEditor(kernel, self.commands)
         self.library = Library(library_path or default_path(kernel))
+        self.editor = DesignEditor(kernel, self.commands)
+        self.drawing = Drawing(kernel, self.commands)
+        self.design = DesignReader(
+            kernel,
+            keep_operations=self.drawing.user_operations,
+            grid_operations=lambda: self.library.grid_operations(),
+        )
+        self.drawing.grid_operations = lambda: self.library.grid_operations()
         self.grids = TestGridGenerator(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
@@ -242,7 +251,10 @@ class ApiServer:
         @app.get("/api/design")
         def design():
             """Element outlines and the operations that claim them."""
-            return self.design.snapshot()
+            snapshot = self.design.snapshot()
+            # Zodat de frontend weet of openen werk zou weggooien.
+            snapshot["dirty"] = self.document.dirty
+            return snapshot
 
         @app.get("/api/capabilities")
         def capabilities():
@@ -264,7 +276,10 @@ class ApiServer:
             target = self._upload_path(file.filename or "upload.svg")
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
-            return act(self.commands.load_file, str(target))
+            result = act(self.commands.load_file, str(target))
+            # Net geladen: het ontwerp is gelijk aan het bestand.
+            self.document.clean()
+            return result
 
         @app.post("/api/job/start", dependencies=write)
         def start_job():
@@ -287,6 +302,62 @@ class ApiServer:
         @app.post("/api/spooler/clear", dependencies=write)
         def clear_queue():
             return act(self.commands.clear_queue)
+
+        # ------------------------------------------------ tekenen en lagen
+
+        @app.post("/api/design/elements", dependencies=write, status_code=201)
+        def create_element(body: dict):
+            """Draw a shape or a line of text on the bed."""
+            kind = body.get("type")
+            return manage(lambda: self.drawing.create(kind, **body))
+
+        @app.post("/api/design/clear", dependencies=write)
+        def clear_design():
+            """Leeg het ontwerp — wat openen doet voordat het een bestand inleest."""
+            def run():
+                self.kernel.elements.clear_all()
+                self.drawing.user_operations.clear()
+                self.document.clean()
+                return {"cleared": True}
+
+            return manage(run)
+
+        @app.get("/api/design/export.svg")
+        def export_design(filename: str = "ontwerp.svg"):
+            """Download the design as SVG — otherwise the work is fleeting."""
+            from fastapi.responses import FileResponse
+
+            path = manage(self.drawing.export_svg, filename)
+            self.document.clean()
+            return FileResponse(
+                path, media_type="image/svg+xml", filename=path.name
+            )
+
+        @app.post("/api/design/elements/delete", dependencies=write)
+        def delete_elements(body: dict):
+            return manage(self.drawing.delete, body.get("ids"))
+
+        @app.post("/api/design/elements/duplicate", dependencies=write)
+        def duplicate_elements(body: dict):
+            return manage(self.drawing.duplicate, body.get("ids"))
+
+        @app.post("/api/design/operations", dependencies=write, status_code=201)
+        def create_operation(body: dict):
+            return manage(
+                self.drawing.create_operation,
+                body.get("type"),
+                body.get("label"),
+                body.get("speed"),
+                body.get("power_percent"),
+            )
+
+        @app.patch("/api/design/operations/{operation_id}", dependencies=write)
+        def update_operation(operation_id: str, body: dict):
+            return manage(lambda: self.drawing.update_operation(operation_id, **body))
+
+        @app.delete("/api/design/operations/{operation_id}", dependencies=write)
+        def delete_operation(operation_id: str):
+            return manage(self.drawing.delete_operation, operation_id)
 
         # ------------------------------------------------------- design edits
 
@@ -399,6 +470,12 @@ class ApiServer:
                 plan, cells = plan_grid(**body)
                 drawn = self.grids.draw(plan, cells)
                 grid = self.library.add_test_grid(plan, drawn)
+                # Het raster is één object op het canvas; de cellen houden hun
+                # eigen operaties, want die zijn de sweep.
+                group_id = self.grids.group_drawn(drawn)
+                if group_id:
+                    self.library.set_grid_group(grid["id"], group_id)
+                    grid = self.library.test_grid(grid["id"])
                 return grid
 
             return manage(run)
@@ -410,6 +487,37 @@ class ApiServer:
         @app.get("/api/library/testgrids/{grid_id}")
         def get_test_grid(grid_id: int):
             return manage(self.library.test_grid, grid_id)
+
+        @app.post("/api/library/testgrids/{grid_id}/remove-from-design", dependencies=write)
+        def remove_grid_from_design(grid_id: int):
+            """
+            Haal het raster van het canvas: de groep én al zijn cel-operaties.
+
+            Het bewaarde raster blijft bestaan — daar hangen de foto en de
+            herkomst van de presets aan.
+            """
+            def run():
+                grid = self.library.test_grid(grid_id)
+                removed = {"elements": 0, "operations": 0}
+                if grid.get("group_id"):
+                    node = self.kernel.elements.find_node(grid["group_id"])
+                    if node is not None:
+                        removed["elements"] = len(list(node.flat())) - 1
+                        node.remove_node(children=True, destroy=True)
+                for cell in grid["cells"]:
+                    for key in ("element_id", "operation_id"):
+                        node = self.kernel.elements.find_node(cell.get(key) or "")
+                        if node is not None:
+                            node.remove_node(children=True, destroy=True)
+                            removed["operations" if key == "operation_id" else "elements"] += 1
+                for op in list(self.kernel.elements.ops()):
+                    if getattr(op, "label", None) == "Raster-labels" and not list(op.children):
+                        op.remove_node()
+                self.library.set_grid_group(grid_id, None)
+                self.kernel.elements.signal("rebuild_tree", "all")
+                return removed
+
+            return manage(run)
 
         @app.delete("/api/library/testgrids/{grid_id}", dependencies=write)
         def remove_test_grid(grid_id: int):

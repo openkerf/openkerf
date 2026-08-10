@@ -109,20 +109,6 @@
 			</button>
 		</div>
 
-		<label class="upload">
-			<input
-				type="file"
-				accept=".svg,.dxf,.rd,.png,.jpg,.jpeg,.gif,.bmp"
-				disabled={!actions?.load || blocked}
-				onchange={(e) => {
-					const input = e.currentTarget as HTMLInputElement;
-					const file = input.files?.[0];
-					if (file) control.load(file);
-					input.value = '';
-				}}
-			/>
-			<span>Ontwerp laden…</span>
-		</label>
 	{/if}
 
 	{#if actions && !actions.pause}
@@ -213,20 +199,6 @@
 	}
 	.muted {
 		color: var(--text-2);
-	}
-	.upload {
-		display: block;
-		margin-top: var(--space-2);
-	}
-	.upload input {
-		display: block;
-		width: 100%;
-		font: inherit;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.upload span {
-		display: none;
 	}
 	.token {
 		border: 1px solid var(--warn);

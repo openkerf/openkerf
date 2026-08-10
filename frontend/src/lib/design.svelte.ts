@@ -15,6 +15,8 @@ export type DesignElement = {
 	fill: string | null;
 	bounds: [number, number, number, number] | null;
 	path: string;
+	/** Groep waar dit element in zit; een raster is één groep. */
+	group_id: string | null;
 	operation_id: string | null;
 	operation_ids: string[];
 };
@@ -29,10 +31,20 @@ export type DesignOperation = {
 	passes: number | null;
 	output: boolean;
 	element_ids: string[];
+	/** Gezet als deze laag een cel van een testraster is. */
+	grid?: {
+		grid_id: number;
+		row: number;
+		column: number;
+		speed_mm_s: number;
+		power_percent: number;
+	} | null;
 };
 
 export type Design = {
 	units_per_mm: number;
+	/** Zijn er wijzigingen sinds het laatst opslaan of openen? */
+	dirty: boolean;
 	elements: DesignElement[];
 	operations: DesignOperation[];
 };
@@ -77,6 +89,14 @@ export class DesignStore {
 	}
 
 	/** Eerste selectie; voor panelen die één element tonen. */
+	get dirty() {
+		return this.design?.dirty ?? false;
+	}
+
+	get isEmpty() {
+		return this.elements.length === 0;
+	}
+
 	get selected(): DesignElement | null {
 		return this.elements.find((e) => e.id === this.selectedIds[0]) ?? null;
 	}
@@ -93,8 +113,34 @@ export class DesignStore {
 		return this.selectedIds.includes(id);
 	}
 
+	/**
+	 * Een groep is één ding. Klik je een lid aan, dan krijg je de hele groep —
+	 * anders sleep je een los vierkant uit een testraster.
+	 */
+	#expand(id: string): string[] {
+		const element = this.elements.find((e) => e.id === id);
+		if (!element?.group_id) return [id];
+		return this.elements.filter((e) => e.group_id === element.group_id).map((e) => e.id);
+	}
+
 	select(id: string | null) {
-		const next = id ? [id] : [];
+		const next = id ? this.#expand(id) : [];
+		if (same(next, this.selectedIds)) return;
+		this.selectedIds = next;
+		this.onSelect?.(this.selectedIds);
+	}
+
+	/**
+	 * Meerdere elementen in één keer, bijvoorbeeld uit een sleepkader.
+	 *
+	 * Niet select() gevolgd door toggle(): die tweede zou een groep die de
+	 * eerste net toevoegde meteen weer weghalen, waardoor een sleepkader over
+	 * een groep niets leek te selecteren.
+	 */
+	selectMany(ids: string[]) {
+		const expanded = new Set<string>();
+		for (const id of ids) this.#expand(id).forEach((member) => expanded.add(member));
+		const next = [...expanded];
 		if (same(next, this.selectedIds)) return;
 		this.selectedIds = next;
 		this.onSelect?.(this.selectedIds);
@@ -102,9 +148,11 @@ export class DesignStore {
 
 	/** Shift-klik: toevoegen of juist weghalen. */
 	toggle(id: string) {
-		this.selectedIds = this.selectedIds.includes(id)
-			? this.selectedIds.filter((x) => x !== id)
-			: [...this.selectedIds, id];
+		const members = this.#expand(id);
+		const inside = members.every((m) => this.selectedIds.includes(m));
+		this.selectedIds = inside
+			? this.selectedIds.filter((x) => !members.includes(x))
+			: [...this.selectedIds, ...members.filter((m) => !this.selectedIds.includes(m))];
 		this.onSelect?.(this.selectedIds);
 	}
 
