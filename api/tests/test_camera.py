@@ -201,3 +201,35 @@ def test_the_routes_work_end_to_end(client, source):
 
 def test_a_frame_without_a_camera_is_a_409(client):
     assert client.get("/api/camera/frame.png").status_code == 409
+
+
+def test_the_failure_says_what_to_do_about_it(camera, monkeypatch):
+    """
+    "Er is geen beeld" helpt niemand. Het verschil tussen "er zit geen camera
+    aan" en "dit programma mag niet bij de camera" bepaalt volledig wat je
+    eraan moet doen.
+    """
+    monkeypatch.setattr(camera, "detected", lambda: [])
+    zonder = camera._why_no_picture("0")
+
+    monkeypatch.setattr(camera, "detected", lambda: ["MacBook Pro-camera"])
+    met = camera._why_no_picture("0")
+
+    assert "geen enkele camera" in zonder
+    assert "MacBook Pro-camera" in met
+    assert zonder != met
+
+
+def test_opencvs_broken_permission_request_is_skipped():
+    """
+    OpenCV vraagt op macOS zelf om toestemming, maar dat kan alleen vanaf de
+    hoofdthread — en de engine opent de camera in een werkthread. Zonder deze
+    vlag mislukt het verzoek en verschijnt er nooit een venster.
+    """
+    import os
+
+    assert os.environ.get("OPENCV_AVFOUNDATION_SKIP_AUTH") == "1"
+
+
+def test_the_state_says_which_cameras_the_machine_sees(client):
+    assert isinstance(client.get("/api/camera").json().get("detected", []), list)

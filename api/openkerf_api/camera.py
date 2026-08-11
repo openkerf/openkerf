@@ -22,8 +22,18 @@ Drie keuzes die het soepel maken:
 
 from __future__ import annotations
 
+import os
+import platform
+import subprocess
 import threading
 import time
+
+# OpenCV vraagt op macOS zelf om cameratoestemming, maar dat kan alleen vanaf de
+# hoofdthread — en de engine opent de camera in een werkthread. Het verzoek
+# mislukt dan met "can not spin main run loop from other thread" en er komt
+# nooit een venster. Deze vlag slaat dat verzoek over; de toestemming zelf moet
+# dan al geregeld zijn, en dat is precies wat we in de foutmelding uitleggen.
+os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "1")
 
 from .edits import DesignError
 
@@ -84,13 +94,14 @@ class Camera:
             "uri": str(camera.uri),
             "viewers": self._viewers,
             "calibrated": bool(camera.perspective),
+            "detected": self.detected(),
             "perspective": [list(map(float, point)) for point in camera.perspective or []],
             "corrected": bool(camera.correction_perspective),
             "frame": self._size(camera),
         }
 
     def cameras(self) -> list[dict]:
-        """De camera's die de engine kent, plus hun omschrijving."""
+        """De camera's die de engine kent, plus wat het apparaat zelf ziet."""
         if not self.available:
             raise DesignError(IMPORT_HINT)
         found = []
@@ -121,12 +132,66 @@ class Camera:
         while time.monotonic() < deadline and camera.get_display_frame() is None:
             time.sleep(0.1)
         if camera.get_display_frame() is None:
-            raise DesignError(
-                f"Geen beeld van camera '{camera.uri}'. Staat hij aan, en heeft dit "
-                "programma toestemming om de camera te gebruiken?"
-            )
+            raise DesignError(self._why_no_picture(camera.uri))
         self._idle_since = None
         return self.state()
+
+    def _why_no_picture(self, uri) -> str:
+        """
+        Een bruikbare uitleg in plaats van "er is geen beeld".
+
+        Het verschil tussen "er zit geen camera aan" en "dit programma mag niet
+        bij de camera" bepaalt volledig wat je eraan moet doen, en dat verschil
+        kunnen we opzoeken.
+        """
+        found = self.detected()
+        base = f"Geen beeld van camera '{uri}'."
+        if not found:
+            return (
+                f"{base} Dit apparaat ziet geen enkele camera. Zit hij aangesloten "
+                "en aan?"
+            )
+        names = ", ".join(found)
+        if platform.system() == "Darwin":
+            return (
+                f"{base} Er is wel een camera ({names}), dus dit is bijna zeker "
+                "een toestemmingskwestie: macOS geeft camera-toegang per "
+                "programma, en het programma dat de engine startte — je terminal "
+                "— moet aangevinkt staan in Systeeminstellingen › Privacy en "
+                "beveiliging › Camera. Daarna de engine opnieuw starten; het "
+                "toestemmingsvenster verschijnt hier niet vanzelf, omdat de "
+                "camera in een achtergrondthread geopend wordt."
+            )
+        return (
+            f"{base} Er is wel een camera ({names}); mogelijk is hij in gebruik "
+            "door een ander programma, of klopt het cameranummer niet."
+        )
+
+    def detected(self) -> list[str]:
+        """Welke camera's dit apparaat zelf ziet, buiten OpenCV om."""
+        system = platform.system()
+        try:
+            if system == "Darwin":
+                out = subprocess.run(
+                    ["system_profiler", "SPCameraDataType"],
+                    capture_output=True,
+                    text=True,
+                    timeout=8,
+                ).stdout
+                return [
+                    line.strip().rstrip(":")
+                    for line in out.splitlines()
+                    if line.strip().endswith(":") and not line.startswith("Camera")
+                    and line.startswith("    ")
+                ]
+            if system == "Linux":
+                from pathlib import Path
+
+                return sorted(p.name for p in Path("/dev").glob("video*"))
+        except Exception:
+            # Uitzoeken wélke camera's er zijn mag nooit het starten blokkeren.
+            return []
+        return []
 
     def stop(self) -> dict:
         camera = self.service()
