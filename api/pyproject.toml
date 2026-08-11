@@ -18,6 +18,7 @@ dependencies = [
     "python-multipart>=0.0.9",  # file uploads on /api/job/load
     "segno>=1.6",  # QR-codes als pad, niet als plaatje
     "python-barcode>=0.15",  # streepjescodes: codering, wij tekenen de streepjes
+    "fonttools>=4.50",  # eigen lettertypen omzetten naar wat de engine leest
 ]
 
 [project.optional-dependencies]

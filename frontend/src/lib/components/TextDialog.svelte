@@ -35,6 +35,61 @@
 	let align = $state('start');
 	let loaded = false;
 	let filled = false;
+	// Eigen lettertypen: de engine leest alleen .ttf en houdt zijn lijst in een
+	// cache, dus een net geïnstalleerde .otf is onzichtbaar tot je hem importeert.
+	let importing = $state(false);
+	let importable = $state<Font[]>([]);
+	let importFilter = $state('');
+	let busy = $state<string | null>(null);
+	let importError = $state<string | null>(null);
+
+	async function loadFonts(refresh = false) {
+		const response = await fetch(`/api/design/fonts${refresh ? '?refresh=true' : ''}`);
+		fonts = response.ok ? await response.json() : [];
+	}
+
+	async function openImport() {
+		importing = !importing;
+		if (!importing || importable.length) return;
+		const response = await fetch('/api/design/fonts/importable');
+		importable = response.ok ? await response.json() : [];
+	}
+
+	async function bring(item: Font) {
+		busy = item.file;
+		importError = null;
+		try {
+			const token = localStorage.getItem('openkerf.token') ?? '';
+			const response = await fetch('/api/design/fonts/import', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {})
+				},
+				body: JSON.stringify({ file: item.file })
+			});
+			if (!response.ok) {
+				importError =
+					(await response.json().catch(() => null))?.detail ?? 'Importeren mislukte.';
+				return;
+			}
+			const added = await response.json();
+			await loadFonts(true);
+			font = added.file;
+			importable = importable.filter((f) => f.file !== item.file);
+			importing = false;
+		} finally {
+			busy = null;
+		}
+	}
+
+	let shownImportable = $derived(
+		importFilter.trim()
+			? importable.filter((f) =>
+					f.name.toLowerCase().includes(importFilter.trim().toLowerCase())
+				)
+			: importable.slice(0, 60)
+	);
 
 	// Bij bewerken beginnen met wat er staat, niet met lege velden.
 	$effect(() => {
@@ -56,9 +111,7 @@
 	$effect(() => {
 		if (!open || loaded) return;
 		loaded = true;
-		fetch('/api/design/fonts')
-			.then((r) => (r.ok ? r.json() : []))
-			.then((list) => (fonts = list));
+		loadFonts();
 	});
 
 	let shown = $derived(
@@ -135,6 +188,29 @@
 		{/each}
 	</div>
 
+	<div class="import">
+		<button class="link" onclick={openImport}>
+			{importing ? 'Importeren sluiten' : 'Lettertype niet in de lijst?'}
+		</button>
+		{#if importing}
+			<p class="note">
+				De engine leest alleen <code>.ttf</code>. Deze staan wél op je computer maar
+				worden niet gezien; importeren maakt er een bruikbare kopie van.
+			</p>
+			<input type="search" bind:value={importFilter} placeholder="Zoek in {importable.length} lettertypen…" />
+			{#if importError}<p class="err">{importError}</p>{/if}
+			<div class="fonts">
+				{#each shownImportable as item (item.file)}
+					<button class="font" disabled={busy !== null} onclick={() => bring(item)}>
+						{busy === item.file ? 'bezig…' : item.name}
+					</button>
+				{:else}
+					<span class="note">Niets gevonden dat nog ontbreekt.</span>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
 	<div class="actions">
 		<button class="btn" onclick={() => (open = false)}>Annuleren</button>
 		<button class="btn primary" disabled={!text.trim()} onclick={confirm}>
@@ -190,6 +266,15 @@
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
+	.import { margin-top: var(--space-3); display: grid; gap: 6px; }
+	.link {
+		justify-self: start;
+		font-size: var(--text-xs);
+		color: var(--accent);
+		text-decoration: underline;
+	}
+	.note { margin: 0; font-size: 10px; color: var(--text-2); line-height: 1.5; }
+	.err { margin: 0; font-size: 10px; color: var(--danger); }
 	.actions {
 		display: flex;
 		justify-content: flex-end;

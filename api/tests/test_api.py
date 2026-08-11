@@ -97,6 +97,7 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/library/machines",
         "/api/library/presets/{preset_id}/apply",
         "/api/clipart/insert",
+        "/api/design/fonts/import",
         "/api/sheets",
         "/api/sheets/{sheet_id}/activate",
         "/api/sheets/{sheet_id}/move",

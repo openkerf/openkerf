@@ -30,6 +30,7 @@ from .library import Library, LibraryError, default_path
 from .autosave import Autosave
 from .camera import Camera
 from .clipart import Clipart
+from .fonts import Fonts
 from .generators import Generators
 from .nesting import Nesting
 from .nodes import Nodes
@@ -197,6 +198,7 @@ class ApiServer:
         )
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
+        self.fonts = Fonts(kernel)
         self.camera = Camera(kernel, self.commands)
         self.clipart = Clipart(kernel, self.drawing)
         self.autosave = Autosave(
@@ -474,8 +476,25 @@ class ApiServer:
             return {"methods": self.images.vectorisers()}
 
         @app.get("/api/design/fonts")
-        def list_fonts():
+        def list_fonts(refresh: bool = False):
+            """
+            De lettertypen die de engine kan gebruiken.
+
+            De engine houdt die lijst in een cachebestand, dus een net
+            geïnstalleerd lettertype verschijnt pas na `refresh=true`.
+            """
+            if refresh:
+                manage(self.fonts.refresh)
             return manage(self.drawing.fonts)
+
+        @app.get("/api/design/fonts/importable")
+        def importable_fonts():
+            """Lettertypen op dit systeem die de engine niet leest, maar wij wel."""
+            return manage(self.fonts.importable)
+
+        @app.post("/api/design/fonts/import", dependencies=write, status_code=201)
+        def import_font(body: dict):
+            return manage(self.fonts.import_font, body.get("file"))
 
         @app.get("/api/job/estimate")
         def estimate_job():
