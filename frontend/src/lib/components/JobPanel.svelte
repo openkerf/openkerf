@@ -52,7 +52,7 @@
 							y1="2"
 							x2={Math.max(0.01, job.progress * 100)}
 							y2="2"
-							class="fill"
+							class="fill job-progress"
 							class:kerf-anim={job.running}
 						/>
 					</svg>

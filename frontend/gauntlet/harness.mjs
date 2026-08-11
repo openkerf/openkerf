@@ -26,7 +26,11 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 		if (m.type() === 'error') problems.push(m.text().slice(0, 160));
 	});
 	page.on('pageerror', (e) => problems.push(`pageerror: ${String(e).slice(0, 160)}`));
-	await page.goto(BASE + path, { waitUntil: 'networkidle', timeout: 30000 });
+	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
+	// Niet op networkidle wachten: de statusverbinding blijft open, dus die
+	// toestand komt nooit. Wachten tot de app zelf getekend heeft.
+	await page.waitForSelector('.statusbar, .setup', { timeout: 20000 }).catch(() => {});
+	await page.waitForTimeout(700);
 	if (theme === 'dark') {
 		await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
 	}

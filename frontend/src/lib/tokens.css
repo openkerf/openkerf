@@ -159,4 +159,12 @@ button {
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}
+
+	/* Eén uitzondering, en het design system noemt hem met naam: de voortgang
+	   van een lopende job. Die beweging is geen versiering maar de melding dat
+	   de machine nog bezig is; wie beweging uitzet, wil dat nog steeds weten. */
+	.kerf-anim.job-progress {
+		animation-duration: 2s !important;
+		animation-iteration-count: infinite !important;
+	}
 }
