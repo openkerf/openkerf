@@ -4,6 +4,7 @@
 	import type { EditController } from '$lib/edits.svelte';
 
 	let {
+		onPointerMm,
 		device,
 		design,
 		edits,
@@ -19,6 +20,8 @@
 		cameraOpacity = 0.6,
 		sheet = null
 	}: {
+		/** Waar de muis staat, in mm op het bed. `null` als hij weg is. */
+		onPointerMm?: (punt: { x: number; y: number } | null) => void;
 		device: Device | null;
 		design: DesignStore;
 		edits: EditController;
@@ -72,9 +75,75 @@
 		zoom = next;
 	}
 
-	function fit() {
+	/** Terug naar de stand waarin het bed netjes in beeld staat. */
+	function honderd() {
 		zoom = 1;
 		pan = { x: 0, y: 0 };
+	}
+
+	/**
+	 * Een rechthoek in millimeters vullend in beeld brengen.
+	 *
+	 * Het bed staat gecentreerd in het vlak; pan verschuift dat. Om een gebied
+	 * te centreren rekenen we terug welke pan daarvoor nodig is bij de nieuwe
+	 * schaal — anders springt het beeld weg zodra je inzoomt.
+	 */
+	function fitTo(x: number, y: number, w: number, h: number) {
+		if (!canvasWidth || !canvasHeight || w <= 0 || h <= 0) return;
+		const marge = 48;
+		const doel = Math.min(
+			(canvasWidth - RULER - marge * 2) / w,
+			(canvasHeight - RULER - marge * 2) / h
+		);
+		zoom = Math.min(20, Math.max(0.2, doel / fitScale));
+
+		// Centreren op de gerekende stand klopte niet: er zit meer tussen het
+		// meetpunt van `canvasWidth` en de linkerbovenhoek van het bed dan alleen
+		// de liniaal. In plaats van die keten na te rekenen (en bij de volgende
+		// layoutwijziging weer mis te zitten) meten we ná het tekenen waar het
+		// bed écht staat en corrigeren we het verschil in één stap.
+		requestAnimationFrame(() => {
+			if (!frame) return;
+			const vlak = frame.getBoundingClientRect();
+			const bedvlak = frame.querySelector('.bed')?.getBoundingClientRect();
+			if (!bedvlak) return;
+			const perMm = bedvlak.width / bed.width;
+			const midX = bedvlak.x + (x + w / 2) * perMm;
+			const midY = bedvlak.y + (y + h / 2) * perMm;
+			pan = {
+				x: pan.x + (vlak.x + vlak.width / 2 - midX),
+				y: pan.y + (vlak.y + vlak.height / 2 - midY)
+			};
+		});
+	}
+
+	/** Alles wat er ligt, of het hele bed als er niets ligt. */
+	function passend() {
+		const doos = omvat(design.elements ?? []);
+		if (doos) fitTo(doos.x, doos.y, doos.width, doos.height);
+		else fitTo(0, 0, bed.width, bed.height);
+	}
+
+	function naarSelectie() {
+		const gekozen = (design.elements ?? []).filter((e) => design.isSelected(e.id));
+		const doos = omvat(gekozen);
+		if (doos) fitTo(doos.x, doos.y, doos.width, doos.height);
+	}
+
+	/** De omhullende rechthoek in mm van een verzameling elementen. */
+	function omvat(elementen: { bounds: [number, number, number, number] | null }[]) {
+		const perMm = design.design?.units_per_mm ?? 1;
+		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+		for (const e of elementen) {
+			if (!e.bounds) continue;
+			x0 = Math.min(x0, e.bounds[0] / perMm);
+			y0 = Math.min(y0, e.bounds[1] / perMm);
+			x1 = Math.max(x1, e.bounds[2] / perMm);
+			y1 = Math.max(y1, e.bounds[3] / perMm);
+		}
+		if (!Number.isFinite(x0)) return null;
+		// Een enkele lijn heeft geen breedte; geef hem iets om in te passen.
+		return { x: x0, y: y0, width: Math.max(x1 - x0, 1), height: Math.max(y1 - y0, 1) };
 	}
 
 	let frame = $state<HTMLElement | null>(null);
@@ -497,6 +566,15 @@
 
 <svelte:window
 	onkeydown={(e) => {
+		// Zoomsneltoetsen: alleen buiten invoervelden, en zonder modifiers die
+		// bij de browser horen.
+		const doel = e.target as HTMLElement | null;
+		const tikt = doel && /^(INPUT|TEXTAREA|SELECT)$/.test(doel.tagName);
+		if (!tikt && !e.ctrlKey && !e.metaKey && !e.altKey) {
+			if (e.key === '1' && !e.shiftKey) { honderd(); return; }
+			if (e.key === '!' || (e.key === '1' && e.shiftKey)) { passend(); return; }
+			if (e.key === '@' || (e.key === '2' && e.shiftKey)) { naarSelectie(); return; }
+		}
 		if (tool !== 'pen' || !penPoints.length) return;
 		if (e.key === 'Enter') {
 			e.preventDefault();
@@ -528,6 +606,7 @@
 	onpointermove={(e) => {
 		movePan(e);
 		pointer = pointerOnRulers(e);
+			onPointerMm?.(pointer);
 	}}
 	onpointerleave={() => (pointer = null)}
 	onpointerup={() => (panning = null)}
@@ -692,10 +771,15 @@
 									}}
 								/>
 							{:else if !element.hidden}
+								<!-- De kleur van de laag, niet die van het element: zo zie je in
+								     één blik wat gesneden en wat gegraveerd wordt. Zonder laag
+								     gestippeld grijs — die vorm wordt niet gebrand. -->
+								{@const streek = design.strokeFor(element)}
 								<path
 									d={element.path}
 									fill="none"
-									stroke={element.stroke ?? 'var(--text-2)'}
+									stroke={streek.color}
+									stroke-dasharray={streek.dashed ? '6 4' : undefined}
 									stroke-width={design.isSelected(element.id) ? 2 : 1.2}
 									vector-effect="non-scaling-stroke"
 								/>
@@ -970,7 +1054,11 @@
 
 	<div class="zoom">
 		<button title="Uitzoomen" aria-label="Uitzoomen" onclick={() => zoomAt(1 / 1.25)}>−</button>
-		<button class="val mono" title="Passend maken" onclick={fit}>{Math.round(zoom * 100)}%</button>
+		<button class="val mono" title="Terug naar 100% (toets 1)" onclick={honderd}>{Math.round(zoom * 100)}%</button>
+		<button class="fit" title="Alles passend in beeld (Shift+1)" onclick={passend}>
+			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
+			Passend
+		</button>
 		<button title="Inzoomen" aria-label="Inzoomen" onclick={() => zoomAt(1.25)}>+</button>
 	</div>
 
@@ -1188,6 +1276,14 @@
 		border-radius: var(--radius-field);
 		box-shadow: var(--shadow-float);
 		z-index: 3;
+	}
+	.zoom .fit {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		width: auto;
+		padding: 0 10px;
+		font-size: var(--text-xs);
 	}
 	.zoom button {
 		min-width: 28px;

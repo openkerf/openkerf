@@ -53,6 +53,9 @@
 	let telefoon = $derived(breedte < 768);
 	let tablet = $derived(breedte >= 768 && breedte < 1200);
 	let paneelOpen = $state(true);
+	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
+	// waar je hem zoekt.
+	let muisMm = $state<{ x: number; y: number } | null>(null);
 
 	// Het wauw-moment. Alleen op de flank van niet-draaiend naar draaiend, en
 	// daarna weer weg — anders is het decoratie in plaats van een bericht.
@@ -481,6 +484,7 @@
 			}}
 		/>
 		<Canvas
+			onPointerMm={(punt) => (muisMm = punt)}
 			{device}
 			{design}
 			{edits}
@@ -695,6 +699,7 @@
 {/if}
 
 <StatusBar
+	pointerMm={muisMm}
 	{device}
 	state={machine}
 	job={status.activeJob}

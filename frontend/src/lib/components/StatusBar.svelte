@@ -8,13 +8,16 @@
 		state,
 		job,
 		connected,
-		control
+		control,
+		pointerMm = null
 	}: {
 		device: Device | null;
 		state: MachineState;
 		job: Job | null;
 		connected: boolean;
 		control: Controller;
+		/** Muispositie op het bed; staat naast de machinepositie. */
+		pointerMm?: { x: number; y: number } | null;
 	} = $props();
 
 	// Stoppen hoorde alleen in het Job-tabblad. Wie tijdens het branden aan het
@@ -27,8 +30,20 @@
 </script>
 
 <footer class="statusbar mono">
+	<!-- Twee posities naast elkaar: waar de kop staat, en waar jouw muis staat.
+	     Zonder onderscheid leest de een als de ander. -->
+	<span class="wat">kop</span>
 	<span>X <b>{formatMm(mm?.[0])}</b></span>
 	<span>Y <b>{formatMm(mm?.[1])}</b> mm</span>
+	<span class="sep" aria-hidden="true"></span>
+	<span class="wat">muis</span>
+	<span class="muis">
+		{#if pointerMm}
+			<b>{pointerMm.x.toFixed(1)}</b>, <b>{pointerMm.y.toFixed(1)}</b> mm
+		{:else}
+			—
+		{/if}
+	</span>
 	<span class="sep" aria-hidden="true"></span>
 	<span>
 		{#if job}
@@ -61,6 +76,14 @@
 </footer>
 
 <style>
+	.wat {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* Vaste breedte: anders springt de hele balk mee met elke muisbeweging. */
+	.muis { display: inline-block; min-width: 13ch; }
+
 	.statusbar {
 		height: var(--statusbar-height);
 		flex: none;
