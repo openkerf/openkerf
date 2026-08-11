@@ -175,3 +175,42 @@ def test_supports_matches_exactly(kernel):
     runner = CommandRunner(kernel)
     assert runner.supports("spool") is True
     assert runner.supports("spo") is False
+
+
+def test_starting_an_empty_design_is_refused(local_client):
+    """
+    Dit meldde eerder "gelukt": je drukt op starten, de app zegt ja, en er
+    gebeurt niets bij de machine. Dan sta je ernaast te wachten.
+    """
+    local_client.post("/api/design/clear")
+
+    response = local_client.post("/api/job/start")
+
+    assert response.status_code == 409
+    melding = " ".join(response.json()["detail"]["output"])
+    assert "niets klaar om te branden" in melding
+    # En het zegt wat je eraan doet.
+    assert "laag" in melding
+
+
+def test_layers_that_are_all_switched_off_count_as_empty(local_client):
+    """
+    Een laag met 'meebranden' uit levert niets op. Staat álles uit, dan is de
+    job leeg — ook al staat er van alles op het canvas.
+    """
+    local_client.post("/api/design/clear")
+    local_client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
+    )
+    assert local_client.post("/api/job/start").status_code == 200
+
+    # Een element belandt door de classificatie in meerdere lagen tegelijk, dus
+    # ze moeten allemaal uit.
+    for operation in local_client.get("/api/design").json()["operations"]:
+        if operation["element_ids"]:
+            local_client.patch(
+                f"/api/design/operations/{operation['id']}", json={"output": False}
+            )
+
+    assert local_client.post("/api/job/start").status_code == 409

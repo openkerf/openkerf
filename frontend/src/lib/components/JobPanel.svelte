@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Standaard dicht: dit is gereedschap voor storingen, geen dagelijkse kost.
+	let showEvents = $state(false);
 	import { formatDuration, type Device, type Job, type SignalEvent } from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import JobControls from './JobControls.svelte';
@@ -76,9 +78,20 @@
 </div>
 
 <div class="section">
-	<h2 class="section-title">Engine-signalen</h2>
-	{#if events.length === 0}
-		<p class="empty">Nog geen signalen ontvangen.</p>
+	<!-- Dit was "Engine-signalen" met ruwe codes: ontwikkelaarstaal op de plek
+	     waar een nieuwe gebruiker als eerste kijkt. Nu ingeklapt en met een
+	     naam die zegt waar het over gaat. -->
+	<button class="section-title collapse" aria-expanded={showEvents} onclick={() => (showEvents = !showEvents)}>
+		Meldingen van de machine
+		<span class="mono">{events.length ? events.length : ''}</span>
+	</button>
+	{#if !showEvents}
+		<p class="empty">
+			Technische meldingen van de engine. Handig bij het zoeken naar een
+			storing; verder heb je ze niet nodig.
+		</p>
+	{:else if events.length === 0}
+		<p class="empty">Nog niets gemeld.</p>
 	{:else}
 		<ul class="events mono">
 			{#each events.slice(0, 12) as event (event.time + event.code)}
@@ -100,6 +113,23 @@
 		color: var(--text-2);
 		margin: 0 0 var(--space-2);
 	}
+	.collapse {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		text-align: left;
+	}
+	.collapse::after {
+		content: '';
+		margin-left: auto;
+		width: 6px;
+		height: 6px;
+		border-right: 1px solid var(--text-2);
+		border-bottom: 1px solid var(--text-2);
+		transform: rotate(45deg);
+	}
+	.collapse[aria-expanded='true']::after { transform: rotate(-135deg); }
 	.empty {
 		color: var(--text-2);
 		margin: 0;

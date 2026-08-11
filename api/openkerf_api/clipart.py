@@ -284,7 +284,10 @@ class Clipart:
         if not address.lower().startswith("https://"):
             # Alleen https, en alleen van de bronnen die we zelf aanbieden:
             # een willekeurige URL laten ophalen door de server is een open deur.
-            raise DesignError("Alleen https-adressen worden opgehaald.")
+            raise DesignError(
+                "Alleen beveiligde adressen (https) worden opgehaald. Kies een "
+                "tekening uit het zoekvenster in plaats van een adres te plakken."
+            )
         if not any(
             address.lower().startswith(prefix)
             for prefix in (
@@ -294,7 +297,9 @@ class Clipart:
             )
         ):
             raise DesignError(
-                "Dit adres hoort niet bij een van de bronnen die we aanbieden."
+                "Dit adres hoort niet bij Iconify, Wikimedia Commons of "
+                "Openclipart. Kies een tekening uit het zoekvenster; alleen die "
+                "bronnen worden opgehaald."
             )
         width = float(width_mm)
         if not 1 <= width <= 2000:

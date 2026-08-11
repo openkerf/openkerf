@@ -38,7 +38,11 @@
 		{/if}
 	</span>
 	<span class="sep" aria-hidden="true"></span>
-	<span>{connected ? 'API verbonden' : 'API onbereikbaar'}</span>
+	<!-- Gebruikerstaal, geen protocoltaal: wie dit leest wil weten of de laser
+	     luistert, niet of er een socket openstaat. -->
+	<span class:offline={!connected}>
+		{connected ? 'Verbonden met de laser' : 'Geen verbinding met de laser'}
+	</span>
 	{#if busy}
 		<button
 			class="stop"
@@ -69,6 +73,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
+	.offline { color: var(--danger); }
 	b {
 		color: var(--text-1);
 		font-weight: 400;

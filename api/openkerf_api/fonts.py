@@ -112,7 +112,10 @@ class Fonts:
         """
         path = Path(os.path.expanduser(str(source or ""))).resolve()
         if not path.is_file():
-            raise DesignError(f"'{source}' bestaat niet.")
+            raise DesignError(
+                f"'{source}' bestaat niet. Kies een lettertype uit de lijst in "
+                "het tekstvenster; die toont wat er op deze computer staat."
+            )
         if path.suffix.lower() not in CONVERTIBLE + (".ttf",):
             raise DesignError(
                 f"'{path.suffix}' kan niet; kies een .ttf of .otf-bestand."

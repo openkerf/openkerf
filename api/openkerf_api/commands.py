@@ -88,6 +88,31 @@ class CommandRunner:
         return self.run(f'load "{path}"')
 
     def start_job(self) -> list[str]:
+        """
+        Het plan bouwen en naar de spooler sturen.
+
+        Eerst kijken óf er iets te branden valt. Een leeg ontwerp liep hier
+        vrolijk doorheen en meldde "gelukt": de gebruiker drukt op starten, de
+        app zegt ja, en er gebeurt niets bij de machine. Dat is de vervelendste
+        soort fout — je gaat ernaast staan wachten.
+        """
+        elements = self.kernel.elements
+        burnable = 0
+        for operation in elements.ops():
+            if not str(operation.type).startswith("op "):
+                continue
+            if not getattr(operation, "output", True):
+                continue
+            burnable += sum(1 for child in operation.children)
+        if not burnable:
+            raise CommandError(
+                "start",
+                [
+                    "Er staat niets klaar om te branden. Teken of laad iets, en "
+                    "zet het in een laag die meebrandt — een laag met "
+                    "'meebranden' uit wordt overgeslagen."
+                ],
+            )
         return self.run(PLAN_AND_SPOOL)
 
     def pause(self) -> list[str]:

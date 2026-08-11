@@ -107,7 +107,11 @@ class Sheets:
         for sheet in sheets:
             if sheet["id"] == sheet_id:
                 return sheet
-        raise DesignError(f"Vel '{sheet_id}' bestaat niet.")
+        namen = ", ".join(f"'{s['name']}'" for s in sheets) or "geen"
+        raise DesignError(
+            f"Vel '{sheet_id}' bestaat niet. Beschikbaar: {namen}. Kies er een "
+            "uit de vellenbalk boven het canvas."
+        )
 
     # ------------------------------------------------------------ beheren
 
