@@ -356,10 +356,7 @@
 	state={machine}
 	canStart={(control.capabilities?.actions.start ?? false) && !control.needsToken}
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
-	box={design.liveBox}
 	canEdit={canEdit && design.preview === null}
-	onSetPosition={setPosition}
-	onSetSize={setSize}
 	onStart={requestStart}
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
@@ -444,6 +441,9 @@
 					onRotate={rotate}
 					onAssign={assign}
 					onLayerChange={() => design.load()}
+					box={design.liveBox}
+					onSetPosition={setPosition}
+					onSetSize={setSize}
 					onArrange={arrange}
 					onCrop={() => (cropping = true)}
 					onImageFactor={async (adjustment, factor) => {
@@ -610,8 +610,7 @@
 	</div>
 </Dialog>
 
-<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
-	<Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
+<Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
 
 <CameraCalibration bind:open={calibrateOpen} {camera} />
 
@@ -633,7 +632,8 @@
 	}}
 />
 
-<MaterialLibrary
+<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
+	<MaterialLibrary
 		{library}
 		operations={design.operations}
 		{canEdit}

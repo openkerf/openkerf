@@ -16,7 +16,10 @@
 		onImageDpi,
 		onVectorise,
 		onCrop,
-		onImageFactor
+		onImageFactor,
+		box = null,
+		onSetPosition,
+		onSetSize
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -32,12 +35,43 @@
 		onVectorise?: () => void;
 		onCrop?: () => void;
 		onImageFactor?: (adjustment: string, factor: number) => void;
+		/** Live maten tijdens het slepen; valt terug op de selectie zelf. */
+		box?: { x: number; y: number; width: number; height: number } | null;
+		onSetPosition?: (x: number, y: number) => void;
+		onSetSize?: (width: number, height: number) => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
 	let operations = $derived(design.operations);
 	let selected = $derived(design.selected);
 	let size = $derived(design.selectedSize);
+	// Tijdens het slepen laat de canvaslaag een voorbeeldkader zien; die maten
+	// horen hier dan ook te staan, anders lopen paneel en canvas uit elkaar.
+	let live = $derived(box ?? size);
+
+	// Verhouding vasthouden. Zonder dit vervormt een logo zodra je één maat
+	// intikt, en dat merk je pas als het gebrand is.
+	let linked = $state(true);
+
+	function commitPosition(axis: 'x' | 'y', raw: string) {
+		const value = Number(raw);
+		if (!live || !Number.isFinite(value)) return;
+		onSetPosition?.(axis === 'x' ? value : live.x, axis === 'y' ? value : live.y);
+	}
+
+	function commitSize(axis: 'width' | 'height', raw: string) {
+		const value = Number(raw);
+		if (!live || !Number.isFinite(value) || value <= 0) return;
+		if (linked && live.width > 0 && live.height > 0) {
+			const factor = value / (axis === 'width' ? live.width : live.height);
+			onSetSize?.(live.width * factor, live.height * factor);
+			return;
+		}
+		onSetSize?.(
+			axis === 'width' ? value : live.width,
+			axis === 'height' ? value : live.height
+		);
+	}
 	let chosen = $derived(design.selectedElements);
 	let selectedIds = $derived(design.selectedIds);
 
@@ -133,12 +167,53 @@
 				</span>
 				<button class="clear" onclick={() => design.select(null)}>Wis</button>
 			</div>
-			<dl class="figures mono">
-				<div><dt>Breedte</dt><dd>{size.width.toFixed(1)} mm</dd></div>
-				<div><dt>Hoogte</dt><dd>{size.height.toFixed(1)} mm</dd></div>
-				<div><dt>X</dt><dd>{size.x.toFixed(1)} mm</dd></div>
-				<div><dt>Y</dt><dd>{size.y.toFixed(1)} mm</dd></div>
-			</dl>
+			<!-- Maten en positie horen bij de selectie, dus hier en niet in de
+			     bovenbalk: alles wat je met het gekozen object doet, staat bij
+			     elkaar. Lezen tijdens het slepen, bewerken zodra je loslaat. -->
+			<div class="figures mono">
+				{#each [['B', 'width'], ['H', 'height']] as [label, key] (key)}
+					<label>
+						<span>{label}</span>
+						<input
+							type="number"
+							step="0.1"
+							min="0.1"
+							disabled={!canEdit}
+							value={(live ?? size)[key as 'width' | 'height'].toFixed(1)}
+							onchange={(e) => commitSize(key as 'width' | 'height', e.currentTarget.value)}
+						/>
+					</label>
+				{/each}
+				<button
+					class="link"
+					aria-pressed={linked}
+					disabled={!canEdit}
+					title={linked ? 'Verhouding vast' : 'Breedte en hoogte los'}
+					onclick={() => (linked = !linked)}
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+						{#if linked}
+							<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+							<path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+						{:else}
+							<path d="M9 12H5a3 3 0 0 1 0-6h4M15 12h4a3 3 0 0 1 0 6h-4" />
+						{/if}
+					</svg>
+				</button>
+				{#each [['X', 'x'], ['Y', 'y']] as [label, key] (key)}
+					<label>
+						<span>{label}</span>
+						<input
+							type="number"
+							step="0.1"
+							disabled={!canEdit}
+							value={(live ?? size)[key as 'x' | 'y'].toFixed(1)}
+							onchange={(e) => commitPosition(key as 'x' | 'y', e.currentTarget.value)}
+						/>
+					</label>
+				{/each}
+				<span class="unit">mm</span>
+			</div>
 			{#if canEdit && selected.text}
 				<button class="edit-text" onclick={() => onEditText?.(selected.id)}>
 					Tekst bewerken — “{selected.text.text}”
@@ -734,19 +809,32 @@
 		flex: none;
 	}
 	.figures {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-2);
-		margin: var(--space-3) 0 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 4px 6px;
+		margin-bottom: var(--space-3);
 	}
-	.figures dt {
-		font-family: var(--font-ui);
-		font-size: 10px;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
+	.figures label { display: grid; gap: 1px; font-size: 9px; color: var(--text-2); }
+	.figures input {
+		font: inherit;
+		width: 4.6em;
+		padding: 4px 6px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	.figures input:disabled { opacity: 0.6; }
+	.figures .unit { font-size: 9px; color: var(--text-2); padding-bottom: 5px; }
+	.figures .link {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 26px;
+		border-radius: var(--radius-field);
 		color: var(--text-2);
 	}
-	.figures dd {
-		margin: 1px 0 0;
-	}
+	.figures .link[aria-pressed='true'] { color: var(--accent); }
+	.figures .link:hover:not(:disabled) { background: var(--surface-2); }
 </style>

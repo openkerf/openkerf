@@ -967,6 +967,11 @@
 	.ruler-x,
 	.ruler-y {
 		position: absolute;
+		/* Zonder dit valt een inline SVG terug op zijn standaardmaat van
+		   300x150 en houdt de liniaal halverwege op. */
+		display: block;
+		width: 100%;
+		height: 100%;
 		background: var(--surface-1);
 		color: var(--text-2);
 		font-family: var(--font-mono);
@@ -977,15 +982,15 @@
 	.ruler-x {
 		top: 0;
 		left: 20px;
-		right: 0;
+		width: calc(100% - 20px);
 		height: 20px;
 		border-bottom: 1px solid var(--line);
 	}
 	.ruler-y {
 		top: 20px;
 		left: 0;
-		bottom: 0;
 		width: 20px;
+		height: calc(100% - 20px);
 		border-right: 1px solid var(--line);
 	}
 	.ruler-x line,

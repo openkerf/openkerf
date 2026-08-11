@@ -40,3 +40,27 @@ def test_missing_frontend_directory_falls_back(kernel, tmp_path):
     with TestClient(server.build_app()) as client:
         assert client.get("/").status_code == 200
         assert "OpenKerf API" in client.get("/").text
+
+
+def test_an_unknown_api_path_is_a_404_not_the_html_page(tmp_path, kernel):
+    """
+    Dit was verwarrend: een onbekend /api-pad viel in de SPA-fallback. Een GET
+    kreeg de HTML-pagina terug waar de frontend JSON verwachtte, en een POST
+    kreeg "405 Method Not Allowed" omdat de fallback alleen GET kent. Wie een
+    oudere server naast een nieuwere frontend draaide, zag dus een melding die
+    nergens op sloeg.
+    """
+    build = tmp_path / "build"
+    build.mkdir()
+    (build / "index.html").write_text("<!doctype html><title>OpenKerf</title>")
+    server = ApiServer(kernel, frontend=str(build), library_path=tmp_path / "f.db")
+
+    with TestClient(server.build_app()) as client:
+        get = client.get("/api/bestaat-niet")
+        post = client.post("/api/bestaat-niet", json={})
+
+        assert get.status_code == 404
+        assert "Onbekende API-route" in get.json()["detail"]
+        assert post.status_code == 404
+        # De echte SPA-route blijft wél de app teruggeven.
+        assert client.get("/setup").status_code == 200

@@ -123,12 +123,31 @@ def _spa_files(directory: str):
     unknown path has to return index.html instead of a 404. Real missing
     assets (a stale .js hash) still need to 404, or the browser would try to
     execute HTML as JavaScript.
+
+    Een onbekend `/api`-pad valt hier **niet** onder. Dat gebeurde eerder wel,
+    met twee misleidende gevolgen: een GET kreeg de HTML-pagina terug (waar de
+    frontend JSON verwachtte) en een POST kreeg "405 Method Not Allowed", omdat
+    de fallback alleen GET kent. Wie een oudere server draait naast een nieuwere
+    frontend, zag dus een onbegrijpelijke foutmelding in plaats van "die route
+    ken ik niet".
     """
+    from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
     from starlette.exceptions import HTTPException as StarletteHTTPException
 
     class SPAStaticFiles(StaticFiles):
         async def get_response(self, path, scope):
+            if path.startswith("api/") or path == "api":
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "detail": (
+                            f"Onbekende API-route '/{path}'. Draait de server "
+                            "misschien op oudere code dan de frontend? Herstart "
+                            "hem dan."
+                        )
+                    },
+                )
             try:
                 return await super().get_response(path, scope)
             except StarletteHTTPException as e:
