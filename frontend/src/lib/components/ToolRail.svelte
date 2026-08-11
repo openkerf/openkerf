@@ -8,7 +8,8 @@
 		onOpenLibrary,
 		onPlaceImage,
 		onOpenCatalogue,
-		onOpenGenerators
+		onOpenGenerators,
+		onOpenClipart
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
@@ -17,6 +18,7 @@
 		onPlaceImage?: (file: File) => void;
 		onOpenCatalogue?: () => void;
 		onOpenGenerators?: () => void;
+		onOpenClipart?: () => void;
 	} = $props();
 
 	// Elk gereedschap tekent bij een klik op het bed; selecteren is de rust-stand.
@@ -71,6 +73,9 @@
 	     vinden is, vindt niemand. -->
 	<button class="tool" title="Generatoren — raster, cirkel, veelhoek, doos, QR" disabled={!canEdit} onclick={() => onOpenGenerators?.()}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
+	</button>
+	<button class="tool" title="Clipart zoeken in openbare collecties" disabled={!canEdit} onclick={() => onOpenClipart?.()}>
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
 	</button>
 	<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => onOpenGrid?.()}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg>

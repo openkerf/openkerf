@@ -29,6 +29,7 @@ from .images import Images
 from .library import Library, LibraryError, default_path
 from .autosave import Autosave
 from .camera import Camera
+from .clipart import Clipart
 from .generators import Generators
 from .nesting import Nesting
 from .nodes import Nodes
@@ -190,6 +191,7 @@ class ApiServer:
         self.generators = Generators(kernel, self.commands, self.drawing)
         self.nesting = Nesting(kernel, self.editor)
         self.camera = Camera(kernel, self.commands)
+        self.clipart = Clipart(kernel, self.drawing)
         self.autosave = Autosave(
             kernel,
             self.drawing,
@@ -760,6 +762,29 @@ class ApiServer:
         def camera_corrected(body: dict):
             """Tijdens het ijken wil je juist het onbewerkte beeld zien."""
             return manage(self.camera.set_corrected, bool(body.get("corrected")))
+
+        # --------------------------------------------------------------- clipart
+
+        @app.get("/api/clipart/search")
+        def clipart_search(q: str, sources: str | None = None, limit: int = 24):
+            """
+            Zoeken in openbare collecties, via onze server.
+
+            Een bron die niet antwoordt, houdt de rest niet op: hij komt terug
+            in 'unavailable' zodat de app het kan melden.
+            """
+            chosen = [s.strip() for s in (sources or "").split(",") if s.strip()]
+            return manage(self.clipart.search, q, chosen or None, limit)
+
+        @app.post("/api/clipart/insert", dependencies=write, status_code=201)
+        def clipart_insert(body: dict):
+            return manage(
+                self.clipart.insert,
+                body.get("url"),
+                body.get("width_mm", 60.0),
+                body.get("x_mm", 10.0),
+                body.get("y_mm", 10.0),
+            )
 
         # ----------------------------------------------------------- generatoren
 

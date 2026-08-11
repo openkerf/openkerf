@@ -19,6 +19,7 @@
 	import Presetariat from '$components/Presetariat.svelte';
 	import Generators from '$components/Generators.svelte';
 	import CameraCalibration from '$components/CameraCalibration.svelte';
+	import Clipart from '$components/Clipart.svelte';
 	import { CameraStore } from '$lib/camera.svelte';
 	import { PresetariatStore } from '$lib/presetariat.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
@@ -66,6 +67,7 @@
 	let libraryOpen = $state(false);
 	let catalogueOpen = $state(false);
 	let generatorsOpen = $state(false);
+	let clipartOpen = $state(false);
 	let calibrateOpen = $state(false);
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
@@ -397,6 +399,7 @@
 		onOpenLibrary={() => (libraryOpen = true)}
 		onOpenCatalogue={() => (catalogueOpen = true)}
 		onOpenGenerators={() => (generatorsOpen = true)}
+		onOpenClipart={() => (clipartOpen = true)}
 		onPlaceImage={placeImage}
 	/>
 	<Canvas
@@ -639,6 +642,8 @@
 <Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
 
 <CameraCalibration bind:open={calibrateOpen} {camera} />
+
+<Clipart bind:open={clipartOpen} {canEdit} onInserted={() => design.load()} />
 
 <Generators
 	bind:open={generatorsOpen}

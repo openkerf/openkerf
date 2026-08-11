@@ -1,0 +1,281 @@
+"""
+Clipart zoeken in openbare collecties.
+
+Geen netwerk in de tests: de ophaalfunctie is injecteerbaar. Dat is niet alleen
+handig maar ook nodig — een test die van Wikimedia afhangt, faalt op een dag
+zonder dat er iets stuk is.
+"""
+
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+
+from openkerf_api.clipart import Clipart
+from openkerf_api.drawing import Drawing
+from openkerf_api.edits import DesignError
+from openkerf_api.server import ApiServer
+
+WIKI_ANSWER = {
+    "query": {
+        "pages": {
+            "1": {
+                "pageid": 1,
+                "title": "File:Hart.svg",
+                "imageinfo": [
+                    {
+                        "mime": "image/svg+xml",
+                        "url": "https://upload.wikimedia.org/hart.svg?utm_source=x",
+                        "thumburl": "https://upload.wikimedia.org/thumb/hart.png",
+                        "descriptionurl": "https://commons.wikimedia.org/wiki/File:Hart.svg",
+                        "extmetadata": {
+                            "LicenseShortName": {"value": "CC0"},
+                            "Artist": {"value": '<a href="x">Iemand</a>'},
+                        },
+                    }
+                ],
+            },
+            "2": {
+                "pageid": 2,
+                "title": "File:Foto.jpg",
+                "imageinfo": [
+                    {"mime": "image/jpeg", "url": "https://upload.wikimedia.org/foto.jpg"}
+                ],
+            },
+        }
+    }
+}
+
+CLIPART_ANSWER = {
+    "payload": [
+        {
+            "id": 77,
+            "title": "ster",
+            "uploader": "iemand",
+            "detail_link": "https://openclipart.org/detail/77",
+            "svg": {
+                "url": "https://openclipart.org/download/77/ster.svg",
+                "png_thumb": "https://openclipart.org/image/64px/77",
+            },
+        }
+    ]
+}
+
+A_DRAWING = b"""<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <path d="M 10 10 L 90 10 L 90 90 L 10 90 Z" fill="none" stroke="black"/>
+</svg>"""
+
+A_MESSY_DRAWING = b"""<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <linearGradient id="g"><stop offset="0"/></linearGradient>
+  <text x="10" y="20">hallo</text>
+  <path d="M 10 10 L 90 10 L 90 90 Z" fill="url(#g)"/>
+</svg>"""
+
+
+def answers(**by_fragment):
+    """Een neppe ophaalfunctie: kiest een antwoord op wat er in de URL staat."""
+
+    def fetch(url, timeout=None):
+        for fragment, payload in by_fragment.items():
+            if fragment in url:
+                if isinstance(payload, Exception):
+                    raise payload
+                if isinstance(payload, bytes):
+                    return payload
+                return json.dumps(payload).encode()
+        raise AssertionError(f"onverwachte url: {url}")
+
+    return fetch
+
+
+@pytest.fixture
+def shop(kernel):
+    return Clipart(
+        kernel,
+        Drawing(kernel),
+        fetch=answers(commons=WIKI_ANSWER, openclipart=CLIPART_ANSWER),
+    )
+
+
+def test_both_sources_come_back(shop):
+    found = shop.search("hart")
+
+    sources = {r["source"] for r in found["results"]}
+    assert sources == {"Wikimedia Commons", "Openclipart"}
+    assert found["unavailable"] == {}
+
+
+def test_only_vectors_from_wikimedia(shop):
+    """Een JPEG uit Commons is voor een laser een heel ander gesprek."""
+    titles = [r["title"] for r in shop.search("hart", sources=["wikimedia"])["results"]]
+
+    assert titles == ["Hart.svg"]
+
+
+def test_the_tracking_tail_is_stripped(shop):
+    """
+    Commons hangt `?utm_source=` achter zijn URL's. Daar struikelde de filter
+    op bestandsnaam over, en het hoort ook niet in ons ontwerp terecht te komen.
+    """
+    first = shop.search("hart", sources=["wikimedia"])["results"][0]
+
+    assert first["svg_url"] == "https://upload.wikimedia.org/hart.svg"
+
+
+def test_a_source_that_answers_nonsense_says_so_plainly(kernel):
+    """Openclipart geeft bij storing HTML terug; een parse-fout helpt niemand."""
+    from openkerf_api.drawing import Drawing
+
+    def fetch(url, timeout=None):
+        if "commons" in url:
+            return json.dumps(WIKI_ANSWER).encode()
+        return b"<html>onderhoud</html>"
+
+    shop = Clipart(kernel, Drawing(kernel), fetch=fetch)
+
+    assert shop.search("hart")["unavailable"] == {
+        "openclipart": "gaf een onverwacht antwoord"
+    }
+
+
+def test_the_licence_travels_along(shop):
+    """Wie lasert verkoopt wat hij snijdt; dan moet je de licentie kunnen zien."""
+    first = shop.search("hart", sources=["wikimedia"])["results"][0]
+
+    assert first["license"] == "CC0"
+    # Wikimedia levert HTML in zijn metadata; dat wil niemand zien.
+    assert first["author"] == "Iemand"
+
+
+def test_a_source_that_is_down_does_not_hold_up_the_rest(kernel):
+    """
+    Openclipart ligt er met enige regelmaat uit. Dan hoor je te zien wat er wél
+    is, plus welke bron niet antwoordde.
+    """
+    shop = Clipart(
+        kernel,
+        Drawing(kernel),
+        fetch=answers(commons=WIKI_ANSWER, openclipart=TimeoutError()),
+    )
+
+    found = shop.search("hart")
+
+    assert [r["source"] for r in found["results"]] == ["Wikimedia Commons"]
+    assert found["unavailable"] == {"openclipart": "reageerde niet op tijd"}
+
+
+def test_both_down_is_reported_not_pretended_empty(kernel):
+    shop = Clipart(
+        kernel,
+        Drawing(kernel),
+        fetch=answers(commons=TimeoutError(), openclipart=TimeoutError()),
+    )
+
+    found = shop.search("hart")
+
+    assert found["results"] == []
+    assert set(found["unavailable"]) == {"wikimedia", "openclipart"}
+
+
+def test_a_one_letter_search_is_refused(shop):
+    with pytest.raises(DesignError):
+        shop.search("a")
+
+
+# ------------------------------------------------------------------ invoegen
+
+
+@pytest.fixture
+def inserter(kernel):
+    return Clipart(
+        kernel,
+        Drawing(kernel),
+        fetch=answers(
+            **{"hart.svg": A_DRAWING, "rommel.svg": A_MESSY_DRAWING}
+        ),
+    )
+
+
+def test_inserting_places_it_at_the_size_you_asked_for(kernel, inserter):
+    from meerk40t.core.units import UNITS_PER_MM
+
+    result = inserter.insert(
+        "https://upload.wikimedia.org/hart.svg", width_mm=50, x_mm=20, y_mm=30
+    )
+
+    assert result["count"] >= 1
+    nodes = [n for n in kernel.elements.elems() if getattr(n, "bounds", None)]
+    x0 = min(n.bounds[0] for n in nodes) / UNITS_PER_MM
+    y0 = min(n.bounds[1] for n in nodes) / UNITS_PER_MM
+    x1 = max(n.bounds[2] for n in nodes) / UNITS_PER_MM
+    assert (x1 - x0) == pytest.approx(50, abs=0.5)
+    assert x0 == pytest.approx(20, abs=0.5)
+    assert y0 == pytest.approx(30, abs=0.5)
+
+
+def test_what_a_laser_cannot_do_is_reported(inserter):
+    """
+    Gradiënten en tekst komen niet mee. Dat hoor je te weten voordat je
+    materiaal in de machine legt, niet erna.
+    """
+    result = inserter.insert("https://upload.wikimedia.org/rommel.svg")
+
+    assert any("kleurverlopen" in note for note in result["notes"])
+    assert any("tekst" in note for note in result["notes"])
+
+
+def test_a_random_address_is_not_fetched(inserter):
+    """De server iets willekeurigs laten ophalen is een open deur."""
+    for url in (
+        "https://voorbeeld.nl/iets.svg",
+        "http://upload.wikimedia.org/hart.svg",
+        "file:///etc/passwd",
+    ):
+        with pytest.raises(DesignError):
+            inserter.insert(url)
+
+
+def test_an_absurd_width_is_refused(inserter):
+    with pytest.raises(DesignError):
+        inserter.insert("https://upload.wikimedia.org/hart.svg", width_mm=9000)
+
+
+def test_the_routes_work_end_to_end(kernel, tmp_path):
+    server = ApiServer(kernel, library_path=tmp_path / "cl.db")
+    server.clipart.fetch = answers(
+        commons=WIKI_ANSWER,
+        openclipart=CLIPART_ANSWER,
+        **{"hart.svg": A_DRAWING},
+    )
+    with TestClient(server.build_app()) as client:
+        found = client.get("/api/clipart/search", params={"q": "hart"})
+        assert found.status_code == 200
+        assert found.json()["results"]
+
+        made = client.post(
+            "/api/clipart/insert",
+            json={"url": "https://upload.wikimedia.org/hart.svg", "width_mm": 40},
+        )
+        assert made.status_code == 201
+        assert client.get("/api/design").json()["elements"]
+
+
+def test_a_very_busy_drawing_is_flagged(kernel):
+    """
+    Een tekening uit een encyclopedie heeft zo duizend paden. Dat brandt niet
+    fout, maar het duurt uren — en dat weet je liever voordat je begint.
+    """
+    from openkerf_api.drawing import Drawing
+
+    busy = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        + b'<path d="M 1 1 L 9 9"/>' * 500
+        + b"</svg>"
+    )
+    shop = Clipart(kernel, Drawing(kernel), fetch=answers(**{"druk.svg": busy}))
+
+    result = shop.insert("https://upload.wikimedia.org/druk.svg")
+
+    assert any("losse paden" in note for note in result["notes"])
