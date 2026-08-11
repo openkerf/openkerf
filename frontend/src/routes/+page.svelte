@@ -267,9 +267,9 @@
 	// Lokale state is de bron van waarheid, de URL volgt. Andersom werkt niet:
 	// replaceState maakt $page.url niet reactief, waardoor het paneel op de
 	// oude tab bleef staan terwijl de URL wél meeliep.
-	let tab = $state<'design' | 'job'>('job');
+	let tab = $state<'design' | 'layers' | 'job'>('job');
 
-	function selectTab(next: 'design' | 'job') {
+	function selectTab(next: 'design' | 'layers' | 'job') {
 		tab = next;
 		syncUrl();
 	}
@@ -293,7 +293,8 @@
 		control.refreshCapabilities();
 		camera.load();
 		library.load();
-		if ($page.url.searchParams.get('tab') === 'design') tab = 'design';
+		const wantedTab = $page.url.searchParams.get('tab');
+		if (wantedTab === 'design' || wantedTab === 'layers') tab = wantedTab;
 		design.load().then(async () => {
 			// Alleen aanbieden als er niets staat: over bestaand werk heen
 			// terugzetten geeft een mengelmoes, en dat weigert de API ook.
@@ -451,6 +452,19 @@
 					>
 				{/if}
 			</button>
+			<button
+				class="tab"
+				role="tab"
+				aria-selected={tab === 'layers'}
+				onclick={() => selectTab('layers')}
+			>
+				Lagen
+				{#if tab === 'layers'}
+					<svg aria-hidden="true"
+						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4" class="kerf-anim" /></svg
+					>
+				{/if}
+			</button>
 			<button class="tab" role="tab" aria-selected={tab === 'job'} onclick={() => selectTab('job')}>
 				Job
 				{#if tab === 'job'}
@@ -461,8 +475,9 @@
 			</button>
 		</div>
 		<div class="panel-scroll">
-			{#if tab === 'design'}
+			{#if tab === 'design' || tab === 'layers'}
 				<DesignPanel
+					show={tab === 'layers' ? 'layers' : 'selection'}
 					{design}
 					{edits}
 					{canEdit}

@@ -22,7 +22,8 @@
 		image = null,
 		onImageSet,
 		onImageClear,
-		onUncrop
+		onUncrop,
+		show = 'selection'
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -60,6 +61,9 @@
 		) => void;
 		onImageClear?: () => void;
 		onUncrop?: () => void;
+		/** Welk deel getoond wordt. Selectie en lagen naast elkaar in één
+		 *  paneel werd te druk om iets in terug te vinden. */
+		show?: 'selection' | 'layers';
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -178,7 +182,7 @@
 	{/if}
 </div>
 
-{#if selected && size}
+{#if show === 'selection' && selected && size}
 	<div class="section">
 		<h2 class="section-title">Selectie</h2>
 		<div class="selected">
@@ -457,7 +461,26 @@
 	</div>
 {/if}
 
-{#if operations.length}
+{#if show === 'selection' && !selected}
+	<div class="section">
+		<p class="muted">
+			Niets geselecteerd. Klik een vorm aan op het canvas, of sleep een kader
+			om er meerdere te pakken.
+		</p>
+	</div>
+{/if}
+
+{#if show === 'layers' && !operations.length}
+	<div class="section">
+		<p class="muted">
+			Nog geen lagen. Een laag is een bewerking — snijden, graveren of
+			rasteren — met een eigen snelheid en vermogen. Teken iets, of maak er
+			hieronder een aan zodra er een ontwerp is.
+		</p>
+	</div>
+{/if}
+
+{#if show === 'layers' && operations.length}
 	<div class="section">
 		<div class="section-head">
 			<h2 class="section-title">Lagen</h2>
@@ -641,7 +664,8 @@
 			{/if}
 		{/each}
 		<p class="hint">
-			Lagen bewerken en elementen verslepen komt later in fase 3; dit is wat de engine nu heeft.
+			Het vinkje links zet de <strong>huidige selectie</strong> in die laag.{#if !selected}
+				Er is nu niets geselecteerd.{/if}
 		</p>
 	</div>
 {/if}
