@@ -19,6 +19,9 @@
 	--on-color: #ffffff;
 	--void: #000000;
 	--danger: #d3382c;
+	/* Vlak-rood is een andere rol dan tekst-rood: wit hierop haalt 5,6:1, en
+	   dat moet, want dit is de stopknop. */
+	--danger-solid: #c62a1e;
 	--warn: #b8860b;
 	--ok: #2e7d46;
 
@@ -89,6 +92,7 @@
 	--accent: #2aa6b1;
 	--accent-ink: #0b1213;
 	--danger: #e5544a;
+	--danger-solid: #c62a1e;
 	--warn: #d9a62e;
 	--ok: #4caf6d;
 }

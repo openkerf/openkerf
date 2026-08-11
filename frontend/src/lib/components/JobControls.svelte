@@ -216,8 +216,8 @@
 		color: var(--accent-ink);
 	}
 	.btn.danger {
-		background: var(--danger);
-		border-color: var(--danger);
+		background: var(--danger-solid);
+		border-color: var(--danger-solid);
 		color: var(--on-color);
 	}
 	.btn.subtle {

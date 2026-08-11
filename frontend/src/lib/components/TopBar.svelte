@@ -46,7 +46,7 @@
 	<!-- Openen hoort naast opslaan: in de Job-tab vindt niemand het. -->
 	<label class="btn file" title="Ontwerp openen">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
-		Openen
+		<span class="btn-label">Openen</span>
 		<input
 			type="file"
 			accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
@@ -61,7 +61,7 @@
 
 	<label class="btn file" title="Project openen (ontwerp + bibliotheek)">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M8 12h8"/></svg>
-		Project
+		<span class="btn-label">Project</span>
 		<input
 			type="file"
 			accept=".openkerf,.zip"
@@ -75,25 +75,25 @@
 	</label>
 	<a class="btn" href="/api/project/export.openkerf" download="project.openkerf" title="Project opslaan">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v6h6"/></svg>
-		Project opslaan
+		<span class="btn-label">Project opslaan</span>
 	</a>
 
 	<!-- Opslaan als SVG: MeerK40t's eigen schrijver, dus operaties komen bij
 	     terugladen weer mee. -->
 	<a class="btn" href="/api/design/export.svg" download="ontwerp.svg" title="Ontwerp opslaan">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7M8 20v-6h8v6"/></svg>
-		Opslaan
+		<span class="btn-label">Opslaan</span>
 	</a>
 
 	<!-- Kader tonen beweegt de kop: dat is fase 3, niet fase 2. -->
 	<button class="btn" disabled title="Beschikbaar in fase 3">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
-		Kader tonen
+		<span class="btn-label">Kader tonen</span>
 	</button>
 	<!-- Stoppen kan altijd, overal, in één tik. -->
 	<button class="btn danger" disabled={!canStop} onclick={onStop} title="Job direct afbreken">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-		Stop
+		<span class="btn-label">Stop</span>
 	</button>
 	<!-- Opent geen dialoog maar de pre-flight in het rechterpaneel. -->
 	<button class="btn primary" disabled={!canStart} onclick={onStart}>
@@ -115,6 +115,19 @@
 		padding: 0 var(--space-3);
 		background: var(--surface-1);
 		border-bottom: 1px solid var(--line);
+		/* Zonder deze twee duwt de knoppenrij de héle pagina breder dan het
+		   scherm — op een tablet scroll je dan horizontaal langs je eigen app. */
+		min-width: 0;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.topbar::-webkit-scrollbar { display: none; }
+
+	/* Smal scherm: knoppen tonen alleen hun icoon. De titel staat in de
+	   tooltip en het aria-label, dus er gaat geen betekenis verloren. */
+	@media (max-width: 900px) {
+		.topbar :global(.btn-label) { display: none; }
+		.machine .muted { display: none; }
 	}
 	.brand {
 		display: flex;
@@ -151,7 +164,7 @@
 	.dot.ready { background: var(--ok); }
 	.dot.busy { background: var(--accent); }
 	.dot.paused { background: var(--warn); }
-	.dot.alarm { background: var(--danger); }
+	.dot.alarm { background: var(--danger-solid); }
 	.spacer { flex: 1; }
 	.btn {
 		display: inline-flex;
@@ -175,8 +188,8 @@
 	}
 	.btn.primary:hover:not(:disabled) { filter: brightness(1.06); }
 	.btn.danger {
-		background: var(--danger);
-		border-color: var(--danger);
+		background: var(--danger-solid);
+		border-color: var(--danger-solid);
 		color: var(--on-color);
 	}
 	.btn.danger:hover:not(:disabled) { filter: brightness(1.06); }

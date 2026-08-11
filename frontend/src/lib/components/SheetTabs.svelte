@@ -147,16 +147,23 @@
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		background: var(--surface-1);
-		color: var(--text-2);
+		color: var(--text-1);
 		font-size: var(--text-xs);
 	}
 	.sheet:hover:not(:disabled) { background: var(--surface-2); color: var(--text-1); }
 	.sheet[aria-pressed='true'] {
+		/* Het accent zit in de rand en de tint, niet in de tekst: accentkleur op
+		   een accenttint haalt maar 4,24:1 en dit zijn de kleinste letters in
+		   beeld. De actieve staat is nog steeds dubbel gecodeerd (rand + tint +
+		   aria-pressed). */
 		border-color: var(--accent);
-		color: var(--accent);
+		color: var(--text-1);
+		font-weight: 600;
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
-	.sheet .size { font-size: var(--text-xs); opacity: 0.75; }
+	/* Geen opacity op tekst: dat verlaagt het contrast onvoorspelbaar. De maat
+	   is secundair, maar moet leesbaar blijven. */
+	.sheet .size { font-size: var(--text-xs); color: var(--text-2); }
 	.sheet.add { padding: 3px 10px; font-weight: 600; }
 	.error { font-size: var(--text-xs); color: var(--danger); }
 	.editor {

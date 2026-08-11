@@ -84,8 +84,8 @@
 		font: inherit;
 		font-weight: 600;
 		border-radius: var(--radius-field);
-		border: 1px solid var(--danger);
-		background: var(--danger);
+		border: 1px solid var(--danger-solid);
+		background: var(--danger-solid);
 		color: white;
 	}
 	.stop:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -106,5 +106,5 @@
 	.dot.ready { background: var(--ok); }
 	.dot.busy { background: var(--accent); }
 	.dot.paused { background: var(--warn); }
-	.dot.alarm { background: var(--danger); }
+	.dot.alarm { background: var(--danger-solid); }
 </style>
