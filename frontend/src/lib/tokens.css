@@ -23,10 +23,12 @@
 	   dat moet, want dit is de stopknop. */
 	--danger-solid: #c62a1e;
 	/* Als tékst moet oranje 4,5:1 halen; #b8860b kwam niet verder dan 3,25.
-	   Voor een vlak of een stip is de heldere versie juist beter zichtbaar. */
-	--warn: #8a6100;
+	   Voor een vlak of een stip is de heldere versie juist beter zichtbaar.
+	   #8a6100 haalde het net niet (4,45) zodra de badge zijn eigen kleur als
+	   16%-waas eronder legt — de achtergrond telt mee, niet alleen het wit. */
+	--warn: #7f5900;
 	--warn-solid: #b8860b;
-	--ok: #2e7d46;
+	--ok: #2a733f;
 
 	/* Laagkleuren: vaste reeks van 10, puur identificatie. */
 	--layer-1: #e5484d;

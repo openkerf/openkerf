@@ -44,6 +44,12 @@ for (const theme of ['light', 'dark']) {
 			nodes
 				.filter((n) => n.children.length === 0 && (n.textContent ?? '').trim())
 				.filter((n) => {
+					// SVG-tekst heeft geen CSS-doos: clientWidth is er 2 waar de
+					// letter 8 pixels breed is, dus deze meting slaat er altijd op
+					// aan terwijl er niets afgesneden wordt. Gecontroleerd door te
+					// kijken (liniaal-"0" op 1024px staat er heel). De leesbaarheid
+					// van canvastekst wordt hieronder apart in schermpixels gemeten.
+					if (n.namespaceURI && n.namespaceURI.includes('svg')) return false;
 					const s = getComputedStyle(n);
 					if (s.overflow === 'hidden' || s.textOverflow === 'ellipsis') return false;
 					return n.scrollWidth > n.clientWidth + 1 && n.clientWidth > 0;
