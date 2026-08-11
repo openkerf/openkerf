@@ -340,7 +340,8 @@ class DesignReader:
             "color": _color(getattr(op, "color", None)),
             "speed": _plain(getattr(op, "speed", None)),
             "power": _plain(getattr(op, "power", None)),
-            "passes": _plain(getattr(op, "passes", None)),
+            # 0 betekent bij de engine "niet ingesteld", niet "nul keer".
+            "passes": _plain(getattr(op, "passes", None)) or 1,
             # Alleen zinvol voor raster/afbeelding, maar elke operatie draagt de
             # velden; de frontend toont ze op type.
             "dpi": _plain(getattr(op, "dpi", None)),

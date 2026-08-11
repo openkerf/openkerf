@@ -84,6 +84,7 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/machine/home",
         "/api/machine/move",
         "/api/machine/jog",
+        "/api/machine/focus",
         "/api/machine/unlock",
         "/api/machine/lock",
         "/api/design/resize",

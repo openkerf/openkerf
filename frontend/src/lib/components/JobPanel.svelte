@@ -13,7 +13,8 @@
 		preflight = $bindable(),
 		onJog,
 		onHome,
-		onUnlock
+		onUnlock,
+		onFocus
 	}: {
 		device: Device | null;
 		events: SignalEvent[];
@@ -23,13 +24,14 @@
 		onJog?: (dxMm: number, dyMm: number) => void;
 		onHome?: () => void;
 		onUnlock?: () => void;
+		onFocus?: (distanceMm: number) => void;
 	} = $props();
 
 	let spooler = $derived(device?.spooler ?? null);
 	let jobs = $derived(spooler?.jobs ?? []);
 </script>
 
-<JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} />
+<JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} />
 
 <div class="section">
 	<h2 class="section-title">Spooler</h2>

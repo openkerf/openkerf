@@ -33,11 +33,21 @@ def test_motion_commands_are_kernel_level(kernel, motion):
     assert caps["unlock"] is True
 
 
-def test_capability_reporting_survives_a_device_switch(kernel, motion):
+def test_capability_reporting_follows_the_device(kernel, motion):
+    """
+    De mogelijkheden horen bij het apparaat, niet bij de app. Scherpstellen is
+    daar het bewijs van: de Ruida kent `focusz`, het K40-bord niet.
+    """
     before = motion.capabilities()
-    kernel.console("service device start ruida -i\n")
+    assert before["focus"] is False
 
-    assert motion.capabilities() == before
+    kernel.console("service device start ruida -i\n")
+    after = motion.capabilities()
+
+    # Bewegen blijft bestaan, want dat levert de kernel.
+    for shared in ("home", "jog", "move", "unlock"):
+        assert after[shared] == before[shared]
+    assert after["focus"] is True, "de Ruida kent scherpstellen wel"
 
 
 def test_home_runs(kernel, motion):
@@ -99,3 +109,17 @@ def test_moving_is_refused_while_a_job_is_running(kernel, motion):
     ):
         with pytest.raises(DesignError, match="loopt een job"):
             call()
+
+
+def test_focus_is_only_offered_when_the_device_knows_it(motion):
+    """
+    Scherpstellen zit op de Ruida, niet op elk apparaat. Zelfde aanpak als bij
+    pauzeren en stoppen: vragen wat dit apparaat kent in plaats van aannemen.
+    """
+    caps = motion.capabilities()
+
+    assert "focus" in caps
+    # Het testapparaat kent het niet, dus dan wordt het ook niet aangeboden.
+    if not caps["focus"]:
+        with pytest.raises(DesignError, match="focusz"):
+            motion.focus(2)

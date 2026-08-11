@@ -49,6 +49,17 @@ export type Capabilities = {
 		clear_queue: boolean;
 		load: boolean;
 	};
+	/** Wat dít apparaat kan bewegen. Verschilt per machine: een Ruida kent
+	 *  scherpstellen, een K40-bord niet. */
+	motion?: {
+		home: boolean;
+		physical_home: boolean;
+		unlock: boolean;
+		lock: boolean;
+		move: boolean;
+		jog: boolean;
+		focus: boolean;
+	};
 	auth_required: boolean;
 };
 

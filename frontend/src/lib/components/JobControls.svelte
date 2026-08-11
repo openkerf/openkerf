@@ -9,7 +9,8 @@
 		preflight = $bindable(),
 		onJog,
 		onHome,
-		onUnlock
+		onUnlock,
+		onFocus
 	}: {
 		control: Controller;
 		device: Device | null;
@@ -18,6 +19,7 @@
 		onJog?: (dxMm: number, dyMm: number) => void;
 		onHome?: () => void;
 		onUnlock?: () => void;
+		onFocus?: (distanceMm: number) => void;
 	} = $props();
 
 	let actions = $derived(control.capabilities?.actions ?? null);
@@ -25,7 +27,26 @@
 	let queued = $derived(device?.spooler.queue_length ?? 0);
 	let tokenDraft = $state('');
 	let step = $state(10);
-	let estimate = $state<{ seconds: number; parts: number } | null>(null);
+	type Layer = {
+		label: string;
+		speed_mm_s: number | null;
+		power_percent: number | null;
+		passes: number;
+		elements: number;
+		source: string | null;
+	};
+	let estimate = $state<{ seconds: number; parts: number; layers?: Layer[] } | null>(null);
+
+	// Instellingen die niet gemeten zijn, verdienen een waarschuwing vóór het
+	// materiaal in de machine ligt — niet erna.
+	const ONZEKER: Record<string, string> = {
+		geextrapoleerd: 'geëxtrapoleerd — niet gemeten',
+		handmatig: 'handmatig ingesteld',
+		geimporteerd: 'van iemand anders'
+	};
+	let risky = $derived(
+		(estimate?.layers ?? []).filter((l) => l.source !== 'testraster')
+	);
 	let estimating = $state(false);
 
 	// De schatting van de engine vóór het starten: de pre-flight toonde tot nu
@@ -87,6 +108,40 @@
 				</span>
 			</div>
 			<div class="pf-row">In wachtrij: <span class="mono">{queued}</span></div>
+
+			<!-- Wat de machine gaat dóén. Tijd en aantal alleen is theater: een
+			     laseraar controleert snelheid, vermogen en passes voordat hij
+			     iets in de machine legt. -->
+			{#if estimate?.layers?.length}
+				<table class="pf-layers">
+					<thead>
+						<tr><th>Laag</th><th>mm/s</th><th>%</th><th>×</th><th>Bron</th></tr>
+					</thead>
+					<tbody>
+						{#each estimate.layers as layer (layer.label)}
+							<tr>
+								<td class="pf-name" title={layer.label}>{layer.label}</td>
+								<td class="mono">{layer.speed_mm_s ?? '—'}</td>
+								<td class="mono">{layer.power_percent ?? '—'}</td>
+								<td class="mono">{layer.passes}</td>
+								<td class:unsure={layer.source !== 'testraster'}>
+									{layer.source === 'testraster'
+										? 'gemeten'
+										: (ONZEKER[layer.source ?? ''] ?? 'geen preset')}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+				{#if risky.length}
+					<p class="pf-warn strong">
+						{risky.length === 1 ? 'Eén laag gebruikt' : `${risky.length} lagen gebruiken`}
+						instellingen die niet met een testraster gemeten zijn. Op onbekend
+						materiaal: eerst een proefje op een restje.
+					</p>
+				{/if}
+			{/if}
+
 			<p class="pf-warn">
 				Controleer deksel, koeling en air assist. Start pas als het werkstuk vastligt.
 			</p>
@@ -167,6 +222,22 @@
 				{/each}
 				<button class="rot" onclick={() => onUnlock?.()}>Ontgrendelen</button>
 			</div>
+			{#if control.capabilities?.motion?.focus}
+				<!-- Scherpstellen: dagelijks werk zodra de materiaaldikte verandert.
+				     Alleen zichtbaar als het apparaat het kent — de Ruida wel, een
+				     K40-bord niet. -->
+				<div class="focus">
+					<span class="rot-label">Scherpstellen</span>
+					{#each [-1, -0.1, 0.1, 1] as mm (mm)}
+						<button
+							class="rot"
+							disabled={running}
+							title={movingBlocked ?? `Kop ${mm > 0 ? 'omlaag' : 'omhoog'} ${Math.abs(mm)} mm`}
+							onclick={() => onFocus?.(mm)}
+						>{mm > 0 ? `+${mm}` : mm}</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -228,6 +299,29 @@
 		border-radius: var(--radius-card);
 		padding: var(--space-3);
 	}
+	.pf-layers {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: var(--text-xs);
+		margin: 8px 0;
+	}
+	.pf-layers th {
+		text-align: left;
+		font-weight: 500;
+		color: var(--text-2);
+		border-bottom: 1px solid var(--line);
+		padding-bottom: 2px;
+	}
+	.pf-layers td { padding: 2px 0; }
+	.pf-layers td.mono { text-align: right; padding-right: 8px; font-variant-numeric: tabular-nums; }
+	.pf-name {
+		max-width: 8em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.unsure { color: var(--warn); }
+	.pf-warn.strong { color: var(--warn); font-weight: 500; }
 	.pf-time {
 		display: flex;
 		justify-content: space-between;
@@ -305,6 +399,7 @@
 	.pad .down { grid-area: 2 / 2; }
 	.pad .right { grid-area: 2 / 3; }
 	.pad .home { grid-area: 1 / 4 / 3 / 5; }
+	.focus { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
 	.jog {
 		padding: 8px 0;
 		border: 1px solid var(--line);

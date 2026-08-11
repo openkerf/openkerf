@@ -588,6 +588,9 @@
 					onUnlock={async () => {
 						await edits.unlock();
 					}}
+					onFocus={async (mm) => {
+						await post('/api/machine/focus', { distance_mm: mm });
+					}}
 				/>
 			{/if}
 		</div>

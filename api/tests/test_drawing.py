@@ -780,3 +780,27 @@ def test_absurd_raster_settings_are_refused(client):
     for body in ({"dpi": 5}, {"dpi": 9000}, {"overscan_mm": -1}, {"overscan_mm": 500}):
         response = client.patch(f"/api/design/operations/{created['id']}", json=body)
         assert response.status_code == 409, body
+
+
+def test_a_new_layer_has_a_name_you_recognise(client):
+    """
+    De engine noemde een verse laag "Cut defaultmm/s @default #ff0000":
+    machinetaal op de plek waar je je eigen werk moet herkennen.
+    """
+    made = client.post("/api/design/operations", json={"type": "cut"}).json()
+
+    layer = next(
+        o for o in client.get("/api/design").json()["operations"] if o["id"] == made["id"]
+    )
+    assert layer["label"] == "Snijden"
+
+
+def test_a_new_layer_does_not_claim_zero_passes(client):
+    """Nul passes leest als "nul keer snijden" — precies het getal waar een
+    laseraar naar kijkt voordat hij op start drukt."""
+    made = client.post("/api/design/operations", json={"type": "engrave"}).json()
+
+    layer = next(
+        o for o in client.get("/api/design").json()["operations"] if o["id"] == made["id"]
+    )
+    assert layer["passes"] >= 1

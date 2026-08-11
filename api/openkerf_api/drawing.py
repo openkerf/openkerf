@@ -11,7 +11,7 @@ red shape should land in the cut layer by itself.
 """
 
 from .commands import CommandRunner
-from .design import _xy
+from .design import _label, _xy
 from .edits import DesignError, _finite, _positive
 
 # What a shape needs, and the console command that draws it. Millimetres in,
@@ -449,6 +449,17 @@ class Drawing:
 
     # ------------------------------------------------------------- operations
 
+    # Een laag zonder naam kreeg van de engine een label als
+    # "Cut defaultmm/s @default #ff0000" — machinetaal op de plek waar je je
+    # eigen werk moet herkennen.
+    LAYER_NAMES = {
+        "cut": "Snijden",
+        "engrave": "Graveren",
+        "raster": "Rasteren",
+        "image": "Afbeelding",
+        "dots": "Punten",
+    }
+
     def create_operation(self, kind: str, label=None, speed=None, power_percent=None) -> dict:
         command = OPERATIONS.get(kind)
         if command is None:
@@ -472,8 +483,12 @@ class Drawing:
         if not created:
             raise DesignError("De engine heeft geen laag aangemaakt.")
         operation = created[0]
-        if label:
-            operation.label = str(label)
+        # Een naam die je herkent, in plaats van "Cut defaultmm/s @default".
+        operation.label = str(label) if label else self.LAYER_NAMES.get(kind, kind)
+        # De engine zet passes op 0 voor "niet ingesteld". Dat leest als "nul
+        # keer snijden", en dat is het getal waar een laseraar naar kijkt.
+        if not getattr(operation, "passes", 0):
+            operation.passes = 1
         self.elements.validate_ids()
         self.user_operations.add(operation.id)
         self._refresh()
@@ -594,7 +609,7 @@ class Drawing:
         found.sort(key=lambda f: f["name"].lower())
         return found
 
-    def estimate(self) -> dict:
+    def estimate(self, library=None) -> dict:
         """
         Hoe lang gaat deze job duren, vóór je hem start.
 
@@ -619,7 +634,65 @@ class Drawing:
                 pieces += 1
         finally:
             self.runner.run("plan clear")
-        return {"seconds": round(seconds, 1), "parts": pieces}
+        return {
+            "seconds": round(seconds, 1),
+            "parts": pieces,
+            "layers": self.job_layers(library),
+        }
+
+    def job_layers(self, library=None) -> list[dict]:
+        """
+        Wat de machine straks gaat dóén, per laag.
+
+        De pre-flight liet alleen de tijd en het aantal onderdelen zien. Wie
+        tien jaar met een laser werkt, kijkt vóór het starten naar iets anders:
+        welke snelheid, welk vermogen, hoeveel passes — en waar die getallen
+        vandaan komen. Een geëxtrapoleerde instelling op acryl is een ander
+        gesprek dan een gemeten instelling.
+        """
+        library = library or getattr(self, "library", None)
+        presets = []
+        if library is not None:
+            try:
+                presets = library.presets()
+            except Exception:
+                presets = []
+
+        def herkomst(speed, power):
+            if speed is None or power is None:
+                return None
+            for preset in presets:
+                if abs(float(preset["speed_mm_s"]) - float(speed)) > 0.01:
+                    continue
+                if abs(float(preset["power_percent"]) * 10 - float(power)) > 0.1:
+                    continue
+                return preset["source"]
+            return None
+
+        layers = []
+        for operation in self.elements.ops():
+            if not str(operation.type).startswith("op "):
+                continue
+            if not getattr(operation, "output", True):
+                continue
+            children = sum(1 for _ in operation.children)
+            if not children:
+                continue
+            speed = getattr(operation, "speed", None)
+            power = getattr(operation, "power", None)
+            passes = getattr(operation, "passes", None) or 1
+            layers.append(
+                {
+                    "label": _label(operation, str(operation.type).replace("op ", "")),
+                    "type": operation.type,
+                    "speed_mm_s": None if speed is None else float(speed),
+                    "power_percent": None if power is None else round(float(power) / 10, 1),
+                    "passes": int(passes),
+                    "elements": children,
+                    "source": herkomst(speed, power),
+                }
+            )
+        return layers
 
     def export_svg(self, filename: str = "ontwerp.svg"):
         """

@@ -498,8 +498,11 @@ class ApiServer:
 
         @app.get("/api/job/estimate")
         def estimate_job():
-            """Geschatte brandtijd van het huidige ontwerp, vóór starten."""
-            return manage(self.drawing.estimate)
+            """
+            Wat de machine gaat doen, vóór starten: tijd, onderdelen én per
+            laag de instellingen met hun herkomst.
+            """
+            return manage(lambda: self.drawing.estimate(self.library))
 
         @app.get("/api/design/export.svg")
         def export_design(filename: str = "ontwerp.svg"):
@@ -564,6 +567,11 @@ class ApiServer:
         @app.post("/api/machine/jog", dependencies=write)
         def machine_jog(body: dict):
             return manage(self.motion.jog, body.get("dx_mm"), body.get("dy_mm"))
+
+        @app.post("/api/machine/focus", dependencies=write)
+        def focus_machine(body: dict):
+            """Scherpstellen: de kop hoger of lager. Alleen als het apparaat het kent."""
+            return manage(self.motion.focus, body.get("distance_mm"))
 
         @app.post("/api/machine/unlock", dependencies=write)
         def machine_unlock():

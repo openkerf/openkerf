@@ -12,6 +12,10 @@ from .edits import DesignError, _finite
 
 MOVES = ("home", "physical_home", "unlock", "lock")
 
+# Scherpstellen zit op de Ruida (`focusz`), niet op elk apparaat. Zelfde aanpak
+# als bij pauzeren en stoppen: vragen wat dit apparaat kent, niet aannemen.
+FOCUS = "focusz"
+
 
 def _mm(value: float) -> str:
     return f"{value:.4f}mm"
@@ -26,6 +30,7 @@ class MachineControl:
         caps = {name: self.runner.supports(name) for name in MOVES}
         caps["move"] = self.runner.supports("move_absolute")
         caps["jog"] = self.runner.supports("move_relative")
+        caps["focus"] = self.runner.supports(FOCUS)
         return caps
 
     def _idle(self) -> None:
@@ -82,6 +87,20 @@ class MachineControl:
         if dx == 0 and dy == 0:
             raise DesignError("Een jog van nul doet niets.")
         return {"output": self.runner.run(f"move_relative {_mm(dx)} {_mm(dy)}")}
+
+    def focus(self, distance_mm) -> dict:
+        """
+        De kop hoger of lager zetten. Scherpstellen is dagelijks werk: nieuwe
+        materiaaldikte, nieuwe hoogte.
+        """
+        self._require(FOCUS)
+        self._idle()
+        distance = _finite(distance_mm, "distance_mm")
+        if distance == 0:
+            raise DesignError("Een verplaatsing van nul doet niets.")
+        if abs(distance) > 100:
+            raise DesignError("Meer dan 100 mm in één keer is geen scherpstellen.")
+        return {"output": self.runner.run(f"{FOCUS} {_mm(distance)}")}
 
     def unlock(self) -> dict:
         """Motoren vrijgeven, zodat je de kop met de hand kunt verzetten."""
