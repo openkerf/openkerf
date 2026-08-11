@@ -521,17 +521,7 @@
 	</div>
 {/if}
 
-{#if show === 'layers' && !operations.length}
-	<div class="section">
-		<p class="muted">
-			Nog geen lagen. Een laag is een bewerking — snijden, graveren of
-			rasteren — met een eigen snelheid en vermogen. Teken iets, of maak er
-			hieronder een aan zodra er een ontwerp is.
-		</p>
-	</div>
-{/if}
-
-{#if show === 'layers' && operations.length}
+{#if show === 'layers'}
 	<div class="section">
 		<div class="section-head">
 			<h2 class="section-title">Lagen</h2>
@@ -546,6 +536,13 @@
 				</div>
 			{/if}
 		</div>
+		{#if !operations.length}
+			<p class="muted">
+				Nog geen lagen. Een laag is een bewerking — snijden, graveren of
+				rasteren — met een eigen snelheid en vermogen. Maak er hierboven een
+				aan en vink hem aan om je selectie erin te zetten.
+			</p>
+		{/if}
 		{#each plainLayers as op, index (op.id)}
 			<div class="layer" class:muted-row={!op.output}>
 				<span class="chip mono" style="background: {design.colorFor(op.id)}">{index + 1}</span>

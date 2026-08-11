@@ -264,7 +264,9 @@ class Generators:
             index = run
 
         with self.elements.undoscope("Streepjescode"):
-            node = self._add_polygon(bars, f"{kind} — {content[:24]}", subpaths=True)
+            node = self._add_polygon(
+                bars, f"{kind} — {content[:24]}", subpaths=True, intent="engrave"
+            )
             self.elements.validate_ids()
         self._refresh()
         return {
@@ -444,7 +446,7 @@ class Generators:
 
         with self.elements.undoscope("QR-code"):
             node = self._add_polygon(
-                squares, f"QR — {content[:24]}", subpaths=True
+                squares, f"QR — {content[:24]}", subpaths=True, intent="engrave"
             )
             self.elements.validate_ids()
         self._refresh()
@@ -477,7 +479,9 @@ class Generators:
 
         return side("bedwidth", 500.0), side("bedheight", 300.0)
 
-    def _add_polygon(self, points, label: str, subpaths: bool = False):
+    def _add_polygon(
+        self, points, label: str, subpaths: bool = False, intent: str = "cut"
+    ):
         """
         Een gesloten vorm rechtstreeks als geometrie toevoegen.
 
@@ -502,7 +506,26 @@ class Generators:
             stroke_width=self.elements.default_strokewidth,
             label=label,
         )
+        # Expliciet in één laag zetten, niet via kleurclassificatie: die zet een
+        # doospaneel in een gráveerlaag én meteen in een tweede laag die dezelfde
+        # kleur claimt. Dan brandt hetzelfde paneel twee keer, en dat merk je pas
+        # op materiaal.
+        if intent:
+            self._file_under(node, intent)
         return node
+
+    def _file_under(self, node, intent: str):
+        """De vorm in één laag van het gevraagde soort, en nergens anders in."""
+        label = {"cut": "Snijden", "engrave": "Graveren"}.get(intent, "Snijden")
+        for operation in self.elements.ops():
+            if operation.type == f"op {intent}" and getattr(operation, "label", "") == label:
+                target = operation
+                break
+        else:
+            made = self.drawing.create_operation(kind=intent, label=label)
+            target = self.elements.find_node(made["id"])
+        if target is not None:
+            target.add_reference(node)
 
     def _refresh(self):
         self.elements.signal("rebuild_tree", "all")

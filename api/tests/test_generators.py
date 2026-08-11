@@ -345,3 +345,30 @@ def test_a_panel_wider_than_the_sheet_stays_refused(client):
 
 
 
+
+
+def test_generated_parts_land_in_exactly_one_layer(client):
+    """
+    Kleurclassificatie zette een doospaneel in een gráveerlaag én in een tweede
+    laag die dezelfde kleur claimt — hetzelfde paneel twee keer gebrand, en dat
+    merk je pas op materiaal. Vandaar één expliciete laag.
+    """
+    client.post(
+        "/api/design/generate/box",
+        json={"width_mm": 60, "depth_mm": 40, "height_mm": 30, "thickness_mm": 3},
+    )
+
+    design = client.get("/api/design").json()
+    layers = [o for o in design["operations"] if o["element_ids"]]
+    assert [o["label"] for o in layers] == ["Snijden"]
+    assert all(len(e["operation_ids"]) == 1 for e in design["elements"])
+
+
+def test_a_qr_code_is_engraved_not_cut(client):
+    """Een QR-code uitsnijden levert een hoopje vierkantjes op."""
+    client.post("/api/design/generate/qrcode", json={"text": "openkerf", "size_mm": 30})
+
+    layers = [
+        o for o in client.get("/api/design").json()["operations"] if o["element_ids"]
+    ]
+    assert [o["label"] for o in layers] == ["Graveren"]

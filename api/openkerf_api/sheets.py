@@ -213,6 +213,13 @@ class Sheets:
         if source.is_file():
             self.drawing.runner.run(f'load "{source}"')
             self.kernel.elements.validate_ids()
+            # De lagen van dit vel weer als "van de gebruiker" merken. Een verse
+            # boom heeft ruim tweehonderd lege standaardoperaties; zonder deze
+            # markering zijn de lagen die je zelf gemaakt hebt niet van die
+            # ruis te onderscheiden en verdwijnen ze uit de lijst.
+            for operation in self.kernel.elements.ops():
+                if getattr(operation, "id", None):
+                    self.drawing.user_operations.add(operation.id)
         self.kernel.elements.signal("rebuild_tree", "all")
         self.kernel.elements.signal("refresh_scene", "Scene")
 
