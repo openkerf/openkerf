@@ -18,6 +18,8 @@
 	import MaterialLibrary from '$components/MaterialLibrary.svelte';
 	import Presetariat from '$components/Presetariat.svelte';
 	import Generators from '$components/Generators.svelte';
+	import CameraCalibration from '$components/CameraCalibration.svelte';
+	import { CameraStore } from '$lib/camera.svelte';
 	import { PresetariatStore } from '$lib/presetariat.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
 	import TestGridResult from '$components/TestGridResult.svelte';
@@ -42,6 +44,8 @@
 	let libraryOpen = $state(false);
 	let catalogueOpen = $state(false);
 	let generatorsOpen = $state(false);
+	let calibrateOpen = $state(false);
+	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let pendingFile = $state<File | null>(null);
 	// Werk van een vorige sessie. Nooit stilzwijgend terugladen: wie met een
@@ -263,6 +267,7 @@
 	onMount(() => {
 		status.connect();
 		control.refreshCapabilities();
+		camera.load();
 		library.load();
 		if ($page.url.searchParams.get('tab') === 'design') tab = 'design';
 		design.load().then(async () => {
@@ -384,6 +389,8 @@
 			textAt = at;
 			textOpen = true;
 		}}
+		cameraSrc={camera.src}
+		cameraOpacity={camera.opacity}
 		onPath={async (points, closed) => {
 			if (!canEdit) return;
 			await post('/api/design/path', { points, closed });
@@ -493,6 +500,39 @@
 	</aside>
 </div>
 
+<!-- Camerabediening bij het canvas, niet in het rechterpaneel: je kijkt naar
+     het bed terwijl je hem aanzet. -->
+{#if camera.state.available}
+	<div class="camstrip">
+		<button
+			class="cam"
+			aria-pressed={camera.shown && camera.state.running}
+			disabled={camera.busy || !canEdit}
+			title={canEdit ? 'Camerabeeld van het bed' : 'Vereist een token'}
+			onclick={() => (camera.state.running && camera.shown ? camera.stop() : camera.start())}
+		>
+			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h4l2-2h6l2 2h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+			Camera
+		</button>
+		{#if camera.shown && camera.state.running}
+			<input
+				type="range"
+				min="0.1"
+				max="1"
+				step="0.05"
+				aria-label="Doorzichtigheid camerabeeld"
+				bind:value={camera.opacity}
+			/>
+			<button class="cam" onclick={() => (calibrateOpen = true)}>
+				{camera.state.calibrated ? 'Opnieuw ijken' : 'IJken'}
+			</button>
+		{/if}
+		{#if camera.error}
+			<span class="camerror">{camera.error}</span>
+		{/if}
+	</div>
+{/if}
+
 <StatusBar
 	{device}
 	state={machine}
@@ -573,6 +613,8 @@
 <Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
 	<Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
 
+<CameraCalibration bind:open={calibrateOpen} {camera} />
+
 <Generators
 	bind:open={generatorsOpen}
 	hasSelection={design.selectedIds.length > 0}
@@ -605,6 +647,36 @@
 </Dialog>
 
 <style>
+	.camstrip {
+		position: absolute;
+		left: calc(var(--rail-width) + var(--space-4));
+		bottom: calc(var(--statusbar-height) + var(--space-3));
+		z-index: 5;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: 5px 8px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: color-mix(in srgb, var(--surface-1) 92%, transparent);
+		backdrop-filter: blur(6px);
+		box-shadow: var(--shadow-float);
+	}
+	.cam {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		font-size: var(--text-xs);
+		padding: 3px 8px;
+		border-radius: 999px;
+		color: var(--text-2);
+	}
+	.cam:hover:not(:disabled) { background: var(--surface-2); color: var(--text-1); }
+	.cam:disabled { opacity: 0.45; cursor: not-allowed; }
+	.cam[aria-pressed='true'] { color: var(--accent); }
+	.camstrip input[type='range'] { width: 90px; }
+	.camerror { font-size: 10px; color: var(--danger); max-width: 220px; }
+
 	.main {
 		flex: 1;
 		display: flex;

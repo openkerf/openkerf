@@ -22,6 +22,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
+# Camerabeeld is optioneel; zonder OpenCV trekt de cameraplugin van de engine
+# zichzelf terug en meldt onze API netjes dat het er niet is.
+camera = ["opencv-python-headless>=4.9"]
 
 # This is what makes MeerK40t pick the plugin up automatically —
 # no change to the MeerK40t repository is needed.

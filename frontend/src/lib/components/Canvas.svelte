@@ -14,7 +14,9 @@
 		onTextAt,
 		cropping = $bindable(false),
 		onCrop,
-		onPath
+		onPath,
+		cameraSrc = null,
+		cameraOpacity = 0.6
 	}: {
 		device: Device | null;
 		design: DesignStore;
@@ -28,6 +30,9 @@
 		cropping?: boolean;
 		onCrop?: (rect: { x: number; y: number; width: number; height: number }) => void;
 		onPath?: (points: number[][], closed: boolean) => Promise<void> | void;
+		/** Bron van het camerabeeld, of null als de camera uit staat. */
+		cameraSrc?: string | null;
+		cameraOpacity?: number;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -555,6 +560,19 @@
 			       background-size: {50 * scale}px {50 * scale}px;
 			       transform: translate({pan.x}px, {pan.y}px)"
 		>
+			{#if cameraSrc}
+				<!-- Het beeld is al rechtgetrokken naar de bedrechthoek door de
+				     cameraplugin, dus het past één-op-één op het bed. Een gewone
+				     <img> met een MJPEG-bron: de browser decodeert zelf, wij
+				     hoeven niets te verversen. -->
+				<img
+					class="camera"
+					src={cameraSrc}
+					alt="Camerabeeld van het bed"
+					style="opacity: {cameraOpacity}"
+				/>
+			{/if}
+
 			<span class="bed-label mono">
 				bed {bed.width.toFixed(0)} × {bed.height.toFixed(0)} mm
 			</span>
@@ -1019,6 +1037,15 @@
 			linear-gradient(var(--line) 1px, transparent 1px),
 			linear-gradient(90deg, var(--line) 1px, transparent 1px);
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+	}
+	.camera {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: fill;
+		pointer-events: none;
+		user-select: none;
 	}
 	.bed-label {
 		position: absolute;

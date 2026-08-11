@@ -28,6 +28,7 @@ from .edits import DesignEditor, DesignError
 from .images import Images
 from .library import Library, LibraryError, default_path
 from .autosave import Autosave
+from .camera import Camera
 from .generators import Generators
 from .nesting import Nesting
 from .nodes import Nodes
@@ -39,6 +40,11 @@ from .status import StatusReader
 
 # Kernel signals worth forwarding to connected clients. Every one of these is
 # emitted by the engine itself; we only listen.
+CAMERA_HINT = (
+    "Camerabeeld vraagt OpenCV. Installeer het naast de engine met "
+    "'pip install opencv-python-headless'."
+)
+
 SIGNALS = (
     "pipe;usb_status",
     "pipe;running",
@@ -164,6 +170,7 @@ class ApiServer:
         self.nodes = Nodes(kernel, self.commands)
         self.generators = Generators(kernel, self.commands, self.drawing)
         self.nesting = Nesting(kernel, self.editor)
+        self.camera = Camera(kernel, self.commands)
         self.autosave = Autosave(
             kernel,
             self.drawing,
@@ -639,6 +646,89 @@ class ApiServer:
 
             return manage(run)
 
+        # ---------------------------------------------------------------- camera
+
+        @app.get("/api/camera")
+        def camera_state():
+            """Of er een camera is, of hij draait, en of hij geijkt is."""
+            return self.camera.state()
+
+        @app.get("/api/camera/list")
+        def camera_list():
+            return manage(self.camera.cameras)
+
+        @app.post("/api/camera/start", dependencies=write)
+        def camera_start(body: dict | None = None):
+            return manage(self.camera.start, (body or {}).get("uri"))
+
+        @app.post("/api/camera/stop", dependencies=write)
+        def camera_stop():
+            return manage(self.camera.stop)
+
+        @app.get("/api/camera/frame.png")
+        def camera_frame():
+            """Eén beeld — voor het ijken, en als terugval zonder stream."""
+            from fastapi.responses import Response
+
+            return Response(
+                content=manage(self.camera.frame_png),
+                media_type="image/png",
+                # Elk verzoek moet vers beeld opleveren; een gecachet beeld van
+                # het bed is precies wat je niet wilt.
+                headers={"Cache-Control": "no-store"},
+            )
+
+        @app.get("/api/camera/stream.mjpeg")
+        async def camera_stream(request: Request):
+            """
+            Doorlopend beeld. De browser zet dit in een gewone <img> en
+            decodeert zelf — geen JavaScript-lus, geen haperingen.
+
+            De lus vraagt bij elke ronde of de browser nog luistert. Zonder die
+            vraag merkt de server een weggeklikt tabblad niet en blijft de
+            camera draaien voor een kijker die er niet meer is; dat is precies
+            wat er gebeurde toen dit een gewone generator was.
+            """
+            import anyio
+            from fastapi.responses import StreamingResponse
+
+            if not self.camera.available:
+                raise HTTPException(status_code=409, detail=CAMERA_HINT)
+
+            async def frames():
+                with self.camera.viewer():
+                    last = None
+                    while not await request.is_disconnected():
+                        part, last = await anyio.to_thread.run_sync(
+                            self.camera.next_part, last
+                        )
+                        if part is None:
+                            await anyio.sleep(0.04)
+                            continue
+                        yield part
+
+            return StreamingResponse(
+                frames(),
+                media_type="multipart/x-mixed-replace; boundary=frame",
+                headers={"Cache-Control": "no-store"},
+            )
+
+        @app.post("/api/camera/calibrate", dependencies=write)
+        def camera_calibrate(body: dict):
+            """De vier bedhoeken in het beeld: linksboven met de klok mee."""
+            return manage(
+                self.camera.calibrate, body.get("points"), body.get("corrected")
+            )
+
+        @app.delete("/api/camera/calibrate", dependencies=write)
+        def camera_reset_calibration():
+            return manage(self.camera.reset_calibration)
+
+        @app.post("/api/camera/corrected", dependencies=write)
+        def camera_corrected(body: dict):
+            """Tijdens het ijken wil je juist het onbewerkte beeld zien."""
+            return manage(self.camera.set_corrected, bool(body.get("corrected")))
+
         # ----------------------------------------------------------- generatoren
 
         @app.get("/api/design/autosave")
@@ -1029,6 +1119,12 @@ class ApiServer:
         )
         self._thread.start()
         self._attach_signals()
+        # De camera sluiten zodra er niemand meer kijkt. Een leesthread die
+        # uren doorloopt kost stroom en houdt het apparaat bezet voor andere
+        # programma's; de rem zit in Camera.reap().
+        self._camera_job = self.kernel.add_job(
+            self.camera.reap, name="openkerf-camera-reap", interval=5.0
+        )
         self.channel(f"OpenKerf API listening on http://{self.bind}:{self.port}/")
         if self.local_only:
             self.channel("Write actions are open (bound to localhost).")
@@ -1043,6 +1139,11 @@ class ApiServer:
 
     def stop(self):
         self._detach_signals()
+        job = getattr(self, "_camera_job", None)
+        if job is not None:
+            self.kernel.unschedule(job)
+            self._camera_job = None
+        self.camera.stop()
         if self._server is not None:
             self._server.should_exit = True
         if self._thread is not None:
