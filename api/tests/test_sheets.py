@@ -189,3 +189,16 @@ def test_sheets_survive_a_project_file(client, tmp_path):
     assert count(client) == 1
     client.post(f"/api/sheets/{second['id']}/activate")
     assert count(client) == 2
+
+
+def test_sheet_names_stay_unique(client):
+    """
+    Twee dozen achter elkaar leverden anders twee vellen die allebei "Doos 2"
+    heten, en dan weet je niet welke welke is.
+    """
+    client.post("/api/sheets", json={"name": "Doos 2"})
+    client.post("/api/sheets", json={"name": "Doos 2"})
+
+    names = [s["name"] for s in client.get("/api/sheets").json()["sheets"]]
+
+    assert names == ["Vel 1", "Doos 2", "Doos 2 (2)"]

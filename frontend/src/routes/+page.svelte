@@ -160,7 +160,7 @@
 		});
 		if (response.ok) {
 			design.select(null);
-			await Promise.all([design.load(), library.load()]);
+			await Promise.all([design.load(), library.load(), sheets.load()]);
 		}
 	}
 
@@ -721,10 +721,19 @@
 		});
 		if (!response.ok) {
 			const detail = await response.json().catch(() => null);
-			return detail?.detail ?? 'Dat lukte niet.';
+			return { error: detail?.detail ?? 'Dat lukte niet.' };
 		}
-		await design.load();
-		return null;
+		const result = await response.json().catch(() => null);
+		await Promise.all([design.load(), sheets.load()]);
+		// Een vel dat er stilzwijgend bijkomt is een verrassing; zeg het.
+		const used = result?.sheets ?? 1;
+		return {
+			notice:
+				used > 1
+					? `Dit past niet op één vel: het staat nu op ${used} vellen. ` +
+						`Kijk in de vellenbalk boven het canvas.`
+					: null
+		};
 	}}
 />
 

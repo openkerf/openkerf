@@ -120,9 +120,18 @@ class Sheets:
             (int(s["id"].rsplit("-", 1)[-1]) for s in sheets if s["id"][-1].isdigit()),
             default=0,
         )
+        # Namen uniek houden: twee dozen achter elkaar leverden anders twee
+        # vellen die allebei "Doos 2" heten, en dan weet je niet welke welke is.
+        wanted = str(name or f"Vel {number + 1}").strip()[:40]
+        taken = {s["name"] for s in sheets}
+        unique, suffix = wanted, 2
+        while unique in taken:
+            unique = f"{wanted} ({suffix})"
+            suffix += 1
+
         sheet = {
             "id": f"vel-{number + 1}",
-            "name": str(name or f"Vel {number + 1}").strip()[:40],
+            "name": unique,
             "width_mm": self._side(width_mm, bed_width, "width_mm"),
             "height_mm": self._side(height_mm, bed_height, "height_mm"),
             "material_id": material_id,

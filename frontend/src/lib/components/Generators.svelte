@@ -10,7 +10,10 @@
 		open: boolean;
 		hasSelection?: boolean;
 		busy?: boolean;
-		onGenerate: (what: string, body: Record<string, unknown>) => Promise<string | null>;
+		onGenerate: (
+			what: string,
+			body: Record<string, unknown>
+		) => Promise<{ error?: string | null; notice?: string | null }>;
 	} = $props();
 
 	type Tab = 'grid' | 'radial' | 'polygon' | 'box' | 'qrcode' | 'barcode' | 'arctext';
@@ -57,9 +60,16 @@
 	let current = $derived(TABS.find((t) => t.id === tab)!);
 	let blocked = $derived(current.needsSelection && !hasSelection);
 
+	let notice = $state<string | null>(null);
+
 	async function run(body: Record<string, unknown>) {
-		error = await onGenerate(tab, body);
-		if (!error) open = false;
+		notice = null;
+		const outcome = await onGenerate(tab, body);
+		error = outcome.error ?? null;
+		notice = outcome.notice ?? null;
+		// Blijft open als er iets te melden viel — een vel dat er stilzwijgend
+		// bijkomt, is precies het soort verrassing dat je niet wilt.
+		if (!error && !notice) open = false;
 	}
 
 	const n = (value: string) => Number(value);
@@ -79,6 +89,9 @@
 	{/if}
 	{#if error}
 		<p class="error" role="alert">{error}</p>
+	{/if}
+	{#if notice}
+		<p class="notice">{notice}</p>
 	{/if}
 
 	{#if tab === 'grid'}
@@ -225,6 +238,7 @@
 	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
 	.hint { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--warn); }
 	.error { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--danger); }
+	.notice { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--accent); }
 	.fields {
 		display: grid;
 		grid-template-columns: 1fr 1fr;

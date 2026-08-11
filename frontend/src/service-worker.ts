@@ -6,10 +6,13 @@
  * een uit de cache geserveerde jobopdracht is precies wat je niet wilt bij
  * iets dat brandt. Alleen de gebouwde bestanden gaan in de cache.
  */
-import { build, files, version } from '$service-worker';
+import { build, files, prerendered, version } from '$service-worker';
 
 const CACHE = `openkerf-${version}`;
-const SHELL = [...build, ...files];
+// `prerendered` hoorde hier ook bij: dat zijn de pagina's zelf. Zonder die
+// stond de schil nooit in de cache, en viel de offline-terugval altijd terug op
+// een foutmelding — een PWA die alleen offline werkt als je online bent.
+const SHELL = [...build, ...files, ...prerendered];
 
 self.addEventListener('install', (event) => {
 	const worker = self as unknown as ServiceWorkerGlobalScope;
@@ -40,13 +43,28 @@ self.addEventListener('fetch', (event) => {
 	if (request.method !== 'GET' || url.pathname.startsWith('/api')) return;
 	if (url.origin !== location.origin) return;
 
+	// Pagina's eerst van het netwerk. Cache-first leek zuiniger, maar dan houd
+	// je na een nieuwe versie een oude pagina vast die naar bestanden verwijst
+	// die niet meer bestaan — en dan is de app stuk tot je de cache leegt.
+	if (request.mode === 'navigate') {
+		event.respondWith(
+			fetch(request).catch(() =>
+				caches
+					.match(request)
+					.then((hit) => hit ?? caches.match('/'))
+					.then((shell) => shell ?? Response.error())
+			)
+		);
+		return;
+	}
+
+	// De rest draagt een hash in zijn naam en verandert dus nooit van inhoud;
+	// die mag uit de cache.
 	event.respondWith(
 		caches.match(request).then(
 			(hit) =>
 				hit ??
 				fetch(request).catch(() =>
-					// Offline en niet in de cache: geef de app-schil, dan blijft
-					// client-routing werken.
 					caches.match('/').then((shell) => shell ?? Response.error())
 				)
 		)
