@@ -5,20 +5,29 @@
 		tool = $bindable(),
 		canEdit = false,
 		compact = false,
+		bestanden = false,
 		onOpenGrid,
 		onOpenLibrary,
 		onPlaceImage,
+		onOpenFile,
+		onOpenProject,
 		onOpenCatalogue,
 		onOpenGenerators,
 		onOpenClipart
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
-		/** Tablet: vijf gereedschappen in de rail, de rest achter "Meer". */
+		/** Tablet: de rail draagt de tablettaken, de rest zit in het menu. */
 		compact?: boolean;
+		/** Smalle tablet: de bestandsknoppen passen niet in de bovenbalk en
+		 *  wonen dan hier. Boven deze breedte staan ze alleen daar — twee plekken
+		 *  voor dezelfde knop is erger dan één plek verderop. */
+		bestanden?: boolean;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
 		onPlaceImage?: (file: File) => void;
+		onOpenFile?: (file: File) => void;
+		onOpenProject?: (file: File) => void;
 		onOpenCatalogue?: () => void;
 		onOpenGenerators?: () => void;
 		onOpenClipart?: () => void;
@@ -40,16 +49,43 @@
 		{ id: 'measure', label: 'Meten', path: 'M3 15L15 3l6 6L9 21z M7 11l2 2M11 7l2 2' }
 	];
 
-	// Wat een tablet direct nodig heeft. De rest is er nog, één tik verderop:
-	// op 768 pixels hoogte past een rij van dertien niet zonder te verschralen.
-	const KERN: Tool[] = ['select', 'rect', 'circle', 'line', 'text'];
+	const ICON = {
+		beeld: 'M3.5 5h17v14h-17z',
+		raster: 'M3.5 3.5h17v17h-17z M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17',
+		boeken: 'M4 5h6v14H4zM14 5h6v14h-6zM4 9h6M14 9h6'
+	};
+
+	// Op de tablet staat de gereedschapsrail niet in dienst van ontwerpen maar
+	// van instellen en starten (DESIGN-SYSTEM v3, "Drie apparaten, drie apps").
+	// Materiaal en testraster zijn daar kerntaken en stonden achter een menu;
+	// cirkel, lijn en tekst zijn dat niet en staan er nu achter.
+	const KERN: Tool[] = ['select', 'rect'];
+	// Op een aanraakscherm bestaat hover niet, dus bestaat de tooltip niet: vijf
+	// naamloze glyphs zijn daar vijf gokjes. Korte labels passen wél.
+	const KORT: Partial<Record<Tool, string>> = {
+		select: 'Kiezen',
+		rect: 'Rechthoek',
+		// In een menu is de naam een naam; de bediening staat in de tooltip. Als
+		// hele zin brak deze regel over twee regels en zakte de rest weg.
+		pen: 'Pen'
+	};
 	let meerOpen = $state(false);
 	let zichtbaar = $derived(compact ? TOOLS.filter((t) => KERN.includes(t.id)) : TOOLS);
 	let verborgen = $derived(compact ? TOOLS.filter((t) => !KERN.includes(t.id)) : []);
 	$effect(() => {
 		if (!compact) meerOpen = false;
 	});
+	function kies(id: Tool) {
+		tool = id;
+		meerOpen = false;
+	}
 </script>
+
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key === 'Escape' && meerOpen) meerOpen = false;
+	}}
+/>
 
 <nav class="rail" class:compact aria-label="Gereedschap">
 	{#each zichtbaar as item (item.id)}
@@ -63,69 +99,139 @@
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d={item.path} />
 			</svg>
+			{#if compact}<span class="naam">{KORT[item.id] ?? item.label}</span>{/if}
 		</button>
 	{/each}
+
 	{#if compact}
+		<!-- De twee tablettaken uit DESIGN-SYSTEM staan hier direct, niet in het
+		     menu: op de tablet naast de machine is dít het werk. -->
+		<hr />
+		<button class="tool" title="Materiaalbibliotheek" onclick={() => { meerOpen = false; onOpenLibrary?.(); }}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
+			<span class="naam">Materiaal</span>
+		</button>
+		<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenGrid?.(); }}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.raster} /></svg>
+			<span class="naam">Testraster</span>
+		</button>
+		<hr />
 		<button
 			class="tool"
+			class:aan={meerOpen}
 			aria-expanded={meerOpen}
-			title="Meer gereedschap"
+			aria-haspopup="menu"
+			title="Meer"
 			onclick={() => (meerOpen = !meerOpen)}
 		>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+			<span class="naam">Meer</span>
 		</button>
 	{/if}
 
-	<div class="rest" class:uit={compact && !meerOpen} class:zwevend={compact}>
-	{#each verborgen as item (item.id)}
-		<button
-			class="tool"
-			aria-pressed={tool === item.id}
-			title={item.label}
-			disabled={!canEdit}
-			onclick={() => { tool = item.id; meerOpen = false; }}
-		>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-				<path d={item.path} />
-			</svg>
-		</button>
-	{/each}
-	<!-- Een afbeelding plaatsen voegt toe aan het ontwerp; "Openen" vervángt het. -->
-	<label class="tool file" class:off={!canEdit} title="Afbeelding plaatsen">
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
-		<input
-			type="file"
-			aria-label="Afbeelding plaatsen"
-			accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
-			disabled={!canEdit}
-			onchange={(e) => {
-				const input = e.currentTarget as HTMLInputElement;
-				const file = input.files?.[0];
-				input.value = '';
-				if (file) onPlaceImage?.(file);
-			}}
-		/>
-	</label>
+	{#if compact && meerOpen}
+		<!-- Een kolom van tien naamloze glyphs is een raadspel met handschoenen
+		     aan. Hier staan de woorden erbij, en het menu opent náást de rail in
+		     plaats van eroverheen. -->
+		<!-- Op een aanraakscherm is er geen Escape-toets: buiten het menu tikken
+		     moet het sluiten, anders zit je eraan vast tot je "Meer" terugvindt. -->
+		<div
+			class="afdek"
+			role="presentation"
+			onclick={() => (meerOpen = false)}
+		></div>
+		<div class="menu" role="menu" tabindex="-1">
+			<p class="kop">Gereedschap</p>
+			{#each verborgen as item (item.id)}
+				<button class="regel" role="menuitemradio" title={item.label} aria-checked={tool === item.id} disabled={!canEdit} onclick={() => kies(item.id)}>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={item.path} /></svg>
+					<span>{KORT[item.id] ?? item.label}</span>
+				</button>
+			{/each}
 
-	<hr />
-	<!-- Gereedschappen begin je links; een gereedschap dat alleen rechts te
-	     vinden is, vindt niemand. -->
-	<button class="tool" title="Generatoren — raster, cirkel, veelhoek, doos, QR" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenGenerators?.(); }}>
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
-	</button>
-	<button class="tool" title="Clipart zoeken in openbare collecties" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenClipart?.(); }}>
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
-	</button>
-	<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenGrid?.(); }}>
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg>
-	</button>
-	<button class="tool" title="Presetariat — gedeelde instellingen" onclick={() => { meerOpen = false; onOpenCatalogue?.(); }}>
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
-	</button>
-	<button class="tool" title="Materiaalbibliotheek" onclick={() => { meerOpen = false; onOpenLibrary?.(); }}>
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/><path d="M4 9h6M14 9h6"/></svg>
-	</button>
-	</div>
+			<p class="kop">Toevoegen</p>
+			<label class="regel" class:off={!canEdit}>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
+				<span>Afbeelding plaatsen</span>
+				<input type="file" aria-label="Afbeelding plaatsen" accept=".png,.jpg,.jpeg,.gif,.bmp,.webp" disabled={!canEdit}
+					onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onPlaceImage?.(f); }} />
+			</label>
+			<button class="regel" role="menuitem" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenGenerators?.(); }}>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
+				<span>Generatoren</span>
+			</button>
+			<button class="regel" role="menuitem" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenClipart?.(); }}>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
+				<span>Clipart zoeken</span>
+			</button>
+			<button class="regel" role="menuitem" onclick={() => { meerOpen = false; onOpenCatalogue?.(); }}>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
+				<span>Presetariat</span>
+			</button>
+
+			{#if bestanden}
+				<p class="kop">Bestand</p>
+				<label class="regel">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
+					<span>Importeren in dit vel</span>
+					<input type="file" aria-label="Bestand importeren" accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
+						onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenFile?.(f); }} />
+				</label>
+				<label class="regel">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
+					<span>Project openen</span>
+					<input type="file" aria-label="Project openen" accept=".openkerf,.zip"
+						onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenProject?.(f); }} />
+				</label>
+				<a class="regel" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={() => (meerOpen = false)}>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
+					<span>Project opslaan</span>
+				</a>
+				<a class="regel" role="menuitem" href="/api/design/export.svg" download="ontwerp.svg" onclick={() => (meerOpen = false)}>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
+					<span>Dit vel als SVG</span>
+				</a>
+			{/if}
+		</div>
+	{/if}
+
+	{#if !compact}
+		<!-- Een afbeelding plaatsen voegt toe aan het ontwerp; "Openen" vervángt het. -->
+		<label class="tool file" class:off={!canEdit} title="Afbeelding plaatsen">
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
+			<input
+				type="file"
+				aria-label="Afbeelding plaatsen"
+				accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
+				disabled={!canEdit}
+				onchange={(e) => {
+					const input = e.currentTarget as HTMLInputElement;
+					const file = input.files?.[0];
+					input.value = '';
+					if (file) onPlaceImage?.(file);
+				}}
+			/>
+		</label>
+
+		<hr />
+		<!-- Gereedschappen begin je links; een gereedschap dat alleen rechts te
+		     vinden is, vindt niemand. -->
+		<button class="tool" title="Generatoren — raster, cirkel, veelhoek, doos, QR" disabled={!canEdit} onclick={() => onOpenGenerators?.()}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
+		</button>
+		<button class="tool" title="Clipart zoeken in openbare collecties" disabled={!canEdit} onclick={() => onOpenClipart?.()}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
+		</button>
+		<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => onOpenGrid?.()}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.raster} /></svg>
+		</button>
+		<button class="tool" title="Presetariat — gedeelde instellingen" onclick={() => onOpenCatalogue?.()}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
+		</button>
+		<button class="tool" title="Materiaalbibliotheek" onclick={() => onOpenLibrary?.()}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
+		</button>
+	{/if}
 </nav>
 
 <style>
@@ -139,28 +245,33 @@
 		padding: var(--space-2) 0;
 		background: var(--surface-1);
 		border-right: 1px solid var(--line);
+		position: relative;
 	}
-	.rail { position: relative; }
-	.rest { display: contents; }
-	.rest.uit { display: none; }
-	/* Uitgeklapt zweeft de rest naast de rail: hij mag de balk niet oprekken. */
-	.rest.zwevend:not(.uit) {
-		display: flex;
+	/* Met een handschoen aan raak je niet het midden. 4px tussen twee doelen van
+	   44px maakt de buurman even waarschijnlijk als het doel; DESIGN-SYSTEM eist
+	   12. Alleen op tablet: op de desktop staan er dertien in dezelfde kolom. */
+	/* De breedte zelf staat in tokens.css (--rail-width, 84px onder 1200): de
+	   camerabalk in +page.svelte rekent er ook mee. */
+	.rail.compact {
+		gap: var(--space-3);
+	}
+	.rail.compact .tool {
 		flex-direction: column;
-		gap: var(--space-1);
-		position: absolute;
-		left: calc(var(--rail-width) + var(--space-1));
-		top: var(--space-2);
-		padding: var(--space-1);
-		background: var(--surface-1);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		box-shadow: var(--lift-2);
-		z-index: 5;
+		gap: 2px;
+		width: 76px;
+		height: auto;
+		min-height: 52px;
+		padding: var(--space-1h) 2px;
+	}
+	.naam {
+		font-size: var(--text-xs);
+		line-height: 1.1;
+		text-align: center;
 	}
 	.tool {
-		display: grid;
-		place-items: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		width: 40px;
 		height: 40px;
 		border-radius: var(--radius-field);
@@ -175,9 +286,19 @@
 		opacity: 0.35;
 		cursor: not-allowed;
 	}
-	.tool[aria-pressed='true'] {
+	.tool[aria-pressed='true'],
+	.tool.aan {
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 		color: var(--accent);
+	}
+	/* Het icoon mag accent zijn — dat is een grafisch element en 1.4.11 vraagt
+	   daar 3:1, wat het haalt. Het label niet: accent op een accenttint van 12%
+	   komt in het lichte thema op 3,76:1 en tekst van 13px vraagt 4,5. De
+	   actieve staat blijft dubbel gecodeerd via de tint, het icoon en
+	   aria-pressed. Gemeld door het donker-oppervlak (c2-pixels). */
+	.tool[aria-pressed='true'] .naam,
+	.tool.aan .naam {
+		color: var(--text-1);
 	}
 	.tool.file input {
 		position: absolute;
@@ -193,10 +314,90 @@
 		opacity: 0.35;
 		cursor: not-allowed;
 	}
+	.rail.compact hr {
+		width: 56px;
+	}
 	hr {
 		width: 28px;
 		border: none;
 		border-top: 1px solid var(--line);
-		margin: var(--space-1) 0;
+		margin: 0;
+	}
+
+	/* Het menu begint onder de rail-knop die het opende, zodat het de vellenbalk
+	   erboven niet afdekt, en het scrollt als het niet past. */
+	.afdek {
+		position: fixed;
+		inset: 0;
+		z-index: 19;
+	}
+	.menu {
+		position: absolute;
+		left: calc(var(--rail-width) + var(--space-2));
+		/* Van onderen opgebouwd, want "Meer" is de onderste railknop: zo staat het
+		   menu naast de vinger die het opende, en dekt het de vellenbalk erboven
+		   niet af. */
+		bottom: var(--space-2);
+		width: 260px;
+		max-height: calc(100vh - var(--topbar-height) - var(--statusbar-height) - 64px);
+		overflow-y: auto;
+		padding: var(--space-2);
+		background: var(--surface-1);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-float);
+		z-index: 20;
+	}
+	.kop {
+		margin: var(--space-2) 0 var(--space-1);
+		padding: 0 var(--space-2);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--text-2);
+	}
+	.kop:first-child {
+		margin-top: 0;
+	}
+	.regel {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		min-height: 44px;
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-field);
+		color: var(--text-1);
+		text-align: left;
+		text-decoration: none;
+		cursor: pointer;
+		transition: background var(--transition);
+	}
+	.regel svg {
+		flex: none;
+		color: var(--text-2);
+	}
+	.regel:hover:not(:disabled),
+	.regel:focus-visible {
+		background: var(--surface-2);
+	}
+	.regel:disabled,
+	.regel.off {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+	.regel[aria-checked='true'] {
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		color: var(--text-1);
+	}
+	.regel[aria-checked='true'] svg {
+		color: var(--accent);
+	}
+	.regel input[type='file'] {
+		position: absolute;
+		width: 0;
+		height: 0;
+		opacity: 0;
 	}
 </style>

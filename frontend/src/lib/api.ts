@@ -30,11 +30,22 @@ export type Spooler = {
 
 export type Bed = { width_mm: number | null; height_mm: number | null };
 
+/**
+ * Hangt er echt een machine aan? "unknown" is een eerlijk antwoord voor
+ * families waar de engine er geen bron voor heeft; het is géén reden om
+ * "verbonden" te tonen.
+ */
+export type Connection = {
+	state: 'connected' | 'disconnected' | 'unknown';
+	detail: string | null;
+};
+
 export type Device = {
 	label: string | null;
 	path: string | null;
 	active: boolean;
 	laser_status: string | null;
+	connection?: Connection;
 	bed: Bed;
 	position: Position;
 	spooler: Spooler;
@@ -79,8 +90,17 @@ export type SignalEvent = {
 export type SnapshotEvent = { type: 'snapshot'; data: Snapshot };
 export type ApiEvent = SignalEvent | SnapshotEvent;
 
-/** Machine state as the UI shows it — dubbel gecodeerd, nooit alleen kleur. */
-export type MachineState = 'offline' | 'ready' | 'busy' | 'paused' | 'alarm';
+/**
+ * Machine state as the UI shows it — dubbel gecodeerd, nooit alleen kleur.
+ *
+ * `offline` en `unplugged` zijn twee verschillende rampen en vragen om twee
+ * verschillende handelingen. `offline`: de app kan de OpenKerf-server niet
+ * bereiken — herstart de server, of je zit op het verkeerde adres. `unplugged`:
+ * de server draait prima, maar er hangt geen machine aan — controleer de kabel
+ * of zet hem aan. Eén woord voor allebei stuurt de helft van de mensen naar de
+ * verkeerde kabel.
+ */
+export type MachineState = 'offline' | 'unplugged' | 'ready' | 'busy' | 'paused' | 'alarm';
 
 /**
  * Wat de machine aan het doen is.
@@ -103,6 +123,11 @@ export function machineState(device: Device | null, connected: boolean): Machine
 	if (isStalled(job)) return 'paused';
 	if (device.laser_status === 'active') return 'busy';
 	if (job || device.spooler.idle === false) return 'busy';
+	// Pas hier, en niet eerder: een machine die brandt is per definitie
+	// verbonden, en een driver die zijn verbinding niet meldt mag een lopende
+	// job niet als "niet verbonden" wegzetten. Maar een stille machine zonder
+	// kabel is géén "Gereed" — dat was een groene stip boven een dode poort.
+	if (device.connection?.state === 'disconnected') return 'unplugged';
 	return 'ready';
 }
 
@@ -185,10 +210,20 @@ export function jobStatusLabel(job: Job): string {
 
 export const STATE_LABEL: Record<MachineState, string> = {
 	offline: 'Offline',
+	unplugged: 'Niet verbonden',
 	ready: 'Gereed',
 	busy: 'Bezig',
 	paused: 'Pauze',
 	alarm: 'Alarm'
+};
+
+/**
+ * Wat je nu kunt doen, per toestand. Een status die alleen zegt dát het mis is,
+ * laat je met een dood scherm zitten; dit is de zin die eronder hoort.
+ */
+export const STATE_HINT: Partial<Record<MachineState, string>> = {
+	offline: 'De OpenKerf-server reageert niet. Draait hij nog?',
+	unplugged: 'Er hangt geen machine aan. Controleer kabel en aan/uit.'
 };
 
 export function formatMm(value: number | null | undefined): string {

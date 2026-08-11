@@ -66,9 +66,24 @@
 			{/each}
 		</ul>
 	{:else}
-		<p class="muted">
-			{store.busy ? 'Catalogus laden…' : `Niets gevonden voor “${search}”.`}
+		<!-- Het lege geval had één tekst voor drie oorzaken, en die noemde altijd
+		     de zoekterm — ook als je niets getypt had en het de soortfilter was
+		     die alles wegliet. Dan las je "Niets gevonden voor “”" en was de
+		     enige uitweg de terugknop. -->
+		<p class="niets muted">
+			{#if store.busy}
+				Catalogus laden…
+			{:else if search.trim()}
+				Niets gevonden voor “{search.trim()}”{soort ? ' binnen deze soort' : ''}.
+			{:else if soort}
+				Deze soort levert geen modellen op. Waarschijnlijk klopt de soort in het adres niet.
+			{:else}
+				De catalogus is leeg. Draait de engine wel?
+			{/if}
 		</p>
+		{#if !store.busy && (soort || search.trim())}
+			<p><a class="btn" href="/setup/type">Toon alle modellen</a></p>
+		{/if}
 	{/each}
 
 	<div class="actions">
@@ -136,5 +151,8 @@
 	}
 	.name {
 		font-weight: 500;
+	}
+	.niets {
+		margin-top: var(--space-6);
 	}
 </style>

@@ -11,6 +11,8 @@
 	} from '$lib/api';
 
 	import type { Controller } from '$lib/control.svelte';
+	import Verbinding from './Verbinding.svelte';
+	import Melding from './Melding.svelte';
 
 	let {
 		device,
@@ -18,7 +20,8 @@
 		job,
 		connected,
 		control,
-		pointerMm = null
+		pointerMm = null,
+		acties = true
 	}: {
 		device: Device | null;
 		state: MachineState;
@@ -27,6 +30,11 @@
 		control: Controller;
 		/** Muispositie op het bed; staat naast de machinepositie. */
 		pointerMm?: { x: number; y: number } | null;
+		/** Draagt deze balk de pauze- en stopknop? Op tablet niet: daar staat de
+		 *  machinebediening in de bovenbalk, en twee plekken voor dezelfde stop
+		 *  maakt op het beslissende moment onduidelijk welke de echte is. Op 768
+		 *  liep de balk bovendien over en viel de stopknop van het scherm. */
+		acties?: boolean;
 	} = $props();
 
 	// Stoppen hoorde alleen in het Job-tabblad. Wie tijdens het branden aan het
@@ -49,14 +57,46 @@
 	let percent = $derived(job?.progress !== null && job?.progress !== undefined
 		? Math.round(job.progress * 100)
 		: null);
+
+	// Zonder verbinding is elk getal hieronder een herinnering, geen meting. Ze
+	// blijven staan — ze zeggen nog steeds waar de kop stond — maar ze mogen
+	// zich niet voordoen als actueel.
+	let vers = $derived(connected);
+
+	/**
+	 * Wat er over de verbinding staat, in de juiste volgorde van slecht nieuws.
+	 *
+	 * Er stond één zin: "Verbonden met de laser" of niet. Die was tweemaal
+	 * onwaar. Hij zei "verbonden" terwijl er geen kabel in zat, en hij wees bij
+	 * een weggevallen server naar de laser terwijl het probleem de server was —
+	 * en dan sta je een USB-kabel te controleren die niets mankeert.
+	 */
+	let verbindingstekst = $derived(
+		!connected
+			? 'Geen verbinding met OpenKerf'
+			: state === 'unplugged'
+				? 'Machine niet verbonden'
+				: 'Verbonden met de laser'
+	);
 </script>
+
+<Verbinding brandt={Boolean(job?.running)} />
+<!-- Fouten uit schrijfacties zijn hier niet thuis, maar dit is de enige
+     component die op elk tabblad meedraait. Zonder dit landde een mislukte
+     import in een paneel dat je op dat moment niet openhad. -->
+<Melding {control} />
 
 <footer class="statusbar mono">
 	<!-- Twee posities naast elkaar: waar de kop staat, en waar jouw muis staat.
 	     Zonder onderscheid leest de een als de ander. -->
 	<span class="wat">kop</span>
-	<span>X <b>{formatMm(mm?.[0])}</b></span>
-	<span>Y <b>{formatMm(mm?.[1])}</b> mm</span>
+	<span class:oud={!vers}>X <b>{formatMm(mm?.[0])}</b></span>
+	<span class:oud={!vers}>Y <b>{formatMm(mm?.[1])}</b> mm</span>
+	{#if !vers}
+		<!-- Eén woord, maar het is het verschil tussen "de kop staat daar" en
+		     "de kop stond daar toen we hem voor het laatst zagen". -->
+		<span class="wat">laatst gezien</span>
+	{/if}
 	<span class="sep muisdeel" aria-hidden="true"></span>
 	<span class="wat muisdeel">muis</span>
 	<span class="muis muisdeel">
@@ -83,16 +123,20 @@
 	<span class="sep" aria-hidden="true"></span>
 	<!-- Gebruikerstaal, geen protocoltaal: wie dit leest wil weten of de laser
 	     luistert, niet of er een socket openstaat. -->
-	<span class:offline={!connected}>
-		{connected ? 'Verbonden met de laser' : 'Geen verbinding met de laser'}
+	<span class:offline={!connected} class:onthecht={connected && state === 'unplugged'}>
+		{verbindingstekst}
 	</span>
-	{#if busy}
+	{#if busy && acties}
 		<span class="acties">
 			{#if paused}
 				<button
 					class="hervat"
-					disabled={control.needsToken || !canResume}
-					title={control.needsToken ? 'Eerst een token invullen' : 'Verder waar hij gebleven was'}
+					disabled={control.needsToken || !canResume || !connected}
+					title={!connected
+						? 'Geen verbinding met OpenKerf'
+						: control.needsToken
+							? 'Eerst een token invullen'
+							: 'Verder waar hij gebleven was'}
 					onclick={() => control.resume()}
 				>
 					Hervatten
@@ -100,9 +144,11 @@
 			{:else}
 				<button
 					class="pauze"
-					disabled={control.needsToken || !canPause || !job?.running}
-					title={control.needsToken
-						? 'Eerst een token invullen'
+					disabled={control.needsToken || !canPause || !job?.running || !connected}
+					title={!connected
+						? 'Geen verbinding met OpenKerf'
+						: control.needsToken
+							? 'Eerst een token invullen'
 						: !canPause
 							? 'Deze machine kent geen pauze — gebruik de knop op de machine'
 							: 'Job pauzeren'}
@@ -113,12 +159,17 @@
 			{/if}
 			<!-- 24px ertussen: pauze en stop hebben tegengestelde gevolgen, en een
 			     mistik kost je het werkstuk. Zie DESIGN-SYSTEM v2, "Touch". -->
+			<!-- Uitgeschakeld zodra de server weg is. Een stopknop die er levend
+			     uitziet en niets doet, is gevaarlijker dan geen stopknop: je drukt
+			     hem in, loopt weg, en denkt dat het geregeld is. -->
 			<button
 				class="stop"
-				disabled={control.needsToken}
-				title={control.needsToken
-					? 'Zonder token kan de app niet stoppen — gebruik de stopknop op de machine'
-					: 'Job afbreken'}
+				disabled={control.needsToken || !connected}
+				title={!connected
+					? 'Geen verbinding met OpenKerf — stoppen kan alleen met de knop op de machine'
+					: control.needsToken
+						? 'Zonder token kan de app niet stoppen — gebruik de stopknop op de machine'
+						: 'Job afbreken'}
 				onclick={() => control.stop()}
 			>
 				Stop
@@ -161,6 +212,12 @@
 		color: var(--text-2);
 	}
 	.offline { color: var(--danger); }
+	/* Niet rood: de server doet het, er hangt alleen geen machine aan. Rood zou
+	   dit gelijkstellen aan een storing, en dan gelooft niemand het rood meer
+	   dat er wél toe doet. */
+	.onthecht { color: var(--warn); }
+	/* Standen van vóór de stilte: leesbaar, maar niet meer als feit. */
+	.oud { opacity: 0.55; }
 	b {
 		color: var(--text-1);
 		font-weight: 400;
@@ -222,6 +279,7 @@
 		background: var(--text-2);
 	}
 	.dot.ready { background: var(--ok); }
+	.dot.unplugged { background: var(--warn-solid); }
 	.dot.busy { background: var(--accent); }
 	.dot.paused { background: var(--warn-solid); }
 	.dot.alarm { background: var(--danger-solid); }

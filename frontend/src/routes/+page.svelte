@@ -52,6 +52,10 @@
 	let breedte = $state(1440);
 	let telefoon = $derived(breedte < 768);
 	let tablet = $derived(breedte >= 768 && breedte < 1200);
+	// Onder deze breedte passen de bestandsknoppen niet meer náást de
+	// machinebediening in de bovenbalk; ze verhuizen dan naar het railmenu.
+	// Gemeten: bij 950px raakt de startknop anders de rechterrand.
+	let smal = $derived(tablet && breedte < 950);
 	let paneelOpen = $state(true);
 	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
 	// waar je hem zoekt.
@@ -460,6 +464,13 @@
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
 	stopArmed={machine === 'busy' || machine === 'paused'}
 	canEdit={canEdit && design.preview === null}
+	{tablet}
+	{smal}
+	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
+	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
+	paused={machine === 'paused'}
+	onPause={() => control.pause()}
+	onResume={() => control.resume()}
 	onStart={requestStart}
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
@@ -477,7 +488,8 @@
 
 <div class="main">
 	<ToolRail
-			compact={tablet}
+		compact={tablet}
+		bestanden={smal}
 		bind:tool
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
@@ -486,6 +498,8 @@
 		onOpenGenerators={() => (generatorsOpen = true)}
 		onOpenClipart={() => (clipartOpen = true)}
 		onPlaceImage={placeImage}
+		onOpenFile={openFile}
+		onOpenProject={openProject}
 	/>
 	<!-- Vellen boven het canvas: elk vel is een eigen document, dus dit is
 	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->
@@ -724,6 +738,7 @@
 	job={status.activeJob}
 	connected={status.connected}
 	{control}
+	acties={!tablet}
 />
 {/if}
 
@@ -755,7 +770,7 @@
 	</p>
 	<div class="ask-actions">
 		<button
-			class="btn"
+			class="btn weg"
 			onclick={async () => {
 				await fetch('/api/design/autosave', { method: 'DELETE', headers: authHeaders() });
 				recovery = null;
@@ -884,6 +899,18 @@
 		backdrop-filter: blur(6px);
 		box-shadow: var(--shadow-float);
 	}
+	/* Op tablet is er onderin geen ruimte náást de zoombalk: de camerapil lag er
+	   op 768 half overheen. Hij gaat er dan boven staan. */
+	@media (max-width: 1199px) {
+		.camstrip {
+			left: calc(var(--rail-width) + var(--space-3));
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 56px);
+		}
+		.camerror {
+			left: calc(var(--rail-width) + var(--space-3));
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px);
+		}
+	}
 	.cam {
 		display: flex;
 		align-items: center;
@@ -961,9 +988,10 @@
 		align-self: stretch;
 		flex: none;
 		width: 20px;
-		border: 1px solid var(--line);
-		border-right: 0;
-		border-radius: var(--radius-field) 0 0 var(--radius-field);
+		/* Ingeklapt was dit een naadloze witte kolom van 44px tegen de rand — dat
+		   leest als een renderfout, niet als een greep. De lijn links markeert
+		   waar het paneel zat en waar je moet duwen om het terug te halen. */
+		border-left: 1px solid var(--line);
 		background: var(--surface-1);
 		color: var(--text-2);
 		font-size: var(--text-md);
@@ -1013,6 +1041,15 @@
 		font-weight: 500;
 	}
 	:global(.ask-actions .btn:hover) { background: var(--surface-2); }
+	/* "Weggooien" verwijdert het automatisch bewaarde ontwerp definitief en stond
+	   op 8px van "Later". Dit venster verschijnt ongevraagd bij het openen —
+	   precies wanneer je nog niet kijkt — en met een handschoen aan raak je het
+	   midden van een doel niet. 24px ertussen, alleen op aanraakschermen; de
+	   muisindeling op de desktop blijft zoals hij was. Zie DESIGN-SYSTEM,
+	   "Touch als eersteklas input". */
+	@media (max-width: 1199px), (pointer: coarse) {
+		:global(.ask-actions .btn.weg) { margin-right: var(--space-4); }
+	}
 	:global(.ask-actions .btn.primary) {
 		background: var(--accent);
 		border-color: var(--accent);

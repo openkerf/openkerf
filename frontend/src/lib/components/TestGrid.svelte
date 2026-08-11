@@ -383,7 +383,7 @@
 	.stappen li {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-1h);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
@@ -392,7 +392,7 @@
 		width: 12px;
 		height: 1px;
 		background: var(--line);
-		margin-right: 6px;
+		margin-right: var(--space-1h);
 	}
 	.stappen .nr {
 		display: grid;
@@ -504,7 +504,7 @@
 		background: color-mix(in srgb, var(--void) calc(var(--brand) * 88%), var(--mat-hout));
 	}
 	.vakjes {
-		padding: 3px;
+		padding: var(--space-1);
 		background: var(--mat-hout);
 		border-radius: var(--radius-field);
 	}
@@ -532,7 +532,7 @@
 	}
 	.btn {
 		min-height: 40px;
-		padding: 8px 14px;
+		padding: var(--space-2) var(--space-4);
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

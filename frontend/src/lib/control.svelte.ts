@@ -7,6 +7,7 @@
  */
 
 import type { Capabilities } from './api';
+import { verbinding } from './verbinding.svelte';
 
 const TOKEN_KEY = 'openkerf.token';
 
@@ -15,6 +16,15 @@ export class Controller {
 	token = $state('');
 	busy = $state<string | null>(null);
 	error = $state<string | null>(null);
+	/**
+	 * De server heeft onze token geweigerd.
+	 *
+	 * Zonder dit zat je klem: `needsToken` is alleen waar als er géén token is,
+	 * dus met een verkeerde token verdween het invoerveld en faalde elke actie
+	 * met 401 zonder enige weg terug. Nu komt het veld terug zodra de server
+	 * nee zegt.
+	 */
+	rejected = $state(false);
 
 	constructor() {
 		if (typeof localStorage !== 'undefined') {
@@ -30,8 +40,15 @@ export class Controller {
 		return this.authRequired && !this.token;
 	}
 
+	/** Moet het tokenveld in beeld? Ook als er wél een token is, maar een foute. */
+	get tokenProbleem() {
+		return this.needsToken || this.rejected;
+	}
+
 	saveToken(value: string) {
 		this.token = value.trim();
+		this.rejected = false;
+		this.error = null;
 		if (typeof localStorage !== 'undefined') {
 			localStorage.setItem(TOKEN_KEY, this.token);
 		}
@@ -59,13 +76,15 @@ export class Controller {
 				headers: this.#headers(),
 				body
 			});
+			if (response.status === 401) this.rejected = true;
 			if (!response.ok) {
-				this.error = await describeFailure(response);
+				this.error = await describeFailure(response, this.token !== '');
 				return false;
 			}
+			this.rejected = false;
 			return true;
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = onbereikbaar(e);
 			return false;
 		} finally {
 			this.busy = null;
@@ -88,15 +107,16 @@ export class Controller {
 				headers: { 'Content-Type': 'application/json', ...this.#headers() },
 				body: '{}'
 			});
+			if (response.status === 401) this.rejected = true;
 			if (!response.ok) {
-				this.error = await describeFailure(response);
+				this.error = await describeFailure(response, this.token !== '');
 				return false;
 			}
 			const uitslag = await response.json();
 			if (uitslag?.notice) this.error = uitslag.notice;
 			return true;
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = onbereikbaar(e);
 			return false;
 		} finally {
 			this.busy = null;
@@ -133,17 +153,47 @@ export class Controller {
 	}
 }
 
-async function describeFailure(response: Response): Promise<string> {
+/**
+ * Een mislukte fetch is bijna nooit "een netwerkfout".
+ *
+ * De browser gooit hier `TypeError: Failed to fetch`, en dat op het scherm
+ * zetten is protocoltaal: het zegt niet wat er stuk is en niet wat je eraan
+ * doet. Dit zijn de twee gevallen die echt voorkomen — de server is weg, of
+ * je zit zelf zonder netwerk — en ze vragen om verschillende handelingen.
+ */
+function onbereikbaar(e: unknown): string {
+	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+		return 'Dit apparaat heeft geen netwerk. De machine loopt gewoon door; zodra je weer verbinding hebt, zie je het hier.';
+	}
+	verbinding.online = false;
+	verbinding.sinds ??= Date.now();
+	return 'De OpenKerf-server reageert niet — de opdracht is niet aangekomen. Controleer of hij nog draait.';
+}
+
+async function describeFailure(response: Response, metToken: boolean): Promise<string> {
 	if (response.status === 401) {
-		return 'Geen of onjuiste token — schrijfacties zijn geblokkeerd.';
+		return metToken
+			? 'De server weigert deze token. Vul hieronder de token in die in het venster van de engine staat.'
+			: 'Deze OpenKerf is vanaf het netwerk bereikbaar en vraagt daarom een token voordat er iets mag bewegen. Vul hem hieronder in.';
 	}
 	try {
 		const body = await response.json();
 		const detail = body.detail;
 		if (typeof detail === 'string') return detail;
-		if (detail?.output?.length) return detail.output.join(' · ');
-		return `De engine weigerde de opdracht (${response.status}).`;
+		// De engine antwoordt met zijn eigen console-uitvoer. Die begint met de
+		// opdracht die we zelf verstuurden ("plan copy preprocess…") en dat is
+		// ruis voor wie alleen wil weten waarom het niet ging; alleen de laatste,
+		// betekenisvolle regels overhouden.
+		if (detail?.output?.length) return zinnig(detail.output);
+		return `De machine weigerde de opdracht (foutcode ${response.status}).`;
 	} catch {
-		return `De engine weigerde de opdracht (${response.status}).`;
+		return `De machine weigerde de opdracht (foutcode ${response.status}).`;
 	}
+}
+
+function zinnig(output: string[]): string {
+	const regels = output
+		.map((r) => r.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '').trim())
+		.filter((r) => r && !/^(plan|spool|load|estop|abort|pause|resume)\b/.test(r));
+	return (regels.length ? regels : output).join(' · ');
 }

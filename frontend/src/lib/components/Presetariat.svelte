@@ -240,7 +240,7 @@
 	.badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 	.gedeeld {
 		margin: 0 0 var(--space-2);
-		padding: 6px 8px;
+		padding: var(--space-1h) 8px;
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 	}

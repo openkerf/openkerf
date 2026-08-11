@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatDuration, isStalled, type Device, type Job } from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
+	import { verbinding } from '$lib/verbinding.svelte';
 	import Segmented from './Segmented.svelte';
 
 	let {
@@ -99,45 +100,99 @@
 
 	// Zonder token levert elke schrijfactie een 401 op. Een knop aanbieden die
 	// gegarandeerd faalt is een lege belofte, dus die blokkeren we hier al.
-	let blocked = $derived(control.needsToken || control.busy !== null);
+	// Hetzelfde geldt voor een weggevallen server: dan komt er niets aan, en
+	// een knop die er bedienbaar uitziet belooft iets wat niet gebeurt.
+	let blocked = $derived(
+		control.tokenProbleem || control.busy !== null || !verbinding.online
+	);
 	let blockedReason = $derived(
-		control.needsToken ? 'Eerst een token invullen' : undefined
+		!verbinding.online
+			? 'Geen verbinding met OpenKerf — de opdracht komt niet aan'
+			: control.tokenProbleem
+				? 'Eerst een geldige token invullen'
+				: undefined
 	);
 
 	// De kop verzetten terwijl er gebrand wordt, verpest op zijn best de job.
-	let movingBlocked = $derived(running ? 'Kan niet tijdens een lopende job' : undefined);
+	let movingBlocked = $derived(
+		!verbinding.online
+			? 'Geen verbinding met OpenKerf — de kop beweegt hier niet van'
+			: running
+				? 'Kan niet tijdens een lopende job'
+				: undefined
+	);
+	let bewegenUit = $derived(running || !verbinding.online);
 
 	async function confirmStart() {
 		if (await control.start()) preflight = false;
 	}
+
+	/**
+	 * Valt er iets te branden?
+	 *
+	 * De pre-flight toonde bij een leeg bed opgewekt "Geschatte tijd 0:00", de
+	 * volledige veiligheidschecklist en een groene "Nu starten". Dat is twee
+	 * keer fout: je krijgt pas na het starten te horen dat er niets was, en je
+	 * leert intussen om een veiligheidslijst weg te klikken die nergens over
+	 * gaat. Een checklist die je went af te vinken, beschermt niemand meer.
+	 *
+	 * `parts` is het aantal onderdelen in het gebouwde snijplan; nul betekent
+	 * dat de machine niets zou doen. Zolang de schatting nog loopt weten we het
+	 * niet, en dan houden we onze mond.
+	 */
+	let leeg = $derived(!estimating && estimate !== null && estimate.parts === 0);
 </script>
 
 <div class="section">
 	<h2 class="section-title">Bediening</h2>
 
-	{#if control.needsToken}
-		<!-- De API is vanaf het netwerk bereikbaar; zonder token blijft alles read-only. -->
-		<div class="token">
-			<label for="token">Token voor schrijfacties</label>
+	{#if control.tokenProbleem}
+		<!-- De API is vanaf het netwerk bereikbaar; zonder token blijft alles
+		     read-only. Ook bij een geweigerde token: die stond wél in de browser,
+		     waardoor dit veld verdween en er geen weg terug was — elke actie
+		     faalde met 401 en je kon nergens een andere token kwijt. -->
+		<div class="token" class:afgewezen={control.rejected}>
+			<label for="token">
+				{control.rejected ? 'Deze token wordt geweigerd' : 'Token voor schrijfacties'}
+			</label>
 			<div class="token-row">
 				<input id="token" type="password" bind:value={tokenDraft} placeholder="plak de token" />
 				<button class="btn" onclick={() => control.saveToken(tokenDraft)}>Opslaan</button>
 			</div>
-			<p class="hint">De engine logt de token bij het starten van de API.</p>
+			<p class="hint">
+				{control.rejected
+					? 'Kijk in het venster waarin de engine draait: daar staat de token die bij deze server hoort.'
+					: 'De engine logt de token bij het starten van de API.'}
+			</p>
 		</div>
 	{/if}
 
 	{#if preflight}
 		<!-- Pre-flight in het paneel, geen modaal venster. -->
-		<div class="preflight">
-			<div class="pf-time">
-				<span class="muted">Geschatte tijd</span>
-				<span class="v mono">
-					{#if estimating}
-						<span class="rekent">rekent…</span>
-					{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
-				</span>
-			</div>
+		<div class="preflight" class:niets={leeg}>
+			<!-- "Geschatte tijd 0:00" boven een leeg bed leest als een job van nul
+			     seconden in plaats van als geen job. Bij niets te doen zwijgt de
+			     klok en spreekt de melding eronder. -->
+			{#if !leeg}
+				<div class="pf-time">
+					<span class="muted">Geschatte tijd</span>
+					<span class="v mono">
+						{#if estimating}
+							<span class="rekent">rekent…</span>
+						{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
+					</span>
+				</div>
+			{/if}
+			{#if !leeg && device?.connection?.state === 'disconnected'}
+				<!-- Starten mag: de engine zet de job in de wachtrij en verbindt
+				     zodra de machine er is. Maar wie op "Nu starten" drukt en naar
+				     een stille machine loopt, moet weten dat het wachten daaraan
+				     ligt en niet aan de job. -->
+				<p class="pf-warn strong">
+					De machine meldt zich niet. Deze job gaat de wachtrij in en begint
+					pas zodra de verbinding er is — zet hem aan of controleer de kabel.
+				</p>
+			{/if}
 			{#if estimateTraag}
 				<p class="pf-row">
 					De engine bouwt het hele snijplan om dit te schatten; op een zwaar
@@ -197,6 +252,20 @@
 				{/if}
 			{/if}
 
+			{#if leeg}
+				<!-- Geen checklist, geen startknop: er is niets om na te lopen. -->
+				<div class="pf-leeg">
+					<strong>Er is niets om te branden</strong>
+					<p>
+						Het bed is leeg, of alles wat erop staat zit in een laag die niet
+						meebrandt. Teken of importeer iets, geef het een laag, en kom
+						hierna terug.
+					</p>
+				</div>
+				<div class="pf-actions een">
+					<button class="btn" onclick={() => (preflight = false)}>Terug naar het ontwerp</button>
+				</div>
+			{:else}
 			<!-- Dit stond als tweede geel blok onder de risicomelding. Twee
 			     waarschuwingen op rij van dezelfde kleur devalueren elkaar: de
 			     routinecontrole maakte de échte melding onzichtbaar. Nu neutraal
@@ -226,10 +295,16 @@
 
 			<div class="pf-actions">
 				<button class="btn" onclick={() => (preflight = false)}>Annuleren</button>
-				<button class="btn primary" onclick={confirmStart} disabled={control.busy !== null}>
+				<button
+					class="btn primary"
+					onclick={confirmStart}
+					disabled={control.busy !== null || !verbinding.online}
+					title={verbinding.online ? undefined : blockedReason}
+				>
 					{control.busy === 'start' ? 'Bezig…' : 'Nu starten'}
 				</button>
 			</div>
+			{/if}
 		</div>
 	{:else}
 		<div class="controls">
@@ -238,7 +313,7 @@
 			     degene die je niet moet hebben — en spoolt een tik er een tweede
 			     job achteraan. -->
 			<button
-				class="btn"
+				class="btn dubbel"
 				class:primary={!bezet}
 				disabled={!actions?.start || blocked || bezet}
 				title={bezet ? 'Er loopt al een job — eerst stoppen of afwachten' : blockedReason}
@@ -248,7 +323,7 @@
 			</button>
 			{#if paused}
 				<button
-					class="btn primary"
+					class="btn primary dubbel"
 					disabled={!actions?.resume || blocked}
 					title={blockedReason}
 					onclick={() => control.resume()}
@@ -257,7 +332,7 @@
 				</button>
 			{:else}
 				<button
-					class="btn"
+					class="btn dubbel"
 					disabled={!actions?.pause || !running || blocked}
 					title={running
 						? blockedReason
@@ -278,19 +353,32 @@
 			<!-- Stoppen kan altijd, in één tik — maar niet vlak naast pauze:
 			     24px eronder, eigen breedte, zodat een mistik niet je werkstuk
 			     kost. Zie DESIGN-SYSTEM v2, "Touch als eersteklas input". -->
+			<!-- Sluimerend als er niets loopt, net als de stopknop in de bovenbalk.
+			     Twee stopknoppen op één scherm met verschillend gedrag is erger
+			     dan één: dan weet je niet meer welke van de twee iets betekent. -->
 			<button
-				class="btn danger stop"
-				disabled={!actions?.stop || control.needsToken}
-				title={blockedReason ?? 'Job direct afbreken'}
+				class="btn danger stop dubbel"
+				class:sluimer={!running && !paused}
+				disabled={!actions?.stop || control.tokenProbleem || !verbinding.online}
+				title={!verbinding.online
+					? 'Geen verbinding met OpenKerf — stoppen kan alleen met de knop op de machine'
+					: (blockedReason ?? 'Job direct afbreken')}
 				onclick={() => control.stop()}
 			>
 				Stop
 			</button>
+			<!-- Op tablet dragen starten, pauzeren en stoppen vast in de bovenbalk
+			     (die kan niet dichtklappen, dit paneel wel). Ze hier nog eens
+			     herhalen maakt er drie van dezelfde knop op één scherm van 768px,
+			     dus verwijzen we in plaats van te dupliceren. -->
+			<p class="elders">
+				Starten, pauzeren en stoppen staan vast in de balk bovenin.
+			</p>
 		</div>
 
 	{/if}
 
-	{#if !control.needsToken}
+	{#if !control.tokenProbleem}
 		<!-- Beweging: nodig om uit te lijnen en het nulpunt te zetten. Deze
 		     knoppen zetten de kop echt in beweging. -->
 		<div class="motion">
@@ -299,24 +387,24 @@
 			     met ← en → ernaast. Home staat ernaast en niet in het midden,
 			     want dat is geen richting. -->
 			<div class="pad" class:metz={control.capabilities?.motion?.focus}>
-				<button class="jog up" aria-label="Naar boven" disabled={running} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
-				<button class="jog left" aria-label="Naar links" disabled={running} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
-				<button class="jog down" aria-label="Naar beneden" disabled={running} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
-				<button class="jog right" aria-label="Naar rechts" disabled={running} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
-				<button class="jog home" disabled={running} title={movingBlocked} onclick={() => onHome?.()}>Home</button>
+				<button class="jog up" aria-label="Naar boven" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
+				<button class="jog left" aria-label="Naar links" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="jog down" aria-label="Naar beneden" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
+				<button class="jog right" aria-label="Naar rechts" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
+				<button class="jog home" disabled={bewegenUit} title={movingBlocked} onclick={() => onHome?.()}>Home</button>
 				{#if control.capabilities?.motion?.focus}
 					<!-- De Z-as staat in dezelfde pad als X en Y: het is dezelfde
 					     handeling met een derde richting, en hij volgt dezelfde
 					     stapgrootte. -->
 					<button
 						class="jog zup"
-						disabled={running}
+						disabled={bewegenUit}
 						title={movingBlocked ?? `Kop ${step} mm omhoog`}
 						onclick={() => onFocus?.(-step)}
 					>Z&nbsp;↑</button>
 					<button
 						class="jog zdown"
-						disabled={running}
+						disabled={bewegenUit}
 						title={movingBlocked ?? `Kop ${step} mm omlaag`}
 						onclick={() => onFocus?.(step)}
 					>Z&nbsp;↓</button>
@@ -329,7 +417,9 @@
 					bind:value={step}
 					options={[0.1, 1, 10, 50].map((size) => ({ value: size, label: `${size} mm` }))}
 				/>
-				<button class="rot" onclick={() => onUnlock?.()}>Ontgrendelen</button>
+				<button class="rot" disabled={bewegenUit} title={movingBlocked} onclick={() => onUnlock?.()}>
+					Ontgrendelen
+				</button>
 			</div>
 			{#if !control.capabilities?.motion?.focus && profile?.has_z}
 				<!-- Het profiel zegt dat deze machine een Z-as heeft, maar de
@@ -356,9 +446,9 @@
 		</p>
 	{/if}
 
-	{#if control.error}
-		<p class="error" role="alert">{control.error}</p>
-	{/if}
+	<!-- De foutmelding staat nu in de statusbalk, op elk tabblad zichtbaar.
+	     Hier nóg een keer zou hem tweemaal tonen zodra je toevallig in Job
+	     staat. -->
 </div>
 
 <style>
@@ -374,6 +464,22 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
+	}
+	/* Onder 1200px staan starten en pauzeren in de bovenbalk en verdwijnt dit
+	   blok grotendeels (zie `.dubbel` verderop). Maar een aanraakscherm kan
+	   bréder zijn dan 1200, en daar stond alles op 8px — onder de 12px die
+	   DESIGN-SYSTEM als ondergrens voor raakdoelen stelt.
+
+	   Rijen tellen net zo hard als kolommen: "Pauze" en "Wachtrij legen" staan
+	   ónder elkaar en zijn tijdens een job allebei bruikbaar, en dat tweede
+	   knopje gooit je hele wachtrij weg. Dus `gap`, niet `column-gap`.
+	   (Startknop en pauzeknop naast elkaar zijn overigens nooit tegelijk
+	   bruikbaar — daar beschermt de afstand tegen niets. Deze wel.)
+	   Ingezet door de tablet-agent, hier verbreed naar beide assen. */
+	@media (pointer: coarse) {
+		.controls {
+			gap: var(--space-6);
+		}
 	}
 	.btn {
 		padding: 8px 12px;
@@ -407,6 +513,22 @@
 		grid-column: 1 / -1;
 		margin-top: var(--space-6);
 	}
+	/* De verwijzing bestaat alleen op tablet; op desktop staan de knoppen hier. */
+	.elders { display: none; }
+	/* Tablet. Onder 768px rendert dit paneel niet — dan neemt PhoneView het over
+	   — dus deze grens dekt precies het bereik waarin de bovenbalk zijn eigen
+	   pauzeknop toont. Haalt de tablet-agent die knoppen daar weg, dan moet dit
+	   mee: het is een afspraak tussen twee bestanden. */
+	@media (max-width: 1199px) {
+		.controls .dubbel { display: none; }
+		.elders {
+			display: block;
+			grid-column: 1 / -1;
+			margin: var(--space-2) 0 0;
+			font-size: var(--text-xs);
+			color: var(--text-2);
+		}
+	}
 	.preflight {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -431,8 +553,8 @@
 		display: inline-block;
 		width: 8px;
 		height: 8px;
-		border-radius: 2px;
-		margin-right: 6px;
+		border-radius: var(--radius-sharp);
+		margin-right: var(--space-1h);
 		vertical-align: baseline;
 	}
 	.pf-name {
@@ -501,6 +623,21 @@
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
 	}
+	.pf-actions.een { grid-template-columns: 1fr; }
+	/* De rand van de pre-flight is neutraal; bij "niets te doen" mag hij het
+	   zeggen zonder alarm te slaan — dit is geen storing, alleen een lege bak. */
+	.preflight.niets { border-color: var(--warn); }
+	.pf-leeg { margin-bottom: var(--space-3); }
+	.pf-leeg strong {
+		display: block;
+		font-size: var(--text-sm);
+		margin-bottom: 2px;
+	}
+	.pf-leeg p {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
 	.muted {
 		color: var(--text-2);
 	}
@@ -529,6 +666,7 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
+	.token.afgewezen { border-color: var(--danger-solid); }
 	.motion { margin-top: var(--space-4); }
 	.rot-label {
 		font-size: var(--text-xs);
@@ -564,7 +702,11 @@
 		background: var(--surface-1);
 		font-weight: 500;
 	}
-	.jog:hover { background: var(--surface-2); }
+	.jog:hover:not(:disabled) { background: var(--surface-2); }
+	/* Uitgeschakeld moet je zíen. Deze knoppen waren wel geblokkeerd maar zagen
+	   er identiek uit, dus bleef je erop drukken en gebeurde er niets. */
+	.jog:disabled { opacity: 0.4; cursor: not-allowed; }
+	.rot:disabled { opacity: 0.4; cursor: not-allowed; }
 	.jog.home { font-size: var(--text-xs); }
 	.steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 	.rot {
@@ -574,17 +716,20 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
+	/* Zelfde sluimerstand als in de bovenbalk: herkenbaar als de stopknop
+	   (rode rand, rood vierkant) zonder de hele dag alarm te slaan. */
+	.btn.danger.sluimer {
+		background: var(--surface-1);
+		border-color: var(--danger-solid);
+		color: var(--text-1);
+	}
+	.btn.danger.sluimer:hover:not(:disabled) {
+		background: var(--danger-solid);
+		color: var(--on-color);
+	}
 	.hint {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
-	}
-	.error {
-		margin: var(--space-3) 0 0;
-		padding: var(--space-2);
-		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--danger) 14%, transparent);
-		color: var(--text-1);
-		font-size: var(--text-xs);
 	}
 </style>

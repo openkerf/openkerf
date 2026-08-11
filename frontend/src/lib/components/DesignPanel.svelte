@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LAYER_COLORS, type DesignStore } from '$lib/design.svelte';
+	import { LAYER_COLORS, inktOp, type DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import NumberField from './NumberField.svelte';
 	import Segmented from './Segmented.svelte';
@@ -269,8 +269,13 @@
 		<p class="edit-error" role="alert">{edits.error}</p>
 	{/if}
 	{#if elements.length === 0}
+		<!-- Hier stond "Gebruik 'Ontwerp laden…' in de Job-tab". Die knop bestaat
+		     niet en heeft nooit bestaan (repo-brede grep: deze regel was de enige
+		     vindplaats van die naam). Een lege staat die naar een verzonnen knop
+		     wijst, is erger dan een lege staat die zwijgt: je gaat zoeken. -->
 		<p class="empty">
-			Nog geen ontwerp geladen. Gebruik “Ontwerp laden…” in de Job-tab.
+			Nog niets op het bed. <b>Importeren</b> in de bovenbalk haalt een SVG,
+			DXF of afbeelding binnen; met het gereedschap links teken je zelf.
 		</p>
 	{:else}
 		<p class="muted mono">{elements.length} element{elements.length === 1 ? '' : 'en'}</p>
@@ -608,7 +613,9 @@
 					     laag, dus de kleur is ook de weg naar zijn instellingen. -->
 					<button
 						class="chip mono"
-						style="background: {design.colorFor(op.id)}"
+						style="background: {design.colorFor(op.id)}; color: {inktOp(
+							design.colorFor(op.id)
+						)}"
 						disabled={!canEdit}
 						title="Laag {index + 1} van {plainLayers.length} — instellingen en kleur"
 						aria-expanded={open}
@@ -957,6 +964,8 @@
 		place-items: center;
 		font-size: var(--text-xs);
 		font-weight: 600;
+		/* De inkt komt van inktOp() als inline stijl; dit is alleen de val voor
+		   een kleur die niet te ontleden is. */
 		color: var(--on-color);
 		border: 0;
 		padding: 0;
@@ -1384,7 +1393,7 @@
 		width: auto;
 		height: 24px;
 		padding: 0;
-		border: 1px solid rgb(0 0 0 / 0.15);
+		border: 1px solid var(--edge-on-color);
 		border-radius: var(--radius-field);
 	}
 	.swatch.picked {

@@ -516,6 +516,10 @@
 	</article>
 {/snippet}
 
+<!-- Filters over een lege verzameling zijn meubilair: drie bedieningen die
+     niets te bedienen hebben, boven een venster dat zegt dat er niets is. Bij
+     een lege bibliotheek verdwijnen ze en houdt de uitnodiging het woord. -->
+{#if library.materials.length > 0}
 <div class="kopblok">
 	<div class="balk">
 	<input
@@ -563,8 +567,13 @@
 	{/if}
 	</div>
 </div>
+{/if}
 
-{#if canEdit && operations.length === 0}
+<!-- Alleen zinnig als er iets toe te passen valt. Bij een lege bibliotheek stond
+     deze uitleg over lagen bóven de mededeling dat er nog geen materialen zijn:
+     twee keer "je hebt niets", in de verkeerde volgorde, en het antwoord op een
+     vraag die je nog niet gesteld had. -->
+{#if canEdit && operations.length === 0 && library.materials.length > 0}
 	<!-- Eén keer zeggen waarom "Toepassen" niet kan, niet op elke kaart opnieuw. -->
 	<p class="melding">
 		Er is nog geen laag om een instelling op te zetten. Maak er een aan in de tab
@@ -589,12 +598,42 @@
 {/if}
 
 {#if library.materials.length === 0}
-	<p class="leeg">
-		Nog geen materialen. Voeg er een toe en leg vast wat op jóuw machine werkt — daarna
-		staat het hier terug, met de foto van het raster waar het uit kwam.
-	</p>
+	<!-- Een lege bibliotheek was één grijze alinea onderaan een venster vol
+	     filters die niets te filteren hadden. Dit is het eerste wat een nieuwe
+	     gebruiker hier ziet, dus krijgt het de vorm van een uitnodiging: wat dit
+	     is, waarom het de moeite waard is, en de twee wegen naar binnen. -->
+	<div class="onthaal">
+		<h2>Nog geen materialen</h2>
+		<p>
+			Hier leg je vast wat op jóuw laser werkt: per materiaal en dikte een
+			snelheid en een vermogen, met de foto van het testraster waar ze uit
+			komen. De volgende keer 3 mm berk is daarmee één tik werk in plaats van
+			opnieuw uitzoeken.
+		</p>
+		<div class="wegen">
+			{#if canEdit}
+				<button class="btn primary" onclick={() => (adding = true)}>
+					Eerste materiaal toevoegen
+				</button>
+			{/if}
+			<p class="fijn">
+				Of haal er een op uit het Presetariat — dat is de gedeelde catalogus van
+				andere lasers.
+			</p>
+		</div>
+	</div>
 {:else if groepen.length === 0}
-	<p class="leeg">Niets gevonden voor “{zoek}”. Probeer alleen de materiaalnaam.</p>
+	<!-- Niets gevonden is geen doodlopende weg zolang je de zoekopdracht kunt
+	     weggooien zonder het veld te zoeken. -->
+	<div class="onthaal smal">
+		<h2>Niets gevonden voor “{zoek}”</h2>
+		<p>
+			De bibliotheek bevat {library.materials.length}
+			{library.materials.length === 1 ? 'materiaal' : 'materialen'}. Zoek op de
+			materiaalnaam zelf — “berk” vindt meer dan “berken 3mm snijden”.
+		</p>
+		<button class="btn" onclick={() => (zoek = '')}>Zoekopdracht wissen</button>
+	</div>
 {:else}
 	<!-- Onlangs gebruikt is een snelkoppeling voor wie bladert. Wie zoekt of
 	     al op één materiaal gefilterd heeft, krijgt er alleen dubbele kaarten
@@ -767,11 +806,27 @@
 	}
 	section + section { margin-top: var(--space-4); }
 	.leeg { color: var(--text-2); margin: 0 0 var(--space-2); }
+	/* Een lege staat mag ruimte innemen: hij is hier het scherm, niet een
+	   voetnoot eronder. */
+	.onthaal {
+		padding: var(--space-6) 0 var(--space-4);
+		max-width: 46ch;
+	}
+	.onthaal.smal { padding: var(--space-5) 0; }
+	.onthaal h2 {
+		font-size: var(--text-md);
+		font-weight: 600;
+		margin: 0 0 var(--space-2);
+		color: var(--text-1);
+	}
+	.onthaal p { margin: 0 0 var(--space-3); color: var(--text-2); }
+	.wegen { display: grid; justify-items: start; gap: var(--space-3); }
+	.wegen .fijn { margin: 0; max-width: 42ch; }
 	.fijn { color: var(--text-2); font-size: var(--text-xs); margin: 0 0 var(--space-2); }
 	.mini {
 		font-size: var(--text-xs);
 		color: var(--accent);
-		padding: 4px 6px;
+		padding: 4px var(--space-1h);
 		border-radius: var(--radius-field);
 	}
 	.mini:hover { background: var(--surface-2); }
@@ -823,7 +878,7 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: var(--space-2);
-		padding: 6px 10px;
+		padding: var(--space-1h) var(--space-3);
 		/* Zonder deze sluier haalt witte tekst op een houtnerf geen AA. */
 		background: linear-gradient(to top, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0.42) 70%, transparent);
 		color: var(--on-color);
@@ -974,9 +1029,9 @@
 	.botst {
 		display: flex;
 		align-items: flex-start;
-		gap: 6px;
+		gap: var(--space-1h);
 		margin: var(--space-2) 0 0;
-		padding: 6px 8px;
+		padding: var(--space-1h) 8px;
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 		color: var(--warn);

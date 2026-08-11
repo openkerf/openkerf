@@ -11,6 +11,7 @@
 		type SignalEvent
 	} from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
+	import { verbinding } from '$lib/verbinding.svelte';
 	import JobControls from './JobControls.svelte';
 
 	let {
@@ -49,10 +50,25 @@
 
 <div class="section">
 	<h2 class="section-title">Spooler</h2>
-	{#if !spooler?.present}
-		<p class="empty">Geen spooler beschikbaar.</p>
+	<!-- Drie soorten leegte, en ze betekenen niet hetzelfde: we weten het niet
+	     (geen verbinding), de machine heeft geen wachtrij (protocolprobleem), of
+	     er staat gewoon niets klaar. Eén regel "Wachtrij is leeg" voor alle drie
+	     stelde de gebruiker gerust op momenten dat dat niet mocht. -->
+	{#if !verbinding.online}
+		<p class="empty">
+			Onbekend — zonder verbinding weten we niet wat er in de wachtrij staat.
+			Wat je hier las, is van vlak vóór de stilte.
+		</p>
+	{:else if !spooler?.present}
+		<p class="empty">
+			Deze machine meldt geen wachtrij. Starten kan wel; je ziet alleen de
+			voortgang niet.
+		</p>
 	{:else if jobs.length === 0}
-		<p class="empty">Wachtrij is leeg.</p>
+		<p class="empty">
+			Niets in de wachtrij. Wat je start komt hier te staan, met voortgang en
+			resterende tijd.
+		</p>
 	{:else}
 		{#each jobs as job, i (i)}
 			<!-- Alleen de job waar de bediening over gaat kan stilstaan; de rest

@@ -15,10 +15,23 @@
 	--text-2: #5b6470;
 	--accent: #0e7c86;
 	--accent-ink: #ffffff;
+	/* v3.2: de merkkleur als tékst is een andere rol dan de merkkleur als vlak.
+	   --accent haalt 4,95 op wit en 4,61 op --surface-0, maar op --surface-2
+	   blijft hij op 4,33 steken — en dat is precies waar een pil, een chip of
+	   een kruimelpad staat. Dit is dezelfde kleur, één tint dieper, zodat hij
+	   4,5 haalt op élk van de drie oppervlakken (5,09 op de donkerste). */
+	--accent-text: #0c7079;
 	/* Tekst op een gekleurd vlak, en de zwarte achtergrond van een camerabeeld. */
 	--on-color: #ffffff;
+	/* v3.2: de haarlijn die je om een wíllekeurig gekleurd vlak trekt — een
+	   laagvakje, een kleurstip. --line werkt daar niet: die is afgestemd op de
+	   oppervlakken, niet op een geel of blauw vlakje. Donker en licht draaien om,
+	   want de rand moet altijd de kant op die het meeste verschil maakt. */
+	--edge-on-color: rgb(0 0 0 / 0.22);
 	--void: #000000;
-	--danger: #d3382c;
+	/* v3.2: #d3382c haalde op --surface-0 nog 4,48 en dat is te weinig voor de
+	   telefoonknop die de laser stopt. Eén tint dieper haalt 4,69. */
+	--danger: #cf3427;
 	/* Vlak-rood is een andere rol dan tekst-rood: wit hierop haalt 5,6:1, en
 	   dat moet, want dit is de stopknop. */
 	--danger-solid: #c62a1e;
@@ -29,18 +42,6 @@
 	--warn: #7f5900;
 	--warn-solid: #b8860b;
 	--ok: #2a733f;
-
-	/* Laagkleuren: vaste reeks van 10, puur identificatie. */
-	--layer-1: #e5484d;
-	--layer-2: #f76b15;
-	--layer-3: #ffc53d;
-	--layer-4: #46a758;
-	--layer-5: #12a594;
-	--layer-6: #0091ff;
-	--layer-7: #6e56cf;
-	--layer-8: #e93d82;
-	--layer-9: #8d6e63;
-	--layer-10: #607d8b;
 
 	/* Materiaal als beeld: de grondkleur van elke textuurstrook. Geen
 	   themakleuren maar materiaalkleuren — hout is hout, ook 's nachts. In het
@@ -58,6 +59,9 @@
 	/* Spacing op een 4px-grid. */
 	--space-1: 4px;
 	--space-2: 8px;
+	/* Halve stap. Kwam tien keer met de hand terug als `6px` — voor een chip of
+	   een pil is 4px te krap en 8px te los. Dan hoort hij in de schaal. */
+	--space-1h: 6px;
 	--space-3: 12px;
 	--space-4: 16px;
 	--space-6: 24px;
@@ -65,7 +69,11 @@
 
 	/* Laagkleuren: vaste reeks van tien, herkenbaar uit RDWorks en LightBurn.
 	   Ze staan hier en niet in JavaScript, zodat het canvas dezelfde bron
-	   leest als de rest van de app. */
+	   leest als de rest van de app. Puur identificatie — ze zijn in beide
+	   thema's gelijk, want een rode laag hoort 's nachts nog steeds rood te
+	   zijn. Wat wél per thema verschilt is of ze loskomen van het bed; dat
+	   regelt `leesbaar()` in design.svelte.ts, en de inkt die erop past
+	   regelt `inktOp()` ernaast. */
 	--layer-1: #E5484D;
 	--layer-2: #F76B15;
 	--layer-3: #FFC53D;
@@ -84,6 +92,8 @@
 	/* Het canvas is een podium, geen vlak. */
 	--stage: radial-gradient(120% 100% at 50% 0%, #eceef0 0%, #e3e6e9 60%, #dcdfe3 100%);
 
+	/* Scherper dan een veld: voor een streepje of een balkje dat geen knop is. */
+	--radius-sharp: 2px;
 	--radius-field: 6px;
 	--radius-card: 10px;
 	--radius-dot: 999px;
@@ -100,6 +110,9 @@
 	--topbar-height: 48px;
 	--statusbar-height: 28px;
 	--rail-width: 56px;
+	/* De sleephoeken op een rasterfoto. Groot genoeg voor een vinger, en de
+	   helft ervan schuift ze terug zodat ze op hun punt staan. */
+	--greep: 44px;
 
 	--shadow-float: 0 8px 24px rgb(0 0 0 / 0.12);
 	--transition: 150ms ease-out;
@@ -111,9 +124,17 @@
 	--surface-0: #16181b;
 	--surface-1: #1e2126;
 	--surface-2: #262a30;
-	--canvas-bg: #101214;
+	/* v3.2: --canvas-bg heeft één afnemer, de bedminiatuur op de telefoon, en
+	   #101214 maakte daar een gat van: net zo zwart als een dood camerabeeld,
+	   op een kaart die lichter is. Overal élders in de app is het bed juist het
+	   lichtste vlak (wit op grijs in licht, #262a30 op de stage in donker). Nu
+	   volgt de miniatuur diezelfde regel: het bed is een figuur, geen holte. */
+	--canvas-bg: #2b3037;
 	--bed: #262a30;
-	--line: #33383f;
+	/* v3.2: #33383f haalde 1,51 tegen --surface-0. Op donker draagt de rand het
+	   hele knopsilhouet — er is geen witte vulling die het werk overneemt — dus
+	   die mag zwaarder: 1,78. */
+	--line: #3d434b;
 	--text-1: #e8eaed;
 	--text-2: #9aa3ae;
 	--mat-hout: #9c7845;
@@ -123,13 +144,30 @@
 	--mat-metaal: #7d848b;
 	--accent: #2aa6b1;
 	--accent-ink: #0b1213;
+	/* In donker haalt --accent zelf al 4,94 op --surface-2, dus daar is geen
+	   tweede tint nodig. Het token bestaat wél, zodat een component één naam
+	   kan gebruiken zonder per thema te hoeven weten of het uitmaakt. */
+	--accent-text: #2aa6b1;
+	--edge-on-color: rgb(255 255 255 / 0.22);
 	--danger: #e5544a;
-	--danger-solid: #c62a1e;
+	/* v3.2: dit was in beide thema's dezelfde #c62a1e, en dat pakt averechts
+	   uit. Op wit springt die vulling 6,5× uit zijn achtergrond, op het donkere
+	   paneel nog maar 3,2× — de knop die de machine stopt was in donker juist
+	   de minst opvallende. Eén tint op geeft 3,8× en houdt wit erop op 4,67. */
+	--danger-solid: #d63a2b;
 	--warn: #d9a62e;
 	--warn-solid: #d9a62e;
-	--lift-1: 0 1px 2px rgb(0 0 0 / 0.30);
-	--lift-2: 0 10px 28px rgb(0 0 0 / 0.45);
+	/* v3.2: diepte werkt op donker niet met een zwarte schaduw — zwart op
+	   bijna-zwart is niets. Wat een vlak optilt is een líchte rand. Vandaar de
+	   ring van 1px naast de slagschaduw; die is meteen de bovengrens van het
+	   vlak, ook waar geen border staat. */
+	--lift-1: 0 1px 2px rgb(0 0 0 / 0.4);
+	--lift-2: 0 10px 28px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
 	--scrim: rgb(0 0 0 / 0.60);
+	/* Dit token had helemaal geen donkere variant en bleef dus op 12% zwart
+	   staan: de zwevende panelen (gereedschapsuitklap, zoompil, camerapil)
+	   hadden in donker letterlijk geen rand en geen schaduw. */
+	--shadow-float: 0 8px 24px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
 	--stage: radial-gradient(120% 100% at 50% 0%, #191c20 0%, #131619 60%, #0f1114 100%);
 	--ok: #4caf6d;
 }
@@ -198,6 +236,12 @@ button {
 		--text-sm: 15px;
 		--text-md: 18px;
 		--text-lg: 24px;
+		/* v3.2: op een aanraakscherm bestaat hover niet, dus bestaat de tooltip
+		   niet, dus krijgen de railpictogrammen een woord eronder. Dat past niet
+		   in 56px. Het getal staat hier en niet in ToolRail, omdat de camerabalk
+		   in +page.svelte er ook mee rekent — twee componenten die dezelfde maat
+		   nodig hebben, dus één bron. */
+		--rail-width: 84px;
 	}
 }
 
@@ -224,6 +268,26 @@ button {
 :root button.danger:hover:not(:disabled) {
 	background: var(--danger-solid);
 	color: var(--on-color);
+}
+
+/*
+ * En het tweede vangnet ernaast: vulling en letter moeten samen omslaan.
+ *
+ * De sluimerende stopknop in de topbalk gaat bij hover van wit-met-donkere-
+ * letter naar rood-met-witte-letter. `color` springt meteen, `background`
+ * schuift in 150 ms — dus staat er 150 ms lang witte tekst op halfroze. Op
+ * 80 ms na het aanwijzen gemeten: rgb(216 109 101) met wit, 3,31:1. Dat is
+ * onder de grens, en uitgerekend op de knop die de laser stopt.
+ *
+ * De transitie op background weghalen lost het aan beide kanten op; de
+ * kleurwissel van een knop die van rol verandert hoort sowieso hard te zijn,
+ * niet vloeiend. Randen en schaduw mogen wel blijven bewegen.
+ */
+:root .btn.danger,
+:root button.danger,
+:root .btn.primary,
+:root button.primary {
+	transition-property: border-color, box-shadow, filter, opacity;
 }
 
 @media (max-width: 1199px), (pointer: coarse) {

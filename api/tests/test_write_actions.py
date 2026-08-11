@@ -126,6 +126,37 @@ def test_load_accepts_an_upload(kernel, local_client):
     assert len(list(kernel.elements.elems())) > before
 
 
+def test_load_refuses_a_file_that_is_not_a_drawing(kernel, local_client):
+    """
+    Een hernoemd of half gedownload bestand kwam er als HTTP 200 {"ok": true}
+    uit: de engine roept "File is Malformed" op het console-kanaal en geeft
+    daarna netjes terug. De gebruiker zag een leeg bed en geen enkele reden.
+    """
+    response = local_client.post(
+        "/api/job/load",
+        files={"file": ("kapot.svg", b"dit is geen tekening", "image/svg+xml")},
+    )
+
+    assert response.status_code == 409
+    melding = " ".join(response.json()["detail"]["output"])
+    assert "kapot.svg" in melding
+    # Gebruikerstaal, geen protocoltaal: geen "Malformed", geen tijdelijk pad.
+    assert "Malformed" not in melding
+    assert "/var/" not in melding
+
+
+def test_load_says_so_when_the_file_holds_no_shapes(kernel, local_client):
+    """Een SVG zonder vormen laadt zonder klacht en levert een leeg bed op."""
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="50mm"></svg>'
+
+    response = local_client.post(
+        "/api/job/load", files={"file": ("leeg.svg", svg, "image/svg+xml")}
+    )
+
+    assert response.status_code == 409
+    assert "geen tekening" in " ".join(response.json()["detail"]["output"])
+
+
 def test_upload_filename_cannot_escape_the_upload_directory(kernel):
     server = ApiServer(kernel)
     target = server._upload_path("../../etc/passwd")

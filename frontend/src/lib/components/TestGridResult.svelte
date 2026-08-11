@@ -598,9 +598,9 @@
 	   oog moet zien waar de hoek precies ligt. */
 	.hoek {
 		position: absolute;
-		width: 44px;
-		height: 44px;
-		margin: -22px 0 0 -22px;
+		width: var(--greep);
+		height: var(--greep);
+		margin: calc(var(--greep) / -2) 0 0 calc(var(--greep) / -2);
 		border-radius: var(--radius-dot);
 		background: color-mix(in srgb, var(--accent) 22%, transparent);
 		border: 1px solid var(--accent);
@@ -651,7 +651,7 @@
 
 	.btn {
 		min-height: 40px;
-		padding: 8px 14px;
+		padding: var(--space-2) var(--space-4);
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

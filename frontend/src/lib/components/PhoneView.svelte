@@ -18,6 +18,8 @@
 	import { formatDuration, STATE_LABEL, type Device, type Job, type MachineState } from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import type { CameraStore } from '$lib/camera.svelte';
+	import Verbinding from './Verbinding.svelte';
+	import { verbinding } from '$lib/verbinding.svelte';
 
 	let {
 		device,
@@ -212,6 +214,8 @@
 	let kop = $derived(device?.position.mm ?? null);
 </script>
 
+<Verbinding brandt={running} />
+
 <div class="telefoon">
 	<header>
 		<span class="dot {staat}" aria-hidden="true"></span>
@@ -287,6 +291,19 @@
 							: '—'}</dd></div>
 					<div><dt>Kop</dt><dd class="mono">{position}</dd></div>
 				</dl>
+				<!-- Een bed zonder job zei alleen "Gereed" bovenin. Dat is een
+				     toestand, geen antwoord: wie hier kijkt wil weten of het stil is
+				     omdat het klaar is, of stil omdat er iets mis is. -->
+				<p class="waarom">
+					{#if !connected}
+						Dit is de laatste stand die we gezien hebben.
+					{:else if staat === 'unplugged'}
+						Er hangt geen machine aan de server. Controleer of hij aanstaat en
+						of de kabel erin zit.
+					{:else}
+						Niets aan het branden. Een job start je op de desktop.
+					{/if}
+				</p>
 			</div>
 		{/if}
 
@@ -348,20 +365,40 @@
 	<!-- De noodrem: vast onderin, scrollt niet mee, ver uit elkaar. Wat de
 	     machine weigert hoort hier te staan en niet in de console te verdwijnen. -->
 	<div class="noodrem">
+		{#if !connected}
+			<!-- De enige rem die nu nog werkt, staat niet op dit scherm. Dat mag je
+			     niet zelf hoeven concluderen uit twee grijze knoppen. -->
+			<p class="fout" role="alert">
+				Geen verbinding — stoppen kan alleen met de knop op de machine.
+				<button class="opnieuw" onclick={() => verbinding.nuProberen()}>
+					Opnieuw proberen{verbinding.overSeconden > 0
+						? ` (vanzelf over ${verbinding.overSeconden} s)`
+						: ''}
+				</button>
+			</p>
+		{/if}
 		{#if control.error}
 			<p class="fout" role="alert">{control.error}</p>
 		{/if}
 		<div class="knoppen">
 			{#if stil}
-				<button class="rem hervat" disabled={control.needsToken} onclick={() => control.resume()}>
+				<button class="rem hervat" disabled={control.needsToken || !connected} onclick={() => control.resume()}>
 					Hervat
 				</button>
 			{:else}
-				<button class="rem pauze" disabled={!huidig || control.needsToken} onclick={pauzeer}>
+				<button class="rem pauze" disabled={!huidig || control.needsToken || !connected} onclick={pauzeer}>
 					{pauzeGevraagd ? 'Pauze…' : 'Pauze'}
 				</button>
 			{/if}
-			<button class="rem stop" class:scherp={Boolean(huidig)} disabled={control.needsToken} onclick={() => control.stop()}>
+			<!-- Zonder verbinding komt deze tik nergens aan. Een rode knop die
+			     indrukbaar oogt en niets doet, is op dit scherm het gevaarlijkste
+			     wat er is: je drukt, je loopt weg, en je gelooft dat het stopt. -->
+			<button
+				class="rem stop"
+				class:scherp={Boolean(huidig) && connected}
+				disabled={control.needsToken || !connected}
+				onclick={() => control.stop()}
+			>
 				Stop
 			</button>
 		</div>
@@ -393,6 +430,25 @@
 	.dot.busy { background: var(--accent); }
 	.dot.paused { background: var(--warn-solid); }
 	.dot.alarm { background: var(--danger-solid); }
+	.dot.unplugged { background: var(--warn-solid); }
+	.opnieuw {
+		display: block;
+		width: 100%;
+		min-height: 44px;
+		margin-top: var(--space-2);
+		font: inherit;
+		font-weight: 600;
+		color: var(--text-1);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+	}
+	.waarom {
+		margin: var(--space-3) 0 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		text-align: center;
+	}
 
 	/* Alleen dit deel scrollt; de kop en de noodrem staan stil. */
 	.rol {

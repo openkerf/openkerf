@@ -105,8 +105,14 @@ function readLayerColors(): string[] {
  * kleur kiezen mag niet — de laagkleur is van de gebruiker — dus schuiven we
  * dezelfde kleur op in helderheid tot hij loskomt van de achtergrond. Zwart
  * wordt grijs, donkerblauw wordt blauw; de laag blijft herkenbaar.
+ *
+ * De drempel is 3,0 en niet lager: een lijn op het bed is een grafisch object,
+ * en WCAG 1.4.11 vraagt daar 3:1 voor. Op 2,6 kwamen precies de kleuren
+ * ongemoeid door die het probleem zijn — paars (--layer-7) haalt 2,78 op het
+ * donkere bed en oranje 2,97 op het lichte, en die werden dus níet bijgesteld
+ * terwijl ze onder de norm zitten.
  */
-const DREMPEL = 2.6;
+const DREMPEL = 3.0;
 
 function ontleed(kleur: string): [number, number, number] | null {
 	const hex = kleur.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -162,6 +168,23 @@ export function leesbaar(kleur: string): string {
 		}
 	}
 	return pool === 255 ? 'rgb(235 235 235)' : 'rgb(30 30 30)';
+}
+
+/**
+ * De inkt die op een laagkleur past — zwart of wit, wat het verst weg staat.
+ *
+ * Het nummer op een laagchip stond vast op --on-color, dus altijd wit. Op geel
+ * (--layer-3) is dat 1,58:1 en dan lees je het cijfer domweg niet. Voor acht
+ * van de tien laagkleuren wint zwart, voor paars en bruin wint wit; die keuze
+ * hangt aan de kleur en niet aan het thema, want de chip toont de laagkleur in
+ * beide thema's ongewijzigd.
+ */
+export function inktOp(kleur: string): string {
+	const eigen = ontleed(kleur);
+	if (!eigen) return 'var(--on-color)';
+	const wit = verschil(eigen, [255, 255, 255]);
+	const zwart = verschil(eigen, [0, 0, 0]);
+	return wit >= zwart ? 'var(--on-color)' : 'var(--void)';
 }
 
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);

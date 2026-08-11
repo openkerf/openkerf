@@ -7,6 +7,15 @@
 
 	onMount(() => store.loadMachines());
 
+	// De engine maakt bij het opstarten zelf een lhystudios-apparaat aan, zodat
+	// de kernel altijd iets heeft om tegen te praten. Dat is geen machine van
+	// de gebruiker, en hem in deze lijst zetten als "In gebruik" leest als een
+	// apparaat dat je zelf hebt toegevoegd. We zetten hem apart met de reden
+	// erbij, in plaats van hem te verbergen: hij is wél actief, en dat moet je
+	// kunnen zien.
+	let eigen = $derived(store.machines.filter((m) => m.configured !== false));
+	let placeholder = $derived(store.machines.find((m) => m.configured === false) ?? null);
+
 	async function useMachine(machine: Machine) {
 		if (await store.activate(machine.path)) await store.loadMachines();
 	}
@@ -22,11 +31,17 @@
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
 	<h1>Jouw machines</h1>
-	{#if store.machines.length === 0}
-		<p class="muted">Nog geen machine ingesteld.</p>
+	{#if eigen.length === 0}
+		<p class="leeg">
+			<strong>Nog geen machine ingesteld.</strong>
+			<span class="muted">
+				Voeg de laser toe die in je werkplaats staat. Dat bepaalt het bed op het canvas,
+				welke bediening je krijgt en hoe OpenKerf hem aanspreekt.
+			</span>
+		</p>
 	{:else}
 		<ul class="machines">
-			{#each store.machines as machine (machine.path)}
+			{#each eigen as machine (machine.path)}
 				<li class:active={machine.active}>
 					<div>
 						<div class="name">{machine.label}</div>
@@ -52,6 +67,25 @@
 	<div class="actions">
 		<a class="btn primary" href="/setup/soort">Machine toevoegen</a>
 	</div>
+
+	{#if placeholder}
+		<aside class="placeholder">
+			<h2>Standaardapparaat van de engine</h2>
+			<p class="muted">
+				MeerK40t maakt bij het opstarten zelf een apparaat aan
+				(<span class="mono">{placeholder.label}</span>) zodat er altijd iets actief is.
+				Niemand heeft het gekozen, en de bedmaten en verbinding zijn gokwerk — brand er niets
+				op zonder ze te controleren.
+			</p>
+			<p class="muted">
+				Heb je toevallig precies zo'n machine? Geef hem dan een naam en zijn echte bedmaat;
+				vanaf dan telt hij als jouw machine.
+			</p>
+			<a class="btn" href="/setup/instellen?machine={encodeURIComponent(placeholder.path)}">
+				Nakijken en overnemen
+			</a>
+		</aside>
+	{/if}
 </section>
 
 <style>
@@ -82,11 +116,40 @@
 	.name {
 		font-weight: 500;
 	}
+	/* Accent op een tint van 14% accent haalt geen AA (gemeten: 4,10 in licht,
+	   4,46 in donker). De tint blijft de accentkleur dragen, de tekst niet —
+	   dezelfde uitweg als in ToolRail, en zonder de merkkleur te verschuiven. */
 	.badge {
 		font-size: var(--text-xs);
 		padding: 4px 8px;
 		border-radius: var(--radius-dot);
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		color: var(--accent);
+		color: var(--text-1);
+	}
+	.leeg {
+		display: grid;
+		gap: var(--space-2);
+		margin: 0;
+		padding: var(--space-4);
+		border: 1px dashed var(--line);
+		border-radius: var(--radius-card);
+	}
+	.placeholder {
+		margin-top: var(--space-8);
+		padding: var(--space-4);
+		border-radius: var(--radius-card);
+		/* Een waarschuwingsvlak, geen fout: dit apparaat werkt, het is alleen
+		   niet het jouwe. Zie DESIGN-SYSTEM, "zekerheid is een zin". */
+		border-left: 3px solid var(--warn);
+		background: var(--surface-2);
+	}
+	.placeholder h2 {
+		font-size: var(--text-sm);
+		font-weight: 600;
+		margin: 0 0 var(--space-2);
+	}
+	.placeholder p {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-xs);
 	}
 </style>

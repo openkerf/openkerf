@@ -18,6 +18,12 @@
 	];
 
 	let current = $derived(STEPS.findIndex((s) => s.path === $page.url.pathname));
+
+	// Stappen met weinig op het scherm krijgen een smallere kaart. Anders staat
+	// een kolom van 460px links in een kaart van 900 en is de rechterhelft leeg
+	// — dat leest als een pagina waar iets van weggevallen is.
+	const SMAL = ['/setup/naam', '/setup/klaar'];
+	let smal = $derived(SMAL.includes($page.url.pathname));
 </script>
 
 <header class="topbar">
@@ -27,9 +33,13 @@
 	<a class="btn" href="/">Terug<span class="lang">naar werkgebied</span></a>
 </header>
 
-<main>
+<main class:smal>
 	{#if current >= 0}
 	<nav class="steps" aria-label="Voortgang">
+		<!-- Vijf pillen zonder telling zeggen niet hoe ver je bent; op een
+		     telefoon wikkelen ze bovendien, en dan is de gemarkeerde pil het
+		     enige houvast. De zin ervoor werkt altijd. -->
+		<p class="teller">Stap {current + 1} van {STEPS.length}</p>
 		<ol>
 			{#each STEPS as step, index (step.path)}
 				<li class:current={index === current} class:done={current > index}>
@@ -44,7 +54,12 @@
 	</nav>
 	{/if}
 
-	{@render children()}
+	<!-- De stappen stonden als kale tekst in een leeg venster: op 1440 bij 900
+	     was tweederde van het scherm niets. Een kaart maakt er een scherm van
+	     in plaats van een document. -->
+	<div class="blad">
+		{@render children()}
+	</div>
 </main>
 
 <style>
@@ -89,11 +104,31 @@
 		width: 100%;
 		margin: 0 auto;
 	}
+	main.smal {
+		max-width: 560px;
+	}
+	.blad {
+		background: var(--surface-1);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		box-shadow: var(--lift-1);
+		padding: var(--space-6);
+	}
+	@media (max-width: 560px) {
+		.blad {
+			padding: var(--space-4);
+		}
+	}
+	.teller {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
 	.steps ol {
 		display: flex;
 		gap: var(--space-2);
 		list-style: none;
-		margin: 0 0 var(--space-6);
+		margin: 0 0 var(--space-4);
 		padding: 0;
 		font-size: var(--text-xs);
 		flex-wrap: wrap;
@@ -107,15 +142,35 @@
 		color: var(--text-2);
 		text-decoration: none;
 	}
+	/* Een afgeronde stap staat op --surface-2, en daar blijft --accent op 4,33
+	   steken; --accent-text is dezelfde kleur één tint dieper en haalt 5,09.
+	   Ook bij hover, want die legt --line eronder. */
 	.steps li.done a {
-		color: var(--accent);
+		color: var(--accent-text);
 	}
+	/* De hover zette --line als vulling, en dat is een randkleur, geen vlak: in
+	   licht zakt de pil daarmee naar 4,14 en in donker naar 3,42 — allebei
+	   onder de grens, en juist op het moment dat je de stap wílt aanklikken.
+	   Het vlak blijft nu staan; de aanwijzing is een streep, en die kan geen
+	   contrast kosten. */
 	.steps li.done a:hover {
-		background: var(--line);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 	.steps li.current span {
 		background: var(--accent);
 		color: var(--accent-ink);
+	}
+	/* Een afgeronde stap is een link terug, dus een raakdoel. Gemeten op 27px
+	   hoog op tablet en telefoon; het design system eist er 44. */
+	@media (max-width: 1199px) {
+		.steps li span,
+		.steps li a {
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+			padding: 4px 12px;
+		}
 	}
 	/* Gedeeld door alle stappen — die zijn losse routes, dus scoped styles
 	   per pagina zouden hetzelfde vijf keer herhalen. */
@@ -128,8 +183,10 @@
 	:global(.setup .muted) {
 		color: var(--text-2);
 	}
+	/* De breedte zit nu in de kaart (main.smal), niet in de inhoud: anders
+	   stond een kolom van 460px links in een kaart van 900. */
 	:global(.setup.narrow) {
-		max-width: 460px;
+		max-width: none;
 	}
 	:global(.setup .actions) {
 		display: flex;
