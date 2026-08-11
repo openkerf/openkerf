@@ -211,12 +211,23 @@
 	}
 
 	async function arrange(action: string) {
-		if (!canEdit || !hasSelection) return;
+		// 'rescue' werkt op het hele ontwerp; de rest op de selectie.
+		if (!canEdit || (!hasSelection && action !== 'rescue')) return;
 		const ids = design.selectedIds;
 		if (action === 'offset') {
 			const answer = prompt('Offset in mm (negatief = naar binnen)', '2');
 			if (!answer) return;
 			if ((await edits.offset(ids, Number(answer))).ok) await design.load();
+			return;
+		}
+		if (action === 'rescue') {
+			// Alles op het bed leggen, ook wat je niet kunt aanwijzen omdat het
+			// buiten beeld ligt.
+			await post('/api/design/nest', {
+				ids: design.elements.filter((e) => !e.hidden).map((e) => e.id),
+				margin_mm: 5
+			});
+			await design.load();
 			return;
 		}
 		if (action === 'nest') {
@@ -358,6 +369,11 @@
 			removeSelection();
 			return;
 		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+			e.preventDefault();
+			design.selectMany(design.elements.filter((el) => !el.hidden).map((el) => el.id));
+			return;
+		}
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && hasSelection && canEdit) {
 			e.preventDefault();
 			duplicateSelection();
@@ -478,6 +494,9 @@
 			{#if tab === 'design' || tab === 'layers'}
 				<DesignPanel
 					show={tab === 'layers' ? 'layers' : 'selection'}
+					bed={device?.bed?.width_mm && device?.bed?.height_mm
+						? { width: device.bed.width_mm, height: device.bed.height_mm }
+						: null}
 					{design}
 					{edits}
 					{canEdit}

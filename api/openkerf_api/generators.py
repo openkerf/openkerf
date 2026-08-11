@@ -326,15 +326,51 @@ class Generators:
             width, depth, height, thickness, finger, kerf, lid=lid
         )
 
-        ids, x = [], 0.0
+        # Op het bed leggen in rijen, niet op één lange rij: zes panelen naast
+        # elkaar zijn zo een meter breed, en wat buiten het bed valt kun je niet
+        # meer aanwijzen om het terug te halen.
+        bed_width, bed_height = self._bed()
+        widest = max(
+            max(px for px, _ in points) - min(px for px, _ in points)
+            for _, points in panels
+        )
+        if widest > bed_width:
+            raise DesignError(
+                f"Het breedste paneel is {widest:.0f} mm en past niet op een bed "
+                f"van {bed_width:.0f} mm. Kies kleinere buitenmaten."
+            )
+
+        # Eerst uitrekenen waar alles komt, dan pas tekenen. Anders staat er een
+        # halve doos buiten het bed voordat je weet dat hij niet past.
+        placed, x, y, shelf = [], gap, gap, 0.0
+        for name, points in panels:
+            span = max(px for px, _ in points) - min(px for px, _ in points)
+            high = max(py for _, py in points) - min(py for _, py in points)
+            if x > gap and x + span > bed_width - gap:
+                x = gap
+                y += shelf + gap
+                shelf = 0.0
+            placed.append((name, points, x, y))
+            x += span + gap
+            shelf = max(shelf, high)
+
+        needed = y + shelf + gap
+        if needed > bed_height:
+            raise DesignError(
+                f"Deze doos heeft {needed:.0f} mm hoogte nodig op het bed en dat "
+                f"is er {bed_height:.0f} mm. Kies kleinere maten, laat de deksel "
+                "weg, of snijd hem in twee keer."
+            )
+
+        ids = []
         with self.elements.undoscope("Doos"):
-            for name, points in panels:
-                span = max(px for px, _ in points) - min(px for px, _ in points)
-                node = self._add_polygon(
-                    [(px + x, py) for px, py in points], f"Doos — {name}"
+            for name, points, at_x, at_y in placed:
+                ids.append(
+                    self._add_polygon(
+                        [(px + at_x, py + at_y) for px, py in points],
+                        f"Doos — {name}",
+                    )
                 )
-                ids.append(node)
-                x += span + gap
             self.elements.validate_ids()
         self._refresh()
         return {
@@ -408,6 +444,19 @@ class Generators:
         }
 
     # --------------------------------------------------------------- intern
+
+    def _bed(self) -> tuple[float, float]:
+        from meerk40t.core.units import Length
+
+        device = getattr(self.kernel, "device", None)
+
+        def side(name, fallback):
+            try:
+                return float(Length(getattr(device, name)).mm)
+            except Exception:
+                return fallback
+
+        return side("bedwidth", 500.0), side("bedheight", 300.0)
 
     def _add_polygon(self, points, label: str, subpaths: bool = False):
         """

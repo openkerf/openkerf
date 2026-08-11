@@ -134,9 +134,9 @@ def test_a_box_panel_is_the_size_you_asked_for(client):
     client.post(
         "/api/design/generate/box",
         json={
-            "width_mm": 100,
-            "depth_mm": 80,
-            "height_mm": 50,
+            "width_mm": 60,
+            "depth_mm": 40,
+            "height_mm": 30,
             "thickness_mm": 3,
             "finger_mm": 10,
         },
@@ -147,8 +147,8 @@ def test_a_box_panel_is_the_size_you_asked_for(client):
     bodem = next(e for e in design["elements"] if e["label"].endswith("bodem"))
     x0, y0, x1, y1 = (v / per_mm for v in bodem["bounds"])
     # Breedte plus de tanden die aan weerszijden uitsteken (2 x de dikte).
-    assert (x1 - x0) == pytest.approx(100 + 2 * 3, abs=0.2)
-    assert (y1 - y0) == pytest.approx(80 + 2 * 3, abs=0.2)
+    assert (x1 - x0) == pytest.approx(60 + 2 * 3, abs=0.2)
+    assert (y1 - y0) == pytest.approx(40 + 2 * 3, abs=0.2)
 
 
 def test_a_qr_code_is_the_size_you_asked_for(client):
@@ -169,9 +169,9 @@ def test_a_box_yields_six_panels(client):
     response = client.post(
         "/api/design/generate/box",
         json={
-            "width_mm": 100,
-            "depth_mm": 80,
-            "height_mm": 50,
+            "width_mm": 60,
+            "depth_mm": 40,
+            "height_mm": 30,
             "thickness_mm": 3,
             "finger_mm": 10,
             "kerf_mm": 0.1,
@@ -188,9 +188,9 @@ def test_a_box_without_a_lid_yields_five(client):
     response = client.post(
         "/api/design/generate/box",
         json={
-            "width_mm": 100,
-            "depth_mm": 80,
-            "height_mm": 50,
+            "width_mm": 60,
+            "depth_mm": 40,
+            "height_mm": 30,
             "thickness_mm": 3,
             "lid": False,
         },
@@ -226,9 +226,9 @@ def test_a_finger_thinner_than_the_material_is_refused(client):
     response = client.post(
         "/api/design/generate/box",
         json={
-            "width_mm": 100,
-            "depth_mm": 80,
-            "height_mm": 50,
+            "width_mm": 60,
+            "depth_mm": 40,
+            "height_mm": 30,
             "thickness_mm": 6,
             "finger_mm": 3,
         },
@@ -253,3 +253,68 @@ def test_a_qr_code_becomes_a_path(client):
 def test_an_empty_qr_code_is_refused(client):
     response = client.post("/api/design/generate/qrcode", json={"text": "  "})
     assert response.status_code == 409
+
+
+def test_box_panels_stay_on_the_bed(client):
+    """
+    Zes panelen op één rij zijn zo een meter breed. Wat buiten het bed valt is
+    niet meer aan te wijzen, dus dan kun je het ook niet terughalen.
+    """
+    bed = client.get("/api/devices").json()[0]["bed"]
+    client.post(
+        "/api/design/generate/box",
+        json={
+            "width_mm": 60,
+            "depth_mm": 40,
+            "height_mm": 30,
+            "thickness_mm": 3,
+            "finger_mm": 10,
+        },
+    )
+
+    design = client.get("/api/design").json()
+    per_mm = design["units_per_mm"]
+    right = max(e["bounds"][2] for e in design["elements"]) / per_mm
+    low = max(e["bounds"][3] for e in design["elements"]) / per_mm
+    assert right <= bed["width_mm"] + 0.5, f"steekt tot {right:.0f} mm uit"
+    assert low <= bed["height_mm"] + 0.5, f"loopt tot {low:.0f} mm door"
+
+    rows = {round(e["bounds"][1] / per_mm) for e in design["elements"]}
+    assert len(rows) > 1, "alles staat nog op één rij"
+
+
+def test_a_box_too_tall_for_the_bed_is_refused_before_drawing(client):
+    """
+    Een halve doos buiten het bed is erger dan geen doos: die kun je niet meer
+    aanwijzen om hem weg te halen.
+    """
+    response = client.post(
+        "/api/design/generate/box",
+        json={
+            "width_mm": 200,
+            "depth_mm": 150,
+            "height_mm": 120,
+            "thickness_mm": 4,
+            "finger_mm": 15,
+        },
+    )
+
+    assert response.status_code == 409
+    assert "hoogte nodig" in response.json()["detail"]
+    assert client.get("/api/design").json()["elements"] == []
+
+
+def test_a_box_too_wide_for_the_bed_is_refused(client):
+    response = client.post(
+        "/api/design/generate/box",
+        json={
+            "width_mm": 2000,
+            "depth_mm": 900,
+            "height_mm": 600,
+            "thickness_mm": 6,
+            "finger_mm": 20,
+        },
+    )
+
+    assert response.status_code == 409
+    assert "past niet" in response.json()["detail"]

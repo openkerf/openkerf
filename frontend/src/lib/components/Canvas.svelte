@@ -584,7 +584,7 @@
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<svg
 				viewBox="0 0 {bed.width} {bed.height}"
-				style="position: absolute; inset: 0; width: 100%; height: 100%"
+				style="position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible"
 				role="img"
 				aria-label={head
 					? `Laserkop op ${head[0].toFixed(1)}, ${head[1].toFixed(1)} millimeter`

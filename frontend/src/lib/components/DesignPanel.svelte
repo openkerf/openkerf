@@ -23,7 +23,8 @@
 		onImageSet,
 		onImageClear,
 		onUncrop,
-		show = 'selection'
+		show = 'selection',
+		bed = null
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -64,12 +65,26 @@
 		/** Welk deel getoond wordt. Selectie en lagen naast elkaar in één
 		 *  paneel werd te druk om iets in terug te vinden. */
 		show?: 'selection' | 'layers';
+		/** Bedmaat in mm, om te zien of er iets buiten valt. */
+		bed?: { width: number; height: number } | null;
 	} = $props();
 
 	let elements = $derived(design.elements);
 	let operations = $derived(design.operations);
 	let selected = $derived(design.selected);
 	let size = $derived(design.selectedSize);
+
+	// Wat buiten het bed ligt, brandt niet mee en is lastig te pakken. Beter
+	// melden met een uitweg dan de gebruiker laten ontdekken dat er iets mist.
+	let strays = $derived.by(() => {
+		const perMm = design.design?.units_per_mm;
+		if (!bed || !perMm) return [];
+		return design.elements.filter((element) => {
+			if (!element.bounds) return false;
+			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
+			return x0 < -0.5 || y0 < -0.5 || x1 > bed.width + 0.5 || y1 > bed.height + 0.5;
+		});
+	});
 	// Tijdens het slepen laat de canvaslaag een voorbeeldkader zien; die maten
 	// horen hier dan ook te staan, anders lopen paneel en canvas uit elkaar.
 	let live = $derived(box ?? size);
@@ -155,6 +170,21 @@
 		return parts;
 	}
 </script>
+
+{#if show === 'selection' && strays.length}
+	<div class="section stray">
+		<p>
+			{strays.length}
+			{strays.length === 1 ? 'vorm ligt' : 'vormen liggen'} buiten het bed. Die
+			branden niet mee.
+		</p>
+		{#if canEdit}
+			<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('rescue')}>
+				Terughalen op het bed
+			</button>
+		{/if}
+	</div>
+{/if}
 
 <div class="section">
 	<div class="section-head">
@@ -822,6 +852,14 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
+	.stray {
+		border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line));
+		border-radius: var(--radius-card);
+		background: color-mix(in srgb, var(--warn) 8%, transparent);
+		display: grid;
+		gap: 6px;
+	}
+	.stray p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
 	.tip {
 		margin: 2px 0 0;
 		font-size: 10px;
