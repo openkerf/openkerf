@@ -37,10 +37,15 @@ MAX_BYTES = 4 * 1024 * 1024
 
 WIKIMEDIA = "https://commons.wikimedia.org/w/api.php"
 OPENCLIPART = "https://openclipart.org/search/json/"
+ICONIFY = "https://api.iconify.design"
 
 USER_AGENT = "OpenKerf/0.1 (https://github.com/openkerf/openkerf)"
 
-SOURCES = ("wikimedia", "openclipart")
+SOURCES = ("iconify", "wikimedia", "openclipart")
+
+# Iconen komen als 1em-vierkantjes in de kleur van de tekst; zonder een echte
+# maat en een echte kleur weet de engine niet wat hij moet tekenen.
+ICON_SIZE = 240
 
 # Wat op een laser niet bestaat, of anders uitpakt dan je ziet. Geen weigering
 # maar een melding: de engine laat ze vallen, en dan hoor je te weten wat er
@@ -86,7 +91,11 @@ class Clipart:
         per_source = max(4, int(limit) // len(wanted))
         offset = (number - 1) * per_source
 
-        lookups = {"wikimedia": self._wikimedia, "openclipart": self._openclipart}
+        lookups = {
+            "iconify": self._iconify,
+            "wikimedia": self._wikimedia,
+            "openclipart": self._openclipart,
+        }
         results, problems = [], {}
 
         # Naast elkaar, met gewone threads: één trage bron mag de andere niet
@@ -143,6 +152,45 @@ class Clipart:
             # gebruiker heeft niets aan een parse-fout.
             return "gaf een onverwacht antwoord"
         return str(error)[:120] or "gaf een onverwacht antwoord"
+
+    def _iconify(self, query: str, limit: int, offset: int = 0) -> list[dict]:
+        """
+        Open-source iconensets, gebundeld door Iconify.
+
+        Voor een laser is dit het meest bruikbare materiaal dat er is: gesloten
+        paden, geen kleurverlopen, geen tekst, weinig knooppunten. Precies alles
+        wat bij andere bronnen uit de tekening valt, ontbreekt hier gewoon.
+        """
+        params = urllib.parse.urlencode(
+            {"query": query, "limit": str(max(32, limit)), "start": str(offset)}
+        )
+        payload = json.loads(self.fetch(f"{ICONIFY}/search?{params}").decode("utf-8"))
+        # De licentie per set zit in hetzelfde antwoord; dat scheelt een tweede
+        # verzoek per resultaat.
+        sets = payload.get("collections") or {}
+
+        found = []
+        for name in (payload.get("icons") or [])[:limit]:
+            prefix, _, icon = str(name).partition(":")
+            if not icon:
+                continue
+            collection = sets.get(prefix) or {}
+            licence = (collection.get("license") or {}).get("title")
+            image = f"{ICONIFY}/{prefix}/{icon}.svg"
+            found.append(
+                {
+                    "id": f"iconify:{name}",
+                    "source": "Iconify",
+                    "title": icon.replace("-", " "),
+                    "svg_url": f"{image}?height={ICON_SIZE}&color=%23000000",
+                    "thumbnail_url": f"{image}?height=64&color=%23000000",
+                    "page_url": f"https://icon-sets.iconify.design/{prefix}/{icon}/",
+                    "license": licence or "zie de iconenset",
+                    "author": (collection.get("author") or {}).get("name")
+                    or collection.get("name"),
+                }
+            )
+        return found
 
     def _wikimedia(self, query: str, limit: int, offset: int = 0) -> list[dict]:
         params = urllib.parse.urlencode(
@@ -239,10 +287,14 @@ class Clipart:
             raise DesignError("Alleen https-adressen worden opgehaald.")
         if not any(
             address.lower().startswith(prefix)
-            for prefix in ("https://upload.wikimedia.org/", "https://openclipart.org/")
+            for prefix in (
+                "https://upload.wikimedia.org/",
+                "https://openclipart.org/",
+                f"{ICONIFY}/",
+            )
         ):
             raise DesignError(
-                "Dit adres hoort niet bij Wikimedia Commons of Openclipart."
+                "Dit adres hoort niet bij een van de bronnen die we aanbieden."
             )
         width = float(width_mm)
         if not 1 <= width <= 2000:

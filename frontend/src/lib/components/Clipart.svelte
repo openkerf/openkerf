@@ -22,13 +22,16 @@
 		author: string | null;
 	};
 
+	// Iconify eerst: iconen zijn voor een laser het meest bruikbare materiaal —
+	// gesloten paden, geen kleurverlopen, geen tekst.
 	const SOURCES = [
+		{ id: 'iconify', label: 'Iconify (iconen)' },
 		{ id: 'wikimedia', label: 'Wikimedia Commons' },
 		{ id: 'openclipart', label: 'Openclipart' }
 	];
 
 	let query = $state('');
-	let chosen = $state<string[]>(['wikimedia', 'openclipart']);
+	let chosen = $state<string[]>(['iconify', 'wikimedia', 'openclipart']);
 	let results = $state<Result[]>([]);
 	let unavailable = $state<Record<string, string>>({});
 	let busy = $state(false);

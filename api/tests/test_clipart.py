@@ -61,6 +61,18 @@ CLIPART_ANSWER = {
     ]
 }
 
+ICONIFY_ANSWER = {
+    "icons": ["mdi:heart", "tabler:heart-filled"],
+    "total": 2,
+    "collections": {
+        "mdi": {
+            "name": "Material Design Icons",
+            "author": {"name": "Pictogrammers"},
+            "license": {"title": "Apache 2.0", "spdx": "Apache-2.0"},
+        }
+    },
+}
+
 A_DRAWING = b"""<?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
   <path d="M 10 10 L 90 10 L 90 90 L 10 90 Z" fill="none" stroke="black"/>
@@ -95,15 +107,19 @@ def shop(kernel):
     return Clipart(
         kernel,
         Drawing(kernel),
-        fetch=answers(commons=WIKI_ANSWER, openclipart=CLIPART_ANSWER),
+        fetch=answers(
+            commons=WIKI_ANSWER,
+            openclipart=CLIPART_ANSWER,
+            iconify=ICONIFY_ANSWER,
+        ),
     )
 
 
-def test_both_sources_come_back(shop):
+def test_all_sources_come_back(shop):
     found = shop.search("hart")
 
     sources = {r["source"] for r in found["results"]}
-    assert sources == {"Wikimedia Commons", "Openclipart"}
+    assert sources == {"Iconify", "Wikimedia Commons", "Openclipart"}
     assert found["unavailable"] == {}
 
 
@@ -135,9 +151,9 @@ def test_a_source_that_answers_nonsense_says_so_plainly(kernel):
 
     shop = Clipart(kernel, Drawing(kernel), fetch=fetch)
 
-    assert shop.search("hart")["unavailable"] == {
-        "openclipart": "gaf een onverwacht antwoord"
-    }
+    assert shop.search("hart", sources=["wikimedia", "openclipart"])[
+        "unavailable"
+    ] == {"openclipart": "gaf een onverwacht antwoord"}
 
 
 def test_the_licence_travels_along(shop):
@@ -160,7 +176,7 @@ def test_a_source_that_is_down_does_not_hold_up_the_rest(kernel):
         fetch=answers(commons=WIKI_ANSWER, openclipart=TimeoutError()),
     )
 
-    found = shop.search("hart")
+    found = shop.search("hart", sources=["wikimedia", "openclipart"])
 
     assert [r["source"] for r in found["results"]] == ["Wikimedia Commons"]
     assert found["unavailable"] == {"openclipart": "reageerde niet op tijd"}
@@ -173,7 +189,7 @@ def test_both_down_is_reported_not_pretended_empty(kernel):
         fetch=answers(commons=TimeoutError(), openclipart=TimeoutError()),
     )
 
-    found = shop.search("hart")
+    found = shop.search("hart", sources=["wikimedia", "openclipart"])
 
     assert found["results"] == []
     assert set(found["unavailable"]) == {"wikimedia", "openclipart"}
@@ -289,7 +305,11 @@ def watcher(kernel):
 
     def fetch(url, timeout=None):
         asked.append(url)
-        return json.dumps(WIKI_ANSWER if "commons" in url else CLIPART_ANSWER).encode()
+        if "commons" in url:
+            return json.dumps(WIKI_ANSWER).encode()
+        if "iconify" in url:
+            return json.dumps(ICONIFY_ANSWER).encode()
+        return json.dumps(CLIPART_ANSWER).encode()
 
     return Clipart(kernel, Drawing(kernel), fetch=fetch), asked
 
@@ -304,8 +324,9 @@ def test_paging_asks_the_sources_for_the_next_batch(kernel):
 
     shop.search("hart", limit=24, page=3)
 
-    assert "gsroffset=24" in next(u for u in asked if "commons" in u)
+    assert "gsroffset=16" in next(u for u in asked if "commons" in u)
     assert "page=3" in next(u for u in asked if "openclipart" in u)
+    assert "start=16" in next(u for u in asked if "iconify" in u)
 
 
 def test_the_first_page_starts_at_the_beginning(kernel):
@@ -315,6 +336,7 @@ def test_the_first_page_starts_at_the_beginning(kernel):
 
     assert "gsroffset=0" in next(u for u in asked if "commons" in u)
     assert "page=1" in next(u for u in asked if "openclipart" in u)
+    assert "start=0" in next(u for u in asked if "iconify" in u)
 
 
 def test_a_half_empty_page_means_the_end(shop):
@@ -332,3 +354,34 @@ def test_an_absurd_page_is_refused(shop):
     for page in (0, -3, 500, "twee"):
         with pytest.raises(DesignError):
             shop.search("hart", page=page)
+
+
+def test_iconify_carries_its_set_licence(shop):
+    """De licentie verschilt per iconenset en staat in hetzelfde antwoord."""
+    icon = next(r for r in shop.search("hart")["results"] if r["source"] == "Iconify")
+
+    assert icon["license"] == "Apache 2.0"
+    assert icon["author"] == "Pictogrammers"
+
+
+def test_an_icon_gets_a_real_size_and_colour(shop):
+    """
+    Iconify levert standaard een vierkantje van 1em in de tekstkleur. Zonder
+    echte maat en kleur weet de engine niet wat hij moet tekenen.
+    """
+    icon = next(r for r in shop.search("hart")["results"] if r["source"] == "Iconify")
+
+    assert "height=240" in icon["svg_url"]
+    assert "color=%23000000" in icon["svg_url"]
+
+
+def test_an_icon_can_be_inserted(kernel):
+    from openkerf_api.drawing import Drawing
+
+    shop = Clipart(
+        kernel, Drawing(kernel), fetch=answers(**{"iconify": A_DRAWING})
+    )
+
+    result = shop.insert("https://api.iconify.design/mdi/heart.svg?height=240")
+
+    assert result["count"] >= 1
