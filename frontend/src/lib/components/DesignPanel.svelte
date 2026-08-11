@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
+	import Segmented from './Segmented.svelte';
 
 	let {
 		design,
@@ -525,17 +526,24 @@
 	<div class="section">
 		<div class="section-head">
 			<h2 class="section-title">Lagen</h2>
-			{#if canEdit}
-				<div class="addrow">
-					<select bind:value={newLayerType} aria-label="Type nieuwe laag">
-						{#each [['cut', 'Snijden'], ['engrave', 'Graveren'], ['raster', 'Raster'], ['dots', 'Punten']] as [value, label] (value)}
-							<option {value}>{label}</option>
-						{/each}
-					</select>
-					<button class="mini" disabled={edits.busy} onclick={addLayer}>Toevoegen</button>
-				</div>
-			{/if}
 		</div>
+		{#if canEdit}
+			<!-- Vier vaste soorten: als één balk, zodat je in één blik ziet wat er
+			     te kiezen valt en wat er nu staat. -->
+			<div class="addrow">
+				<Segmented
+					label="Type nieuwe laag"
+					bind:value={newLayerType}
+					options={[
+						{ value: 'cut', label: 'Snijden' },
+						{ value: 'engrave', label: 'Graveren' },
+						{ value: 'raster', label: 'Raster' },
+						{ value: 'dots', label: 'Punten' }
+					]}
+				/>
+				<button class="mini" disabled={edits.busy} onclick={addLayer}>Toevoegen</button>
+			</div>
+		{/if}
 		{#if !operations.length}
 			<p class="muted">
 				Nog geen lagen. Een laag is een bewerking — snijden, graveren of
@@ -712,8 +720,7 @@
 			{/if}
 		{/each}
 		<p class="hint">
-			Het vinkje links zet de <strong>huidige selectie</strong> in die laag.{#if !selected}
-				Er is nu niets geselecteerd.{/if}
+			Het vinkje links zet de <strong>huidige selectie</strong> in die laag.{#if !selected}{' '}Er is nu niets geselecteerd.{/if}
 		</p>
 	</div>
 {/if}
@@ -948,16 +955,9 @@
 		color: var(--danger);
 		margin-top: var(--space-1);
 	}
-	.addrow { display: flex; gap: var(--space-1); align-items: center; }
-	.addrow select {
-		font: inherit;
-		font-size: var(--text-xs);
-		padding: 2px 4px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
+		.addrow { display: grid; gap: var(--space-2); margin: 0 0 var(--space-3); }
+	.addrow :global(.segmented) { display: flex; width: 100%; }
+	.addrow .mini { justify-self: start; }
 	.layer-edit {
 		display: grid;
 		grid-template-columns: 1fr 1fr;

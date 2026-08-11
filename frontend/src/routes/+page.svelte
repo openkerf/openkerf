@@ -21,6 +21,8 @@
 	import CameraCalibration from '$components/CameraCalibration.svelte';
 	import Clipart from '$components/Clipart.svelte';
 	import SheetTabs from '$components/SheetTabs.svelte';
+	import PhoneView from '$components/PhoneView.svelte';
+	import JobStart from '$components/JobStart.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
 	import { CameraStore } from '$lib/camera.svelte';
 	import { PresetariatStore } from '$lib/presetariat.svelte';
@@ -44,6 +46,29 @@
 	let tool = $state<Tool>('select');
 	// Bijsnijden: het volgende sleepkader knipt de geselecteerde afbeelding bij.
 	let cropping = $state(false);
+
+	// Drie apparaten, drie apps (DESIGN-SYSTEM v2). Geen gekrompen desktop maar
+	// een eigen gedaante: onder 768px is dit een monitor met een noodrem.
+	let breedte = $state(1440);
+	let telefoon = $derived(breedte < 768);
+	let tablet = $derived(breedte >= 768 && breedte < 1200);
+	let paneelOpen = $state(true);
+
+	// Het wauw-moment. Alleen op de flank van niet-draaiend naar draaiend, en
+	// daarna weer weg — anders is het decoratie in plaats van een bericht.
+	let wauw = $state(false);
+	let liep = false;
+	function vier() {
+		wauw = true;
+		setTimeout(() => (wauw = false), 900);
+	}
+	control.onStarted = vier;
+	$effect(() => {
+		const nu = Boolean(status.activeJob?.running);
+		// Ook als iemand anders startte (telefoon, console) hoort het te vieren.
+		if (nu && !liep) vier();
+		liep = nu;
+	});
 	// Wat er op de gekozen afbeelding aanstaat. Komt van de API, want het recept
 	// leeft op de node in de engine — niet in de browser.
 	let imageState = $state<Record<string, unknown> | null>(null);
@@ -299,6 +324,11 @@
 	let preflight = $state(false);
 
 	let device = $derived(status.device);
+	let telefoonPositie = $derived(
+		device?.position.mm
+			? `${device.position.mm[0].toFixed(1)}, ${device.position.mm[1].toFixed(1)} mm`
+			: '—'
+	);
 	// Niet `state` noemen: `$state` zou dan als store-referentie gelezen worden.
 	let machine = $derived(machineState(device, status.connected));
 
@@ -361,6 +391,7 @@
 </script>
 
 <svelte:window
+	bind:innerWidth={breedte}
 	onkeydown={(e) => {
 		if (e.key === 'Escape') {
 			design.select(null);
@@ -399,6 +430,19 @@
 	}}
 />
 
+{#if telefoon}
+	<!-- De telefoon is een eigen app: monitor en noodrem. Zie DESIGN-SYSTEM v2,
+	     "Drie apparaten, drie apps". -->
+	<PhoneView
+		{device}
+		state={machine}
+		job={status.activeJob}
+		{control}
+		{camera}
+		connected={status.connected}
+		position={telefoonPositie}
+	/>
+{:else}
 <TopBar
 	{device}
 	state={machine}
@@ -414,6 +458,7 @@
 
 <div class="main">
 	<ToolRail
+			compact={tablet}
 		bind:tool
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
@@ -475,9 +520,23 @@
 				await loadImageState();
 			}}
 		/>
+		{#if wauw}
+			<!-- Eén keer, bij het starten: daar gebeurt het ook echt. -->
+			<JobStart label={status.activeJob?.label ?? null} />
+		{/if}
 	</div>
 
-	<aside class="panel" aria-label="Eigenschappen">
+	{#if tablet}
+	<!-- Op een tablet is 280 van 1024 pixels een kwart van je werkblad. Het
+	     paneel mag weg als je aan het tekenen bent; de machineknoppen staan
+	     in de bovenbalk, dus je raakt de laser nooit kwijt. -->
+	<button
+		class="paneelgreep"
+		aria-expanded={paneelOpen}
+		onclick={() => (paneelOpen = !paneelOpen)}
+	>{paneelOpen ? '›' : '‹'}<span class="vw">Paneel {paneelOpen ? 'inklappen' : 'uitklappen'}</span></button>
+{/if}
+<aside class="panel" class:weg={tablet && !paneelOpen} aria-label="Eigenschappen">
 		<div class="tabs" role="tablist">
 			<button
 				class="tab"
@@ -642,6 +701,7 @@
 	connected={status.connected}
 	{control}
 />
+{/if}
 
 <!-- Bibliotheken en gereedschappen als eigen venster: in 280px kun je niet
      zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->
@@ -765,6 +825,8 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
+		/* Het startmoment legt zich over het bed; dat vraagt een anker. */
+		position: relative;
 	}
 	.camstrip {
 		position: absolute;
@@ -842,6 +904,27 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+	}
+	.panel.weg { display: none; }
+	/* De greep zit tegen de rand van het canvas, waar je duim al is. */
+	.paneelgreep {
+		align-self: stretch;
+		flex: none;
+		width: 20px;
+		border: 1px solid var(--line);
+		border-right: 0;
+		border-radius: var(--radius-field) 0 0 var(--radius-field);
+		background: var(--surface-1);
+		color: var(--text-2);
+		font-size: var(--text-md);
+	}
+	.paneelgreep:hover { background: var(--surface-2); color: var(--text-1); }
+	.vw {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
 	}
 	.tabs {
 		display: flex;

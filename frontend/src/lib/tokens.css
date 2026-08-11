@@ -23,10 +23,12 @@
 	   dat moet, want dit is de stopknop. */
 	--danger-solid: #c62a1e;
 	/* Als tékst moet oranje 4,5:1 halen; #b8860b kwam niet verder dan 3,25.
-	   Voor een vlak of een stip is de heldere versie juist beter zichtbaar. */
-	--warn: #8a6100;
+	   Voor een vlak of een stip is de heldere versie juist beter zichtbaar.
+	   #8a6100 haalde het net niet (4,45) zodra de badge zijn eigen kleur als
+	   16%-waas eronder legt — de achtergrond telt mee, niet alleen het wit. */
+	--warn: #7f5900;
 	--warn-solid: #b8860b;
-	--ok: #2e7d46;
+	--ok: #2a733f;
 
 	/* Laagkleuren: vaste reeks van 10, puur identificatie. */
 	--layer-1: #e5484d;
@@ -39,6 +41,19 @@
 	--layer-8: #e93d82;
 	--layer-9: #8d6e63;
 	--layer-10: #607d8b;
+
+	/* Materiaal als beeld: de grondkleur van elke textuurstrook. Geen
+	   themakleuren maar materiaalkleuren — hout is hout, ook 's nachts. In het
+	   donkere thema staan ze een slag doffer, anders schreeuwen ze. */
+	--mat-hout: #c8a06a;
+	--mat-acryl: #7fb9c4;
+	--mat-leer: #8a5a3b;
+	--mat-karton: #cdb391;
+	--mat-metaal: #b6bcc2;
+
+	/* Eén maat groter dan de schaal, voor het percentage op de telefoon: dat
+	   moet je van een meter afstand kunnen lezen. */
+	--text-display: 40px;
 
 	/* Spacing op een 4px-grid. */
 	--space-1: 4px;
@@ -62,6 +77,13 @@
 	--layer-9: #8D6E63;
 	--layer-10: #607D8B;
 
+	/* v2: drie diepteniveaus. Vlak, opgetild, zwevend — zie DESIGN-SYSTEM.md. */
+	--lift-1: 0 1px 2px rgb(16 20 26 / 0.06);
+	--lift-2: 0 8px 24px rgb(16 20 26 / 0.12);
+	--scrim: rgb(16 20 26 / 0.40);
+	/* Het canvas is een podium, geen vlak. */
+	--stage: radial-gradient(120% 100% at 50% 0%, #eceef0 0%, #e3e6e9 60%, #dcdfe3 100%);
+
 	--radius-field: 6px;
 	--radius-card: 10px;
 	--radius-dot: 999px;
@@ -81,6 +103,8 @@
 
 	--shadow-float: 0 8px 24px rgb(0 0 0 / 0.12);
 	--transition: 150ms ease-out;
+	/* Panelen en vensters mogen iets trager: stil is goed, doods niet. */
+	--transition-panel: 200ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 [data-theme='dark'] {
@@ -92,12 +116,21 @@
 	--line: #33383f;
 	--text-1: #e8eaed;
 	--text-2: #9aa3ae;
+	--mat-hout: #9c7845;
+	--mat-acryl: #4f8892;
+	--mat-leer: #63402a;
+	--mat-karton: #9c8564;
+	--mat-metaal: #7d848b;
 	--accent: #2aa6b1;
 	--accent-ink: #0b1213;
 	--danger: #e5544a;
 	--danger-solid: #c62a1e;
 	--warn: #d9a62e;
 	--warn-solid: #d9a62e;
+	--lift-1: 0 1px 2px rgb(0 0 0 / 0.30);
+	--lift-2: 0 10px 28px rgb(0 0 0 / 0.45);
+	--scrim: rgb(0 0 0 / 0.60);
+	--stage: radial-gradient(120% 100% at 50% 0%, #191c20 0%, #131619 60%, #0f1114 100%);
 	--ok: #4caf6d;
 }
 
@@ -157,18 +190,30 @@ button {
 
 /* Op een tablet of telefoon bedien je dit met een vinger, soms met een
    handschoen aan. Het design system eist 40px; kleiner is niet te raken. */
-@media (max-width: 720px), (pointer: coarse) {
+/* v2: op armlengte naast een machine is 13px te klein. Dezelfde schaal, één
+   stap opgeschoven — geen nieuwe maten, alleen andere toewijzing. */
+@media (max-width: 1199px) {
+	:root {
+		--text-xs: 13px;
+		--text-sm: 15px;
+		--text-md: 18px;
+		--text-lg: 24px;
+	}
+}
+
+/* v2: 44px haalt een handschoen; 40 niet. */
+@media (max-width: 1199px), (pointer: coarse) {
 	button,
 	a.btn,
 	label.btn,
 	select,
 	input[type='checkbox'] {
-		min-height: 40px;
+		min-height: 44px;
 	}
 	button:not(.sheet):not(.tab):not(.font),
 	a.btn,
 	label.btn {
-		min-width: 40px;
+		min-width: 44px;
 	}
 }
 

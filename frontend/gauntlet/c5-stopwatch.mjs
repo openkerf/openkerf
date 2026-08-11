@@ -5,7 +5,7 @@
  * 5000 paden, pannen en zoomen met dat bestand, themawissel en de
  * statusupdates.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { browser, open, report, reset } from './harness.mjs';
 
 const BIG = '/Users/Jelle.Tigchelaar/.claude/jobs/ef487fda/tmp/gauntlet/5000.svg';
@@ -39,6 +39,18 @@ if (usable > 3000) {
 }
 
 // --- import van 5000 paden
+// De proeftekening zelf maken als hij er niet is: een meting die afhangt van
+// een bestand uit een vorige sessie is geen meting.
+if (!existsSync(BIG)) {
+	mkdirSync(BIG.replace(/\/[^/]+$/, ''), { recursive: true });
+	const paden = [];
+	for (let i = 0; i < 5000; i++) {
+		const x = (i % 100) * 3 + 5;
+		const y = Math.floor(i / 100) * 3 + 5;
+		paden.push(`<path d="M${x} ${y}h2v2h-2z" fill="none" stroke="#000" stroke-width="0.2"/>`);
+	}
+	writeFileSync(BIG, `<svg xmlns="http://www.w3.org/2000/svg" width="310mm" height="210mm" viewBox="0 0 310 210">${paden.join('')}</svg>`);
+}
 const svg = readFileSync(BIG, 'utf8');
 const importMs = await page.evaluate(async (body) => {
 	const form = new FormData();

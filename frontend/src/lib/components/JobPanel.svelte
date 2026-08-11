@@ -104,7 +104,7 @@
 </div>
 
 <style>
-	.section + .section {
+	.section {
 		margin-top: var(--space-6);
 	}
 	.section-title {

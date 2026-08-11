@@ -148,3 +148,35 @@ def test_a_file_that_is_not_a_font_is_refused(fonts, tmp_path, monkeypatch):
 
     with pytest.raises(DesignError, match="niet te lezen"):
         fonts.import_font(str(fake))
+
+
+def test_the_preview_endpoint_only_serves_fonts_the_engine_knows(client, tmp_path, monkeypatch):
+    """
+    Een naam opzoeken in de lijst, niet als pad behandelen: anders is dit een
+    leesbaar venster op de hele schijf.
+    """
+    import openkerf_api.fonts as module
+
+    monkeypatch.setattr(module, "SEARCH", (str(tmp_path),))
+    geheim = tmp_path / "geheim.txt"
+    geheim.write_text("niet voor de browser")
+
+    assert client.get("/api/design/fonts/file", params={"name": str(geheim)}).status_code == 409
+    assert client.get("/api/design/fonts/file", params={"name": "/etc/passwd"}).status_code == 409
+
+
+def test_a_known_font_is_served_as_bytes(client, fonts, tmp_path, monkeypatch):
+    """De keuzelijst kan een naam pas in zijn eigen letter tonen als dit werkt."""
+    import openkerf_api.fonts as module
+
+    monkeypatch.setattr(module, "SEARCH", (str(tmp_path),))
+    a_font(tmp_path / "Voorbeeldig.otf")
+    added = client.post(
+        "/api/design/fonts/import", json={"file": str(tmp_path / "Voorbeeldig.otf")}
+    ).json()
+
+    response = client.get("/api/design/fonts/file", params={"name": added["file"]})
+
+    assert response.status_code == 200
+    # De signature van een TrueType-bestand; een HTML-foutpagina heeft die niet.
+    assert response.content[:4] in (b"\x00\x01\x00\x00", b"true", b"ttcf")

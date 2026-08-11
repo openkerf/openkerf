@@ -181,11 +181,17 @@ class Library:
     # ---------------------------------------------------------------- presets
 
     def presets(self, material_id=None, operation=None) -> list[dict]:
+        # De foto van het raster erbij: een preset die uit een testraster komt
+        # heeft bewijs, en dat bewijs hoort op de kaart en niet drie schermen
+        # verderop. origin_id is "testgrid:<id>".
         query = """
-            SELECT p.*, m.name AS material_name, mp.name AS machine_name
+            SELECT p.*, m.name AS material_name, mp.name AS machine_name,
+                   g.id AS grid_id, g.photo_path AS grid_photo
             FROM preset p
             JOIN material m ON m.id = p.material_id
             LEFT JOIN machine_profile mp ON mp.id = p.machine_id
+            LEFT JOIN test_grid g
+                   ON p.origin_id = 'testgrid:' || g.id AND g.photo_path IS NOT NULL
         """
         clauses, params = [], []
         if material_id is not None:

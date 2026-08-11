@@ -45,7 +45,7 @@
 
 	<!-- Openen hoort naast opslaan: in de Job-tab vindt niemand het. -->
 	<label class="btn file" title="Ontwerp openen">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
 		<span class="btn-label">Openen</span>
 		<input
 			type="file"
@@ -61,7 +61,7 @@
 	</label>
 
 	<label class="btn file" title="Project openen (ontwerp + bibliotheek)">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M8 12h8"/></svg>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
 		<span class="btn-label">Project</span>
 		<input
 			type="file"
@@ -76,14 +76,14 @@
 		/>
 	</label>
 	<a class="btn" href="/api/project/export.openkerf" download="project.openkerf" title="Project opslaan">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v6h6"/></svg>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
 		<span class="btn-label">Project opslaan</span>
 	</a>
 
 	<!-- Opslaan als SVG: MeerK40t's eigen schrijver, dus operaties komen bij
 	     terugladen weer mee. -->
 	<a class="btn" href="/api/design/export.svg" download="ontwerp.svg" title="Ontwerp opslaan">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7M8 20v-6h8v6"/></svg>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
 		<span class="btn-label">Opslaan</span>
 	</a>
 
@@ -95,7 +95,7 @@
 	<!-- Stoppen kan altijd, overal, in één tik. -->
 	<button class="btn danger" disabled={!canStop} onclick={onStop} title="Job direct afbreken">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-		<span class="btn-label">Stop</span>
+		<span class="btn-label blijft">Stop</span>
 	</button>
 	<!-- Opent geen dialoog maar de pre-flight in het rechterpaneel. -->
 	<button class="btn primary" disabled={!canStart} onclick={onStart}>
@@ -126,9 +126,13 @@
 	.topbar::-webkit-scrollbar { display: none; }
 
 	/* Smal scherm: knoppen tonen alleen hun icoon. De titel staat in de
-	   tooltip en het aria-label, dus er gaat geen betekenis verloren. */
-	@media (max-width: 900px) {
-		.topbar :global(.btn-label) { display: none; }
+	   tooltip en het aria-label, dus er gaat geen betekenis verloren.
+	   De grens ligt op 1200px, niet op 900: op een tablet van 1024 breken de
+	   labels anders over twee regels en groeit de balk mee. */
+	@media (max-width: 1199px) {
+		/* De twee knoppen die de machine aansturen houden hun woord: een rood
+		   vierkantje zonder tekst is geen noodstop. */
+		.topbar :global(.btn-label:not(.blijft)) { display: none; }
 		.machine .muted { display: none; }
 	}
 	.brand {
@@ -140,6 +144,7 @@
 		letter-spacing: -0.01em;
 	}
 	.machine {
+		white-space: nowrap;
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -188,13 +193,13 @@
 		border-color: var(--accent);
 		color: var(--accent-ink);
 	}
-	.btn.primary:hover:not(:disabled) { filter: brightness(1.06); }
+	.btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.06); }
 	.btn.danger {
 		background: var(--danger-solid);
 		border-color: var(--danger-solid);
 		color: var(--on-color);
 	}
-	.btn.danger:hover:not(:disabled) { filter: brightness(1.06); }
+	.btn.danger:hover:not(:disabled) { background: var(--danger-solid); filter: brightness(1.06); }
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	.iconbtn {
 		display: grid;

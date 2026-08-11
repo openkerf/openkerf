@@ -76,6 +76,32 @@ class Fonts:
         except AttributeError:
             pass
 
+    # -------------------------------------------------------------- tonen
+
+    # Wat een browser als webfont kan laden. `.shx` en `.jhf` zijn plotterfonts
+    # zonder browser-equivalent; die krijgen geen voorbeeld.
+    PREVIEWABLE = (".ttf", ".otf", ".woff", ".woff2")
+
+    def preview_file(self, name: str) -> Path:
+        """
+        Het bestand achter een lettertype, om als webfont te serveren.
+
+        Alleen bestanden die de engine zelf al kent komen hier langs: de naam
+        wordt opgezocht in de lijst, niet als pad behandeld. Anders is dit een
+        leesbaar venster op de hele schijf.
+        """
+        wanted = str(name or "")
+        for entry in self.registry.available_fonts() or []:
+            path = Path(str(entry[0]))
+            if wanted not in (str(path), path.name):
+                continue
+            if path.suffix.lower() not in self.PREVIEWABLE:
+                raise DesignError("Van dit lettertype kan een browser niets tonen.")
+            if not path.is_file():
+                raise DesignError("Dat lettertype staat er niet meer.")
+            return path
+        raise DesignError("Onbekend lettertype.")
+
     # ---------------------------------------------------------- importeren
 
     def importable(self) -> list[dict]:

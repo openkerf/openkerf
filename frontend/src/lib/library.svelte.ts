@@ -23,6 +23,9 @@ export type Preset = {
 	focus_offset_mm: number;
 	source: 'handmatig' | 'geextrapoleerd' | 'testraster' | 'geimporteerd';
 	note: string;
+	/** Het raster waar deze preset uit komt, als daar een foto van is. */
+	grid_id: number | null;
+	grid_photo: string | null;
 };
 
 export const OPERATIONS = [

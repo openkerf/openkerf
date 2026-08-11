@@ -487,6 +487,21 @@ class ApiServer:
                 manage(self.fonts.refresh)
             return manage(self.drawing.fonts)
 
+        @app.get("/api/design/fonts/file")
+        def font_file(name: str):
+            """
+            Het lettertypebestand zelf, zodat de keuzelijst elke naam in zijn
+            eigen letter kan tonen — kiezen op zicht in plaats van op naam.
+            """
+            from fastapi.responses import FileResponse
+
+            path = manage(self.fonts.preview_file, name)
+            return FileResponse(
+                path,
+                media_type="font/ttf",
+                headers={"Cache-Control": "max-age=86400"},
+            )
+
         @app.get("/api/design/fonts/importable")
         def importable_fonts():
             """Lettertypen op dit systeem die de engine niet leest, maar wij wel."""
