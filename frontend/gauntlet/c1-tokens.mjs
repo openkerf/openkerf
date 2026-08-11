@@ -32,6 +32,11 @@ for (const file of files) {
 		// tokens.css met de bron in CSS. Uitzonderingen horen gemarkeerd te
 		// staan, niet stilzwijgend door de vingers gezien te worden.
 		if (lines.slice(Math.max(0, index - 4), index).join(' ').includes('@tokens-mirror')) continue;
+		// Een kleurcode die je in een commentaarregel noemt, is uitleg en geen
+		// stijl. Deze meter sloeg aan op de zin die uitlegt waarom #0000ff00
+		// onbruikbaar is — dat is de meter die de fout in gaat, niet de code.
+		const kaal = line.trim();
+		if (kaal.startsWith('//') || kaal.startsWith('*') || kaal.startsWith('/*')) continue;
 		for (const m of line.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
 			hexes.push({ file: file.slice(SRC.length + 1), line: index + 1, value: m[0], src: line.trim().slice(0, 70) });
 		}

@@ -142,13 +142,13 @@
 	.proef {
 		margin: 0;
 		display: grid;
-		gap: 6px;
+		gap: var(--space-2);
 		padding: var(--space-2);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
 	}
-	svg { width: 100%; height: 150px; display: block; }
+	svg { width: 190px; height: 150px; display: block; margin: 0 auto; }
 	/* Alle maten hierin staan in viewBox-eenheden, niet in pixels — daarom
 	   non-scaling-stroke, anders verandert de lijndikte met de kolombreedte. */
 	.vorm, .vorm > :global(path), .hulp, .tanden > :global(path), .bemating > :global(path) {
@@ -161,8 +161,13 @@
 	.hulp { stroke: var(--text-2); stroke-dasharray: 3 2; }
 	.tanden > :global(path) { stroke-width: 2.6; }
 	.bemating > :global(path) { stroke: var(--text-2); stroke-width: 0.8; }
-	.bij { font-size: 5px; fill: var(--text-2); font-family: var(--font-mono); }
+	/* @svg-space: deze SVG rekent in viewBox-eenheden (100 breed op 190 px), niet
+	   in CSS-pixels. Wat er op het scherm van terechtkomt, wordt gemeten door
+	   criticus 2 — een uitzondering zonder meting is precies hoe het reuzenlabel
+	   uit ronde 4 drie rondes lang onopgemerkt bleef. */
+	.bij { font-size: 7.5px; fill: var(--text-2); font-family: var(--font-mono); }
 	.bij.tand { fill: var(--accent); }
-	.letter { font-size: 9px; fill: var(--accent); text-anchor: middle; font-weight: 600; }
+	/* @svg-space: zie hierboven. */
+	.letter { font-size: 10px; fill: var(--accent); text-anchor: middle; font-weight: 600; }
 	figcaption { font-size: var(--text-xs); color: var(--text-2); text-align: center; }
 </style>

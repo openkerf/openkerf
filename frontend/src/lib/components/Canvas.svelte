@@ -1282,7 +1282,7 @@
 		align-items: center;
 		gap: 4px;
 		width: auto;
-		padding: 0 10px;
+		padding: 0 var(--space-3);
 		font-size: var(--text-xs);
 	}
 	.zoom button {

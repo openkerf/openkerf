@@ -449,7 +449,7 @@
 	}
 	.zknop {
 		min-width: 56px;
-		padding: 6px 10px;
+		padding: var(--space-2) var(--space-3);
 		font-size: var(--text-xs);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);

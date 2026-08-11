@@ -304,12 +304,12 @@
 		align-items: baseline;
 		flex-wrap: wrap;
 		gap: 4px;
-		margin-top: 6px;
+		margin-top: var(--space-2);
 	}
 	.reeks .wat { font-size: var(--text-xs); color: var(--text-2); min-width: 7em; }
 	.waarde {
 		font-size: var(--text-xs);
-		padding: 1px 7px;
+		padding: 1px var(--space-2);
 		border-radius: var(--radius-dot);
 		background: var(--surface-2);
 		color: var(--text-1);

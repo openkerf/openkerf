@@ -290,7 +290,7 @@
 		justify-items: center;
 		gap: 2px;
 		font-size: var(--text-xs);
-		padding: 6px 10px 8px;
+		padding: var(--space-2) var(--space-3) var(--space-2);
 		border: 0;
 		border-bottom: 2px solid transparent;
 		border-radius: 0;

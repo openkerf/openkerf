@@ -78,7 +78,7 @@
 	}
 	.soort {
 		display: grid;
-		gap: 6px;
+		gap: var(--space-2);
 		/* Gelijke hoogte, wat de tekst ook doet: een rafelig raster van kaarten
 		   leest als een lijst met fouten erin. */
 		height: 100%;

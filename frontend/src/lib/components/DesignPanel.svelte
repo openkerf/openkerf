@@ -745,11 +745,19 @@
 	.layer {
 		display: flex;
 		align-items: center;
+		/* De waarden krijgen hun eigen regel. Naast de naam persten ze "Graveren"
+		   tot "G.." in een paneel van 280 px — en dan weet je niet meer welke
+		   laag je voor je hebt. */
+		flex-wrap: wrap;
 		gap: var(--space-2);
-		padding: 8px 8px;
+		padding: var(--space-2);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 	}
+	/* De waarden naar de tweede regel, maar de knop blijft rechts op de eerste:
+	   anders staat hij in zijn eentje op een derde regel. */
+	.layer .layer-vals { flex-basis: 100%; order: 1; }
+	.layer .eye { order: 0; }
 	.layer + .layer {
 		margin-top: 8px;
 	}
@@ -804,7 +812,7 @@
 	}
 	.history {
 		display: flex;
-		gap: var(--space-1);
+		gap: var(--space-3);
 	}
 	.mini {
 		font-size: var(--text-xs);
