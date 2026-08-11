@@ -202,6 +202,30 @@ button {
 }
 
 /* v2: 44px haalt een handschoen; 40 niet. */
+/*
+ * Vangnet: een gevulde knop blijft gevuld als je hem aanwijst.
+ *
+ * Elk component definieert zijn eigen `.btn`, en bijna overal staat
+ * `.btn:hover { background: var(--surface-2) }` ná `.btn.primary`. Beide wegen
+ * even zwaar (0,3,0), dus de hover wint op volgorde: de knop wordt grijs terwijl
+ * de tekst wit blijft. Gemeten op de hoofdknop: rgb(238,240,242) met witte
+ * letters — onleesbaar, en juist op de knop die het meeste doet.
+ *
+ * `:root` ervoor maakt dit een tandje zwaarder (0,4,0) zonder !important. Dit is
+ * een vangnet, geen oplossing: de échte fout is dat acht componenten dezelfde
+ * knopstijl overschrijven. Dat staat als X1 in FEATURE-GAPS.md.
+ */
+:root .btn.primary:hover:not(:disabled),
+:root button.primary:hover:not(:disabled) {
+	background: var(--accent);
+	color: var(--accent-ink);
+}
+:root .btn.danger:hover:not(:disabled),
+:root button.danger:hover:not(:disabled) {
+	background: var(--danger-solid);
+	color: var(--on-color);
+}
+
 @media (max-width: 1199px), (pointer: coarse) {
 	button,
 	a.btn,

@@ -97,6 +97,73 @@ function readLayerColors(): string[] {
 	return read.every(Boolean) ? read : fallback;
 }
 
+/**
+ * Een laagkleur leesbaar houden op het bed waar hij op ligt.
+ *
+ * De meeste geïmporteerde tekeningen zijn zwart. Op het donkere bed is zwart op
+ * zwart, en dan zie je de omtrek van je eigen werkstuk niet meer. Een andere
+ * kleur kiezen mag niet — de laagkleur is van de gebruiker — dus schuiven we
+ * dezelfde kleur op in helderheid tot hij loskomt van de achtergrond. Zwart
+ * wordt grijs, donkerblauw wordt blauw; de laag blijft herkenbaar.
+ */
+const DREMPEL = 2.6;
+
+function ontleed(kleur: string): [number, number, number] | null {
+	const hex = kleur.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+	if (hex) {
+		const h = hex[1];
+		const breed = h.length === 3 ? h.split('').map((c) => c + c) : h.match(/../g)!;
+		return breed.map((c) => parseInt(c, 16)) as [number, number, number];
+	}
+	const rgb = kleur.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+	if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
+	return null;
+}
+
+function helderheid([r, g, b]: [number, number, number]) {
+	const k = [r, g, b].map((v) => {
+		const s = v / 255;
+		return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2];
+}
+
+function verschil(a: [number, number, number], b: [number, number, number]) {
+	const la = helderheid(a);
+	const lb = helderheid(b);
+	return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** De bedkleur van het actieve thema, opnieuw gelezen zodra dat wisselt. */
+let bedKleur: { thema: string; rgb: [number, number, number] } | null = null;
+
+function bed(): [number, number, number] | null {
+	if (typeof window === 'undefined') return null;
+	const thema = document.documentElement.dataset.theme ?? '';
+	if (bedKleur?.thema === thema) return bedKleur.rgb;
+	const rgb = ontleed(getComputedStyle(document.documentElement).getPropertyValue('--bed'));
+	if (!rgb) return null;
+	bedKleur = { thema, rgb };
+	return rgb;
+}
+
+export function leesbaar(kleur: string): string {
+	const ondergrond = bed();
+	const eigen = ontleed(kleur);
+	if (!ondergrond || !eigen) return kleur;
+	if (verschil(eigen, ondergrond) >= DREMPEL) return kleur;
+	// Weg van het bed: op een donker bed naar wit, op een licht bed naar zwart.
+	const pool = helderheid(ondergrond) < 0.2 ? 255 : 0;
+	for (let deel = 15; deel <= 75; deel += 5) {
+		const f = deel / 100;
+		const gemengd = eigen.map((c) => c + (pool - c) * f) as [number, number, number];
+		if (verschil(gemengd, ondergrond) >= DREMPEL) {
+			return `rgb(${gemengd.map((c) => Math.round(c)).join(' ')})`;
+		}
+	}
+	return pool === 255 ? 'rgb(235 235 235)' : 'rgb(30 30 30)';
+}
+
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);
 
 export function isDesignSignal(code: string) {
@@ -115,6 +182,23 @@ export class DesignStore {
 	preview = $state<{ x: number; y: number; width: number; height: number } | null>(null);
 	/** Gezet door de pagina om de URL mee te laten lopen met de selectie. */
 	onSelect: ((ids: string[]) => void) | null = null;
+
+	/**
+	 * Het actieve thema, als reactieve waarde.
+	 *
+	 * Lijnkleuren worden tegen de bedkleur afgewogen (zie `leesbaar`), en die
+	 * verandert bij het omschakelen. CSS-variabelen wisselen vanzelf mee, maar
+	 * een kleur die wij hebben uitgerekend staat als vaste waarde in de DOM —
+	 * zonder dit bleef het canvas na het omschakelen op de oude kleuren staan.
+	 */
+	theme = $state(typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? ''));
+
+	constructor() {
+		if (typeof document === 'undefined') return;
+		new MutationObserver(() => {
+			this.theme = document.documentElement.dataset.theme ?? '';
+		}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+	}
 
 	#pending = false;
 
@@ -227,13 +311,15 @@ export class DesignStore {
 	 * laagkleur onbruikbaar — dan pakken we de palet-kleur op volgorde.
 	 */
 	colorFor(operationId: string | null): string {
+		// Aanraken zodat Svelte deze kleur opnieuw uitrekent bij een themawissel.
+		void this.theme;
 		const operations = this.operations;
 		const index = operations.findIndex((o) => o.id === operationId);
 		if (index < 0) return 'var(--text-2)';
 		const eigen = operations[index].color;
 		const bruikbaar =
 			eigen && !(/^#[0-9a-f]{6}0{2}$/i.test(eigen.trim()));
-		return bruikbaar ? eigen : LAYER_COLORS[index % LAYER_COLORS.length];
+		return leesbaar(bruikbaar ? eigen : LAYER_COLORS[index % LAYER_COLORS.length]);
 	}
 
 	/**

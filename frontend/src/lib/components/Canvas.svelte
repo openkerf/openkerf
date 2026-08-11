@@ -43,17 +43,34 @@
 
 	const FALLBACK = { width: 500, height: 300 };
 
+	// Boven de afgeleiden die hem gebruiken: de schaal hangt van de werkelijke
+	// maat van het werkvlak af, niet andersom.
+	let canvasWidth = $state(0);
+	let canvasHeight = $state(0);
+
 	let bed = $derived({
 		width: device?.bed?.width_mm ?? FALLBACK.width,
 		height: device?.bed?.height_mm ?? FALLBACK.height
 	});
 
-	// Passend: het bed vult 640px breed. Zoom en pan komen daar bovenop, zodat
-	// werken op een bed van 500x300 mm niet betekent dat je op 2px per mm zit.
-	let fitScale = $derived(640 / bed.width);
+	/** Lucht tussen het bed en de rand van het werkvlak, in schermpixels. */
+	const MARGE = 32;
+
+	// Passend betekent: het bed vult het werkvlak dat er is. Een vaste 640px
+	// (wat hier stond) laat op een breed scherm tweederde ongebruikt en loopt op
+	// een tablet juist onder het rechterpaneel door — het bed werd afgesneden.
+	let fitScale = $derived(
+		Math.min(
+			(Math.max(canvasWidth, 320) - MARGE * 2) / bed.width,
+			(Math.max(canvasHeight, 240) - MARGE * 2) / bed.height
+		)
+	);
 	let zoom = $state(1);
 	let pan = $state({ x: 0, y: 0 });
 	let scale = $derived(fitScale * zoom);
+
+	/** Eén schermpixel, uitgedrukt in millimeters. */
+	let mmPerPx = $derived(1 / scale);
 
 	// Tekst in de bed-SVG rekent in millimeters, dus een vaste maat groeit mee
 	// met de zoom: bij tien keer inzoomen wordt een label tien keer zo groot en
@@ -61,16 +78,43 @@
 	// schermmaat is de enige maat die klopt.
 	let labelSize = $derived(11 / scale);
 
+	// Dezelfde val als bij het label: een greep van "2.4" in een SVG die in
+	// millimeters meet is 2,4 mm, dus 5 px uitgezoomd en 50 px ingezoomd. Alles
+	// wat je met een muis of vinger moet raken rekenen we daarom terug naar
+	// schermpixels. Maten in px: greep 10, trefzone 24 (raakdoel), steel 16.
+	// Met een vinger is 24 px te klein; het ontwerpsysteem eist 44 px raakdoel op
+	// aanraakschermen. De greep zelf blijft even klein — die moet je zien, niet
+	// raken.
+	let grofAanwijzen = $state(false);
+	$effect(() => {
+		if (typeof window === 'undefined' || !window.matchMedia) return;
+		const vraag = window.matchMedia('(pointer: coarse)');
+		grofAanwijzen = vraag.matches;
+		const luister = () => (grofAanwijzen = vraag.matches);
+		vraag.addEventListener('change', luister);
+		return () => vraag.removeEventListener('change', luister);
+	});
+
+	let handleR = $derived(5 * mmPerPx);
+	let hitR = $derived((grofAanwijzen ? 22 : 12) * mmPerPx);
+	let stalk = $derived((grofAanwijzen ? 26 : 16) * mmPerPx);
+
 	function zoomAt(factor: number, clientX?: number, clientY?: number) {
 		const next = Math.min(20, Math.max(0.2, zoom * factor));
 		if (next === zoom) return;
 		if (clientX !== undefined && clientY !== undefined && frame) {
-			// Houd het punt onder de cursor op zijn plek.
-			const rect = frame.getBoundingClientRect();
-			const px = clientX - rect.left - pan.x;
-			const py = clientY - rect.top - pan.y;
+			// Houd het punt onder de cursor op zijn plek. Dat vraagt de afstand tot
+			// het *midden van het bed*, want daaromheen groeit alles. Er stond de
+			// afstand tot de hoek van het canvasvlak, en dat scheelt een halve
+			// canvasbreedte: het punt onder de muis liep bij elke tik zo'n 15 px weg.
+			// Het midden uitrekenen en niet opmeten: bij een reeks wieltikken loopt
+			// de DOM een tik achter, en dan zoomt elke tik naar een punt dat de
+			// vorige tik al verschoven had.
+			const vlak = frame.getBoundingClientRect();
 			const ratio = next / zoom;
-			pan = { x: pan.x - px * (ratio - 1), y: pan.y - py * (ratio - 1) };
+			const dx = clientX - (vlak.left + RULER + canvasWidth / 2 + pan.x);
+			const dy = clientY - (vlak.top + RULER + canvasHeight / 2 + pan.y);
+			pan = { x: pan.x - dx * (ratio - 1), y: pan.y - dy * (ratio - 1) };
 		}
 		zoom = next;
 	}
@@ -90,10 +134,11 @@
 	 */
 	function fitTo(x: number, y: number, w: number, h: number) {
 		if (!canvasWidth || !canvasHeight || w <= 0 || h <= 0) return;
-		const marge = 48;
+		// canvasWidth is het vlak *binnen* de linialen; die er nog eens van
+		// aftrekken maakte alles wat "passend" heette een slag te klein.
 		const doel = Math.min(
-			(canvasWidth - RULER - marge * 2) / w,
-			(canvasHeight - RULER - marge * 2) / h
+			(canvasWidth - MARGE * 2) / w,
+			(canvasHeight - MARGE * 2) / h
 		);
 		zoom = Math.min(20, Math.max(0.2, doel / fitScale));
 
@@ -145,6 +190,10 @@
 		// Een enkele lijn heeft geen breedte; geef hem iets om in te passen.
 		return { x: x0, y: y0, width: Math.max(x1 - x0, 1), height: Math.max(y1 - y0, 1) };
 	}
+
+	/** Alleen met het pijltje pak je vormen op; met een tekengereedschap in de
+	 *  hand moet een klik binnen een bestaande vorm gewoon tekenen. */
+	let selectTool = $derived(tool === 'select' || tool === 'nodes');
 
 	let frame = $state<HTMLElement | null>(null);
 	let panning = $state<{ x: number; y: number; from: { x: number; y: number } } | null>(null);
@@ -328,6 +377,24 @@
 	});
 
 	let outline = $derived(preview ?? selection);
+
+	/**
+	 * Het selectiekader, een paar schermpixels ruim om de vorm heen.
+	 *
+	 * Precies op de contour lag de gestreepte accentlijn over de laagkleur van
+	 * het element, en dan zie je niet meer in welke laag het zit. Het kader hoort
+	 * eromheen te liggen, niet erop — zo blijven beide leesbaar.
+	 */
+	let frameBox = $derived.by(() => {
+		if (!outline) return null;
+		const pad = 5 * mmPerPx;
+		return {
+			x: Math.min(outline.x, outline.x + outline.width) - pad,
+			y: Math.min(outline.y, outline.y + outline.height) - pad,
+			width: Math.abs(outline.width) + pad * 2,
+			height: Math.abs(outline.height) + pad * 2
+		};
+	});
 	let rotation = $derived(drag?.mode === 'rotate' ? drag.angle : 0);
 	let center = $derived(
 		outline ? { x: outline.x + outline.width / 2, y: outline.y + outline.height / 2 } : null
@@ -471,19 +538,38 @@
 	// wist die de selectie die het sleepkader net gemaakt heeft.
 	let bandJustEnded = false;
 
+	/**
+	 * Waar de muis wordt afgevangen zodra er écht gesleept wordt.
+	 *
+	 * Niet meteen bij het indrukken: een element dat de muis vangt, krijgt ook
+	 * de daaropvolgende klik toegewezen. Vangen we die op de SVG, dan komt elke
+	 * klik op een vorm binnen als "klik naast alles" en selecteerde niets meer.
+	 * Dus pas vangen als de muis beweegt — dan is het een sleep, geen klik.
+	 */
+	let bandCatcher: Element | null = null;
+
 	function startBand(event: PointerEvent) {
 		const at = pointerMm(event);
 		band = { x1: at.x, y1: at.y, x2: at.x, y2: at.y };
-		(event.target as Element).setPointerCapture?.(event.pointerId);
+		bandCatcher = event.currentTarget as Element;
 	}
 
 	function moveBand(event: PointerEvent) {
 		if (!band) return;
 		const at = pointerMm(event);
+		if (bandCatcher && (Math.abs(at.x - band.x1) > 0.5 || Math.abs(at.y - band.y1) > 0.5)) {
+			bandCatcher.setPointerCapture?.(event.pointerId);
+			bandCatcher = null;
+		}
 		band = { ...band, x2: at.x, y2: at.y };
 	}
 
-	function endBand() {
+	function endBand(event: PointerEvent) {
+		bandCatcher = null;
+		const held = event.currentTarget as Element;
+		// releasePointerCapture gooit als er niets gevangen is; loslaten vóór de
+		// klik is nodig, anders wordt die klik alsnog naar de SVG omgeleid.
+		if (held?.hasPointerCapture?.(event.pointerId)) held.releasePointerCapture(event.pointerId);
 		if (!band) return;
 		const box = {
 			x0: Math.min(band.x1, band.x2),
@@ -521,9 +607,6 @@
 	// op het bed uitgelijnd (het bed wordt gecentreerd én gepand, dus alleen de
 	// pan verrekenen klopt niet), en de stapgrootte volgt de zoom — op 50 mm
 	// vast zie je uitgezoomd een muur van cijfers en ingezoomd bijna niets.
-	let canvasWidth = $state(0);
-	let canvasHeight = $state(0);
-
 	const STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500];
 	/** Breedte van de liniaalstrook; ook in de CSS gebruikt. */
 	const RULER = 20;
@@ -537,17 +620,44 @@
 	/** De kleinste stap waarbij twee labels minstens 55 px uit elkaar staan. */
 	let rulerStep = $derived(STEPS.find((step) => step * scale >= 55) ?? 500);
 
-	function ticks(lengthMm: number, step: number) {
+	/**
+	 * De onderverdeling onder de hoofdstap: het grootste ronde getal dat er heel
+	 * in past en dat op het scherm nog uit elkaar te houden is.
+	 *
+	 * Blind delen door vijf gaf bij een stap van 20 mm een raster van 4 mm — een
+	 * maat waar niemand in denkt, en te dicht op elkaar om iets aan af te lezen.
+	 */
+	let subStep = $derived(
+		[...STEPS]
+			.filter((s) => s < rulerStep && rulerStep % s === 0 && s * scale >= 12)
+			.sort((a, b) => b - a)
+			.pop() ?? 0
+	);
+
+	function ticks(lengthMm: number, step: number, sub: number) {
 		const marks = [];
-		for (let value = 0; value <= lengthMm + 0.001; value += step / 5) {
+		for (let value = 0; value <= lengthMm + 0.001; value += sub || step) {
 			const major = Math.abs(value % step) < 0.001;
 			marks.push({ value, major, label: major ? String(Math.round(value)) : '' });
 		}
 		return marks;
 	}
 
-	let ticksX = $derived(ticks(bed.width, rulerStep));
-	let ticksY = $derived(ticks(bed.height, rulerStep));
+	let ticksX = $derived(ticks(bed.width, rulerStep, subStep));
+	let ticksY = $derived(ticks(bed.height, rulerStep, subStep));
+
+	// Het grid volgde de zoom niet: het stond vast op 50 mm terwijl de liniaal
+	// op 20 of 100 sprong. Dan valt er geen lijn op een cijfer en kun je niets
+	// van het bed aflezen. Nu deelt het grid de stap van de liniaal, met een
+	// fijne onderverdeling die verdwijnt zodra hij te dicht op elkaar staat.
+	let gridMajor = $derived(rulerStep * scale);
+	let gridMinor = $derived(subStep * scale);
+	let gridStyle = $derived(
+		`background-size: ${gridMajor}px ${gridMajor}px, ${gridMajor}px ${gridMajor}px,` +
+			(gridMinor > 0
+				? ` ${gridMinor}px ${gridMinor}px, ${gridMinor}px ${gridMinor}px`
+				: ' 0 0, 0 0')
+	);
 
 	/** Waar de muis staat, als streepje op beide linialen. */
 	let pointer = $state<{ x: number; y: number } | null>(null);
@@ -616,9 +726,12 @@
 		{#each ticksX as tick (tick.value)}
 			{@const at = bedOrigin.x + tick.value * scale}
 			{#if at >= -40 && at <= canvasWidth + 40}
-				<line x1={at} x2={at} y1={tick.major ? 8 : 14} y2="20" />
+				<!-- Streepjes onder de cijferband, niet erdoorheen: met streepjes
+				     die tot y=8 liepen sneed er altijd een door "100" en las je
+				     "109". Cijfers wonen boven, streepjes beneden. -->
+				<line x1={at} x2={at} y1={tick.major ? 11 : 15} y2="20" />
 				{#if tick.label}
-					<text x={at + 2} y="9">{tick.label}</text>
+					<text x={at + 3} y="1">{tick.label}</text>
 				{/if}
 			{/if}
 		{/each}
@@ -630,9 +743,9 @@
 		{#each ticksY as tick (tick.value)}
 			{@const at = bedOrigin.y + tick.value * scale}
 			{#if at >= -40 && at <= canvasHeight + 40}
-				<line y1={at} y2={at} x1={tick.major ? 8 : 14} x2="20" />
+				<line y1={at} y2={at} x1={tick.major ? 11 : 15} x2="20" />
 				{#if tick.label}
-					<text x="2" y={at - 2} transform="rotate(-90 2 {at - 2})">{tick.label}</text>
+					<text x="1" y={at - 3} transform="rotate(-90 1 {at - 3})">{tick.label}</text>
 				{/if}
 			{/if}
 		{/each}
@@ -645,8 +758,8 @@
 		<div
 			class="bed"
 			style="width: {bed.width * scale}px; height: {bed.height * scale}px;
-			       background-size: {50 * scale}px {50 * scale}px;
-			       transform: translate({pan.x}px, {pan.y}px)"
+			       left: {bedOrigin.x}px; top: {bedOrigin.y}px;
+			       {gridStyle}"
 		>
 			{#if cameraSrc}
 				<!-- Het beeld is al rechtgetrokken naar de bedrechthoek door de
@@ -674,6 +787,19 @@
 			<span class="bed-label mono">
 				bed {bed.width.toFixed(0)} × {bed.height.toFixed(0)} mm
 			</span>
+
+			{#if design.isEmpty && !cameraSrc}
+				<!-- Een leeg bed is een lege bladzijde: zonder tekst weet niemand
+				     waar hij moet beginnen. Vangt geen muis af, want je moet er
+				     doorheen kunnen tekenen. -->
+				<div class="blank">
+					<h2>Leeg bed</h2>
+					<p>
+						Kies <strong>Importeren</strong> bovenin voor een bestaand ontwerp,
+						of pak links een vorm en klik op het bed.
+					</p>
+				</div>
+			{/if}
 
 			<!-- Klikken op het lege canvas deselecteert. Het toetsenbord-equivalent
 			     is Escape, afgevangen op window-niveau; de elementen zelf zijn
@@ -720,7 +846,10 @@
 						startBand(e);
 						return;
 					}
-					if (e.target === e.currentTarget && tool === 'select' && !e.altKey && e.button === 0) {
+					// Ook boven een element: slepen trekt een kader, klikken zonder
+					// te slepen selecteert. Zonder dit kon je binnen een groot kader
+					// geen selectie meer trekken zodra dat kader klikbaar werd.
+					if (tool === 'select' && !e.altKey && e.button === 0) {
 						startBand(e);
 					}
 				}}
@@ -750,6 +879,7 @@
 								/>
 								<rect
 									class="hit"
+									class:passive={!selectTool}
 									role="button"
 									tabindex="0"
 									aria-label="Selecteer afbeelding"
@@ -760,6 +890,10 @@
 									fill="transparent"
 									onclick={(e) => {
 										e.stopPropagation();
+										if (bandJustEnded) {
+											bandJustEnded = false;
+											return;
+										}
 										if (e.shiftKey) design.toggle(element.id);
 										else design.select(element.id);
 									}}
@@ -787,8 +921,9 @@
 								     klikken, zeker niet op een touchscreen. -->
 								<path
 									class="hit"
+									class:passive={!selectTool}
 									d={element.path}
-									fill="none"
+									fill="transparent"
 									stroke="transparent"
 									stroke-width="12"
 									vector-effect="non-scaling-stroke"
@@ -798,6 +933,12 @@
 									aria-pressed={design.isSelected(element.id)}
 									onclick={(e) => {
 										e.stopPropagation();
+										// De klik na een sleepkader mag de selectie die dat kader
+										// net maakte niet vervangen.
+										if (bandJustEnded) {
+											bandJustEnded = false;
+											return;
+										}
 										// Shift houdt de bestaande selectie vast.
 										if (e.shiftKey) design.toggle(element.id);
 										else design.select(element.id);
@@ -815,7 +956,7 @@
 
 					<!-- Selectiecontour: de kerflijn. Statisch gestreept, en alleen
 					     geanimeerd terwijl je sleept — zoals DESIGN-SYSTEM.md voorschrijft. -->
-					{#if outline}
+					{#if outline && frameBox}
 						<!-- Tijdens het roteren draait het hele kader mee als voorvertoning;
 						     de echte vorm volgt zodra de engine het heeft toegepast. -->
 						<g
@@ -826,10 +967,10 @@
 						>
 							<rect
 								class:kerf-anim={drag !== null}
-								x={outline.x}
-								y={outline.y}
-								width={Math.abs(outline.width)}
-								height={Math.abs(outline.height)}
+								x={frameBox.x}
+								y={frameBox.y}
+								width={frameBox.width}
+								height={frameBox.height}
 							/>
 							<!-- Sleepvlak: het hele selectiekader verplaatst het element. -->
 							{#if canEdit}
@@ -840,10 +981,10 @@
 									role="button"
 									tabindex="-1"
 									aria-label="Sleep om te verplaatsen"
-									x={outline.x}
-									y={outline.y}
-									width={Math.abs(outline.width)}
-									height={Math.abs(outline.height)}
+									x={frameBox.x}
+									y={frameBox.y}
+									width={frameBox.width}
+									height={frameBox.height}
 									onpointerdown={(e) => startDrag(e, 'move')}
 									onpointermove={moveDrag}
 									onpointerup={endDrag}
@@ -855,15 +996,15 @@
 							<line
 								class="stalk"
 								x1={center.x}
-								y1={outline.y}
+								y1={frameBox.y}
 								x2={center.x}
-								y2={outline.y - 8}
+								y2={frameBox.y - stalk}
 							/>
 							<circle
 								class="rotator"
 								cx={center.x}
-								cy={outline.y - 8}
-								r="2"
+								cy={frameBox.y - stalk}
+								r={handleR}
 							/>
 							<!-- Ruimere trefzone eromheen: 2 mm is bij deze schaal maar een
 							     paar pixels, en dat is niet te pakken met een muis, laat
@@ -874,8 +1015,8 @@
 								tabindex="-1"
 								aria-label="Sleep om te draaien"
 								cx={center.x}
-								cy={outline.y - 8}
-								r="5"
+								cy={frameBox.y - stalk}
+								r={hitR}
 								onpointerdown={(e) => startDrag(e, 'rotate')}
 								onpointermove={moveDrag}
 								onpointerup={endDrag}
@@ -883,17 +1024,27 @@
 						{/if}
 						<!-- Bij een lijn zijn de eindpunten de grepen; hoekgrepen van een
 						     denkbeeldig kader zouden daar bovenop liggen. -->
-						{#each selectedLine ? [] : [[outline.x, outline.y], [outline.x + outline.width, outline.y], [outline.x, outline.y + outline.height], [outline.x + outline.width, outline.y + outline.height]] as [hx, hy], corner (corner)}
+						{#each selectedLine ? [] : [[frameBox.x, frameBox.y], [frameBox.x + frameBox.width, frameBox.y], [frameBox.x, frameBox.y + frameBox.height], [frameBox.x + frameBox.width, frameBox.y + frameBox.height]] as [hx, hy], corner (corner)}
 								<rect
 									class="handle"
+									x={hx - handleR}
+									y={hy - handleR}
+									width={handleR * 2}
+									height={handleR * 2}
+								/>
+								<!-- De trefzone is ruimer dan de greep: 10 px zichtbaar is
+								     precies genoeg om te zien, en veel te weinig om met een
+								     vinger te raken. -->
+								<rect
+									class="handle-hit"
 									class:grabbable={canEdit}
 									role="button"
 									tabindex="-1"
 									aria-label="Sleep om te schalen"
-									x={hx - 1.2}
-									y={hy - 1.2}
-									width="2.4"
-									height="2.4"
+									x={hx - hitR}
+									y={hy - hitR}
+									width={hitR * 2}
+									height={hitR * 2}
 									onpointerdown={(e) => startDrag(e, 'scale', corner)}
 									onpointermove={moveDrag}
 									onpointerup={endDrag}
@@ -901,8 +1052,8 @@
 							{/each}
 							<text
 								class="mono"
-								x={outline.x + outline.width / 2}
-								y={outline.y + Math.abs(outline.height) + labelSize * 1.6}
+								x={frameBox.x + frameBox.width / 2}
+								y={frameBox.y + frameBox.height + labelSize * 1.3}
 								text-anchor="middle"
 								style="font-size: {labelSize}px"
 							>
@@ -950,14 +1101,15 @@
 					<!-- Een lijn pak je bij een eindpunt, niet bij een hoek van een
 					     denkbeeldig kader. -->
 					{#each lineHandles as point, index (index)}
+						<circle class="endpoint" cx={point.x} cy={point.y} r={handleR} />
 						<circle
-							class="endpoint"
+							class="grip"
 							role="button"
 							tabindex="-1"
 							aria-label="Eindpunt {index + 1} verslepen"
 							cx={point.x}
 							cy={point.y}
-							r="2.5"
+							r={hitR}
 							onpointerdown={(e) => startEndpoint(e, index)}
 							onpointermove={moveEndpoint}
 							onpointerup={endEndpoint}
@@ -970,12 +1122,18 @@
 						{@const live = nodeDrag?.index === point.index ? nodeDrag : null}
 						<circle
 							class="knot"
+							cx={live ? live.x : point.x_mm}
+							cy={live ? live.y : point.y_mm}
+							r={handleR}
+						/>
+						<circle
+							class="grip"
 							role="button"
 							tabindex="-1"
 							aria-label="Knooppunt {point.index + 1} verslepen"
 							cx={live ? live.x : point.x_mm}
 							cy={live ? live.y : point.y_mm}
-							r="2.5"
+							r={hitR}
 							onpointerdown={(e) => startNode(e, point.index)}
 							onpointermove={moveNode}
 							onpointerup={endNode}
@@ -1045,7 +1203,9 @@
 					<g class="head">
 						<line x1={head[0]} y1="0" x2={head[0]} y2={bed.height} />
 						<line x1="0" y1={head[1]} x2={bed.width} y2={head[1]} />
-						<circle cx={head[0]} cy={head[1]} r="4" />
+						<!-- Ook de kop is een schermmarkering, geen vorm van 4 mm: op
+						     twintig keer inzoomen was hij anders een cirkel van 26 cm. -->
+						<circle cx={head[0]} cy={head[1]} r={7 * mmPerPx} />
 					</g>
 				{/if}
 			</svg>
@@ -1054,7 +1214,11 @@
 
 	<div class="zoom">
 		<button title="Uitzoomen" aria-label="Uitzoomen" onclick={() => zoomAt(1 / 1.25)}>−</button>
-		<button class="val mono" title="Terug naar 100% (toets 1)" onclick={honderd}>{Math.round(zoom * 100)}%</button>
+		<!-- 100% is de stand waarin het hele bed in beeld staat; dat is nu ook
+		     echt zo, sinds de schaal het werkvlak volgt in plaats van 640 px. -->
+		<button class="val mono" title="Het hele bed in beeld (toets 1)" onclick={honderd}
+			>{Math.round(zoom * 100)}%</button
+		>
 		<button class="fit" title="Alles passend in beeld (Shift+1)" onclick={passend}>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
 			Passend
@@ -1145,17 +1309,24 @@
 	.canvas {
 		position: absolute;
 		inset: 20px 0 0 20px;
-		display: grid;
-		place-items: center;
 	}
 	.bed {
 		background: var(--bed);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
-		position: relative;
+		/* Absoluut op een gerekende plek, niet gecentreerd door de grid: zodra het
+		   bed groter werd dan het vlak klemde de browser de linkerrand vast, en
+		   dan klopte elke omrekening van pixels naar millimeters niet meer —
+		   linialen, muispositie en zoomen naar de cursor liepen alle drie mis. */
+		position: absolute;
+		/* Twee niveaus, zoals elk tekenprogramma: de hoofdlijnen staan op de
+		   stap van de liniaal, de fijne verdeling op een vijfde daarvan. Kleur
+		   komt uit het token; de fijne lijn is dezelfde kleur, verdund. */
 		background-image:
 			linear-gradient(var(--line) 1px, transparent 1px),
-			linear-gradient(90deg, var(--line) 1px, transparent 1px);
+			linear-gradient(90deg, var(--line) 1px, transparent 1px),
+			linear-gradient(color-mix(in srgb, var(--line) 45%, transparent) 1px, transparent 1px),
+			linear-gradient(90deg, color-mix(in srgb, var(--line) 45%, transparent) 1px, transparent 1px);
 		box-shadow: var(--lift-1), 0 10px 24px rgb(16 20 26 / 0.10);
 	}
 	.camera {
@@ -1191,18 +1362,51 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
+	.blank {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		align-content: center;
+		justify-items: center;
+		gap: var(--space-2);
+		padding: var(--space-4);
+		text-align: center;
+		pointer-events: none;
+		user-select: none;
+	}
+	.blank h2 {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--text-1);
+	}
+	.blank p {
+		max-width: 34ch;
+		font-size: var(--text-sm);
+		line-height: 1.45;
+		color: var(--text-2);
+	}
+	.blank strong {
+		color: var(--text-1);
+		font-weight: 600;
+	}
 	.head line {
 		stroke: var(--accent);
-		stroke-width: 0.5;
-		opacity: 0.5;
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+		opacity: 0.4;
 	}
 	.head circle {
 		fill: none;
 		stroke: var(--accent);
-		stroke-width: 1;
+		stroke-width: 1.5;
+		vector-effect: non-scaling-stroke;
 	}
 	.hit {
 		cursor: pointer;
+	}
+	.hit.passive {
+		pointer-events: none;
 	}
 	.pending {
 		stroke: var(--accent);
@@ -1224,7 +1428,18 @@
 		stroke: var(--accent);
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
+		pointer-events: none;
+	}
+	/* Onzichtbare trefzone om een greep heen; de greep zelf is te klein om te
+	   raken zodra hij een vaste schermmaat heeft. */
+	.grip {
+		fill: transparent;
+		stroke: none;
 		cursor: grab;
+		touch-action: none;
+	}
+	.grip:active {
+		cursor: grabbing;
 	}
 	.pen-line {
 		stroke: var(--accent);
@@ -1250,9 +1465,10 @@
 		stroke: var(--accent);
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
-		cursor: grab;
+		pointer-events: none;
 	}
-	.knot:hover { fill: var(--accent); }
+	/* De trefzone ligt ná de greep in de boom; :has kijkt vooruit. */
+	.knot:has(+ .grip:hover) { fill: var(--accent); }
 	.crop-catch {
 		fill: rgb(0 0 0 / 0.18);
 		cursor: crosshair;
@@ -1328,8 +1544,14 @@
 	.selection .handle {
 		fill: var(--surface-1);
 		stroke-dasharray: none;
+		pointer-events: none;
 	}
-	.selection .handle.grabbable {
+	.selection rect.handle-hit {
+		fill: transparent;
+		stroke: none;
+		touch-action: none;
+	}
+	.selection rect.handle-hit.grabbable {
 		cursor: nwse-resize;
 	}
 	.selection .stalk {

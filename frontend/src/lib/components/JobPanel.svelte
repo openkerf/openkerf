@@ -1,7 +1,15 @@
 <script lang="ts">
 	// Standaard dicht: dit is gereedschap voor storingen, geen dagelijkse kost.
 	let showEvents = $state(false);
-	import { formatDuration, type Device, type Job, type SignalEvent } from '$lib/api';
+	import {
+		formatDuration,
+		isStalled,
+		jobStatusLabel,
+		remainingSeconds,
+		type Device,
+		type Job,
+		type SignalEvent
+	} from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import JobControls from './JobControls.svelte';
 
@@ -15,6 +23,8 @@
 		onHome,
 		onUnlock,
 		onFocus,
+		onFrame,
+		colorFor,
 		profile = null
 	}: {
 		device: Device | null;
@@ -26,6 +36,8 @@
 		onHome?: () => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
+		onFrame?: () => void;
+		colorFor?: (operationId: string | null) => string;
 		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
@@ -33,7 +45,7 @@
 	let jobs = $derived(spooler?.jobs ?? []);
 </script>
 
-<JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {profile} />
+<JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
 
 <div class="section">
 	<h2 class="section-title">Spooler</h2>
@@ -43,34 +55,52 @@
 		<p class="empty">Wachtrij is leeg.</p>
 	{:else}
 		{#each jobs as job, i (i)}
-			<article class="job" class:running={job.running}>
+			<!-- Alleen de job waar de bediening over gaat kan stilstaan; de rest
+			     staat gewoon in de rij te wachten. Zonder dat onderscheid kreeg
+			     elke wachtende job het pauze-uiterlijk. -->
+			{@const stil = job === activeJob && isStalled(job)}
+			<article class="job" class:running={job.running || stil} class:paused={stil}>
 				<header>
 					<span class="name">{job.label}</span>
-					<span class="status mono">{job.status ?? '—'}</span>
+					<!-- De engine zegt "running"/"queued"; deze app spreekt Nederlands. -->
+					<span class="status" class:nu={job.running && !stil} class:pauze={stil}
+						>{stil ? 'Gepauzeerd' : jobStatusLabel(job)}</span
+					>
 				</header>
 
+				{#if job.running || stil}
+					<!-- "Hoe lang nog" is het enige getal dat iemand naast de machine
+					     wil weten; verstreken en totaal staan eronder om het na te
+					     kunnen rekenen. -->
+					<p class="resterend">
+						<span class="mono groot">{formatDuration(remainingSeconds(job))}</span>
+						<span class="rest-label">resterend</span>
+					</p>
+				{/if}
+
 				{#if job.progress !== null}
-					<!-- Kerflijn als voortgang: de omtrek "snijdt" zich af. -->
-					<svg class="progress" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
-						<line x1="0" y1="2" x2="100" y2="2" class="track" />
+					<!-- Kerflijn als voortgang: de omtrek "snijdt" zich af. Op 2px was
+					     hij niet als voortgang te lezen; nu draagt hij de kaart. -->
+					<svg class="progress" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+						<line x1="0" y1="3" x2="100" y2="3" class="track" />
 						<line
 							x1="0"
-							y1="2"
+							y1="3"
 							x2={Math.max(0.01, job.progress * 100)}
-							y2="2"
+							y2="3"
 							class="fill job-progress"
 							class:kerf-anim={job.running}
 						/>
 					</svg>
 					<div class="figures mono">
-						<span>{Math.round(job.progress * 100)}%</span>
+						<span class="pct">{Math.round(job.progress * 100)}%</span>
 						<span>{job.steps_done ?? '—'} / {job.steps_total ?? '—'} stappen</span>
 					</div>
 				{/if}
 
 				<dl class="meta mono">
 					<div><dt>Verstreken</dt><dd>{formatDuration(job.elapsed_seconds)}</dd></div>
-					<div><dt>Schatting</dt><dd>{formatDuration(job.estimate_seconds)}</dd></div>
+					<div><dt>Totaal</dt><dd>{formatDuration(job.estimate_seconds)}</dd></div>
 					<div>
 						<dt>Passes</dt>
 						<dd>{job.loops_executed ?? 0} / {job.loops ?? '∞'}</dd>
@@ -146,9 +176,32 @@
 	.job + .job {
 		margin-top: var(--space-2);
 	}
+	/* De lopende job hoort er niet uit te zien als de drie eronder in de rij:
+	   een randje in accentkleur viel op een schermvullend paneel weg. */
 	.job.running {
 		border-color: var(--accent);
+		box-shadow: inset 3px 0 0 var(--accent);
 	}
+	.job.paused {
+		border-color: var(--warn-solid);
+		box-shadow: inset 3px 0 0 var(--warn-solid);
+	}
+	.resterend {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+		margin: var(--space-2) 0 0;
+	}
+	.groot {
+		font-size: var(--text-xl);
+		line-height: 1.1;
+		color: var(--text-1);
+	}
+	.rest-label {
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.figures .pct { color: var(--text-1); }
 	.job header {
 		display: flex;
 		justify-content: space-between;
@@ -166,19 +219,23 @@
 		color: var(--text-2);
 		flex: none;
 	}
+	.status.nu { color: var(--accent); font-weight: 600; }
+	.status.pauze { color: var(--warn); font-weight: 600; }
 	.progress {
 		width: 100%;
-		height: 4px;
-		margin: var(--space-3) 0 var(--space-1);
+		height: 6px;
+		margin: var(--space-2) 0 var(--space-1);
 		overflow: visible;
 	}
 	.track {
 		stroke: var(--line);
-		stroke-width: 2;
+		stroke-width: 6;
+		stroke-linecap: round;
+		vector-effect: non-scaling-stroke;
 	}
 	.fill {
 		stroke: var(--accent);
-		stroke-width: 2;
+		stroke-width: 6;
 		stroke-dasharray: 6 4;
 		vector-effect: non-scaling-stroke;
 	}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatDuration, type Device, type Job } from '$lib/api';
+	import { formatDuration, isStalled, type Device, type Job } from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import Segmented from './Segmented.svelte';
 
@@ -12,6 +12,8 @@
 		onHome,
 		onUnlock,
 		onFocus,
+		onFrame,
+		colorFor,
 		profile = null
 	}: {
 		control: Controller;
@@ -22,16 +24,28 @@
 		onHome?: () => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
+		/** De kop langs de omtrek sturen, zonder te branden. */
+		onFrame?: () => void;
+		/** Dezelfde laagkleur als het canvas en de lagenlijst tonen. */
+		colorFor?: (operationId: string | null) => string;
 		/** Wat dit machineprofiel zegt te kunnen; bepaalt wat er verschijnt. */
 		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
 	let actions = $derived(control.capabilities?.actions ?? null);
 	let running = $derived(Boolean(job?.running));
+	// Stilstaand, niet alleen "gepauzeerd volgens het statusveld": pauzeren zet
+	// bij Lihuiyu `running` op false en meldt verder niets. Zonder dit stond hier
+	// "Pauze" (uitgeschakeld) op een job die juist hervat moest worden.
+	let paused = $derived(isStalled(job));
 	let queued = $derived(device?.spooler.queue_length ?? 0);
+	// Een lopende job is de reden dat starten niet mag; dat moet in de tooltip
+	// staan, want een grijze knop zonder reden is een raadsel.
+	let bezet = $derived(running || paused);
 	let tokenDraft = $state('');
 	let step = $state(10);
 	type Layer = {
+		id: string | null;
 		label: string;
 		speed_mm_s: number | null;
 		power_percent: number | null;
@@ -52,18 +66,29 @@
 		(estimate?.layers ?? []).filter((l) => l.source !== 'testraster')
 	);
 	let estimating = $state(false);
+	let estimateTraag = $state(false);
+
+	// De engine bouwt voor deze schatting het hele snijplan op. Op een zwaar
+	// ontwerp duurde dat hier meer dan drie minuten, en de pre-flight bleef
+	// intussen op een puntje staan. Een schatting mag nooit de reden zijn dat
+	// je niet kunt starten, dus na tien seconden zeggen we het gewoon.
+	const ESTIMATE_GEDULD = 10_000;
 
 	// De schatting van de engine vóór het starten: de pre-flight toonde tot nu
 	// toe alleen de tijd van een al lopende job, wat precies te laat is.
 	async function loadEstimate() {
 		estimating = true;
+		estimateTraag = false;
+		const traag = setTimeout(() => (estimateTraag = true), ESTIMATE_GEDULD);
 		try {
 			const response = await fetch('/api/job/estimate');
 			estimate = response.ok ? await response.json() : null;
 		} catch {
 			estimate = null;
 		} finally {
+			clearTimeout(traag);
 			estimating = false;
+			estimateTraag = false;
 		}
 	}
 
@@ -108,10 +133,26 @@
 			<div class="pf-time">
 				<span class="muted">Geschatte tijd</span>
 				<span class="v mono">
-					{#if estimating}…{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
+					{#if estimating}
+						<span class="rekent">rekent…</span>
+					{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
 				</span>
 			</div>
-			<div class="pf-row">In wachtrij: <span class="mono">{queued}</span></div>
+			{#if estimateTraag}
+				<p class="pf-row">
+					De engine bouwt het hele snijplan om dit te schatten; op een zwaar
+					ontwerp duurt dat even. Starten kan gewoon — de machine wacht er
+					niet op.
+				</p>
+			{/if}
+			<!-- Alleen tonen als er iets in staat: "In wachtrij: 0" vlak vóór het
+			     starten is de normale situatie, en dus geen mededeling. -->
+			{#if queued > 0}
+				<div class="pf-row">
+					Er staat al <span class="mono">{queued}</span>
+					{queued === 1 ? 'job' : 'jobs'} in de wachtrij; deze komt erachteraan.
+				</div>
+			{/if}
 
 			<!-- Wat de machine gaat dóén. Tijd en aantal alleen is theater: een
 			     laseraar controleert snelheid, vermogen en passes voordat hij
@@ -122,16 +163,26 @@
 						<tr><th>Laag</th><th>mm/s</th><th>%</th><th>×</th><th>Bron</th></tr>
 					</thead>
 					<tbody>
-						{#each estimate.layers as layer (layer.label)}
+						<!-- Op de index, niet op het label: twee operaties van hetzelfde
+						     type heten allebei "Graveren", en een dubbele sleutel laat
+						     Svelte de tabel verkeerd bijwerken. -->
+						{#each estimate.layers as layer, i (i)}
 							<tr>
-								<td class="pf-name" title={layer.label}>{layer.label}</td>
+								<td class="pf-name" title={layer.label}>
+										<!-- Twee snijlagen heten allebei "Snijden"; de chip is het
+										     enige wat ze uit elkaar houdt, en het is dezelfde kleur
+										     als op het canvas en in de lagenlijst. -->
+										{#if colorFor}
+											<span class="chip" style:background={colorFor(layer.id)} aria-hidden="true"></span>
+										{/if}{layer.label}
+									</td>
 								<td class="mono">{layer.speed_mm_s ?? '—'}</td>
 								<td class="mono">{layer.power_percent ?? '—'}</td>
 								<td class="mono">{layer.passes}</td>
 								<td class:unsure={layer.source !== 'testraster'}>
 									{layer.source === 'testraster'
 										? 'gemeten'
-										: (ONZEKER[layer.source ?? ''] ?? 'geen preset')}
+										: (ONZEKER[layer.source ?? ''] ?? 'niet gemeten')}
 								</td>
 							</tr>
 						{/each}
@@ -146,9 +197,33 @@
 				{/if}
 			{/if}
 
-			<p class="pf-warn">
-				Controleer deksel, koeling en air assist. Start pas als het werkstuk vastligt.
-			</p>
+			<!-- Dit stond als tweede geel blok onder de risicomelding. Twee
+			     waarschuwingen op rij van dezelfde kleur devalueren elkaar: de
+			     routinecontrole maakte de échte melding onzichtbaar. Nu neutraal
+			     en als lijst, want je loopt hem af. -->
+			<div class="pf-check">
+				<span class="pf-kop">Loop dit even na</span>
+				<ul>
+					<li>Deksel dicht</li>
+					<li>Afzuiging en air assist aan</li>
+					<li>Werkstuk ligt vast en vlak</li>
+				</ul>
+			</div>
+
+			<!-- De kop langs de omtrek, zonder te branden: de laatste controle die
+			     je écht kunt uitvoeren in plaats van alleen aanvinken. Stond alleen
+			     in de bovenbalk; hier is het moment waarop je hem nodig hebt. -->
+			{#if onFrame}
+				<button
+					class="btn kader"
+					disabled={control.busy !== null || running}
+					title="De kop langs de omtrek van je werk sturen — de laser blijft uit"
+					onclick={() => onFrame?.()}
+				>
+					Eerst het kader tonen
+				</button>
+			{/if}
+
 			<div class="pf-actions">
 				<button class="btn" onclick={() => (preflight = false)}>Annuleren</button>
 				<button class="btn primary" onclick={confirmStart} disabled={control.busy !== null}>
@@ -158,46 +233,58 @@
 		</div>
 	{:else}
 		<div class="controls">
+			<!-- Eén primaire knop per toestand. Stond "Job starten" ook tijdens een
+			     lopende job in het accent, dan is de opvallendste knop op het scherm
+			     degene die je niet moet hebben — en spoolt een tik er een tweede
+			     job achteraan. -->
 			<button
-				class="btn primary"
-				disabled={!actions?.start || blocked}
-				title={blockedReason}
+				class="btn"
+				class:primary={!bezet}
+				disabled={!actions?.start || blocked || bezet}
+				title={bezet ? 'Er loopt al een job — eerst stoppen of afwachten' : blockedReason}
 				onclick={() => (preflight = true)}
 			>
 				Job starten
 			</button>
-			<button
-				class="btn"
-				disabled={!actions?.pause || !running || blocked}
-				title={blockedReason}
-				onclick={() => control.pause()}
-			>
-				Pauze
-			</button>
-			<button
-				class="btn"
-				disabled={!actions?.resume || blocked}
-				title={blockedReason}
-				onclick={() => control.resume()}
-			>
-				Hervatten
-			</button>
-			<!-- Stoppen kan altijd, in één tik — zolang we mogen schrijven. -->
-			<button
-				class="btn danger"
-				disabled={!actions?.stop || control.needsToken}
-				title={blockedReason}
-				onclick={() => control.stop()}
-			>
-				Stop
-			</button>
+			{#if paused}
+				<button
+					class="btn primary"
+					disabled={!actions?.resume || blocked}
+					title={blockedReason}
+					onclick={() => control.resume()}
+				>
+					Hervatten
+				</button>
+			{:else}
+				<button
+					class="btn"
+					disabled={!actions?.pause || !running || blocked}
+					title={running
+						? blockedReason
+						: 'Er loopt niets om te pauzeren'}
+					onclick={() => control.pause()}
+				>
+					Pauze
+				</button>
+			{/if}
 			<button
 				class="btn subtle"
 				disabled={!actions?.clear_queue || queued === 0 || blocked}
-				title={blockedReason}
+				title={queued === 0 ? 'De wachtrij is al leeg' : blockedReason}
 				onclick={() => control.clearQueue()}
 			>
 				Wachtrij legen ({queued})
+			</button>
+			<!-- Stoppen kan altijd, in één tik — maar niet vlak naast pauze:
+			     24px eronder, eigen breedte, zodat een mistik niet je werkstuk
+			     kost. Zie DESIGN-SYSTEM v2, "Touch als eersteklas input". -->
+			<button
+				class="btn danger stop"
+				disabled={!actions?.stop || control.needsToken}
+				title={blockedReason ?? 'Job direct afbreken'}
+				onclick={() => control.stop()}
+			>
+				Stop
 			</button>
 		</div>
 
@@ -316,6 +403,10 @@
 	.btn.subtle {
 		grid-column: 1 / -1;
 	}
+	.btn.stop {
+		grid-column: 1 / -1;
+		margin-top: var(--space-6);
+	}
 	.preflight {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -336,8 +427,16 @@
 	}
 	.pf-layers td { padding: 2px 0; }
 	.pf-layers td.mono { text-align: right; padding-right: 8px; font-variant-numeric: tabular-nums; }
+	.chip {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: 2px;
+		margin-right: 6px;
+		vertical-align: baseline;
+	}
 	.pf-name {
-		max-width: 8em;
+		max-width: 9em;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -355,6 +454,11 @@
 	.pf-time .v {
 		font-size: var(--text-md);
 	}
+	.rekent {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
 	.pf-row {
 		color: var(--text-2);
 		font-size: var(--text-xs);
@@ -366,6 +470,31 @@
 		border-radius: var(--radius-field);
 		background: color-mix(in srgb, var(--warn) 14%, transparent);
 		font-size: var(--text-xs);
+	}
+	.pf-check {
+		margin: var(--space-3) 0;
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		font-size: var(--text-xs);
+	}
+	.pf-kop {
+		display: block;
+		font-weight: 600;
+		color: var(--text-2);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin-bottom: var(--space-1);
+	}
+	.pf-check ul {
+		margin: 0;
+		padding-left: 1.1em;
+		color: var(--text-1);
+	}
+	.pf-check li { padding: 1px 0; }
+	.kader {
+		width: 100%;
+		margin-bottom: var(--space-3);
 	}
 	.pf-actions {
 		display: grid;

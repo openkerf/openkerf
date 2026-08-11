@@ -13,7 +13,8 @@
 		min = null,
 		max = null,
 		unit = null,
-		disabled = false
+		disabled = false,
+		onchange
 	}: {
 		label: string;
 		/** Als string, zodat een half getypt getal ("1.") niet wegspringt. */
@@ -23,6 +24,9 @@
 		max?: number | null;
 		unit?: string | null;
 		disabled?: boolean;
+		/** Voor velden die meteen naar de machine moeten in plaats van naar een
+		 *  formulier dat later opgeslagen wordt. Vuurt niet tijdens het typen. */
+		onchange?: (value: string) => void;
 	} = $props();
 
 	function zet(richting: number) {
@@ -33,6 +37,7 @@
 		if (max !== null) nieuw = Math.min(max, nieuw);
 		// Drijvende komma laat 0.1 + 0.2 als 0.30000000000000004 achter.
 		value = String(Math.round(nieuw * 1000) / 1000);
+		onchange?.(value);
 	}
 </script>
 
@@ -40,16 +45,26 @@
 	<span class="naam">{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</span>
 	<span class="teller">
 		<button type="button" {disabled} aria-label="{label} verlagen" onclick={() => zet(-1)}>−</button>
-		<input class="mono" type="text" inputmode="decimal" bind:value {disabled} />
+		<input
+			class="mono"
+			type="text"
+			inputmode="decimal"
+			bind:value
+			{disabled}
+			onchange={() => onchange?.(value)}
+		/>
 		<button type="button" {disabled} aria-label="{label} verhogen" onclick={() => zet(1)}>+</button>
 	</span>
 </label>
 
 <style>
-	.veld { display: grid; gap: 4px; }
+	/* min-width: 0 op alle drie de niveaus. Zonder dat houdt het invoerveld
+	   zijn eigen breedte van ~20 tekens aan en loopt de stepper uit een smalle
+	   kolom — in het lagenpaneel stak hij 28px buiten het paneel. */
+	.veld { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
 	.naam { font-size: var(--text-xs); color: var(--text-2); }
 	.eenheid { color: var(--text-2); }
-	.teller { display: flex; }
+	.teller { display: flex; min-width: 0; }
 	.teller input {
 		flex: 1;
 		min-width: 0;

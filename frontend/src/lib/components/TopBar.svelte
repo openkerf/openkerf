@@ -7,6 +7,7 @@
 		state: machineState,
 		canStart,
 		canStop,
+		stopArmed = false,
 		canEdit = false,
 		onStart,
 		onStop,
@@ -20,6 +21,10 @@
 		state: MachineState;
 		canStart: boolean;
 		canStop: boolean;
+		/** Er is iets om te stoppen. De knop blijft altijd bruikbaar — als onze
+		 *  statusdetectie ernaast zit mag je de noodrem niet kwijt zijn — maar hij
+		 *  schreeuwt alleen wanneer het ertoe doet. */
+		stopArmed?: boolean;
 		canEdit?: boolean;
 		onStart: () => void;
 		onStop: () => void;
@@ -104,13 +109,26 @@
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
 		<span class="btn-label">Kader tonen</span>
 	</button>
-	<!-- Stoppen kan altijd, overal, in één tik. -->
-	<button class="btn danger" disabled={!canStop} onclick={onStop} title="Job direct afbreken">
+	<!-- Stoppen kan altijd, overal, in één tik. Vol rood alleen als er ook echt
+	     iets loopt: een knop die uren per dag alarm staat te slaan zonder reden
+	     leert de gebruiker hem te negeren, en dan mist hij hem als het telt. -->
+	<button
+		class="btn danger"
+		class:sluimer={!stopArmed}
+		disabled={!canStop}
+		onclick={onStop}
+		title={stopArmed ? 'Job direct afbreken' : 'Er loopt nu niets — dit breekt een job af zodra er een loopt'}
+	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
 		<span class="btn-label blijft">Stop</span>
 	</button>
 	<!-- Opent geen dialoog maar de pre-flight in het rechterpaneel. -->
-	<button class="btn primary" disabled={!canStart} onclick={onStart}>
+	<button
+		class="btn primary"
+		disabled={!canStart}
+		title={stopArmed ? 'Er loopt al een job' : 'De pre-flight openen'}
+		onclick={onStart}
+	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
 		Start job
 	</button>
@@ -145,7 +163,6 @@
 		/* De twee knoppen die de machine aansturen houden hun woord: een rood
 		   vierkantje zonder tekst is geen noodstop. */
 		.topbar :global(.btn-label:not(.blijft)) { display: none; }
-		.machine .muted { display: none; }
 	}
 	/* Het project en de losse bestanden zijn twee soorten handelingen; een
 	   haarlijn zegt dat zonder woorden. */
@@ -218,8 +235,30 @@
 		background: var(--danger-solid);
 		border-color: var(--danger-solid);
 		color: var(--on-color);
+		/* Stop en Start job zijn de twee tegengestelde acties van deze balk en
+		   stonden 12px uit elkaar. De balk-gap is 12, dus deze marge maakt er 24
+		   van — het minimum uit DESIGN-SYSTEM v2 voor doelen met tegengestelde
+		   gevolgen. */
+		margin-right: var(--space-3);
 	}
 	.btn.danger:hover:not(:disabled) { background: var(--danger-solid); filter: brightness(1.06); }
+	/* Sluimerend: herkenbaar als de stopknop (rode rand, rood vierkant), maar
+	   niet als alarm. Bij een lopende job wint de gevulde variant hierboven. */
+	.btn.danger.sluimer {
+		background: var(--surface-1);
+		border-color: var(--danger-solid);
+		/* Het woord in gewone tekstkleur, het icoon in rood: --danger op
+		   --surface-1 haalt in het donkere thema 4,4:1 en dat is te weinig voor
+		   tekst. De rode rand plus het rode vierkantje dragen de betekenis. */
+		color: var(--text-1);
+	}
+	.btn.danger.sluimer svg { color: var(--danger); }
+	.btn.danger.sluimer:hover:not(:disabled) {
+		background: var(--danger-solid);
+		color: var(--on-color);
+		filter: none;
+	}
+	.btn.danger.sluimer:hover:not(:disabled) svg { color: inherit; }
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	.iconbtn {
 		display: grid;

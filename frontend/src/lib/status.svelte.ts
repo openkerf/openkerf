@@ -5,6 +5,7 @@
  * 2 s opnieuw een volledige snapshot. Read-only: we sturen niets terug.
  */
 
+import { currentJob } from './api';
 import type { ApiEvent, Device, SignalEvent, Snapshot } from './api';
 
 const RECONNECT_MIN = 500;
@@ -27,8 +28,16 @@ export class StatusConnection {
 		return devices.find((d) => d.active) ?? devices[0] ?? null;
 	}
 
+	/**
+	 * De job waar de bediening over gaat — lopend óf stilstaand.
+	 *
+	 * Dit filterde op `running`, en dat vlaggetje gaat bij Lihuiyu op `false`
+	 * zodra je pauzeert. Gevolg: de job verdween uit de statusbalk, uit het
+	 * Job-paneel en van de telefoon, er was geen knop om te hervatten, en
+	 * "Job starten" werd weer actief bovenop werk dat alleen maar stilstond.
+	 */
 	get activeJob() {
-		return this.device?.spooler.jobs.find((job) => job.running) ?? null;
+		return currentJob(this.device);
 	}
 
 	connect() {

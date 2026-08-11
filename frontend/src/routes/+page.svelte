@@ -114,6 +114,7 @@
 	let editingText = $state<string | null>(null);
 	let estimate = $state<number | null>(null);
 	let gridOpen = $state(false);
+	let versRaster = $state<number | null>(null);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
 	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
@@ -452,8 +453,12 @@
 <TopBar
 	{device}
 	state={machine}
-	canStart={(control.capabilities?.actions.start ?? false) && !control.needsToken}
+	canStart={(control.capabilities?.actions.start ?? false) &&
+		!control.needsToken &&
+		machine !== 'busy' &&
+		machine !== 'paused'}
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
+	stopArmed={machine === 'busy' || machine === 'paused'}
 	canEdit={canEdit && design.preview === null}
 	onStart={requestStart}
 	onStop={() => control.stop()}
@@ -663,6 +668,8 @@
 						await edits.unlock();
 					}}
 					profile={library.activeMachine}
+					onFrame={() => control.frame()}
+					colorFor={(id) => design.colorFor(id)}
 		onFocus={async (mm) => {
 						await post('/api/machine/focus', { distance_mm: mm });
 					}}
@@ -839,8 +846,18 @@
 </Dialog>
 
 <Dialog title="Testraster" bind:open={gridOpen} width="860px">
-	<TestGrid {library} {canEdit} materialId={gridMateriaal} onGenerated={() => design.load()} />
-	<TestGridResult {library} {canEdit} />
+	<TestGrid
+		{library}
+		{canEdit}
+		materialId={gridMateriaal}
+		onGenerated={(id) => {
+			// Vers gebrand raster: stap 3 hoort er meteen op te staan in plaats van
+			// op "kies een raster…" te blijven hangen.
+			versRaster = id;
+			design.load();
+		}}
+	/>
+	<TestGridResult {library} {canEdit} focusGrid={versRaster} />
 </Dialog>
 
 <style>
@@ -928,6 +945,15 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+	}
+	/* Op tablet en telefoon staat de tekst een stap groter (15px in plaats van
+	   13), maar het paneel bleef 280px — daarmee past er een vijfde minder op
+	   een regel dan op de desktop en breken laagnamen middenin een woord.
+	   280 × 15/13 ≈ 323: hetzelfde aantal tekens per regel als op de desktop. */
+	@media (max-width: 1199px), (pointer: coarse) {
+		.panel {
+			width: 324px;
+		}
 	}
 	.panel.weg { display: none; }
 	/* De greep zit tegen de rand van het canvas, waar je duim al is. */

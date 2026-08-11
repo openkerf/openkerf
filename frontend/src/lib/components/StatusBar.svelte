@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { formatDuration, formatMm, STATE_LABEL, type Device, type Job, type MachineState } from '$lib/api';
+	import {
+		formatDuration,
+		formatMm,
+		isStalled,
+		remainingSeconds,
+		STATE_LABEL,
+		type Device,
+		type Job,
+		type MachineState
+	} from '$lib/api';
 
 	import type { Controller } from '$lib/control.svelte';
 
@@ -24,9 +33,22 @@
 	// ontwerpen was, had geen stop in beeld — en dat is precies het moment
 	// waarop je hem nodig hebt. Vandaar hier, altijd zichtbaar zodra er iets
 	// loopt of in de wachtrij staat.
-	let busy = $derived(Boolean(job?.running) || (device?.spooler.queue_length ?? 0) > 0);
+	// Ook een gepauzeerde job telt: die heeft bij Lihuiyu `running === false` en
+	// verdween daardoor uit deze balk — precies wanneer je de hervatknop zoekt.
+	let busy = $derived(Boolean(job) || (device?.spooler.queue_length ?? 0) > 0);
 
 	let mm = $derived(device?.position.mm ?? null);
+
+	// Pauzeren moest lukken vanaf élk tabblad. Stond hij alleen in het
+	// Job-paneel, dan kostte het een tabwissel plus een klik — precies op het
+	// moment dat je geen tweede handeling wil doen. Dus hier, naast de stop.
+	let paused = $derived(isStalled(job));
+	let canPause = $derived(control.capabilities?.actions.pause ?? false);
+	let canResume = $derived(control.capabilities?.actions.resume ?? false);
+	let remaining = $derived(remainingSeconds(job));
+	let percent = $derived(job?.progress !== null && job?.progress !== undefined
+		? Math.round(job.progress * 100)
+		: null);
 </script>
 
 <footer class="statusbar mono">
@@ -35,9 +57,9 @@
 	<span class="wat">kop</span>
 	<span>X <b>{formatMm(mm?.[0])}</b></span>
 	<span>Y <b>{formatMm(mm?.[1])}</b> mm</span>
-	<span class="sep" aria-hidden="true"></span>
-	<span class="wat">muis</span>
-	<span class="muis">
+	<span class="sep muisdeel" aria-hidden="true"></span>
+	<span class="wat muisdeel">muis</span>
+	<span class="muis muisdeel">
 		{#if pointerMm}
 			<b>{pointerMm.x.toFixed(1)}</b>, <b>{pointerMm.y.toFixed(1)}</b> mm
 		{:else}
@@ -45,8 +67,14 @@
 		{/if}
 	</span>
 	<span class="sep" aria-hidden="true"></span>
-	<span>
-		{#if job}
+	<!-- Tijdens een job is "hoe lang nog" het enige getal dat telt; de totale
+	     schatting stond er, maar die moest je zelf van de klok aftrekken. -->
+	<span class="tijd">
+		{#if job && remaining !== null}
+			{#if percent !== null}<b class="pct">{percent}%</b>{/if}
+			nog <b>{formatDuration(remaining)}</b>
+			<span class="van">van {formatDuration(job.estimate_seconds)}</span>
+		{:else if job}
 			~ {formatDuration(job.estimate_seconds)} geschat
 		{:else}
 			geen job
@@ -59,16 +87,43 @@
 		{connected ? 'Verbonden met de laser' : 'Geen verbinding met de laser'}
 	</span>
 	{#if busy}
-		<button
-			class="stop"
-			disabled={control.needsToken}
-			title={control.needsToken
-				? 'Zonder token kan de app niet stoppen — gebruik de stopknop op de machine'
-				: 'Job afbreken'}
-			onclick={() => control.stop()}
-		>
-			Stop
-		</button>
+		<span class="acties">
+			{#if paused}
+				<button
+					class="hervat"
+					disabled={control.needsToken || !canResume}
+					title={control.needsToken ? 'Eerst een token invullen' : 'Verder waar hij gebleven was'}
+					onclick={() => control.resume()}
+				>
+					Hervatten
+				</button>
+			{:else}
+				<button
+					class="pauze"
+					disabled={control.needsToken || !canPause || !job?.running}
+					title={control.needsToken
+						? 'Eerst een token invullen'
+						: !canPause
+							? 'Deze machine kent geen pauze — gebruik de knop op de machine'
+							: 'Job pauzeren'}
+					onclick={() => control.pause()}
+				>
+					Pauze
+				</button>
+			{/if}
+			<!-- 24px ertussen: pauze en stop hebben tegengestelde gevolgen, en een
+			     mistik kost je het werkstuk. Zie DESIGN-SYSTEM v2, "Touch". -->
+			<button
+				class="stop"
+				disabled={control.needsToken}
+				title={control.needsToken
+					? 'Zonder token kan de app niet stoppen — gebruik de stopknop op de machine'
+					: 'Job afbreken'}
+				onclick={() => control.stop()}
+			>
+				Stop
+			</button>
+		</span>
 	{/if}
 	<span class="right">
 		<span class="dot {state}" aria-hidden="true"></span>{STATE_LABEL[state]}
@@ -83,9 +138,18 @@
 	}
 	/* Vaste breedte: anders springt de hele balk mee met elke muisbeweging. */
 	.muis { display: inline-block; min-width: 13ch; }
+	/* Op tablet teken je niet, dus is de muispositie geen informatie — en de
+	   ruimte hebben de bedieningsknoppen wél nodig: zonder dit brak de balk
+	   over twee regels zodra er een job liep. */
+	@media (max-width: 1199px) {
+		.muisdeel { display: none; }
+	}
+	.statusbar > span { white-space: nowrap; }
 
 	.statusbar {
-		height: var(--statusbar-height);
+		/* Vaste hoogte op desktop; op touch groeien de knoppen naar 44px en dan
+		   moet de balk meegeven in plaats van ze eruit te laten steken. */
+		min-height: var(--statusbar-height);
 		flex: none;
 		display: flex;
 		align-items: center;
@@ -106,18 +170,44 @@
 		height: 14px;
 		background: var(--line);
 	}
-	.stop {
+	/* De voortgang in cijfers: percentage vet, resterend vet, totaal gedempt —
+	   drie getallen naast elkaar lezen anders als één brij. */
+	.tijd { white-space: nowrap; }
+	.pct { margin-right: var(--space-2); }
+	.van { color: var(--text-2); }
+
+	.acties {
 		margin-left: auto;
+		display: flex;
+		align-items: center;
+		/* 24px: tegengestelde gevolgen horen niet naast elkaar te plakken. */
+		gap: var(--space-6);
+	}
+	.pauze,
+	.hervat,
+	.stop {
 		padding: 4px 12px;
 		font: inherit;
 		font-weight: 600;
 		border-radius: var(--radius-field);
-		border: 1px solid var(--danger-solid);
-		background: var(--danger-solid);
-		color: white;
+		border: 1px solid var(--line);
+		background: var(--surface-1);
+		color: var(--text-1);
 	}
+	.hervat {
+		border-color: var(--accent);
+		background: var(--accent);
+		color: var(--accent-ink);
+	}
+	.stop {
+		border-color: var(--danger-solid);
+		background: var(--danger-solid);
+		color: var(--on-color);
+	}
+	.pauze:disabled,
+	.hervat:disabled,
 	.stop:disabled { opacity: 0.5; cursor: not-allowed; }
-	.stop + .right { margin-left: var(--space-3); }
+	.acties + .right { margin-left: var(--space-3); }
 	.right {
 		margin-left: auto;
 		display: flex;

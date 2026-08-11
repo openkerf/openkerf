@@ -48,6 +48,16 @@
 	function label(value: string) {
 		return OPERATIONS.find((o) => o.value === value)?.label ?? value;
 	}
+
+	/**
+	 * Wat de hele lijst gemeen heeft, zeggen we één keer.
+	 *
+	 * Zesentwintig regels met exact dezelfde amberkleurige pil "Startwaarde"
+	 * informeren niemand; ze maken van een waarschuwing behang. Staat er
+	 * variatie in, dan verdient elke regel zijn eigen pil.
+	 */
+	let soorten = $derived(new Set(catalogue.presets.map((p) => p.source.kind)));
+	let eenSoort = $derived(soorten.size === 1 ? [...soorten][0] : null);
 </script>
 
 <Dialog title="Presetariat" bind:open width="720px">
@@ -104,10 +114,19 @@
 		</p>
 	{/if}
 
+	{#if eenSoort}
+		{@const gedeeld = CONFIDENCE[eenSoort] ?? CONFIDENCE.handmatig}
+		<p class="gedeeld {gedeeld.tone}">
+			Alles hieronder is <strong>{gedeeld.text.toLowerCase()}</strong>{#if eenSoort === 'handmatig'}:
+				niet gemeten. Brand een testraster voordat je erop vertrouwt{:else if eenSoort === 'testraster'}:
+				op andermans machine gemeten{:else}: opgave van de fabrikant{/if}.
+		</p>
+	{/if}
+
 	<div class="list">
 		{#each catalogue.presets as preset (preset.id)}
 			{@const badge = CONFIDENCE[preset.source.kind] ?? CONFIDENCE.handmatig}
-			<label class="row" class:done={preset.imported}>
+			<label class="row" class:done={preset.imported} title={preset.note ?? undefined}>
 				<input
 					type="checkbox"
 					disabled={!canEdit || preset.imported}
@@ -126,7 +145,9 @@
 						? ` · ${preset.passes}×`
 						: ''}
 				</div>
-				<span class="badge {badge.tone}">{badge.text}</span>
+				{#if !eenSoort}
+					<span class="badge {badge.tone}">{badge.text}</span>
+				{/if}
 				{#if preset.verified}
 					<span class="badge ok" title="Door een tweede persoon nagebrand">Nagebrand</span>
 				{/if}
@@ -217,6 +238,21 @@
 	}
 	.badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
 	.badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+	.gedeeld {
+		margin: 0 0 var(--space-2);
+		padding: 6px 8px;
+		border-radius: var(--radius-field);
+		font-size: var(--text-xs);
+	}
+	.gedeeld.warn {
+		color: var(--warn);
+		background: color-mix(in srgb, var(--warn) 12%, transparent);
+	}
+	.gedeeld.ok {
+		color: var(--ok);
+		background: color-mix(in srgb, var(--ok) 10%, transparent);
+	}
+	.gedeeld.neutral { color: var(--text-2); background: var(--surface-2); }
 	.empty { font-size: var(--text-xs); color: var(--text-2); padding: var(--space-4) 0; }
 	.warn { font-size: var(--text-xs); color: var(--warn); margin: 0 0 var(--space-2); }
 	.ok { font-size: var(--text-xs); color: var(--ok); margin: 0 0 var(--space-2); }

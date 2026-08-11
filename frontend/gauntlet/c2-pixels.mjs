@@ -261,5 +261,41 @@ for (const theme of ['light', 'dark']) {
 	await page.context().close();
 }
 
+// --- gevulde knoppen in hover-staat
+// De hoofdknop werd grijs met witte tekst zodra je hem aanwees, en dat is drie
+// rondes lang aan elke meting ontsnapt omdat niemand hover mat. Nu wel.
+{
+	const page = await open(b, { width: 1440 });
+	await page.waitForTimeout(600);
+	const later = await page.$('button:has-text("Later")');
+	if (later) { await later.click(); await page.waitForTimeout(300); }
+	const slecht = [];
+	for (const knop of (await page.$$('.primary, .danger')).slice(0, 12)) {
+		if (!(await knop.isVisible()) || !(await knop.isEnabled())) continue;
+		await knop.hover({ force: true }).catch(() => {});
+		await page.waitForTimeout(80);
+		const meting = await knop.evaluate((n) => {
+			const s = getComputedStyle(n);
+			return { bg: s.backgroundColor, fg: s.color, t: (n.textContent || '').trim().slice(0, 16) };
+		});
+		const lees = (c) => (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+		const lum = (rgb) => {
+			const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+			return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+		};
+		const a = lees(meting.bg), b2 = lees(meting.fg);
+		if (a.length < 3 || b2.length < 3) continue;
+		const hi = Math.max(lum(a), lum(b2)), lo = Math.min(lum(a), lum(b2));
+		const ratio = (hi + 0.05) / (lo + 0.05);
+		if (ratio < 4.5) slecht.push(`"${meting.t}" ${ratio.toFixed(2)}:1 (${meting.bg} / ${meting.fg})`);
+	}
+	console.log('gevulde knoppen bij hover:', slecht.length ? slecht : 'alle >= 4,5:1');
+	if (slecht.length) {
+		findings.push({ severity: 'major', what: 'Gevulde knop verliest zijn vulling bij hover',
+			evidence: slecht.join(' | ') });
+	}
+	await page.context().close();
+}
+
 report('Criticus 2 — pixelrechter', findings);
 await b.close();
