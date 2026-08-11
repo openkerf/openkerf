@@ -11,7 +11,8 @@
 		onJog,
 		onHome,
 		onUnlock,
-		onFocus
+		onFocus,
+		profile = null
 	}: {
 		control: Controller;
 		device: Device | null;
@@ -21,6 +22,8 @@
 		onHome?: () => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
+		/** Wat dit machineprofiel zegt te kunnen; bepaalt wat er verschijnt. */
+		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
 	let actions = $derived(control.capabilities?.actions ?? null);
@@ -225,20 +228,45 @@
 				<button class="rot" onclick={() => onUnlock?.()}>Ontgrendelen</button>
 			</div>
 			{#if control.capabilities?.motion?.focus}
-				<!-- Scherpstellen: dagelijks werk zodra de materiaaldikte verandert.
-				     Alleen zichtbaar als het apparaat het kent — de Ruida wel, een
-				     K40-bord niet. -->
+				<!-- Z-as: dagelijks werk zodra de materiaaldikte verandert. Alleen
+				     zichtbaar als het apparaat het kent — de Ruida wel, een
+				     K40-bord niet. De stapgrootte is dezelfde als voor X en Y:
+				     één balk om te onthouden. -->
 				<div class="focus">
-					<span class="rot-label">Scherpstellen</span>
-					{#each [-1, -0.1, 0.1, 1] as mm (mm)}
-						<button
-							class="rot"
-							disabled={running}
-							title={movingBlocked ?? `Kop ${mm > 0 ? 'omlaag' : 'omhoog'} ${Math.abs(mm)} mm`}
-							onclick={() => onFocus?.(mm)}
-						>{mm > 0 ? `+${mm}` : mm}</button>
-					{/each}
+					<span class="rot-label">Z-as (scherpstellen)</span>
+					<button
+						class="zknop"
+						disabled={running}
+						title={movingBlocked ?? `Kop ${step} mm omhoog`}
+						onclick={() => onFocus?.(-step)}
+					>↑ Z</button>
+					<button
+						class="zknop"
+						disabled={running}
+						title={movingBlocked ?? `Kop ${step} mm omlaag`}
+						onclick={() => onFocus?.(step)}
+					>↓ Z</button>
+					<span class="stapje mono">{step} mm</span>
 				</div>
+			{:else if profile?.has_z}
+				<!-- Het profiel zegt dat deze machine een Z-as heeft, maar de
+				     driver van de engine kent er geen commando voor. Dat is geen
+				     ontbrekende knop maar ontbrekende ondersteuning; zeg dat. -->
+				<p class="hint">
+					Dit profiel meldt een Z-as, maar de driver van deze machine kent
+					geen commando om de kop te verzetten. Scherpstellen doe je met de
+					hand.
+				</p>
+			{/if}
+			{#if profile?.has_autofocus}
+				<!-- MeerK40t kent geen commando om een autofocus te starten. Een
+				     knop die in plaats daarvan iets ánders doet, is erger dan geen
+				     knop — dus zeggen we waar hij wél zit. -->
+				<p class="hint">
+					Deze machine heeft autofocus. De engine kan hem niet starten;
+					gebruik de knop op de machine zelf, dan klopt de Z-hoogte hierboven
+					weer met het werkstuk.
+				</p>
 			{/if}
 		</div>
 	{/if}
@@ -419,6 +447,16 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
+	.zknop {
+		min-width: 56px;
+		padding: 6px 10px;
+		font-size: var(--text-xs);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+	}
+	.zknop:hover:not(:disabled) { background: var(--surface-2); }
+	.stapje { font-size: var(--text-xs); color: var(--text-2); }
 	.hint {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);

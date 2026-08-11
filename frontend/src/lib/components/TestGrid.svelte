@@ -3,10 +3,25 @@
 	import NumberField from './NumberField.svelte';
 
 	let {
+		materialId = null,
 		library,
 		canEdit = false,
 		onGenerated
-	}: { library: LibraryStore; canEdit?: boolean; onGenerated?: () => void } = $props();
+	}: {
+		/** Voorgekozen materiaal, als je hier vanuit de bibliotheek komt. */
+		materialId?: number | null;
+		library: LibraryStore;
+		canEdit?: boolean;
+		onGenerated?: () => void;
+	} = $props();
+
+	// Kom je vanuit een materiaal, dan staat dat materiaal al ingevuld en gaat
+	// het formulier meteen open — anders begin je met kiezen wat je net koos.
+	$effect(() => {
+		if (materialId === null) return;
+		form.material_id = materialId;
+		open = true;
+	});
 
 	type Cell = {
 		row: number;

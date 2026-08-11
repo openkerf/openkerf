@@ -6,12 +6,17 @@
 		library,
 		operations,
 		canEdit = false,
-		onApplied
+		onApplied,
+		onMakeGrid,
+		token = ''
 	}: {
 		library: LibraryStore;
 		operations: DesignOperation[];
 		canEdit?: boolean;
 		onApplied?: () => void;
+		/** Opent het testrastervenster voor dit materiaal. */
+		onMakeGrid?: (materialId: number | null) => void;
+		token?: string;
 	} = $props();
 
 	let materialId = $state<number | null>(null);
@@ -112,6 +117,24 @@
 		if (/staal|metaal|alu|steel|metal|messing|rvs|inox|chroom|koper|brass|copper|titaan/.test(n)) return 'metaal';
 		return 'onbekend';
 	}
+
+	let bezigFoto = $state<number | null>(null);
+
+	async function fotoBij(gridId: number, bestand: File) {
+		bezigFoto = gridId;
+		try {
+			const form = new FormData();
+			form.append('file', bestand);
+			const response = await fetch(`/api/library/testgrids/${gridId}/photo`, {
+				method: 'POST',
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+				body: form
+			});
+			if (response.ok) await library.load();
+		} finally {
+			bezigFoto = null;
+		}
+	}
 </script>
 
 <div class="section">
@@ -157,7 +180,9 @@
 {#if library.materials.length}
 	<div class="section">
 		<div class="section-head">
-			<h2 class="section-title">Presets</h2>
+			<h2 class="section-title">
+				Presets{#if library.activeMachine}{' '}<span class="machine">· {library.activeMachine.name}</span>{/if}
+			</h2>
 			{#if operations.length > 1}
 				<select class="target" bind:value={targetOperation} title="Toepassen op welke laag">
 					{#each operations as op, index (op.id)}
@@ -167,8 +192,31 @@
 			{/if}
 		</div>
 
+		{#if library.activeMachine}
+			<!-- Een preset geldt voor één laser op één materiaal. Standaard zie je
+			     die van de machine die nu aanstaat; de rest is één vinkje weg. -->
+			<label class="bereik">
+				<input
+					type="checkbox"
+					checked={library.onlyThisMachine}
+					onchange={() => library.toggleScope()}
+				/>
+				<span>Alleen deze machine</span>
+			</label>
+		{/if}
+
 		{#if visible.length === 0}
-			<p class="muted">Geen presets voor dit materiaal.</p>
+			<!-- Waar de vraag ontstaat: niemand denkt "ik wil een testraster",
+			     men denkt "ik weet niet wat 3 mm berk nodig heeft". -->
+			<p class="muted">
+				Nog geen instellingen voor dit materiaal. Een testraster brandt een
+				reeks vakjes, en van het beste vakje maak je een preset.
+			</p>
+			{#if canEdit}
+				<button class="btn primary" onclick={() => onMakeGrid?.(materialId)}>
+					Testraster maken
+				</button>
+			{/if}
 		{:else}
 			{#each visible as preset (preset.id)}
 				<article class="preset">
@@ -223,6 +271,23 @@
 							</button>
 							{#if !chosenOperation}
 								<span class="waarom">Er is nog geen laag om dit op te zetten.</span>
+							{/if}
+							{#if preset.grid_id && !preset.grid_photo}
+								<!-- Het bewijs ontbreekt nog; dat voeg je hier toe, niet
+								     drie schermen verderop. -->
+								<label class="mini file">
+									{bezigFoto === preset.grid_id ? 'bezig…' : 'Foto van raster'}
+									<input
+										type="file"
+										accept="image/*"
+										capture="environment"
+										onchange={(e) => {
+											const f = e.currentTarget.files?.[0];
+											e.currentTarget.value = '';
+											if (f && preset.grid_id) fotoBij(preset.grid_id, f);
+										}}
+									/>
+								</label>
 							{/if}
 							<button
 								class="mini"
@@ -448,6 +513,17 @@
 		background: var(--surface-1);
 		box-shadow: var(--lift-1);
 	}
+	.machine { font-weight: 400; text-transform: none; letter-spacing: 0; }
+	.bereik {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		margin-bottom: var(--space-2);
+	}
+	.file { position: relative; overflow: hidden; }
+	.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 	.waarom { font-size: var(--text-xs); color: var(--text-2); }
 	.preset .head {
 		display: flex;

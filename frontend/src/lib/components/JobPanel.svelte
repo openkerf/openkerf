@@ -14,7 +14,8 @@
 		onJog,
 		onHome,
 		onUnlock,
-		onFocus
+		onFocus,
+		profile = null
 	}: {
 		device: Device | null;
 		events: SignalEvent[];
@@ -25,13 +26,14 @@
 		onHome?: () => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
+		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
 	let spooler = $derived(device?.spooler ?? null);
 	let jobs = $derived(spooler?.jobs ?? []);
 </script>
 
-<JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} />
+<JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {profile} />
 
 <div class="section">
 	<h2 class="section-title">Spooler</h2>

@@ -24,6 +24,13 @@ CREATE TABLE IF NOT EXISTS machine_profile (
     lens_mm      REAL,
     bed_width_mm REAL,
     bed_height_mm REAL,
+    -- Het pad van de device-service in de engine ("lhystudios"). Hiermee weet
+    -- de bibliotheek welk profiel bij de machine hoort die nú actief is; zonder
+    -- die koppeling is een preset een uitspraak over niets.
+    device_path  TEXT,
+    -- Wat deze machine kán. Bepaalt wat er in de jog verschijnt.
+    has_z        INTEGER NOT NULL DEFAULT 0,
+    has_autofocus INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -114,6 +121,15 @@ class Library:
         if "group_id" not in existing:
             db.execute("ALTER TABLE test_grid ADD COLUMN group_id TEXT")
 
+        profiel = {row["name"] for row in db.execute("PRAGMA table_info(machine_profile)")}
+        for kolom, definitie in (
+            ("device_path", "TEXT"),
+            ("has_z", "INTEGER NOT NULL DEFAULT 0"),
+            ("has_autofocus", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            if kolom not in profiel:
+                db.execute(f"ALTER TABLE machine_profile ADD COLUMN {kolom} {definitie}")
+
     def _connect(self):
         db = sqlite3.connect(self.path)
         db.row_factory = sqlite3.Row
@@ -133,8 +149,9 @@ class Library:
         with self._connect() as db:
             cursor = db.execute(
                 """INSERT INTO machine_profile
-                   (name, laser_type, power_watt, lens_mm, bed_width_mm, bed_height_mm)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                   (name, laser_type, power_watt, lens_mm, bed_width_mm,
+                    bed_height_mm, device_path, has_z, has_autofocus)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     name,
                     fields.get("laser_type") or "co2-glass",
@@ -142,9 +159,56 @@ class Library:
                     _number(fields.get("lens_mm"), "lens_mm", optional=True),
                     _number(fields.get("bed_width_mm"), "bed_width_mm", optional=True),
                     _number(fields.get("bed_height_mm"), "bed_height_mm", optional=True),
+                    str(fields.get("device_path") or "") or None,
+                    1 if fields.get("has_z") else 0,
+                    1 if fields.get("has_autofocus") else 0,
                 ),
             )
             return self._one(db, "machine_profile", cursor.lastrowid)
+
+    def profile_for_device(self, device_path: str, label: str | None = None) -> dict:
+        """
+        Het profiel van de machine die nu actief is, desnoods vers aangemaakt.
+
+        Een preset is een uitspraak over *deze laser op dit materiaal*. Zonder
+        een profiel om aan te hangen zou elke preset "voor alle machines" zijn,
+        en dat is precies de verwarring die dit oplost.
+        """
+        pad = str(device_path or "").strip()
+        if not pad:
+            raise LibraryError("Er is geen actieve machine om bij aan te sluiten.")
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM machine_profile WHERE device_path = ?", (pad,)
+            ).fetchone()
+            if row is not None:
+                return dict(row)
+        return self.add_machine(name=label or pad, device_path=pad)
+
+    def update_machine(self, machine_id: int, fields: dict) -> dict:
+        toegestaan = (
+            "name", "laser_type", "power_watt", "lens_mm",
+            "bed_width_mm", "bed_height_mm", "has_z", "has_autofocus",
+        )
+        stukken, waarden = [], []
+        for sleutel in toegestaan:
+            if sleutel not in fields:
+                continue
+            stukken.append(f"{sleutel} = ?")
+            if sleutel in ("has_z", "has_autofocus"):
+                waarden.append(1 if fields[sleutel] else 0)
+            elif sleutel in ("name", "laser_type"):
+                waarden.append(str(fields[sleutel]))
+            else:
+                waarden.append(_number(fields[sleutel], sleutel, optional=True))
+        if not stukken:
+            raise LibraryError("Niets om bij te werken.")
+        with self._connect() as db:
+            db.execute(
+                f"UPDATE machine_profile SET {', '.join(stukken)} WHERE id = ?",
+                (*waarden, machine_id),
+            )
+            return self._one(db, "machine_profile", machine_id)
 
     # -------------------------------------------------------------- materials
 
@@ -180,7 +244,7 @@ class Library:
 
     # ---------------------------------------------------------------- presets
 
-    def presets(self, material_id=None, operation=None) -> list[dict]:
+    def presets(self, material_id=None, operation=None, machine_id=None) -> list[dict]:
         # De foto van het raster erbij: een preset die uit een testraster komt
         # heeft bewijs, en dat bewijs hoort op de kaart en niet drie schermen
         # verderop. origin_id is "testgrid:<id>".
@@ -190,8 +254,7 @@ class Library:
             FROM preset p
             JOIN material m ON m.id = p.material_id
             LEFT JOIN machine_profile mp ON mp.id = p.machine_id
-            LEFT JOIN test_grid g
-                   ON p.origin_id = 'testgrid:' || g.id AND g.photo_path IS NOT NULL
+            LEFT JOIN test_grid g ON p.origin_id = 'testgrid:' || g.id
         """
         clauses, params = [], []
         if material_id is not None:
@@ -200,6 +263,12 @@ class Library:
         if operation:
             clauses.append("p.operation = ?")
             params.append(operation)
+        if machine_id is not None:
+            # Presets zonder profiel horen bij niemand in het bijzonder en
+            # blijven dus zichtbaar: ze zijn met de hand gemaakt vóór er
+            # profielen waren.
+            clauses.append("(p.machine_id = ? OR p.machine_id IS NULL)")
+            params.append(machine_id)
         if clauses:
             query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY m.name, p.thickness_mm, p.operation"
