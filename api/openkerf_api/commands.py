@@ -18,6 +18,11 @@ ERROR_MARKERS = (
     "Syntax Error",
     "Bad provider",
     "did not exist",
+    # De engine meldt een onleesbaar bestand alleen op het console-kanaal en
+    # geeft daarna netjes terug. Zonder deze marker kwam er HTTP 200 {"ok":true}
+    # uit een bestand dat nooit is ingelezen — de gebruiker ziet een leeg bed en
+    # geen enkele reden waarom.
+    "File is Malformed",
 )
 
 # The full job pipeline in one line: console commands chain through their
@@ -85,7 +90,47 @@ class CommandRunner:
     # --------------------------------------------------------------- actions
 
     def load_file(self, path: str) -> list[str]:
-        return self.run(f'load "{path}"')
+        """
+        Een bestand inlezen, en eerlijk zijn als dat niet lukt.
+
+        De console meldt een mislukking als tekst op het kanaal en geeft daarna
+        gewoon terug, dus zonder deze controle kwam er "gelukt" uit een bestand
+        dat nooit is ingelezen. Twee dingen kunnen misgaan: het bestand is
+        onleesbaar (de engine roept "File is Malformed"), of het is leesbaar
+        maar leeg — een SVG zonder vormen laadt zonder klacht en levert een
+        leeg bed op. Allebei krijgen ze hier hun eigen zin, in de taal van
+        iemand die een tekening wilde openen.
+        """
+        naam = path.rsplit("/", 1)[-1]
+        voor = self._element_count()
+        try:
+            output = self.run(f'load "{path}"')
+        except CommandError as e:
+            raise CommandError(
+                "load",
+                [
+                    f"“{naam}” is niet in te lezen. Het bestand is beschadigd of "
+                    "het is geen tekening — controleer of je de juiste export "
+                    "hebt (SVG, DXF, PNG of een RD-bestand).",
+                ],
+            ) from e
+        if self._element_count() <= voor:
+            raise CommandError(
+                "load",
+                [
+                    f"In “{naam}” zit geen tekening. Het bestand is gelezen maar "
+                    "bevat geen vormen — bij een SVG uit een tekenprogramma komt "
+                    "dat meestal doordat alles op een verborgen laag staat.",
+                ],
+            )
+        return output
+
+    def _element_count(self) -> int:
+        """Hoeveel vormen er in de boom staan; 0 als de engine niet meewerkt."""
+        try:
+            return sum(1 for _ in self.kernel.elements.elems())
+        except Exception:
+            return 0
 
     def start_job(self) -> list[str]:
         """

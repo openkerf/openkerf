@@ -5,7 +5,9 @@
  * 2 s opnieuw een volledige snapshot. Read-only: we sturen niets terug.
  */
 
+import { currentJob } from './api';
 import type { ApiEvent, Device, SignalEvent, Snapshot } from './api';
+import { verbinding } from './verbinding.svelte';
 
 const RECONNECT_MIN = 500;
 const RECONNECT_MAX = 10_000;
@@ -27,12 +29,37 @@ export class StatusConnection {
 		return devices.find((d) => d.active) ?? devices[0] ?? null;
 	}
 
+	/**
+	 * De job waar de bediening over gaat — lopend óf stilstaand.
+	 *
+	 * Dit filterde op `running`, en dat vlaggetje gaat bij Lihuiyu op `false`
+	 * zodra je pauzeert. Gevolg: de job verdween uit de statusbalk, uit het
+	 * Job-paneel en van de telefoon, er was geen knop om te hervatten, en
+	 * "Job starten" werd weer actief bovenop werk dat alleen maar stilstond.
+	 */
 	get activeJob() {
-		return this.device?.spooler.jobs.find((job) => job.running) ?? null;
+		return currentJob(this.device);
 	}
 
 	connect() {
 		this.#stopped = false;
+		verbinding.nuProberen = () => this.#nu();
+		this.#open();
+	}
+
+	/**
+	 * Meteen opnieuw proberen in plaats van de backoff uitzitten.
+	 *
+	 * Na een halve minuut wachten we tien seconden tussen pogingen. Wie net de
+	 * server heeft herstart wil niet tien seconden naar een dood scherm kijken,
+	 * en heeft bovendien informatie die wij niet hebben: hij weet dát hij hem
+	 * herstart heeft.
+	 */
+	#nu() {
+		if (this.#retryTimer) clearTimeout(this.#retryTimer);
+		this.#retryTimer = null;
+		this.#retryDelay = RECONNECT_MIN;
+		this.#tellen(0);
 		this.#open();
 	}
 
@@ -40,6 +67,7 @@ export class StatusConnection {
 		this.#stopped = true;
 		if (this.#retryTimer) clearTimeout(this.#retryTimer);
 		this.#retryTimer = null;
+		this.#tellen(0);
 		this.#socket?.close();
 		this.#socket = null;
 		this.connected = false;
@@ -53,6 +81,9 @@ export class StatusConnection {
 
 		socket.onopen = () => {
 			this.connected = true;
+			verbinding.online = true;
+			verbinding.sinds = null;
+			this.#tellen(0);
 			this.#retryDelay = RECONNECT_MIN;
 		};
 
@@ -73,6 +104,8 @@ export class StatusConnection {
 
 		socket.onclose = () => {
 			this.connected = false;
+			verbinding.online = false;
+			verbinding.sinds ??= Date.now();
 			this.#socket = null;
 			this.#scheduleReconnect();
 		};
@@ -82,10 +115,34 @@ export class StatusConnection {
 
 	#scheduleReconnect() {
 		if (this.#stopped || this.#retryTimer) return;
+		this.#tellen(this.#retryDelay);
 		this.#retryTimer = setTimeout(() => {
 			this.#retryTimer = null;
 			this.#open();
 		}, this.#retryDelay);
 		this.#retryDelay = Math.min(this.#retryDelay * 2, RECONNECT_MAX);
 	}
+
+	/**
+	 * De aftelklok naar de volgende poging.
+	 *
+	 * Een app die stilstaat zonder te zeggen dat hij iets doet, ziet eruit als
+	 * een app die vastgelopen is. Eén zichtbaar getal is het verschil tussen
+	 * "hij is bezig" en "hij is dood".
+	 */
+	#tellen(ms: number) {
+		if (this.#tikker) clearInterval(this.#tikker);
+		this.#tikker = null;
+		verbinding.overSeconden = Math.ceil(ms / 1000);
+		if (ms <= 0) return;
+		this.#tikker = setInterval(() => {
+			verbinding.overSeconden = Math.max(0, verbinding.overSeconden - 1);
+			if (verbinding.overSeconden === 0 && this.#tikker) {
+				clearInterval(this.#tikker);
+				this.#tikker = null;
+			}
+		}, 1000);
+	}
+
+	#tikker: ReturnType<typeof setInterval> | null = null;
 }

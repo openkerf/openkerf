@@ -102,6 +102,13 @@ export class EditController {
 		return this.#send(`/api/design/operations/${encodeURIComponent(id)}`, 'PATCH', fields);
 	}
 
+	/** Een laag omhoog of omlaag in de brandvolgorde — graveren vóór snijden. */
+	async moveLayer(id: string, direction: 'up' | 'down') {
+		return this.#post(`/api/design/operations/${encodeURIComponent(id)}/move`, {
+			direction
+		});
+	}
+
 	async removeLayer(id: string) {
 		return this.#send(`/api/design/operations/${encodeURIComponent(id)}`, 'DELETE');
 	}

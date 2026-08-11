@@ -20,15 +20,52 @@ def test_device_snapshot_shape(kernel):
         "path",
         "active",
         "laser_status",
+        "connection",
         "bed",
         "position",
         "spooler",
     }
     assert snap["active"] is True
+    assert set(snap["connection"]) == {"state", "detail"}
     assert set(snap["position"]) == {"native", "mm", "state"}
     assert snap["spooler"]["present"] is True
     assert snap["spooler"]["queue_length"] == 0
     assert snap["spooler"]["jobs"] == []
+
+
+def test_connection_never_guesses_connected(kernel):
+    """
+    Het dummy-apparaat heeft geen enkele verbindingsbron. Dan is "unknown" het
+    enige eerlijke antwoord — een gok naar "connected" zou precies de groene
+    stip boven een dode poort terugbrengen die deze laag moest wegnemen.
+    """
+    device = next(iter(kernel.services("device")))
+    link = StatusReader(kernel).connection(device)
+
+    assert link["state"] in {"connected", "disconnected", "unknown"}
+    assert link["state"] != "connected"
+
+
+def test_connection_reads_a_lihuiyu_style_controller():
+    class Link:
+        @staticmethod
+        def is_connected():
+            return False
+
+    class Device:
+        controller = type("C", (), {"connection": Link(), "state": "unknown"})()
+
+    assert StatusReader(None).connection(Device()) == {
+        "state": "disconnected",
+        "detail": "unknown",
+    }
+
+
+def test_connection_reads_a_ruida_style_property():
+    class Device:
+        connected = True
+
+    assert StatusReader(None).connection(Device())["state"] == "connected"
 
 
 def test_bed_size_is_reported_in_mm(kernel):

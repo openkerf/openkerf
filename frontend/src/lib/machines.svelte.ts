@@ -22,6 +22,9 @@ export type Machine = {
 	label: string;
 	provider: string | null;
 	active: boolean;
+	/** Door een mens ingesteld, of door de engine zelf verzonnen bij het
+	 *  opstarten? Ontbreekt bij een oudere server. */
+	configured?: boolean;
 };
 
 export type SettingField = {
@@ -56,13 +59,17 @@ export const KINDS: {
 		id: 'co2-ruida',
 		label: 'CO2 met Ruida of Newly',
 		blurb: 'Grote kast, glazen buis, waterkoeling, meestal een Z-as. K50/K60 en groter.',
-		icon: 'M2.5 8h13v11h-13zM2.5 8l2-3h9l2 3M6 12h6M18 11h3.5v8H18zM19.5 11V9'
+		// Rechtop en hoog, met een koeler ernaast. Het silhouet moet van de K40
+		// te onderscheiden zijn zónder de details te lezen — DESIGN-SYSTEM v3
+		// eist onderscheidende silhouetten, en twee lage doosjes zijn dat niet.
+		icon: 'M3 4h12v16H3zM3 9h12M6 20v1.5M12 20v1.5M18 8h3v8h-3z'
 	},
 	{
 		id: 'co2-k40',
 		label: 'K40 CO2',
 		blurb: 'De blauwe doos van 40 W, met een M2- of M3-Nano-bord.',
-		icon: 'M6 10h12v8H6zM6 10l1.5-3h9l1.5 3M10 14h4'
+		// Laag en breed: de blauwe doos met zijn klapdeksel.
+		icon: 'M3 11h18v7H3zM4.5 11l2-3h11l2 3M9 14.5h6'
 	},
 	{
 		id: 'diode',

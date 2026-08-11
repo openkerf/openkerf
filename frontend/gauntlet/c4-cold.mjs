@@ -13,7 +13,12 @@ const page = await open(b, { width: 1440 });
 await page.screenshot({ path: 'gauntlet/shots/koud-start.png' });
 
 // --- systeemtaal in zichtbare tekst
-const words = ['WebSocket', 'API', 'HTTP', '40[0-9]', '50[0-9]', 'null', 'undefined',
+// Een HTTP-foutcode in beeld is systeemtaal; een bedmaat van 406 mm en een
+// snelheid van 400 mm/s zijn dat niet. Op drie losse cijfers zoeken vindt het
+// verschil niet — deze meter meldde "bed 610 x 406 mm" als lek. Daarom alleen
+// nog codes die als code gepresenteerd worden.
+const words = ['WebSocket', 'API', 'HTTP\\s*[45][0-9][0-9]', 'status\\s*[45][0-9][0-9]',
+	'HTTP', 'null', 'undefined',
 	'JSON', 'endpoint', 'token', 'fetch', 'timeout', 'exception', 'traceback', 'localhost',
 	'127.0.0.1', 'uri', 'URI', 'svg-node', 'DOM'];
 const jargon = await page.evaluate((patterns) => {

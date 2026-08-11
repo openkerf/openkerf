@@ -56,10 +56,59 @@ class StatusReader:
             "path": _attr(device, "path"),
             "active": _attr(device, "path") == active_path,
             "laser_status": _attr(device, "laser_status"),
+            "connection": self.connection(device),
             "bed": self.bed(device),
             "position": self.position(device),
             "spooler": self.spooler_snapshot(device),
         }
+
+    def connection(self, device) -> dict:
+        """
+        Hangt er echt een machine aan, of praten we tegen niemand?
+
+        Dit ontbrak, en dat is de duurste leugen die deze app kan vertellen: de
+        bovenbalk zei "Gereed" met een groene stip terwijl er geen kabel in zat,
+        puur omdat onze eigen WebSocket het deed. LightBurn zet hier
+        "Disconnected" en dat is precies het verschil dat iemand naast de
+        machine moet zien.
+
+        Er is geen gedeelde driverinterface voor: MeerK40t garandeert alleen
+        `status()`, `get()`, `set()` en `hold_work()` (core/drivers.py). Elke
+        familie meldt het dus ergens anders, en waar geen enkele bron bestaat
+        zeggen we "unknown" in plaats van te gokken. Een gok naar "connected"
+        is de fout die we juist repareren.
+
+        `state` is er één van: "connected", "disconnected", "unknown".
+        """
+        # Ruida (onze doelmachine) heeft een expliciete property; die is
+        # gebonden aan de sessielaag en dus de betrouwbaarste bron die er is.
+        ruida = _attr(device, "connected")
+        if isinstance(ruida, bool):
+            return {
+                "state": "connected" if ruida else "disconnected",
+                "detail": None,
+            }
+
+        # Lihuiyu (K40-borden): de controller houdt een verbinding en een
+        # leesbare toestand bij ("connected", "Not Connected", "Unknown"...).
+        controller = _attr(device, "controller")
+        if controller is not None:
+            link = _attr(controller, "connection")
+            if link is not None and hasattr(link, "is_connected"):
+                open_ = _safe(link.is_connected)
+                if isinstance(open_, bool):
+                    return {
+                        "state": "connected" if open_ else "disconnected",
+                        "detail": _attr(controller, "state"),
+                    }
+            # Geen verbindingsobject = nog nooit geopend.
+            if hasattr(controller, "connection"):
+                return {
+                    "state": "disconnected",
+                    "detail": _attr(controller, "state"),
+                }
+
+        return {"state": "unknown", "detail": None}
 
     def bed(self, device) -> dict:
         """Bed size in mm. Devices store these as strings like "320mm"."""

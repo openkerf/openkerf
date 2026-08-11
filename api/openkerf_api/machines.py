@@ -116,9 +116,28 @@ class MachineManager:
                 "label": getattr(device, "label", device.path),
                 "provider": getattr(device, "registered_path", None),
                 "active": device.path == active,
+                "configured": self._configured(device),
             }
             for device in self.kernel.services("device")
         ]
+
+    def _configured(self, device) -> bool:
+        """
+        Did a human set this machine up, or did the engine invent it?
+
+        MeerK40t boots with a default lhystudios device so that the kernel
+        always has something to talk to. A first-time user never chose it, and
+        presenting it as "your machine, connected and ready" is a lie with
+        consequences — you would be spooling K40 codes at whatever is really on
+        the other end. We therefore stamp every machine that came out of our
+        own wizard, and treat the rest as the engine's placeholder.
+        """
+        device.setting(bool, "openkerf_configured", False)
+        return bool(device.openkerf_configured)
+
+    def _mark_configured(self, device) -> None:
+        device.setting(bool, "openkerf_configured", False)
+        device.openkerf_configured = True
 
     def _find(self, path):
         for device in self.kernel.services("device"):
@@ -154,6 +173,7 @@ class MachineManager:
         if label:
             device.label = label
             self.kernel.signal("device;renamed", device.path, label)
+        self._mark_configured(device)
         self.flush()
         return {
             "path": device.path,
@@ -170,6 +190,9 @@ class MachineManager:
         device = self._find(path)
         device.label = label
         self.kernel.signal("device;renamed", device.path, label)
+        # Naming the engine's default device is how you adopt it: from here on
+        # it is a machine someone chose, not a placeholder.
+        self._mark_configured(device)
         self.flush()
         return {"path": device.path, "label": label}
 
@@ -270,6 +293,9 @@ class MachineManager:
             applied[attr] = coerced
             # The device listens for these to re-realize its view and pipes.
             device.signal(attr, coerced)
+        # Same reasoning as in rename(): setting a bed size on the engine's
+        # default device is an act of adoption.
+        self._mark_configured(device)
         self.flush()
         return applied
 

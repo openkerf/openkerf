@@ -165,7 +165,7 @@
 	   is secundair, maar moet leesbaar blijven. */
 	.sheet .size { font-size: var(--text-xs); color: var(--text-2); }
 	/* Met een vinger te raken, ook met een handschoen aan. */
-	.sheet.add { padding: 4px 12px; font-weight: 600; min-width: 40px; }
+	.sheet.add { padding: 4px 12px; font-weight: 600; min-width: 44px; }
 	.error { font-size: var(--text-xs); color: var(--danger); }
 	.editor {
 		flex: none;

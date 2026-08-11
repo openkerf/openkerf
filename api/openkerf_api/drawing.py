@@ -10,6 +10,8 @@ of truth — including its automatic classification, which is wanted here: a new
 red shape should land in the cut layer by itself.
 """
 
+import re
+
 from .commands import CommandRunner
 from .design import _xy, operation_label
 from .edits import DesignError, _finite, _positive
@@ -499,6 +501,7 @@ class Drawing:
 
         before = {id(o) for o in self.elements.ops()}
         with self.elements.undoscope("Laag toevoegen"):
+            self._ensure_colors()
             self.runner.run(" ".join(parts))
         created = [o for o in self.elements.ops() if id(o) not in before]
         if not created:
@@ -506,6 +509,10 @@ class Drawing:
         operation = created[0]
         # Een naam die je herkent, in plaats van "Cut defaultmm/s @default".
         operation.label = str(label) if label else self.LAYER_NAMES.get(kind, kind)
+        # Een eigen kleur vanaf het begin. De engine geeft rasterlagen zwart en
+        # puntlagen doorzichtig mee; als laagkleur zijn dat allebei niets — je
+        # ziet op het canvas én in de lijst niet welke laag je voor je hebt.
+        self._set_color(operation, self._next_color())
         # De engine zet passes op 0 voor "niet ingesteld". Dat leest als "nul
         # keer snijden", en dat is het getal waar een laseraar naar kijkt.
         if not getattr(operation, "passes", 0):
@@ -517,6 +524,42 @@ class Drawing:
 
     # Wat je aan een rasterlaag nog wél mag veranderen.
     GRID_EDITABLE = {"output"}
+
+    def move_operation(self, operation_id: str, direction: str) -> dict:
+        """
+        Verschuif een laag in de brandvolgorde.
+
+        De volgorde van de kinderen onder `branch ops` ís de volgorde waarin de
+        machine brandt — graveren vóór snijden, anders val je het werkstuk uit
+        het vel voordat het opschrift erop staat. Rastercellen slaan we over:
+        die horen bij één testbord en hebben onderling geen eigen volgorde.
+        """
+        if direction not in ("up", "down"):
+            raise DesignError("richting moet 'up' of 'down' zijn.")
+        operation = self._operation(operation_id)
+        parent = operation.parent
+        if parent is None:
+            raise DesignError("Deze laag zit niet in de bewerkingenboom.")
+
+        siblings = list(parent.children)
+        try:
+            here = siblings.index(operation)
+        except ValueError:  # pragma: no cover - de boom is dan al inconsistent
+            raise DesignError("Deze laag staat niet in zijn eigen tak.")
+
+        step = -1 if direction == "up" else 1
+        target = here + step
+        if not 0 <= target < len(siblings):
+            return {"id": operation_id, "moved": False, "index": here}
+
+        with self.elements.undoscope("Laagvolgorde wijzigen"):
+            # `swap_node` lijkt hier de juiste zet maar wisselt óók de kinderen
+            # van beide knopen om, dus de referenties naar de vormen verhuizen
+            # mee en er verandert per saldo niets. `insert_sibling` verplaatst
+            # alleen de knoop zelf — dat is wat "een laag opschuiven" betekent.
+            siblings[target].insert_sibling(operation, below=direction == "down")
+        self._refresh()
+        return {"id": operation_id, "moved": True, "index": target}
 
     def update_operation(self, operation_id: str, **fields) -> dict:
         operation = self._operation(operation_id)
@@ -551,6 +594,11 @@ class Drawing:
             if fields.get("output") is not None:
                 operation.output = bool(fields["output"])
                 applied["output"] = operation.output
+            if fields.get("color") is not None:
+                # Laagkleur is identificatie, geen instelling: hij bepaalt hoe
+                # de vormen op het canvas getekend worden en waar de gebruiker
+                # zijn laag aan herkent. De engine wil een Color, geen string.
+                applied["color"] = self._set_color(operation, fields["color"])
             if fields.get("dpi") is not None:
                 # Lijnafstand van een rastergravure; te hoog kost uren.
                 dpi = _positive(fields["dpi"], "dpi")
@@ -580,6 +628,64 @@ class Drawing:
         self.user_operations.discard(operation_id)
         self._refresh()
         return {"removed": operation_id}
+
+    # Dezelfde tien als `--layer-1..10` in tokens.css en LAYER_COLORS in de
+    # frontend. Ze staan hier nog een keer omdat een nieuwe laag zijn kleur van
+    # de engine moet krijgen, niet pas van het paneel dat hem toevallig toont.
+    PALETTE = (
+        "#E5484D", "#F76B15", "#FFC53D", "#46A758", "#12A594",
+        "#0090FF", "#8E4EC6", "#E93D82", "#8D6E63", "#607D8B",
+    )
+
+    @staticmethod
+    def _usable_color(op) -> str | None:
+        """
+        De kleur van een laag, of niets als de engine er geen gaf.
+
+        Een snijlaag krijgt rood mee, maar een rasterlaag zwart en een puntlaag
+        volledig doorzichtig. Als laagkleur zijn die twee laatste geen kleur:
+        onzichtbaar op het canvas en niet te onderscheiden in de lijst.
+        """
+        color = getattr(op, "color", None)
+        if color is None:
+            return None
+        if getattr(color, "alpha", 255) == 0 or getattr(color, "value", None) is None:
+            return None
+        text = str(getattr(color, "hexrgb", "") or "").lower()
+        return None if text in ("", "#000000") else text
+
+    def _next_color(self) -> str:
+        """De eerste palet-kleur die nog niet in gebruik is, anders op volgorde."""
+        ops = list(self.elements.ops())
+        used = {c for c in (self._usable_color(op) for op in ops) if c}
+        for candidate in self.PALETTE:
+            if candidate.lower() not in used:
+                return candidate
+        return self.PALETTE[len(ops) % len(self.PALETTE)]
+
+    def _ensure_colors(self) -> None:
+        """
+        Geef elke laag zonder bruikbare kleur er alsnog een.
+
+        Zonder dit botst een nieuwe laag met de standaardlaag die de engine zelf
+        aanmaakte: die is doorzichtig, dus de frontend valt voor hem terug op de
+        eerste paletkleur — precies degene die wij net uitdeelden.
+        """
+        for op in list(self.elements.ops()):
+            if self._usable_color(op) is None:
+                self._set_color(op, self._next_color())
+
+    @staticmethod
+    def _set_color(operation, value) -> str:
+        """Zet een `#rrggbb` op de laag; alfa laten we er niet in, want een
+        doorzichtige laagkleur is op het canvas geen kleur meer."""
+        from meerk40t.svgelements import Color
+
+        text = str(value).strip()
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", text):
+            raise DesignError("color moet een #rrggbb-waarde zijn.")
+        operation.color = Color(text)
+        return text
 
     def _is_grid_cell(self, operation, operation_id: str) -> bool:
         """Zelfde verificatie als de snapshot: id én instellingen moeten kloppen."""
@@ -704,6 +810,9 @@ class Drawing:
             passes = getattr(operation, "passes", None) or 1
             layers.append(
                 {
+                    # Zonder id kan de pre-flight de laagkleur niet opzoeken, en
+                    # twee operaties van hetzelfde type heten allebei "Graveren".
+                    "id": getattr(operation, "id", None),
                     "label": operation_label(operation),
                     "type": operation.type,
                     "speed_mm_s": None if speed is None else float(speed),

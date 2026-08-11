@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS preset (
     source        TEXT NOT NULL DEFAULT 'handmatig',
     origin_id     TEXT,
     note          TEXT NOT NULL DEFAULT '',
+    -- Wanneer deze instelling voor het laatst op een laag gezet is. Wie
+    -- gisteren 3 mm berken sneed, zoekt vandaag niet alfabetisch; hij zoekt
+    -- wat hij gisteren gebruikte.
+    last_used_at  TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -120,6 +124,10 @@ class Library:
         existing = {row["name"] for row in db.execute("PRAGMA table_info(test_grid)")}
         if "group_id" not in existing:
             db.execute("ALTER TABLE test_grid ADD COLUMN group_id TEXT")
+
+        presets = {row["name"] for row in db.execute("PRAGMA table_info(preset)")}
+        if "last_used_at" not in presets:
+            db.execute("ALTER TABLE preset ADD COLUMN last_used_at TEXT")
 
         profiel = {row["name"] for row in db.execute("PRAGMA table_info(machine_profile)")}
         for kolom, definitie in (
@@ -250,7 +258,8 @@ class Library:
         # verderop. origin_id is "testgrid:<id>".
         query = """
             SELECT p.*, m.name AS material_name, mp.name AS machine_name,
-                   g.id AS grid_id, g.photo_path AS grid_photo
+                   g.id AS grid_id, g.photo_path AS grid_photo,
+                   g.created_at AS grid_date, g.cells AS grid_cells
             FROM preset p
             JOIN material m ON m.id = p.material_id
             LEFT JOIN machine_profile mp ON mp.id = p.machine_id
@@ -404,6 +413,14 @@ class Library:
             "power_max": min(100.0, round(max(powers) * 1.3, 1)),
         }
 
+    def touch_preset(self, preset_id: int) -> None:
+        """Onthoud dat deze instelling gebruikt is; dat is wat 'gisteren' maakt."""
+        with self._connect() as db:
+            db.execute(
+                "UPDATE preset SET last_used_at = datetime('now') WHERE id = ?",
+                (preset_id,),
+            )
+
     def remove_preset(self, preset_id: int) -> dict:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM preset WHERE id = ?", (preset_id,))
@@ -545,6 +562,15 @@ def _grid_row(row) -> dict:
 def _preset_row(row) -> dict:
     data = dict(row)
     data["air_assist"] = bool(data["air_assist"])
+    # Uit welk vakje van het raster deze preset komt. Dat is de herkomst in één
+    # regel: "rij 2, kolom 3" is aanwijsbaar op de foto, "testraster" niet.
+    cellen = data.pop("grid_cells", None)
+    data["grid_cell"] = None
+    if cellen:
+        for cel in json.loads(cellen):
+            if cel.get("preset_id") == data["id"]:
+                data["grid_cell"] = {"row": cel["row"], "column": cel["column"]}
+                break
     return data
 
 

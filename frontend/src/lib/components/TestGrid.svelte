@@ -12,15 +12,13 @@
 		materialId?: number | null;
 		library: LibraryStore;
 		canEdit?: boolean;
-		onGenerated?: () => void;
+		onGenerated?: (gridId: number) => void;
 	} = $props();
 
-	// Kom je vanuit een materiaal, dan staat dat materiaal al ingevuld en gaat
-	// het formulier meteen open — anders begin je met kiezen wat je net koos.
+	// Kom je vanuit een materiaal, dan staat dat materiaal al ingevuld.
 	$effect(() => {
 		if (materialId === null) return;
 		form.material_id = materialId;
-		open = true;
 	});
 
 	type Cell = {
@@ -34,13 +32,16 @@
 		height_mm: number;
 	};
 
-	let open = $state(false);
 	let busy = $state(false);
+	// Het voorbeeld ververst elke 250 ms; dat mag de hoofdknop niet uitzetten.
+	let bezigVoorbeeld = $state(false);
 	let error = $state<string | null>(null);
+	let gelukt = $state<{ id: number; cellen: number } | null>(null);
 	let preview = $state<{ plan: Record<string, number>; cells: Cell[] } | null>(null);
 
 	let form = $state({
 		material_id: null as number | null,
+		caption: '',
 		thickness_mm: '3',
 		operation: 'snijden',
 		speed_min: '5',
@@ -55,8 +56,8 @@
 		origin_y_mm: '10'
 	});
 
-	function body() {
-		return {
+	function body(metOpschrift = false) {
+		const uit: Record<string, unknown> = {
 			material_id: form.material_id,
 			thickness_mm: form.thickness_mm === '' ? null : Number(form.thickness_mm),
 			operation: form.operation,
@@ -71,17 +72,25 @@
 			origin_x_mm: Number(form.origin_x_mm),
 			origin_y_mm: Number(form.origin_y_mm)
 		};
+		// De planningsroute kent "caption" niet; alleen het bord krijgt hem mee.
+		if (metOpschrift) uit.caption = form.caption.trim();
+		return uit;
 	}
 
-	async function send(path: string, method = 'POST') {
-		busy = true;
+	async function send(path: string, metOpschrift = false, stil = false) {
+		if (stil) bezigVoorbeeld = true;
+		else busy = true;
 		error = null;
 		try {
 			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 			const token =
 				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
 			if (token) headers.Authorization = `Bearer ${token}`;
-			const response = await fetch(path, { method, headers, body: JSON.stringify(body()) });
+			const response = await fetch(path, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(body(metOpschrift))
+			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
 				error =
@@ -95,12 +104,11 @@
 			error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
 			return null;
 		} finally {
-			busy = false;
+			if (stil) bezigVoorbeeld = false;
+			else busy = false;
 		}
 	}
 
-	// Eerst rekenen, dan pas tekenen: je ziet wat er komt voordat er iets in het
-	// ontwerp verschijnt.
 	/**
 	 * Bereik voorstellen rond wat de bibliotheek al weet.
 	 *
@@ -119,28 +127,23 @@
 			power_max: String(range.power_max)
 		};
 		suggestedFrom = range.based_on;
-		preview = null;
 	}
 
 	let suggestedFrom = $state<number | null>(null);
-
-	async function showPreview() {
-		preview = await send('/api/library/testgrids/preview');
-	}
 
 	// Live meekijken. Een voorbeeld achter een knop is geen voorbeeld: je ziet
 	// pas wat je instelt nadat je besloten hebt dat je het wilt zien.
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
-		// Aanraken zodat de effect-tracker weet waar hij op moet letten.
 		void [
 			form.operation, form.speed_min, form.speed_max, form.power_min,
 			form.power_max, form.speed_steps, form.power_steps, form.cell_mm,
 			form.gap_mm, form.origin_x_mm, form.origin_y_mm
 		];
-		if (!open) return;
 		if (timer) clearTimeout(timer);
-		timer = setTimeout(showPreview, 250);
+		timer = setTimeout(async () => {
+			preview = await send('/api/library/testgrids/preview', false, true);
+		}, 250);
 		return () => {
 			if (timer) clearTimeout(timer);
 		};
@@ -154,99 +157,183 @@
 		preview ? [...new Set(preview.cells.map((c) => c.power_percent))].sort((a, b) => a - b) : []
 	);
 
+	/**
+	 * Hoe zwaar een vakje verbrandt: veel vermogen en weinig snelheid geven de
+	 * diepste snede. Dat is geen natuurkunde maar een leesbaar verloop — het
+	 * voorbeeld moet je léren hoe je het bord straks leest, met de zwaarste hoek
+	 * rechtsboven.
+	 *
+	 * Logaritmisch en daarna uitgerekt over het hele bereik: de verhouding
+	 * vermogen/snelheid loopt over een raster al snel een factor tien uiteen, en
+	 * lineair blijft dan alleen de bovenste rij zichtbaar donker.
+	 */
+	let brandschaal = $derived.by(() => {
+		if (!preview) return { laag: 0, hoog: 1 };
+		const scores = preview.cells.map(
+			(c) => Math.log(c.power_percent / Math.max(0.001, c.speed_mm_s))
+		);
+		const laag = Math.min(...scores);
+		const hoog = Math.max(...scores);
+		return { laag, hoog: hoog > laag ? hoog : laag + 1 };
+	});
+
+	function brand(cell: Cell) {
+		const score = Math.log(cell.power_percent / Math.max(0.001, cell.speed_mm_s));
+		const t = (score - brandschaal.laag) / (brandschaal.hoog - brandschaal.laag);
+		// Niet helemaal tot nul: ook het lichtste vakje is een snede in hout.
+		return Math.max(0, Math.min(1, 0.12 + 0.88 * t));
+	}
+
+	// Het voorbeeld tekenen we in échte pixels in plaats van in millimeters:
+	// een SVG met een mm-viewBox maakt van elke 11px-label een reus van 11mm.
+	const VOORBEELD_PX = 208;
+	let schaal = $derived(preview ? VOORBEELD_PX / Math.max(1, preview.plan.width_mm) : 1);
+	let celPx = $derived(preview ? preview.plan.cell_mm * schaal : 0);
+	let gatPx = $derived(preview ? preview.plan.gap_mm * schaal : 0);
+	// Bij meer dan acht stappen wordt elk label onleesbaar; dan alleen de randen.
+	// Een label van elf pixels past niet in een vakje van twintig; dan alleen de
+	// twee randwaarden, want die dragen het bereik.
+	let toonAlleLabels = $derived(
+		snelheden.length <= 8 && vermogens.length <= 8 && celPx >= 30
+	);
+
+	function labelbaar(reeks: number[], i: number) {
+		return toonAlleLabels || i === 0 || i === reeks.length - 1;
+	}
+
+	let geenMateriaal = $derived(form.material_id === null);
+	let stap = $derived(gelukt ? 2 : 1);
+
 	async function generate() {
-		const grid = await send('/api/library/testgrids');
+		gelukt = null;
+		const grid = await send('/api/library/testgrids', true);
 		if (grid) {
-			preview = null;
-			onGenerated?.();
+			gelukt = { id: grid.id, cellen: grid.cells?.length ?? 0 };
+			onGenerated?.(grid.id);
 		}
 	}
 </script>
 
-<div class="section">
-	<div class="section-head">
-		<h2 class="section-title">Testraster</h2>
-		{#if canEdit}
-			<button class="mini" onclick={() => (open = !open)}>{open ? 'Sluiten' : 'Openen'}</button>
-		{/if}
-	</div>
+<div class="wizard">
+	<!-- De wizard is de didactische kern van de app: hij vertelt waar je bent en
+	     wat er nog komt, ook als stap 3 pas naast de machine gebeurt. -->
+	<ol class="stappen" aria-label="Stappen van de testrasterflow">
+		<li class:nu={stap === 1}><span class="nr">1</span>Instellen</li>
+		<li class:nu={stap === 2}><span class="nr">2</span>Branden</li>
+		<li><span class="nr">3</span>Fotograferen</li>
+		<li><span class="nr">4</span>Beste vakje → preset</li>
+	</ol>
 
 	{#if !canEdit}
 		<p class="muted">Een testraster genereren vereist een token.</p>
-	{:else if open}
-		<p class="muted">
-			Brandt een raster van vakjes: vermogen naar rechts, snelheid naar beneden. Daarna
-			fotografeer je het resultaat en wijs je het beste vakje aan — die stap komt nog.
+	{:else}
+		<p class="lead">
+			Je brandt een bord met vakjes: <strong>vermogen loopt naar rechts op</strong>,
+			<strong>snelheid naar beneden</strong>. Straks fotografeer je het bord — met de telefoon
+			naast de machine kan ook — en tik je het vakje aan dat het beste uitpakte. Daar maakt
+			OpenKerf een preset van.
 		</p>
 
-		{#if error}<p class="error" role="alert">{error}</p>{/if}
-
 		<div class="werkbank">
-		<div class="grid">
-			<label>
-				<span>Materiaal</span>
-				<select bind:value={form.material_id}>
-					<option value={null}>—</option>
-					{#each library.materials as material (material.id)}
-						<option value={material.id}>{material.name}</option>
-					{/each}
-				</select>
-			</label>
-			<label>
-				<span>Bewerking</span>
-				<select bind:value={form.operation}>
-					{#each OPERATIONS as op (op.value)}
-						<option value={op.value}>{op.label}</option>
-					{/each}
-				</select>
-			</label>
-			<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={form.thickness_mm} />
-			<NumberField label="Vakje" unit="mm" step={1} min={1} bind:value={form.cell_mm} />
+			<div class="grid">
+				<label class="veld">
+					<span class="naam">Materiaal</span>
+					<select bind:value={form.material_id}>
+						<option value={null}>— geen —</option>
+						{#each library.materials as material (material.id)}
+							<option value={material.id}>{material.name}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="veld">
+					<span class="naam">Bewerking</span>
+					<select bind:value={form.operation}>
+						{#each OPERATIONS as op (op.value)}
+							<option value={op.value}>{op.label}</option>
+						{/each}
+					</select>
+				</label>
 
-			<NumberField label="Snelheid van" unit="mm/s" step={1} min={0} bind:value={form.speed_min} />
-			<NumberField label="tot" unit="mm/s" step={1} min={0} bind:value={form.speed_max} />
-			<NumberField label="Vermogen van" unit="%" step={5} min={0} max={100} bind:value={form.power_min} />
-			<NumberField label="tot" unit="%" step={5} min={0} max={100} bind:value={form.power_max} />
+				{#if geenMateriaal}
+					<!-- Vóór het hout eraan gaat, niet erna: zonder materiaal kan er
+					     later geen preset uit dit bord komen, en dat is de hele reden
+					     dat je het brandt. -->
+					<p class="waarschuwing" role="status">
+						<strong>Kies een materiaal.</strong> Een preset is een uitspraak over déze laser
+						op dít materiaal — zonder materiaal levert het gebrande bord straks niets op.
+					</p>
+				{/if}
 
-			<NumberField label="Stappen snelheid" step={1} min={2} bind:value={form.speed_steps} />
-			<NumberField label="Stappen vermogen" step={1} min={2} bind:value={form.power_steps} />
-			<NumberField label="Start X" unit="mm" step={5} min={0} bind:value={form.origin_x_mm} />
-			<NumberField label="Start Y" unit="mm" step={5} min={0} bind:value={form.origin_y_mm} />
-		</div>
+				<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={form.thickness_mm} />
+				<NumberField label="Vakje" unit="mm" step={1} min={1} bind:value={form.cell_mm} />
 
-		{#if preview}
-			<aside class="preview">
-				<div class="figures mono">
-					<span>{preview.cells.length} vakjes</span>
-					<span>{preview.plan.width_mm} × {preview.plan.height_mm} mm</span>
-				</div>
-				<!-- De waarden waarop je écht snijdt. Ze worden afgerond op nette
-				     stappen, en dat hoor je te zien vóór het hout eraan gaat. -->
-				<div class="reeks">
-					<span class="wat">rijen, mm/s</span>
-					{#each snelheden as v (v)}<span class="waarde mono">{v}</span>{/each}
-				</div>
-				<div class="reeks">
-					<span class="wat">kolommen, %</span>
-					{#each vermogens as v (v)}<span class="waarde mono">{v}</span>{/each}
-				</div>
-				<svg
-					viewBox="0 0 {preview.plan.width_mm} {preview.plan.height_mm}"
-					role="img"
-					aria-label="Voorbeeld van het raster: {preview.cells.length} vakjes"
-				>
-					{#each preview.cells as cell (`${cell.row}-${cell.column}`)}
-						<rect
-							x={cell.x_mm - preview.plan.origin_x_mm}
-							y={cell.y_mm - preview.plan.origin_y_mm}
-							width={cell.width_mm}
-							height={cell.height_mm}
-							opacity={0.25 + 0.75 * (cell.power_percent / 100)}
-						/>
-					{/each}
-				</svg>
-			</aside>
-		{/if}
+				<NumberField label="Snelheid van" unit="mm/s" step={1} min={0} bind:value={form.speed_min} />
+				<NumberField label="tot" unit="mm/s" step={1} min={0} bind:value={form.speed_max} />
+				<NumberField label="Vermogen van" unit="%" step={5} min={0} max={100} bind:value={form.power_min} />
+				<NumberField label="tot" unit="%" step={5} min={0} max={100} bind:value={form.power_max} />
+
+				<NumberField label="Stappen snelheid" step={1} min={2} bind:value={form.speed_steps} />
+				<NumberField label="Stappen vermogen" step={1} min={2} bind:value={form.power_steps} />
+				<NumberField label="Tussenruimte" unit="mm" step={1} min={0} bind:value={form.gap_mm} />
+				<NumberField label="Start X" unit="mm" step={5} min={0} bind:value={form.origin_x_mm} />
+				<NumberField label="Start Y" unit="mm" step={5} min={0} bind:value={form.origin_y_mm} />
+
+				<label class="veld breed">
+					<span class="naam">Opschrift op het bord</span>
+					<input
+						type="text"
+						bind:value={form.caption}
+						maxlength="48"
+						placeholder="bijv. proef achterkant"
+					/>
+					<span class="hint">
+						Wordt mee gegraveerd, met materiaal, dikte en datum erachter. Een bord zonder
+						opschrift is over twee weken een raadselachtig stuk hout.
+					</span>
+				</label>
+			</div>
+
+			{#if preview}
+				<aside class="preview" aria-label="Voorbeeld van het bord">
+					<div class="figures">
+						<span class="mono">{preview.cells.length} vakjes</span>
+						<span class="mono">{preview.plan.width_mm} × {preview.plan.height_mm} mm</span>
+					</div>
+
+					<!-- Het bord zoals het eruitkomt: donkerder = meer verbranding, en
+					     de waarden staan erlangs waar ze ook op het hout komen. -->
+					<div class="bord" style="--cel: {celPx}px; --gat: {gatPx}px;">
+						<div class="hoek"></div>
+						<div class="koplabels">
+							{#each vermogens as v, i (v)}
+								<span class="as mono">{labelbaar(vermogens, i) ? `${v}%` : ''}</span>
+							{/each}
+						</div>
+						<div class="zijlabels">
+							{#each snelheden as v, i (v)}
+								<span class="as mono">{labelbaar(snelheden, i) ? v : ''}</span>
+							{/each}
+						</div>
+						<div
+							class="vakjes"
+							style="grid-template-columns: repeat({vermogens.length}, var(--cel));"
+						>
+							{#each preview.cells as cell (`${cell.row}-${cell.column}`)}
+								<span
+									class="vakje"
+									style="--brand: {brand(cell)}"
+									title="{cell.speed_mm_s} mm/s bij {cell.power_percent}%"
+								></span>
+							{/each}
+						</div>
+					</div>
+
+					<p class="legenda">
+						Rijen: snelheid in mm/s. Kolommen: vermogen. Donkerder is meer verbranding —
+						rechtsboven gaat het diepst.
+					</p>
+				</aside>
+			{/if}
 		</div>
 
 		{#if suggestedFrom !== null}
@@ -257,104 +344,235 @@
 			</p>
 		{/if}
 
+		{#if error}<p class="error" role="alert">{error}</p>{/if}
+
+		{#if gelukt}
+			<p class="gelukt" role="status">
+				<strong>Raster #{gelukt.id} staat op het bed</strong> — {gelukt.cellen} vakjes, als
+				één groep in je ontwerp. Start de job om het te branden; kom daarna terug voor
+				stap 3.
+			</p>
+		{/if}
+
 		<div class="actions">
 			<button class="btn" disabled={busy} onclick={suggest}>Bereik voorstellen</button>
-			<button class="btn primary" disabled={busy} onclick={generate}>
-				{busy ? 'Bezig…' : 'Genereren'}
+			<button class="btn primary" disabled={busy || !preview} onclick={generate}>
+				{#if busy}
+					Bezig…
+				{:else if preview}
+					Raster tekenen — {preview.cells.length} vakjes, {preview.plan.width_mm} × {preview.plan.height_mm} mm
+				{:else}
+					Raster tekenen
+				{/if}
 			</button>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.section { margin-top: var(--space-6); }
-	.section-head {
+	.wizard { display: grid; gap: var(--space-3); }
+
+	.stappen {
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin: 0;
+		padding: 0;
+		list-style: none;
 	}
-	.section-title {
+	.stappen li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1h);
 		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
 		color: var(--text-2);
-		margin: 0 0 var(--space-2);
 	}
+	.stappen li + li::before {
+		content: '';
+		width: 12px;
+		height: 1px;
+		background: var(--line);
+		margin-right: var(--space-1h);
+	}
+	.stappen .nr {
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		border-radius: var(--radius-dot);
+		border: 1px solid var(--line);
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
+	}
+	.stappen li.nu { color: var(--text-1); font-weight: 600; }
+	.stappen li.nu .nr {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-ink);
+	}
+
+	.lead { margin: 0; font-size: var(--text-sm); color: var(--text-1); max-width: 62ch; }
 	.muted { color: var(--text-2); margin: 0; font-size: var(--text-xs); }
-	.mini { font-size: var(--text-xs); color: var(--accent); }
+
 	.grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: var(--space-2);
-		margin: var(--space-3) 0;
+		gap: var(--space-2) var(--space-3);
+		align-content: start;
 	}
-	.grid label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
-	select {
+	.veld { display: grid; gap: 4px; }
+	.veld.breed { grid-column: 1 / -1; }
+	.naam { font-size: var(--text-xs); color: var(--text-2); }
+	.hint { font-size: var(--text-xs); color: var(--text-2); }
+	select, input[type='text'] {
 		font: inherit;
+		font-size: var(--text-sm);
 		width: 100%;
-		padding: 4px 8px;
+		box-sizing: border-box;
+		padding: 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.reeks {
-		display: flex;
-		align-items: baseline;
-		flex-wrap: wrap;
-		gap: 4px;
-		margin-top: var(--space-2);
-	}
-	.reeks .wat { font-size: var(--text-xs); color: var(--text-2); min-width: 7em; }
-	.waarde {
+
+	.waarschuwing {
+		grid-column: 1 / -1;
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-field);
+		border-left: 3px solid var(--warn-solid, var(--warn));
+		background: color-mix(in srgb, var(--warn-solid, var(--warn)) 12%, transparent);
 		font-size: var(--text-xs);
-		padding: 1px var(--space-2);
-		border-radius: var(--radius-dot);
-		background: var(--surface-2);
 		color: var(--text-1);
 	}
+
+	/* Instellen en zien wat je instelt, naast elkaar. Onder 720px stapelt het. */
+	.werkbank {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: var(--space-4);
+		align-items: start;
+	}
+	@media (max-width: 720px) {
+		.werkbank { grid-template-columns: 1fr; }
+		.grid { grid-template-columns: 1fr; }
+	}
+
 	.preview {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
-		padding: var(--space-2);
-		margin-bottom: var(--space-2);
+		padding: var(--space-3);
+		background: var(--surface-1);
+		box-shadow: var(--lift-1);
 	}
 	.figures {
 		display: flex;
 		justify-content: space-between;
+		gap: var(--space-3);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		margin-bottom: var(--space-2);
 	}
-	/* Het hele bord in één blik. Een SVG met viewBox rekt zich anders op tot de
-	   volle breedte en duwt de knoppen uit beeld. */
-	.preview svg { height: 190px; width: 100%; display: block; }
-	/* Instellen en zien wat je instelt, naast elkaar. Onder 720px stapelt het;
-	   dan is er geen ruimte voor twee kolommen. */
-	.werkbank { display: grid; grid-template-columns: 1fr 260px; gap: var(--space-4); align-items: start; }
-	@media (max-width: 720px) { .werkbank { grid-template-columns: 1fr; } }
-	.preview rect { fill: var(--accent); }
-	.actions { display: flex; gap: var(--space-2); }
+
+	/* Het voorbeeld staat in pixels, niet in millimeters: labels binnen een
+	   mm-viewBox worden factor tien te groot. Zie DESIGN-SYSTEM v3. */
+	.bord {
+		display: grid;
+		grid-template-columns: auto auto;
+		grid-template-rows: auto auto;
+		gap: 4px;
+	}
+	.koplabels, .zijlabels { display: grid; gap: var(--gat); }
+	.koplabels { grid-auto-flow: column; grid-auto-columns: var(--cel); }
+	.zijlabels { grid-auto-rows: var(--cel); }
+	.as {
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+	}
+	.zijlabels .as { justify-items: end; padding-right: 2px; }
+	.vakjes { display: grid; gap: var(--gat); }
+	/* Het bord is hout en de snede is roet: dezelfde tinten die de
+	   materiaalkaart gebruikt, zodat het voorbeeld léést als het bord dat
+	   straks op tafel ligt in plaats van als een staafdiagram. */
+	.vakje {
+		width: var(--cel);
+		height: var(--cel);
+		background: color-mix(in srgb, var(--void) calc(var(--brand) * 88%), var(--mat-hout));
+	}
+	.vakjes {
+		padding: var(--space-1);
+		background: var(--mat-hout);
+		border-radius: var(--radius-field);
+	}
+	.legenda {
+		margin: var(--space-2) 0 0;
+		max-width: 24ch;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+
+	/* De knop van stap 1 hoort in beeld te blijven. In een venster van 80vh met
+	   twaalf velden erboven verdween hij onder de vouw, en dan lijkt de wizard
+	   doodlopend. */
+	.actions {
+		position: sticky;
+		bottom: 0;
+		z-index: 1;
+		display: flex;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+		margin: 0 calc(-1 * var(--space-4));
+		padding: var(--space-3) var(--space-4);
+		background: var(--surface-1);
+		border-top: 1px solid var(--line);
+	}
 	.btn {
-		padding: 8px 12px;
+		min-height: 40px;
+		padding: var(--space-2) var(--space-4);
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);
+		font: inherit;
+		font-size: var(--text-sm);
 		font-weight: 500;
+		color: var(--text-1);
 	}
 	.btn:hover:not(:disabled) { background: var(--surface-2); }
+	/* Zonder deze regel wint de algemene hover van .primary: de knop werd bij
+	   aanwijzen lichtgrijs met witte tekst. Zelfde specificiteit, later in de
+	   stylesheet — een klassieke. */
+	.btn.primary:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--accent) 88%, var(--text-1));
+	}
+	/* Een uitgeschakelde primaire knop mag er niet uitzien als een knop die het
+	   doet: 45% accent leest in het donkere thema nog steeds als "klik mij". */
+	.btn.primary:disabled {
+		background: var(--surface-2);
+		border-color: var(--line);
+		color: var(--text-2);
+		opacity: 1;
+	}
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	.btn.primary {
 		background: var(--accent);
 		border-color: var(--accent);
 		color: var(--accent-ink);
+		flex: 1;
+		min-width: 16rem;
 	}
-	.error {
-		margin: 0 0 var(--space-2);
-		padding: var(--space-2);
+	.error, .gelukt {
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--danger) 14%, transparent);
 		font-size: var(--text-xs);
+	}
+	.error { background: color-mix(in srgb, var(--danger-solid, var(--danger)) 14%, transparent); }
+	.gelukt {
+		background: color-mix(in srgb, var(--ok) 14%, transparent);
+		border-left: 3px solid var(--ok);
 	}
 </style>

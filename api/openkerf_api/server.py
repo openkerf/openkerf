@@ -663,6 +663,13 @@ class ApiServer:
         def update_operation(operation_id: str, body: dict):
             return manage(lambda: self.drawing.update_operation(operation_id, **body))
 
+        @app.post("/api/design/operations/{operation_id}/move", dependencies=write)
+        def move_operation(operation_id: str, body: dict):
+            """Een laag omhoog of omlaag in de brandvolgorde."""
+            return manage(
+                lambda: self.drawing.move_operation(operation_id, body.get("direction"))
+            )
+
         @app.delete("/api/design/operations/{operation_id}", dependencies=write)
         def delete_operation(operation_id: str):
             return manage(self.drawing.delete_operation, operation_id)
@@ -807,6 +814,9 @@ class ApiServer:
                     power_percent=preset["power_percent"],
                     passes=preset["passes"],
                 )
+                # Pas ná een geslaagde toepassing: een mislukte poging is geen
+                # gebruik, en "onlangs gebruikt" moet waar blijven.
+                self.library.touch_preset(preset_id)
                 return {**result, "preset": preset}
 
             return manage(run)

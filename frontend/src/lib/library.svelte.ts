@@ -26,6 +26,12 @@ export type Preset = {
 	/** Het raster waar deze preset uit komt, als daar een foto van is. */
 	grid_id: number | null;
 	grid_photo: string | null;
+	/** Wanneer dat raster gebrand is — de datum van het bewijs. */
+	grid_date?: string | null;
+	/** Welk vakje van dat raster het werd; aanwijsbaar op de foto. */
+	grid_cell?: { row: number; column: number } | null;
+	/** Laatste keer dat deze instelling op een laag gezet is. */
+	last_used_at?: string | null;
 };
 
 export const OPERATIONS = [
@@ -34,6 +40,19 @@ export const OPERATIONS = [
 	{ value: 'graveren-raster', label: 'Graveren · raster' },
 	{ value: 'markeren', label: 'Markeren' }
 ];
+
+/**
+ * Dezelfde bewerking, zonder middenpunt.
+ *
+ * In een keuzelijst leest "Graveren · vector" prima, maar op een kaart waar het
+ * middenpunt al de scheiding is tussen dikte en bewerking, krijg je
+ * "3 mm · Graveren · vector" en weet je niet meer wat bij wat hoort.
+ */
+export function operationName(value: string): string {
+	const label = OPERATIONS.find((o) => o.value === value)?.label ?? value;
+	const [hoofd, soort] = label.split(' · ');
+	return soort ? `${hoofd} (${soort})` : hoofd;
+}
 
 /**
  * Welk laagtype bij welke bewerking hoort.
@@ -49,13 +68,68 @@ export const OPERATION_LAYER: Record<string, string[]> = {
 	markeren: ['op engrave', 'op dots']
 };
 
-/** Hoe zeker is deze preset? Bepaalt de badge in de materiaalkaart. */
-export const SOURCE_LABEL: Record<Preset['source'], { text: string; tone: string }> = {
-	testraster: { text: 'Geverifieerd', tone: 'ok' },
-	handmatig: { text: 'Handmatig', tone: 'neutral' },
-	geextrapoleerd: { text: 'Geëxtrapoleerd', tone: 'warn' },
-	geimporteerd: { text: 'Geïmporteerd', tone: 'neutral' }
+/**
+ * Hoe zeker is deze preset?
+ *
+ * Een badge alleen is te makkelijk over te lezen: twee pillen van dezelfde maat
+ * die alleen in kleur en woord verschillen, lezen bij het scrollen als
+ * hetzelfde ding. Daarom draagt elke bron ook een vorm (het icoon), een regel
+ * die zegt wát het betekent, en — als het risico oplevert — een regel die zegt
+ * wat je ermee moet. Kleur is dan het derde signaal, niet het enige.
+ */
+export const SOURCE_LABEL: Record<
+	Preset['source'],
+	{ text: string; tone: string; icon: 'check' | 'alert' | 'pen' | 'down'; means: string; advice: string }
+> = {
+	testraster: {
+		text: 'Geverifieerd',
+		tone: 'ok',
+		icon: 'check',
+		means: 'Gebrand en beoordeeld op een testraster',
+		advice: ''
+	},
+	handmatig: {
+		text: 'Handmatig',
+		tone: 'neutral',
+		icon: 'pen',
+		means: 'Zelf ingevoerd, niet gemeten',
+		advice: ''
+	},
+	geextrapoleerd: {
+		text: 'Geëxtrapoleerd',
+		tone: 'warn',
+		icon: 'alert',
+		means: 'Uitgerekend vanaf een andere dikte — nooit gebrand',
+		advice: 'Probeer eerst op restmateriaal; begin lager in vermogen.'
+	},
+	geimporteerd: {
+		text: 'Geïmporteerd',
+		tone: 'warn',
+		icon: 'down',
+		means: 'Van iemand anders zijn machine',
+		advice: 'Andere laser, ander resultaat — behandel dit als startwaarde.'
+	}
 };
+
+/**
+ * "Gisteren" in plaats van een tijdstempel.
+ *
+ * De terugkerende gebruiker zoekt op wanneer, niet op wanneer precies. SQLite
+ * schrijft UTC zonder zone-achtervoegsel; zonder de Z erbij leest de browser
+ * het als lokale tijd en is alles een paar uur mis.
+ */
+export function toen(stamp: string | null | undefined): string {
+	if (!stamp) return '';
+	const tijd = new Date(stamp.includes('T') ? stamp : `${stamp.replace(' ', 'T')}Z`);
+	if (Number.isNaN(tijd.getTime())) return '';
+	const dag = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+	const dagen = Math.round((dag(new Date()) - dag(tijd)) / 86400000);
+	if (dagen <= 0) return 'vandaag';
+	if (dagen === 1) return 'gisteren';
+	if (dagen < 7) return `${dagen} dagen geleden`;
+	if (dagen < 14) return 'vorige week';
+	return tijd.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export type ActiveMachine = {
 	id: number;
