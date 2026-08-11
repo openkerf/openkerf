@@ -52,6 +52,12 @@
 	let pan = $state({ x: 0, y: 0 });
 	let scale = $derived(fitScale * zoom);
 
+	// Tekst in de bed-SVG rekent in millimeters, dus een vaste maat groeit mee
+	// met de zoom: bij tien keer inzoomen wordt een label tien keer zo groot en
+	// legt het het halve werkstuk toe. Terugrekenen naar een constante
+	// schermmaat is de enige maat die klopt.
+	let labelSize = $derived(11 / scale);
+
 	function zoomAt(factor: number, clientX?: number, clientY?: number) {
 		const next = Math.min(20, Math.max(0.2, zoom * factor));
 		if (next === zoom) return;
@@ -812,8 +818,9 @@
 							<text
 								class="mono"
 								x={outline.x + outline.width / 2}
-								y={outline.y + Math.abs(outline.height) + 5}
+								y={outline.y + Math.abs(outline.height) + labelSize * 1.6}
 								text-anchor="middle"
+								style="font-size: {labelSize}px"
 							>
 								{Math.abs(outline.width).toFixed(1)} × {Math.abs(outline.height).toFixed(1)} mm
 							</text>
@@ -844,8 +851,9 @@
 					<text
 						class="mono measure"
 						x={(endpointPreview.x1_mm + endpointPreview.x2_mm) / 2}
-						y={(endpointPreview.y1_mm + endpointPreview.y2_mm) / 2 - 3}
+						y={(endpointPreview.y1_mm + endpointPreview.y2_mm) / 2 - labelSize}
 						text-anchor="middle"
+						style="font-size: {labelSize}px"
 					>
 						{Math.hypot(
 							endpointPreview.x2_mm - endpointPreview.x1_mm,
@@ -915,8 +923,9 @@
 					<text
 						class="measure-label"
 						x={(measureFrom.x + to.x) / 2}
-						y={(measureFrom.y + to.y) / 2 - 2}
+						y={(measureFrom.y + to.y) / 2 - labelSize * 0.6}
 						text-anchor="middle"
+						style="font-size: {labelSize}px"
 					>
 						{Math.hypot(to.x - measureFrom.x, to.y - measureFrom.y).toFixed(1)} mm
 					</text>
@@ -1119,7 +1128,6 @@
 	.pen-dot { fill: var(--accent); }
 	.measure {
 		fill: var(--text-2);
-		font-size: var(--text-xs);
 	}
 	.endpoint {
 		fill: var(--surface-1);
@@ -1142,10 +1150,8 @@
 	}
 	.measure-label {
 		font-variant-numeric: tabular-nums;
-		/* @svg-space: deze tekst staat in de SVG die in millimeters rekent, niet
-		   in CSS-pixels — 4 betekent hier 4 mm. Buiten de typeschaal dus, en
-		   terecht: hij moet meeschalen met het bed. */
-		font-size: 4px;
+		/* Geen font-size hier: die wordt per element uitgerekend, omdat deze
+		   tekst in millimeters staat en anders met de zoom meegroeit. */
 		fill: var(--accent);
 		font-family: var(--font-mono, monospace);
 	}
@@ -1265,7 +1271,6 @@
 	}
 	.selection text {
 		fill: var(--text-2);
-		font-size: var(--text-xs);
 	}
 	.empty {
 		position: absolute;

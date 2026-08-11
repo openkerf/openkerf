@@ -163,5 +163,59 @@ for (const theme of ['light', 'dark']) {
 	}
 }
 
+// --- tekst in de bed-SVG: blijft die leesbaar bij elke zoom?
+// Dit werd gemist doordat de tokencontrole alleen naar de wáárde keek: 11px in
+// een SVG die in millimeters rekent, is 11 millimeter. Op het scherm meten is
+// de enige controle die dat vangt.
+{
+	const page = await open(b, { width: 1440 });
+	await page.evaluate(() =>
+		fetch('/api/design/elements', {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ type: 'rect', x_mm: 20, y_mm: 20, width_mm: 20, height_mm: 20 })
+		})
+	);
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await page.waitForSelector('.statusbar');
+	await page.waitForTimeout(900);
+	const spot = await page.evaluate(() => {
+		const el = document.querySelector('svg path.hit');
+		if (!el) return null;
+		const r = el.getBoundingClientRect();
+		return { x: r.x + 1, y: r.y + r.height / 2 };
+	});
+	if (spot) {
+		await page.mouse.click(spot.x, spot.y);
+		await page.waitForTimeout(400);
+		const surface = await page.$('svg[role="img"]');
+		const box = await surface.boundingBox();
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+		const gemeten = [];
+		for (const zoom of [0, 6, 12]) {
+			for (let i = 0; i < (zoom ? 6 : 0); i++) {
+				await page.mouse.wheel(0, -120);
+				await page.waitForTimeout(25);
+			}
+			const hoogte = await page.evaluate(() => {
+				const t = [...document.querySelectorAll('svg text')]
+					.filter((n) => /mm/.test(n.textContent ?? ''))
+					.map((n) => n.getBoundingClientRect().height);
+				return t.length ? Math.round(Math.max(...t)) : null;
+			});
+			if (hoogte) gemeten.push(`${zoom ? `${zoom} stappen` : 'geen zoom'}: ${hoogte}px`);
+		}
+		const tegroot = gemeten.filter((g) => Number(g.match(/(\d+)px/)[1]) > 24);
+		const teklein = gemeten.filter((g) => Number(g.match(/(\d+)px/)[1]) < 8);
+		if (tegroot.length || teklein.length) {
+			add('major', 'Tekst op het canvas schaalt mee met de zoom',
+				`gemeten hoogtes: ${gemeten.join(' | ')} (moet tussen 8 en 24 px blijven)`);
+		} else {
+			console.log('canvaslabels blijven leesbaar:', gemeten.join(' | '));
+		}
+	}
+	await page.evaluate(() => fetch('/api/design/clear', { method: 'POST' }));
+	await page.context().close();
+}
+
 report('Criticus 2 — pixelrechter', findings);
 await b.close();
