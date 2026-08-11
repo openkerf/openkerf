@@ -49,6 +49,7 @@
 		<span class="btn-label">Openen</span>
 		<input
 			type="file"
+			aria-label="Bestand kiezen"
 			accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
 			onchange={(e) => {
 				const input = e.currentTarget as HTMLInputElement;
@@ -64,6 +65,7 @@
 		<span class="btn-label">Project</span>
 		<input
 			type="file"
+			aria-label="Bestand kiezen"
 			accept=".openkerf,.zip"
 			onchange={(e) => {
 				const input = e.currentTarget as HTMLInputElement;
@@ -163,7 +165,7 @@
 	}
 	.dot.ready { background: var(--ok); }
 	.dot.busy { background: var(--accent); }
-	.dot.paused { background: var(--warn); }
+	.dot.paused { background: var(--warn-solid); }
 	.dot.alarm { background: var(--danger-solid); }
 	.spacer { flex: 1; }
 	.btn {

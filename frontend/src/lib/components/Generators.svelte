@@ -231,8 +231,11 @@
 		background: var(--surface-1);
 	}
 	.tab[aria-pressed='true'] {
+		/* Accentkleur op een accenttint haalt geen 4,5:1; het accent zit in de
+		   rand, de tekst blijft leesbaar. */
 		border-color: var(--accent);
-		color: var(--accent);
+		color: var(--text-1);
+		font-weight: 600;
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }

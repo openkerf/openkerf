@@ -14,6 +14,18 @@ export async function browser() {
 	return chromium.launch();
 }
 
+/**
+ * Schone lei voor een criticus.
+ *
+ * Zonder dit staat het herstelvenster van een vorige meting over het scherm en
+ * meet je door een modaal venster heen — dat kostte me een ronde voordat ik het
+ * doorhad.
+ */
+export async function reset() {
+	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' }).catch(() => {});
+	await fetch(`${BASE}/api/design/clear`, { method: 'POST' }).catch(() => {});
+}
+
 export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}) {
 	const context = await b.newContext({
 		viewport: { width, height: width === 390 ? 844 : 900 },
@@ -21,6 +33,14 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 		colorScheme: theme === 'dark' ? 'dark' : 'light'
 	});
 	const page = await context.newPage();
+	// Het thema vóór het tekenen zetten. Achteraf omschakelen betekent meten
+	// tijdens de overgang, en dan lees je halverwege gemengde kleuren — dat
+	// leverde "contrastfouten" op die na een seconde vanzelf weg waren.
+	if (theme === 'dark') {
+		await page.addInitScript(() =>
+			document.documentElement.setAttribute('data-theme', 'dark')
+		);
+	}
 	const problems = [];
 	page.on('console', (m) => {
 		if (m.type() === 'error') problems.push(m.text().slice(0, 160));
@@ -31,9 +51,6 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 	// toestand komt nooit. Wachten tot de app zelf getekend heeft.
 	await page.waitForSelector('.statusbar, .setup', { timeout: 20000 }).catch(() => {});
 	await page.waitForTimeout(700);
-	if (theme === 'dark') {
-		await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
-	}
 	page.problems = problems;
 	return page;
 }

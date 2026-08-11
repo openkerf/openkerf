@@ -4,8 +4,9 @@
  * Wat ziet iemand die de app nooit eerder zag? Lege bibliotheek, geen machine.
  * Systeemtaal in de interface is een major: de gebruiker praat geen protocol.
  */
-import { browser, open, report } from './harness.mjs';
+import { browser, open, report, reset } from './harness.mjs';
 
+await reset();
 const b = await browser();
 const findings = [];
 const page = await open(b, { width: 1440 });

@@ -7,7 +7,7 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { browser, open, report } from './harness.mjs';
+import { browser, open, report, reset } from './harness.mjs';
 
 const SRC = new URL('../src', import.meta.url).pathname;
 
@@ -131,6 +131,7 @@ for (const file of files) {
 }
 
 // --- in de browser: mono met tabulaire cijfers voor numerieke waarden
+await reset();
 const b = await browser();
 const page = await open(b, { width: 1440 });
 const numeric = await page.$$eval('*', (nodes) =>

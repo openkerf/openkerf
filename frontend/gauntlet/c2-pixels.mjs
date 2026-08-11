@@ -5,8 +5,9 @@
  * elementen, overloop, en of paren die identiek horen te zijn dat ook zijn.
  * Screenshots gaan naar gauntlet/shots als archief.
  */
-import { browser, open, report, WIDTHS } from './harness.mjs';
+import { browser, open, report, reset, WIDTHS } from './harness.mjs';
 
+await reset();
 const b = await browser();
 const findings = [];
 const seen = new Set();

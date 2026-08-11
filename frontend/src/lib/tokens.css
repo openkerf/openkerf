@@ -22,7 +22,10 @@
 	/* Vlak-rood is een andere rol dan tekst-rood: wit hierop haalt 5,6:1, en
 	   dat moet, want dit is de stopknop. */
 	--danger-solid: #c62a1e;
-	--warn: #b8860b;
+	/* Als tékst moet oranje 4,5:1 halen; #b8860b kwam niet verder dan 3,25.
+	   Voor een vlak of een stip is de heldere versie juist beter zichtbaar. */
+	--warn: #8a6100;
+	--warn-solid: #b8860b;
 	--ok: #2e7d46;
 
 	/* Laagkleuren: vaste reeks van 10, puur identificatie. */
@@ -94,6 +97,7 @@
 	--danger: #e5544a;
 	--danger-solid: #c62a1e;
 	--warn: #d9a62e;
+	--warn-solid: #d9a62e;
 	--ok: #4caf6d;
 }
 
@@ -149,6 +153,23 @@ button {
 }
 .kerf-anim {
 	animation: kerf 2s linear infinite;
+}
+
+/* Op een tablet of telefoon bedien je dit met een vinger, soms met een
+   handschoen aan. Het design system eist 40px; kleiner is niet te raken. */
+@media (max-width: 720px), (pointer: coarse) {
+	button,
+	a.btn,
+	label.btn,
+	select,
+	input[type='checkbox'] {
+		min-height: 40px;
+	}
+	button:not(.sheet):not(.tab):not(.font),
+	a.btn,
+	label.btn {
+		min-width: 40px;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {

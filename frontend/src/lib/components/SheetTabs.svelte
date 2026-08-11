@@ -164,7 +164,8 @@
 	/* Geen opacity op tekst: dat verlaagt het contrast onvoorspelbaar. De maat
 	   is secundair, maar moet leesbaar blijven. */
 	.sheet .size { font-size: var(--text-xs); color: var(--text-2); }
-	.sheet.add { padding: 3px 10px; font-weight: 600; }
+	/* Met een vinger te raken, ook met een handschoen aan. */
+	.sheet.add { padding: 4px 12px; font-weight: 600; min-width: 40px; }
 	.error { font-size: var(--text-xs); color: var(--danger); }
 	.editor {
 		flex: none;

@@ -6,9 +6,10 @@
  * statusupdates.
  */
 import { readFileSync } from 'node:fs';
-import { browser, open, report } from './harness.mjs';
+import { browser, open, report, reset } from './harness.mjs';
 
 const BIG = '/Users/Jelle.Tigchelaar/.claude/jobs/ef487fda/tmp/gauntlet/5000.svg';
+await reset();
 const b = await browser();
 const findings = [];
 

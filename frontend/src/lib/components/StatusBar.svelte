@@ -110,6 +110,6 @@
 	}
 	.dot.ready { background: var(--ok); }
 	.dot.busy { background: var(--accent); }
-	.dot.paused { background: var(--warn); }
+	.dot.paused { background: var(--warn-solid); }
 	.dot.alarm { background: var(--danger-solid); }
 </style>

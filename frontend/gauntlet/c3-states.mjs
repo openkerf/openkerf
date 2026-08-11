@@ -5,8 +5,9 @@
  * belangrijkste meting: die verraadt een rand die verschijnt in plaats van
  * van kleur wisselt.
  */
-import { browser, open, report } from './harness.mjs';
+import { browser, open, report, reset } from './harness.mjs';
 
+await reset();
 const b = await browser();
 const findings = [];
 const page = await open(b, { width: 1440 });
