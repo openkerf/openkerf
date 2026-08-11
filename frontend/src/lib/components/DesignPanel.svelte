@@ -358,34 +358,73 @@
 				</div>
 			{/if}
 
-			{#if canEdit && chosen.length > 1}
+			<!-- Deze groepen blijven staan bij één selectie, uitgeschakeld met de
+			     reden erbij. Verborgen knoppen kun je niet ontdekken: wie nooit
+			     twee vormen tegelijk selecteert, weet niet dat combineren en
+			     uitlijnen bestaan. -->
+			{#if canEdit}
+				{@const enough = chosen.length > 1}
+				{@const why = enough ? undefined : 'Selecteer minstens twee vormen'}
 				<div class="arrange">
 					<!-- Booleaans: het resultaat is één pad, de vormen verdwijnen. -->
 					<span class="rot-label">Combineren</span>
 					{#each [['union', 'Verenigen'], ['difference', 'Verschil'], ['intersection', 'Doorsnede'], ['xor', 'Uitsluiten']] as [op, label] (op)}
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.(op)}>{label}</button>
+						<button
+							class="rot"
+							disabled={edits.busy || !enough}
+							title={why}
+							onclick={() => onArrange?.(op)}
+						>{label}</button>
 					{/each}
 				</div>
 
 				<div class="arrange">
 					<span class="rot-label">Uitlijnen</span>
 					{#each [['left', 'Links'], ['centerh', 'Midden'], ['right', 'Rechts'], ['top', 'Boven'], ['centerv', 'Midden'], ['bottom', 'Onder']] as [mode, label] (mode)}
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.(mode)}>{label}</button>
+						<button
+							class="rot"
+							disabled={edits.busy || !enough}
+							title={why}
+							onclick={() => onArrange?.(mode)}
+						>{label}</button>
 					{/each}
 					<span class="rot-label">Verdelen</span>
-					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('spaceh')}>Horizontaal</button>
-					<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('spacev')}>Verticaal</button>
+					<button
+						class="rot"
+						disabled={edits.busy || chosen.length < 3}
+						title={chosen.length < 3 ? 'Selecteer minstens drie vormen' : undefined}
+						onclick={() => onArrange?.('spaceh')}
+					>Horizontaal</button>
+					<button
+						class="rot"
+						disabled={edits.busy || chosen.length < 3}
+						title={chosen.length < 3 ? 'Selecteer minstens drie vormen' : undefined}
+						onclick={() => onArrange?.('spacev')}
+					>Verticaal</button>
 				</div>
+
+				{#if !enough}
+					<p class="tip">
+						Combineren en uitlijnen werken op meerdere vormen: sleep een kader
+						om ze heen, of houd shift ingedrukt terwijl je klikt.
+					</p>
+				{/if}
 			{/if}
 
-			{#if canEdit && (chosen.length > 1 || selected.group_id)}
+			{#if canEdit}
 				<div class="arrange">
-					{#if chosen.length > 1}
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('group')}>Groeperen</button>
-					{/if}
-					{#if selected.group_id}
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('ungroup')}>Groep opheffen</button>
-					{/if}
+					<button
+						class="rot"
+						disabled={edits.busy || chosen.length < 2}
+						title={chosen.length < 2 ? 'Selecteer minstens twee vormen' : undefined}
+						onclick={() => onArrange?.('group')}
+					>Groeperen</button>
+					<button
+						class="rot"
+						disabled={edits.busy || !selected.group_id}
+						title={selected.group_id ? undefined : 'Deze vorm zit niet in een groep'}
+						onclick={() => onArrange?.('ungroup')}
+					>Groep opheffen</button>
 				</div>
 			{/if}
 
@@ -758,6 +797,12 @@
 		border-radius: 4px;
 		background: var(--surface-2);
 		color: var(--text-1);
+	}
+	.tip {
+		margin: 2px 0 0;
+		font-size: 10px;
+		line-height: 1.45;
+		color: var(--text-2);
 	}
 	.arrange {
 		display: flex;
