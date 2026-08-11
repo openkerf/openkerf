@@ -21,7 +21,7 @@
 	<div class="brand"><Logo />OpenKerf</div>
 	<span class="crumb">Machine instellen</span>
 	<div class="spacer"></div>
-	<a class="btn" href="/">Terug<span class="lang"> naar werkgebied</span></a>
+	<a class="btn" href="/">Terug<span class="lang">{' '}naar werkgebied</span></a>
 </header>
 
 <main>

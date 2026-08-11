@@ -819,7 +819,7 @@
 	/>
 </Dialog>
 
-<Dialog title="Testraster" bind:open={gridOpen} width="640px">
+<Dialog title="Testraster" bind:open={gridOpen} width="860px">
 	<TestGrid {library} {canEdit} onGenerated={() => design.load()} />
 	<TestGridResult {library} {canEdit} />
 </Dialog>

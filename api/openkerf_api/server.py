@@ -1053,7 +1053,26 @@ class ApiServer:
         def create_test_grid(body: dict):
             """Plan the grid, draw it into the design, and remember it."""
             def run():
-                plan, cells = plan_grid(**body)
+                from datetime import date
+
+                # Het opschrift hoort niet bij de planning maar bij het bord;
+                # plan_grid kent die sleutels niet.
+                velden = dict(body)
+                opschrift = str(velden.pop("caption", "") or "")
+                plan, cells = plan_grid(**velden)
+                plan["caption"] = opschrift
+                plan["stamp"] = date.today().isoformat()
+                if velden.get("material_id"):
+                    materiaal = next(
+                        (
+                            m
+                            for m in self.library.materials()
+                            if m["id"] == velden["material_id"]
+                        ),
+                        None,
+                    )
+                    if materiaal:
+                        plan["material_name"] = materiaal["name"]
                 drawn = self.grids.draw(plan, cells)
                 grid = self.library.add_test_grid(plan, drawn)
                 # Het raster is één object op het canvas; de cellen houden hun
