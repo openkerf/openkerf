@@ -72,8 +72,15 @@ export class Controller {
 		}
 	}
 
-	start() {
-		return this.#post('/api/job/start', 'start');
+	/** Wordt bij een geslaagde start aangeroepen — het wauw-moment hangt hieraan. */
+	onStarted: (() => void) | null = null;
+
+	async start() {
+		const ok = await this.#post('/api/job/start', 'start');
+		// Aan de druk op de knop, niet aan de polling: een korte job is voorbij
+		// voordat de status hem ooit als "running" laat zien.
+		if (ok !== false) this.onStarted?.();
+		return ok;
 	}
 	pause() {
 		return this.#post('/api/job/pause', 'pause');

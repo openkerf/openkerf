@@ -120,6 +120,26 @@
 			: fonts
 	);
 
+	// Alleen wat in beeld staat krijgt een voorbeeld: 200 webfonts laden om een
+	// lijst te tonen is niet nodig, en .shx/.jhf kan een browser toch niet.
+	const PREVIEWABLE = /\.(ttf|otf|woff2?)$/i;
+	let familie = $derived(
+		new Map(
+			shown
+				.slice(0, 60)
+				.filter((f) => PREVIEWABLE.test(f.file))
+				.map((f, i) => [f.file, `ok-preview-${i}`])
+		)
+	);
+	let faces = $derived(
+		[...familie]
+			.map(
+				([file, naam]) =>
+					`@font-face{font-family:"${naam}";src:url("/api/design/fonts/file?name=${encodeURIComponent(file)}");font-display:swap;}`
+			)
+			.join('')
+	);
+
 	function confirm() {
 		if (!text.trim()) return;
 		onConfirm({
@@ -175,17 +195,38 @@
 		</span>
 		<input type="search" bind:value={filter} placeholder="Zoek een lettertype…" />
 	</label>
-	<div class="fonts">
-		<button class="font" class:picked={font === ''} onclick={() => (font = '')}>
-			Standaard
+	<!-- svelte-ignore -->
+	{@html `<style>${faces}</style>`}
+	<div class="fonts" role="listbox" aria-label="Lettertype">
+		<button
+			class="font"
+			role="option"
+			aria-selected={font === ''}
+			class:picked={font === ''}
+			onclick={() => (font = '')}
+		>
+			<span class="naam">Standaard</span>
 		</button>
-		{#each shown.slice(0, 200) as item (item.file)}
+		{#each shown.slice(0, 60) as item (item.file)}
 			<button
 				class="font"
+				role="option"
+				aria-selected={font === item.file}
 				class:picked={font === item.file}
 				onclick={() => (font = item.file)}
-			>{item.name}</button>
+			>
+				<!-- De naam in zijn eigen letter: kiezen op zicht, niet op naam. -->
+				<span
+					class="naam"
+					style={familie.has(item.file) ? `font-family: "${familie.get(item.file)}", var(--font-ui)` : ''}
+				>{item.name}</span>
+				<span class="proef" style={familie.has(item.file) ? `font-family: "${familie.get(item.file)}", var(--font-ui)` : ''}
+					>{text.trim().slice(0, 18) || 'Handgemaakt 123'}</span>
+			</button>
 		{/each}
+		{#if shown.length > 60}
+			<p class="note">Nog {shown.length - 60} andere — typ om te zoeken.</p>
+		{/if}
 	</div>
 
 	<div class="import">
@@ -244,26 +285,39 @@
 	}
 	.fonts {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-		max-height: 180px;
+		flex-direction: column;
+		gap: 2px;
+		max-height: 260px;
 		overflow-y: auto;
 		padding: var(--space-2);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 	}
 	.font {
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border: 1px solid var(--line);
-		border-radius: 999px;
-		background: var(--surface-1);
-		color: var(--text-2);
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-3);
+		width: 100%;
+		min-height: 36px;
+		padding: 4px var(--space-2);
+		border: 1px solid transparent;
+		border-radius: var(--radius-field);
+		background: transparent;
+		color: var(--text-1);
+		text-align: left;
 	}
-	.font:hover { background: var(--surface-2); color: var(--text-1); }
+	.font .naam { font-size: var(--text-sm); }
+	.font .proef {
+		font-size: var(--text-md);
+		color: var(--text-2);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.font:hover { background: var(--surface-2); }
 	.font.picked {
 		border-color: var(--accent);
-		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 	.import { margin-top: var(--space-3); display: grid; gap: 6px; }

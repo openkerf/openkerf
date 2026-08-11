@@ -69,7 +69,8 @@
 		display: grid;
 		place-items: center;
 		padding: var(--space-6);
-		background: rgb(0 0 0 / 0.35);
+		/* v2: een venster ligt vóór de app, niet erin. */
+		background: var(--scrim);
 	}
 	.panel {
 		display: flex;
@@ -78,7 +79,7 @@
 		background: var(--surface-1);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-float);
+		box-shadow: var(--lift-2);
 		outline: none;
 	}
 	header {

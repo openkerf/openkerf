@@ -983,7 +983,9 @@
 	.canvas-wrap {
 		flex: 1;
 		position: relative;
-		background: var(--canvas-bg);
+		/* v2: het bed ligt ergens. Een verloop in de omgeving en één schaduw
+		   eronder — geen drie. */
+		background: var(--stage);
 		overflow: hidden;
 	}
 	.ruler-x,
@@ -1066,7 +1068,7 @@
 		background-image:
 			linear-gradient(var(--line) 1px, transparent 1px),
 			linear-gradient(90deg, var(--line) 1px, transparent 1px);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+		box-shadow: var(--lift-1), 0 10px 24px rgb(16 20 26 / 0.10);
 	}
 	.camera {
 		position: absolute;

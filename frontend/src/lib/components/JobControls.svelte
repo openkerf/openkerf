@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatDuration, type Device, type Job } from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
+	import Segmented from './Segmented.svelte';
 
 	let {
 		control,
@@ -215,11 +216,12 @@
 				<button class="jog home" disabled={running} title={movingBlocked} onclick={() => onHome?.()}>Home</button>
 			</div>
 			<div class="steps">
-				{#each [0.1, 1, 10, 50] as size (size)}
-					<button class="rot mono" class:on={step === size} onclick={() => (step = size)}>
-						{size} mm
-					</button>
-				{/each}
+				<Segmented
+					label="Stapgrootte"
+					mono
+					bind:value={step}
+					options={[0.1, 1, 10, 50].map((size) => ({ value: size, label: `${size} mm` }))}
+				/>
 				<button class="rot" onclick={() => onUnlock?.()}>Ontgrendelen</button>
 			</div>
 			{#if control.capabilities?.motion?.focus}
@@ -409,7 +411,7 @@
 	}
 	.jog:hover { background: var(--surface-2); }
 	.jog.home { font-size: var(--text-xs); }
-	.steps { display: flex; flex-wrap: wrap; gap: 4px; }
+	.steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 	.rot {
 		font-size: var(--text-xs);
 		padding: 4px 8px;
@@ -417,7 +419,6 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
-	.rot.on { border-color: var(--accent); color: var(--accent); }
 	.hint {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);

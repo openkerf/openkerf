@@ -4,6 +4,7 @@
 	let {
 		tool = $bindable(),
 		canEdit = false,
+		compact = false,
 		onOpenGrid,
 		onOpenLibrary,
 		onPlaceImage,
@@ -13,6 +14,8 @@
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
+		/** Tablet: vijf gereedschappen in de rail, de rest achter "Meer". */
+		compact?: boolean;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
 		onPlaceImage?: (file: File) => void;
@@ -36,16 +39,51 @@
 		{ id: 'text', label: 'Tekst', path: 'M5 6h14M12 6v13' },
 		{ id: 'measure', label: 'Meten', path: 'M3 15L15 3l6 6L9 21z M7 11l2 2M11 7l2 2' }
 	];
+
+	// Wat een tablet direct nodig heeft. De rest is er nog, één tik verderop:
+	// op 768 pixels hoogte past een rij van dertien niet zonder te verschralen.
+	const KERN: Tool[] = ['select', 'rect', 'circle', 'line', 'text'];
+	let meerOpen = $state(false);
+	let zichtbaar = $derived(compact ? TOOLS.filter((t) => KERN.includes(t.id)) : TOOLS);
+	let verborgen = $derived(compact ? TOOLS.filter((t) => !KERN.includes(t.id)) : []);
+	$effect(() => {
+		if (!compact) meerOpen = false;
+	});
 </script>
 
-<nav class="rail" aria-label="Gereedschap">
-	{#each TOOLS as item (item.id)}
+<nav class="rail" class:compact aria-label="Gereedschap">
+	{#each zichtbaar as item (item.id)}
 		<button
 			class="tool"
 			aria-pressed={tool === item.id}
 			title={item.id === 'select' || canEdit ? item.label : `${item.label} — vereist een token`}
 			disabled={item.id !== 'select' && !canEdit}
 			onclick={() => (tool = item.id)}
+		>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<path d={item.path} />
+			</svg>
+		</button>
+	{/each}
+	{#if compact}
+		<button
+			class="tool"
+			aria-expanded={meerOpen}
+			title="Meer gereedschap"
+			onclick={() => (meerOpen = !meerOpen)}
+		>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+		</button>
+	{/if}
+
+	<div class="rest" class:uit={compact && !meerOpen} class:zwevend={compact}>
+	{#each verborgen as item (item.id)}
+		<button
+			class="tool"
+			aria-pressed={tool === item.id}
+			title={item.label}
+			disabled={!canEdit}
+			onclick={() => { tool = item.id; meerOpen = false; }}
 		>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d={item.path} />
@@ -87,6 +125,7 @@
 	<button class="tool" title="Materiaalbibliotheek" onclick={() => onOpenLibrary?.()}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/><path d="M4 9h6M14 9h6"/></svg>
 	</button>
+	</div>
 </nav>
 
 <style>
@@ -100,6 +139,24 @@
 		padding: var(--space-2) 0;
 		background: var(--surface-1);
 		border-right: 1px solid var(--line);
+	}
+	.rail { position: relative; }
+	.rest { display: contents; }
+	.rest.uit { display: none; }
+	/* Uitgeklapt zweeft de rest naast de rail: hij mag de balk niet oprekken. */
+	.rest.zwevend:not(.uit) {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		position: absolute;
+		left: calc(var(--rail-width) + var(--space-1));
+		top: var(--space-2);
+		padding: var(--space-1);
+		background: var(--surface-1);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		box-shadow: var(--lift-2);
+		z-index: 5;
 	}
 	.tool {
 		display: grid;
