@@ -34,6 +34,7 @@ from .generators import Generators
 from .nesting import Nesting
 from .nodes import Nodes
 from .presetariat import Presetariat
+from .sheets import Sheets
 from .testgrid import TestGridGenerator, plan_grid
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
@@ -192,6 +193,12 @@ class ApiServer:
         self.nesting = Nesting(kernel, self.editor)
         self.camera = Camera(kernel, self.commands)
         self.clipart = Clipart(kernel, self.drawing)
+        self.sheets = Sheets(
+            kernel,
+            self.drawing,
+            self.document,
+            Path(self.library.path).with_name("openkerf-vellen"),
+        )
         self.autosave = Autosave(
             kernel,
             self.drawing,
@@ -377,7 +384,9 @@ class ApiServer:
             """Ontwerp plus bibliotheek-context in één bestand."""
             from fastapi.responses import FileResponse
 
-            path = manage(self.drawing.export_project, self.library, filename)
+            path = manage(
+                self.drawing.export_project, self.library, filename, self.sheets
+            )
             self.document.clean()
             return FileResponse(
                 path, media_type="application/zip", filename=path.name
@@ -388,7 +397,9 @@ class ApiServer:
             target = self._upload_path(file.filename or "project.openkerf")
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
-            result = manage(self.drawing.import_project, str(target), self.library)
+            result = manage(
+                self.drawing.import_project, str(target), self.library, self.sheets
+            )
             self.document.clean()
             return result
 
@@ -762,6 +773,44 @@ class ApiServer:
         def camera_corrected(body: dict):
             """Tijdens het ijken wil je juist het onbewerkte beeld zien."""
             return manage(self.camera.set_corrected, bool(body.get("corrected")))
+
+        # ----------------------------------------------------------------- vellen
+
+        @app.get("/api/sheets")
+        def list_sheets():
+            """De vellen van dit project, en welke actief is."""
+            return manage(self.sheets.state)
+
+        @app.post("/api/sheets", dependencies=write, status_code=201)
+        def add_sheet(body: dict | None = None):
+            fields = body or {}
+            return manage(
+                self.sheets.add,
+                fields.get("name"),
+                fields.get("width_mm"),
+                fields.get("height_mm"),
+                fields.get("material_id"),
+            )
+
+        @app.post("/api/sheets/{sheet_id}/activate", dependencies=write)
+        def activate_sheet(sheet_id: str):
+            """
+            Wisselen van vel: het huidige wordt opgeslagen, het andere geladen.
+            Wat je ziet is daarna precies wat er gebrand wordt.
+            """
+            return manage(self.sheets.activate, sheet_id)
+
+        @app.patch("/api/sheets/{sheet_id}", dependencies=write)
+        def update_sheet(sheet_id: str, body: dict):
+            return manage(lambda: self.sheets.update(sheet_id, **body))
+
+        @app.delete("/api/sheets/{sheet_id}", dependencies=write)
+        def delete_sheet(sheet_id: str):
+            return manage(self.sheets.remove, sheet_id)
+
+        @app.post("/api/sheets/{sheet_id}/move", dependencies=write)
+        def move_to_sheet(sheet_id: str, body: dict):
+            return manage(self.sheets.move_selection, body.get("ids") or [], sheet_id)
 
         # --------------------------------------------------------------- clipart
 

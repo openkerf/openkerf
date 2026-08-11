@@ -24,7 +24,9 @@
 		onImageClear,
 		onUncrop,
 		show = 'selection',
-		bed = null
+		bed = null,
+		otherSheets = [],
+		onMoveToSheet
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -67,6 +69,9 @@
 		show?: 'selection' | 'layers';
 		/** Bedmaat in mm, om te zien of er iets buiten valt. */
 		bed?: { width: number; height: number } | null;
+		/** De andere vellen, om de selectie naartoe te verhuizen. */
+		otherSheets?: { id: string; name: string }[];
+		onMoveToSheet?: (sheetId: string) => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -446,6 +451,22 @@
 			{/if}
 
 			{#if canEdit}
+				{#if otherSheets.length}
+					<div class="arrange">
+						<!-- Verhuizen naar een ander vel: de selectie gaat mee via het
+						     klembord van de engine, dus operaties en kleuren blijven. -->
+						<span class="rot-label">Naar vel</span>
+						{#each otherSheets as sheet (sheet.id)}
+							<button
+								class="rot"
+								disabled={edits.busy}
+								title="Verplaats de selectie naar {sheet.name}"
+								onclick={() => onMoveToSheet?.(sheet.id)}
+							>{sheet.name}</button>
+						{/each}
+					</div>
+				{/if}
+
 				<div class="arrange">
 					<button
 						class="rot"

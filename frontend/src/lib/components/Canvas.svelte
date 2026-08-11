@@ -16,7 +16,8 @@
 		onCrop,
 		onPath,
 		cameraSrc = null,
-		cameraOpacity = 0.6
+		cameraOpacity = 0.6,
+		sheet = null
 	}: {
 		device: Device | null;
 		design: DesignStore;
@@ -33,6 +34,8 @@
 		/** Bron van het camerabeeld, of null als de camera uit staat. */
 		cameraSrc?: string | null;
 		cameraOpacity?: number;
+		/** Het actieve vel: het stuk materiaal binnen het bed. */
+		sheet?: { name: string; width: number; height: number } | null;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -573,6 +576,16 @@
 				/>
 			{/if}
 
+			{#if sheet && (sheet.width < bed.width - 0.5 || sheet.height < bed.height - 0.5)}
+				<!-- Het vel ligt binnen het bed; alles daarbuiten brandt niet mee. -->
+				<div
+					class="sheet"
+					style="width: {sheet.width * scale}px; height: {sheet.height * scale}px"
+				>
+					<span class="sheet-label mono">{sheet.name}</span>
+				</div>
+			{/if}
+
 			<span class="bed-label mono">
 				bed {bed.width.toFixed(0)} × {bed.height.toFixed(0)} mm
 			</span>
@@ -1051,6 +1064,21 @@
 		object-fit: fill;
 		pointer-events: none;
 		user-select: none;
+	}
+	.sheet {
+		position: absolute;
+		left: 0;
+		top: 0;
+		border: 1px dashed var(--accent);
+		background: color-mix(in srgb, var(--accent) 4%, transparent);
+		pointer-events: none;
+	}
+	.sheet-label {
+		position: absolute;
+		left: 3px;
+		bottom: 2px;
+		font-size: 9px;
+		color: var(--accent);
 	}
 	.bed-label {
 		position: absolute;

@@ -1,0 +1,191 @@
+"""
+Vellen: meerdere stukken materiaal in één project.
+
+Elk vel is een eigen document. De kern van deze tests is dan ook: blijft de
+inhoud van een vel staan als je wegwisselt en terugkomt, en komt er nooit iets
+van het ene vel op het andere terecht.
+"""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from openkerf_api.server import ApiServer
+
+
+@pytest.fixture
+def client(kernel, tmp_path):
+    with TestClient(ApiServer(kernel, library_path=tmp_path / "v.db").build_app()) as c:
+        yield c
+
+
+def a_rect(client, x=10, y=10, w=20, h=10):
+    return client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": x, "y_mm": y, "width_mm": w, "height_mm": h},
+    ).json()["ids"][0]
+
+
+def count(client):
+    return len(client.get("/api/design").json()["elements"])
+
+
+def test_a_project_always_has_one_sheet(client):
+    """Een project zonder vel bestaat niet, net zomin als een laser zonder bed."""
+    state = client.get("/api/sheets").json()
+
+    assert len(state["sheets"]) == 1
+    assert state["sheets"][0]["active"] is True
+    assert state["sheets"][0]["width_mm"] > 0
+
+
+def test_a_new_sheet_takes_the_bed_size_by_default(client):
+    bed = client.get("/api/devices").json()[0]["bed"]
+
+    added = client.post("/api/sheets", json={}).json()
+
+    assert len(added["sheets"]) == 2
+    assert added["sheets"][1]["width_mm"] == pytest.approx(bed["width_mm"], abs=0.2)
+
+
+def test_a_sheet_can_be_smaller_than_the_bed(client):
+    """Een vel is een stuk materiaal, geen kopie van het bed."""
+    added = client.post(
+        "/api/sheets", json={"name": "Restje acryl", "width_mm": 120, "height_mm": 80}
+    ).json()
+
+    assert added["sheets"][1]["name"] == "Restje acryl"
+    assert added["sheets"][1]["width_mm"] == 120
+
+
+def test_switching_sheets_keeps_each_ones_content(client):
+    """
+    Dit is waar het om draait: elk vel is een eigen document, dus wat je op het
+    ene tekent hoort niet op het andere te staan — en moet er nog zijn als je
+    terugkomt.
+    """
+    a_rect(client, x=10)
+    a_rect(client, x=50)
+    assert count(client) == 2
+
+    second = client.post("/api/sheets", json={"name": "Tweede"}).json()["sheets"][1]
+    client.post(f"/api/sheets/{second['id']}/activate")
+
+    assert count(client) == 0, "het tweede vel begint leeg"
+    a_rect(client, x=30)
+    assert count(client) == 1
+
+    client.post("/api/sheets/vel-1/activate")
+    assert count(client) == 2, "het eerste vel is zijn inhoud kwijt"
+
+    client.post(f"/api/sheets/{second['id']}/activate")
+    assert count(client) == 1
+
+
+def test_the_selection_can_move_to_another_sheet(client):
+    keep = a_rect(client, x=10)
+    goes = a_rect(client, x=60)
+    second = client.post("/api/sheets", json={}).json()["sheets"][1]
+
+    response = client.post(f"/api/sheets/{second['id']}/move", json={"ids": [goes]})
+
+    assert response.status_code == 200
+    # We staan nu op het tweede vel, met alleen het verplaatste element.
+    assert response.json()["active"] == second["id"]
+    assert count(client) == 1
+
+    client.post("/api/sheets/vel-1/activate")
+    elements = client.get("/api/design").json()["elements"]
+    assert len(elements) == 1
+    assert elements[0]["id"] == keep
+
+
+def test_moving_to_the_sheet_you_are_on_is_refused(client):
+    rect = a_rect(client)
+
+    response = client.post("/api/sheets/vel-1/move", json={"ids": [rect]})
+
+    assert response.status_code == 409
+
+
+def test_moving_nothing_is_refused(client):
+    client.post("/api/sheets", json={})
+
+    assert client.post("/api/sheets/vel-2/move", json={"ids": []}).status_code == 409
+
+
+def test_a_sheet_can_be_renamed_and_resized(client):
+    client.patch("/api/sheets/vel-1", json={"name": "Berken 3mm", "width_mm": 300})
+
+    sheet = client.get("/api/sheets").json()["sheets"][0]
+    assert sheet["name"] == "Berken 3mm"
+    assert sheet["width_mm"] == 300
+
+
+def test_a_sheet_carries_one_material(client):
+    """Daarmee kloppen de presets en de tijdschatting per vel."""
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+
+    client.patch("/api/sheets/vel-1", json={"material_id": material["id"]})
+
+    assert client.get("/api/sheets").json()["sheets"][0]["material_id"] == material["id"]
+
+
+def test_deleting_a_sheet_removes_its_content_too(client):
+    second = client.post("/api/sheets", json={}).json()["sheets"][1]
+    client.post(f"/api/sheets/{second['id']}/activate")
+    a_rect(client)
+
+    client.delete(f"/api/sheets/{second['id']}")
+
+    state = client.get("/api/sheets").json()
+    assert [s["id"] for s in state["sheets"]] == ["vel-1"]
+    # En we staan niet meer op het vel dat weg is.
+    assert state["active"] == "vel-1"
+    assert count(client) == 0
+
+
+def test_the_last_sheet_cannot_be_deleted(client):
+    assert client.delete("/api/sheets/vel-1").status_code == 409
+
+
+def test_an_absurd_sheet_size_is_refused(client):
+    for size in ({"width_mm": 1}, {"height_mm": 9000}, {"width_mm": -50}):
+        assert client.post("/api/sheets", json=size).status_code == 409
+
+
+def test_sheets_survive_a_project_file(client, tmp_path):
+    """
+    Anders is het projectbestand een halve waarheid: je krijgt één vel terug en
+    de rest van je werk is weg.
+    """
+    a_rect(client, x=10)
+    second = client.post(
+        "/api/sheets", json={"name": "Acryl", "width_mm": 120, "height_mm": 80}
+    ).json()["sheets"][1]
+    client.post(f"/api/sheets/{second['id']}/activate")
+    a_rect(client, x=30)
+    a_rect(client, x=70)
+
+    saved = client.get("/api/project/export.openkerf")
+    assert saved.status_code == 200
+    bundle = tmp_path / "project.openkerf"
+    bundle.write_bytes(saved.content)
+
+    # Alles weggooien en het project weer openen.
+    client.delete(f"/api/sheets/{second['id']}")
+    client.post("/api/design/clear")
+
+    with bundle.open("rb") as handle:
+        opened = client.post(
+            "/api/project/open", files={"file": ("project.openkerf", handle)}
+        )
+    assert opened.status_code == 200
+
+    state = client.get("/api/sheets").json()
+    assert [s["name"] for s in state["sheets"]] == ["Vel 1", "Acryl"]
+    assert state["sheets"][1]["width_mm"] == 120
+
+    client.post("/api/sheets/vel-1/activate")
+    assert count(client) == 1
+    client.post(f"/api/sheets/{second['id']}/activate")
+    assert count(client) == 2

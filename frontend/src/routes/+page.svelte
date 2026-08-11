@@ -20,6 +20,8 @@
 	import Generators from '$components/Generators.svelte';
 	import CameraCalibration from '$components/CameraCalibration.svelte';
 	import Clipart from '$components/Clipart.svelte';
+	import SheetTabs from '$components/SheetTabs.svelte';
+	import { SheetStore } from '$lib/sheets.svelte';
 	import { CameraStore } from '$lib/camera.svelte';
 	import { PresetariatStore } from '$lib/presetariat.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
@@ -68,6 +70,7 @@
 	let catalogueOpen = $state(false);
 	let generatorsOpen = $state(false);
 	let clipartOpen = $state(false);
+	const sheets = new SheetStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let calibrateOpen = $state(false);
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
@@ -303,6 +306,7 @@
 		status.connect();
 		control.refreshCapabilities();
 		camera.load();
+		sheets.load();
 		library.load();
 		const wantedTab = $page.url.searchParams.get('tab');
 		if (wantedTab === 'design' || wantedTab === 'layers') tab = wantedTab;
@@ -419,39 +423,59 @@
 		onOpenClipart={() => (clipartOpen = true)}
 		onPlaceImage={placeImage}
 	/>
-	<Canvas
-		{device}
-		{design}
-		{edits}
-		{canEdit}
-		{tool}
-		onEdited={() => design.load()}
-		onDrawn={draw}
-		onTextAt={(at) => {
-			textAt = at;
-			textOpen = true;
-		}}
-		cameraSrc={camera.src}
-		cameraOpacity={camera.opacity}
-		onPath={async (points, closed) => {
-			if (!canEdit) return;
-			await post('/api/design/path', { points, closed });
-			await design.load();
-		}}
-		bind:cropping
-		onCrop={async (rect) => {
-			const id = design.selectedId;
-			if (!id) return;
-			await post(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
-				x_mm: rect.x,
-				y_mm: rect.y,
-				width_mm: rect.width,
-				height_mm: rect.height
-			});
-			await design.load();
-			await loadImageState();
-		}}
-	/>
+	<!-- Vellen boven het canvas: elk vel is een eigen document, dus dit is
+	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->
+	<div class="stage">
+		<SheetTabs
+			{sheets}
+			{library}
+			{canEdit}
+			onSwitched={async () => {
+				design.select(null);
+				await design.load();
+			}}
+		/>
+		<Canvas
+			{device}
+			{design}
+			{edits}
+			{canEdit}
+			{tool}
+			onEdited={() => design.load()}
+			onDrawn={draw}
+			onTextAt={(at) => {
+				textAt = at;
+				textOpen = true;
+			}}
+			cameraSrc={camera.src}
+			cameraOpacity={camera.opacity}
+			sheet={sheets.active
+				? {
+						name: sheets.active.name,
+						width: sheets.active.width_mm,
+						height: sheets.active.height_mm
+					}
+				: null}
+			onPath={async (points, closed) => {
+				if (!canEdit) return;
+				await post('/api/design/path', { points, closed });
+				await design.load();
+			}}
+			bind:cropping
+			onCrop={async (rect) => {
+				const id = design.selectedId;
+				if (!id) return;
+				await post(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
+					x_mm: rect.x,
+					y_mm: rect.y,
+					width_mm: rect.width,
+					height_mm: rect.height
+				});
+				await design.load();
+				await loadImageState();
+			}}
+		/>
+	</div>
 
 	<aside class="panel" aria-label="Eigenschappen">
 		<div class="tabs" role="tablist">
@@ -507,6 +531,13 @@
 					box={design.liveBox}
 					onSetPosition={setPosition}
 					onSetSize={setSize}
+					otherSheets={sheets.sheets.filter((s) => !s.active)}
+					onMoveToSheet={async (id) => {
+						if (await sheets.move(design.selectedIds, id)) {
+							design.select(null);
+							await design.load();
+						}
+					}}
 					onArrange={arrange}
 					onCrop={() => (cropping = true)}
 
@@ -712,6 +743,12 @@
 </Dialog>
 
 <style>
+	.stage {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
 	.camstrip {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));

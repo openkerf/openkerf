@@ -641,7 +641,7 @@ class Drawing:
             raise DesignError("De engine heeft geen bestand geschreven.")
         return target
 
-    def export_project(self, library, filename: str = "project.openkerf"):
+    def export_project(self, library, filename: str = "project.openkerf", sheets=None):
         """
         Een projectbestand: het ontwerp plus de bibliotheek-context.
 
@@ -668,11 +668,24 @@ class Drawing:
             "test_grids": library.test_grids(),
         }
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as bundle:
+            # design.svg blijft het actieve vel, zodat een ouder OpenKerf het
+            # project nog kan openen: dan mis je de andere vellen, maar niet je
+            # werk.
             bundle.write(design, "design.svg")
             bundle.writestr("library.json", json.dumps(context, indent=1, default=str))
+            if sheets is not None:
+                index = sheets.export_into(bundle)
+                bundle.writestr(
+                    "vellen.json",
+                    json.dumps(
+                        {"active": sheets.state()["active"], "sheets": index},
+                        indent=1,
+                        ensure_ascii=False,
+                    ),
+                )
         return target
 
-    def import_project(self, path, library) -> dict:
+    def import_project(self, path, library, sheets=None) -> dict:
         """
         Een project openen: het ontwerp vervangen en ontbrekende
         bibliotheekgegevens aanvullen.
@@ -695,6 +708,11 @@ class Drawing:
             context = (
                 json.loads(bundle.read("library.json")) if "library.json" in names else {}
             )
+            if sheets is not None and "vellen.json" in names:
+                index = json.loads(bundle.read("vellen.json"))
+                sheets.import_from(
+                    bundle, index.get("sheets") or [], index.get("active")
+                )
 
         import tempfile
 

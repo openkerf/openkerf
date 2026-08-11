@@ -49,7 +49,9 @@ def test_a_project_carries_design_and_library(client):
 
     assert response.status_code == 200
     bundle = zipfile.ZipFile(io.BytesIO(response.content))
-    assert set(bundle.namelist()) == {"design.svg", "library.json"}
+    # design.svg is het actieve vel en blijft apart staan, zodat een oudere
+    # versie van OpenKerf het project nog kan openen.
+    assert {"design.svg", "library.json", "vellen.json"} <= set(bundle.namelist())
     assert bundle.read("design.svg").startswith(b"<svg")
     context = json.loads(bundle.read("library.json"))
     assert [m["name"] for m in context["materials"]] == ["Multiplex"]
