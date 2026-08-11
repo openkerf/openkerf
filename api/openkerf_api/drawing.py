@@ -11,7 +11,7 @@ red shape should land in the cut layer by itself.
 """
 
 from .commands import CommandRunner
-from .design import _label, _xy
+from .design import _xy, operation_label
 from .edits import DesignError, _finite, _positive
 
 # What a shape needs, and the console command that draws it. Millimetres in,
@@ -136,9 +136,30 @@ class Drawing:
             raise DesignError("De engine heeft niets getekend.")
 
         self.elements.validate_ids()
+        for node in created:
+            self._single_layer(node)
         self.elements.set_emphasis(created)
         self._refresh()
         return {"ids": [n.id for n in created], "type": created[0].type}
+
+    def _single_layer(self, node) -> None:
+        """
+        Een verse vorm hoort in één laag te vallen, niet in twee.
+
+        De classificatie van de engine kijkt naar de lijnkleur, en meerdere
+        operaties kunnen dezelfde kleur claimen. Dan zit dezelfde rechthoek in
+        een snij- én een graveerlaag, en brandt hij twee keer — de tweede keer
+        vaak op 100%. Precies de val die eerder bij het testraster toesloeg.
+        Een element in meerdere lagen zetten blijft kunnen, maar dan omdat
+        iemand daarvoor kiest.
+        """
+        references = [
+            reference
+            for reference in list(getattr(node, "_references", []))
+            if reference.parent is not None
+        ]
+        for extra in references[1:]:
+            extra.remove_node()
 
     def _command(self, kind: str, v: dict, fields: dict) -> str:
         if kind == "rect":
@@ -683,7 +704,7 @@ class Drawing:
             passes = getattr(operation, "passes", None) or 1
             layers.append(
                 {
-                    "label": _label(operation, str(operation.type).replace("op ", "")),
+                    "label": operation_label(operation),
                     "type": operation.type,
                     "speed_mm_s": None if speed is None else float(speed),
                     "power_percent": None if power is None else round(float(power) / 10, 1),

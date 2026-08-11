@@ -8,6 +8,7 @@ instead the snapshot carries `units_per_mm` and the frontend applies a single
 scale transform. One multiplication, no parsing.
 """
 
+import re
 from meerk40t.core.units import UNITS_PER_MM
 
 # Operation types that carry a laser setting and therefore read as a layer.
@@ -24,6 +25,34 @@ def _plain(value):
         return float(value)
     except (TypeError, ValueError):
         return str(value)
+
+
+# Lagen die de engine zelf aanmaakt heten "Engrave 20.0mm/s @1000 #0000ff":
+# de instellingen in de naam gepropt. Die staan er al netjes naast, dus we
+# tonen waar de laag over gaat.
+LAYER_NAMES = {
+    "op cut": "Snijden",
+    "op engrave": "Graveren",
+    "op raster": "Rasteren",
+    "op image": "Afbeelding",
+    "op dots": "Punten",
+}
+
+
+def operation_label(op) -> str:
+    """
+    De naam van een laag: die van de gebruiker, of het soort bewerking.
+
+    Het kenmerk van een engine-naam is de kleurcode erin ("Engrave 20.0mm/s
+    @1000 #0000ff"). Een testrastercel heet bewust "5.0mm/s @40.0%" — dat is
+    juist informatie, en die laten we staan.
+    """
+    # Eerst laten renderen: de ruwe naam is een sjabloon met plaatshouders als
+    # "{percent}", en die horen niet in de lagenlijst.
+    rendered = _label(op, str(op.type).replace("op ", ""))
+    if rendered and not re.search(r"#[0-9a-fA-F]{6}", rendered):
+        return rendered
+    return LAYER_NAMES.get(str(op.type), str(op.type).replace("op ", "").title())
 
 
 def _label(node, fallback: str) -> str:
@@ -336,7 +365,7 @@ class DesignReader:
         return {
             "id": operation_id,
             "type": op.type,
-            "label": _label(op, op.type.replace("op ", "")),
+            "label": operation_label(op),
             "color": _color(getattr(op, "color", None)),
             "speed": _plain(getattr(op, "speed", None)),
             "power": _plain(getattr(op, "power", None)),

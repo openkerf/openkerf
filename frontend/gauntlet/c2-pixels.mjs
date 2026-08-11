@@ -22,6 +22,10 @@ function add(severity, what, evidence) {
 for (const theme of ['light', 'dark']) {
 	for (const [name, width] of Object.entries(WIDTHS)) {
 		const page = await open(b, { width, theme });
+		const failed = [];
+		page.on('response', (r) => {
+			if (r.status() >= 400) failed.push(`${r.status()} ${r.url().slice(-70)}`);
+		});
 		await page.waitForTimeout(600);
 		await page.screenshot({ path: `gauntlet/shots/app-${name}-${theme}.png`, fullPage: false });
 
@@ -149,8 +153,11 @@ for (const theme of ['light', 'dark']) {
 		}
 
 		if (page.problems.length) {
+			// Het verzoek erbij: "404" zonder adres is geen bevinding maar een raadsel.
 			add('major', 'Fouten in de browserconsole',
-				[...new Set(page.problems)].slice(0, 4).join(' | '));
+				[...new Set(page.problems)].slice(0, 4).join(' | ') +
+					(failed.length ? ` — mislukte verzoeken: ${[...new Set(failed)].join(', ')}` : '') +
+					` [${name}/${theme}]`);
 		}
 		await page.context().close();
 	}

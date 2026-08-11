@@ -37,9 +37,13 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 	// tijdens de overgang, en dan lees je halverwege gemengde kleuren — dat
 	// leverde "contrastfouten" op die na een seconde vanzelf weg waren.
 	if (theme === 'dark') {
-		await page.addInitScript(() =>
-			document.documentElement.setAttribute('data-theme', 'dark')
-		);
+		await page.addInitScript(() => {
+			// Een initscript draait al vóórdat <html> bestaat; dan is
+			// documentElement nog null en gooit setAttribute.
+			const zet = () => document.documentElement?.setAttribute('data-theme', 'dark');
+			zet();
+			document.addEventListener('DOMContentLoaded', zet);
+		});
 	}
 	const problems = [];
 	page.on('console', (m) => {

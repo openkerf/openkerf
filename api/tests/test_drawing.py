@@ -804,3 +804,32 @@ def test_a_new_layer_does_not_claim_zero_passes(client):
         o for o in client.get("/api/design").json()["operations"] if o["id"] == made["id"]
     )
     assert layer["passes"] >= 1
+
+
+def test_a_new_shape_lands_in_exactly_one_layer(client):
+    """
+    De classificatie kijkt naar de lijnkleur, en meerdere operaties kunnen
+    dezelfde kleur claimen. Dan brandt dezelfde vorm twee keer — de tweede keer
+    vaak op vol vermogen. Dat merk je pas op materiaal.
+    """
+    made = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 30, "height_mm": 20},
+    ).json()
+
+    element = next(
+        e for e in client.get("/api/design").json()["elements"] if e["id"] == made["ids"][0]
+    )
+    assert len(element["operation_ids"]) == 1
+
+
+def test_the_preflight_lists_one_layer_for_one_shape(client):
+    """Wat de pre-flight toont, is wat er gebeurt. Twee lagen voor één vorm is een dubbele brand."""
+    client.post("/api/design/clear")
+    client.post(
+        "/api/design/elements",
+        json={"type": "circle", "cx_mm": 50, "cy_mm": 50, "r_mm": 20},
+    )
+
+    layers = client.get("/api/job/estimate").json()["layers"]
+    assert len(layers) == 1, [l["label"] for l in layers]
