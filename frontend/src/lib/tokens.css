@@ -40,6 +40,19 @@
 	--layer-9: #8d6e63;
 	--layer-10: #607d8b;
 
+	/* Materiaal als beeld: de grondkleur van elke textuurstrook. Geen
+	   themakleuren maar materiaalkleuren — hout is hout, ook 's nachts. In het
+	   donkere thema staan ze een slag doffer, anders schreeuwen ze. */
+	--mat-hout: #c8a06a;
+	--mat-acryl: #7fb9c4;
+	--mat-leer: #8a5a3b;
+	--mat-karton: #cdb391;
+	--mat-metaal: #b6bcc2;
+
+	/* Eén maat groter dan de schaal, voor het percentage op de telefoon: dat
+	   moet je van een meter afstand kunnen lezen. */
+	--text-display: 40px;
+
 	/* Spacing op een 4px-grid. */
 	--space-1: 4px;
 	--space-2: 8px;
@@ -101,6 +114,11 @@
 	--line: #33383f;
 	--text-1: #e8eaed;
 	--text-2: #9aa3ae;
+	--mat-hout: #9c7845;
+	--mat-acryl: #4f8892;
+	--mat-leer: #63402a;
+	--mat-karton: #9c8564;
+	--mat-metaal: #7d848b;
 	--accent: #2aa6b1;
 	--accent-ink: #0b1213;
 	--danger: #e5544a;

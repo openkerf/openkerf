@@ -47,7 +47,7 @@
 	button {
 		flex: 1;
 		min-width: 0;
-		padding: 6px 10px;
+		padding: var(--space-2) var(--space-3);
 		font: inherit;
 		font-size: var(--text-xs);
 		color: var(--text-2);
@@ -63,8 +63,8 @@
 	   hij ook op een meter afstand te zien. */
 	button.on {
 		background: var(--accent);
-		color: var(--on-color);
+		color: var(--accent-ink);
 		font-weight: 500;
 	}
-	button.on:hover { background: var(--accent); color: var(--on-color); }
+	button.on:hover { background: var(--accent); color: var(--accent-ink); }
 </style>

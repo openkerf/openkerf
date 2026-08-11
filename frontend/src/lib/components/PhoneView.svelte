@@ -205,10 +205,10 @@
 	.podium.klein { flex: none; min-height: 132px; }
 	.podium img { width: 100%; height: 100%; object-fit: contain; }
 	.leeg { display: grid; gap: var(--space-2); justify-items: center; color: var(--text-2); }
-	.groot { font-size: 40px; color: var(--text-1); font-variant-numeric: tabular-nums; }
+	.groot { font-size: var(--text-display); color: var(--text-1); font-variant-numeric: tabular-nums; }
 	.klein {
 		font: inherit;
-		padding: 10px 16px;
+		padding: var(--space-3) var(--space-4);
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

@@ -141,7 +141,7 @@
 			Nog geen materialen. Voeg er een toe en leg de instellingen vast die bij jouw machine werken.
 		</p>
 	{:else}
-		<select class="picker" bind:value={materialId}>
+		<select class="picker" aria-label="Materiaal filteren" bind:value={materialId}>
 			<option value={null}>Alle materialen</option>
 			{#each library.materials as material (material.id)}
 				<option value={material.id}>{material.name}</option>
@@ -395,19 +395,19 @@
 	}
 	/* Nerf: twee lagen strepen onder een lichte hoek, met een warme ondergrond. */
 	.strook.hout {
-		background-color: #c8a06a;
+		background-color: var(--mat-hout);
 		background-image:
 			repeating-linear-gradient(97deg, rgb(0 0 0 / 0.10) 0 1px, transparent 1px 7px),
 			repeating-linear-gradient(93deg, rgb(255 255 255 / 0.13) 0 2px, transparent 2px 15px);
 	}
 	/* Acryl: glad, met één schuine glans. */
 	.strook.acryl {
-		background-color: #7fb9c4;
+		background-color: var(--mat-acryl);
 		background-image: linear-gradient(103deg, rgb(255 255 255 / 0.45) 0 18%, transparent 40%);
 	}
 	/* Leer: onregelmatige korrel uit gestapelde radiale vlekken. */
 	.strook.leer {
-		background-color: #8a5a3b;
+		background-color: var(--mat-leer);
 		background-image:
 			radial-gradient(circle at 20% 40%, rgb(0 0 0 / 0.18) 0 2px, transparent 3px),
 			radial-gradient(circle at 62% 70%, rgb(0 0 0 / 0.14) 0 3px, transparent 4px),
@@ -417,12 +417,12 @@
 	}
 	/* Karton: golfprofiel, van opzij gezien. */
 	.strook.karton {
-		background-color: #cdb391;
+		background-color: var(--mat-karton);
 		background-image: repeating-linear-gradient(90deg, rgb(0 0 0 / 0.13) 0 1px, transparent 1px 9px);
 	}
 	/* Metaal: geborsteld, met een lopende glans. */
 	.strook.metaal {
-		background-color: #b6bcc2;
+		background-color: var(--mat-metaal);
 		background-image:
 			repeating-linear-gradient(90deg, rgb(255 255 255 / 0.35) 0 1px, transparent 1px 4px),
 			linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.40) 48%, transparent 62%);
@@ -440,7 +440,7 @@
 		width: auto;
 		max-width: 45%;
 		object-fit: contain;
-		border-radius: 3px;
+		border-radius: var(--radius-field);
 		background: var(--surface-1);
 		box-shadow: var(--lift-1);
 	}
