@@ -88,9 +88,6 @@
 					<span class="onder">bezig met branden</span>
 				{:else}
 					<span class="onder">Geen job actief</span>
-					{#if camera.state.available}
-						<button class="klein" onclick={() => camera.start()}>Camera aanzetten</button>
-					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -124,6 +121,15 @@
 		</section>
 	{/if}
 
+	<!-- Alles wat je met een duim moet kunnen raken, in één blok onderaan. -->
+	<div class="onderin">
+	{#if camera.state.available && !(camera.shown && camera.state.running)}
+		<!-- Onderin, niet in het podium: met één duim kom je niet bij de bovenste
+		     15% van een telefoonscherm, en dit is de enige actie die er is als er
+		     niets brandt. -->
+		<button class="camknop" onclick={() => camera.start()}>Camera aanzetten</button>
+	{/if}
+
 	<!-- De noodrem: vast onderin, binnen duimbereik, ver uit elkaar. -->
 	<section class="noodrem">
 		<button
@@ -137,6 +143,8 @@
 			onclick={() => control.stop()}
 		>Stop</button>
 	</section>
+
+	</div>
 
 	{#if wachtend.length}
 		<section class="rasters">
@@ -206,12 +214,15 @@
 	.podium img { width: 100%; height: 100%; object-fit: contain; }
 	.leeg { display: grid; gap: var(--space-2); justify-items: center; color: var(--text-2); }
 	.groot { font-size: var(--text-display); color: var(--text-1); font-variant-numeric: tabular-nums; }
-	.klein {
+	.camknop {
+		flex: none;
+		min-height: 48px;
 		font: inherit;
-		padding: var(--space-3) var(--space-4);
+		font-size: var(--text-sm);
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);
+		color: var(--text-1);
 	}
 
 	.stand { flex: none; margin: 0; display: grid; gap: 1px; background: var(--line);
@@ -229,7 +240,8 @@
 
 	/* 24px tussen pauze en stop: tegengestelde gevolgen mogen niet naast
 	   elkaar liggen als je met een duim mikt. */
-	.noodrem { flex: none; margin-top: auto; display: flex; gap: var(--space-6); }
+	.onderin { margin-top: auto; display: grid; gap: var(--space-2); }
+	.noodrem { flex: none; display: flex; gap: var(--space-6); }
 	.rem {
 		flex: 1;
 		min-height: 64px;

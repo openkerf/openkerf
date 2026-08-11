@@ -36,11 +36,49 @@ def _steps(value, name: str) -> int:
     return number
 
 
+# De stappen waarop een mens werkt. Een raster dat rijen snijdt op 11,667 mm/s
+# is geen naslagwerk: die instelling type je nooit meer over.
+_NETTE_STAPPEN = (0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 250, 500)
+
+
+def _rond_af(waarde: float, ruwe_stap: float) -> float:
+    """
+    Een tussenwaarde naar het dichtstbijzijnde nette getal schuiven.
+
+    De korrel volgt de stapgrootte: bij stappen van ~13 rond je op tientallen af,
+    bij stappen van ~0,4 op tienden. Zo blijft het raster herkenbaar oplopen in
+    plaats van vier keer hetzelfde getal te tonen.
+    """
+    # De grofste nette stap die hoogstens een halve stap groot is: dan schuift
+    # een waarde nooit verder dan een kwart stap op en blijft de reeks netjes
+    # oplopen.
+    grens = ruwe_stap / 2 if ruwe_stap else 1
+    passend = [k for k in _NETTE_STAPPEN if k <= grens]
+    korrel = passend[-1] if passend else _NETTE_STAPPEN[0]
+    afgerond = round(waarde / korrel) * korrel
+    # Drijvende komma laat 3 * 0.1 als 0.30000000000000004 achter.
+    return round(afgerond, 3)
+
+
 def _spread(low: float, high: float, steps: int) -> list[float]:
+    """
+    De reeks waarden voor één as.
+
+    Begin en eind blijven exact wat er gevraagd is — dat is het bereik dat de
+    gebruiker wil aftasten. Alleen de tussenstappen schuiven naar een net getal,
+    en als twee daarvan op hetzelfde uitkomen blijft de rauwe waarde staan:
+    liever een lelijk getal dan twee identieke rijen.
+    """
     if steps == 1:
         return [low]
     span = (high - low) / (steps - 1)
-    return [low + span * i for i in range(steps)]
+    ruw = [low + span * i for i in range(steps)]
+    net = [ruw[0]] + [_rond_af(v, span) for v in ruw[1:-1]] + [ruw[-1]]
+    if len(set(net)) < len(net) or any(
+        net[i] >= net[i + 1] for i in range(len(net) - 1)
+    ):
+        return ruw
+    return net
 
 
 def plan_grid(
@@ -241,6 +279,7 @@ class TestGridGenerator:
                               "_node": node, "_op": operation})
 
             self._label_axes(plan, cells)
+            self._caption(plan)
 
         # Ids only exist once the engine has handed them out.
         self.elements.validate_ids()
@@ -273,9 +312,7 @@ class TestGridGenerator:
             node = self._text(f"{speed:g} mm/s", text_height)
             if node is None:
                 return  # Geen vectorfont beschikbaar; het raster blijft bruikbaar.
-            labels = labels or self.elements.op_branch.add(
-                type="op engrave", speed=80, power=300, label="Raster-labels"
-            )
+            labels = labels or self._label_op()
             self._place(
                 node,
                 right=plan["origin_x_mm"] - 2,
@@ -293,6 +330,49 @@ class TestGridGenerator:
                 bottom=plan["origin_y_mm"] - 2,
             )
             labels.add_reference(node)
+
+    def _caption(self, plan: dict):
+        """
+        Het opschrift op het bord: wat is dit, waarvan, wanneer.
+
+        Een gebrand raster zonder opschrift is over twee weken een raadselachtig
+        stuk hout. Het staat in de labellaag, dus met een vaste, veilige
+        instelling — het opschrift moet leesbaar zijn ongeacht welke cel het
+        beste uitpakt.
+        """
+        delen = [str(plan.get("caption") or "").strip()]
+        if plan.get("material_name"):
+            delen.append(str(plan["material_name"]))
+        if plan.get("thickness_mm"):
+            delen.append(f"{plan['thickness_mm']:g} mm")
+        delen.append(str(plan["operation"]))
+        if plan.get("stamp"):
+            delen.append(str(plan["stamp"]))
+        tekst = " · ".join(d for d in delen if d)
+        if not tekst:
+            return
+
+        hoogte = max(2.5, plan["cell_mm"] * 0.4)
+        node = self._text(tekst, hoogte)
+        if node is None:
+            return
+        labels = self._label_op()
+        self._place(
+            node,
+            left=plan["origin_x_mm"],
+            # Bóven de kolomlabels, met dezelfde marge als die labels zelf.
+            bottom=plan["origin_y_mm"] - 2 - hoogte - 2,
+        )
+        labels.add_reference(node)
+
+    def _label_op(self):
+        """De laag waar alle opschriften in gaan; één per raster."""
+        for node in self.elements.op_branch.children:
+            if getattr(node, "label", None) == "Raster-labels":
+                return node
+        return self.elements.op_branch.add(
+            type="op engrave", speed=80, power=300, label="Raster-labels"
+        )
 
     def _text(self, text: str, height_mm: float):
         """Vector text via the Hershey fonts; bitmap text has no geometry."""
@@ -323,7 +403,7 @@ class TestGridGenerator:
         )
         return node
 
-    def _place(self, node, right=None, center=None, middle=None, bottom=None):
+    def _place(self, node, right=None, center=None, middle=None, bottom=None, left=None):
         """Move a freshly drawn label to where it belongs, measured from its bounds."""
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -331,6 +411,8 @@ class TestGridGenerator:
         dx = dy = 0.0
         if right is not None:
             dx = right - x1
+        if left is not None:
+            dx = left - x0
         if center is not None:
             dx = center - (x0 + x1) / 2
         if bottom is not None:

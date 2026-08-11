@@ -223,5 +223,43 @@ for (const theme of ['light', 'dark']) {
 	await page.context().close();
 }
 
+// --- SVG-tekst in schermpixels
+// Elke uitzondering op de typeschaal (@svg-space) hoort hier langs te komen:
+// een viewBox in millimeters of eigen eenheden zegt niets over wat je ziet.
+{
+	const page = await open(b, { width: 1440 });
+	await page.waitForTimeout(600);
+	const later = await page.$('button:has-text("Later")');
+	if (later) { await later.click(); await page.waitForTimeout(300); }
+	await page.click('button[title^="Generatoren"]').catch(() => {});
+	await page.waitForTimeout(400);
+	await page.click('button:has-text("Doos")').catch(() => {});
+	await page.waitForTimeout(500);
+	// Niet de omhullende doos meten: die is voor cijfers ongeveer 0,6 em, dus
+	// een correcte 11px-liniaal komt eruit als 6,6 en dan "vindt" de meter een
+	// fout die er niet is. Wat telt is de gerenderde lettergrootte: de
+	// opgegeven font-size maal de schaal waarmee de SVG op het scherm staat.
+	const klein = await page.$$eval('svg text', (ns) =>
+		ns
+			.filter((n) => (n.textContent ?? '').trim() && n.getBoundingClientRect().height > 0)
+			.map((n) => {
+				const ctm = n.getScreenCTM();
+				const schaal = ctm ? Math.sqrt(Math.abs(ctm.a * ctm.d - ctm.b * ctm.c)) : 1;
+				const opgegeven = parseFloat(getComputedStyle(n).fontSize) || 0;
+				return {
+					t: n.textContent.trim().slice(0, 14),
+					px: +(opgegeven * schaal).toFixed(1)
+				};
+			})
+			.filter((x) => x.px > 0 && x.px < 10.5)
+	);
+	console.log('SVG-tekst onder 10,5 schermpixels:', klein.length ? klein : 'geen');
+	if (klein.length) {
+		findings.push({ severity: 'major', what: 'SVG-tekst kleiner dan de ondergrens van de schaal',
+			evidence: klein.map((x) => `"${x.t}" ${x.px}px`).join(' | ') });
+	}
+	await page.context().close();
+}
+
 report('Criticus 2 — pixelrechter', findings);
 await b.close();

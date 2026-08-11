@@ -35,6 +35,20 @@ export const OPERATIONS = [
 	{ value: 'markeren', label: 'Markeren' }
 ];
 
+/**
+ * Welk laagtype bij welke bewerking hoort.
+ *
+ * Een snijpreset op een graveerlaag zetten is geen tikfout maar verbrand
+ * materiaal: 12 mm/s op 65% doet iets heel anders dan 250 mm/s op 20%. We
+ * blokkeren het niet — soms weet de gebruiker beter — maar we zeggen het wel.
+ */
+export const OPERATION_LAYER: Record<string, string[]> = {
+	snijden: ['op cut'],
+	'graveren-vector': ['op engrave'],
+	'graveren-raster': ['op raster', 'op image'],
+	markeren: ['op engrave', 'op dots']
+};
+
 /** Hoe zeker is deze preset? Bepaalt de badge in de materiaalkaart. */
 export const SOURCE_LABEL: Record<Preset['source'], { text: string; tone: string }> = {
 	testraster: { text: 'Geverifieerd', tone: 'ok' },
@@ -43,10 +57,22 @@ export const SOURCE_LABEL: Record<Preset['source'], { text: string; tone: string
 	geimporteerd: { text: 'Geïmporteerd', tone: 'neutral' }
 };
 
+export type ActiveMachine = {
+	id: number;
+	name: string;
+	device_path: string | null;
+	has_z: number;
+	has_autofocus: number;
+};
+
 export class LibraryStore {
 	materials = $state<Material[]>([]);
 	presets = $state<Preset[]>([]);
 	machines = $state<{ id: number; name: string; power_watt: number | null }[]>([]);
+	/** Het profiel van de machine die nu actief is; bepaalt wat je hier ziet. */
+	activeMachine = $state<ActiveMachine | null>(null);
+	/** Uit: ook presets van andere machines tonen. */
+	onlyThisMachine = $state(true);
 	busy = $state(false);
 	error = $state<string | null>(null);
 
@@ -83,14 +109,26 @@ export class LibraryStore {
 	}
 
 	async load() {
-		const [materials, presets, machines] = await Promise.all([
+		const alles = this.onlyThisMachine ? '' : '?all_machines=true';
+		const [materials, presets, machines, active] = await Promise.all([
 			this.#request('/api/library/materials'),
-			this.#request('/api/library/presets'),
-			this.#request('/api/library/machines')
+			this.#request(`/api/library/presets${alles}`),
+			this.#request('/api/library/machines'),
+			// 409 als er geen machine actief is; dan blijft het veld leeg en
+			// toont de bibliotheek zich zonder machinekop.
+			this.#request('/api/library/active-machine')
 		]);
 		if (materials) this.materials = materials;
 		if (presets) this.presets = presets;
 		if (machines) this.machines = machines;
+		this.activeMachine = active ?? null;
+		// Een mislukte 409 mag niet als foutmelding blijven staan.
+		if (!active) this.error = null;
+	}
+
+	async toggleScope() {
+		this.onlyThisMachine = !this.onlyThisMachine;
+		await this.load();
 	}
 
 	async addMaterial(name: string) {

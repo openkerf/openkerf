@@ -36,6 +36,64 @@ export type SettingField = {
 
 export type SettingSheet = { sheet: string; fields: SettingField[] };
 
+/**
+ * De soorten machine die een gebruiker herkent.
+ *
+ * MeerK40t's catalogus is geordend op merk en bord — veertig namen waarvan je
+ * er geen kent als je net begint. Wie in zijn werkplaats staat weet wél of hij
+ * een glazen buis met waterkoeling heeft of een open diodeframe. Deze indeling
+ * is dus geen technische maar een herkenbare.
+ */
+export type Kind = 'co2-ruida' | 'co2-k40' | 'diode' | 'galvo';
+
+export const KINDS: {
+	id: Kind;
+	label: string;
+	blurb: string;
+	icon: string;
+}[] = [
+	{
+		id: 'co2-ruida',
+		label: 'CO2 met Ruida of Newly',
+		blurb: 'Grote kast, glazen buis, waterkoeling, meestal een Z-as. K50/K60 en groter.',
+		icon: 'M2.5 8h13v11h-13zM2.5 8l2-3h9l2 3M6 12h6M18 11h3.5v8H18zM19.5 11V9'
+	},
+	{
+		id: 'co2-k40',
+		label: 'K40 CO2',
+		blurb: 'De blauwe doos van 40 W, met een M2- of M3-Nano-bord.',
+		icon: 'M6 10h12v8H6zM6 10l1.5-3h9l1.5 3M10 14h4'
+	},
+	{
+		id: 'diode',
+		label: 'Diode op GRBL',
+		blurb: 'Open frame zonder koeling. Ortur, Longer, Sculpfun, zelfbouw.',
+		icon: 'M3 19h18M5 19V7M19 19V7M4 7h16M11 7v4M9.5 11h3l-1.5 3.5z'
+	},
+	{
+		id: 'galvo',
+		label: 'Galvo — fiber of UV',
+		blurb: 'Spiegelkop op een statief, markeert metaal. Balor-besturing.',
+		icon: 'M12 3v3M9 6h6v3H9zM12 9v2M8 11h8l-4 6zM6 20h12'
+	}
+];
+
+/**
+ * Bij welke soort een familie uit de catalogus hoort.
+ *
+ * Op naam classificeren is grof, maar de catalogus geeft niets beters mee dan
+ * de familienaam en de sleutel. Wat nergens in past komt bij "diode" terecht —
+ * dat is waar de meeste GRBL-borden thuishoren.
+ */
+export function kindOf(family: string, keys: string[]): Kind {
+	const naam = family.toLowerCase();
+	const sleutels = keys.join(' ').toLowerCase();
+	if (/balor|fibre|fiber|uv/.test(naam + sleutels)) return 'galvo';
+	if (/k-series|k40/.test(naam) || /nano|k40/.test(sleutels)) return 'co2-k40';
+	if (/newly|ruida|moshi|co2/.test(naam) || /ruida|newly|moshi/.test(sleutels)) return 'co2-ruida';
+	return 'diode';
+}
+
 export class MachineStore {
 	catalog = $state<CatalogFamily[]>([]);
 	machines = $state<Machine[]>([]);

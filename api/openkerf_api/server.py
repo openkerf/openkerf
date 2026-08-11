@@ -229,6 +229,24 @@ class ApiServer:
 
     # ------------------------------------------------------------------ app
 
+    def _active_profile(self):
+        """
+        Het bibliotheekprofiel van de machine die de engine nu gebruikt.
+
+        De engine kent devices, de bibliotheek kent profielen; dit is de knoop
+        ertussen. Geen actief device betekent geen profiel — dan tonen we alles.
+        """
+        device = getattr(self.kernel, "device", None)
+        pad = getattr(device, "path", None) if device is not None else None
+        if not pad:
+            return None
+        try:
+            return self.library.profile_for_device(
+                str(pad), str(getattr(device, "label", "") or pad)
+            )
+        except Exception:
+            return None
+
     def build_app(self):
         from contextlib import asynccontextmanager
 
@@ -682,12 +700,50 @@ class ApiServer:
             return manage(self.library.remove_material, material_id)
 
         @app.get("/api/library/presets")
-        def list_presets(material_id: int | None = None, operation: str | None = None):
-            return self.library.presets(material_id, operation)
+        def list_presets(
+            material_id: int | None = None,
+            operation: str | None = None,
+            all_machines: bool = False,
+        ):
+            """
+            De presets, standaard van de machine die nu actief is.
+
+            Een preset geldt voor één laser op één materiaal; alles door elkaar
+            tonen is de verwarring die dit oplost. `all_machines=true` toont de
+            rest erbij.
+            """
+            profiel = None if all_machines else self._active_profile()
+            return self.library.presets(
+                material_id, operation, profiel["id"] if profiel else None
+            )
+
+        @app.get("/api/library/active-machine")
+        def active_machine():
+            """
+            Het profiel van de actieve machine, desnoods vers aangemaakt.
+
+            De frontend heeft dit nodig om te zeggen wiens presets je ziet, en
+            om te weten of er een Z-as of autofocus is.
+            """
+            profiel = self._active_profile()
+            if profiel is None:
+                raise HTTPException(status_code=409, detail="Er is geen actieve machine.")
+            return profiel
+
+        @app.patch("/api/library/machines/{machine_id}", dependencies=write)
+        def update_machine(machine_id: int, body: dict):
+            return manage(self.library.update_machine, machine_id, body)
 
         @app.post("/api/library/presets", dependencies=write, status_code=201)
         def add_preset(body: dict):
-            return manage(lambda: self.library.add_preset(**body))
+            # Zonder profiel hangt een preset in de lucht; de actieve machine is
+            # het enige zinnige standaardantwoord.
+            velden = dict(body)
+            if not velden.get("machine_id"):
+                profiel = self._active_profile()
+                if profiel:
+                    velden["machine_id"] = profiel["id"]
+            return manage(lambda: self.library.add_preset(**velden))
 
         @app.patch("/api/library/presets/{preset_id}", dependencies=write)
         def update_preset(preset_id: int, body: dict):
@@ -1053,7 +1109,32 @@ class ApiServer:
         def create_test_grid(body: dict):
             """Plan the grid, draw it into the design, and remember it."""
             def run():
-                plan, cells = plan_grid(**body)
+                from datetime import date
+
+                # Het opschrift hoort niet bij de planning maar bij het bord;
+                # plan_grid kent die sleutels niet.
+                velden = dict(body)
+                opschrift = str(velden.pop("caption", "") or "")
+                # Een raster is een proef op déze machine; zonder dat gegeven
+                # zijn de presets die eruit komen niet terug te plaatsen.
+                if not velden.get("machine_id"):
+                    profiel = self._active_profile()
+                    if profiel:
+                        velden["machine_id"] = profiel["id"]
+                plan, cells = plan_grid(**velden)
+                plan["caption"] = opschrift
+                plan["stamp"] = date.today().isoformat()
+                if velden.get("material_id"):
+                    materiaal = next(
+                        (
+                            m
+                            for m in self.library.materials()
+                            if m["id"] == velden["material_id"]
+                        ),
+                        None,
+                    )
+                    if materiaal:
+                        plan["material_name"] = materiaal["name"]
                 drawn = self.grids.draw(plan, cells)
                 grid = self.library.add_test_grid(plan, drawn)
                 # Het raster is één object op het canvas; de cellen houden hun

@@ -1,11 +1,27 @@
 <script lang="ts">
 	import { OPERATIONS, type LibraryStore } from '$lib/library.svelte';
+	import NumberField from './NumberField.svelte';
 
 	let {
+		materialId = null,
 		library,
 		canEdit = false,
 		onGenerated
-	}: { library: LibraryStore; canEdit?: boolean; onGenerated?: () => void } = $props();
+	}: {
+		/** Voorgekozen materiaal, als je hier vanuit de bibliotheek komt. */
+		materialId?: number | null;
+		library: LibraryStore;
+		canEdit?: boolean;
+		onGenerated?: () => void;
+	} = $props();
+
+	// Kom je vanuit een materiaal, dan staat dat materiaal al ingevuld en gaat
+	// het formulier meteen open — anders begin je met kiezen wat je net koos.
+	$effect(() => {
+		if (materialId === null) return;
+		form.material_id = materialId;
+		open = true;
+	});
 
 	type Cell = {
 		row: number;
@@ -112,6 +128,32 @@
 		preview = await send('/api/library/testgrids/preview');
 	}
 
+	// Live meekijken. Een voorbeeld achter een knop is geen voorbeeld: je ziet
+	// pas wat je instelt nadat je besloten hebt dat je het wilt zien.
+	let timer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		// Aanraken zodat de effect-tracker weet waar hij op moet letten.
+		void [
+			form.operation, form.speed_min, form.speed_max, form.power_min,
+			form.power_max, form.speed_steps, form.power_steps, form.cell_mm,
+			form.gap_mm, form.origin_x_mm, form.origin_y_mm
+		];
+		if (!open) return;
+		if (timer) clearTimeout(timer);
+		timer = setTimeout(showPreview, 250);
+		return () => {
+			if (timer) clearTimeout(timer);
+		};
+	});
+
+	/** De waarden waarop echt gebrand wordt — na afronding. */
+	let snelheden = $derived(
+		preview ? [...new Set(preview.cells.map((c) => c.speed_mm_s))].sort((a, b) => a - b) : []
+	);
+	let vermogens = $derived(
+		preview ? [...new Set(preview.cells.map((c) => c.power_percent))].sort((a, b) => a - b) : []
+	);
+
 	async function generate() {
 		const grid = await send('/api/library/testgrids');
 		if (grid) {
@@ -139,6 +181,7 @@
 
 		{#if error}<p class="error" role="alert">{error}</p>{/if}
 
+		<div class="werkbank">
 		<div class="grid">
 			<label>
 				<span>Materiaal</span>
@@ -157,25 +200,35 @@
 					{/each}
 				</select>
 			</label>
-			<label><span>Dikte (mm)</span><input class="mono" bind:value={form.thickness_mm} /></label>
-			<label><span>Vakje (mm)</span><input class="mono" bind:value={form.cell_mm} /></label>
+			<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={form.thickness_mm} />
+			<NumberField label="Vakje" unit="mm" step={1} min={1} bind:value={form.cell_mm} />
 
-			<label><span>Snelheid van</span><input class="mono" bind:value={form.speed_min} /></label>
-			<label><span>tot (mm/s)</span><input class="mono" bind:value={form.speed_max} /></label>
-			<label><span>Vermogen van</span><input class="mono" bind:value={form.power_min} /></label>
-			<label><span>tot (%)</span><input class="mono" bind:value={form.power_max} /></label>
+			<NumberField label="Snelheid van" unit="mm/s" step={1} min={0} bind:value={form.speed_min} />
+			<NumberField label="tot" unit="mm/s" step={1} min={0} bind:value={form.speed_max} />
+			<NumberField label="Vermogen van" unit="%" step={5} min={0} max={100} bind:value={form.power_min} />
+			<NumberField label="tot" unit="%" step={5} min={0} max={100} bind:value={form.power_max} />
 
-			<label><span>Stappen snelheid</span><input class="mono" bind:value={form.speed_steps} /></label>
-			<label><span>Stappen vermogen</span><input class="mono" bind:value={form.power_steps} /></label>
-			<label><span>Start X (mm)</span><input class="mono" bind:value={form.origin_x_mm} /></label>
-			<label><span>Start Y (mm)</span><input class="mono" bind:value={form.origin_y_mm} /></label>
+			<NumberField label="Stappen snelheid" step={1} min={2} bind:value={form.speed_steps} />
+			<NumberField label="Stappen vermogen" step={1} min={2} bind:value={form.power_steps} />
+			<NumberField label="Start X" unit="mm" step={5} min={0} bind:value={form.origin_x_mm} />
+			<NumberField label="Start Y" unit="mm" step={5} min={0} bind:value={form.origin_y_mm} />
 		</div>
 
 		{#if preview}
-			<div class="preview">
+			<aside class="preview">
 				<div class="figures mono">
 					<span>{preview.cells.length} vakjes</span>
 					<span>{preview.plan.width_mm} × {preview.plan.height_mm} mm</span>
+				</div>
+				<!-- De waarden waarop je écht snijdt. Ze worden afgerond op nette
+				     stappen, en dat hoor je te zien vóór het hout eraan gaat. -->
+				<div class="reeks">
+					<span class="wat">rijen, mm/s</span>
+					{#each snelheden as v (v)}<span class="waarde mono">{v}</span>{/each}
+				</div>
+				<div class="reeks">
+					<span class="wat">kolommen, %</span>
+					{#each vermogens as v (v)}<span class="waarde mono">{v}</span>{/each}
 				</div>
 				<svg
 					viewBox="0 0 {preview.plan.width_mm} {preview.plan.height_mm}"
@@ -192,8 +245,9 @@
 						/>
 					{/each}
 				</svg>
-			</div>
+			</aside>
 		{/if}
+		</div>
 
 		{#if suggestedFrom !== null}
 			<p class="muted">
@@ -205,7 +259,6 @@
 
 		<div class="actions">
 			<button class="btn" disabled={busy} onclick={suggest}>Bereik voorstellen</button>
-			<button class="btn" disabled={busy} onclick={showPreview}>Voorbeeld</button>
 			<button class="btn primary" disabled={busy} onclick={generate}>
 				{busy ? 'Bezig…' : 'Genereren'}
 			</button>
@@ -237,12 +290,27 @@
 		margin: var(--space-3) 0;
 	}
 	.grid label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
-	input, select {
+	select {
 		font: inherit;
 		width: 100%;
 		padding: 4px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	.reeks {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-top: var(--space-2);
+	}
+	.reeks .wat { font-size: var(--text-xs); color: var(--text-2); min-width: 7em; }
+	.waarde {
+		font-size: var(--text-xs);
+		padding: 1px var(--space-2);
+		border-radius: var(--radius-dot);
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
@@ -259,7 +327,13 @@
 		color: var(--text-2);
 		margin-bottom: var(--space-2);
 	}
-	.preview svg { width: 100%; height: auto; display: block; }
+	/* Het hele bord in één blik. Een SVG met viewBox rekt zich anders op tot de
+	   volle breedte en duwt de knoppen uit beeld. */
+	.preview svg { height: 190px; width: 100%; display: block; }
+	/* Instellen en zien wat je instelt, naast elkaar. Onder 720px stapelt het;
+	   dan is er geen ruimte voor twee kolommen. */
+	.werkbank { display: grid; grid-template-columns: 1fr 260px; gap: var(--space-4); align-items: start; }
+	@media (max-width: 720px) { .werkbank { grid-template-columns: 1fr; } }
 	.preview rect { fill: var(--accent); }
 	.actions { display: flex; gap: var(--space-2); }
 	.btn {

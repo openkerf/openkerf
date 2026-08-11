@@ -50,7 +50,7 @@
 	{/if}
 
 	<div class="actions">
-		<a class="btn primary" href="/setup/type">Machine toevoegen</a>
+		<a class="btn primary" href="/setup/soort">Machine toevoegen</a>
 	</div>
 </section>
 

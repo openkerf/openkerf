@@ -1,5 +1,7 @@
 <script lang="ts">
 	import Dialog from './Dialog.svelte';
+	import GeneratorPreview from './GeneratorPreview.svelte';
+	import NumberField from './NumberField.svelte';
 
 	let {
 		open = $bindable(),
@@ -47,17 +49,57 @@
 	// De typen die python-barcode aankan en die op een laser zinnig zijn.
 	const BARCODES = ['code128', 'code39', 'ean13', 'ean8', 'upca', 'itf', 'issn'];
 
-	const TABS: { id: Tab; label: string; needsSelection: boolean }[] = [
-		{ id: 'grid', label: 'Raster', needsSelection: true },
-		{ id: 'radial', label: 'Cirkel', needsSelection: true },
-		{ id: 'polygon', label: 'Veelhoek', needsSelection: false },
-		{ id: 'box', label: 'Doos', needsSelection: false },
-		{ id: 'qrcode', label: 'QR-code', needsSelection: false },
-		{ id: 'barcode', label: 'Streepjescode', needsSelection: false },
-		{ id: 'arctext', label: 'Boogtekst', needsSelection: false }
+	// "Raster" heette hetzelfde als het testraster, en dat is iets heel anders.
+	// Herhalen zegt wat het doet.
+	const TABS: { id: Tab; label: string; needsSelection: boolean; icon: string }[] = [
+		{
+			id: 'grid',
+			label: 'Herhalen',
+			needsSelection: true,
+			icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z'
+		},
+		{
+			id: 'radial',
+			label: 'Cirkel',
+			needsSelection: true,
+			icon: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 4v3M20 12h-3M12 20v-3M4 12h3'
+		},
+		{ id: 'polygon', label: 'Veelhoek', needsSelection: false, icon: 'M12 3l8 6-3 10H7L4 9z' },
+		{
+			id: 'box',
+			label: 'Doos',
+			needsSelection: false,
+			icon: 'M3 8l9-5 9 5-9 5zM3 8v8l9 5 9-5V8'
+		},
+		{
+			id: 'qrcode',
+			label: 'QR-code',
+			needsSelection: false,
+			icon: 'M3.5 3.5h6v6h-6zM14.5 3.5h6v6h-6zM3.5 14.5h6v6h-6zM14.5 15h2v2h-2zM19 19h1.5v1.5H19'
+		},
+		{
+			id: 'barcode',
+			label: 'Streepjescode',
+			needsSelection: false,
+			icon: 'M4 5v14M7.5 5v14M10 5v14M14 5v14M17 5v14M20 5v14'
+		},
+		{
+			id: 'arctext',
+			label: 'Boogtekst',
+			needsSelection: false,
+			icon: 'M4 16a8 8 0 0 1 16 0M8 12l.8-2.4M12 10.6V8M16 12l-.8-2.4'
+		}
 	];
 
 	let current = $derived(TABS.find((t) => t.id === tab)!);
+	/** De velden van het zichtbare tabblad, voor de schets ernaast. */
+	let huidig = $derived(
+		(
+			{
+				grid, radial, polygon, box, qrcode: qr, barcode: bar, arctext: arc
+			} as Record<string, Record<string, unknown>>
+		)[tab] ?? {}
+	);
 	let blocked = $derived(current.needsSelection && !hasSelection);
 
 	let notice = $state<string | null>(null);
@@ -75,10 +117,13 @@
 	const n = (value: string) => Number(value);
 </script>
 
-<Dialog title="Generatoren" bind:open width="560px">
+<Dialog title="Generatoren" bind:open width="800px">
 	<div class="tabs">
 		{#each TABS as item (item.id)}
 			<button class="tab" aria-pressed={tab === item.id} onclick={() => { tab = item.id; error = null; }}>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d={item.icon} />
+				</svg>
 				{item.label}
 			</button>
 		{/each}
@@ -94,16 +139,18 @@
 		<p class="notice">{notice}</p>
 	{/if}
 
+	<div class="werkbank">
+	<div class="formulier">
 	{#if tab === 'grid'}
 		<p class="lead">
 			De selectie in rijen en kolommen herhalen. De afstand is de ruimte <em>tussen</em>
 			de vormen, want daar gaat de snede doorheen.
 		</p>
 		<div class="fields">
-			<label><span>Kolommen</span><input class="mono" type="number" min="1" bind:value={grid.columns} /></label>
-			<label><span>Rijen</span><input class="mono" type="number" min="1" bind:value={grid.rows} /></label>
-			<label><span>Ruimte X (mm)</span><input class="mono" type="number" step="0.5" bind:value={grid.gap_x_mm} /></label>
-			<label><span>Ruimte Y (mm)</span><input class="mono" type="number" step="0.5" bind:value={grid.gap_y_mm} /></label>
+			<NumberField label="Kolommen" step={1} min={1} bind:value={grid.columns} />
+			<NumberField label="Rijen" step={1} min={1} bind:value={grid.rows} />
+			<NumberField label="Ruimte X" unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
+			<NumberField label="Ruimte Y" unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run({
 			columns: n(grid.columns), rows: n(grid.rows),
@@ -114,8 +161,8 @@
 	{:else if tab === 'radial'}
 		<p class="lead">De selectie rond een middelpunt herhalen.</p>
 		<div class="fields">
-			<label><span>Aantal</span><input class="mono" type="number" min="2" bind:value={radial.repeats} /></label>
-			<label><span>Straal (mm)</span><input class="mono" type="number" step="1" bind:value={radial.radius_mm} /></label>
+			<NumberField label="Aantal" step={1} min={2} bind:value={radial.repeats} />
+			<NumberField label="Straal" unit="mm" step={1} bind:value={radial.radius_mm} />
 			<label class="check"><input type="checkbox" bind:checked={radial.rotate} /><span>Meedraaien</span></label>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run({
@@ -126,11 +173,11 @@
 			Een regelmatige veelhoek. Vul een binnenstraal in en het wordt een ster.
 		</p>
 		<div class="fields">
-			<label><span>Hoeken</span><input class="mono" type="number" min="3" bind:value={polygon.corners} /></label>
-			<label><span>Straal (mm)</span><input class="mono" type="number" step="1" bind:value={polygon.radius_mm} /></label>
-			<label><span>Binnenstraal (mm)</span><input class="mono" type="number" step="1" placeholder="leeg = veelhoek" bind:value={polygon.inner} /></label>
-			<label><span>Midden X (mm)</span><input class="mono" type="number" bind:value={polygon.cx_mm} /></label>
-			<label><span>Midden Y (mm)</span><input class="mono" type="number" bind:value={polygon.cy_mm} /></label>
+			<NumberField label="Hoeken" step={1} min={3} bind:value={polygon.corners} />
+			<NumberField label="Straal" unit="mm" step={1} bind:value={polygon.radius_mm} />
+			<NumberField label="Binnenstraal" unit="mm" step={1} bind:value={polygon.inner} />
+			<NumberField label="Midden X" unit="mm" step={1} bind:value={polygon.cx_mm} />
+			<NumberField label="Midden Y" unit="mm" step={1} bind:value={polygon.cy_mm} />
 		</div>
 		<button class="go" disabled={busy} onclick={() => run({
 			corners: n(polygon.corners), radius_mm: n(polygon.radius_mm),
@@ -139,20 +186,17 @@
 		})}>Tekenen</button>
 	{:else if tab === 'box'}
 		<p class="lead">
-			Een doos met vingerlassen, als losse panelen naast elkaar. De maten zijn de
-			buitenmaten van de doos; het uitgesneden paneel is aan elke kant één
-			materiaaldikte groter, dat zijn de tanden. De snijbreedte (kerf) wordt bij
-			de tanden opgeteld, want de laser haalt aan beide kanten van elke snede
-			materiaal weg. Past hij niet op één vel, dan komen de resterende panelen
-			op een nieuw vel te staan.
+			Losse panelen met vingerlassen. De maten zijn buitenmaten; de kerf wordt
+			bij de tanden opgeteld omdat de laser aan beide kanten materiaal
+			wegneemt. Past het niet op één vel, dan gaat de rest naar een volgend vel.
 		</p>
 		<div class="fields">
-			<label><span>Breedte (mm)</span><input class="mono" type="number" bind:value={box.width_mm} /></label>
-			<label><span>Diepte (mm)</span><input class="mono" type="number" bind:value={box.depth_mm} /></label>
-			<label><span>Hoogte (mm)</span><input class="mono" type="number" bind:value={box.height_mm} /></label>
-			<label><span>Materiaaldikte (mm)</span><input class="mono" type="number" step="0.1" bind:value={box.thickness_mm} /></label>
-			<label><span>Vinger (mm)</span><input class="mono" type="number" step="1" bind:value={box.finger_mm} /></label>
-			<label><span>Kerf (mm)</span><input class="mono" type="number" step="0.05" bind:value={box.kerf_mm} /></label>
+			<NumberField label="Breedte" unit="mm" step={1} bind:value={box.width_mm} />
+			<NumberField label="Diepte" unit="mm" step={1} bind:value={box.depth_mm} />
+			<NumberField label="Hoogte" unit="mm" step={1} bind:value={box.height_mm} />
+			<NumberField label="Materiaaldikte" unit="mm" step={0.1} bind:value={box.thickness_mm} />
+			<NumberField label="Vinger" unit="mm" step={1} bind:value={box.finger_mm} />
+			<NumberField label="Kerf" unit="mm" step={0.05} bind:value={box.kerf_mm} />
 			<label class="check"><input type="checkbox" bind:checked={box.lid} /><span>Met deksel</span></label>
 			<label class="check">
 				<input type="checkbox" bind:checked={box.spread} />
@@ -171,7 +215,7 @@
 		</p>
 		<div class="fields">
 			<label class="wide"><span>Inhoud</span><input type="text" placeholder="https://…" bind:value={qr.text} /></label>
-			<label><span>Formaat (mm)</span><input class="mono" type="number" step="1" bind:value={qr.size_mm} /></label>
+			<NumberField label="Formaat" unit="mm" step={1} bind:value={qr.size_mm} />
 		</div>
 		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run({
 			text: qr.text.trim(), size_mm: n(qr.size_mm)
@@ -192,8 +236,8 @@
 					{/each}
 				</select>
 			</label>
-			<label><span>Breedte (mm)</span><input class="mono" type="number" step="1" bind:value={bar.width_mm} /></label>
-			<label><span>Hoogte (mm)</span><input class="mono" type="number" step="1" bind:value={bar.height_mm} /></label>
+			<NumberField label="Breedte" unit="mm" step={1} bind:value={bar.width_mm} />
+			<NumberField label="Hoogte" unit="mm" step={1} bind:value={bar.height_mm} />
 		</div>
 		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run({
 			text: bar.text.trim(), kind: bar.kind,
@@ -207,10 +251,10 @@
 		</p>
 		<div class="fields">
 			<label class="wide"><span>Tekst</span><input type="text" placeholder="OPENKERF" bind:value={arc.text} /></label>
-			<label><span>Midden X (mm)</span><input class="mono" type="number" bind:value={arc.cx_mm} /></label>
-			<label><span>Midden Y (mm)</span><input class="mono" type="number" bind:value={arc.cy_mm} /></label>
-			<label><span>Straal (mm)</span><input class="mono" type="number" step="1" bind:value={arc.radius_mm} /></label>
-			<label><span>Letterhoogte (mm)</span><input class="mono" type="number" step="0.5" bind:value={arc.font_size_mm} /></label>
+			<NumberField label="Midden X" unit="mm" step={1} bind:value={arc.cx_mm} />
+			<NumberField label="Midden Y" unit="mm" step={1} bind:value={arc.cy_mm} />
+			<NumberField label="Straal" unit="mm" step={1} bind:value={arc.radius_mm} />
+			<NumberField label="Letterhoogte" unit="mm" step={0.5} bind:value={arc.font_size_mm} />
 			<label class="check"><input type="checkbox" bind:checked={arc.inside} /><span>Onderlangs</span></label>
 		</div>
 		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run({
@@ -218,25 +262,47 @@
 			radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm), inside: arc.inside
 		})}>Plaatsen</button>
 	{/if}
+	</div>
+
+	<!-- De vorm naast het formulier dat hem maakt. -->
+	<GeneratorPreview soort={tab} waarden={huidig}>
+		Schets, niet op schaal
+	</GeneratorPreview>
+	</div>
 </Dialog>
 
 <style>
-	.tabs { display: flex; gap: 4px; margin-bottom: var(--space-3); flex-wrap: wrap; }
-	.tab {
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border-radius: 999px;
-		border: 1px solid var(--line);
-		color: var(--text-2);
-		background: var(--surface-1);
+	/* Instellen links, zien wat je instelt rechts. Onder 720px stapelt het. */
+	.werkbank { display: grid; grid-template-columns: 1fr 210px; gap: var(--space-4); align-items: start; }
+	.formulier { min-width: 0; }
+	@media (max-width: 720px) { .werkbank { grid-template-columns: 1fr; } }
+
+	.tabs {
+		display: flex;
+		gap: 2px;
+		margin-bottom: var(--space-3);
+		flex-wrap: wrap;
+		border-bottom: 1px solid var(--line);
 	}
+	/* Tabbladen, geen pillen: dit is navigatie tussen formulieren. Met een
+	   icoon erboven herken je de doos zonder te lezen. */
+	.tab {
+		display: grid;
+		justify-items: center;
+		gap: 2px;
+		font-size: var(--text-xs);
+		padding: var(--space-2) var(--space-3) var(--space-2);
+		border: 0;
+		border-bottom: 2px solid transparent;
+		border-radius: 0;
+		color: var(--text-2);
+		background: none;
+	}
+	.tab:hover { color: var(--text-1); }
 	.tab[aria-pressed='true'] {
-		/* Accentkleur op een accenttint haalt geen 4,5:1; het accent zit in de
-		   rand, de tekst blijft leesbaar. */
-		border-color: var(--accent);
-		color: var(--text-1);
-		font-weight: 600;
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border-bottom-color: var(--accent);
+		color: var(--accent);
+		font-weight: 500;
 	}
 	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
 	.hint { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--warn); }

@@ -95,7 +95,8 @@ def test_generating_draws_a_square_and_an_operation_per_cell(kernel, client):
     # Nine squares plus the axis labels drawn beside them.
     drawn = {n.id for n in kernel.elements.elems()}
     assert {c["element_id"] for c in grid["cells"]} <= drawn
-    assert len(drawn) == 9 + BASE["speed_steps"] + BASE["power_steps"]
+    # Negen vakjes, de aslabels, plus het opschrift op het bord.
+    assert len(drawn) == 9 + BASE["speed_steps"] + BASE["power_steps"] + 1
 
     snapshot = DesignReader(kernel).snapshot()
     labels = {op["label"] for op in snapshot["operations"]}
@@ -218,8 +219,11 @@ def test_the_axes_are_labelled(kernel, client):
     labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"]
 
     assert labels, "there is a layer holding the axis labels"
-    # One per row plus one per column.
-    assert len(labels[0]["element_ids"]) == BASE["speed_steps"] + BASE["power_steps"]
+    # One per row, one per column, plus the caption on the board.
+    assert (
+        len(labels[0]["element_ids"])
+        == BASE["speed_steps"] + BASE["power_steps"] + 1
+    )
 
 
 def test_labels_sit_outside_the_grid(kernel, client):
@@ -496,3 +500,59 @@ def test_the_newest_grid_wins_a_shared_operation_id(client):
 
     assert len(marked) == len(second["cells"])
     assert {o["grid"]["grid_id"] for o in marked} == {second["id"]}
+
+
+def test_the_series_lands_on_values_a_person_would_type():
+    """
+    Een raster dat rijen snijdt op 11,667 mm/s is geen naslagwerk. Begin en eind
+    blijven exact; alleen de tussenstappen schuiven naar een net getal.
+    """
+    from openkerf_api.testgrid import _spread
+
+    reeks = _spread(5, 25, 4)
+
+    assert reeks[0] == 5 and reeks[-1] == 25
+    assert reeks == [5.0, 12.5, 17.5, 25.0]
+    assert all(round(v * 10) == v * 10 for v in reeks), reeks
+
+
+def test_a_narrow_range_keeps_its_steps_apart():
+    """
+    Afronden mag nooit twee identieke rijen opleveren: dan brand je twee keer
+    hetzelfde en heb je een kolom verspild.
+    """
+    from openkerf_api.testgrid import _spread
+
+    for lo, hi, stappen in ((10, 12, 4), (0.5, 2, 4), (100, 101, 5), (5, 25, 6)):
+        reeks = _spread(lo, hi, stappen)
+        assert len(set(reeks)) == stappen, (lo, hi, stappen, reeks)
+        assert all(reeks[i] < reeks[i + 1] for i in range(len(reeks) - 1)), reeks
+        assert reeks[0] == lo and reeks[-1] == hi
+
+
+def test_the_board_carries_a_caption(kernel, client):
+    """
+    Een gebrand raster zonder opschrift is over twee weken een raadselachtig
+    stuk hout. Materiaal, dikte, bewerking en datum horen erop.
+    """
+    material = client.post("/api/library/materials", json={"name": "Berkentriplex"}).json()
+    client.post(
+        "/api/library/testgrids",
+        json={**BASE, "material_id": material["id"], "thickness_mm": 3},
+    )
+
+    snapshot = DesignReader(kernel).snapshot()
+    perMm = snapshot["units_per_mm"]
+    labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"][0]
+    dozen = [
+        [v / perMm for v in e["bounds"]]
+        for e in snapshot["elements"]
+        if e["id"] in labels["element_ids"] and e["bounds"]
+    ]
+
+    # De tekst is omgezet naar geometrie, dus de letters zijn niet terug te
+    # lezen. Wat wel klopt: het opschrift staat bóven de kolomlabels en is
+    # breder dan één vakje — geen enkel aslabel is dat.
+    boven = [d for d in dozen if d[3] < BASE["origin_y_mm"] - 4]
+    assert len(boven) == 1, dozen
+    assert boven[0][2] - boven[0][0] > BASE["cell_mm"] * 2, boven

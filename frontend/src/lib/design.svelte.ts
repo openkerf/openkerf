@@ -222,18 +222,51 @@ export class DesignStore {
 	/**
 	 * Kleur per operatie: eigen kleur, anders een vaste laagkleur op volgorde.
 	 *
-	 * Let op: dit is de kleur van de *laagrij*, niet van het element op het
-	 * canvas. In MeerK40t is de relatie many-to-many — één element kan in
-	 * meerdere operaties zitten (de engine classificeert automatisch op kleur),
-	 * dus "de kleur van de laag waar dit element in zit" bestaat niet. Het
-	 * canvas tekent daarom op de eigen streekkleur van het element, net als de
-	 * scene van MeerK40t zelf.
+	 * De engine geeft soms een kleur met alfa mee (`#0000ff00`, volledig
+	 * doorzichtig) voor een operatie die nooit getekend werd. Die is als
+	 * laagkleur onbruikbaar — dan pakken we de palet-kleur op volgorde.
 	 */
 	colorFor(operationId: string | null): string {
 		const operations = this.operations;
 		const index = operations.findIndex((o) => o.id === operationId);
 		if (index < 0) return 'var(--text-2)';
-		return operations[index].color ?? LAYER_COLORS[index % LAYER_COLORS.length];
+		const eigen = operations[index].color;
+		const bruikbaar =
+			eigen && !(/^#[0-9a-f]{6}0{2}$/i.test(eigen.trim()));
+		return bruikbaar ? eigen : LAYER_COLORS[index % LAYER_COLORS.length];
+	}
+
+	/**
+	 * Hoe een element op het bed getekend wordt.
+	 *
+	 * In MeerK40t kan één element in meerdere operaties zitten (de engine
+	 * classificeert automatisch op kleur). "De laag" bestaat dus strikt genomen
+	 * niet — daarom telt de bovenste, net als bij overlappende lagen in elk
+	 * ander tekenprogramma.
+	 *
+	 * Een element zonder laag wordt gestippeld grijs: dat is geen ontbrekende
+	 * kleur maar een waarschuwing. Zo'n vorm wordt niet gebrand.
+	 */
+	strokeFor(element: { operation_ids?: string[]; operation_id?: string | null }): {
+		color: string;
+		dashed: boolean;
+	} {
+		const ids = element.operation_ids?.length
+			? element.operation_ids
+			: element.operation_id
+				? [element.operation_id]
+				: [];
+		if (!ids.length) return { color: 'var(--text-2)', dashed: true };
+		const volgorde = this.operations;
+		// De bovenste laag is de eerste in de boom, niet de eerste in de lijst
+		// die het element toevallig meekreeg.
+		let beste = -1;
+		for (const id of ids) {
+			const i = volgorde.findIndex((o) => o.id === id);
+			if (i >= 0 && (beste < 0 || i < beste)) beste = i;
+		}
+		if (beste < 0) return { color: 'var(--text-2)', dashed: true };
+		return { color: this.colorFor(volgorde[beste].id), dashed: false };
 	}
 
 	/** Loopt op bij elke herlaadslag; het canvas hangt hem aan afbeeldings-URL's

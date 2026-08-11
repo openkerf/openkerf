@@ -53,6 +53,12 @@
 	let telefoon = $derived(breedte < 768);
 	let tablet = $derived(breedte >= 768 && breedte < 1200);
 	let paneelOpen = $state(true);
+	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
+	// waar je hem zoekt.
+	let muisMm = $state<{ x: number; y: number } | null>(null);
+	/** Materiaal waarmee het testrastervenster opent, als je er vanuit de
+	    bibliotheek naartoe springt. */
+	let gridMateriaal = $state<number | null>(null);
 
 	// Het wauw-moment. Alleen op de flank van niet-draaiend naar draaiend, en
 	// daarna weer weg — anders is het decoratie in plaats van een bericht.
@@ -481,6 +487,7 @@
 			}}
 		/>
 		<Canvas
+			onPointerMm={(punt) => (muisMm = punt)}
 			{device}
 			{design}
 			{edits}
@@ -647,7 +654,8 @@
 					onUnlock={async () => {
 						await edits.unlock();
 					}}
-					onFocus={async (mm) => {
+					profile={library.activeMachine}
+		onFocus={async (mm) => {
 						await post('/api/machine/focus', { distance_mm: mm });
 					}}
 				/>
@@ -695,6 +703,7 @@
 {/if}
 
 <StatusBar
+	pointerMm={muisMm}
 	{device}
 	state={machine}
 	job={status.activeJob}
@@ -811,11 +820,18 @@
 		operations={design.operations}
 		{canEdit}
 		onApplied={() => design.load()}
+		token={token()}
+		onMakeGrid={(id) => {
+			// Vanuit het materiaal naar het raster: dat is waar de vraag ontstaat.
+			libraryOpen = false;
+			gridMateriaal = id;
+			gridOpen = true;
+		}}
 	/>
 </Dialog>
 
-<Dialog title="Testraster" bind:open={gridOpen} width="640px">
-	<TestGrid {library} {canEdit} onGenerated={() => design.load()} />
+<Dialog title="Testraster" bind:open={gridOpen} width="860px">
+	<TestGrid {library} {canEdit} materialId={gridMateriaal} onGenerated={() => design.load()} />
 	<TestGridResult {library} {canEdit} />
 </Dialog>
 

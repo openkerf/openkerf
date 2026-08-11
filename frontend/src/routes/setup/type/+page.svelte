@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { kindOf, KINDS } from '$lib/machines.svelte';
 	import { createStore } from '$lib/setup.svelte';
 
 	const store = createStore();
@@ -7,8 +9,17 @@
 
 	onMount(() => store.loadCatalog());
 
+	// De gekozen soort staat in de URL: deze stap moet een verversing en de
+	// terugknop overleven.
+	let soort = $derived($page.url.searchParams.get('soort'));
+	let gekozenSoort = $derived(KINDS.find((k) => k.id === soort) ?? null);
+
 	let families = $derived(
 		store.catalog
+			.filter(
+				(family) =>
+					!soort || kindOf(family.family, family.machines.map((m) => m.key)) === soort
+			)
 			.map((family) => ({
 				...family,
 				machines: family.machines.filter((machine) =>
@@ -26,10 +37,15 @@
 <section class="setup">
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
-	<h1>Wat voor machine is het?</h1>
+	<h1>{gekozenSoort ? `Welke ${gekozenSoort.label}?` : 'Welk model?'}</h1>
 	<p class="muted">
-		Deze lijst komt uit MeerK40t zelf. Weet je het merk niet? Kies de familie die past bij je
-		controller — de instellingen kun je hierna nog aanpassen.
+		Deze lijst komt uit MeerK40t zelf.
+		{#if gekozenSoort}
+			Alleen de modellen die bij je keuze horen — <a href="/setup/type">toon alles</a>.
+		{:else}
+			Weet je het merk niet? Kies de familie die past bij je controller.
+		{/if}
+		De instellingen kun je hierna nog aanpassen.
 	</p>
 	<input class="search" type="search" bind:value={search} placeholder="Zoek op merk of type…" />
 
@@ -88,10 +104,15 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 		gap: var(--space-2);
+		/* Gelijke hoogte per rij: de teksten komen uit upstream en lopen van
+		   twee tot acht regels, en dat leest als een raster met fouten erin. */
+		align-items: stretch;
 	}
 	.type {
 		display: grid;
 		gap: 2px;
+		height: 100%;
+		align-content: start;
 		padding: 8px 12px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -106,6 +127,12 @@
 	}
 	.type .muted {
 		font-size: var(--text-xs);
+		/* Drie regels is genoeg om te herkennen; de rest is upstream-proza. */
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 	}
 	.name {
 		font-weight: 500;

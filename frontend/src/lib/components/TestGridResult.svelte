@@ -189,6 +189,18 @@
 								}
 							}}
 						/>
+						{#if picked.includes(key(cell))}
+							<!-- Vinkje in de hoek. De maten staan in millimeters, dus
+							     relatief aan het vakje — een vaste pixelmaat zou hier
+							     vijftien keer te groot uitvallen. -->
+							<path
+								class="vink"
+								d="M{cell.x_mm - grid.origin_x_mm + cell.width_mm * 0.58} {cell.y_mm - grid.origin_y_mm + cell.height_mm * 0.22}
+								   l{cell.width_mm * 0.09} {cell.height_mm * 0.1}
+								   l{cell.width_mm * 0.18} -{cell.height_mm * 0.19}"
+								fill="none"
+							/>
+						{/if}
 					</g>
 				{/each}
 			</svg>
@@ -270,21 +282,40 @@
 		width: 100%;
 		height: 100%;
 	}
+	/* Deze SVG meet in millimeters en wordt naar ~600 pixels uitgerekt: een
+	   factor vijftien. De rand is daartegen beschermd, maar de focusring van de
+	   browser was dat niet — die werd een blauwe blob van 160 pixels om een
+	   vakje van 110. Zie DESIGN-SYSTEM, "SVG die in millimeters meet". */
 	.cell rect {
 		fill: transparent;
 		stroke: color-mix(in srgb, var(--accent) 55%, transparent);
 		stroke-width: 1;
 		vector-effect: non-scaling-stroke;
 		cursor: pointer;
+		outline: none;
+	}
+	/* Zelf getekend, met een rand die niet meeschaalt. */
+	.cell rect:focus-visible {
+		stroke: var(--accent);
+		stroke-width: 3;
+		stroke-dasharray: 4 3;
 	}
 	.cell.used rect {
 		stroke: var(--ok);
 		stroke-dasharray: 3 2;
 	}
 	.cell.picked rect {
-		fill: color-mix(in srgb, var(--accent) 25%, transparent);
+		fill: color-mix(in srgb, var(--accent) 18%, transparent);
 		stroke: var(--accent);
 		stroke-width: 2;
+	}
+	.vink {
+		stroke: var(--accent);
+		stroke-width: 2.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		vector-effect: non-scaling-stroke;
+		pointer-events: none;
 	}
 	.hint {
 		margin: var(--space-2) 0 0;

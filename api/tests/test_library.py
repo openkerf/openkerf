@@ -340,3 +340,60 @@ def test_suggestion_prefers_the_same_thickness(library):
 
     assert thin["based_on"] == 1
     assert thin["speed_max"] < 30
+
+
+def test_presets_follow_the_active_machine(client):
+    """
+    Een preset is een uitspraak over déze laser op dit materiaal. Standaard
+    toont de bibliotheek dus wat bij de actieve machine hoort.
+    """
+    profiel = client.get("/api/library/active-machine").json()
+    assert profiel["device_path"], "het profiel hangt aan een device van de engine"
+
+    materiaal = client.post("/api/library/materials", json={"name": "Berk"}).json()
+    eigen = client.post(
+        "/api/library/presets",
+        json={
+            "material_id": materiaal["id"],
+            "operation": "snijden",
+            "speed_mm_s": 12,
+            "power_percent": 70,
+        },
+    ).json()
+    assert eigen["machine_id"] == profiel["id"], "krijgt de actieve machine mee"
+
+    # Eentje van een andere machine.
+    ander = client.post(
+        "/api/library/machines", json={"name": "Ruida 60W"}
+    ).json()
+    client.post(
+        "/api/library/presets",
+        json={
+            "material_id": materiaal["id"],
+            "operation": "snijden",
+            "speed_mm_s": 30,
+            "power_percent": 55,
+            "machine_id": ander["id"],
+        },
+    )
+
+    van_ons = client.get("/api/library/presets").json()
+    alles = client.get("/api/library/presets?all_machines=true").json()
+
+    assert [p["id"] for p in van_ons] == [eigen["id"]]
+    assert len(alles) == 2
+
+
+def test_a_machine_can_declare_a_z_axis_and_autofocus(client):
+    """Wat de machine kán, bepaalt wat er in de jog verschijnt."""
+    profiel = client.get("/api/library/active-machine").json()
+    assert profiel["has_z"] == 0 and profiel["has_autofocus"] == 0
+
+    bijgewerkt = client.patch(
+        f"/api/library/machines/{profiel['id']}",
+        json={"has_z": True, "has_autofocus": True},
+    ).json()
+
+    assert bijgewerkt["has_z"] == 1
+    assert bijgewerkt["has_autofocus"] == 1
+    assert client.get("/api/library/active-machine").json()["has_z"] == 1
