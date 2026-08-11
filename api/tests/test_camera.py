@@ -9,6 +9,8 @@ frame ophalen, ijken, corrigeren — wordt wél doorlopen.
 
 import time
 
+import platform
+
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -218,6 +220,11 @@ def test_the_failure_says_what_to_do_about_it(camera, monkeypatch):
     assert "geen enkele camera" in zonder
     assert "MacBook Pro-camera" in met
     assert zonder != met
+    if platform.system() == "Darwin":
+        # Bij Camera in Systeeminstellingen zit geen +-knop, dus "vink je
+        # terminal aan" is een doodlopend advies. Het commando dat het venster
+        # uitlokt hoort erbij.
+        assert "cv2.VideoCapture(0)" in met
 
 
 def test_opencvs_broken_permission_request_is_skipped():

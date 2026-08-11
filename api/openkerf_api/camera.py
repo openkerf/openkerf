@@ -153,14 +153,19 @@ class Camera:
             )
         names = ", ".join(found)
         if platform.system() == "Darwin":
+            # Bij Camera in Systeeminstellingen zit géén +-knop: alleen
+            # programma's die ooit toestemming vroegen komen in die lijst. Onze
+            # engine kan dat niet vragen (het verzoek moet van de hoofdthread
+            # komen), dus de gebruiker moet het één keer zelf uitlokken.
             return (
-                f"{base} Er is wel een camera ({names}), dus dit is bijna zeker "
-                "een toestemmingskwestie: macOS geeft camera-toegang per "
-                "programma, en het programma dat de engine startte — je terminal "
-                "— moet aangevinkt staan in Systeeminstellingen › Privacy en "
-                "beveiliging › Camera. Daarna de engine opnieuw starten; het "
-                "toestemmingsvenster verschijnt hier niet vanzelf, omdat de "
-                "camera in een achtergrondthread geopend wordt."
+                f"{base} Er is wel een camera ({names}), dus dit is een "
+                "toestemmingskwestie. macOS laat je een programma niet zelf aan "
+                "de cameralijst toevoegen — het moet er één keer om vragen. "
+                "Draai daarom in je eigen Terminal:\n\n"
+                "    python3 -c \"import cv2; cv2.VideoCapture(0)\"\n\n"
+                "Dan verschijnt het toestemmingsvenster en staat je terminal "
+                "daarna in Systeeminstellingen › Privacy en beveiliging › "
+                "Camera. Start de engine vervolgens vanuit diezelfde terminal."
             )
         return (
             f"{base} Er is wel een camera ({names}); mogelijk is hij in gebruik "

@@ -621,10 +621,15 @@
 				{camera.state.calibrated ? 'Opnieuw ijken' : 'IJken'}
 			</button>
 		{/if}
-		{#if camera.error}
-			<span class="camerror">{camera.error}</span>
-		{/if}
 	</div>
+	{#if camera.error}
+		<!-- Een lange melding hoort niet in een pilvormige balk: die wordt dan een
+		     blob. Eigen kader, leesbare regelbreedte, en zelf weg te klikken. -->
+		<div class="camerror" role="alert">
+			<p class="wrap">{camera.error}</p>
+			<button aria-label="Melding sluiten" onclick={() => (camera.error = null)}>×</button>
+		</div>
+	{/if}
 {/if}
 
 <StatusBar
@@ -786,7 +791,40 @@
 	.cam:disabled { opacity: 0.45; cursor: not-allowed; }
 	.cam[aria-pressed='true'] { color: var(--accent); }
 	.camstrip input[type='range'] { width: 90px; }
-	.camerror { font-size: 10px; color: var(--danger); max-width: 220px; }
+	.camerror {
+		position: absolute;
+		left: calc(var(--rail-width) + var(--space-4));
+		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px);
+		z-index: 5;
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
+		max-width: 42ch;
+		padding: var(--space-3);
+		border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
+		border-radius: var(--radius-card);
+		background: var(--surface-1);
+		box-shadow: var(--shadow-float);
+	}
+	.camerror p {
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: 1.5;
+		color: var(--text-1);
+	}
+	/* De melding bevat een commando op een eigen regel; dat mag niet als één
+	   lange lap tekst aan elkaar geplakt worden. */
+	.camerror .wrap { white-space: pre-wrap; }
+	.camerror button {
+		flex: none;
+		width: 20px;
+		height: 20px;
+		border-radius: var(--radius-field);
+		color: var(--text-2);
+		font-size: 15px;
+		line-height: 1;
+	}
+	.camerror button:hover { background: var(--surface-2); color: var(--text-1); }
 
 	.main {
 		flex: 1;
