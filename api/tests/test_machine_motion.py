@@ -123,3 +123,29 @@ def test_focus_is_only_offered_when_the_device_knows_it(motion):
     if not caps["focus"]:
         with pytest.raises(DesignError, match="focusz"):
             motion.focus(2)
+
+
+def test_the_frame_traces_the_work(client):
+    """
+    Kader tonen is de laatste controle vóór je brandt: past het, ligt het recht,
+    zit de klem in de weg. De laser blijft uit — er wordt alleen bewogen.
+    """
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 20, "y_mm": 30, "width_mm": 60, "height_mm": 40},
+    )
+
+    response = client.post("/api/machine/frame")
+
+    assert response.status_code == 200
+    # Vier hoeken plus terug naar het begin, zodat je de ronde ziet sluiten.
+    assert response.json()["corners"] == 5
+
+
+def test_an_empty_bed_has_nothing_to_frame(client):
+    client.post("/api/design/clear")
+
+    response = client.post("/api/machine/frame")
+
+    assert response.status_code == 409
+    assert "niets" in response.json()["detail"].lower()

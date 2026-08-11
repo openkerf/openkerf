@@ -459,6 +459,14 @@
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
 	onOpenProject={openProject}
+	canFrame={(design.elements?.length ?? 0) > 0 &&
+		(control.capabilities?.motion?.move ?? false) &&
+		!control.needsToken}
+	onFrame={() => {
+		// Geen dialoog: dit is een controlebeweging, geen onomkeerbare stap.
+		// Via de controller, zodat een klagende machine in beeld komt.
+		control.frame();
+	}}
 	onToggleTheme={toggleTheme}
 />
 

@@ -606,6 +606,28 @@ class ApiServer:
             """Scherpstellen: de kop hoger of lager. Alleen als het apparaat het kent."""
             return manage(self.motion.focus, body.get("distance_mm"))
 
+        @app.post("/api/machine/frame", dependencies=write)
+        def frame_design(body: dict | None = None):
+            """
+            De kop langs de omtrek van het werk sturen, zonder te branden.
+
+            Zonder maten in het verzoek pakt hij de omhullende rechthoek van wat
+            er nu op het bed ligt — dat is wat je wilt controleren.
+            """
+            def run():
+                velden = body or {}
+                if velden.get("width_mm"):
+                    return self.motion.frame(
+                        velden.get("x_mm"), velden.get("y_mm"),
+                        velden.get("width_mm"), velden.get("height_mm"),
+                    )
+                doos = self.design.bounds_mm()
+                if doos is None:
+                    raise DesignError("Er ligt niets op het bed om te omkaderen.")
+                return self.motion.frame(*doos)
+
+            return manage(run)
+
         @app.post("/api/machine/unlock", dependencies=write)
         def machine_unlock():
             return manage(self.motion.unlock)

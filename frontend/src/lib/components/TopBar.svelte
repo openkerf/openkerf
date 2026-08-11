@@ -10,6 +10,8 @@
 		canEdit = false,
 		onStart,
 		onStop,
+		onFrame,
+		canFrame = false,
 		onOpenFile,
 		onOpenProject,
 		onToggleTheme
@@ -21,6 +23,9 @@
 		canEdit?: boolean;
 		onStart: () => void;
 		onStop: () => void;
+		onFrame?: () => void;
+		/** Er ligt iets op het bed én deze machine kan bewegen. */
+		canFrame?: boolean;
 		onOpenFile?: (file: File) => void;
 		onOpenProject?: (file: File) => void;
 		onToggleTheme: () => void;
@@ -44,25 +49,9 @@
 	<div class="spacer"></div>
 
 	<!-- Openen hoort naast opslaan: in de Job-tab vindt niemand het. -->
-	<label class="btn file" title="Ontwerp openen">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
-		<span class="btn-label">Openen</span>
-		<input
-			type="file"
-			aria-label="Bestand kiezen"
-			accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
-			onchange={(e) => {
-				const input = e.currentTarget as HTMLInputElement;
-				const file = input.files?.[0];
-				input.value = '';
-				if (file) onOpenFile?.(file);
-			}}
-		/>
-	</label>
-
 	<label class="btn file" title="Project openen (ontwerp + bibliotheek)">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
-		<span class="btn-label">Project</span>
+		<span class="btn-label">Project openen</span>
 		<input
 			type="file"
 			aria-label="Bestand kiezen"
@@ -80,15 +69,38 @@
 		<span class="btn-label">Project opslaan</span>
 	</a>
 
+	<span class="scheiding" aria-hidden="true"></span>
+	<label class="btn file" title="Bestand in dit vel importeren — SVG, DXF, RD, G-code of een afbeelding">
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
+		<span class="btn-label">Importeren</span>
+		<input
+			type="file"
+			aria-label="Bestand kiezen"
+			accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
+			onchange={(e) => {
+				const input = e.currentTarget as HTMLInputElement;
+				const file = input.files?.[0];
+				input.value = '';
+				if (file) onOpenFile?.(file);
+			}}
+		/>
+	</label>
+
 	<!-- Opslaan als SVG: MeerK40t's eigen schrijver, dus operaties komen bij
 	     terugladen weer mee. -->
-	<a class="btn" href="/api/design/export.svg" download="ontwerp.svg" title="Ontwerp opslaan">
+	<a class="btn" href="/api/design/export.svg" download="ontwerp.svg" title="Dit vel opslaan als SVG">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
-		<span class="btn-label">Opslaan</span>
+		<span class="btn-label">Exporteren</span>
 	</a>
 
-	<!-- Kader tonen beweegt de kop: dat is fase 3, niet fase 2. -->
-	<button class="btn" disabled title="Beschikbaar in fase 3">
+	<!-- De laatste controle vóór je brandt: past het, ligt het recht, zit de
+	     klem in de weg. De laser blijft uit. -->
+	<button
+		class="btn"
+		disabled={!canFrame}
+		title={canFrame ? 'De kop langs de omtrek van je werk sturen, zonder te branden' : 'Er ligt niets op het bed, of deze machine kan niet bewegen'}
+		onclick={onFrame}
+	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
 		<span class="btn-label">Kader tonen</span>
 	</button>
@@ -134,6 +146,14 @@
 		   vierkantje zonder tekst is geen noodstop. */
 		.topbar :global(.btn-label:not(.blijft)) { display: none; }
 		.machine .muted { display: none; }
+	}
+	/* Het project en de losse bestanden zijn twee soorten handelingen; een
+	   haarlijn zegt dat zonder woorden. */
+	.scheiding {
+		width: 1px;
+		align-self: stretch;
+		margin: 8px 4px;
+		background: var(--line);
 	}
 	.brand {
 		display: flex;

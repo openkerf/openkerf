@@ -211,12 +211,29 @@
 			<!-- Omgekeerde T, zoals de pijltjes op een toetsenbord: ↑ boven ↓,
 			     met ← en → ernaast. Home staat ernaast en niet in het midden,
 			     want dat is geen richting. -->
-			<div class="pad">
+			<div class="pad" class:metz={control.capabilities?.motion?.focus}>
 				<button class="jog up" aria-label="Naar boven" disabled={running} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
 				<button class="jog left" aria-label="Naar links" disabled={running} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
 				<button class="jog down" aria-label="Naar beneden" disabled={running} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
 				<button class="jog right" aria-label="Naar rechts" disabled={running} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
 				<button class="jog home" disabled={running} title={movingBlocked} onclick={() => onHome?.()}>Home</button>
+				{#if control.capabilities?.motion?.focus}
+					<!-- De Z-as staat in dezelfde pad als X en Y: het is dezelfde
+					     handeling met een derde richting, en hij volgt dezelfde
+					     stapgrootte. -->
+					<button
+						class="jog zup"
+						disabled={running}
+						title={movingBlocked ?? `Kop ${step} mm omhoog`}
+						onclick={() => onFocus?.(-step)}
+					>Z&nbsp;↑</button>
+					<button
+						class="jog zdown"
+						disabled={running}
+						title={movingBlocked ?? `Kop ${step} mm omlaag`}
+						onclick={() => onFocus?.(step)}
+					>Z&nbsp;↓</button>
+				{/if}
 			</div>
 			<div class="steps">
 				<Segmented
@@ -227,28 +244,7 @@
 				/>
 				<button class="rot" onclick={() => onUnlock?.()}>Ontgrendelen</button>
 			</div>
-			{#if control.capabilities?.motion?.focus}
-				<!-- Z-as: dagelijks werk zodra de materiaaldikte verandert. Alleen
-				     zichtbaar als het apparaat het kent — de Ruida wel, een
-				     K40-bord niet. De stapgrootte is dezelfde als voor X en Y:
-				     één balk om te onthouden. -->
-				<div class="focus">
-					<span class="rot-label">Z-as (scherpstellen)</span>
-					<button
-						class="zknop"
-						disabled={running}
-						title={movingBlocked ?? `Kop ${step} mm omhoog`}
-						onclick={() => onFocus?.(-step)}
-					>↑ Z</button>
-					<button
-						class="zknop"
-						disabled={running}
-						title={movingBlocked ?? `Kop ${step} mm omlaag`}
-						onclick={() => onFocus?.(step)}
-					>↓ Z</button>
-					<span class="stapje mono">{step} mm</span>
-				</div>
-			{:else if profile?.has_z}
+			{#if !control.capabilities?.motion?.focus && profile?.has_z}
 				<!-- Het profiel zegt dat deze machine een Z-as heeft, maar de
 				     driver van de engine kent er geen commando voor. Dat is geen
 				     ontbrekende knop maar ontbrekende ondersteuning; zeg dat. -->
@@ -261,12 +257,8 @@
 			{#if profile?.has_autofocus}
 				<!-- MeerK40t kent geen commando om een autofocus te starten. Een
 				     knop die in plaats daarvan iets ánders doet, is erger dan geen
-				     knop — dus zeggen we waar hij wél zit. -->
-				<p class="hint">
-					Deze machine heeft autofocus. De engine kan hem niet starten;
-					gebruik de knop op de machine zelf, dan klopt de Z-hoogte hierboven
-					weer met het werkstuk.
-				</p>
+				     knop — dus zeggen we waar hij wél zit, in één zin. -->
+				<p class="hint">Autofocus start je op de machine zelf.</p>
 			{/if}
 		</div>
 	{/if}
@@ -417,6 +409,8 @@
 	}
 	.pad {
 		display: grid;
+		/* Vier kolommen; de vijfde bestaat alleen als er een Z-as is, anders
+		   staat er een lege kolom ruimte in te nemen. */
 		grid-template-columns: repeat(4, 40px);
 		grid-template-rows: repeat(2, 34px);
 		gap: 4px;
@@ -429,7 +423,11 @@
 	.pad .down { grid-area: 2 / 2; }
 	.pad .right { grid-area: 2 / 3; }
 	.pad .home { grid-area: 1 / 4 / 3 / 5; }
-	.focus { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+	.pad.metz { grid-template-columns: repeat(5, 40px); }
+	.pad .zup { grid-area: 1 / 5; }
+	.pad .zdown { grid-area: 2 / 5; }
+	/* De Z-knoppen dragen een letter én een pijl; dat past niet op 15px. */
+	.pad .zup, .pad .zdown { font-size: var(--text-xs); }
 	.jog {
 		padding: 8px 0;
 		border: 1px solid var(--line);
@@ -447,16 +445,6 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
-	.zknop {
-		min-width: 56px;
-		padding: var(--space-2) var(--space-3);
-		font-size: var(--text-xs);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-	}
-	.zknop:hover:not(:disabled) { background: var(--surface-2); }
-	.stapje { font-size: var(--text-xs); color: var(--text-2); }
 	.hint {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);

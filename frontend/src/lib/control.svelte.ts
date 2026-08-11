@@ -72,6 +72,37 @@ export class Controller {
 		}
 	}
 
+	/**
+	 * De kop langs de omtrek van het werk sturen. Geen laser, alleen beweging.
+	 *
+	 * De machine kan melden dat hij nog bezig is; dat komt hier in `error`
+	 * terecht, want anders denk je het kader gezien te hebben terwijl er een
+	 * hoek ontbrak.
+	 */
+	async frame() {
+		this.busy = 'frame';
+		this.error = null;
+		try {
+			const response = await fetch('/api/machine/frame', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', ...this.#headers() },
+				body: '{}'
+			});
+			if (!response.ok) {
+				this.error = await describeFailure(response);
+				return false;
+			}
+			const uitslag = await response.json();
+			if (uitslag?.notice) this.error = uitslag.notice;
+			return true;
+		} catch (e) {
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return false;
+		} finally {
+			this.busy = null;
+		}
+	}
+
 	/** Wordt bij een geslaagde start aangeroepen — het wauw-moment hangt hieraan. */
 	onStarted: (() => void) | null = null;
 

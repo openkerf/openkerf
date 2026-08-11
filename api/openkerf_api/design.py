@@ -247,6 +247,32 @@ class DesignReader:
     def elements(self):
         return self.kernel.elements
 
+    def bounds_mm(self):
+        """
+        De omhullende rechthoek van alles wat op het bed ligt, in millimeters.
+
+        `None` als er niets ligt. Verborgen elementen tellen niet mee: die
+        worden ook niet gebrand, dus ze horen niet in het kader.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        x0 = y0 = float("inf")
+        x1 = y1 = float("-inf")
+        for node in self.kernel.elements.elems():
+            if getattr(node, "hidden", False) or not getattr(node, "bounds", None):
+                continue
+            a, b, c, d = node.bounds
+            x0, y0 = min(x0, a), min(y0, b)
+            x1, y1 = max(x1, c), max(y1, d)
+        if x0 == float("inf"):
+            return None
+        return (
+            x0 / UNITS_PER_MM,
+            y0 / UNITS_PER_MM,
+            (x1 - x0) / UNITS_PER_MM,
+            (y1 - y0) / UNITS_PER_MM,
+        )
+
     def snapshot(self) -> dict:
         # Give every node a stable identifier. The engine's own mechanism:
         # existing ids are kept, missing ones get "meerk40t:N", duplicates are
