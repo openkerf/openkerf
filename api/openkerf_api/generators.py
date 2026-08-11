@@ -24,10 +24,12 @@ from .edits import DesignError, _finite, _positive
 
 
 class Generators:
-    def __init__(self, kernel, runner, drawing=None):
+    def __init__(self, kernel, runner, drawing=None, sheets=None):
         self.kernel = kernel
         self.runner = runner
         self.drawing = drawing
+        # Voor een doos die niet op één vel past; zie box().
+        self.sheets = sheets
 
     @property
     def elements(self):
@@ -284,6 +286,7 @@ class Generators:
         kerf_mm=0.0,
         gap_mm=5.0,
         lid=True,
+        spread=True,
     ) -> dict:
         """
         Panelen met vingerlassen, naast elkaar gelegd om te snijden.
@@ -329,54 +332,62 @@ class Generators:
         # Op het bed leggen in rijen, niet op één lange rij: zes panelen naast
         # elkaar zijn zo een meter breed, en wat buiten het bed valt kun je niet
         # meer aanwijzen om het terug te halen.
-        bed_width, bed_height = self._bed()
+        bed_width, bed_height = self._surface()
         widest = max(
             max(px for px, _ in points) - min(px for px, _ in points)
             for _, points in panels
         )
         if widest > bed_width:
             raise DesignError(
-                f"Het breedste paneel is {widest:.0f} mm en past niet op een bed "
+                f"Het breedste paneel is {widest:.0f} mm en past niet op een vel "
                 f"van {bed_width:.0f} mm. Kies kleinere buitenmaten."
             )
 
         # Eerst uitrekenen waar alles komt, dan pas tekenen. Anders staat er een
-        # halve doos buiten het bed voordat je weet dat hij niet past.
-        placed, x, y, shelf = [], gap, gap, 0.0
-        for name, points in panels:
-            span = max(px for px, _ in points) - min(px for px, _ in points)
-            high = max(py for _, py in points) - min(py for _, py in points)
-            if x > gap and x + span > bed_width - gap:
-                x = gap
-                y += shelf + gap
-                shelf = 0.0
-            placed.append((name, points, x, y))
-            x += span + gap
-            shelf = max(shelf, high)
+        # halve doos buiten het vel voordat je weet dat hij niet past.
+        pages = _lay_out(panels, bed_width, bed_height, gap)
 
-        needed = y + shelf + gap
-        if needed > bed_height:
+        if len(pages) > 1 and not (spread and self.sheets):
             raise DesignError(
-                f"Deze doos heeft {needed:.0f} mm hoogte nodig op het bed en dat "
-                f"is er {bed_height:.0f} mm. Kies kleinere maten, laat de deksel "
-                "weg, of snijd hem in twee keer."
+                f"Deze doos past niet op één vel van {bed_width:.0f} x "
+                f"{bed_height:.0f} mm; er zijn er {len(pages)} nodig. Zet "
+                "'verdelen over vellen' aan, of kies kleinere maten."
             )
 
+        started_on = self.sheets.state()["active"] if self.sheets else None
         ids = []
-        with self.elements.undoscope("Doos"):
-            for name, points, at_x, at_y in placed:
-                ids.append(
-                    self._add_polygon(
+        for index, page in enumerate(pages):
+            if index:
+                # Volgend vel, even groot als dit: dan klopt de indeling met wat
+                # er berekend is.
+                self.sheets.add(
+                    name=f"Doos {index + 1}",
+                    width_mm=bed_width,
+                    height_mm=bed_height,
+                )
+                self.sheets.activate(self.sheets.state()["sheets"][-1]["id"])
+            with self.elements.undoscope("Doos"):
+                for name, points, at_x, at_y in page:
+                    node = self._add_polygon(
                         [(px + at_x, py + at_y) for px, py in points],
                         f"Doos — {name}",
                     )
-                )
-            self.elements.validate_ids()
-        self._refresh()
+                    if index == 0:
+                        ids.append(node)
+                self.elements.validate_ids()
+            self._refresh()
+
+        if len(pages) > 1 and self.sheets:
+            # Terug naar waar de gebruiker was: het canvas onder je vandaan
+            # laten schuiven is verwarrender dan zelf doorklikken.
+            self.sheets.activate(started_on)
+            self._refresh()
+
         return {
             "generator": "box",
             "ids": [n.id for n in ids if n.id],
             "panels": [name for name, _ in panels],
+            "sheets": len(pages),
         }
 
     # ------------------------------------------------------------- qr-code
@@ -444,6 +455,14 @@ class Generators:
         }
 
     # --------------------------------------------------------------- intern
+
+    def _surface(self) -> tuple[float, float]:
+        """Waar het op moet passen: het actieve vel, of het bed als die er niet zijn."""
+        if self.sheets is not None:
+            for sheet in self.sheets.state()["sheets"]:
+                if sheet["active"]:
+                    return float(sheet["width_mm"]), float(sheet["height_mm"])
+        return self._bed()
 
     def _bed(self) -> tuple[float, float]:
         from meerk40t.core.units import Length
@@ -652,3 +671,30 @@ def box_panels(width, depth, height, thickness, finger, kerf, lid=True):
         (name, panel_outline(name, w, h, thickness, finger, kerf, edges))
         for name, w, h, edges in panels
     ]
+
+
+def _lay_out(panels, width, height, gap):
+    """
+    De panelen in rijen leggen, en aan een nieuw vel beginnen zodra het vol is.
+
+    Geeft een lijst van vellen terug, elk met (naam, punten, x, y). Puur
+    rekenwerk: pas als vaststaat hoeveel vellen het worden, wordt er getekend.
+    """
+    pages, page = [], []
+    x, y, shelf = gap, gap, 0.0
+    for name, points in panels:
+        span = max(px for px, _ in points) - min(px for px, _ in points)
+        high = max(py for _, py in points) - min(py for _, py in points)
+        if x > gap and x + span > width - gap:
+            x = gap
+            y += shelf + gap
+            shelf = 0.0
+        if y + high + gap > height:
+            pages.append(page)
+            page, x, y, shelf = [], gap, gap, 0.0
+        page.append((name, points, x, y))
+        x += span + gap
+        shelf = max(shelf, high)
+    if page:
+        pages.append(page)
+    return pages

@@ -27,7 +27,8 @@
 		thickness_mm: '3',
 		finger_mm: '10',
 		kerf_mm: '0.15',
-		lid: true
+		lid: true,
+		spread: true
 	});
 	let qr = $state({ text: '', size_mm: '30' });
 	let bar = $state({ text: '', kind: 'code128', width_mm: '60', height_mm: '20' });
@@ -129,7 +130,8 @@
 			buitenmaten van de doos; het uitgesneden paneel is aan elke kant één
 			materiaaldikte groter, dat zijn de tanden. De snijbreedte (kerf) wordt bij
 			de tanden opgeteld, want de laser haalt aan beide kanten van elke snede
-			materiaal weg.
+			materiaal weg. Past hij niet op één vel, dan komen de resterende panelen
+			op een nieuw vel te staan.
 		</p>
 		<div class="fields">
 			<label><span>Breedte (mm)</span><input class="mono" type="number" bind:value={box.width_mm} /></label>
@@ -139,11 +141,15 @@
 			<label><span>Vinger (mm)</span><input class="mono" type="number" step="1" bind:value={box.finger_mm} /></label>
 			<label><span>Kerf (mm)</span><input class="mono" type="number" step="0.05" bind:value={box.kerf_mm} /></label>
 			<label class="check"><input type="checkbox" bind:checked={box.lid} /><span>Met deksel</span></label>
+			<label class="check">
+				<input type="checkbox" bind:checked={box.spread} />
+				<span>Verdelen over vellen als het niet past</span>
+			</label>
 		</div>
 		<button class="go" disabled={busy} onclick={() => run({
 			width_mm: n(box.width_mm), depth_mm: n(box.depth_mm), height_mm: n(box.height_mm),
 			thickness_mm: n(box.thickness_mm), finger_mm: n(box.finger_mm),
-			kerf_mm: n(box.kerf_mm), lid: box.lid
+			kerf_mm: n(box.kerf_mm), lid: box.lid, spread: box.spread
 		})}>Panelen maken</button>
 	{:else if tab === 'qrcode'}
 		<p class="lead">

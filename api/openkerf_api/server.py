@@ -189,16 +189,16 @@ class ApiServer:
         self.motion = MachineControl(kernel, self.commands)
         self.images = Images(kernel, self.commands)
         self.nodes = Nodes(kernel, self.commands)
-        self.generators = Generators(kernel, self.commands, self.drawing)
-        self.nesting = Nesting(kernel, self.editor)
-        self.camera = Camera(kernel, self.commands)
-        self.clipart = Clipart(kernel, self.drawing)
         self.sheets = Sheets(
             kernel,
             self.drawing,
             self.document,
             Path(self.library.path).with_name("openkerf-vellen"),
         )
+        self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
+        self.nesting = Nesting(kernel, self.editor)
+        self.camera = Camera(kernel, self.commands)
+        self.clipart = Clipart(kernel, self.drawing)
         self.autosave = Autosave(
             kernel,
             self.drawing,
@@ -928,6 +928,7 @@ class ApiServer:
                 body.get("kerf_mm", 0.0),
                 body.get("gap_mm", 5.0),
                 body.get("lid", True),
+                body.get("spread", True),
             )
 
         @app.post("/api/design/generate/arctext", dependencies=write, status_code=201)

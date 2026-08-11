@@ -283,28 +283,52 @@ def test_box_panels_stay_on_the_bed(client):
     assert len(rows) > 1, "alles staat nog op één rij"
 
 
-def test_a_box_too_tall_for_the_bed_is_refused_before_drawing(client):
+BIG_BOX = {
+    "width_mm": 200,
+    "depth_mm": 150,
+    "height_mm": 120,
+    "thickness_mm": 4,
+    "finger_mm": 15,
+}
+
+
+def test_a_box_that_does_not_fit_is_spread_over_sheets(client):
     """
-    Een halve doos buiten het bed is erger dan geen doos: die kun je niet meer
-    aanwijzen om hem weg te halen.
+    Eerder werd zo'n doos geweigerd met het advies "snijd hem in twee keer",
+    zonder dat je dat kon doen. Nu legt hij zichzelf op meerdere vellen.
     """
+    response = client.post("/api/design/generate/box", json=BIG_BOX)
+
+    assert response.status_code == 201
+    assert response.json()["sheets"] > 1
+
+    sheets = client.get("/api/sheets").json()["sheets"]
+    assert len(sheets) > 1
+    # We staan weer op het vel waar we begonnen; het canvas hoort niet onder je
+    # vandaan te schuiven.
+    assert sheets[0]["active"] is True
+
+    on_each = []
+    for sheet in sheets:
+        client.post(f"/api/sheets/{sheet['id']}/activate")
+        on_each.append(len(client.get("/api/design").json()["elements"]))
+    assert sum(on_each) == 6, f"niet alle panelen zijn getekend: {on_each}"
+    assert all(count > 0 for count in on_each)
+
+
+def test_spreading_can_be_switched_off(client):
+    """Wie geen extra vellen wil, hoort dat te horen in plaats van ze te krijgen."""
     response = client.post(
-        "/api/design/generate/box",
-        json={
-            "width_mm": 200,
-            "depth_mm": 150,
-            "height_mm": 120,
-            "thickness_mm": 4,
-            "finger_mm": 15,
-        },
+        "/api/design/generate/box", json={**BIG_BOX, "spread": False}
     )
 
     assert response.status_code == 409
-    assert "hoogte nodig" in response.json()["detail"]
+    assert "past niet op één vel" in response.json()["detail"]
     assert client.get("/api/design").json()["elements"] == []
 
 
-def test_a_box_too_wide_for_the_bed_is_refused(client):
+def test_a_panel_wider_than_the_sheet_stays_refused(client):
+    """Verdelen helpt niet als één paneel al te breed is."""
     response = client.post(
         "/api/design/generate/box",
         json={
@@ -317,4 +341,7 @@ def test_a_box_too_wide_for_the_bed_is_refused(client):
     )
 
     assert response.status_code == 409
-    assert "past niet" in response.json()["detail"]
+    assert "breedste paneel" in response.json()["detail"]
+
+
+
