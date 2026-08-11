@@ -6,9 +6,12 @@
 
 	// Elke stap is een eigen route, zodat de browser-terugknop werkt en een
 	// verversing je niet terug naar stap 1 gooit.
+	// "Machines" stond hier als eerste stap, maar dat is een overzicht van álle
+	// machines — een bestemming, geen stap binnen één machine. Twee niveaus in
+	// één rij pillen leest als een fout, en dat was het ook.
 	const STEPS = [
-		{ path: '/setup', title: 'Machines' },
-		{ path: '/setup/type', title: 'Type' },
+		{ path: '/setup/soort', title: 'Soort' },
+		{ path: '/setup/type', title: 'Model' },
 		{ path: '/setup/naam', title: 'Naam' },
 		{ path: '/setup/instellen', title: 'Instellen' },
 		{ path: '/setup/klaar', title: 'Klaar' }
@@ -21,10 +24,11 @@
 	<div class="brand"><Logo />OpenKerf</div>
 	<span class="crumb">Machine instellen</span>
 	<div class="spacer"></div>
-	<a class="btn" href="/">Terug<span class="lang">{' '}naar werkgebied</span></a>
+	<a class="btn" href="/">Terug<span class="lang">naar werkgebied</span></a>
 </header>
 
 <main>
+	{#if current >= 0}
 	<nav class="steps" aria-label="Voortgang">
 		<ol>
 			{#each STEPS as step, index (step.path)}
@@ -38,6 +42,7 @@
 			{/each}
 		</ol>
 	</nav>
+	{/if}
 
 	{@render children()}
 </main>
@@ -45,6 +50,9 @@
 <style>
 	/* Op 390 pixels breekt deze kop over drie regels en valt de knop van het
 	   scherm. Dan maar korter: de bestemming staat er nog. */
+	/* De ruimte tussen "Terug" en de rest komt van een marge: in een flexbox
+	   valt een geschreven spatie tussen twee items weg. */
+	.lang { margin-left: 0.3em; }
 	@media (max-width: 560px) {
 		.crumb { display: none; }
 		.lang { display: none; }
