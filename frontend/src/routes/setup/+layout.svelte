@@ -21,7 +21,7 @@
 	<div class="brand"><Logo />OpenKerf</div>
 	<span class="crumb">Machine instellen</span>
 	<div class="spacer"></div>
-	<a class="btn" href="/">Terug naar werkgebied</a>
+	<a class="btn" href="/">Terug<span class="lang"> naar werkgebied</span></a>
 </header>
 
 <main>
@@ -43,6 +43,13 @@
 </main>
 
 <style>
+	/* Op 390 pixels breekt deze kop over drie regels en valt de knop van het
+	   scherm. Dan maar korter: de bestemming staat er nog. */
+	@media (max-width: 560px) {
+		.crumb { display: none; }
+		.lang { display: none; }
+	}
+
 	.topbar {
 		height: var(--topbar-height);
 		flex: none;

@@ -34,6 +34,7 @@ const b = await browser();
 
 const SCHERMEN = [
 	['canvas', async () => {}],
+	['tekst', async (p) => { await p.click('button[title^="Tekst"]').catch(() => {}); await p.mouse.click(500, 400); }],
 	['lagen', async (p) => { await p.click('button[role="tab"]:has-text("Lagen")').catch(() => {}); }],
 	['job', async (p) => { await p.click('button[role="tab"]:has-text("Job")').catch(() => {}); }],
 	['bibliotheek', async (p) => { await p.click('button[title="Materiaalbibliotheek"]').catch(() => {}); }],
@@ -45,8 +46,20 @@ const SCHERMEN = [
 for (const [klasse, breedte] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 390]]) {
 	for (const thema of ['licht', 'donker']) {
 		for (const [naam, stap] of SCHERMEN) {
+			// De telefoon heeft geen tabs, gereedschap of vensters meer: één
+			// scherm, dus ook één opname.
+			if (breedte < 768 && naam !== 'canvas' && naam !== 'setup') continue;
 			const page = await open(b, { width: breedte, theme: thema === 'donker' ? 'dark' : 'light' });
-			await page.waitForTimeout(500);
+			await page.waitForTimeout(600);
+			// Een autosave uit een eerdere sessie legt zich over alles heen.
+			const later = await page.$('button:has-text("Later")');
+			if (later) { await later.click(); await page.waitForTimeout(300); }
+			// Op de tablet zitten de vensters achter de uitklap.
+			const meer = await page.$('button[title="Meer gereedschap"]');
+			if (meer && ['bibliotheek', 'generatoren', 'clipart'].includes(naam)) {
+				await meer.click();
+				await page.waitForTimeout(250);
+			}
 			await stap(page);
 			await page.waitForTimeout(700);
 			await page.screenshot({ path: `${DIR}/${klasse}-${thema}-${naam}.png` });

@@ -52,6 +52,7 @@
 	let breedte = $state(1440);
 	let telefoon = $derived(breedte < 768);
 	let tablet = $derived(breedte >= 768 && breedte < 1200);
+	let paneelOpen = $state(true);
 
 	// Het wauw-moment. Alleen op de flank van niet-draaiend naar draaiend, en
 	// daarna weer weg — anders is het decoratie in plaats van een bericht.
@@ -525,7 +526,17 @@
 		{/if}
 	</div>
 
-	<aside class="panel" aria-label="Eigenschappen">
+	{#if tablet}
+	<!-- Op een tablet is 280 van 1024 pixels een kwart van je werkblad. Het
+	     paneel mag weg als je aan het tekenen bent; de machineknoppen staan
+	     in de bovenbalk, dus je raakt de laser nooit kwijt. -->
+	<button
+		class="paneelgreep"
+		aria-expanded={paneelOpen}
+		onclick={() => (paneelOpen = !paneelOpen)}
+	>{paneelOpen ? '›' : '‹'}<span class="vw">Paneel {paneelOpen ? 'inklappen' : 'uitklappen'}</span></button>
+{/if}
+<aside class="panel" class:weg={tablet && !paneelOpen} aria-label="Eigenschappen">
 		<div class="tabs" role="tablist">
 			<button
 				class="tab"
@@ -893,6 +904,27 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+	}
+	.panel.weg { display: none; }
+	/* De greep zit tegen de rand van het canvas, waar je duim al is. */
+	.paneelgreep {
+		align-self: stretch;
+		flex: none;
+		width: 20px;
+		border: 1px solid var(--line);
+		border-right: 0;
+		border-radius: var(--radius-field) 0 0 var(--radius-field);
+		background: var(--surface-1);
+		color: var(--text-2);
+		font-size: var(--text-md);
+	}
+	.paneelgreep:hover { background: var(--surface-2); color: var(--text-1); }
+	.vw {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
 	}
 	.tabs {
 		display: flex;

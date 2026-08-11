@@ -28,6 +28,10 @@
 	let chosenOperation = $derived(
 		operations.find((o) => o.id === targetOperation) ?? operations[0] ?? null
 	);
+	$effect(() => {
+		const gekozen = chosenOperation;
+		if (gekozen && targetOperation !== gekozen.id) targetOperation = gekozen.id;
+	});
 
 	async function createMaterial() {
 		if (!newMaterial.trim()) return;
