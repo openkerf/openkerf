@@ -24,8 +24,16 @@ def images(kernel):
 
 
 def a_png(size=(120, 80)):
+    """
+    Geen vlakke kleur maar een vorm met licht en donker: op een egale
+    afbeelding verandert contrast niets, en dan test je niets.
+    """
+    from PIL import ImageDraw
+
+    image = Image.new("RGB", size, (210, 210, 210))
+    ImageDraw.Draw(image).ellipse((15, 10, 95, 65), fill=(40, 40, 40))
     buffer = io.BytesIO()
-    Image.new("RGB", size, (200, 120, 40)).save(buffer, "PNG")
+    image.save(buffer, "PNG")
     return buffer.getvalue()
 
 
@@ -63,25 +71,6 @@ def test_asking_a_rectangle_for_pixels_is_refused(client):
     response = client.get(f"/api/design/elements/{created['ids'][0]}/image.png")
 
     assert response.status_code == 409
-
-
-@pytest.mark.parametrize("adjustment", ["grayscale", "invert", "contrast", "dither"])
-def test_adjustments_change_the_pixels(client, loaded, adjustment):
-    """Without dithering a photo engraves as a grey smear, so this matters."""
-    before = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
-
-    response = client.post(
-        f"/api/design/elements/{loaded['id']}/image", json={"adjustment": adjustment}
-    )
-
-    assert response.status_code == 200
-    after = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
-    assert after != before
-
-
-def test_unknown_adjustment_is_refused(kernel, images, loaded):
-    with pytest.raises(DesignError):
-        images.adjust(loaded["id"], "sepia")
 
 
 def test_dpi_can_be_set(client, loaded):
@@ -194,50 +183,133 @@ def test_a_crop_without_size_is_refused(client, loaded):
     assert response.status_code == 409
 
 
-@pytest.mark.parametrize("adjustment", ["contrast", "color"])
-def test_a_slider_adjustment_changes_the_pixels(client, loaded, adjustment):
-    before = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
+# ------------------------------------------------------- niet-destructief
 
-    response = client.post(
-        f"/api/design/elements/{loaded['id']}/image",
-        json={"adjustment": adjustment, "factor": 1.8},
-    )
-
-    assert response.status_code == 200
-    after = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
-    assert after != before
+def enabled(client, element_id):
+    state = client.get(f"/api/design/elements/{element_id}/image").json()
+    return {a["name"] for a in state["adjustments"] if a["enabled"]}
 
 
-def test_an_absurd_strength_is_refused(client, loaded):
-    for factor in (-1, 12, "veel"):
-        response = client.post(
-            f"/api/design/elements/{loaded['id']}/image",
-            json={"adjustment": "contrast", "factor": factor},
-        )
-        assert response.status_code == 409, factor
+def pixels(client, element_id):
+    return client.get(f"/api/design/elements/{element_id}/image.png").content
 
 
-def test_brightness_is_not_offered(client, loaded):
+def test_the_panel_can_see_what_is_switched_on(client, loaded):
     """
-    Het `image brightness`-commando van de engine leest zijn factor op de
-    verkeerde plek uit de argumentenlijst en doet daardoor altijd niets. Een
-    schuifje aanbieden dat gegarandeerd niet werkt, is erger dan geen schuifje.
+    Zonder deze lijst zag je alleen knoppen en moest je onthouden waar je op
+    had gedrukt.
     """
-    response = client.post(
-        f"/api/design/elements/{loaded['id']}/image",
-        json={"adjustment": "brightness", "factor": 1.5},
-    )
+    state = client.get(f"/api/design/elements/{loaded['id']}/image").json()
 
-    assert response.status_code == 409
+    assert {a["name"] for a in state["adjustments"]} >= {
+        "contrast",
+        "gamma",
+        "dither",
+        "halftone",
+        "tone",
+    }
+    assert all(a["enabled"] is False for a in state["adjustments"])
+    assert state["adjustments"][0]["ranges"]
 
 
-def test_a_strength_of_one_leaves_the_image_alone(client, loaded):
-    """Anders is een schuifje niet te gebruiken om naar een resultaat te zoeken."""
-    before = client.get(f"/api/design/elements/{loaded['id']}/image.png").content
+def test_an_adjustment_switches_on_and_off(client, loaded):
+    before = pixels(client, loaded["id"])
 
     client.post(
         f"/api/design/elements/{loaded['id']}/image",
-        json={"adjustment": "contrast", "factor": 1.0},
+        json={"adjustment": "contrast", "enabled": True, "values": {"contrast": 60}},
     )
+    changed = pixels(client, loaded["id"])
+    assert changed != before
+    assert enabled(client, loaded["id"]) == {"contrast"}
 
-    assert client.get(f"/api/design/elements/{loaded['id']}/image.png").content == before
+    client.post(
+        f"/api/design/elements/{loaded['id']}/image",
+        json={"adjustment": "contrast", "enabled": False},
+    )
+    assert pixels(client, loaded["id"]) == before
+    assert enabled(client, loaded["id"]) == set()
+
+
+def test_clicking_the_same_thing_twice_changes_nothing_more(client, loaded):
+    """
+    Dit ging mis: elke klik werkte op het resultaat van de vorige, dus na een
+    paar keer was de afbeelding weggebrand.
+    """
+    body = {"adjustment": "contrast", "enabled": True, "values": {"contrast": 60}}
+
+    client.post(f"/api/design/elements/{loaded['id']}/image", json=body)
+    once = pixels(client, loaded["id"])
+    client.post(f"/api/design/elements/{loaded['id']}/image", json=body)
+    twice = pixels(client, loaded["id"])
+
+    assert once == twice
+
+
+def test_everything_can_be_wiped_back_to_the_original(client, loaded):
+    before = pixels(client, loaded["id"])
+    for name in ("contrast", "tone", "edge_enhance"):
+        client.post(
+            f"/api/design/elements/{loaded['id']}/image",
+            json={"adjustment": name, "enabled": True},
+        )
+    assert pixels(client, loaded["id"]) != before
+
+    client.post(f"/api/design/elements/{loaded['id']}/image", json={"clear": True})
+
+    assert pixels(client, loaded["id"]) == before
+    assert enabled(client, loaded["id"]) == set()
+
+
+def test_values_outside_their_range_are_refused(client, loaded):
+    for values in ({"contrast": 500}, {"brightness": -900}):
+        response = client.post(
+            f"/api/design/elements/{loaded['id']}/image",
+            json={"adjustment": "contrast", "enabled": True, "values": values},
+        )
+        assert response.status_code == 409, values
+
+
+def test_an_unknown_adjustment_is_refused(client, loaded):
+    response = client.post(
+        f"/api/design/elements/{loaded['id']}/image",
+        json={"adjustment": "sepia", "enabled": True},
+    )
+    assert response.status_code == 409
+
+
+def test_a_setting_that_does_not_belong_is_refused(client, loaded):
+    response = client.post(
+        f"/api/design/elements/{loaded['id']}/image",
+        json={"adjustment": "gamma", "enabled": True, "values": {"contrast": 10}},
+    )
+    assert response.status_code == 409
+
+
+def test_an_unknown_dither_type_is_refused(client, loaded):
+    response = client.post(
+        f"/api/design/elements/{loaded['id']}/image",
+        json={"adjustment": "dither", "enabled": True, "values": {"type": "handmatig"}},
+    )
+    assert response.status_code == 409
+
+
+def test_cropping_can_be_undone(client, loaded):
+    """Ook bijsnijden gaat in het recept, dus het origineel blijft bestaan."""
+    box = loaded["image"]
+    before = pixels(client, loaded["id"])
+
+    client.post(
+        f"/api/design/elements/{loaded['id']}/crop",
+        json={
+            "x_mm": box["x_mm"],
+            "y_mm": box["y_mm"],
+            "width_mm": box["width_mm"] / 2,
+            "height_mm": box["height_mm"],
+        },
+    )
+    assert pixels(client, loaded["id"]) != before
+
+    client.delete(f"/api/design/elements/{loaded['id']}/crop")
+
+    assert pixels(client, loaded["id"]) == before

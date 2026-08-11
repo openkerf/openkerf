@@ -16,10 +16,13 @@
 		onImageDpi,
 		onVectorise,
 		onCrop,
-		onImageFactor,
 		box = null,
 		onSetPosition,
-		onSetSize
+		onSetSize,
+		image = null,
+		onImageSet,
+		onImageClear,
+		onUncrop
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -34,11 +37,29 @@
 		onImageDpi?: (dpi: number) => void;
 		onVectorise?: () => void;
 		onCrop?: () => void;
-		onImageFactor?: (adjustment: string, factor: number) => void;
 		/** Live maten tijdens het slepen; valt terug op de selectie zelf. */
 		box?: { x: number; y: number; width: number; height: number } | null;
 		onSetPosition?: (x: number, y: number) => void;
 		onSetSize?: (width: number, height: number) => void;
+		/** Wat er op de gekozen afbeelding aanstaat; komt van de API. */
+		image?: {
+			dpi: number | null;
+			dither_types: string[];
+			adjustments: {
+				name: string;
+				label: string;
+				enabled: boolean;
+				ranges: Record<string, number[]>;
+				values: Record<string, string | number | boolean>;
+			}[];
+		} | null;
+		onImageSet?: (
+			name: string,
+			enabled: boolean,
+			values: Record<string, unknown> | null
+		) => void;
+		onImageClear?: () => void;
+		onUncrop?: () => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -237,47 +258,91 @@
 			{/if}
 
 			{#if canEdit && selected.image}
-				<div class="arrange">
-					<span class="rot-label">Afbeelding</span>
-					{#each ['grayscale', 'dither', 'invert', 'contrast', 'sharpen', 'halftone'] as adjustment (adjustment)}
-						<button class="rot" disabled={edits.busy} onclick={() => onImage?.(adjustment)}>
-							{adjustment}
-						</button>
+				<!-- Bewerkingen zijn niet destructief: het recept gaat elke keer
+				     opnieuw over het origineel. Vandaar schakelaars met hun
+				     waarden erbij, en niet een rij knoppen waarvan je moet
+				     onthouden waar je op gedrukt hebt. -->
+				<div class="imagefx">
+					<div class="fx-head">
+						<span class="rot-label">Afbeelding</span>
+						<button
+							class="rot"
+							disabled={edits.busy || !image?.adjustments.some((a) => a.enabled)}
+							onclick={() => onImageClear?.()}
+						>Alles wissen</button>
+					</div>
+
+					{#each image?.adjustments ?? [] as item (item.name)}
+						<div class="fx" class:on={item.enabled}>
+							<label class="fx-toggle">
+								<input
+									type="checkbox"
+									checked={item.enabled}
+									disabled={edits.busy}
+									onchange={(e) => onImageSet?.(item.name, e.currentTarget.checked, null)}
+								/>
+								<span>{item.label}</span>
+							</label>
+							{#if item.enabled}
+								{#each Object.entries(item.values) as [key, value] (key)}
+									{#if item.ranges[key]}
+										<label class="fx-value">
+											<span>{key}</span>
+											<input
+												type="range"
+												min={item.ranges[key][0]}
+												max={item.ranges[key][1]}
+												step={key === 'radius' || key === 'factor' ? 0.1 : 1}
+												{value}
+												disabled={edits.busy}
+												onchange={(e) =>
+													onImageSet?.(item.name, true, {
+														[key]: Number(e.currentTarget.value)
+													})}
+											/>
+											<span class="mono fx-num">{value}</span>
+										</label>
+									{:else if key === 'type' && item.name === 'dither'}
+										<label class="fx-value">
+											<span>soort</span>
+											<select
+												disabled={edits.busy}
+												onchange={(e) =>
+													onImageSet?.(item.name, true, { type: e.currentTarget.value })}
+											>
+												{#each image?.dither_types ?? [] as option (option)}
+													<option value={option} selected={option === value}>{option}</option>
+												{/each}
+											</select>
+										</label>
+									{/if}
+								{/each}
+							{/if}
+						</div>
 					{/each}
-					<button class="rot" disabled={edits.busy} onclick={() => onVectorise?.()}>
-						Vectoriseren
-					</button>
-					<button class="rot" disabled={edits.busy} onclick={() => onCrop?.()}>
-						Bijsnijden
-					</button>
-					{#each [['contrast', 'Contrast'], ['sharpness', 'Scherpte'], ['color', 'Verzadiging']] as [key, label] (key)}
-						<label class="slider">
-							<span>{label}</span>
+
+					<div class="fx-actions">
+						<button class="rot" disabled={edits.busy} onclick={() => onVectorise?.()}>
+							Vectoriseren
+						</button>
+						<button class="rot" disabled={edits.busy} onclick={() => onCrop?.()}>
+							Bijsnijden
+						</button>
+						<button class="rot" disabled={edits.busy} onclick={() => onUncrop?.()}>
+							Snede terug
+						</button>
+						<label class="dpi mono">
+							DPI
 							<input
-								type="range"
-								min="0.2"
-								max="3"
-								step="0.1"
-								value="1"
-								disabled={edits.busy}
-								onchange={(e) => {
-									onImageFactor?.(key, Number(e.currentTarget.value));
-									e.currentTarget.value = '1';
-								}}
+								type="number"
+								min="10"
+								max="2000"
+								step="10"
+								value={selected.image.dpi ?? 96}
+								onchange={(e) => onImageDpi?.(Number(e.currentTarget.value))}
 							/>
 						</label>
-					{/each}
-					<label class="dpi mono">
-						DPI
-						<input
-							type="number"
-							min="10"
-							max="2000"
-							step="10"
-							value={selected.image.dpi ?? 96}
-							onchange={(e) => onImageDpi?.(Number(e.currentTarget.value))}
-						/>
-					</label>
+					</div>
 				</div>
 			{/if}
 
@@ -650,15 +715,40 @@
 		color: var(--accent);
 	}
 	.edit-text:hover { background: var(--surface-2); }
-	.slider {
+	.imagefx { display: grid; gap: 4px; margin-top: var(--space-3); }
+	.fx-head { display: flex; align-items: center; gap: var(--space-2); }
+	.fx {
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		padding: 5px 7px;
+	}
+	.fx.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+	.fx-toggle {
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		width: 100%;
+		font-size: var(--text-xs);
+		color: var(--text-1);
+	}
+	.fx-value {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 3px;
 		font-size: 10px;
 		color: var(--text-2);
 	}
-	.slider input { flex: 1; }
+	.fx-value input[type='range'] { flex: 1; }
+	.fx-value select {
+		flex: 1;
+		font: inherit;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	.fx-num { min-width: 3em; text-align: right; }
+	.fx-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
 	.dpi { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-2); }
 	.dpi input {
 		width: 4.5em;

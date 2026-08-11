@@ -6,39 +6,84 @@ snapshot en was daardoor onzichtbaar op ons canvas. Hier komen de gegevens
 vandaan die de frontend nodig heeft om hem te tekenen: het kader in millimeters
 plus een PNG-weergave van de huidige pixels.
 
-De bewerkingen zijn MeerK40t's eigen `image ...`-commando's. Ze bepalen of een
-gravure iets wordt: een foto zonder dithering wordt een grijze vlek.
+Bewerkingen zijn **niet destructief**. Een `elem image` bewaart het origineel
+en een receptenlijst (`node.operations`); bij elke wijziging gaat dat hele
+recept opnieuw over het origineel heen. Dat is de reden dat je twee keer op
+dezelfde knop kunt drukken zonder de afbeelding weg te branden, en dat het
+paneel kan laten zien wát er aanstaat.
+
+Eerder liep dit via de `image ...`-console­commando's. Die schrijven het
+resultaat terug in de afbeelding zelf, dus contrast twee keer verhogen deed dat
+ook echt twee keer, en na een paar klikken was er niets meer over. De engine had
+het goede model al; wij gebruikten het verkeerde.
 """
 
 from .commands import CommandRunner
 from .edits import DesignError
 
 # Bewerkingen die zonder argumenten werken; geverifieerd tegen de engine.
-ADJUSTMENTS = (
-    "grayscale",
-    "invert",
-    "contrast",
-    "sharpen",
-    "dither",
-    "halftone",
-    "edge_enhance",
-    "equalize",
-    "autocontrast",
-    "contour",
-    "resample",
+ADJUSTMENTS = {
+    "contrast": {
+        "label": "Contrast en helderheid",
+        # De engine rekent -128..127 om naar een factor rond 1.
+        "defaults": {"contrast": 25, "brightness": 0},
+        "ranges": {"contrast": (-127, 127), "brightness": (-127, 127)},
+    },
+    "gamma": {
+        "label": "Gamma",
+        "defaults": {"factor": 1.5},
+        "ranges": {"factor": (0.0, 5.0)},
+    },
+    "auto_contrast": {
+        "label": "Automatisch contrast",
+        "defaults": {"cutoff": 3},
+        "ranges": {"cutoff": (0, 45)},
+    },
+    "unsharp_mask": {
+        "label": "Verscherpen",
+        "defaults": {"percent": 150, "radius": 2, "threshold": 3},
+        "ranges": {"percent": (0, 500), "radius": (0, 20), "threshold": (0, 255)},
+    },
+    "edge_enhance": {"label": "Randen versterken", "defaults": {}, "ranges": {}},
+    "halftone": {
+        "label": "Halftoon",
+        "defaults": {"black": True, "sample": 10, "angle": 22, "oversample": 2},
+        "ranges": {"sample": (2, 50), "angle": (0, 90), "oversample": (1, 4)},
+    },
+    "dither": {
+        "label": "Dithering",
+        "defaults": {"type": "Floyd-Steinberg"},
+        "ranges": {},
+    },
+    "tone": {
+        "label": "Omkeren",
+        # Omkeren bestaat niet als eigen bewerking, maar een tooncurve van
+        # (0,255) naar (255,0) doet precies dat — en zit wél in het recept, dus
+        # blijft hij omkeerbaar.
+        "defaults": {"type": "line", "values": [(0, 255), (255, 0)]},
+        "ranges": {},
+    },
+    "crop": {
+        "label": "Bijsnijden",
+        "defaults": {"bounds": None},
+        "ranges": {},
+    },
+}
+
+DITHER_TYPES = (
+    "Floyd-Steinberg",
+    "Atkinson",
+    "Jarvis-Judice-Ninke",
+    "Stucki",
+    "Burkes",
+    "Sierra3",
+    "Sierra2",
+    "Sierra-2-4a",
 )
 
 # Vectoriseren zit in aparte plugins die kunnen ontbreken (potrace heeft een
 # externe library nodig), dus we vragen de kernel wat er echt geregistreerd is.
 VECTORISERS = ("vectrace", "potrace")
-
-# Bewerkingen met een sterkte. 1.0 laat de afbeelding zoals hij is; lager is
-# zwakker, hoger sterker. Dit zijn de schuifjes die xTool Studio ook heeft.
-# `brightness` staat er bewust NIET bij: dat commando leest zijn factor uit de
-# ruwe argumentenlijst op de verkeerde plek en faalt daardoor altijd. Upstream-
-# bevinding, genoteerd in CLAUDE.md; wij bieden geen knop aan die gegarandeerd
-# niets doet.
-FACTORS = ("contrast", "sharpness", "color")
 
 
 class Images:
@@ -59,45 +104,108 @@ class Images:
             raise DesignError("Dit element is geen afbeelding.")
         return node
 
-    def adjust(self, element_id: str, adjustment: str) -> dict:
-        if adjustment not in ADJUSTMENTS:
-            raise DesignError(
-                f"Onbekende bewerking: {adjustment}. Kies uit {', '.join(ADJUSTMENTS)}."
-            )
+    def adjustments(self, element_id: str) -> dict:
+        """
+        Wat er op deze afbeelding aanstaat, en met welke waarden.
+
+        Zonder dit kon het paneel niet tonen wat er gekozen was — je zag alleen
+        knoppen en moest maar onthouden waar je op had gedrukt.
+        """
         node = self._node(element_id)
-        self.elements.set_emphasis([node])
-        with self.elements.undoscope(f"Afbeelding {adjustment}"):
-            self.runner.run(f"image {adjustment}")
-        self.elements.signal("rebuild_tree", "all")
-        self.elements.signal("refresh_scene", "Scene")
-        return {"id": element_id, "adjustment": adjustment}
+        recipe = {op.get("name"): op for op in getattr(node, "operations", []) or []}
+        return {
+            "id": element_id,
+            "dpi": float(getattr(node, "dpi", 0) or 0) or None,
+            "dither_types": list(DITHER_TYPES),
+            "adjustments": [
+                {
+                    "name": name,
+                    "label": spec["label"],
+                    "enabled": bool(recipe.get(name, {}).get("enable", False)),
+                    "ranges": {k: list(v) for k, v in spec["ranges"].items()},
+                    "values": {
+                        key: recipe.get(name, {}).get(key, default)
+                        for key, default in spec["defaults"].items()
+                    },
+                }
+                for name, spec in ADJUSTMENTS.items()
+                # Bijsnijden heeft een eigen weg (een kader op het canvas), dus
+                # het staat niet als knop tussen de rest.
+                if name != "crop"
+            ],
+        }
 
-    def enhance(self, element_id: str, adjustment: str, factor) -> dict:
+    def set_adjustment(self, element_id: str, name: str, enabled=None, values=None) -> dict:
         """
-        Helderheid, contrast, scherpte of verzadiging met een sterkte.
+        Eén bewerking aan- of uitzetten, of zijn waarden bijstellen.
 
-        Anders dan de vaste bewerkingen is dit een schuifje: 1,0 verandert
-        niets, en dat maakt het bruikbaar om naar een resultaat toe te werken
-        in plaats van er één keer overheen te gaan.
+        Het recept gaat daarna in zijn geheel opnieuw over het **origineel**.
+        Twee keer dezelfde knop levert dus hetzelfde resultaat op, en uitzetten
+        brengt de afbeelding echt terug — dat was de fout in de vorige versie.
         """
-        if adjustment not in FACTORS:
+        spec = ADJUSTMENTS.get(name)
+        if spec is None:
+            usable = ", ".join(k for k in ADJUSTMENTS if k != "crop")
+            raise DesignError(f"Onbekende bewerking: {name}. Kies uit {usable}.")
+        node = self._node(element_id)
+
+        operation = self._find(node, name)
+        if operation is None:
+            operation = {"name": name, **spec["defaults"]}
+            node.operations = list(getattr(node, "operations", []) or []) + [operation]
+        if enabled is not None:
+            operation["enable"] = bool(enabled)
+        operation.setdefault("enable", True)
+
+        for key, value in (values or {}).items():
+            if key not in spec["defaults"]:
+                raise DesignError(f"'{key}' hoort niet bij {name}.")
+            operation[key] = self._checked(name, key, value, spec)
+
+        if name == "dither" and operation.get("type") not in DITHER_TYPES:
             raise DesignError(
-                f"Onbekende bewerking: {adjustment}. Kies uit {', '.join(FACTORS)}."
+                f"Onbekend dither-type. Kies uit {', '.join(DITHER_TYPES)}."
             )
+
+        with self.elements.undoscope(f"Afbeelding: {spec['label']}"):
+            self._reprocess(node)
+        return self.adjustments(element_id)
+
+    def clear_adjustments(self, element_id: str) -> dict:
+        """Alles eraf: terug naar de afbeelding zoals hij binnenkwam."""
+        node = self._node(element_id)
+        with self.elements.undoscope("Afbeelding: bewerkingen wissen"):
+            node.operations = []
+            self._reprocess(node)
+        return self.adjustments(element_id)
+
+    def _find(self, node, name):
+        for operation in getattr(node, "operations", []) or []:
+            if operation.get("name") == name:
+                return operation
+        return None
+
+    def _checked(self, name, key, value, spec):
+        bounds = spec["ranges"].get(key)
+        if bounds is None:
+            return value
         try:
-            strength = float(factor)
+            number = float(value)
         except (TypeError, ValueError) as e:
-            raise DesignError("De sterkte moet een getal zijn.") from e
-        if not 0 <= strength <= 5:
-            raise DesignError("De sterkte moet tussen 0 en 5 liggen.")
+            raise DesignError(f"{key} moet een getal zijn.") from e
+        low, high = bounds
+        if not low <= number <= high:
+            raise DesignError(f"{key} moet tussen {low} en {high} liggen.")
+        return number if isinstance(spec["defaults"][key], float) else int(number)
 
-        node = self._node(element_id)
-        self.elements.set_emphasis([node])
-        with self.elements.undoscope(f"Afbeelding {adjustment}"):
-            self.runner.run(f"image {adjustment} {strength}")
-        self.elements.signal("rebuild_tree", "all")
+    def _reprocess(self, node):
+        """Het recept opnieuw over het origineel halen."""
+        node._processed_image = None
+        node.update(self.kernel.root)
+        # update() rekent in een eigen thread; active_image wacht daar netjes op.
+        node.active_image  # noqa: B018
+        self.elements.signal("element_property_update", [node])
         self.elements.signal("refresh_scene", "Scene")
-        return {"id": element_id, "adjustment": adjustment, "factor": strength}
 
     def set_dpi(self, element_id: str, dpi) -> dict:
         """
@@ -154,14 +262,14 @@ class Images:
         """
         Bijsnijden op een rechthoek in millimeters.
 
-        De engine snijdt op pixels, dus we rekenen om via het kader van de
-        afbeelding. Dat is een evenredige afbeelding zonder rotatie — precies
-        hoe het canvas de afbeelding ook tekent.
+        Ook dit gaat in het recept in plaats van in de pixels: bijsnijden is
+        daarmee terug te draaien, en een tweede keer snijden rekent vanaf het
+        origineel in plaats van vanaf de al bijgesneden afbeelding.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
         node = self._node(element_id)
-        image = getattr(node, "active_image", None) or getattr(node, "image", None)
+        image = getattr(node, "image", None)
         bounds = getattr(node, "bounds", None)
         if image is None or not bounds:
             raise DesignError("Deze afbeelding heeft geen pixels om te snijden.")
@@ -189,11 +297,15 @@ class Images:
         if right - left < 1 or lower - upper < 1:
             raise DesignError("Het snijkader valt buiten de afbeelding.")
 
-        self.elements.set_emphasis([node])
+        operation = self._find(node, "crop")
+        if operation is None:
+            operation = {"name": "crop"}
+            node.operations = list(getattr(node, "operations", []) or []) + [operation]
+        operation["enable"] = True
+        operation["bounds"] = [left, upper, right, lower]
+
         with self.elements.undoscope("Afbeelding bijsnijden"):
-            self.runner.run(f"image crop {left} {upper} {right} {lower}")
-        self.elements.signal("rebuild_tree", "all")
-        self.elements.signal("refresh_scene", "Scene")
+            self._reprocess(node)
         return {"id": element_id, "pixels": [left, upper, right, lower]}
 
     def render_png(self, element_id: str):

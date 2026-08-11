@@ -41,6 +41,28 @@
 	let tool = $state<Tool>('select');
 	// Bijsnijden: het volgende sleepkader knipt de geselecteerde afbeelding bij.
 	let cropping = $state(false);
+	// Wat er op de gekozen afbeelding aanstaat. Komt van de API, want het recept
+	// leeft op de node in de engine — niet in de browser.
+	let imageState = $state<Record<string, unknown> | null>(null);
+
+	async function loadImageState() {
+		const id = design.selectedId;
+		const element = design.elements.find((e) => e.id === id);
+		if (!id || !element?.image) {
+			imageState = null;
+			return;
+		}
+		const response = await fetch(`/api/design/elements/${encodeURIComponent(id)}/image`);
+		imageState = response.ok ? await response.json() : null;
+	}
+
+	async function setImage(body: Record<string, unknown>) {
+		const id = design.selectedId;
+		if (!id) return;
+		await post(`/api/design/elements/${encodeURIComponent(id)}/image`, body);
+		await design.load();
+		await loadImageState();
+	}
 	let libraryOpen = $state(false);
 	let catalogueOpen = $state(false);
 	let generatorsOpen = $state(false);
@@ -289,7 +311,10 @@
 		});
 		// Pas ná mount koppelen: replaceState vóórdat de router klaar is breekt
 		// de render. De URL volgt daarom de actie, niet een effect.
-		design.onSelect = () => syncUrl();
+		design.onSelect = () => {
+			syncUrl();
+			loadImageState();
+		};
 		// De beschikbare acties hangen af van het actieve device, dus opnieuw
 		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
@@ -404,6 +429,7 @@
 				height_mm: rect.height
 			});
 			await design.load();
+			await loadImageState();
 		}}
 	/>
 
@@ -446,26 +472,26 @@
 					onSetSize={setSize}
 					onArrange={arrange}
 					onCrop={() => (cropping = true)}
-					onImageFactor={async (adjustment, factor) => {
-						const id = design.selectedId;
-						if (!id) return;
-						await post(`/api/design/elements/${encodeURIComponent(id)}/image`, {
-							adjustment,
-							factor
-						});
-						await design.load();
-					}}
+
 					onVectorise={async () => {
 						const id = design.selectedId;
 						if (!id) return;
 						await post(`/api/design/elements/${encodeURIComponent(id)}/vectorise`, { method: 'vectrace' });
 						await design.load();
 					}}
-					onImage={async (adjustment) => {
+					image={imageState as never}
+					onImageSet={(name, enabled, values) =>
+						setImage({ adjustment: name, enabled, values })}
+					onImageClear={() => setImage({ clear: true })}
+					onUncrop={async () => {
 						const id = design.selectedId;
 						if (!id) return;
-						await post(`/api/design/elements/${encodeURIComponent(id)}/image`, { adjustment });
+						await fetch(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
+							method: 'DELETE',
+							headers: authHeaders()
+						});
 						await design.load();
+						await loadImageState();
 					}}
 					onImageDpi={async (dpi) => {
 						const id = design.selectedId;

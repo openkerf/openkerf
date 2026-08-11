@@ -398,18 +398,24 @@ class ApiServer:
             path = manage(self.images.render_png, element_id)
             return FileResponse(path, media_type="image/png")
 
+        @app.get("/api/design/elements/{element_id}/image")
+        def image_adjustments(element_id: str):
+            """Welke bewerkingen aanstaan en met welke waarden."""
+            return manage(self.images.adjustments, element_id)
+
         @app.post("/api/design/elements/{element_id}/image", dependencies=write)
         def adjust_image(element_id: str, body: dict):
             if body.get("dpi") is not None:
                 return manage(self.images.set_dpi, element_id, body["dpi"])
-            if body.get("factor") is not None:
-                return manage(
-                    self.images.enhance,
-                    element_id,
-                    body.get("adjustment"),
-                    body["factor"],
-                )
-            return manage(self.images.adjust, element_id, body.get("adjustment"))
+            if body.get("clear"):
+                return manage(self.images.clear_adjustments, element_id)
+            return manage(
+                self.images.set_adjustment,
+                element_id,
+                body.get("adjustment"),
+                body.get("enabled"),
+                body.get("values"),
+            )
 
         @app.get("/api/design/elements/{element_id}/nodes")
         def element_nodes(element_id: str):
@@ -424,6 +430,13 @@ class ApiServer:
                 body.get("index"),
                 body.get("x_mm"),
                 body.get("y_mm"),
+            )
+
+        @app.delete("/api/design/elements/{element_id}/crop", dependencies=write)
+        def uncrop_image(element_id: str):
+            """Bijsnijden terugdraaien; het origineel is nooit weggegooid."""
+            return manage(
+                self.images.set_adjustment, element_id, "crop", False, None
             )
 
         @app.post("/api/design/elements/{element_id}/crop", dependencies=write)
