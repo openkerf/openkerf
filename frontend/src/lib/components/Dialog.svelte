@@ -96,7 +96,7 @@
 		letter-spacing: -0.01em;
 	}
 	.close {
-		font-size: 20px;
+		font-size: var(--text-lg);
 		line-height: 1;
 		color: var(--text-2);
 		width: 28px;

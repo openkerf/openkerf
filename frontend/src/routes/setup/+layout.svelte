@@ -86,7 +86,7 @@
 	.steps li span,
 	.steps li a {
 		display: block;
-		padding: 4px 10px;
+		padding: 4px 8px;
 		border-radius: var(--radius-dot);
 		background: var(--surface-2);
 		color: var(--text-2);
@@ -131,7 +131,7 @@
 	:global(.setup .btn) {
 		display: inline-flex;
 		align-items: center;
-		padding: 8px 14px;
+		padding: 8px 16px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

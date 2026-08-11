@@ -72,7 +72,7 @@
 	.search {
 		font: inherit;
 		width: 100%;
-		padding: 8px 10px;
+		padding: 8px 8px;
 		margin-top: var(--space-4);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
@@ -92,7 +92,7 @@
 	.type {
 		display: grid;
 		gap: 2px;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-1);

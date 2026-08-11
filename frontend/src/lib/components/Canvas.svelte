@@ -988,7 +988,7 @@
 		background: var(--surface-1);
 		color: var(--text-2);
 		font-family: var(--font-mono);
-		font-size: 9px;
+		font-size: var(--text-xs);
 		z-index: 2;
 		user-select: none;
 	}
@@ -1018,8 +1018,11 @@
 	}
 	.ruler-x text,
 	.ruler-y text {
+		/* Getallen op een liniaal zijn waarden: mono met tabulaire cijfers,
+		   anders springt de schaalverdeling bij het pannen. */
+		font-variant-numeric: tabular-nums;
 		fill: var(--text-2);
-		font-size: 9px;
+		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		dominant-baseline: hanging;
 	}
@@ -1032,7 +1035,7 @@
 		z-index: 3;
 		display: grid;
 		place-items: center;
-		font-size: 8px;
+		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		color: var(--text-2);
 		background: var(--surface-1);
@@ -1049,7 +1052,7 @@
 	.bed {
 		background: var(--bed);
 		border: 1px solid var(--line);
-		border-radius: 2px;
+		border-radius: var(--radius-field);
 		position: relative;
 		background-image:
 			linear-gradient(var(--line) 1px, transparent 1px),
@@ -1074,17 +1077,19 @@
 		pointer-events: none;
 	}
 	.sheet-label {
+		font-variant-numeric: tabular-nums;
 		position: absolute;
 		left: 3px;
 		bottom: 2px;
-		font-size: 9px;
+		font-size: var(--text-xs);
 		color: var(--accent);
 	}
 	.bed-label {
+		font-variant-numeric: tabular-nums;
 		position: absolute;
 		top: -22px;
 		right: 0;
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
 	.head line {
@@ -1114,7 +1119,7 @@
 	.pen-dot { fill: var(--accent); }
 	.measure {
 		fill: var(--text-2);
-		font-size: 3.5px;
+		font-size: var(--text-xs);
 	}
 	.endpoint {
 		fill: var(--surface-1);
@@ -1136,6 +1141,10 @@
 		vector-effect: non-scaling-stroke;
 	}
 	.measure-label {
+		font-variant-numeric: tabular-nums;
+		/* @svg-space: deze tekst staat in de SVG die in millimeters rekent, niet
+		   in CSS-pixels — 4 betekent hier 4 mm. Buiten de typeschaal dus, en
+		   terecht: hij moet meeschalen met het bed. */
 		font-size: 4px;
 		fill: var(--accent);
 		font-family: var(--font-mono, monospace);
@@ -1175,7 +1184,7 @@
 	.zoom button {
 		min-width: 28px;
 		height: 28px;
-		border-radius: 4px;
+		border-radius: var(--radius-field);
 		color: var(--text-2);
 	}
 	.zoom button:hover {
@@ -1184,7 +1193,7 @@
 	}
 	.zoom .val {
 		font-size: 11px;
-		padding: 0 6px;
+		padding: 0 8px;
 		color: var(--text-1);
 	}
 	/* De globale :focus-visible-regel uit tokens.css tekent een outline van 2 px
@@ -1256,7 +1265,7 @@
 	}
 	.selection text {
 		fill: var(--text-2);
-		font-size: 3.5px;
+		font-size: var(--text-xs);
 	}
 	.empty {
 		position: absolute;

@@ -64,7 +64,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 10px 12px;
+		padding: 8px 12px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		margin-bottom: var(--space-2);
@@ -84,7 +84,7 @@
 	}
 	.badge {
 		font-size: var(--text-xs);
-		padding: 3px 9px;
+		padding: 4px 8px;
 		border-radius: var(--radius-dot);
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
 		color: var(--accent);

@@ -72,7 +72,7 @@
 	.field input {
 		font: inherit;
 		font-weight: 400;
-		padding: 8px 10px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);

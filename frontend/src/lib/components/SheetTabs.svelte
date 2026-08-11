@@ -142,8 +142,8 @@
 		flex: none;
 		display: flex;
 		align-items: baseline;
-		gap: 6px;
-		padding: 3px 10px;
+		gap: 8px;
+		padding: 4px 8px;
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		background: var(--surface-1);
@@ -156,9 +156,9 @@
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
-	.sheet .size { font-size: 9px; opacity: 0.75; }
+	.sheet .size { font-size: var(--text-xs); opacity: 0.75; }
 	.sheet.add { padding: 3px 10px; font-weight: 600; }
-	.error { font-size: 10px; color: var(--danger); }
+	.error { font-size: var(--text-xs); color: var(--danger); }
 	.editor {
 		flex: none;
 		display: flex;
@@ -169,12 +169,12 @@
 		background: var(--surface-2);
 		border-bottom: 1px solid var(--line);
 	}
-	.editor label { display: grid; gap: 2px; font-size: 9px; color: var(--text-2); }
+	.editor label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
 	.editor input,
 	.editor select {
 		font: inherit;
 		font-size: var(--text-xs);
-		padding: 4px 6px;
+		padding: 4px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
@@ -185,7 +185,7 @@
 	.drop,
 	.close {
 		font-size: var(--text-xs);
-		padding: 5px 10px;
+		padding: 4px 8px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

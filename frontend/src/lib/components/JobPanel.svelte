@@ -161,14 +161,14 @@
 		margin: var(--space-3) 0 0;
 	}
 	.meta dt {
-		font-size: 10px;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--text-2);
 		font-family: var(--font-ui);
 	}
 	.meta dd {
-		margin: 1px 0 0;
+		margin: 2px 0 0;
 		font-size: var(--text-sm);
 	}
 	.events {
@@ -180,7 +180,7 @@
 	.events li {
 		display: flex;
 		gap: var(--space-2);
-		padding: 3px 0;
+		padding: 4px 0;
 		border-bottom: 1px solid var(--line);
 	}
 	.code {

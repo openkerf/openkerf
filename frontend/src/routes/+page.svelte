@@ -488,7 +488,7 @@
 				Bewerken
 				{#if tab === 'design'}
 					<svg aria-hidden="true"
-						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4" class="kerf-anim" /></svg
+						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
 					>
 				{/if}
 			</button>
@@ -501,7 +501,7 @@
 				Lagen
 				{#if tab === 'layers'}
 					<svg aria-hidden="true"
-						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4" class="kerf-anim" /></svg
+						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
 					>
 				{/if}
 			</button>
@@ -509,7 +509,7 @@
 				Job
 				{#if tab === 'job'}
 					<svg aria-hidden="true"
-						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4" class="kerf-anim" /></svg
+						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
 					>
 				{/if}
 			</button>
@@ -771,7 +771,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 5px 8px;
+		padding: 4px 8px;
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		background: color-mix(in srgb, var(--surface-1) 92%, transparent);
@@ -781,9 +781,9 @@
 	.cam {
 		display: flex;
 		align-items: center;
-		gap: 5px;
+		gap: 4px;
 		font-size: var(--text-xs);
-		padding: 3px 8px;
+		padding: 4px 8px;
 		border-radius: 999px;
 		color: var(--text-2);
 	}
@@ -847,7 +847,7 @@
 	}
 	.tab {
 		flex: 1;
-		padding: 10px 0 8px;
+		padding: 8px 0 8px;
 		font-weight: 500;
 		color: var(--text-2);
 		position: relative;
@@ -870,7 +870,7 @@
 		flex-wrap: wrap;
 	}
 	:global(.ask-actions .btn) {
-		padding: 8px 14px;
+		padding: 8px 16px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

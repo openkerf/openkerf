@@ -15,6 +15,9 @@
 	--text-2: #5b6470;
 	--accent: #0e7c86;
 	--accent-ink: #ffffff;
+	/* Tekst op een gekleurd vlak, en de zwarte achtergrond van een camerabeeld. */
+	--on-color: #ffffff;
+	--void: #000000;
 	--danger: #d3382c;
 	--warn: #b8860b;
 	--ok: #2e7d46;
@@ -38,6 +41,20 @@
 	--space-4: 16px;
 	--space-6: 24px;
 	--space-8: 32px;
+
+	/* Laagkleuren: vaste reeks van tien, herkenbaar uit RDWorks en LightBurn.
+	   Ze staan hier en niet in JavaScript, zodat het canvas dezelfde bron
+	   leest als de rest van de app. */
+	--layer-1: #E5484D;
+	--layer-2: #F76B15;
+	--layer-3: #FFC53D;
+	--layer-4: #46A758;
+	--layer-5: #12A594;
+	--layer-6: #0090FF;
+	--layer-7: #8E4EC6;
+	--layer-8: #E93D82;
+	--layer-9: #8D6E63;
+	--layer-10: #607D8B;
 
 	--radius-field: 6px;
 	--radius-card: 10px;

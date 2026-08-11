@@ -236,7 +236,7 @@
 	select {
 		font: inherit;
 		width: 100%;
-		padding: 7px 9px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
@@ -254,7 +254,7 @@
 	}
 	.font {
 		font-size: var(--text-xs);
-		padding: 3px 8px;
+		padding: 4px 8px;
 		border: 1px solid var(--line);
 		border-radius: 999px;
 		background: var(--surface-1);
@@ -273,8 +273,8 @@
 		color: var(--accent);
 		text-decoration: underline;
 	}
-	.note { margin: 0; font-size: 10px; color: var(--text-2); line-height: 1.5; }
-	.err { margin: 0; font-size: 10px; color: var(--danger); }
+	.note { margin: 0; font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
+	.err { margin: 0; font-size: var(--text-xs); color: var(--danger); }
 	.actions {
 		display: flex;
 		justify-content: flex-end;
@@ -282,7 +282,7 @@
 		margin-top: var(--space-4);
 	}
 	.btn {
-		padding: 8px 14px;
+		padding: 8px 16px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

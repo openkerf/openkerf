@@ -49,7 +49,7 @@
 	input[type='number'],
 	select {
 		font: inherit;
-		padding: 7px 9px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);

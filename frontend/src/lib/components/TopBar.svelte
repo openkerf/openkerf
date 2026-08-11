@@ -128,7 +128,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 6px 10px;
+		padding: 8px 8px;
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
 		color: inherit;
@@ -156,8 +156,8 @@
 	.btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		padding: 7px 14px;
+		gap: 8px;
+		padding: 8px 16px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);
@@ -177,7 +177,7 @@
 	.btn.danger {
 		background: var(--danger);
 		border-color: var(--danger);
-		color: #fff;
+		color: var(--on-color);
 	}
 	.btn.danger:hover:not(:disabled) { filter: brightness(1.06); }
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }

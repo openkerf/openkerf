@@ -240,7 +240,7 @@
 	.picker {
 		font: inherit;
 		width: 100%;
-		padding: 6px 8px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
@@ -293,7 +293,7 @@
 	}
 	.actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 	.btn {
-		padding: 7px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

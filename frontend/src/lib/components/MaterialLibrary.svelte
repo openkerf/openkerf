@@ -324,7 +324,7 @@
 	input,
 	select {
 		font: inherit;
-		padding: 6px 8px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
@@ -333,7 +333,7 @@
 	.picker, .target { width: 100%; }
 	.target { width: auto; font-size: var(--text-xs); }
 	.btn {
-		padding: 7px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);
@@ -356,11 +356,11 @@
 		display: flex;
 		gap: var(--space-2);
 		align-items: center;
-		padding: 10px;
+		padding: 8px;
 	}
 	.what { flex: 1; min-width: 0; }
 	.name { font-weight: 600; }
-	.sub { display: block; color: var(--text-2); font-size: 12px; }
+	.sub { display: block; color: var(--text-2); font-size: var(--text-xs); }
 	.badge {
 		flex: none;
 		font-size: var(--text-xs);
@@ -386,19 +386,19 @@
 	.param { padding: 8px 10px; }
 	.param + .param { border-left: 1px solid var(--line); }
 	.param .k {
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--text-2);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
-	.param .v { font-size: 14px; margin-top: 1px; }
-	.param .v small { font-size: 10px; color: var(--text-2); }
+	.param .v { font-size: var(--text-sm); margin-top: 1px; }
+	.param .v small { font-size: var(--text-xs); color: var(--text-2); }
 	.foot {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-2);
-		padding: 8px 10px;
+		padding: 8px 8px;
 		border-top: 1px solid var(--line);
 	}
 	.edit {
@@ -409,14 +409,14 @@
 		border-top: 1px solid var(--line);
 		background: var(--surface-2);
 	}
-	.edit label { display: grid; gap: 2px; font-size: 10px; color: var(--text-2); }
+	.edit label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
 	.edit label.wide { grid-column: 1 / -1; }
 	.edit input, .edit select { width: 100%; }
 	.profiles { list-style: none; margin: var(--space-2) 0; padding: 0; }
 	.profiles li {
 		display: flex;
 		justify-content: space-between;
-		padding: 6px 8px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		margin-bottom: 4px;

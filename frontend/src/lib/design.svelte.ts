@@ -75,18 +75,27 @@ export type Design = {
 };
 
 /** Vaste laagkleuren uit DESIGN-SYSTEM.md, gebruikt als een operatie er geen heeft. */
-export const LAYER_COLORS = [
-	'#E5484D',
-	'#F76B15',
-	'#FFC53D',
-	'#46A758',
-	'#12A594',
-	'#0091FF',
-	'#6E56CF',
-	'#E93D82',
-	'#8D6E63',
-	'#607D8B'
-];
+export const LAYER_COLORS = readLayerColors();
+
+/**
+ * De laagkleuren komen uit tokens.css, zodat canvas en paneel dezelfde bron
+ * lezen — dat is wat het design system voorschrijft. Buiten de browser (bij
+ * het bouwen) valt hij terug op de reeks zoals hij daar staat.
+ */
+function readLayerColors(): string[] {
+	// @tokens-mirror: exacte spiegel van --layer-1..10 in tokens.css. Alleen in
+	// gebruik tijdens het bouwen, wanneer er geen document is om uit te lezen.
+	const fallback = [
+		'#E5484D', '#F76B15', '#FFC53D', '#46A758', '#12A594',
+		'#0090FF', '#8E4EC6', '#E93D82', '#8D6E63', '#607D8B'
+	];
+	if (typeof window === 'undefined') return fallback;
+	const style = getComputedStyle(document.documentElement);
+	const read = fallback.map(
+		(_, i) => style.getPropertyValue(`--layer-${i + 1}`).trim()
+	);
+	return read.every(Boolean) ? read : fallback;
+}
 
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);
 

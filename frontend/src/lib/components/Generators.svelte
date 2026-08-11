@@ -224,7 +224,7 @@
 	.tabs { display: flex; gap: 4px; margin-bottom: var(--space-3); flex-wrap: wrap; }
 	.tab {
 		font-size: var(--text-xs);
-		padding: 4px 10px;
+		padding: 4px 8px;
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		color: var(--text-2);
@@ -245,14 +245,14 @@
 		gap: var(--space-2) var(--space-3);
 		margin-bottom: var(--space-4);
 	}
-	.fields label { display: grid; gap: 2px; font-size: 10px; color: var(--text-2); }
+	.fields label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
 	.fields .wide { grid-column: 1 / -1; }
 	.fields .check { display: flex; align-items: center; gap: 6px; align-self: end; }
 	input,
 	select {
 		font: inherit;
 		width: 100%;
-		padding: 6px 8px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
@@ -261,7 +261,7 @@
 	.check input { width: auto; }
 	.go {
 		width: 100%;
-		padding: 8px 14px;
+		padding: 8px 16px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--accent);
 		background: var(--accent);

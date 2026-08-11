@@ -80,7 +80,7 @@
 	}
 	.stop {
 		margin-left: auto;
-		padding: 3px 12px;
+		padding: 4px 12px;
 		font: inherit;
 		font-weight: 600;
 		border-radius: var(--radius-field);
@@ -94,7 +94,7 @@
 		margin-left: auto;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 8px;
 		color: var(--text-1);
 	}
 	.dot {

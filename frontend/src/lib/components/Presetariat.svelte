@@ -174,7 +174,7 @@
 	.filters label {
 		display: grid;
 		gap: 2px;
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
 	.filters .grow { flex: 1; min-width: 160px; }
@@ -182,7 +182,7 @@
 	input[type='search'] {
 		font: inherit;
 		width: 100%;
-		padding: 6px 8px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
@@ -198,18 +198,18 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 6px 8px;
+		padding: 8px 8px;
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 	}
 	.row:hover { background: var(--surface-2); }
 	.row.done { opacity: 0.55; }
 	.what { display: grid; }
-	.sub { color: var(--text-2); font-size: 10px; }
+	.sub { color: var(--text-2); font-size: var(--text-xs); }
 	.numbers { margin-left: auto; color: var(--text-1); }
 	.badge {
-		font-size: 9px;
-		padding: 2px 6px;
+		font-size: var(--text-xs);
+		padding: 2px 8px;
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		color: var(--text-2);
@@ -226,10 +226,10 @@
 		gap: var(--space-3);
 		margin-top: var(--space-4);
 	}
-	.meta { font-size: 10px; color: var(--text-2); }
+	.meta { font-size: var(--text-xs); color: var(--text-2); }
 	.btn {
 		margin-left: auto;
-		padding: 7px 12px;
+		padding: 8px 12px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

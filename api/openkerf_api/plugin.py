@@ -40,6 +40,12 @@ def plugin(kernel, lifecycle=None):
             help=_("token for write actions (generated when omitted)"),
         )
         @kernel.console_option(
+            "library",
+            "l",
+            type=str,
+            help=_("path to the library database (its own folder for testing)"),
+        )
+        @kernel.console_option(
             "quit",
             "q",
             type=bool,
@@ -57,6 +63,7 @@ def plugin(kernel, lifecycle=None):
             bind="127.0.0.1",
             frontend=None,
             token=None,
+            library=None,
             quit=False,
             **kwargs,
         ):
@@ -82,7 +89,14 @@ def plugin(kernel, lifecycle=None):
                 return
 
             server = ApiServer(
-                kernel, port=port, bind=bind, frontend=frontend, token=token
+                kernel,
+                port=port,
+                bind=bind,
+                frontend=frontend,
+                token=token,
+                # Een eigen database is wat een test nodig heeft: anders lopen
+                # proefmaterialen en -vellen door de bibliotheek van de gebruiker.
+                library_path=library,
             )
             try:
                 server.start()

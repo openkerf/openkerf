@@ -145,7 +145,7 @@
 	.stage {
 		position: relative;
 		width: 100%;
-		background: #000;
+		background: var(--void);
 		border-radius: var(--radius-field);
 		overflow: hidden;
 		touch-action: none;
@@ -164,20 +164,23 @@
 		height: 100%;
 	}
 	polygon {
+		/* Bewust géén kerflijn (6/4): die is voorbehouden aan de selectie op het
+		   canvas, de jobvoortgang en de actieve tab. Dit is een ijkkader, geen
+		   snede. */
 		stroke: var(--accent);
 		stroke-width: 2;
 		vector-effect: non-scaling-stroke;
-		stroke-dasharray: 6 4;
+		stroke-dasharray: 5 3;
 	}
 	.grip {
 		fill: color-mix(in srgb, var(--accent) 70%, transparent);
-		stroke: white;
+		stroke: var(--on-color);
 		stroke-width: 2;
 		vector-effect: non-scaling-stroke;
 		cursor: grab;
 	}
 	text {
-		fill: white;
+		fill: var(--on-color);
 		font-size: 18px;
 		font-family: var(--font-mono);
 		paint-order: stroke;
@@ -189,7 +192,7 @@
 		grid-template-columns: repeat(4, 1fr);
 		gap: var(--space-2);
 		margin-top: var(--space-3);
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
 	.numbers div { display: grid; gap: 1px; }
@@ -200,7 +203,7 @@
 		margin-top: var(--space-4);
 	}
 	.btn {
-		padding: 8px 14px;
+		padding: 8px 16px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 		background: var(--surface-1);

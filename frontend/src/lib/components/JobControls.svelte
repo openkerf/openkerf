@@ -218,7 +218,7 @@
 	.btn.danger {
 		background: var(--danger);
 		border-color: var(--danger);
-		color: #fff;
+		color: var(--on-color);
 	}
 	.btn.subtle {
 		grid-column: 1 / -1;
@@ -233,15 +233,15 @@
 		justify-content: space-between;
 		align-items: baseline;
 		padding-bottom: var(--space-2);
-		margin-bottom: 6px;
+		margin-bottom: 8px;
 		border-bottom: 1px solid var(--line);
 	}
 	.pf-time .v {
-		font-size: 16px;
+		font-size: var(--text-md);
 	}
 	.pf-row {
 		color: var(--text-2);
-		font-size: 12px;
+		font-size: var(--text-xs);
 		padding: var(--space-1) 0;
 	}
 	.pf-warn {
@@ -278,7 +278,7 @@
 		flex: 1;
 		min-width: 0;
 		font: inherit;
-		padding: 6px 8px;
+		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
@@ -286,7 +286,7 @@
 	}
 	.motion { margin-top: var(--space-4); }
 	.rot-label {
-		font-size: 10px;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--text-2);
@@ -317,9 +317,9 @@
 	.steps { display: flex; flex-wrap: wrap; gap: 4px; }
 	.rot {
 		font-size: var(--text-xs);
-		padding: 3px 7px;
+		padding: 4px 8px;
 		border: 1px solid var(--line);
-		border-radius: 4px;
+		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
 	.rot.on { border-color: var(--accent); color: var(--accent); }
