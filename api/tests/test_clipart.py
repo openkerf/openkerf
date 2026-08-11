@@ -279,3 +279,56 @@ def test_a_very_busy_drawing_is_flagged(kernel):
     result = shop.insert("https://upload.wikimedia.org/druk.svg")
 
     assert any("losse paden" in note for note in result["notes"])
+
+
+def watcher(kernel):
+    """Een neppe bron die onthoudt welke URL's er gevraagd zijn."""
+    from openkerf_api.drawing import Drawing
+
+    asked = []
+
+    def fetch(url, timeout=None):
+        asked.append(url)
+        return json.dumps(WIKI_ANSWER if "commons" in url else CLIPART_ANSWER).encode()
+
+    return Clipart(kernel, Drawing(kernel), fetch=fetch), asked
+
+
+def test_paging_asks_the_sources_for_the_next_batch(kernel):
+    """
+    Twaalf resultaten is vaak te weinig om te vinden wat je zoekt. De twee
+    bronnen tellen anders: Commons in een beginpositie, Openclipart in
+    pagina's.
+    """
+    shop, asked = watcher(kernel)
+
+    shop.search("hart", limit=24, page=3)
+
+    assert "gsroffset=24" in next(u for u in asked if "commons" in u)
+    assert "page=3" in next(u for u in asked if "openclipart" in u)
+
+
+def test_the_first_page_starts_at_the_beginning(kernel):
+    shop, asked = watcher(kernel)
+
+    shop.search("hart")
+
+    assert "gsroffset=0" in next(u for u in asked if "commons" in u)
+    assert "page=1" in next(u for u in asked if "openclipart" in u)
+
+
+def test_a_half_empty_page_means_the_end(shop):
+    """
+    Geen van beide API's zegt hoeveel resultaten er in totaal zijn. Een pagina
+    die niet vol raakt, is dus het eerlijkste teken dat we er zijn.
+    """
+    found = shop.search("hart", limit=24)
+
+    assert found["page"] == 1
+    assert found["has_more"] is False
+
+
+def test_an_absurd_page_is_refused(shop):
+    for page in (0, -3, 500, "twee"):
+        with pytest.raises(DesignError):
+            shop.search("hart", page=page)

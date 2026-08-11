@@ -70,14 +70,21 @@ class Clipart:
 
     # -------------------------------------------------------------- zoeken
 
-    def search(self, query: str, sources=None, limit: int = 24) -> dict:
+    def search(self, query: str, sources=None, limit: int = 24, page: int = 1) -> dict:
         text = str(query or "").strip()
         if len(text) < 2:
             raise DesignError("Geef minstens twee letters om op te zoeken.")
         wanted = [s for s in (sources or SOURCES) if s in SOURCES]
         if not wanted:
             raise DesignError(f"Onbekende bron. Kies uit {', '.join(SOURCES)}.")
+        try:
+            number = int(page)
+        except (TypeError, ValueError) as e:
+            raise DesignError("De pagina moet een geheel getal zijn.") from e
+        if not 1 <= number <= 50:
+            raise DesignError("De pagina moet tussen 1 en 50 liggen.")
         per_source = max(4, int(limit) // len(wanted))
+        offset = (number - 1) * per_source
 
         lookups = {"wikimedia": self._wikimedia, "openclipart": self._openclipart}
         results, problems = [], {}
@@ -90,7 +97,7 @@ class Clipart:
 
         def run(name):
             try:
-                found[name] = lookups[name](text, per_source)
+                found[name] = lookups[name](text, per_source, offset)
             except Exception as error:  # noqa: BLE001 - de reden is het antwoord
                 problems[name] = self._reason(error)
 
@@ -109,8 +116,14 @@ class Clipart:
             elif name not in problems:
                 problems[name] = "reageerde niet op tijd"
 
+        # Meer te halen zolang minstens één bron zijn pagina helemaal vulde.
+        # Geen van beide API's zegt hoeveel resultaten er in totaal zijn, dus
+        # dit is het eerlijkste teken: een halfvolle pagina is het einde.
+        more = any(len(found.get(name, [])) >= per_source for name in wanted)
         return {
             "query": text,
+            "page": number,
+            "has_more": more,
             "results": results[: int(limit)],
             "unavailable": problems,
         }
@@ -131,7 +144,7 @@ class Clipart:
             return "gaf een onverwacht antwoord"
         return str(error)[:120] or "gaf een onverwacht antwoord"
 
-    def _wikimedia(self, query: str, limit: int) -> list[dict]:
+    def _wikimedia(self, query: str, limit: int, offset: int = 0) -> list[dict]:
         params = urllib.parse.urlencode(
             {
                 "action": "query",
@@ -140,6 +153,7 @@ class Clipart:
                 "gsrsearch": f"filetype:drawing {query}",
                 "gsrnamespace": "6",
                 "gsrlimit": str(limit),
+                "gsroffset": str(offset),
                 "prop": "imageinfo",
                 "iiprop": "url|mime|extmetadata",
                 "iiurlwidth": "160",
@@ -174,8 +188,15 @@ class Clipart:
             )
         return found
 
-    def _openclipart(self, query: str, limit: int) -> list[dict]:
-        params = urllib.parse.urlencode({"query": query, "amount": str(limit)})
+    def _openclipart(self, query: str, limit: int, offset: int = 0) -> list[dict]:
+        # Openclipart telt in pagina's, niet in een beginpositie.
+        params = urllib.parse.urlencode(
+            {
+                "query": query,
+                "amount": str(limit),
+                "page": str(offset // max(1, limit) + 1),
+            }
+        )
         payload = json.loads(self.fetch(f"{OPENCLIPART}?{params}").decode("utf-8"))
 
         found = []

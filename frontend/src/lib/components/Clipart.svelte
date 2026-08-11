@@ -34,30 +34,47 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let searched = $state(false);
+	let page = $state(1);
+	let hasMore = $state(false);
+	let loadingMore = $state(false);
 	let width = $state('60');
 	let placing = $state<string | null>(null);
 	let notes = $state<string[]>([]);
 
-	async function search() {
+	async function search(next = false) {
 		if (query.trim().length < 2) return;
-		busy = true;
+		const wanted = next ? page + 1 : 1;
+		if (next) loadingMore = true;
+		else busy = true;
 		error = null;
 		notes = [];
 		try {
-			const params = new URLSearchParams({ q: query.trim(), sources: chosen.join(',') });
+			const params = new URLSearchParams({
+				q: query.trim(),
+				sources: chosen.join(','),
+				page: String(wanted)
+			});
 			const response = await fetch(`/api/clipart/search?${params}`);
 			if (!response.ok) {
 				error = (await response.json().catch(() => null))?.detail ?? 'Zoeken mislukte.';
 				return;
 			}
 			const data = await response.json();
-			results = data.results;
+			// Bij "meer" aanvullen in plaats van vervangen, zodat je niet
+			// kwijtraakt wat je al bekeken had. Op id ontdubbelen: de bronnen
+			// leveren soms hetzelfde op een volgende pagina opnieuw.
+			const seen = new Set(next ? results.map((r) => r.id) : []);
+			const fresh = (data.results as Result[]).filter((r) => !seen.has(r.id));
+			results = next ? [...results, ...fresh] : data.results;
 			unavailable = data.unavailable;
+			hasMore = data.has_more && (!next || fresh.length > 0);
+			page = wanted;
 			searched = true;
 		} catch (e) {
 			error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
 		} finally {
 			busy = false;
+			loadingMore = false;
 		}
 	}
 
@@ -114,7 +131,11 @@
 			<input class="mono" type="number" min="1" max="2000" step="5" bind:value={width} />
 			<span>mm</span>
 		</label>
-		<button class="btn primary" disabled={busy || query.trim().length < 2} onclick={search}>
+		<button
+			class="btn primary"
+			disabled={busy || query.trim().length < 2}
+			onclick={() => search()}
+		>
 			{busy ? 'Zoeken…' : 'Zoeken'}
 		</button>
 	</div>
@@ -180,6 +201,19 @@
 			</p>
 		{/each}
 	</div>
+
+	{#if results.length}
+		<div class="more">
+			<span class="count mono">{results.length} getoond</span>
+			{#if hasMore}
+				<button class="btn" disabled={loadingMore} onclick={() => search(true)}>
+					{loadingMore ? 'Ophalen…' : 'Meer resultaten'}
+				</button>
+			{:else}
+				<span class="count">dit is alles</span>
+			{/if}
+		</div>
+	{/if}
 </Dialog>
 
 <style>
@@ -247,6 +281,14 @@
 	}
 	.meta a { color: var(--accent); }
 	.empty { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--text-2); padding: var(--space-5) 0; }
+	.more {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		margin-top: var(--space-3);
+	}
+	.more .btn { margin-left: auto; }
+	.count { font-size: 10px; color: var(--text-2); }
 	.btn {
 		padding: 8px 14px;
 		border-radius: var(--radius-field);

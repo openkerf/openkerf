@@ -766,7 +766,9 @@ class ApiServer:
         # --------------------------------------------------------------- clipart
 
         @app.get("/api/clipart/search")
-        def clipart_search(q: str, sources: str | None = None, limit: int = 24):
+        def clipart_search(
+            q: str, sources: str | None = None, limit: int = 24, page: int = 1
+        ):
             """
             Zoeken in openbare collecties, via onze server.
 
@@ -774,7 +776,7 @@ class ApiServer:
             in 'unavailable' zodat de app het kan melden.
             """
             chosen = [s.strip() for s in (sources or "").split(",") if s.strip()]
-            return manage(self.clipart.search, q, chosen or None, limit)
+            return manage(self.clipart.search, q, chosen or None, limit, page)
 
         @app.post("/api/clipart/insert", dependencies=write, status_code=201)
         def clipart_insert(body: dict):
