@@ -91,6 +91,23 @@
 		if (!target) return;
 		if (await library.applyTo(preset.id, target.id)) onApplied?.();
 	}
+
+	/**
+	 * Welke textuur bij een materiaal hoort.
+	 *
+	 * Op naam raden is grof, maar het alternatief is een veld dat niemand
+	 * invult. Onbekend materiaal krijgt een neutrale strook — dat is eerlijker
+	 * dan hout suggereren.
+	 */
+	function textuur(naam: string | null): string {
+		const n = (naam ?? '').toLowerCase();
+		if (/multiplex|plywood|hout|wood|mdf|berk|populier|eiken/.test(n)) return 'hout';
+		if (/acryl|acrylic|plexi|pmma/.test(n)) return 'acryl';
+		if (/leer|leather/.test(n)) return 'leer';
+		if (/karton|papier|paper|card/.test(n)) return 'karton';
+		if (/staal|metaal|alu|steel|metal|messing|rvs|inox|chroom|koper|brass|copper|titaan/.test(n)) return 'metaal';
+		return 'onbekend';
+	}
 </script>
 
 <div class="section">
@@ -151,6 +168,19 @@
 		{:else}
 			{#each visible as preset (preset.id)}
 				<article class="preset">
+					<!-- Materiaal als beeld: een strook die zegt waar je in brandt.
+					     Met CSS gemaakt (geen bestanden, schaalt mee, volgt het
+					     thema) en met de rasterfoto ernaast als die er is — het
+					     bewijs hoort bij de instelling, niet drie schermen verder. -->
+					<div class="strook {textuur(preset.material_name)}">
+						{#if preset.grid_photo}
+							<img
+								class="bewijs"
+								src="/api/library/testgrids/{preset.grid_id}/photo"
+								alt="Foto van het testraster waar deze preset uit komt"
+							/>
+						{/if}
+					</div>
 					<div class="head">
 						<div class="what">
 							<span class="name">{preset.material_name}</span>
@@ -178,13 +208,18 @@
 					</div>
 					{#if canEdit}
 						<div class="foot">
+							<!-- Een dode knop zonder reden is een raadsel; zeg waaróm. -->
 							<button
 								class="btn primary"
 								disabled={library.busy || !chosenOperation}
+								title={chosenOperation ? undefined : 'Maak eerst een laag aan in de Lagen-tab'}
 								onclick={() => apply(preset)}
 							>
-								Toepassen{chosenOperation ? ` op ${chosenOperation.label}` : ''}
+								{chosenOperation ? `Toepassen op ${chosenOperation.label}` : 'Toepassen'}
 							</button>
+							{#if !chosenOperation}
+								<span class="waarom">Er is nog geen laag om dit op te zetten.</span>
+							{/if}
 							<button
 								class="mini"
 								onclick={() => (editing = editing === preset.id ? null : preset.id)}
@@ -352,6 +387,64 @@
 		overflow: hidden;
 		margin-top: var(--space-2);
 	}
+	.strook {
+		position: relative;
+		height: 42px;
+		border-bottom: 1px solid var(--line);
+		background-color: var(--surface-2);
+	}
+	/* Nerf: twee lagen strepen onder een lichte hoek, met een warme ondergrond. */
+	.strook.hout {
+		background-color: #c8a06a;
+		background-image:
+			repeating-linear-gradient(97deg, rgb(0 0 0 / 0.10) 0 1px, transparent 1px 7px),
+			repeating-linear-gradient(93deg, rgb(255 255 255 / 0.13) 0 2px, transparent 2px 15px);
+	}
+	/* Acryl: glad, met één schuine glans. */
+	.strook.acryl {
+		background-color: #7fb9c4;
+		background-image: linear-gradient(103deg, rgb(255 255 255 / 0.45) 0 18%, transparent 40%);
+	}
+	/* Leer: onregelmatige korrel uit gestapelde radiale vlekken. */
+	.strook.leer {
+		background-color: #8a5a3b;
+		background-image:
+			radial-gradient(circle at 20% 40%, rgb(0 0 0 / 0.18) 0 2px, transparent 3px),
+			radial-gradient(circle at 62% 70%, rgb(0 0 0 / 0.14) 0 3px, transparent 4px),
+			radial-gradient(circle at 85% 25%, rgb(255 255 255 / 0.12) 0 2px, transparent 3px);
+		background-size: 26px 22px, 33px 29px, 19px 17px;
+		background-position: 0 0, 11px 7px, 5px 13px;
+	}
+	/* Karton: golfprofiel, van opzij gezien. */
+	.strook.karton {
+		background-color: #cdb391;
+		background-image: repeating-linear-gradient(90deg, rgb(0 0 0 / 0.13) 0 1px, transparent 1px 9px);
+	}
+	/* Metaal: geborsteld, met een lopende glans. */
+	.strook.metaal {
+		background-color: #b6bcc2;
+		background-image:
+			repeating-linear-gradient(90deg, rgb(255 255 255 / 0.35) 0 1px, transparent 1px 4px),
+			linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.40) 48%, transparent 62%);
+	}
+	.strook.onbekend {
+		background-image: repeating-linear-gradient(45deg, rgb(0 0 0 / 0.04) 0 6px, transparent 6px 12px);
+	}
+	/* Het bewijs zelf: rechts in de strook, volledig zichtbaar en niet
+	   afgesneden — een halve rasterfoto bewijst niets. */
+	.bewijs {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		height: 34px;
+		width: auto;
+		max-width: 45%;
+		object-fit: contain;
+		border-radius: 3px;
+		background: var(--surface-1);
+		box-shadow: var(--lift-1);
+	}
+	.waarom { font-size: var(--text-xs); color: var(--text-2); }
 	.preset .head {
 		display: flex;
 		gap: var(--space-2);
