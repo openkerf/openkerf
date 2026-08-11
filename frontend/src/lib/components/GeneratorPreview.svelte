@@ -102,12 +102,15 @@
 			<g class="tanden">
 				<path d="M26 62 v6 M33 65.5 v6 M40 69 v6" />
 			</g>
+			<!-- Losse woorden pasten niet naast elkaar op 100 eenheden zonder onder
+			     de 11 schermpixels te duiken. Letters bij de maatlijnen, met de
+			     legenda eronder: even eenduidig, wel leesbaar. -->
 			<g class="bemating">
-				<path d="M22 88 H50 M50 88 H78" />
-				<text class="bij" x="30" y="95">breedte</text>
-				<text class="bij" x="58" y="95">diepte</text>
-				<text class="bij" x="82" y="60">hoogte</text>
-				<text class="bij tand" x="16" y="82">vinger</text>
+				<path d="M22 86 H50 M50 86 H78 M84 42 V64" />
+				<text class="bij" x="33" y="95">B</text>
+				<text class="bij" x="62" y="95">D</text>
+				<text class="bij" x="88" y="56">H</text>
+				<text class="bij tand" x="14" y="78">V</text>
 			</g>
 		{:else if soort === 'arctext'}
 			<path class="hulp" d="M14 66 A36 36 0 0 1 86 66" />
@@ -135,6 +138,9 @@
 			</g>
 		{/if}
 	</svg>
+	{#if soort === 'box'}
+		<figcaption class="legenda">B breedte · D diepte · H hoogte · V vinger</figcaption>
+	{/if}
 	<figcaption>{@render children?.()}</figcaption>
 </figure>
 
@@ -170,4 +176,5 @@
 	/* @svg-space: zie hierboven. */
 	.letter { font-size: 10px; fill: var(--accent); text-anchor: middle; font-weight: 600; }
 	figcaption { font-size: var(--text-xs); color: var(--text-2); text-align: center; }
+	.legenda { color: var(--text-1); }
 </style>

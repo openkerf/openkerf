@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Dialog from './Dialog.svelte';
 	import GeneratorPreview from './GeneratorPreview.svelte';
+	import NumberField from './NumberField.svelte';
 
 	let {
 		open = $bindable(),
@@ -116,7 +117,7 @@
 	const n = (value: string) => Number(value);
 </script>
 
-<Dialog title="Generatoren" bind:open width="560px">
+<Dialog title="Generatoren" bind:open width="800px">
 	<div class="tabs">
 		{#each TABS as item (item.id)}
 			<button class="tab" aria-pressed={tab === item.id} onclick={() => { tab = item.id; error = null; }}>
@@ -146,10 +147,10 @@
 			de vormen, want daar gaat de snede doorheen.
 		</p>
 		<div class="fields">
-			<label><span>Kolommen</span><input class="mono" type="number" min="1" bind:value={grid.columns} /></label>
-			<label><span>Rijen</span><input class="mono" type="number" min="1" bind:value={grid.rows} /></label>
-			<label><span>Ruimte X (mm)</span><input class="mono" type="number" step="0.5" bind:value={grid.gap_x_mm} /></label>
-			<label><span>Ruimte Y (mm)</span><input class="mono" type="number" step="0.5" bind:value={grid.gap_y_mm} /></label>
+			<NumberField label="Kolommen" step={1} min={1} bind:value={grid.columns} />
+			<NumberField label="Rijen" step={1} min={1} bind:value={grid.rows} />
+			<NumberField label="Ruimte X" unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
+			<NumberField label="Ruimte Y" unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run({
 			columns: n(grid.columns), rows: n(grid.rows),
@@ -160,8 +161,8 @@
 	{:else if tab === 'radial'}
 		<p class="lead">De selectie rond een middelpunt herhalen.</p>
 		<div class="fields">
-			<label><span>Aantal</span><input class="mono" type="number" min="2" bind:value={radial.repeats} /></label>
-			<label><span>Straal (mm)</span><input class="mono" type="number" step="1" bind:value={radial.radius_mm} /></label>
+			<NumberField label="Aantal" step={1} min={2} bind:value={radial.repeats} />
+			<NumberField label="Straal" unit="mm" step={1} bind:value={radial.radius_mm} />
 			<label class="check"><input type="checkbox" bind:checked={radial.rotate} /><span>Meedraaien</span></label>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run({
@@ -172,11 +173,11 @@
 			Een regelmatige veelhoek. Vul een binnenstraal in en het wordt een ster.
 		</p>
 		<div class="fields">
-			<label><span>Hoeken</span><input class="mono" type="number" min="3" bind:value={polygon.corners} /></label>
-			<label><span>Straal (mm)</span><input class="mono" type="number" step="1" bind:value={polygon.radius_mm} /></label>
-			<label><span>Binnenstraal (mm)</span><input class="mono" type="number" step="1" placeholder="leeg = veelhoek" bind:value={polygon.inner} /></label>
-			<label><span>Midden X (mm)</span><input class="mono" type="number" bind:value={polygon.cx_mm} /></label>
-			<label><span>Midden Y (mm)</span><input class="mono" type="number" bind:value={polygon.cy_mm} /></label>
+			<NumberField label="Hoeken" step={1} min={3} bind:value={polygon.corners} />
+			<NumberField label="Straal" unit="mm" step={1} bind:value={polygon.radius_mm} />
+			<NumberField label="Binnenstraal" unit="mm" step={1} bind:value={polygon.inner} />
+			<NumberField label="Midden X" unit="mm" step={1} bind:value={polygon.cx_mm} />
+			<NumberField label="Midden Y" unit="mm" step={1} bind:value={polygon.cy_mm} />
 		</div>
 		<button class="go" disabled={busy} onclick={() => run({
 			corners: n(polygon.corners), radius_mm: n(polygon.radius_mm),
@@ -190,12 +191,12 @@
 			wegneemt. Past het niet op één vel, dan gaat de rest naar een volgend vel.
 		</p>
 		<div class="fields">
-			<label><span>Breedte (mm)</span><input class="mono" type="number" bind:value={box.width_mm} /></label>
-			<label><span>Diepte (mm)</span><input class="mono" type="number" bind:value={box.depth_mm} /></label>
-			<label><span>Hoogte (mm)</span><input class="mono" type="number" bind:value={box.height_mm} /></label>
-			<label><span>Materiaaldikte (mm)</span><input class="mono" type="number" step="0.1" bind:value={box.thickness_mm} /></label>
-			<label><span>Vinger (mm)</span><input class="mono" type="number" step="1" bind:value={box.finger_mm} /></label>
-			<label><span>Kerf (mm)</span><input class="mono" type="number" step="0.05" bind:value={box.kerf_mm} /></label>
+			<NumberField label="Breedte" unit="mm" step={1} bind:value={box.width_mm} />
+			<NumberField label="Diepte" unit="mm" step={1} bind:value={box.depth_mm} />
+			<NumberField label="Hoogte" unit="mm" step={1} bind:value={box.height_mm} />
+			<NumberField label="Materiaaldikte" unit="mm" step={0.1} bind:value={box.thickness_mm} />
+			<NumberField label="Vinger" unit="mm" step={1} bind:value={box.finger_mm} />
+			<NumberField label="Kerf" unit="mm" step={0.05} bind:value={box.kerf_mm} />
 			<label class="check"><input type="checkbox" bind:checked={box.lid} /><span>Met deksel</span></label>
 			<label class="check">
 				<input type="checkbox" bind:checked={box.spread} />
@@ -214,7 +215,7 @@
 		</p>
 		<div class="fields">
 			<label class="wide"><span>Inhoud</span><input type="text" placeholder="https://…" bind:value={qr.text} /></label>
-			<label><span>Formaat (mm)</span><input class="mono" type="number" step="1" bind:value={qr.size_mm} /></label>
+			<NumberField label="Formaat" unit="mm" step={1} bind:value={qr.size_mm} />
 		</div>
 		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run({
 			text: qr.text.trim(), size_mm: n(qr.size_mm)
@@ -235,8 +236,8 @@
 					{/each}
 				</select>
 			</label>
-			<label><span>Breedte (mm)</span><input class="mono" type="number" step="1" bind:value={bar.width_mm} /></label>
-			<label><span>Hoogte (mm)</span><input class="mono" type="number" step="1" bind:value={bar.height_mm} /></label>
+			<NumberField label="Breedte" unit="mm" step={1} bind:value={bar.width_mm} />
+			<NumberField label="Hoogte" unit="mm" step={1} bind:value={bar.height_mm} />
 		</div>
 		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run({
 			text: bar.text.trim(), kind: bar.kind,
@@ -250,10 +251,10 @@
 		</p>
 		<div class="fields">
 			<label class="wide"><span>Tekst</span><input type="text" placeholder="OPENKERF" bind:value={arc.text} /></label>
-			<label><span>Midden X (mm)</span><input class="mono" type="number" bind:value={arc.cx_mm} /></label>
-			<label><span>Midden Y (mm)</span><input class="mono" type="number" bind:value={arc.cy_mm} /></label>
-			<label><span>Straal (mm)</span><input class="mono" type="number" step="1" bind:value={arc.radius_mm} /></label>
-			<label><span>Letterhoogte (mm)</span><input class="mono" type="number" step="0.5" bind:value={arc.font_size_mm} /></label>
+			<NumberField label="Midden X" unit="mm" step={1} bind:value={arc.cx_mm} />
+			<NumberField label="Midden Y" unit="mm" step={1} bind:value={arc.cy_mm} />
+			<NumberField label="Straal" unit="mm" step={1} bind:value={arc.radius_mm} />
+			<NumberField label="Letterhoogte" unit="mm" step={0.5} bind:value={arc.font_size_mm} />
 			<label class="check"><input type="checkbox" bind:checked={arc.inside} /><span>Onderlangs</span></label>
 		</div>
 		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run({

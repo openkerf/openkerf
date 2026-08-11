@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { OPERATIONS, SOURCE_LABEL, type LibraryStore, type Preset } from '$lib/library.svelte';
+	import { OPERATION_LAYER, OPERATIONS, SOURCE_LABEL, type LibraryStore, type Preset } from '$lib/library.svelte';
 	import type { DesignOperation } from '$lib/design.svelte';
 
 	let {
@@ -134,6 +134,13 @@
 		} finally {
 			bezigFoto = null;
 		}
+	}
+
+	/** Past deze preset bij het laagtype waar hij op gezet wordt? */
+	function past(preset: Preset, laag: DesignOperation | null) {
+		if (!laag) return true;
+		const toegestaan = OPERATION_LAYER[preset.operation];
+		return !toegestaan || toegestaan.includes(laag.type);
 	}
 </script>
 
@@ -271,6 +278,13 @@
 							</button>
 							{#if !chosenOperation}
 								<span class="waarom">Er is nog geen laag om dit op te zetten.</span>
+							{:else if !past(preset, chosenOperation)}
+								<!-- Niet blokkeren, wel zeggen: een snijinstelling op een
+								     graveerlaag is verbrand materiaal, geen tikfout. -->
+								<span class="botst">
+									Let op: dit is een {preset.operation}-instelling en
+									"{chosenOperation.label}" is geen {preset.operation}-laag.
+								</span>
 							{/if}
 							{#if preset.grid_id && !preset.grid_photo}
 								<!-- Het bewijs ontbreekt nog; dat voeg je hier toe, niet
@@ -524,6 +538,12 @@
 	}
 	.file { position: relative; overflow: hidden; }
 	.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+	.botst {
+		font-size: var(--text-xs);
+		color: var(--warn);
+		flex: 1;
+		min-width: 12ch;
+	}
 	.waarom { font-size: var(--text-xs); color: var(--text-2); }
 	.preset .head {
 		display: flex;

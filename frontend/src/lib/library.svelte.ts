@@ -35,6 +35,20 @@ export const OPERATIONS = [
 	{ value: 'markeren', label: 'Markeren' }
 ];
 
+/**
+ * Welk laagtype bij welke bewerking hoort.
+ *
+ * Een snijpreset op een graveerlaag zetten is geen tikfout maar verbrand
+ * materiaal: 12 mm/s op 65% doet iets heel anders dan 250 mm/s op 20%. We
+ * blokkeren het niet — soms weet de gebruiker beter — maar we zeggen het wel.
+ */
+export const OPERATION_LAYER: Record<string, string[]> = {
+	snijden: ['op cut'],
+	'graveren-vector': ['op engrave'],
+	'graveren-raster': ['op raster', 'op image'],
+	markeren: ['op engrave', 'op dots']
+};
+
 /** Hoe zeker is deze preset? Bepaalt de badge in de materiaalkaart. */
 export const SOURCE_LABEL: Record<Preset['source'], { text: string; tone: string }> = {
 	testraster: { text: 'Geverifieerd', tone: 'ok' },
