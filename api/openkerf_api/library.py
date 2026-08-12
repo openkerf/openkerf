@@ -12,7 +12,9 @@ separate table that presets point at.
 """
 
 import json
+import re
 import sqlite3
+import unicodedata
 from pathlib import Path
 
 SCHEMA = """
@@ -92,6 +94,34 @@ CREATE INDEX IF NOT EXISTS preset_material ON preset(material_id);
 
 OPERATIONS = ("snijden", "graveren-vector", "graveren-raster", "markeren")
 SOURCES = ("handmatig", "geextrapoleerd", "testraster", "geimporteerd")
+
+# Besluit B7: de bibliotheek is uitwisselbaar. Eén bestand, want een
+# bibliotheek zonder de rasterfoto's is de helft — die foto's zíjn het bewijs.
+# Daarom een zip: de JSON met de gegevens, de foto's ernaast.
+BUNDLE_FORMAT = "openkerf-library"
+BUNDLE_VERSION = 1
+BUNDLE_SUFFIX = ".openkerf-lib"
+BUNDLE_INDEX = "bibliotheek.json"
+BUNDLE_PHOTOS = "fotos"
+
+# Wanneer twee namen over hetzelfde materiaal gaan. De catalogus schrijft
+# "Berkentriplex" waar de bibliotheek "Multiplex berken" heeft — dat is één
+# plank, geen twee. We voegen het nooit vanzelf samen (een verkeerde gok kost
+# je je eigen metingen), maar we wijzen het wel aan.
+MATERIAL_FAMILIES = {
+    "multiplex": ("multiplex", "triplex", "plywood", "ply"),
+    "berken": ("berken", "berk", "birch"),
+    "populier": ("populier", "poplar"),
+    "eiken": ("eiken", "eik", "oak"),
+    "mdf": ("mdf",),
+    "acryl": ("acryl", "acrylaat", "acrylic", "plexiglas", "plexi", "pmma"),
+    "karton": ("karton", "kartonnen", "cardboard"),
+    "papier": ("papier", "paper"),
+    "leer": ("leer", "leder", "leather"),
+    "vilt": ("vilt", "felt"),
+    "rvs": ("rvs", "inox", "staal", "steel"),
+    "aluminium": ("aluminium", "alu"),
+}
 
 
 class LibraryError(RuntimeError):
@@ -545,6 +575,414 @@ class Library:
             )
         return self.test_grid(grid_id)
 
+    # --------------------------------------------------- uitwisselen (B7)
+
+    def export_bundle(self, filename: str = "bibliotheek") -> Path:
+        """
+        De hele bibliotheek als één bestand: gegevens plus bewijs.
+
+        Materialen, presets met hun herkomst, machineprofielen, testrasters en
+        de foto's van die rasters. De foto's moeten mee: een preset met bron
+        "testraster" en geen foto is een bewering waar niets meer onder ligt.
+        """
+        import tempfile
+        import zipfile
+        from datetime import datetime, timezone
+
+        veilig = Path(str(filename)).name or "bibliotheek"
+        if not veilig.lower().endswith(BUNDLE_SUFFIX):
+            veilig += BUNDLE_SUFFIX
+        doel = Path(tempfile.mkdtemp(prefix="openkerf-lib-")) / veilig
+
+        rasters = self.test_grids()
+        presets = []
+        for preset in self.presets():
+            # De koppelvelden uit de weergave horen niet in het bestand: ze
+            # worden bij het inlezen opnieuw afgeleid. De namen blijven wél,
+            # want die zijn waar het samenvoegen op werkt.
+            for sleutel in ("grid_photo", "grid_date", "grid_id", "grid_cell"):
+                preset.pop(sleutel, None)
+            presets.append(preset)
+
+        with zipfile.ZipFile(doel, "w", zipfile.ZIP_DEFLATED) as bundel:
+            for raster in rasters:
+                pad = raster.pop("photo_path", None)
+                raster["photo_file"] = None
+                if pad and Path(pad).exists():
+                    naam = f"{BUNDLE_PHOTOS}/grid-{raster['id']}{Path(pad).suffix.lower()}"
+                    bundel.write(pad, naam)
+                    raster["photo_file"] = naam
+            payload = {
+                "format": BUNDLE_FORMAT,
+                "version": BUNDLE_VERSION,
+                "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "machines": self.machines(),
+                "materials": self.materials(),
+                "presets": presets,
+                "test_grids": rasters,
+            }
+            bundel.writestr(
+                BUNDLE_INDEX,
+                json.dumps(payload, indent=1, ensure_ascii=False, default=str),
+            )
+        return doel
+
+    def read_bundle(self, path) -> dict:
+        """Inlezen en meteen afwijzen wat geen bibliotheek is."""
+        import zipfile
+
+        bron = Path(path)
+        if not bron.exists():
+            raise LibraryError("Dat bestand is er niet (meer).")
+        if not zipfile.is_zipfile(bron):
+            raise LibraryError(
+                "Dit is geen OpenKerf-bibliotheek. Een bibliotheekbestand eindigt "
+                f"op {BUNDLE_SUFFIX}."
+            )
+        with zipfile.ZipFile(bron) as bundel:
+            if BUNDLE_INDEX not in bundel.namelist():
+                raise LibraryError("Dit bestand bevat geen bibliotheek.")
+            try:
+                data = json.loads(bundel.read(BUNDLE_INDEX))
+            except ValueError as e:
+                raise LibraryError("De bibliotheek in dit bestand is beschadigd.") from e
+        if not isinstance(data, dict) or data.get("format") != BUNDLE_FORMAT:
+            raise LibraryError("Dit bestand komt niet uit een OpenKerf-bibliotheek.")
+        if int(data.get("version") or 0) > BUNDLE_VERSION:
+            raise LibraryError(
+                "Dit bestand komt uit een nieuwere versie van OpenKerf. Werk eerst bij."
+            )
+        return data
+
+    def preview_import(self, path, merge_materials: dict | None = None) -> dict:
+        """
+        Wat er gaat gebeuren, vóórdat het gebeurt.
+
+        Niemand wil ontdekken dat hij zijn eigen metingen heeft overschreven.
+        Daarom rekent dit beide keuzes door — samenvoegen én vervangen — zodat
+        het verschil op het scherm staat op het moment dat je kiest.
+        """
+        data = self.read_bundle(path)
+        koppeling = _merge_map(merge_materials)
+
+        materialen = [m for m in (data.get("materials") or []) if m.get("name")]
+        eigen = self.materials()
+        nieuw, bestaand, lijkt_op = [], [], []
+        namen = {}
+        for materiaal in materialen:
+            naam = str(materiaal["name"]).strip()
+            gekoppeld = koppeling.get(_norm(naam))
+            treffer = next((m for m in eigen if m["id"] == gekoppeld), None) if gekoppeld else None
+            treffer = treffer or _same_material(naam, materiaal.get("synonyms"), eigen)
+            if treffer is not None:
+                bestaand.append({"name": naam, "as": treffer["name"], "material_id": treffer["id"]})
+                namen[materiaal.get("id")] = treffer["name"]
+                continue
+            namen[materiaal.get("id")] = naam
+            nieuw.append(naam)
+            gelijkend = _looks_like(naam, eigen)
+            if gelijkend:
+                buur, waarom = gelijkend
+                lijkt_op.append(
+                    {
+                        "name": naam,
+                        "match": buur["name"],
+                        "material_id": buur["id"],
+                        "why": waarom,
+                    }
+                )
+
+        van_mij = {}
+        for preset in self.presets():
+            van_mij.setdefault(_preset_key(preset["material_name"], preset), preset)
+        nieuwe_presets, gelijk, botsingen = 0, 0, []
+        for preset in data.get("presets") or []:
+            naam = namen.get(preset.get("material_id")) or preset.get("material_name")
+            mijne = van_mij.get(_preset_key(naam, preset))
+            if mijne is None:
+                nieuwe_presets += 1
+            elif _same_values(mijne, preset):
+                gelijk += 1
+            else:
+                botsingen.append(
+                    {
+                        "material": naam,
+                        "thickness_mm": preset.get("thickness_mm"),
+                        "operation": preset.get("operation"),
+                        "machine": preset.get("machine_name"),
+                        "mine": _values(mijne),
+                        "theirs": _values(preset),
+                    }
+                )
+
+        eigen_rasters = {_grid_key(g) for g in self.test_grids()}
+        rasters = data.get("test_grids") or []
+        nieuwe_rasters = sum(1 for g in rasters if _grid_key(g) not in eigen_rasters)
+        eigen_machines = {_norm(m["name"]) for m in self.machines()}
+        machines = [m for m in (data.get("machines") or []) if m.get("name")]
+
+        huidig = self._counts()
+        return {
+            "exported_at": data.get("exported_at"),
+            "bevat": {
+                "materials": len(materialen),
+                "presets": len(data.get("presets") or []),
+                "machines": len(machines),
+                "test_grids": len(rasters),
+                "photos": sum(1 for g in rasters if g.get("photo_file")),
+            },
+            "huidig": huidig,
+            "samenvoegen": {
+                "materials": {"new": nieuw, "existing": bestaand, "similar": lijkt_op},
+                "machines": {
+                    "new": [m["name"] for m in machines if _norm(m["name"]) not in eigen_machines],
+                    "existing": [m["name"] for m in machines if _norm(m["name"]) in eigen_machines],
+                },
+                "presets": {
+                    "new": nieuwe_presets,
+                    "identical": gelijk,
+                    "conflicts": botsingen,
+                },
+                "test_grids": {"new": nieuwe_rasters, "existing": len(rasters) - nieuwe_rasters},
+            },
+            "vervangen": {"removes": huidig},
+        }
+
+    def import_bundle(
+        self,
+        path,
+        mode: str = "samenvoegen",
+        merge_materials: dict | None = None,
+        on_conflict: str = "eigen",
+    ) -> dict:
+        """
+        Het bestand daadwerkelijk inlezen.
+
+        `mode` is een expliciete keuze: samenvoegen laat staan wat je hebt,
+        vervangen gooit het weg. `on_conflict` bepaalt wie wint als dezelfde
+        preset aan beide kanten andere getallen draagt; standaard je eigen, want
+        die heb je zelf gemeten.
+
+        De bron blijft staan zoals hij was. Dit is je eigen bibliotheek die
+        terugkomt van een back-up of een andere computer — "testraster"
+        omschrijven naar "geïmporteerd" zou precies het bewijs weggooien dat
+        deze functie moet bewaren. De foto's komen om dezelfde reden mee.
+        """
+        import zipfile
+
+        if mode not in ("samenvoegen", "vervangen"):
+            raise LibraryError(f"Onbekende keuze: {mode}")
+        if on_conflict not in ("eigen", "bestand"):
+            raise LibraryError(f"Onbekende keuze bij botsing: {on_conflict}")
+        data = self.read_bundle(path)
+        koppeling = _merge_map(merge_materials)
+        verwijderd = self._counts() if mode == "vervangen" else None
+        if mode == "vervangen":
+            self.clear()
+
+        # 1. Materialen. Alles hangt hieraan, dus dit gaat eerst.
+        materiaal_id = {}
+        for materiaal in data.get("materials") or []:
+            naam = str(materiaal.get("name") or "").strip()
+            if not naam:
+                continue
+            eigen = self.materials()
+            gekoppeld = koppeling.get(_norm(naam))
+            treffer = next((m for m in eigen if m["id"] == gekoppeld), None) if gekoppeld else None
+            treffer = treffer or _same_material(naam, materiaal.get("synonyms"), eigen)
+            if treffer is None:
+                treffer = self.add_material(naam, materiaal.get("synonyms"))
+            materiaal_id[materiaal.get("id")] = treffer["id"]
+
+        # 2. Machineprofielen, op naam.
+        machine_id = {}
+        for machine in data.get("machines") or []:
+            naam = str(machine.get("name") or "").strip()
+            if not naam:
+                continue
+            treffer = next(
+                (m for m in self.machines() if _norm(m["name"]) == _norm(naam)), None
+            )
+            if treffer is None:
+                treffer = self.add_machine(**{k: v for k, v in machine.items() if k != "id"})
+            machine_id[machine.get("id")] = treffer["id"]
+
+        with zipfile.ZipFile(Path(path)) as bundel:
+            namen = set(bundel.namelist())
+
+            # 3. Testrasters, met hun foto. Vóór de presets, want een preset
+            #    wijst met origin_id naar het raster waar hij uit komt.
+            raster_id = {}
+            eigen_rasters = {_grid_key(g): g["id"] for g in self.test_grids()}
+            for raster in data.get("test_grids") or []:
+                bestaat = eigen_rasters.get(_grid_key(raster))
+                if bestaat is not None:
+                    raster_id[raster.get("id")] = bestaat
+                    continue
+                nieuw = self._insert_grid(raster, materiaal_id, machine_id)
+                raster_id[raster.get("id")] = nieuw
+                foto = raster.get("photo_file")
+                if foto and foto in namen:
+                    self.set_grid_photo(nieuw, Path(foto).suffix.lower(), bundel.read(foto))
+
+        # 4. Presets, met hun herkomst omgenummerd naar de nieuwe raster-id's.
+        van_mij = {}
+        for preset in self.presets():
+            van_mij.setdefault(_preset_key(preset["material_name"], preset), preset)
+        bron_naam = {
+            m.get("id"): str(m.get("name") or "").strip()
+            for m in data.get("materials") or []
+        }
+        preset_id = {}
+        toegevoegd = bijgewerkt = overgeslagen = 0
+        for preset in data.get("presets") or []:
+            doel = materiaal_id.get(preset.get("material_id"))
+            if doel is None:
+                overgeslagen += 1
+                continue
+            naam = next(
+                (m["name"] for m in self.materials() if m["id"] == doel),
+                bron_naam.get(preset.get("material_id"), ""),
+            )
+            mijne = van_mij.get(_preset_key(naam, preset))
+            if mijne is not None:
+                if _same_values(mijne, preset) or on_conflict == "eigen":
+                    preset_id[preset.get("id")] = mijne["id"]
+                    overgeslagen += 1
+                    continue
+                self.update_preset(
+                    mijne["id"],
+                    speed_mm_s=preset.get("speed_mm_s"),
+                    power_percent=preset.get("power_percent"),
+                    passes=preset.get("passes") or 1,
+                )
+                preset_id[preset.get("id")] = mijne["id"]
+                bijgewerkt += 1
+                continue
+            preset_id[preset.get("id")] = self._insert_preset(
+                preset, doel, machine_id, raster_id
+            )
+            toegevoegd += 1
+
+        # 5. En terug: welk vakje van welk raster werd welke preset. Zonder deze
+        #    stap staat de foto er nog, maar wijst niets meer aan.
+        self._relink_cells(raster_id, preset_id)
+
+        return {
+            "mode": mode,
+            "removed": verwijderd,
+            "materials": len(materiaal_id),
+            "machines": len(machine_id),
+            "test_grids": len({v for v in raster_id.values()}),
+            "presets": {
+                "added": toegevoegd,
+                "updated": bijgewerkt,
+                "skipped": overgeslagen,
+            },
+        }
+
+    def clear(self) -> dict:
+        """Alles weg — alleen voor 'vervangen', en alleen na een bevestiging."""
+        weg = self._counts()
+        with self._connect() as db:
+            for tabel in ("preset", "test_grid", "material", "machine_profile"):
+                db.execute(f"DELETE FROM {tabel}")
+        for foto in self.photos.glob("grid-*"):
+            foto.unlink(missing_ok=True)
+        return weg
+
+    def _counts(self) -> dict:
+        with self._connect() as db:
+            def tellen(tabel):
+                return db.execute(f"SELECT count(*) FROM {tabel}").fetchone()[0]
+
+            return {
+                "materials": tellen("material"),
+                "presets": tellen("preset"),
+                "machines": tellen("machine_profile"),
+                "test_grids": tellen("test_grid"),
+            }
+
+    def _insert_grid(self, raster: dict, materiaal_id: dict, machine_id: dict) -> int:
+        """Een raster overnemen mét zijn datum: die datum ís het bewijs."""
+        cellen = raster.get("cells")
+        if isinstance(cellen, str):
+            cellen = json.loads(cellen)
+        with self._connect() as db:
+            cursor = db.execute(
+                """INSERT INTO test_grid (material_id, machine_id, thickness_mm, operation,
+                        speed_min, speed_max, speed_steps, power_min, power_max, power_steps,
+                        cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells, group_id, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    materiaal_id.get(raster.get("material_id")),
+                    machine_id.get(raster.get("machine_id")),
+                    raster.get("thickness_mm"),
+                    raster.get("operation") or "snijden",
+                    raster.get("speed_min"), raster.get("speed_max"), raster.get("speed_steps"),
+                    raster.get("power_min"), raster.get("power_max"), raster.get("power_steps"),
+                    raster.get("cell_mm"), raster.get("gap_mm"),
+                    raster.get("origin_x_mm"), raster.get("origin_y_mm"),
+                    json.dumps(cellen or []),
+                    raster.get("group_id"),
+                    raster.get("created_at") or _now(),
+                ),
+            )
+            return cursor.lastrowid
+
+    def _insert_preset(self, preset: dict, material_id: int, machine_id: dict, raster_id: dict) -> int:
+        herkomst = preset.get("origin_id")
+        if isinstance(herkomst, str) and herkomst.startswith("testgrid:"):
+            oud = herkomst.split(":", 1)[1]
+            nieuw = raster_id.get(int(oud)) if oud.isdigit() else None
+            herkomst = f"testgrid:{nieuw}" if nieuw else None
+        bron = preset.get("source")
+        with self._connect() as db:
+            cursor = db.execute(
+                """INSERT INTO preset (material_id, machine_id, thickness_mm, operation,
+                        speed_mm_s, power_percent, passes, air_assist, focus_offset_mm,
+                        source, origin_id, note, last_used_at, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    material_id,
+                    machine_id.get(preset.get("machine_id")),
+                    preset.get("thickness_mm"),
+                    preset.get("operation"),
+                    preset.get("speed_mm_s"),
+                    preset.get("power_percent"),
+                    int(preset.get("passes") or 1),
+                    1 if preset.get("air_assist", True) else 0,
+                    preset.get("focus_offset_mm") or 0,
+                    bron if bron in SOURCES else "geimporteerd",
+                    herkomst,
+                    str(preset.get("note") or ""),
+                    preset.get("last_used_at"),
+                    preset.get("created_at") or _now(),
+                ),
+            )
+            return cursor.lastrowid
+
+    def _relink_cells(self, raster_id: dict, preset_id: dict) -> None:
+        if not raster_id or not preset_id:
+            return
+        for oud, nieuw in raster_id.items():
+            try:
+                raster = self.test_grid(nieuw)
+            except LibraryError:
+                continue
+            veranderd = False
+            for cel in raster["cells"]:
+                doel = preset_id.get(cel.get("preset_id"))
+                if doel is not None and doel != cel.get("preset_id"):
+                    cel["preset_id"] = doel
+                    veranderd = True
+            if veranderd:
+                with self._connect() as db:
+                    db.execute(
+                        "UPDATE test_grid SET cells = ? WHERE id = ?",
+                        (json.dumps(raster["cells"]), nieuw),
+                    )
+
     # ---------------------------------------------------------------- helpers
 
     @staticmethod
@@ -572,6 +1010,113 @@ def _preset_row(row) -> dict:
                 data["grid_cell"] = {"row": cel["row"], "column": cel["column"]}
                 break
     return data
+
+
+def _now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _norm(text) -> str:
+    """Naamvergelijking zonder accenten, hoofdletters of dubbele spaties."""
+    plat = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore")
+    return re.sub(r"\s+", " ", plat.decode().lower()).strip()
+
+
+def _merge_map(keuzes: dict | None) -> dict:
+    """{"Berkentriplex": 3} → {"berkentriplex": 3}, zodat de naam ertoe doet en de vorm niet."""
+    return {_norm(k): int(v) for k, v in (keuzes or {}).items() if v is not None}
+
+
+def _same_material(naam: str, synonyms, eigen: list[dict]) -> dict | None:
+    """Exact dezelfde naam, of een naam die al als synoniem bekend staat."""
+    doel = _norm(naam)
+    binnen = {_norm(s) for s in (synonyms or [])}
+    for materiaal in eigen:
+        if _norm(materiaal["name"]) == doel:
+            return materiaal
+        mijne = {_norm(s) for s in materiaal.get("synonyms") or []}
+        if doel in mijne or _norm(materiaal["name"]) in binnen or (mijne & binnen):
+            return materiaal
+    return None
+
+
+def _families(naam: str) -> set[str]:
+    """
+    Welke materiaalfamilies er in een naam zitten.
+
+    Op losse woorden splitsen is niet genoeg: "Berkentriplex" is één woord dat
+    twee dingen zegt. Daarom zoeken we de familiewoorden ín de tekst.
+    """
+    plat = _norm(naam)
+    gevonden = set()
+    for familie, woorden in MATERIAL_FAMILIES.items():
+        if any(woord in plat for woord in woorden):
+            gevonden.add(familie)
+    return gevonden
+
+
+def _looks_like(naam: str, eigen: list[dict]) -> tuple[dict, str] | None:
+    """
+    Een materiaal dat waarschijnlijk hetzelfde is, met de reden erbij.
+
+    Twee gedeelde families is de drempel: alleen "berken" gedeeld kan berken
+    multiplex naast massief berken zijn, en dat zijn twee heel verschillende
+    sneden. Berken én multiplex samen is één plank.
+    """
+    mijn = _families(naam)
+    if len(mijn) < 2:
+        return None
+    for materiaal in eigen:
+        gedeeld = mijn & _families(materiaal["name"])
+        if len(gedeeld) >= 2:
+            woorden = sorted(gedeeld)
+            return materiaal, f"beide gaan over {' en '.join(woorden)}"
+    return None
+
+
+def _rond(waarde):
+    """3 en 3.0 zijn dezelfde dikte; None blijft None."""
+    return None if waarde in (None, "") else round(float(waarde), 2)
+
+
+def _preset_key(material_naam, preset: dict) -> tuple:
+    """Wanneer twee presets over hetzelfde gaan: zelfde plank, zelfde snede, zelfde laser."""
+    return (
+        _norm(material_naam),
+        _rond(preset.get("thickness_mm")),
+        str(preset.get("operation") or ""),
+        _norm(preset.get("machine_name") or ""),
+    )
+
+
+def _values(preset: dict) -> dict:
+    return {
+        "speed_mm_s": preset.get("speed_mm_s"),
+        "power_percent": preset.get("power_percent"),
+        "passes": preset.get("passes") or 1,
+        "source": preset.get("source"),
+        "note": preset.get("note") or "",
+    }
+
+
+def _same_values(mijne: dict, hunne: dict) -> bool:
+    for sleutel in ("speed_mm_s", "power_percent"):
+        if _rond(mijne.get(sleutel)) != _rond(hunne.get(sleutel)):
+            return False
+    return int(mijne.get("passes") or 1) == int(hunne.get("passes") or 1)
+
+
+def _grid_key(raster: dict) -> tuple:
+    """Een raster is hetzelfde raster als het op hetzelfde moment gebrand is."""
+    return (
+        str(raster.get("created_at") or ""),
+        str(raster.get("operation") or ""),
+        _rond(raster.get("speed_min")),
+        _rond(raster.get("power_min")),
+        _rond(raster.get("cell_mm")),
+    )
 
 
 def _percent(value):

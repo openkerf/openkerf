@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
 	import NumberField from './NumberField.svelte';
 	import {
 		OPERATION_LAYER,
@@ -6,6 +7,9 @@
 		SOURCE_LABEL,
 		operationName,
 		toen,
+		type ImportPreview,
+		type ImportResult,
+		type PresetConflict,
 		type LibraryStore,
 		type Preset
 	} from '$lib/library.svelte';
@@ -15,6 +19,8 @@
 		library,
 		operations,
 		canEdit = false,
+		sheetMaterialId = null,
+		sheetMaterialName = null,
 		onApplied,
 		onMakeGrid,
 		token = ''
@@ -22,13 +28,22 @@
 		library: LibraryStore;
 		operations: DesignOperation[];
 		canEdit?: boolean;
+		/** Het materiaal van het vel waarop je werkt (besluit B1). De bibliotheek
+		 *  opent daarop gefilterd: je zoekt instellingen voor wat er ín de
+		 *  machine ligt, niet voor alles wat je ooit gebrand hebt. */
+		sheetMaterialId?: number | null;
+		sheetMaterialName?: string | null;
 		onApplied?: () => void;
 		/** Opent het testrastervenster voor dit materiaal. */
 		onMakeGrid?: (materialId: number | null) => void;
 		token?: string;
 	} = $props();
 
-	let materialId = $state<number | null>(null);
+	// Het venster wordt bij elke opening opnieuw opgebouwd, dus dit is ook echt
+	// de stand waarin je hem elke keer aantreft. Bewust alleen de beginwaarde:
+	// wisselt het vel terwijl dit openstaat, dan hoort het filter niet onder je
+	// handen vandaan te schuiven — vandaar untrack.
+	let materialId = $state<number | null>(untrack(() => sheetMaterialId));
 	let zoek = $state('');
 	let adding = $state(false);
 	let newMaterial = $state('');
@@ -237,6 +252,116 @@
 		} finally {
 			bezigFoto = null;
 		}
+	}
+
+	// ------------------------------------------------ uitwisselen (besluit B7)
+
+	type Voorstel = ImportPreview['samenvoegen']['materials']['similar'][number];
+
+	let voorbeeld = $state<ImportPreview | null>(null);
+	let bestandsnaam = $state('');
+	let modus = $state<'samenvoegen' | 'vervangen'>('samenvoegen');
+	let botsWint = $state<'eigen' | 'bestand'>('eigen');
+	/** Welk materiaal uit het bestand op welk eigen materiaal gelegd wordt. */
+	let koppel = $state<Record<string, number>>({});
+	let wisZeker = $state(false);
+	let klaar = $state<ImportResult | null>(null);
+	/**
+	 * Elk voorstel dat we ooit toonden, ook nadat het aangevinkt is.
+	 *
+	 * Zodra je koppelt, telt het materiaal als bekend en verdwijnt het uit de
+	 * voorstellen van de server — en daarmee zou het vinkje verdwijnen dat je
+	 * net zette. Dan is de keuze niet meer terug te draaien zonder afbreken.
+	 */
+	let gezien = $state<Record<string, Voorstel>>({});
+	let voorstellen = $derived.by(() => {
+		const lijst = [...(voorbeeld?.samenvoegen.materials.similar ?? [])];
+		for (const naam of Object.keys(koppel)) {
+			if (gezien[naam] && !lijst.some((p) => p.name === naam)) lijst.push(gezien[naam]);
+		}
+		return lijst.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+	});
+
+	/** Kwam er iets binnen dat het huidige filter niet laat zien? */
+	let verborgen = $state(false);
+	let wisselEl = $state<HTMLElement | null>(null);
+	let klaarEl = $state<HTMLElement | null>(null);
+
+	/**
+	 * Het venster is de scrollbak, en je drukte op een knop onderaan.
+	 *
+	 * Zonder dit verschijnt het voorbeeld met zijn kop en zijn tellingen bóven
+	 * beeld: je landt midden in een beslissing en moet eerst omhoog om te zien
+	 * waar hij over gaat.
+	 */
+	async function naarBoven(welke: 'voorbeeld' | 'klaar') {
+		await tick();
+		(welke === 'klaar' ? klaarEl : wisselEl)?.scrollIntoView({ block: 'start' });
+	}
+
+	async function kiesBestand(bestand: File) {
+		klaar = null;
+		modus = 'samenvoegen';
+		botsWint = 'eigen';
+		koppel = {};
+		gezien = {};
+		wisZeker = false;
+		bestandsnaam = bestand.name;
+		voorbeeld = await library.uploadBundle(bestand);
+		if (voorbeeld) naarBoven('voorbeeld');
+	}
+
+	/**
+	 * Twee namen voor dezelfde plank aan elkaar knopen.
+	 *
+	 * Het voorbeeld wordt daarna opnieuw opgehaald: het aantal nieuwe materialen
+	 * verandert erdoor, en een telling die niet meebeweegt met je keuze is een
+	 * telling die je niet kunt vertrouwen.
+	 */
+	async function koppelen(paar: Voorstel, aan: boolean) {
+		// Onthouden vóór het herrekenen: daarna kent de server dit materiaal en
+		// draagt hij het voorstel niet meer aan.
+		gezien = { ...gezien, [paar.name]: paar };
+		koppel = aan
+			? { ...koppel, [paar.name]: paar.material_id }
+			: Object.fromEntries(Object.entries(koppel).filter(([k]) => k !== paar.name));
+		if (voorbeeld) {
+			const opnieuw = await library.previewBundle(voorbeeld.bundle, koppel);
+			if (opnieuw) voorbeeld = opnieuw;
+		}
+	}
+
+	async function importeren() {
+		if (!voorbeeld) return;
+		const zichtbaarVoor = library.presets.length;
+		const uitkomst = await library.importBundle(voorbeeld.bundle, modus, koppel, botsWint);
+		if (uitkomst) {
+			// "4 instellingen erbij" terwijl het scherm niet verandert, is geen
+			// geruststelling maar een raadsel: ze horen dan bij een andere machine
+			// en vallen buiten het filter. Gemeten in plaats van geraden.
+			verborgen =
+				uitkomst.presets.added > 0 &&
+				library.presets.length - zichtbaarVoor < uitkomst.presets.added;
+			klaar = uitkomst;
+			voorbeeld = null;
+			naarBoven('klaar');
+		}
+	}
+
+	/**
+	 * Draagt de kant uit het bestand het betere bewijs?
+	 *
+	 * "Mijn waarden houden" is de veilige regel, maar niet als jouw waarde
+	 * uitgerekend is en die uit het bestand op een raster gebrand. Dan wint de
+	 * regel het van de meting, en dat hoort iemand te zien vóór hij kiest.
+	 */
+	function sterkerBewijs(botsing: PresetConflict) {
+		return botsing.theirs.source === 'testraster' && botsing.mine.source !== 'testraster';
+	}
+
+	/** "3 instellingen" — en "1 instelling", want dat leest een mens ook. */
+	function tel(aantal: number, enkel: string, meer: string) {
+		return `${aantal} ${aantal === 1 ? enkel : meer}`;
 	}
 
 	/** Past deze preset bij het laagtype waar hij op gezet wordt? */
@@ -516,6 +641,243 @@
 	</article>
 {/snippet}
 
+{#if voorbeeld}
+	<!-- Het importvoorbeeld neemt het hele venster over. Dit is het moment
+	     waarop de beslissing valt; ernaast blijven bladeren door de bibliotheek
+	     die je op het punt staat te overschrijven, helpt niemand. -->
+	{@const s = voorbeeld.samenvoegen}
+	<section class="wissel" bind:this={wisselEl}>
+		<header class="wisselkop">
+			<h2>Dit gaat er gebeuren</h2>
+			<p class="bron">
+				<span class="mono">{bestandsnaam}</span>
+				{#if voorbeeld.exported_at}
+					<span class="scheiding">·</span> geëxporteerd {toen(voorbeeld.exported_at)}
+				{/if}
+			</p>
+			<ul class="inhoud">
+				<li>{tel(voorbeeld.bevat.materials, 'materiaal', 'materialen')}</li>
+				<li>{tel(voorbeeld.bevat.presets, 'instelling', 'instellingen')}</li>
+				<li>{tel(voorbeeld.bevat.machines, 'machineprofiel', 'machineprofielen')}</li>
+				<li>{tel(voorbeeld.bevat.test_grids, 'testraster', 'testrasters')}</li>
+				<li class:mist={voorbeeld.bevat.photos === 0}>
+					{tel(voorbeeld.bevat.photos, 'foto', "foto's")}
+				</li>
+			</ul>
+			<!-- Waar het naast komt te liggen. Zonder dit zijn "6 instellingen"
+			     zes losse getallen; ernaast is het een verhouding. -->
+			<p class="nu">
+				Je bibliotheek nu: {tel(voorbeeld.huidig.materials, 'materiaal', 'materialen')} ·
+				{tel(voorbeeld.huidig.presets, 'instelling', 'instellingen')} ·
+				{tel(voorbeeld.huidig.test_grids, 'testraster', 'testrasters')}
+			</p>
+		</header>
+
+		<!-- De twee keuzes staan naast elkaar en dragen allebei hun gevolg, zodat
+		     "vervangen" niet per ongeluk gekozen wordt omdat het korter klinkt. -->
+		<div class="keuzes">
+			<label class="keuze" class:aan={modus === 'samenvoegen'}>
+				<input type="radio" name="importmodus" value="samenvoegen" bind:group={modus} />
+				<span class="titelklein">Samenvoegen</span>
+				<span class="uitleg">Wat je hebt blijft staan; wat er nog niet is komt erbij.</span>
+			</label>
+			<label class="keuze gevaar" class:aan={modus === 'vervangen'}>
+				<input type="radio" name="importmodus" value="vervangen" bind:group={modus} />
+				<span class="titelklein">Vervangen</span>
+				<span class="uitleg">Je huidige bibliotheek gaat weg en wordt dit bestand.</span>
+			</label>
+		</div>
+
+		{#if modus === 'samenvoegen'}
+			<ul class="gevolg">
+				{#if s.materials.new.length}
+					<li class="erbij">
+						<strong>{tel(s.materials.new.length, 'nieuw materiaal', 'nieuwe materialen')}</strong>
+						<span class="fijn">{s.materials.new.join(', ')}</span>
+					</li>
+				{/if}
+				{#if s.materials.existing.length}
+					<li class="zelfde">
+						{tel(s.materials.existing.length, 'materiaal', 'materialen')} herkend als wat je al hebt
+					</li>
+				{/if}
+				{#if s.presets.new}
+					<li class="erbij">
+						<strong>{tel(s.presets.new, 'instelling', 'instellingen')} erbij</strong>
+					</li>
+				{/if}
+				{#if s.presets.identical}
+					<li class="zelfde">
+						{tel(s.presets.identical, 'instelling is', 'instellingen zijn')} identiek — die blijven
+						zoals ze zijn
+					</li>
+				{/if}
+				{#if s.test_grids.new}
+					<li class="erbij">
+						<strong>{tel(s.test_grids.new, 'testraster', 'testrasters')} erbij</strong>
+						<span class="fijn">met de foto's die erbij horen</span>
+					</li>
+				{/if}
+				{#if s.machines.new.length}
+					<li class="erbij">
+						<strong
+							>{tel(s.machines.new.length, 'machineprofiel', 'machineprofielen')} erbij</strong
+						>
+						<span class="fijn">{s.machines.new.join(', ')}</span>
+					</li>
+				{/if}
+				{#if !s.materials.new.length && !s.presets.new && !s.test_grids.new && !s.presets.conflicts.length}
+					<li class="zelfde">
+						Er komt niets bij: dit bestand staat al helemaal in je bibliotheek.
+					</li>
+				{/if}
+			</ul>
+
+			{#if voorstellen.length}
+				<!-- De valkuil uit M5: "Berkentriplex" en "Multiplex berken" zijn één
+				     plank. Zelf samenvoegen zou een gok zijn met andermans getallen op
+				     jouw materiaal; aanwijzen mag de gebruiker wel. -->
+				<div class="blok">
+					<h3>Zelfde plank, andere naam?</h3>
+					<p class="fijn">
+						Deze materialen uit het bestand lijken op iets wat je al hebt. Samenvoegen
+						zet hun instellingen bij het materiaal dat je al kent; laat je het staan,
+						dan komen er twee.
+					</p>
+					{#each voorstellen as paar (paar.name)}
+						<label class="samenvoeg">
+							<input
+								type="checkbox"
+								checked={koppel[paar.name] === paar.material_id}
+								onchange={(e) => koppelen(paar, e.currentTarget.checked)}
+							/>
+							<span>
+								<strong>{paar.name}</strong> samenvoegen met <strong>{paar.match}</strong>
+								<span class="fijn">— {paar.why}</span>
+							</span>
+						</label>
+					{/each}
+				</div>
+			{/if}
+
+			{#if s.presets.conflicts.length}
+				<div class="blok bots">
+					<h3>{tel(s.presets.conflicts.length, 'instelling botst', 'instellingen botsen')}</h3>
+					<p class="fijn">
+						Dezelfde plank, dezelfde snede, andere getallen. Kies wie wint — je eigen
+						waarden zijn op jouw machine gemeten.
+					</p>
+					<div class="wint">
+						<label class="bereik">
+							<input type="radio" name="botsing" value="eigen" bind:group={botsWint} />
+							<span>Mijn waarden houden</span>
+						</label>
+						<label class="bereik">
+							<input type="radio" name="botsing" value="bestand" bind:group={botsWint} />
+							<span>Die uit het bestand overnemen</span>
+						</label>
+					</div>
+					<ul class="botsingen">
+						{#each s.presets.conflicts as botsing (`${botsing.material}-${botsing.operation}-${botsing.thickness_mm}`)}
+							<li>
+								<span class="wat">
+									{botsing.material}{botsing.thickness_mm !== null
+										? `, ${botsing.thickness_mm} mm`
+										: ''} · {operationLabel(botsing.operation)}
+								</span>
+								<span class="paar">
+									<span class="kant" class:wint={botsWint === 'eigen'}>
+										<span class="k">Van mij</span>
+										<span class="mono"
+											>{botsing.mine.speed_mm_s} mm/s · {botsing.mine.power_percent}%</span
+										>
+									</span>
+									<span class="pijl" aria-hidden="true">→</span>
+									<span class="kant" class:wint={botsWint === 'bestand'}>
+										<span class="k">Uit het bestand</span>
+										<span class="mono"
+											>{botsing.theirs.speed_mm_s} mm/s · {botsing.theirs.power_percent}%</span
+										>
+									</span>
+								</span>
+								{#if sterkerBewijs(botsing)}
+									<span class="beter">
+										Die uit het bestand is op een testraster gebrand; die van jou is
+										{SOURCE_LABEL[botsing.mine.source as Preset['source']]?.text.toLowerCase() ??
+											botsing.mine.source}.
+									</span>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+		{:else}
+			<div class="blok wis">
+				<h3>Dit wist wat je nu hebt</h3>
+				<p>
+					{tel(voorbeeld.vervangen.removes.materials, 'materiaal', 'materialen')},
+					{tel(voorbeeld.vervangen.removes.presets, 'instelling', 'instellingen')} en
+					{tel(voorbeeld.vervangen.removes.test_grids, 'testraster', 'testrasters')} verdwijnen,
+					met de foto's die erbij horen. Dat is niet terug te draaien.
+				</p>
+				<!-- Het advies moet hier op te volgen zijn. Anders staat er "maak
+				     eerst een back-up" op een scherm dat je moet verlaten om er een
+				     te maken, en dan doet niemand het. -->
+				<p class="fijn">
+					Wil je hem nog kunnen terughalen?
+					<button class="mini" onclick={() => library.exportBundle()}>
+						Exporteer hem eerst
+					</button>
+				</p>
+				<label class="samenvoeg">
+					<input type="checkbox" bind:checked={wisZeker} />
+					<span>Ja, wis mijn bibliotheek en zet dit bestand ervoor in de plaats.</span>
+				</label>
+			</div>
+		{/if}
+
+		{#if library.error}
+			<p class="error" role="alert">{library.error}</p>
+		{/if}
+
+		<div class="acties">
+			<button
+				class="btn primary"
+				class:danger={modus === 'vervangen'}
+				disabled={library.busy || (modus === 'vervangen' && !wisZeker)}
+				onclick={importeren}
+			>
+				{modus === 'vervangen' ? 'Wissen en importeren' : 'Samenvoegen'}
+			</button>
+			<button class="btn" onclick={() => (voorbeeld = null)}>Annuleren</button>
+		</div>
+	</section>
+{:else}
+
+{#if klaar}
+	<!-- Wat er daadwerkelijk gebeurd is, in dezelfde woorden als het voorbeeld. -->
+	<div class="klaar" role="status" bind:this={klaarEl}>
+		<strong>
+			{klaar.mode === 'vervangen' ? 'Bibliotheek vervangen' : 'Bibliotheek samengevoegd'}
+		</strong>
+		<span>
+			{tel(klaar.presets.added, 'instelling', 'instellingen')} erbij{klaar.presets.updated
+				? `, ${tel(klaar.presets.updated, 'bijgewerkt', 'bijgewerkt')}`
+				: ''}{klaar.presets.skipped
+				? `, ${klaar.presets.skipped} ongewijzigd gelaten`
+				: ''} · {tel(klaar.test_grids, 'testraster', 'testrasters')}.
+		</span>
+		{#if verborgen && library.activeMachine}
+			<span class="fijn">
+				Een deel hoort bij een andere machine; zet “Alleen {library.activeMachine.name}” uit om
+				het te zien.
+			</span>
+		{/if}
+		<button class="mini" onclick={() => (klaar = null)}>Sluiten</button>
+	</div>
+{/if}
+
 <!-- Filters over een lege verzameling zijn meubilair: drie bedieningen die
      niets te bedienen hebben, boven een venster dat zegt dat er niets is. Bij
      een lege bibliotheek verdwijnen ze en houdt de uitnodiging het woord. -->
@@ -543,6 +905,23 @@
 </div>
 
 <div class="context">
+	<!-- De twee inperkingen horen bij elkaar: samen zeggen ze "dit is wat er bij
+	     deze laser en dit vel hoort". Los van elkaar aan de twee uiteinden van
+	     de balk leest het als twee losse instellingen. -->
+	<div class="filters">
+	{#if sheetMaterialId !== null && sheetMaterialName}
+		<!-- Dezelfde schakelaar als "alleen deze machine", want het is dezelfde
+		     soort inperking: een preset geldt voor één laser op één materiaal.
+		     Uitzetten toont de rest — dit filter is een startpunt, geen muur. -->
+		<label class="bereik">
+			<input
+				type="checkbox"
+				checked={materialId === sheetMaterialId}
+				onchange={(e) => (materialId = e.currentTarget.checked ? sheetMaterialId : null)}
+			/>
+			<span>Alleen {sheetMaterialName} <span class="waarom">— van dit vel</span></span>
+		</label>
+	{/if}
 	{#if library.activeMachine}
 		<!-- Een preset geldt voor één laser op één materiaal. Standaard zie je
 		     die van de machine die nu aanstaat; de rest is één vinkje weg. -->
@@ -555,6 +934,7 @@
 			<span>Alleen {library.activeMachine.name}</span>
 		</label>
 	{/if}
+	</div>
 	{#if operations.length > 1}
 		<label class="doel">
 			<span>Toepassen op</span>
@@ -761,6 +1141,41 @@
 	</details>
 {/if}
 
+<!-- Besluit B7. Buiten het blok hierboven, want importeren in een lege
+     bibliotheek is juist de gewone reden om hier te zijn: nieuwe computer. -->
+<section class="uitwissel">
+	<h3>Bibliotheek uitwisselen</h3>
+	<p class="fijn">
+		Eén bestand met je materialen, instellingen, machineprofielen en de foto's van je
+		testrasters — voor een back-up of een andere computer.
+	</p>
+	<div class="uitknoppen">
+		<button
+			class="btn"
+			disabled={library.busy || library.materials.length === 0}
+			title={library.materials.length === 0 ? 'Er is nog niets om te exporteren' : undefined}
+			onclick={() => library.exportBundle()}
+		>
+			Bibliotheek exporteren
+		</button>
+		{#if canEdit}
+			<label class="btn file">
+				Bibliotheek importeren…
+				<input
+					type="file"
+					accept=".openkerf-lib,application/zip"
+					onchange={(e) => {
+						const f = e.currentTarget.files?.[0];
+						e.currentTarget.value = '';
+						if (f) kiesBestand(f);
+					}}
+				/>
+			</label>
+		{/if}
+	</div>
+</section>
+{/if}
+
 <style>
 	/* Zoeken moet bereikbaar blijven als je door twintig materialen scrollt;
 	   het venster zelf is de scrollbak, dus dit plakt aan zijn bovenkant. */
@@ -796,6 +1211,22 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
+	.filters {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+	}
+	.bereik {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1h);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* Waaróm dit filter aanstaat, in de schakelaar zelf: anders lijkt het een
+	   voorkeur die iemand ooit heeft aangezet. */
+	.waarom { color: var(--text-2); }
 	.kop {
 		font-size: var(--text-xs);
 		font-weight: 600;
@@ -1153,7 +1584,212 @@
 		font-size: var(--text-xs);
 	}
 
+	/* ------------------------------------------- uitwisselen (besluit B7) */
+
+	.uitwissel {
+		margin-top: var(--space-4);
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--line);
+	}
+	.uitwissel h3 {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--text-2);
+		margin: 0 0 var(--space-2);
+	}
+	.uitwissel .fijn { max-width: 52ch; }
+	.uitknoppen { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+	/* Het voorbeeld is een eigen scherm, geen strook onder de lijst: hier valt
+	   de beslissing, dus krijgt het de ruimte en de leesbreedte ervoor. */
+	.wisselkop { margin-bottom: var(--space-4); }
+	.wisselkop h2 {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		margin: 0;
+		color: var(--text-1);
+	}
+	.bron { margin: 4px 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); }
+	.scheiding { opacity: 0.5; }
+	.inhoud {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1h);
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.inhoud li {
+		font-size: var(--text-xs);
+		padding: var(--space-1) var(--space-3);
+		border-radius: var(--radius-dot);
+		border: 1px solid var(--line);
+		background: var(--surface-2);
+		color: var(--text-2);
+	}
+	/* Nul foto's is geen detail: dan komt het bewijs niet mee. */
+	.inhoud li.mist { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+	.nu { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-2); }
+
+	.keuzes {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+	}
+	.keuze {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		grid-template-areas: 'radio titel' '. uitleg';
+		gap: 2px var(--space-2);
+		align-items: start;
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-1);
+		cursor: pointer;
+	}
+	.keuze input { grid-area: radio; margin: 2px 0 0; }
+	.keuze .titelklein { grid-area: titel; font-weight: 600; }
+	.keuze .uitleg { grid-area: uitleg; font-size: var(--text-xs); color: var(--text-2); }
+	.keuze.aan { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+	.keuze.gevaar.aan {
+		border-color: var(--danger);
+		box-shadow: inset 0 0 0 1px var(--danger);
+		background: color-mix(in srgb, var(--danger) 8%, transparent);
+	}
+
+	.gevolg {
+		list-style: none;
+		margin: var(--space-3) 0 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-1h);
+	}
+	.gevolg li {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		padding-left: var(--space-4);
+		position: relative;
+		font-size: var(--text-sm);
+	}
+	/* Erbij of ongewijzigd, in vorm en niet alleen in kleur. */
+	.gevolg li::before {
+		position: absolute;
+		left: 0;
+		top: 0;
+		font-weight: 700;
+	}
+	.gevolg li.erbij::before { content: '+'; color: var(--ok); }
+	.gevolg li.zelfde::before { content: '='; color: var(--text-2); }
+	.gevolg li.zelfde { color: var(--text-2); }
+	.gevolg .fijn { margin: 0; }
+
+	.blok {
+		margin-top: var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+	}
+	.blok h3 {
+		margin: 0 0 4px;
+		font-size: var(--text-sm);
+		font-weight: 600;
+	}
+	.blok.bots { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+	.blok.wis {
+		border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+		background: color-mix(in srgb, var(--danger) 9%, transparent);
+	}
+	.blok.wis p { margin: 0 0 var(--space-2); }
+	/* Op aanraakbreedtes is een selectievakje 44px hoog (design system), dus
+	   uitlijnen op de bovenkant zet het glyphje een regel onder zijn eigen
+	   label. Centreren houdt het naast de tekst op elk apparaat. */
+	.samenvoeg {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		align-items: center;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
+	.wint { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
+	.botsingen { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+	/* Twee waarden vergelijken kan alleen als ze in een kolom staan. Elke regel
+	   deelt daarom hetzelfde raster: wat, van mij, van het bestand. */
+	.botsingen li {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		align-items: start;
+		gap: 4px var(--space-3);
+		padding: var(--space-2);
+		border-radius: var(--radius-field);
+		border: 1px solid var(--line);
+		background: var(--surface-1);
+		font-size: var(--text-xs);
+	}
+	.botsingen .wat { font-weight: 500; }
+	.beter { grid-column: 1 / -1; color: var(--warn); }
+	.paar { display: contents; }
+	.kant {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
+		color: var(--text-2);
+	}
+	/* Wie wint is af te lezen zonder de keuze erboven terug te lezen: de
+	   winnende kant staat vet en gemarkeerd, de andere blijft leesbaar — het
+	   zijn allebei getallen die je wilt kunnen zien. */
+	.kant.wint { color: var(--text-1); font-weight: 600; }
+	.kant.wint .k::after {
+		content: ' ✓';
+		color: var(--ok);
+	}
+	.kant .k {
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		font-weight: 400;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.pijl { display: none; }
+
+	.acties {
+		display: flex;
+		gap: var(--space-2);
+		margin-top: var(--space-4);
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--line);
+	}
+	.btn.danger {
+		background: var(--danger);
+		border-color: var(--danger);
+		color: var(--on-color);
+	}
+	.klaar {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin-bottom: var(--space-3);
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-field);
+		border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+		background: color-mix(in srgb, var(--ok) 12%, transparent);
+		font-size: var(--text-xs);
+	}
+	.klaar .mini { margin-left: auto; }
+
 	@media (max-width: 640px) {
+		.keuzes { grid-template-columns: 1fr; }
+		.botsingen li { align-items: flex-start; }
 		.herkomst { grid-template-columns: 1fr; }
 		.edit,
 		.grid { grid-template-columns: 1fr; }

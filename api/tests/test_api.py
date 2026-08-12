@@ -93,12 +93,21 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/rotate",
         "/api/design/assign",
         "/api/design/unassign",
+        # Besluit B2: één klik op een paletkleur. Schrijft aan de boom (de
+        # selectie verhuist) of aan de tekenkleur, dus achter dezelfde poort.
+        "/api/design/palette",
         "/api/design/undo",
         "/api/design/redo",
         "/api/library/materials",
         "/api/library/presets",
         "/api/library/machines",
         "/api/library/presets/{preset_id}/apply",
+        # Besluit B7: de bibliotheek uitwisselen. Uploaden en voorbeeld zijn ook
+        # POSTs — ze schrijven een bestand in de uploadmap en horen dus achter
+        # dezelfde poort als het importeren zelf.
+        "/api/library/import/upload",
+        "/api/library/import/preview",
+        "/api/library/import",
         "/api/clipart/insert",
         "/api/design/fonts/import",
         "/api/sheets",

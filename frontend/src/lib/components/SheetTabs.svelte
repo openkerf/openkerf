@@ -6,12 +6,16 @@
 		sheets,
 		library,
 		canEdit = false,
-		onSwitched
+		onSwitched,
+		onEditMaterial
 	}: {
 		sheets: SheetStore;
 		library: LibraryStore;
 		canEdit?: boolean;
 		onSwitched?: () => void;
+		/** Opent het materiaalvenster van de bovenbalk — dezelfde plek, want daar
+		 *  hoort deze keuze thuis (besluit B1). */
+		onEditMaterial?: () => void;
 	} = $props();
 
 	let editing = $state<string | null>(null);
@@ -96,21 +100,16 @@
 				onchange={(e) => sheets.update(sheet.id, { height_mm: Number(e.currentTarget.value) })}
 			/>
 		</label>
+		<!-- Materiaal wordt hier niet nóg een keer ingevuld. Het staat in de
+		     bovenbalk, want alles stroomafwaarts leest het daar; twee plekken om
+		     hetzelfde te kiezen levert alleen de vraag op welke de echte is. -->
 		<label class="wide">
 			<span>Materiaal</span>
-			<select
-				onchange={(e) =>
-					sheets.update(sheet.id, {
-						material_id: e.currentTarget.value ? Number(e.currentTarget.value) : null
-					})}
-			>
-				<option value="" selected={sheet.material_id === null}>geen</option>
-				{#each library.materials as material (material.id)}
-					<option value={material.id} selected={material.id === sheet.material_id}>
-						{material.name}
-					</option>
-				{/each}
-			</select>
+			<button class="materiaal" onclick={() => onEditMaterial?.()}>
+				{materialName(sheet.material_id) ?? 'niet ingevuld'}{sheet.thickness_mm === null
+					? ''
+					: ` · ${String(sheet.thickness_mm).replace('.', ',')} mm`}
+			</button>
 		</label>
 		<button
 			class="drop"
@@ -178,8 +177,7 @@
 		border-bottom: 1px solid var(--line);
 	}
 	.editor label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
-	.editor input,
-	.editor select {
+	.editor input {
 		font: inherit;
 		font-size: var(--text-xs);
 		padding: 4px 8px;
@@ -188,6 +186,19 @@
 		background: var(--surface-1);
 		color: var(--text-1);
 	}
+	.editor .materiaal {
+		font-size: var(--text-xs);
+		padding: 4px 8px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+		/* Tussen twee invoervelden ziet een knop met gewone tekstkleur eruit als
+		   een veld dat niet meedoet. De accentkleur zegt dat er iets gebeurt als
+		   je erop drukt. */
+		color: var(--accent-text);
+		text-align: left;
+	}
+	.editor .materiaal:hover { background: var(--surface-2); }
 	.editor input[type='text'] { width: 9em; }
 	.editor input[type='number'] { width: 5em; }
 	.drop,

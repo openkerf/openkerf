@@ -405,6 +405,86 @@ def test_estimating_leaves_no_plan_behind(kernel, drawing, client):
     assert len(kernel.planner.default_plan.plan) == 0
 
 
+def test_estimating_never_builds_the_plan(kernel, drawing, client, monkeypatch):
+    """
+    De reden dat deze route op een zwaar ontwerp minuten kostte (gat J1).
+
+    `plan copy` kopieert de cutcode één keer per pass en de optimalisatie erna
+    schaalt kwadratisch; gemeten: 960 vormen × 60 passes duurde 169 s. De
+    schatting rekent nu op de geometrie, dus de planpijplijn mag niet meer
+    aangeroepen worden — vandaar dat we hem hier laten ontploffen.
+    """
+    kernel.console("rect 20mm 15mm 60mm 40mm\n")
+    kernel.console("element* cut -s 12 -p 650\n")
+    origineel = drawing.runner.run
+
+    def run(command, *args, **kwargs):
+        if command.startswith("plan"):
+            raise AssertionError(f"de schatting bouwde alsnog een plan: {command}")
+        return origineel(command, *args, **kwargs)
+
+    monkeypatch.setattr(drawing.runner, "run", run)
+
+    body = client.get("/api/job/estimate").json()
+
+    assert body["method"] == "geometry"
+    assert body["seconds"] > 0
+
+
+def test_the_fast_estimate_matches_the_plan(kernel, drawing, client):
+    """
+    Snel mag niet ten koste van klopt.
+
+    Dezelfde som als `duration_cut` + `duration_travel`, alleen zonder eerst
+    het plan te bouwen: brandlengte gedeeld door de laagsnelheid, plus de
+    sprongen ertussen. De reisvolgorde die de optimalisatie kiest zit er niet
+    in, dus een paar procent verschil hoort erbij.
+    """
+    for index in range(8):
+        kernel.console(f"circle {10 + index * 20}mm 30mm 8mm\n")
+    kernel.console("element* cut -s 12 -p 650\n")
+
+    snel = client.get("/api/job/estimate").json()
+    plan = client.get("/api/job/estimate?exact=1").json()
+
+    assert plan["method"] == "plan"
+    assert abs(snel["seconds"] - plan["seconds"]) / plan["seconds"] < 0.1
+
+
+def test_passes_multiply_the_estimate(client):
+    """Een laag die zes keer over hetzelfde gaat, duurt zes keer zo lang."""
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 20, "y_mm": 20, "width_mm": 50, "height_mm": 40},
+    )
+    een = client.get("/api/job/estimate").json()["seconds"]
+
+    for laag in client.get("/api/design").json()["operations"]:
+        assert client.patch(
+            f"/api/design/operations/{laag['id']}", json={"passes": 6}
+        ).status_code == 200
+
+    assert client.get("/api/job/estimate").json()["seconds"] == pytest.approx(
+        een * 6, rel=0.02
+    )
+
+
+def test_an_outline_in_a_raster_layer_costs_nothing(kernel, drawing, client):
+    """
+    Een rasterlaag brandt het vlak, en een omlijnde vorm heeft dat niet.
+
+    Op de omhullende rekenen zou hier acht minuten melden voor werk dat niet
+    gebeurt: het echte plan levert voor zo'n laag nul cutcode op (gemeten).
+    """
+    kernel.console("rect 20mm 20mm 60mm 40mm\n")
+    kernel.console("element* cut -s 12 -p 650\n")
+    zonder = client.get("/api/job/estimate").json()["seconds"]
+
+    kernel.console("element* raster -s 100 -p 300\n")
+
+    assert client.get("/api/job/estimate").json()["seconds"] == zonder
+
+
 # ------------------------------------------------------ tekst bijwerken
 
 def test_text_reports_its_source(kernel, drawing):

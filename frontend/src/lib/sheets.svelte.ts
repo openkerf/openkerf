@@ -11,7 +11,10 @@ export type Sheet = {
 	name: string;
 	width_mm: number;
 	height_mm: number;
+	/** Waarin gebrand wordt. Leeg mag: een restje van onbekende herkomst hoeft
+	 *  geen verzonnen naam te krijgen. */
 	material_id: number | null;
+	thickness_mm: number | null;
 	active: boolean;
 };
 

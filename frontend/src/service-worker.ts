@@ -34,6 +34,28 @@ self.addEventListener('activate', (event) => {
 	);
 });
 
+/**
+ * Een melding aantikken hoort de app te openen, niet een tweede tabblad.
+ *
+ * De meldingen zelf worden vanuit de pagina verstuurd (zie meldingen.svelte.ts);
+ * ze lopen via de service worker omdat Android `new Notification()` vanuit een
+ * pagina weigert. Dan hoort de klik hier ook opgevangen te worden — anders
+ * gebeurt er niets als je hem aantikt terwijl de telefoon in je zak zat.
+ */
+self.addEventListener('notificationclick', (event) => {
+	const worker = self as unknown as ServiceWorkerGlobalScope;
+	const melding = (event as NotificationEvent).notification;
+	melding.close();
+	event.waitUntil(
+		worker.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((vensters) => {
+			for (const venster of vensters) {
+				if ('focus' in venster) return venster.focus();
+			}
+			return worker.clients.openWindow('/');
+		})
+	);
+});
+
 self.addEventListener('fetch', (event) => {
 	const request = event.request;
 	const url = new URL(request.url);

@@ -4,12 +4,17 @@
 
 	let {
 		materialId = null,
+		thicknessMm = null,
 		library,
 		canEdit = false,
 		onGenerated
 	}: {
-		/** Voorgekozen materiaal, als je hier vanuit de bibliotheek komt. */
+		/** Voorgekozen materiaal: van het vel waarop je werkt, of van de kaart
+		 *  waar je vandaan komt. */
 		materialId?: number | null;
+		/** De dikte van dat vel. Een raster gaat over één plaat, en die ligt al
+		 *  in de machine — dan is dit getal geen vraag meer. */
+		thicknessMm?: number | null;
 		library: LibraryStore;
 		canEdit?: boolean;
 		onGenerated?: (gridId: number) => void;
@@ -19,6 +24,12 @@
 	$effect(() => {
 		if (materialId === null) return;
 		form.material_id = materialId;
+	});
+	// En de dikte van het vel erbij: het raster gaat over de plaat die in de
+	// machine ligt, dus die twee velden hoeven niet opnieuw ingevuld.
+	$effect(() => {
+		if (thicknessMm === null) return;
+		form.thickness_mm = String(thicknessMm);
 	});
 
 	type Cell = {

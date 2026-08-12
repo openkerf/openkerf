@@ -12,6 +12,10 @@ WRITE_ROUTES = [
     ("/api/job/resume", {}),
     ("/api/job/stop", {}),
     ("/api/spooler/clear", {}),
+    # Besluit B7: een bibliotheek binnenhalen overschrijft mogelijk metingen.
+    # Dat mag van buiten de eigen computer nooit zonder token.
+    ("/api/library/import", {"json": {}}),
+    ("/api/library/import/preview", {"json": {}}),
 ]
 
 
@@ -46,6 +50,17 @@ def test_every_mutating_route_requires_the_write_guard(local_client):
     for route in mutating:
         names = [getattr(d.call, "__name__", "") for d in route.dependant.dependencies]
         assert "require_write" in names, f"{route.path} has no write guard"
+
+
+def test_machine_detection_is_not_a_write_route(local_client):
+    """
+    Besluit B6: zoeken is lezen. De detectie is daarom een GET zonder guard —
+    en dat mag alleen zolang hij niets aanmaakt of verbindt. Wordt hij ooit een
+    POST, dan hoort hij in de lijst hierboven en achter het slot; deze test is
+    de plek waar dat opvalt.
+    """
+    scan = [r for r in local_client.app.routes if getattr(r, "path", "") == "/api/machines/scan"]
+    assert scan and scan[0].methods == {"GET"}
 
 
 def test_writes_are_open_on_localhost(local_client):

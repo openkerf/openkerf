@@ -26,7 +26,7 @@ from .document import Document
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
-from .library import Library, LibraryError, default_path
+from .library import BUNDLE_SUFFIX, Library, LibraryError, default_path
 from .autosave import Autosave
 from .camera import Camera
 from .clipart import Clipart
@@ -34,7 +34,9 @@ from .fonts import Fonts
 from .generators import Generators
 from .nesting import Nesting
 from .nodes import Nodes
+from .palette import Palette, machine_key
 from .presetariat import Presetariat
+from .provenance import Provenance
 from .sheets import Sheets
 from .testgrid import TestGridGenerator, plan_grid
 from .machine import MachineControl
@@ -196,6 +198,15 @@ class ApiServer:
             self.document,
             Path(self.library.path).with_name("openkerf-vellen"),
         )
+        # Waar de instellingen van een laag vandaan komen. Naast de bibliotheek,
+        # want het gaat over presets; niet erín, want het gaat over dit project.
+        self.provenance = Provenance(
+            Path(self.library.path).with_name("openkerf-herkomst.json")
+        )
+        # Wat elke paletkleur op deze machine het laatst deed (besluit B2).
+        # Naast de herkomst en nadrukkelijk niet erin: dit is gewoonte, geen
+        # bewijs — zie de kop van palette.py.
+        self.palette = Palette(Path(self.library.path).with_name("openkerf-palet.json"))
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
         self.fonts = Fonts(kernel)
@@ -213,6 +224,11 @@ class ApiServer:
             grid_operations=lambda: self.library.grid_operations(),
         )
         self.drawing.grid_operations = lambda: self.library.grid_operations()
+        # Besluit B2: een laag die tijdens het tekenen ontstaat, begint op wat
+        # die kleur op deze machine eerder deed.
+        self.drawing.color_memory = lambda kleur: self.palette.recall(
+            self._palette_machine()[0], kleur
+        )
         self.grids = TestGridGenerator(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
@@ -246,6 +262,74 @@ class ApiServer:
             )
         except Exception:
             return None
+
+    def _palette_machine(self):
+        """
+        Onder welke machine het palet-geheugen valt, en hoe die heet.
+
+        Snelheid en vermogen zijn machine-eigenschappen: 12 mm/s op 80 watt is
+        een andere snede dan op 40. Een geheugen dat dat door elkaar haalt is
+        erger dan geen geheugen, dus het hangt aan de machine of aan niets.
+        """
+        profile = self._active_profile()
+        naam = None
+        if profile:
+            naam = profile.get("name") or profile.get("device_path")
+        return machine_key(profile), naam
+
+    def _remember_layer(self, operation_id: str) -> None:
+        """
+        Leg vast wat de kleur van deze laag nu doet.
+
+        Aangeroepen ná een geslaagde wijziging, want een geweigerde poging is
+        geen gewoonte. Faalt dit, dan is er hoogstens geen geheugen — het mag
+        nooit de wijziging zelf laten stranden.
+        """
+        try:
+            operation = self.drawing._operation(operation_id)
+            color = self.drawing._usable_color(operation)
+            if color is None:
+                return
+            power = getattr(operation, "power", None)
+            key, naam = self._palette_machine()
+            self.palette.remember(
+                key,
+                color,
+                speed=getattr(operation, "speed", None),
+                power_percent=None if power is None else float(power) / 10,
+                kind=str(getattr(operation, "type", "") or ""),
+                machine_name=naam,
+            )
+        except Exception:
+            return
+
+    def _active_sheet(self):
+        """
+        Het vel waarop nu gewerkt wordt, met de naam van zijn materiaal erbij.
+
+        Het vel bewaart alleen een id — de bibliotheek weet hoe het heet, en
+        zonder die naam kan de pre-flight niet zeggen wáárin je brandt.
+        """
+        try:
+            sheet = self.sheets.active()
+        except Exception:
+            return None
+        if sheet is None:
+            return None
+        naam = None
+        if sheet.get("material_id") is not None:
+            try:
+                naam = next(
+                    (
+                        m["name"]
+                        for m in self.library.materials()
+                        if m["id"] == sheet["material_id"]
+                    ),
+                    None,
+                )
+            except Exception:
+                naam = None
+        return {**sheet, "material_name": naam}
 
     def build_app(self):
         from contextlib import asynccontextmanager
@@ -529,13 +613,47 @@ class ApiServer:
         def import_font(body: dict):
             return manage(self.fonts.import_font, body.get("file"))
 
+        @app.get("/api/job/layers")
+        def job_layers():
+            """
+            Wat er gebrand wordt en waar die instellingen vandaan komen —
+            zonder de klok.
+
+            Bewust een eigen route naast `/api/job/estimate`: die bouwt voor de
+            tijdschatting het hele snijplan, en dat duurt op een zwaar ontwerp
+            minuten (gat J1). Een waarschuwing dat een laag een instelling van
+            ánder materiaal draagt, mag daar niet achteraan hoeven staan — dat
+            is nu juist wat je vóór het starten moet weten. Hier wordt niets
+            gepland: dit leest de elementenboom, de bibliotheek en de herkomst.
+            """
+            sheet = self._active_sheet()
+            return manage(
+                lambda: {
+                    "sheet": sheet,
+                    "layers": self.drawing.job_layers(
+                        self.library, self.provenance, sheet
+                    ),
+                }
+            )
+
         @app.get("/api/job/estimate")
-        def estimate_job():
+        def estimate_job(exact: bool = False):
             """
             Wat de machine gaat doen, vóór starten: tijd, onderdelen én per
             laag de instellingen met hun herkomst.
+
+            `exact=1` rekent langs het volledige snijplan, zoals deze route
+            vroeger altijd deed. Dat kost op een zwaar ontwerp minuten en is
+            alleen bedoeld om de snelle schatting tegen te ijken.
             """
-            return manage(lambda: self.drawing.estimate(self.library))
+            return manage(
+                lambda: self.drawing.estimate(
+                    self.library,
+                    self.provenance,
+                    self._active_sheet(),
+                    exact=exact,
+                )
+            )
 
         @app.get("/api/design/export.svg")
         def export_design(filename: str = "ontwerp.svg"):
@@ -661,7 +779,59 @@ class ApiServer:
 
         @app.patch("/api/design/operations/{operation_id}", dependencies=write)
         def update_operation(operation_id: str, body: dict):
-            return manage(lambda: self.drawing.update_operation(operation_id, **body))
+            def run():
+                result = self.drawing.update_operation(operation_id, **body)
+                # Besluit B2: de kleur onthoudt wat je er het laatst mee deed.
+                self._remember_layer(operation_id)
+                return result
+
+            return manage(run)
+
+        # ------------------------------------------------------- palet (B2)
+
+        @app.get("/api/design/palette")
+        def design_palette():
+            """
+            De kleurenstrook onder het canvas: tien kleuren met hun geheugen.
+
+            Alleen het geheugen komt hiervandaan. Wélke laag nu welke kleur
+            heeft, staat al in `/api/design` — dat twee keer sturen is twee
+            waarheden die uit elkaar kunnen lopen.
+            """
+            key, naam = self._palette_machine()
+            onthouden = self.palette.all(key)
+            return {
+                "machine": {"key": key, "name": naam},
+                "default_color": self.drawing.default_color(),
+                "colors": [
+                    {"color": kleur.lower(), "memory": onthouden.get(kleur.lower())}
+                    for kleur in self.drawing.PALETTE
+                ],
+            }
+
+        @app.post("/api/design/palette", dependencies=write)
+        def use_palette_color(body: dict):
+            """
+            Eén klik op een paletvakje.
+
+            Mét selectie: die verhuist naar de laag van die kleur, die zo nodig
+            wordt aangemaakt op wat die kleur eerder deed. Zonder selectie: de
+            kleur voor nieuw werk. Dat onderscheid komt van LightBurn en is de
+            reden dat toewijzen daar één handeling is en bij ons drie.
+            """
+            kleur = body.get("color")
+            ids = body.get("ids") or []
+            key, _naam = self._palette_machine()
+
+            def run():
+                memory = self.palette.recall(key, kleur)
+                if ids:
+                    result = self.drawing.paint(ids, kleur, memory)
+                    self._remember_layer(result["operation_id"])
+                    return result
+                return {**self.drawing.set_default_color(kleur), "operation_id": None}
+
+            return manage(run)
 
         @app.post("/api/design/operations/{operation_id}/move", dependencies=write)
         def move_operation(operation_id: str, body: dict):
@@ -695,7 +865,12 @@ class ApiServer:
 
         @app.post("/api/design/rotate", dependencies=write)
         def rotate_elements(body: dict):
-            return manage(self.editor.rotate, body.get("ids"), body.get("angle_deg"))
+            return manage(
+                self.editor.rotate,
+                body.get("ids"),
+                body.get("angle_deg"),
+                bool(body.get("absolute", False)),
+            )
 
         @app.post("/api/design/assign", dependencies=write)
         def assign_elements(body: dict):
@@ -799,6 +974,70 @@ class ApiServer:
         def add_machine_profile(body: dict):
             return manage(lambda: self.library.add_machine(**body))
 
+        # ------------------------------------------ bibliotheek uitwisselen (B7)
+
+        @app.get("/api/library/export.openkerf-lib")
+        def export_library(filename: str = "bibliotheek"):
+            """De hele bibliotheek als één bestand, foto's inbegrepen."""
+            from fastapi.responses import FileResponse
+
+            path = manage(self.library.export_bundle, filename)
+            return FileResponse(
+                path, media_type="application/zip", filename=path.name
+            )
+
+        @app.post("/api/library/import/upload", dependencies=write)
+        async def upload_library(file: UploadFile):
+            """
+            Het bestand aannemen en zeggen wat het zou doen — nog niets meer.
+
+            Het blijft onder zijn eigen naam in de uploadmap staan, zodat het
+            voorbeeld herrekend kan worden zonder opnieuw te uploaden.
+            """
+            target = self._upload_path(file.filename or f"bibliotheek{BUNDLE_SUFFIX}")
+            with target.open("wb") as handle:
+                shutil.copyfileobj(file.file, handle)
+            preview = manage(self.library.preview_import, target)
+            return {"bundle": target.name, **preview}
+
+        def _bundle(body: dict) -> Path:
+            naam = Path(str(body.get("bundle") or "")).name
+            if not naam:
+                raise HTTPException(status_code=422, detail="Kies eerst een bestand.")
+            return self._upload_path(naam)
+
+        @app.post("/api/library/import/preview", dependencies=write)
+        def preview_library(body: dict):
+            """Hetzelfde voorbeeld, herrekend met de samenvoegkeuzes erin."""
+            target = _bundle(body)
+            preview = manage(
+                self.library.preview_import, target, body.get("merge_materials")
+            )
+            return {"bundle": target.name, **preview}
+
+        @app.post("/api/library/import", dependencies=write)
+        def import_library(body: dict):
+            target = _bundle(body)
+            # Welk materiaal op welk vel lag, in namen: bij vervangen krijgen
+            # materialen nieuwe id's en zou het vel anders naar niets wijzen.
+            namen = {m["id"]: m["name"] for m in self.library.materials()}
+            vellen = {
+                s["id"]: namen.get(s.get("material_id"))
+                for s in self.sheets.state()["sheets"]
+            }
+            result = manage(
+                self.library.import_bundle,
+                target,
+                body.get("mode") or "samenvoegen",
+                body.get("merge_materials"),
+                body.get("on_conflict") or "eigen",
+            )
+            opnieuw = {m["name"]: m["id"] for m in self.library.materials()}
+            for sheet_id, naam in vellen.items():
+                if naam and opnieuw.get(naam) is not None:
+                    self.sheets.update(sheet_id, material_id=opnieuw[naam])
+            return result
+
         @app.post("/api/library/presets/{preset_id}/apply", dependencies=write)
         def apply_preset(preset_id: int, body: dict):
             """Write a preset's speed, power and passes onto an operation."""
@@ -817,6 +1056,14 @@ class ApiServer:
                 # Pas ná een geslaagde toepassing: een mislukte poging is geen
                 # gebruik, en "onlangs gebruikt" moet waar blijven.
                 self.library.touch_preset(preset_id)
+                # En onthouden wáár deze getallen vandaan komen. Zonder dat
+                # briefje moet de pre-flight de herkomst raden aan de waarden,
+                # en dan is een instelling voor ander materiaal niet te zien.
+                self.provenance.record(self.sheets.active_id, operation_id, preset)
+                # En het palet onthoudt wat deze kleur nu doet. Dat is iets
+                # anders dan de herkomst hierboven: het geheugen draagt geen
+                # bewijs mee, alleen de gewoonte (zie palette.py).
+                self._remember_layer(operation_id)
                 return {**result, "preset": preset}
 
             return manage(run)
@@ -920,6 +1167,7 @@ class ApiServer:
                 fields.get("width_mm"),
                 fields.get("height_mm"),
                 fields.get("material_id"),
+                fields.get("thickness_mm"),
             )
 
         @app.post("/api/sheets/{sheet_id}/activate", dependencies=write)
@@ -936,7 +1184,14 @@ class ApiServer:
 
         @app.delete("/api/sheets/{sheet_id}", dependencies=write)
         def delete_sheet(sheet_id: str):
-            return manage(self.sheets.remove, sheet_id)
+            def run():
+                state = self.sheets.remove(sheet_id)
+                # Vel-nummers worden hergebruikt; zonder dit erft een nieuw
+                # vel de herkomst van het vel dat hier net weg is.
+                self.provenance.forget_sheet(sheet_id)
+                return state
+
+            return manage(run)
 
         @app.post("/api/sheets/{sheet_id}/move", dependencies=write)
         def move_to_sheet(sheet_id: str, body: dict):
@@ -1294,6 +1549,18 @@ class ApiServer:
         @app.get("/api/machines")
         def machine_list():
             return self.machines.list()
+
+        @app.get("/api/machines/scan")
+        def machine_scan(network: bool = True, seconds: float = 2.0):
+            """
+            Search USB, serial and the local network for machines.
+
+            A GET on purpose: this looks, it does not touch. Nothing is created,
+            activated or connected here — the caller turns a proposal into a
+            machine through POST /api/machines, which does carry the write
+            guard. See BESLISSINGEN.md B6.
+            """
+            return manage(self.machines.scan, network, seconds)
 
         @app.post("/api/machines", dependencies=write, status_code=201)
         def machine_create(body: dict):

@@ -8,7 +8,9 @@ instead the snapshot carries `units_per_mm` and the frontend applies a single
 scale transform. One multiplication, no parsing.
 """
 
+import math
 import re
+
 from meerk40t.core.units import UNITS_PER_MM
 
 # Operation types that carry a laser setting and therefore read as a layer.
@@ -223,6 +225,53 @@ def _group_of(node) -> str | None:
     return None
 
 
+def _pose_of(node) -> dict | None:
+    """
+    Hoe dit element gedraaid en gespiegeld staat.
+
+    De engine houdt dit al bij in `node.matrix`; zonder deze twee getallen kan
+    het paneel wél draaien maar niet tónen waar je staat, en dan blijft de
+    gebruiker in het duister klikken.
+    """
+    matrix = _attr_or_none(node, "matrix")
+    if matrix is None:
+        return None
+    try:
+        rotation = float(matrix.rotation)
+        determinant = float(matrix.a) * float(matrix.d) - float(matrix.b) * float(
+            matrix.c
+        )
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if not math.isfinite(rotation) or not math.isfinite(determinant):
+        return None
+    mirrored = determinant < 0
+    return {"angle_deg": _angle_from(rotation, mirrored), "mirrored": mirrored}
+
+
+def _angle_from(rotation_rad: float, mirrored: bool) -> float:
+    """
+    De hoek zoals de gebruiker hem ziet, in graden binnen [0, 360).
+
+    Een gespiegelde matrix ontleedt als "eerst spiegelen, dan draaien", en
+    `matrix.rotation` telt die spiegeling als een halve slag mee: een vorm die
+    alléén gespiegeld is meldt 180°. Dat is geen hoek maar een artefact van de
+    ontbinding, dus die halve slag gaat er weer af. Terugrekenen naar [0, 360)
+    omdat -270° en 90° hetzelfde beeld zijn, en twee namen voor één stand een
+    invoerveld onbetrouwbaar maken.
+    """
+    degrees = math.degrees(rotation_rad) - (180.0 if mirrored else 0.0)
+    # Afronden vóór de modulo, niet erna: 359.9999 wordt anders 360.0, en dan
+    # staat er een hoek in het veld die per definitie niet bestaat.
+    return round(degrees, 3) % 360.0
+
+
+def _visual_angle(node) -> float | None:
+    """De hoek van één node, of niets als de matrix niets prijsgeeft."""
+    pose = _pose_of(node)
+    return None if pose is None else pose["angle_deg"]
+
+
 def _color(value) -> str | None:
     if value is None:
         return None
@@ -361,6 +410,7 @@ class DesignReader:
             "text": _text_of(node),
             "line": _line_of(node),
             "effect": _effect_of(node),
+            "pose": _pose_of(node),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,

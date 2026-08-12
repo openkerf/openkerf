@@ -20,6 +20,9 @@
 	import type { CameraStore } from '$lib/camera.svelte';
 	import Verbinding from './Verbinding.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
+	import MeldingAlarm from './MeldingAlarm.svelte';
+	import MeldingKaart from './MeldingKaart.svelte';
+	import type { Bewaker, Meldingen } from '$lib/meldingen.svelte';
 
 	let {
 		device,
@@ -27,6 +30,8 @@
 		job,
 		control,
 		camera,
+		meldingen,
+		bewaker,
 		connected,
 		position
 	}: {
@@ -35,6 +40,8 @@
 		job: Job | null;
 		control: Controller;
 		camera: CameraStore;
+		meldingen: Meldingen;
+		bewaker: Bewaker;
 		connected: boolean;
 		position: string;
 	} = $props();
@@ -209,6 +216,25 @@
 		return `${n} ${n === 1 ? 'bewerking' : 'bewerkingen'}`;
 	});
 
+	/**
+	 * De toestemmingsvraag krijgt hier zijn aanleiding van de machine zelf.
+	 *
+	 * Op de telefoon start je geen job (dat doet de desktop), dus is "er brandt
+	 * nu iets" het moment waarop de vraag ergens op slaat. Bij een leeg bed
+	 * vragen we niets; dan staat de instelling gewoon onderaan te wachten.
+	 */
+	let vraagWeg = $state(false);
+	let vraagNu = $derived(meldingen.vragen && !vraagWeg && Boolean(huidig));
+	/** De instelkaart uitgeklapt? Ingeklapt kost hij één regel. */
+	let instellingenOpen = $state(false);
+	let meldStand = $derived(
+		meldingen.toestemming === 'denied'
+			? 'geblokkeerd'
+			: meldingen.actief
+				? 'aan'
+				: 'uit'
+	);
+
 	let bedW = $derived(device?.bed.width_mm ?? 0);
 	let bedH = $derived(device?.bed.height_mm ?? 0);
 	let kop = $derived(device?.position.mm ?? null);
@@ -217,6 +243,15 @@
 <Verbinding brandt={running} />
 
 <div class="telefoon">
+	<!--
+		Bovenaan en buiten het scrolgebied: een alarm dat je weg kunt scrollen is
+		geen alarm (besluit B3). Bewust géén overlay: als vast blok dúwt hij de
+		rest omlaag in plaats van de kop en de helft van de bedtekening af te
+		dekken. Op 390 px kostte de zwevende versie 270 px aan afgesneden inhoud,
+		en de machinestatus — juist bij een verbindingsalarm het eerste wat je wilt
+		zien — was permanent onbereikbaar.
+	-->
+	<MeldingAlarm {bewaker} groot />
 	<header>
 		<span class="dot {staat}" aria-hidden="true"></span>
 		<span class="staat">{connected ? STATE_LABEL[staat] : 'Geen verbinding'}</span>
@@ -307,6 +342,11 @@
 			</div>
 		{/if}
 
+		{#if vraagNu}
+			<!-- De aanleiding is er nu: er ligt werk in de machine. -->
+			<MeldingKaart {meldingen} variant="aanleiding" onKlaar={() => (vraagWeg = true)} />
+		{/if}
+
 		{#if beeldStuk}
 			<p class="uitleg">De camera staat aan maar levert geen beeld. Kabel los?</p>
 		{/if}
@@ -356,6 +396,26 @@
 				{/each}
 			</section>
 		{/if}
+
+		<!-- De vaste plek waar meldingen aan en uit gaan, en waar staat wat de
+		     browser ervan vindt. Ingeklapt kost dat één regel; geblokkeerd is een
+		     toestand die je hier ziet én terugdraait. -->
+		<section class="meldsectie">
+			<button
+				class="meldrij"
+				aria-expanded={instellingenOpen}
+				onclick={() => (instellingenOpen = !instellingenOpen)}
+			>
+				<span class="naam">Meldingen</span>
+				<span class="stand {meldStand}">{meldStand}</span>
+				<span class="pijl" aria-hidden="true">{instellingenOpen ? '▴' : '▾'}</span>
+			</button>
+			{#if instellingenOpen}
+				<div class="meldbody">
+					<MeldingKaart {meldingen} />
+				</div>
+			{/if}
+		</section>
 
 		<p class="elders">
 			Ontwerpen doe je op de desktop — dit scherm houdt de machine in de gaten.
@@ -581,6 +641,38 @@
 		font-weight: 600;
 	}
 	.raster input { position: absolute; width: 0; height: 0; opacity: 0; }
+
+	.meldsectie { flex: none; display: grid; gap: var(--space-2); }
+	.meldrij {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		min-height: 52px;
+		padding: 0 var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+		color: var(--text-1);
+		text-align: left;
+	}
+	.meldrij .naam { font-weight: 500; }
+	.meldrij .stand {
+		margin-left: auto;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.meldrij .stand.aan { color: var(--ok); }
+	/* Geblokkeerd is geen fout van de gebruiker maar wel iets wat je moet zien:
+	   amber, want er valt iets te herstellen. */
+	.meldrij .stand.geblokkeerd { color: var(--warn); }
+	.meldrij .pijl { flex: none; color: var(--text-2); }
+	.meldbody {
+		padding: var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-1);
+	}
 
 	.elders {
 		flex: none;

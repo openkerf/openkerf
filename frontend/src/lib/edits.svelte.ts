@@ -64,8 +64,20 @@ export class EditController {
 		});
 	}
 
-	rotate(ids: string[] | string, angleDeg: number) {
-		return this.#post('/api/design/rotate', { ids, angle_deg: angleDeg });
+	/**
+	 * Draaien om het midden van de selectie.
+	 *
+	 * Met `absolute` is de hoek een bestemming en geen stap: de server rekent
+	 * uit hoeveel er nog bij moet vanaf de stand die de vormen nú hebben. Dat
+	 * is wat een hoekveld bruikbaar maakt — hetzelfde getal intikken levert
+	 * hetzelfde beeld op, hoe vaak je ook geklikt hebt.
+	 */
+	rotate(ids: string[] | string, angleDeg: number, absolute = false) {
+		return this.#post('/api/design/rotate', {
+			ids,
+			angle_deg: angleDeg,
+			absolute
+		});
 	}
 
 	assign(ids: string[] | string, operationId: string) {
@@ -87,6 +99,21 @@ export class EditController {
 
 	duplicate(ids: string[] | string) {
 		return this.#post('/api/design/elements/duplicate', { ids });
+	}
+
+	/**
+	 * Eén klik op een paletvakje (besluit B2).
+	 *
+	 * Mét selectie verhuist die naar de laag van die kleur, die zo nodig wordt
+	 * aangemaakt op wat die kleur op deze machine eerder deed. Zonder selectie
+	 * zet hij de kleur voor nieuw werk.
+	 */
+	async paletteColor(color: string, ids: string[] = []) {
+		const result = await this.#post('/api/design/palette', {
+			color,
+			ids: ids.length ? ids : undefined
+		});
+		return result.ok;
 	}
 
 	addLayer(type: string, label?: string, speed?: number, powerPercent?: number) {

@@ -2,6 +2,8 @@
 	import { formatDuration, isStalled, type Device, type Job } from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
+	import type { Design } from '$lib/design.svelte';
+	import JobPreview from './JobPreview.svelte';
 	import Segmented from './Segmented.svelte';
 
 	let {
@@ -45,6 +47,7 @@
 	let bezet = $derived(running || paused);
 	let tokenDraft = $state('');
 	let step = $state(10);
+	type Warning = { code: string; text: string; ernst?: number };
 	type Layer = {
 		id: string | null;
 		label: string;
@@ -53,8 +56,70 @@
 		passes: number;
 		elements: number;
 		source: string | null;
+		/** Het materiaal waarvoor deze instelling gemaakt is — bekend zodra hij
+		 *  uit een preset komt (besluit B1). */
+		material_name?: string | null;
+		thickness_mm?: number | null;
+		warnings?: Warning[];
 	};
-	let estimate = $state<{ seconds: number; parts: number; layers?: Layer[] } | null>(null);
+	type SheetInfo = {
+		name: string;
+		width_mm: number;
+		height_mm: number;
+		material_name: string | null;
+		thickness_mm: number | null;
+	};
+	let estimate = $state<{ seconds: number; parts: number } | null>(null);
+	/**
+	 * Wat er gebrand wordt, los van hoe lang het duurt.
+	 *
+	 * Eigen bron, want `/api/job/estimate` bouwt voor de klok het hele snijplan
+	 * en dat duurt op een zwaar ontwerp minuten. De waarschuwing dat een laag
+	 * een instelling van ánder materiaal draagt, is precies wat je vóór het
+	 * starten moet zien; die hoort niet achter een tijdschatting te wachten.
+	 */
+	let overzicht = $state<{ sheet?: SheetInfo | null; layers?: Layer[] } | null>(null);
+	let layers = $derived(overzicht?.layers ?? []);
+	/**
+	 * Het ontwerp voor de weergave erboven (besluit B8).
+	 *
+	 * Eigen ophaalslag en niet de store van de pagina: dit paneel krijgt hem
+	 * niet doorgegeven, en vlak vóór het starten wil je sowieso zien wat er nú
+	 * op het bed ligt en niet wat er stond toen het canvas voor het laatst
+	 * ververste.
+	 */
+	let ontwerp = $state<Design | null>(null);
+
+	// Wat de laag draagt tegenover waarin gebrand wordt. Dit is het laatste
+	// moment waarop dat verschil nog iets kost dat je kunt terugdraaien.
+	//
+	// Eén regel per laag: twee bezwaren over dezelfde laag lazen als twee lagen,
+	// omdat de naam er dan twee keer boven staat. En het zwaarste bezwaar eerst
+	// — een gemeten instelling van het verkeerde materiaal is erger dan een
+	// uitgerekende op het juiste, en dan moet die bovenaan staan.
+	let mismatch = $derived(
+		layers
+			.filter((l) => l.warnings?.length)
+			.map((l) => ({
+				laag: l.label,
+				ernst: Math.max(...(l.warnings ?? []).map((w) => w.ernst ?? 1)),
+				tekst: (l.warnings ?? []).map((w) => w.text).join(' ')
+			}))
+			.sort((a, b) => b.ernst - a.ernst)
+	);
+	// Alleen wijzen als er iets te kiezen valt: bij bezwaren van gelijk gewicht
+	// is "eerst dit" een willekeurige aanwijzing en dus ruis.
+	let eersteWeegtZwaarder = $derived(
+		mismatch.length > 1 && mismatch[0].ernst > mismatch[mismatch.length - 1].ernst
+	);
+	let velTekst = $derived.by(() => {
+		const vel = overzicht?.sheet;
+		if (!vel?.material_name) return null;
+		const dikte = vel.thickness_mm;
+		return dikte === null || dikte === undefined
+			? vel.material_name
+			: `${vel.material_name} · ${String(dikte).replace('.', ',')} mm`;
+	});
 
 	// Instellingen die niet gemeten zijn, verdienen een waarschuwing vóór het
 	// materiaal in de machine ligt — niet erna.
@@ -63,9 +128,22 @@
 		handmatig: 'handmatig ingesteld',
 		geimporteerd: 'van iemand anders'
 	};
-	let risky = $derived(
-		(estimate?.layers ?? []).filter((l) => l.source !== 'testraster')
-	);
+	let risky = $derived(layers.filter((l) => l.source !== 'testraster'));
+
+	/**
+	 * Waar de getallen van deze laag vandaan komen, in twee woorden.
+	 *
+	 * "Gemeten" boven een instelling die op ánder materiaal gemeten is, stelt
+	 * gerust waar dat niet hoort: het meten klopt, het materiaal niet. Dan zegt
+	 * deze kolom wat er wél aan de hand is, en de regel eronder waarom.
+	 */
+	function bron(layer: Layer): string {
+		const codes = (layer.warnings ?? []).map((w) => w.code);
+		if (codes.includes('ander-materiaal')) return 'ander materiaal';
+		if (codes.includes('andere-dikte')) return 'andere dikte';
+		if (layer.source === 'testraster') return 'gemeten';
+		return ONZEKER[layer.source ?? ''] ?? 'niet gemeten';
+	}
 	let estimating = $state(false);
 	let estimateTraag = $state(false);
 
@@ -77,9 +155,27 @@
 
 	// De schatting van de engine vóór het starten: de pre-flight toonde tot nu
 	// toe alleen de tijd van een al lopende job, wat precies te laat is.
+	//
+	// Twee verzoeken, bewust niet één: het overzicht (lagen, materiaal,
+	// bezwaren) komt meteen, de klok mag daarna komen. Andersom stond de
+	// waarschuwing over verkeerd materiaal minutenlang achter een tijdschatting
+	// te wachten op een zwaar ontwerp.
 	async function loadEstimate() {
 		estimating = true;
 		estimateTraag = false;
+		try {
+			// Naast elkaar: de weergave en de lagentabel horen samen op het
+			// scherm te verschijnen, niet de een een halve seconde na de ander.
+			const [lagen, snapshot] = await Promise.all([
+				fetch('/api/job/layers'),
+				fetch('/api/design')
+			]);
+			overzicht = lagen.ok ? await lagen.json() : null;
+			ontwerp = snapshot.ok ? await snapshot.json() : null;
+		} catch {
+			overzicht = null;
+			ontwerp = null;
+		}
 		const traag = setTimeout(() => (estimateTraag = true), ESTIMATE_GEDULD);
 		try {
 			const response = await fetch('/api/job/estimate');
@@ -95,7 +191,11 @@
 
 	$effect(() => {
 		if (preflight) loadEstimate();
-		else estimate = null;
+		else {
+			estimate = null;
+			overzicht = null;
+			ontwerp = null;
+		}
 	});
 
 	// Zonder token levert elke schrijfactie een 401 op. Een knop aanbieden die
@@ -173,7 +273,11 @@
 			<!-- "Geschatte tijd 0:00" boven een leeg bed leest als een job van nul
 			     seconden in plaats van als geen job. Bij niets te doen zwijgt de
 			     klok en spreekt de melding eronder. -->
+			<!-- Eerst het werkstuk, dan pas de getallen erover (besluit B8). Wie
+			     ziet dat er iets buiten het vel hangt, hoeft de tijd niet meer te
+			     lezen — en op tablet en telefoon staat het canvas er niet naast. -->
 			{#if !leeg}
+				<JobPreview design={ontwerp} sheet={overzicht?.sheet ?? null} {colorFor} />
 				<div class="pf-time">
 					<span class="muted">Geschatte tijd</span>
 					<span class="v mono">
@@ -182,6 +286,14 @@
 						{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
 					</span>
 				</div>
+				<!-- Waarín gebrand wordt, vlak boven de instellingen waarmee. Zonder
+				     dat staat er een tabel met getallen zonder onderwerp. -->
+				{#if velTekst}
+					<div class="pf-time vel">
+						<span class="muted">Materiaal</span>
+						<span class="v">{velTekst}</span>
+					</div>
+				{/if}
 			{/if}
 			{#if !leeg && device?.connection?.state === 'disconnected'}
 				<!-- Starten mag: de engine zet de job in de wachtrij en verbindt
@@ -212,7 +324,7 @@
 			<!-- Wat de machine gaat dóén. Tijd en aantal alleen is theater: een
 			     laseraar controleert snelheid, vermogen en passes voordat hij
 			     iets in de machine legt. -->
-			{#if estimate?.layers?.length}
+			{#if layers.length}
 				<table class="pf-layers">
 					<thead>
 						<tr><th>Laag</th><th>mm/s</th><th>%</th><th>×</th><th>Bron</th></tr>
@@ -221,7 +333,7 @@
 						<!-- Op de index, niet op het label: twee operaties van hetzelfde
 						     type heten allebei "Graveren", en een dubbele sleutel laat
 						     Svelte de tabel verkeerd bijwerken. -->
-						{#each estimate.layers as layer, i (i)}
+						{#each layers as layer, i (i)}
 							<tr>
 								<td class="pf-name" title={layer.label}>
 										<!-- Twee snijlagen heten allebei "Snijden"; de chip is het
@@ -234,15 +346,36 @@
 								<td class="mono">{layer.speed_mm_s ?? '—'}</td>
 								<td class="mono">{layer.power_percent ?? '—'}</td>
 								<td class="mono">{layer.passes}</td>
-								<td class:unsure={layer.source !== 'testraster'}>
-									{layer.source === 'testraster'
-										? 'gemeten'
-										: (ONZEKER[layer.source ?? ''] ?? 'niet gemeten')}
+								<!-- "gemeten" in rustige tekst boven een instelling die op
+								     ánder materiaal gemeten is, stelt gerust waar dat niet
+								     hoort. De regel eronder zegt wat eraan schort; hier
+								     zegt de kleur alvast dát er iets is. -->
+								<td class:unsure={layer.source !== 'testraster' || (layer.warnings?.length ?? 0) > 0}>
+									{bron(layer)}
 								</td>
 							</tr>
 						{/each}
 					</tbody>
 				</table>
+				<!-- Eerst het concrete bezwaar, dan het algemene. Een instelling van
+				     ánder materiaal is geen kwestie van vertrouwen maar van
+				     verkeerde plaat: dat hoort bovenaan te staan en met naam.
+
+				     Binnen de lijst weegt niet alles even zwaar. Een gemeten waarde
+				     van het verkeerde materiaal staat boven een uitgerekende waarde
+				     op het juiste, en als die twee naast elkaar staan zegt het
+				     merkje welke je eerst oplost. -->
+				{#if mismatch.length}
+					<ul class="pf-mismatch" role="alert">
+						{#each mismatch as melding, i (i)}
+							<li class:licht={melding.ernst < 2}>
+								{#if i === 0 && eersteWeegtZwaarder}
+									<span class="eerst">Eerst</span>
+								{/if}<strong>{melding.laag}</strong> — {melding.tekst}
+							</li>
+						{/each}
+					</ul>
+				{/if}
 				{#if risky.length}
 					<p class="pf-warn strong">
 						{risky.length === 1 ? 'Eén laag gebruikt' : `${risky.length} lagen gebruiken`}
@@ -593,6 +726,43 @@
 		background: color-mix(in srgb, var(--warn) 14%, transparent);
 		font-size: var(--text-xs);
 	}
+	/* De enige melding hier die over een concrete verwisseling gaat, en dus de
+	   enige met een linkerbalk: zwaarder dan de algemene "niet gemeten"-notitie
+	   eronder, en niet in dezelfde vlakke gele tint, want dan wegen ze gelijk. */
+	.pf-mismatch {
+		margin: var(--space-2) 0;
+		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+		list-style: none;
+		border-left: 4px solid var(--warn-solid);
+		border-radius: 0 var(--radius-field) var(--radius-field) 0;
+		background: color-mix(in srgb, var(--warn) 22%, transparent);
+		font-size: var(--text-xs);
+		display: grid;
+		gap: var(--space-1);
+	}
+	/* Het mildste bezwaar — uitgerekend maar op het juiste materiaal — hoort er
+	   wel te staan en niet even hard te roepen als een verkeerde plaat. */
+	.pf-mismatch .licht { color: var(--text-2); }
+	.pf-mismatch .licht strong { color: var(--text-1); font-weight: 500; }
+	/* Geen gevuld pilletje: --warn-solid is volgens tokens.css een vlakkleur en
+	   haalt met wit erop maar 3,25:1 (zelf gemeten: 2,22 in donker). Ook --warn
+	   als tekst bleef op deze waas op 3,73 steken. Dus draagt de rand de kleur
+	   en het woord de gewone tekstkleur — gemeten 9,79:1 licht, 14,5:1 donker. */
+	.eerst {
+		display: inline-block;
+		margin-right: var(--space-1h);
+		padding: 0 var(--space-1h);
+		border-radius: var(--radius-dot);
+		border: 1px solid var(--warn-solid);
+		color: var(--text-1);
+		font-size: var(--text-xs);
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	/* De maat is secundair maar moet leesbaar blijven; geen aparte tint. */
+	.pf-time.vel { border-bottom: none; padding-bottom: 0; margin-bottom: var(--space-2); }
+	.pf-time.vel .v { font-size: var(--text-sm); }
 	.pf-check {
 		margin: var(--space-3) 0;
 		padding: var(--space-2) var(--space-3);

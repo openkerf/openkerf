@@ -29,21 +29,71 @@
 	/** Wat wij zelf in beeld brengen; de engine mag het niet nóg een keer tonen. */
 	const EIGEN = ['bedwidth', 'bedheight', 'home_corner'];
 
+	/**
+	 * Wat de zoekknop van stap 1 gevonden heeft (besluit B6).
+	 *
+	 * De poort of het IP-adres komt als parameter mee en wordt hier ingevuld —
+	 * zichtbaar, en pas vastgelegd als je op opslaan drukt. Niets van dit alles
+	 * legt verbinding; dat gebeurt bij de eerste job.
+	 */
+	let verbinding = $derived.by(() => {
+		const rauw = $page.url.searchParams.get('verbinding');
+		if (!rauw) return null;
+		try {
+			const uit = JSON.parse(rauw);
+			return uit && typeof uit === 'object' ? (uit as Record<string, string>) : null;
+		} catch {
+			return null;
+		}
+	});
+
+	const VERBINDINGSWOORD: Record<string, string> = {
+		interface: 'Verbinding',
+		address: 'Adres',
+		serial_port: 'Poort'
+	};
+	/** "udp" is de sleutel van de engine, geen woord voor op het scherm. */
+	const VERBINDINGSWAARDE: Record<string, string> = {
+		udp: 'netwerk (UDP)',
+		usb: 'USB'
+	};
+
 	async function reload() {
 		if (!machinePath) return;
 		const sheets = await store.loadSettings(machinePath, essentialOnly);
 		values = Object.fromEntries(
 			sheets.flatMap((sheet) => sheet.fields.map((field) => [field.attr, field.value]))
 		);
+		// Alleen invullen wat deze machine ook echt kent: een `serial_port` op
+		// een apparaat dat er geen heeft, wordt door de API afgewezen.
+		if (verbinding) {
+			for (const [attr, waarde] of Object.entries(verbinding)) {
+				if (attr in values) values[attr] = waarde;
+			}
+		}
 	}
 
 	onMount(reload);
 
-	// De engine registreert bedwidth als Length en geeft "600mm" terug; de
-	// stepper rekent met getallen. Eenheid eruit, en er weer in bij opslaan.
+	/**
+	 * De engine registreert bedwidth als Length en geeft een string met eenheid
+	 * terug. De stepper rekent in millimeters, dus de eenheid moet meegerekend
+	 * worden — niet weggegooid.
+	 *
+	 * Ruida staat standaard op "24.0in". Alleen de cijfers pakken maakte daar een
+	 * bed van 24 bij 16 millimeter van: een canvas ter grootte van een postzegel,
+	 * en niemand die kon zien waarom.
+	 */
+	const NAAR_MM: Record<string, number> = { mm: 1, cm: 10, in: 25.4, mil: 0.0254 };
+
 	function alsGetal(waarde: unknown): string {
-		const getal = String(waarde ?? '').match(/-?\d+(\.\d+)?/);
-		return getal ? getal[0] : '0';
+		const tekst = String(waarde ?? '').trim();
+		const gevonden = tekst.match(/^\s*(-?\d+(?:\.\d+)?)\s*([a-zA-Z]*)/);
+		if (!gevonden) return '0';
+		const factor = NAAR_MM[gevonden[2].toLowerCase()] ?? 1;
+		const mm = Number(gevonden[1]) * factor;
+		// Geen sleep van drijvende-komma-cijfers achter een maat in millimeters.
+		return String(Math.round(mm * 100) / 100);
 	}
 
 	let breedte = $state('0');
@@ -175,6 +225,29 @@
 		<p class="muted">Begin bij het overzicht en kies of maak een machine.</p>
 		<div class="actions"><a class="btn primary" href="/setup">Naar het overzicht</a></div>
 	{:else}
+		{#if verbinding}
+			{@const ingevuld = Object.entries(verbinding).filter(([attr]) => attr in values)}
+			<p class="verbinding">
+				<strong>Verbinding uit het zoeken ingevuld.</strong>
+				{#if ingevuld.length}
+					<span class="mono">
+						{ingevuld
+							.map(
+								([attr, waarde]) =>
+									`${VERBINDINGSWOORD[attr] ?? attr}: ${VERBINDINGSWAARDE[waarde] ?? waarde}`
+							)
+							.join(' · ')}
+					</span>
+				{:else}
+					<span class="muted">Deze machine kent die instellingen niet; er is niets gewijzigd.</span>
+				{/if}
+				<span class="muted">
+					Je legt hem hiermee nog niet aan: OpenKerf praat pas met de machine als je een job
+					start.
+				</span>
+			</p>
+		{/if}
+
 		<h1>Hoe groot is het bed?</h1>
 		<p class="muted">
 			Meet het werkgebied, niet de buitenkant van de kast. Dit wordt het bed op je canvas —
@@ -293,6 +366,19 @@
 </section>
 
 <style>
+	.verbinding {
+		display: grid;
+		gap: 4px;
+		margin: 0 0 var(--space-4);
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--text-xs);
+		border-left: 3px solid var(--ok);
+		background: var(--surface-2);
+		border-radius: var(--radius-field);
+	}
+	.verbinding .muted {
+		color: var(--text-2);
+	}
 	.werkgebied {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;

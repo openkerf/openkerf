@@ -202,3 +202,57 @@ def test_sheet_names_stay_unique(client):
     names = [s["name"] for s in client.get("/api/sheets").json()["sheets"]]
 
     assert names == ["Vel 1", "Doos 2", "Doos 2 (2)"]
+
+
+# ----------------------------------------------------------------- materiaal
+
+def test_a_sheet_carries_a_material_and_a_thickness(client):
+    """
+    Besluit B1: materiaal en dikte hangen aan het vel.
+
+    Zonder dat weet niets stroomafwaarts waarin je brandt — de bibliotheek niet,
+    het testraster niet, en de pre-flight al helemaal niet.
+    """
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+
+    state = client.patch(
+        "/api/sheets/vel-1", json={"material_id": material["id"], "thickness_mm": 3}
+    ).json()
+
+    sheet = state["sheets"][0]
+    assert sheet["material_id"] == material["id"]
+    assert sheet["thickness_mm"] == 3
+
+
+def test_a_sheet_without_a_material_stays_empty(client):
+    """Een restje van onbekende dikte hoeft geen verzonnen getal te krijgen."""
+    sheet = client.get("/api/sheets").json()["sheets"][0]
+
+    assert sheet["material_id"] is None
+    assert sheet["thickness_mm"] is None
+
+
+def test_the_thickness_can_be_cleared_again(client):
+    client.patch("/api/sheets/vel-1", json={"thickness_mm": 3})
+
+    state = client.patch("/api/sheets/vel-1", json={"thickness_mm": None}).json()
+
+    assert state["sheets"][0]["thickness_mm"] is None
+
+
+def test_an_impossible_thickness_is_refused(client):
+    assert client.patch("/api/sheets/vel-1", json={"thickness_mm": -2}).status_code == 409
+    assert client.patch("/api/sheets/vel-1", json={"thickness_mm": 900}).status_code == 409
+
+
+def test_each_sheet_keeps_its_own_material(client):
+    """Dun en dik in één project: dat is de reden dat dit per vel gaat."""
+    berken = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    acryl = client.post("/api/library/materials", json={"name": "Acryl"}).json()
+    client.patch("/api/sheets/vel-1", json={"material_id": berken["id"], "thickness_mm": 3})
+    client.post("/api/sheets", json={"material_id": acryl["id"], "thickness_mm": 5})
+
+    sheets = client.get("/api/sheets").json()["sheets"]
+
+    assert [s["material_id"] for s in sheets] == [berken["id"], acryl["id"]]
+    assert [s["thickness_mm"] for s in sheets] == [3, 5]

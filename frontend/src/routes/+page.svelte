@@ -21,6 +21,7 @@
 	import CameraCalibration from '$components/CameraCalibration.svelte';
 	import Clipart from '$components/Clipart.svelte';
 	import SheetTabs from '$components/SheetTabs.svelte';
+	import SheetMaterial from '$components/SheetMaterial.svelte';
 	import PhoneView from '$components/PhoneView.svelte';
 	import JobStart from '$components/JobStart.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
@@ -30,9 +31,20 @@
 	import TestGridResult from '$components/TestGridResult.svelte';
 	import TextDialog from '$components/TextDialog.svelte';
 	import TopBar from '$components/TopBar.svelte';
+	import MeldingAlarm from '$components/MeldingAlarm.svelte';
+	import MeldingKaart from '$components/MeldingKaart.svelte';
+	import { Bewaker, Meldingen } from '$lib/meldingen.svelte';
 
 	const status = new StatusConnection();
 	const control = new Controller();
+	// Besluit B3: melden ja, zelf ingrijpen nee. De bewaker leest de status en
+	// besluit wanneer er iets te zeggen valt; hij stuurt niets naar de machine.
+	const meldingen = new Meldingen();
+	const bewaker = new Bewaker(meldingen);
+	/** Staat de instelkaart open? Bereikbaar naast de paneeltabs. */
+	let meldingenOpen = $state(false);
+	/** De aanleidingkaart: alleen in beeld vlak nadat er een job begon. */
+	let vraagOpen = $state(false);
 	const design = new DesignStore();
 	const token = () =>
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
@@ -54,8 +66,15 @@
 	let tablet = $derived(breedte >= 768 && breedte < 1200);
 	// Onder deze breedte passen de bestandsknoppen niet meer náást de
 	// machinebediening in de bovenbalk; ze verhuizen dan naar het railmenu.
-	// Gemeten: bij 950px raakt de startknop anders de rechterrand.
-	let smal = $derived(tablet && breedte < 950);
+	// Sinds het materiaal van het vel in de balk staat (besluit B1) ligt die
+	// grens niet meer op 950 maar op de hele tabletbreedte: gemeten liep de
+	// balk op 1024 anders 99px over de rand, en dan staat de startknop buiten
+	// beeld. Waarín je brandt weegt zwaarder dan een bestandsknop die één tik
+	// verderop in het railmenu staat.
+	let smal = $derived(tablet);
+	// Eén stap eerder: op een gewoon laptopscherm blijven de bestandsknoppen
+	// staan, maar zonder hun woord. Gemeten grens; boven 1500px past alles.
+	let krap = $derived(!telefoon && breedte < 1500);
 	let paneelOpen = $state(true);
 	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
 	// waar je hem zoekt.
@@ -71,6 +90,11 @@
 	function vier() {
 		wauw = true;
 		setTimeout(() => (wauw = false), 900);
+		// Het enige moment waarop de toestemmingsvraag ergens op slaat: er brandt
+		// nu iets, dus er valt straks iets te melden. Bij het laden van de app zou
+		// dezelfde vraag zonder aanleiding komen — en die weigering is definitief.
+		if (meldingen.vragen) vraagOpen = true;
+		bewaker.gestart();
 	}
 	control.onStarted = vier;
 	$effect(() => {
@@ -119,6 +143,11 @@
 	let estimate = $state<number | null>(null);
 	let gridOpen = $state(false);
 	let versRaster = $state<number | null>(null);
+	/** Het materiaal van het huidige vel wijzigen (besluit B1). */
+	let materiaalOpen = $state(false);
+	let velMateriaal = $derived(
+		library.materials.find((m) => m.id === sheets.active?.material_id)?.name ?? null
+	);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
 	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
@@ -377,8 +406,15 @@
 		// De beschikbare acties hangen af van het actieve device, dus opnieuw
 		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
+		// De toestemming kan buiten ons om wijzigen: wie hem in de site-instellingen
+		// van de browser terugzet, verwacht niet dat hij daarna moet verversen.
+		const herlees = () => meldingen.lees();
+		window.addEventListener('focus', herlees);
+		document.addEventListener('visibilitychange', herlees);
 		return () => {
 			clearInterval(poll);
+			window.removeEventListener('focus', herlees);
+			document.removeEventListener('visibilitychange', herlees);
 			status.close();
 		};
 	});
@@ -388,6 +424,16 @@
 	$effect(() => {
 		const latest = status.events[0];
 		if (latest && isDesignSignal(latest.code)) design.load();
+	});
+
+	// Alarmsignalen uit de engine (`pipe;usb_status`) en de tweesecondensnapshot:
+	// twee losse bronnen, dus twee losse effecten.
+	$effect(() => {
+		const latest = status.events[0];
+		if (latest) bewaker.signaal(latest);
+	});
+	$effect(() => {
+		bewaker.status(status.device, status.connected);
 	});
 
 	function requestStart() {
@@ -450,10 +496,13 @@
 		job={status.activeJob}
 		{control}
 		{camera}
+		{meldingen}
+		{bewaker}
 		connected={status.connected}
 		position={telefoonPositie}
 	/>
 {:else}
+<MeldingAlarm {bewaker} />
 <TopBar
 	{device}
 	state={machine}
@@ -466,6 +515,7 @@
 	canEdit={canEdit && design.preview === null}
 	{tablet}
 	{smal}
+	{krap}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
 	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
 	paused={machine === 'paused'}
@@ -475,6 +525,9 @@
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
 	onOpenProject={openProject}
+	material={velMateriaal}
+	thicknessMm={sheets.active?.thickness_mm ?? null}
+	onOpenMaterial={() => (materiaalOpen = true)}
 	canFrame={(design.elements?.length ?? 0) > 0 &&
 		(control.capabilities?.motion?.move ?? false) &&
 		!control.needsToken}
@@ -489,7 +542,7 @@
 <div class="main">
 	<ToolRail
 		compact={tablet}
-		bestanden={smal}
+		bestanden={smal || krap}
 		bind:tool
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
@@ -508,6 +561,7 @@
 			{sheets}
 			{library}
 			{canEdit}
+			onEditMaterial={() => (materiaalOpen = true)}
 			onSwitched={async () => {
 				design.select(null);
 				await design.load();
@@ -571,6 +625,10 @@
 	>{paneelOpen ? '›' : '‹'}<span class="vw">Paneel {paneelOpen ? 'inklappen' : 'uitklappen'}</span></button>
 {/if}
 <aside class="panel" class:weg={tablet && !paneelOpen} aria-label="Eigenschappen">
+		<!-- Het belletje staat wél in dezelfde rij maar buiten de tablist: een
+		     tablist mag volgens ARIA alleen tabs bevatten, en axe rekende het
+		     belletje anders als ontbrekend kind aan (aria-required-children). -->
+		<div class="tabsrij">
 		<div class="tabs" role="tablist">
 			<button
 				class="tab"
@@ -605,6 +663,28 @@
 						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
 					>
 				{/if}
+			</button>
+		</div>
+			<!-- De vaste plek voor meldingen. Naast de tabs en niet zwevend boven het
+			     canvas: dit paneel gaat over déze machine, en dat is precies waar een
+			     melding over gaat. Het belletje draagt zijn eigen toestand — uit of
+			     geblokkeerd is iets wat je moet kunnen zien zonder te klikken. -->
+			<button
+				class="bel"
+				class:stil={!meldingen.actief}
+				aria-haspopup="dialog"
+				title={meldingen.actief ? 'Meldingen staan aan' : 'Meldingen staan uit'}
+				aria-label={meldingen.actief ? 'Meldingen — staan aan' : 'Meldingen — staan uit'}
+				onclick={() => (meldingenOpen = true)}
+			>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+					<path d="M13.7 21a2 2 0 0 1-3.4 0" />
+					{#if !meldingen.actief}
+						<line x1="3" y1="3" x2="21" y2="21" />
+					{/if}
+				</svg>
 			</button>
 		</div>
 		<div class="panel-scroll">
@@ -811,6 +891,18 @@
 	</div>
 </Dialog>
 
+<!-- De aanleidingkaart zweeft en blokkeert niet: er is net een job gestart, en
+     die mag niet achter een modaal venster verdwijnen. -->
+{#if !telefoon && vraagOpen && meldingen.vragen}
+	<div class="vraagkaart">
+		<MeldingKaart {meldingen} variant="aanleiding" onKlaar={() => (vraagOpen = false)} />
+	</div>
+{/if}
+
+<Dialog title="Meldingen" bind:open={meldingenOpen} width="460px">
+	<MeldingKaart {meldingen} />
+</Dialog>
+
 <Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
 
 <CameraCalibration bind:open={calibrateOpen} {camera} />
@@ -844,10 +936,26 @@
 	}}
 />
 
+<!-- Materiaal van het vel: klein venster, twee keuzes. In de bovenbalk kan het
+     niet — die scrollt horizontaal en knipt elk uitklapmenu af — en op een
+     tablet is een venster bovendien met een vinger te bedienen. -->
+<Dialog title="Materiaal van dit vel" bind:open={materiaalOpen} width="440px">
+	{#if sheets.active}
+		<SheetMaterial
+			{sheets}
+			{library}
+			sheet={sheets.active}
+			onDone={() => (materiaalOpen = false)}
+		/>
+	{/if}
+</Dialog>
+
 <Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
 	<MaterialLibrary
 		{library}
 		operations={design.operations}
+		sheetMaterialId={sheets.active?.material_id ?? null}
+		sheetMaterialName={velMateriaal}
 		{canEdit}
 		onApplied={() => design.load()}
 		token={token()}
@@ -864,7 +972,8 @@
 	<TestGrid
 		{library}
 		{canEdit}
-		materialId={gridMateriaal}
+		materialId={gridMateriaal ?? sheets.active?.material_id ?? null}
+		thicknessMm={sheets.active?.thickness_mm ?? null}
 		onGenerated={(id) => {
 			// Vers gebrand raster: stap 3 hoort er meteen op te staan in plaats van
 			// op "kies een raster…" te blijven hangen.
@@ -887,7 +996,10 @@
 	.camstrip {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));
-		bottom: calc(var(--statusbar-height) + var(--space-3));
+		/* --palet-hoogte komt van de kleurenstrook onder het canvas (B2), die
+		   zichzelf opmeet. Zonder die term lag de camerapil over de eerste
+		   kleurvakjes heen. Nul zolang er geen strook is. */
+		bottom: calc(var(--statusbar-height) + var(--space-3) + var(--palet-hoogte, 0px));
 		z-index: 5;
 		display: flex;
 		align-items: center;
@@ -904,11 +1016,11 @@
 	@media (max-width: 1199px) {
 		.camstrip {
 			left: calc(var(--rail-width) + var(--space-3));
-			bottom: calc(var(--statusbar-height) + var(--space-3) + 56px);
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 56px + var(--palet-hoogte, 0px));
 		}
 		.camerror {
 			left: calc(var(--rail-width) + var(--space-3));
-			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px);
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px + var(--palet-hoogte, 0px));
 		}
 	}
 	.cam {
@@ -927,7 +1039,7 @@
 	.camerror {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));
-		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px);
+		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px + var(--palet-hoogte, 0px));
 		z-index: 5;
 		display: flex;
 		align-items: flex-start;
@@ -958,6 +1070,25 @@
 		line-height: 1;
 	}
 	.camerror button:hover { background: var(--surface-2); color: var(--text-1); }
+
+	/* Rechtsonder, maar náást het paneel en niet erover: precies daar staat de
+	   spoolerkaart met de voortgang van de job die net begon, en die afdekken met
+	   de vraag "zal ik het melden als hij klaar is" is het verkeerde van het
+	   verkeerde. Dezelfde breedtes als `.panel` hieronder — twee regels die
+	   samen horen, dus ze staan naast elkaar. */
+	.vraagkaart {
+		position: fixed;
+		right: calc(280px + var(--space-4));
+		bottom: calc(var(--statusbar-height) + var(--space-4));
+		z-index: 70;
+		width: min(360px, calc(100vw - 300px - 2 * var(--space-4)));
+	}
+	@media (max-width: 1199px), (pointer: coarse) {
+		.vraagkaart {
+			right: calc(324px + var(--space-4));
+			width: min(360px, calc(100vw - 344px - 2 * var(--space-4)));
+		}
+	}
 
 	.main {
 		flex: 1;
@@ -1004,10 +1135,14 @@
 		overflow: hidden;
 		clip-path: inset(50%);
 	}
-	.tabs {
+	.tabsrij {
 		display: flex;
 		flex: none;
 		border-bottom: 1px solid var(--line);
+	}
+	.tabs {
+		display: flex;
+		flex: 1;
 	}
 	.tab {
 		flex: 1;
@@ -1025,6 +1160,26 @@
 		bottom: -1px;
 		width: calc(100% - var(--space-8));
 		height: 2px;
+	}
+	.bel {
+		flex: none;
+		width: 36px;
+		display: grid;
+		place-items: center;
+		color: var(--text-2);
+	}
+	.bel svg {
+		width: 17px;
+		height: 17px;
+	}
+	.bel:hover {
+		color: var(--text-1);
+		background: var(--surface-2);
+	}
+	/* Uit is een toestand, geen fout: het doorgestreepte belletje zegt het al.
+	   Geen rood, want er is niets stuk. */
+	.bel.stil {
+		color: var(--text-2);
 	}
 	:global(.ask) { margin: 0 0 var(--space-4); }
 	:global(.ask-actions) {

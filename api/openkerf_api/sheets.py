@@ -66,6 +66,19 @@ class Sheets:
             ],
         }
 
+    @property
+    def active_id(self) -> str | None:
+        self._ensure()
+        return self._active
+
+    def active(self) -> dict | None:
+        """Het vel waarop nu gewerkt wordt — inclusief zijn materiaal."""
+        sheets = self._ensure()
+        for sheet in sheets:
+            if sheet["id"] == self._active:
+                return dict(sheet)
+        return None
+
     def _ensure(self) -> list[dict]:
         """
         Er is altijd minstens één vel.
@@ -83,8 +96,15 @@ class Sheets:
                     "width_mm": width,
                     "height_mm": height,
                     "material_id": None,
+                    "thickness_mm": None,
                 }
             ]
+            self._write(sheets)
+        elif any("thickness_mm" not in sheet for sheet in sheets):
+            # Dikte kwam er later bij (besluit B1). Vellen uit een ouder project
+            # missen de sleutel; zonder deze regel valt de bovenbalk erover.
+            for sheet in sheets:
+                sheet.setdefault("thickness_mm", None)
             self._write(sheets)
         if self._active is None or all(s["id"] != self._active for s in sheets):
             self._active = sheets[0]["id"]
@@ -115,7 +135,14 @@ class Sheets:
 
     # ------------------------------------------------------------ beheren
 
-    def add(self, name=None, width_mm=None, height_mm=None, material_id=None) -> dict:
+    def add(
+        self,
+        name=None,
+        width_mm=None,
+        height_mm=None,
+        material_id=None,
+        thickness_mm=None,
+    ) -> dict:
         sheets = self._ensure()
         if len(sheets) >= MAX_SHEETS:
             raise DesignError(f"Meer dan {MAX_SHEETS} vellen wordt onoverzichtelijk.")
@@ -139,10 +166,27 @@ class Sheets:
             "width_mm": self._side(width_mm, bed_width, "width_mm"),
             "height_mm": self._side(height_mm, bed_height, "height_mm"),
             "material_id": material_id,
+            "thickness_mm": self._thickness(thickness_mm),
         }
         sheets.append(sheet)
         self._write(sheets)
         return self.state()
+
+    def _thickness(self, value):
+        """
+        De dikte van dit stuk materiaal, of niets.
+
+        Leeg is een geldig antwoord: wie een restje van onbekende dikte in de
+        machine legt, moet niet eerst een getal hoeven verzinnen. Een preset
+        zonder dikte hoort erbij te kunnen — dwingen zou de bovenbalk in een
+        formulier veranderen.
+        """
+        if value is None or value == "":
+            return None
+        dikte = _positive(value, "thickness_mm")
+        if dikte > 500:
+            raise DesignError("Een vel van meer dan 500 mm dik gaat er niet in.")
+        return round(dikte, 2)
 
     def _side(self, value, fallback, label):
         if value is None:
@@ -165,6 +209,8 @@ class Sheets:
                 sheet[key] = self._side(fields[key], sheet[key], key)
         if "material_id" in fields:
             sheet["material_id"] = fields["material_id"]
+        if "thickness_mm" in fields:
+            sheet["thickness_mm"] = self._thickness(fields["thickness_mm"])
         self._write(sheets)
         return self.state()
 
