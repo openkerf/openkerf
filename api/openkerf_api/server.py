@@ -510,6 +510,11 @@ class ApiServer:
         def clear_design():
             """Leeg het ontwerp — wat openen doet voordat het een bestand inleest."""
             def run():
+                # Vóór `clean()`, want die wist juist het antwoord: stond dit
+                # ontwerp al veilig op schijf, dan valt er na het leegmaken
+                # niets meer te herstellen en hoeft het herstelvenster er de
+                # volgende keer niet over te beginnen.
+                self.autosave.forget_if_saved()
                 self.kernel.elements.clear_all()
                 self.drawing.user_operations.clear()
                 self.document.clean()

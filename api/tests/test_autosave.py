@@ -104,6 +104,36 @@ def test_throwing_it_away_does_not_leave_you_without_a_net(client, server):
     assert client.get("/api/design/autosave").json()["exists"] is True
 
 
+def test_a_new_design_after_exporting_is_not_haunted(client, server):
+    """
+    Tekenen, exporteren, aan iets nieuws beginnen — en de volgende laadbeurt
+    vroeg of je die pas geëxporteerde tekening wilde terugzetten. Er valt daar
+    niets te herstellen: het staat onder je eigen naam op schijf. Een venster
+    dat bij elk nieuw ontwerp langskomt, leer je wegklikken, en dan mis je het
+    op de dag dat het wél ergens over gaat.
+    """
+    a_rect(client)
+    server.autosave.save()
+    client.get("/api/design/export.svg")
+
+    client.post("/api/design/clear")
+
+    assert client.get("/api/design/autosave").json()["exists"] is False
+
+
+def test_unsaved_work_keeps_its_net_even_when_you_clear_the_canvas(client, server):
+    """
+    De keerzijde, en die weegt zwaarder: wie tekent zonder op te slaan en dan
+    het canvas leegt, moet het nog terug kunnen halen.
+    """
+    a_rect(client)
+    server.autosave.save()
+
+    client.post("/api/design/clear")
+
+    assert client.get("/api/design/autosave").json()["exists"] is True
+
+
 def test_the_last_change_before_you_walk_away_still_lands(client, server, monkeypatch):
     """
     `touch` schrijft de eerste wijziging en remt daarna. Wie in die interval nog

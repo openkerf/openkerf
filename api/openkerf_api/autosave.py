@@ -118,6 +118,32 @@ class Autosave:
             "age_seconds": max(0, int(time.time() - stamp)),
         }
 
+    def forget_if_saved(self) -> bool:
+        """
+        Het vangnet opruimen als er niets meer in kan vallen.
+
+        Het herstelbestand blijft anders eeuwig staan, en het venster "Werk van
+        een vorige sessie" komt dan bij élke start van een nieuw ontwerp langs.
+        Gemeten: tekenen, op Exporteren drukken, aan iets nieuws beginnen — en
+        de volgende laadbeurt vraagt of je die pas geëxporteerde tekening wilt
+        terugzetten. Dat is geen vorige sessie en er valt niets te herstellen;
+        het is een venster dat je leert wegklikken, en dat is precies wat je
+        niet wil op de dag dat er wél iets te herstellen valt.
+
+        `document.dirty` is hier de juiste vraag en niet "heeft de gebruiker
+        opgeslagen": hij staat op False zodra het ontwerp gelijk is aan een
+        bestand — na exporteren, na openen, na een projectbestand. Staat hij op
+        True, dan is er ongeborgen werk en blijft het vangnet liggen, ook al
+        gooit de gebruiker het canvas leeg.
+
+        Geeft terug of er werkelijk iets weggehaald is.
+        """
+        if self.document.dirty:
+            return False
+        bestond = self.path.is_file()
+        self.discard()
+        return bestond
+
     def _open_de_rem(self) -> None:
         """
         De rem lostrekken, zodat de eerstvolgende wijziging meteen bewaard wordt.

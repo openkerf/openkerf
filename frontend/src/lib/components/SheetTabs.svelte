@@ -87,6 +87,22 @@
 		}
 	}
 
+	/**
+	 * Een vel toevoegen laat je op het huidige vel staan — vandaag.
+	 *
+	 * Daarom stond hier geen `onSwitched`. Maar dat is een aanname over de API,
+	 * niet iets wat deze component ziet: gaat `/api/sheets` het nieuwe vel ooit
+	 * wél activeren, dan toont het canvas de inhoud van het vórige vel terwijl
+	 * de tab het nieuwe aanwijst — een scherm dat met zichzelf klopt en niet met
+	 * de engine. Dus kijken we gewoon of het actieve vel veranderd is.
+	 */
+	async function voegToe() {
+		const voor = sheets.active?.id ?? null;
+		if (await sheets.add()) {
+			if ((sheets.active?.id ?? null) !== voor) onSwitched?.();
+		}
+	}
+
 	async function go(id: string) {
 		if (sheets.active?.id === id) {
 			editing = editing === id ? null : id;
@@ -125,7 +141,7 @@
 			class="sheet add"
 			disabled={sheets.busy}
 			title="Vel toevoegen"
-			onclick={() => sheets.add()}
+			onclick={voegToe}
 		>+</button>
 	{/if}
 

@@ -3,6 +3,9 @@
  *
  * Draaien tegen een lopende server:
  *   OK_BASE=http://127.0.0.1:8181 node --test frontend/tests/import-vraagt-eerst.test.ts
+ *
+ * Deze test deelt één draaiende engine met de andere e2e-tests, dus meer dan
+ * één bestand tegelijk draaien gaat mis: gebruik `--test-concurrency=1`.
  * Zonder bereikbare server slaat de test zichzelf over — hij hoort bij een
  * draaiende engine, niet bij een bundelstap.
  *
@@ -46,6 +49,18 @@ before(async () => {
 		.then((r) => r.ok)
 		.catch(() => false);
 	if (!bereikbaar) return;
+	// Zonder ingestelde machine toont `/` het welkomstscherm en is er geen
+	// importknop; dan meet je de setup in plaats van het importeren.
+	const machines: { path: string; configured?: boolean }[] = await (
+		await fetch(`${BASE}/api/machines`)
+	).json();
+	if (!machines.some((m) => m.configured)) {
+		await fetch(`${BASE}/api/machines`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ info: 'ruida-beta', label: 'Testbank import' })
+		});
+	}
 	map = mkdtempSync(join(tmpdir(), 'openkerf-import-'));
 	writeFileSync(join(map, 'vijf.svg'), VIJF_VORMEN);
 	writeFileSync(join(map, 'een.svg'), EEN_VORM);

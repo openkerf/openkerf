@@ -4,6 +4,9 @@
  * Draaien tegen een lopende server:
  *   OK_BASE=http://127.0.0.1:8181 node --test frontend/tests/machinenaam.test.ts
  *
+ * Deze test deelt één draaiende engine met de andere e2e-tests, dus meer dan
+ * één bestand tegelijk draaien gaat mis: gebruik `--test-concurrency=1`.
+ *
  * Aanleiding: de wizard twee keer doorlopen leverde twee machines op die allebei
  * "Werkplaats 5030" heetten (`/api/machines` gaf `ruida` en `ruida1`, zelfde
  * label), zonder één woord erover. In de bovenbalk staat alleen die naam, en de

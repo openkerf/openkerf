@@ -360,6 +360,17 @@
 	// rechthoek pas punten krijgt zodra je er een pad van maakt.
 	let nodePoints = $state<{ index: number; x_mm: number; y_mm: number }[]>([]);
 	let nodeDrag = $state<{ index: number; x: number; y: number } | null>(null);
+	/**
+	 * Waarom er geen knooppunten staan.
+	 *
+	 * Het gereedschap heeft drie stille standen — niets gekozen, meer dan één
+	 * ding gekozen, en een vorm die de engine niet per punt bewerkt — en in alle
+	 * drie gebeurde er zichtbaar niets. Het gereedschap stond wel ingedrukt.
+	 * Gemeten met twee vormen geselecteerd: het paneel toont de gewone
+	 * meervoudsselectie en het woord "knooppunt" komt nergens in beeld voor.
+	 * Eén regel onder het bed zegt waar je staat en wat de volgende stap is.
+	 */
+	let nodeReden = $state<'geen' | 'meerdere' | 'onbewerkbaar' | null>(null);
 
 	$effect(() => {
 		const id = tool === 'nodes' && design.selectedIds.length === 1 ? design.selectedId : null;
@@ -367,13 +378,17 @@
 		void design.revision;
 		if (!id) {
 			nodePoints = [];
+			nodeReden =
+				tool !== 'nodes' ? null : design.selectedIds.length === 0 ? 'geen' : 'meerdere';
 			return;
 		}
 		let cancelled = false;
 		fetch(`/api/design/elements/${encodeURIComponent(id)}/nodes`)
 			.then((r) => (r.ok ? r.json() : null))
 			.then((data) => {
-				if (!cancelled) nodePoints = data?.editable ? data.points : [];
+				if (cancelled) return;
+				nodePoints = data?.editable ? data.points : [];
+				nodeReden = data?.editable ? null : 'onbewerkbaar';
 			});
 		return () => {
 			cancelled = true;
@@ -2036,6 +2051,23 @@
      1440: overlap van 34 px). Eén maat voor de hele onderrand is de enige die
      klopt, want er kan meer dan één strook staan. -->
 <div class="onderrand" bind:clientHeight={onderrandHoogte}>
+<!-- Het knooppuntgereedschap staat ingedrukt maar doet niets: zeg waarom.
+     Zonder deze regel was het verschil tussen "je moet nog een vorm kiezen" en
+     "deze vorm kán het niet" onzichtbaar, en beide zagen eruit als een kapot
+     gereedschap. -->
+{#if nodeReden}
+	<p class="tool-uitleg" role="status">
+		{#if nodeReden === 'geen'}
+			Knooppunten werkt op één vorm. Klik er een aan op het bed.
+		{:else if nodeReden === 'meerdere'}
+			Knooppunten werkt op één vorm tegelijk; er staan er {design.selectedIds.length}
+			gekozen. Klik er één aan.
+		{:else}
+			Deze vorm heeft geen losse punten. Maak er eerst een pad van met
+			<em>Combineren</em> in het paneel rechts.
+		{/if}
+	</p>
+{/if}
 <!-- Wat het spoor op het bed is, in woorden (gat J3).
      Een lijn die tijdens een job over het bed groeit, leest als "dit is er al
      gesneden" — en dat kunnen we niet waarmaken: `driver;position` zegt niet of
@@ -2475,6 +2507,20 @@
 		stroke: var(--bed);
 		stroke-width: 3;
 		stroke-linejoin: round;
+	}
+	/* Zelfde plek en zelfde toon als de spooruitleg: een regel die zegt wat je
+	   voor je hebt, niet een waarschuwing. */
+	.tool-uitleg {
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--text-xs);
+		line-height: 1.4;
+		color: var(--text-2);
+		border-top: 1px solid var(--line-1);
+	}
+	.tool-uitleg em {
+		font-style: normal;
+		color: var(--text-1);
 	}
 	.spoor-uitleg {
 		display: flex;
