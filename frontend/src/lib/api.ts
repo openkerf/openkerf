@@ -71,6 +71,13 @@ export type Capabilities = {
 		jog: boolean;
 		focus: boolean;
 	};
+	/** Kan deze driver snelheid en vermogen bijstellen terwijl een job loopt
+	 *  (gat J11)? Alleen grbl heeft daar realtime overrides voor; op een Ruida
+	 *  staat dit op false en horen die knoppen er niet te zijn. */
+	adjust?: {
+		power: boolean;
+		speed: boolean;
+	};
 	auth_required: boolean;
 };
 

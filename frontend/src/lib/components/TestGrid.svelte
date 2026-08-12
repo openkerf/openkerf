@@ -87,6 +87,9 @@
 		/** Of de rijlabels links van het raster nog op het bed vallen. */
 		label_room?: boolean;
 		label_margin_mm?: number;
+		/** Of het hele bord — opschrift en kader erbij — nog op het bed begint. */
+		board_room?: boolean;
+		anchor?: 'corner' | 'center';
 	};
 	let preview = $state<{
 		plan: Plan;
@@ -116,8 +119,22 @@
 		interval_mm: '0.1',
 		cell_mm: '8',
 		gap_mm: '2',
-		origin_x_mm: '10',
-		origin_y_mm: '10'
+		// 20 en niet 10: de rijlabels worden links van het raster gegraveerd en
+		// zijn bij driecijferige snelheden ruim 17 mm breed. Vanaf 10 begon het
+		// bord dus buiten het bed, en dan opent de wizard met een waarschuwing
+		// over zijn eigen standaardwaarden.
+		origin_x_mm: '20',
+		origin_y_mm: '20',
+		// Gat T9: vanaf de hoek of vanaf het midden. Een testbord leg je op een
+		// reststuk, en dan weet je waar het mídden van dat stuk ligt.
+		anchor: 'corner' as 'corner' | 'center',
+		// Gat T10: LightBurn heeft Enable Text en Enable Border. Tekst staat aan
+		// — het bord is een bewijsstuk — en het kader is er voor wie de foto
+		// makkelijker wil uitlijnen.
+		text: true,
+		border: false,
+		label_speed_mm_s: '80',
+		label_power_percent: '30'
 	});
 
 	/** Onder welke sleutel de vaste waarde van een grootheid naar de API gaat. */
@@ -128,6 +145,8 @@
 	};
 
 	let intervalKan = $derived(INTERVAL_BEWERKINGEN.includes(form.operation));
+	/** Waar de labellaag over gaat: opschrift, kader, of allebei (T10). */
+	let labellaagNaam = $derived(form.text ? 'Opschrift' : 'Kader');
 	/** Rasteren gekozen op een engine die het niet kan omzetten naar laserregels. */
 	let rasterOnmogelijk = $derived(
 		form.operation === 'graveren-raster' && preview?.engine?.raster === false
@@ -168,7 +187,12 @@
 			cell_mm: Number(form.cell_mm),
 			gap_mm: Number(form.gap_mm),
 			origin_x_mm: Number(form.origin_x_mm),
-			origin_y_mm: Number(form.origin_y_mm)
+			origin_y_mm: Number(form.origin_y_mm),
+			anchor: form.anchor,
+			text: form.text,
+			border: form.border,
+			label_speed_mm_s: Number(form.label_speed_mm_s),
+			label_power_percent: Number(form.label_power_percent)
 		};
 		for (const as of AS_ORDE) {
 			if (assen.includes(as)) {
@@ -247,7 +271,9 @@
 			form.speed_min, form.speed_max, form.speed_steps, form.speed_mm_s,
 			form.power_min, form.power_max, form.power_steps, form.power_percent,
 			form.interval_min, form.interval_max, form.interval_steps, form.interval_mm,
-			form.cell_mm, form.gap_mm, form.origin_x_mm, form.origin_y_mm
+			form.cell_mm, form.gap_mm, form.origin_x_mm, form.origin_y_mm,
+			form.anchor, form.text, form.border,
+			form.label_speed_mm_s, form.label_power_percent
 		];
 		if (timer) clearTimeout(timer);
 		timer = setTimeout(async () => {
@@ -396,8 +422,41 @@
 		'speed_min', 'speed_max', 'speed_steps',
 		'power_min', 'power_max', 'power_steps',
 		'interval_min', 'interval_max', 'interval_steps',
-		'cell_mm', 'gap_mm', 'origin_x_mm', 'origin_y_mm'
+		'cell_mm', 'gap_mm',
+		'label_speed_mm_s', 'label_power_percent'
 	] as const;
+
+	/**
+	 * Eén bewaarde instelling in het formulier zetten.
+	 *
+	 * Werkt voor een vorig raster (T3) en voor een benoemd recept (T7): de
+	 * server levert ze in dezelfde vorm, en dat was de reden om T7 óp T3 te
+	 * bouwen in plaats van ernaast.
+	 */
+	function neemOver(vorige: Record<string, unknown>) {
+		for (const sleutel of OVER_TE_NEMEN) {
+			const waarde = vorige[sleutel];
+			if (waarde === null || waarde === undefined) continue;
+			(form as Record<string, unknown>)[sleutel] =
+				typeof waarde === 'number' ? String(waarde) : waarde;
+		}
+		// Een vaste grootheid staat in de vorige rij als min == max.
+		for (const as of AS_ORDE) {
+			if (vorige[`${as}_steps`] === 1 && vorige[`${as}_min`] != null) {
+				form[VAST_VELD[as]] = String(vorige[`${as}_min`]);
+			}
+		}
+		// Waar het bord lag en wat er verder op stond (T9, T10). Het punt dat je
+		// intikte komt terug, niet de hoek die eruit gerekend is.
+		if (vorige.anchor === 'center' || vorige.anchor === 'corner') form.anchor = vorige.anchor;
+		if (typeof vorige.text_enabled === 'boolean') form.text = vorige.text_enabled;
+		if (typeof vorige.border_enabled === 'boolean') form.border = vorige.border_enabled;
+		const x = vorige.anchor_x_mm ?? vorige.origin_x_mm;
+		const y = vorige.anchor_y_mm ?? vorige.origin_y_mm;
+		if (x != null) form.origin_x_mm = String(x);
+		if (y != null) form.origin_y_mm = String(y);
+		if (vorige.thickness_mm != null) form.thickness_mm = String(vorige.thickness_mm);
+	}
 
 	$effect(() => {
 		const id = form.material_id;
@@ -412,22 +471,127 @@
 			// Alleen overnemen zolang je nog niets gegenereerd hebt: anders
 			// overschrijf je het formulier waar je net mee bezig was.
 			if (!vorige || gelukt || form.material_id !== id) return;
-			for (const sleutel of OVER_TE_NEMEN) {
-				const waarde = vorige[sleutel];
-				if (waarde === null || waarde === undefined) continue;
-				(form as Record<string, unknown>)[sleutel] =
-					typeof waarde === 'number' ? String(waarde) : waarde;
-			}
-			// Een vaste grootheid staat in de vorige rij als min == max.
-			for (const as of AS_ORDE) {
-				if (vorige[`${as}_steps`] === 1 && vorige[`${as}_min`] != null) {
-					form[VAST_VELD[as]] = String(vorige[`${as}_min`]);
-				}
-			}
-			if (vorige.thickness_mm != null) form.thickness_mm = String(vorige.thickness_mm);
+			neemOver(vorige);
 			overgenomen = { datum: vorige.from_date, raster: vorige.from_grid };
 		})();
 	});
+
+	// ------------------------------------------ benoemde recepten (gat T7)
+	//
+	// T3 onthoudt één instelling per materiaal: het vorige raster. Dat dekt de
+	// wekelijkse proef, niet twee recepten die je afwisselt — "berk snijden"
+	// naast "berk graveren". LightBurn heeft daar een Presets-lijst voor met
+	// opslaan en verwijderen; dit is dezelfde lijst, gevuld met dezelfde
+	// sleutels als het vorige raster, zodat er één invulroutine is.
+
+	type Recept = {
+		id: number;
+		name: string;
+		material_id: number | null;
+		material_name: string | null;
+		settings: Record<string, unknown>;
+	};
+
+	let recepten = $state<Recept[]>([]);
+	let gekozenRecept = $state<number | null>(null);
+	let receptNaam = $state('');
+	let receptFout = $state<string | null>(null);
+	let receptBezig = $state(false);
+	/** Het opslaanveld staat dicht tot je het opent: het is niet de hoofdweg. */
+	let bewaren = $state(false);
+
+	async function haalRecepten() {
+		const vraag =
+			form.material_id === null
+				? '/api/library/testgrids/recipes'
+				: `/api/library/testgrids/recipes?material_id=${form.material_id}`;
+		const response = await fetch(vraag);
+		if (!response.ok) return;
+		recepten = await response.json();
+		if (gekozenRecept !== null && !recepten.some((r) => r.id === gekozenRecept)) {
+			gekozenRecept = null;
+		}
+	}
+
+	$effect(() => {
+		void form.material_id;
+		haalRecepten();
+	});
+
+	function kiesRecept(id: number | null) {
+		gekozenRecept = id;
+		const recept = recepten.find((r) => r.id === id);
+		if (!recept) return;
+		// Een recept overschrijft het formulier; dat is waarvoor je hem koos.
+		// De herkomstregel van T3 klopt daarna niet meer, dus die gaat weg.
+		overgenomen = null;
+		neemOver(recept.settings);
+		receptNaam = recept.name;
+	}
+
+	async function bewaarRecept() {
+		const naam = receptNaam.trim();
+		if (!naam) return;
+		receptBezig = true;
+		receptFout = null;
+		try {
+			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+			const token =
+				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
+			if (token) headers.Authorization = `Bearer ${token}`;
+			// Precies wat er straks gebrand wordt, min het opschrift: dat hoort
+			// bij één bord en niet bij het recept.
+			const instellingen = { ...body(false) };
+			delete (instellingen as Record<string, unknown>).material_id;
+			const response = await fetch('/api/library/testgrids/recipes', {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({
+					name: naam,
+					material_id: form.material_id,
+					settings: instellingen
+				})
+			});
+			const data = await response.json().catch(() => null);
+			if (!response.ok) {
+				receptFout =
+					typeof data?.detail === 'string'
+						? data.detail
+						: `Opslaan mislukte (${response.status}).`;
+				return;
+			}
+			await haalRecepten();
+			gekozenRecept = data?.id ?? null;
+			bewaren = false;
+		} finally {
+			receptBezig = false;
+		}
+	}
+
+	async function wisRecept() {
+		if (gekozenRecept === null) return;
+		receptBezig = true;
+		receptFout = null;
+		try {
+			const headers: Record<string, string> = {};
+			const token =
+				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
+			if (token) headers.Authorization = `Bearer ${token}`;
+			const response = await fetch(`/api/library/testgrids/recipes/${gekozenRecept}`, {
+				method: 'DELETE',
+				headers
+			});
+			if (!response.ok) {
+				receptFout = `Verwijderen mislukte (${response.status}).`;
+				return;
+			}
+			gekozenRecept = null;
+			receptNaam = '';
+			await haalRecepten();
+		} finally {
+			receptBezig = false;
+		}
+	}
 
 	/** "11 aug" — de datum van het raster waar de instelling vandaan komt. */
 	function kortedatum(ruw: string) {
@@ -556,6 +720,71 @@
 			fotografeer je het bord — met de telefoon naast de machine kan ook — en tik je het
 			vakje aan dat het beste uitpakte. Daar maakt OpenKerf een preset van.
 		</p>
+
+		<!-- Gat T7: benoemde instellingen. Wie wekelijks 3 mm berk test heeft
+		     genoeg aan "vorige keer" (T3), maar twee recepten voor hetzelfde
+		     materiaal — snijden naast graveren — kunnen daar niet naast elkaar
+		     staan. Bovenaan, zoals in LightBurn: je kiest je recept vóór je
+		     gaat sleutelen, niet erna. -->
+		<div class="recepten">
+			<label class="veld">
+				<span class="naam">Recept</span>
+				<select
+					value={gekozenRecept}
+					disabled={recepten.length === 0}
+					onchange={(e) =>
+						kiesRecept(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
+				>
+					<option value={null}
+						>{recepten.length === 0
+							? '— nog geen bewaarde instellingen —'
+							: '— kies een bewaarde instelling —'}</option
+					>
+					{#each recepten as recept (recept.id)}
+						<option value={recept.id}
+							>{recept.name}{recept.material_name ? '' : ' · alle materialen'}</option
+						>
+					{/each}
+				</select>
+			</label>
+			<div class="receptknoppen">
+				<button class="btn" onclick={() => (bewaren = !bewaren)} aria-expanded={bewaren}>
+					{bewaren ? 'Niet opslaan' : 'Dit opslaan…'}
+				</button>
+				{#if gekozenRecept !== null}
+					<button class="btn stil" disabled={receptBezig} onclick={wisRecept}>Verwijderen</button>
+				{/if}
+			</div>
+			{#if bewaren}
+				<div class="erbij">
+					<input
+						type="text"
+						bind:value={receptNaam}
+						maxlength="60"
+						placeholder="Naam, bijv. Berk 3 mm snijden"
+						aria-label="Naam van dit recept"
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								bewaarRecept();
+							}
+						}}
+					/>
+					<button
+						class="btn"
+						disabled={receptBezig || receptNaam.trim() === ''}
+						onclick={bewaarRecept}>Opslaan</button
+					>
+				</div>
+				<p class="hint">
+					Bewaart alles op dit formulier behalve het opschrift.
+					{form.material_id === null
+						? 'Zonder materiaal gekozen wordt dit een recept voor alle materialen.'
+						: 'Hoort bij het gekozen materiaal; een gelijknamig recept wordt bijgewerkt.'}
+				</p>
+			{/if}
+			{#if receptFout}<p class="fout" role="alert">{receptFout}</p>{/if}
+		</div>
 
 		<div class="werkbank">
 			<div class="grid">
@@ -710,8 +939,81 @@
 				{/each}
 
 				<NumberField label="Tussenruimte" unit="mm" step={1} min={0} bind:value={form.gap_mm} />
-				<NumberField label="Start X" unit="mm" step={5} min={0} bind:value={form.origin_x_mm} />
-				<NumberField label="Start Y" unit="mm" step={5} min={0} bind:value={form.origin_y_mm} />
+
+				<!-- Gat T9: LightBurn vraagt X Center/Y Center. Op een restplank weet
+				     je waar het midden van je stuk hout ligt, niet waar de hoek van
+				     een raster moet komen dat je nog niet gezien hebt. Het midden
+				     slaat op het hele bord, opschriften inbegrepen — anders ligt het
+				     scheef zodra de rijlabels links uitsteken. -->
+				<label class="veld breed">
+					<span class="naam">Positie meten vanaf</span>
+					<select bind:value={form.anchor}>
+						<option value="corner">De linkerbovenhoek van het bord</option>
+						<option value="center">Het midden van het bord</option>
+					</select>
+				</label>
+				<NumberField
+					label={form.anchor === 'center' ? 'Midden X' : 'Start X'}
+					unit="mm"
+					step={5}
+					min={0}
+					bind:value={form.origin_x_mm}
+				/>
+				<NumberField
+					label={form.anchor === 'center' ? 'Midden Y' : 'Start Y'}
+					unit="mm"
+					step={5}
+					min={0}
+					bind:value={form.origin_y_mm}
+				/>
+
+				<!-- Gat T10: LightBurn heeft Enable Text en Enable Border. Voor een
+				     proefje op een restje is het opschrift verspilling; voor een bord
+				     dat de kast in gaat is het het halve bewijsstuk. Standaard aan,
+				     dus wie niets doet houdt wat er stond. -->
+				<fieldset class="schakelaars">
+					<legend class="naam">Wat er verder op het bord komt</legend>
+					<label class="vink">
+						<input type="checkbox" bind:checked={form.text} />
+						<span>Opschrift en aslabels graveren</span>
+					</label>
+					<label class="vink">
+						<input type="checkbox" bind:checked={form.border} />
+						<span>Randkader om het bord</span>
+					</label>
+					<p class="hint">
+						{#if !form.text}
+							Zonder opschrift is het bord over twee weken een raadselachtig stuk hout —
+							en de aswaarden staan er dan ook niet bij.
+						{:else if form.border}
+							Het kader loopt om alles heen, opschrift inbegrepen. Handig om de foto
+							straks op uit te lijnen.
+						{:else}
+							Het kader is een lijn om het hele bord; hij maakt het uitlijnen van de
+							foto makkelijker.
+						{/if}
+					</p>
+				</fieldset>
+
+				{#if form.text || form.border}
+					<!-- De labellaag stond hard op 80 mm/s @30%. Dat werkt op berken en
+					     niet op acryl, en dan brandt het opschrift dwars door je bord. -->
+					<NumberField
+						label="{labellaagNaam}: snelheid"
+						unit="mm/s"
+						step={5}
+						min={1}
+						bind:value={form.label_speed_mm_s}
+					/>
+					<NumberField
+						label="{labellaagNaam}: vermogen"
+						unit="%"
+						step={5}
+						min={1}
+						max={100}
+						bind:value={form.label_power_percent}
+					/>
+				{/if}
 
 				<label class="veld breed">
 					<span class="naam">Opschrift op het bord</span>
@@ -732,8 +1034,26 @@
 				<aside class="preview" aria-label="Voorbeeld van het bord">
 					<div class="figures">
 						<span class="mono">{preview.cells.length} vakjes</span>
-						<span class="mono">{preview.plan.width_mm} × {preview.plan.height_mm} mm</span>
+						<!-- De maat van het hele bord, niet van de vakjes alleen: het
+						     opschrift en het kader worden net zo goed gebrand, en juist
+						     die staken links en boven uit (T11). LightBurn meldt
+						     hetzelfde als Output Size. -->
+						<span class="mono"
+							>{preview.plan.outer_width_mm ?? preview.plan.width_mm} × {preview.plan
+								.outer_height_mm ?? preview.plan.height_mm} mm</span
+						>
 					</div>
+					{#if (preview.plan.outer_width_mm ?? 0) > preview.plan.width_mm}
+						<p class="kosten">
+							Waarvan <span class="mono"
+								>{preview.plan.width_mm} × {preview.plan.height_mm} mm</span
+							> vakjes; de rest is {form.text && form.border
+								? 'opschrift en kader'
+								: form.text
+									? 'opschrift'
+									: 'kader'}.
+						</p>
+					{/if}
 					<!-- Wat het gaat kosten, vóór je op genereren drukt. Met interval
 					     als as kan de brandtijd stil vertienvoudigen: een rij op
 					     0,05 mm legt zes keer zoveel regels als een op 0,3 mm, en dat
@@ -745,7 +1065,17 @@
 
 					<!-- Het bord zoals het eruitkomt: donkerder = meer verbranding, en
 					     de waarden staan erlangs waar ze ook op het hout komen. -->
-					<div class="bord" style="--cel: {celPx}px; --gat: {gatPx}px;">
+					<!-- De schakelaars van T10 horen hier te zien te zijn en niet alleen
+					     in een getal: zet je het opschrift uit, dan verdwijnen de
+					     aswaarden ook uit het voorbeeld, want ze komen niet op het hout.
+					     Het kader is een lijn om het geheel, precies waar hij brandt. -->
+					<div
+						class="bord"
+						class:kaal={!form.text}
+						class:kader={form.border}
+						style="--cel: {celPx}px; --gat: {gatPx}px;"
+					>
+						{#if form.text}
 						<div class="hoek"></div>
 						<div class="koplabels">
 							{#each kolomwaarden as v, i (i)}
@@ -769,6 +1099,7 @@
 								>
 							{/each}
 						</div>
+						{/if}
 						<div
 							class="vakjes"
 							style="grid-template-columns: repeat({kolomwaarden.length}, var(--cel));"
@@ -786,15 +1117,22 @@
 						</div>
 					</div>
 
-					{#if preview.plan.label_room === false}
-						<!-- De rijlabels worden links van het raster gegraveerd. Bij een
-						     kleine Start X vallen ze buiten het bed: dan brandt de
-						     machine ze niet en is het bord naderhand onleesbaar. -->
+					{#if preview.plan.board_room === false}
+						<!-- Het bord begint links of boven buiten het bed. Dat komt bijna
+						     altijd door de rijlabels: die worden links van het raster
+						     gegraveerd en zijn zo breed als hun langste waarde. Bij het
+						     midden als ankerpunt kun je dat niet zelf uitrekenen, dus
+						     staat het getal erbij. -->
 						<p class="krap">
-							De rijlabels hebben links van het raster ruwweg
-							{Math.ceil(preview.plan.label_margin_mm ?? 0)} mm nodig. Zet
-							<strong>Start X</strong> daar
-							minstens op, anders vallen ze buiten het bed en blijft het bord onleesbaar.
+							Het bord begint op <strong class="mono"
+								>{preview.plan.outer_x_mm}, {preview.plan.outer_y_mm} mm</strong
+							>, en dat ligt buiten het bed.
+							{#if preview.plan.label_room === false}
+								De rijlabels hebben links ruwweg {Math.ceil(preview.plan.label_margin_mm ?? 0)} mm
+								nodig.
+							{/if}
+							Schuif het {form.anchor === 'center' ? 'midden' : 'startpunt'} naar rechts of
+							naar beneden{form.text ? ', of zet het opschrift uit' : ''}.
 						</p>
 					{/if}
 
@@ -880,7 +1218,9 @@
 				{:else if gelukt}
 					Nog een raster tekenen
 				{:else if preview}
-					Raster tekenen — {preview.cells.length} vakjes, {preview.plan.width_mm} × {preview.plan.height_mm} mm
+					Raster tekenen — {preview.cells.length} vakjes, {preview.plan.outer_width_mm ??
+						preview.plan.width_mm} × {preview.plan.outer_height_mm ??
+						preview.plan.height_mm} mm
 				{:else}
 					Raster tekenen
 				{/if}
@@ -997,6 +1337,50 @@
 		color: var(--text-1);
 	}
 
+	/* De receptenbalk: één regel bovenaan, zoals in LightBurn. Kiezen is de
+	   hoofdactie, opslaan staat ernaast en klapt pas open als je het vraagt —
+	   anders is het eerste wat je ziet een leeg naamveld. */
+	.recepten {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: var(--space-2) var(--space-3);
+		align-items: end;
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+	}
+	.recepten .erbij,
+	.recepten .hint,
+	.recepten .fout { grid-column: 1 / -1; }
+	.receptknoppen { display: flex; gap: var(--space-2); }
+	.receptknoppen .btn { min-height: 38px; padding: var(--space-1h) var(--space-3); }
+	/* Verwijderen is stil: het staat er voor als je het nodig hebt, niet als
+	   suggestie naast de knop die je wél moet gebruiken. */
+	.btn.stil { border-color: transparent; background: transparent; color: var(--text-2); }
+	.btn.stil:hover:not(:disabled) { background: var(--surface-1); color: var(--text-1); }
+
+	/* Twee schakelaars die bij elkaar horen: een fieldset, want ze delen één
+	   vraag ("wat komt er verder op het bord"). */
+	.schakelaars {
+		grid-column: 1 / -1;
+		display: grid;
+		gap: var(--space-1h);
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+	}
+	.schakelaars legend { padding: 0 var(--space-1); }
+	.vink {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+		color: var(--text-1);
+	}
+	.schakelaars .hint { margin: 0; max-width: 52ch; }
+
 	/* Instellen en zien wat je instelt, naast elkaar. Onder 720px stapelt het. */
 	.werkbank {
 		display: grid;
@@ -1007,9 +1391,17 @@
 	@media (max-width: 720px) {
 		.werkbank { grid-template-columns: 1fr; }
 		.grid { grid-template-columns: 1fr; }
+		.preview { position: static; }
 	}
 
 	.preview {
+		/* Meekijken terwijl je sleutelt. Het formulier is met de positiekeuze en
+		   de schakelaars langer geworden dan het venster: wie onderin "vanaf het
+		   midden" koos, zag het voorbeeld niet meer waarin dat verschil zichtbaar
+		   is. Boven 720px, want daaronder staat het voorbeeld ónder het formulier
+		   en zou plakken betekenen dat het de velden afdekt. */
+		position: sticky;
+		top: 0;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		padding: var(--space-3);
@@ -1032,6 +1424,16 @@
 		grid-template-columns: auto auto;
 		grid-template-rows: auto auto;
 		gap: 4px;
+	}
+	/* Zonder opschrift is er ook geen labelkolom: dan is het bord precies de
+	   vakjes, en dat hoort het voorbeeld te laten zien. */
+	.bord.kaal { grid-template-columns: auto; grid-template-rows: auto; }
+	/* Het randkader zoals het brandt: om alles heen, met de tussenruimte ertussen
+	   die de generator ook aanhoudt. */
+	.bord.kader {
+		padding: var(--space-2);
+		border: 1px solid var(--text-2);
+		border-radius: var(--radius-sharp);
 	}
 	.koplabels, .zijlabels { display: grid; gap: var(--gat); }
 	.koplabels { grid-auto-flow: column; grid-auto-columns: var(--cel); }

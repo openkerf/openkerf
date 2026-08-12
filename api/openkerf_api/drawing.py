@@ -11,6 +11,7 @@ red shape should land in the cut layer by itself.
 """
 
 import re
+from contextlib import contextmanager
 
 from .commands import CommandRunner
 from .design import _xy, operation_label
@@ -80,6 +81,10 @@ class Drawing:
         # Wat een paletkleur op deze machine eerder deed (besluit B2). De
         # server hangt hier het echte geheugen in; los getest is er niets.
         self.color_memory = lambda color: None
+        # Het nulpunt van de gebruiker (gat J12). De server hangt hier
+        # `MachineControl.origin` in; zonder dat is er geen nulpunt en
+        # verandert er niets aan de plek van het werk.
+        self.origin = lambda: None
 
     @property
     def elements(self):
@@ -643,6 +648,13 @@ class Drawing:
         opschrift erop staat. Stabiel sorteren, zodat twee snijlagen hun
         onderlinge volgorde houden — die heeft de gebruiker zelf gekozen.
 
+        Binnen dezelfde soort telt de sterkte mee (gat L7). Twee snijlagen zijn
+        niet uitwisselbaar: een lichte scoreerlijn op 5 % en een doorsnede op
+        80 % horen in die volgorde, want zodra het werkstuk los is, ligt het
+        niet meer stil voor de rest. LightBurn sorteert daar ook op, alleen
+        andersom om — hun sterkste gaat vooraan en daarna de Line-lagen naar
+        achteren; wij houden één regel aan die op elke soort hetzelfde doet.
+
         Rastercellen blijven staan waar ze staan: hun volgorde is de sweep.
         """
         parent = self.elements.op_branch
@@ -652,7 +664,11 @@ class Drawing:
             return {"sorted": False, "order": [node.id for node in layers]}
 
         wanted = sorted(
-            layers, key=lambda node: self.BURN_ORDER.get(str(node.type), 99)
+            layers,
+            key=lambda node: (
+                self.BURN_ORDER.get(str(node.type), 99),
+                self._sterkte(node),
+            ),
         )
         if wanted == layers:
             return {"sorted": False, "order": [node.id for node in wanted]}
@@ -668,6 +684,26 @@ class Drawing:
                 vorige = node
         self._refresh()
         return {"sorted": True, "order": [node.id for node in wanted]}
+
+    def _sterkte(self, node) -> float:
+        """
+        Hoe diep deze laag gaat, als één getal (gat L7).
+
+        Vermogen gedeeld door snelheid maal het aantal passes: dat is de
+        energie per millimeter, en het is precies de grootheid waar een
+        laseraar op afgaat als hij "zwaarder" zegt. Het is een rangschikking,
+        geen natuurkunde — hij hoeft alleen twee lagen van dezelfde soort uit
+        elkaar te houden.
+
+        Een laag zonder snelheid of vermogen krijgt 0 en blijft daarmee vooraan
+        staan; sorted() is stabiel, dus onderling houden die hun volgorde.
+        """
+        power = _number(getattr(node, "power", None)) or 0.0
+        speed = _number(getattr(node, "speed", None)) or 0.0
+        passes = _number(getattr(node, "passes", None)) or 1.0
+        if speed <= 0 or power <= 0:
+            return 0.0
+        return (power / speed) * max(passes, 1.0)
 
     # Instellingen die een laag houdt als hij van soort verandert. Bewust niet
     # `dpi`/`overscan`: die horen bij rasteren en zijn op een snijlaag zinloos —
@@ -763,14 +799,33 @@ class Drawing:
     COOLANT_ON = 1
     COOLANT_OFF = 2
 
+    # Methoden die wel geclaimd kunnen worden maar niets aan de machine doen.
+    #
+    # Gat L8. De engine kent er drie: `gcode_m7` en `gcode_m8` (grbl-only, die
+    # schakelen echt iets) en `popup` — "Warnmessage". Die derde stuurt geen
+    # enkel signaal naar de laser; hij roept `kernel.yesno`, en dat is buiten de
+    # wxPython-GUI een `input()` op stdin (kernel.py:4217). Wij draaien
+    # headless, dus dan staat de spoolerthread te wachten op een toets die
+    # niemand indrukt — er kijkt niemand naar die terminal, de UI is een
+    # browser — of hij valt om met EOFError zodra stdin dicht is.
+    #
+    # Een schakelaar aanbieden die de job laat hangen is erger dan geen
+    # schakelaar. Op een Ruida is `popup` de enige claimbare methode (de andere
+    # twee hebben `constraints="grbl"`), en dus is air assist daar niet iets wat
+    # wij kunnen beloven. Zie de bevinding bij L8.
+    LOZE_COOLANTS = {"popup"}
+
     def air_assist_supported(self) -> bool:
-        """Kent de actieve machine een commando voor air assist?"""
+        """Kent de actieve machine een commando dat de blazer echt schakelt?"""
         coolant = getattr(getattr(self.kernel, "root", None), "coolant", None)
         device = getattr(self.kernel, "device", None)
         if coolant is None or device is None:
             return False
         try:
-            return coolant.get_device_function(device) is not None
+            if coolant.get_device_function(device) is None:
+                return False
+            gekozen = coolant.get_device_coolant(device) or {}
+            return str(gekozen.get("id", "")) not in self.LOZE_COOLANTS
         except Exception:  # pragma: no cover - een driver die niet meewerkt
             return False
 
@@ -1179,6 +1234,57 @@ class Drawing:
         except Exception:
             return None
 
+    # ------------------------------------------- gebruikersoorsprong (J12)
+
+    @contextmanager
+    def verschoven(self, oorsprong):
+        """
+        Het hele ontwerp even opzij zetten, zolang het de machine in gaat.
+
+        Dit is de hele werking van het nulpunt (gat J12): wat je op 0,0 tekent
+        brandt op het nulpunt, en alles wat je eromheen tekende schuift mee.
+        De tekening zelf verandert niet — na afloop staat elke vorm weer op de
+        coördinaten die in het paneel stonden, want anders zou één druk op
+        starten je ontwerp verplaatsen.
+
+        Bewust niet via het console-commando `translate`: dat werkt in een
+        eigen undoscope, en dan levert elke start twee stappen in de
+        ongedaan-geschiedenis op die de gebruiker nooit heeft gemaakt. De
+        matrix rechtstreeks verzetten is precies wat dat commando doet, zonder
+        die bijwerking.
+
+        De verschuiving wordt in een `finally` teruggedraaid: gaat het plannen
+        stuk, dan mag het ontwerp niet verschoven achterblijven.
+        """
+        dx = float((oorsprong or {}).get("x_mm") or 0.0)
+        dy = float((oorsprong or {}).get("y_mm") or 0.0)
+        if not dx and not dy:
+            yield False
+            return
+        units = self._units_per_mm()
+        verzet = self._verzet(dx * units, dy * units)
+        try:
+            yield True
+        finally:
+            self._verzet(-dx * units, -dy * units, verzet)
+
+    def _verzet(self, dx: float, dy: float, nodes=None) -> list:
+        """Alle vormen een vast stuk opschuiven, in engine-eenheden."""
+        from meerk40t.svgelements import Matrix
+
+        matrix = Matrix.translate(dx, dy)
+        verzet = []
+        for node in list(nodes if nodes is not None else self.elements.elems()):
+            try:
+                node.matrix *= matrix
+                node.translated(dx, dy)
+            except AttributeError:
+                # Een knoop zonder matrix (die bestaan) laten we met rust; hij
+                # staat dan op zijn eigen plek en dat melden we niet als fout.
+                continue
+            verzet.append(node)
+        return verzet
+
     def bounds_report(self, sheet=None) -> dict:
         """
         Wat er buiten het bed of buiten het vel valt (gat C2).
@@ -1202,6 +1308,19 @@ class Drawing:
         if sheet and sheet.get("width_mm") and sheet.get("height_mm"):
             vel = (float(sheet["width_mm"]), float(sheet["height_mm"]))
 
+        # Het nulpunt telt wél mee voor het bed en níet voor het vel (gat J12).
+        #
+        # Dat is geen slordigheid maar wat het nulpunt betekent: je legt hem op
+        # de hoek van het materiaal dat op het bed ligt. Het vel schuift dus mee
+        # — het werk blijft er net zo op liggen als je het tekende — terwijl het
+        # bed blijft waar het is, want dat is de machine. Zonder dit onderscheid
+        # zou elk gezet nulpunt een "buiten het vel"-waarschuwing opleveren, en
+        # alarmbellen die altijd afgaan leert iedereen negeren (zie C2).
+        # Het canvas tekent daarom ook het vel op zijn nieuwe plek.
+        nulpunt = self.origin() or None
+        ox = float((nulpunt or {}).get("x_mm") or 0.0)
+        oy = float((nulpunt or {}).get("y_mm") or 0.0)
+
         buiten_bed: list[str] = []
         buiten_vel: list[str] = []
         x0 = y0 = float("inf")
@@ -1214,7 +1333,7 @@ class Drawing:
             x0, y0 = min(x0, a), min(y0, b)
             x1, y1 = max(x1, c), max(y1, d)
             naam = getattr(node, "id", None) or ""
-            if bed and self._buiten(a, b, c, d, bed):
+            if bed and self._buiten(a + ox, b + oy, c + ox, d + oy, bed):
                 buiten_bed.append(naam)
             if vel and self._buiten(a, b, c, d, vel):
                 buiten_vel.append(naam)
@@ -1227,10 +1346,24 @@ class Drawing:
                 "width_mm": round(x1 - x0, 2),
                 "height_mm": round(y1 - y0, 2),
             }
+        # Waar het werk terechtkomt zodra er een nulpunt staat. Zonder dit getal
+        # zou de pre-flight een kader tonen op de plek waar je tekende, terwijl
+        # de machine ergens anders brandt — en dat is precies de fout die het
+        # nulpunt moet voorkomen.
+        gebrand = werk
+        if werk and (ox or oy):
+            gebrand = {
+                **werk,
+                "x_mm": round(werk["x_mm"] + ox, 2),
+                "y_mm": round(werk["y_mm"] + oy, 2),
+            }
+
         return {
             "bed": None if not bed else {"width_mm": round(bed[0], 2), "height_mm": round(bed[1], 2)},
             "sheet": None if not vel else {"width_mm": vel[0], "height_mm": vel[1]},
             "work": werk,
+            "origin": nulpunt,
+            "burns_at": gebrand,
             "outside_bed": len(buiten_bed),
             "outside_sheet": len(buiten_vel),
             "outside_bed_ids": buiten_bed,

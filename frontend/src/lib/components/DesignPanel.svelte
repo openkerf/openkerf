@@ -1087,6 +1087,31 @@
 			>
 				<div class="ident">
 					{#if canEdit && plainLayers.length > 1}
+					<!-- De ordekolom in de linkermarge: eerder branden, slepen, later
+					     branden. Gat L9 — LightBurn heeft een altijd zichtbare ▲/▼-strip
+					     aan de rand van de lijst en wij hadden alleen slepen en de
+					     pijltjestoetsen op de greep; de zichtbare knop miste, en dat is
+					     de enige van de drie die zichzelf uitlegt.
+
+					     In de marge en niet in de rij: de rij is 280 px breed en elke
+					     pixel daarvan gaat naar de laagnaam (zie de opmerking bij .greep).
+					     De kolom is 14 px en kost de naam er vier. -->
+					<div class="ordekolom">
+						<!-- Alleen in de ruime stand: in de compacte is de rij 36 px hoog
+						     en dan zijn drie knoppen boven elkaar elk 12 px — een raakdoel
+						     dat je alleen per ongeluk raakt. Daar blijft de greep over, en
+						     die doet met de pijltjestoetsen hetzelfde. -->
+						{#if !compact}
+							<button
+								class="pijl"
+								aria-label="{op.label} eerder branden"
+								title={index === 0 ? 'Deze laag brandt al als eerste' : 'Eerder branden'}
+								disabled={edits.busy || index === 0}
+								onclick={() => moveLayer(op.id, 'up')}
+							>
+								<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 15 7-7 7 7" /></svg>
+							</button>
+						{/if}
 						<!-- Slepen om te herordenen (gat L1). Een eigen greep en niet de
 						     hele rij: die zit vol met schakelaars en velden, en dan sleep
 						     je de laag weg terwijl je het vermogen wilde bijstellen.
@@ -1117,6 +1142,20 @@
 								<circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
 							</svg>
 						</button>
+						{#if !compact}
+							<button
+								class="pijl"
+								aria-label="{op.label} later branden"
+								title={index === plainLayers.length - 1
+									? 'Deze laag brandt al als laatste'
+									: 'Later branden'}
+								disabled={edits.busy || index === plainLayers.length - 1}
+								onclick={() => moveLayer(op.id, 'down')}
+							>
+								<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7" /></svg>
+							</button>
+						{/if}
+					</div>
 					{/if}
 					<!-- Het nummer op de chip ís de brandvolgorde. Klikken opent de
 					     laag, dus de kleur is ook de weg naar zijn instellingen. -->
@@ -1294,13 +1333,42 @@
 						     branden. Twee aparte woorden, want twee aparte standen. -->
 						<span class="tag zicht">verborgen</span>
 					{/if}
-					{#if op.air_assist && design.layerCapabilities.air_assist}
-						<!-- Air assist staat aan (besluit B11). In de rij als woord, want
-						     anders moet je elke laag openklappen om te zien of de blazer
-						     meedoet — en dat is juist het verschil tussen een schone snede
-						     en een geschroeide rand. Uitzetten gaat in de uitklap: het is
-						     geen knop waar je tijdens het werk aan zit. -->
-						<span class="tag lucht">lucht</span>
+					{#if design.layerCapabilities.air_assist && (compact || op.air_assist)}
+						<!-- Air assist in de rij (besluit B11, gat L10).
+						     Stond hier als dood woord zodra hij aanstond; nu is het een
+						     schakelaar, want of de blazer meedoet is het verschil tussen een
+						     schone snede en een geschroeide rand, en dat zet je per
+						     materiaal om. Uitzetten kostte tot nu toe een tik naar de
+						     uitklap en een tik terug.
+
+						     Waarom hij in de ruime stand alleen verschijnt als hij áán
+						     staat, en in de compacte altijd: gemeten met vier lagen op
+						     1440 en 1024. In de compacte stand past de pil naast de
+						     waarderegel en blijft de rij 36 px (desktop) en 54 px (tablet)
+						     — precies de maten uit L5. In de ruime stand is de waarderegel
+						     al vol (215 van 218 px op desktop) en valt de pil op een derde
+						     regel: 76 → 101 px, en op tablet 111 → 159 px. Dat is de helft
+						     van de lijst kwijt voor een schakelaar die je zelden aanraakt.
+						     LightBurn krijgt hem er wél bij in één regel, maar hun paneel is
+						     480–512 px; wij hebben er 280.
+
+						     Aanzetten gebeurt in de ruime stand dus in de uitklap, uitzetten
+						     kan vanaf de rij — dat is de kant waar haast bij zit.
+
+						     De pil verschijnt alleen als de driver een commando heeft dat de
+						     blazer werkelijk schakelt; op een Ruida is dat er niet (L8). -->
+						<button
+							class="tag lucht"
+							class:uit={!op.air_assist}
+							role="switch"
+							aria-checked={op.air_assist}
+							aria-label="Air assist tijdens {op.label}"
+							title={op.air_assist
+								? 'Air assist staat aan — klik om uit te zetten'
+								: 'Air assist staat uit — klik om aan te zetten'}
+							disabled={edits.busy}
+							onclick={() => patchLayer(op.id, { air_assist: !op.air_assist })}
+						>lucht</button>
 					{/if}
 					{#if canEdit && selectedIds.length}
 						<!-- Toewijzen staat achteraan en niet vóór de naam: anders
@@ -1634,7 +1702,7 @@
 		   kostte de laagnaam 20 px en dan brak "Graveren" af als "Gra-veren" —
 		   precies de leesbaarheid die de vorige ronde had gewonnen. In de marge
 		   kost hij tien pixels en niets van de naam. */
-		padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-2) + 10px);
+		padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-2) + 14px);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 	}
@@ -1728,14 +1796,62 @@
 	.layer.sleep-modus * {
 		user-select: none;
 	}
+	/* ── De ordekolom in de marge: ▲ / greep / ▼ (L1 en L9) ─────────────────
+	   Drie wegen naar dezelfde handeling, en dat is geen luxe: slepen is het
+	   snelst met een muis, de pijltjestoetsen op de greep werken zonder muis, en
+	   de knoppen zijn de enige van de drie die zichzelf uitleggen. LightBurn
+	   heeft die derde altijd zichtbaar; wij hadden hem in de uitklap. */
+	.ordekolom {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 14px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 1px;
+	}
+	.pijl {
+		flex: none;
+		width: 14px;
+		height: 15px;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-field);
+		color: var(--text-2);
+	}
+	.pijl:hover:not(:disabled) {
+		color: var(--text-1);
+		background: var(--surface-3);
+	}
+	/* Uit én weg te klikken: een laag die al bovenaan staat, kan niet hoger.
+	   Onzichtbaar maken zou de kolom laten verspringen, dus hij blijft staan en
+	   wordt alleen stil. */
+	.pijl:disabled {
+		opacity: 0.25;
+		cursor: default;
+	}
+	/* Onder 1200 px verdwijnen ze. Dat is niet willekeurig: dezelfde grens waar
+	   tokens.css elke knop 44×44 maakt omdat je daar met een vinger werkt. Drie
+	   raakdoelen van 44 px boven elkaar in een rij van 111 px kan niet, en 14 px
+	   brede pijlen naast een greep van 26 px is een raakdoel dat je alleen per
+	   ongeluk raakt — gemeten: de globale regel blies ze op tot 44×44 in een
+	   kolom van 14 px, dwars over de kaartrand heen.
+	   Daar blijft de greep over: slepen is op een aanraakscherm het gebaar dat
+	   je verwacht, de pijltjestoetsen erop doen hetzelfde, en de knoppen
+	   ↑ Eerder / ↓ Later staan nog in de uitklap. */
+	@media (max-width: 1199px), (pointer: coarse) {
+		.pijl {
+			display: none;
+		}
+	}
 	/* ── Slepen om te herordenen (L1) ──────────────────────────────────────── */
 	.greep {
-		position: absolute;
-		left: 1px;
-		top: 50%;
-		transform: translateY(-50%);
-		width: 16px;
-		height: 26px;
+		flex: none;
+		width: 14px;
+		height: 22px;
 		/* Slepen mag geen tekst selecteren: de eerste versie trok bij elke
 		   sleepbeweging een blauwe selectie over het halve scherm. */
 		user-select: none;
@@ -1877,11 +1993,25 @@
 	/* Air assist aan: geen waarschuwing, dus niet in amber. Een stand die je moet
 	   kunnen zien, in de gewone tekstkleur met een randje eromheen. */
 	.tag.lucht {
-		color: var(--text-2);
+		color: var(--text-1);
 		font-weight: 400;
-		border: 1px solid var(--line);
+		border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
 		border-radius: var(--radius-dot);
 		padding: 0 var(--space-2);
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
+	}
+	/* Uit is geen lege plek maar een doorgehaald woord: dubbel gecodeerd, zodat
+	   het ook zonder kleurverschil te lezen is — en zodat "deze machine kan het
+	   niet" (geen pil) iets anders blijft dan "hij staat uit". */
+	.tag.lucht.uit {
+		color: var(--text-2);
+		border-color: var(--line);
+		background: transparent;
+		text-decoration: line-through;
+	}
+	.tag.lucht:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--text-1);
 	}
 	.geheugen {
 		margin: 0;

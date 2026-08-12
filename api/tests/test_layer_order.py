@@ -138,6 +138,30 @@ def test_sort_keeps_the_order_the_user_chose_within_one_kind(kernel, drawing):
     assert labels == ["Buitensnede", "Binnensnede"]
 
 
+def test_sort_puts_the_lightest_layer_of_a_kind_first(kernel, drawing):
+    """
+    Gat L7: binnen dezelfde soort telt de sterkte mee.
+
+    Twee snijlagen zijn niet uitwisselbaar. Een scoreerlijn op 12 % en een
+    doorsnede op 90 % horen in die volgorde: zodra het werkstuk los is, ligt het
+    niet meer stil voor de rest. Eerder keek het sorteren alleen naar het soort,
+    en dan ging een snijlaag op 5 % even hard naar achteren als een die er
+    doorheen gaat.
+    """
+    diep = drawing.create_operation("cut", label="Doorsnijden", speed=8, power_percent=90)
+    licht = drawing.create_operation("cut", label="Scoreren", speed=40, power_percent=12)
+    drawing.create_operation("engrave", label="Tekst")
+
+    drawing.sort_operations()
+
+    volgorde = [
+        getattr(op, "id", None)
+        for op in kernel.elements.op_branch.children
+        if str(op.type) == "op cut"
+    ]
+    assert volgorde == [licht["id"], diep["id"]]
+
+
 def test_sort_reports_nothing_to_do_when_already_in_order(drawing):
     maak(drawing, "raster", "engrave", "cut")
 

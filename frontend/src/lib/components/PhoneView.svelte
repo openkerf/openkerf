@@ -365,6 +365,55 @@
 	let stille = $derived(vormen.filter((v) => v.stil).length);
 
 	/**
+	 * Werk dat buiten het bed of buiten het vel valt (gat P8).
+	 *
+	 * Het canvas meldt dit sinds C2 in twee zinnen onder de tekening; hier stond
+	 * de vorm wél buiten het velkader getekend, maar zonder een woord erbij. Wie
+	 * naast de machine in de zon staat, leest kleurverschil als eerste niet meer.
+	 *
+	 * Dezelfde som als op het canvas, met dezelfde speling en dezelfde regel dat
+	 * alleen werk dat écht brandt meetelt: een vorm in geen laag kost geen
+	 * materiaal, en valse alarmbellen leren mensen alarmbellen te negeren. De
+	 * berekening is bewust hier en niet uit `/api/job/estimate`: dit scherm
+	 * ververst op signalen, en een tweede bron zou een tweede antwoord geven.
+	 */
+	const RAND_SPELING = 0.5;
+
+	function buitenKader(
+		doos: { x: number; y: number; width: number; height: number },
+		kader: { width: number; height: number }
+	) {
+		return (
+			doos.x < -RAND_SPELING ||
+			doos.y < -RAND_SPELING ||
+			doos.x + doos.width > kader.width + RAND_SPELING ||
+			doos.y + doos.height > kader.height + RAND_SPELING
+		);
+	}
+
+	let buitenstaanders = $derived.by(() => {
+		const uit = { bed: 0, vel: 0 };
+		if (!design || !bedW || !bedH) return uit;
+		for (const element of design.elements) {
+			if (!element.bounds || element.hidden) continue;
+			const streek = design.strokeFor(element);
+			if (streek.dashed || streek.dimmed || !streek.visible) continue;
+			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
+			const doos = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+			if (buitenKader(doos, { width: bedW, height: bedH })) uit.bed += 1;
+			else if (
+				sheet &&
+				sheet.width_mm > 0 &&
+				sheet.height_mm > 0 &&
+				buitenKader(doos, { width: sheet.width_mm, height: sheet.height_mm })
+			) {
+				uit.vel += 1;
+			}
+		}
+		return uit;
+	});
+
+	/**
 	 * Wat er getékend wordt. Dat is niet hetzelfde als wat er brandt: te kleine
 	 * opschriften vallen hier weg (`TEKST_MINIMUM`), maar ze branden wel, dus de
 	 * telling erboven blijft ongemoeid. Een tekening mag iets weglaten; een
@@ -384,6 +433,8 @@
 			delen.push(`${brandt} ${brandt === 1 ? 'vorm brandt' : 'vormen branden'}`);
 			if (stille) delen.push(`${stille} in geen laag`);
 		}
+		if (buitenstaanders.bed) delen.push(`${buitenstaanders.bed} buiten het bed`);
+		if (buitenstaanders.vel) delen.push(`${buitenstaanders.vel} buiten het vel`);
 		delen.push(`kop op ${position}`);
 		return delen.join(', ') + '.';
 	});
@@ -509,6 +560,32 @@
 					</dd>
 				</div>
 			</dl>
+			<!-- Gat P8: hetzelfde als de strook onder het canvas (C2), in dezelfde
+			     twee zinnen. Buiten het bed komt de kop niet; buiten het vel komt
+			     hij wel, maar ligt er geen materiaal. Dat verschil bepaalt of je
+			     het werk verschuift of je plaat vervangt, dus het staat er als
+			     twee regels en niet als één "let op". -->
+			{#if buitenstaanders.bed || buitenstaanders.vel}
+				<div class="buiten" role="status">
+					{#if buitenstaanders.bed}
+						<p class="bedrand">
+							<span class="teken" aria-hidden="true">!</span>
+							{buitenstaanders.bed === 1
+								? 'Eén vorm ligt'
+								: `${buitenstaanders.bed} vormen liggen`} buiten het bed — daar komt de kop niet.
+						</p>
+					{/if}
+					{#if buitenstaanders.vel}
+						<p class="velrand">
+							<span class="teken" aria-hidden="true">!</span>
+							{buitenstaanders.vel === 1
+								? 'Eén vorm ligt'
+								: `${buitenstaanders.vel} vormen liggen`} buiten {sheet ? sheet.name : 'het vel'} —
+							daar ligt geen materiaal.
+						</p>
+					{/if}
+				</div>
+			{/if}
 			<!-- Een bed zonder job zei alleen "Gereed" bovenin. Dat is een
 			     toestand, geen antwoord: wie hier kijkt wil weten of het stil is
 			     omdat het klaar is, of stil omdat er iets mis is. -->
@@ -791,6 +868,41 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
+	/* Gat P8: dezelfde twee regels als onder het canvas, met dezelfde kleur én
+	   hetzelfde teken. Kleur alleen mag het nooit dragen — deze telefoon ligt
+	   naast de machine, vaak met de zon erop. */
+	.buiten {
+		display: grid;
+		gap: var(--space-2);
+		margin-top: var(--space-3);
+	}
+	.buiten p {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
+		margin: 0;
+		padding-left: var(--space-2);
+		font-size: var(--text-sm);
+		line-height: 1.4;
+		color: var(--text-1);
+		border-left: 4px solid var(--danger-solid);
+	}
+	.buiten p.velrand { border-left-color: var(--warn-solid); }
+	.buiten .teken {
+		flex: none;
+		width: 18px;
+		height: 18px;
+		margin-top: 1px;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-dot);
+		font-weight: 700;
+		font-size: var(--text-xs);
+		color: var(--on-color);
+		background: var(--danger-solid);
+	}
+	.buiten p.velrand .teken { background: var(--warn-solid); color: var(--void); }
+
 	.waarom {
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-xs);

@@ -190,7 +190,21 @@
 
 	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
 	     leidt naar de setup — ook de route als er nog géén machine is. -->
-	<a class="machine" href="/setup" title="{device?.label ?? 'Machine instellen'} — {STATE_LABEL[machineState]}">
+	<!-- Gat B3: xTool toont het apparaat op een tablet als object, met een
+	     modelafbeelding. Wij niet, en bewust — zie het rapport bij deze ronde:
+	     wij hebben geen artwork per bordfamilie en een verkeerd plaatje boven een
+	     Ruida is een bewering over welke machine je aanraakt. Wat de vraag eronder
+	     wél verdient — "wélke machine en hoe groot" — staat hier in de tooltip en
+	     bij het bed op het canvas, zonder de balk breder te maken (B6 mat dat de
+	     ruimte op is). -->
+	<a
+		class="machine"
+		href="/setup"
+		title="{device?.label ?? 'Machine instellen'} — {STATE_LABEL[machineState]}{device
+			?.bed?.width_mm && device?.bed?.height_mm
+			? ` · bed ${Math.round(device.bed.width_mm)} × ${Math.round(device.bed.height_mm)} mm`
+			: ''}"
+	>
 		<span class="dot {machineState}" aria-hidden="true"></span>
 		<span class="naam">{device?.label ?? 'Machine instellen'}</span>
 		<!-- Het woord bij de toestand stond hier een derde keer: de statusbalk

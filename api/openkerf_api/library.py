@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS preset (
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Nieuwe kolommen op `test_grid` horen ook in `_migrate` te staan: bestaande
+-- databases krijgen ze daar, verse hier.
 CREATE TABLE IF NOT EXISTS test_grid (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     material_id   INTEGER REFERENCES material(id) ON DELETE SET NULL,
@@ -103,6 +105,23 @@ CREATE TABLE IF NOT EXISTS test_grid (
     alignment     TEXT,
     group_id      TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Benoemde generatorinstellingen (gat T7).
+--
+-- T3 onthoudt één instelling per materiaal: het vórige raster. Dat dekt "ik
+-- test elke week 3 mm berk" maar niet "berk snijden" náást "berk graveren" —
+-- twee recepten voor hetzelfde materiaal kunnen daar niet naast elkaar staan.
+-- Dit is dezelfde inhoud onder een naam, en bewust in dezelfde vorm: één rij
+-- met precies de sleutels die `Library.GRID_DEFAULTS` beschrijft, zodat een
+-- recept en een vorig raster onderling verwisselbaar zijn voor de wizard.
+CREATE TABLE IF NOT EXISTS grid_recipe (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    material_id INTEGER REFERENCES material(id) ON DELETE CASCADE,
+    settings    TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS preset_material ON preset(material_id);
@@ -178,6 +197,14 @@ class Library:
             ("column_axis", "TEXT NOT NULL DEFAULT 'power'"),
             ("rows", "INTEGER"),
             ("columns", "INTEGER"),
+            # T9/T10: waar het bord aan hangt en wat er verder op gebrand wordt.
+            # Rasters van vóór deze versie stonden altijd vanaf de hoek, met
+            # opschriften en zonder kader — dat zijn precies deze standaarden.
+            ("anchor", "TEXT NOT NULL DEFAULT 'corner'"),
+            ("text_enabled", "INTEGER NOT NULL DEFAULT 1"),
+            ("border_enabled", "INTEGER NOT NULL DEFAULT 0"),
+            ("label_speed_mm_s", "REAL"),
+            ("label_power_percent", "REAL"),
         ):
             if kolom not in existing:
                 db.execute(f"ALTER TABLE test_grid ADD COLUMN {kolom} {definitie}")
@@ -561,12 +588,16 @@ class Library:
         return self.test_grid(grid_id)
 
     # De instellingen die het volgende raster van hetzelfde materiaal overneemt.
+    # Dezelfde lijst draagt de benoemde recepten van T7: één vorm, zodat de
+    # wizard niet hoeft te weten of hij een vorig raster of een recept invult.
     GRID_DEFAULTS = (
         "operation", "thickness_mm", "row_axis", "column_axis",
         "speed_min", "speed_max", "speed_steps",
         "power_min", "power_max", "power_steps",
         "interval_min", "interval_max", "interval_steps",
         "cell_mm", "gap_mm", "origin_x_mm", "origin_y_mm",
+        "anchor", "text_enabled", "border_enabled",
+        "label_speed_mm_s", "label_power_percent",
     )
 
     def last_grid_settings(self, material_id=None) -> dict | None:
@@ -583,10 +614,98 @@ class Library:
         if not rasters:
             return None
         vorige = rasters[0]  # test_grids() staat nieuwste eerst
-        instelling = {sleutel: vorige[sleutel] for sleutel in self.GRID_DEFAULTS}
+        instelling = {
+            sleutel: vorige.get(sleutel) for sleutel in self.GRID_DEFAULTS
+        }
+        _met_ankerpunt(instelling)
         instelling["from_grid"] = vorige["id"]
         instelling["from_date"] = vorige["created_at"]
         return instelling
+
+    # ------------------------------------------- benoemde recepten (gat T7)
+
+    def grid_recipes(self, material_id=None) -> list[dict]:
+        """
+        De bewaarde generatorinstellingen.
+
+        Zonder materiaal krijg je alles; met een materiaal de recepten van dát
+        materiaal plus de materiaalloze — die laatste zijn de algemene ("snelle
+        4×4"), en die wil je juist zien als je aan iets nieuws begint.
+        """
+        with self._connect() as db:
+            rijen = [
+                dict(r)
+                for r in db.execute(
+                    """SELECT r.*, m.name AS material_name
+                       FROM grid_recipe r
+                       LEFT JOIN material m ON m.id = r.material_id
+                       ORDER BY r.name COLLATE NOCASE"""
+                )
+            ]
+        for rij in rijen:
+            rij["settings"] = _recept_instellingen(json.loads(rij["settings"]))
+            _met_ankerpunt(rij["settings"])
+        if material_id is None:
+            return rijen
+        return [
+            r for r in rijen if r["material_id"] in (material_id, None)
+        ]
+
+    def save_grid_recipe(self, name: str, settings: dict, material_id=None) -> dict:
+        """
+        Een recept opslaan, of het gelijknamige overschrijven.
+
+        Overschrijven en niet weigeren: "berk snijden" opslaan terwijl er al een
+        "berk snijden" staat betekent dat je hem hebt bijgesteld. Een tweede met
+        dezelfde naam zou een lijst opleveren waarin je niet meer kunt kiezen.
+        """
+        naam = str(name or "").strip()
+        if not naam:
+            raise LibraryError("Een recept heeft een naam nodig.")
+        if len(naam) > 60:
+            raise LibraryError("Hou de naam onder de 60 tekens.")
+        if not isinstance(settings, dict):
+            raise LibraryError("Een recept bestaat uit instellingen.")
+        schoon = _recept_instellingen(settings)
+        if not schoon:
+            raise LibraryError("Er zaten geen bruikbare instellingen in dit recept.")
+        if material_id is not None and not any(
+            m["id"] == material_id for m in self.materials()
+        ):
+            raise LibraryError(f"Materiaal {material_id} bestaat niet.")
+        with self._connect() as db:
+            bestaand = db.execute(
+                """SELECT id FROM grid_recipe
+                   WHERE name = ? COLLATE NOCASE AND material_id IS ?""",
+                (naam, material_id),
+            ).fetchone()
+            if bestaand is None:
+                cursor = db.execute(
+                    "INSERT INTO grid_recipe (name, material_id, settings) VALUES (?, ?, ?)",
+                    (naam, material_id, json.dumps(schoon)),
+                )
+                recept_id = cursor.lastrowid
+            else:
+                recept_id = bestaand["id"]
+                db.execute(
+                    """UPDATE grid_recipe SET name = ?, settings = ?, updated_at = ?
+                       WHERE id = ?""",
+                    (naam, json.dumps(schoon), _now(), recept_id),
+                )
+        return self.grid_recipe(recept_id)
+
+    def grid_recipe(self, recipe_id: int) -> dict:
+        for recept in self.grid_recipes():
+            if recept["id"] == recipe_id:
+                return recept
+        raise LibraryError(f"Recept {recipe_id} bestaat niet.")
+
+    def remove_grid_recipe(self, recipe_id: int) -> dict:
+        with self._connect() as db:
+            cursor = db.execute("DELETE FROM grid_recipe WHERE id = ?", (recipe_id,))
+            if not cursor.rowcount:
+                raise LibraryError(f"Recept {recipe_id} bestaat niet.")
+        return {"removed": recipe_id}
 
     def grid_operations(self) -> dict:
         """Welke operatie bij welk raster hoort — voor het lagenpaneel."""
@@ -614,8 +733,11 @@ class Library:
                         speed_min, speed_max, speed_steps, power_min, power_max, power_steps,
                         interval_min, interval_max, interval_steps,
                         row_axis, column_axis, rows, columns,
-                        cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells,
+                        anchor, text_enabled, border_enabled,
+                        label_speed_mm_s, label_power_percent)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, ?)""",
                 (
                     plan.get("material_id"),
                     plan.get("machine_id"),
@@ -639,6 +761,11 @@ class Library:
                     plan["origin_x_mm"],
                     plan["origin_y_mm"],
                     json.dumps(cells),
+                    plan.get("anchor") or "corner",
+                    0 if plan.get("text") is False else 1,
+                    1 if plan.get("border") else 0,
+                    plan.get("label_speed_mm_s"),
+                    plan.get("label_power_percent"),
                 ),
             )
             grid_id = cursor.lastrowid
@@ -730,6 +857,9 @@ class Library:
                 "materials": self.materials(),
                 "presets": presets,
                 "test_grids": rasters,
+                # T7: een benoemd recept is werk dat je zelf hebt uitgezocht,
+                # dus het hoort in dezelfde back-up als de rest.
+                "grid_recipes": self.grid_recipes(),
             }
             bundel.writestr(
                 BUNDLE_INDEX,
@@ -979,12 +1109,36 @@ class Library:
         #    stap staat de foto er nog, maar wijst niets meer aan.
         self._relink_cells(raster_id, preset_id)
 
+        # 6. De benoemde recepten (T7), met hun materiaal omgenummerd. Een
+        #    gelijknamig recept van jezelf blijft staan: net als bij presets is
+        #    je eigen instelling de instelling die je gemeten hebt.
+        recepten = 0
+        eigen_recepten = {
+            (r["name"].casefold(), r["material_id"]) for r in self.grid_recipes()
+        }
+        for recept in data.get("grid_recipes") or []:
+            naam = str(recept.get("name") or "").strip()
+            if not naam:
+                continue
+            doel = materiaal_id.get(recept.get("material_id"))
+            if (naam.casefold(), doel) in eigen_recepten:
+                continue
+            instellingen = recept.get("settings")
+            if isinstance(instellingen, str):
+                instellingen = json.loads(instellingen)
+            try:
+                self.save_grid_recipe(naam, instellingen or {}, doel)
+            except LibraryError:
+                continue
+            recepten += 1
+
         return {
             "mode": mode,
             "removed": verwijderd,
             "materials": len(materiaal_id),
             "machines": len(machine_id),
             "test_grids": len({v for v in raster_id.values()}),
+            "grid_recipes": recepten,
             "presets": {
                 "added": toegevoegd,
                 "updated": bijgewerkt,
@@ -996,7 +1150,9 @@ class Library:
         """Alles weg — alleen voor 'vervangen', en alleen na een bevestiging."""
         weg = self._counts()
         with self._connect() as db:
-            for tabel in ("preset", "test_grid", "material", "machine_profile"):
+            for tabel in (
+                "preset", "test_grid", "grid_recipe", "material", "machine_profile"
+            ):
                 db.execute(f"DELETE FROM {tabel}")
         for foto in self.photos.glob("grid-*"):
             foto.unlink(missing_ok=True)
@@ -1026,8 +1182,11 @@ class Library:
                         interval_min, interval_max, interval_steps,
                         row_axis, column_axis, rows, columns,
                         cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells, alignment,
-                        group_id, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        group_id, created_at,
+                        anchor, text_enabled, border_enabled,
+                        label_speed_mm_s, label_power_percent)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, ?)""",
                 (
                     materiaal_id.get(raster.get("material_id")),
                     machine_id.get(raster.get("machine_id")),
@@ -1051,6 +1210,11 @@ class Library:
                     else None,
                     raster.get("group_id"),
                     raster.get("created_at") or _now(),
+                    raster.get("anchor") or "corner",
+                    0 if raster.get("text_enabled") is False else 1,
+                    1 if raster.get("border_enabled") else 0,
+                    raster.get("label_speed_mm_s"),
+                    raster.get("label_power_percent"),
                 ),
             )
             return cursor.lastrowid
@@ -1121,7 +1285,80 @@ def _grid_row(row) -> dict:
     data = dict(row)
     data["cells"] = json.loads(data["cells"])
     data["alignment"] = _uitlijning(data.get("alignment"))
+    # SQLite kent geen booleans; de wizard zet er wel vinkjes mee.
+    for sleutel in ("text_enabled", "border_enabled"):
+        if sleutel in data:
+            data[sleutel] = bool(data[sleutel])
     return data
+
+
+# De waarden van de grootheden die níét op een as staan. Ze horen bij een
+# recept — "berk graveren op 40%" is anders geen recept maar een half recept —
+# maar niet bij GRID_DEFAULTS, want daar staan ze als min == max in de reeks.
+_VASTE_VELDEN = ("speed_mm_s", "power_percent", "interval_mm")
+
+
+def _recept_instellingen(ruw: dict) -> dict:
+    """
+    Alleen de sleutels die een raster beschrijven, in het juiste soort.
+
+    Een recept is een JSON-blob in de database, en dat is precies waar rommel
+    binnenkomt. Hier gaat eruit wat er niet in hoort, zodat de wizard er blind
+    op kan vertrouwen.
+    """
+    uit = {}
+    for sleutel in tuple(Library.GRID_DEFAULTS) + _VASTE_VELDEN:
+        if sleutel not in ruw or ruw[sleutel] is None:
+            continue
+        waarde = ruw[sleutel]
+        if sleutel in ("text_enabled", "border_enabled"):
+            uit[sleutel] = bool(waarde)
+        elif sleutel in ("operation", "row_axis", "column_axis", "anchor"):
+            uit[sleutel] = str(waarde)
+        else:
+            try:
+                uit[sleutel] = float(waarde)
+            except (TypeError, ValueError):
+                continue
+    return uit
+
+
+def _met_ankerpunt(instelling: dict) -> dict:
+    """
+    Het punt zoals de gebruiker het intikte: een hoek, of een midden (T9).
+
+    In de database staat altijd de linkerbovenhoek van de vakjes — daar rekent
+    de foto-overlay mee. Wie het bord op het midden gelegd heeft, moet dat
+    midden terugzien in het formulier en niet een hoek die hij nooit getypt
+    heeft. Het midden komt uit dezelfde `plan_grid` die het ook uitrekende;
+    hem hier nabouwen zou twee sommen geven die uit elkaar kunnen lopen.
+    """
+    hoek_x = instelling.get("origin_x_mm")
+    hoek_y = instelling.get("origin_y_mm")
+    instelling["anchor_x_mm"] = hoek_x
+    instelling["anchor_y_mm"] = hoek_y
+    if instelling.get("anchor") != "center":
+        return instelling
+    from .testgrid import plan_grid
+
+    velden = {k: v for k, v in instelling.items() if v is not None}
+    velden["text"] = velden.pop("text_enabled", True)
+    velden["border"] = velden.pop("border_enabled", False)
+    velden.pop("anchor", None)
+    velden.pop("anchor_x_mm", None)
+    velden.pop("anchor_y_mm", None)
+    velden.pop("thickness_mm", None)
+    for as_ in ("speed", "power", "interval"):
+        if velden.get(f"{as_}_steps") == 1:
+            velden.pop(f"{as_}_steps", None)
+            velden.pop(f"{as_}_max", None)
+    try:
+        plan = plan_grid(**velden)[0]
+    except Exception:
+        return instelling
+    instelling["anchor_x_mm"] = plan["center_x_mm"]
+    instelling["anchor_y_mm"] = plan["center_y_mm"]
+    return instelling
 
 
 def _uitlijning(ruw):

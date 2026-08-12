@@ -235,6 +235,10 @@ class ApiServer:
         self.drawing.color_memory = lambda kleur: self.palette.recall(
             self._palette_machine()[0], kleur
         )
+        # Gat J12: het nulpunt woont op de machine (machine.py) en bepaalt waar
+        # het werk terechtkomt. Eén bron, twee lezers — de pre-flight en het
+        # spoolen.
+        self.drawing.origin = self.motion.origin
         self.grids = TestGridGenerator(kernel)
         self.bridge = EventBridge()
         self.channel = kernel.channel("openkerf-api")
@@ -432,6 +436,10 @@ class ApiServer:
             return {
                 "actions": self.commands.capabilities(),
                 "motion": self.motion.capabilities(),
+                # Gat J11: bijstellen tijdens een lopende job kan alleen als de
+                # driver een realtime kanaal heeft. Op een Ruida staat hier
+                # false, en dan hoort er geen knop te zijn.
+                "adjust": self.motion.adjust_capabilities(),
                 "auth_required": not self.local_only,
             }
 
@@ -455,7 +463,15 @@ class ApiServer:
             # machine gaat, en het is het enige woord dat de gebruiker zelf
             # heeft gekozen. Zonder dit heet een naamloze job "Spooler:3 items".
             sheet = self._active_sheet() or {}
-            return act(lambda: self.commands.start_job(sheet.get("name")))
+
+            def run():
+                # Gat J12: staat er een nulpunt, dan gaat het werk daarvandaan
+                # de machine in. De verschuiving leeft alleen zolang het plan
+                # gebouwd wordt; daarna staat de tekening weer waar hij stond.
+                with self.drawing.verschoven(self.motion.origin()):
+                    return self.commands.start_job(sheet.get("name"))
+
+            return act(run)
 
         @app.post("/api/job/pause", dependencies=write)
         def pause_job():
@@ -759,6 +775,35 @@ class ApiServer:
 
         # -- einde blok posities --------------------------------------------
 
+        # -- gebruikersoorsprong (gat J12) — zie machine.py -----------------
+        @app.get("/api/machine/origin")
+        def machine_origin():
+            """Het nulpunt van deze machine, of null als er geen gezet is."""
+            return manage(lambda: {"origin": self.motion.origin()})
+
+        @app.post("/api/machine/origin", dependencies=write)
+        def set_machine_origin(body: dict | None = None):
+            """Zonder x/y: waar de kop nu staat."""
+            velden = body or {}
+            return manage(
+                self.motion.set_origin, velden.get("x_mm"), velden.get("y_mm")
+            )
+
+        @app.delete("/api/machine/origin", dependencies=write)
+        def clear_machine_origin():
+            return manage(self.motion.clear_origin)
+
+        # -- bijstellen tijdens een lopende job (gat J11) -------------------
+        @app.get("/api/job/adjust")
+        def job_adjustment():
+            """Wat er nu bijgesteld staat, en of deze machine het überhaupt kan."""
+            return manage(self.motion.adjustment)
+
+        @app.post("/api/job/adjust", dependencies=write)
+        def adjust_job(body: dict):
+            """Snelheid en/of vermogen schalen, ook midden in een job."""
+            return manage(self.motion.adjust, body.get("power"), body.get("speed"))
+
         @app.post("/api/machine/focus", dependencies=write)
         def focus_machine(body: dict):
             """Scherpstellen: de kop hoger of lager. Alleen als het apparaat het kent."""
@@ -782,7 +827,18 @@ class ApiServer:
                 doos = self.design.bounds_mm()
                 if doos is None:
                     raise DesignError("Er ligt niets op het bed om te omkaderen.")
-                return self.motion.frame(*doos)
+                # Gat J12: kaderen moet laten zien waar het écht komt te
+                # liggen. Een kader op de tekencoördinaten terwijl het nulpunt
+                # het werk 100 mm opzij zet, is precies de controle die je
+                # dacht gedaan te hebben.
+                nulpunt = self.motion.origin() or {}
+                x, y, breedte, hoogte = doos
+                return self.motion.frame(
+                    x + float(nulpunt.get("x_mm") or 0.0),
+                    y + float(nulpunt.get("y_mm") or 0.0),
+                    breedte,
+                    hoogte,
+                )
 
             return manage(run)
 
@@ -1534,6 +1590,36 @@ class ApiServer:
             """
             return self.library.last_grid_settings(material_id)
 
+        # ---------------------------------------- benoemde recepten (gat T7)
+        #
+        # Vóór `/testgrids/{grid_id}`, anders vangt die route "recipes" op als
+        # een id. Dat is FastAPI's volgorde van declareren, niet van specificiteit.
+
+        @app.get("/api/library/testgrids/recipes")
+        def list_grid_recipes(material_id: int | None = None):
+            """
+            Bewaarde generatorinstellingen onder een naam.
+
+            T3 onthoudt het vorige raster per materiaal; dit is hetzelfde in het
+            meervoud, zodat "berk snijden" en "berk graveren" naast elkaar
+            kunnen bestaan. Dezelfde sleutels, zodat de wizard beide op
+            dezelfde manier invult.
+            """
+            return manage(self.library.grid_recipes, material_id)
+
+        @app.post("/api/library/testgrids/recipes", dependencies=write, status_code=201)
+        def save_grid_recipe(body: dict):
+            return manage(
+                self.library.save_grid_recipe,
+                body.get("name"),
+                body.get("settings") or {},
+                body.get("material_id"),
+            )
+
+        @app.delete("/api/library/testgrids/recipes/{recipe_id}", dependencies=write)
+        def remove_grid_recipe(recipe_id: int):
+            return manage(self.library.remove_grid_recipe, recipe_id)
+
         @app.get("/api/library/testgrids/{grid_id}")
         def get_test_grid(grid_id: int):
             return manage(self.library.test_grid, grid_id)
@@ -1695,6 +1781,58 @@ class ApiServer:
             if not info:
                 raise HTTPException(status_code=422, detail="'info' ontbreekt.")
             return manage(self.machines.create, info, body.get("label"))
+
+        # ------------------------------------- machineprofiel uitwisselen (E5)
+        #
+        # Vóór `/machines/{path}`, anders leest die "import" als een pad.
+
+        @app.post("/api/machines/import/upload", dependencies=write)
+        async def upload_machine_profile(file: UploadFile):
+            """Het profiel aannemen en zeggen wat het zou doen — nog niets meer."""
+            from .machines import PROFILE_SUFFIX
+
+            target = self._upload_path(file.filename or f"machine{PROFILE_SUFFIX}")
+            with target.open("wb") as handle:
+                shutil.copyfileobj(file.file, handle)
+            preview = manage(self.machines.preview_profile, target)
+            return {"profile": target.name, **preview}
+
+        @app.post("/api/machines/import", dependencies=write, status_code=201)
+        def import_machine_profile(body: dict):
+            naam = Path(str(body.get("profile") or "")).name
+            if not naam:
+                raise HTTPException(status_code=422, detail="Kies eerst een bestand.")
+            return manage(
+                self.machines.import_profile,
+                self._upload_path(naam),
+                body.get("label"),
+            )
+
+        @app.get("/api/machines/{path}/export.openkerf-machine")
+        def export_machine_profile(path: str):
+            """
+            Eén machine als bestand, in dezelfde vorm als de bibliotheek (B7).
+
+            Gat E5: LightBurn levert `.lbdev`, zodat een fabrikant een profiel
+            kan meesturen en een tweede computer niets overtypt.
+            """
+            from fastapi.responses import JSONResponse
+
+            from .machines import PROFILE_SUFFIX
+
+            profiel = manage(self.machines.export_profile, path)
+            veilig = "".join(
+                c if c.isalnum() or c in "-_" else "-"
+                for c in str(profiel["machine"]["label"] or path)
+            ).strip("-") or path
+            return JSONResponse(
+                profiel,
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="{veilig}{PROFILE_SUFFIX}"'
+                    )
+                },
+            )
 
         @app.post("/api/machines/{path}/activate", dependencies=write)
         def machine_activate(path: str):

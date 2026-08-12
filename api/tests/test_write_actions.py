@@ -16,6 +16,11 @@ WRITE_ROUTES = [
     # Dat mag van buiten de eigen computer nooit zonder token.
     ("/api/library/import", {"json": {}}),
     ("/api/library/import/preview", {"json": {}}),
+    # Gat T7: een benoemd recept opslaan schrijft in de bibliotheek.
+    ("/api/library/testgrids/recipes", {"json": {}}),
+    # Gat E5: een machineprofiel inlezen maakt een machine aan met een bed, een
+    # interface en een adres. Dat bepaalt waar de kop heen gaat.
+    ("/api/machines/import", {"json": {}}),
 ]
 
 # Dezelfde eis voor de andere werkwoorden. De uitlijning van een rasterfoto is

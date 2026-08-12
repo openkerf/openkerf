@@ -111,6 +111,13 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # Gat J6: posities die deze machine onthoudt. Schrijft aan de settings
         # van de device-service, dus achter dezelfde poort als bewegen.
         "/api/machine/positions",
+        # Gat J12: het nulpunt van de gebruiker. Schrijft net als de posities
+        # aan de settings van de device-service, en het verplaatst het werk op
+        # weg naar de machine — dus zeker achter de poort.
+        "/api/machine/origin",
+        # Gat J11: snelheid en vermogen bijstellen tijdens een lopende job.
+        # Dit stuurt realtime bytes naar de driver; dat is de machine aanraken.
+        "/api/job/adjust",
         "/api/machine/unlock",
         "/api/machine/lock",
         "/api/design/resize",
@@ -156,6 +163,15 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/library/testgrids/{grid_id}/photo",
         "/api/library/testgrids/{grid_id}/remove-from-design",
         "/api/library/testgrids/{grid_id}/presets",
+        # Gat T7: benoemde generatorinstellingen. Schrijft alleen in de
+        # bibliotheek — geen machine, geen ontwerp — maar wel in jouw
+        # bibliotheek, dus achter dezelfde poort als de rest daarvan.
+        "/api/library/testgrids/recipes",
+        # Gat E5: een machineprofiel inlezen. Uploaden schrijft een bestand in
+        # de uploadmap en importeren maakt een machine aan met instellingen die
+        # bepalen waar de kop heen gaat — allebei achter de poort.
+        "/api/machines/import/upload",
+        "/api/machines/import",
         # Rekent alleen; zie READ_ONLY_POSTS in test_write_actions.py.
         "/api/library/testgrids/preview",
     }

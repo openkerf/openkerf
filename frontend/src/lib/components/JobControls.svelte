@@ -293,11 +293,21 @@
 		posities = await control.listPositions();
 	}
 	// Bij het openen van het paneel én na een machinewissel: posities horen bij
-	// de machine, dus die van de vorige zijn hier onzin.
+	// de machine, dus die van de vorige zijn hier onzin. Dat geldt net zo goed
+	// voor het nulpunt (J12) en voor de bijstelling (J11) — allebei staan ze op
+	// de machine en niet in de browser.
 	$effect(() => {
 		void device?.path;
 		ophalenPosities();
+		control.loadOrigin();
+		if (control.canAdjust) control.loadAdjustment();
 	});
+
+	/** De twee grootheden die tijdens een job bijgesteld kunnen worden (J11). */
+	const STELBAAR = [
+		{ wat: 'power' as const, naam: 'Vermogen' },
+		{ wat: 'speed' as const, naam: 'Snelheid' }
+	];
 
 	async function bewaar() {
 		const naam = nieuweNaam.trim();
@@ -410,7 +420,20 @@
 					<span class="muted">Materiaal</span>
 					<span class="v">{velTekst ?? 'niet ingevuld voor dit vel'}</span>
 				</div>
-				<!-- Geen tweede regel met de jobafmeting: de weergave erboven zet
+					{#if control.origin}
+						<!-- Gat J12: een nulpunt verplaatst het werk op het bed, en de
+						     pre-flight is het laatste moment waarop je dat nog ziet. Het
+						     staat er dus als eigen regel — zwijgen zou betekenen dat het
+						     enige scherm vóór het branden niet vertelt wáár er gebrand
+						     wordt. -->
+						<div class="pf-time vel">
+							<span class="muted">Nulpunt</span>
+							<span class="v mono"
+								>{maat(control.origin.x_mm)},&#8239;{maat(control.origin.y_mm)} mm</span
+							>
+						</div>
+					{/if}
+					<!-- Geen tweede regel met de jobafmeting: de weergave erboven zet
 				     "werk 120 × 80 mm" al onder de tekening (besluit B8). Datzelfde
 				     getal nog eens als eigen rij, negentig pixels lager, is geen
 				     informatie maar ruis. Wat de weergave níet doet is het werk tegen
@@ -802,6 +825,122 @@
 							Deze plek bewaren
 						</button>
 					{/if}
+				</div>
+			{/if}
+			<!-- Het nulpunt (gat J12). LightBurn heeft Set Origin / Clear Origin /
+			     Go to Origin; bij ons was "Naar oorsprong" letterlijk 0,0 van het
+			     bed en was er geen manier om een eigen nulpunt te leggen. Dat is
+			     dagelijks werk: de restplank ligt waar hij ligt, en je wil je hele
+			     tekening niet verslepen om hem erop te krijgen.
+
+			     Bewust een eigen blokje onder "Naar een punt" en niet ertussen: de
+			     bewaarde posities zeggen "ga daarheen", dit zegt "reken daarvandaan".
+			     Tussen de plekken zou hij als nóg een plek lezen. -->
+			{#if control.capabilities?.motion?.move}
+				<div class="nulpunt" class:gezet={control.origin !== null}>
+					<span class="rot-label">Nulpunt van het werk</span>
+					{#if control.origin}
+						<!-- Het getal staat er altijd bij. Een nulpunt dat je niet kunt
+						     aflezen is een instelling die stilletjes je werk verplaatst,
+						     en dat is precies de verrassing die een laser duur maakt. -->
+						<p class="nulstand">
+							<span class="mono"
+								>{maat(control.origin.x_mm)},&#8239;{maat(control.origin.y_mm)} mm</span
+							>
+							— wat je op 0,0 tekent, brandt hier. Het vel schuift mee: het nulpunt
+							is de hoek van het materiaal dat erin ligt.
+						</p>
+					{:else}
+						<p class="hint">
+							Staat uit: het werk brandt op de coördinaten waarop je het tekende.
+						</p>
+					{/if}
+					<div class="puntrij">
+						<button
+							class="rot"
+							disabled={bewegenUit || huidigMm === null}
+							title={huidigMm === null
+								? 'Deze machine meldt geen positie, dus er valt geen nulpunt vast te leggen'
+								: `Leg het nulpunt op ${maat(huidigMm[0])}, ${maat(huidigMm[1])} mm — waar de kop nu staat`}
+							onclick={() => control.setOrigin()}
+						>
+							{control.origin ? 'Hier opnieuw' : 'Hier het nulpunt'}
+						</button>
+						{#if control.origin}
+							<button
+								class="rot"
+								disabled={bewegenUit}
+								title={movingBlocked ?? 'De kop naar het nulpunt sturen'}
+								onclick={() =>
+									control.origin && control.moveTo(control.origin.x_mm, control.origin.y_mm)}
+							>
+								Naar nulpunt
+							</button>
+							<button
+								class="rot"
+								title="Terug naar het nulpunt van de machine zelf"
+								onclick={() => control.clearOrigin()}
+							>
+								Wissen
+							</button>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
+			<!-- Bijstellen tijdens een lopende job (gat J11).
+			     LightBurn heeft hier twee kolommen "Adjust Speed" en "Adjust Power"
+			     waarmee je een job rédt in plaats van hem opnieuw doet: je ziet dat
+			     het te donker wordt en draait tien procent terug zonder te stoppen.
+
+			     Alleen zichtbaar als de driver het kan, en dat is geen netheid maar
+			     noodzaak: alleen grbl heeft realtime overrides (0x90/0x99), de Ruida
+			     zet snelheid en vermogen per cut-segment uit de settings. Een knop
+			     die niets doet naast een brandende laser is erger dan geen knop.
+			     Zie FEATURE-GAPS J11. -->
+			{#if control.canAdjust}
+				<div class="bijstellen">
+					<span class="rot-label">Bijstellen tijdens de job</span>
+					{#each STELBAAR as as (as.wat)}
+						{#if control.capabilities?.adjust?.[as.wat]}
+							{@const stand = control.adjust[as.wat] ?? 1}
+							<div class="stelrij">
+								<span class="stelnaam">
+									{as.naam}
+									<!-- Alleen het getal in mono; "zoals ontworpen" is een zin en
+									     die staat in een cijferletter vreemd afgemeten. -->
+									<span class="stelwaarde" class:mono={stand !== 1}
+										>{stand === 1
+											? 'zoals ontworpen'
+											: `${stand > 1 ? '+' : '−'}${Math.abs(
+													Math.round((stand - 1) * 100)
+												)}%`}</span
+									>
+								</span>
+								<div class="stelknoppen">
+									{#each [-0.1, -0.01, 0.01, 0.1] as stap (stap)}
+										<button
+											class="rot stel"
+											disabled={!verbinding.online}
+											title="{stap > 0 ? 'Meer' : 'Minder'} {as.naam.toLowerCase()}"
+											onclick={() => control.setAdjustment(as.wat, stand + stap)}
+											>{stap > 0 ? '+' : '−'}{Math.abs(Math.round(stap * 100))}%</button
+										>
+									{/each}
+									<button
+										class="rot stel terug"
+										disabled={!verbinding.online || stand === 1}
+										title="Terug naar wat de laag zegt"
+										onclick={() => control.setAdjustment(as.wat, 1)}>Terug</button
+									>
+								</div>
+							</div>
+						{/if}
+					{/each}
+					<p class="hint">
+						Dit schaalt wat de machine nú doet. De laag houdt zijn eigen
+						instelling — die kan uit een preset komen, en dan is hij bewijs.
+					</p>
 				</div>
 			{/if}
 			{#if !control.capabilities?.motion?.focus && profile?.has_z}
@@ -1264,6 +1403,63 @@
 		gap: var(--space-2);
 		align-items: center;
 	}
+	/* ── Het nulpunt (gat J12) ─────────────────────────────────────────────────
+	   Een eigen blokje met een rustige rand eromheen: dit is een stand die aan
+	   of uit staat en die je werk verplaatst. Zonder omlijsting leest het als
+	   nóg een rij knoppen tussen de bewaarde plekken, en dan zie je niet dát er
+	   iets aan staat. */
+	.nulpunt {
+		margin-top: var(--space-3);
+		padding: var(--space-2h) var(--space-3);
+		border: 1px solid var(--line-1);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+	}
+	/* Staat er een nulpunt, dan draagt de linkerrand dat — zodat je het aan de
+	   rand van je oog ziet zonder de tekst te lezen. In het accent en niet in
+	   een waarschuwingskleur: dit is niet gevaarlijk, het is aan. */
+	.nulpunt.gezet {
+		border-left: 3px solid var(--accent);
+	}
+	.nulstand {
+		margin: var(--space-1h) 0 0;
+		font-size: var(--text-xs);
+		line-height: 1.45;
+		color: var(--text-2);
+	}
+	.nulstand .mono {
+		color: var(--text-1);
+		font-variant-numeric: tabular-nums;
+	}
+	/* ── Bijstellen tijdens de job (gat J11) ───────────────────────────────── */
+	.bijstellen { margin-top: var(--space-3); }
+	.stelrij { margin-top: var(--space-2); }
+	.stelnaam {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-1);
+	}
+	.stelwaarde {
+		color: var(--text-2);
+		font-variant-numeric: tabular-nums;
+	}
+	.stelknoppen {
+		display: flex;
+		gap: var(--space-1h);
+		margin-top: var(--space-1h);
+	}
+	/* Vijf knoppen op één regel in een paneel van 280 px: elk mag krimpen, maar
+	   de tekst blijft op de typeschaal — alleen de lucht eromheen gaat eraf. */
+	.stel {
+		flex: 1;
+		min-width: 0;
+		padding: 4px 2px;
+		font-variant-numeric: tabular-nums;
+	}
+	.stel.terug { flex: 1.3; }
 	.naamveld {
 		flex: 1;
 		min-width: 10ch;

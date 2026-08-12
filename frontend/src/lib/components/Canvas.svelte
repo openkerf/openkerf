@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { currentJob } from '$lib/api';
 	import type { Device } from '$lib/api';
+	import { kopspoor } from '$lib/status.svelte';
+	import { nulpunt } from '$lib/control.svelte';
 	import type { DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import LagenPalet from './LagenPalet.svelte';
@@ -226,6 +229,86 @@
 	}
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
+
+	// ── Voortgang op het canvas (gat J3) ───────────────────────────────────────
+	//
+	// De belofte uit DESIGN-SYSTEM v2 was dat de contour zich aftekent terwijl de
+	// machine hem snijdt. Wat daarvoor nodig is — de volgorde waarin de engine de
+	// vormen afwerkt — komt nergens naar buiten; wij krijgen een percentage en een
+	// stroom kopposities. Dus tekenen we wat gemeten is en niet wat mooi is:
+	// het spoor dat de kop werkelijk gereden heeft (zie `Kopspoor` in
+	// status.svelte.ts), plus de voortgang als ring óm de kop.
+	//
+	// Wat dit bewust níet doet: doen alsof het een kerf is. Het signaal zegt niet
+	// of de laser aan stond, dus de sprong tussen twee vormen staat er net zo goed
+	// in. Daarom heet het een spoor, staat het in één dunne lijn en niet in de
+	// laagkleur, en zegt de strook onder het canvas in woorden wat je ziet.
+	let job = $derived(currentJob(device));
+	let voortgang = $derived.by(() => {
+		if (!job) return null;
+		const deel = job.progress;
+		if (deel === null || deel === undefined || !Number.isFinite(deel)) return null;
+		return Math.min(1, Math.max(0, deel));
+	});
+
+	/** Het spoor in millimeters, klaar om als polyline neer te zetten. */
+	let spoor = $derived.by(() => {
+		if (!job) return '';
+		const punten = kopspoor.punten;
+		if (punten.length < 4) return '';
+		const perMm = design.design?.units_per_mm ?? 1;
+		const stukken = [];
+		for (let i = 0; i < punten.length; i += 2) {
+			stukken.push(`${(punten[i] / perMm).toFixed(2)},${(punten[i + 1] / perMm).toFixed(2)}`);
+		}
+		return stukken.join(' ');
+	});
+
+	/**
+	 * De laatste meter van het spoor, vol aangezet: daar gebeurt het nu.
+	 *
+	 * Kort houden. Met zestig punten kleurde bij een rechthoek de hele omtrek
+	 * op — gemeten op de proefjob — en dan is er geen verschil meer tussen
+	 * "hier is hij geweest" en "hier is hij nu", terwijl dat juist het enige is
+	 * wat dit stuk toevoegt.
+	 */
+	const VERS_PUNTEN = 14;
+	let spoorKop = $derived.by(() => {
+		if (!job) return '';
+		const punten = kopspoor.punten;
+		if (punten.length < 4) return '';
+		const perMm = design.design?.units_per_mm ?? 1;
+		const vanaf = Math.max(0, punten.length - 2 * VERS_PUNTEN);
+		const stukken = [];
+		for (let i = vanaf; i < punten.length; i += 2) {
+			stukken.push(`${(punten[i] / perMm).toFixed(2)},${(punten[i + 1] / perMm).toFixed(2)}`);
+		}
+		return stukken.join(' ');
+	});
+
+	/** Straal en omtrek van de voortgangsring, in schermpixels teruggerekend. */
+	const RING_PX = 13;
+	let ringR = $derived(RING_PX * mmPerPx);
+	let ringOmtrek = $derived(2 * Math.PI * ringR);
+
+	// ── Het nulpunt van de gebruiker (gat J12) ─────────────────────────────────
+	//
+	// Het nulpunt verplaatst het werk op weg naar de machine. Dat mág niet
+	// alleen in een paneel staan: dan teken je op de ene plek en brandt het op de
+	// andere, en dat is precies het soort verrassing waar deze functie tegen
+	// bedoeld is. Op het bed staat daarom het punt zelf én een gestippeld kader
+	// waar het werk terechtkomt.
+	$effect(() => {
+		nulpunt.laad();
+	});
+	let nulstand = $derived(nulpunt.punt);
+	/** Waar het werk komt te liggen: de omhullende, verschoven met het nulpunt. */
+	let brandtHier = $derived.by(() => {
+		if (!nulstand || (!nulstand.x_mm && !nulstand.y_mm)) return null;
+		const doos = omvat(design.elements ?? []);
+		if (!doos) return null;
+		return { ...doos, x: doos.x + nulstand.x_mm, y: doos.y + nulstand.y_mm };
+	});
 
 	// Alleen bij precies één geselecteerde lijn: die bewerk je op zijn punten.
 	let selectedLine = $derived(
@@ -868,7 +951,15 @@
 			const nummer = design.numberFor(beste);
 			if (!nummer) continue;
 			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
-			if ((x1 - x0) * scale < 22 || (y1 - y0) * scale < 14) continue;
+			// Gat C8: een vorm die op het scherm kleiner is dan het cijfer, krijgt
+			// er geen — bij vijftig kleine vormen wordt het bed anders een wolk
+			// getallen die niets meer aanwijst. Maar wat je zelf hebt aangeklikt is
+			// nooit ruis: één cijfer bij één vorm is precies de vraag die je stelde
+			// toen je hem selecteerde. Dus de maatgrens geldt niet voor de selectie,
+			// en daarmee is de dubbele codering van C6 op elke zoomstand bereikbaar
+			// zonder in te zoomen.
+			const klein = (x1 - x0) * scale < 22 || (y1 - y0) * scale < 14;
+			if (klein && !design.isSelected(element.id)) continue;
 			labels.push({
 				id: element.id,
 				nummer,
@@ -1198,7 +1289,12 @@
 				bed {bed.width.toFixed(0)} × {bed.height.toFixed(0)} mm
 			</span>
 
-			{#if design.isEmpty && !cameraSrc}
+			<!-- `!job`: tijdens een lopende job is "Leeg bed — kies Importeren" een
+			     uitnodiging op het verkeerde moment. Gezien op een foto waarop het
+			     spoor van de kop over het bed liep terwijl er "Leeg bed" onder stond;
+			     dat kan zodra het ontwerp gewist wordt terwijl de machine nog bezig is
+			     met wat er al gespoold was. -->
+			{#if design.isEmpty && !cameraSrc && !job}
 				<!-- Een leeg bed is een lege bladzijde: zonder tekst weet niemand
 				     waar hij moet beginnen. Vangt geen muis af, want je moet er
 				     doorheen kunnen tekenen. -->
@@ -1274,6 +1370,22 @@
 				}}
 				onpointerup={endBand}
 			>
+				<!-- Het spoor van de kop, ónder het ontwerp (gat J3).
+				     Eerst als brede, zachte baan in het accent en pas daarna de vormen
+				     eroverheen: zo licht op wat de machine gehad heeft, zonder dat de
+				     laagkleur eronder verdwijnt — en die kleur is het enige dat zegt
+				     wélke bewerking het was. Bovenop een lijn van 1,2 px was het spoor
+				     in --text-2 op de proefjob letterlijk onzichtbaar; gemeten en
+				     weggegooid. -->
+				{#if spoor}
+					<polyline
+						class="spoor-baan"
+						points={spoor}
+						vector-effect="non-scaling-stroke"
+						aria-hidden="true"
+					/>
+				{/if}
+
 				<!-- Het ontwerp. Eén schaaltransform rekent Tats om naar mm; de
 				     paddata zelf blijft onaangeroerd zoals de engine hem gaf. -->
 				{#if design.design}
@@ -1716,6 +1828,92 @@
 					<text class="as mono" x={2.5 * mmPerPx} y={21 * mmPerPx} style="font-size: {labelSize}px">Y</text>
 				</g>
 
+				<!-- Het nulpunt van de gebruiker (gat J12).
+				     Een kruis met een open midden, in --text-1 en niet in het accent:
+				     het accent is de kop en het merk op 0,0 (C5) is óók al een vast
+				     teken, dus dit derde punt moet van allebei te onderscheiden zijn.
+				     Alle maten teruggerekend naar schermpixels — anders groeit het
+				     kruis met de zoom mee. -->
+				{#if nulstand}
+					<g class="nulpunt-merk" aria-hidden="true">
+						<line
+							x1={nulstand.x_mm - 9 * mmPerPx}
+							y1={nulstand.y_mm}
+							x2={nulstand.x_mm - 3 * mmPerPx}
+							y2={nulstand.y_mm}
+						/>
+						<line
+							x1={nulstand.x_mm + 3 * mmPerPx}
+							y1={nulstand.y_mm}
+							x2={nulstand.x_mm + 9 * mmPerPx}
+							y2={nulstand.y_mm}
+						/>
+						<line
+							x1={nulstand.x_mm}
+							y1={nulstand.y_mm - 9 * mmPerPx}
+							x2={nulstand.x_mm}
+							y2={nulstand.y_mm - 3 * mmPerPx}
+						/>
+						<line
+							x1={nulstand.x_mm}
+							y1={nulstand.y_mm + 3 * mmPerPx}
+							x2={nulstand.x_mm}
+							y2={nulstand.y_mm + 9 * mmPerPx}
+						/>
+						<text
+							class="as mono"
+							x={nulstand.x_mm + 11 * mmPerPx}
+							y={nulstand.y_mm - 5 * mmPerPx}
+							style="font-size: {labelSize}px">0</text
+						>
+					</g>
+					{#if brandtHier}
+						<!-- Waar het werk terechtkomt. Zonder dit kader zegt het nulpunt
+						     alleen dát er iets verschuift en niet waarheen, en dan moet je
+						     het uitrekenen terwijl je juist wilde kunnen kijken. -->
+						<g class="brandt-hier" aria-hidden="true">
+							<!-- Het vel schuift mee. Dat is geen opsmuk maar de betekenis van
+							     het nulpunt: je legt het op de hoek van het materiaal dat
+							     erin ligt, dus het materiaal ligt daar. Zonder dit kader
+							     stond het werk zichtbaar naast het vel terwijl er nergens
+							     "buiten het vel" gemeld werd — een tekening die zichzelf
+							     tegenspreekt. -->
+							{#if sheet}
+								<rect
+									class="velschets"
+									x={nulstand.x_mm}
+									y={nulstand.y_mm}
+									width={sheet.width}
+									height={sheet.height}
+									vector-effect="non-scaling-stroke"
+								/>
+							{/if}
+							<rect
+								x={brandtHier.x}
+								y={brandtHier.y}
+								width={brandtHier.width}
+								height={brandtHier.height}
+								vector-effect="non-scaling-stroke"
+							/>
+							<text
+								class="mono"
+								x={brandtHier.x + 2 * mmPerPx}
+								y={brandtHier.y - 3 * mmPerPx}
+								style="font-size: {labelSize}px">brandt hier</text
+							>
+						</g>
+					{/if}
+				{/if}
+
+				<!-- Het verse stuk, bovenop: waar de kop nú is. Kort gehouden (zie
+				     VERS_PUNTEN) zodat er verschil blijft tussen "hier is hij geweest"
+				     en "hier is hij nu". -->
+				{#if spoorKop}
+					<g class="spoor" aria-hidden="true">
+						<polyline class="vers" points={spoorKop} vector-effect="non-scaling-stroke" />
+					</g>
+				{/if}
+
 				{#if head}
 					<!-- Live kop-positie. Er is nog geen ontwerp om te tonen: fase 1
 					     leest alleen status, het canvas zelf komt in fase 3. -->
@@ -1725,6 +1923,28 @@
 						<!-- Ook de kop is een schermmarkering, geen vorm van 4 mm: op
 						     twintig keer inzoomen was hij anders een cirkel van 26 cm. -->
 						<circle cx={head[0]} cy={head[1]} r={7 * mmPerPx} />
+						<!-- De voortgang van de job, als ring om de kop (gat J3). Dit is
+						     het enige getal dat de engine echt geeft, en het staat waar je
+						     tijdens een job toch al naar kijkt. Beginnend bovenaan en met
+						     de klok mee, want dat leest iedereen als "hoe ver". -->
+						{#if voortgang !== null}
+							<circle
+								class="ring-baan"
+								cx={head[0]}
+								cy={head[1]}
+								r={ringR}
+								vector-effect="non-scaling-stroke"
+							/>
+							<circle
+								class="ring"
+								cx={head[0]}
+								cy={head[1]}
+								r={ringR}
+								vector-effect="non-scaling-stroke"
+								stroke-dasharray="{ringOmtrek * voortgang} {ringOmtrek}"
+								transform="rotate(-90 {head[0]} {head[1]})"
+							/>
+						{/if}
 					</g>
 				{/if}
 			</svg>
@@ -1805,6 +2025,26 @@
      1440: overlap van 34 px). Eén maat voor de hele onderrand is de enige die
      klopt, want er kan meer dan één strook staan. -->
 <div class="onderrand" bind:clientHeight={onderrandHoogte}>
+<!-- Wat het spoor op het bed is, in woorden (gat J3).
+     Een lijn die tijdens een job over het bed groeit, leest als "dit is er al
+     gesneden" — en dat kunnen we niet waarmaken: `driver;position` zegt niet of
+     de laser aan stond, dus de sprong tussen twee vormen zit er net zo goed in.
+     Een beeld dat meer belooft dan het weet is erger dan geen beeld, dus staat
+     hier wat je voor je hebt. Alleen tijdens een job; daarbuiten is er niets te
+     zeggen. -->
+{#if job && spoor}
+	<p class="spoor-uitleg" role="status">
+		<span class="spoor-merk" aria-hidden="true"></span>
+		<!-- Alle tekst in één kind: met losse tekstknopen ernaast wordt elk stuk
+		     een eigen flex-item, en dan stond "62%" op een tablet in een eigen
+		     kolom naast een afgebroken zin (gemeten op 1024). -->
+		<span
+			>Spoor van de kop — gemeten, inclusief de sprongen tussen de vormen.{#if voortgang !== null}{' '}<span
+					class="mono">{Math.round(voortgang * 100)}%</span
+				> staat als ring om de kop.{/if}</span
+		>
+	</p>
+{/if}
 {#if buitenBed || buitenVel}
 	<div class="buiten-strook" role="status">
 		{#if buitenBed}
@@ -2124,6 +2364,102 @@
 		stroke: var(--accent);
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
+	}
+	/* ── Voortgang tijdens een job (gat J3) ────────────────────────────────────
+	   Het spoor is dun en flauw: het is context onder het werk, geen tweede
+	   tekening erbovenop. Bewust in --text-2 en niet in het accent of een
+	   laagkleur — het accent is de kop, en een laagkleur zou beweren dat dit
+	   stuk in díe laag gebrand is, en dat weten we niet. */
+	/* De afgelegde baan: breed en zacht, onder het ontwerp door. Breed genoeg om
+	   ook op een uitgezoomd bed te lezen, zacht genoeg om de laagkleur erboven
+	   niet te verdringen. */
+	.spoor-baan {
+		fill: none;
+		stroke: var(--accent);
+		stroke-width: 6;
+		stroke-opacity: 0.38;
+		stroke-linejoin: round;
+		stroke-linecap: round;
+	}
+	/* Het verse stuk in het accent: daar is de machine nu bezig, en dat is het
+	   enige stuk waarvan je zeker weet dat het net gebeurd is. */
+	.spoor polyline.vers {
+		stroke: var(--accent);
+		stroke-width: 1.6;
+		stroke-opacity: 0.9;
+	}
+	/* De ring om de kop: de baan als flauwe cirkel zodat je ziet hoe ver 100%
+	   ligt, en de voortgang erin. */
+	.head circle.ring-baan {
+		stroke: var(--accent);
+		stroke-width: 2.5;
+		stroke-opacity: 0.16;
+	}
+	.head circle.ring {
+		stroke: var(--accent);
+		stroke-width: 2.5;
+		stroke-linecap: round;
+	}
+	/* ── Het nulpunt van de gebruiker (gat J12) ─────────────────────────────── */
+	.nulpunt-merk line {
+		stroke: var(--text-1);
+		stroke-width: 1.4;
+		vector-effect: non-scaling-stroke;
+	}
+	.nulpunt-merk text {
+		fill: var(--text-1);
+		paint-order: stroke;
+		stroke: var(--bed);
+		stroke-width: 3;
+		stroke-linejoin: round;
+	}
+	/* Waar het werk terechtkomt: gestippeld en gedempt, want het is geen vorm
+	   maar een aankondiging. Niet in --danger of --warn — er is niets mis; het
+	   is precies wat je gevraagd hebt. */
+	.brandt-hier rect {
+		fill: none;
+		stroke: var(--text-1);
+		stroke-width: 1;
+		stroke-dasharray: 5 4;
+		stroke-opacity: 0.55;
+	}
+	/* Het vel op zijn nieuwe plek staat een stap zachter dan het werk erin: het
+	   is de ondergrond, niet het onderwerp. */
+	.brandt-hier rect.velschets {
+		stroke-opacity: 0.3;
+		stroke-dasharray: 2 5;
+	}
+	.brandt-hier text {
+		fill: var(--text-2);
+		paint-order: stroke;
+		stroke: var(--bed);
+		stroke-width: 3;
+		stroke-linejoin: round;
+	}
+	.spoor-uitleg {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--text-xs);
+		line-height: 1.4;
+		color: var(--text-2);
+		border-top: 1px solid var(--line-1);
+	}
+	/* Het merkje is het stukje lijn zelf: zo hoef je niet te raden welke lijn op
+	   het bed bij deze zin hoort. */
+	.spoor-merk {
+		flex: none;
+		width: 22px;
+		height: 0;
+		margin-top: 0.5em;
+		border-top: 2px solid var(--accent);
+		opacity: 0.9;
+	}
+	.spoor-uitleg .mono {
+		color: var(--text-1);
+		font-variant-numeric: tabular-nums;
 	}
 	.hit {
 		cursor: pointer;

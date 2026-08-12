@@ -6,7 +6,7 @@
  * statusupdates.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { browser, open, report, reset } from './harness.mjs';
+import { BASE, browser, open, report, reset } from './harness.mjs';
 
 const BIG = '/Users/Jelle.Tigchelaar/.claude/jobs/ef487fda/tmp/gauntlet/5000.svg';
 await reset();
@@ -17,7 +17,7 @@ const findings = [];
 const context = await b.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await context.newPage();
 const t0 = Date.now();
-await page.goto('http://127.0.0.1:8090/', { waitUntil: 'domcontentloaded' });
+await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.statusbar');
 await page.waitForFunction(() => document.querySelector('svg[role="img"]') !== null, { timeout: 20000 });
 const usable = Date.now() - t0;

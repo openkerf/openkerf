@@ -410,3 +410,40 @@ def test_two_presets_that_differ_only_in_interval_are_a_conflict(bib, leeg):
 
     botsingen = voorstel["samenvoegen"]["presets"]["conflicts"]
     assert [b["operation"] for b in botsingen] == ["graveren-raster"]
+
+
+# --------------------------------- benoemde rasterrecepten mee (gat T7)
+
+
+def test_named_recipes_travel_with_the_library(bib, leeg):
+    """
+    Een recept is werk dat je zelf hebt uitgezocht. Een back-up die je
+    materialen en metingen meeneemt maar je recepten laat staan, is een halve
+    back-up — en dat merk je pas op de tweede computer.
+    """
+    berken = bib.add_material("Multiplex berken")
+    bib.save_grid_recipe(
+        "Berk snijden",
+        {"operation": "snijden", "speed_min": 5, "speed_max": 25, "cell_mm": 8},
+        berken["id"],
+    )
+    bib.save_grid_recipe("Snelle 4×4", {"operation": "snijden", "cell_mm": 6})
+
+    leeg.import_bundle(bib.export_bundle())
+
+    recepten = {r["name"]: r for r in leeg.grid_recipes()}
+    assert set(recepten) == {"Berk snijden", "Snelle 4×4"}
+    assert recepten["Berk snijden"]["material_name"] == "Multiplex berken"
+    assert recepten["Snelle 4×4"]["material_id"] is None
+    assert recepten["Berk snijden"]["settings"]["speed_max"] == 25
+
+
+def test_your_own_recipe_wins_from_the_file(bib, leeg):
+    """Zelfde regel als bij presets: wat jij hebt uitgezocht blijft staan."""
+    bib.save_grid_recipe("Snel", {"operation": "snijden", "cell_mm": 6})
+    leeg.save_grid_recipe("Snel", {"operation": "snijden", "cell_mm": 12})
+
+    resultaat = leeg.import_bundle(bib.export_bundle())
+
+    assert resultaat["grid_recipes"] == 0
+    assert leeg.grid_recipes()[0]["settings"]["cell_mm"] == 12
