@@ -48,6 +48,15 @@ class Autosave:
             # Een leeg ontwerp bewaren zou een goed herstelbestand overschrijven
             # op het moment dat iemand "nieuw" kiest.
             return False
+        # `save` zet `elements.basename` op de bestandsnaam, en die naam komt
+        # daarna terug als jobnaam in de spooler — elke job heette "herstel.svg",
+        # ook op een vers ontwerp waar niets hersteld was. Twee jobs die
+        # hetzelfde heten zijn bij een laser niet uit elkaar te houden, dus we
+        # zetten de naam terug zoals hij was.
+        # `basename` is een property zonder setter; hij leidt af van
+        # `_filename`, en dát is wat `save` zet.
+        elements = self.kernel.elements
+        bestand_voor = getattr(elements, "_filename", None)
         try:
             written = self.drawing.export_svg("herstel.svg")
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,6 +65,11 @@ class Autosave:
         except Exception:
             # Automatisch bewaren mag nooit een bewerking laten mislukken.
             return False
+        finally:
+            try:
+                elements._filename = bestand_voor
+            except Exception:
+                pass
 
     def state(self) -> dict:
         if not self.path.is_file():

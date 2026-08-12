@@ -80,3 +80,46 @@ def test_it_can_be_thrown_away(client, server):
     client.delete("/api/design/autosave")
 
     assert client.get("/api/design/autosave").json()["exists"] is False
+
+
+def test_autosaving_does_not_rename_your_document(kernel, client, tmp_path):
+    """
+    Automatisch bewaren schrijft naar `herstel.svg`, en `save` zet die naam op
+    `elements.basename`. Die naam kwam daarna terug als jobnaam: elke job in de
+    wachtrij heette "herstel.svg", ook op een vers ontwerp waar niets hersteld
+    was. Twee jobs die hetzelfde heten zijn bij een laser niet uit elkaar te
+    houden.
+    """
+
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
+    )
+    kernel.elements._filename = "/ergens/mijn-ontwerp.svg"
+
+    _autosave(kernel, tmp_path).save()
+
+    assert kernel.elements.basename == "mijn-ontwerp.svg"
+
+
+def test_autosaving_leaves_an_unnamed_document_unnamed(kernel, client, tmp_path):
+    """Zonder naam blijft het naamloos — dan verzint onze eigen jobnaam iets."""
+
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
+    )
+    voor = getattr(kernel.elements, "basename", None)
+
+    _autosave(kernel, tmp_path).save()
+
+    assert getattr(kernel.elements, "basename", None) == voor
+
+
+def _autosave(kernel, tmp_path):
+    """De autosave zoals de server hem maakt, met een eigen pad voor de test."""
+    from openkerf_api.autosave import Autosave
+    from openkerf_api.document import Document
+    from openkerf_api.drawing import Drawing
+
+    return Autosave(kernel, Drawing(kernel), Document(), tmp_path / "herstel.svg")
