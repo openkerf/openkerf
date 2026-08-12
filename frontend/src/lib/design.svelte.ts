@@ -184,7 +184,32 @@ function bed(): [number, number, number] | null {
 	return rgb;
 }
 
+/**
+ * Uitkomsten onthouden per kleur en thema.
+ *
+ * Deze functie draait één keer per element per hertekening, en bij een
+ * themawissel opnieuw voor álles. Op vijfduizend paden kostte dat 145 ms —
+ * boven de grens van de stopwatch, en zichtbaar als een hapering. De uitkomst
+ * hangt alleen af van de kleur en de bedkleur, en een ontwerp heeft hooguit
+ * een handvol verschillende laagkleuren, dus onthouden scheelt bijna al het
+ * werk. De sleutel draagt het thema, zodat een wissel niet de oude waarde
+ * teruggeeft.
+ */
+const geheugen = new Map<string, string>();
+
 export function leesbaar(kleur: string): string {
+	const thema = typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? '');
+	const sleutel = `${thema}|${kleur}`;
+	const bekend = geheugen.get(sleutel);
+	if (bekend !== undefined) return bekend;
+	const uitkomst = bereken(kleur);
+	// Een ontwerp heeft een handvol kleuren; deze grens is er alleen zodat een
+	// pathologisch geval het geheugen niet opvreet.
+	if (geheugen.size < 512) geheugen.set(sleutel, uitkomst);
+	return uitkomst;
+}
+
+function bereken(kleur: string): string {
 	const ondergrond = bed();
 	const eigen = ontleed(kleur);
 	if (!ondergrond || !eigen) return kleur;
