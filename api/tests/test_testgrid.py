@@ -859,3 +859,77 @@ def test_the_plan_says_how_much_room_the_row_labels_need():
     )[0]
 
     assert ruim["label_room"] is True
+
+
+# ------------------------- kan deze engine wel rasteren? (gemeten, niet gehoopt)
+
+
+def test_the_preview_says_whether_this_engine_can_burn_a_raster(client):
+    """
+    `op raster` zet zijn vormen tijdens het plannen om in een bitmap via
+    `render-op/make_raster`, en die dienst registreert **alleen de wxPython-GUI**
+    (`meerk40t/gui/plugin.py:79`). Headless neemt `preprocess` de
+    `strip_rasters`-tak: de laag gooit zijn kinderen weg en levert nul cutcode.
+    Het bord komt dan blanco uit de machine.
+
+    Deze test legt de stand vast waarin we draaien. Wordt hij rood omdat er
+    ineens `True` staat, dan is er een rasteraar bijgekomen en mag de
+    waarschuwing in TestGrid.svelte weg.
+    """
+    antwoord = client.post("/api/library/testgrids/preview", json=RASTER).json()
+
+    assert antwoord["engine"]["raster"] is False
+
+
+def test_a_raster_grid_produces_no_cutcode_on_a_headless_engine(kernel, client):
+    """
+    De meting onder de waarschuwing hierboven: een ontwerp met alleen
+    rasterlagen levert nul brandtijd over nul delen. Dit is het bewijs dat de
+    melding geen voorzichtigheid is maar een feit.
+    """
+    client.post("/api/library/testgrids", json=RASTER)
+    # De labellaag brandt wél (die is een engrave); alleen de sweep meten.
+    for operation in kernel.elements.ops():
+        if getattr(operation, "label", None) == "Raster-labels":
+            operation.output = False
+
+    exact = client.get("/api/job/estimate?exact=1").json()
+
+    assert exact["parts"] == 0
+    assert exact["seconds"] == 0.0
+    # En de lagen bestaan wél — het zijn er negen, ze doen alleen niets.
+    assert len([laag for laag in exact["layers"] if laag["type"] == "op raster"]) == 9
+
+
+def test_a_vector_grid_does_produce_cutcode(kernel, client):
+    """Het tegenbewijs: snijden en vectorgraveren branden wel, ook headless."""
+    client.post("/api/library/testgrids", json=BASE)
+    for operation in kernel.elements.ops():
+        if getattr(operation, "label", None) == "Raster-labels":
+            operation.output = False
+
+    exact = client.get("/api/job/estimate?exact=1").json()
+
+    # `parts` telt hier de stukken van het snijplan, niet de vormen; wat telt is
+    # dat er iets te branden is en dat het tijd kost.
+    assert exact["parts"] >= 1
+    assert exact["seconds"] > 0
+
+
+def test_the_plan_prices_the_board_in_seconds():
+    """
+    Wat het gaat kosten, vóór er iets getekend is. Interval als as kan de
+    brandtijd stil vermenigvuldigen; dan hoort er een getal te staan dat
+    meebeweegt.
+    """
+    snijden = plan_grid(**BASE)[0]
+    assert snijden["seconds"] > 0
+
+    # Zelfde bord, halve snelheid: ruwweg dubbele brandtijd.
+    langzamer = plan_grid(**{**BASE, "speed_min": 2.5, "speed_max": 12.5})[0]
+    assert langzamer["seconds"] > snijden["seconds"] * 1.5
+
+    # En een fijner interval kost meer regels, dus meer tijd.
+    grof = plan_grid(**{**RASTER, "interval_min": 0.3, "interval_max": 0.4})[0]
+    fijn = plan_grid(**{**RASTER, "interval_min": 0.05, "interval_max": 0.06})[0]
+    assert fijn["seconds"] > grof["seconds"] * 4, (fijn["seconds"], grof["seconds"])

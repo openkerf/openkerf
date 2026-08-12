@@ -81,7 +81,11 @@
 		label_room?: boolean;
 		label_margin_mm?: number;
 	};
-	let preview = $state<{ plan: Plan; cells: Cell[] } | null>(null);
+	let preview = $state<{
+		plan: Plan;
+		cells: Cell[];
+		engine?: { raster?: boolean };
+	} | null>(null);
 
 	let form = $state({
 		material_id: null as number | null,
@@ -117,6 +121,10 @@
 	};
 
 	let intervalKan = $derived(INTERVAL_BEWERKINGEN.includes(form.operation));
+	/** Rasteren gekozen op een engine die het niet kan omzetten naar laserregels. */
+	let rasterOnmogelijk = $derived(
+		form.operation === 'graveren-raster' && preview?.engine?.raster === false
+	);
 	let assen = $derived([form.row_axis, form.column_axis] as As[]);
 	let vasteAs = $derived(
 		(['speed', 'power', 'interval'] as As[]).filter(
@@ -312,6 +320,16 @@
 		const rechts = zwaarste.column === kolomwaarden.length - 1;
 		// Nederlands zegt "rechtsboven", niet "bovenrechts".
 		return `${rechts ? 'rechts' : 'links'}${onder ? 'onder' : 'boven'}`;
+	});
+
+	/** "3 min 20 s" — een tijd die je tegen je koffie kunt afwegen. */
+	let brandtijd = $derived.by(() => {
+		const s = preview?.plan.seconds ?? 0;
+		if (!s) return '—';
+		if (s < 60) return `${Math.round(s)} s`;
+		const minuten = Math.floor(s / 60);
+		if (minuten < 60) return `${minuten} min ${Math.round(s % 60)} s`;
+		return `${Math.floor(minuten / 60)} u ${minuten % 60} min`;
 	});
 
 	/** "0.05 mm", "60%", "12 mm/s" — de aswaarde zoals hij op het hout komt. */
@@ -543,6 +561,22 @@
 					</div>
 				{/if}
 
+				{#if rasterOnmogelijk}
+					<!-- De engine zet een rasterlaag tijdens het plannen om in een
+					     bitmap, en die omzetter zit in de wxPython-GUI. Draait de
+					     server headless — zoals hier — dan gooit de laag zijn eigen
+					     vormen weg en komt het bord blanco uit de machine. Dat is
+					     een gat in de engine, geen keuze van ons; het minste wat we
+					     kunnen doen is het zeggen vóór het hout eraan gaat. -->
+					<p class="waarschuwing ernstig" role="alert">
+						<strong>Deze server kan rasterlagen niet branden.</strong> De omzetter die
+						een rastervlak naar laserregels rekent, zit in de wxPython-versie van de
+						engine en ontbreekt hier. Een raster­bord komt blanco uit de machine.
+						Kies <strong>Graveren · vector</strong> of <strong>Snijden</strong>, of brand
+						dit raster vanuit de wxPython-UI.
+					</p>
+				{/if}
+
 				{#if overgenomen}
 					<p class="overgenomen" role="status">
 						Instellingen overgenomen van je vorige raster voor dit materiaal
@@ -649,6 +683,14 @@
 						<span class="mono">{preview.cells.length} vakjes</span>
 						<span class="mono">{preview.plan.width_mm} × {preview.plan.height_mm} mm</span>
 					</div>
+					<!-- Wat het gaat kosten, vóór je op genereren drukt. Met interval
+					     als as kan de brandtijd stil vertienvoudigen: een rij op
+					     0,05 mm legt zes keer zoveel regels als een op 0,3 mm, en dat
+					     staat in geen enkel ander getal in dit formulier. -->
+					<p class="kosten">
+						Brandtijd ongeveer <strong class="mono">{brandtijd}</strong>, zonder de
+						opschriften.
+					</p>
 
 					<!-- Het bord zoals het eruitkomt: donkerder = meer verbranding, en
 					     de waarden staan erlangs waar ze ook op het hout komen. -->
@@ -875,6 +917,12 @@
 		color: var(--text-1);
 	}
 	.waarschuwing p { margin: 0; }
+	/* Een bord dat blanco uit de machine komt is geen aandachtspunt maar een
+	   verspilde plaat: die melding krijgt de gevaarkleur. */
+	.waarschuwing.ernstig {
+		border-left-color: var(--danger-solid, var(--danger));
+		background: color-mix(in srgb, var(--danger-solid, var(--danger)) 12%, transparent);
+	}
 	/* De uitweg staat in de waarschuwing zelf: één regel typen en je bent eruit,
 	   zonder de bibliotheek te openen en dit venster kwijt te raken. */
 	.erbij { display: flex; gap: var(--space-2); flex-wrap: wrap; }
@@ -955,6 +1003,12 @@
 		background: var(--mat-hout);
 		border-radius: var(--radius-field);
 	}
+	.kosten {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.kosten strong { color: var(--text-1); }
 	.krap {
 		margin: var(--space-2) 0 0;
 		padding: var(--space-1h) var(--space-2);

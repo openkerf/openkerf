@@ -39,7 +39,7 @@ from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
 from .sheets import Sheets
-from .testgrid import TestGridGenerator, markeer_foto, plan_grid
+from .testgrid import TestGridGenerator, markeer_foto, plan_grid, raster_supported
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
 from .status import StatusReader
@@ -1459,7 +1459,14 @@ class ApiServer:
             """Work out the cells without drawing anything, so it can be shown first."""
             def run():
                 plan, cells = plan_grid(**body)
-                return {"plan": plan, "cells": cells}
+                return {
+                    "plan": plan,
+                    "cells": cells,
+                    # Wat déze engine met dit soort laag kan. Zonder rasteraar
+                    # komt een rasterbord blanco uit de machine, en dat moet je
+                    # weten vóór het hout eraan gaat — zie raster_supported.
+                    "engine": {"raster": raster_supported(self.kernel)},
+                }
 
             return manage(run)
 

@@ -185,7 +185,7 @@
 
 <svelte:window onkeydown={sneltoets} />
 
-<header class="topbar" class:smal class:krap>
+<header class="topbar" class:smal class:krap class:weg>
 	<div class="brand" title="OpenKerf"><Logo /><span class="woord">OpenKerf</span></div>
 
 	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
@@ -270,8 +270,12 @@
 	     klem in de weg. De laser blijft uit. -->
 	<button
 		class="btn kader"
-		disabled={!canFrame}
-		title={canFrame ? 'De kop langs de omtrek van je werk sturen, zonder te branden' : 'Er ligt niets op het bed, of deze machine kan niet bewegen'}
+		disabled={!canFrame || weg}
+		title={weg
+			? `${GEEN_SERVER} Het kader lopen kan pas als de server terug is.`
+			: canFrame
+				? 'De kop langs de omtrek van je werk sturen, zonder te branden'
+				: 'Er ligt niets op het bed, of deze machine kan niet bewegen'}
 		onclick={onFrame}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
@@ -417,6 +421,15 @@
 	   bediening en zijn tooltip. Zonder dat woord houdt de naam 64px. */
 	@media (max-width: 849px) {
 		.topbar .kader .btn-label { display: none; }
+		/* En zonder server valt op 768 ook de materiaalnaam weg.
+		   "Stop op de machine" is 60px breder dan "Stop", en het materiaal is het
+		   enige buigzame ding in deze balk, dus het betaalde die 60px met zijn
+		   naam: er stond "B  3mm" en dat is geen chip maar een restant.
+		   Dan liever expliciet weg. Op het moment dat de server eruit ligt is het
+		   materiaal onveranderlijk en niet waar je naar kijkt; de enige vraag is
+		   waar de stop zit, en dat antwoord mag de hele breedte hebben. Boven
+		   850px blijft de chip staan — daar is de ruimte er (gemeten). */
+		.topbar.weg .materiaal { display: none; }
 	}
 	/* Onder ~950px verdwijnen de bestandsknoppen; het materiaal blijft, want het
 	   hoort bij wat er straks gebeurt. Alleen krapper. */

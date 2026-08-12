@@ -271,6 +271,31 @@ def plan_grid(
         "width_mm": round(columns * pitch - gap, 3),
         "height_mm": round(rows * pitch - gap, 3),
     }
+    # Wat dit bord gaat kosten aan tijd, vóórdat er iets getekend is.
+    #
+    # Nodig omdat interval als as de brandtijd stil kan vermenigvuldigen: een
+    # rij op 0,05 mm legt zes keer zoveel regels als een rij op 0,3 mm, en dat
+    # zie je aan geen enkel getal in het formulier. Zelfde som als
+    # `DrawingService._geometry_estimate`: lengte gedeeld door snelheid, plus de
+    # sprong naar het volgende vakje. Het bord is nog niet getekend, dus dit kan
+    # niet uit de elementenboom komen.
+    RAPID_MM_S = 100.0
+    seconden = 0.0
+    for entry in cells:
+        snelheid = entry["speed_mm_s"] or 0
+        if snelheid <= 0:
+            continue
+        interval = entry.get("interval_mm")
+        if interval_telt and interval:
+            # Rasteren: regel na regel over het vlak, plus één regelsprong.
+            regels = cell / interval
+            brand_mm = regels * cell + cell
+        else:
+            # Snijden of vectorgraveren: de omtrek van het vakje.
+            brand_mm = 4 * cell
+        seconden += brand_mm / snelheid + pitch / RAPID_MM_S
+    plan["seconds"] = round(seconden, 1)
+
     # Hoeveel ruimte de rijlabels links van het raster nodig hebben. Ze worden
     # daar gegraveerd, en bij Start X 10 met driecijferige snelheden staan ze
     # buiten het bed — dan brandt de machine ze niet en is het bord onleesbaar.
@@ -425,6 +450,27 @@ def _cel_label(plan: dict, cell: dict) -> str:
         toon(naam, as_waarde(cell, naam))
         for naam in (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
     )
+
+
+def raster_supported(kernel) -> bool:
+    """
+    Kan deze engine een rasterlaag daadwerkelijk branden?
+
+    Nee, als er geen rasteraar geregistreerd is. `op raster` zet zijn vormen
+    tijdens het plannen om in een bitmap via `render-op/make_raster`, en die
+    dienst wordt **alleen door de wxPython-GUI geregistreerd**
+    (`meerk40t/gui/plugin.py:79`, met als commentaar "used to do cut planning").
+    Ontbreekt hij, dan neemt `OpRasterNode.preprocess` de `strip_rasters`-tak:
+    de laag gooit zijn eigen kinderen weg en levert nul cutcode.
+
+    Gemeten op onze headless server: een ontwerp met alleen rasterlagen geeft
+    `/api/job/estimate?exact=1` → 0,0 s over 0 delen. Het bord komt blanco uit
+    de machine. Daarom wordt dit gemeld in plaats van gehoopt.
+    """
+    try:
+        return kernel.root.lookup("render-op/make_raster") is not None
+    except Exception:
+        return False
 
 
 # Which MeerK40t operation type a library operation maps to.

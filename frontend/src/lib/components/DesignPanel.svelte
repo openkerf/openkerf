@@ -1796,6 +1796,13 @@
 	.soort :global(.segmented) {
 		width: 100%;
 	}
+	/* Vier woorden in 222 px: met de standaard tussenruimte van 12 px per zijde
+	   liep "Graveren" over zijn eigen segment heen en las er "Gravere". De
+	   letters blijven op de typeschaal; alleen de lucht eromheen krimpt. */
+	.soort :global(.segmented button) {
+		padding-left: var(--space-1);
+		padding-right: var(--space-1);
+	}
 	.chip {
 		width: 26px;
 		height: 26px;
