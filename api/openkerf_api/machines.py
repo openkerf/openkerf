@@ -300,8 +300,29 @@ class MachineManager:
         # Same reasoning as in rename(): setting a bed size on the engine's
         # default device is an act of adoption.
         self._mark_configured(device)
+        if "device_coolant" in applied:
+            self._claim_coolant(device)
         self.flush()
         return applied
+
+    def _claim_coolant(self, device) -> None:
+        """
+        De air-assistmethode meteen laten aanhaken (besluit B11).
+
+        De engine claimt de methode alleen bij het opstarten van de
+        device-service. Zonder dit staat de instelling wel op de machine maar
+        kent de coolant-registratie het apparaat nog niet, en dan meldt
+        `/api/design/capabilities` "geen air assist" terwijl de gebruiker hem
+        net heeft ingesteld — of erger: de schakelaar staat er wel en de blazer
+        doet niets. Dezelfde aanroep als de drivers zelf doen.
+        """
+        coolant = getattr(getattr(self.kernel, "root", None), "coolant", None)
+        if coolant is None:
+            return
+        try:
+            coolant.claim_coolant(device, getattr(device, "device_coolant", ""))
+        except Exception:  # pragma: no cover - een driver die niet meewerkt
+            pass
 
     def _setting_types(self, device) -> dict:
         types = {}

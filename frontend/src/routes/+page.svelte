@@ -75,6 +75,15 @@
 	// Eén stap eerder: op een gewoon laptopscherm blijven de bestandsknoppen
 	// staan, maar zonder hun woord. Gemeten grens; boven 1500px past alles.
 	let krap = $derived(!telefoon && breedte < 1500);
+	/**
+	 * Op de kleinste tablet begint het paneel dicht (gat B2).
+	 *
+	 * Het paneel schaalt mee met het venster, dus het is nooit meer breder dan
+	 * het canvas — maar onder 850px houdt het bed nog geen 400px over, en dan is
+	 * het eerste wat je ziet een sliver werkgebied naast een vol formulier. De
+	 * greep ernaast is één tik, en starten/pauzeren/stoppen staan op tablet toch
+	 * in de bovenbalk. Alleen bij het openen: daarna beslist de gebruiker.
+	 */
 	let paneelOpen = $state(true);
 	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
 	// waar je hem zoekt.
@@ -378,6 +387,7 @@
 		camera.load();
 		sheets.load();
 		library.load();
+		if (window.innerWidth < 850) paneelOpen = false;
 		const wantedTab = $page.url.searchParams.get('tab');
 		if (wantedTab === 'design' || wantedTab === 'layers') tab = wantedTab;
 		design.load().then(async () => {
@@ -500,6 +510,14 @@
 		{bewaker}
 		connected={status.connected}
 		position={telefoonPositie}
+		{design}
+		sheet={sheets.active
+			? {
+					name: sheets.active.name,
+					width_mm: sheets.active.width_mm,
+					height_mm: sheets.active.height_mm
+				}
+			: null}
 	/>
 {:else}
 <MeldingAlarm {bewaker} />
@@ -513,7 +531,6 @@
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
 	stopArmed={machine === 'busy' || machine === 'paused'}
 	canEdit={canEdit && design.preview === null}
-	{tablet}
 	{smal}
 	{krap}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
@@ -622,7 +639,14 @@
 		class="paneelgreep"
 		aria-expanded={paneelOpen}
 		onclick={() => (paneelOpen = !paneelOpen)}
-	>{paneelOpen ? '›' : '‹'}<span class="vw">Paneel {paneelOpen ? 'inklappen' : 'uitklappen'}</span></button>
+	>
+		<!-- De greep is de pil, niet de kolom. De knop blijft 44px breed omdat een
+		     duim dat nodig heeft, maar hij is doorzichtig: ingeklapt bleef er
+		     anders een blanco strook van 44px langs de rand staan (gat B6), en
+		     dat leest als een renderfout in plaats van als iets om aan te duwen. -->
+		<span class="pil" aria-hidden="true">{paneelOpen ? '›' : '‹'}</span>
+		<span class="vw">Paneel {paneelOpen ? 'inklappen' : 'uitklappen'}</span>
+	</button>
 {/if}
 <aside class="panel" class:weg={tablet && !paneelOpen} aria-label="Eigenschappen">
 		<!-- Het belletje staat wél in dezelfde rij maar buiten de tablist: een
@@ -1085,8 +1109,9 @@
 	}
 	@media (max-width: 1199px), (pointer: coarse) {
 		.vraagkaart {
-			right: calc(324px + var(--space-4));
-			width: min(360px, calc(100vw - 344px - 2 * var(--space-4)));
+			/* Volgt de paneelbreedte hieronder; twee regels die samen horen. */
+			right: calc(clamp(280px, 38vw, 324px) + var(--space-4));
+			width: min(360px, calc(100vw - clamp(300px, 38vw + 20px, 344px) - 2 * var(--space-4)));
 		}
 	}
 
@@ -1107,27 +1132,49 @@
 	/* Op tablet en telefoon staat de tekst een stap groter (15px in plaats van
 	   13), maar het paneel bleef 280px — daarmee past er een vijfde minder op
 	   een regel dan op de desktop en breken laagnamen middenin een woord.
-	   280 × 15/13 ≈ 323: hetzelfde aantal tekens per regel als op de desktop. */
+	   280 × 15/13 ≈ 323: hetzelfde aantal tekens per regel als op de desktop.
+
+	   Vaste 324px liep op de kleinste tablet mis (gat B2): op 768 hield het
+	   canvas 316px over en was het paneel dus bréder dan het werk. Nu schaalt
+	   het paneel mee met het venster, met 324 als plafond zodat de tekstregel
+	   op 1024 en hoger onveranderd blijft. Gemeten op 768: paneel 292, canvas
+	   348 — het canvas wint, zoals het hoort. */
 	@media (max-width: 1199px), (pointer: coarse) {
 		.panel {
-			width: 324px;
+			width: clamp(280px, 38vw, 324px);
 		}
 	}
 	.panel.weg { display: none; }
-	/* De greep zit tegen de rand van het canvas, waar je duim al is. */
+	/* De greep zit tegen de rand van het canvas, waar je duim al is. Het
+	   raakdoel is de hele kolom (44px, duimmaat), maar wat je ziet is een pil in
+	   het midden: een volle kolom van 44px in paneelkleur was een blanco strook
+	   naast het canvas, en die zegt niets. */
 	.paneelgreep {
 		align-self: stretch;
 		flex: none;
-		width: 20px;
-		/* Ingeklapt was dit een naadloze witte kolom van 44px tegen de rand — dat
-		   leest als een renderfout, niet als een greep. De lijn links markeert
-		   waar het paneel zat en waar je moet duwen om het terug te halen. */
-		border-left: 1px solid var(--line);
-		background: var(--surface-1);
+		width: 44px;
+		display: grid;
+		place-items: center;
+		border: none;
+		background: transparent;
 		color: var(--text-2);
 		font-size: var(--text-md);
 	}
-	.paneelgreep:hover { background: var(--surface-2); color: var(--text-1); }
+	.paneelgreep .pil {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 56px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: var(--surface-1);
+		box-shadow: var(--lift-1);
+		line-height: 1;
+		transition: background var(--transition), color var(--transition);
+	}
+	.paneelgreep:hover .pil { background: var(--surface-2); color: var(--text-1); }
+	.paneelgreep:focus-visible { outline: none; }
+	.paneelgreep:focus-visible .pil { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.vw {
 		position: absolute;
 		width: 1px;

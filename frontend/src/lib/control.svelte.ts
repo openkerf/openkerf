@@ -11,6 +11,9 @@ import { verbinding } from './verbinding.svelte';
 
 const TOKEN_KEY = 'openkerf.token';
 
+/** Een plek op het bed die deze machine onthoudt (gat J6). */
+export type Position = { name: string; x_mm: number; y_mm: number };
+
 export class Controller {
 	capabilities = $state<Capabilities | null>(null);
 	token = $state('');
@@ -144,6 +147,73 @@ export class Controller {
 	}
 	clearQueue() {
 		return this.#post('/api/spooler/clear', 'clear');
+	}
+
+	// ------------------------------------------------- bewegen naar een punt
+
+	async #json(path: string, action: string, method = 'POST', body?: unknown) {
+		this.busy = action;
+		this.error = null;
+		try {
+			const response = await fetch(path, {
+				method,
+				headers: { 'Content-Type': 'application/json', ...this.#headers() },
+				body: body === undefined ? undefined : JSON.stringify(body)
+			});
+			if (response.status === 401) this.rejected = true;
+			if (!response.ok) {
+				this.error = await describeFailure(response, this.token !== '');
+				return null;
+			}
+			this.rejected = false;
+			return await response.json();
+		} catch (e) {
+			this.error = onbereikbaar(e);
+			return null;
+		} finally {
+			this.busy = null;
+		}
+	}
+
+	/**
+	 * De kop naar een absolute plek op het bed sturen (gat J6).
+	 *
+	 * Draagt zowel "naar de oorsprong" als de bewaarde posities. De jogknoppen
+	 * gaan via de pagina omdat die het canvas moet bijwerken; dit is een sprong
+	 * naar een punt en heeft dat niet nodig.
+	 */
+	moveTo(xMm: number, yMm: number) {
+		return this.#json('/api/machine/move', 'move', 'POST', { x_mm: xMm, y_mm: yMm });
+	}
+
+	/**
+	 * Posities die deze machine onthoudt.
+	 *
+	 * Ze staan op de device-service in de engine, niet in de browser: een
+	 * positie hoort bij de machine met de mal erop, niet bij de laptop waar je
+	 * toevallig achter zit.
+	 */
+	async listPositions(): Promise<Position[]> {
+		try {
+			const response = await fetch('/api/machine/positions');
+			if (!response.ok) return [];
+			return (await response.json()).positions ?? [];
+		} catch {
+			return [];
+		}
+	}
+
+	/** Zonder coördinaten: waar de kop nu staat. */
+	savePosition(name: string) {
+		return this.#json('/api/machine/positions', 'save-position', 'POST', { name });
+	}
+
+	deletePosition(name: string) {
+		return this.#json(
+			`/api/machine/positions?name=${encodeURIComponent(name)}`,
+			'delete-position',
+			'DELETE'
+		);
 	}
 
 	load(file: File) {

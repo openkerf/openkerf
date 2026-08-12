@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { STATE_LABEL, type Device, type MachineState } from '$lib/api';
+	import { STATE_LABEL, STOP_TOETS, type Device, type MachineState } from '$lib/api';
+	import { apparaat } from '$lib/apparaat.svelte';
+	import { verbinding } from '$lib/verbinding.svelte';
 	import Logo from './Logo.svelte';
 
 	let {
@@ -9,7 +11,6 @@
 		canStop,
 		stopArmed = false,
 		canEdit = false,
-		tablet = false,
 		smal = false,
 		krap = false,
 		canPause = false,
@@ -37,8 +38,14 @@
 		 *  schreeuwt alleen wanneer het ertoe doet. */
 		stopArmed?: boolean;
 		canEdit?: boolean;
-		/** Tablet 768–1199: hier hoort de machinebediening, want het paneel kan
-		 *  ingeklapt zijn en de statusbalk past niet op 768. */
+		/**
+		 * @deprecated Wordt genegeerd; de afspraak staat in `$lib/apparaat.svelte`.
+		 *
+		 * Gat J9: deze prop en de `@media (max-width: 1199px)` in JobControls
+		 * waren twee bronnen voor één regel. Beide componenten lezen nu
+		 * `apparaat.bedieningInBalk`. De prop blijft geaccepteerd zodat de
+		 * pagina niet in dezelfde stap mee hoeft; hij mag daar weg.
+		 */
 		tablet?: boolean;
 		/** Onder ~950px passen de bestandsknoppen er niet meer bij; ze staan dan
 		 *  in het menu van de gereedschapsrail. */
@@ -68,6 +75,97 @@
 		onToggleTheme: () => void;
 	} = $props();
 
+	// De bovenbalk staat altijd; hier hangt het meeluisteren naar de
+	// schermbreedte, zodat de rest van de app het niet nog eens hoeft te doen.
+	$effect(() => apparaat.volg());
+	let balkdraagt = $derived(apparaat.bedieningInBalk);
+
+	/**
+	 * Zonder server is dit geen bediening meer, en dat moet je zien.
+	 *
+	 * Dit was gat E1, en het was het gevaarlijkste dat de ronde vond. De Stop in
+	 * deze balk bleef klikbaar nadat de server was weggevallen (gemeten op 1440
+	 * én 1024: `disabled` bleef `false`), terwijl de Stop ín het Job-paneel wél
+	 * uitging. Op tablet draagt deze balk als enige de bediening — daar was dit
+	 * dus de énige stopknop, en die deed niets. Je drukt, er gebeurt niets
+	 * zichtbaars, en je gelooft dat de machine stopt.
+	 *
+	 * Een knop die niet aankomt hoort niet te doen alsof. Hij gaat uit, en de
+	 * tooltip zegt wat er aan de hand is én wat je dán moet doen: de knop op de
+	 * machine. Dat laatste is het halve antwoord; zonder die zin heb je alleen
+	 * een dode knop.
+	 */
+	let weg = $derived(!verbinding.online);
+	const GEEN_SERVER = 'Geen verbinding met OpenKerf — deze knop komt niet aan.';
+	let stopTitel = $derived(
+		weg
+			? `${GEEN_SERVER} Stoppen kan nu alleen met de noodstop op de machine.`
+			: stopArmed
+				? `Job direct afbreken (${STOP_TOETS})`
+				: `Er loopt nu niets — dit breekt een job af zodra er een loopt (${STOP_TOETS})`
+	);
+	let pauzeTitel = $derived(
+		weg
+			? `${GEEN_SERVER} Pauzeren kan nu alleen met de knop op de machine.`
+			: canPause
+				? 'Job pauzeren — de kop stopt, de job blijft staan (Pause)'
+				: 'Deze machine kent geen pauze — gebruik de knop op de machine'
+	);
+	let hervatTitel = $derived(
+		weg
+			? `${GEEN_SERVER} Hervatten kan nu alleen op de machine.`
+			: 'Verder waar hij gebleven was (Pause)'
+	);
+	let startTitel = $derived(
+		weg
+			? `${GEEN_SERVER} Wacht tot de server terug is.`
+			: stopArmed
+				? 'Er loopt al een job'
+				: 'De pre-flight openen'
+	);
+
+	/**
+	 * Sneltoetsen voor pauzeren en stoppen (gat J4).
+	 *
+	 * LightBurn heeft Pause en Ctrl+Break, en die werken daar zelfs als het
+	 * venster niet vooraan staat. Dat laatste kunnen wij niet: een webpagina
+	 * krijgt geen toetsaanslagen als hij geen focus heeft, en er is geen browser
+	 * die daar een uitzondering voor maakt. Wat wél kan is dit — overal in de
+	 * app, op elk tabblad, zonder eerst een paneel te moeten zoeken. Wie de
+	 * machine wil kunnen stoppen zónder naar het scherm te kijken, gebruikt de
+	 * knop op de machine; dat is ook waar de tooltip naartoe wijst zodra de
+	 * server weg is.
+	 *
+	 * Pause staat niet op elk toetsenbord (Apple levert hem al jaren niet meer),
+	 * daarom is er een tweede weg die overal bestaat.
+	 */
+	function sneltoets(e: KeyboardEvent) {
+		// Niet ingrijpen terwijl iemand een maat of een naam intypt: daar is
+		// Ctrl+. een teken en geen noodrem.
+		const doel = e.target as HTMLElement | null;
+		if (
+			doel?.isContentEditable ||
+			['INPUT', 'TEXTAREA', 'SELECT'].includes(doel?.tagName ?? '')
+		) {
+			return;
+		}
+		const meta = e.ctrlKey || e.metaKey;
+		// Stop: Ctrl/⌘ + punt. Eén hand, geen modus, en vrij in elke browser.
+		if (meta && (e.key === '.' || e.code === 'Period')) {
+			e.preventDefault();
+			if (canStop && !weg) onStop();
+			return;
+		}
+		// Pauze/hervat: de Pause-toets, met of zonder Ctrl (Ctrl+Break stuurt
+		// dezelfde `key`). Toggle, want je drukt hem twee keer.
+		if (e.key === 'Pause') {
+			e.preventDefault();
+			if (weg) return;
+			if (paused && canResume) onResume?.();
+			else if (!paused && canPause && stopArmed) onPause?.();
+		}
+	}
+
 	// Tijdens het slepen leest `box` de voorvertoning, dus de velden lopen mee.
 	// Ze zijn dan niet te bewerken: je bent al aan het slepen.
 
@@ -84,6 +182,8 @@
 			: 'Nog geen materiaal gekozen voor dit vel — klik om het in te vullen'
 	);
 </script>
+
+<svelte:window onkeydown={sneltoets} />
 
 <header class="topbar" class:smal class:krap>
 	<div class="brand" title="OpenKerf"><Logo /><span class="woord">OpenKerf</span></div>
@@ -112,7 +212,10 @@
 		onclick={onOpenMaterial}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 12 4l9 4.5-9 4.5z"/><path d="M3 8.5V15l9 4.5 9-4.5V8.5"/></svg>
-		<span class="naam">{material ?? 'Materiaal kiezen'}</span>
+		<!-- Op een smalle tablet is "Materiaal kiezen" 49px die de startknop van
+		     het scherm duwen. Eén woord naast een streepjesrand en een plankje
+		     nodigt net zo goed uit, en de hele zin staat in de tooltip. -->
+		<span class="naam">{material ?? (smal ? 'Materiaal' : 'Materiaal kiezen')}</span>
 		{#if dikte}<span class="dikte mono">{dikte}</span>{/if}
 	</button>
 
@@ -124,7 +227,7 @@
 		<span class="btn-label">Project openen</span>
 		<input
 			type="file"
-			aria-label="Bestand kiezen"
+			aria-label="Projectbestand kiezen"
 			accept=".openkerf,.zip"
 			onchange={(e) => {
 				const input = e.currentTarget as HTMLInputElement;
@@ -145,7 +248,7 @@
 		<span class="btn-label">Importeren</span>
 		<input
 			type="file"
-			aria-label="Bestand kiezen"
+			aria-label="Bestand importeren in dit vel"
 			accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
 			onchange={(e) => {
 				const input = e.currentTarget as HTMLInputElement;
@@ -166,15 +269,19 @@
 	<!-- De laatste controle vóór je brandt: past het, ligt het recht, zit de
 	     klem in de weg. De laser blijft uit. -->
 	<button
-		class="btn"
+		class="btn kader"
 		disabled={!canFrame}
 		title={canFrame ? 'De kop langs de omtrek van je werk sturen, zonder te branden' : 'Er ligt niets op het bed, of deze machine kan niet bewegen'}
 		onclick={onFrame}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
-		<span class="btn-label">Kader tonen</span>
+		<!-- Het woord blijft ook op tablet staan, want daar is dit een
+		     eersteklas actie en een dun gestippeld vierkantje zegt niets. Alleen
+		     "tonen" gaat weg: "Kader" naast dat vierkantje is ondubbelzinnig, en
+		     de hele zin staat in de tooltip. -->
+		<span class="btn-label blijft">Kader<span class="tonen">&nbsp;tonen</span></span>
 	</button>
-	{#if tablet}
+	{#if balkdraagt}
 		<!-- Op de tablet kan het paneel dicht zijn en past de statusbalk op 768
 		     niet; dan stond de pauzeknop nergens. Hij houdt zijn plek ook als er
 		     niets loopt: een knop die verspringt zodra de job start is precies op
@@ -182,8 +289,8 @@
 		{#if paused}
 			<button
 				class="btn hervat"
-				disabled={!canResume}
-				title="Verder waar hij gebleven was"
+				disabled={!canResume || weg}
+				title={hervatTitel}
 				onclick={onResume}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
@@ -192,10 +299,8 @@
 		{:else}
 			<button
 				class="btn pauze"
-				disabled={!canPause || !stopArmed}
-				title={canPause
-					? 'Job pauzeren — de kop stopt, de job blijft staan'
-					: 'Deze machine kent geen pauze — gebruik de knop op de machine'}
+				disabled={!canPause || !stopArmed || weg}
+				title={pauzeTitel}
 				onclick={onPause}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/></svg>
@@ -206,21 +311,27 @@
 	<!-- Stoppen kan altijd, overal, in één tik. Vol rood alleen als er ook echt
 	     iets loopt: een knop die uren per dag alarm staat te slaan zonder reden
 	     leert de gebruiker hem te negeren, en dan mist hij hem als het telt. -->
+	<!-- Weggevallen server: geen rood, geen vulling, en het woord zegt waar de
+	     stop dán zit. Een tooltip is hier geen antwoord — op de tablet, waar dit
+	     de enige stopknop is, bestaat hover niet. -->
 	<button
 		class="btn danger"
-		class:sluimer={!stopArmed}
-		disabled={!canStop}
+		class:sluimer={!stopArmed && !weg}
+		class:dood={weg}
+		disabled={!canStop || weg}
 		onclick={onStop}
-		title={stopArmed ? 'Job direct afbreken' : 'Er loopt nu niets — dit breekt een job af zodra er een loopt'}
+		title={stopTitel}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-		<span class="btn-label blijft">Stop</span>
+		<span class="btn-label blijft"
+			>Stop{#if weg}<span class="waar">&nbsp;op de machine</span>{/if}</span
+		>
 	</button>
 	<!-- Opent geen dialoog maar de pre-flight in het rechterpaneel. -->
 	<button
 		class="btn primary"
-		disabled={!canStart}
-		title={stopArmed ? 'Er loopt al een job' : 'De pre-flight openen'}
+		disabled={!canStart || weg}
+		title={startTitel}
 		onclick={onStart}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
@@ -263,11 +374,18 @@
 		/* De knoppen die de machine aansturen houden hun woord: een rood
 		   vierkantje zonder tekst is geen noodstop. */
 		.topbar :global(.btn-label:not(.blijft)) { display: none; }
-		/* Het woordmerk kost 100px die de machineknoppen nodig hebben; het
-		   beeldmerk blijft en zegt hetzelfde. */
-		.brand .woord { display: none; }
-		/* Een machinenaam kan willekeurig lang zijn en duwde op 768 de startknop
-		   van het scherm. */
+		/* Het kader houdt zijn woord wél — op tablet is dit een eersteklas actie
+		   en een dun gestippeld vierkantje zegt niets — maar alleen het eerste
+		   woord: "Kader" naast dat vierkantje is ondubbelzinnig. */
+		.kader .tonen { display: none; }
+		/* Het hele merk gaat weg, woord én beeld.
+		   Het woordmerk kostte al 100px; het beeldmerk kost er nog 108 met zijn
+		   gap (gemeten), en die zijn hier meer waard dan een logo. Op een tablet
+		   weet je welke app je open hebt — je hebt hem net aangetikt — en de
+		   gereedschapsrail links draagt de identiteit al. Deze balk draagt op
+		   tablet als enige de noodrem én het kader; dat weegt zwaarder dan een
+		   merkteken. Dít is de ruimte waaruit het kader terugkomt. */
+		.topbar .brand { display: none; }
 		/* 44px: dit is de route naar de setup en was met 38px het enige doel in
 		   de balk dat de handschoenmaat niet haalde. Alleen op tablet: op de
 		   desktop staat hij naast knoppen van 37px en zou hij uitsteken. */
@@ -275,8 +393,11 @@
 			min-height: 44px;
 			padding: 0 var(--space-2);
 		}
-		.machine .naam {
-			max-width: 15ch;
+		/* Een machinenaam kan willekeurig lang zijn en duwde op 768 de startknop
+		   van het scherm. Alleen de machinelink: `a.machine`, niet `.machine` —
+		   de materiaalchip draagt dezelfde klasse en heeft zijn eigen maat. */
+		a.machine .naam {
+			max-width: 10ch;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
@@ -285,11 +406,53 @@
 		   krijgt de ruimte die overblijft. Het icoontje levert die ruimte in: de
 		   naam van je materiaal zegt meer dan een plankje van 16px. */
 		.materiaal svg { display: none; }
-		.materiaal .naam { max-width: 13ch; }
+	}
+	/* Onder 850px verliest het kader zijn woord alsnog.
+	   Gemeten met de langste namen die deze balk kan krijgen ("Thunder Nova 51
+	   werkplaats" en "Multiplex berken transparant 18,5mm"): die 40px persen de
+	   materiaalnaam op 768 samen tot 15px — één letter en een puntje. Dat is de
+	   verkeerde ruil. Waarín je brandt bepaalt samen met de machine élke
+	   instelling die daarna volgt (besluit B1) en heeft geen vervanging; het
+	   kader heeft zijn gestippelde vierkantje, zijn vaste plek naast de
+	   bediening en zijn tooltip. Zonder dat woord houdt de naam 64px. */
+	@media (max-width: 849px) {
+		.topbar .kader .btn-label { display: none; }
 	}
 	/* Onder ~950px verdwijnen de bestandsknoppen; het materiaal blijft, want het
 	   hoort bij wat er straks gebeurt. Alleen krapper. */
-	.topbar.smal .materiaal .naam { max-width: 8ch; }
+	/* Was 8ch op de hele tabletbreedte, toen het merk nog 120px kostte. Dat merk
+	   is weg, en die ruimte gaat naar de twee chips die samen elke instelling
+	   bepalen (besluit B1): achter "Multiple…" kun je niet zien of je in
+	   multiplex brandt of in multiplex met een folie erop.
+	   Gemeten met "Thunder Nova 51 werkplaats" én "Multiplex berken transparant
+	   18,5mm", de langste namen die deze balk kan krijgen: op 850 en hoger past
+	   het met 56px over, en op 768 vangt het `flex: 0 1 auto` hieronder het
+	   verschil op — de chip krimpt naar 137px en de naam naar 64px, interne
+	   overloop 0, laatste knop op 756 van 768. Een extra mediaquery voor het
+	   smalste geval was daarmee overbodig: het vangnet dóet zijn werk. */
+	.topbar.smal .materiaal .naam { max-width: 10ch; }
+	/* Kaderen blíjft op tablet in beeld.
+	   Hij stond hier op `display: none` onder 950px, met het argument dat hij ook
+	   in de pre-flight woont. Dat argument klopt niet voor dít apparaat: de tablet
+	   is het scherm dat naast de machine ligt, en kaderen is de laatste controle
+	   die je dáár uitvoert — met je hand op het werkstuk, niet vanaf een
+	   bureaustoel. Een actie die je uitsluitend naast de machine doet hoort op het
+	   apparaat dat daar ligt, niet in een paneel dat dichtgeklapt kan zijn.
+	   De ruimte komt van het merk (zie de tabletregel hierboven). */
+	/* Vangnet voor wat hierna nog in deze balk komt: de machinebediening staat
+	   vast (`flex: none` hierboven), maar het materiaal mag als laatste redmiddel
+	   krimpen in plaats van de startknop van het scherm te duwen. */
+	/* Vangnet voor wat hierna nog in deze balk komt: de machinebediening staat
+	   vast (`flex: none` hierboven), maar het materiaal mag als laatste redmiddel
+	   krimpen in plaats van de startknop van het scherm te duwen. Gemeten op 768
+	   met de langste namen die mogelijk zijn: de chip zakt naar 137px en de naam
+	   naar 64px — afgekapt maar leesbaar, en de balk loopt niet over.
+	   Ik heb hier een ondergrens van 9rem geprobeerd en weer weggehaald: hij deed
+	   niets, want tokens.css zet in zijn coarse-pointerblok `min-width: 44px` op
+	   elke knop met een selector die deze verslaat. Een regel die niets doet maar
+	   wel iets belooft, is erger dan geen regel. */
+	.materiaal { flex: 0 1 auto; min-width: 0; }
+	.materiaal .naam { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	/* Een afgekapte materiaalnaam is jammer maar leesbaar via de tooltip; een
 	   afgekapte uitnodiging ("Materiaa…") is onbegrijpelijk. Deze selector moet
 	   de regel hierboven verslaan, dus staat de hele keten erin. */
@@ -342,8 +505,12 @@
 		text-decoration: none;
 		transition: background var(--transition);
 	}
+	/* --line is een randkleur, afgestemd op oppervlakken die tegen elkaar aan
+	   liggen; als vulling onder tekst haalt --text-2 erop 4,05 in licht en 3,49
+	   in donker. --hover is een doorschijnende sluier en werkt op élk oppervlak.
+	   Gat D9, gemeld door de thema-agent. */
 	.machine:hover {
-		background: var(--line);
+		background: var(--hover);
 	}
 	.muted {
 		color: var(--text-2);
@@ -445,7 +612,28 @@
 		filter: none;
 	}
 	.btn.danger.sluimer:hover:not(:disabled) svg { color: inherit; }
+	/* De knop die niet aankomt.
+	   Niet "rood maar vaag": een vervaagde noodstop leest nog steeds als een
+	   noodstop, en dat is precies de belofte die hier niet waargemaakt kan
+	   worden. Dus geen rood meer, een onderbroken rand — hetzelfde teken dat de
+	   lege materiaalknop draagt voor "hier staat nog niets" — en het woord dat
+	   zegt waar de stop wél zit. `opacity` blijft weg: de tekst moet leesbaar
+	   zijn, want hij is nu het bericht. */
+	.btn.danger.dood {
+		background: transparent;
+		border: 1px dashed color-mix(in srgb, var(--text-2) 55%, transparent);
+		color: var(--text-2);
+		opacity: 1;
+	}
+	.btn.danger.dood svg { color: var(--text-2); }
+	.btn.danger.dood .waar { color: var(--text-1); font-weight: 600; }
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+	/* Deze knop dráágt zijn eigen uitleg; de standaard-vervaging maakt hem
+	   onleesbaar en die uitleg is nu het enige wat de knop nog doet. */
+	.btn.danger.dood:disabled { opacity: 1; }
+	/* Op 768–1199 vallen de woorden van niet-machineknoppen weg; deze niet,
+	   want zonder "op de machine" is een dode stopknop alleen maar dood. */
+	.topbar.smal .btn.danger.dood .waar { display: inline; }
 	.iconbtn {
 		display: grid;
 		place-items: center;

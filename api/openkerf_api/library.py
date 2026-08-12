@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS preset (
     speed_mm_s    REAL NOT NULL,
     power_percent REAL NOT NULL,
     passes        INTEGER NOT NULL DEFAULT 1,
+    -- Lijnafstand bij rasteren. Sinds B12 kan een testraster hierop sweepen,
+    -- dus komt hij ook uit het winnende vakje mee; leeg bij snijden.
+    interval_mm   REAL,
     air_assist    INTEGER NOT NULL DEFAULT 1,
     focus_offset_mm REAL NOT NULL DEFAULT 0,
     -- handmatig | geextrapoleerd | testraster | geimporteerd
@@ -77,6 +80,15 @@ CREATE TABLE IF NOT EXISTS test_grid (
     power_min     REAL NOT NULL,
     power_max     REAL NOT NULL,
     power_steps   INTEGER NOT NULL,
+    -- Besluit B12: interval is de derde grootheid. Twee ervan staan op de
+    -- assen, de derde ligt vast — dan zijn min en max gelijk en steps 1.
+    interval_min  REAL,
+    interval_max  REAL,
+    interval_steps INTEGER,
+    row_axis      TEXT NOT NULL DEFAULT 'speed',
+    column_axis   TEXT NOT NULL DEFAULT 'power',
+    rows          INTEGER,
+    columns       INTEGER,
     cell_mm       REAL NOT NULL,
     gap_mm        REAL NOT NULL,
     origin_x_mm   REAL NOT NULL,
@@ -85,6 +97,10 @@ CREATE TABLE IF NOT EXISTS test_grid (
     -- weet welk vakje bij welke snelheid en vermogen hoort.
     cells         TEXT NOT NULL,
     photo_path    TEXT,
+    -- De vier hoeken van het gebrande bord op de foto (0–1). Hoort hier en
+    -- niet in localStorage: je lijnt uit op de desktop en wijst het vakje aan
+    -- op de tablet, en dan moet de overlay dezelfde zijn.
+    alignment     TEXT,
     group_id      TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -152,12 +168,32 @@ class Library:
     def _migrate(db):
         """Kolommen die later bijkwamen, voor databases van vóór die versie."""
         existing = {row["name"] for row in db.execute("PRAGMA table_info(test_grid)")}
-        if "group_id" not in existing:
-            db.execute("ALTER TABLE test_grid ADD COLUMN group_id TEXT")
+        for kolom, definitie in (
+            ("group_id", "TEXT"),
+            ("alignment", "TEXT"),
+            ("interval_min", "REAL"),
+            ("interval_max", "REAL"),
+            ("interval_steps", "INTEGER"),
+            ("row_axis", "TEXT NOT NULL DEFAULT 'speed'"),
+            ("column_axis", "TEXT NOT NULL DEFAULT 'power'"),
+            ("rows", "INTEGER"),
+            ("columns", "INTEGER"),
+        ):
+            if kolom not in existing:
+                db.execute(f"ALTER TABLE test_grid ADD COLUMN {kolom} {definitie}")
+        # Rasters van vóór B12 hadden altijd snelheid × vermogen.
+        db.execute(
+            "UPDATE test_grid SET rows = speed_steps WHERE rows IS NULL"
+        )
+        db.execute(
+            "UPDATE test_grid SET columns = power_steps WHERE columns IS NULL"
+        )
 
         presets = {row["name"] for row in db.execute("PRAGMA table_info(preset)")}
         if "last_used_at" not in presets:
             db.execute("ALTER TABLE preset ADD COLUMN last_used_at TEXT")
+        if "interval_mm" not in presets:
+            db.execute("ALTER TABLE preset ADD COLUMN interval_mm REAL")
 
         profiel = {row["name"] for row in db.execute("PRAGMA table_info(machine_profile)")}
         for kolom, definitie in (
@@ -334,9 +370,9 @@ class Library:
             with self._connect() as db:
                 cursor = db.execute(
                     """INSERT INTO preset (material_id, machine_id, thickness_mm, operation,
-                            speed_mm_s, power_percent, passes, air_assist, focus_offset_mm,
-                            source, origin_id, note)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            speed_mm_s, power_percent, passes, interval_mm, air_assist,
+                            focus_offset_mm, source, origin_id, note)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         material_id,
                         fields.get("machine_id"),
@@ -345,6 +381,7 @@ class Library:
                         speed,
                         power,
                         int(fields.get("passes") or 1),
+                        _number(fields.get("interval_mm"), "interval_mm", optional=True),
                         1 if fields.get("air_assist", True) else 0,
                         _number(fields.get("focus_offset_mm") or 0, "focus_offset_mm"),
                         source,
@@ -377,6 +414,7 @@ class Library:
         "speed_mm_s": lambda v: _number(v, "speed_mm_s", positive=True),
         "power_percent": lambda v: _percent(v),
         "passes": lambda v: int(_number(v, "passes", positive=True)),
+        "interval_mm": lambda v: _number(v, "interval_mm", optional=True),
         "air_assist": lambda v: 1 if v else 0,
         "focus_offset_mm": lambda v: _number(v, "focus_offset_mm"),
         "note": lambda v: str(v or ""),
@@ -489,6 +527,61 @@ class Library:
                 "UPDATE test_grid SET group_id = ? WHERE id = ?", (group_id, grid_id)
             )
 
+    def set_grid_alignment(self, grid_id: int, corners) -> dict:
+        """
+        Waar het gebrande bord op de foto ligt: vier hoeken, elk 0–1.
+
+        In de database en niet in de browser: je lijnt uit op de desktop en
+        wijst het vakje aan op de tablet, en dan hoort dezelfde overlay er te
+        liggen. `None` wist de uitlijning en zet hem terug op het voorstel.
+        """
+        self.test_grid(grid_id)
+        if corners is None:
+            schoon = None
+        else:
+            schoon = _uitlijning(corners)
+            if schoon is None:
+                raise LibraryError(
+                    "Een uitlijning bestaat uit vier punten met een x en een y."
+                )
+            for punt in schoon:
+                if not (0 <= punt["x"] <= 1 and 0 <= punt["y"] <= 1):
+                    raise LibraryError("Een hoek ligt buiten de foto.")
+        with self._connect() as db:
+            db.execute(
+                "UPDATE test_grid SET alignment = ? WHERE id = ?",
+                (json.dumps(schoon) if schoon else None, grid_id),
+            )
+        return self.test_grid(grid_id)
+
+    # De instellingen die het volgende raster van hetzelfde materiaal overneemt.
+    GRID_DEFAULTS = (
+        "operation", "thickness_mm", "row_axis", "column_axis",
+        "speed_min", "speed_max", "speed_steps",
+        "power_min", "power_max", "power_steps",
+        "interval_min", "interval_max", "interval_steps",
+        "cell_mm", "gap_mm", "origin_x_mm", "origin_y_mm",
+    )
+
+    def last_grid_settings(self, material_id=None) -> dict | None:
+        """
+        Wat je de vorige keer voor dit materiaal instelde.
+
+        Wie wekelijks 3 mm berk test, vult elke week hetzelfde formulier in.
+        Er is geen aparte tabel voor nodig: het vorige raster ís de instelling,
+        en die overleeft daarmee ook een export en import.
+        """
+        rasters = self.test_grids()
+        if material_id is not None:
+            rasters = [g for g in rasters if g["material_id"] == material_id]
+        if not rasters:
+            return None
+        vorige = rasters[0]  # test_grids() staat nieuwste eerst
+        instelling = {sleutel: vorige[sleutel] for sleutel in self.GRID_DEFAULTS}
+        instelling["from_grid"] = vorige["id"]
+        instelling["from_date"] = vorige["created_at"]
+        return instelling
+
     def grid_operations(self) -> dict:
         """Welke operatie bij welk raster hoort — voor het lagenpaneel."""
         mapping = {}
@@ -513,8 +606,10 @@ class Library:
             cursor = db.execute(
                 """INSERT INTO test_grid (material_id, machine_id, thickness_mm, operation,
                         speed_min, speed_max, speed_steps, power_min, power_max, power_steps,
+                        interval_min, interval_max, interval_steps,
+                        row_axis, column_axis, rows, columns,
                         cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     plan.get("material_id"),
                     plan.get("machine_id"),
@@ -526,6 +621,13 @@ class Library:
                     plan["power_min"],
                     plan["power_max"],
                     plan["power_steps"],
+                    plan.get("interval_min"),
+                    plan.get("interval_max"),
+                    plan.get("interval_steps"),
+                    plan.get("row_axis") or "speed",
+                    plan.get("column_axis") or "power",
+                    plan.get("rows") or plan["speed_steps"],
+                    plan.get("columns") or plan["power_steps"],
                     plan["cell_mm"],
                     plan["gap_mm"],
                     plan["origin_x_mm"],
@@ -855,6 +957,7 @@ class Library:
                     speed_mm_s=preset.get("speed_mm_s"),
                     power_percent=preset.get("power_percent"),
                     passes=preset.get("passes") or 1,
+                    interval_mm=preset.get("interval_mm"),
                 )
                 preset_id[preset.get("id")] = mijne["id"]
                 bijgewerkt += 1
@@ -912,8 +1015,11 @@ class Library:
             cursor = db.execute(
                 """INSERT INTO test_grid (material_id, machine_id, thickness_mm, operation,
                         speed_min, speed_max, speed_steps, power_min, power_max, power_steps,
-                        cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells, group_id, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        interval_min, interval_max, interval_steps,
+                        row_axis, column_axis, rows, columns,
+                        cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells, alignment,
+                        group_id, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     materiaal_id.get(raster.get("material_id")),
                     machine_id.get(raster.get("machine_id")),
@@ -921,9 +1027,20 @@ class Library:
                     raster.get("operation") or "snijden",
                     raster.get("speed_min"), raster.get("speed_max"), raster.get("speed_steps"),
                     raster.get("power_min"), raster.get("power_max"), raster.get("power_steps"),
+                    raster.get("interval_min"), raster.get("interval_max"),
+                    raster.get("interval_steps"),
+                    raster.get("row_axis") or "speed",
+                    raster.get("column_axis") or "power",
+                    raster.get("rows") or raster.get("speed_steps"),
+                    raster.get("columns") or raster.get("power_steps"),
                     raster.get("cell_mm"), raster.get("gap_mm"),
                     raster.get("origin_x_mm"), raster.get("origin_y_mm"),
                     json.dumps(cellen or []),
+                    # De uitlijning is met de hand gedaan; die hoort bij de foto
+                    # en gaat dus mee terug uit een back-up.
+                    json.dumps(_uitlijning(raster.get("alignment")))
+                    if _uitlijning(raster.get("alignment"))
+                    else None,
                     raster.get("group_id"),
                     raster.get("created_at") or _now(),
                 ),
@@ -940,9 +1057,9 @@ class Library:
         with self._connect() as db:
             cursor = db.execute(
                 """INSERT INTO preset (material_id, machine_id, thickness_mm, operation,
-                        speed_mm_s, power_percent, passes, air_assist, focus_offset_mm,
-                        source, origin_id, note, last_used_at, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        speed_mm_s, power_percent, passes, interval_mm, air_assist,
+                        focus_offset_mm, source, origin_id, note, last_used_at, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     material_id,
                     machine_id.get(preset.get("machine_id")),
@@ -951,6 +1068,7 @@ class Library:
                     preset.get("speed_mm_s"),
                     preset.get("power_percent"),
                     int(preset.get("passes") or 1),
+                    preset.get("interval_mm"),
                     1 if preset.get("air_assist", True) else 0,
                     preset.get("focus_offset_mm") or 0,
                     bron if bron in SOURCES else "geimporteerd",
@@ -994,7 +1112,27 @@ class Library:
 def _grid_row(row) -> dict:
     data = dict(row)
     data["cells"] = json.loads(data["cells"])
+    data["alignment"] = _uitlijning(data.get("alignment"))
     return data
+
+
+def _uitlijning(ruw):
+    """De vier hoeken als lijst van punten, of None als er niets bewaard is."""
+    if not ruw:
+        return None
+    try:
+        punten = json.loads(ruw) if isinstance(ruw, str) else ruw
+    except ValueError:
+        return None
+    if not isinstance(punten, list) or len(punten) != 4:
+        return None
+    try:
+        return [
+            {"x": float(p["x"]), "y": float(p["y"])}
+            for p in punten
+        ]
+    except (TypeError, KeyError, ValueError):
+        return None
 
 
 def _preset_row(row) -> dict:
@@ -1102,6 +1240,8 @@ def _values(preset: dict) -> dict:
 
 
 def _same_values(mijne: dict, hunne: dict) -> bool:
+    if _rond(mijne.get("interval_mm")) != _rond(hunne.get("interval_mm")):
+        return False
     for sleutel in ("speed_mm_s", "power_percent"):
         if _rond(mijne.get(sleutel)) != _rond(hunne.get(sleutel)):
             return False

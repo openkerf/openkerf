@@ -19,6 +19,8 @@ export type Preset = {
 	speed_mm_s: number;
 	power_percent: number;
 	passes: number;
+	/** Lijnafstand bij rasteren; leeg bij snijden en vectorgraveren (B12). */
+	interval_mm?: number | null;
 	air_assist: boolean;
 	focus_offset_mm: number;
 	source: 'handmatig' | 'geextrapoleerd' | 'testraster' | 'geimporteerd';

@@ -452,6 +452,10 @@ class DesignReader:
             "dpi": _plain(getattr(op, "dpi", None)),
             "overscan": _plain(getattr(op, "overscan", None)),
             "bidirectional": bool(getattr(op, "bidirectional", True)),
+            # Air assist (besluit B11). De engine kent drie standen in
+            # `coolant`: 0 laat staan, 1 aan, 2 uit. Voor de gebruiker is het
+            # een schakelaar, dus alles wat niet 1 is, is uit.
+            "air_assist": _plain(getattr(op, "coolant", None)) == 1,
             "output": bool(getattr(op, "output", True)),
             "element_ids": referenced,
         }

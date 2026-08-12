@@ -7,10 +7,23 @@ ze bestaan altijd en gaan via de spooler van het actieve apparaat. We melden de
 beschikbaarheid alsnog, zodat de UI niet hoeft aan te nemen dat dat zo blijft.
 """
 
+import json
+
 from .commands import CommandRunner
 from .edits import DesignError, _finite
 
 MOVES = ("home", "physical_home", "unlock", "lock")
+
+# Waar bewaarde posities staan (gat J6).
+#
+# Op de device-service, niet in onze bibliotheek: een positie is een eigenschap
+# van déze machine met déze mal erop, en de settings van een service zijn
+# precies daarvoor gemaakt — ze verhuizen mee als de machine van profiel
+# wisselt, en ze overleven een herstart zonder dat wij een tabel hoeven te
+# migreren. De bibliotheek is van iemand anders en gaat over materiaal.
+POSITIES_KEY = "openkerf_positions"
+MAX_POSITIES = 12
+MAX_NAAM = 40
 
 # Scherpstellen zit op de Ruida (`focusz`), niet op elk apparaat. Zelfde aanpak
 # als bij pauzeren en stoppen: vragen wat dit apparaat kent, niet aannemen.
@@ -164,6 +177,101 @@ class MachineControl:
         if abs(distance) > 100:
             raise DesignError("Meer dan 100 mm in één keer is geen scherpstellen.")
         return {"output": self.runner.run(f"{FOCUS} {_mm(distance)}")}
+
+    # ------------------------------------------------- bewaarde posities (J6)
+
+    def _device(self):
+        device = getattr(self.kernel, "device", None)
+        if device is None:
+            raise DesignError("Er is geen actieve machine.")
+        return device
+
+    def positions(self) -> list[dict]:
+        """
+        De posities die deze machine onthoudt.
+
+        LightBurn's Move-venster heeft ze en wij niet: wie een mal op het bed
+        heeft liggen, wil "linkerbovenhoek van de mal" één keer vastleggen in
+        plaats van hem elke sessie opnieuw bij elkaar te joggen.
+        """
+        device = self._device()
+        try:
+            device.setting(str, POSITIES_KEY, "[]")
+            ruw = json.loads(getattr(device, POSITIES_KEY, "[]") or "[]")
+        except Exception:
+            return []
+        if not isinstance(ruw, list):
+            return []
+        schoon = []
+        for item in ruw:
+            if not isinstance(item, dict):
+                continue
+            naam = str(item.get("name", "")).strip()
+            x, y = item.get("x_mm"), item.get("y_mm")
+            if not naam or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                continue
+            schoon.append({"name": naam, "x_mm": float(x), "y_mm": float(y)})
+        return schoon
+
+    def _write_positions(self, posities: list[dict]) -> list[dict]:
+        device = self._device()
+        device.setting(str, POSITIES_KEY, "[]")
+        setattr(device, POSITIES_KEY, json.dumps(posities))
+        # Anders staat hij er alleen tot de volgende herstart, en dan is het
+        # geen geheugen maar een grap.
+        try:
+            self.kernel.write_configuration()
+        except Exception:  # pragma: no cover - de engine mag ons niet breken
+            pass
+        return posities
+
+    def save_position(self, name, x_mm=None, y_mm=None) -> dict:
+        """
+        Bewaar een positie. Zonder coördinaten: waar de kop nu staat.
+
+        Dat laatste is de normale manier — je jogt naar de hoek van je mal en
+        legt hem daar vast; getallen intypen kan ook, maar dan wist je ze al.
+        """
+        naam = str(name or "").strip()[:MAX_NAAM]
+        if not naam:
+            raise DesignError("Een bewaarde positie heeft een naam nodig.")
+
+        if x_mm is None or y_mm is None:
+            huidig = self._current_mm()
+            if huidig is None:
+                raise DesignError(
+                    "Deze machine meldt geen positie, dus er valt niets te "
+                    "bewaren. Vul de coördinaten met de hand in."
+                )
+            x_mm, y_mm = huidig
+        x = _finite(x_mm, "x_mm")
+        y = _finite(y_mm, "y_mm")
+
+        posities = [p for p in self.positions() if p["name"].lower() != naam.lower()]
+        posities.append({"name": naam, "x_mm": round(x, 2), "y_mm": round(y, 2)})
+        if len(posities) > MAX_POSITIES:
+            raise DesignError(
+                f"Meer dan {MAX_POSITIES} bewaarde posities wordt een lijst waar "
+                "je in moet zoeken. Gooi er eerst een weg."
+            )
+        self._write_positions(posities)
+        return {"name": naam, "x_mm": round(x, 2), "y_mm": round(y, 2)}
+
+    def delete_position(self, name) -> dict:
+        naam = str(name or "").strip()
+        posities = [p for p in self.positions() if p["name"].lower() != naam.lower()]
+        self._write_positions(posities)
+        return {"deleted": naam}
+
+    def _current_mm(self):
+        """Waar de kop nu staat, in millimeters — of None als hij het niet zegt."""
+        from .status import StatusReader
+
+        positie = StatusReader(self.kernel).position(self._device())
+        mm = positie.get("mm")
+        if not mm or len(mm) < 2:
+            return None
+        return (float(mm[0]), float(mm[1]))
 
     def unlock(self) -> dict:
         """Motoren vrijgeven, zodat je de kop met de hand kunt verzetten."""

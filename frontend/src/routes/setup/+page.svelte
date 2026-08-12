@@ -44,7 +44,7 @@
 			{#each eigen as machine (machine.path)}
 				<li class:active={machine.active}>
 					<div>
-						<div class="name">{machine.label}</div>
+						<div class="name" title={machine.label}>{machine.label}</div>
 						<div class="muted mono">{machine.path}</div>
 					</div>
 					{#if machine.active}
@@ -115,6 +115,33 @@
 	}
 	.name {
 		font-weight: 500;
+		/* Een naam die de engine geeft ("lhystudios1") heeft geen afbreekpunt: hij
+		   duwde de badge weg of werd erdoor afgesneden. Afkappen met ellips is
+		   eerlijk — je ziet dat er meer staat. De volledige naam blijft in de
+		   title-tip. */
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* Onder ~420px is er naast de naam geen kolom meer over: op 390 hield de
+	   naam 74px van de 308 en botste "Ruida 5030" tegen de badge. De naam krijgt
+	   dan de hele regel, de acties de regel eronder — dat is ook de volgorde
+	   waarin je ze leest. */
+	@media (max-width: 420px) {
+		.machines li {
+			flex-wrap: wrap;
+		}
+		.machines li > div:first-child {
+			flex: 1 0 100%;
+		}
+		/* De knoppen mogen dan de volle breedte delen; ze zijn hier het doel van
+		   een duim, niet van een muis. */
+		.machines li .btn,
+		.machines li .badge {
+			min-height: 44px;
+			display: inline-flex;
+			align-items: center;
+		}
 	}
 	/* Accent op een tint van 14% accent haalt geen AA (gemeten: 4,10 in licht,
 	   4,46 in donker). De tint blijft de accentkleur dragen, de tekst niet —

@@ -18,6 +18,8 @@ export class StatusConnection {
 	events = $state<SignalEvent[]>([]);
 	connected = $state(false);
 	lastUpdate = $state<number | null>(null);
+	/** Welk serverproces we aan de lijn hebben; verandert alleen bij een herstart. */
+	instance = $state<string | null>(null);
 
 	#socket: WebSocket | null = null;
 	#retryDelay = RECONNECT_MIN;
@@ -95,7 +97,9 @@ export class StatusConnection {
 				return;
 			}
 			this.lastUpdate = Date.now();
-			if (payload.type === 'snapshot') {
+			if (payload.type === 'hello') {
+				this.#hallo(payload.instance);
+			} else if (payload.type === 'snapshot') {
 				this.snapshot = payload.data;
 			} else {
 				this.events = [payload, ...this.events].slice(0, MAX_EVENTS);
@@ -111,6 +115,33 @@ export class StatusConnection {
 		};
 
 		socket.onerror = () => socket.close();
+	}
+
+	/**
+	 * De server stelt zich voor (gat E2).
+	 *
+	 * Hier zat een stille fout: de WebSocket verbond na een herstart keurig
+	 * terug, de statusbalk werd weer groen, en de pagina toonde daarna
+	 * onverstoorbaar het ontwerp van vóór de herstart — dat aan de andere kant
+	 * niet meer bestaat. Je tekent verder in een document dat weg is.
+	 *
+	 * Zelfde `instance` = hetzelfde proces, dus een netwerkhik: de snapshot die
+	 * er meteen achteraan komt herstelt alles wat live is, en er valt niets op
+	 * te halen. Een ander `instance` betekent een nieuwe engine met een lege
+	 * boom, en dan is er niets meer te redden aan de pagina zoals hij is. We
+	 * herladen niet uit onszelf — dat gooit ongesaveld werk weg zonder dat
+	 * iemand erom vroeg — maar zetten de vlag waar de app op reageert.
+	 */
+	#hallo(instance: string) {
+		if (!instance) return;
+		if (this.instance === null) {
+			this.instance = instance;
+			return;
+		}
+		if (this.instance !== instance) {
+			this.instance = instance;
+			verbinding.herstart = true;
+		}
 	}
 
 	#scheduleReconnect() {

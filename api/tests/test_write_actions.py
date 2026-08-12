@@ -18,6 +18,12 @@ WRITE_ROUTES = [
     ("/api/library/import/preview", {"json": {}}),
 ]
 
+# Dezelfde eis voor de andere werkwoorden. De uitlijning van een rasterfoto is
+# een PUT en zou anders buiten de tokencontrole hierboven vallen.
+WRITE_ROUTES_PUT = [
+    ("/api/library/testgrids/1/alignment", {"json": {"corners": None}}),
+]
+
 
 @pytest.fixture
 def local_client(kernel):
@@ -71,6 +77,8 @@ def test_writes_are_rejected_without_token_off_localhost(lan_server):
     with TestClient(lan_server.build_app()) as client:
         for path, body in WRITE_ROUTES:
             assert client.post(path, **body).status_code == 401, path
+        for path, body in WRITE_ROUTES_PUT:
+            assert client.put(path, **body).status_code == 401, path
 
 
 def test_writes_accept_bearer_token(lan_server):

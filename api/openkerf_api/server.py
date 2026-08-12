@@ -17,6 +17,7 @@ import shutil
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from .auth import extract_token, generate_token, is_loopback, token_matches
@@ -38,7 +39,7 @@ from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
 from .sheets import Sheets
-from .testgrid import TestGridGenerator, plan_grid
+from .testgrid import TestGridGenerator, markeer_foto, plan_grid
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
 from .status import StatusReader
@@ -64,6 +65,11 @@ SIGNALS = (
 )
 
 HEARTBEAT_SECONDS = 2.0
+
+# Wie deze server is, in dit proces (gat E2). Nieuw bij elke start; de client
+# vergelijkt hem bij het herverbinden en weet zo of hij tegen dezelfde engine
+# praat als vóór de stilte.
+INSTANCE_ID = uuid.uuid4().hex
 
 
 class EventBridge:
@@ -445,7 +451,11 @@ class ApiServer:
         @app.post("/api/job/start", dependencies=write)
         def start_job():
             """Plan the current operations and hand the job to the spooler."""
-            return act(self.commands.start_job)
+            # De naam van het vel als jobnaam (gat P4): dat is wat er in de
+            # machine gaat, en het is het enige woord dat de gebruiker zelf
+            # heeft gekozen. Zonder dit heet een naamloze job "Spooler:3 items".
+            sheet = self._active_sheet() or {}
+            return act(lambda: self.commands.start_job(sheet.get("name")))
 
         @app.post("/api/job/pause", dependencies=write)
         def pause_job():
@@ -719,6 +729,28 @@ class ApiServer:
         def machine_jog(body: dict):
             return manage(self.motion.jog, body.get("dx_mm"), body.get("dy_mm"))
 
+        # -- bewaarde posities (gat J6) — eigen blokje, zie machine.py ------
+        @app.get("/api/machine/positions")
+        def machine_positions():
+            """Posities die deze machine onthoudt: mal, nulpunt van een jig."""
+            return manage(lambda: {"positions": self.motion.positions()})
+
+        @app.post("/api/machine/positions", dependencies=write, status_code=201)
+        def save_machine_position(body: dict):
+            """Zonder x/y: waar de kop nu staat."""
+            return manage(
+                self.motion.save_position,
+                body.get("name"),
+                body.get("x_mm"),
+                body.get("y_mm"),
+            )
+
+        @app.delete("/api/machine/positions", dependencies=write)
+        def delete_machine_position(name: str):
+            return manage(self.motion.delete_position, name)
+
+        # -- einde blok posities --------------------------------------------
+
         @app.post("/api/machine/focus", dependencies=write)
         def focus_machine(body: dict):
             """Scherpstellen: de kop hoger of lager. Alleen als het apparaat het kent."""
@@ -833,11 +865,50 @@ class ApiServer:
 
             return manage(run)
 
+        @app.get("/api/design/capabilities")
+        def design_capabilities():
+            """
+            Wat een laag op déze machine kan (besluit B11).
+
+            Air assist staat als schakelaar in de rij, maar alleen als de
+            driver er een commando voor kent — dezelfde regel als bij de Z-as.
+            Wat de machine niet kan, hoort niet als knop op het scherm.
+            """
+            return {"air_assist": self.drawing.air_assist_supported()}
+
+        @app.post("/api/design/operations/sort", dependencies=write)
+        def sort_operations():
+            """Graveren vóór snijden, in één handeling (gat L2)."""
+            return manage(self.drawing.sort_operations)
+
         @app.post("/api/design/operations/{operation_id}/move", dependencies=write)
         def move_operation(operation_id: str, body: dict):
-            """Een laag omhoog of omlaag in de brandvolgorde."""
+            """
+            Een laag verplaatsen in de brandvolgorde.
+
+            `direction` is één stap (de knoppen), `index` is een bestemming
+            (slepen, gat L1).
+            """
             return manage(
-                lambda: self.drawing.move_operation(operation_id, body.get("direction"))
+                lambda: self.drawing.move_operation(
+                    operation_id, body.get("direction"), body.get("index")
+                )
+            )
+
+        @app.post("/api/design/operations/{operation_id}/type", dependencies=write)
+        def retype_operation(operation_id: str, body: dict):
+            """
+            Een snijlaag graveerlaag maken, met de vormen erin (gat L3).
+
+            Een eigen route en geen PATCH: de laag wordt vervangen en krijgt
+            een nieuw id. Dat stilzwijgend onder een PATCH doen zou betekenen
+            dat de aanroeper achteraf naar een laag verwijst die niet meer
+            bestaat.
+            """
+            return manage(
+                lambda: self.drawing.change_operation_type(
+                    operation_id, body.get("type")
+                )
             )
 
         @app.delete("/api/design/operations/{operation_id}", dependencies=write)
@@ -1438,6 +1509,16 @@ class ApiServer:
         def list_test_grids():
             return self.library.test_grids()
 
+        @app.get("/api/library/testgrids/defaults")
+        def test_grid_defaults(material_id: int | None = None):
+            """
+            De instellingen van het vorige raster voor dit materiaal (T3).
+
+            Geen aparte voorkeurentabel: het vorige raster ís de instelling.
+            `null` als er nog geen raster voor dit materiaal is.
+            """
+            return self.library.last_grid_settings(material_id)
+
         @app.get("/api/library/testgrids/{grid_id}")
         def get_test_grid(grid_id: int):
             return manage(self.library.test_grid, grid_id)
@@ -1486,15 +1567,43 @@ class ApiServer:
                 raise HTTPException(status_code=422, detail="Lege foto.")
             return manage(self.library.set_grid_photo, grid_id, suffix, data)
 
+        @app.put("/api/library/testgrids/{grid_id}/alignment", dependencies=write)
+        def set_grid_alignment(grid_id: int, body: dict):
+            """
+            Waar het bord op de foto ligt (T4).
+
+            Stond in localStorage: uitlijnen op de desktop en het vakje aanwijzen
+            op de tablet leverde dan twee verschillende overlays op.
+            """
+            return manage(
+                self.library.set_grid_alignment, grid_id, body.get("corners")
+            )
+
         @app.get("/api/library/testgrids/{grid_id}/photo")
-        def get_grid_photo(grid_id: int):
-            from fastapi.responses import FileResponse
+        def get_grid_photo(grid_id: int, cell: str | None = None):
+            """
+            De foto van het gebrande bord.
+
+            Met `?cell=<rij>-<kolom>` komt het aangewezen vakje omcirkeld mee
+            (M4), volgens de uitlijning die bij dit raster bewaard is. Zonder
+            die parameter is het onbewerkt het bestand van de gebruiker.
+            """
+            from fastapi.responses import FileResponse, Response
 
             grid = manage(self.library.test_grid, grid_id)
             path = grid.get("photo_path")
             if not path or not Path(path).is_file():
                 raise HTTPException(status_code=404, detail="Nog geen foto.")
-            return FileResponse(path)
+            if not cell:
+                return FileResponse(path)
+            try:
+                row, column = (int(deel) for deel in str(cell).split("-", 1))
+            except ValueError:
+                raise HTTPException(
+                    status_code=422, detail="cell heeft de vorm <rij>-<kolom>."
+                ) from None
+            data = manage(markeer_foto, grid, path, row, column)
+            return Response(content=data, media_type="image/jpeg")
 
         @app.post("/api/library/testgrids/{grid_id}/presets", dependencies=write, status_code=201)
         def presets_from_cells(grid_id: int, body: dict):
@@ -1529,6 +1638,9 @@ class ApiServer:
                         operation=grid["operation"],
                         speed_mm_s=cell["speed_mm_s"],
                         power_percent=cell["power_percent"],
+                        # Bij een rasterproef hoort de lijnafstand bij de
+                        # uitkomst; zonder haar is de preset niet na te branden.
+                        interval_mm=cell.get("interval_mm"),
                         source="testraster",
                         origin_id=f"testgrid:{grid_id}",
                         note=str(pick.get("note") or ""),
@@ -1597,6 +1709,16 @@ class ApiServer:
             await websocket.accept()
             self.bridge.add_client(websocket)
             try:
+                # Wie ben ik, en sinds wanneer (gat E2). De WebSocket verbindt
+                # vanzelf terug, maar de pagina die dan nog openstaat kan van
+                # vóór een herstart zijn: de elementenboom is dan weg, het vel
+                # is weg, en de app blijft vrolijk het ontwerp tonen dat er niet
+                # meer is. Aan dit ene getal ziet de client het verschil tussen
+                # een netwerkhik (zelfde proces, niets aan de hand) en een
+                # herstart (alles opnieuw ophalen).
+                await websocket.send_text(
+                    json.dumps({"type": "hello", "instance": INSTANCE_ID})
+                )
                 await websocket.send_text(
                     json.dumps(
                         {"type": "snapshot", "data": self.reader.snapshot()},

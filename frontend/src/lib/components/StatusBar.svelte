@@ -5,12 +5,14 @@
 		isStalled,
 		remainingSeconds,
 		STATE_LABEL,
+		totalSeconds,
 		type Device,
 		type Job,
 		type MachineState
 	} from '$lib/api';
 
 	import type { Controller } from '$lib/control.svelte';
+	import { verbinding } from '$lib/verbinding.svelte';
 	import Verbinding from './Verbinding.svelte';
 	import Melding from './Melding.svelte';
 
@@ -54,6 +56,10 @@
 	let canPause = $derived(control.capabilities?.actions.pause ?? false);
 	let canResume = $derived(control.capabilities?.actions.resume ?? false);
 	let remaining = $derived(remainingSeconds(job));
+	// Uit dezelfde bron als `remaining` — dat is de hele fix van gat B1. Stond
+	// hier `job.estimate_seconds`, dan las de balk "nog 0:00 van 13:45:04":
+	// een restant van de klok naast een totaal van het brandmodel.
+	let totaal = $derived(totalSeconds(job));
 	let percent = $derived(job?.progress !== null && job?.progress !== undefined
 		? Math.round(job.progress * 100)
 		: null);
@@ -66,21 +72,67 @@
 	/**
 	 * Wat er over de verbinding staat, in de juiste volgorde van slecht nieuws.
 	 *
-	 * Er stond één zin: "Verbonden met de laser" of niet. Die was tweemaal
-	 * onwaar. Hij zei "verbonden" terwijl er geen kabel in zat, en hij wees bij
+	 * Er stond één zin: "Verbonden met de laser" of niet. Die was driemaal
+	 * onwaar. Hij zei "verbonden" terwijl er geen kabel in zat, hij wees bij
 	 * een weggevallen server naar de laser terwijl het probleem de server was —
-	 * en dan sta je een USB-kabel te controleren die niets mankeert.
+	 * en dan sta je een USB-kabel te controleren die niets mankeert — en hij
+	 * zei het ook als niemand het kón weten.
+	 *
+	 * Dat laatste was gat E3. Voor grbl, newly en het dummy-apparaat meldt de
+	 * engine `connection.state === "unknown"`: er is domweg geen bron. Onze
+	 * balk maakte daar "Verbonden met de laser" van, met een groene stip erbij,
+	 * ook meteen na de wizard — terwijl de wizard zélf zegt dat de verbinding
+	 * pas bij de eerste job gelegd wordt. Twee schermen die elkaar tegenspreken,
+	 * op de plek waar je het meest vertrouwt.
+	 *
+	 * Nu zegt de balk alleen "verbonden" als de driver dat zelf meldt. Weet
+	 * niemand het, dan staat dat er: "Verbinding onbekend". Dat is geen storing
+	 * en geen belofte, en het is het enige wat waar is.
+	 *
+	 * Verleidelijk maar fout: een lopende job als bewijs nemen. Gemeten op deze
+	 * eigen server — het Job-paneel toonde een job op 80 % terwijl de engine
+	 * eronder "USB connection did not exist" meldde. De spooler draait vrolijk
+	 * door zonder machine; hij is dus geen handshake.
 	 */
+	let onbekend = $derived(
+		connected && state !== 'unplugged' && device?.connection?.state !== 'connected'
+	);
 	let verbindingstekst = $derived(
 		!connected
 			? 'Geen verbinding met OpenKerf'
 			: state === 'unplugged'
 				? 'Machine niet verbonden'
-				: 'Verbonden met de laser'
+				: onbekend
+					? 'Verbinding onbekend'
+					: 'Verbonden met de laser'
+	);
+	let verbindingsuitleg = $derived(
+		onbekend
+			? 'De engine draait, maar deze driver meldt niet of er een machine aan hangt. ' +
+				'Bij de eerste job merk je het: die blijft in de wachtrij staan als er niets luistert.'
+			: undefined
 	);
 </script>
 
 <Verbinding brandt={Boolean(job?.running)} />
+
+<!-- Gat E2. De socket is terug, de balk is weer groen, maar het is een andere
+     engine dan die deze pagina kent: de elementenboom aan de andere kant is
+     leeg. Niet vanzelf herladen — dat gooit werk weg zonder dat iemand erom
+     vroeg — maar het ook niet verzwijgen, want alles wat je hierna doet gaat
+     over een document dat daar niet meer bestaat. -->
+{#if verbinding.herstart}
+	<div class="herstart" role="alert">
+		<div class="tekst">
+			<strong>De server is opnieuw gestart</strong>
+			<p>
+				Deze pagina toont nog het ontwerp van vóór de herstart; de engine is
+				leeg begonnen. Herlaad om te zien wat er echt is.
+			</p>
+		</div>
+		<button onclick={() => location.reload()}>Herladen</button>
+	</div>
+{/if}
 <!-- Fouten uit schrijfacties zijn hier niet thuis, maar dit is de enige
      component die op elk tabblad meedraait. Zonder dit landde een mislukte
      import in een paneel dat je op dat moment niet openhad. -->
@@ -113,9 +165,9 @@
 		{#if job && remaining !== null}
 			{#if percent !== null}<b class="pct">{percent}%</b>{/if}
 			nog <b>{formatDuration(remaining)}</b>
-			<span class="van">van {formatDuration(job.estimate_seconds)}</span>
+			<span class="van">van {formatDuration(totaal)}</span>
 		{:else if job}
-			~ {formatDuration(job.estimate_seconds)} geschat
+			~ {formatDuration(totaal)} geschat
 		{:else}
 			geen job
 		{/if}
@@ -123,7 +175,12 @@
 	<span class="sep" aria-hidden="true"></span>
 	<!-- Gebruikerstaal, geen protocoltaal: wie dit leest wil weten of de laser
 	     luistert, niet of er een socket openstaat. -->
-	<span class:offline={!connected} class:onthecht={connected && state === 'unplugged'}>
+	<span
+		class:offline={!connected}
+		class:onthecht={connected && state === 'unplugged'}
+		class:afwachtend={Boolean(verbindingsuitleg)}
+		title={verbindingsuitleg}
+	>
 		{verbindingstekst}
 	</span>
 	{#if busy && acties}
@@ -182,6 +239,41 @@
 </footer>
 
 <style>
+	/* Boven de statusbalk, over de volle breedte: dit gaat over de hele pagina
+	   en niet over één paneel. Niet gecentreerd bovenin — daar staat al de
+	   verbindingskaart, en twee kaarten over elkaar heen is geen bericht. */
+	.herstart {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: var(--statusbar-height);
+		z-index: 70;
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		padding: var(--space-2) var(--space-4);
+		border-top: 1px solid var(--warn-solid);
+		background: var(--surface-1);
+		box-shadow: var(--lift-2);
+		font-size: var(--text-xs);
+		color: var(--text-1);
+	}
+	.herstart .tekst { min-width: 0; }
+	.herstart strong { display: block; font-size: var(--text-sm); }
+	.herstart p { margin: 0; color: var(--text-2); }
+	.herstart button {
+		flex: none;
+		margin-left: auto;
+		/* 44px: dit wordt ook op een tablet naast de machine aangeraakt. */
+		min-height: 44px;
+		padding: 0 var(--space-4);
+		font: inherit;
+		font-weight: 600;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-field);
+		background: var(--accent);
+		color: var(--accent-ink);
+	}
 	.wat {
 		font-family: var(--font-ui);
 		font-size: var(--text-xs);
@@ -216,6 +308,15 @@
 	   dit gelijkstellen aan een storing, en dan gelooft niemand het rood meer
 	   dat er wél toe doet. */
 	.onthecht { color: var(--warn); }
+	/* Nog niet verbonden is geen storing en geen belofte. Dezelfde gedempte
+	   tint als de rest van de balk, met een streepje eronder dat zegt dat er
+	   uitleg achter zit. Geel zou hier alarm slaan over iets wat volkomen
+	   normaal is vlak na de wizard. */
+	.afwachtend {
+		color: var(--text-2);
+		text-decoration: underline dotted;
+		text-underline-offset: 3px;
+	}
 	/* Standen van vóór de stilte: leesbaar, maar niet meer als feit. */
 	.oud { opacity: 0.55; }
 	b {

@@ -14,18 +14,30 @@ async function wegmetHerstel(page) {
 	// Het herstelvenster van een vorige sessie fotografeert een backdrop.
 	const later = page.getByRole('button', { name: /Later|Annuleren/ }).first();
 	if (await later.isVisible().catch(() => false)) await later.click().catch(() => {});
+	// Sinds de eerste-start-poort staat er op een schoon profiel een venster
+	// vóór de studio; zonder die klik is de bibliotheek onbereikbaar.
+	// Let op: dit is een knop, geen link. Een klik via getByText landt op de
+	// omhullende doos en doet niets — dat kostte me een ronde.
+	const rond = page.getByRole('button', { name: 'Rondkijken zonder machine' });
+	if (await rond.count()) {
+		await rond.click().catch(() => {});
+		await page.waitForSelector('.statusbar', { timeout: 10000 }).catch(() => {});
+		await page.waitForTimeout(600);
+	}
 }
 
 /** Opent de materiaalbibliotheek via de rail; geeft false als die er niet is. */
 async function openBibliotheek(page) {
-	const knop = page.locator('button[title="Materiaalbibliotheek"]');
-	if (!(await knop.count())) return false;
-	if (!(await knop.first().isVisible().catch(() => false))) {
-		// Op smallere schermen zit hij achter "meer".
-		const meer = page.locator('button[title*="Meer"], button[title*="meer"]').first();
-		if (await meer.isVisible().catch(() => false)) await meer.click();
+	const knop = page.locator('button[title="Materiaalbibliotheek"]:visible');
+	if (!(await knop.count())) {
+		// Op smallere schermen zit hij achter "Meer".
+		const meer = page.locator('button[title*="Meer"]:visible, button[title*="meer"]:visible').first();
+		if (await meer.count()) {
+			await meer.click();
+			await page.waitForTimeout(400);
+		}
 	}
-	if (!(await knop.first().isVisible().catch(() => false))) return false;
+	if (!(await knop.count())) return false;
 	await knop.first().click();
 	await page.waitForTimeout(600);
 	return true;

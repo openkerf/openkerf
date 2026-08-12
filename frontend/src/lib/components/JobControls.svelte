@@ -1,8 +1,16 @@
 <script lang="ts">
-	import { formatDuration, isStalled, type Device, type Job } from '$lib/api';
-	import type { Controller } from '$lib/control.svelte';
+	import {
+		formatDuration,
+		isStalled,
+		PAUZE_TOETS,
+		STOP_TOETS,
+		type Device,
+		type Job
+	} from '$lib/api';
+	import { apparaat } from '$lib/apparaat.svelte';
+	import type { Controller, Position } from '$lib/control.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
-	import type { Design } from '$lib/design.svelte';
+	import { inktOp, laagNummer, type Design } from '$lib/design.svelte';
 	import JobPreview from './JobPreview.svelte';
 	import Segmented from './Segmented.svelte';
 
@@ -35,6 +43,8 @@
 		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
+	// Gat J9: één bron voor "waar woont deze actie". Zie apparaat.svelte.ts.
+	let balkdraagt = $derived(apparaat.bedieningInBalk);
 	let actions = $derived(control.capabilities?.actions ?? null);
 	let running = $derived(Boolean(job?.running));
 	// Stilstaand, niet alleen "gepauzeerd volgens het statusveld": pauzeren zet
@@ -120,6 +130,58 @@
 			? vel.material_name
 			: `${vel.material_name} · ${String(dikte).replace('.', ',')} mm`;
 	});
+
+	/**
+	 * Hoe groot het werk is, en past het op het bed? (gat J5)
+	 *
+	 * De weergave erboven zet het werk tegen het *vel*, en dat is de vraag die
+	 * je meestal hebt. Maar een vel is een tekening en het bed is de machine:
+	 * een vel van 600×400 op een bed van 310×210 tekent prima en snijdt niet.
+	 * Dat is precies het soort fout dat je één regel eerder wil weten dan één
+	 * beweging later.
+	 */
+	let werkMm = $derived.by(() => {
+		const perMm = ontwerp?.units_per_mm ?? 0;
+		const elementen = ontwerp?.elements ?? [];
+		if (!perMm || !elementen.length) return null;
+		let x0 = Infinity;
+		let y0 = Infinity;
+		let x1 = -Infinity;
+		let y1 = -Infinity;
+		for (const element of elementen) {
+			if (element.hidden || !element.bounds) continue;
+			const [a, b, c, d] = element.bounds;
+			x0 = Math.min(x0, a / perMm);
+			y0 = Math.min(y0, b / perMm);
+			x1 = Math.max(x1, c / perMm);
+			y1 = Math.max(y1, d / perMm);
+		}
+		if (!Number.isFinite(x0)) return null;
+		return { x0, y0, w: x1 - x0, h: y1 - y0, x1, y1 };
+	});
+	// 0,5 mm speling: op de rand van het bed is een tiende millimeter
+	// meetruis, geen fout, en een waarschuwing die daarop afgaat verliest
+	// binnen een dag zijn geloofwaardigheid.
+	const BEDMARGE = 0.5;
+	let buitenBed = $derived.by(() => {
+		const bed = device?.bed;
+		if (!werkMm || !bed?.width_mm || !bed?.height_mm) return null;
+		if (
+			werkMm.x0 >= -BEDMARGE &&
+			werkMm.y0 >= -BEDMARGE &&
+			werkMm.x1 <= bed.width_mm + BEDMARGE &&
+			werkMm.y1 <= bed.height_mm + BEDMARGE
+		) {
+			return null;
+		}
+		// Hele millimeters: een bed van 24 inch is 609,6 mm en die komma is geen
+		// informatie, alleen precisie waar niemand om vroeg.
+		return `${Math.round(bed.width_mm)} × ${Math.round(bed.height_mm)} mm`;
+	});
+	// Hele millimeters waar het kan; 0,5 mm blijft 0,5 mm.
+	function maat(value: number): string {
+		return (Math.round(value * 10) / 10).toString().replace('.', ',');
+	}
 
 	// Instellingen die niet gemeten zijn, verdienen een waarschuwing vóór het
 	// materiaal in de machine ligt — niet erna.
@@ -223,6 +285,37 @@
 	);
 	let bewegenUit = $derived(running || !verbinding.online);
 
+	// ------------------------------------------- bewaarde posities (gat J6)
+
+	let posities = $state<Position[]>([]);
+	let bewaren = $state(false);
+	let nieuweNaam = $state('');
+	let huidigMm = $derived(device?.position.mm ?? null);
+
+	async function ophalenPosities() {
+		posities = await control.listPositions();
+	}
+	// Bij het openen van het paneel én na een machinewissel: posities horen bij
+	// de machine, dus die van de vorige zijn hier onzin.
+	$effect(() => {
+		void device?.path;
+		ophalenPosities();
+	});
+
+	async function bewaar() {
+		const naam = nieuweNaam.trim();
+		if (!naam) return;
+		if (await control.savePosition(naam)) {
+			bewaren = false;
+			nieuweNaam = '';
+			await ophalenPosities();
+		}
+	}
+
+	async function vergeet(naam: string) {
+		if (await control.deletePosition(naam)) await ophalenPosities();
+	}
+
 	async function confirmStart() {
 		if (await control.start()) preflight = false;
 	}
@@ -278,6 +371,22 @@
 			     lezen — en op tablet en telefoon staat het canvas er niet naast. -->
 			{#if !leeg}
 				<JobPreview design={ontwerp} sheet={overzicht?.sheet ?? null} {colorFor} />
+				<!-- Direct onder de tekening, naast de melding over het vel die de
+				     tekening zelf al geeft (gat J5). Twee meldingen over hetzelfde
+				     onderwerp horen bij elkaar; verderop in de gele stapel las dit
+				     als een vierde algemene waarschuwing, en dan weegt geen van de
+				     vier nog iets.
+
+				     Zwaarder dan geel, want het is een andere soort. Buiten het vel
+				     kost je materiaal; buiten het bed kán de machine er niet bij. Dat
+				     is geen "let op" maar "dit gaat zo niet". -->
+				{#if buitenBed}
+					<p class="pf-buitenbed" role="alert">
+						<strong>Buiten het bed.</strong> Deze machine reikt tot {buitenBed};
+						wat daarbuiten ligt wordt niet gebrand. Verplaats het of maak het
+						kleiner.
+					</p>
+				{/if}
 				<div class="pf-time">
 					<span class="muted">Geschatte tijd</span>
 					<span class="v mono">
@@ -288,12 +397,17 @@
 				</div>
 				<!-- Waarín gebrand wordt, vlak boven de instellingen waarmee. Zonder
 				     dat staat er een tabel met getallen zonder onderwerp. -->
-				{#if velTekst}
-					<div class="pf-time vel">
-						<span class="muted">Materiaal</span>
-						<span class="v">{velTekst}</span>
-					</div>
-				{/if}
+				<!-- Altijd een regel, ook zonder materiaal. Niets zeggen leest als
+				     "hoeft niet"; en dan draai je een preset van berken op acryl. -->
+				<div class="pf-time vel" class:onbekend={!velTekst}>
+					<span class="muted">Materiaal</span>
+					<span class="v">{velTekst ?? 'niet ingevuld voor dit vel'}</span>
+				</div>
+				<!-- Geen tweede regel met de jobafmeting: de weergave erboven zet
+				     "werk 120 × 80 mm" al onder de tekening (besluit B8). Datzelfde
+				     getal nog eens als eigen rij, negentig pixels lager, is geen
+				     informatie maar ruis. Wat de weergave níet doet is het werk tegen
+				     het bed houden — dat staat hieronder. -->
 			{/if}
 			{#if !leeg && device?.connection?.state === 'disconnected'}
 				<!-- Starten mag: de engine zet de job in de wachtrij en verbindt
@@ -338,9 +452,24 @@
 								<td class="pf-name" title={layer.label}>
 										<!-- Twee snijlagen heten allebei "Snijden"; de chip is het
 										     enige wat ze uit elkaar houdt, en het is dezelfde kleur
-										     als op het canvas en in de lagenlijst. -->
+										     als op het canvas en in de lagenlijst.
+
+										     Gat J7: met het laagnummer erin. Het design system verbiedt
+										     informatie die alleen in kleur zit, en van tien laagkleuren
+										     botsen er twee bij deuteranopie. Het nummer komt uit
+										     `laagNummer()` — dezelfde bron als de chip in het lagenpaneel
+										     en het cijfer bij de vorm op het canvas, zodat ze niet uiteen
+										     kunnen lopen. -->
 										{#if colorFor}
-											<span class="chip" style:background={colorFor(layer.id)} aria-hidden="true"></span>
+											{@const nummer = laagNummer(ontwerp, layer.id)}
+											<span
+												class="chip mono"
+												class:genummerd={nummer !== null}
+												style:background={colorFor(layer.id)}
+												style:color={inktOp(colorFor(layer.id))}
+												aria-hidden={nummer === null}
+												title={nummer === null ? undefined : `Laag ${nummer}`}
+											>{nummer ?? ''}</span>
 										{/if}{layer.label}
 									</td>
 								<td class="mono">{layer.speed_mm_s ?? '—'}</td>
@@ -440,7 +569,7 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="controls">
+		<div class="controls" class:balkdraagt>
 			<!-- Eén primaire knop per toestand. Stond "Job starten" ook tijdens een
 			     lopende job in het accent, dan is de opvallendste knop op het scherm
 			     degene die je niet moet hebben — en spoolt een tik er een tweede
@@ -489,16 +618,22 @@
 			<!-- Sluimerend als er niets loopt, net als de stopknop in de bovenbalk.
 			     Twee stopknoppen op één scherm met verschillend gedrag is erger
 			     dan één: dan weet je niet meer welke van de twee iets betekent. -->
+			<!-- Zonder server dezelfde behandeling als in de bovenbalk (gat E1):
+			     geen rood meer, en het woord zegt waar de stop wél zit. Twee
+			     stopknoppen op één scherm die zich verschillend gedragen is
+			     erger dan één — dan weet je op het beslissende moment niet meer
+			     welke van de twee iets betekent. -->
 			<button
 				class="btn danger stop dubbel"
-				class:sluimer={!running && !paused}
+				class:sluimer={!running && !paused && verbinding.online}
+				class:dood={!verbinding.online}
 				disabled={!actions?.stop || control.tokenProbleem || !verbinding.online}
 				title={!verbinding.online
-					? 'Geen verbinding met OpenKerf — stoppen kan alleen met de knop op de machine'
+					? 'Geen verbinding met OpenKerf — deze knop komt niet aan. Stoppen kan nu alleen met de noodstop op de machine.'
 					: (blockedReason ?? 'Job direct afbreken')}
 				onclick={() => control.stop()}
 			>
-				Stop
+				{#if verbinding.online}Stop{:else}Stop <strong>op de machine</strong>{/if}
 			</button>
 			<!-- Op tablet dragen starten, pauzeren en stoppen vast in de bovenbalk
 			     (die kan niet dichtklappen, dit paneel wel). Ze hier nog eens
@@ -506,6 +641,15 @@
 			     dus verwijzen we in plaats van te dupliceren. -->
 			<p class="elders">
 				Starten, pauzeren en stoppen staan vast in de balk bovenin.
+			</p>
+			<!-- Gat J4. LightBurn's Pause en Ctrl+Break werken daar ook als het
+			     venster niet vooraan staat; in een browser bestaat die
+			     mogelijkheid niet, en dat verzwijgen zou een belofte zijn die je
+			     op het verkeerde moment ontdekt. -->
+			<p class="toetsen">
+				<kbd>{PAUZE_TOETS}</kbd> pauzeert, <kbd>{STOP_TOETS}</kbd> stopt — overal
+				in de app, zolang dit venster voorop staat. Erbuiten kan een browser
+				geen toetsen ontvangen; gebruik dan de knop op de machine.
 			</p>
 		</div>
 
@@ -554,6 +698,87 @@
 					Ontgrendelen
 				</button>
 			</div>
+
+			<!-- Naar een punt in plaats van een richting (gat J6). LightBurn's
+			     Move-venster heeft "Go to Origin" en opgeslagen posities; wie een
+			     mal op het bed heeft liggen, jogt die hoek anders elke sessie
+			     opnieuw bij elkaar. -->
+			{#if control.capabilities?.motion?.move}
+				<div class="punten">
+					<span class="rot-label">Naar een punt</span>
+					<div class="puntrij">
+						<button
+							class="rot"
+							disabled={bewegenUit}
+							title={movingBlocked ?? 'De kop naar 0,0 van het bed sturen'}
+							onclick={() => control.moveTo(0, 0)}
+						>
+							Naar oorsprong
+						</button>
+						{#each posities as plek (plek.name)}
+							<span class="plek">
+								<button
+									class="rot naam"
+									disabled={bewegenUit}
+									title={movingBlocked ??
+										`Naar ${maat(plek.x_mm)}, ${maat(plek.y_mm)} mm`}
+									onclick={() => control.moveTo(plek.x_mm, plek.y_mm)}
+								>
+									{plek.name}
+									<!-- De coördinaten erbij, niet alleen in de tooltip: op een
+									     aanraakscherm bestaat hover niet, en dan is een bewaarde
+									     positie een naam zonder plek. LightBurn zet ze in een eigen
+									     kolom; hier is daar geen kolom voor, dus staan ze gedempt
+									     achter de naam in dezelfde chip. -->
+									<span class="coord mono">{maat(plek.x_mm)},&#8239;{maat(plek.y_mm)}</span>
+								</button>
+								<!-- Weggooien zit in de knop zelf, niet in een menu: het zijn
+								     er hooguit twaalf en je doet het zelden. -->
+								<button
+									class="rot weg"
+									aria-label="{plek.name} vergeten"
+									title="Deze positie vergeten"
+									onclick={() => vergeet(plek.name)}
+								>×</button>
+							</span>
+						{/each}
+					</div>
+					{#if bewaren}
+						<div class="bewaarrij">
+							<!-- svelte-ignore a11y_autofocus -->
+							<input
+								class="naamveld"
+								placeholder="bijv. hoek van de mal"
+								maxlength="40"
+								autofocus
+								bind:value={nieuweNaam}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') bewaar();
+									if (e.key === 'Escape') bewaren = false;
+								}}
+							/>
+							<button class="rot" onclick={bewaar} disabled={!nieuweNaam.trim()}>
+								Bewaren
+							</button>
+							<button class="rot" onclick={() => (bewaren = false)}>Annuleren</button>
+						</div>
+					{:else}
+						<button
+							class="rot"
+							disabled={bewegenUit || huidigMm === null}
+							title={huidigMm === null
+								? 'Deze machine meldt geen positie, dus er valt niets te bewaren'
+								: `Bewaar ${maat(huidigMm[0])}, ${maat(huidigMm[1])} mm onder een naam`}
+							onclick={() => {
+								nieuweNaam = '';
+								bewaren = true;
+							}}
+						>
+							Deze plek bewaren
+						</button>
+					{/if}
+				</div>
+			{/if}
 			{#if !control.capabilities?.motion?.focus && profile?.has_z}
 				<!-- Het profiel zegt dat deze machine een Z-as heeft, maar de
 				     driver van de engine kent er geen commando voor. Dat is geen
@@ -648,19 +873,18 @@
 	}
 	/* De verwijzing bestaat alleen op tablet; op desktop staan de knoppen hier. */
 	.elders { display: none; }
-	/* Tablet. Onder 768px rendert dit paneel niet — dan neemt PhoneView het over
-	   — dus deze grens dekt precies het bereik waarin de bovenbalk zijn eigen
-	   pauzeknop toont. Haalt de tablet-agent die knoppen daar weg, dan moet dit
-	   mee: het is een afspraak tussen twee bestanden. */
-	@media (max-width: 1199px) {
-		.controls .dubbel { display: none; }
-		.elders {
-			display: block;
-			grid-column: 1 / -1;
-			margin: var(--space-2) 0 0;
-			font-size: var(--text-xs);
-			color: var(--text-2);
-		}
+	/* Gat J9. Hier stond `@media (max-width: 1199px)` en in TopBar een JS-prop:
+	   twee bronnen voor één afspraak, die uit de pas kunnen lopen met als
+	   slechtste uitkomst dat de pauzeknop nergens of twee keer staat. Beide
+	   lezen nu `apparaat.bedieningInBalk`; de klasse hieronder is het gevolg,
+	   niet de regel. */
+	.controls.balkdraagt .dubbel { display: none; }
+	.controls.balkdraagt .elders {
+		display: block;
+		grid-column: 1 / -1;
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
 	}
 	.preflight {
 		border: 1px solid var(--line);
@@ -690,6 +914,20 @@
 		margin-right: var(--space-1h);
 		vertical-align: baseline;
 	}
+	/* Met een nummer erin is de chip geen stip meer maar een klein vlak (gat J7).
+	   Even breed als hoog en met tabulaire cijfers, zodat een 1 en een 10 de
+	   kolom niet laten verspringen. De inkt (zwart of wit) komt uit `inktOp`:
+	   op geel is wit 1,58:1 en dan lees je het cijfer domweg niet. */
+	.chip.genummerd {
+		width: 15px;
+		height: 15px;
+		line-height: 15px;
+		text-align: center;
+		font-size: var(--text-xs);
+		font-variant-numeric: tabular-nums;
+		border-radius: var(--radius-field);
+		vertical-align: -3px;
+	}
 	.pf-name {
 		max-width: 9em;
 		overflow: hidden;
@@ -698,6 +936,19 @@
 	}
 	.unsure { color: var(--warn); }
 	.pf-warn.strong { color: var(--warn); font-weight: 500; }
+	/* Een eigen soort, niet de vierde gele waas. De linkerbalk in de
+	   gevarenkleur zegt "dit werkt niet" tegenover "let hierop"; de tekst zelf
+	   houdt de gewone kleur, want --danger op deze waas haalt het contrast niet
+	   (dezelfde meting als bij .pf-mismatch hieronder). */
+	.pf-buitenbed {
+		margin: var(--space-2) 0;
+		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+		border-left: 4px solid var(--danger-solid);
+		border-radius: 0 var(--radius-field) var(--radius-field) 0;
+		background: color-mix(in srgb, var(--danger) 16%, transparent);
+		font-size: var(--text-xs);
+		color: var(--text-1);
+	}
 	.pf-time {
 		display: flex;
 		justify-content: space-between;
@@ -763,6 +1014,10 @@
 	/* De maat is secundair maar moet leesbaar blijven; geen aparte tint. */
 	.pf-time.vel { border-bottom: none; padding-bottom: 0; margin-bottom: var(--space-2); }
 	.pf-time.vel .v { font-size: var(--text-sm); }
+	/* Ontbrekend materiaal is geen storing maar wel een gat: dezelfde gedempte
+	   tint als de labels, zodat het leest als "hier hoort nog iets" en niet als
+	   een materiaal dat "niet ingevuld" heet. */
+	.pf-time.vel.onbekend .v { color: var(--text-2); font-style: italic; }
 	.pf-check {
 		margin: var(--space-3) 0;
 		padding: var(--space-2) var(--space-3);
@@ -897,9 +1152,91 @@
 		background: var(--danger-solid);
 		color: var(--on-color);
 	}
+	/* Dezelfde dode staat als in de bovenbalk: onderbroken rand, geen rood, en
+	   leesbaar — de tekst ís hier het bericht, dus die mag niet vervagen. */
+	.btn.danger.dood {
+		background: transparent;
+		border: 1px dashed color-mix(in srgb, var(--text-2) 55%, transparent);
+		color: var(--text-2);
+	}
+	.btn.danger.dood:disabled { opacity: 1; }
+	.btn.danger.dood strong { color: var(--text-1); }
 	.hint {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
+	}
+	.toetsen {
+		grid-column: 1 / -1;
+		margin: var(--space-3) 0 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		line-height: 1.5;
+	}
+	/* Vier regels over toetsen op een scherm zonder toetsenbord is de duurste
+	   ruimte van de app vullen met iets wat je daar niet kunt doen. Op tablet
+	   staat de bediening bovendien in de balk en is dit paneel al vooral proza.
+	   Een tablet met een los toetsenbord houdt de sneltoets — hij staat nog in
+	   de tooltip van de knop, en hij werkt gewoon. */
+	@media (pointer: coarse) {
+		.toetsen { display: none; }
+	}
+	kbd {
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
+		padding: 1px var(--space-1h);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		color: var(--text-1);
+		white-space: nowrap;
+	}
+	/* Naar een punt springen, naast de richtingsknoppen erboven. */
+	.punten { margin-top: var(--space-3); }
+	.puntrij {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin: var(--space-2) 0;
+	}
+	/* Naam en kruisje zijn één ding met twee doelen; de naad ertussen is een
+	   haarlijn, zodat het als één chip leest en niet als twee losse knopjes. */
+	.plek { display: inline-flex; }
+	.plek .naam { border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	.plek .weg {
+		border-left: none;
+		border-radius: 0 var(--radius-field) var(--radius-field) 0;
+		padding: 4px var(--space-2);
+		color: var(--text-2);
+	}
+	.plek .weg:hover { color: var(--danger); }
+	/* Op een aanraakscherm is een kruisje van 20px een vergissing die wacht om
+	   te gebeuren: één misgeprikte tik en je bewaarde positie is weg. Het is
+	   herstelbaar (naartoe joggen, opnieuw bewaren) en daarom geen bevestiging
+	   waard, maar het doel mag wel de handschoenmaat halen. */
+	@media (pointer: coarse) {
+		.plek .naam,
+		.plek .weg { min-height: 44px; }
+		.plek .weg { padding: 0 var(--space-3); }
+	}
+	/* Gedempt en een maat kleiner: de naam is waar je op mikt, de coördinaten
+	   zijn de bevestiging dat het de juiste plek is. */
+	.coord { color: var(--text-2); margin-left: var(--space-1h); }
+	.bewaarrij {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		align-items: center;
+	}
+	.naamveld {
+		flex: 1;
+		min-width: 10ch;
+		font: inherit;
+		font-size: var(--text-xs);
+		padding: 4px 8px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		color: var(--text-1);
 	}
 </style>

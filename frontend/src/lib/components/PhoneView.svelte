@@ -15,7 +15,18 @@
 	 * 3. Wat je meet, toon je één keer. Voortgang stond hier drie keer en de
 	 *    resterende tijd — het enige getal waar je op wacht — nul keer.
 	 */
-	import { formatDuration, STATE_LABEL, type Device, type Job, type MachineState } from '$lib/api';
+	import {
+		currentJob,
+		gridSummary,
+		formatDuration,
+		jobLabel,
+		remainingSeconds,
+		STATE_LABEL,
+		type Device,
+		type GridAxis,
+		type Job,
+		type MachineState
+	} from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import type { CameraStore } from '$lib/camera.svelte';
 	import Verbinding from './Verbinding.svelte';
@@ -23,6 +34,7 @@
 	import MeldingAlarm from './MeldingAlarm.svelte';
 	import MeldingKaart from './MeldingKaart.svelte';
 	import type { Bewaker, Meldingen } from '$lib/meldingen.svelte';
+	import type { DesignStore } from '$lib/design.svelte';
 
 	let {
 		device,
@@ -33,10 +45,14 @@
 		meldingen,
 		bewaker,
 		connected,
-		position
+		position,
+		design = null,
+		sheet = null
 	}: {
 		device: Device | null;
 		state: MachineState;
+		/** Alleen de lópende job, en daarom hier ongebruikt: dit scherm leest
+		 *  `currentJob(device)`, want een gepauzeerde job hoort er ook bij (J8). */
 		job: Job | null;
 		control: Controller;
 		camera: CameraStore;
@@ -44,26 +60,28 @@
 		bewaker: Bewaker;
 		connected: boolean;
 		position: string;
+		/** Wat er op het bed ligt (gat J10). Zonder dit tekende de telefoon een
+		 *  leeg kader, ook met zeven vormen erop. */
+		design?: DesignStore | null;
+		sheet?: { name: string; width_mm: number; height_mm: number } | null;
 	} = $props();
 
 	// `job` is alleen de lópende job. Een gepauzeerde job valt daar buiten, en
 	// die verdween daardoor compleet van dit scherm: je pauzeerde en het scherm
-	// meldde "geen job actief", zonder knop om te hervatten. De spooler weet
-	// beter, dus die vragen we.
-	let wachtrij = $derived(device?.spooler.jobs ?? []);
-	let huidig = $derived<Job | null>(job ?? wachtrij[0] ?? null);
-	let running = $derived(Boolean(job?.running));
-	// Stilstaand werk: pauze zet bij de ene driver `running` op false en laat
-	// hem bij de andere staan terwijl de laserstatus omslaat. Beide gevallen
-	// betekenen hier hetzelfde — er ligt werk dat niet vooruitkomt.
-	let stil = $derived(Boolean(huidig) && (!running || machineState === 'paused'));
-
-	// De kop is de belangrijkste regel van dit scherm; die mag niet "Gereed"
-	// zeggen terwijl de spooler brandt. Sommige drivers melden hun laserstatus
-	// pas laat (of nooit); een lopende job is bewijs genoeg.
-	let staat = $derived<MachineState>(
-		!connected ? 'offline' : stil ? 'paused' : running ? 'busy' : machineState
-	);
+	// meldde "geen job actief", zonder knop om te hervatten. `currentJob` is de
+	// gedeelde definitie van "de job waar de bediening over gaat".
+	let huidig = $derived<Job | null>(currentJob(device));
+	let running = $derived(Boolean(huidig?.running));
+	/**
+	 * Staat er werk stil? Eén bron: `machineState()`, die `isStalled()` al
+	 * aanroept en ook de device-kant (`laser_status === "pause"`) meeneemt.
+	 *
+	 * Hier stond een eigen variant die de eis "er was al voortgang" liet vallen
+	 * (gat J8). Gevolg: een vers gespoolde job loopt nog niet en heette op de
+	 * telefoon één pollronde lang "Pauze", terwijl de rest van de app hem in de
+	 * wachtrij zag staan. Twee schermen die iets anders zeggen over één job.
+	 */
+	let stil = $derived(machineState === 'paused');
 
 	/**
 	 * De pauzeknop moet iets doen dat je ziet.
@@ -81,10 +99,6 @@
 		const ok = await control.pause();
 		if (!ok) pauzeGevraagd = false;
 	}
-
-	// Een job die nog nooit gelopen heeft staat in de wachtrij; een job die
-	// halverwege stilviel is gepauzeerd. Voor de kijker is dat verschil groot.
-	let stilLabel = $derived(/wait/i.test(huidig?.status ?? '') ? 'in de wachtrij' : 'gepauzeerd');
 
 	/**
 	 * Een camera die "aan" staat maar geen beeld levert.
@@ -108,17 +122,12 @@
 	/**
 	 * Resterende tijd, niet de totale schatting.
 	 *
-	 * Zodra de job een eind op weg is, is het gemeten tempo betrouwbaarder dan
-	 * de vooraf berekende schatting; daaronder valt hij terug op die schatting.
+	 * Uit `remainingSeconds()`: hier stond dezelfde berekening met een eigen
+	 * drempel (5 % voortgang tegen de 10 % van de gedeelde versie), dus telefoon
+	 * en statusbalk sprongen op een ander moment van schatten naar meten en
+	 * toonden even twee verschillende resttijden voor dezelfde job.
 	 */
-	let resterend = $derived.by(() => {
-		if (!huidig) return null;
-		const verstreken = huidig.elapsed_seconds ?? 0;
-		if (progress > 0.05 && verstreken > 5) return Math.max(0, verstreken / progress - verstreken);
-		const schatting = huidig.estimate_seconds;
-		if (schatting == null) return null;
-		return Math.max(0, schatting * (1 - progress));
-	});
+	let resterend = $derived(remainingSeconds(huidig));
 
 	// Een aftelklok zegt hoe lang je moet wachten; een kloktijd zegt of je nog
 	// koffie kunt halen. Naast elkaar kosten ze één regel.
@@ -148,6 +157,14 @@
 		power_max: number;
 		speed_steps: number;
 		power_steps: number;
+		// Sinds B12 kiest de gebruiker de assen zelf; welke grootheid waar staat
+		// bepaalt wat de samenvattingsregel mag beweren.
+		row_axis: GridAxis | null;
+		column_axis: GridAxis | null;
+		rows: number | null;
+		columns: number | null;
+		interval_min: number | null;
+		interval_max: number | null;
 		created_at: string;
 	};
 	let wachtend = $state<Raster[]>([]);
@@ -158,10 +175,20 @@
 	/** Veel materiaalnamen dragen de dikte al ("Berkentriplex 4 mm"); dan niet
 	    nog eens "4 mm" erachter plakken. */
 	function rasterNaam(g: Raster): string {
-		const naam = g.material_name ?? 'raster';
+		// Zonder materiaal stond hier "raster · graveren-raster": tweemaal
+		// hetzelfde woord, en van de twee is er één een interne sleutel.
+		const naam = g.material_name ?? 'Testraster';
 		if (!g.thickness_mm || /\bmm\b/i.test(naam)) return naam;
 		return `${naam} ${g.thickness_mm} mm`;
 	}
+
+	/** De sleutels van de generator zijn geen woorden voor op het scherm. */
+	const BEWERKING: Record<string, string> = {
+		snijden: 'snijden',
+		'graveren-vector': 'graveren',
+		'graveren-raster': 'rasteren',
+		markeren: 'markeren'
+	};
 
 	/** "2026-08-11 19:33:37" → "11 aug 19:33". Zonder seconden, zonder jaar. */
 	function stempel(waarde: string): string {
@@ -203,20 +230,6 @@
 	}
 
 	/**
-	 * De engine noemt een naamloze job "Spooler:1 items".
-	 *
-	 * Dat is de interne opsomming van de wachtrij, geen titel. Op de enige
-	 * regel die zegt wát er brandt hoort geen debug-tekst te staan.
-	 */
-	let jobNaam = $derived.by(() => {
-		const label = huidig?.label ?? '';
-		const m = label.match(/^Spooler:\s*(\d+)\s*items?$/i);
-		if (!m) return label || 'Naamloze job';
-		const n = Number(m[1]);
-		return `${n} ${n === 1 ? 'bewerking' : 'bewerkingen'}`;
-	});
-
-	/**
 	 * De toestemmingsvraag krijgt hier zijn aanleiding van de machine zelf.
 	 *
 	 * Op de telefoon start je geen job (dat doet de desktop), dus is "er brandt
@@ -238,6 +251,64 @@
 	let bedW = $derived(device?.bed.width_mm ?? 0);
 	let bedH = $derived(device?.bed.height_mm ?? 0);
 	let kop = $derived(device?.position.mm ?? null);
+
+	/**
+	 * Wat er op het bed ligt (gat J10).
+	 *
+	 * Dit scherm tekende een leeg kader, ook met zeven vormen erop — en dan is
+	 * "kijken naast de machine" precies de ene vraag die je niet beantwoord
+	 * krijgt: wát gaat er zo meteen gebrand worden.
+	 *
+	 * De paddata staat in Tats, net als op het canvas; één schaaltransform zet
+	 * hem om naar de millimeters waarin deze tekening meet. En omdat het in
+	 * millimeters meet, krijgt elke lijn `non-scaling-stroke` — anders is een
+	 * streek van 1 op een bed van 610 mm een haar van niks (of op een klein bed
+	 * een balk van een halve centimeter).
+	 */
+	let perMm = $derived(design?.design?.units_per_mm ?? 1);
+	/**
+	 * Kleur en stand komen uit `strokeFor` — dezelfde helper die het canvas
+	 * gebruikt. Zelf de laag uitzoeken leverde een ander antwoord op dan het
+	 * canvas: bij een vorm in twee lagen pakte ik de eerste uit de lijst en het
+	 * canvas de bovenste in de boom. Twee schermen die hetzelfde werk in een
+	 * andere kleur tekenen is precies het soort verschil waardoor je op je
+	 * telefoon niet meer durft te vertrouwen.
+	 */
+	let vormen = $derived.by(() => {
+		const store = design;
+		if (!store) return [];
+		return store.elements
+			.filter((element) => !element.hidden && (element.path || element.image))
+			.map((element) => {
+				const streek = store.strokeFor(element);
+				return {
+					id: element.id,
+					path: element.path,
+					image: element.image,
+					kleur: streek.color,
+					zichtbaar: streek.visible,
+					// "Brandt niet" dekt twee gevallen: in geen enkele laag, of in een
+					// laag die op "brandt niet mee" staat. Voor wie naast de machine
+					// staat is dat dezelfde mededeling.
+					stil: streek.dashed || streek.dimmed
+				};
+			})
+			.filter((vorm) => vorm.zichtbaar);
+	});
+	let brandt = $derived(vormen.filter((v) => !v.stil).length);
+	let stille = $derived(vormen.filter((v) => v.stil).length);
+
+	/** Eén zin voor wie het beeld niet krijgt; hij staat ook onder de tekening. */
+	let bedUitleg = $derived.by(() => {
+		const delen = [`Bed ${Math.round(bedW)} bij ${Math.round(bedH)} millimeter`];
+		if (vormen.length === 0) delen.push('leeg');
+		else {
+			delen.push(`${brandt} ${brandt === 1 ? 'vorm brandt' : 'vormen branden'}`);
+			if (stille) delen.push(`${stille} in geen laag`);
+		}
+		delen.push(`kop op ${position}`);
+		return delen.join(', ') + '.';
+	});
 </script>
 
 <Verbinding brandt={running} />
@@ -253,8 +324,8 @@
 	-->
 	<MeldingAlarm {bewaker} groot />
 	<header>
-		<span class="dot {staat}" aria-hidden="true"></span>
-		<span class="staat">{connected ? STATE_LABEL[staat] : 'Geen verbinding'}</span>
+		<span class="dot {machineState}" aria-hidden="true"></span>
+		<span class="staat">{connected ? STATE_LABEL[machineState] : 'Geen verbinding'}</span>
 		<span class="machine mono">{device?.label ?? 'geen machine'}</span>
 	</header>
 
@@ -288,7 +359,7 @@
 				<div class="binnen">
 					<span class="groot mono">{percent}<span class="pct">%</span></span>
 					{#if stil}
-						<span class="onder">{stilLabel}</span>
+						<span class="onder">gepauzeerd</span>
 					{:else if pauzeGevraagd}
 						<span class="onder">pauze gevraagd…</span>
 					{:else if resterend !== null}
@@ -300,7 +371,7 @@
 				</div>
 			</div>
 			<div class="jobregel">
-				<span class="titel">{jobNaam}</span>
+				<span class="titel">{jobLabel(huidig)}</span>
 				<span class="mono muted">{huidig.steps_done} / {huidig.steps_total}</span>
 			</div>
 		{:else}
@@ -308,9 +379,47 @@
 			     kop en wat is dit voor machine" — en dat is te tekenen. -->
 			<div class="rust">
 				{#if bedW > 0 && bedH > 0}
-					<svg class="bedje" viewBox="0 0 {bedW} {bedH}" role="img"
-						aria-label="Bed {Math.round(bedW)} bij {Math.round(bedH)} millimeter, kop op {position}">
+					<svg class="bedje" viewBox="0 0 {bedW} {bedH}" role="img" aria-label={bedUitleg}>
 						<rect class="vlak" x="0" y="0" width={bedW} height={bedH} vector-effect="non-scaling-stroke" />
+						<!-- Het vel: waar het materiaal ligt. Zonder dat kader zweeft het
+						     werk ergens in een bed van 610 mm en zie je niet of het op je
+						     restje past. -->
+						{#if sheet && sheet.width_mm > 0 && sheet.height_mm > 0}
+							<rect
+								class="vel"
+								x="0"
+								y="0"
+								width={sheet.width_mm}
+								height={sheet.height_mm}
+								vector-effect="non-scaling-stroke"
+							/>
+						{/if}
+						<!-- Het werk zelf, in laagkleur. Eén schaal van Tats naar mm,
+						     precies zoals het canvas het doet. -->
+						{#if vormen.length}
+							<g transform="scale({1 / perMm})">
+								{#each vormen as vorm (vorm.id)}
+									{#if vorm.image}
+										<image
+											href="/api/design/elements/{encodeURIComponent(vorm.id)}/image.png"
+											x={vorm.image.x_mm * perMm}
+											y={vorm.image.y_mm * perMm}
+											width={vorm.image.width_mm * perMm}
+											height={vorm.image.height_mm * perMm}
+											preserveAspectRatio="none"
+											opacity={vorm.stil ? 0.35 : 1}
+										/>
+									{:else}
+										<path
+											d={vorm.path}
+											class="vorm"
+											class:stil={vorm.stil}
+											style:stroke={vorm.stil ? undefined : vorm.kleur}
+										/>
+									{/if}
+								{/each}
+							</g>
+						{/if}
 						{#if kop}
 							<g class="kop">
 								<line x1={kop[0]} y1="0" x2={kop[0]} y2={bedH} vector-effect="non-scaling-stroke" />
@@ -325,6 +434,22 @@
 							? `${Math.round(bedW)} × ${Math.round(bedH)} mm`
 							: '—'}</dd></div>
 					<div><dt>Kop</dt><dd class="mono">{position}</dd></div>
+					<!-- Wat er ligt, in woorden. Een grijze stippellijn tussen zeven
+					     gekleurde is op een telefoon in de zon niet te zien; het getal
+					     erbij wel. -->
+					<div>
+						<dt>Op het bed</dt>
+						<dd>
+							{#if vormen.length === 0}
+								niets
+							{:else}
+								<span class="mono">{brandt}</span>
+								{brandt === 1 ? 'vorm brandt' : 'vormen branden'}{#if stille}<span class="stilnoot"
+										>, <span class="mono">{stille}</span> in geen laag</span
+									>{/if}
+							{/if}
+						</dd>
+					</div>
 				</dl>
 				<!-- Een bed zonder job zei alleen "Gereed" bovenin. Dat is een
 				     toestand, geen antwoord: wie hier kijkt wil weten of het stil is
@@ -332,7 +457,7 @@
 				<p class="waarom">
 					{#if !connected}
 						Dit is de laatste stand die we gezien hebben.
-					{:else if staat === 'unplugged'}
+					{:else if machineState === 'unplugged'}
 						Er hangt geen machine aan de server. Controleer of hij aanstaat en
 						of de kabel erin zit.
 					{:else}
@@ -374,10 +499,9 @@
 				{#each wachtend as grid (grid.id)}
 					<label class="raster">
 						<span class="naam">
-							<span class="kop">{rasterNaam(grid)} · {grid.operation}</span>
+							<span class="kop">{rasterNaam(grid)} · {BEWERKING[grid.operation] ?? grid.operation}</span>
 							<span class="detail mono">
-								{grid.speed_min}–{grid.speed_max} mm/s · {grid.power_min}–{grid.power_max}% ·
-								{stempel(grid.created_at)}
+								{gridSummary(grid)} · {stempel(grid.created_at)}
 							</span>
 						</span>
 						<span class="knop">{bezig === grid.id ? 'bezig…' : 'Foto maken'}</span>
@@ -489,6 +613,9 @@
 	   De stip bleef daardoor grijs terwijl de machine brandde. */
 	.dot.busy { background: var(--accent); }
 	.dot.paused { background: var(--warn-solid); }
+	/* `unplugged` bestond nog niet toen deze stip geschreven werd; zonder regel
+	   viel hij terug op grijs en las een dode poort als "niets aan de hand". */
+	.dot.unplugged { background: var(--warn-solid); }
 	.dot.alarm { background: var(--danger-solid); }
 	.dot.unplugged { background: var(--warn-solid); }
 	.opnieuw {
@@ -577,12 +704,35 @@
 	}
 	/* Krap houden: de wachtende rasters zijn de reden dat je de telefoon pakt,
 	   en die staan hieronder. Het bed hoeft alleen herkenbaar te zijn. */
-	.bedje { width: 100%; height: auto; max-height: 24vh; display: block; }
+	.bedje { width: 100%; height: auto; max-height: 30vh; display: block; }
 	/* --bed is wit en de kaart is dat ook: in het lichte thema was het bed dan
 	   onzichtbaar. --canvas-bg staat in beide thema's los van de kaart. */
 	.bedje .vlak { fill: var(--canvas-bg); stroke: var(--line); stroke-width: 1; }
 	.bedje .kop line { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.7; }
 	.bedje .kop circle { fill: var(--accent); }
+	/* De rand van het vel is de grens van je materiaal. `--line` haalt daar
+	   tegen `--canvas-bg` te weinig om als grens te lezen; `--text-2` is
+	   dezelfde keuze als in de pre-flight. */
+	.bedje .vel {
+		fill: var(--bed);
+		stroke: var(--text-2);
+		stroke-width: 1;
+		stroke-dasharray: 5 4;
+	}
+	.bedje .vorm {
+		fill: none;
+		stroke-width: 1.5;
+		vector-effect: non-scaling-stroke;
+		stroke-linejoin: round;
+	}
+	/* Zit in geen meebrandende laag: dezelfde taal als op het canvas en in de
+	   pre-flight — grijs gestippeld betekent "de machine slaat dit over". */
+	.bedje .vorm.stil {
+		stroke: var(--text-2);
+		stroke-width: 1;
+		stroke-dasharray: 4 3;
+	}
+	.feiten .stilnoot { color: var(--text-2); font-weight: 400; }
 	.feiten { margin: 0; display: grid; gap: var(--space-1); }
 	.feiten > div { display: flex; justify-content: space-between; align-items: baseline; }
 	.feiten dt { color: var(--text-2); }

@@ -707,17 +707,179 @@
 			.pop() ?? 0
 	);
 
-	function ticks(lengthMm: number, step: number, sub: number) {
-		const marks = [];
-		for (let value = 0; value <= lengthMm + 0.001; value += sub || step) {
-			const major = Math.abs(value % step) < 0.001;
-			marks.push({ value, major, label: major ? String(Math.round(value)) : '' });
+	/**
+	 * Streepjes over de hele liniaal, ook naast het bed (gat C4).
+	 *
+	 * De schaal hield op bij de bedrand, en dan kun je van een vorm die
+	 * ernaast ligt niet aflezen hóe ver ernaast — juist het getal dat je nodig
+	 * hebt om hem terug te halen. LightBurn laat de schaal doorlopen met
+	 * negatieve waarden; dat doen we hier ook.
+	 *
+	 * Tellen in stappen en niet in millimeters optellen: `value += 0.1`
+	 * driehonderd keer levert 29,999999 op, en dan valt de modulo-toets voor
+	 * "is dit een hoofdstreep" willekeurig om.
+	 */
+	function ticks(fromMm: number, toMm: number, step: number, sub: number, lengthMm: number) {
+		const fijn = sub || step;
+		const perHoofd = Math.max(1, Math.round(step / fijn));
+		const marks: { value: number; major: boolean; buiten: boolean; label: string }[] = [];
+		const eerste = Math.ceil(fromMm / fijn - 0.001);
+		const laatste = Math.floor(toMm / fijn + 0.001);
+		// Bij een absurde zoomstand niet duizenden knopen tekenen.
+		if (laatste - eerste > 400) return marks;
+		for (let i = eerste; i <= laatste; i++) {
+			const value = i * fijn;
+			const major = ((i % perHoofd) + perHoofd) % perHoofd === 0;
+			marks.push({
+				value,
+				major,
+				// Buiten het bed: wél een streepje en een cijfer, maar lichter —
+				// zo zie je in één blik waar het werkgebied ophoudt.
+				buiten: value < -0.001 || value > lengthMm + 0.001,
+				label: major ? String(Math.round(value)) : ''
+			});
 		}
 		return marks;
 	}
 
-	let ticksX = $derived(ticks(bed.width, rulerStep, subStep));
-	let ticksY = $derived(ticks(bed.height, rulerStep, subStep));
+	// Wat er van de liniaal in beeld staat, in millimeters. Nul ligt op de
+	// bedhoek, dus links van het bed is negatief.
+	let ticksX = $derived(
+		ticks(
+			-bedOrigin.x / scale,
+			(canvasWidth - bedOrigin.x) / scale,
+			rulerStep,
+			subStep,
+			bed.width
+		)
+	);
+	let ticksY = $derived(
+		ticks(
+			-bedOrigin.y / scale,
+			(canvasHeight - bedOrigin.y) / scale,
+			rulerStep,
+			subStep,
+			bed.height
+		)
+	);
+
+	// ── Buiten het bed of buiten het vel ───────────────────────────────────────
+	//
+	// Gat C2: een vorm die het bed of het vel overschrijdt werd nergens gemeld.
+	// Twee verschillende fouten, en het verschil telt: buiten het bed kán de
+	// machine niet komen, buiten het vel wél — maar daar ligt geen materiaal.
+	// Daarom twee kleuren en twee zinnen, en niet één "let op".
+	const RAND_SPELING = 0.5;
+
+	function buitenKader(
+		box: { x: number; y: number; width: number; height: number },
+		kader: { width: number; height: number }
+	) {
+		return (
+			box.x < -RAND_SPELING ||
+			box.y < -RAND_SPELING ||
+			box.x + box.width > kader.width + RAND_SPELING ||
+			box.y + box.height > kader.height + RAND_SPELING
+		);
+	}
+
+	/** Per element: valt het buiten het bed, of alleen buiten het vel? */
+	let buitenstaanders = $derived.by(() => {
+		const perMm = design.design?.units_per_mm;
+		const uit = new Map<string, 'bed' | 'vel'>();
+		if (!perMm) return uit;
+		for (const element of design.elements) {
+			if (!element.bounds || element.hidden) continue;
+			// Alleen werk dat straks écht de machine in gaat. Een vorm die in geen
+			// enkele laag zit of in een laag met "brandt niet mee" kost geen
+			// materiaal en geen tijd — die rood omranden is een valse alarmbel, en
+			// van valse alarmbellen leert een gebruiker ze te negeren. Dat hij niet
+			// meebrandt staat er al: gestippeld grijs op het canvas.
+			const streek = design.strokeFor(element);
+			if (streek.dashed || streek.dimmed || !streek.visible) continue;
+			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
+			const doos = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+			if (buitenKader(doos, bed)) uit.set(element.id, 'bed');
+			else if (sheet && buitenKader(doos, sheet)) uit.set(element.id, 'vel');
+		}
+		return uit;
+	});
+
+	let buitenBed = $derived([...buitenstaanders.values()].filter((v) => v === 'bed').length);
+	let buitenVel = $derived([...buitenstaanders.values()].filter((v) => v === 'vel').length);
+
+	// ── Laagnummers bij de vorm (gat C6) ───────────────────────────────────────
+	//
+	// Het design system verbiedt informatie die alleen in kleur zit, en op het
+	// bed was de laag precies dat. Bij deuteranopie liggen laag 4 en 10 maar 24
+	// eenheden uit elkaar (gemeten door c6-a11y) — op een lijn van 1,2 px is dat
+	// niets. Het nummer is hetzelfde vangnet als op de chip in het paneel.
+	//
+	// Waarom een nummer en geen lijnstijl per laagsoort: gestreept betekent op
+	// dit canvas al "zit in geen enkele laag", en half doorzichtig betekent
+	// "brandt niet mee" (besluit B4). Nog een derde streepjespatroon erbij maakt
+	// van drie betekenissen één raadsel, en het zou bovendien niet zeggen wélke
+	// van de vier snijlagen je voor je hebt. Het nummer zegt dat wel, en het is
+	// exact hetzelfde getal als in de lijst en in de pre-flight (gat J7).
+	let nummersAan = $state(
+		typeof window === 'undefined' || localStorage.getItem('openkerf.laagnummers') !== 'uit'
+	);
+
+	function nummersSchakel() {
+		nummersAan = !nummersAan;
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('openkerf.laagnummers', nummersAan ? 'aan' : 'uit');
+		}
+	}
+
+	/**
+	 * Waar de nummers komen te staan, in millimeters.
+	 *
+	 * Alleen bij vormen die er op het scherm ruimte voor hebben: een cijfer bij
+	 * een vorm van vier pixels is een vlek, en vijftig vlekken maken het bed
+	 * onleesbaar. Wie het van dichtbij wil zien, zoomt in — dan verschijnen ze
+	 * vanzelf.
+	 */
+	let laagLabels = $derived.by(() => {
+		if (!nummersAan) return [];
+		const perMm = design.design?.units_per_mm;
+		if (!perMm) return [];
+		const labels = [];
+		for (const element of design.elements) {
+			if (element.hidden || !element.bounds) continue;
+			const streek = design.strokeFor(element);
+			if (!streek.visible) continue;
+			const ids = element.operation_ids?.length
+				? element.operation_ids
+				: element.operation_id
+					? [element.operation_id]
+					: [];
+			// De laag die de kleur bepaalt, is ook de laag die het nummer krijgt.
+			let beste: string | null = null;
+			let bestIndex = -1;
+			for (const id of ids) {
+				const i = design.operations.findIndex((o) => o.id === id);
+				if (i < 0 || design.isLayerHidden(id)) continue;
+				if (bestIndex < 0 || i < bestIndex) {
+					bestIndex = i;
+					beste = id;
+				}
+			}
+			const nummer = design.numberFor(beste);
+			if (!nummer) continue;
+			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
+			if ((x1 - x0) * scale < 22 || (y1 - y0) * scale < 14) continue;
+			labels.push({
+				id: element.id,
+				nummer,
+				kleur: streek.color,
+				x: x0,
+				y: y0,
+				dim: streek.dimmed
+			});
+		}
+		return labels;
+	});
 
 	// ── Vastklikken ────────────────────────────────────────────────────────────
 	//
@@ -872,6 +1034,23 @@
 	/** Waar de muis staat, als streepje op beide linialen. */
 	let pointer = $state<{ x: number; y: number } | null>(null);
 
+	/**
+	 * De hoogte van alles onder het canvas, als CSS-variabele op de wortel.
+	 *
+	 * De camerapil zweeft boven het canvas met een vaste afstand tot de
+	 * onderkant en leest deze maat. Er staat inmiddels meer dan één strook
+	 * onder het bed — de kleurenstrook (B2) en de waarschuwing over werk buiten
+	 * het bed (C2) — dus meten we het blok als geheel. Opmeten en niet
+	 * uitrekenen: de hoogte verschilt per apparaat, want op aanraakschermen zijn
+	 * de knoppen groter en breekt de regel.
+	 */
+	let onderrandHoogte = $state(0);
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		document.documentElement.style.setProperty('--palet-hoogte', `${onderrandHoogte}px`);
+		return () => document.documentElement.style.removeProperty('--palet-hoogte');
+	});
+
 	// Niet via pointerMm: die rekent vanaf de SVG, en dit gebeurt op het
 	// omhullende vlak dat óók de linialen bevat. Rekenen vanaf de bedhoek.
 	function pointerOnRulers(event: PointerEvent) {
@@ -936,15 +1115,26 @@
 >
 	<div class="corner" aria-hidden="true">mm</div>
 	<svg class="ruler-x" aria-hidden="true">
+		<!-- Het werkgebied als band op de liniaal zelf (gat C4). De schaal loopt
+		     nu door tot voorbij het bed, dus er moet iets zeggen wáár het bed
+		     ophoudt — anders lees je een getal af zonder te weten of het nog op
+		     de machine ligt. -->
+		<rect
+			class="werkgebied"
+			x={bedOrigin.x}
+			y="0"
+			width={Math.max(0, bed.width * scale)}
+			height="20"
+		/>
 		{#each ticksX as tick (tick.value)}
 			{@const at = bedOrigin.x + tick.value * scale}
 			{#if at >= -40 && at <= canvasWidth + 40}
 				<!-- Streepjes onder de cijferband, niet erdoorheen: met streepjes
 				     die tot y=8 liepen sneed er altijd een door "100" en las je
 				     "109". Cijfers wonen boven, streepjes beneden. -->
-				<line x1={at} x2={at} y1={tick.major ? 11 : 15} y2="20" />
+				<line class:buiten={tick.buiten} x1={at} x2={at} y1={tick.major ? 11 : 15} y2="20" />
 				{#if tick.label}
-					<text x={at + 3} y="1">{tick.label}</text>
+					<text class:buiten={tick.buiten} x={at + 3} y="1">{tick.label}</text>
 				{/if}
 			{/if}
 		{/each}
@@ -953,12 +1143,19 @@
 		{/if}
 	</svg>
 	<svg class="ruler-y" aria-hidden="true">
+		<rect
+			class="werkgebied"
+			x="0"
+			y={bedOrigin.y}
+			width="20"
+			height={Math.max(0, bed.height * scale)}
+		/>
 		{#each ticksY as tick (tick.value)}
 			{@const at = bedOrigin.y + tick.value * scale}
 			{#if at >= -40 && at <= canvasHeight + 40}
-				<line y1={at} y2={at} x1={tick.major ? 11 : 15} x2="20" />
+				<line class:buiten={tick.buiten} y1={at} y2={at} x1={tick.major ? 11 : 15} x2="20" />
 				{#if tick.label}
-					<text x="1" y={at - 3} transform="rotate(-90 1 {at - 3})">{tick.label}</text>
+					<text class:buiten={tick.buiten} x="1" y={at - 3} transform="rotate(-90 1 {at - 3})">{tick.label}</text>
 				{/if}
 			{/if}
 		{/each}
@@ -1086,6 +1283,21 @@
 							     dat wijzen de hulplijnen naar een rand die er nog niet ligt. -->
 							<g transform={verschuiving(element.id)}>
 							{#if !element.hidden && element.image && design.strokeFor(element).visible}
+								{#if buitenstaanders.get(element.id)}
+									<!-- Zelfde melding als bij een pad, maar een afbeelding heeft
+									     geen contour om te laten gloeien: dan is het kader het
+									     onderwerp. -->
+									<rect
+										class="buiten-gloed"
+										class:velrand={buitenstaanders.get(element.id) === 'vel'}
+										x={element.image.x_mm * (design.design?.units_per_mm ?? 1)}
+										y={element.image.y_mm * (design.design?.units_per_mm ?? 1)}
+										width={element.image.width_mm * (design.design?.units_per_mm ?? 1)}
+										height={element.image.height_mm * (design.design?.units_per_mm ?? 1)}
+										fill="none"
+										vector-effect="non-scaling-stroke"
+									/>
+								{/if}
 								<!-- Afbeeldingen hebben geen pad; de pixels komen van de API.
 								     De transform hierboven rekent in Tats, dus terugschalen. -->
 								<image
@@ -1133,6 +1345,21 @@
 								     wel ziet liggen maar nooit aanziet voor werk dat straks de
 								     machine in gaat. -->
 								{@const streek = design.strokeFor(element)}
+								{@const buiten = buitenstaanders.get(element.id)}
+								{#if buiten}
+									<!-- Gat C2: een gloed in de kleur van het bezwaar, onder de
+									     vorm door. De laagkleur blijft dus zichtbaar — je moet
+									     nog steeds kunnen zien in welke laag het ding zit — maar
+									     de vorm zelf draagt nu de waarschuwing, en niet alleen
+									     een regel tekst in een paneel dat je dicht kunt klappen. -->
+									<path
+										class="buiten-gloed"
+										class:velrand={buiten === 'vel'}
+										d={element.path}
+										fill="none"
+										vector-effect="non-scaling-stroke"
+									/>
+								{/if}
 								<path
 									d={element.path}
 									fill="none"
@@ -1179,6 +1406,21 @@
 							</g>
 						{/each}
 					</g>
+
+					<!-- Het laagnummer bij de vorm (gat C6). Buiten de Tat-schaal, want
+					     de tekst moet even groot blijven bij elke zoomstand. Het cijfer
+					     krijgt een rand in de bedkleur mee (`paint-order`), anders valt
+					     het weg tegen een rasterlijn of tegen de vorm eronder. -->
+					{#each laagLabels as label (label.id)}
+						<!-- @svg-space: millimeter-ruimte, geen CSS-pixels; `labelSize` is de
+						     teruggerekende schermmaat van --text-xs. -->
+						<text
+							style="font-size: {labelSize * 0.95}px; fill: {label.kleur}; fill-opacity: {label.dim ? 0.5 : 1}"
+							class="laagnummer mono"
+							x={label.x + 2 * mmPerPx}
+							y={label.y - 3 * mmPerPx}
+						>{label.nummer}</text>
+					{/each}
 
 					<!-- Selectiecontour: de kerflijn. Statisch gestreept, en alleen
 					     geanimeerd terwijl je sleept — zoals DESIGN-SYSTEM.md voorschrijft. -->
@@ -1443,6 +1685,37 @@
 					/>
 				{/if}
 
+				<!-- De oorsprong (gat C5). LightBurn zet er een vast hoekmerk met
+				     asletters neer, en met reden: bij ons viel 0,0 samen met de
+				     kopmarkering, dus zodra de kop bewoog was er niets meer dat zei
+				     waar de machine vandaan telt. Dit merk beweegt nooit.
+
+				     Alle maten teruggerekend naar schermpixels — in een SVG die in
+				     millimeters meet is "6" zes millimeter, en dan groeit het merk
+				     met de zoom mee tot het het halve bed beslaat. -->
+				<!-- @svg-space: asletters in millimeter-ruimte, teruggerekend naar de
+				     schermmaat van --text-xs. -->
+				<g class="oorsprong" aria-hidden="true">
+					<!-- Twee assen met een pijlpunt: X naar rechts, Y omlaag. Dat is de
+					     richting waarin de machine telt, en die staat er dus in. -->
+					<line x1="0" y1="0" x2={14 * mmPerPx} y2="0" />
+					<line x1="0" y1="0" x2="0" y2={14 * mmPerPx} />
+					<path class="punt" d="M{14 * mmPerPx} 0 L{10 * mmPerPx} {-2.4 * mmPerPx} L{10 * mmPerPx} {2.4 * mmPerPx} Z" />
+					<path class="punt" d="M0 {14 * mmPerPx} L{-2.4 * mmPerPx} {10 * mmPerPx} L{2.4 * mmPerPx} {10 * mmPerPx} Z" />
+					<!-- Een vierkantje op het punt zelf, geen ring: de kopmarkering is
+					     al een ring in het accent, en die twee vlak op elkaar (de kop
+					     staat na homen precies hier) waren niet uit elkaar te houden. -->
+					<rect
+						class="knoop"
+						x={-1.8 * mmPerPx}
+						y={-1.8 * mmPerPx}
+						width={3.6 * mmPerPx}
+						height={3.6 * mmPerPx}
+					/>
+					<text class="as mono" x={18.5 * mmPerPx} y={3.5 * mmPerPx} style="font-size: {labelSize * 0.9}px">X</text>
+					<text class="as mono" x={2.5 * mmPerPx} y={21 * mmPerPx} style="font-size: {labelSize * 0.9}px">Y</text>
+				</g>
+
 				{#if head}
 					<!-- Live kop-positie. Er is nog geen ontwerp om te tonen: fase 1
 					     leest alleen status, het canvas zelf komt in fase 3. -->
@@ -1459,6 +1732,24 @@
 	</div>
 
 	<div class="zoom">
+		<!-- Laagnummers bij de vorm aan of uit (gat C6). Standaard aan, want het
+		     nummer is het vangnet dat het design system voorschrijft; uit kan,
+		     want bij vijftig vormen op een vel is het een wolk cijfers. -->
+		<button
+			class="snap"
+			class:aan={nummersAan}
+			aria-pressed={nummersAan}
+			title={nummersAan
+				? 'Laagnummers bij de vormen staan aan'
+				: 'Laagnummers bij de vormen staan uit'}
+			aria-label="Laagnummers bij de vormen"
+			onclick={nummersSchakel}
+		>
+			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<path d="M5 9h14M5 15h14M10 4 8 20M17 4l-2 16" />
+			</svg>
+		</button>
+		<span class="scheiding" aria-hidden="true"></span>
 		<!-- Vastklikken aan of uit. Een magneet, want dat is het beeld dat elk
 		     tekenprogramma ervoor gebruikt; de stand staat er in woorden bij in de
 		     titel, want een icoon alleen zegt niet of het aan- of uitstaat. -->
@@ -1496,11 +1787,54 @@
 	{/if}
 </div>
 
+<!-- Gat C2 in woorden, als eigen strook onder het bed.
+     De gloed op het bed is de eerste waarschuwing, maar kleur alleen mag het
+     nooit dragen: wie in de werkplaats bij een raam staat ziet die gloed als
+     eerste niet meer, en met deuteranopie is rood op een oranje lijn geen
+     verschil. Twee aparte zinnen, want buiten het bed (daar komt de kop niet)
+     en buiten het vel (daar ligt geen materiaal) zijn twee problemen.
+
+     Bewust géén zwevend kaartje op het canvas: daar botste hij op de camerapil
+     links en op de zoombalk rechts — gemeten op 1024, de melding viel er half
+     achter. Een strook in de stroom dekt niets af en verdwijnt weer zodra het
+     werk binnen de randen ligt. -->
+<!-- Alles wat ónder het bed hangt in één blok, en dat blok meet zichzelf op.
+     De camerapil zweeft boven het canvas met een vaste afstand tot de onderkant
+     en rekent met `--palet-hoogte`; stond de kleurenstrook alleen in die maat,
+     dan lag de pil over deze waarschuwing heen zodra hij verscheen (gemeten op
+     1440: overlap van 34 px). Eén maat voor de hele onderrand is de enige die
+     klopt, want er kan meer dan één strook staan. -->
+<div class="onderrand" bind:clientHeight={onderrandHoogte}>
+{#if buitenBed || buitenVel}
+	<div class="buiten-strook" role="status">
+		{#if buitenBed}
+			<span class="regel bedrand">
+				<span class="teken" aria-hidden="true">!</span>
+				<span
+					>{buitenBed === 1 ? 'Eén vorm ligt' : `${buitenBed} vormen liggen`} buiten het
+					bed — daar komt de kop niet.</span
+				>
+			</span>
+		{/if}
+		{#if buitenVel}
+			<span class="regel velrand">
+				<span class="teken" aria-hidden="true">!</span>
+				<span
+					>{buitenVel === 1 ? 'Eén vorm ligt' : `${buitenVel} vormen liggen`} buiten {sheet
+						? sheet.name
+						: 'het vel'} — daar ligt geen materiaal.</span
+				>
+			</span>
+		{/if}
+	</div>
+{/if}
+
 <!-- Besluit B2: de kleurenstrook hoort ónder het canvas, niet in het paneel.
      Daar hoort hij bij de vorm die je vasthebt, en niet bij een tabblad dat je
      eerst moet opzoeken. Een eigen rij, geen zwevende balk over het bed heen:
      hij mag nooit iets afdekken wat je aan het uitlijnen bent. -->
 <LagenPalet {design} {edits} {canEdit} onChanged={() => onEdited?.()} />
+</div>
 
 <style>
 	.canvas-wrap {
@@ -1549,6 +1883,21 @@
 	.ruler-x .here,
 	.ruler-y .here {
 		stroke: var(--accent);
+	}
+	/* Buiten het bed loopt de schaal door, maar zachter: het getal is er als je
+	   het nodig hebt en dringt zich niet op als je binnen het bed werkt (C4). */
+	.ruler-x line.buiten,
+	.ruler-y line.buiten {
+		stroke: color-mix(in srgb, var(--line-strong, var(--line)) 55%, transparent);
+	}
+	.ruler-x text.buiten,
+	.ruler-y text.buiten {
+		fill: color-mix(in srgb, var(--text-2) 60%, transparent);
+	}
+	/* De band die zegt hoe ver het bed reikt. Geen rand: dat zou een vierde
+	   lijnsoort op een liniaal van 20 px zijn. */
+	.werkgebied {
+		fill: color-mix(in srgb, var(--text-2) 8%, transparent);
 	}
 	.ruler-x text,
 	.ruler-y text {
@@ -1660,6 +2009,109 @@
 	.blank strong {
 		color: var(--text-1);
 		font-weight: 600;
+	}
+	/* De oorsprong (C5). Bewust níet in het accent en niet in rood: het accent
+	   is de kopmarkering — dat was juist de verwarring — en rood betekent in dit
+	   systeem gevaar. Dit is een vast punt op de machine, dus de tekstkleur van
+	   de app, half doorzichtig zodat hij nooit boven het werk uit schreeuwt. */
+	.oorsprong {
+		pointer-events: none;
+	}
+	.oorsprong line {
+		stroke: var(--text-1);
+		stroke-width: 1.4;
+		vector-effect: non-scaling-stroke;
+		opacity: 0.55;
+	}
+	.oorsprong .punt {
+		fill: var(--text-1);
+		opacity: 0.55;
+	}
+	.oorsprong .knoop {
+		fill: var(--text-1);
+		opacity: 0.8;
+	}
+	.oorsprong text {
+		fill: var(--text-1);
+		opacity: 0.75;
+		font-family: var(--font-mono);
+		paint-order: stroke;
+		stroke: var(--bed);
+		stroke-width: 3px;
+		stroke-linejoin: round;
+		vector-effect: non-scaling-stroke;
+	}
+	/* Het laagnummer bij de vorm (C6). Zelfde kleur als de lijn, met een rand in
+	   de bedkleur eromheen — anders leest een 8 op een rasterlijn als een 3. */
+	.laagnummer {
+		pointer-events: none;
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
+		paint-order: stroke;
+		stroke: var(--bed);
+		stroke-width: 3px;
+		stroke-linejoin: round;
+		vector-effect: non-scaling-stroke;
+	}
+	/* Buiten het bed of buiten het vel (C2): een gloed ónder de vorm, zodat de
+	   laagkleur zelf leesbaar blijft. Twee kleuren, twee betekenissen — rood
+	   voor "daar komt de kop niet", amber voor "daar ligt geen materiaal". */
+	.buiten-gloed {
+		stroke: var(--danger-solid);
+		stroke-width: 6;
+		stroke-opacity: 0.32;
+		stroke-linejoin: round;
+		pointer-events: none;
+	}
+	/* Buiten het vel: amber én onderbroken. Twee coderingen, want amber op een
+	   gele laaglijn (--layer-3) is een verschil dat bij deuteranopie en in fel
+	   werkplaatslicht verdwijnt. Onderbroken past ook bij wat het zegt: het
+	   materiaal onder deze vorm houdt op. De vorm zelf blijft doorgetrokken —
+	   gestreepte lijnen betekenen op dit canvas "zit in geen laag". */
+	.buiten-gloed.velrand {
+		stroke: var(--warn-solid);
+		stroke-dasharray: 3 3;
+		stroke-opacity: 0.55;
+	}
+	.buiten-strook {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-3);
+		padding: var(--space-2) var(--space-3);
+		border-top: 1px solid var(--line);
+		background: var(--surface-1);
+	}
+	.buiten-strook .regel {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
+		padding-left: var(--space-2);
+		font-size: var(--text-xs);
+		line-height: 1.4;
+		color: var(--text-1);
+		border-left: 4px solid var(--danger-solid);
+	}
+	.buiten-strook .regel.velrand {
+		border-left-color: var(--warn-solid);
+	}
+	/* Het teken is de tweede codering náást de kleur: ook zwart-wit afgedrukt
+	   blijft het een uitroepteken in een cirkel. */
+	.buiten-strook .teken {
+		flex: none;
+		width: 16px;
+		height: 16px;
+		margin-top: 1px;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-dot);
+		font-weight: 700;
+		font-size: var(--text-xs);
+		color: var(--on-color);
+		background: var(--danger-solid);
+	}
+	.buiten-strook .regel.velrand .teken {
+		background: var(--warn-solid);
+		color: var(--void);
 	}
 	.head line {
 		stroke: var(--accent);

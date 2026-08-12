@@ -45,27 +45,57 @@
 	});
 </script>
 
-<svelte:head>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link
-		href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
-		rel="stylesheet"
-	/>
-</svelte:head>
+<!-- De fonts komen sinds v3.3 uit de build zelf (@font-face in tokens.css, zes
+     woff2 van samen 128 KB). De link naar fonts.googleapis.com die hier stond
+     voegde daar niets aan toe en was het énige externe verzoek van de app;
+     zonder netwerk leverde hij ERR_FAILED in de console op. -->
 
 {#if inWizard || rondkijken || stand === 'klaar'}
 	{@render children()}
 {:else if stand === 'nodig'}
 	<Welkom onrondkijken={() => (rondkijken = true)} />
+{:else}
+	<!-- Zolang `stand` onbekend is tekenen we het werkgebied niet: dat zou
+	     opflitsen met de melding dat de laser klaarstaat. Maar een volstrekt
+	     blanco pagina is niet te onderscheiden van een stuk scherm, en op een
+	     langzame server duurde "één tel" merkbaar langer dan een tel. Deze regel
+	     verschijnt daarom pas ná 400 ms: is de server snel, dan zie je hem
+	     nooit; is hij traag, dan staat er waar we op wachten. -->
+	<p class="wachten" role="status">Even kijken welke machine er is…</p>
 {/if}
-<!-- Zolang `stand` onbekend is tekenen we niets: één tel leegte is beter dan
-     een werkgebied dat opflitst en meldt dat de laser klaarstaat. -->
-
 
 <style>
 	:global(body) {
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+	}
+	.wachten {
+		flex: 1;
+		display: grid;
+		place-items: center;
+		margin: 0;
+		color: var(--text-2);
+		background: var(--surface-0);
+		/* Vertraagd in beeld: een snelle server hoort hier geen tekst te laten
+		   opflitsen, een langzame moet zich verantwoorden. */
+		opacity: 0;
+		/* Duur en timing los uitschrijven: --transition is "150ms ease-out", dus
+		   in een animation-shorthand levert het een tweede timingfunctie op en
+		   valt de hele regel als ongeldig weg. Gemeten: opacity bleef 0. */
+		animation: opdoemen 150ms ease-out 400ms forwards;
+	}
+	@keyframes opdoemen {
+		to {
+			opacity: 1;
+		}
+	}
+	/* Wie beweging uitzet, krijgt de regel meteen: hij is een melding, geen
+	   versiering, en mag niet helemaal wegvallen. */
+	@media (prefers-reduced-motion: reduce) {
+		.wachten {
+			opacity: 1;
+			animation: none;
+		}
 	}
 </style>
