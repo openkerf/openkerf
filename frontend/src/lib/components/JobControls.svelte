@@ -71,6 +71,17 @@
 		material_name?: string | null;
 		thickness_mm?: number | null;
 		warnings?: Warning[];
+		/** Voert deze engine de laag daadwerkelijk uit? Zie `rasterUit`. */
+		burns?: boolean;
+	};
+	type Bounds = {
+		bed: { width_mm: number; height_mm: number } | null;
+		sheet: { width_mm: number; height_mm: number } | null;
+		work: { x_mm: number; y_mm: number; width_mm: number; height_mm: number } | null;
+		outside_bed: number;
+		outside_sheet: number;
+		outside_bed_ids: string[];
+		outside_sheet_ids: string[];
 	};
 	type SheetInfo = {
 		name: string;
@@ -88,7 +99,12 @@
 	 * een instelling van ánder materiaal draagt, is precies wat je vóór het
 	 * starten moet zien; die hoort niet achter een tijdschatting te wachten.
 	 */
-	let overzicht = $state<{ sheet?: SheetInfo | null; layers?: Layer[] } | null>(null);
+	let overzicht = $state<{
+		sheet?: SheetInfo | null;
+		layers?: Layer[];
+		bounds?: Bounds | null;
+		engine?: { raster: boolean } | null;
+	} | null>(null);
 	let layers = $derived(overzicht?.layers ?? []);
 	/**
 	 * Het ontwerp voor de weergave erboven (besluit B8).
@@ -109,7 +125,7 @@
 	// uitgerekende op het juiste, en dan moet die bovenaan staan.
 	let mismatch = $derived(
 		layers
-			.filter((l) => l.warnings?.length)
+			.filter((l) => l.burns !== false && l.warnings?.length)
 			.map((l) => ({
 				laag: l.label,
 				ernst: Math.max(...(l.warnings ?? []).map((w) => w.ernst ?? 1)),
@@ -132,52 +148,30 @@
 	});
 
 	/**
-	 * Hoe groot het werk is, en past het op het bed? (gat J5)
+	 * Past het op het bed, en past het op het vel? (gaten J5 en C2)
 	 *
-	 * De weergave erboven zet het werk tegen het *vel*, en dat is de vraag die
-	 * je meestal hebt. Maar een vel is een tekening en het bed is de machine:
-	 * een vel van 600×400 op een bed van 310×210 tekent prima en snijdt niet.
-	 * Dat is precies het soort fout dat je één regel eerder wil weten dan één
-	 * beweging later.
+	 * Beide vragen worden door de server beantwoord en niet hier: die meet ze
+	 * toch al voor het canvas en de telefoon, en drie plekken die het zelf
+	 * uitrekenen kunnen het over de rand oneens worden. `bounds` hoort daarom
+	 * in `/api/job/layers` en niet alleen in `/api/job/estimate` — anders
+	 * verschijnt "valt buiten het bed" pas als de klok terug is, en dat kan op
+	 * een zwaar ontwerp seconden duren.
+	 *
+	 * De melding zelf staat in `JobPreview`, direct onder de tekening waar de
+	 * vorm te zien is waar het over gaat.
 	 */
-	let werkMm = $derived.by(() => {
-		const perMm = ontwerp?.units_per_mm ?? 0;
-		const elementen = ontwerp?.elements ?? [];
-		if (!perMm || !elementen.length) return null;
-		let x0 = Infinity;
-		let y0 = Infinity;
-		let x1 = -Infinity;
-		let y1 = -Infinity;
-		for (const element of elementen) {
-			if (element.hidden || !element.bounds) continue;
-			const [a, b, c, d] = element.bounds;
-			x0 = Math.min(x0, a / perMm);
-			y0 = Math.min(y0, b / perMm);
-			x1 = Math.max(x1, c / perMm);
-			y1 = Math.max(y1, d / perMm);
-		}
-		if (!Number.isFinite(x0)) return null;
-		return { x0, y0, w: x1 - x0, h: y1 - y0, x1, y1 };
-	});
-	// 0,5 mm speling: op de rand van het bed is een tiende millimeter
-	// meetruis, geen fout, en een waarschuwing die daarop afgaat verliest
-	// binnen een dag zijn geloofwaardigheid.
-	const BEDMARGE = 0.5;
-	let buitenBed = $derived.by(() => {
-		const bed = device?.bed;
-		if (!werkMm || !bed?.width_mm || !bed?.height_mm) return null;
-		if (
-			werkMm.x0 >= -BEDMARGE &&
-			werkMm.y0 >= -BEDMARGE &&
-			werkMm.x1 <= bed.width_mm + BEDMARGE &&
-			werkMm.y1 <= bed.height_mm + BEDMARGE
-		) {
-			return null;
-		}
-		// Hele millimeters: een bed van 24 inch is 609,6 mm en die komma is geen
-		// informatie, alleen precisie waar niemand om vroeg.
-		return `${Math.round(bed.width_mm)} × ${Math.round(bed.height_mm)} mm`;
-	});
+	let grenzen = $derived(overzicht?.bounds ?? null);
+
+	/**
+	 * Brandt deze engine rasterlagen?
+	 *
+	 * Nee, headless: de omzetter van rastervlak naar laserregels zit in de
+	 * wxPython-GUI. De laag gooit tijdens het plannen zijn eigen vormen weg en
+	 * levert nul cutcode. Dat mag geen verrassing zijn ná het branden, en de
+	 * tijdschatting mag er geen seconden voor beloven.
+	 */
+	let rasterUit = $derived(overzicht?.engine?.raster === false);
+	let blindeLagen = $derived(layers.filter((l) => l.burns === false));
 	// Hele millimeters waar het kan; 0,5 mm blijft 0,5 mm.
 	function maat(value: number): string {
 		return (Math.round(value * 10) / 10).toString().replace('.', ',');
@@ -190,7 +184,10 @@
 		handmatig: 'handmatig ingesteld',
 		geimporteerd: 'van iemand anders'
 	};
-	let risky = $derived(layers.filter((l) => l.source !== 'testraster'));
+	// Een laag die niet brandt, hoeft geen betrouwbare instellingen te hebben:
+	// er wordt niets mee gedaan. Hem meetellen maakt van "3 lagen zijn niet
+	// gemeten" een getal dat niet klopt met wat er straks gebeurt.
+	let risky = $derived(layers.filter((l) => l.burns !== false && l.source !== 'testraster'));
 
 	/**
 	 * Waar de getallen van deze laag vandaan komen, in twee woorden.
@@ -370,21 +367,31 @@
 			     ziet dat er iets buiten het vel hangt, hoeft de tijd niet meer te
 			     lezen — en op tablet en telefoon staat het canvas er niet naast. -->
 			{#if !leeg}
-				<JobPreview design={ontwerp} sheet={overzicht?.sheet ?? null} {colorFor} />
-				<!-- Direct onder de tekening, naast de melding over het vel die de
-				     tekening zelf al geeft (gat J5). Twee meldingen over hetzelfde
-				     onderwerp horen bij elkaar; verderop in de gele stapel las dit
-				     als een vierde algemene waarschuwing, en dan weegt geen van de
-				     vier nog iets.
-
-				     Zwaarder dan geel, want het is een andere soort. Buiten het vel
-				     kost je materiaal; buiten het bed kán de machine er niet bij. Dat
-				     is geen "let op" maar "dit gaat zo niet". -->
-				{#if buitenBed}
-					<p class="pf-buitenbed" role="alert">
-						<strong>Buiten het bed.</strong> Deze machine reikt tot {buitenBed};
-						wat daarbuiten ligt wordt niet gebrand. Verplaats het of maak het
-						kleiner.
+				<!-- De meldingen over bed en vel horen bij de tekening en staan er
+				     dus in, direct onder de vorm waar het over gaat (gaten J5 en
+				     C2). Ze stonden hier als twee even rode kaarten op rij; dat
+				     maakte "daar ligt geen materiaal" even ernstig als "daar komt de
+				     kop niet", en dan weegt geen van beide nog. -->
+				<JobPreview
+					design={ontwerp}
+					sheet={overzicht?.sheet ?? null}
+					bounds={grenzen}
+					{colorFor}
+				/>
+				<!-- De omzetter die een rastervlak naar laserregels rekent, zit in de
+				     wxPython-versie van de engine. Ontbreekt hij, dan gooit de laag
+				     tijdens het plannen zijn eigen vormen weg en komt er niets uit de
+				     machine. Dezelfde woorden als de blokkade in de testrasterwizard:
+				     wie ze daar gelezen heeft, herkent ze hier — en andersom. -->
+				{#if rasterUit && blindeLagen.length}
+					<p class="pf-geenraster" role="alert">
+						<strong>Deze server kan rasterlagen niet branden.</strong>
+						{blindeLagen.length === 1
+							? `De laag "${blindeLagen[0].label}" levert`
+							: `${blindeLagen.length} rasterlagen leveren`} niets — de omzetter
+						van rastervlak naar laserregels zit in de wxPython-versie van de
+						engine. De klok hieronder rekent er daarom nul voor. Maak er een
+						graveer- of snijlaag van, of brand deze job vanuit de wxPython-UI.
 					</p>
 				{/if}
 				<div class="pf-time">
@@ -462,26 +469,44 @@
 										     kunnen lopen. -->
 										{#if colorFor}
 											{@const nummer = laagNummer(ontwerp, layer.id)}
-											<span
-												class="chip mono"
-												class:genummerd={nummer !== null}
-												style:background={colorFor(layer.id)}
-												style:color={inktOp(colorFor(layer.id))}
-												aria-hidden={nummer === null}
-												title={nummer === null ? undefined : `Laag ${nummer}`}
-											>{nummer ?? ''}</span>
+											<!-- Met `aria-hidden` eraf hoort een schermlezer anders een
+											     kaal cijfer vóór de laagnaam: "1 Snijden". `role="img"`
+											     met een naam maakt er "Laag 1, Snijden" van; zonder rol
+											     negeren de meeste schermlezers een aria-label op een
+											     span. Zonder nummer is de chip alleen kleur en dus
+											     decoratie — die blijft verborgen. -->
+											{#if nummer === null}
+												<span class="chip mono" style:background={colorFor(layer.id)} aria-hidden="true"
+												></span>
+											{:else}
+												<span
+													class="chip mono genummerd"
+													style:background={colorFor(layer.id)}
+													style:color={inktOp(colorFor(layer.id))}
+													role="img"
+													aria-label="Laag {nummer}"
+												>{nummer}</span>
+											{/if}
 										{/if}{layer.label}
 									</td>
-								<td class="mono">{layer.speed_mm_s ?? '—'}</td>
-								<td class="mono">{layer.power_percent ?? '—'}</td>
-								<td class="mono">{layer.passes}</td>
-								<!-- "gemeten" in rustige tekst boven een instelling die op
-								     ánder materiaal gemeten is, stelt gerust waar dat niet
-								     hoort. De regel eronder zegt wat eraan schort; hier
-								     zegt de kleur alvast dát er iets is. -->
-								<td class:unsure={layer.source !== 'testraster' || (layer.warnings?.length ?? 0) > 0}>
-									{bron(layer)}
-								</td>
+								<!-- Een laag die deze engine niet uitvoert, mag geen snelheid en
+								     vermogen tonen alsof er iets gaat gebeuren. Ook de herkomst
+								     verdwijnt: waar de getallen vandaan komen doet niet ter
+								     zake als ze niet gebruikt worden. -->
+								{#if layer.burns === false}
+									<td class="pf-blind" colspan="4">brandt niet</td>
+								{:else}
+									<td class="mono">{layer.speed_mm_s ?? '—'}</td>
+									<td class="mono">{layer.power_percent ?? '—'}</td>
+									<td class="mono">{layer.passes}</td>
+									<!-- "gemeten" in rustige tekst boven een instelling die op
+									     ánder materiaal gemeten is, stelt gerust waar dat niet
+									     hoort. De regel eronder zegt wat eraan schort; hier
+									     zegt de kleur alvast dát er iets is. -->
+									<td class:unsure={layer.source !== 'testraster' || (layer.warnings?.length ?? 0) > 0}>
+										{bron(layer)}
+									</td>
+								{/if}
 							</tr>
 						{/each}
 					</tbody>
@@ -935,12 +960,20 @@
 		white-space: nowrap;
 	}
 	.unsure { color: var(--warn); }
+	/* Een laag die niets doet, in de rustige tint: er valt niets te controleren,
+	   dus dit is een mededeling en geen alarm. Het alarm staat erboven. */
+	.pf-blind {
+		color: var(--text-2);
+		font-style: italic;
+		text-align: right;
+		padding-right: 8px;
+	}
 	.pf-warn.strong { color: var(--warn); font-weight: 500; }
 	/* Een eigen soort, niet de vierde gele waas. De linkerbalk in de
 	   gevarenkleur zegt "dit werkt niet" tegenover "let hierop"; de tekst zelf
 	   houdt de gewone kleur, want --danger op deze waas haalt het contrast niet
 	   (dezelfde meting als bij .pf-mismatch hieronder). */
-	.pf-buitenbed {
+	.pf-geenraster {
 		margin: var(--space-2) 0;
 		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
 		border-left: 4px solid var(--danger-solid);

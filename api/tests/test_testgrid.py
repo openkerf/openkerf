@@ -867,25 +867,28 @@ def test_the_plan_says_how_much_room_the_row_labels_need():
 def test_the_preview_says_whether_this_engine_can_burn_a_raster(client):
     """
     `op raster` zet zijn vormen tijdens het plannen om in een bitmap via
-    `render-op/make_raster`, en die dienst registreert **alleen de wxPython-GUI**
-    (`meerk40t/gui/plugin.py:79`). Headless neemt `preprocess` de
-    `strip_rasters`-tak: de laag gooit zijn kinderen weg en levert nul cutcode.
-    Het bord komt dan blanco uit de machine.
+    `render-op/make_raster`. Die dienst registreert upstream **alleen de
+    wxPython-GUI** (`meerk40t/gui/plugin.py:79`); zonder hem neemt `preprocess`
+    de `strip_rasters`-tak, gooit de laag zijn kinderen weg en komt het bord
+    blanco uit de machine.
 
-    Deze test legt de stand vast waarin we draaien. Wordt hij rood omdat er
-    ineens `True` staat, dan is er een rasteraar bijgekomen en mag de
-    waarschuwing in TestGrid.svelte weg.
+    Onze plugin registreert er sinds `openkerf_api/rasterizer.py` zelf een. Deze
+    engine kán dus rasteren, en het voorbeeld hoort dat te melden. Wordt dit
+    weer `False`, dan is de rasteraar niet geladen en brandt elke rasterlaag
+    niets — dan hoort de blokkade in TestGrid.svelte terug.
     """
     antwoord = client.post("/api/library/testgrids/preview", json=RASTER).json()
 
-    assert antwoord["engine"]["raster"] is False
+    assert antwoord["engine"]["raster"] is True
 
 
-def test_a_raster_grid_produces_no_cutcode_on_a_headless_engine(kernel, client):
+def test_a_raster_grid_produces_cutcode_on_a_headless_engine(kernel, client):
     """
-    De meting onder de waarschuwing hierboven: een ontwerp met alleen
-    rasterlagen levert nul brandtijd over nul delen. Dit is het bewijs dat de
-    melding geen voorzichtigheid is maar een feit.
+    De meting onder de melding hierboven. Voorheen gaf ditzelfde ontwerp
+    0 stukken over 0,0 s — negen rasterlagen die niets deden. Met de rasteraar
+    uit `openkerf_api/rasterizer.py` levert het werk dat tijd kost.
+
+    De tegenproef staat eronder: zonder de dienst is het weer nul.
     """
     client.post("/api/library/testgrids", json=RASTER)
     # De labellaag brandt wél (die is een engrave); alleen de sweep meten.
@@ -895,10 +898,26 @@ def test_a_raster_grid_produces_no_cutcode_on_a_headless_engine(kernel, client):
 
     exact = client.get("/api/job/estimate?exact=1").json()
 
+    assert exact["parts"] >= 1
+    assert exact["seconds"] > 0
+    assert len([laag for laag in exact["layers"] if laag["type"] == "op raster"]) == 9
+
+
+def test_without_a_rasteriser_the_same_grid_burns_nothing(kernel, client):
+    """
+    Waarom de rasteraar er moest komen, in één meting: haal hem weg en het bord
+    is leeg. Dit is de stand waarin MeerK40t headless uit de doos draait.
+    """
+    kernel.root.register("render-op/make_raster", None)
+    client.post("/api/library/testgrids", json=RASTER)
+    for operation in kernel.elements.ops():
+        if getattr(operation, "label", None) == "Raster-labels":
+            operation.output = False
+
+    exact = client.get("/api/job/estimate?exact=1").json()
+
     assert exact["parts"] == 0
     assert exact["seconds"] == 0.0
-    # En de lagen bestaan wél — het zijn er negen, ze doen alleen niets.
-    assert len([laag for laag in exact["layers"] if laag["type"] == "op raster"]) == 9
 
 
 def test_a_vector_grid_does_produce_cutcode(kernel, client):

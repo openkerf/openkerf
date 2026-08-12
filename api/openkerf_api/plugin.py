@@ -15,6 +15,14 @@ def plugin(kernel, lifecycle=None):
     if lifecycle == "register":
         _ = kernel.translation
 
+        # Zonder rasteraar gooit `op raster` tijdens het plannen zijn eigen
+        # kinderen weg en komt elke rasterbewerking blanco uit de machine. De
+        # wxPython-GUI registreert er een; headless staat er niets. Wij vullen
+        # dat gat, en alleen dat gat: staat de wx-rasteraar er al, dan wint die.
+        from .rasterizer import register as register_rasterizer
+
+        register_rasterizer(kernel)
+
         @kernel.console_option(
             "port", "p", type=int, default=8080, help=_("port to listen on")
         )

@@ -635,6 +635,12 @@ class ApiServer:
             ánder materiaal draagt, mag daar niet achteraan hoeven staan — dat
             is nu juist wat je vóór het starten moet weten. Hier wordt niets
             gepland: dit leest de elementenboom, de bibliotheek en de herkomst.
+
+            Om diezelfde reden dragen ook `bounds` en `engine` hier: dat een
+            vorm buiten het bed valt of dat deze engine geen rasters brandt, is
+            geen klokgegeven maar een blokkade. Stond het alleen in
+            `/api/job/estimate`, dan verscheen "valt buiten het bed" pas als de
+            tijdschatting terug was.
             """
             sheet = self._active_sheet()
             return manage(
@@ -643,6 +649,8 @@ class ApiServer:
                     "layers": self.drawing.job_layers(
                         self.library, self.provenance, sheet
                     ),
+                    "bounds": self.drawing.bounds_report(sheet),
+                    "engine": self.drawing.engine_report(),
                 }
             )
 

@@ -376,16 +376,25 @@ export class Bewaker {
 		if (!connected) {
 			if (this.#liep) {
 				this.#liep = false;
-				this.#zet({
-					code: 'weg',
-					titel: 'De verbinding viel weg tijdens een job',
-					tekst: 'OpenKerf kan de server niet meer bereiken terwijl er gebrand werd.',
-					raad: 'De machine loopt waarschijnlijk door. Ga ernaartoe; stoppen kan alleen op de machine.'
-				});
+				// Geen alarmkaart (gat B9). Dit alarm gaat niet over de machine maar
+				// over ónze server, en dat is exact het onderwerp van de
+				// verbindingskaart die op elk apparaat al bovenaan staat — inclusief
+				// de zin "stoppen kan alleen op de machine zelf" én een knop om het
+				// opnieuw te proberen. Twee kaarten die hetzelfde zeggen, waarvan de
+				// onderste er drie regels over doet, maken de bovenste niet
+				// geloofwaardiger.
+				//
+				// De systeemmelding blijft wél: die bereikt je met de tab op de
+				// achtergrond of het scherm op zwart, en dáár staat geen kaart.
+				this.#meldingen.meld(
+					'De verbinding viel weg tijdens een job',
+					'OpenKerf kan de server niet meer bereiken terwijl er gebrand werd. De machine loopt waarschijnlijk door; stoppen kan alleen op de machine zelf.',
+					'openkerf-alarm',
+					{ altijd: true }
+				);
 			}
 			return;
 		}
-		this.#wis('weg');
 
 		const job = currentJob(device);
 		if (!job) {

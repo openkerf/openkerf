@@ -1145,7 +1145,20 @@ class Drawing:
             # niet alleen op het canvas: op tablet en telefoon staat het canvas
             # er niet naast, en dit is het laatste scherm vóór het branden.
             "bounds": self.bounds_report(sheet),
+            "engine": self.engine_report(),
         }
+
+    def engine_report(self) -> dict:
+        """
+        Wat déze engine met een soort laag kan.
+
+        Nu één ding: rasteren. Zonder de rasteraar komt een rasterlaag blanco
+        uit de machine (zie `raster_supported`), en dat mag geen verrassing zijn
+        die je pas ná het branden ontdekt.
+        """
+        from .testgrid import raster_supported
+
+        return {"raster": raster_supported(self.kernel)}
 
     # Een halve millimeter speling. Precies op de rand liggen is geen fout —
     # dat is een vorm die het vel vult — en meetruis in de omhullende mag geen
@@ -1176,7 +1189,13 @@ class Drawing:
         maar daar ligt geen materiaal; dan brandt hij in de rooster of in je
         werkblad. Allebei kosten ze materiaal en tijd, en allebei zijn ze nu
         alleen te zien door goed te kijken.
+
+        De id's die hieruit komen moeten dezelfde zijn als die in `/api/design`,
+        anders kan de weergave in de pre-flight er niets mee — en dan doet die
+        de meting alsnog over. `validate_ids()` deelt ze uit; wie het overslaat
+        krijgt lege strings terug voor alles wat uit een SVG kwam (gemeten).
         """
+        self.elements.validate_ids()
         units = self._units_per_mm()
         bed = self.bed_mm()
         vel = None
@@ -1263,9 +1282,20 @@ class Drawing:
         seconds = 0.0
         pieces = 0
         rapid = self._rapid_mm_s()
+        rastert = self.engine_report()["raster"]
         for operation in self.elements.ops():
             kind = str(operation.type)
             if not kind.startswith("op ") or not getattr(operation, "output", True):
+                continue
+            # Geen tijd rekenen voor werk dat deze engine niet uitvoert. Zonder
+            # rasteraar gooit `OpRasterNode.preprocess` de kinderen van de laag
+            # weg en levert hij nul cutcode; wij rekenden er wél seconden voor.
+            # Gemeten op één gevuld vlak van 60×40 mm: onze som 385,5 s tegen
+            # 70,0 s in het echte plan — 315 s beloofd voor een blanco plaat.
+            # De laag telt nog wél als onderdeel: hij ligt op het bed, en de
+            # melding erover hoort in de pre-flight en niet in een nul.
+            if kind == "op raster" and not rastert:
+                pieces += len(self._burnable(operation))
                 continue
             shapes = self._burnable(operation)
             pieces += len(shapes)
@@ -1446,6 +1476,7 @@ class Drawing:
             return None
 
         sheet_id = (sheet or {}).get("id")
+        rastert = self.engine_report()["raster"]
 
         layers = []
         for operation in self.elements.ops():
@@ -1479,6 +1510,10 @@ class Drawing:
                     "power_percent": percent,
                     "passes": int(passes),
                     "elements": children,
+                    # Brandt deze laag daadwerkelijk? Een rasterlaag doet dat op
+                    # een engine zonder rasteraar niet, en dan mag de tabel geen
+                    # snelheid en vermogen tonen alsof er iets gaat gebeuren.
+                    "burns": not (str(operation.type) == "op raster" and not rastert),
                     "source": (entry or {}).get("source") or herkomst(speed, power),
                     "preset_id": (entry or {}).get("preset_id"),
                     "material_id": (entry or {}).get("material_id"),
