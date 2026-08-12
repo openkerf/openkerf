@@ -2,6 +2,8 @@
 	import { formatDuration, isStalled, type Device, type Job } from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
+	import type { Design } from '$lib/design.svelte';
+	import JobPreview from './JobPreview.svelte';
 	import Segmented from './Segmented.svelte';
 
 	let {
@@ -62,6 +64,8 @@
 	};
 	type SheetInfo = {
 		name: string;
+		width_mm: number;
+		height_mm: number;
 		material_name: string | null;
 		thickness_mm: number | null;
 	};
@@ -76,6 +80,15 @@
 	 */
 	let overzicht = $state<{ sheet?: SheetInfo | null; layers?: Layer[] } | null>(null);
 	let layers = $derived(overzicht?.layers ?? []);
+	/**
+	 * Het ontwerp voor de weergave erboven (besluit B8).
+	 *
+	 * Eigen ophaalslag en niet de store van de pagina: dit paneel krijgt hem
+	 * niet doorgegeven, en vlak vóór het starten wil je sowieso zien wat er nú
+	 * op het bed ligt en niet wat er stond toen het canvas voor het laatst
+	 * ververste.
+	 */
+	let ontwerp = $state<Design | null>(null);
 
 	// Wat de laag draagt tegenover waarin gebrand wordt. Dit is het laatste
 	// moment waarop dat verschil nog iets kost dat je kunt terugdraaien.
@@ -151,10 +164,17 @@
 		estimating = true;
 		estimateTraag = false;
 		try {
-			const response = await fetch('/api/job/layers');
-			overzicht = response.ok ? await response.json() : null;
+			// Naast elkaar: de weergave en de lagentabel horen samen op het
+			// scherm te verschijnen, niet de een een halve seconde na de ander.
+			const [lagen, snapshot] = await Promise.all([
+				fetch('/api/job/layers'),
+				fetch('/api/design')
+			]);
+			overzicht = lagen.ok ? await lagen.json() : null;
+			ontwerp = snapshot.ok ? await snapshot.json() : null;
 		} catch {
 			overzicht = null;
+			ontwerp = null;
 		}
 		const traag = setTimeout(() => (estimateTraag = true), ESTIMATE_GEDULD);
 		try {
@@ -174,6 +194,7 @@
 		else {
 			estimate = null;
 			overzicht = null;
+			ontwerp = null;
 		}
 	});
 
@@ -252,7 +273,11 @@
 			<!-- "Geschatte tijd 0:00" boven een leeg bed leest als een job van nul
 			     seconden in plaats van als geen job. Bij niets te doen zwijgt de
 			     klok en spreekt de melding eronder. -->
+			<!-- Eerst het werkstuk, dan pas de getallen erover (besluit B8). Wie
+			     ziet dat er iets buiten het vel hangt, hoeft de tijd niet meer te
+			     lezen — en op tablet en telefoon staat het canvas er niet naast. -->
 			{#if !leeg}
+				<JobPreview design={ontwerp} sheet={overzicht?.sheet ?? null} {colorFor} />
 				<div class="pf-time">
 					<span class="muted">Geschatte tijd</span>
 					<span class="v mono">

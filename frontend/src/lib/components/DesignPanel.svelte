@@ -607,7 +607,12 @@
 		{#each plainLayers as op, index (op.id)}
 			{@const open = editingLayer === op.id}
 			{@const percent = powerPercent(op)}
-			<div class="layer" class:off={!op.output} class:open>
+			<div
+				class="layer"
+				class:off={!op.output}
+				class:onzichtbaar={design.isLayerHidden(op.id)}
+				class:open
+			>
 				<div class="ident">
 					<!-- Het nummer op de chip ís de brandvolgorde. Klikken opent de
 					     laag, dus de kleur is ook de weg naar zijn instellingen. -->
@@ -654,6 +659,35 @@
 								<path d="M12 3v9" />
 								<path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
 							</svg>
+						</button>
+						<!-- Besluit B4: zichtbaar en meebranden zijn twee dingen. Een
+						     uitlijnkader op het canvas houden zonder het te branden is
+						     een standaardtruc, en met één schakelaar kan dat niet.
+						     Zichtbaarheid is een kijkstand: die gaat niet naar de engine
+						     en verandert dus niets aan wat er gebrand wordt. -->
+						<button
+							class="oog"
+							class:uit={design.isLayerHidden(op.id)}
+							role="switch"
+							aria-checked={!design.isLayerHidden(op.id)}
+							title={design.isLayerHidden(op.id)
+								? 'Verborgen op het canvas — klik om te tonen. Dit verandert niets aan de job.'
+								: 'Zichtbaar op het canvas — klik om te verbergen. Dit verandert niets aan de job.'}
+							aria-label="Zichtbaar op het canvas voor {op.label}"
+							onclick={() => design.toggleLayer(op.id)}
+						>
+							{#if design.isLayerHidden(op.id)}
+								<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+									<path d="M3 3l18 18" />
+									<path d="M10.6 5.1A9.6 9.6 0 0 1 12 5c5 0 9 4.5 9 7a11 11 0 0 1-2.5 3.4" />
+									<path d="M6.2 7.4A11.6 11.6 0 0 0 3 12c0 2.5 4 7 9 7a9.7 9.7 0 0 0 3.8-.8" />
+								</svg>
+							{:else}
+								<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+									<path d="M3 12c0-2.5 4-7 9-7s9 4.5 9 7-4 7-9 7-9-4.5-9-7Z" />
+									<circle cx="12" cy="12" r="2.6" />
+								</svg>
+							{/if}
 						</button>
 						<button
 							class="more"
@@ -721,6 +755,11 @@
 						     was het vergeten". -->
 						<span class="tag">brandt niet mee</span>
 					{/if}
+					{#if design.isLayerHidden(op.id)}
+						<!-- En dit is de andere helft van B4: verborgen zegt niets over
+						     branden. Twee aparte woorden, want twee aparte standen. -->
+						<span class="tag zicht">verborgen</span>
+					{/if}
 					{#if canEdit && selectedIds.length}
 						<!-- Toewijzen staat achteraan en niet vóór de naam: anders
 						     verschuift de hele rij zodra je iets selecteert. -->
@@ -738,6 +777,7 @@
 			</div>
 
 			{#if canEdit && open}
+				{@const onthouden = design.memoryFor(design.colorFor(op.id))}
 				<div class="layer-edit">
 					<div class="swatches" role="group" aria-label="Kleur van {op.label}">
 						{#each LAYER_COLORS as swatch (swatch)}
@@ -753,6 +793,28 @@
 							></button>
 						{/each}
 					</div>
+
+					<!-- Wat deze kleur op deze machine onthouden heeft (besluit B2).
+					     Het staat er met zoveel woorden bij dat het geen preset is:
+					     een preset hoort bij een materiaal en een dikte en zegt dat er
+					     iets gebrand is. Dit zegt alleen wat jij hier het laatst deed,
+					     en dat mag nooit voor bewijs doorgaan. -->
+					<p class="geheugen wide">
+						{#if onthouden?.speed_mm_s}
+							<span class="mono"
+								>{onthouden.speed_mm_s} mm/s{onthouden.power_percent == null
+									? ''
+									: ` · ${Math.round(onthouden.power_percent)}%`}</span
+							>
+							onthouden voor deze kleur op {onthouden.machine_name ?? 'deze machine'} —
+							daarmee begint een volgende laag in deze kleur. Geen preset: dit
+							draagt geen herkomst.
+						{:else}
+							Deze kleur heeft op deze machine nog niets onthouden. Zodra je
+							snelheid of vermogen bijstelt, begint een volgende laag in deze
+							kleur daarop.
+						{/if}
+					</p>
 
 					<label class="wide">
 						<span>Naam</span>
@@ -992,6 +1054,54 @@
 	}
 	.out:hover:not(:disabled) {
 		background: var(--surface-2);
+	}
+	/* Zichtbaarheid staat naast meebranden en ziet er bewust ánders uit: dit is
+	   een kijkstand, geen machinestand. Daarom neutraal grijs waar meebranden
+	   groen kleurt — kleur is hier gereserveerd voor wat de laser gaat doen. */
+	.oog {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-field);
+		border: 1px solid var(--line);
+		background: var(--surface-1);
+		color: var(--text-2);
+	}
+	.oog.uit {
+		background: var(--surface-2);
+		color: var(--text-2);
+		opacity: 0.75;
+	}
+	.oog:hover:not(:disabled) {
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	/* Een verborgen laag mag je nog wél lezen — hij is niet uitgezet, hij staat
+	   alleen even niet op het bed. De naam vervaagt, de knoppen niet. */
+	.layer.onzichtbaar .layer-name,
+	.layer.onzichtbaar .count {
+		opacity: 0.55;
+	}
+	.tag.zicht {
+		color: var(--text-2);
+		font-weight: 400;
+	}
+	.geheugen {
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: 1.4;
+		color: var(--text-2);
+		background: var(--surface-2);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		padding: var(--space-2);
+	}
+	.geheugen .mono {
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
+		color: var(--text-1);
 	}
 	.more {
 		flex: none;

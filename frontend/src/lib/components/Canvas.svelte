@@ -2,6 +2,7 @@
 	import type { Device } from '$lib/api';
 	import type { DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
+	import LagenPalet from './LagenPalet.svelte';
 	import {
 		omgevingstrefpunten,
 		klikDoosVast,
@@ -1084,7 +1085,7 @@
 							<!-- Tijdens het verplaatsen loopt de vorm mee met het kader; zonder
 							     dat wijzen de hulplijnen naar een rand die er nog niet ligt. -->
 							<g transform={verschuiving(element.id)}>
-							{#if !element.hidden && element.image}
+							{#if !element.hidden && element.image && design.strokeFor(element).visible}
 								<!-- Afbeeldingen hebben geen pad; de pixels komen van de API.
 								     De transform hierboven rekent in Tats, dus terugschalen. -->
 								<image
@@ -1122,17 +1123,23 @@
 										}
 									}}
 								/>
-							{:else if !element.hidden}
+							{:else if !element.hidden && design.strokeFor(element).visible}
 								<!-- De kleur van de laag, niet die van het element: zo zie je in
 								     één blik wat gesneden en wat gegraveerd wordt. Zonder laag
-								     gestippeld grijs — die vorm wordt niet gebrand. -->
+								     gestippeld grijs — die vorm wordt niet gebrand.
+								     Besluit B4: de stippellijn blijft dáárvoor gereserveerd. Een
+								     laag met "brandt niet mee" is een andere staat en krijgt een
+								     eigen weergave — dunner en half doorzichtig — zodat je hem
+								     wel ziet liggen maar nooit aanziet voor werk dat straks de
+								     machine in gaat. -->
 								{@const streek = design.strokeFor(element)}
 								<path
 									d={element.path}
 									fill="none"
 									stroke={streek.color}
 									stroke-dasharray={streek.dashed ? '6 4' : undefined}
-									stroke-width={design.isSelected(element.id) ? 2 : 1.2}
+									stroke-opacity={streek.dimmed ? 0.4 : 1}
+									stroke-width={design.isSelected(element.id) ? 2 : streek.dimmed ? 0.9 : 1.2}
 									vector-effect="non-scaling-stroke"
 								/>
 								<!-- Onzichtbare trefzone: een contour van 1 px is niet aan te
@@ -1488,6 +1495,12 @@
 		<p class="empty">Geen machine verbonden</p>
 	{/if}
 </div>
+
+<!-- Besluit B2: de kleurenstrook hoort ónder het canvas, niet in het paneel.
+     Daar hoort hij bij de vorm die je vasthebt, en niet bij een tabblad dat je
+     eerst moet opzoeken. Een eigen rij, geen zwevende balk over het bed heen:
+     hij mag nooit iets afdekken wat je aan het uitlijnen bent. -->
+<LagenPalet {design} {edits} {canEdit} onChanged={() => onEdited?.()} />
 
 <style>
 	.canvas-wrap {

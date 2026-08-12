@@ -131,6 +131,57 @@ export function toen(stamp: string | null | undefined): string {
 	return tijd.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/** Twee instellingen die over hetzelfde gaan maar andere getallen dragen. */
+export type PresetConflict = {
+	material: string;
+	thickness_mm: number | null;
+	operation: string;
+	machine: string | null;
+	mine: { speed_mm_s: number; power_percent: number; passes: number; source: string };
+	theirs: { speed_mm_s: number; power_percent: number; passes: number; source: string };
+};
+
+export type Telling = {
+	materials: number;
+	presets: number;
+	machines: number;
+	test_grids: number;
+};
+
+/**
+ * Wat er gaat gebeuren als je dit bestand binnenhaalt.
+ *
+ * Beide keuzes zijn doorgerekend, want het verschil tussen samenvoegen en
+ * vervangen moet op het scherm staan op het moment dat je kiest — niet erna.
+ */
+export type ImportPreview = {
+	bundle: string;
+	exported_at: string | null;
+	bevat: Telling & { photos: number };
+	huidig: Telling;
+	samenvoegen: {
+		materials: {
+			new: string[];
+			existing: { name: string; as: string; material_id: number }[];
+			/** Andere naam, waarschijnlijk dezelfde plank — de valkuil uit M5. */
+			similar: { name: string; match: string; material_id: number; why: string }[];
+		};
+		machines: { new: string[]; existing: string[] };
+		presets: { new: number; identical: number; conflicts: PresetConflict[] };
+		test_grids: { new: number; existing: number };
+	};
+	vervangen: { removes: Telling };
+};
+
+export type ImportResult = {
+	mode: string;
+	removed: Telling | null;
+	materials: number;
+	machines: number;
+	test_grids: number;
+	presets: { added: number; updated: number; skipped: number };
+};
+
 export type ActiveMachine = {
 	id: number;
 	name: string;
@@ -267,6 +318,75 @@ export class LibraryStore {
 			headers: this.#headers(true),
 			body: JSON.stringify({ operation_id: operationId })
 		});
+	}
+
+	// ------------------------------------------------ uitwisselen (besluit B7)
+
+	/**
+	 * De hele bibliotheek als één bestand ophalen.
+	 *
+	 * Via een ankertje en niet via fetch: dan doet de browser wat hij goed doet
+	 * — een download met een naam, zonder het bestand eerst in het geheugen van
+	 * de pagina te trekken.
+	 */
+	exportBundle() {
+		const anker = document.createElement('a');
+		anker.href = '/api/library/export.openkerf-lib';
+		anker.download = 'bibliotheek.openkerf-lib';
+		anker.click();
+	}
+
+	async uploadBundle(file: File): Promise<ImportPreview | null> {
+		this.busy = true;
+		this.error = null;
+		try {
+			const form = new FormData();
+			form.append('file', file);
+			const response = await fetch('/api/library/import/upload', {
+				method: 'POST',
+				headers: this.#headers(),
+				body: form
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return null;
+			}
+			return await response.json();
+		} catch (e) {
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return null;
+		} finally {
+			this.busy = false;
+		}
+	}
+
+	/** Hetzelfde voorbeeld, herrekend nadat je een materiaal hebt aangewezen. */
+	previewBundle(bundle: string, mergeMaterials: Record<string, number>) {
+		return this.#request('/api/library/import/preview', {
+			method: 'POST',
+			headers: this.#headers(true),
+			body: JSON.stringify({ bundle, merge_materials: mergeMaterials })
+		}) as Promise<ImportPreview | null>;
+	}
+
+	async importBundle(
+		bundle: string,
+		mode: 'samenvoegen' | 'vervangen',
+		mergeMaterials: Record<string, number>,
+		onConflict: 'eigen' | 'bestand'
+	): Promise<ImportResult | null> {
+		const done = await this.#request('/api/library/import', {
+			method: 'POST',
+			headers: this.#headers(true),
+			body: JSON.stringify({
+				bundle,
+				mode,
+				merge_materials: mergeMaterials,
+				on_conflict: onConflict
+			})
+		});
+		if (done) await this.load();
+		return done;
 	}
 
 	presetsFor(materialId: number | null) {

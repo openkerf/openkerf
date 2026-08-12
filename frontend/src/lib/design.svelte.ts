@@ -74,6 +74,28 @@ export type Design = {
 	operations: DesignOperation[];
 };
 
+/**
+ * Wat een paletkleur op deze machine het laatst deed (besluit B2).
+ *
+ * Let op het verschil met een preset: dit hangt aan machine + kleur en draagt
+ * geen herkomst. Een preset hangt aan machine + materiaal + dikte en zegt dat
+ * er ooit iets gebrand is. De UI moet dat uit elkaar houden, want gewoonte is
+ * geen bewijs.
+ */
+export type PaletteMemory = {
+	speed_mm_s?: number;
+	power_percent?: number;
+	type?: string;
+	machine_name?: string;
+	updated_at?: string;
+};
+
+export type PaletteInfo = {
+	machine: { key: string; name: string | null };
+	default_color: string | null;
+	colors: { color: string; memory: PaletteMemory | null }[];
+};
+
 /** Vaste laagkleuren uit DESIGN-SYSTEM.md, gebruikt als een operatie er geen heeft. */
 export const LAYER_COLORS = readLayerColors();
 
@@ -346,6 +368,31 @@ export class DesignStore {
 	}
 
 	/**
+	 * Lagen die je even niet wilt zien (besluit B4).
+	 *
+	 * "Zichtbaar" is iets anders dan "brandt mee". Een uitlijnkader dat je op
+	 * het canvas houdt zonder het te branden, is een standaardtruc; met één
+	 * schakelaar voor allebei kan dat niet. `output` staat in de engine en
+	 * overleeft dus alles — dit is een kijkstand en blijft hier.
+	 *
+	 * Bewust niet bewaard in localStorage: laag-id's worden per document
+	 * uitgedeeld en hergebruikt, dus een bewaarde lijst kan bij het volgende
+	 * ontwerp de verkeerde laag onzichtbaar maken. Een verdwenen vorm zonder
+	 * aanwijsbare reden is een erger kwaad dan opnieuw op het oog klikken.
+	 */
+	hiddenLayers = $state<string[]>([]);
+
+	isLayerHidden(operationId: string) {
+		return this.hiddenLayers.includes(operationId);
+	}
+
+	toggleLayer(operationId: string) {
+		this.hiddenLayers = this.isLayerHidden(operationId)
+			? this.hiddenLayers.filter((id) => id !== operationId)
+			: [...this.hiddenLayers, operationId];
+	}
+
+	/**
 	 * Hoe een element op het bed getekend wordt.
 	 *
 	 * In MeerK40t kan één element in meerdere operaties zitten (de engine
@@ -359,28 +406,74 @@ export class DesignStore {
 	strokeFor(element: { operation_ids?: string[]; operation_id?: string | null }): {
 		color: string;
 		dashed: boolean;
+		/** Laag staat op "brandt niet mee": wel te zien, niet te branden. */
+		dimmed: boolean;
+		/** Vals als élke laag van dit element op onzichtbaar staat. */
+		visible: boolean;
 	} {
+		const los = { color: 'var(--text-2)', dashed: true, dimmed: false, visible: true };
 		const ids = element.operation_ids?.length
 			? element.operation_ids
 			: element.operation_id
 				? [element.operation_id]
 				: [];
-		if (!ids.length) return { color: 'var(--text-2)', dashed: true };
+		if (!ids.length) return los;
 		const volgorde = this.operations;
 		// De bovenste laag is de eerste in de boom, niet de eerste in de lijst
-		// die het element toevallig meekreeg.
+		// die het element toevallig meekreeg. Onzichtbare lagen tellen niet mee
+		// voor de kleur: anders bepaalt een laag die je niet ziet hoe het eruit
+		// ziet.
 		let beste = -1;
+		let bestaat = false;
 		for (const id of ids) {
 			const i = volgorde.findIndex((o) => o.id === id);
-			if (i >= 0 && (beste < 0 || i < beste)) beste = i;
+			if (i < 0) continue;
+			bestaat = true;
+			if (this.isLayerHidden(id)) continue;
+			if (beste < 0 || i < beste) beste = i;
 		}
-		if (beste < 0) return { color: 'var(--text-2)', dashed: true };
-		return { color: this.colorFor(volgorde[beste].id), dashed: false };
+		if (!bestaat) return los;
+		// Wel in een laag, maar in geen enkele zichtbare: dan tekenen we hem niet.
+		if (beste < 0) return { ...los, dashed: false, visible: false };
+		return {
+			color: this.colorFor(volgorde[beste].id),
+			dashed: false,
+			dimmed: !volgorde[beste].output,
+			visible: true
+		};
 	}
 
 	/** Loopt op bij elke herlaadslag; het canvas hangt hem aan afbeeldings-URL's
 	 *  zodat een bewerkte afbeelding niet uit de browsercache komt. */
 	revision = $state(0);
+
+	/** Het palet met zijn geheugen; `null` zolang het nog niet geladen is. */
+	palette = $state<PaletteInfo | null>(null);
+
+	/** Wat deze kleur eerder deed, of niets als hij nog nooit gebruikt is. */
+	memoryFor(color: string): PaletteMemory | null {
+		const gezocht = color.trim().toLowerCase();
+		return this.palette?.colors.find((c) => c.color === gezocht)?.memory ?? null;
+	}
+
+	/** De laag die deze kleur nu draagt, als er een is. */
+	layerWithColor(color: string): DesignOperation | null {
+		const gezocht = color.trim().toLowerCase();
+		return (
+			this.operations.find(
+				(o) => !o.grid && (o.color ?? '').trim().toLowerCase() === gezocht
+			) ?? null
+		);
+	}
+
+	async loadPalette() {
+		try {
+			const response = await fetch('/api/design/palette');
+			if (response.ok) this.palette = await response.json();
+		} catch {
+			// Geen geheugen is geen storing: de strook werkt ook zonder.
+		}
+	}
 
 	async load() {
 		// Signalen komen in bursts binnen; één herlaadslag per burst is genoeg.
@@ -399,6 +492,9 @@ export class DesignStore {
 				const alive = new Set(this.elements.map((e) => e.id));
 				const kept = this.selectedIds.filter((id) => alive.has(id));
 				if (kept.length !== this.selectedIds.length) this.selectedIds = kept;
+				// Het geheugen loopt mee met de boom: een bijgestelde snelheid is
+				// meteen wat die kleur "nu doet", ook in de strook onder het canvas.
+				void this.loadPalette();
 			}
 		} catch {
 			// Verbinding weg: de statusbalk meldt dat al, hier niets doen.

@@ -15,6 +15,7 @@ import re
 from .commands import CommandRunner
 from .design import _xy, operation_label
 from .edits import DesignError, _finite, _positive
+from .palette import normalise
 
 # What a shape needs, and the console command that draws it. Millimetres in,
 # because that is what the user sees.
@@ -47,6 +48,26 @@ def _mm(value: float) -> str:
     return f"{value:.4f}mm"
 
 
+def _is_filled(node) -> bool:
+    """Heeft deze vorm een vlak om te rasteren? Een afbeelding is er zelf een."""
+    if str(getattr(node, "type", "")) == "elem image":
+        return True
+    fill = getattr(node, "fill", None)
+    if fill is None or getattr(fill, "value", None) is None:
+        return False
+    return getattr(fill, "alpha", 255) != 0
+
+
+def _number(value):
+    """Een getal, of niets. De engine levert hier soms een string of numpy."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class Drawing:
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
@@ -56,6 +77,9 @@ class Drawing:
         # Callable die de operaties van testrasters teruggeeft; die staan op
         # slot omdat hun waarden de sweep zijn.
         self.grid_operations = lambda: {}
+        # Wat een paletkleur op deze machine eerder deed (besluit B2). De
+        # server hangt hier het echte geheugen in; los getest is er niets.
+        self.color_memory = lambda color: None
 
     @property
     def elements(self):
@@ -131,6 +155,7 @@ class Drawing:
             )
 
         before = {id(n) for n in self.elements.elems()}
+        before_ops = {id(o) for o in self.elements.ops()}
         with self.elements.undoscope(f"{kind} tekenen"):
             self.runner.run(self._command(kind, values, fields))
         created = [n for n in self.elements.elems() if id(n) not in before]
@@ -140,6 +165,7 @@ class Drawing:
         self.elements.validate_ids()
         for node in created:
             self._single_layer(node)
+        self._seed_from_memory(before_ops)
         self.elements.set_emphasis(created)
         self._refresh()
         return {"ids": [n.id for n in created], "type": created[0].type}
@@ -619,6 +645,147 @@ class Drawing:
         self._refresh()
         return {"id": operation_id, "applied": applied}
 
+    # ---------------------------------------------------------------- palet
+
+    def layer_for_color(self, color: str, memory: dict | None = None) -> dict:
+        """
+        De laag met deze paletkleur, desnoods vers aangemaakt (besluit B2).
+
+        Kleur is bij ons de identiteit van een laag, dus "de laag van rood" is
+        een eenduidige vraag: er is er hoogstens één. Testrastercellen tellen
+        niet mee — die horen bij een testbord en hun waarden liggen vast.
+
+        Een verse laag begint op wat die kleur op deze machine eerder deed. Dat
+        is het hele punt van het geheugen: een laag die blanco begint, dwingt je
+        elke keer opnieuw twee getallen te bedenken.
+        """
+        wanted = self._valid_color(color)
+        self.elements.validate_ids()
+        for op in self.elements.ops():
+            # Alleen echte bewerkingen: een effect draagt ook een kleur, maar
+            # het is een container in de elementenboom en geen laag.
+            if not str(op.type).startswith("op "):
+                continue
+            if self._is_grid_cell(op, getattr(op, "id", "") or ""):
+                continue
+            if self._usable_color(op) == wanted:
+                return {"id": op.id, "type": op.type, "created": False}
+
+        memory = memory or {}
+        kind = str(memory.get("type") or "cut")
+        if kind not in OPERATIONS:
+            kind = "cut"
+        made = self.create_operation(
+            kind,
+            speed=memory.get("speed_mm_s"),
+            power_percent=memory.get("power_percent"),
+        )
+        operation = self._operation(made["id"])
+        # create_operation deelt de eerstvolgende vrije paletkleur uit; hier is
+        # de kleur juist de reden dat de laag bestaat.
+        self._set_color(operation, wanted)
+        self._refresh()
+        return {"id": operation.id, "type": operation.type, "created": True}
+
+    def _seed_from_memory(self, before_ops: set) -> None:
+        """
+        Een laag die de classificatie zelf aanmaakt, op het geheugen zetten.
+
+        Wie een paletkleur kiest en dan tekent, laat de engine een laag maken —
+        niet wij. Zonder dit begint die op de fabrieksinstelling, terwijl de
+        gebruiker net een kleur koos waarvan hij wéét wat hij ermee deed. B2
+        belooft dat een verse laag niet blanco begint; dit is de andere helft
+        van die belofte.
+        """
+        for op in self.elements.ops():
+            if id(op) in before_ops or not str(op.type).startswith("op "):
+                continue
+            kleur = self._usable_color(op)
+            if kleur is None:
+                # De classificatie geeft zo'n verse laag de tekenkleur mét
+                # alfa nul mee ("#0090ff00"). Dat is dezelfde kleur en toch
+                # geen kleur: op het canvas viel de laag terug op de eerste
+                # paletkleur, dus je tekende in blauw en kreeg rood. De alfa
+                # eraf halen is hier de hele reparatie.
+                kleur = normalise(str(getattr(op, "color", ""))[:7])
+                if kleur is None:
+                    continue
+                self._set_color(op, kleur)
+            try:
+                onthouden = self.color_memory(kleur) or {}
+            except Exception:
+                continue
+            if onthouden.get("speed_mm_s"):
+                op.speed = float(onthouden["speed_mm_s"])
+            if onthouden.get("power_percent"):
+                op.power = float(onthouden["power_percent"]) * 10
+
+    def paint(self, element_ids, color: str, memory: dict | None = None) -> dict:
+        """
+        Zet de selectie in de laag van deze kleur — verplaatsen, niet toevoegen.
+
+        Eén klik op een paletvakje, waar het via het lagenpaneel drie
+        handelingen kostte (tabblad, laag zoeken, "hierin"). Verplaatsen en niet
+        toevoegen, want dat is wat een gebruiker bedoelt met "maak dit rood":
+        een vorm die daarna in twee lagen zit, brandt twee keer.
+
+        De lijnkleur van de vorm gaat mee. In MeerK40t ís de lijnkleur waar de
+        classificatie op werkt, dus zonder dat springt de vorm bij het opnieuw
+        laden van een SVG terug naar zijn oude laag.
+        """
+        from meerk40t.svgelements import Color
+
+        wanted = self._valid_color(color)
+        nodes = self._nodes(element_ids)
+        layer = self.layer_for_color(wanted, memory)
+        operation = self._operation(layer["id"])
+
+        with self.elements.undoscope("Naar laag verplaatsen"):
+            for node in nodes:
+                for reference in list(getattr(node, "_references", [])):
+                    if reference.parent is not None:
+                        reference.remove_node()
+                operation.add_reference(node)
+                if hasattr(node, "stroke"):
+                    node.stroke = Color(wanted)
+                    # Zoals de engine het zelf doet in `element_stroke`: geen
+                    # altered(), want dat gooit de gecachete geometrie weg.
+                    node.translated(0, 0)
+        self.elements.signal("element_property_reload", nodes)
+        self._refresh()
+        return {
+            "operation_id": operation.id,
+            "created": layer["created"],
+            "ids": [n.id for n in nodes],
+        }
+
+    def set_default_color(self, color: str) -> dict:
+        """
+        De kleur waarin nieuw werk getekend wordt.
+
+        `default_stroke` is de kleur die de engine aan elke nieuwe vorm geeft,
+        dus dit is precies LightBurns "klikken zonder selectie zet de kleur voor
+        nieuw werk" — geen eigen boekhouding ernaast.
+        """
+        from meerk40t.svgelements import Color
+
+        wanted = self._valid_color(color)
+        self.elements.default_stroke = Color(wanted)
+        return {"color": wanted}
+
+    def default_color(self) -> str | None:
+        try:
+            return normalise(str(self.elements.default_stroke.hexrgb))
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _valid_color(color) -> str:
+        wanted = normalise(color)
+        if wanted is None:
+            raise DesignError("color moet een #rrggbb-waarde zijn.")
+        return wanted
+
     def delete_operation(self, operation_id: str) -> dict:
         operation = self._operation(operation_id)
         with self.elements.undoscope("Laag verwijderen"):
@@ -736,14 +903,45 @@ class Drawing:
         found.sort(key=lambda f: f["name"].lower())
         return found
 
-    def estimate(self, library=None, provenance=None, sheet=None) -> dict:
+    def estimate(self, library=None, provenance=None, sheet=None, exact=False) -> dict:
         """
         Hoe lang gaat deze job duren, vóór je hem start.
 
-        De pre-flight liet tot nu toe alleen de schatting van een al lopende job
-        zien, wat precies te laat is. We draaien de planpijplijn zonder te
-        spoolen, tellen snij- en reistijd op, en gooien het plan weer weg.
+        Standaard gerekend op de geometrie en de laaginstellingen, niet op het
+        gebouwde snijplan. Dat plan bouwen was de reden dat deze route op een
+        zwaar ontwerp minuten kostte (gat J1): `plan copy` kopieert de cutcode
+        één keer per pass, en de optimalisatie erna schaalt kwadratisch in het
+        aantal stukken. Zestig passes over tweehonderd vormen zijn twaalfduizend
+        objecten waarvan we uiteindelijk alleen de totale lengte gebruiken.
+
+        Lengte per vorm keer het aantal passes, gedeeld door de snelheid van de
+        laag, plus de sprongen ertussen — dat is precies wat `duration_cut` en
+        `duration_travel` optellen, alleen zonder eerst het plan te maken. De
+        volgorde die de optimalisatie kiest zit er niet in, dus de reistijd is
+        een bovengrens; de brandtijd is exact dezelfde som.
+
+        `exact=True` bouwt alsnog het volledige plan. Alleen bedoeld om de
+        snelle route tegen de oude te kunnen ijken — niet voor de UI.
         """
+        seconds, pieces = (
+            self._plan_estimate() if exact else self._geometry_estimate()
+        )
+        return {
+            "seconds": round(seconds, 1),
+            # Hoeveel vormen er gebrand worden. Nul betekent dat de machine
+            # niets zou doen, en dáár hangt de pre-flight zijn "er is niets om
+            # te branden" aan.
+            "parts": pieces,
+            "method": "plan" if exact else "geometry",
+            # Waarin gebrand wordt hoort bij wat er gebrand wordt: zonder het
+            # materiaal van het vel is "instelling van 3 mm berken" een
+            # mededeling zonder tegenpartij.
+            "sheet": sheet,
+            "layers": self.job_layers(library, provenance, sheet),
+        }
+
+    def _plan_estimate(self) -> tuple[float, int]:
+        """De oude weg: het hele plan bouwen en de duur eruit optellen."""
         self.runner.run("plan copy preprocess validate blob preopt optimize")
         planner = getattr(self.kernel, "planner", None)
         seconds = 0.0
@@ -761,15 +959,169 @@ class Drawing:
                 pieces += 1
         finally:
             self.runner.run("plan clear")
-        return {
-            "seconds": round(seconds, 1),
-            "parts": pieces,
-            # Waarin gebrand wordt hoort bij wat er gebrand wordt: zonder het
-            # materiaal van het vel is "instelling van 3 mm berken" een
-            # mededeling zonder tegenpartij.
-            "sheet": sheet,
-            "layers": self.job_layers(library, provenance, sheet),
-        }
+        return seconds, pieces
+
+    # Verplaatsen zonder branden. De engine rekent met 100 mm/s zodra een
+    # apparaat niets anders opgeeft (core/parameters.py:314).
+    RAPID_MM_S = 100.0
+
+    def _geometry_estimate(self) -> tuple[float, int]:
+        """Brandtijd en reistijd uit de elementenboom, zonder plan."""
+        seconds = 0.0
+        pieces = 0
+        rapid = self._rapid_mm_s()
+        for operation in self.elements.ops():
+            kind = str(operation.type)
+            if not kind.startswith("op ") or not getattr(operation, "output", True):
+                continue
+            shapes = self._burnable(operation)
+            pieces += len(shapes)
+            if not shapes:
+                continue
+            passes = int(getattr(operation, "passes", None) or 1)
+            if kind == "op dots":
+                # Een punt kost zijn verblijftijd, niet zijn lengte.
+                dwell = _number(getattr(operation, "dwell_time", None)) or 0.0
+                seconds += passes * len(shapes) * dwell / 1000
+                continue
+            speed = _number(getattr(operation, "speed", None))
+            if not speed or speed <= 0:
+                continue
+            if kind in ("op raster", "op image"):
+                burn_mm = self._scan_mm(operation, shapes)
+                travel_mm = 0.0
+            else:
+                burn_mm = sum(self._length_mm(node) for node in shapes)
+                travel_mm = self._travel_mm(shapes)
+            seconds += passes * (burn_mm / speed + travel_mm / rapid)
+        return seconds, pieces
+
+    def _rapid_mm_s(self) -> float:
+        device = getattr(self.kernel, "device", None)
+        value = _number(getattr(device, "rapid_speed", None))
+        return value if value and value > 0 else self.RAPID_MM_S
+
+    def _burnable(self, operation) -> list:
+        """
+        De vormen onder een laag, verwijzingen opgelost.
+
+        Een laag bevat `ReferenceNode`s die naar het element wijzen, en een
+        effect (hatch, wobble) is zelf een container met eigen geometrie. Wat
+        verborgen is, wordt niet gebrand en telt hier dus niet mee.
+        """
+        found = []
+        stack = list(operation.children)
+        depth = 0
+        while stack and depth < 5000:
+            depth += 1
+            node = stack.pop()
+            target = getattr(node, "node", None) or node
+            if getattr(target, "hidden", False):
+                continue
+            if hasattr(target, "as_geometry") or getattr(target, "type", "") == (
+                "elem image"
+            ):
+                found.append(target)
+            else:
+                stack.extend(getattr(target, "children", []) or [])
+        return found
+
+    @staticmethod
+    def _length_mm(node) -> float:
+        from meerk40t.core.units import UNITS_PER_MM
+
+        try:
+            return float(node.as_geometry().length()) / UNITS_PER_MM
+        except Exception:
+            # Een afbeelding heeft geen pad; die valt onder de rasterrekensom.
+            return 0.0
+
+    @staticmethod
+    def _center_mm(node) -> tuple[float, float] | None:
+        from meerk40t.core.units import UNITS_PER_MM
+
+        bounds = getattr(node, "bounds", None)
+        if not bounds:
+            return None
+        x0, y0, x1, y1 = bounds
+        return (x0 + x1) / 2 / UNITS_PER_MM, (y0 + y1) / 2 / UNITS_PER_MM
+
+    def _travel_mm(self, nodes) -> float:
+        """
+        De sprongen tussen de vormen, in de volgorde die het dichtst bij ligt.
+
+        De optimalisatie van de engine doet hetzelfde (nearest-neighbour) maar
+        dan op snijstukken in plaats van op hele vormen, dus dit is een ruwe
+        bovengrens. Bij veel vormen wordt het te duur om exact te doen, en het
+        is de kleinste term in de som.
+        """
+        points = [p for p in (self._center_mm(n) for n in nodes) if p]
+        if len(points) < 2:
+            return 0.0
+        import numpy as np
+
+        # Als complexe getallen, net als de geometrie van de engine: dan is de
+        # afstand tot álle overgebleven punten één numpy-bewerking. In Python
+        # per punt zou dit bij duizend vormen seconden kosten, en dan zijn we
+        # terug bij het probleem dat we oplossen.
+        rest = np.array([complex(x, y) for x, y in points])
+        here = rest[0]
+        rest = np.delete(rest, 0)
+        travel = 0.0
+        while rest.size:
+            afstanden = np.abs(rest - here)
+            index = int(afstanden.argmin())
+            travel += float(afstanden[index])
+            here = rest[index]
+            rest = np.delete(rest, index)
+        return travel
+
+    @staticmethod
+    def _scan_mm(operation, nodes) -> float:
+        """
+        Hoeveel millimeter de kop aflegt om deze laag te rasteren.
+
+        Regel voor regel over elke vorm heen, met de regelafstand uit de dpi en
+        de overscan aan weerszijden. Eenrichtingsverkeer verdubbelt het: dan
+        rijdt de kop elke regel leeg terug.
+
+        Per vorm, niet over de omhullende van de hele laag: twee vlakken in
+        tegenoverliggende hoeken rasteren het lege midden ertussen niet.
+
+        Een rasterlaag brandt het **vlak**, en een vorm zonder vulling heeft dat
+        niet. Zo'n vorm levert in het echte plan nul cutcode op (gemeten: een
+        omlijnde rechthoek in een rasterlaag geeft 0,0 s), dus hij telt hier ook
+        niet mee — anders staat er 8 minuten voor werk dat niet gebeurt.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        dpi = _number(getattr(operation, "dpi", None)) or 500.0
+        step_mm = 25.4 / max(dpi, 1.0)
+        vlak = str(operation.type) == "op raster"
+        overscan_mm = 0.0
+        raw = getattr(operation, "overscan", None)
+        if raw is not None:
+            try:
+                from meerk40t.core.units import Length
+
+                overscan_mm = float(Length(raw).mm)
+            except Exception:
+                overscan_mm = 0.0
+
+        scan = 0.0
+        for node in nodes:
+            bounds = getattr(node, "bounds", None)
+            if not bounds:
+                continue
+            if vlak and not _is_filled(node):
+                continue
+            width = (bounds[2] - bounds[0]) / UNITS_PER_MM
+            height = (bounds[3] - bounds[1]) / UNITS_PER_MM
+            lines = max(1.0, height / step_mm)
+            scan += lines * (width + 2 * overscan_mm)
+        if not getattr(operation, "bidirectional", True):
+            scan *= 2
+        return scan
 
     def job_layers(self, library=None, provenance=None, sheet=None) -> list[dict]:
         """

@@ -89,6 +89,21 @@ export class EditController {
 		return this.#post('/api/design/elements/duplicate', { ids });
 	}
 
+	/**
+	 * Eén klik op een paletvakje (besluit B2).
+	 *
+	 * Mét selectie verhuist die naar de laag van die kleur, die zo nodig wordt
+	 * aangemaakt op wat die kleur op deze machine eerder deed. Zonder selectie
+	 * zet hij de kleur voor nieuw werk.
+	 */
+	async paletteColor(color: string, ids: string[] = []) {
+		const result = await this.#post('/api/design/palette', {
+			color,
+			ids: ids.length ? ids : undefined
+		});
+		return result.ok;
+	}
+
 	addLayer(type: string, label?: string, speed?: number, powerPercent?: number) {
 		return this.#post('/api/design/operations', {
 			type,

@@ -12,6 +12,10 @@ WRITE_ROUTES = [
     ("/api/job/resume", {}),
     ("/api/job/stop", {}),
     ("/api/spooler/clear", {}),
+    # Besluit B7: een bibliotheek binnenhalen overschrijft mogelijk metingen.
+    # Dat mag van buiten de eigen computer nooit zonder token.
+    ("/api/library/import", {"json": {}}),
+    ("/api/library/import/preview", {"json": {}}),
 ]
 
 
