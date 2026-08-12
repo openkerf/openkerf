@@ -736,7 +736,7 @@ class Drawing:
         found.sort(key=lambda f: f["name"].lower())
         return found
 
-    def estimate(self, library=None) -> dict:
+    def estimate(self, library=None, provenance=None, sheet=None) -> dict:
         """
         Hoe lang gaat deze job duren, vóór je hem start.
 
@@ -764,10 +764,14 @@ class Drawing:
         return {
             "seconds": round(seconds, 1),
             "parts": pieces,
-            "layers": self.job_layers(library),
+            # Waarin gebrand wordt hoort bij wat er gebrand wordt: zonder het
+            # materiaal van het vel is "instelling van 3 mm berken" een
+            # mededeling zonder tegenpartij.
+            "sheet": sheet,
+            "layers": self.job_layers(library, provenance, sheet),
         }
 
-    def job_layers(self, library=None) -> list[dict]:
+    def job_layers(self, library=None, provenance=None, sheet=None) -> list[dict]:
         """
         Wat de machine straks gaat dóén, per laag.
 
@@ -796,6 +800,8 @@ class Drawing:
                 return preset["source"]
             return None
 
+        sheet_id = (sheet or {}).get("id")
+
         layers = []
         for operation in self.elements.ops():
             if not str(operation.type).startswith("op "):
@@ -808,18 +814,32 @@ class Drawing:
             speed = getattr(operation, "speed", None)
             power = getattr(operation, "power", None)
             passes = getattr(operation, "passes", None) or 1
+            percent = None if power is None else round(float(power) / 10, 1)
+            operation_id = getattr(operation, "id", None)
+            # Het briefje van deze laag gaat vóór op raden aan de getallen: het
+            # weet ook wélk materiaal er bij die getallen hoorde.
+            entry = (
+                provenance.lookup(sheet_id, operation_id, speed, percent)
+                if provenance is not None
+                else None
+            )
             layers.append(
                 {
                     # Zonder id kan de pre-flight de laagkleur niet opzoeken, en
                     # twee operaties van hetzelfde type heten allebei "Graveren".
-                    "id": getattr(operation, "id", None),
+                    "id": operation_id,
                     "label": operation_label(operation),
                     "type": operation.type,
                     "speed_mm_s": None if speed is None else float(speed),
-                    "power_percent": None if power is None else round(float(power) / 10, 1),
+                    "power_percent": percent,
                     "passes": int(passes),
                     "elements": children,
-                    "source": herkomst(speed, power),
+                    "source": (entry or {}).get("source") or herkomst(speed, power),
+                    "preset_id": (entry or {}).get("preset_id"),
+                    "material_id": (entry or {}).get("material_id"),
+                    "material_name": (entry or {}).get("material_name"),
+                    "thickness_mm": (entry or {}).get("thickness_mm"),
+                    "warnings": _layer_warnings(entry, sheet),
                 }
             )
         return layers
@@ -975,3 +995,94 @@ class Drawing:
             self.runner.document.touch()
         self.elements.signal("rebuild_tree", "all")
         self.elements.signal("refresh_scene", "Scene")
+
+
+# Verschil in dikte waarbij een instelling nog "van dezelfde plaat" is. Een
+# halve millimeter dekt de spreiding van plaatmateriaal; daarboven is het een
+# andere dikte en dus een andere snede.
+DIKTE_SPELING = 0.51
+
+
+def _mm_tekst(waarde) -> str:
+    """3 in plaats van 3.0, en 0,8 in plaats van 0.8 — het is een Nederlandse maat."""
+    getal = float(waarde)
+    heel = f"{getal:g}"
+    return heel.replace(".", ",")
+
+
+# Hoe zwaar een bezwaar weegt. Niet alle waarschuwingen zijn even erg, en wie ze
+# even zwaar toont laat de gebruiker zelf uitzoeken wat er eerst moet — precies
+# op het moment dat hij daar geen zin in heeft.
+#
+# Een gemeten instelling van het verkeerde materiaal is het ergst: die getallen
+# zijn wél waar, maar over iets anders, en niets in beeld spreekt ze tegen. Een
+# andere dikte van hetzelfde materiaal is een gradatie daarvan. Een uitgerekende
+# waarde op het juiste materiaal is de mildste: hij kán kloppen, hij is alleen
+# nooit bewezen.
+ERNST = {"ander-materiaal": 3, "andere-dikte": 2, "nooit-gebrand": 1}
+
+
+def _layer_warnings(entry: dict | None, sheet: dict | None) -> list[dict]:
+    """
+    Waarom je vóór het starten nog even naar deze laag moet kijken.
+
+    Drie dingen, in volgorde van hoe hard ze kunnen aankomen: de instelling
+    komt van een ánder materiaal, van een andere dikte, of van niemand — hij is
+    uitgerekend of overgenomen en nooit werkelijk gebrand.
+    """
+    if not entry:
+        return []
+
+    waarschuwingen = []
+    sheet = sheet or {}
+    vel_materiaal = sheet.get("material_id")
+    vel_naam = sheet.get("material_name") or "dit vel"
+    vel_dikte = sheet.get("thickness_mm")
+
+    van = entry.get("material_name") or "een ander materiaal"
+    if (
+        vel_materiaal is not None
+        and entry.get("material_id") is not None
+        and entry["material_id"] != vel_materiaal
+    ):
+        waarschuwingen.append(
+            {
+                "code": "ander-materiaal",
+                "text": f"Deze instelling is voor {van}; dit vel is {vel_naam}.",
+            }
+        )
+    elif (
+        vel_dikte is not None
+        and entry.get("thickness_mm") is not None
+        and abs(float(entry["thickness_mm"]) - float(vel_dikte)) >= DIKTE_SPELING
+    ):
+        waarschuwingen.append(
+            {
+                "code": "andere-dikte",
+                "text": (
+                    f"Deze instelling is voor {_mm_tekst(entry['thickness_mm'])} mm; "
+                    f"dit vel is {_mm_tekst(vel_dikte)} mm."
+                ),
+            }
+        )
+
+    if entry.get("source") == "geextrapoleerd":
+        waarschuwingen.append(
+            {
+                "code": "nooit-gebrand",
+                "text": "Uitgerekend vanaf een andere dikte — nooit gebrand.",
+            }
+        )
+    elif entry.get("source") == "geimporteerd":
+        waarschuwingen.append(
+            {
+                "code": "nooit-gebrand",
+                "text": "Van een andere machine overgenomen — hier nooit gebrand.",
+            }
+        )
+
+    # Het zwaarste bezwaar bovenaan, zodat de lezer niet zelf hoeft te wegen.
+    for waarschuwing in waarschuwingen:
+        waarschuwing["ernst"] = ERNST.get(waarschuwing["code"], 1)
+    waarschuwingen.sort(key=lambda w: -w["ernst"])
+    return waarschuwingen

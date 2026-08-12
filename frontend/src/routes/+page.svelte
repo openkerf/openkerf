@@ -21,6 +21,7 @@
 	import CameraCalibration from '$components/CameraCalibration.svelte';
 	import Clipart from '$components/Clipart.svelte';
 	import SheetTabs from '$components/SheetTabs.svelte';
+	import SheetMaterial from '$components/SheetMaterial.svelte';
 	import PhoneView from '$components/PhoneView.svelte';
 	import JobStart from '$components/JobStart.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
@@ -54,8 +55,15 @@
 	let tablet = $derived(breedte >= 768 && breedte < 1200);
 	// Onder deze breedte passen de bestandsknoppen niet meer náást de
 	// machinebediening in de bovenbalk; ze verhuizen dan naar het railmenu.
-	// Gemeten: bij 950px raakt de startknop anders de rechterrand.
-	let smal = $derived(tablet && breedte < 950);
+	// Sinds het materiaal van het vel in de balk staat (besluit B1) ligt die
+	// grens niet meer op 950 maar op de hele tabletbreedte: gemeten liep de
+	// balk op 1024 anders 99px over de rand, en dan staat de startknop buiten
+	// beeld. Waarín je brandt weegt zwaarder dan een bestandsknop die één tik
+	// verderop in het railmenu staat.
+	let smal = $derived(tablet);
+	// Eén stap eerder: op een gewoon laptopscherm blijven de bestandsknoppen
+	// staan, maar zonder hun woord. Gemeten grens; boven 1500px past alles.
+	let krap = $derived(!telefoon && breedte < 1500);
 	let paneelOpen = $state(true);
 	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
 	// waar je hem zoekt.
@@ -119,6 +127,11 @@
 	let estimate = $state<number | null>(null);
 	let gridOpen = $state(false);
 	let versRaster = $state<number | null>(null);
+	/** Het materiaal van het huidige vel wijzigen (besluit B1). */
+	let materiaalOpen = $state(false);
+	let velMateriaal = $derived(
+		library.materials.find((m) => m.id === sheets.active?.material_id)?.name ?? null
+	);
 
 	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
 	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
@@ -466,6 +479,7 @@
 	canEdit={canEdit && design.preview === null}
 	{tablet}
 	{smal}
+	{krap}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
 	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
 	paused={machine === 'paused'}
@@ -475,6 +489,9 @@
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
 	onOpenProject={openProject}
+	material={velMateriaal}
+	thicknessMm={sheets.active?.thickness_mm ?? null}
+	onOpenMaterial={() => (materiaalOpen = true)}
 	canFrame={(design.elements?.length ?? 0) > 0 &&
 		(control.capabilities?.motion?.move ?? false) &&
 		!control.needsToken}
@@ -489,7 +506,7 @@
 <div class="main">
 	<ToolRail
 		compact={tablet}
-		bestanden={smal}
+		bestanden={smal || krap}
 		bind:tool
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
@@ -508,6 +525,7 @@
 			{sheets}
 			{library}
 			{canEdit}
+			onEditMaterial={() => (materiaalOpen = true)}
 			onSwitched={async () => {
 				design.select(null);
 				await design.load();
@@ -844,10 +862,26 @@
 	}}
 />
 
+<!-- Materiaal van het vel: klein venster, twee keuzes. In de bovenbalk kan het
+     niet — die scrollt horizontaal en knipt elk uitklapmenu af — en op een
+     tablet is een venster bovendien met een vinger te bedienen. -->
+<Dialog title="Materiaal van dit vel" bind:open={materiaalOpen} width="440px">
+	{#if sheets.active}
+		<SheetMaterial
+			{sheets}
+			{library}
+			sheet={sheets.active}
+			onDone={() => (materiaalOpen = false)}
+		/>
+	{/if}
+</Dialog>
+
 <Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
 	<MaterialLibrary
 		{library}
 		operations={design.operations}
+		sheetMaterialId={sheets.active?.material_id ?? null}
+		sheetMaterialName={velMateriaal}
 		{canEdit}
 		onApplied={() => design.load()}
 		token={token()}
@@ -864,7 +898,8 @@
 	<TestGrid
 		{library}
 		{canEdit}
-		materialId={gridMateriaal}
+		materialId={gridMateriaal ?? sheets.active?.material_id ?? null}
+		thicknessMm={sheets.active?.thickness_mm ?? null}
 		onGenerated={(id) => {
 			// Vers gebrand raster: stap 3 hoort er meteen op te staan in plaats van
 			// op "kies een raster…" te blijven hangen.

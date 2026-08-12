@@ -2,6 +2,13 @@
 	import type { Device } from '$lib/api';
 	import type { DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
+	import {
+		omgevingstrefpunten,
+		klikDoosVast,
+		klikPuntVast,
+		SNAP_LABEL,
+		type SnapGuide
+	} from '$lib/snapping';
 
 	let {
 		onPointerMm,
@@ -195,6 +202,12 @@
 	 *  hand moet een klik binnen een bestaande vorm gewoon tekenen. */
 	let selectTool = $derived(tool === 'select' || tool === 'nodes');
 
+	/** Gereedschappen die iets op een plek zetten; daar hoort vastklikken bij. */
+	let tekengereedschap = $derived(
+		tool === 'rect' || tool === 'circle' || tool === 'line' || tool === 'text' ||
+			tool === 'pen' || tool === 'measure'
+	);
+
 	let frame = $state<HTMLElement | null>(null);
 	let panning = $state<{ x: number; y: number; from: { x: number; y: number } } | null>(null);
 
@@ -240,7 +253,7 @@
 
 	function moveEndpoint(event: PointerEvent) {
 		if (!endpointDrag || !endpointPreview) return;
-		const at = pointerMm(event, true);
+		const at = snapPunt(pointerMm(event, true), event);
 		endpointPreview =
 			endpointDrag.index === 0
 				? { ...endpointPreview, x1_mm: at.x, y1_mm: at.y }
@@ -252,6 +265,7 @@
 		const target = endpointPreview;
 		endpointDrag = null;
 		endpointPreview = null;
+		guides = [];
 		if (!drag || !target || !design.selectedId) return;
 		await edits.updateLine(design.selectedId, target);
 		onEdited?.();
@@ -323,13 +337,14 @@
 
 	function moveNode(event: PointerEvent) {
 		if (!nodeDrag) return;
-		const at = pointerMm(event, true);
+		const at = snapPunt(pointerMm(event, true), event);
 		nodeDrag = { ...nodeDrag, x: at.x, y: at.y };
 	}
 
 	async function endNode() {
 		const drag = nodeDrag;
 		nodeDrag = null;
+		guides = [];
 		const id = design.selectedId;
 		if (!drag || !id) return;
 		const moved = await edits.moveNode(id, drag.index, drag.x, drag.y);
@@ -377,6 +392,31 @@
 	});
 
 	let outline = $derived(preview ?? selection);
+
+	/**
+	 * De vorm zelf laten meelopen tijdens het verplaatsen.
+	 *
+	 * Alleen het kader bewoog mee en de vorm bleef staan tot de engine antwoordde.
+	 * Zolang er niets vastklikte viel dat nauwelijks op; met hulplijnen erbij wél,
+	 * want dan wijst de lijn naar een rand die op dat moment ergens anders ligt en
+	 * lijkt het vastklikken mis te gaan. De paddata staat in Tats, dus de
+	 * verschuiving in mm moet daarheen terug.
+	 */
+	function verschuiving(id: string) {
+		if (!drag || !preview || !design.isSelected(id)) return undefined;
+		const per = design.design?.units_per_mm ?? 1;
+		if (drag.mode === 'move') return `translate(${drag.dx * per} ${drag.dy * per})`;
+		if (drag.mode !== 'scale') return undefined;
+		// Schalen gebeurt vanaf de tegenoverliggende hoek; die blijft dus liggen en
+		// is het vaste punt van de vergroting.
+		const o = drag.origin;
+		if (!o.width || !o.height) return undefined;
+		const vastX = (drag.corner % 2 === 0 ? o.x + o.width : o.x) * per;
+		const vastY = (drag.corner < 2 ? o.y + o.height : o.y) * per;
+		const sx = preview.width / o.width;
+		const sy = preview.height / o.height;
+		return `translate(${vastX} ${vastY}) scale(${sx} ${sy}) translate(${-vastX} ${-vastY})`;
+	}
 
 	/**
 	 * Het selectiekader, een paar schermpixels ruim om de vorm heen.
@@ -427,10 +467,15 @@
 
 	$effect(() => {
 		if (tool !== 'line') lineStart = null;
+		// Van gereedschap wisselen laat geen hulplijn achter die nergens meer bij hoort.
+		void tool;
+		guides = [];
 	});
 
 	function drawAt(event: MouseEvent) {
-		const at = pointerMm(event);
+		// Plaatsen klikt net zo goed vast als slepen: een nieuwe vorm hoort op de
+		// rasterlijn te landen waar je hem neerzet, niet op 3,7 mm ernaast.
+		const at = snapPunt(pointerMm(event), event);
 		const half = DEFAULT_MM / 2;
 		if (tool === 'rect') {
 			onDrawn?.({
@@ -500,8 +545,34 @@
 			drag.angle = degrees;
 			return;
 		}
-		drag.dx = (event.clientX - drag.startX) * mmPerPixel();
-		drag.dy = (event.clientY - drag.startY) * mmPerPixel();
+		let dx = (event.clientX - drag.startX) * mmPerPixel();
+		let dy = (event.clientY - drag.startY) * mmPerPixel();
+
+		if (snapUit(event)) {
+			guides = [];
+		} else if (drag.mode === 'move') {
+			// Verplaatsen: randen én hartlijnen mogen vastklikken, per as apart.
+			const uit = klikDoosVast(drag.origin, { dx, dy }, trefpunten, snapRaster, snapTolerantie);
+			dx = uit.dx;
+			dy = uit.dy;
+			guides = uit.guides;
+		} else {
+			// Schalen: alleen de hoek die je vasthebt. De tegenoverliggende hoek
+			// blijft liggen, dus die heeft niets te zoeken tussen de kandidaten.
+			const links = drag.corner % 2 === 0;
+			const boven = drag.corner < 2;
+			const hoek = {
+				x: (links ? drag.origin.x : drag.origin.x + drag.origin.width) + dx,
+				y: (boven ? drag.origin.y : drag.origin.y + drag.origin.height) + dy
+			};
+			const uit = klikPuntVast(hoek, trefpunten, snapRaster, snapTolerantie);
+			dx += uit.x - hoek.x;
+			dy += uit.y - hoek.y;
+			guides = uit.guides;
+		}
+
+		drag.dx = dx;
+		drag.dy = dy;
 	}
 
 	async function endDrag(event: PointerEvent) {
@@ -509,6 +580,7 @@
 		const finished = drag;
 		const target = preview;
 		drag = null;
+		guides = [];
 		design.preview = null;
 		if (design.selectedIds.length === 0 || !target) return;
 
@@ -646,6 +718,143 @@
 	let ticksX = $derived(ticks(bed.width, rulerStep, subStep));
 	let ticksY = $derived(ticks(bed.height, rulerStep, subStep));
 
+	// ── Vastklikken ────────────────────────────────────────────────────────────
+	//
+	// De trefafstand staat in schermpixels en wordt hier teruggerekend naar
+	// millimeters. Dat is hoe LightBurn en Inkscape het doen, en het is de enige
+	// maat die klopt: op 400% is een pixel een kwart millimeter, dus wordt het
+	// vastklikken vanzelf vier keer preciezer in plaats van vier keer grover.
+	const SNAP_PX = 9;
+	let snapTolerantie = $derived(SNAP_PX * mmPerPx);
+
+	// Op de fijnste rasterlijn die je op dat moment ook echt ziet. Staat de fijne
+	// verdeling uit omdat hij te dicht op elkaar valt, dan is de hoofdstap de
+	// enige lijn die er is — vastklikken op iets onzichtbaars is een raadsel.
+	let snapRaster = $derived(subStep || rulerStep);
+
+	/**
+	 * De dozen van alle andere vormen, in mm.
+	 *
+	 * Wat je zelf versleept telt niet mee: een vorm klikt niet aan zichzelf vast.
+	 * Verborgen vormen ook niet — die zie je niet, dus een hulplijn erop is
+	 * onverklaarbaar.
+	 */
+	let andereDozen = $derived.by(() => {
+		const perMm = design.design?.units_per_mm ?? 1;
+		return design.elements
+			.filter((e) => e.bounds && !e.hidden && !design.isSelected(e.id))
+			.map((e) => {
+				const [x0, y0, x1, y1] = e.bounds!;
+				return { x: x0 / perMm, y: y0 / perMm, width: (x1 - x0) / perMm, height: (y1 - y0) / perMm };
+			});
+	});
+
+	let trefpunten = $derived(
+		omgevingstrefpunten({ bed, vel: sheet, anderen: andereDozen })
+	);
+
+	/** De hulplijnen die nú zichtbaar zijn. Leeg zodra je loslaat. */
+	let guides = $state<SnapGuide[]>([]);
+
+	/**
+	 * De hulplijnen als tekenbare lijnstukken.
+	 *
+	 * Een lijn die aan een vorm hangt loopt van die vorm tot voorbij wat eraan
+	 * vastklikt, zodat je ziet wélke twee dingen zijn uitgelijnd — dat is wat
+	 * Inkscape en Illustrator ook doen. Een raster-, vel- of bedlijn heeft geen
+	 * tegenhanger en loopt daarom over het hele bed door.
+	 */
+	let guideLines = $derived.by(() => {
+		const marge = 14 * mmPerPx;
+		const live = preview ?? selection;
+		// Waar het oog is: het ding dat je verplaatst, of anders de cursor.
+		const anker = live
+			? {
+					x0: Math.min(live.x, live.x + live.width),
+					x1: Math.max(live.x, live.x + live.width),
+					y0: Math.min(live.y, live.y + live.height),
+					y1: Math.max(live.y, live.y + live.height)
+				}
+			: hover
+				? { x0: hover.x, x1: hover.x, y0: hover.y, y1: hover.y }
+				: { x0: 0, x1: bed.width, y0: 0, y1: bed.height };
+		const klem = (v: number, laag: number, hoog: number) => Math.min(Math.max(v, laag), hoog);
+
+		return guides.map((g) => {
+			let van = 0;
+			let tot = g.axis === 'x' ? bed.height : bed.width;
+			if (g.span) {
+				van = Math.min(g.span[0], g.axis === 'x' ? anker.y0 : anker.x0);
+				tot = Math.max(g.span[1], g.axis === 'x' ? anker.y1 : anker.x1);
+				van -= marge;
+				tot += marge;
+			}
+			// Het woordje hangt aan de vorm die je beweegt, niet aan het uiteinde
+			// van de lijn: bij een lijn die het hele bed doorloopt viel dat uiteinde
+			// achter het rechterpaneel en las je "bedra…".
+			const tekst = SNAP_LABEL[g.kind];
+			const breed = tekst.length * labelSize * 0.55;
+			const vertical = g.axis === 'x';
+			let tx = vertical ? g.pos : anker.x1 + labelSize * 0.5;
+			let anchor = vertical ? 'middle' : 'start';
+			if (!vertical && tx + breed > bed.width) {
+				tx = anker.x0 - labelSize * 0.5;
+				anchor = 'end';
+			}
+			return {
+				key: `${g.axis}:${g.kind}:${g.pos.toFixed(3)}`,
+				label: tekst,
+				x1: vertical ? g.pos : van,
+				x2: vertical ? g.pos : tot,
+				y1: vertical ? van : g.pos,
+				y2: vertical ? tot : g.pos,
+				tx: vertical ? klem(tx, breed / 2, bed.width - breed / 2) : klem(tx, 0, bed.width),
+				ty: vertical
+					? klem(anker.y0 - labelSize * 1.1, labelSize, bed.height - labelSize * 0.3)
+					: klem(g.pos - labelSize * 0.4, labelSize, bed.height - labelSize * 0.3),
+				anchor
+			};
+		});
+	});
+
+	/**
+	 * Staat het vastklikken aan? De knop naast de zoomregeling zet het uit voor
+	 * langer dan één beweging, en die keuze blijft staan tussen sessies —
+	 * LightBurn en xTool hebben er allebei een schakelaar voor, en wie zonder
+	 * wil werken moet niet elke keer een toets vast hoeven houden.
+	 */
+	let snapAan = $state(
+		typeof window === 'undefined' || localStorage.getItem('openkerf.snap') !== 'uit'
+	);
+
+	function snapSchakel() {
+		snapAan = !snapAan;
+		guides = [];
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('openkerf.snap', snapAan ? 'aan' : 'uit');
+		}
+	}
+
+	/**
+	 * Alt keert de stand om voor die ene beweging: aan het vastklikken tegen,
+	 * uit het juist even aan. Dat laatste is hoe LightBurn het ook doet — een
+	 * modifier die niets doet zodra je de functie hebt uitgezet, is een dode toets.
+	 */
+	function snapUit(event: { altKey?: boolean } | null | undefined) {
+		return snapAan === (event?.altKey === true);
+	}
+
+	/** Een los punt vastklikken en meteen de hulplijnen zetten. */
+	function snapPunt(at: { x: number; y: number }, event?: { altKey?: boolean } | null) {
+		if (snapUit(event)) {
+			guides = [];
+			return at;
+		}
+		const uit = klikPuntVast(at, trefpunten, snapRaster, snapTolerantie);
+		guides = uit.guides;
+		return { x: uit.x, y: uit.y };
+	}
+
 	// Het grid volgde de zoom niet: het stond vast op 50 mm terwijl de liniaal
 	// op 20 of 100 sprong. Dan valt er geen lijn op een cijfer en kun je niets
 	// van het bed aflezen. Nu deelt het grid de stap van de liniaal, met een
@@ -718,7 +927,10 @@
 		pointer = pointerOnRulers(e);
 			onPointerMm?.(pointer);
 	}}
-	onpointerleave={() => (pointer = null)}
+	onpointerleave={() => {
+		pointer = null;
+		if (!drag) guides = [];
+	}}
 	onpointerup={() => (panning = null)}
 >
 	<div class="corner" aria-hidden="true">mm</div>
@@ -816,11 +1028,11 @@
 				onclick={(e) => {
 					if (e.target !== e.currentTarget) return;
 					if (tool === 'pen' && canEdit) {
-						penClick(pointerMm(e));
+						penClick(snapPunt(pointerMm(e), e));
 						return;
 					}
 					if (tool === 'measure') {
-						const at = pointerMm(e);
+						const at = snapPunt(pointerMm(e), e);
 						if (!measureFrom || measureTo) {
 							measureFrom = at;
 							measureTo = null;
@@ -854,9 +1066,12 @@
 					}
 				}}
 				onpointermove={(e) => {
-					if (tool === 'measure' && measureFrom && !measureTo) hover = pointerMm(e);
-					if (tool === 'pen' && penPoints.length) hover = pointerMm(e);
-					if (lineStart) hover = pointerMm(e);
+					// Waar het gereedschap zou landen, mét vastklikken — zo zie je de
+						// hulplijn vóór de klik en niet pas erna.
+						if (tool === 'measure' && measureFrom && !measureTo) hover = snapPunt(pointerMm(e), e);
+					else if (tool === 'pen' && penPoints.length) hover = snapPunt(pointerMm(e), e);
+					else if (lineStart) hover = snapPunt(pointerMm(e), e);
+						else if (canEdit && tekengereedschap) snapPunt(pointerMm(e), e);
 					moveBand(e);
 				}}
 				onpointerup={endBand}
@@ -866,6 +1081,9 @@
 				{#if design.design}
 					<g transform="scale({1 / design.design.units_per_mm})">
 						{#each design.elements as element (element.id)}
+							<!-- Tijdens het verplaatsen loopt de vorm mee met het kader; zonder
+							     dat wijzen de hulplijnen naar een rand die er nog niet ligt. -->
+							<g transform={verschuiving(element.id)}>
 							{#if !element.hidden && element.image}
 								<!-- Afbeeldingen hebben geen pad; de pixels komen van de API.
 								     De transform hierboven rekent in Tats, dus terugschalen. -->
@@ -951,6 +1169,7 @@
 									}}
 								/>
 							{/if}
+							</g>
 						{/each}
 					</g>
 
@@ -1062,6 +1281,26 @@
 						</g>
 					{/if}
 				{/if}
+
+				<!-- Hulplijnen: waaróp iets vastklikt. Zonder deze terugkoppeling is
+				     snapping een raadsel — je ziet iets wegspringen en weet niet
+				     waarheen. Ze vangen geen muis af. -->
+				<!-- Het label staat op volle --text-xs (11 px): kleiner maken om ruimte te
+				     winnen is precies wat de pixelrechter afkeurt. -->
+				{#each guideLines as lijn (lijn.key)}
+					<g class="guide">
+						<line x1={lijn.x1} y1={lijn.y1} x2={lijn.x2} y2={lijn.y2} />
+						<text
+							class="mono"
+							x={lijn.tx}
+							y={lijn.ty}
+								text-anchor={lijn.anchor}
+							style="font-size: {labelSize}px"
+						>
+							{lijn.label}
+						</text>
+					</g>
+				{/each}
 
 				{#if lineStart && hover}
 					<line
@@ -1213,6 +1452,25 @@
 	</div>
 
 	<div class="zoom">
+		<!-- Vastklikken aan of uit. Een magneet, want dat is het beeld dat elk
+		     tekenprogramma ervoor gebruikt; de stand staat er in woorden bij in de
+		     titel, want een icoon alleen zegt niet of het aan- of uitstaat. -->
+		<button
+			class="snap"
+			class:aan={snapAan}
+			aria-pressed={snapAan}
+			title={snapAan
+				? 'Vastklikken staat aan — houd Alt ingedrukt om het even over te slaan'
+				: 'Vastklikken staat uit — houd Alt ingedrukt om het even te gebruiken'}
+			aria-label="Vastklikken op raster en vormen"
+			onclick={snapSchakel}
+		>
+			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<path d="M6 4v8a6 6 0 0 0 12 0V4" />
+				<path d="M6 10h4M14 10h4" />
+			</svg>
+		</button>
+		<span class="scheiding" aria-hidden="true"></span>
 		<button title="Uitzoomen" aria-label="Uitzoomen" onclick={() => zoomAt(1 / 1.25)}>−</button>
 		<!-- 100% is de stand waarin het hele bed in beeld staat; dat is nu ook
 		     echt zo, sinds de schaal het werkvlak volgt in plaats van 640 px. -->
@@ -1405,6 +1663,31 @@
 	.hit {
 		cursor: pointer;
 	}
+	/* Fijn gestippeld en op volle sterkte, zodat een hulplijn niet te verwarren
+	   is met de kopmarkering (dezelfde accentkleur, maar doorgetrokken en
+	   halfdoorzichtig) of met de gestreepte selectiecontour. */
+	.guide {
+		pointer-events: none;
+	}
+	.guide line {
+		stroke: var(--accent);
+		stroke-width: 1;
+		stroke-dasharray: 2 2;
+		vector-effect: non-scaling-stroke;
+	}
+	.guide text {
+		fill: var(--accent);
+		font-variant-numeric: tabular-nums;
+		/* Een randje in de bedkleur onder de letters: het woordje staat pal naast
+		   het werkstuk en zou anders over een contour of een greep vallen. */
+		paint-order: stroke;
+		stroke: var(--bed);
+		stroke-width: 3px;
+		stroke-linejoin: round;
+		vector-effect: non-scaling-stroke;
+		/* Geen font-size hier: die wordt per element uitgerekend, want deze tekst
+		   staat in millimeters en zou anders met de zoom meegroeien. */
+	}
 	.hit.passive {
 		pointer-events: none;
 	}
@@ -1510,6 +1793,16 @@
 	.zoom button:hover {
 		background: var(--surface-2);
 		color: var(--text-1);
+	}
+	.zoom .snap.aan {
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+	}
+	.zoom .scheiding {
+		width: 1px;
+		align-self: stretch;
+		margin: 2px 2px;
+		background: var(--line);
 	}
 	.zoom .val {
 		font-size: 11px;

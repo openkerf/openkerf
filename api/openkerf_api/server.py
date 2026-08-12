@@ -35,6 +35,7 @@ from .generators import Generators
 from .nesting import Nesting
 from .nodes import Nodes
 from .presetariat import Presetariat
+from .provenance import Provenance
 from .sheets import Sheets
 from .testgrid import TestGridGenerator, plan_grid
 from .machine import MachineControl
@@ -196,6 +197,11 @@ class ApiServer:
             self.document,
             Path(self.library.path).with_name("openkerf-vellen"),
         )
+        # Waar de instellingen van een laag vandaan komen. Naast de bibliotheek,
+        # want het gaat over presets; niet erín, want het gaat over dit project.
+        self.provenance = Provenance(
+            Path(self.library.path).with_name("openkerf-herkomst.json")
+        )
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
         self.fonts = Fonts(kernel)
@@ -246,6 +252,34 @@ class ApiServer:
             )
         except Exception:
             return None
+
+    def _active_sheet(self):
+        """
+        Het vel waarop nu gewerkt wordt, met de naam van zijn materiaal erbij.
+
+        Het vel bewaart alleen een id — de bibliotheek weet hoe het heet, en
+        zonder die naam kan de pre-flight niet zeggen wáárin je brandt.
+        """
+        try:
+            sheet = self.sheets.active()
+        except Exception:
+            return None
+        if sheet is None:
+            return None
+        naam = None
+        if sheet.get("material_id") is not None:
+            try:
+                naam = next(
+                    (
+                        m["name"]
+                        for m in self.library.materials()
+                        if m["id"] == sheet["material_id"]
+                    ),
+                    None,
+                )
+            except Exception:
+                naam = None
+        return {**sheet, "material_name": naam}
 
     def build_app(self):
         from contextlib import asynccontextmanager
@@ -529,13 +563,40 @@ class ApiServer:
         def import_font(body: dict):
             return manage(self.fonts.import_font, body.get("file"))
 
+        @app.get("/api/job/layers")
+        def job_layers():
+            """
+            Wat er gebrand wordt en waar die instellingen vandaan komen —
+            zonder de klok.
+
+            Bewust een eigen route naast `/api/job/estimate`: die bouwt voor de
+            tijdschatting het hele snijplan, en dat duurt op een zwaar ontwerp
+            minuten (gat J1). Een waarschuwing dat een laag een instelling van
+            ánder materiaal draagt, mag daar niet achteraan hoeven staan — dat
+            is nu juist wat je vóór het starten moet weten. Hier wordt niets
+            gepland: dit leest de elementenboom, de bibliotheek en de herkomst.
+            """
+            sheet = self._active_sheet()
+            return manage(
+                lambda: {
+                    "sheet": sheet,
+                    "layers": self.drawing.job_layers(
+                        self.library, self.provenance, sheet
+                    ),
+                }
+            )
+
         @app.get("/api/job/estimate")
         def estimate_job():
             """
             Wat de machine gaat doen, vóór starten: tijd, onderdelen én per
             laag de instellingen met hun herkomst.
             """
-            return manage(lambda: self.drawing.estimate(self.library))
+            return manage(
+                lambda: self.drawing.estimate(
+                    self.library, self.provenance, self._active_sheet()
+                )
+            )
 
         @app.get("/api/design/export.svg")
         def export_design(filename: str = "ontwerp.svg"):
@@ -817,6 +878,10 @@ class ApiServer:
                 # Pas ná een geslaagde toepassing: een mislukte poging is geen
                 # gebruik, en "onlangs gebruikt" moet waar blijven.
                 self.library.touch_preset(preset_id)
+                # En onthouden wáár deze getallen vandaan komen. Zonder dat
+                # briefje moet de pre-flight de herkomst raden aan de waarden,
+                # en dan is een instelling voor ander materiaal niet te zien.
+                self.provenance.record(self.sheets.active_id, operation_id, preset)
                 return {**result, "preset": preset}
 
             return manage(run)
@@ -920,6 +985,7 @@ class ApiServer:
                 fields.get("width_mm"),
                 fields.get("height_mm"),
                 fields.get("material_id"),
+                fields.get("thickness_mm"),
             )
 
         @app.post("/api/sheets/{sheet_id}/activate", dependencies=write)
@@ -936,7 +1002,14 @@ class ApiServer:
 
         @app.delete("/api/sheets/{sheet_id}", dependencies=write)
         def delete_sheet(sheet_id: str):
-            return manage(self.sheets.remove, sheet_id)
+            def run():
+                state = self.sheets.remove(sheet_id)
+                # Vel-nummers worden hergebruikt; zonder dit erft een nieuw
+                # vel de herkomst van het vel dat hier net weg is.
+                self.provenance.forget_sheet(sheet_id)
+                return state
+
+            return manage(run)
 
         @app.post("/api/sheets/{sheet_id}/move", dependencies=write)
         def move_to_sheet(sheet_id: str, body: dict):
@@ -1294,6 +1367,18 @@ class ApiServer:
         @app.get("/api/machines")
         def machine_list():
             return self.machines.list()
+
+        @app.get("/api/machines/scan")
+        def machine_scan(network: bool = True, seconds: float = 2.0):
+            """
+            Search USB, serial and the local network for machines.
+
+            A GET on purpose: this looks, it does not touch. Nothing is created,
+            activated or connected here — the caller turns a proposal into a
+            machine through POST /api/machines, which does carry the write
+            guard. See BESLISSINGEN.md B6.
+            """
+            return manage(self.machines.scan, network, seconds)
 
         @app.post("/api/machines", dependencies=write, status_code=201)
         def machine_create(body: dict):

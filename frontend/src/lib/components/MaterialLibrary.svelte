@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import NumberField from './NumberField.svelte';
 	import {
 		OPERATION_LAYER,
@@ -15,6 +16,8 @@
 		library,
 		operations,
 		canEdit = false,
+		sheetMaterialId = null,
+		sheetMaterialName = null,
 		onApplied,
 		onMakeGrid,
 		token = ''
@@ -22,13 +25,22 @@
 		library: LibraryStore;
 		operations: DesignOperation[];
 		canEdit?: boolean;
+		/** Het materiaal van het vel waarop je werkt (besluit B1). De bibliotheek
+		 *  opent daarop gefilterd: je zoekt instellingen voor wat er ín de
+		 *  machine ligt, niet voor alles wat je ooit gebrand hebt. */
+		sheetMaterialId?: number | null;
+		sheetMaterialName?: string | null;
 		onApplied?: () => void;
 		/** Opent het testrastervenster voor dit materiaal. */
 		onMakeGrid?: (materialId: number | null) => void;
 		token?: string;
 	} = $props();
 
-	let materialId = $state<number | null>(null);
+	// Het venster wordt bij elke opening opnieuw opgebouwd, dus dit is ook echt
+	// de stand waarin je hem elke keer aantreft. Bewust alleen de beginwaarde:
+	// wisselt het vel terwijl dit openstaat, dan hoort het filter niet onder je
+	// handen vandaan te schuiven — vandaar untrack.
+	let materialId = $state<number | null>(untrack(() => sheetMaterialId));
 	let zoek = $state('');
 	let adding = $state(false);
 	let newMaterial = $state('');
@@ -543,6 +555,23 @@
 </div>
 
 <div class="context">
+	<!-- De twee inperkingen horen bij elkaar: samen zeggen ze "dit is wat er bij
+	     deze laser en dit vel hoort". Los van elkaar aan de twee uiteinden van
+	     de balk leest het als twee losse instellingen. -->
+	<div class="filters">
+	{#if sheetMaterialId !== null && sheetMaterialName}
+		<!-- Dezelfde schakelaar als "alleen deze machine", want het is dezelfde
+		     soort inperking: een preset geldt voor één laser op één materiaal.
+		     Uitzetten toont de rest — dit filter is een startpunt, geen muur. -->
+		<label class="bereik">
+			<input
+				type="checkbox"
+				checked={materialId === sheetMaterialId}
+				onchange={(e) => (materialId = e.currentTarget.checked ? sheetMaterialId : null)}
+			/>
+			<span>Alleen {sheetMaterialName} <span class="waarom">— van dit vel</span></span>
+		</label>
+	{/if}
 	{#if library.activeMachine}
 		<!-- Een preset geldt voor één laser op één materiaal. Standaard zie je
 		     die van de machine die nu aanstaat; de rest is één vinkje weg. -->
@@ -555,6 +584,7 @@
 			<span>Alleen {library.activeMachine.name}</span>
 		</label>
 	{/if}
+	</div>
 	{#if operations.length > 1}
 		<label class="doel">
 			<span>Toepassen op</span>
@@ -796,6 +826,22 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
+	.filters {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+	}
+	.bereik {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1h);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* Waaróm dit filter aanstaat, in de schakelaar zelf: anders lijkt het een
+	   voorkeur die iemand ooit heeft aangezet. */
+	.waarom { color: var(--text-2); }
 	.kop {
 		font-size: var(--text-xs);
 		font-weight: 600;

@@ -101,6 +101,39 @@ export function kindOf(family: string, keys: string[]): Kind {
 	return 'diode';
 }
 
+/**
+ * Wat een zoekopdracht oplevert (besluit B6).
+ *
+ * Een vondst is een *voorstel*, geen machine: hij bestaat alleen in dit
+ * antwoord tot de gebruiker hem bevestigt. De API-kant is daarom een GET zonder
+ * schrijfrechten — zie `machines.py`, sectie "detection".
+ */
+export type Vondst = {
+	id: string;
+	transport: 'usb' | 'serieel' | 'netwerk' | string;
+	/** Wat er gevonden is, in mensentaal: "K40-bord (CH341)". */
+	title: string;
+	/** Waar het zit: een poortnaam, een IP-adres, een USB-identiteit. */
+	where: string;
+	detail: string | null;
+	kind: Kind | string;
+	confidence: 'zeker' | 'waarschijnlijk' | 'onzeker' | string;
+	/** Waarom we dit denken. Altijd tonen: een gok zonder reden is een gok. */
+	why: string;
+	suggestions: { key: string; label: string; family: string }[];
+	/** Verbindingsinstellingen die uit de vondst volgen (poort, adres). */
+	settings: Record<string, string>;
+};
+
+export type ScanResult = {
+	candidates: Vondst[];
+	/** Waar gekeken is — nodig om "niets gevonden" te kunnen vertrouwen. */
+	searched: string[];
+	/** Waarom ergens níet gekeken kon worden, of wat er stil bleef. */
+	notes: string[];
+	duration_ms: number;
+};
+
 export class MachineStore {
 	catalog = $state<CatalogFamily[]>([]);
 	machines = $state<Machine[]>([]);
@@ -156,6 +189,34 @@ export class MachineStore {
 		);
 		this.settings = data ?? [];
 		return this.settings;
+	}
+
+	/**
+	 * Zoek naar machines op USB, seriële poorten en het lokale netwerk.
+	 *
+	 * `signal` hoort erbij: dit duurt seconden, en een gebruiker die niet kan
+	 * stoppen wacht niet maar ververst de pagina.
+	 */
+	async scan(options: { network?: boolean; seconds?: number; signal?: AbortSignal } = {}) {
+		const { network = true, seconds = 2, signal } = options;
+		this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch(`/api/machines/scan?network=${network}&seconds=${seconds}`, {
+				signal
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return null;
+			}
+			return (await response.json()) as ScanResult;
+		} catch (e) {
+			if (e instanceof DOMException && e.name === 'AbortError') return null;
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return null;
+		} finally {
+			this.busy = false;
+		}
 	}
 
 	create(info: string, label: string) {

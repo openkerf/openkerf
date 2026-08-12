@@ -11,6 +11,7 @@
 		canEdit = false,
 		tablet = false,
 		smal = false,
+		krap = false,
 		canPause = false,
 		canResume = false,
 		paused = false,
@@ -20,6 +21,9 @@
 		onStop,
 		onFrame,
 		canFrame = false,
+		material = null,
+		thicknessMm = null,
+		onOpenMaterial,
 		onOpenFile,
 		onOpenProject,
 		onToggleTheme
@@ -39,6 +43,10 @@
 		/** Onder ~950px passen de bestandsknoppen er niet meer bij; ze staan dan
 		 *  in het menu van de gereedschapsrail. */
 		smal?: boolean;
+		/** Onder ~1500px is er geen ruimte voor vier bestandsknoppen mét woord
+		 *  náást machine, materiaal en de bediening. Ze houden hun icoon, hun
+		 *  tooltip en hun plek; alleen het woord gaat weg. */
+		krap?: boolean;
 		canPause?: boolean;
 		canResume?: boolean;
 		paused?: boolean;
@@ -49,6 +57,12 @@
 		onFrame?: () => void;
 		/** Er ligt iets op het bed én deze machine kan bewegen. */
 		canFrame?: boolean;
+		/** Het materiaal van het huidige vel — waarín gebrand wordt. Hoort naast
+		 *  de machine: die twee samen bepalen elke instelling stroomafwaarts.
+		 *  Leeg is een geldige staat en zegt dat ook. */
+		material?: string | null;
+		thicknessMm?: number | null;
+		onOpenMaterial?: () => void;
 		onOpenFile?: (file: File) => void;
 		onOpenProject?: (file: File) => void;
 		onToggleTheme: () => void;
@@ -56,23 +70,56 @@
 
 	// Tijdens het slepen leest `box` de voorvertoning, dus de velden lopen mee.
 	// Ze zijn dan niet te bewerken: je bent al aan het slepen.
+
+	// "3 mm", niet "3.0 mm" — en 0,8 mm blijft 0,8 mm.
+	// "3mm" aan elkaar: in de balk telt elke pixel, en het leest als één maat.
+	let dikte = $derived(
+		thicknessMm === null || thicknessMm === undefined
+			? null
+			: `${String(thicknessMm).replace('.', ',')}mm`
+	);
+	let materiaalTitel = $derived(
+		material
+			? `Dit vel is ${material}${dikte ? `, ${dikte}` : ' (dikte niet ingevuld)'} — klik om te wijzigen`
+			: 'Nog geen materiaal gekozen voor dit vel — klik om het in te vullen'
+	);
 </script>
 
-<header class="topbar" class:smal>
+<header class="topbar" class:smal class:krap>
 	<div class="brand" title="OpenKerf"><Logo /><span class="woord">OpenKerf</span></div>
 
 	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
 	     leidt naar de setup — ook de route als er nog géén machine is. -->
-	<a class="machine" href="/setup" title="Machine kiezen of instellen">
+	<a class="machine" href="/setup" title="{device?.label ?? 'Machine instellen'} — {STATE_LABEL[machineState]}">
 		<span class="dot {machineState}" aria-hidden="true"></span>
 		<span class="naam">{device?.label ?? 'Machine instellen'}</span>
-		<span class="muted">{STATE_LABEL[machineState]}</span>
+		<!-- Het woord bij de toestand stond hier een derde keer: de statusbalk
+		     rechtsonder zegt het voluit, en de gekleurde stip zegt het hier al.
+		     Die 55px zijn de ruimte waarin het materiaal past — en zonder die
+		     ruimte schuift de startknop van het scherm af. Op tablet was dit om
+		     dezelfde reden al verborgen. -->
+		<span class="muted toestand">{STATE_LABEL[machineState]}</span>
 	</a>
+
+	<!-- Waarmee (machine) en waarín (materiaal) horen naast elkaar: samen
+	     bepalen ze elke instelling die hierna volgt. Het materiaal hing tot nu
+	     toe in een filter in een venster dat je weer sluit — zie besluit B1. -->
+	<button
+		class="machine materiaal"
+		class:leeg={!material}
+		disabled={!canEdit}
+		title={materiaalTitel}
+		onclick={onOpenMaterial}
+	>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 12 4l9 4.5-9 4.5z"/><path d="M3 8.5V15l9 4.5 9-4.5V8.5"/></svg>
+		<span class="naam">{material ?? 'Materiaal kiezen'}</span>
+		{#if dikte}<span class="dikte mono">{dikte}</span>{/if}
+	</button>
 
 	<div class="spacer"></div>
 
 	<!-- Openen hoort naast opslaan: in de Job-tab vindt niemand het. -->
-	<label class="btn file docs" title="Project openen (ontwerp + bibliotheek)">
+	<label class="btn file docs project" title="Project openen (ontwerp + bibliotheek)">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
 		<span class="btn-label">Project openen</span>
 		<input
@@ -87,12 +134,12 @@
 			}}
 		/>
 	</label>
-	<a class="btn docs" href="/api/project/export.openkerf" download="project.openkerf" title="Project opslaan">
+	<a class="btn docs project" href="/api/project/export.openkerf" download="project.openkerf" title="Project opslaan">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
 		<span class="btn-label">Project opslaan</span>
 	</a>
 
-	<span class="scheiding docs" aria-hidden="true"></span>
+	<span class="scheiding docs project" aria-hidden="true"></span>
 	<label class="btn file docs" title="Bestand in dit vel importeren — SVG, DXF, RD, G-code of een afbeelding">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
 		<span class="btn-label">Importeren</span>
@@ -228,19 +275,36 @@
 			min-height: 44px;
 			padding: 0 var(--space-2);
 		}
-		/* De toestand staat op tablet al twee keer in de statusbalk ("Machine niet
-		   verbonden" en de bolletje-plus-woord rechts). Hier een derde keer kost
-		   de balk zijn pasvorm: met "Niet verbonden" erbij liep de themaknop op
-		   1024 van het scherm. De gekleurde stip blijft, dus de toestand is nog
-		   steeds in beeld. */
-		.machine .muted { display: none; }
 		.machine .naam {
 			max-width: 15ch;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
 		}
+		/* De dikte blijft staan — 3 mm berken snijdt anders dan 6 mm — en de naam
+		   krijgt de ruimte die overblijft. Het icoontje levert die ruimte in: de
+		   naam van je materiaal zegt meer dan een plankje van 16px. */
+		.materiaal svg { display: none; }
+		.materiaal .naam { max-width: 13ch; }
 	}
+	/* Onder ~950px verdwijnen de bestandsknoppen; het materiaal blijft, want het
+	   hoort bij wat er straks gebeurt. Alleen krapper. */
+	.topbar.smal .materiaal .naam { max-width: 8ch; }
+	/* Een afgekapte materiaalnaam is jammer maar leesbaar via de tooltip; een
+	   afgekapte uitnodiging ("Materiaa…") is onbegrijpelijk. Deze selector moet
+	   de regel hierboven verslaan, dus staat de hele keten erin. */
+	.topbar.smal .materiaal.leeg .naam { max-width: none; }
+	/* Vier bestandsknoppen mét label kosten 560px; dat paste zolang de balk
+	   verder alleen de machine droeg. Met het materiaal erbij (besluit B1) liep
+	   hij op 1440 — onze eigen maat — over de rand, en dan staat de startknop
+	   buiten beeld.
+
+	   Niet de woorden weghalen maar het projectpaar: vier naamloze icoontjes
+	   waarvan er twee een doos met een pijltje zijn, is geen balk maar een
+	   raadsel. Openen en opslaan van het hele project staan in het menu van de
+	   gereedschapsrail, met hun woord erbij; importeren en exporteren — wat je
+	   tijdens het werken doet — houden hier hun naam. */
+	.topbar.krap .project { display: none; }
 	/* Onder ~950px is er geen ruimte meer voor bestandsacties náást de
 	   machinebediening. De machine wint; de bestanden staan dan in het menu van
 	   de gereedschapsrail, één tik verderop. */
@@ -269,6 +333,10 @@
 		gap: var(--space-2);
 		padding: 8px var(--space-2);
 		border-radius: var(--radius-field);
+		/* Onzichtbaar, maar aanwezig: de lege materiaalknop krijgt een streepjes-
+		   rand, en zonder deze regel verspringt de balk 2px zodra je er een
+		   materiaal in zet. */
+		border: 1px solid transparent;
 		background: var(--surface-2);
 		color: inherit;
 		text-decoration: none;
@@ -280,6 +348,33 @@
 	.muted {
 		color: var(--text-2);
 	}
+	/* Nog niets gekozen is geen fout, dus geen rood en geen uitroepteken. Een
+	   onderbroken rand zegt "hier hoort nog iets in te vullen" en verder niets;
+	   zodra er een materiaal staat, wordt het een gewone chip. */
+	.materiaal.leeg {
+		background: transparent;
+		/* --line is afgestemd op vlakken die tegen elkaar aan liggen; als losse
+		   streepjesrand op de balk verdwijnt hij. Dezelfde secundaire tekstkleur,
+		   verdund, houdt hem zichtbaar zonder alarm te slaan. */
+		border: 1px dashed color-mix(in srgb, var(--text-2) 45%, transparent);
+		color: var(--text-2);
+	}
+	/* "Materiaal kiezen" is korter dan een materiaalnaam en mag heel blijven:
+	   afgekapt tot "Materiaal…" is het geen uitnodiging meer. */
+	.materiaal.leeg .naam { max-width: none; }
+	.materiaal.leeg:hover:not(:disabled) { color: var(--text-1); }
+	.materiaal:disabled { cursor: not-allowed; }
+	.materiaal svg { color: var(--text-2); flex: none; }
+	.materiaal .naam {
+		max-width: 14ch;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* De dikte is het halve antwoord en mag niet wegvallen, maar hij hoeft ook
+	   niet even zwaar te wegen als de naam. */
+	.dikte { color: var(--text-2); font-size: var(--text-xs); }
+	.toestand { display: none; }
 	.dot {
 		width: 8px;
 		height: 8px;
