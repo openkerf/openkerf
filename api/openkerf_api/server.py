@@ -1957,6 +1957,13 @@ class ApiServer:
         self._camera_job = self.kernel.add_job(
             self.camera.reap, name="openkerf-camera-reap", interval=5.0
         )
+        # De staart van het automatisch bewaren. `touch` hangt aan boomsignalen,
+        # dus de laatste wijziging vóór je wegloopt kreeg nooit een schrijfbeurt:
+        # er komt geen signaal meer om hem op te halen. Deze job doet dat wel, op
+        # de kernelthread, dus zonder een tweede thread in de elementenboom.
+        self._autosave_job = self.kernel.add_job(
+            self.autosave.flush, name="openkerf-autosave-flush", interval=5.0
+        )
         self.channel(f"OpenKerf API listening on http://{self.bind}:{self.port}/")
         if self.local_only:
             self.channel("Write actions are open (bound to localhost).")
@@ -1975,6 +1982,13 @@ class ApiServer:
         if job is not None:
             self.kernel.unschedule(job)
             self._camera_job = None
+        job = getattr(self, "_autosave_job", None)
+        if job is not None:
+            self.kernel.unschedule(job)
+            self._autosave_job = None
+        # Nog één keer, nu het nog kan: wat na de laatste schrijfbeurt getekend
+        # is, mag niet met het proces verdwijnen.
+        self.autosave.save()
         self.camera.stop()
         if self._server is not None:
             self._server.should_exit = True

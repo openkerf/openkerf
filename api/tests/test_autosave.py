@@ -3,6 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from openkerf_api.autosave import INTERVAL
 from openkerf_api.server import ApiServer
 
 
@@ -101,6 +102,35 @@ def test_throwing_it_away_does_not_leave_you_without_a_net(client, server):
 
     assert server.autosave.touch() is True
     assert client.get("/api/design/autosave").json()["exists"] is True
+
+
+def test_the_last_change_before_you_walk_away_still_lands(client, server, monkeypatch):
+    """
+    `touch` schrijft de eerste wijziging en remt daarna. Wie in die interval nog
+    twee vormen tekent en dan naar de machine loopt, kreeg voor die twee nooit
+    meer een schrijfbeurt: er komt geen signaal meer om er een op te hangen.
+    Gemeten op een draaiende server: drie vormen in drie seconden, proces
+    afgeschoten, één vorm in het herstelbestand.
+
+    `flush` hangt als kerneljob aan de scheduler en haalt de staart op.
+    """
+    a_rect(client)
+    assert server.autosave.touch() is True
+
+    a_rect(client)
+    a_rect(client)
+    assert server.autosave.touch() is False, "de rem hoort er nog op te staan"
+    # Niets meer te doen zonder de staart: er komt geen wijziging meer.
+    assert server.autosave.flush() is False, "binnen de interval blijft het wachten"
+
+    # De interval loopt af terwijl er niemand meer tekent.
+    monkeypatch.setattr(
+        "openkerf_api.autosave.time.monotonic",
+        lambda: server.autosave._last + INTERVAL + 1,
+    )
+
+    assert server.autosave.flush() is True
+    assert server.autosave.flush() is False, "één keer is genoeg; niet blijven schrijven"
 
 
 def test_clearing_the_design_does_not_use_up_the_throttle(client, server):

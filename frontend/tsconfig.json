@@ -2,6 +2,10 @@
 	"extends": "./.svelte-kit/tsconfig.json",
 	"compilerOptions": {
 		"allowJs": true,
+		// De tests in `tests/` draaien op Node zelf (`node --test`), en Node's
+		// type-stripping lost geen extensies op: daar hoort `./ding.ts` te staan.
+		// `noEmit` staat aan in de basis, dus dit mag.
+		"allowImportingTsExtensions": true,
 		"checkJs": true,
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,

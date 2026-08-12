@@ -29,6 +29,9 @@ class Autosave:
         self.document = document
         self.path = Path(path)
         self._last = 0.0
+        # Kwam er een wijziging binnen terwijl de rem erop stond? Dan staat er
+        # werk in de boom dat nog nergens op schijf terugkomt.
+        self._wachtend = False
 
     def touch(self) -> bool:
         """
@@ -48,8 +51,33 @@ class Autosave:
             return False
         now = time.monotonic()
         if now - self._last < INTERVAL:
+            # Niet nu, maar het mag ook niet blijven liggen: `flush` haalt het op.
+            self._wachtend = True
             return False
         self._last = now
+        self._wachtend = False
+        return self.save()
+
+    def flush(self, *args) -> bool:
+        """
+        De staart: de laatste wijziging vóór je bij de machine gaat staan.
+
+        `touch` schrijft de eerste wijziging meteen en remt daarna. Wie in die
+        twintig seconden nog drie vormen tekent en dan ophoudt, kreeg voor die
+        drie nooit meer een schrijfbeurt — er komt immers geen signaal meer.
+        Gemeten: drie vormen in drie seconden, server hard afgeschoten, en het
+        herstelbestand bevatte er één.
+
+        Draait als kerneljob, dus op dezelfde thread als de boomsignalen. Dat is
+        geen detail: een eigen timerthread zou de elementenboom uitlezen terwijl
+        de kernel hem verzet.
+        """
+        if not self._wachtend:
+            return False
+        if time.monotonic() - self._last < INTERVAL:
+            return False
+        self._last = time.monotonic()
+        self._wachtend = False
         return self.save()
 
     def save(self) -> bool:
@@ -103,6 +131,7 @@ class Autosave:
         hele sessie zonder vangnet.
         """
         self._last = 0.0
+        self._wachtend = False
 
     def restore(self) -> dict:
         """Het herstelbestand terugladen, over een leeg canvas."""
