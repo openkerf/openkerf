@@ -12,6 +12,7 @@
  * Gebruik: OK_BASE=... node gauntlet/g-thema-accent.mjs
  */
 import { browser, open, report, reset } from './harness.mjs';
+import { eisScherm, eisHeleBuild } from './g-thema-guard.mjs';
 
 const findings = [];
 const b = await browser();
@@ -98,6 +99,9 @@ for (const theme of ['light', 'dark']) {
 		const page = await open(b, { width: 1440, theme, path: scherm.path });
 		const later = await page.$('button:has-text("Later")');
 		if (later) await later.click().catch(() => {});
+		// Poort: sta ik op het scherm dat ik denk te meten, en is de build heel?
+		await eisScherm(page, scherm.path.startsWith('/setup') ? '.setup' : '.topbar', `${scherm.naam} (${theme})`);
+		if (scherm === schermen[0]) await eisHeleBuild(page);
 		const rijen = await page.evaluate(meting);
 		totaal += rijen.length;
 		for (const r of rijen) if (r.cr < r.grens) gezakt.push({ ...r, waar: `${scherm.naam} (${theme})` });

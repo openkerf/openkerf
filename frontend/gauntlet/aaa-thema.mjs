@@ -10,6 +10,7 @@
  */
 import { mkdirSync } from 'node:fs';
 import { browser, open, BASE } from './harness.mjs';
+import { eisScherm, eisHeleBuild } from './g-thema-guard.mjs';
 
 const OUT = '/Users/Jelle.Tigchelaar/git/openkerf/screenshots/aaa/g-thema';
 const ronde = process.argv[2] ?? 'r1';
@@ -38,6 +39,18 @@ async function weg(page) {
 	await page.waitForTimeout(200);
 }
 
+/**
+ * Geen foto van een halve pagina.
+ *
+ * `frontend/build` is in deze wave gedeeld; twee builds door elkaar leverden al
+ * een index.html op die naar een ontbrekende chunk wees, en dan is het
+ * screenshot een egaal vlak in --surface-0 dat er als een thema uitziet. Deze
+ * poort faalt luid in plaats van een plaatje op te leveren.
+ */
+async function poort(page, verwacht, waar) {
+	await eisScherm(page, verwacht, waar);
+}
+
 await zaai();
 const b = await browser();
 
@@ -46,6 +59,9 @@ for (const [naam, width] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 3
 		for (const tab of ['design', 'layers', 'job']) {
 			const page = await open(b, { width, theme, path: `/?tab=${tab}` });
 			await weg(page);
+			// Op 390 is het een andere app: PhoneView, met `.telefoon` als wortel.
+			await poort(page, width === 390 ? '.telefoon' : '.topbar', `${naam} ${theme} ${tab}`);
+			if (tab === 'design' && theme === 'light') await eisHeleBuild(page);
 			await page.screenshot({ path: `${OUT}/${ronde}-${naam}-${theme}-${tab}.png` });
 			await page.context().close();
 		}
@@ -68,6 +84,7 @@ for (const [naam, width] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 3
 		// De instelstap van de wizard: daar staan de vinkjes.
 		const w = await open(b, { width, theme, path: '/setup/instellen?machine=ruida' });
 		await weg(w);
+		await poort(w, '.setup', `${naam} ${theme} instellen`);
 		await w.screenshot({ path: `${OUT}/${ronde}-${naam}-${theme}-instellen.png`, fullPage: false });
 		await w.context().close();
 	}

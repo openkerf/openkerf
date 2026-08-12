@@ -6,6 +6,7 @@
  * zelf" een bewering; met deze meting is het een feit.
  */
 import { browser, open, report, BASE } from './harness.mjs';
+import { eisScherm } from './g-thema-guard.mjs';
 
 const findings = [];
 const b = await browser();
@@ -27,6 +28,9 @@ await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 30000 });
 await page.waitForSelector('.statusbar, .setup, .welkom', { timeout: 20000 }).catch(() => {});
 await page.waitForTimeout(1500);
 await page.evaluate(() => document.fonts.ready);
+// Poort: een blanco pagina levert "geen externe verzoeken" op, en dat zou hier
+// als geslaagd lezen. eisHeleBuild kan niet: fetch is hier juist geblokkeerd.
+await eisScherm(page, '.topbar, .setup, .welkom', 'offline hoofdscherm');
 
 const uit = await page.evaluate(async () => {
 	const s = getComputedStyle(document.documentElement);

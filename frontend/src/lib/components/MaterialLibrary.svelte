@@ -578,6 +578,12 @@
 								     vakje, in plaats van te beweren dat de cirkel exact zit. -->
 								De omtrek wijst vakje rij {preset.grid_cell.row + 1}, kolom
 								{preset.grid_cell.column + 1} aan — daar komen deze waarden uit.
+								{#if preset.grid_aligned === false}
+									<span class="benadering">
+										De uitlijning van deze foto is niet gezet, dus de omtrek is bij
+										benadering — lijn het raster uit voor een exacte markering.
+									</span>
+								{/if}
 							{:else}
 								Het gebrande raster waar deze waarden uit komen.
 							{/if}
@@ -1552,6 +1558,10 @@
 	}
 	.herkomst dt { color: var(--text-2); }
 	.herkomst dd { margin: 0; }
+	/* Zonder opgeslagen uitlijning valt de server terug op het hele beeld; bij een
+	   schuine foto met veel rand ligt de omtrek dan een halve cel mis. Dat zeggen
+	   is beter dan een markering die exact lijkt en het niet is. */
+	.benadering { display: block; margin-top: 2px; color: var(--warn); }
 	.bewijsvak {
 		display: grid;
 		justify-items: start;

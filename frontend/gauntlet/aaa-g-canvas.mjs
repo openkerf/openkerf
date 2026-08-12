@@ -107,10 +107,10 @@ const STATEN = [
 		'/?tab=layers',
 		async (p) => {
 			await zaai(p, { veel: true });
-			const greep = (await p.$$('.greep'))[8];
+			const greep = (await p.$$('.greep'))[6];
 			if (!greep) return;
 			const doos = await greep.boundingBox();
-			const doel = (await p.$$('.layer'))[2];
+			const doel = (await p.$$('.layer'))[1];
 			const doelDoos = await doel.boundingBox();
 			await p.mouse.move(doos.x + doos.width / 2, doos.y + doos.height / 2);
 			await p.mouse.down();

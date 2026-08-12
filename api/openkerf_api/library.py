@@ -325,7 +325,13 @@ class Library:
         query = """
             SELECT p.*, m.name AS material_name, mp.name AS machine_name,
                    g.id AS grid_id, g.photo_path AS grid_photo,
-                   g.created_at AS grid_date, g.cells AS grid_cells
+                   g.created_at AS grid_date, g.cells AS grid_cells,
+                   -- Is de foto van dat raster uitgelijnd? Zo niet, dan valt de
+                   -- markering op de foto terug op vier standaardhoeken en ligt
+                   -- de omtrek er ongeveer, niet precies. De bibliotheek hoort
+                   -- dat te kunnen zeggen in plaats van een precisie te
+                   -- suggereren die er niet is.
+                   (g.alignment IS NOT NULL) AS grid_aligned
             FROM preset p
             JOIN material m ON m.id = p.material_id
             LEFT JOIN machine_profile mp ON mp.id = p.machine_id
@@ -702,7 +708,9 @@ class Library:
             # De koppelvelden uit de weergave horen niet in het bestand: ze
             # worden bij het inlezen opnieuw afgeleid. De namen blijven wél,
             # want die zijn waar het samenvoegen op werkt.
-            for sleutel in ("grid_photo", "grid_date", "grid_id", "grid_cell"):
+            for sleutel in (
+                "grid_photo", "grid_date", "grid_id", "grid_cell", "grid_aligned"
+            ):
                 preset.pop(sleutel, None)
             presets.append(preset)
 
@@ -1138,6 +1146,10 @@ def _uitlijning(ruw):
 def _preset_row(row) -> dict:
     data = dict(row)
     data["air_assist"] = bool(data["air_assist"])
+    # SQLite geeft 0/1 terug voor een booleaanse uitdrukking; de kaart die dit
+    # toont moet er "ja of nee" van kunnen maken zonder erover te hoeven denken.
+    if "grid_aligned" in data:
+        data["grid_aligned"] = bool(data["grid_aligned"])
     # Uit welk vakje van het raster deze preset komt. Dat is de herkomst in één
     # regel: "rij 2, kolom 3" is aanwijsbaar op de foto, "testraster" niet.
     cellen = data.pop("grid_cells", None)

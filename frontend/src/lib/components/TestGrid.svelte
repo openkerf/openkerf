@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { AXIS_LABEL, AXIS_UNIT, type GridAxis } from '$lib/api';
 	import { OPERATIONS, type LibraryStore } from '$lib/library.svelte';
 	import NumberField from './NumberField.svelte';
 
@@ -58,12 +59,18 @@
 	 *
 	 * Twee ervan staan op de assen, de derde blijft vast. Passes staat er
 	 * bewust niet bij: dat vermenigvuldigt de brandtijd van het hele bord.
+	 *
+	 * Naam en eenheid komen uit `$lib/api`, want de fotolijst op de telefoon
+	 * vat dezelfde rasters samen; twee kopieën van "mm/s" zijn twee kansen om
+	 * te gaan afwijken. Wat hier blijft, is invoergedrag van de wizard: de
+	 * stapgrootte van de plus-en-min en de bovengrens van het veld.
 	 */
-	type As = 'speed' | 'power' | 'interval';
-	const ASSEN: Record<As, { naam: string; eenheid: string; stap: number; max?: number }> = {
-		speed: { naam: 'Snelheid', eenheid: 'mm/s', stap: 1 },
-		power: { naam: 'Vermogen', eenheid: '%', stap: 5, max: 100 },
-		interval: { naam: 'Interval', eenheid: 'mm', stap: 0.01, max: 5 }
+	type As = GridAxis;
+	const AS_ORDE: As[] = ['speed', 'power', 'interval'];
+	const INVOER: Record<As, { stap: number; max?: number }> = {
+		speed: { stap: 1 },
+		power: { stap: 5, max: 100 },
+		interval: { stap: 0.01, max: 5 }
 	};
 	/** Waar de lijnafstand iets betekent; bij snijden legt de kop één lijn. */
 	const INTERVAL_BEWERKINGEN = ['graveren-raster'];
@@ -127,7 +134,7 @@
 	);
 	let assen = $derived([form.row_axis, form.column_axis] as As[]);
 	let vasteAs = $derived(
-		(['speed', 'power', 'interval'] as As[]).filter(
+		AS_ORDE.filter(
 			(a) => !assen.includes(a) && (a !== 'interval' || intervalKan)
 		)
 	);
@@ -163,7 +170,7 @@
 			origin_x_mm: Number(form.origin_x_mm),
 			origin_y_mm: Number(form.origin_y_mm)
 		};
-		for (const as of ['speed', 'power', 'interval'] as As[]) {
+		for (const as of AS_ORDE) {
 			if (assen.includes(as)) {
 				uit[`${as}_min`] = Number(form[`${as}_min`]);
 				uit[`${as}_max`] = Number(form[`${as}_max`]);
@@ -335,7 +342,7 @@
 	/** "0.05 mm", "60%", "12 mm/s" — de aswaarde zoals hij op het hout komt. */
 	function toon(as: As, waarde: number | null | undefined) {
 		if (waarde === null || waarde === undefined) return '';
-		const eenheid = ASSEN[as].eenheid;
+		const eenheid = AXIS_UNIT[as];
 		return eenheid === '%' ? `${waarde}%` : `${waarde} ${eenheid}`;
 	}
 
@@ -412,7 +419,7 @@
 					typeof waarde === 'number' ? String(waarde) : waarde;
 			}
 			// Een vaste grootheid staat in de vorige rij als min == max.
-			for (const as of ['speed', 'power', 'interval'] as As[]) {
+			for (const as of AS_ORDE) {
 				if (vorige[`${as}_steps`] === 1 && vorige[`${as}_min`] != null) {
 					form[VAST_VELD[as]] = String(vorige[`${as}_min`]);
 				}
@@ -437,11 +444,55 @@
 
 	let naarMachine = $state<string | null>(null);
 	let machineFout = $state<string | null>(null);
+	let machineLet = $state<string | null>(null);
+
+	/**
+	 * De harde controle die het bedieningspaneel vóór het starten doet.
+	 *
+	 * Dat paneel opent een pre-flight en start pas na bevestiging; deze knop
+	 * start rechtstreeks, en dan mag de belangrijkste controle niet wegvallen.
+	 * Buiten het bed is een blokkade — daar kán de kop niet komen, dus de
+	 * machine slaat de beweging over of loopt tegen zijn eindaanslag. Buiten het
+	 * vel is een waarschuwing: de kop kan er wel komen, er ligt alleen geen
+	 * materiaal. Precies het onderscheid dat `bounds_report` maakt.
+	 */
+	async function tegenhouder(): Promise<string | null> {
+		machineLet = null;
+		try {
+			const response = await fetch('/api/job/estimate');
+			if (!response.ok) return null; // Geen oordeel is geen blokkade.
+			const grenzen = (await response.json())?.bounds;
+			if (!grenzen) return null;
+			if (grenzen.outside_bed > 0) {
+				return `${grenzen.outside_bed} ${
+					grenzen.outside_bed === 1 ? 'vorm ligt' : 'vormen liggen'
+				} buiten het bed — daar komt de kop niet. Zet Start X of Start Y hoger en teken het raster opnieuw.`;
+			}
+			if (grenzen.outside_sheet > 0) {
+				machineLet = `${grenzen.outside_sheet} ${
+					grenzen.outside_sheet === 1 ? 'vorm valt' : 'vormen vallen'
+				} buiten het vel: daar ligt geen materiaal.`;
+			}
+			return null;
+		} catch {
+			return null;
+		}
+	}
 
 	async function machineActie(pad: string, bezig: string, klaar: string) {
 		naarMachine = bezig;
 		machineFout = null;
 		try {
+			// Alleen vóór het branden. Een kader laten lopen is juist de manier om
+			// te zien dat iets buiten het bed valt; dat tegenhouden zou de
+			// controle blokkeren die je wilde doen.
+			if (pad.includes('/job/start')) {
+				const bezwaar = await tegenhouder();
+				if (bezwaar) {
+					machineFout = bezwaar;
+					return;
+				}
+			}
 			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 			const token =
 				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
@@ -500,8 +551,8 @@
 	{:else}
 		<p class="lead">
 			Je brandt een bord met vakjes:
-			<strong>{ASSEN[form.column_axis].naam.toLowerCase()} loopt naar rechts op</strong>,
-			<strong>{ASSEN[form.row_axis].naam.toLowerCase()} naar beneden</strong>. Straks
+			<strong>{AXIS_LABEL[form.column_axis].toLowerCase()} loopt naar rechts op</strong>,
+			<strong>{AXIS_LABEL[form.row_axis].toLowerCase()} naar beneden</strong>. Straks
 			fotografeer je het bord — met de telefoon naast de machine kan ook — en tik je het
 			vakje aan dat het beste uitpakte. Daar maakt OpenKerf een preset van.
 		</p>
@@ -595,9 +646,9 @@
 						value={form.row_axis}
 						onchange={(e) => kiesAs('row_axis', e.currentTarget.value as As)}
 					>
-						{#each Object.entries(ASSEN) as [waarde, as] (waarde)}
+						{#each AS_ORDE as waarde (waarde)}
 							{#if waarde !== 'interval' || intervalKan}
-								<option value={waarde}>{as.naam}</option>
+								<option value={waarde}>{AXIS_LABEL[waarde]}</option>
 							{/if}
 						{/each}
 					</select>
@@ -608,9 +659,9 @@
 						value={form.column_axis}
 						onchange={(e) => kiesAs('column_axis', e.currentTarget.value as As)}
 					>
-						{#each Object.entries(ASSEN) as [waarde, as] (waarde)}
+						{#each AS_ORDE as waarde (waarde)}
 							{#if waarde !== 'interval' || intervalKan}
-								<option value={waarde}>{as.naam}</option>
+								<option value={waarde}>{AXIS_LABEL[waarde]}</option>
 							{/if}
 						{/each}
 					</select>
@@ -621,37 +672,37 @@
 				     hij anders achter de knoppenbalk. -->
 				{#each vasteAs as as (as)}
 					<NumberField
-						label="{ASSEN[as].naam} (vast, hele bord)"
-						unit={ASSEN[as].eenheid}
-						step={ASSEN[as].stap}
+						label="{AXIS_LABEL[as]} (vast, hele bord)"
+						unit={AXIS_UNIT[as]}
+						step={INVOER[as].stap}
 						min={0}
-						max={ASSEN[as].max ?? null}
+						max={INVOER[as].max ?? null}
 						bind:value={form[VAST_VELD[as]]}
 					/>
 				{/each}
 
 				{#each assen as as (as)}
 					<NumberField
-						label="{ASSEN[as].naam} van"
-						unit={ASSEN[as].eenheid}
-						step={ASSEN[as].stap}
+						label="{AXIS_LABEL[as]} van"
+						unit={AXIS_UNIT[as]}
+						step={INVOER[as].stap}
 						min={0}
-						max={ASSEN[as].max ?? null}
+						max={INVOER[as].max ?? null}
 						bind:value={form[`${as}_min`]}
 					/>
 					<NumberField
 						label="tot"
-						unit={ASSEN[as].eenheid}
-						step={ASSEN[as].stap}
+						unit={AXIS_UNIT[as]}
+						step={INVOER[as].stap}
 						min={0}
-						max={ASSEN[as].max ?? null}
+						max={INVOER[as].max ?? null}
 						bind:value={form[`${as}_max`]}
 					/>
 				{/each}
 
 				{#each assen as as (as)}
 					<NumberField
-						label="Stappen {ASSEN[as].naam.toLowerCase()}"
+						label="Stappen {AXIS_LABEL[as].toLowerCase()}"
 						step={1}
 						min={2}
 						bind:value={form[`${as}_steps`]}
@@ -748,10 +799,10 @@
 					{/if}
 
 					<p class="legenda">
-						Rijen: {ASSEN[form.row_axis].naam.toLowerCase()} in {ASSEN[form.row_axis].eenheid}.
-						Kolommen: {ASSEN[form.column_axis].naam.toLowerCase()}.
+						Rijen: {AXIS_LABEL[form.row_axis].toLowerCase()} in {AXIS_UNIT[form.row_axis]}.
+						Kolommen: {AXIS_LABEL[form.column_axis].toLowerCase()}.
 						{#each vasteAs as as (as)}
-							{ASSEN[as].naam} vast op {toon(as, Number(form[VAST_VELD[as]]))}.
+							{AXIS_LABEL[as]} vast op {toon(as, Number(form[VAST_VELD[as]]))}.
 						{/each}
 						Donkerder is meer verbranding{diepsteHoek ? ` — ${diepsteHoek} gaat het diepst` : ''}.
 					</p>
@@ -803,6 +854,7 @@
 						De job staat in de wachtrij. Blijf erbij tot het bord uit de machine komt.
 					</p>
 				{/if}
+				{#if machineLet}<p class="nagekomen">Let op: {machineLet}</p>{/if}
 				{#if machineFout}<p class="fout" role="alert">{machineFout}</p>{/if}
 			</div>
 		{/if}
@@ -920,6 +972,9 @@
 	/* Een bord dat blanco uit de machine komt is geen aandachtspunt maar een
 	   verspilde plaat: die melding krijgt de gevaarkleur. */
 	.waarschuwing.ernstig {
+		/* Terug naar één tekstblok: het gedeelde kader is een grid, en dan wordt
+		   elk woord tussen twee <strong>'s een eigen rij. */
+		display: block;
 		border-left-color: var(--danger-solid, var(--danger));
 		background: color-mix(in srgb, var(--danger-solid, var(--danger)) 12%, transparent);
 	}

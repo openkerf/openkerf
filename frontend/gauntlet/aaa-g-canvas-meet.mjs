@@ -73,7 +73,7 @@ const meet = async (page) =>
 		const rulerY = [...document.querySelectorAll('.ruler-y text')].map((n) => n.textContent);
 		return {
 			gloed: document.querySelectorAll('.buiten-gloed').length,
-			gloedVel: document.querySelectorAll('.buiten-gloed.vel').length,
+			gloedVel: document.querySelectorAll('.buiten-gloed.velrand').length,
 			meldingen: teksten('.buiten-strook .regel'),
 			meldingDoos: doos('.buiten-strook'),
 			cameraDoos: doos('.camstrip'),

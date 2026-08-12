@@ -933,3 +933,51 @@ def test_the_plan_prices_the_board_in_seconds():
     grof = plan_grid(**{**RASTER, "interval_min": 0.3, "interval_max": 0.4})[0]
     fijn = plan_grid(**{**RASTER, "interval_min": 0.05, "interval_max": 0.06})[0]
     assert fijn["seconds"] > grof["seconds"] * 4, (fijn["seconds"], grof["seconds"])
+
+
+def test_a_preset_says_whether_its_photo_is_aligned(client):
+    """
+    De markering op de foto valt zonder uitlijning terug op vier
+    standaardhoeken, en dan ligt de omtrek er ongeveer. De bibliotheek moet dat
+    kunnen zeggen; anders suggereert de kaart een precisie die er niet is.
+    """
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    grid = client.post(
+        "/api/library/testgrids", json={**BASE, "material_id": material["id"]}
+    ).json()
+    cell = grid["cells"][0]
+    client.post(
+        f"/api/library/testgrids/{grid['id']}/presets",
+        json={"cells": [{"row": cell["row"], "column": cell["column"]}]},
+    )
+
+    zonder = client.get("/api/library/presets?all_machines=true").json()[0]
+    assert zonder["grid_aligned"] is False
+
+    client.put(
+        f"/api/library/testgrids/{grid['id']}/alignment",
+        json={"corners": [{"x": 0.1, "y": 0.1}, {"x": 0.9, "y": 0.1},
+                          {"x": 0.9, "y": 0.9}, {"x": 0.1, "y": 0.9}]},
+    )
+
+    met = client.get("/api/library/presets?all_machines=true").json()[0]
+    assert met["grid_aligned"] is True
+
+
+def test_a_preset_without_a_grid_has_no_alignment_claim(client):
+    """Een handmatige preset heeft geen raster, dus ook geen uitlijning."""
+    material = client.post("/api/library/materials", json={"name": "Acryl"}).json()
+    client.post(
+        "/api/library/presets",
+        json={
+            "material_id": material["id"],
+            "operation": "snijden",
+            "speed_mm_s": 12,
+            "power_percent": 65,
+        },
+    )
+
+    preset = client.get("/api/library/presets?all_machines=true").json()[0]
+
+    assert preset["grid_id"] is None
+    assert preset["grid_aligned"] is False

@@ -1415,7 +1415,7 @@
 						<!-- @svg-space: millimeter-ruimte, geen CSS-pixels; `labelSize` is de
 						     teruggerekende schermmaat van --text-xs. -->
 						<text
-							style="font-size: {labelSize * 0.95}px; fill: {label.kleur}; fill-opacity: {label.dim ? 0.5 : 1}"
+							style="font-size: {labelSize}px; fill: {label.kleur}; fill-opacity: {label.dim ? 0.5 : 1}"
 							class="laagnummer mono"
 							x={label.x + 2 * mmPerPx}
 							y={label.y - 3 * mmPerPx}
@@ -1712,8 +1712,8 @@
 						width={3.6 * mmPerPx}
 						height={3.6 * mmPerPx}
 					/>
-					<text class="as mono" x={18.5 * mmPerPx} y={3.5 * mmPerPx} style="font-size: {labelSize * 0.9}px">X</text>
-					<text class="as mono" x={2.5 * mmPerPx} y={21 * mmPerPx} style="font-size: {labelSize * 0.9}px">Y</text>
+					<text class="as mono" x={18.5 * mmPerPx} y={3.5 * mmPerPx} style="font-size: {labelSize}px">X</text>
+					<text class="as mono" x={2.5 * mmPerPx} y={21 * mmPerPx} style="font-size: {labelSize}px">Y</text>
 				</g>
 
 				{#if head}

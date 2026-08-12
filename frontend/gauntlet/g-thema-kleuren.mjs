@@ -14,6 +14,7 @@
  * Gebruik: OK_BASE=... node gauntlet/g-thema-kleuren.mjs
  */
 import { browser, open, report, reset } from './harness.mjs';
+import { eisScherm, eisHeleBuild } from './g-thema-guard.mjs';
 
 const DREMPEL = 28;
 
@@ -47,6 +48,8 @@ for (const theme of ['light', 'dark']) {
 	const page = await open(b, { width: 1440, theme, path: '/?tab=layers' });
 	const later = await page.$('button:has-text("Later")');
 	if (later) await later.click().catch(() => {});
+	await eisScherm(page, '.topbar', `lagenpaneel (${theme})`);
+	await eisHeleBuild(page);
 	per[theme] = await page.evaluate(() => {
 		const s = getComputedStyle(document.documentElement);
 		return {
