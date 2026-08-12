@@ -12,12 +12,35 @@ import { browser, open, BASE, WIDTHS } from './harness.mjs';
 const OUT = '/Users/Jelle.Tigchelaar/git/openkerf/screenshots/aaa/rest-job';
 const ronde = process.argv[2] ?? 'voor';
 
+/**
+ * `zonderRaster` doet alsof deze engine geen rasteraar heeft.
+ *
+ * Sinds onze eigen rasteraar geregistreerd wordt (`openkerf_api/rasterizer.py`)
+ * brandt een rasterlaag gewoon, en dan is de blokkade in de pre-flight terecht
+ * onzichtbaar. Om hem tóch te kunnen fotograferen wordt hier alleen het
+ * antwoord van `/api/job/layers` omgezet naar wat een engine zónder rasteraar
+ * meldt — dezelfde vorm die `test_a_raster_layer_promises_no_time_on_an_engine
+ * _that_cannot_burn_it` vastlegt. De component en de markup zijn echt.
+ */
+const zonderRaster = process.argv.includes('--zonder-raster');
+
 const b = await browser();
 const metingen = [];
 
 for (const [naam, width] of Object.entries(WIDTHS)) {
 	for (const theme of ['light', 'dark']) {
 		const page = await open(b, { width, theme, path: '/?tab=job' });
+		if (zonderRaster) {
+			await page.route('**/api/job/layers', async (route) => {
+				const antwoord = await route.fetch();
+				const data = await antwoord.json();
+				data.engine = { raster: false };
+				for (const laag of data.layers ?? []) {
+					if (laag.type === 'op raster') laag.burns = false;
+				}
+				await route.fulfill({ response: antwoord, json: data });
+			});
+		}
 		// Het herstelvenster van een vorige sessie legt een backdrop over alles.
 		const later = page.getByRole('button', { name: /later/i });
 		if (await later.count()) await later.first().click().catch(() => {});

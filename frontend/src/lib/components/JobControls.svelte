@@ -965,8 +965,11 @@
 	.pf-blind {
 		color: var(--text-2);
 		font-style: italic;
-		text-align: right;
-		padding-right: 8px;
+		/* Links, direct naast de laagnaam: dit gaat over de laag en niet over een
+		   kolom. Rechts uitgelijnd stond het los aan de andere kant van de rij,
+		   waar de lezer een getal verwacht. */
+		text-align: left;
+		padding-left: 8px;
 	}
 	.pf-warn.strong { color: var(--warn); font-weight: 500; }
 	/* Een eigen soort, niet de vierde gele waas. De linkerbalk in de
