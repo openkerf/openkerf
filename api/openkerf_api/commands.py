@@ -27,7 +27,16 @@ ERROR_MARKERS = (
 
 # The full job pipeline in one line: console commands chain through their
 # input/output types only within a single line (verified against the engine).
-PLAN_AND_SPOOL = "plan copy preprocess validate blob preopt optimize spool"
+#
+# `clear` staat er niet voor de sier. `plan copy` *voegt toe* aan het plan dat er
+# al ligt (planner.py:593, `data.append`), en het plan is kernel-globaal en
+# blijft na het spoolen staan. Zonder clear droeg de tweede start dus twee keer
+# hetzelfde werk, de derde drie keer, en groeide de tijdschatting met een factor
+# per druk op de knop — gemeten: 1701 s, 3364 s, 5027 s voor hetzelfde ontwerp.
+# Dat is de bron van "150:40:23 voor hetzelfde werk" uit gat B1: niet één foute
+# formule maar elf keer dezelfde job in één plan. Erger dan het getal is wat er
+# gebrand zou zijn: de machine snijdt elke vorm net zo vaak over.
+PLAN_AND_SPOOL = "plan clear copy preprocess validate blob preopt optimize spool"
 
 
 class CommandError(RuntimeError):
@@ -132,7 +141,7 @@ class CommandRunner:
         except Exception:
             return 0
 
-    def start_job(self) -> list[str]:
+    def start_job(self, name: str | None = None) -> list[str]:
         """
         Het plan bouwen en naar de spooler sturen.
 
@@ -158,7 +167,38 @@ class CommandRunner:
                     "'meebranden' uit wordt overgeslagen."
                 ],
             )
-        return self.run(PLAN_AND_SPOOL)
+        output = self.run(PLAN_AND_SPOOL)
+        self._name_job(name, burnable)
+        return output
+
+    def _name_job(self, name, burnable: int) -> None:
+        """
+        De verse job een naam geven die een mens herkent (gat P4).
+
+        De engine noemt hem `Spooler:3 items` zodra er geen bestandsnaam is:
+        de klassenaam plus de lengte van de opdrachtenlijst (spoolers.py:612).
+        Het `spool`-commando haalt zijn label uit `elements.basename` en kent
+        geen optie om er iets anders in te zetten, dus we hernoemen de job
+        nadat hij in de wachtrij staat. Alleen als de engine zelf niets wist:
+        heb je een bestand geladen, dan is die naam beter dan de onze.
+        """
+        titel = (name or "").strip()
+        if not titel:
+            titel = f"{burnable} bewerking" + ("" if burnable == 1 else "en")
+        try:
+            queue = list(self.kernel.device.spooler.queue)
+        except Exception:
+            return
+        if not queue:
+            return
+        job = queue[-1]
+        huidig = str(getattr(job, "label", "") or "")
+        if huidig and not re.fullmatch(r"\w+:\d+ items?", huidig):
+            return
+        try:
+            job.label = titel
+        except Exception:  # pragma: no cover - de engine mag ons niet breken
+            pass
 
     def pause(self) -> list[str]:
         return self.run("pause")

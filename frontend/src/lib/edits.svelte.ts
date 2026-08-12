@@ -136,6 +136,33 @@ export class EditController {
 		});
 	}
 
+	/**
+	 * Een laag naar een plek in de lijst slepen (gat L1).
+	 *
+	 * Een bestemming en geen aantal stappen: bij het slepen weet de lijst waar
+	 * de laag terecht moet, en dat omrekenen naar stapjes gaat mis zodra er een
+	 * testraster tussen staat.
+	 */
+	async dropLayerAt(id: string, index: number) {
+		return this.#post(`/api/design/operations/${encodeURIComponent(id)}/move`, { index });
+	}
+
+	/** Graveren vóór snijden, in één handeling (gat L2). */
+	async sortLayers() {
+		return this.#post('/api/design/operations/sort');
+	}
+
+	/**
+	 * Het soort bewerking van een bestaande laag wijzigen (gat L3).
+	 *
+	 * De laag krijgt hierdoor een nieuw id — de engine kan het type van een
+	 * knoop niet wisselen, dus de server maakt er een nieuwe en verhuist de
+	 * vormen. Wie het oude id vasthoudt, wijst daarna nergens meer naar.
+	 */
+	async retypeLayer(id: string, type: string) {
+		return this.#post(`/api/design/operations/${encodeURIComponent(id)}/type`, { type });
+	}
+
 	async removeLayer(id: string) {
 		return this.#send(`/api/design/operations/${encodeURIComponent(id)}`, 'DELETE');
 	}

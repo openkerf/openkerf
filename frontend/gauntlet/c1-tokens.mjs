@@ -37,7 +37,11 @@ for (const file of files) {
 		// onbruikbaar is — dat is de meter die de fout in gaat, niet de code.
 		const kaal = line.trim();
 		if (kaal.startsWith('//') || kaal.startsWith('*') || kaal.startsWith('/*')) continue;
-		for (const m of line.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
+		// Een HTML-entiteit is geen kleurcode. `&#8239;` — de smalle vaste ruimte
+		// tussen een getal en zijn eenheid — las deze meter als #8239 en meldde
+		// dus een hardcoded kleur die niet bestaat.
+		const zonderEntiteiten = line.replace(/&#[0-9a-fA-F]+;/g, '');
+		for (const m of zonderEntiteiten.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
 			hexes.push({ file: file.slice(SRC.length + 1), line: index + 1, value: m[0], src: line.trim().slice(0, 70) });
 		}
 	}
@@ -122,6 +126,49 @@ if (sizes.length) {
 		severity: 'major',
 		what: `${sizes.length} fontgroottes buiten de schaal 11/13/15/18/24`,
 		evidence: sizes.slice(0, 10).join(' | ')
+	});
+}
+
+// --- v3.3 (D9): --line is een randkleur, geen inkt en geen vulling
+//
+// Het token is afgestemd op de oppervlakken: als tekst haalt het 1,41 in licht
+// en 1,84 in donker, en als vulling onder tekst zakte --text-2 erop naar 4,05
+// respectievelijk 3,49. Toegestaan is dus `border`, `outline`, `stroke` en
+// `box-shadow` — plus een haarlijn die als blokje getekend wordt, en die
+// herken je aan een breedte of hoogte van een paar pixels in hetzelfde blok.
+// Wat overblijft is de echte fout: --line als tekstkleur, of als vlak dat
+// oplicht onder de muis. Daarvoor bestaat sinds v3.3 --hover.
+const lijnmisbruik = [];
+for (const file of files) {
+	if (file.endsWith('tokens.css')) continue;
+	const text = readFileSync(file, 'utf8');
+	const rows = text.split('\n');
+	for (const [index, line] of rows.entries()) {
+		const kaal = line.trim();
+		if (kaal.startsWith('//') || kaal.startsWith('*') || kaal.startsWith('/*')) continue;
+		const plaats = `${file.slice(SRC.length + 1)}:${index + 1}`;
+		if (/(^|[^-])color:\s*var\(--line\)/.test(line)) {
+			lijnmisbruik.push(`${plaats} als tekstkleur — ${kaal.slice(0, 50)}`);
+			continue;
+		}
+		if (!/background(-color)?:\s*var\(--line\)/.test(line)) continue;
+		// Het omringende blok terugzoeken: van de vorige `{` tot de volgende `}`.
+		let start = index;
+		while (start > 0 && !rows[start].includes('{')) start--;
+		let eind = index;
+		while (eind < rows.length - 1 && !rows[eind].includes('}')) eind++;
+		const blok = rows.slice(start, eind + 1).join(' ');
+		const haarlijn = /(width|height|inline-size|block-size):\s*[1-4]px/.test(blok);
+		const hover = /:hover|:focus|:active/.test(rows[start]);
+		if (haarlijn && !hover) continue;
+		lijnmisbruik.push(`${plaats} als vulling — ${rows[start].trim().slice(0, 40)}`);
+	}
+}
+if (lijnmisbruik.length) {
+	findings.push({
+		severity: 'major',
+		what: `${lijnmisbruik.length}× --line gebruikt als inkt of vulling in plaats van als rand`,
+		evidence: lijnmisbruik.slice(0, 8).join(' | ')
 	});
 }
 

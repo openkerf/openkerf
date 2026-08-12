@@ -32,6 +32,24 @@ ESSENTIAL_ATTRS = (
 
 TYPE_NAMES = {bool: "bool", int: "int", float: "float", str: "str"}
 
+# ------------------------------------------------- machineprofiel uitwisselen
+#
+# Gat E5: LightBurn heeft `.lbdev`, zodat een fabrikant een kant-en-klaar
+# profiel kan meeleveren en je op een tweede computer niets overtypt. Zelfde
+# vorm als de bibliotheek van B7 — `format`, `version`, en de inhoud eronder —
+# maar zonder zip: er hangen geen foto's aan een machine, dus één leesbaar
+# JSON-bestand is eerlijker dan een archief met één bestand erin.
+PROFILE_FORMAT = "openkerf-machine"
+PROFILE_VERSION = 1
+PROFILE_SUFFIX = ".openkerf-machine"
+
+# Instellingen die over déze opstelling gaan en niet over het machinetype: het
+# IP-adres van de controller, de seriële poort van deze computer. Ze gaan wél
+# mee — twee computers naast dezelfde laser hebben er hetzelfde aan — maar het
+# voorbeeld bij het importeren noemt ze apart, want ze zijn het eerste dat
+# elders niet klopt.
+LOCAL_ATTRS = ("address", "serial_port", "port")
+
 
 def _type_name(value_type) -> str:
     """
@@ -177,6 +195,11 @@ class MachineManager:
         if label:
             device.label = label
             self.kernel.signal("device;renamed", device.path, label)
+        # Uit welke catalogusregel hij komt. De engine bewaart dat zelf niet —
+        # `registered_path` wijst naar de driver, en tientallen merken delen er
+        # één. Zonder dit is een profiel (E5) elders niet terug te maken.
+        device.setting(str, "openkerf_info_key", "")
+        device.openkerf_info_key = info_key
         self._mark_configured(device)
         self.flush()
         return {
@@ -300,8 +323,29 @@ class MachineManager:
         # Same reasoning as in rename(): setting a bed size on the engine's
         # default device is an act of adoption.
         self._mark_configured(device)
+        if "device_coolant" in applied:
+            self._claim_coolant(device)
         self.flush()
         return applied
+
+    def _claim_coolant(self, device) -> None:
+        """
+        De air-assistmethode meteen laten aanhaken (besluit B11).
+
+        De engine claimt de methode alleen bij het opstarten van de
+        device-service. Zonder dit staat de instelling wel op de machine maar
+        kent de coolant-registratie het apparaat nog niet, en dan meldt
+        `/api/design/capabilities` "geen air assist" terwijl de gebruiker hem
+        net heeft ingesteld — of erger: de schakelaar staat er wel en de blazer
+        doet niets. Dezelfde aanroep als de drivers zelf doen.
+        """
+        coolant = getattr(getattr(self.kernel, "root", None), "coolant", None)
+        if coolant is None:
+            return
+        try:
+            coolant.claim_coolant(device, getattr(device, "device_coolant", ""))
+        except Exception:  # pragma: no cover - een driver die niet meewerkt
+            pass
 
     def _setting_types(self, device) -> dict:
         types = {}
@@ -324,6 +368,159 @@ class MachineManager:
     def flush(self):
         """Persist settings so a machine survives a restart of the engine."""
         self.runner.run("flush")
+
+    # --------------------------------------------- profiel uitwisselen (E5)
+
+    def _info_key(self, device) -> str | None:
+        """
+        Uit welke catalogusregel deze machine gemaakt is.
+
+        Sinds E5 stempelen we hem bij het aanmaken op het apparaat. Machines van
+        vóór die versie dragen hem niet; dan is de provider het beste dat we
+        hebben, en die wijst bij Ruida naar tientallen merken die op dezelfde
+        driver draaien. Het profiel meldt dat dan als schatting.
+        """
+        device.setting(str, "openkerf_info_key", "")
+        if device.openkerf_info_key:
+            return device.openkerf_info_key
+        provider = getattr(device, "registered_path", None)
+        kandidaten = [
+            entry
+            for familie in self.catalog()
+            for entry in familie["machines"]
+            if entry["provider"] == provider
+        ]
+        return kandidaten[0]["key"] if kandidaten else None
+
+    def export_profile(self, path: str) -> dict:
+        """Het hele profiel van één machine, als één leesbaar bestand."""
+        from datetime import datetime, timezone
+
+        device = self._find(path)
+        waarden = {}
+        for blad in self.settings(path):
+            for veld in blad["fields"]:
+                # De naam staat bij sommige drivers óók in een instellingenblad.
+                # Hij hoort één keer in het bestand te staan — hierboven, waar
+                # het importeren hem kan overschrijven met een eigen naam.
+                if veld["attr"] == "label":
+                    continue
+                waarden[veld["attr"]] = veld["value"]
+        sleutel = self._info_key(device)
+        if sleutel is None:
+            raise MachineError(
+                "Van deze machine is niet te achterhalen uit welk type hij komt; "
+                "een profiel eruit zou elders niet aan te maken zijn."
+            )
+        return {
+            "format": PROFILE_FORMAT,
+            "version": PROFILE_VERSION,
+            "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "machine": {
+                "info": sleutel,
+                "provider": getattr(device, "registered_path", None),
+                "label": getattr(device, "label", device.path),
+                "settings": waarden,
+            },
+        }
+
+    def read_profile(self, data) -> dict:
+        """Inlezen en meteen afwijzen wat geen machineprofiel is."""
+        import json
+        from pathlib import Path
+
+        if isinstance(data, (str, Path)):
+            bron = Path(data)
+            if not bron.exists():
+                raise MachineError("Dat bestand is er niet (meer).")
+            try:
+                data = json.loads(bron.read_text())
+            except ValueError as e:
+                raise MachineError("Dit bestand is geen leesbaar profiel.") from e
+        if not isinstance(data, dict) or data.get("format") != PROFILE_FORMAT:
+            raise MachineError(
+                "Dit bestand komt niet uit OpenKerf. Een machineprofiel eindigt "
+                f"op {PROFILE_SUFFIX}."
+            )
+        if int(data.get("version") or 0) > PROFILE_VERSION:
+            raise MachineError(
+                "Dit profiel komt uit een nieuwere versie van OpenKerf. Werk eerst bij."
+            )
+        machine = data.get("machine")
+        if not isinstance(machine, dict) or not machine.get("info"):
+            raise MachineError("Dit profiel zegt niet om welk machinetype het gaat.")
+        return data
+
+    def preview_profile(self, data) -> dict:
+        """
+        Wat er gaat gebeuren, vóórdat het gebeurt.
+
+        Een machineprofiel bepaalt waar de kop heen gaat. Blind inladen wat
+        iemand je mailde is precies één stap van een kop die tegen zijn
+        eindaanslag loopt, dus dit vertelt eerst wat erin zit.
+        """
+        data = self.read_profile(data)
+        machine = data["machine"]
+        bekend = {
+            entry["key"]: entry
+            for familie in self.catalog()
+            for entry in familie["machines"]
+        }
+        regel = bekend.get(machine["info"])
+        waarden = machine.get("settings") or {}
+        # Alleen wat écht ingevuld is. De engine zet niet-gebruikte velden op
+        # "UNCONFIGURED"; die als "controleer dit" tonen bij een USB-machine is
+        # een waarschuwing over niets, en daar leer je waarschuwingen van negeren.
+        lokaal = {
+            k: v
+            for k, v in waarden.items()
+            if k in LOCAL_ATTRS and str(v).strip() not in ("", "UNCONFIGURED", "None")
+        }
+        kern = {
+            k: waarden[k]
+            for k in ("bedwidth", "bedheight", "interface")
+            if k in waarden
+        }
+        return {
+            "label": machine.get("label") or machine["info"],
+            "info": machine["info"],
+            "known": regel is not None,
+            "friendly_name": regel["friendly_name"] if regel else None,
+            "family": regel["family"] if regel else None,
+            "settings": len(waarden),
+            "essential": kern,
+            # Wat elders als eerste niet klopt: het adres van déze controller.
+            "local": lokaal,
+            "exported_at": data.get("exported_at"),
+        }
+
+    def import_profile(self, data, label: str | None = None) -> dict:
+        """Het profiel als nieuwe machine aanmaken, met zijn instellingen erop."""
+        data = self.read_profile(data)
+        machine = data["machine"]
+        naam = (label or machine.get("label") or "").strip() or None
+        gemaakt = self.create(machine["info"], naam)
+
+        waarden = machine.get("settings") or {}
+        types = self._setting_types(self._find(gemaakt["path"]))
+        # Wat deze engine niet kent, laten we liggen in plaats van het profiel af
+        # te wijzen: een profiel uit een nieuwere MeerK40t hoort niet je hele
+        # inrichting te blokkeren om één instelling die hier niet bestaat.
+        # `label` staat bij sommige drivers óók in een instellingenblad. Hem
+        # meenemen zou de naam die je bij het importeren koos meteen weer
+        # overschrijven met die van de bron — twee machines met dezelfde naam,
+        # en dat is precies wat je bij een tweede profiel niet wilt.
+        bruikbaar = {
+            k: v for k, v in waarden.items() if k in types and k != "label"
+        }
+        overgeslagen = sorted(set(waarden) - set(bruikbaar))
+        if bruikbaar:
+            self.update_settings(gemaakt["path"], bruikbaar)
+        return {
+            **gemaakt,
+            "applied": len(bruikbaar),
+            "skipped": overgeslagen,
+        }
 
     # ------------------------------------------------------------------ scan
 

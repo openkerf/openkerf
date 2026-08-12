@@ -20,5 +20,16 @@ export const verbinding = $state({
 	/** Seconden tot de volgende poging; 0 = we proberen nu. */
 	overSeconden: 0,
 	/** Nu opnieuw proberen, in plaats van de backoff af te wachten. */
-	nuProberen: (() => {}) as () => void
+	nuProberen: (() => {}) as () => void,
+	/**
+	 * De server is herstart sinds deze pagina geladen werd (gat E2).
+	 *
+	 * De socket verbindt vanzelf terug en de balk wordt weer groen, maar de
+	 * engine erachter heeft een lege elementenboom: het ontwerp dat je op het
+	 * scherm ziet bestaat aan de andere kant niet meer. Alles wat je daarna
+	 * doet gaat over niets. Dat mag niet stil gebeuren, en het mag ook niet
+	 * vanzelf herladen — dat gooit werk weg zonder dat iemand erom vroeg. Dus
+	 * één vlag, één zin, één knop.
+	 */
+	herstart: false
 });

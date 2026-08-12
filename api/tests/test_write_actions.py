@@ -16,6 +16,17 @@ WRITE_ROUTES = [
     # Dat mag van buiten de eigen computer nooit zonder token.
     ("/api/library/import", {"json": {}}),
     ("/api/library/import/preview", {"json": {}}),
+    # Gat T7: een benoemd recept opslaan schrijft in de bibliotheek.
+    ("/api/library/testgrids/recipes", {"json": {}}),
+    # Gat E5: een machineprofiel inlezen maakt een machine aan met een bed, een
+    # interface en een adres. Dat bepaalt waar de kop heen gaat.
+    ("/api/machines/import", {"json": {}}),
+]
+
+# Dezelfde eis voor de andere werkwoorden. De uitlijning van een rasterfoto is
+# een PUT en zou anders buiten de tokencontrole hierboven vallen.
+WRITE_ROUTES_PUT = [
+    ("/api/library/testgrids/1/alignment", {"json": {"corners": None}}),
 ]
 
 
@@ -71,6 +82,8 @@ def test_writes_are_rejected_without_token_off_localhost(lan_server):
     with TestClient(lan_server.build_app()) as client:
         for path, body in WRITE_ROUTES:
             assert client.post(path, **body).status_code == 401, path
+        for path, body in WRITE_ROUTES_PUT:
+            assert client.put(path, **body).status_code == 401, path
 
 
 def test_writes_accept_bearer_token(lan_server):

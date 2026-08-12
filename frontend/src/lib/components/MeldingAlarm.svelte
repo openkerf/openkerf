@@ -42,14 +42,29 @@
 <style>
 	.alarm {
 		position: fixed;
-		/* Midden-boven, en niet over de volle breedte: rechtsboven staat de
-		   foutmelding van de bediening (Melding.svelte, z-index 60) en die zou
-		   hier onder verdwijnen. Twee dingen die tegelijk mis kunnen zijn horen
-		   allebei leesbaar te blijven. */
-		top: calc(var(--topbar-height) + var(--space-2));
-		left: 50%;
-		transform: translateX(-50%);
-		width: min(720px, calc(100vw - 2 * var(--space-4)));
+		/*
+		 * Eén kolom met de verbindingskaart, en die staat erboven.
+		 *
+		 * Dit stond gecentreerd op 50% terwijl `Verbinding.svelte` tegen de rail
+		 * aan hangt, op dezelfde hoogte. Op 1440 begon dit alarm daardoor op
+		 * x≈360, midden over die kaart, en kapte het twee zinnen af — niet
+		 * volledig bedekt maar half, en dat is erger: een afgebroken zin ziet
+		 * eruit als een hele zin, dus je weet niet dát je de helft mist.
+		 *
+		 * Nu dezelfde linkerrand en dezelfde breedte, met `--melding-kolom` als
+		 * verschuiving: die zet de verbindingskaart op `:root` met zijn eigen
+		 * gemeten hoogte, en is er niet zodra die kaart weg is. Waarom die kaart
+		 * bóven dit alarm hoort: zonder onze server is elke melding over de
+		 * machine per definitie oud nieuws — het is dezelfde engine die niet meer
+		 * antwoordt.
+		 *
+		 * Het oorspronkelijke bezwaar tegen links uitlijnen was de foutmelding van
+		 * de bediening rechtsboven (Melding.svelte, z-index 60). Die staat er nog,
+		 * en links uitlijnen helpt daar juist: zo raken die twee elkaar niet.
+		 */
+		top: calc(var(--topbar-height) + var(--space-3) + var(--melding-kolom, 0px));
+		left: calc(var(--rail-width) + var(--space-3));
+		width: min(620px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		border-radius: var(--radius-card);
 		/* Boven alles: vensters zitten op 60, de scrim op 50. Een alarm hoort
 		   nergens achter. */
@@ -109,14 +124,15 @@
 		background: rgb(255 255 255 / 0.15);
 	}
 
-	/* Tablet: 720 px gecentreerd op 1024 loopt tot x=872, en daar begint het
-	   rechterpaneel al — de balk dekte dan de tabs "Bewerken" en "Lagen" af.
-	   Smaller en tegen de gereedschapsrail aan houdt hem volledig boven het
-	   canvas. */
+	/* Tablet: op 1024 begint het rechterpaneel op x≈700, dus 620 px vanaf de rail
+	   zou de tabs "Bewerken" en "Lagen" weer afdekken — precies wat je op dat
+	   moment wilde bedienen. 560 houdt de kaart volledig boven het canvas.
+	   Dezelfde 560 staat in `Verbinding.svelte`; die twee horen gelijk te blijven,
+	   want samen zijn ze één kolom. Zonder wrapper-element (dat zou `+page.svelte`
+	   raken, waar deze twee op verschillende plekken gerenderd worden) is dit de
+	   prijs: één maat op twee plekken, met deze verwijzing als verband. */
 	@media (min-width: 768px) and (max-width: 1199px) {
 		.alarm:not(.groot) {
-			left: calc(var(--rail-width) + var(--space-3));
-			transform: none;
 			width: min(560px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		}
 	}
@@ -127,12 +143,15 @@
 	   een duim mik je niet op een knop van 36 px in een hoek. */
 	.alarm.groot {
 		position: static;
-		/* `transform` werkt óók op een statisch element: zonder deze regel bleef
-		   de translateX(-50%) van de zwevende variant staan en schoof het hele
-		   blok een halve schermbreedte naar links het beeld uit. */
+		/* De zwevende variant hangt aan de rail en heeft geen transform meer, maar
+		   deze regels blijven staan als slot op de deur: `transform` en `left`
+		   werken óók op een statisch element, en toen de zwevende variant nog
+		   `translateX(-50%)` droeg schoof dit blok daarmee een halve schermbreedte
+		   het beeld uit. */
 		transform: none;
 		left: auto;
 		right: auto;
+		top: auto;
 		flex: none;
 		width: 100%;
 		border-radius: 0;

@@ -21,14 +21,34 @@
 	// dezelfde dragen — dan pakt de tweede het patroon van de eerste.
 	const eigenId = $props.id();
 
+	/**
+	 * Wat de server over de grenzen meldt (gat C2).
+	 *
+	 * De meting komt uit `/api/job/layers`, dezelfde die het canvas en de
+	 * telefoon gebruiken. Hem hier overdoen zou betekenen dat twee plekken
+	 * kunnen gaan verschillen over de vraag of iets nog net past — en dan is
+	 * geen van beide te vertrouwen.
+	 */
+	type BoundsReport = {
+		bed: { width_mm: number; height_mm: number } | null;
+		sheet: { width_mm: number; height_mm: number } | null;
+		work: { x_mm: number; y_mm: number; width_mm: number; height_mm: number } | null;
+		outside_bed: number;
+		outside_sheet: number;
+		outside_bed_ids: string[];
+		outside_sheet_ids: string[];
+	};
+
 	let {
 		design,
 		sheet,
+		bounds = null,
 		colorFor
 	}: {
 		design: Design | null;
 		/** Het vel waarop gebrand wordt; zonder vel valt hij terug op het werk zelf. */
 		sheet: { name: string; width_mm: number; height_mm: number } | null;
+		bounds?: BoundsReport | null;
 		colorFor?: (operationId: string | null) => string;
 	} = $props();
 
@@ -47,11 +67,19 @@
 		kleur: string;
 		/** Zit in geen enkele meebrandende laag: wordt niet gebrand. */
 		stil: boolean;
-		/** Steekt buiten het vel uit. */
+		/** Steekt buiten het vel uit: daar ligt geen materiaal. */
 		buiten: boolean;
+		/** Ligt buiten het bed: daar komt de kop niet eens. */
+		buitenBed: boolean;
 	};
 
 	let perMm = $derived(design?.units_per_mm ?? 1);
+
+	// De meting van de server, als hij er is. Zonder `bounds` (bijvoorbeeld
+	// terwijl het overzicht nog laadt) valt hij terug op de velrand die hij zelf
+	// kan zien; het bed kent hij dan niet en dat meldt hij dus ook niet.
+	let bedIds = $derived(new Set(bounds?.outside_bed_ids ?? []));
+	let velIds = $derived(new Set(bounds?.outside_sheet_ids ?? []));
 
 	let vormen = $derived.by<Vorm[]>(() => {
 		if (!design) return [];
@@ -60,6 +88,15 @@
 			.map((element) => {
 				const lagen = (element.operation_ids ?? []).filter((id) => brandende.has(id));
 				const box = element.bounds;
+				const zelfBuiten = Boolean(
+					sheet &&
+						box &&
+						(box[0] / perMm < -0.05 ||
+							box[1] / perMm < -0.05 ||
+							box[2] / perMm > sheet.width_mm + 0.05 ||
+							box[3] / perMm > sheet.height_mm + 0.05)
+				);
+				const buitenBed = bounds ? bedIds.has(element.id) : false;
 				return {
 					id: element.id,
 					path: element.path,
@@ -73,19 +110,17 @@
 						: null,
 					kleur: lagen.length ? (colorFor?.(lagen[0]) ?? GRIJS) : GRIJS,
 					stil: lagen.length === 0,
-					buiten: Boolean(
-						sheet &&
-							box &&
-							(box[0] / perMm < -0.05 ||
-								box[1] / perMm < -0.05 ||
-								box[2] / perMm > sheet.width_mm + 0.05 ||
-								box[3] / perMm > sheet.height_mm + 0.05)
-					)
+					// Buiten het bed is de zwaarste van de twee, dus die wint: een
+					// vorm die er allebei buiten valt, is er één die de machine niet
+					// kan bereiken. Twee merktekens over één vorm zeggen niets extra.
+					buiten: (bounds ? velIds.has(element.id) : zelfBuiten) && !buitenBed,
+					buitenBed
 				};
 			});
 	});
 
 	let buitenVel = $derived(vormen.filter((v) => v.buiten).length);
+	let buitenBed = $derived(vormen.filter((v) => v.buitenBed).length);
 	let stille = $derived(vormen.filter((v) => v.stil).length);
 	let brandt = $derived(vormen.filter((v) => !v.stil).length);
 
@@ -148,6 +183,7 @@
 		if (!kader) return 'Niets op het vel.';
 		const delen = [`${brandt} ${brandt === 1 ? 'vorm brandt' : 'vormen branden'}`];
 		if (sheet) delen.push(`op ${sheet.name}, ${maat(sheet.width_mm)} bij ${maat(sheet.height_mm)} millimeter`);
+		if (buitenBed) delen.push(`${buitenBed} liggen buiten het bed`);
 		if (buitenVel) delen.push(`${buitenVel} vallen buiten het vel`);
 		if (stille) delen.push(`${stille} zitten in geen laag`);
 		return delen.join('; ') + '.';
@@ -217,6 +253,20 @@
 				/>
 			{/if}
 
+			<!-- De bedrand, alleen als er iets buiten valt. Anders is het een grote
+			     doos om een klein vel: ruis. Ligt er wél iets buiten, dan is een
+			     rode vorm zonder zichtbare grens een raadsel — je ziet dát er iets
+			     mis is, niet waarmee. -->
+			{#if buitenBed && bounds?.bed}
+				<rect
+					class="bedrand"
+					x="0"
+					y="0"
+					width={bounds.bed.width_mm}
+					height={bounds.bed.height_mm}
+				/>
+			{/if}
+
 			<!-- Het werk zelf. Eén schaaltransform rekent Tats om naar mm, precies
 			     zoals het canvas het doet; de paddata blijft zoals de engine hem gaf. -->
 			<g transform="scale({1 / perMm})">
@@ -237,7 +287,12 @@
 							class="vorm"
 							class:stil={vorm.stil}
 							class:buiten={vorm.buiten}
-							style:stroke={vorm.buiten ? 'var(--danger-solid)' : vorm.kleur}
+							class:buitenbed={vorm.buitenBed}
+							style:stroke={vorm.buitenBed
+								? 'var(--danger-solid)'
+								: vorm.buiten
+									? 'var(--warn-solid)'
+									: vorm.kleur}
 						/>
 					{/if}
 				{/each}
@@ -274,11 +329,26 @@
 		<!-- Wat het beeld zegt, in woorden. Een rode lijn die je over het hoofd
 		     ziet is geen waarschuwing; en wie op de telefoon in de zon staat,
 		     ziet kleurverschil als eerste niet meer. -->
+		<!-- Buiten het bed staat bovenaan en is rood; buiten het vel eronder en
+		     oranje. Dat is geen smaakkwestie maar de volgorde waarin het
+		     misgaat: buiten het vel kost je materiaal, buiten het bed komt de
+		     kop er niet eens — daar staat de machine stil of loopt hij tegen
+		     zijn eindaanslag. Twee even rode kaarten op rij (zoals het was)
+		     maken die twee even erg, en dan weegt geen van beide nog. -->
+		{#if buitenBed}
+			<p class="melding buitenbed" role="alert">
+				<strong>Buiten het bed.</strong>
+				{buitenBed === 1 ? 'Eén vorm ligt' : `${buitenBed} vormen liggen`} buiten
+				het bereik van de machine{bounds?.bed
+					? `, die tot ${maat(bounds.bed.width_mm)} × ${maat(bounds.bed.height_mm)} mm reikt`
+					: ''}. Daar komt de kop niet: verplaats het of maak het kleiner.
+			</p>
+		{/if}
 		{#if buitenVel}
 			<p class="melding buiten">
 				{buitenVel === 1 ? 'Eén vorm valt' : `${buitenVel} vormen vallen`} buiten
-				{sheet ? sheet.name : 'het vel'}. Wat er overheen steekt, wordt niet gebrand
-				of belandt naast je materiaal.
+				{sheet ? sheet.name : 'het vel'}. Daar ligt geen materiaal — wat er
+				overheen steekt, brandt in je rooster of je werkblad.
 			</p>
 		{/if}
 		{#if stille}
@@ -354,10 +424,22 @@
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
 	}
-	/* Steekt er iets over de rand, dan is de rand het onderwerp. */
+	/* Steekt er iets over de rand, dan is de rand het onderwerp. Oranje en niet
+	   rood: het vel is een stuk materiaal dat op is, niet een grens die de
+	   machine niet haalt. Dat laatste is de bedrand hieronder. */
 	.vel.overhang {
+		stroke: var(--warn-solid);
+		stroke-width: 2;
+	}
+	/* Waar de machine ophoudt. Rood en gestreept: twee codes voor één grens,
+	   want op een klein beeld is hue alleen te weinig — en bij deuteranopie
+	   liggen rood en amber tegen elkaar aan. */
+	.bedrand {
+		fill: none;
 		stroke: var(--danger-solid);
 		stroke-width: 2;
+		stroke-dasharray: 10 6;
+		vector-effect: non-scaling-stroke;
 	}
 	.vorm {
 		fill: none;
@@ -372,8 +454,17 @@
 		stroke-dasharray: 4 3;
 		stroke-width: 1;
 	}
+	/* Buiten het vel: oranje én onderbroken. Een langere streep dan die van
+	   `stil` (4 3), zodat "doet niet mee" en "ligt naast je materiaal" op één
+	   beeld niet hetzelfde patroon dragen. */
 	.vorm.buiten {
 		stroke-width: 2.5;
+		stroke-dasharray: 9 4;
+	}
+	/* Buiten het bed: rood en dicht. De zwaarste van de drie krijgt de rustigste
+	   lijn — die hoeft niets te suggereren, hij is gewoon fout. */
+	.vorm.buitenbed {
+		stroke-width: 3;
 	}
 	/* Twee maten naast elkaar als het past, onder elkaar als het niet past — in
 	   een paneel van 220px past het niet, en dan is links uitlijnen rustiger dan
@@ -397,12 +488,19 @@
 		font-size: var(--text-xs);
 		line-height: 1.45;
 	}
-	.melding.buiten {
+	.melding.buiten,
+	.melding.buitenbed {
 		color: var(--text-1);
-		border-left: 4px solid var(--danger-solid);
-		background: color-mix(in srgb, var(--danger) 18%, transparent);
 		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
 		border-radius: 0 var(--radius-field) var(--radius-field) 0;
+	}
+	.melding.buitenbed {
+		border-left: 4px solid var(--danger-solid);
+		background: color-mix(in srgb, var(--danger) 18%, transparent);
+	}
+	.melding.buiten {
+		border-left: 4px solid var(--warn-solid);
+		background: color-mix(in srgb, var(--warn) 18%, transparent);
 	}
 	.melding.stil {
 		color: var(--text-2);

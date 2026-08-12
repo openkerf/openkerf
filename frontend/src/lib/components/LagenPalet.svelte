@@ -73,20 +73,10 @@
 		return `${doel} ${waar}${cijfers ? ` · ${cijfers}` : ''}`;
 	}
 
-	/**
-	 * De hoogte van de strook, als CSS-variabele op de wortel.
-	 *
-	 * De camerapil zweeft boven het canvas met een vaste afstand tot de
-	 * onderkant. Zonder deze maat lag hij precies over de eerste vakjes heen —
-	 * en die hoogte verschilt per apparaat, want op aanraakschermen zijn de
-	 * knoppen groter en breekt de regel. Meten is dus de enige maat die klopt.
-	 */
-	let hoogte = $state(0);
-	$effect(() => {
-		if (typeof document === 'undefined') return;
-		document.documentElement.style.setProperty('--palet-hoogte', `${hoogte}px`);
-		return () => document.documentElement.style.removeProperty('--palet-hoogte');
-	});
+	// De hoogte van de onderrand (deze strook plus een eventuele waarschuwing)
+	// wordt gemeten in Canvas.svelte en daar in `--palet-hoogte` gezet — de
+	// camerapil rekent ermee. Eén meter voor het hele blok, want er kan meer dan
+	// één strook onder het bed staan.
 
 	async function kies(kleur: string) {
 		if (!canEdit || edits.busy) return;
@@ -97,7 +87,7 @@
 	}
 </script>
 
-<div class="palet" class:leeg={!canEdit} bind:clientHeight={hoogte}>
+<div class="palet" class:leeg={!canEdit}>
 	<span class="kop">Laagkleur</span>
 	<div class="strook" role="group" aria-label="Laagkleuren">
 		{#each kleuren as kleur, index (kleur)}
@@ -174,16 +164,37 @@
 		background: var(--surface-1);
 		min-height: 40px;
 		flex-wrap: wrap;
+		/* Op 768px liep deze strook 91px buiten beeld, en met `visible` betekent
+		   dat afgekapt in plaats van scrollbaar. De swatches zijn sinds besluit
+		   B2 een besturingselement: een vakje dat je niet kunt raken is een
+		   verdwenen functie, geen verdwenen versiering. */
+		min-width: 0;
 	}
 	.kop {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		text-transform: none;
 		white-space: nowrap;
+		flex: 0 0 auto;
 	}
+	/* Onder 800px is er geen ruimte voor het woord naast tien vakjes van 44px.
+	   De vakjes winnen: die zijn de bediening, dit is het bijschrift. */
+	@media (max-width: 800px) {
+		.kop { display: none; }
+	}
+	/* De swatches blijven altijd heel — ze zijn het enige hier dat je aanraakt —
+	   maar op tablet zijn ze 44px, en tien daarvan is 476px. Naast de kop en de
+	   stand past dat niet in 768. Dus wrappen: liever twee rijen vakjes dan één
+	   rij waarvan de laatste drie buiten beeld vallen. */
 	.strook {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 4px;
+		min-width: 0;
+		/* `auto` als basis houdt de tien vakjes op één rij zolang ze passen; pas
+		   als dat niet meer kan, breekt hij. Met basis 0 wrapte hij ook op 1024
+		   naar vier rijen, en dat is erger dan het probleem. */
+		flex: 0 1 auto;
 	}
 	.vak {
 		width: 26px;
@@ -269,6 +280,20 @@
 		   "geëxtrapoleerd" bij presets, en dat is iets heel anders. */
 		background: var(--surface-2);
 	}
+	/* De sluitende tekst geeft als eerste mee — die is uitleg, geen bediening. */
+	.uitleg {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* De stand en de uitleg zijn bijschrift bij de vakjes; als er te weinig
+	   ruimte is, geven zíj mee. De vakjes zijn de bediening en blijven heel. */
+	.geheugen { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+	@media (max-width: 820px) {
+		.geheugen,
+		.uitleg { display: none; }
+	}
 	.uitleg {
 		font-size: var(--text-xs);
 		color: var(--text-2);
@@ -276,7 +301,21 @@
 		margin-left: auto;
 	}
 	@media (max-width: 1199px) {
-		.uitleg {
+		/* De sluitende tekst geeft als eerste mee — die is uitleg, geen bediening. */
+	.uitleg {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* De stand en de uitleg zijn bijschrift bij de vakjes; als er te weinig
+	   ruimte is, geven zíj mee. De vakjes zijn de bediening en blijven heel. */
+	.geheugen { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+	@media (max-width: 820px) {
+		.geheugen,
+		.uitleg { display: none; }
+	}
+	.uitleg {
 			display: none;
 		}
 	}

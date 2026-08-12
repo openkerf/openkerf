@@ -34,10 +34,53 @@
 	);
 	// Alleen noemen als het lang genoeg duurt om ongerust van te worden.
 	let duur = $derived(weg >= 60 ? `${Math.floor(weg / 60)} min` : null);
+
+	/**
+	 * Deze kaart en het machine-alarm vormen één kolom, en dit is de maat ervan.
+	 *
+	 * Ze hingen aan hetzelfde anker en lagen over elkaar heen — niet volledig,
+	 * wat erger is: het alarm begon halverwege deze kaart en kapte twee zinnen
+	 * middenin af ("Wat je nu tekent of instelt k…"). Een afgebroken zin ziet
+	 * eruit als een hele zin, dus je weet niet dát je iets mist, en je handelt op
+	 * de helft van een instructie.
+	 *
+	 * Twee vaste elementen kunnen alleen stapelen als ze van elkaar weten hoe
+	 * hoog ze zijn. Geen wrapper-element (dat zou `+page.svelte` raken, en deze
+	 * kaart en het alarm worden daar op twee verschillende plekken gerenderd),
+	 * dus geeft deze kaart zijn hoogte door in een variabele op `:root` en rekent
+	 * het alarm daarmee zijn eigen `top` uit. Nul zodra deze kaart weg is.
+	 *
+	 * De volgorde is niet willekeurig: zonder onze server is elke melding over de
+	 * machine per definitie oud nieuws — de engine die het meldde is dezelfde die
+	 * niet meer antwoordt. Deze kaart hoort dus boven.
+	 */
+	let kaart = $state<HTMLElement | null>(null);
+	$effect(() => {
+		const wortel = document.documentElement;
+		if (!kaart) {
+			wortel.style.removeProperty('--melding-kolom');
+			return;
+		}
+		// Hoogte plus de tussenruimte in één getal: dan hoeft het alarm er niets
+		// bij te rekenen en kan er ook geen halve variabele overblijven.
+		const meet = () =>
+			wortel.style.setProperty(
+				'--melding-kolom',
+				`calc(${Math.ceil(kaart!.offsetHeight)}px + var(--space-2))`
+			);
+		meet();
+		// De hoogte verandert met de tekst ("al 3 min") en met de vensterbreedte.
+		const wacht = new ResizeObserver(meet);
+		wacht.observe(kaart);
+		return () => {
+			wacht.disconnect();
+			wortel.style.removeProperty('--melding-kolom');
+		};
+	});
 </script>
 
 {#if !verbinding.online && laat}
-	<div class="verbroken" role="alert">
+	<div class="verbroken" role="alert" bind:this={kaart}>
 		<span class="stip" aria-hidden="true"></span>
 		<div class="tekst">
 			<strong>Geen verbinding met OpenKerf</strong>
@@ -79,7 +122,10 @@
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-3);
-		max-width: min(560px, calc(100vw - 2 * var(--space-4)));
+		/* Zelfde breedte als het alarm eronder, want samen zijn ze één kolom.
+		   Stond op 560 tegenover 720 van het alarm, en dan lezen twee kaarten met
+		   dezelfde linkerrand als een fout in plaats van als een stapel. */
+		width: min(620px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		padding: var(--space-3) var(--space-4);
 		border: 1px solid var(--danger-solid);
 		border-radius: var(--radius-card);
@@ -133,6 +179,14 @@
 	 * overheen liggen. Het knopje "opnieuw proberen" staat daar in de
 	 * onderbalk zelf.
 	 */
+	/* Tablet: zelfde 560 als het alarm eronder — op 1024 begint het rechterpaneel
+	   op x≈700 en zou 620 px de paneeltabs afdekken. Deze maat hoort gelijk te
+	   blijven met die in `MeldingAlarm.svelte`; zie de toelichting daar. */
+	@media (min-width: 768px) and (max-width: 1199px) {
+		.verbroken {
+			width: min(560px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
+		}
+	}
 	@media (max-width: 767px) {
 		.verbroken { display: none; }
 	}

@@ -19,6 +19,8 @@ export type Preset = {
 	speed_mm_s: number;
 	power_percent: number;
 	passes: number;
+	/** Lijnafstand bij rasteren; leeg bij snijden en vectorgraveren (B12). */
+	interval_mm?: number | null;
 	air_assist: boolean;
 	focus_offset_mm: number;
 	source: 'handmatig' | 'geextrapoleerd' | 'testraster' | 'geimporteerd';
@@ -30,6 +32,11 @@ export type Preset = {
 	grid_date?: string | null;
 	/** Welk vakje van dat raster het werd; aanwijsbaar op de foto. */
 	grid_cell?: { row: number; column: number } | null;
+	/**
+	 * Of de foto van dat raster uitgelijnd is. Zo niet, dan valt de markering
+	 * terug op vier standaardhoeken en ligt de omtrek er bij benadering.
+	 */
+	grid_aligned?: boolean;
 	/** Laatste keer dat deze instelling op een laag gezet is. */
 	last_used_at?: string | null;
 };

@@ -11,6 +11,38 @@ import { verbinding } from './verbinding.svelte';
 
 const TOKEN_KEY = 'openkerf.token';
 
+/** Een plek op het bed die deze machine onthoudt (gat J6). */
+export type Position = { name: string; x_mm: number; y_mm: number };
+
+/**
+ * Het nulpunt van de gebruiker (gat J12), als losse module-toestand.
+ *
+ * Twee schermen hebben hem nodig: het Job-paneel, dat hem zet, en het canvas,
+ * dat laat zien waar het werk terechtkomt. Die twee zitten niet in elkaar en de
+ * pagina ertussen is niet van deze ronde, dus in plaats van een prop door drie
+ * lagen te rijgen staat hij hier — één waarde, twee lezers.
+ */
+class Nulpunt {
+	punt = $state<{ x_mm: number; y_mm: number } | null>(null);
+	#geladen = false;
+
+	/** Eén keer per pagina ophalen; wie het opnieuw wil, geeft `opnieuw` mee. */
+	async laad(opnieuw = false) {
+		if (this.#geladen && !opnieuw) return;
+		this.#geladen = true;
+		try {
+			const response = await fetch('/api/machine/origin');
+			if (!response.ok) return;
+			this.punt = (await response.json()).origin ?? null;
+		} catch {
+			// Zwijgen: zonder server valt er sowieso niets te sturen, en de
+			// verbindingskaart zegt dat al.
+		}
+	}
+}
+
+export const nulpunt = new Nulpunt();
+
 export class Controller {
 	capabilities = $state<Capabilities | null>(null);
 	token = $state('');
@@ -144,6 +176,142 @@ export class Controller {
 	}
 	clearQueue() {
 		return this.#post('/api/spooler/clear', 'clear');
+	}
+
+	// ------------------------------------------------- bewegen naar een punt
+
+	async #json(path: string, action: string, method = 'POST', body?: unknown) {
+		this.busy = action;
+		this.error = null;
+		try {
+			const response = await fetch(path, {
+				method,
+				headers: { 'Content-Type': 'application/json', ...this.#headers() },
+				body: body === undefined ? undefined : JSON.stringify(body)
+			});
+			if (response.status === 401) this.rejected = true;
+			if (!response.ok) {
+				this.error = await describeFailure(response, this.token !== '');
+				return null;
+			}
+			this.rejected = false;
+			return await response.json();
+		} catch (e) {
+			this.error = onbereikbaar(e);
+			return null;
+		} finally {
+			this.busy = null;
+		}
+	}
+
+	/**
+	 * De kop naar een absolute plek op het bed sturen (gat J6).
+	 *
+	 * Draagt zowel "naar de oorsprong" als de bewaarde posities. De jogknoppen
+	 * gaan via de pagina omdat die het canvas moet bijwerken; dit is een sprong
+	 * naar een punt en heeft dat niet nodig.
+	 */
+	moveTo(xMm: number, yMm: number) {
+		return this.#json('/api/machine/move', 'move', 'POST', { x_mm: xMm, y_mm: yMm });
+	}
+
+	/**
+	 * Posities die deze machine onthoudt.
+	 *
+	 * Ze staan op de device-service in de engine, niet in de browser: een
+	 * positie hoort bij de machine met de mal erop, niet bij de laptop waar je
+	 * toevallig achter zit.
+	 */
+	async listPositions(): Promise<Position[]> {
+		try {
+			const response = await fetch('/api/machine/positions');
+			if (!response.ok) return [];
+			return (await response.json()).positions ?? [];
+		} catch {
+			return [];
+		}
+	}
+
+	/** Zonder coördinaten: waar de kop nu staat. */
+	savePosition(name: string) {
+		return this.#json('/api/machine/positions', 'save-position', 'POST', { name });
+	}
+
+	deletePosition(name: string) {
+		return this.#json(
+			`/api/machine/positions?name=${encodeURIComponent(name)}`,
+			'delete-position',
+			'DELETE'
+		);
+	}
+
+	// ------------------------------------------------- het nulpunt (gat J12)
+	//
+	// LightBurn's Set Origin: je legt een nulpunt op je werkstuk en het werk
+	// brandt daarvandaan. Dat is de handeling bij het uitlijnen op een restplank
+	// — de plank ligt waar hij ligt, en je wil je tekening niet verslepen om hem
+	// erop te krijgen.
+	//
+	// Het nulpunt leeft op de machine (zoals de bewaarde posities), niet in de
+	// browser: het hoort bij déze laser met dít stuk hout erin.
+
+	get origin() {
+		return nulpunt.punt;
+	}
+
+	loadOrigin() {
+		return nulpunt.laad(true);
+	}
+
+	/** Zonder coördinaten: waar de kop nu staat. */
+	async setOrigin(xMm?: number, yMm?: number) {
+		const body = xMm === undefined || yMm === undefined ? {} : { x_mm: xMm, y_mm: yMm };
+		const uitslag = await this.#json('/api/machine/origin', 'set-origin', 'POST', body);
+		if (uitslag) nulpunt.punt = { x_mm: uitslag.x_mm, y_mm: uitslag.y_mm };
+		return uitslag;
+	}
+
+	async clearOrigin() {
+		const uitslag = await this.#json('/api/machine/origin', 'clear-origin', 'DELETE');
+		if (uitslag) nulpunt.punt = null;
+		return uitslag;
+	}
+
+	// --------------------------- bijstellen tijdens een lopende job (gat J11)
+	//
+	// Alleen als de driver een realtime kanaal heeft. Op een Ruida staat
+	// `capabilities.adjust` op false en bestaan deze knoppen niet — zie
+	// machine.py voor waarom dat geen tekortkoming van ons is.
+
+	adjust = $state<{ power: number | null; speed: number | null }>({
+		power: null,
+		speed: null
+	});
+
+	get canAdjust() {
+		const kan = this.capabilities?.adjust;
+		return Boolean(kan?.power || kan?.speed);
+	}
+
+	async loadAdjustment() {
+		try {
+			const response = await fetch('/api/job/adjust');
+			if (!response.ok) return;
+			const data = await response.json();
+			this.adjust = { power: data.power ?? null, speed: data.speed ?? null };
+		} catch {
+			// Zie loadOrigin.
+		}
+	}
+
+	/** `factor` is een vermenigvuldiging op wat de laag zegt; 1 is "zoals ontworpen". */
+	async setAdjustment(wat: 'power' | 'speed', factor: number) {
+		const geknipt = Math.min(2, Math.max(0.1, Math.round(factor * 100) / 100));
+		const uitslag = await this.#json('/api/job/adjust', `adjust-${wat}`, 'POST', {
+			[wat]: geknipt
+		});
+		if (uitslag) this.adjust = { power: uitslag.power ?? null, speed: uitslag.speed ?? null };
+		return uitslag;
 	}
 
 	load(file: File) {

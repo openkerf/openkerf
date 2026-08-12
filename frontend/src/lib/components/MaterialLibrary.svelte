@@ -364,6 +364,20 @@
 		return `${aantal} ${aantal === 1 ? enkel : meer}`;
 	}
 
+	/**
+	 * De rasterfoto, met het gekozen vakje omcirkeld als we weten welk vakje het was.
+	 *
+	 * De server tekent de markering in het beeld (`?cell=<rij>-<kolom>`), dus een
+	 * gewone `<img>` volstaat en er is hier geen overlay-wiskunde nodig. Zonder
+	 * bekend vakje vragen we de foto onbewerkt op — dat is de veilige val-terug.
+	 */
+	function fotoUrl(preset: Preset) {
+		const basis = `/api/library/testgrids/${preset.grid_id}/photo`;
+		return preset.grid_cell
+			? `${basis}?cell=${preset.grid_cell.row}-${preset.grid_cell.column}`
+			: basis;
+	}
+
 	/** Past deze preset bij het laagtype waar hij op gezet wordt? */
 	function past(preset: Preset, laag: DesignOperation | null) {
 		if (!laag) return true;
@@ -440,15 +454,25 @@
 					<div class="v mono">{preset.passes}</div>
 				</div>
 			{/if}
+			{#if preset.interval_mm && preset.operation === 'graveren-raster'}
+				<!-- Zonder lijnafstand is een rasterinstelling niet na te branden;
+				     bij de andere bewerkingen bestaat hij niet. -->
+				<div class="param">
+					<div class="k">Lijnafstand</div>
+					<div class="v mono">{preset.interval_mm} <small>mm</small></div>
+				</div>
+			{/if}
 			{#if preset.grid_photo}
 				<!-- Het bewijs hoort naast de bewering te staan, niet drie schermen
 				     verderop. Klikken opent de herkomst met de foto op formaat. -->
 				<button
 					class="bewijs"
 					onclick={() => (herkomst = herkomst === preset.id ? null : preset.id)}
-					title="Foto van het testraster waar deze instelling uit komt"
+					title={preset.grid_cell
+						? `Het testraster, met vakje rij ${preset.grid_cell.row + 1}, kolom ${preset.grid_cell.column + 1} omcirkeld`
+						: 'Foto van het testraster waar deze instelling uit komt'}
 				>
-					<img src="/api/library/testgrids/{preset.grid_id}/photo" alt="" />
+					<img src={fotoUrl(preset)} alt="" />
 				</button>
 			{/if}
 		</div>
@@ -519,7 +543,10 @@
 					{#if preset.grid_id}
 						<dt>Testraster</dt>
 						<dd>
-							#{preset.grid_id}{preset.grid_date ? ` · gebrand ${toen(preset.grid_date)}` : ''}{preset.grid_cell
+							<!-- Staat de foto ernaast, dan noemt het bijschrift het vakje al;
+							     twee regels verder hetzelfde herhalen is ruis. -->
+							#{preset.grid_id}{preset.grid_date ? ` · gebrand ${toen(preset.grid_date)}` : ''}{preset.grid_cell &&
+							!preset.grid_photo
 								? ` · vakje rij ${preset.grid_cell.row + 1}, kolom ${preset.grid_cell.column + 1}`
 								: ''}
 						</dd>
@@ -537,8 +564,30 @@
 				</dl>
 				<div class="bewijsvak">
 					{#if preset.grid_photo}
-						<img src="/api/library/testgrids/{preset.grid_id}/photo" alt="Foto van testraster {preset.grid_id}" />
-						<p class="onder">Het gebrande raster waar deze waarden uit komen.</p>
+						<img
+							src={fotoUrl(preset)}
+							alt={preset.grid_cell
+								? `Foto van testraster ${preset.grid_id}, met vakje rij ${preset.grid_cell.row + 1}, kolom ${preset.grid_cell.column + 1} omcirkeld`
+								: `Foto van testraster ${preset.grid_id}`}
+						/>
+						<p class="onder">
+							{#if preset.grid_cell}
+								<!-- De markering volgt de uitlijning van het raster; is die niet
+								     gezet, dan valt de server terug op het hele beeld en klopt
+								     de omtrek bij benadering. Daarom benoemt het bijschrift het
+								     vakje, in plaats van te beweren dat de cirkel exact zit. -->
+								De omtrek wijst vakje rij {preset.grid_cell.row + 1}, kolom
+								{preset.grid_cell.column + 1} aan — daar komen deze waarden uit.
+								{#if preset.grid_aligned === false}
+									<span class="benadering">
+										De uitlijning van deze foto is niet gezet, dus de omtrek is bij
+										benadering — lijn het raster uit voor een exacte markering.
+									</span>
+								{/if}
+							{:else}
+								Het gebrande raster waar deze waarden uit komen.
+							{/if}
+						</p>
 					{:else if preset.grid_id}
 						<p class="onder">
 							Van dit raster is nog geen foto. Zonder foto is er niets om de keuze aan
@@ -597,6 +646,16 @@
 					value={String(preset.power_percent)}
 					onchange={(v) => saveEdit(preset, { power_percent: Number(v) })}
 				/>
+				{#if preset.operation === 'graveren-raster'}
+					<NumberField
+						label="Lijnafstand"
+						unit="mm"
+						step={0.01}
+						min={0.01}
+						value={String(preset.interval_mm ?? '')}
+						onchange={(v) => saveEdit(preset, { interval_mm: Number(v) })}
+					/>
+				{/if}
 				<NumberField
 					label="Passes"
 					step={1}
@@ -1499,6 +1558,10 @@
 	}
 	.herkomst dt { color: var(--text-2); }
 	.herkomst dd { margin: 0; }
+	/* Zonder opgeslagen uitlijning valt de server terug op het hele beeld; bij een
+	   schuine foto met veel rand ligt de omtrek dan een halve cel mis. Dat zeggen
+	   is beter dan een markering die exact lijkt en het niet is. */
+	.benadering { display: block; margin-top: 2px; color: var(--warn); }
 	.bewijsvak {
 		display: grid;
 		justify-items: start;

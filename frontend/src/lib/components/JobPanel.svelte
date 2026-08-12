@@ -4,8 +4,10 @@
 	import {
 		formatDuration,
 		isStalled,
+		jobLabel,
 		jobStatusLabel,
 		remainingSeconds,
+		totalSeconds,
 		type Device,
 		type Job,
 		type SignalEvent
@@ -77,7 +79,11 @@
 			{@const stil = job === activeJob && isStalled(job)}
 			<article class="job" class:running={job.running || stil} class:paused={stil}>
 				<header>
-					<span class="name">{job.label}</span>
+					<!-- "Spooler:3 items" is de interne opsomming van de engine, geen
+					     naam (gat P4). De vertaling staat in api.ts, zodat het
+					     Job-paneel, de statusbalk en de telefoon niet ieder hun eigen
+					     omweg houden. -->
+					<span class="name" title={job.label}>{jobLabel(job)}</span>
 					<!-- De engine zegt "running"/"queued"; deze app spreekt Nederlands. -->
 					<span class="status" class:nu={job.running && !stil} class:pauze={stil}
 						>{stil ? 'Gepauzeerd' : jobStatusLabel(job)}</span
@@ -116,7 +122,9 @@
 
 				<dl class="meta mono">
 					<div><dt>Verstreken</dt><dd>{formatDuration(job.elapsed_seconds)}</dd></div>
-					<div><dt>Totaal</dt><dd>{formatDuration(job.estimate_seconds)}</dd></div>
+					<!-- Uit dezelfde bron als "resterend" hierboven; zie gat B1. Twee
+					     bronnen naast elkaar gaven "nog 0:00" onder "Totaal 13:45:04". -->
+					<div><dt>Totaal</dt><dd>{formatDuration(totalSeconds(job))}</dd></div>
 					<div>
 						<dt>Passes</dt>
 						<dd>{job.loops_executed ?? 0} / {job.loops ?? '∞'}</dd>

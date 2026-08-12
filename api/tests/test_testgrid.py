@@ -100,8 +100,10 @@ def test_generating_draws_a_square_and_an_operation_per_cell(kernel, client):
 
     snapshot = DesignReader(kernel).snapshot()
     labels = {op["label"] for op in snapshot["operations"]}
-    assert "5.0mm/s @40.0%" in labels
-    assert "25.0mm/s @80.0%" in labels
+    # Het laaglabel noemt de twee grootheden die op de assen staan, met hun
+    # eenheid: sinds B12 hoeft dat niet snelheid en vermogen te zijn.
+    assert "5 mm/s · 40%" in labels
+    assert "25 mm/s · 80%" in labels
 
 
 def test_each_cell_carries_its_own_settings(kernel, client):
@@ -556,3 +558,804 @@ def test_the_board_carries_a_caption(kernel, client):
     boven = [d for d in dozen if d[3] < BASE["origin_y_mm"] - 4]
     assert len(boven) == 1, dozen
     assert boven[0][2] - boven[0][0] > BASE["cell_mm"] * 2, boven
+
+
+# ------------------------------------------------- interval als derde as (B12)
+
+RASTER = {
+    **BASE,
+    "operation": "graveren-raster",
+    "row_axis": "interval",
+    "column_axis": "power",
+    "interval_min": 0.05,
+    "interval_max": 0.3,
+    "interval_steps": 3,
+    "speed_mm_s": 200,
+}
+
+
+def test_interval_can_be_an_axis_with_speed_held_fixed():
+    """
+    B12: bij graveren bepaalt de lijnafstand het resultaat minstens zoveel als
+    het vermogen. Wat níét op een as staat, ligt vast voor het hele bord.
+    """
+    plan, cells = plan_grid(**RASTER)
+
+    assert plan["rows"] == 3 and plan["columns"] == 3
+    assert sorted({c["interval_mm"] for c in cells}) == [0.05, 0.15, 0.3]
+    assert {c["speed_mm_s"] for c in cells} == {200}
+    # De vaste grootheid staat als één punt in de rij: min == max, één stap.
+    assert (plan["speed_min"], plan["speed_max"], plan["speed_steps"]) == (200, 200, 1)
+
+
+def test_the_interval_varies_down_the_rows_it_was_put_on():
+    _, cells = plan_grid(**RASTER)
+    kolom = [c for c in cells if c["column"] == 0]
+
+    assert [c["interval_mm"] for c in kolom] == [0.05, 0.15, 0.3]
+    assert len({c["power_percent"] for c in kolom}) == 1
+
+
+def test_interval_is_refused_where_it_means_nothing():
+    """Bij snijden legt de kop één lijn; een lijnafstand-as zou daar niets doen."""
+    with pytest.raises(DesignError) as fout:
+        plan_grid(**{**RASTER, "operation": "snijden"})
+
+    assert "rasteren" in str(fout.value)
+
+
+def test_two_axes_cannot_be_the_same_quantity():
+    with pytest.raises(DesignError):
+        plan_grid(**{**BASE, "row_axis": "power", "column_axis": "power"})
+
+
+def test_swapping_the_axes_swaps_the_board():
+    """Snelheid naar rechts in plaats van naar beneden, en verder niets anders."""
+    _, cells = plan_grid(**{**BASE, "row_axis": "power", "column_axis": "speed"})
+    rij = [c for c in cells if c["row"] == 0]
+
+    assert [c["speed_mm_s"] for c in rij] == [5, 15, 25]
+    assert len({c["power_percent"] for c in rij}) == 1
+
+
+def test_an_interval_grid_sets_the_dpi_on_each_operation(kernel, client):
+    """
+    De engine kent geen interval maar dpi. Zonder deze omrekening zou elk vakje
+    op dezelfde lijnafstand branden en test je niets.
+    """
+    grid = client.post("/api/library/testgrids", json=RASTER).json()
+
+    for cell in grid["cells"]:
+        operation = kernel.elements.find_node(cell["operation_id"])
+        assert operation.type == "op raster"
+        assert operation.dpi == pytest.approx(round(25.4 / cell["interval_mm"]), abs=1)
+
+
+def test_the_stored_grid_remembers_which_axis_was_which(client):
+    grid = client.post("/api/library/testgrids", json=RASTER).json()
+
+    assert grid["row_axis"] == "interval"
+    assert grid["column_axis"] == "power"
+    assert (grid["rows"], grid["columns"]) == (3, 3)
+    assert grid["interval_steps"] == 3
+
+
+def test_a_preset_from_an_interval_grid_carries_its_interval(client):
+    """
+    Zonder de lijnafstand is de preset niet na te branden: dezelfde snelheid en
+    hetzelfde vermogen op een ander interval geven een ander resultaat.
+    """
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    grid = client.post(
+        "/api/library/testgrids", json={**RASTER, "material_id": material["id"]}
+    ).json()
+    cell = grid["cells"][4]
+
+    made = client.post(
+        f"/api/library/testgrids/{grid['id']}/presets",
+        json={"cells": [{"row": cell["row"], "column": cell["column"]}]},
+    )
+
+    assert made.status_code == 201
+    assert made.json()["presets"][0]["interval_mm"] == cell["interval_mm"]
+
+
+# ------------------------------------------------------- uitlijning (gat T4)
+
+def test_alignment_survives_a_different_browser(client):
+    """
+    T4: uitlijnen doe je op de desktop, het vakje aanwijzen op de tablet naast
+    de machine. In localStorage was die tweede helft een leeg raster over een
+    schuine foto.
+    """
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    hoeken = [
+        {"x": 0.12, "y": 0.08},
+        {"x": 0.91, "y": 0.14},
+        {"x": 0.88, "y": 0.93},
+        {"x": 0.09, "y": 0.87},
+    ]
+
+    response = client.put(
+        f"/api/library/testgrids/{grid['id']}/alignment", json={"corners": hoeken}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["alignment"] == hoeken
+    # En hij komt terug bij het ophalen, niet alleen in het antwoord.
+    assert client.get(f"/api/library/testgrids/{grid['id']}").json()["alignment"] == hoeken
+
+
+def test_a_fresh_grid_has_no_alignment_yet(client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    assert grid["alignment"] is None
+
+
+def test_a_broken_alignment_is_refused(client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    for kapot in ([], [{"x": 0, "y": 0}], [{"x": 5, "y": 0}] * 4, "linksboven"):
+        response = client.put(
+            f"/api/library/testgrids/{grid['id']}/alignment", json={"corners": kapot}
+        )
+        assert response.status_code == 409, kapot
+
+
+def test_alignment_can_be_cleared(client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    client.put(
+        f"/api/library/testgrids/{grid['id']}/alignment",
+        json={"corners": [{"x": 0.1, "y": 0.1}] * 4},
+    )
+
+    response = client.put(
+        f"/api/library/testgrids/{grid['id']}/alignment", json={"corners": None}
+    )
+
+    assert response.json()["alignment"] is None
+
+
+# ------------------------------------- het vakje aanwijzen op de foto (gat M4)
+
+def _foto(kleur=(120, 90, 60), maat=(200, 160)):
+    from io import BytesIO
+
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("RGB", maat, kleur).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+def test_the_photo_can_come_back_with_the_chosen_cell_marked(client):
+    """
+    M4: de herkomst zei "rij 2, kolom 3" en op de foto was niets gemarkeerd.
+    Met ?cell= tekent de server dezelfde overlay in het beeld zelf, zodat de
+    markering meekomt in elk <img> dat de foto toont.
+    """
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    client.post(
+        f"/api/library/testgrids/{grid['id']}/photo",
+        files={"file": ("bord.jpg", _foto(), "image/jpeg")},
+    )
+
+    kaal = client.get(f"/api/library/testgrids/{grid['id']}/photo")
+    gemerkt = client.get(f"/api/library/testgrids/{grid['id']}/photo?cell=1-2")
+
+    assert kaal.status_code == 200 and gemerkt.status_code == 200
+    assert gemerkt.headers["content-type"] == "image/jpeg"
+    assert gemerkt.content != kaal.content
+
+
+def test_the_mark_follows_the_alignment(client):
+    """
+    Dezelfde cel, twee uitlijningen: het merkteken hoort mee te schuiven. Anders
+    wijst hij naar een plek waar niets gebrand is.
+    """
+    from PIL import Image
+    from io import BytesIO
+
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    client.post(
+        f"/api/library/testgrids/{grid['id']}/photo",
+        files={"file": ("bord.jpg", _foto(), "image/jpeg")},
+    )
+
+    eerst = client.get(f"/api/library/testgrids/{grid['id']}/photo?cell=0-0").content
+    client.put(
+        f"/api/library/testgrids/{grid['id']}/alignment",
+        json={
+            "corners": [
+                {"x": 0.3, "y": 0.3},
+                {"x": 0.95, "y": 0.3},
+                {"x": 0.95, "y": 0.95},
+                {"x": 0.3, "y": 0.95},
+            ]
+        },
+    )
+    daarna = client.get(f"/api/library/testgrids/{grid['id']}/photo?cell=0-0").content
+
+    assert eerst != daarna
+    # En het blijft een leesbare foto van hetzelfde formaat.
+    assert Image.open(BytesIO(daarna)).size == Image.open(BytesIO(eerst)).size
+
+
+def test_marking_a_cell_that_is_not_there_is_a_clean_error(client):
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    client.post(
+        f"/api/library/testgrids/{grid['id']}/photo",
+        files={"file": ("bord.jpg", _foto(), "image/jpeg")},
+    )
+
+    assert client.get(f"/api/library/testgrids/{grid['id']}/photo?cell=9-9").status_code == 409
+    assert client.get(f"/api/library/testgrids/{grid['id']}/photo?cell=kwart").status_code == 422
+
+
+# ------------------------------------------ vorige instelling onthouden (T3)
+
+def test_the_next_grid_starts_where_the_last_one_for_this_material_left_off(client):
+    """
+    T3: wie wekelijks 3 mm berk test, stelt elke week hetzelfde in. Het vorige
+    raster ís die instelling; daar is geen aparte voorkeurentabel voor nodig.
+    """
+    berk = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    client.post(
+        "/api/library/testgrids",
+        json={**BASE, "material_id": berk["id"], "thickness_mm": 3, "speed_max": 40},
+    )
+
+    vorige = client.get(f"/api/library/testgrids/defaults?material_id={berk['id']}").json()
+
+    assert vorige["speed_max"] == 40
+    assert vorige["thickness_mm"] == 3
+    assert vorige["operation"] == "snijden"
+    assert vorige["row_axis"] == "speed"
+
+
+def test_defaults_are_per_material(client):
+    berk = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    acryl = client.post("/api/library/materials", json={"name": "Acryl"}).json()
+    client.post(
+        "/api/library/testgrids", json={**BASE, "material_id": berk["id"], "speed_max": 40}
+    )
+
+    assert client.get(f"/api/library/testgrids/defaults?material_id={acryl['id']}").json() is None
+    assert (
+        client.get(f"/api/library/testgrids/defaults?material_id={berk['id']}").json()[
+            "speed_max"
+        ]
+        == 40
+    )
+
+
+def test_defaults_remember_a_fixed_quantity_too(client):
+    """De vaste snelheid van een intervalraster hoort er de volgende keer weer te staan."""
+    berk = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    client.post("/api/library/testgrids", json={**RASTER, "material_id": berk["id"]})
+
+    vorige = client.get(f"/api/library/testgrids/defaults?material_id={berk['id']}").json()
+
+    assert vorige["row_axis"] == "interval"
+    assert (vorige["speed_min"], vorige["speed_steps"]) == (200, 1)
+
+
+# ------------------------------------------- ruimte voor de rijlabels
+
+
+def test_the_plan_says_how_much_room_the_row_labels_need():
+    """
+    De rijlabels worden links van het raster gegraveerd. Bij Start X 10 mm en
+    driecijferige snelheden staan ze buiten het bed: de machine brandt ze niet
+    en het bord is naderhand onleesbaar. Het plan meldt dat vóór het branden.
+    """
+    krap = plan_grid(**{**BASE, "speed_min": 100, "speed_max": 300, "origin_x_mm": 10})[0]
+
+    assert krap["label_margin_mm"] > 10
+    assert krap["label_room"] is False
+
+    ruim = plan_grid(
+        **{**BASE, "speed_min": 100, "speed_max": 300, "origin_x_mm": 40}
+    )[0]
+
+    assert ruim["label_room"] is True
+
+
+# ------------------------- kan deze engine wel rasteren? (gemeten, niet gehoopt)
+
+
+def test_the_preview_says_whether_this_engine_can_burn_a_raster(client):
+    """
+    `op raster` zet zijn vormen tijdens het plannen om in een bitmap via
+    `render-op/make_raster`. Die dienst registreert upstream **alleen de
+    wxPython-GUI** (`meerk40t/gui/plugin.py:79`); zonder hem neemt `preprocess`
+    de `strip_rasters`-tak, gooit de laag zijn kinderen weg en komt het bord
+    blanco uit de machine.
+
+    Onze plugin registreert er sinds `openkerf_api/rasterizer.py` zelf een. Deze
+    engine kán dus rasteren, en het voorbeeld hoort dat te melden. Wordt dit
+    weer `False`, dan is de rasteraar niet geladen en brandt elke rasterlaag
+    niets — dan hoort de blokkade in TestGrid.svelte terug.
+    """
+    antwoord = client.post("/api/library/testgrids/preview", json=RASTER).json()
+
+    assert antwoord["engine"]["raster"] is True
+
+
+def test_a_raster_grid_produces_cutcode_on_a_headless_engine(kernel, client):
+    """
+    De meting onder de melding hierboven. Voorheen gaf ditzelfde ontwerp
+    0 stukken over 0,0 s — negen rasterlagen die niets deden. Met de rasteraar
+    uit `openkerf_api/rasterizer.py` levert het werk dat tijd kost.
+
+    De tegenproef staat eronder: zonder de dienst is het weer nul.
+    """
+    client.post("/api/library/testgrids", json=RASTER)
+    # De labellaag brandt wél (die is een engrave); alleen de sweep meten.
+    for operation in kernel.elements.ops():
+        if getattr(operation, "label", None) == "Raster-labels":
+            operation.output = False
+
+    exact = client.get("/api/job/estimate?exact=1").json()
+
+    assert exact["parts"] >= 1
+    assert exact["seconds"] > 0
+    assert len([laag for laag in exact["layers"] if laag["type"] == "op raster"]) == 9
+
+
+def test_without_a_rasteriser_the_same_grid_burns_nothing(kernel, client):
+    """
+    Waarom de rasteraar er moest komen, in één meting: haal hem weg en het bord
+    is leeg. Dit is de stand waarin MeerK40t headless uit de doos draait.
+    """
+    kernel.root.register("render-op/make_raster", None)
+    client.post("/api/library/testgrids", json=RASTER)
+    for operation in kernel.elements.ops():
+        if getattr(operation, "label", None) == "Raster-labels":
+            operation.output = False
+
+    exact = client.get("/api/job/estimate?exact=1").json()
+
+    assert exact["parts"] == 0
+    assert exact["seconds"] == 0.0
+
+
+def test_a_vector_grid_does_produce_cutcode(kernel, client):
+    """Het tegenbewijs: snijden en vectorgraveren branden wel, ook headless."""
+    client.post("/api/library/testgrids", json=BASE)
+    for operation in kernel.elements.ops():
+        if getattr(operation, "label", None) == "Raster-labels":
+            operation.output = False
+
+    exact = client.get("/api/job/estimate?exact=1").json()
+
+    # `parts` telt hier de stukken van het snijplan, niet de vormen; wat telt is
+    # dat er iets te branden is en dat het tijd kost.
+    assert exact["parts"] >= 1
+    assert exact["seconds"] > 0
+
+
+def test_the_plan_prices_the_board_in_seconds():
+    """
+    Wat het gaat kosten, vóór er iets getekend is. Interval als as kan de
+    brandtijd stil vermenigvuldigen; dan hoort er een getal te staan dat
+    meebeweegt.
+    """
+    snijden = plan_grid(**BASE)[0]
+    assert snijden["seconds"] > 0
+
+    # Zelfde bord, halve snelheid: ruwweg dubbele brandtijd.
+    langzamer = plan_grid(**{**BASE, "speed_min": 2.5, "speed_max": 12.5})[0]
+    assert langzamer["seconds"] > snijden["seconds"] * 1.5
+
+    # En een fijner interval kost meer regels, dus meer tijd.
+    grof = plan_grid(**{**RASTER, "interval_min": 0.3, "interval_max": 0.4})[0]
+    fijn = plan_grid(**{**RASTER, "interval_min": 0.05, "interval_max": 0.06})[0]
+    assert fijn["seconds"] > grof["seconds"] * 4, (fijn["seconds"], grof["seconds"])
+
+
+def test_a_preset_says_whether_its_photo_is_aligned(client):
+    """
+    De markering op de foto valt zonder uitlijning terug op vier
+    standaardhoeken, en dan ligt de omtrek er ongeveer. De bibliotheek moet dat
+    kunnen zeggen; anders suggereert de kaart een precisie die er niet is.
+    """
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    grid = client.post(
+        "/api/library/testgrids", json={**BASE, "material_id": material["id"]}
+    ).json()
+    cell = grid["cells"][0]
+    client.post(
+        f"/api/library/testgrids/{grid['id']}/presets",
+        json={"cells": [{"row": cell["row"], "column": cell["column"]}]},
+    )
+
+    zonder = client.get("/api/library/presets?all_machines=true").json()[0]
+    assert zonder["grid_aligned"] is False
+
+    client.put(
+        f"/api/library/testgrids/{grid['id']}/alignment",
+        json={"corners": [{"x": 0.1, "y": 0.1}, {"x": 0.9, "y": 0.1},
+                          {"x": 0.9, "y": 0.9}, {"x": 0.1, "y": 0.9}]},
+    )
+
+    met = client.get("/api/library/presets?all_machines=true").json()[0]
+    assert met["grid_aligned"] is True
+
+
+def test_a_preset_without_a_grid_has_no_alignment_claim(client):
+    """Een handmatige preset heeft geen raster, dus ook geen uitlijning."""
+    material = client.post("/api/library/materials", json={"name": "Acryl"}).json()
+    client.post(
+        "/api/library/presets",
+        json={
+            "material_id": material["id"],
+            "operation": "snijden",
+            "speed_mm_s": 12,
+            "power_percent": 65,
+        },
+    )
+
+    preset = client.get("/api/library/presets?all_machines=true").json()[0]
+
+    assert preset["grid_id"] is None
+    assert preset["grid_aligned"] is False
+
+
+# ------------------------- vanaf de hoek of vanaf het midden (gat T9)
+
+
+def test_the_corner_is_still_the_default():
+    """Wat er stond blijft staan: Start X/Y is de hoek van de vakjes."""
+    plan, cells = plan_grid(**BASE)
+
+    assert plan["anchor"] == "corner"
+    assert (plan["origin_x_mm"], plan["origin_y_mm"]) == (10, 10)
+    assert (cells[0]["x_mm"], cells[0]["y_mm"]) == (10, 10)
+
+
+def test_centring_puts_the_middle_of_the_board_on_the_point():
+    """
+    Een testbord leg je op een reststuk, en dan weet je waar het mídden van dat
+    stuk ligt. Het midden slaat op het hele bord: het raster centreren terwijl
+    de rijlabels er links buiten steken, legt het bord scheef.
+    """
+    plan, _ = plan_grid(**{**BASE, "anchor": "center", "origin_x_mm": 200, "origin_y_mm": 150})
+
+    assert plan["center_x_mm"] == pytest.approx(200)
+    assert plan["center_y_mm"] == pytest.approx(150)
+    assert plan["outer_x_mm"] == pytest.approx(200 - plan["outer_width_mm"] / 2)
+    assert plan["outer_y_mm"] == pytest.approx(150 - plan["outer_height_mm"] / 2)
+    # De vakjes zijn opgeschoven, niet het opschrift eromheen.
+    assert plan["origin_x_mm"] > plan["outer_x_mm"]
+    assert plan["width_mm"] == 28
+
+
+def test_a_centred_board_is_wider_than_its_cells():
+    """De gemelde maat is inclusief labels en opschrift — precies wat T11 miste."""
+    plan, _ = plan_grid(**BASE)
+
+    assert plan["outer_width_mm"] > plan["width_mm"]
+    assert plan["outer_height_mm"] > plan["height_mm"]
+
+
+def test_an_unknown_anchor_is_refused():
+    with pytest.raises(DesignError):
+        plan_grid(**{**BASE, "anchor": "ergens"})
+
+
+def test_the_reported_size_covers_everything_that_is_drawn(kernel, client):
+    """
+    Gemeten in plaats van gerekend: het gemelde kader moet elke vorm bevatten
+    die er werkelijk gebrand wordt, opschrift en randkader inbegrepen. Dit is
+    de test die een verschoven schatting vangt.
+    """
+    plan = client.post(
+        "/api/library/testgrids/preview",
+        json={**BASE, "origin_x_mm": 60, "origin_y_mm": 60, "border": True},
+    ).json()["plan"]
+    client.post(
+        "/api/library/testgrids",
+        json={**BASE, "origin_x_mm": 60, "origin_y_mm": 60, "border": True},
+    )
+
+    snapshot = DesignReader(kernel).snapshot()
+    per_mm = snapshot["units_per_mm"]
+    for element in snapshot["elements"]:
+        if not element["bounds"]:
+            continue
+        x0, y0, x1, y1 = (v / per_mm for v in element["bounds"])
+        assert x0 >= plan["outer_x_mm"] - 0.5, element["id"]
+        assert y0 >= plan["outer_y_mm"] - 0.5, element["id"]
+        assert x1 <= plan["outer_x_mm"] + plan["outer_width_mm"] + 0.5, element["id"]
+        assert y1 <= plan["outer_y_mm"] + plan["outer_height_mm"] + 0.5, element["id"]
+
+
+def test_a_centred_board_that_runs_off_the_bed_is_refused(kernel, client):
+    response = client.post(
+        "/api/library/testgrids",
+        json={**BASE, "anchor": "center", "origin_x_mm": 315, "origin_y_mm": 150},
+    )
+
+    assert response.status_code == 409
+    assert "bed" in str(response.json()["detail"])
+    assert len(list(kernel.elements.elems())) == 0
+
+
+def test_a_board_that_starts_left_of_the_bed_is_reported_not_refused():
+    """
+    Zoals bij T11: links uitsteken kost je de opschriften, niet het raster.
+    Melden dus, en niet blokkeren — het bord zelf brandt gewoon.
+    """
+    plan, _ = plan_grid(**{**BASE, "origin_x_mm": 2})
+
+    assert plan["board_room"] is False
+    assert plan["label_room"] is False
+
+
+# ------------------------------- tekst en rand zijn te kiezen (gat T10)
+
+
+def test_text_can_be_switched_off(kernel, client):
+    """Voor een proefje op een restje is het opschrift verspilling."""
+    client.post("/api/library/testgrids", json={**BASE, "text": False})
+
+    snapshot = DesignReader(kernel).snapshot()
+    assert [op for op in snapshot["operations"] if op["label"] == "Raster-labels"] == []
+    assert len(snapshot["elements"]) == 9  # alleen de vakjes
+
+
+def test_text_is_on_by_default(kernel, client):
+    """Het bord is een bewijsstuk; het opschrift hoort er standaard op."""
+    client.post("/api/library/testgrids", json=BASE)
+
+    snapshot = DesignReader(kernel).snapshot()
+    assert [op for op in snapshot["operations"] if op["label"] == "Raster-labels"]
+
+
+def test_a_board_without_text_needs_no_room_beside_it():
+    plan, _ = plan_grid(**{**BASE, "text": False})
+
+    assert plan["outer_width_mm"] == plan["width_mm"]
+    assert plan["outer_height_mm"] == plan["height_mm"]
+    assert plan["label_room"] is True
+
+
+def test_the_border_frames_the_whole_board(kernel, client):
+    """
+    Een kader dwars door de rijlabels maakt het bord juist onleesbaar, dus het
+    ligt om alles heen — en het brandt in de labellaag, niet in de sweep.
+    """
+    grid = client.post(
+        "/api/library/testgrids", json={**BASE, "origin_x_mm": 40, "border": True}
+    ).json()
+
+    snapshot = DesignReader(kernel).snapshot()
+    per_mm = snapshot["units_per_mm"]
+    labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"][0]
+    dozen = [
+        [v / per_mm for v in e["bounds"]]
+        for e in snapshot["elements"]
+        if e["id"] in labels["element_ids"] and e["bounds"]
+    ]
+    kader = max(dozen, key=lambda d: (d[2] - d[0]) * (d[3] - d[1]))
+    # Elke andere vorm ligt erbinnen — ook de vakjes.
+    for cell in grid["cells"]:
+        element = next(e for e in snapshot["elements"] if e["id"] == cell["element_id"])
+        x0, y0, x1, y1 = (v / per_mm for v in element["bounds"])
+        assert kader[0] <= x0 and kader[1] <= y0
+        assert x1 <= kader[2] and y1 <= kader[3]
+
+
+def test_there_is_no_border_unless_you_ask(kernel, client):
+    """Nieuw werk aanzetten voor iedereen die niets vroeg, verandert stil zijn bord."""
+    client.post("/api/library/testgrids", json=BASE)
+
+    snapshot = DesignReader(kernel).snapshot()
+    # Negen vakjes, drie rijlabels, drie kolomlabels, één opschrift.
+    assert len(snapshot["elements"]) == 16
+
+
+def test_the_label_layer_can_be_set(kernel, client):
+    """80 mm/s @30% werkt op berken en niet op acryl."""
+    client.post(
+        "/api/library/testgrids",
+        json={**BASE, "label_speed_mm_s": 120, "label_power_percent": 18},
+    )
+
+    labels = next(
+        op for op in kernel.elements.ops() if getattr(op, "label", "") == "Raster-labels"
+    )
+    assert labels.speed == 120
+    assert labels.power == pytest.approx(180)  # 0-1000 in de engine
+
+
+def test_the_label_layer_falls_back_to_what_it_always_was(kernel, client):
+    client.post("/api/library/testgrids", json=BASE)
+
+    labels = next(
+        op for op in kernel.elements.ops() if getattr(op, "label", "") == "Raster-labels"
+    )
+    assert labels.speed == 80
+    assert labels.power == pytest.approx(300)
+
+
+def test_an_impossible_label_layer_is_refused():
+    with pytest.raises(DesignError):
+        plan_grid(**{**BASE, "label_power_percent": 140})
+
+
+def test_the_choices_survive_into_the_stored_grid(client):
+    """
+    Zonder dit vergeet T3 hoe je het bord neerlegde: de volgende keer stond het
+    weer vanaf de hoek, met een opschrift dat je net had uitgezet.
+    """
+    material = client.post("/api/library/materials", json={"name": "Vilt"}).json()
+    client.post(
+        "/api/library/testgrids",
+        json={
+            **BASE,
+            "material_id": material["id"],
+            "anchor": "center",
+            "origin_x_mm": 200,
+            "origin_y_mm": 150,
+            "text": False,
+            "border": True,
+        },
+    )
+
+    vorige = client.get(
+        f"/api/library/testgrids/defaults?material_id={material['id']}"
+    ).json()
+
+    assert vorige["anchor"] == "center"
+    assert vorige["text_enabled"] is False
+    assert vorige["border_enabled"] is True
+    # En het punt dat je intikte komt terug, niet de hoek die eruit gerekend is.
+    assert vorige["anchor_x_mm"] == pytest.approx(200)
+    assert vorige["anchor_y_mm"] == pytest.approx(150)
+
+
+# --------------------------------- benoemde generatorpresets (gat T7)
+
+
+def test_a_recipe_keeps_its_settings_under_a_name(client):
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+
+    recept = client.post(
+        "/api/library/testgrids/recipes",
+        json={
+            "name": "Berk snijden",
+            "material_id": material["id"],
+            "settings": {**BASE, "speed_mm_s": 12},
+        },
+    ).json()
+
+    assert recept["name"] == "Berk snijden"
+    assert recept["settings"]["operation"] == "snijden"
+    assert recept["settings"]["speed_min"] == 5
+    assert recept["material_name"] == "Berken"
+
+
+def test_two_recipes_for_one_material_live_side_by_side(client):
+    """
+    Precies wat T3 niet kon: "berk snijden" naast "berk graveren". Eén
+    instelling per materiaal onthouden dekt de wekelijkse proef, niet de twee
+    recepten die je afwisselt.
+    """
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    for naam, bewerking in (("Snijden", "snijden"), ("Graveren", "graveren-vector")):
+        client.post(
+            "/api/library/testgrids/recipes",
+            json={
+                "name": naam,
+                "material_id": material["id"],
+                "settings": {**BASE, "operation": bewerking},
+            },
+        )
+
+    recepten = client.get(
+        f"/api/library/testgrids/recipes?material_id={material['id']}"
+    ).json()
+
+    assert [r["name"] for r in recepten] == ["Graveren", "Snijden"]  # alfabetisch
+    assert {r["settings"]["operation"] for r in recepten} == {
+        "snijden",
+        "graveren-vector",
+    }
+
+
+def test_saving_the_same_name_twice_updates_it(client):
+    """Anders staan er twee regels waartussen je niet kunt kiezen."""
+    client.post(
+        "/api/library/testgrids/recipes",
+        json={"name": "Snel", "settings": {**BASE, "cell_mm": 8}},
+    )
+    client.post(
+        "/api/library/testgrids/recipes",
+        json={"name": "snel", "settings": {**BASE, "cell_mm": 12}},
+    )
+
+    recepten = client.get("/api/library/testgrids/recipes").json()
+
+    assert len(recepten) == 1
+    assert recepten[0]["settings"]["cell_mm"] == 12
+
+
+def test_a_recipe_without_a_material_shows_up_everywhere(client):
+    """"Snelle 4×4" hoort bij geen plank; juist bij iets nieuws wil je hem zien."""
+    material = client.post("/api/library/materials", json={"name": "Acryl"}).json()
+    client.post("/api/library/testgrids/recipes", json={"name": "Snel", "settings": BASE})
+
+    recepten = client.get(
+        f"/api/library/testgrids/recipes?material_id={material['id']}"
+    ).json()
+
+    assert [r["name"] for r in recepten] == ["Snel"]
+    assert recepten[0]["material_id"] is None
+
+
+def test_a_recipe_for_another_material_stays_out_of_the_way(client):
+    berk = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    acryl = client.post("/api/library/materials", json={"name": "Acryl"}).json()
+    client.post(
+        "/api/library/testgrids/recipes",
+        json={"name": "Berk snijden", "material_id": berk["id"], "settings": BASE},
+    )
+
+    assert client.get(
+        f"/api/library/testgrids/recipes?material_id={acryl['id']}"
+    ).json() == []
+
+
+def test_a_nameless_recipe_is_refused(client):
+    response = client.post(
+        "/api/library/testgrids/recipes", json={"name": "  ", "settings": BASE}
+    )
+
+    assert response.status_code == 409
+
+
+def test_rubbish_is_kept_out_of_a_recipe(client):
+    """Een recept is een JSON-blob, en dat is waar rommel binnenkomt."""
+    recept = client.post(
+        "/api/library/testgrids/recipes",
+        json={"name": "Snel", "settings": {**BASE, "drop table": "x", "cell_mm": "acht"}},
+    ).json()
+
+    assert "drop table" not in recept["settings"]
+    assert "cell_mm" not in recept["settings"]
+
+
+def test_a_recipe_can_be_thrown_away(client):
+    recept = client.post(
+        "/api/library/testgrids/recipes", json={"name": "Snel", "settings": BASE}
+    ).json()
+
+    assert client.delete(f"/api/library/testgrids/recipes/{recept['id']}").status_code == 200
+    assert client.get("/api/library/testgrids/recipes").json() == []
+    assert client.delete(f"/api/library/testgrids/recipes/{recept['id']}").status_code == 409
+
+
+def test_a_recipe_reads_like_a_previous_grid(client):
+    """
+    Eén vorm voor beide: de wizard hoeft niet te weten of hij een vorig raster
+    of een recept invult. Dat was de reden om T7 óp T3 te bouwen.
+    """
+    material = client.post("/api/library/materials", json={"name": "Berken"}).json()
+    client.post(
+        "/api/library/testgrids",
+        json={**BASE, "material_id": material["id"]},
+    )
+    vorige = client.get(
+        f"/api/library/testgrids/defaults?material_id={material['id']}"
+    ).json()
+    recept = client.post(
+        "/api/library/testgrids/recipes",
+        json={"name": "Zelfde", "material_id": material["id"], "settings": vorige},
+    ).json()
+
+    gedeeld = set(recept["settings"]) & set(vorige)
+    assert "speed_min" in gedeeld and "cell_mm" in gedeeld
+    for sleutel in gedeeld:
+        assert recept["settings"][sleutel] == vorige[sleutel], sleutel

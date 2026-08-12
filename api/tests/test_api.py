@@ -37,6 +37,12 @@ def test_devices_endpoint(client):
 
 def test_websocket_sends_snapshot_on_connect(client):
     with client.websocket_connect("/api/ws") as ws:
+        # Eerst stelt de server zich voor: aan dit id ziet een herverbindende
+        # client of hij tegen hetzelfde proces praat als vóór de stilte, of dat
+        # de engine herstart is en de pagina van een ander leven is (gat E2).
+        hello = json.loads(ws.receive_text())
+        assert hello["type"] == "hello"
+        assert hello["instance"]
         payload = json.loads(ws.receive_text())
         assert payload["type"] == "snapshot"
         assert payload["data"]["devices"]
@@ -72,7 +78,22 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/elements/delete",
         "/api/design/elements/duplicate",
         "/api/design/operations",
+        # Volgorde en soort van een laag. Alle drie schrijven in de
+        # bewerkingenboom en niet aan de machine: `move` schuift een laag op in
+        # de brandvolgorde (L1), `sort` zet graveren vóór snijden in één
+        # handeling (L2), en `type` vervangt een laag door een van een ander
+        # soort met de vormen erin (L3) — dat laatste is een POST en geen PATCH
+        # omdat de laag een nieuw id krijgt. Zie de sectie "Lagen" in
+        # FEATURE-GAPS.md.
         "/api/design/operations/{operation_id}/move",
+        # Gat L2: graveren vóór snijden in één handeling. Schrijft aan de
+        # brandvolgorde in de boom, dus achter dezelfde poort.
+        "/api/design/operations/sort",
+        # Gat L3: het soort bewerking van een bestaande laag. Vervangt de knoop
+        # en verhuist de referenties — een eigen route, want het id verandert.
+        "/api/design/operations/{operation_id}/type",
+        "/api/design/operations/sort",
+        "/api/design/operations/{operation_id}/type",
         "/api/design/align",
         "/api/design/offset",
         "/api/design/simplify",
@@ -87,6 +108,16 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/machine/jog",
         "/api/machine/focus",
         "/api/machine/frame",
+        # Gat J6: posities die deze machine onthoudt. Schrijft aan de settings
+        # van de device-service, dus achter dezelfde poort als bewegen.
+        "/api/machine/positions",
+        # Gat J12: het nulpunt van de gebruiker. Schrijft net als de posities
+        # aan de settings van de device-service, en het verplaatst het werk op
+        # weg naar de machine — dus zeker achter de poort.
+        "/api/machine/origin",
+        # Gat J11: snelheid en vermogen bijstellen tijdens een lopende job.
+        # Dit stuurt realtime bytes naar de driver; dat is de machine aanraken.
+        "/api/job/adjust",
         "/api/machine/unlock",
         "/api/machine/lock",
         "/api/design/resize",
@@ -132,6 +163,15 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/library/testgrids/{grid_id}/photo",
         "/api/library/testgrids/{grid_id}/remove-from-design",
         "/api/library/testgrids/{grid_id}/presets",
+        # Gat T7: benoemde generatorinstellingen. Schrijft alleen in de
+        # bibliotheek — geen machine, geen ontwerp — maar wel in jouw
+        # bibliotheek, dus achter dezelfde poort als de rest daarvan.
+        "/api/library/testgrids/recipes",
+        # Gat E5: een machineprofiel inlezen. Uploaden schrijft een bestand in
+        # de uploadmap en importeren maakt een machine aan met instellingen die
+        # bepalen waar de kop heen gaat — allebei achter de poort.
+        "/api/machines/import/upload",
+        "/api/machines/import",
         # Rekent alleen; zie READ_ONLY_POSTS in test_write_actions.py.
         "/api/library/testgrids/preview",
     }
@@ -141,7 +181,12 @@ def test_write_routes_are_limited_to_the_known_set(client):
         for route in client.app.routes
         for method in getattr(route, "methods", set())
     }
-    assert methods <= {"GET", "HEAD", "POST", "PATCH", "DELETE"}
+    # PUT kwam erbij met `/api/library/testgrids/{grid_id}/alignment` (T4): de
+    # uitlijning van een testbord wordt in zijn geheel vervangen, niet deels
+    # bijgewerkt. Dat is verdedigbaar REST, maar het is wel de enige PUT in een
+    # API waar elke andere wijziging PATCH is — de keuze hoort bij de eigenaar
+    # van dat oppervlak, niet bij deze test.
+    assert methods <= {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
 
 
 def test_console_command_is_registered(kernel):

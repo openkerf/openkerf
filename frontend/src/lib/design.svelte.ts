@@ -61,6 +61,8 @@ export type DesignOperation = {
 	dpi: number | null;
 	overscan: string | null;
 	bidirectional: boolean;
+	/** Air assist tijdens deze laag (besluit B11). */
+	air_assist: boolean;
 	output: boolean;
 	element_ids: string[];
 	/** Gezet als deze laag een cel van een testraster is. */
@@ -115,7 +117,7 @@ function readLayerColors(): string[] {
 	// @tokens-mirror: exacte spiegel van --layer-1..10 in tokens.css. Alleen in
 	// gebruik tijdens het bouwen, wanneer er geen document is om uit te lezen.
 	const fallback = [
-		'#E5484D', '#F76B15', '#FFC53D', '#46A758', '#12A594',
+		'#E5484D', '#F76B15', '#FFC53D', '#0F9B32', '#12A594',
 		'#0090FF', '#8E4EC6', '#E93D82', '#8D6E63', '#607D8B'
 	];
 	if (typeof window === 'undefined') return fallback;
@@ -182,7 +184,32 @@ function bed(): [number, number, number] | null {
 	return rgb;
 }
 
+/**
+ * Uitkomsten onthouden per kleur en thema.
+ *
+ * Deze functie draait één keer per element per hertekening, en bij een
+ * themawissel opnieuw voor álles. Op vijfduizend paden kostte dat 145 ms —
+ * boven de grens van de stopwatch, en zichtbaar als een hapering. De uitkomst
+ * hangt alleen af van de kleur en de bedkleur, en een ontwerp heeft hooguit
+ * een handvol verschillende laagkleuren, dus onthouden scheelt bijna al het
+ * werk. De sleutel draagt het thema, zodat een wissel niet de oude waarde
+ * teruggeeft.
+ */
+const geheugen = new Map<string, string>();
+
 export function leesbaar(kleur: string): string {
+	const thema = typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? '');
+	const sleutel = `${thema}|${kleur}`;
+	const bekend = geheugen.get(sleutel);
+	if (bekend !== undefined) return bekend;
+	const uitkomst = bereken(kleur);
+	// Een ontwerp heeft een handvol kleuren; deze grens is er alleen zodat een
+	// pathologisch geval het geheugen niet opvreet.
+	if (geheugen.size < 512) geheugen.set(sleutel, uitkomst);
+	return uitkomst;
+}
+
+function bereken(kleur: string): string {
 	const ondergrond = bed();
 	const eigen = ontleed(kleur);
 	if (!ondergrond || !eigen) return kleur;
@@ -214,6 +241,40 @@ export function inktOp(kleur: string): string {
 	const wit = verschil(eigen, [255, 255, 255]);
 	const zwart = verschil(eigen, [0, 0, 0]);
 	return wit >= zwart ? 'var(--on-color)' : 'var(--void)';
+}
+
+/**
+ * Het laagnummer zoals het overal in de app staat (gat J7).
+ *
+ * Eén bron, want dit getal komt op drie plekken voor: de chip in de
+ * lagenlijst, het label bij de vorm op het canvas en de chip in de pre-flight.
+ * Liepen die uiteen, dan wijst het vangnet voor kleurenblindheid naar de
+ * verkeerde laag — erger dan geen nummer.
+ *
+ * Rastercellen tellen niet mee: die horen bij één testbord, staan in de lijst
+ * als één regel en hebben geen eigen plek in de brandvolgorde.
+ */
+export function laagNummer(
+	design: { operations?: DesignOperation[] } | null | undefined,
+	operationId: string | null | undefined
+): number | null {
+	if (!design?.operations || !operationId) return null;
+	const index = design.operations.filter((o) => !o.grid).findIndex((o) => o.id === operationId);
+	return index < 0 ? null : index + 1;
+}
+
+/** Steekt deze omhullende (in mm) buiten een kader van `breedte × hoogte`? */
+export function buitenKader(
+	box: { x: number; y: number; width: number; height: number },
+	kader: { width: number; height: number },
+	speling = 0.5
+): boolean {
+	return (
+		box.x < -speling ||
+		box.y < -speling ||
+		box.x + box.width > kader.width + speling ||
+		box.y + box.height > kader.height + speling
+	);
 }
 
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);
@@ -457,6 +518,30 @@ export class DesignStore {
 	/** Het palet met zijn geheugen; `null` zolang het nog niet geladen is. */
 	palette = $state<PaletteInfo | null>(null);
 
+	/**
+	 * Wat een laag op déze machine kan (besluit B11).
+	 *
+	 * Alleen wat de driver kent, komt op het scherm — dezelfde regel als bij de
+	 * Z-as. Standaard alles uit: liever een schakelaar die er even niet staat
+	 * dan een schakelaar die niets doet.
+	 */
+	layerCapabilities = $state<{ air_assist: boolean }>({ air_assist: false });
+
+	async loadCapabilities() {
+		try {
+			const response = await fetch('/api/design/capabilities');
+			if (response.ok) this.layerCapabilities = await response.json();
+		} catch {
+			// Onbereikbaar is niet hetzelfde als "kan het niet", maar het scherm
+			// moet iets tonen — en dan liever niets dan een dode schakelaar.
+		}
+	}
+
+	/** Het laagnummer zoals de chip het toont; zie `laagNummer` (gat J7). */
+	numberFor(operationId: string | null): number | null {
+		return laagNummer(this.design, operationId);
+	}
+
 	/** Wat deze kleur eerder deed, of niets als hij nog nooit gebruikt is. */
 	memoryFor(color: string): PaletteMemory | null {
 		const gezocht = color.trim().toLowerCase();
@@ -502,6 +587,9 @@ export class DesignStore {
 				// Het geheugen loopt mee met de boom: een bijgestelde snelheid is
 				// meteen wat die kleur "nu doet", ook in de strook onder het canvas.
 				void this.loadPalette();
+				// En wat de machine kán: van machine wisselen verandert welke
+				// schakelaars er in een laagrij thuishoren (besluit B11).
+				void this.loadCapabilities();
 			}
 		} catch {
 			// Verbinding weg: de statusbalk meldt dat al, hier niets doen.

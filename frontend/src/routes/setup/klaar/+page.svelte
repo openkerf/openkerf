@@ -13,6 +13,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { createStore } from '$lib/setup.svelte';
+	import { SheetStore } from '$lib/sheets.svelte';
 
 	const store = createStore();
 
@@ -20,9 +21,65 @@
 	let machine = $derived(store.machines.find((m) => m.path === machinePath) ?? null);
 	let geladen = $state(false);
 
+	/**
+	 * Het vel volgt de machine niet vanzelf (gat E2).
+	 *
+	 * Een vel is een stuk materiaal, geen kopie van het bed — dus meeschalen
+	 * zónder te vragen zou het restje van 200 × 300 dat je net hebt ingesteld
+	 * stilletjes oprekken tot bedmaat. Maar het omgekeerde is wat er nu gebeurt:
+	 * je stelt een bed van 610 × 406 in en begint je eerste ontwerp in een kader
+	 * van 310 × 210 dat van de vórige machine kwam en nergens op slaat.
+	 *
+	 * Vandaar dat het hier gevraagd wordt, op de enige plek waar de bedmaat net
+	 * veranderd is: één regel, twee knoppen, en het antwoord is definitief.
+	 */
+	const sheets = new SheetStore(() =>
+		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '')
+	);
+	let bed = $state<{ w: number; h: number } | null>(null);
+	/** Beantwoord (aangepast of laten staan): dan is de vraag weg. */
+	let velAntwoord = $state<'aangepast' | 'gelaten' | null>(null);
+
+	let velVraag = $derived.by(() => {
+		const vel = sheets.active;
+		if (!bed || !vel || velAntwoord) return null;
+		// Een tiende millimeter verschil is afronding, geen mismatch.
+		const afwijkt =
+			Math.abs(vel.width_mm - bed.w) > 0.5 || Math.abs(vel.height_mm - bed.h) > 0.5;
+		return afwijkt ? { vel, bed } : null;
+	});
+
+	function maat(value: number) {
+		return String(Math.round(value * 10) / 10).replace('.', ',');
+	}
+
+	async function velNaarBed() {
+		const vraag = velVraag;
+		if (!vraag) return;
+		if (await sheets.update(vraag.vel.id, { width_mm: bed!.w, height_mm: bed!.h }))
+			velAntwoord = 'aangepast';
+	}
+
 	onMount(async () => {
 		await store.loadMachines();
 		geladen = true;
+		// De bedmaat in millimeters komt uit de status: de instellingen van de
+		// engine geven "24.0in" terug, en dat is hier de verkeerde eenheid om
+		// mee te rekenen.
+		await sheets.load();
+		try {
+			const response = await fetch('/api/status');
+			if (!response.ok) return;
+			const state = await response.json();
+			const pad = $page.url.searchParams.get('machine') ?? '';
+			const dev =
+				(state.devices ?? []).find((d: { path: string }) => d.path === pad) ??
+				(state.devices ?? []).find((d: { active: boolean }) => d.active);
+			if (dev?.bed?.width_mm > 0 && dev?.bed?.height_mm > 0)
+				bed = { w: dev.bed.width_mm, h: dev.bed.height_mm };
+		} catch {
+			/* zonder bedmaat stellen we de vraag niet — beter niets dan een gok */
+		}
 	});
 
 	const STAPPEN = [
@@ -61,6 +118,38 @@
 			deksel open en zonder werkstuk — dan zie je of de kop beweegt zoals je verwacht zonder
 			dat er iets kan branden.
 		</p>
+
+		{#if velVraag}
+			<div class="velvraag">
+				<h2 class="kop">Gaat je vel mee naar dit bed?</h2>
+				<p>
+					<strong>{velVraag.vel.name}</strong> staat op
+					<span class="mono">{maat(velVraag.vel.width_mm)} × {maat(velVraag.vel.height_mm)} mm</span>,
+					het bed van {machine?.label ?? 'deze machine'} is
+					<span class="mono">{maat(velVraag.bed.w)} × {maat(velVraag.bed.h)} mm</span>.
+				</p>
+				<p class="muted">
+					Een vel is het stuk materiaal dat je erin legt, niet het bed zelf — dus als dit
+					een restje van {maat(velVraag.vel.width_mm)} mm breed is, klopt het zo.
+				</p>
+				<div class="velknoppen">
+					<button class="btn primary" disabled={sheets.busy} onclick={velNaarBed}>
+						Vel op bedmaat zetten
+					</button>
+					<button class="btn subtle" onclick={() => (velAntwoord = 'gelaten')}>
+						Laten staan
+					</button>
+				</div>
+				{#if sheets.error}<p class="fout" role="alert">{sheets.error}</p>{/if}
+			</div>
+		{:else if velAntwoord === 'aangepast' && sheets.active}
+			<p class="velgoed" role="status">
+				{sheets.active.name} staat nu op
+				<span class="mono"
+					>{maat(sheets.active.width_mm)} × {maat(sheets.active.height_mm)} mm</span
+				>.
+			</p>
+		{/if}
 
 		<h2>Van hier naar je eerste snede</h2>
 		<ol class="weg">
@@ -120,5 +209,48 @@
 	}
 	.tekst .muted {
 		font-size: var(--text-xs);
+	}
+
+	/* Een vraag, geen waarschuwing: er is niets stuk, er valt iets te kiezen.
+	   Daarom het accent in de rand en niet amber. */
+	.velvraag {
+		margin-top: var(--space-6);
+		padding: var(--space-4);
+		border: 1px solid var(--line);
+		border-left: 3px solid var(--accent);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+	}
+	.velvraag .kop {
+		margin: 0 0 var(--space-2);
+	}
+	.velvraag p {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-xs);
+	}
+	.velknoppen {
+		display: flex;
+		flex-wrap: wrap;
+		/* Twee uitkomsten die elkaar uitsluiten: ver genoeg uit elkaar om er met
+		   een duim niet naast te mikken. */
+		gap: var(--space-6);
+		margin-top: var(--space-3);
+	}
+	/* Met een handschoen aan is 37px te weinig; de knoppen in de setup zijn
+	   verder muisknoppen, dus dit staat hier en niet in de layout. */
+	@media (max-width: 1199px), (pointer: coarse) {
+		.velknoppen :global(.btn) {
+			min-height: 44px;
+		}
+	}
+	.velgoed {
+		margin-top: var(--space-6);
+		font-size: var(--text-xs);
+		color: var(--ok);
+	}
+	.fout {
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		color: var(--danger);
 	}
 </style>

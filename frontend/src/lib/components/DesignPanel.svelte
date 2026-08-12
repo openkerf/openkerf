@@ -311,6 +311,116 @@
 		if (await edits.moveLayer(id, direction)) onLayerChange?.();
 	}
 
+	/** Graveren vóór snijden, in één klik (gat L2). */
+	async function sorteerLagen() {
+		const uit = await edits.sortLayers();
+		if (uit.ok) onLayerChange?.();
+	}
+
+	/**
+	 * Het soort bewerking van een bestaande laag wijzigen (gat L3).
+	 *
+	 * De laag krijgt een nieuw id — de engine kan het type van een knoop niet
+	 * wisselen — dus de uitklap sluit: hij zou anders naar een laag wijzen die
+	 * niet meer bestaat.
+	 */
+	async function retypeLayer(id: string, type: string) {
+		const uit = await edits.retypeLayer(id, type);
+		if (!uit.ok) return;
+		editingLayer = null;
+		onLayerChange?.();
+	}
+
+	// ── Slepen om te herordenen (gat L1) ──────────────────────────────────────
+	//
+	// Niet de HTML5-sleep-API: die werkt niet op een aanraakscherm, en naast een
+	// laser is een tablet het gebruikelijke apparaat. Pointer-events werken op
+	// alle drie de apparaten met dezelfde code.
+	//
+	// De knoppen ↑/↓ in de uitklap blijven staan, en de greep zelf doet met de
+	// pijltjestoetsen hetzelfde — slepen is een extra weg, geen vervanging.
+	let slepen = $state<{ id: string; van: number; naar: number } | null>(null);
+	let rijElementen: (HTMLElement | null)[] = [];
+	let rijGrenzen: { top: number; midden: number }[] = [];
+
+	function startSleep(event: PointerEvent, id: string, index: number) {
+		if (!canEdit || edits.busy) return;
+		event.preventDefault();
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		// De maten één keer opmeten, aan het begin: tijdens het slepen verschuift
+		// de lijst zelf niet, en opnieuw meten per beweging kost een layout per
+		// muisbeweging.
+		rijGrenzen = rijElementen
+			.filter((el): el is HTMLElement => !!el)
+			.map((el) => {
+				const doos = el.getBoundingClientRect();
+				return { top: doos.top, midden: doos.top + doos.height / 2 };
+			});
+		slepen = { id, van: index, naar: index };
+	}
+
+	function beweegSleep(event: PointerEvent) {
+		if (!slepen) return;
+		let naar = 0;
+		for (let i = 0; i < rijGrenzen.length; i++) {
+			if (event.clientY > rijGrenzen[i].midden) naar = i + 1;
+		}
+		// Boven de eigen rij landen betekent: op die plek. Onder de eigen rij
+		// schuift alles ertussen één op, dus is de bestemming er één lager.
+		if (naar > slepen.van) naar -= 1;
+		naar = Math.min(Math.max(naar, 0), rijGrenzen.length - 1);
+		if (naar !== slepen.naar) slepen = { ...slepen, naar };
+	}
+
+	async function eindSleep() {
+		const beweging = slepen;
+		slepen = null;
+		if (!beweging || beweging.naar === beweging.van) return;
+		const uit = await edits.dropLayerAt(beweging.id, beweging.naar);
+		if (uit.ok) onLayerChange?.();
+	}
+
+	/**
+	 * Compacte lijst (gat L5).
+	 *
+	 * Gemeten: onze rij is 76 px op de desktop en 111 px op een aanraakscherm;
+	 * LightBurn doet 23–26 px. Boven de acht lagen is onze lijst daarmee een
+	 * scrollpartij. Compact zet identiteit en waarden op één regel in plaats van
+	 * twee — de velden blijven staan, want bijstellen naast een draaiende machine
+	 * mag geen submenu kosten. Dat is precies waarom dit paneel bestaat.
+	 *
+	 * De stand blijft bewaard: wie met vijftien lagen werkt, doet dat de hele
+	 * middag.
+	 */
+	let compact = $state(
+		typeof window !== 'undefined' && localStorage.getItem('openkerf.lagen-compact') === 'aan'
+	);
+
+	// Dezelfde volgorde als de server (`Drawing.BURN_ORDER`): eerst wat het
+	// oppervlak raakt, snijden als laatste. Hier alleen om te weten of de knop
+	// nog iets te doen heeft — sorteren zelf gebeurt in de engine.
+	const BRAND_ORDER: Record<string, number> = {
+		'op image': 0,
+		'op raster': 1,
+		'op engrave': 2,
+		'op dots': 3,
+		'op cut': 4
+	};
+
+	let gesorteerd = $derived.by(() => {
+		const rangen = plainLayers.map((o) => BRAND_ORDER[o.type] ?? 99);
+		return {
+			kanSorteren: rangen.some((rang, i) => i > 0 && rang < rangen[i - 1])
+		};
+	});
+
+	function compactSchakel() {
+		compact = !compact;
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('openkerf.lagen-compact', compact ? 'aan' : 'uit');
+		}
+	}
+
 	async function dropLayer(id: string) {
 		confirmDrop = null;
 		if (await edits.removeLayer(id)) onLayerChange?.();
@@ -328,6 +438,19 @@
 				dots: 'punten'
 			}[soort] ?? soort
 		);
+	}
+
+	/**
+	 * Het laagtype zoals de keuzebalk het kent.
+	 *
+	 * De engine noemt ze `op cut`; onze vier keuzes heten `cut`. Een
+	 * afbeeldingslaag (`op image`) heeft geen eigen keuze — die maakt de engine
+	 * zelf bij het plaatsen van een afbeelding — en valt onder rasteren, want dat
+	 * is wat hij doet.
+	 */
+	function soortVan(type: string): string {
+		const soort = String(type).replace(/^op /, '');
+		return soort === 'image' ? 'raster' : soort;
 	}
 
 	/** Vermogen zit in de engine op 0–1000; de gebruiker rekent in procenten. */
@@ -364,6 +487,22 @@
 		return inside === chosen.length ? 'all' : 'some';
 	}
 
+	/**
+	 * De drie waarden van een laag als één regel, voor de compacte stand.
+	 *
+	 * Met eenheden erbij, want "35 · 100 · 1" is een reeks getallen zonder
+	 * betekenis. Passes alleen als er meer dan één is: dat is het geval bij
+	 * hoogstens een paar lagen, en "1×" bij alle andere is ruis.
+	 */
+	function kort(op: { speed: number | null; power: number | null; passes: number | null }) {
+		const delen: string[] = [];
+		delen.push(op.speed === null ? '—' : `${op.speed}`);
+		const percent = powerPercent(op);
+		delen.push(percent === null ? '—' : `${percent}%`);
+		if ((op.passes ?? 1) > 1) delen.push(`${op.passes}×`);
+		return delen.join(' · ');
+	}
+
 	function describe(op: { speed: number | null; power: number | null }) {
 		const parts: string[] = [];
 		if (op.speed !== null) parts.push(`${op.speed} mm/s`);
@@ -374,10 +513,14 @@
 
 {#if show === 'selection' && strays.length}
 	<div class="section stray">
+		<!-- Zelfde woorden als de strook onder het canvas (gat C2): daar staat wat
+		     er aan de hand is, hier staat de uitweg. Twee plekken die hetzelfde
+		     probleem anders benoemen, laat de lezer denken dat het twee problemen
+		     zijn. -->
 		<p>
 			{strays.length}
-			{strays.length === 1 ? 'vorm ligt' : 'vormen liggen'} buiten het bed. Die
-			branden niet mee.
+			{strays.length === 1 ? 'vorm ligt' : 'vormen liggen'} buiten het bed — daar
+			komt de kop niet.
 		</p>
 		{#if canEdit}
 			<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('rescue')}>
@@ -881,6 +1024,45 @@
 				<span class="order-note mono">1 → {plainLayers.length} = brandvolgorde</span>
 			{/if}
 		</div>
+
+		{#if plainLayers.length > 1}
+			<!-- Twee handelingen over de hele lijst, boven de lijst. Sorteren is de
+			     enige knop hier die iets aan de job verandert; daarom staat de
+			     dichtheidsschakelaar rechts en apart. -->
+			<div class="lijst-balk">
+				{#if canEdit}
+					<button
+						class="rot"
+						disabled={edits.busy || !gesorteerd.kanSorteren}
+						title={gesorteerd.kanSorteren
+							? 'Zet de lagen op brandvolgorde: rasteren, graveren, punten, snijden als laatste'
+							: 'De lagen staan al op brandvolgorde'}
+						onclick={sorteerLagen}
+					>
+						<!-- Geen icoon alleen: "sorteren" is niet te tekenen zonder dat het
+						     op filteren lijkt. -->
+						Graveren vóór snijden
+					</button>
+				{/if}
+				<button
+					class="dichtheid"
+					aria-pressed={compact}
+					title={compact
+						? 'Compacte lijst — klik voor ruime rijen'
+						: 'Ruime lijst — klik voor compacte rijen'}
+					onclick={compactSchakel}
+				>
+					<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+						{#if compact}
+							<path d="M4 7h16M4 12h16M4 17h16" />
+						{:else}
+							<path d="M4 8h16M4 16h16" />
+						{/if}
+					</svg>
+					{compact ? 'Compact' : 'Ruim'}
+				</button>
+			</div>
+		{/if}
 		{#if !operations.length}
 			<p class="muted">
 				Nog geen lagen. Een laag is een bewerking — snijden, graveren of
@@ -893,11 +1075,88 @@
 			{@const percent = powerPercent(op)}
 			<div
 				class="layer"
+				class:compact
 				class:off={!op.output}
 				class:onzichtbaar={design.isLayerHidden(op.id)}
 				class:open
+				class:sleept={slepen?.id === op.id}
+				class:sleep-modus={slepen != null}
+				class:doel-boven={slepen != null && slepen.id !== op.id && slepen.naar === index && index < slepen.van}
+				class:doel-onder={slepen != null && slepen.id !== op.id && slepen.naar === index && index > slepen.van}
+				bind:this={rijElementen[index]}
 			>
 				<div class="ident">
+					{#if canEdit && plainLayers.length > 1}
+					<!-- De ordekolom in de linkermarge: eerder branden, slepen, later
+					     branden. Gat L9 — LightBurn heeft een altijd zichtbare ▲/▼-strip
+					     aan de rand van de lijst en wij hadden alleen slepen en de
+					     pijltjestoetsen op de greep; de zichtbare knop miste, en dat is
+					     de enige van de drie die zichzelf uitlegt.
+
+					     In de marge en niet in de rij: de rij is 280 px breed en elke
+					     pixel daarvan gaat naar de laagnaam (zie de opmerking bij .greep).
+					     De kolom is 14 px en kost de naam er vier. -->
+					<div class="ordekolom">
+						<!-- Alleen in de ruime stand: in de compacte is de rij 36 px hoog
+						     en dan zijn drie knoppen boven elkaar elk 12 px — een raakdoel
+						     dat je alleen per ongeluk raakt. Daar blijft de greep over, en
+						     die doet met de pijltjestoetsen hetzelfde. -->
+						{#if !compact}
+							<button
+								class="pijl"
+								aria-label="{op.label} eerder branden"
+								title={index === 0 ? 'Deze laag brandt al als eerste' : 'Eerder branden'}
+								disabled={edits.busy || index === 0}
+								onclick={() => moveLayer(op.id, 'up')}
+							>
+								<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 15 7-7 7 7" /></svg>
+							</button>
+						{/if}
+						<!-- Slepen om te herordenen (gat L1). Een eigen greep en niet de
+						     hele rij: die zit vol met schakelaars en velden, en dan sleep
+						     je de laag weg terwijl je het vermogen wilde bijstellen.
+						     De pijltjestoetsen doen hier hetzelfde als slepen, zodat dit
+						     zonder muis en zonder de uitklap ook werkt. -->
+						<button
+							class="greep"
+							aria-label="Volgorde van {op.label} — sleep, of gebruik de pijltjestoetsen"
+							title="Sleep om te herordenen (of pijltje omhoog/omlaag)"
+							disabled={edits.busy}
+							onpointerdown={(e) => startSleep(e, op.id, index)}
+							onpointermove={beweegSleep}
+							onpointerup={eindSleep}
+							onpointercancel={() => (slepen = null)}
+							onkeydown={(e) => {
+								if (e.key === 'ArrowUp' && index > 0) {
+									e.preventDefault();
+									moveLayer(op.id, 'up');
+								} else if (e.key === 'ArrowDown' && index < plainLayers.length - 1) {
+									e.preventDefault();
+									moveLayer(op.id, 'down');
+								}
+							}}
+						>
+							<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+								<circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+								<circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+								<circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+							</svg>
+						</button>
+						{#if !compact}
+							<button
+								class="pijl"
+								aria-label="{op.label} later branden"
+								title={index === plainLayers.length - 1
+									? 'Deze laag brandt al als laatste'
+									: 'Later branden'}
+								disabled={edits.busy || index === plainLayers.length - 1}
+								onclick={() => moveLayer(op.id, 'down')}
+							>
+								<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7" /></svg>
+							</button>
+						{/if}
+					</div>
+					{/if}
 					<!-- Het nummer op de chip ís de brandvolgorde. Klikken opent de
 					     laag, dus de kleur is ook de weg naar zijn instellingen. -->
 					<button
@@ -948,7 +1207,17 @@
 						     uitlijnkader op het canvas houden zonder het te branden is
 						     een standaardtruc, en met één schakelaar kan dat niet.
 						     Zichtbaarheid is een kijkstand: die gaat niet naar de engine
-						     en verandert dus niets aan wat er gebrand wordt. -->
+						     en verandert dus niets aan wat er gebrand wordt.
+
+						     In de compacte stand verhuist deze naar de uitklap. Gemeten op
+						     een tablet: met beide schakelaars van 44 px naast elkaar houdt de
+						     laagnaam 30 px over en staat er "Sni…" — en een lijst waarin je
+						     de lagen niet kunt uitéénhouden is geen compacte lijst maar een
+						     onleesbare. Meebranden blijft in de rij, want dat is de
+						     schakelaar waar je tijdens het werk aan zit; verbergen doe je
+						     één keer. Dát een laag verborgen is, blijft in de rij staan als
+						     woord. -->
+						{#if !compact}
 						<button
 							class="oog"
 							class:uit={design.isLayerHidden(op.id)}
@@ -973,21 +1242,41 @@
 								</svg>
 							{/if}
 						</button>
-						<button
-							class="more"
-							title={open ? 'Sluiten' : 'Meer instellingen'}
-							aria-expanded={open}
-							aria-label="Meer instellingen voor {op.label}"
-							onclick={() => (editingLayer = open ? null : op.id)}
-						>⋯</button>
+						{/if}
+						{#if !compact}
+							<!-- In de compacte stand valt deze weg: de chip doet precies
+							     hetzelfde en die staat er altijd. Eén weg naar de uitklap is
+							     genoeg als de rij 34 px hoog moet blijven. -->
+							<button
+								class="more"
+								title={open ? 'Sluiten' : 'Meer instellingen'}
+								aria-expanded={open}
+								aria-label="Meer instellingen voor {op.label}"
+								onclick={() => (editingLayer = open ? null : op.id)}
+							>⋯</button>
+						{/if}
 					{/if}
 				</div>
 
 				<!-- Snelheid, vermogen en passes staan als velden in de rij zelf.
 				     Dat is de hele reden dat dit paneel bestaat: bijstellen naast
-				     een draaiende machine mag geen submenu kosten. -->
+				     een draaiende machine mag geen submenu kosten.
+
+				     Compact (gat L5) is de uitzondering: daar staan de waarden als één
+				     leesbare regel en verhuizen de velden naar de uitklap. Drie velden
+				     naast een naam en drie schakelaars passen niet in een paneel van
+				     280 px zonder om te breken, en dan is de rij weer twee regels hoog
+				     en heb je niets gewonnen. -->
 				<div class="vals">
-					{#if canEdit}
+					{#if canEdit && compact}
+						<button
+							class="kort mono"
+							title="Snelheid, vermogen en passes — klik om ze bij te stellen"
+							aria-expanded={open}
+							aria-label="Instellingen van {op.label}: {kort(op)}"
+							onclick={() => (editingLayer = open ? null : op.id)}
+						>{kort(op)}</button>
+					{:else if canEdit}
 						<label class="val">
 							<input
 								class="mono"
@@ -1044,6 +1333,43 @@
 						     branden. Twee aparte woorden, want twee aparte standen. -->
 						<span class="tag zicht">verborgen</span>
 					{/if}
+					{#if design.layerCapabilities.air_assist && (compact || op.air_assist)}
+						<!-- Air assist in de rij (besluit B11, gat L10).
+						     Stond hier als dood woord zodra hij aanstond; nu is het een
+						     schakelaar, want of de blazer meedoet is het verschil tussen een
+						     schone snede en een geschroeide rand, en dat zet je per
+						     materiaal om. Uitzetten kostte tot nu toe een tik naar de
+						     uitklap en een tik terug.
+
+						     Waarom hij in de ruime stand alleen verschijnt als hij áán
+						     staat, en in de compacte altijd: gemeten met vier lagen op
+						     1440 en 1024. In de compacte stand past de pil naast de
+						     waarderegel en blijft de rij 36 px (desktop) en 54 px (tablet)
+						     — precies de maten uit L5. In de ruime stand is de waarderegel
+						     al vol (215 van 218 px op desktop) en valt de pil op een derde
+						     regel: 76 → 101 px, en op tablet 111 → 159 px. Dat is de helft
+						     van de lijst kwijt voor een schakelaar die je zelden aanraakt.
+						     LightBurn krijgt hem er wél bij in één regel, maar hun paneel is
+						     480–512 px; wij hebben er 280.
+
+						     Aanzetten gebeurt in de ruime stand dus in de uitklap, uitzetten
+						     kan vanaf de rij — dat is de kant waar haast bij zit.
+
+						     De pil verschijnt alleen als de driver een commando heeft dat de
+						     blazer werkelijk schakelt; op een Ruida is dat er niet (L8). -->
+						<button
+							class="tag lucht"
+							class:uit={!op.air_assist}
+							role="switch"
+							aria-checked={op.air_assist}
+							aria-label="Air assist tijdens {op.label}"
+							title={op.air_assist
+								? 'Air assist staat aan — klik om uit te zetten'
+								: 'Air assist staat uit — klik om aan te zetten'}
+							disabled={edits.busy}
+							onclick={() => patchLayer(op.id, { air_assist: !op.air_assist })}
+						>lucht</button>
+					{/if}
 					{#if canEdit && selectedIds.length}
 						<!-- Toewijzen staat achteraan en niet vóór de naam: anders
 						     verschuift de hele rij zodra je iets selecteert. -->
@@ -1063,6 +1389,53 @@
 			{#if canEdit && open}
 				{@const onthouden = design.memoryFor(design.colorFor(op.id))}
 				<div class="layer-edit">
+					{#if compact}
+						<!-- In de compacte stand staan de velden hier, want in de rij is er
+						     geen plek voor. Zelfde velden, zelfde gedrag — alleen een regel
+						     lager. -->
+						<div class="vals wide">
+							<label class="val">
+								<input
+									class="mono"
+									type="number"
+									step="1"
+									min="0.1"
+									inputmode="decimal"
+									aria-label="Snelheid van {op.label} in mm per seconde"
+									value={op.speed ?? ''}
+									disabled={edits.busy}
+									onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
+								/><span>mm/s</span>
+							</label>
+							<label class="val">
+								<input
+									class="mono"
+									type="number"
+									step="1"
+									min="1"
+									max="100"
+									inputmode="numeric"
+									aria-label="Vermogen van {op.label} in procent"
+									value={percent ?? ''}
+									disabled={edits.busy}
+									onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
+								/><span>%</span>
+							</label>
+							<label class="val narrow">
+								<input
+									class="mono"
+									type="number"
+									step="1"
+									min="1"
+									inputmode="numeric"
+									aria-label="Aantal passes van {op.label}"
+									value={op.passes ?? 1}
+									disabled={edits.busy}
+									onchange={(e) => commitNumber(e, op.id, 'passes', op.passes ?? 1)}
+								/><span>×</span>
+							</label>
+						</div>
+					{/if}
 					<div class="swatches" role="group" aria-label="Kleur van {op.label}">
 						{#each LAYER_COLORS as swatch (swatch)}
 							<button
@@ -1108,6 +1481,54 @@
 							onchange={(e) => patchLayer(op.id, { label: e.currentTarget.value })}
 						/>
 					</label>
+
+					<!-- Wat deze laag doet, ná het aanmaken te wijzigen (gat L3). Een
+					     snijlaag graveerlaag maken kon alleen door hem weg te gooien en
+					     alle toewijzingen opnieuw te doen; LightBurn heeft er een keuzelijst
+					     voor in de rij. De vormen en de instellingen gaan mee. -->
+					<div class="soort wide">
+						<span class="rot-label">Soort bewerking</span>
+						<Segmented
+							label="Soort bewerking van {op.label}"
+							options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
+							disabled={edits.busy}
+							bind:value={() => soortVan(op.type), (waarde) => retypeLayer(op.id, waarde)}
+						/>
+						<p class="hint">
+							De vormen en de instellingen blijven; alleen wat de machine ermee
+							doet verandert.
+						</p>
+					</div>
+
+					{#if compact}
+						<!-- De kijkstand uit de rij, hier als vinkje (zie het commentaar bij
+						     het oog in de rij). Zelfde gedrag, zelfde uitleg: dit verandert
+						     niets aan wat er gebrand wordt. -->
+						<label class="check wide">
+							<input
+								type="checkbox"
+								checked={!design.isLayerHidden(op.id)}
+								onchange={() => design.toggleLayer(op.id)}
+							/>
+							<span>Zichtbaar op het canvas (verandert niets aan de job)</span>
+						</label>
+					{/if}
+
+					{#if design.layerCapabilities.air_assist}
+						<!-- Besluit B11: alleen zichtbaar als de driver er een commando voor
+						     kent. Dezelfde regel als bij de Z-as — wat de machine kán,
+						     bepaalt wat je ziet. Staat de schakelaar er niet, dan heeft deze
+						     machine geen methode ingesteld om de blazer aan te sturen. -->
+						<label class="check wide">
+							<input
+								type="checkbox"
+								checked={op.air_assist}
+								disabled={edits.busy}
+								onchange={(e) => patchLayer(op.id, { air_assist: e.currentTarget.checked })}
+							/>
+							<span>Air assist tijdens deze laag</span>
+						</label>
+					{/if}
 
 					{#if op.type === 'op raster' || op.type === 'op image'}
 						<!-- Alleen rasteren gebruikt deze; bij snijden zijn ze zinloos. -->
@@ -1270,19 +1691,28 @@
 	   lijst wordt een stapel kaarten waarin je niets meer terugvindt; minder
 	   en de waarden zijn niet meer aan te tikken. */
 	.layer {
+		/* Anker voor de sleepgreep, die in de linkermarge hangt. */
+		position: relative;
 		display: grid;
 		/* minmax(0, 1fr) en niet de impliciete auto-kolom: die groeit mee met
 		   de langste laagnaam en duwt dan de hele lijst het paneel uit. */
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-1);
-		padding: var(--space-2);
+		/* Links iets meer lucht: daar hangt de sleepgreep in. Hem in de rij zetten
+		   kostte de laagnaam 20 px en dan brak "Graveren" af als "Gra-veren" —
+		   precies de leesbaarheid die de vorige ronde had gewonnen. In de marge
+		   kost hij tien pixels en niets van de naam. */
+		padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-2) + 14px);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 	}
 	.layer .ident {
 		display: flex;
 		align-items: center;
-		gap: var(--space-2);
+		/* 6 px en niet 8: met de sleepgreep erbij (L1) hield de laagnaam 53 px
+		   over en brak "Graveren" af als "Gra-veren". Zes keer twee pixels terug
+		   geeft de naam er achttien bij, en dat is precies wat hij nodig had. */
+		gap: var(--space-1h);
 	}
 	.layer + .layer {
 		margin-top: var(--space-1);
@@ -1300,6 +1730,194 @@
 		border-color: var(--accent);
 		border-bottom-left-radius: 0;
 		border-bottom-right-radius: 0;
+	}
+	/* ── Compacte lijst (L5) ──────────────────────────────────────────────────
+	   Identiteit en waarden op één regel. De velden blijven staan: dit paneel
+	   bestaat omdat bijstellen naast een draaiende machine geen submenu mag
+	   kosten. Wat wijkt is de naam — die mag afkappen, want hij staat er in de
+	   ruime stand voluit en in de tooltip altijd. */
+	.layer.compact {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+		padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + 10px);
+	}
+	/* De twee schakelaars mogen in de compacte stand krap: ze zitten naast
+	   elkaar en je mikt op een icoon van 16 px, niet op de rand van het vlak.
+	   Op een aanraakscherm blijven ze 44 px — dat regelt de mediaquery onderaan,
+	   die zwaarder weegt dan deze regel. */
+	.layer.compact .out,
+	.layer.compact .oog {
+		width: 24px;
+		height: 24px;
+	}
+	.layer.compact .ident {
+		flex: 1 1 12ch;
+		min-width: 0;
+		/* Vier raakdoelen en een naam in 247 px: elke pixel gaat naar de naam,
+		   want dat is het enige in de rij dat nergens anders staat. Gemeten:
+		   met de ruime tussenruimte hield de naam 10 px over en las "G". */
+		gap: var(--space-1);
+	}
+	.layer.compact .vals {
+		flex: 0 1 auto;
+	}
+	.layer.compact .layer-name {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.layer.compact .count {
+		display: none;
+	}
+	/* De drie waarden als één regel. Een knop en geen tekst: hij opent dezelfde
+	   uitklap als de chip, zodat je vanaf het getal dat je wilt wijzigen bij het
+	   veld komt. */
+	.kort {
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		/* Kaal, zonder kader: een pil kost hier 14 px die de laagnaam nodig heeft.
+		   Dat het te openen is, blijkt uit de onderstreping bij aanwijzen en uit
+		   `aria-expanded` — en de chip ernaast doet hetzelfde. */
+		padding: 0;
+		white-space: nowrap;
+	}
+	.kort:hover {
+		color: var(--text-1);
+		text-decoration: underline;
+	}
+	/* Tijdens het slepen mag er nergens tekst geselecteerd worden: de aanslag
+	   begint op de greep, maar de browser zoekt vandaar het eerstvolgende stukje
+	   selecteerbare tekst en trok een blauwe baan tot in de statusbalk. */
+	.layer.sleep-modus,
+	.layer.sleep-modus * {
+		user-select: none;
+	}
+	/* ── De ordekolom in de marge: ▲ / greep / ▼ (L1 en L9) ─────────────────
+	   Drie wegen naar dezelfde handeling, en dat is geen luxe: slepen is het
+	   snelst met een muis, de pijltjestoetsen op de greep werken zonder muis, en
+	   de knoppen zijn de enige van de drie die zichzelf uitleggen. LightBurn
+	   heeft die derde altijd zichtbaar; wij hadden hem in de uitklap. */
+	.ordekolom {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 14px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 1px;
+	}
+	.pijl {
+		flex: none;
+		width: 14px;
+		height: 15px;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-field);
+		color: var(--text-2);
+	}
+	.pijl:hover:not(:disabled) {
+		color: var(--text-1);
+		background: var(--surface-3);
+	}
+	/* Uit én weg te klikken: een laag die al bovenaan staat, kan niet hoger.
+	   Onzichtbaar maken zou de kolom laten verspringen, dus hij blijft staan en
+	   wordt alleen stil. */
+	.pijl:disabled {
+		opacity: 0.25;
+		cursor: default;
+	}
+	/* Onder 1200 px verdwijnen ze. Dat is niet willekeurig: dezelfde grens waar
+	   tokens.css elke knop 44×44 maakt omdat je daar met een vinger werkt. Drie
+	   raakdoelen van 44 px boven elkaar in een rij van 111 px kan niet, en 14 px
+	   brede pijlen naast een greep van 26 px is een raakdoel dat je alleen per
+	   ongeluk raakt — gemeten: de globale regel blies ze op tot 44×44 in een
+	   kolom van 14 px, dwars over de kaartrand heen.
+	   Daar blijft de greep over: slepen is op een aanraakscherm het gebaar dat
+	   je verwacht, de pijltjestoetsen erop doen hetzelfde, en de knoppen
+	   ↑ Eerder / ↓ Later staan nog in de uitklap. */
+	@media (max-width: 1199px), (pointer: coarse) {
+		.pijl {
+			display: none;
+		}
+	}
+	/* ── Slepen om te herordenen (L1) ──────────────────────────────────────── */
+	.greep {
+		flex: none;
+		width: 14px;
+		height: 22px;
+		/* Slepen mag geen tekst selecteren: de eerste versie trok bij elke
+		   sleepbeweging een blauwe selectie over het halve scherm. */
+		user-select: none;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-field);
+		color: var(--text-2);
+		cursor: grab;
+		touch-action: none;
+	}
+	.greep:hover:not(:disabled) {
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	/* Wat je vasthebt, ligt los van de lijst: opgetild en iets doorzichtig, zodat
+	   je de rij eronder ziet waar hij terechtkomt. */
+	.layer.sleept {
+		opacity: 0.65;
+		border-color: var(--accent);
+		box-shadow: var(--shadow-float);
+		cursor: grabbing;
+	}
+	/* De bestemming, als lijn tegen de rij aan. Een lijn en geen opengeschoven
+	   gat: de lijst mag onder je vinger niet gaan schuiven, dan mik je mis. */
+	.layer.doel-boven {
+		box-shadow: inset 0 3px 0 0 var(--accent);
+	}
+	.layer.doel-onder {
+		box-shadow: inset 0 -3px 0 0 var(--accent);
+	}
+	.lijst-balk {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		margin-bottom: var(--space-2);
+	}
+	.dichtheid {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1h);
+		margin-left: auto;
+		padding: var(--space-1) var(--space-2);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		background: var(--surface-1);
+	}
+	.dichtheid:hover {
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+	.soort {
+		display: grid;
+		gap: var(--space-1);
+	}
+	.soort :global(.segmented) {
+		width: 100%;
+	}
+	/* Vier woorden in 222 px: met de standaard tussenruimte van 12 px per zijde
+	   liep "Graveren" over zijn eigen segment heen en las er "Gravere". De
+	   letters blijven op de typeschaal; alleen de lucht eromheen krimpt. */
+	.soort :global(.segmented button) {
+		padding-left: var(--space-1);
+		padding-right: var(--space-1);
 	}
 	.chip {
 		width: 26px;
@@ -1371,6 +1989,29 @@
 	.tag.zicht {
 		color: var(--text-2);
 		font-weight: 400;
+	}
+	/* Air assist aan: geen waarschuwing, dus niet in amber. Een stand die je moet
+	   kunnen zien, in de gewone tekstkleur met een randje eromheen. */
+	.tag.lucht {
+		color: var(--text-1);
+		font-weight: 400;
+		border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+		border-radius: var(--radius-dot);
+		padding: 0 var(--space-2);
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
+	}
+	/* Uit is geen lege plek maar een doorgehaald woord: dubbel gecodeerd, zodat
+	   het ook zonder kleurverschil te lezen is — en zodat "deze machine kan het
+	   niet" (geen pil) iets anders blijft dan "hij staat uit". */
+	.tag.lucht.uit {
+		color: var(--text-2);
+		border-color: var(--line);
+		background: transparent;
+		text-decoration: line-through;
+	}
+	.tag.lucht:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--text-1);
 	}
 	.geheugen {
 		margin: 0;
@@ -1540,6 +2181,24 @@
 		.more {
 			width: 44px;
 			height: 44px;
+			min-height: 44px;
+		}
+		/* De greep is smaller dan de rest maar even hoog: hij moet met een vinger
+		   te pakken zijn zonder de naam uit de rij te duwen. */
+		.greep {
+			width: 26px;
+			height: 44px;
+			min-height: 44px;
+		}
+		/* Met een vinger is de greep breder, dus is de marge waar hij in hangt
+		   dat ook. */
+		.layer {
+			padding-left: calc(var(--space-2) + 20px);
+		}
+		.layer.compact {
+			padding-left: calc(var(--space-2) + 20px);
+		}
+		.dichtheid {
 			min-height: 44px;
 		}
 		.val input {

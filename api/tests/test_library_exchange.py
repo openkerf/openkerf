@@ -23,6 +23,14 @@ FOTO = bytes.fromhex(
 )
 
 
+UITLIJNING = [
+    {"x": 0.12, "y": 0.08},
+    {"x": 0.91, "y": 0.14},
+    {"x": 0.88, "y": 0.93},
+    {"x": 0.09, "y": 0.87},
+]
+
+
 @pytest.fixture
 def bib(tmp_path):
     return Library(tmp_path / "bron" / "library.db")
@@ -51,6 +59,8 @@ def vul(library: Library) -> dict:
         [{"row": 1, "column": 2, "speed_mm_s": 12, "power_percent": 65, "operation_id": "op1"}],
     )
     library.set_grid_photo(raster["id"], ".png", FOTO)
+    # De uitlijning is handwerk en hoort dus bij het bewijs (T4).
+    library.set_grid_alignment(raster["id"], UITLIJNING)
     gemeten = library.add_preset(
         material_id=berken["id"],
         machine_id=machine["id"],
@@ -70,6 +80,7 @@ def vul(library: Library) -> dict:
         operation="graveren-raster",
         speed_mm_s=200,
         power_percent=25,
+        interval_mm=0.1,
         source="handmatig",
     )
     return {"machine": machine, "berken": berken, "raster": raster, "preset": gemeten}
@@ -273,6 +284,12 @@ def test_a_full_round_trip_keeps_provenance_and_photos(bib, leeg):
     assert gemeten["grid_cell"] == {"row": 1, "column": 2}
     # …en de foto staat er echt, met dezelfde bytes.
     assert Path(raster["photo_path"]).read_bytes() == FOTO
+    # De uitlijning hoort bij die foto: zonder haar staat het bewijs er nog maar
+    # wijst het niets meer aan (T4).
+    assert raster["alignment"] == UITLIJNING
+    # En een rasterpreset zonder lijnafstand is niet na te branden (B12).
+    hun_raster = next(p for p in bib.presets() if p["operation"] == "graveren-raster")
+    assert hun_raster["interval_mm"] == 0.1
 
 
 def test_the_burn_date_of_the_evidence_survives(bib, leeg):
@@ -354,3 +371,79 @@ def test_uploading_something_else_is_a_clean_refusal(client):
     )
     assert response.status_code == 409
     assert "bibliotheek" in json.dumps(response.json())
+
+
+def test_the_alignment_survives_a_backup(bib, leeg):
+    """
+    De uitlijning is met de hand gedaan en hoort bij de foto. Ging hij bij een
+    back-up verloren, dan stond het bewijs er nog maar wees het niets meer aan.
+    """
+    vul(bib)
+
+    leeg.import_bundle(bib.export_bundle())
+
+    teruggekomen = leeg.test_grids()[0]
+    assert teruggekomen["alignment"] == UITLIJNING
+
+
+def test_the_line_spacing_survives_a_backup(bib, leeg):
+    """Een rasterpreset zonder lijnafstand is niet na te branden (B12)."""
+    vul(bib)
+
+    leeg.import_bundle(bib.export_bundle())
+
+    raster = [p for p in leeg.presets() if p["operation"] == "graveren-raster"][0]
+    assert raster["interval_mm"] == 0.1
+
+
+def test_two_presets_that_differ_only_in_interval_are_a_conflict(bib, leeg):
+    """
+    Zonder de lijnafstand in de vergelijking zou de ene stilletjes de andere
+    overschrijven: dezelfde snelheid en hetzelfde vermogen, ander resultaat.
+    """
+    vul(bib)
+    vul(leeg)
+    van_mij = [p for p in leeg.presets() if p["operation"] == "graveren-raster"][0]
+    leeg.update_preset(van_mij["id"], interval_mm=0.2)
+
+    voorstel = leeg.preview_import(bib.export_bundle())
+
+    botsingen = voorstel["samenvoegen"]["presets"]["conflicts"]
+    assert [b["operation"] for b in botsingen] == ["graveren-raster"]
+
+
+# --------------------------------- benoemde rasterrecepten mee (gat T7)
+
+
+def test_named_recipes_travel_with_the_library(bib, leeg):
+    """
+    Een recept is werk dat je zelf hebt uitgezocht. Een back-up die je
+    materialen en metingen meeneemt maar je recepten laat staan, is een halve
+    back-up — en dat merk je pas op de tweede computer.
+    """
+    berken = bib.add_material("Multiplex berken")
+    bib.save_grid_recipe(
+        "Berk snijden",
+        {"operation": "snijden", "speed_min": 5, "speed_max": 25, "cell_mm": 8},
+        berken["id"],
+    )
+    bib.save_grid_recipe("Snelle 4×4", {"operation": "snijden", "cell_mm": 6})
+
+    leeg.import_bundle(bib.export_bundle())
+
+    recepten = {r["name"]: r for r in leeg.grid_recipes()}
+    assert set(recepten) == {"Berk snijden", "Snelle 4×4"}
+    assert recepten["Berk snijden"]["material_name"] == "Multiplex berken"
+    assert recepten["Snelle 4×4"]["material_id"] is None
+    assert recepten["Berk snijden"]["settings"]["speed_max"] == 25
+
+
+def test_your_own_recipe_wins_from_the_file(bib, leeg):
+    """Zelfde regel als bij presets: wat jij hebt uitgezocht blijft staan."""
+    bib.save_grid_recipe("Snel", {"operation": "snijden", "cell_mm": 6})
+    leeg.save_grid_recipe("Snel", {"operation": "snijden", "cell_mm": 12})
+
+    resultaat = leeg.import_bundle(bib.export_bundle())
+
+    assert resultaat["grid_recipes"] == 0
+    assert leeg.grid_recipes()[0]["settings"]["cell_mm"] == 12

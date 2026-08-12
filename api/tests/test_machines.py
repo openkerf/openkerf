@@ -1,5 +1,6 @@
 """Machine catalogue, creation and settings — the setup flow's engine side."""
 
+import json
 import socket
 
 import pytest
@@ -479,3 +480,173 @@ def test_nothing_found_still_says_where_it_looked(monkeypatch, client):
     assert "candidates" in result
     assert result["searched"], "er is ergens gekeken"
     assert isinstance(result["duration_ms"], int)
+
+
+# --------------------------- een machineprofiel uitwisselen (gat E5)
+
+
+def _ruida(client):
+    """Een Ruida, want die heeft een interface en een adres om mee te nemen."""
+    return client.post(
+        "/api/machines", json={"info": "ruida-beta", "label": "5030 Ruida"}
+    ).json()
+
+
+def test_a_profile_carries_the_type_and_the_settings(client):
+    machine = _ruida(client)
+    client.patch(
+        f"/api/machines/{machine['path']}/settings",
+        json={"bedwidth": "600mm", "bedheight": "400mm"},
+    )
+
+    profiel = client.get(
+        f"/api/machines/{machine['path']}/export.openkerf-machine"
+    ).json()
+
+    assert profiel["format"] == "openkerf-machine"
+    assert profiel["machine"]["info"] == "ruida-beta"
+    assert profiel["machine"]["label"] == "5030 Ruida"
+    assert profiel["machine"]["settings"]["bedwidth"] == "600mm"
+
+
+def test_the_export_is_offered_as_a_file(client):
+    machine = _ruida(client)
+
+    response = client.get(f"/api/machines/{machine['path']}/export.openkerf-machine")
+
+    assert response.status_code == 200
+    assert ".openkerf-machine" in response.headers["content-disposition"]
+
+
+def test_a_profile_recreates_the_machine_elsewhere(client, kernel):
+    """
+    Wie een tweede computer inricht, typt nu niets over. Dat is de hele reden
+    van E5: LightBurn levert `.lbdev`, wij dit.
+    """
+    machine = _ruida(client)
+    client.patch(
+        f"/api/machines/{machine['path']}/settings",
+        json={"bedwidth": "600mm", "bedheight": "400mm"},
+    )
+    profiel = client.get(
+        f"/api/machines/{machine['path']}/export.openkerf-machine"
+    ).json()
+    client.delete(f"/api/machines/{machine['path']}")
+
+    binnen = client.post(
+        "/api/machines/import/upload",
+        files={"file": ("5030.openkerf-machine", json.dumps(profiel), "application/json")},
+    ).json()
+
+    assert binnen["known"] is True
+    assert binnen["essential"]["bedwidth"] == "600mm"
+
+    gemaakt = client.post(
+        "/api/machines/import", json={"profile": binnen["profile"]}
+    ).json()
+
+    settings = client.get(f"/api/machines/{gemaakt['path']}/settings").json()
+    waarden = {
+        veld["attr"]: veld["value"] for blad in settings for veld in blad["fields"]
+    }
+    assert waarden["bedwidth"] == "600mm"
+    assert waarden["bedheight"] == "400mm"
+    assert gemaakt["applied"] > 0
+
+
+def test_the_preview_names_what_is_local_to_this_bench(client):
+    """
+    Het IP-adres van déze controller is het eerste dat elders niet klopt. Het
+    gaat mee, maar het voorbeeld noemt het apart.
+    """
+    machine = _ruida(client)
+    client.patch(
+        f"/api/machines/{machine['path']}/settings", json={"address": "192.168.1.55"}
+    )
+    profiel = client.get(
+        f"/api/machines/{machine['path']}/export.openkerf-machine"
+    ).json()
+
+    voorbeeld = client.post(
+        "/api/machines/import/upload",
+        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+    ).json()
+
+    assert voorbeeld["local"]["address"] == "192.168.1.55"
+
+
+def test_importing_creates_nothing_before_you_say_so(client):
+    """Uploaden is kijken. Een profiel dat je nog niet accepteerde, bestaat niet."""
+    machine = _ruida(client)
+    profiel = client.get(
+        f"/api/machines/{machine['path']}/export.openkerf-machine"
+    ).json()
+    voor = len(client.get("/api/machines").json())
+
+    client.post(
+        "/api/machines/import/upload",
+        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+    )
+
+    assert len(client.get("/api/machines").json()) == voor
+
+
+def test_something_that_is_not_a_profile_is_refused(client):
+    response = client.post(
+        "/api/machines/import/upload",
+        files={"file": ("x.openkerf-machine", '{"format": "iets anders"}', "application/json")},
+    )
+
+    assert response.status_code == 409
+    assert "OpenKerf" in response.json()["detail"]
+
+
+def test_a_profile_from_the_future_is_refused(manager):
+    with pytest.raises(MachineError):
+        manager.read_profile({"format": "openkerf-machine", "version": 99, "machine": {"info": "x"}})
+
+
+def test_settings_this_engine_does_not_know_are_skipped_not_fatal(client):
+    """
+    Een profiel uit een nieuwere MeerK40t hoort je inrichting niet te blokkeren
+    om één instelling die hier niet bestaat.
+    """
+    machine = _ruida(client)
+    profiel = client.get(
+        f"/api/machines/{machine['path']}/export.openkerf-machine"
+    ).json()
+    profiel["machine"]["settings"]["iets_van_later"] = 1
+    client.delete(f"/api/machines/{machine['path']}")
+
+    binnen = client.post(
+        "/api/machines/import/upload",
+        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+    ).json()
+    gemaakt = client.post(
+        "/api/machines/import", json={"profile": binnen["profile"]}
+    ).json()
+
+    assert gemaakt["skipped"] == ["iets_van_later"]
+    assert gemaakt["path"]
+
+
+def test_an_imported_machine_can_be_exported_again(client):
+    """De rondgang: wat eruit komt, gaat er ook weer in."""
+    machine = _ruida(client)
+    profiel = client.get(
+        f"/api/machines/{machine['path']}/export.openkerf-machine"
+    ).json()
+    binnen = client.post(
+        "/api/machines/import/upload",
+        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+    ).json()
+    gemaakt = client.post(
+        "/api/machines/import", json={"profile": binnen["profile"], "label": "Kopie"}
+    ).json()
+
+    opnieuw = client.get(
+        f"/api/machines/{gemaakt['path']}/export.openkerf-machine"
+    ).json()
+
+    assert opnieuw["machine"]["info"] == profiel["machine"]["info"]
+    assert opnieuw["machine"]["label"] == "Kopie"

@@ -11,6 +11,7 @@ red shape should land in the cut layer by itself.
 """
 
 import re
+from contextlib import contextmanager
 
 from .commands import CommandRunner
 from .design import _xy, operation_label
@@ -80,6 +81,10 @@ class Drawing:
         # Wat een paletkleur op deze machine eerder deed (besluit B2). De
         # server hangt hier het echte geheugen in; los getest is er niets.
         self.color_memory = lambda color: None
+        # Het nulpunt van de gebruiker (gat J12). De server hangt hier
+        # `MachineControl.origin` in; zonder dat is er geen nulpunt en
+        # verandert er niets aan de plek van het werk.
+        self.origin = lambda: None
 
     @property
     def elements(self):
@@ -551,7 +556,7 @@ class Drawing:
     # Wat je aan een rasterlaag nog wél mag veranderen.
     GRID_EDITABLE = {"output"}
 
-    def move_operation(self, operation_id: str, direction: str) -> dict:
+    def move_operation(self, operation_id: str, direction=None, index=None) -> dict:
         """
         Verschuif een laag in de brandvolgorde.
 
@@ -559,8 +564,15 @@ class Drawing:
         machine brandt — graveren vóór snijden, anders val je het werkstuk uit
         het vel voordat het opschrift erop staat. Rastercellen slaan we over:
         die horen bij één testbord en hebben onderling geen eigen volgorde.
+
+        Twee manieren, één weg: `direction` is één stap (de knoppen ↑/↓),
+        `index` is een bestemming (slepen, gat L1). Bij slepen weet de lijst
+        precies waar de laag heen moet en niet hoeveel stappen dat zijn — dat
+        omrekenen naar stapjes zou bij elke tussenliggende rastercel misgaan.
         """
-        if direction not in ("up", "down"):
+        if (direction is None) == (index is None):
+            raise DesignError("Geef één van beide: 'direction' of 'index'.")
+        if direction is not None and direction not in ("up", "down"):
             raise DesignError("richting moet 'up' of 'down' zijn.")
         operation = self._operation(operation_id)
         parent = operation.parent
@@ -573,8 +585,31 @@ class Drawing:
         except ValueError:  # pragma: no cover - de boom is dan al inconsistent
             raise DesignError("Deze laag staat niet in zijn eigen tak.")
 
-        step = -1 if direction == "up" else 1
-        target = here + step
+        if direction is not None:
+            step = -1 if direction == "up" else 1
+            target = here + step
+            below = direction == "down"
+        else:
+            # De lijst telt in lagen, wij tellen in kinderen van `branch ops`.
+            # Voor de gebruiker is "plek 3" de derde láág, niet de derde knoop;
+            # met een testraster ertussen is dat niet hetzelfde getal.
+            plain = [node for node in siblings if self._plain_layer(node)]
+            try:
+                wanted = int(index)
+            except (TypeError, ValueError):
+                raise DesignError("index moet een geheel getal zijn.")
+            if not 0 <= wanted < len(plain):
+                raise DesignError(
+                    f"index moet tussen 0 en {len(plain) - 1} liggen."
+                )
+            anchor = plain[wanted]
+            if anchor is operation:
+                return {"id": operation_id, "moved": False, "index": here}
+            target = siblings.index(anchor)
+            # Naar beneden schuiven betekent: ónder de laag komen die daar nu
+            # staat. Naar boven: erboven. Anders landt de laag er steeds één
+            # naast en loopt de lijst bij het slepen een plek achter.
+            below = target > here
         if not 0 <= target < len(siblings):
             return {"id": operation_id, "moved": False, "index": here}
 
@@ -583,9 +618,216 @@ class Drawing:
             # van beide knopen om, dus de referenties naar de vormen verhuizen
             # mee en er verandert per saldo niets. `insert_sibling` verplaatst
             # alleen de knoop zelf — dat is wat "een laag opschuiven" betekent.
-            siblings[target].insert_sibling(operation, below=direction == "down")
+            siblings[target].insert_sibling(operation, below=below)
         self._refresh()
         return {"id": operation_id, "moved": True, "index": target}
+
+    # Hoe de machine hoort te werken: eerst wat het oppervlak raakt, dan wat
+    # erdoorheen gaat. Snijden als laatste, want een uitgesneden werkstuk ligt
+    # los in het bed en verschuift onder de volgende bewerking — of valt eruit.
+    BURN_ORDER = {
+        "op image": 0,
+        "op raster": 1,
+        "op engrave": 2,
+        "op dots": 3,
+        "op cut": 4,
+    }
+
+    def _plain_layer(self, node) -> bool:
+        """Een gewone laag: een bewerking die geen cel van een testraster is."""
+        if not str(getattr(node, "type", "")).startswith("op "):
+            return False
+        return not self._is_grid_cell(node, getattr(node, "id", "") or "")
+
+    def sort_operations(self) -> dict:
+        """
+        Graveren vóór snijden, in één handeling (gat L2).
+
+        LightBurn heeft hier `Sort Cuts Last` voor, en dat is één klik voor de
+        duurste fout die er is: het werkstuk valt uit het vel voordat het
+        opschrift erop staat. Stabiel sorteren, zodat twee snijlagen hun
+        onderlinge volgorde houden — die heeft de gebruiker zelf gekozen.
+
+        Binnen dezelfde soort telt de sterkte mee (gat L7). Twee snijlagen zijn
+        niet uitwisselbaar: een lichte scoreerlijn op 5 % en een doorsnede op
+        80 % horen in die volgorde, want zodra het werkstuk los is, ligt het
+        niet meer stil voor de rest. LightBurn sorteert daar ook op, alleen
+        andersom om — hun sterkste gaat vooraan en daarna de Line-lagen naar
+        achteren; wij houden één regel aan die op elke soort hetzelfde doet.
+
+        Rastercellen blijven staan waar ze staan: hun volgorde is de sweep.
+        """
+        parent = self.elements.op_branch
+        children = list(parent.children)
+        layers = [node for node in children if self._plain_layer(node)]
+        if len(layers) < 2:
+            return {"sorted": False, "order": [node.id for node in layers]}
+
+        wanted = sorted(
+            layers,
+            key=lambda node: (
+                self.BURN_ORDER.get(str(node.type), 99),
+                self._sterkte(node),
+            ),
+        )
+        if wanted == layers:
+            return {"sorted": False, "order": [node.id for node in wanted]}
+
+        with self.elements.undoscope("Graveren vóór snijden"):
+            # De eerste laag blijft liggen waar de eerste laag lag; de rest
+            # schuift er in volgorde achteraan. Zo blijft een testraster dat
+            # ertussen staat op zijn eigen plek en verhuist alleen wat wij
+            # sorteren.
+            vorige = wanted[0]
+            for node in wanted[1:]:
+                vorige.insert_sibling(node, below=True)
+                vorige = node
+        self._refresh()
+        return {"sorted": True, "order": [node.id for node in wanted]}
+
+    def _sterkte(self, node) -> float:
+        """
+        Hoe diep deze laag gaat, als één getal (gat L7).
+
+        Vermogen gedeeld door snelheid maal het aantal passes: dat is de
+        energie per millimeter, en het is precies de grootheid waar een
+        laseraar op afgaat als hij "zwaarder" zegt. Het is een rangschikking,
+        geen natuurkunde — hij hoeft alleen twee lagen van dezelfde soort uit
+        elkaar te houden.
+
+        Een laag zonder snelheid of vermogen krijgt 0 en blijft daarmee vooraan
+        staan; sorted() is stabiel, dus onderling houden die hun volgorde.
+        """
+        power = _number(getattr(node, "power", None)) or 0.0
+        speed = _number(getattr(node, "speed", None)) or 0.0
+        passes = _number(getattr(node, "passes", None)) or 1.0
+        if speed <= 0 or power <= 0:
+            return 0.0
+        return (power / speed) * max(passes, 1.0)
+
+    # Instellingen die een laag houdt als hij van soort verandert. Bewust niet
+    # `dpi`/`overscan`: die horen bij rasteren en zijn op een snijlaag zinloos —
+    # de engine geeft de nieuwe laag daar zijn eigen standaard voor.
+    TYPE_KEEP = ("label", "speed", "power", "passes", "output", "coolant")
+
+    def change_operation_type(self, operation_id: str, kind: str) -> dict:
+        """
+        Een snijlaag graveerlaag maken, met de vormen erin (gat L3).
+
+        De engine kent geen "verander het type van deze bewerking": het type
+        zit in de klasse van de knoop. Wat er wél kan is een nieuwe bewerking
+        maken, de referenties verhuizen en de oude weghalen — precies wat je
+        met de hand zou doen, maar dan zonder de toewijzingen kwijt te raken.
+        Alles binnen één undoscope, dus één keer ongedaan maken zet het terug.
+        """
+        if kind not in OPERATIONS:
+            raise DesignError(
+                f"Onbekend laagtype: {kind}. Kies uit {', '.join(sorted(OPERATIONS))}."
+            )
+        old = self._operation(operation_id)
+        if self._is_grid_cell(old, operation_id):
+            raise DesignError(
+                "Dit is een cel van een testraster; het soort bewerking is de test."
+            )
+        if str(old.type) == f"op {kind}" or (
+            kind == "image" and str(old.type) == "op image"
+        ):
+            return {"id": operation_id, "type": old.type, "changed": False}
+
+        parent = old.parent
+        siblings = list(parent.children)
+        here = siblings.index(old)
+        kleur = self._usable_color(old)
+        bewaard = {
+            name: getattr(old, name, None)
+            for name in self.TYPE_KEEP
+            if getattr(old, name, None) is not None
+        }
+        # Een laag die nog "Snijden" heet omdat hij zo geboren is, moet na het
+        # omzetten "Graveren" heten — anders staat er een snijlaag in de lijst
+        # die graveert. Een naam die de gebruiker zélf gaf, blijft staan: die
+        # zegt waar de laag voor is en niet wat hij doet.
+        standaard = {f"op {k}": v for k, v in self.LAYER_NAMES.items()}
+        if bewaard.get("label") == standaard.get(str(old.type)):
+            bewaard["label"] = self.LAYER_NAMES.get(kind, kind)
+        vormen = [
+            reference.node
+            for reference in list(old.children)
+            if getattr(reference, "node", None) is not None
+        ]
+
+        with self.elements.undoscope("Laagsoort wijzigen"):
+            before = {id(o) for o in self.elements.ops()}
+            self.runner.run(OPERATIONS[kind])
+            gemaakt = [o for o in self.elements.ops() if id(o) not in before]
+            if not gemaakt:
+                raise DesignError("De engine heeft geen laag aangemaakt.")
+            nieuw = gemaakt[0]
+            for name, value in bewaard.items():
+                setattr(nieuw, name, value)
+            if kleur:
+                self._set_color(nieuw, kleur)
+            for node in vormen:
+                nieuw.add_reference(node)
+            # Op de plek van de oude: de brandvolgorde is de reden dat de lijst
+            # een volgorde heeft, en die mag niet verspringen omdat je het soort
+            # bijstelt.
+            old.insert_sibling(nieuw, below=False)
+            old.remove_node()
+
+        self.elements.validate_ids()
+        self.user_operations.discard(operation_id)
+        self.user_operations.add(nieuw.id)
+        self._refresh()
+        return {
+            "id": nieuw.id,
+            "type": nieuw.type,
+            "changed": True,
+            "replaced": operation_id,
+            "index": here,
+            "elements": len(vormen),
+        }
+
+    # ------------------------------------------------------- air assist (B11)
+    #
+    # De engine zet air assist per bewerking in `coolant`: 0 is "laat staan",
+    # 1 is aan, 2 is uit. `cutplan` vertaalt dat naar `coolant_on`/`coolant_off`
+    # — maar alléén als het apparaat een methode geclaimd heeft. Heeft het die
+    # niet, dan schrijft de engine een klacht op het consolekanaal en gebeurt er
+    # verder niets. Een schakelaar die stilzwijgend niets doet is erger dan geen
+    # schakelaar, dus tonen we hem alleen als de driver hem kent (besluit B11).
+    COOLANT_ON = 1
+    COOLANT_OFF = 2
+
+    # Methoden die wel geclaimd kunnen worden maar niets aan de machine doen.
+    #
+    # Gat L8. De engine kent er drie: `gcode_m7` en `gcode_m8` (grbl-only, die
+    # schakelen echt iets) en `popup` — "Warnmessage". Die derde stuurt geen
+    # enkel signaal naar de laser; hij roept `kernel.yesno`, en dat is buiten de
+    # wxPython-GUI een `input()` op stdin (kernel.py:4217). Wij draaien
+    # headless, dus dan staat de spoolerthread te wachten op een toets die
+    # niemand indrukt — er kijkt niemand naar die terminal, de UI is een
+    # browser — of hij valt om met EOFError zodra stdin dicht is.
+    #
+    # Een schakelaar aanbieden die de job laat hangen is erger dan geen
+    # schakelaar. Op een Ruida is `popup` de enige claimbare methode (de andere
+    # twee hebben `constraints="grbl"`), en dus is air assist daar niet iets wat
+    # wij kunnen beloven. Zie de bevinding bij L8.
+    LOZE_COOLANTS = {"popup"}
+
+    def air_assist_supported(self) -> bool:
+        """Kent de actieve machine een commando dat de blazer echt schakelt?"""
+        coolant = getattr(getattr(self.kernel, "root", None), "coolant", None)
+        device = getattr(self.kernel, "device", None)
+        if coolant is None or device is None:
+            return False
+        try:
+            if coolant.get_device_function(device) is None:
+                return False
+            gekozen = coolant.get_device_coolant(device) or {}
+            return str(gekozen.get("id", "")) not in self.LOZE_COOLANTS
+        except Exception:  # pragma: no cover - een driver die niet meewerkt
+            return False
 
     def update_operation(self, operation_id: str, **fields) -> dict:
         operation = self._operation(operation_id)
@@ -642,6 +884,20 @@ class Drawing:
             if fields.get("bidirectional") is not None:
                 operation.bidirectional = bool(fields["bidirectional"])
                 applied["bidirectional"] = operation.bidirectional
+            if fields.get("air_assist") is not None:
+                # Uit is expliciet uit (2), niet "laat staan" (0): een laag die
+                # ná een laag met air assist brandt, moet de blazer ook echt
+                # dichtzetten. Met 0 blijft hij aan en denkt de gebruiker dat
+                # hij uitstaat omdat de schakelaar dat zegt.
+                if not self.air_assist_supported():
+                    raise DesignError(
+                        "Deze machine kent geen commando voor air assist, dus "
+                        "een schakelaar hier zou niets doen. Stel eerst bij de "
+                        "machine in welke methode de blazer aanstuurt."
+                    )
+                aan = bool(fields["air_assist"])
+                operation.coolant = self.COOLANT_ON if aan else self.COOLANT_OFF
+                applied["air_assist"] = aan
         self._refresh()
         return {"id": operation_id, "applied": applied}
 
@@ -799,8 +1055,10 @@ class Drawing:
     # Dezelfde tien als `--layer-1..10` in tokens.css en LAYER_COLORS in de
     # frontend. Ze staan hier nog een keer omdat een nieuwe laag zijn kleur van
     # de engine moet krijgen, niet pas van het paneel dat hem toevallig toont.
+    # Laag 4 ging in design-system v3.3 van #46A758 naar #0F9B32: de oude groen
+    # was bij rood-groenblindheid niet te scheiden van laag 9 en 10.
     PALETTE = (
-        "#E5484D", "#F76B15", "#FFC53D", "#46A758", "#12A594",
+        "#E5484D", "#F76B15", "#FFC53D", "#0F9B32", "#12A594",
         "#0090FF", "#8E4EC6", "#E93D82", "#8D6E63", "#607D8B",
     )
 
@@ -938,7 +1196,194 @@ class Drawing:
             # mededeling zonder tegenpartij.
             "sheet": sheet,
             "layers": self.job_layers(library, provenance, sheet),
+            # Wat er buiten het bed of buiten het vel hangt (gat C2). Hier en
+            # niet alleen op het canvas: op tablet en telefoon staat het canvas
+            # er niet naast, en dit is het laatste scherm vóór het branden.
+            "bounds": self.bounds_report(sheet),
+            "engine": self.engine_report(),
         }
+
+    def engine_report(self) -> dict:
+        """
+        Wat déze engine met een soort laag kan.
+
+        Nu één ding: rasteren. Zonder de rasteraar komt een rasterlaag blanco
+        uit de machine (zie `raster_supported`), en dat mag geen verrassing zijn
+        die je pas ná het branden ontdekt.
+        """
+        from .testgrid import raster_supported
+
+        return {"raster": raster_supported(self.kernel)}
+
+    # Een halve millimeter speling. Precies op de rand liggen is geen fout —
+    # dat is een vorm die het vel vult — en meetruis in de omhullende mag geen
+    # rode rand opleveren op werk dat gewoon past.
+    RAND_SPELING = 0.5
+
+    def bed_mm(self) -> tuple[float, float] | None:
+        """De bedmaat van de actieve machine in millimeters."""
+        device = getattr(self.kernel, "device", None)
+        view = getattr(device, "view", None)
+        try:
+            from meerk40t.core.units import Length
+
+            return (
+                float(Length(view.width).mm),
+                float(Length(view.height).mm),
+            )
+        except Exception:
+            return None
+
+    # ------------------------------------------- gebruikersoorsprong (J12)
+
+    @contextmanager
+    def verschoven(self, oorsprong):
+        """
+        Het hele ontwerp even opzij zetten, zolang het de machine in gaat.
+
+        Dit is de hele werking van het nulpunt (gat J12): wat je op 0,0 tekent
+        brandt op het nulpunt, en alles wat je eromheen tekende schuift mee.
+        De tekening zelf verandert niet — na afloop staat elke vorm weer op de
+        coördinaten die in het paneel stonden, want anders zou één druk op
+        starten je ontwerp verplaatsen.
+
+        Bewust niet via het console-commando `translate`: dat werkt in een
+        eigen undoscope, en dan levert elke start twee stappen in de
+        ongedaan-geschiedenis op die de gebruiker nooit heeft gemaakt. De
+        matrix rechtstreeks verzetten is precies wat dat commando doet, zonder
+        die bijwerking.
+
+        De verschuiving wordt in een `finally` teruggedraaid: gaat het plannen
+        stuk, dan mag het ontwerp niet verschoven achterblijven.
+        """
+        dx = float((oorsprong or {}).get("x_mm") or 0.0)
+        dy = float((oorsprong or {}).get("y_mm") or 0.0)
+        if not dx and not dy:
+            yield False
+            return
+        units = self._units_per_mm()
+        verzet = self._verzet(dx * units, dy * units)
+        try:
+            yield True
+        finally:
+            self._verzet(-dx * units, -dy * units, verzet)
+
+    def _verzet(self, dx: float, dy: float, nodes=None) -> list:
+        """Alle vormen een vast stuk opschuiven, in engine-eenheden."""
+        from meerk40t.svgelements import Matrix
+
+        matrix = Matrix.translate(dx, dy)
+        verzet = []
+        for node in list(nodes if nodes is not None else self.elements.elems()):
+            try:
+                node.matrix *= matrix
+                node.translated(dx, dy)
+            except AttributeError:
+                # Een knoop zonder matrix (die bestaan) laten we met rust; hij
+                # staat dan op zijn eigen plek en dat melden we niet als fout.
+                continue
+            verzet.append(node)
+        return verzet
+
+    def bounds_report(self, sheet=None) -> dict:
+        """
+        Wat er buiten het bed of buiten het vel valt (gat C2).
+
+        Twee verschillende fouten, en het verschil telt: buiten het bed kán de
+        machine niet komen — daar loopt de kop tegen zijn eindaanslag of slaat
+        de driver de beweging over. Buiten het vel kán de machine wel komen,
+        maar daar ligt geen materiaal; dan brandt hij in de rooster of in je
+        werkblad. Allebei kosten ze materiaal en tijd, en allebei zijn ze nu
+        alleen te zien door goed te kijken.
+
+        De id's die hieruit komen moeten dezelfde zijn als die in `/api/design`,
+        anders kan de weergave in de pre-flight er niets mee — en dan doet die
+        de meting alsnog over. `validate_ids()` deelt ze uit; wie het overslaat
+        krijgt lege strings terug voor alles wat uit een SVG kwam (gemeten).
+        """
+        self.elements.validate_ids()
+        units = self._units_per_mm()
+        bed = self.bed_mm()
+        vel = None
+        if sheet and sheet.get("width_mm") and sheet.get("height_mm"):
+            vel = (float(sheet["width_mm"]), float(sheet["height_mm"]))
+
+        # Het nulpunt telt wél mee voor het bed en níet voor het vel (gat J12).
+        #
+        # Dat is geen slordigheid maar wat het nulpunt betekent: je legt hem op
+        # de hoek van het materiaal dat op het bed ligt. Het vel schuift dus mee
+        # — het werk blijft er net zo op liggen als je het tekende — terwijl het
+        # bed blijft waar het is, want dat is de machine. Zonder dit onderscheid
+        # zou elk gezet nulpunt een "buiten het vel"-waarschuwing opleveren, en
+        # alarmbellen die altijd afgaan leert iedereen negeren (zie C2).
+        # Het canvas tekent daarom ook het vel op zijn nieuwe plek.
+        nulpunt = self.origin() or None
+        ox = float((nulpunt or {}).get("x_mm") or 0.0)
+        oy = float((nulpunt or {}).get("y_mm") or 0.0)
+
+        buiten_bed: list[str] = []
+        buiten_vel: list[str] = []
+        x0 = y0 = float("inf")
+        x1 = y1 = float("-inf")
+        for node in self.elements.elems():
+            box = getattr(node, "bounds", None)
+            if not box:
+                continue
+            a, b, c, d = (float(v) / units for v in box)
+            x0, y0 = min(x0, a), min(y0, b)
+            x1, y1 = max(x1, c), max(y1, d)
+            naam = getattr(node, "id", None) or ""
+            if bed and self._buiten(a + ox, b + oy, c + ox, d + oy, bed):
+                buiten_bed.append(naam)
+            if vel and self._buiten(a, b, c, d, vel):
+                buiten_vel.append(naam)
+
+        werk = None
+        if x1 > x0:
+            werk = {
+                "x_mm": round(x0, 2),
+                "y_mm": round(y0, 2),
+                "width_mm": round(x1 - x0, 2),
+                "height_mm": round(y1 - y0, 2),
+            }
+        # Waar het werk terechtkomt zodra er een nulpunt staat. Zonder dit getal
+        # zou de pre-flight een kader tonen op de plek waar je tekende, terwijl
+        # de machine ergens anders brandt — en dat is precies de fout die het
+        # nulpunt moet voorkomen.
+        gebrand = werk
+        if werk and (ox or oy):
+            gebrand = {
+                **werk,
+                "x_mm": round(werk["x_mm"] + ox, 2),
+                "y_mm": round(werk["y_mm"] + oy, 2),
+            }
+
+        return {
+            "bed": None if not bed else {"width_mm": round(bed[0], 2), "height_mm": round(bed[1], 2)},
+            "sheet": None if not vel else {"width_mm": vel[0], "height_mm": vel[1]},
+            "work": werk,
+            "origin": nulpunt,
+            "burns_at": gebrand,
+            "outside_bed": len(buiten_bed),
+            "outside_sheet": len(buiten_vel),
+            "outside_bed_ids": buiten_bed,
+            "outside_sheet_ids": buiten_vel,
+        }
+
+    @classmethod
+    def _buiten(cls, x0, y0, x1, y1, kader) -> bool:
+        speling = cls.RAND_SPELING
+        return (
+            x0 < -speling
+            or y0 < -speling
+            or x1 > kader[0] + speling
+            or y1 > kader[1] + speling
+        )
+
+    def _units_per_mm(self) -> float:
+        from meerk40t.core.units import UNITS_PER_MM
+
+        return float(UNITS_PER_MM)
 
     def _plan_estimate(self) -> tuple[float, int]:
         """De oude weg: het hele plan bouwen en de duur eruit optellen."""
@@ -970,9 +1415,20 @@ class Drawing:
         seconds = 0.0
         pieces = 0
         rapid = self._rapid_mm_s()
+        rastert = self.engine_report()["raster"]
         for operation in self.elements.ops():
             kind = str(operation.type)
             if not kind.startswith("op ") or not getattr(operation, "output", True):
+                continue
+            # Geen tijd rekenen voor werk dat deze engine niet uitvoert. Zonder
+            # rasteraar gooit `OpRasterNode.preprocess` de kinderen van de laag
+            # weg en levert hij nul cutcode; wij rekenden er wél seconden voor.
+            # Gemeten op één gevuld vlak van 60×40 mm: onze som 385,5 s tegen
+            # 70,0 s in het echte plan — 315 s beloofd voor een blanco plaat.
+            # De laag telt nog wél als onderdeel: hij ligt op het bed, en de
+            # melding erover hoort in de pre-flight en niet in een nul.
+            if kind == "op raster" and not rastert:
+                pieces += len(self._burnable(operation))
                 continue
             shapes = self._burnable(operation)
             pieces += len(shapes)
@@ -1153,6 +1609,7 @@ class Drawing:
             return None
 
         sheet_id = (sheet or {}).get("id")
+        rastert = self.engine_report()["raster"]
 
         layers = []
         for operation in self.elements.ops():
@@ -1186,6 +1643,10 @@ class Drawing:
                     "power_percent": percent,
                     "passes": int(passes),
                     "elements": children,
+                    # Brandt deze laag daadwerkelijk? Een rasterlaag doet dat op
+                    # een engine zonder rasteraar niet, en dan mag de tabel geen
+                    # snelheid en vermogen tonen alsof er iets gaat gebeuren.
+                    "burns": not (str(operation.type) == "op raster" and not rastert),
                     "source": (entry or {}).get("source") or herkomst(speed, power),
                     "preset_id": (entry or {}).get("preset_id"),
                     "material_id": (entry or {}).get("material_id"),

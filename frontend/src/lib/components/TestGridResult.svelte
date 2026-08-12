@@ -1,11 +1,15 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
+
+	type Punt = { x: number; y: number };
 
 	type Cell = {
 		row: number;
 		column: number;
 		speed_mm_s: number;
 		power_percent: number;
+		interval_mm: number | null;
 		x_mm: number;
 		y_mm: number;
 		width_mm: number;
@@ -25,10 +29,37 @@
 		gap_mm: number;
 		speed_steps: number;
 		power_steps: number;
+		/** Sinds B12 hoeven de assen geen snelheid × vermogen te zijn. */
+		row_axis: 'speed' | 'power' | 'interval';
+		column_axis: 'speed' | 'power' | 'interval';
+		rows: number | null;
+		columns: number | null;
 		photo_path: string | null;
+		/** De vier hoeken van het bord op de foto; staat in de database (T4). */
+		alignment: Punt[] | null;
 		cells: Cell[];
 		created_at: string;
 	};
+
+	const EENHEID = { speed: 'mm/s', power: '%', interval: 'mm' } as const;
+	const CEL_SLEUTEL = {
+		speed: 'speed_mm_s',
+		power: 'power_percent',
+		interval: 'interval_mm'
+	} as const;
+
+	/** "12 mm/s", "60%" — wat er in dit vakje anders was dan in het buurvakje. */
+	function aswaarde(cell: Cell, as: Grid['row_axis']) {
+		const waarde = cell[CEL_SLEUTEL[as]];
+		if (waarde === null || waarde === undefined) return '';
+		return as === 'power' ? `${waarde}%` : `${waarde} ${EENHEID[as]}`;
+	}
+
+	/** De twee grootheden die dit vakje onderscheiden, achter elkaar. */
+	function celtekst(cell: Cell) {
+		if (!grid) return '';
+		return `${aswaarde(cell, grid.row_axis)} · ${aswaarde(cell, grid.column_axis)}`;
+	}
 
 	let {
 		library,
@@ -54,12 +85,14 @@
 	let grid = $derived(grids.find((g) => g.id === openId) ?? null);
 
 	// Kader om alle cellen heen: de maat waarin een cel zijn plek uitdrukt.
+	// rows/columns in plaats van speed_steps/power_steps: welke grootheid op
+	// welke as staat, ligt sinds B12 niet meer vast.
 	let box = $derived.by(() => {
 		if (!grid) return null;
 		const pitch = grid.cell_mm + grid.gap_mm;
 		return {
-			width: grid.power_steps * pitch - grid.gap_mm,
-			height: grid.speed_steps * pitch - grid.gap_mm
+			width: (grid.columns ?? grid.power_steps) * pitch - grid.gap_mm,
+			height: (grid.rows ?? grid.speed_steps) * pitch - grid.gap_mm
 		};
 	});
 
@@ -104,7 +137,10 @@
 	// sleepbare hoeken en een projectieve afbeelding, precies zoals de
 	// perspectiefcorrectie van de camera.
 
-	type Punt = { x: number; y: number };
+	// De uitlijning hoort bij het bord, niet bij de browser (gat T4): je lijnt
+	// uit op de desktop en wijst het beste vakje aan op de tablet naast de
+	// machine. Stond dit in localStorage, dan was de tweede helft van die zin
+	// een leeg raster over een schuine foto. Nu is het een kolom op test_grid.
 	const STANDAARD: Punt[] = [
 		{ x: 0.1, y: 0.1 },
 		{ x: 0.9, y: 0.1 },
@@ -114,37 +150,52 @@
 	const HOEKNAAM = ['linksboven', 'rechtsboven', 'rechtsonder', 'linksonder'];
 
 	let hoeken = $state<Punt[]>(STANDAARD.map((p) => ({ ...p })));
+	let bewaarFout = $state<string | null>(null);
 
-	function sleutel(id: number) {
-		return `openkerf.raster.uitlijning.${id}`;
-	}
-
-	// Uitlijning hoort bij dit ene bord; hij blijft staan als je terugkomt.
 	$effect(() => {
 		const id = openId;
 		if (id === null) return;
-		let bewaard: Punt[] | null = null;
-		try {
-			const ruw = localStorage.getItem(sleutel(id));
-			if (ruw) bewaard = JSON.parse(ruw);
-		} catch {
-			bewaard = null;
-		}
+		// Alleen op het wisselen van raster reageren. Zou dit ook op `grids`
+		// luisteren, dan sprong de uitlijnstand dicht zodra het bewaren zijn
+		// antwoord terugstuurde — middenin het slepen.
+		const bewaard = untrack(() => grids.find((g) => g.id === id)?.alignment ?? null);
 		hoeken =
 			bewaard && bewaard.length === 4
 				? bewaard.map((p) => ({ x: p.x, y: p.y }))
 				: STANDAARD.map((p) => ({ ...p }));
+		// Nog nooit uitgelijnd? Dan is dát de eerste handeling.
 		uitlijnen = bewaard === null;
 		aangewezen = null;
+		bewaarFout = null;
 	});
+
+	let bewaartimer: ReturnType<typeof setTimeout> | null = null;
 
 	function bewaarUitlijning() {
 		if (openId === null) return;
-		try {
-			localStorage.setItem(sleutel(openId), JSON.stringify(hoeken));
-		} catch {
-			/* privémodus: dan geldt de uitlijning alleen deze sessie. */
-		}
+		// Slepen vuurt bij elke los-gelaten hoek; even wachten scheelt vier
+		// schrijfrondes naar de database bij één keer uitlijnen.
+		if (bewaartimer) clearTimeout(bewaartimer);
+		const id = openId;
+		const punten = hoeken.map((p) => ({ x: p.x, y: p.y }));
+		bewaartimer = setTimeout(async () => {
+			try {
+				const response = await fetch(`/api/library/testgrids/${id}/alignment`, {
+					method: 'PUT',
+					headers: headers(true),
+					body: JSON.stringify({ corners: punten })
+				});
+				if (!response.ok) {
+					bewaarFout = 'De uitlijning kon niet bewaard worden.';
+					return;
+				}
+				bewaarFout = null;
+				const bijgewerkt: Grid = await response.json();
+				grids = grids.map((g) => (g.id === id ? bijgewerkt : g));
+			} catch {
+				bewaarFout = 'De uitlijning kon niet bewaard worden — geen verbinding.';
+			}
+		}, 400);
 	}
 
 	/**
@@ -252,6 +303,10 @@
 
 	let gekozenCellen = $derived(
 		grid ? grid.cells.filter((c) => picked.includes(key(c))) : []
+	);
+	/** De vakjes waar al een preset uit gehaald is — het bewijs onder de kaart. */
+	let gebruikteCellen = $derived(
+		grid ? grid.cells.filter((c) => c.preset_id !== undefined && c.preset_id !== null) : []
 	);
 
 	function headers(json = false) {
@@ -388,12 +443,15 @@
 						<g
 							class="cell"
 							class:picked={picked.includes(key(cell))}
-							class:used={cell.preset_id !== undefined}
+							class:used={cell.preset_id !== undefined && cell.preset_id !== null}
+							class:aangewezen={aangewezen !== null &&
+								aangewezen.row === cell.row &&
+								aangewezen.column === cell.column}
 						>
 							<polygon
 								role="button"
 								tabindex={uitlijnen ? -1 : 0}
-								aria-label="{cell.speed_mm_s} mm/s bij {cell.power_percent} procent"
+								aria-label="Rij {cell.row + 1}, kolom {cell.column + 1} — {celtekst(cell)}"
 								aria-pressed={picked.includes(key(cell))}
 								points={veelhoek(cell)}
 								onclick={() => toggle(cell)}
@@ -434,7 +492,7 @@
 					{#if uitlijnen}
 						Sleep de vier hoeken naar de hoeken van het gebrande raster
 					{:else if aangewezen}
-						{aangewezen.speed_mm_s} mm/s · {aangewezen.power_percent}%
+						rij {aangewezen.row + 1}, kolom {aangewezen.column + 1} · {celtekst(aangewezen)}
 					{:else}
 						Tik het vakje aan dat het beste uitpakte
 					{/if}
@@ -464,8 +522,8 @@
 							<button
 								class="chip mono"
 								onclick={() => toggle(cell)}
-								aria-label="{cell.speed_mm_s} mm/s bij {cell.power_percent} procent — keuze ongedaan maken"
-							>{cell.speed_mm_s} mm/s · {cell.power_percent}% ×</button>
+								aria-label="Rij {cell.row + 1}, kolom {cell.column + 1}, {celtekst(cell)}: keuze ongedaan maken"
+							>rij {cell.row + 1}, kol {cell.column + 1} · {celtekst(cell)} ×</button>
 						{/each}
 					{:else}
 						<span class="muted">Nog geen vakje gekozen</span>
@@ -488,6 +546,30 @@
 					</button>
 				{/if}
 			</div>
+
+			{#if bewaarFout}<p class="melding fout" role="alert">{bewaarFout}</p>{/if}
+
+			{#if gebruikteCellen.length}
+				<!-- Gat M4: de herkomst zei "rij 2, kolom 3" en op de foto was niets
+				     gemarkeerd. Nu de uitlijning bewaard is, kan dezelfde overlay
+				     het vakje aanwijzen — hier door het op te lichten, en in de
+				     bibliotheek doordat de foto met ?cell= de rand meegebrand
+				     krijgt. -->
+				<div class="herkomst">
+					<span class="muted">Werd een preset:</span>
+					{#each gebruikteCellen as cell (key(cell))}
+						<button
+							class="chip bewijs mono"
+							onpointerenter={() => (aangewezen = cell)}
+							onpointerleave={() => (aangewezen = null)}
+							onfocus={() => (aangewezen = cell)}
+							onblur={() => (aangewezen = null)}
+							onclick={() => (aangewezen = cell)}
+						>rij {cell.row + 1}, kol {cell.column + 1} · {celtekst(cell)}</button>
+					{/each}
+					<span class="muted">— aanwijzen licht het vakje op de foto op.</span>
+				</div>
+			{/if}
 
 			{#if grid.material_id === null}
 				<p class="melding waarschuwing">
@@ -580,7 +662,19 @@
 		stroke-width: 3;
 		stroke-dasharray: 4 3;
 	}
-	.cell.used polygon { stroke: var(--ok); stroke-dasharray: 3 2; }
+	.cell.used polygon {
+		stroke: var(--ok);
+		stroke-dasharray: 3 2;
+		fill: color-mix(in srgb, var(--ok) 14%, transparent);
+	}
+	/* Aanwijzen in de herkomstregel licht het vakje op de foto op: dat is de
+	   hele belofte van "rij 2, kolom 3" — dat je hem terugvindt. */
+	.cell.aangewezen polygon {
+		stroke: var(--ok);
+		stroke-width: 4;
+		stroke-dasharray: none;
+		fill: color-mix(in srgb, var(--ok) 30%, transparent);
+	}
 	.cell.picked polygon {
 		fill: color-mix(in srgb, var(--accent) 26%, transparent);
 		stroke: var(--accent);
@@ -638,6 +732,18 @@
 		flex-wrap: wrap;
 	}
 	.keuze { display: flex; gap: var(--space-1); flex-wrap: wrap; flex: 1; min-width: 8rem; }
+	.herkomst {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+		font-size: var(--text-xs);
+	}
+	.chip.bewijs {
+		border-color: var(--ok);
+		background: color-mix(in srgb, var(--ok) 12%, transparent);
+	}
+
 	.chip {
 		font: inherit;
 		font-family: var(--font-mono);
