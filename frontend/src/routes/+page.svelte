@@ -72,9 +72,14 @@
 	// beeld. Waarín je brandt weegt zwaarder dan een bestandsknop die één tik
 	// verderop in het railmenu staat.
 	let smal = $derived(tablet);
-	// Eén stap eerder: op een gewoon laptopscherm blijven de bestandsknoppen
-	// staan, maar zonder hun woord. Gemeten grens; boven 1500px past alles.
-	let krap = $derived(!telefoon && breedte < 1500);
+	// Onder 880px kost de projectknop in de balk de naam van het materiaal
+	// (gemeten: 63px → 40px op 850, → 7px op 768). Daar woont het project in het
+	// railmenu; daarboven staat het in de balk. Zie de mediaquery in TopBar.svelte.
+	let projectInRail = $derived(breedte < 880);
+	// `krap` stond hier: onder 1500px verdween het projectpaar uit de balk en
+	// stond het alleen nog in het railmenu. Dat was precies waar de gebruiker het
+	// niet vond. Het paar is nu één knop "Project" met een menu, die op elke
+	// breedte in de balk past — dus is er geen krappe stand meer.
 	/**
 	 * Op de kleinste tablet begint het paneel dicht (gat B2).
 	 *
@@ -532,7 +537,6 @@
 	stopArmed={machine === 'busy' || machine === 'paused'}
 	canEdit={canEdit && design.preview === null}
 	{smal}
-	{krap}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
 	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
 	paused={machine === 'paused'}
@@ -559,7 +563,8 @@
 <div class="main">
 	<ToolRail
 		compact={tablet}
-		bestanden={smal || krap}
+		bestanden={smal}
+		{projectInRail}
 		bind:tool
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
@@ -578,6 +583,7 @@
 			{sheets}
 			{library}
 			{canEdit}
+			elementen={design.elements?.length ?? 0}
 			onEditMaterial={() => (materiaalOpen = true)}
 			onSwitched={async () => {
 				design.select(null);

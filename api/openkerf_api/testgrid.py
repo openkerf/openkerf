@@ -82,6 +82,40 @@ INTERVAL_OPERATIONS = ("graveren-raster",)
 # werkpunt waar de meeste CO2-graveringen op staan.
 DEFAULT_INTERVAL_MM = 0.1
 
+# ------------------------------------------------------- de letter op het bord
+#
+# Een testbord is een bewijsstuk: over twee weken moet je er nog aan kunnen
+# aflezen welk vakje 200 mm/s bij 40 % was. Welke letter daar staat, mag dus
+# niet afhangen van wat je toevallig het laatst in het tekstvenster koos.
+#
+# En dat gebeurde wél. `linetext` valt zonder `-f` terug op `context.last_font`
+# (meerk40t/extra/hershey.py:895), een instelling die de engine bewaart en die
+# élke tekstplaatsing overschrijft — ook een die de gebruiker allang vergeten
+# is. Een bord met de opschriften in Apple Chancery is precies wat je niet wilt.
+#
+# `meerk40t.jhf` is de ingebouwde Hershey-letter van de engine: hij komt niet
+# van de schijf, staat er dus altijd, en is enkellijnig — precies wat een
+# gegraveerd opschrift wil (een TrueType-omtrek graveert de contour van de
+# letter, niet de letter). De rest is terugval voor het geval upstream hem ooit
+# hernoemt.
+LABEL_FONTS = ("meerk40t.jhf", "rowmans.jhf", "romant.shx", "arial.ttf")
+
+# Waarop we de letter laten renderen. De hoogte wordt daarna alsnog exact
+# gezet met `_scale_to_height`, maar een vaste startmaat houdt het resultaat
+# reproduceerbaar in plaats van afhankelijk van de console-standaard.
+LABEL_FONT_SIZE_PX = 20
+
+# Hoe breed een teken van die letter is, als deel van de teksthoogte. Nagemeten
+# op de werkelijk getekende opschriften (0,53–0,66 afhankelijk van welke tekens
+# erin staan); we rekenen aan de ruime kant, want dit reserveert ruimte en een
+# tekort laat het opschrift buiten het bord steken.
+CAPTION_CHAR_RATIO = 0.62
+
+# Waar een gegraveerd opschrift ophoudt leesbaar te zijn. Kleiner dan dit is
+# het geen opschrift meer maar een streep, dus krimpt het niet verder — en dus
+# moet het bord er breed genoeg voor zijn.
+MIN_CAPTION_MM = 2.0
+
 # ------------------------------------------------- waar het bord komt te liggen
 #
 # Gat T9: Start X/Y sloeg op de linkerbovenhoek van het raster. Een testbord leg
@@ -201,6 +235,12 @@ def plan_grid(
     material_id=None,
     machine_id=None,
     thickness_mm=None,
+    # Het opschrift hoort bij het bord en niet bij de sweep, maar het bepaalt
+    # wél hoe breed het bord wordt — dus moet de planner het kennen. Weglaten
+    # mag: dan rekent hij met het opschrift dat hij zelf al kan afleiden.
+    caption=None,
+    material_name=None,
+    stamp=None,
 ) -> tuple[dict, list[dict]]:
     """
     Work out the cells without touching the engine, so it can be previewed.
@@ -307,6 +347,37 @@ def plan_grid(
     links_pad = (marge if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
     boven_pad = (boven if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
     rechts_pad = onder_pad = BORDER_PAD_MM if kader else 0.0
+
+    # Ruimte rechts voor het opschrift. Dat staat links uitgelijnd op het bord
+    # en loopt naar rechts door; op een bord van 46 mm is het al 49 mm breed.
+    # `_caption` krimpt het tot het past, maar niet onder MIN_CAPTION_MM —
+    # anders is het geen opschrift meer maar een streep. Zonder deze
+    # reservering liep het op elk klein bord tegen die ondergrens aan en stak
+    # het er alsnog buiten, buiten de maat die wij als "past dit op mijn plaat"
+    # melden. Wij reserveren wat het op die ondergrens nodig heeft; het
+    # opschrift zelf meet daarna zijn eigen breedte en krimpt zo nodig verder,
+    # dus een ruime schatting kost geen leesbaarheid — alleen een iets ruimere
+    # gemelde maat.
+    opschrift = (
+        caption_text(
+            {
+                "caption": caption,
+                "material_name": material_name,
+                "stamp": stamp,
+                "thickness_mm": thickness_mm,
+                "operation": operation,
+                "row_axis": row_axis,
+                "column_axis": column_axis,
+            }
+        )
+        if tekst
+        else ""
+    )
+    if opschrift:
+        rand = BORDER_PAD_MM if kader else 0.0
+        nodig = CAPTION_CHAR_RATIO * MIN_CAPTION_MM * len(opschrift) + 2 * rand
+        rechts_pad += max(0.0, round(nodig - (links_pad + breedte), 1))
+
     buiten_breedte = round(links_pad + breedte + rechts_pad, 3)
     buiten_hoogte = round(boven_pad + hoogte + onder_pad, 3)
 
@@ -371,6 +442,13 @@ def plan_grid(
         "outer_height_mm": buiten_hoogte,
         "center_x_mm": round(buiten_x + buiten_breedte / 2, 3),
         "center_y_mm": round(buiten_y + buiten_hoogte / 2, 3),
+        # Het opschrift hoort bij de planning omdat het de breedte bepaalt.
+        # `caption_text` staat hier al berekend zodat de tekenaar exact dezelfde
+        # regel zet als waar hier ruimte voor gereserveerd is.
+        "caption": str(caption or "").strip(),
+        "material_name": material_name,
+        "stamp": stamp,
+        "caption_text": opschrift,
     }
     # Wat dit bord gaat kosten aan tijd, vóórdat er iets getekend is.
     #
@@ -534,6 +612,37 @@ def toon(naam: str, waarde) -> str:
     return f"{waarde:g}{'' if eenheid == '%' else ' '}{eenheid}"
 
 
+def caption_text(plan: dict) -> str:
+    """
+    Het opschrift zoals het op het hout komt.
+
+    Hier en niet in de tekenaar, want `plan_grid` moet er ruimte voor
+    reserveren: de opschriftregel is op een klein bord breder dan het raster
+    zelf, en wat wij als maat melden moet dekken wat er brandt.
+    """
+    delen = [str(plan.get("caption") or "").strip()]
+    if plan.get("material_name"):
+        delen.append(str(plan["material_name"]))
+    if plan.get("thickness_mm"):
+        delen.append(f"{plan['thickness_mm']:g} mm")
+    delen.append(str(plan.get("operation") or ""))
+    # Welke as welke grootheid draagt. Zonder dit is een bord met vrij gekozen
+    # assen niet te lezen: "0,05" links kan snelheid of interval zijn.
+    # LightBurn zet de asnamen naast de waarden; wij hebben ze harder nodig,
+    # want bij ons staat niet vast wát er op de as staat.
+    assen = (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
+    delen.append(f"{AXES[assen[0]]['label']} v / {AXES[assen[1]]['label']} >")
+    # De grootheid die níét op een as staat, hoort er ook op: zonder haar is
+    # een bord over twee weken niet terug te rekenen naar een instelling.
+    for naam in AXES:
+        if naam in assen or plan.get(f"{naam}_min") is None:
+            continue
+        delen.append(f"{AXES[naam]['label']} {toon(naam, plan[f'{naam}_min'])}")
+    if plan.get("stamp"):
+        delen.append(str(plan["stamp"]))
+    return " · ".join(d for d in delen if d)
+
+
 def _cel_label(plan: dict, cell: dict) -> str:
     """
     Het laaglabel van één vakje: precies de grootheden die variëren.
@@ -676,7 +785,7 @@ class TestGridGenerator:
         drawn = []
         with self.elements.undoscope("Testraster genereren"):
             for cell in cells:
-                node = self._square(cell)
+                node = self._square(cell, gevuld=op_type == "op raster")
                 instelling = {
                     "type": op_type,
                     "speed": cell["speed_mm_s"],
@@ -763,47 +872,28 @@ class TestGridGenerator:
         instelling — het opschrift moet leesbaar zijn ongeacht welke cel het
         beste uitpakt.
         """
-        delen = [str(plan.get("caption") or "").strip()]
-        if plan.get("material_name"):
-            delen.append(str(plan["material_name"]))
-        if plan.get("thickness_mm"):
-            delen.append(f"{plan['thickness_mm']:g} mm")
-        delen.append(str(plan["operation"]))
-        # Welke as welke grootheid draagt. Zonder dit is een bord met vrij
-        # gekozen assen niet te lezen: "0,05" links kan snelheid of interval
-        # zijn. LightBurn zet de asnamen naast de waarden; wij hebben ze harder
-        # nodig, want bij ons staat niet vast wát er op de as staat.
-        assen = (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
-        delen.append(
-            f"{AXES[assen[0]]['label']} v / {AXES[assen[1]]['label']} >"
-        )
-        # De grootheid die níét op een as staat, hoort er ook op: zonder haar
-        # is het bord over twee weken niet terug te rekenen naar een instelling.
-        for naam in AXES:
-            if naam in assen or plan.get(f"{naam}_min") is None:
-                continue
-            delen.append(f"{AXES[naam]['label']} {toon(naam, plan[f'{naam}_min'])}")
-        if plan.get("stamp"):
-            delen.append(str(plan["stamp"]))
-        tekst = " · ".join(d for d in delen if d)
+        # Wat `plan_grid` al uitrekende, zodat de regel die hier gebrand wordt
+        # dezelfde is als die waar het bord op gemaat is.
+        tekst = plan.get("caption_text") or caption_text(plan)
         if not tekst:
             return
 
         hoogte = max(2.5, plan["cell_mm"] * 0.4)
-        node = self._text(tekst, hoogte)
-        if node is None:
-            return
-
         # Binnen de breedte van het bord blijven. Op ware grootte werd dit
         # opschrift 70 mm breed op een bord van 46 mm — het stak er rechts
         # uit, en dan klopt de maat die we melden (T9) niet met wat er brandt.
         # Niet onder de 2 mm: dan is het geen opschrift meer maar een streep.
+        # Die ondergrens is de reden dat `plan_grid` rechts ruimte reserveert:
+        # zonder die reservering kon het opschrift op de ondergrens vastlopen
+        # en er alsnog buiten steken.
         rand = BORDER_PAD_MM if plan.get("border") else 0.0
         beschikbaar = plan.get("outer_width_mm", plan["width_mm"]) - 2 * rand
+        node = self._text(tekst, hoogte)
+        if node is None:
+            return
         breedte = self._breedte_mm(node)
         if breedte > beschikbaar:
-            hoogte = max(2.0, hoogte * beschikbaar / breedte)
-            self._scale_to_height(node, hoogte)
+            self._scale_to_height(node, max(MIN_CAPTION_MM, hoogte * beschikbaar / breedte))
 
         labels = self._label_op(plan)
         self._place(
@@ -812,7 +902,12 @@ class TestGridGenerator:
             # steken links uit, en een opschrift dat halverwege begint leest
             # als een onderschrift bij de verkeerde kolom.
             left=plan.get("outer_x_mm", plan["origin_x_mm"]) + rand,
-            # Bóven de kolomlabels, met dezelfde marge als die labels zelf.
+            # Bóven de kolomlabels, met dezelfde marge als die labels zelf —
+            # en op de plek die `plan_grid` ervoor reserveerde, dus met de
+            # volle opschrifthoogte en niet met de gekrompen maat. Anders zakt
+            # een gekrompen opschrift naar beneden en gaat het dwars door de
+            # kolomlabels heen; op een bord met grote vakjes was dat precies
+            # wat er gebeurde.
             bottom=plan["origin_y_mm"] - 2 - hoogte - 2,
         )
         labels.add_reference(node)
@@ -868,13 +963,54 @@ class TestGridGenerator:
             label="Raster-labels",
         )
 
+    def _label_font(self) -> str | None:
+        """
+        De letter waarin een opschrift op het bord komt.
+
+        Altijd dezelfde, en altijd een die er is: we vragen het de engine in
+        plaats van een naam aan te nemen, want een lettertype dat hij niet kan
+        openen laat `linetext` terugvallen op — juist ja — `last_font`.
+        """
+        registry = getattr(self.kernel.root, "fonts", None)
+        if registry is None:
+            return None
+        for naam in LABEL_FONTS:
+            try:
+                if registry._validate_font(naam):
+                    return naam
+            except Exception:
+                continue
+        return None
+
     def _text(self, text: str, height_mm: float):
-        """Vector text via the Hershey fonts; bitmap text has no geometry."""
+        """
+        Vector text via the Hershey fonts; bitmap text has no geometry.
+
+        Lettertype en grootte staan hier vast en worden expliciet meegegeven.
+        Zonder `-f` pakt de engine `last_font` — de letter van de laatste tekst
+        die de gebruiker plaatste — en dan is het opschrift op het bord een
+        toevalstreffer. Wat we van die instelling aantreffen, zetten we erna
+        terug: het testraster is te gast in andermans document.
+        """
         before = {id(n) for n in self.elements.elems()}
+        font = self._label_font()
+        opdracht = ["linetext 0mm 0mm"]
+        if font:
+            opdracht.append(f'-f "{font}"')
+            opdracht.append(f"-s {LABEL_FONT_SIZE_PX}px")
+        opdracht.append(f'"{text}"')
+        root = self.kernel.root
+        root.setting(str, "last_font", "")
+        vorige = root.last_font
         try:
-            self.kernel.console(f'linetext 0mm 0mm "{text}"\n')
+            self.kernel.console(" ".join(opdracht) + "\n")
         except Exception:
             return None
+        finally:
+            # `create_linetext_node` zet `last_font` op wat het net gebruikte.
+            # Dat is hier onze eigen keuze, en die hoort niet de voorkeur van
+            # de gebruiker te worden.
+            root.last_font = vorige
         node = next(
             (n for n in self.elements.elems() if id(n) not in before and n.bounds), None
         )
@@ -916,7 +1052,17 @@ class TestGridGenerator:
         self.elements.set_emphasis([node])
         self.kernel.console(f"translate {dx:.4f}mm {dy:.4f}mm\n")
 
-    def _square(self, cell: dict):
+    def _square(self, cell: dict, gevuld: bool = False):
+        """
+        Eén vakje van het bord.
+
+        `gevuld` bij een rasterbord, en dat is geen opsmuk: de rasteraar brandt
+        alleen wat een vulling heeft. Zonder vulling zet hij de omtrek neer
+        (zie `test_an_unfilled_shape_burns_its_outline_and_not_its_middle`), en
+        dan komt er van een graveerproef een bord met negen lege kadertjes uit
+        de machine in plaats van negen vlakken in oplopende zwarting. Een
+        rasterproef gaat juist over hoe donker het vlák wordt.
+        """
         before = set(id(n) for n in self.elements.elems())
         self.kernel.console(
             f"rect {cell['x_mm']}mm {cell['y_mm']}mm "
@@ -924,6 +1070,10 @@ class TestGridGenerator:
         )
         for node in self.elements.elems():
             if id(node) not in before:
+                if gevuld:
+                    from meerk40t.svgelements import Color
+
+                    node.fill = Color("black")
                 return node
         raise DesignError("De engine heeft geen vierkant aangemaakt.")
 

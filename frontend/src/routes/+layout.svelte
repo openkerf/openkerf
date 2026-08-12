@@ -27,8 +27,30 @@
 
 	let inWizard = $derived($page.url.pathname.startsWith('/setup'));
 
+	/**
+	 * De wizard verandert het antwoord, dus na de wizard opnieuw vragen.
+	 *
+	 * Dit was de bug die Jelle vond: wie op het werkgebied begint krijgt hier
+	 * `stand = 'nodig'`, gaat de wizard in, maakt zijn machine aan en klikt op
+	 * "Naar het werkgebied" — en belandt weer op de welkomstpoort, want die
+	 * `stand` van vóór de wizard stond er nog. Alleen een handmatige verversing
+	 * hielp, en dat is precies de handeling die deze poort zou moeten besparen.
+	 *
+	 * Geen `$state`: deze vlag mag de effect niet zelf opnieuw aan de gang
+	 * krijgen. Hij verandert alleen mee met de route, en dáár hangt de effect al
+	 * aan via `inWizard`.
+	 */
+	let opnieuwVragen = false;
+
 	$effect(() => {
-		if (inWizard || stand !== 'onbekend') return;
+		if (inWizard) {
+			// Wat hier ook gebeurt — aanmaken, verwijderen, hernoemen — bij
+			// terugkomst is het antwoord van daarnet niets meer waard.
+			opnieuwVragen = true;
+			return;
+		}
+		if (stand !== 'onbekend' && !opnieuwVragen) return;
+		opnieuwVragen = false;
 		(async () => {
 			try {
 				const response = await fetch('/api/machines');

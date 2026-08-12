@@ -6,6 +6,7 @@
 		canEdit = false,
 		compact = false,
 		bestanden = false,
+		projectInRail = false,
 		onOpenGrid,
 		onOpenLibrary,
 		onPlaceImage,
@@ -23,6 +24,11 @@
 		 *  wonen dan hier. Boven deze breedte staan ze alleen daar — twee plekken
 		 *  voor dezelfde knop is erger dan één plek verderop. */
 		bestanden?: boolean;
+		/** Onder 850px past de projectknop niet meer in de bovenbalk naast het
+		 *  materiaal; dan woont het project hier, mét zijn woord. Daarboven staat
+		 *  het in de balk en hoort het hier niet — twee plekken voor dezelfde
+		 *  handeling levert alleen de vraag op welke de echte is. */
+		projectInRail?: boolean;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
 		onPlaceImage?: (file: File) => void;
@@ -38,8 +44,14 @@
 		{ id: 'select', label: 'Selecteren', path: 'M4 3l7 18 2.5-7.5L21 11z' },
 		{
 			id: 'nodes',
-			label: 'Knooppunten',
-			path: 'M5 19L19 5M5 19h.01M19 5h.01M12 12h.01'
+			// Twee keer hetzelfde gereedschap, zei de eerste gebruiker die deze rail
+			// echt gebruikte — en hij had gelijk in wat hij zág. Dit icoon was een
+			// schuine streep met drie punten van 1,75px eraan; op 18px verdwijnen
+			// die punten en blijft er een streep over die niet van "Lijn" (M4 20L20
+			// 4) te onderscheiden is. Nu een kromme met vierkante handvatten: de
+			// vorm die élk knooppuntgereedschap draagt, en geen streep.
+			label: 'Knooppunten — kies eerst een vorm, sleep daarna de punten',
+			path: 'M5 18C5 8 19 8 19 18M3 16h4v4H3zM17 16h4v4h-4zM10 8.5h4v4h-4z'
 		},
 		{ id: 'rect', label: 'Rechthoek', path: 'M4 6h16v12H4z' },
 		{ id: 'circle', label: 'Cirkel', path: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z' },
@@ -65,6 +77,8 @@
 	const KORT: Partial<Record<Tool, string>> = {
 		select: 'Kiezen',
 		rect: 'Rechthoek',
+		// De uitleg hoort in de tooltip, niet in een menuregel van 260px.
+		nodes: 'Knooppunten',
 		// In een menu is de naam een naam; de bediening staat in de tooltip. Als
 		// hele zin brak deze regel over twee regels en zakte de rest weg.
 		pen: 'Pen'
@@ -177,16 +191,19 @@
 					<input type="file" aria-label="Bestand importeren" accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
 						onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenFile?.(f); }} />
 				</label>
-				<label class="regel">
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
-					<span>Project openen</span>
-					<input type="file" aria-label="Project openen" accept=".openkerf,.zip"
-						onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenProject?.(f); }} />
-				</label>
-				<a class="regel" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={() => (meerOpen = false)}>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
-					<span>Project opslaan</span>
-				</a>
+				{#if projectInRail}
+					<!-- Alleen onder 850px: daarboven staat "Project" in de bovenbalk. -->
+					<label class="regel">
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
+						<span>Project openen</span>
+						<input type="file" aria-label="Project openen" accept=".openkerf,.zip"
+							onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenProject?.(f); }} />
+					</label>
+					<a class="regel" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={() => (meerOpen = false)}>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
+						<span>Project opslaan</span>
+					</a>
+				{/if}
 				<a class="regel" role="menuitem" href="/api/design/export.svg" download="ontwerp.svg" onclick={() => (meerOpen = false)}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
 					<span>Dit vel als SVG</span>

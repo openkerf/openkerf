@@ -1472,9 +1472,20 @@
 										vector-effect="non-scaling-stroke"
 									/>
 								{/if}
+								<!-- Een rasterlaag brandt het vlak weg, geen omtrek. Dat als
+								     lijn tonen zegt iets anders dan wat er gebeurt, dus krijgt
+								     zo'n vorm zijn vlak: in de laagkleur, half doorzichtig,
+								     zodat je er nog doorheen ziet wat eronder ligt en de
+								     contour zelf de laagkleur blijft dragen. Het blijft één
+								     `fill` op het pad dat er toch al staat — geen tweede
+								     tekening, geen rasteraar in de lus, dus de kosten per
+								     muisbeweging veranderen niet. -->
 								<path
+									class:vlak={streek.filled}
+									class:gedempt={streek.dimmed}
 									d={element.path}
-									fill="none"
+									fill={streek.filled ? streek.color : 'none'}
+									fill-rule="nonzero"
 									stroke={streek.color}
 									stroke-dasharray={streek.dashed ? '6 4' : undefined}
 									stroke-opacity={streek.dimmed ? 0.4 : 1}
@@ -2281,6 +2292,35 @@
 		stroke-linejoin: round;
 		vector-effect: non-scaling-stroke;
 	}
+	/* Een vorm in een rasterlaag: die brandt zijn vlak weg, dus tonen we het
+	   vlak. Half doorzichtig, want je moet er nog doorheen kunnen zien wat
+	   eronder ligt.
+
+	   De dekking verschilt per thema, en dat is geen smaak maar meting. Dezelfde
+	   38 % gaf op het lichte bed een contrast van 2,96:1 en op het donkere maar
+	   1,68:1 — dezelfde vulling die licht overtuigt, is donker een vermoeden.
+	   Met 62 % komt donker op 2,12:1. Hoger kan niet veel: op een donker bed
+	   haalt zelfs een volledig dekkende laagkleur maar ~2,65:1, en het vlak mag
+	   niet ondoorzichtig worden. De contour draagt de vorm; de vulling zegt
+	   alleen wat ermee gebeurt. */
+	.vlak {
+		fill-opacity: 0.38;
+	}
+
+	/* Laag op "brandt niet mee": wel te zien, nooit aan te zien voor werk dat
+	   straks de machine in gaat. Zelfde regel als bij de lijn ernaast. */
+	.vlak.gedempt {
+		fill-opacity: 0.14;
+	}
+
+	:global([data-theme='dark']) .vlak {
+		fill-opacity: 0.62;
+	}
+
+	:global([data-theme='dark']) .vlak.gedempt {
+		fill-opacity: 0.24;
+	}
+
 	/* Het laagnummer bij de vorm (C6). Zelfde kleur als de lijn, met een rand in
 	   de bedkleur eromheen — anders leest een 8 op een rasterlijn als een 3. */
 	.laagnummer {

@@ -471,15 +471,39 @@ export class DesignStore {
 	 * Een element zonder laag wordt gestippeld grijs: dat is geen ontbrekende
 	 * kleur maar een waarschuwing. Zo'n vorm wordt niet gebrand.
 	 */
-	strokeFor(element: { operation_ids?: string[]; operation_id?: string | null }): {
+	strokeFor(element: {
+		operation_ids?: string[];
+		operation_id?: string | null;
+		fill?: string | null;
+	}): {
 		color: string;
 		dashed: boolean;
 		/** Laag staat op "brandt niet mee": wel te zien, niet te branden. */
 		dimmed: boolean;
 		/** Vals als élke laag van dit element op onzichtbaar staat. */
 		visible: boolean;
+		/**
+		 * De vorm wordt als vlak gebrand, niet als lijn (gat R1).
+		 *
+		 * Waar bij een snij- of graveerlaag de kop de contour volgt, veegt een
+		 * rasterlaag het vlák weg. Dat als omtrek tonen is niet zomaar minder
+		 * mooi — het is een ander resultaat dan er uit de machine komt.
+		 *
+		 * Twee voorwaarden, want beide bepalen wat er brandt: de laag moet een
+		 * rasterlaag zijn én de vorm moet een vulling hebben. Een vorm zonder
+		 * vulling brandt óók in een rasterlaag alleen zijn omtrek — nagemeten in
+		 * `test_an_unfilled_shape_burns_its_outline_and_not_its_middle` — dus
+		 * die blijft hier een lijn.
+		 */
+		filled: boolean;
 	} {
-		const los = { color: 'var(--text-2)', dashed: true, dimmed: false, visible: true };
+		const los = {
+			color: 'var(--text-2)',
+			dashed: true,
+			dimmed: false,
+			visible: true,
+			filled: false
+		};
 		const ids = element.operation_ids?.length
 			? element.operation_ids
 			: element.operation_id
@@ -507,7 +531,8 @@ export class DesignStore {
 			color: this.colorFor(volgorde[beste].id),
 			dashed: false,
 			dimmed: !volgorde[beste].output,
-			visible: true
+			visible: true,
+			filled: volgorde[beste].type === 'op raster' && Boolean(element.fill)
 		};
 	}
 

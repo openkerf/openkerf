@@ -1457,6 +1457,9 @@
 		flex: 1;
 		min-width: 0;
 		padding: 4px 2px;
+		/* Getallen in mono: deze knoppen staan naast elkaar en verspringen
+		   anders in breedte zodra +1% een +10% wordt. */
+		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 	}
 	.stel.terug { flex: 1.3; }

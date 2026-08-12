@@ -90,7 +90,6 @@ class Images:
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
         self.runner = runner or CommandRunner(kernel)
-        self._cache = None
 
     @property
     def elements(self):
@@ -308,25 +307,26 @@ class Images:
             self._reprocess(node)
         return {"id": element_id, "pixels": [left, upper, right, lower]}
 
-    def render_png(self, element_id: str):
+    def render_png(self, element_id: str) -> bytes:
         """
         De huidige pixels als PNG, zodat het canvas de afbeelding kan tonen.
 
-        Eén map voor alle weergaves: het canvas vraagt hier bij elke verversing
-        om, en per keer een nieuwe tijdelijke map maken laat er honderden staan.
+        Bytes, geen bestand. Dit liep eerst via één vast pad per element, en
+        dat brak zodra het canvas twee keer tegelijk om hetzelfde plaatje
+        vroeg — wat het doet, want elke verversing hangt er een nieuw
+        `?v=`-nummer aan terwijl de vorige aanvraag nog loopt. De ene aanvraag
+        schreef het bestand opnieuw terwijl de andere het aan het versturen
+        was: `Content-Length` van vóór het overschrijven, inhoud van erna, en
+        uvicorn viel om met `Too little data for declared Content-Length` in
+        het log van de gebruiker. Een antwoord uit het geheugen heeft altijd de
+        lengte die het meldt.
         """
+        from io import BytesIO
+
         node = self._node(element_id)
         image = getattr(node, "active_image", None) or getattr(node, "image", None)
         if image is None:
             raise DesignError("Deze afbeelding heeft geen pixels.")
-        target = self._cache_dir() / f"{element_id.replace(':', '_')}.png"
-        image.convert("RGBA").save(target, "PNG")
-        return target
-
-    def _cache_dir(self):
-        import tempfile
-        from pathlib import Path
-
-        if self._cache is None:
-            self._cache = Path(tempfile.mkdtemp(prefix="openkerf-images-"))
-        return self._cache
+        buffer = BytesIO()
+        image.convert("RGBA").save(buffer, "PNG")
+        return buffer.getvalue()

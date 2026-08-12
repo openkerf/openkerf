@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from openkerf_api.design import DesignReader
 from openkerf_api.edits import DesignError
 from openkerf_api.server import ApiServer
-from openkerf_api.testgrid import plan_grid
+from openkerf_api.testgrid import LABEL_FONTS, plan_grid
 
 BASE = {
     "operation": "snijden",
@@ -1091,6 +1091,72 @@ def test_a_board_that_starts_left_of_the_bed_is_reported_not_refused():
 
     assert plan["board_room"] is False
     assert plan["label_room"] is False
+
+
+# ---------------------------- de letter op het bord staat vast (bug-raster 1)
+
+
+def _label_fonts(kernel) -> set[str]:
+    """De lettertypen van alles wat op het bord aan tekst staat."""
+    return {
+        element["text"]["font"]
+        for element in DesignReader(kernel).snapshot()["elements"]
+        if element.get("text")
+    }
+
+
+def test_the_board_uses_its_own_font_whatever_the_user_last_picked(kernel, client):
+    """
+    Jelle's bevinding: kies een lettertype in het tekstvenster, maak daarna een
+    testraster, en de opschriften staan in dát lettertype.
+
+    De oorzaak zit in de engine: `linetext` zonder `-f` valt terug op
+    `context.last_font`, een instelling die elke tekstplaatsing overschrijft.
+    Een bord is een bewijsstuk — wat erop staat mag niet afhangen van wat je
+    een uur eerder toevallig koos.
+    """
+    client.post(
+        "/api/design/elements",
+        json={
+            "type": "text",
+            "x_mm": 10,
+            "y_mm": 10,
+            "text": "Hallo",
+            "font": "Apple Chancery.ttf",
+            "font_size_mm": 8,
+        },
+    )
+    client.post("/api/library/testgrids", json=BASE)
+
+    fonts = _label_fonts(kernel)
+    assert "Apple Chancery.ttf" in fonts, "de tekst van de gebruiker zelf"
+    assert fonts - {"Apple Chancery.ttf"} == {LABEL_FONTS[0]}
+
+
+def test_the_board_leaves_the_users_font_choice_alone(kernel, client):
+    """
+    Onze keuze mag geen voorkeur worden.
+
+    `create_linetext_node` zet `last_font` op wat het net gebruikte, dus zonder
+    herstel zou het volgende stuk tekst van de gebruiker in ónze labelletter
+    verschijnen — dezelfde fout, andere kant op.
+    """
+    client.post(
+        "/api/design/elements",
+        json={"type": "text", "x_mm": 10, "y_mm": 10, "text": "Voor", "font": "Arial.ttf"},
+    )
+    client.post("/api/library/testgrids", json=BASE)
+    client.post(
+        "/api/design/elements",
+        json={"type": "text", "x_mm": 10, "y_mm": 60, "text": "Na"},
+    )
+
+    na = [
+        element
+        for element in DesignReader(kernel).snapshot()["elements"]
+        if element.get("text") and element["text"]["text"] == "Na"
+    ]
+    assert na and na[0]["text"]["font"] == "Arial.ttf"
 
 
 # ------------------------------- tekst en rand zijn te kiezen (gat T10)

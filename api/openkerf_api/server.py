@@ -536,10 +536,12 @@ class ApiServer:
         @app.get("/api/design/elements/{element_id}/image.png")
         def element_image(element_id: str):
             """De pixels van een afbeelding, zodat het canvas hem kan tonen."""
-            from fastapi.responses import FileResponse
+            from fastapi.responses import Response
 
-            path = manage(self.images.render_png, element_id)
-            return FileResponse(path, media_type="image/png")
+            return Response(
+                content=manage(self.images.render_png, element_id),
+                media_type="image/png",
+            )
 
         @app.get("/api/design/elements/{element_id}/image")
         def image_adjustments(element_id: str):
@@ -1518,11 +1520,42 @@ class ApiServer:
 
         # ---------------------------------------------------------- testrasters
 
+        def grid_fields(body: dict) -> dict:
+            """
+            Wat het bord aan het formulier toevoegt: machine, datum, materiaal.
+
+            Voorbeeld en werkelijkheid gebruiken hier dezelfde regels. Dat moet
+            ook: het opschrift bepaalt hoe breed het bord wordt, dus een
+            voorbeeld zonder datum meldt een smaller bord dan er brandt.
+            """
+            from datetime import date
+
+            velden = dict(body)
+            # Een raster is een proef op déze machine; zonder dat gegeven zijn
+            # de presets die eruit komen niet terug te plaatsen.
+            if not velden.get("machine_id"):
+                profiel = self._active_profile()
+                if profiel:
+                    velden["machine_id"] = profiel["id"]
+            velden["stamp"] = date.today().isoformat()
+            if velden.get("material_id"):
+                materiaal = next(
+                    (
+                        m
+                        for m in self.library.materials()
+                        if m["id"] == velden["material_id"]
+                    ),
+                    None,
+                )
+                if materiaal:
+                    velden["material_name"] = materiaal["name"]
+            return velden
+
         @app.post("/api/library/testgrids/preview")
         def preview_test_grid(body: dict):
             """Work out the cells without drawing anything, so it can be shown first."""
             def run():
-                plan, cells = plan_grid(**body)
+                plan, cells = plan_grid(**grid_fields(body))
                 return {
                     "plan": plan,
                     "cells": cells,
@@ -1538,32 +1571,11 @@ class ApiServer:
         def create_test_grid(body: dict):
             """Plan the grid, draw it into the design, and remember it."""
             def run():
-                from datetime import date
-
-                # Het opschrift hoort niet bij de planning maar bij het bord;
-                # plan_grid kent die sleutels niet.
-                velden = dict(body)
-                opschrift = str(velden.pop("caption", "") or "")
-                # Een raster is een proef op déze machine; zonder dat gegeven
-                # zijn de presets die eruit komen niet terug te plaatsen.
-                if not velden.get("machine_id"):
-                    profiel = self._active_profile()
-                    if profiel:
-                        velden["machine_id"] = profiel["id"]
-                plan, cells = plan_grid(**velden)
-                plan["caption"] = opschrift
-                plan["stamp"] = date.today().isoformat()
-                if velden.get("material_id"):
-                    materiaal = next(
-                        (
-                            m
-                            for m in self.library.materials()
-                            if m["id"] == velden["material_id"]
-                        ),
-                        None,
-                    )
-                    if materiaal:
-                        plan["material_name"] = materiaal["name"]
+                # Het opschrift gaat mee de planning in: het staat links
+                # uitgelijnd op het bord en loopt naar rechts door, dus het
+                # bepaalt mede hoe breed het bord wordt. Achteraf toevoegen gaf
+                # een gemelde maat die smaller was dan wat er brandt.
+                plan, cells = plan_grid(**grid_fields(body))
                 drawn = self.grids.draw(plan, cells)
                 grid = self.library.add_test_grid(plan, drawn)
                 # Het raster is één object op het canvas; de cellen houden hun
@@ -1959,7 +1971,50 @@ class ApiServer:
         if self._upload_dir is not None:
             shutil.rmtree(self._upload_dir, ignore_errors=True)
             self._upload_dir = None
+        self._wait_for_the_machine_to_go_quiet()
         self.channel("OpenKerf API stopped.")
+
+    # Hoe lang we bij het afsluiten wachten tot de machine uitgepraat is. Lang
+    # genoeg voor het staartje van een verzending, kort genoeg om niet in de
+    # weg te lopen als er echt nog een job draait.
+    QUIET_TIMEOUT_S = 2.0
+
+    def _wait_for_the_machine_to_go_quiet(self):
+        """
+        De verzendthread van de driver zijn zin laten afmaken.
+
+        Bij het afsluiten kwam dit in het log van de gebruiker:
+
+            Exception in thread Thread-3 (_data_sender):
+              ruida/controller.py:128 in _data_sender -> self.write(data)
+              ruida/ruidasession.py:186 in write -> ConnectionError(
+                  'Not connected to the Ruida controller.')
+
+        Dat is een thread van MeerK40t zelf: `_data_sender` leegt zijn wachtrij
+        zonder te controleren of de verbinding er nog is, dus zodra de sessie
+        eronder wegvalt struikelt hij. Repareren hoort daar te gebeuren (zie de
+        upstream-lijst in CLAUDE.md) — wij raken `meerk40t/` niet aan.
+
+        Wat wij wél kunnen: niet de eersten zijn die de deur dichttrekken. Wij
+        starten de device-service, dus wachten we hier even tot hij is
+        uitgepraat voordat de rest van het afsluiten de verbinding weghaalt.
+        Alles achter `getattr`: een dummy-device heeft geen van deze dingen, en
+        het afsluiten mag hier nooit op stukgaan.
+        """
+        import time
+
+        device = getattr(self.kernel, "device", None)
+        controller = getattr(getattr(device, "driver", None), "controller", None)
+        if controller is None:
+            return
+        einde = time.monotonic() + self.QUIET_TIMEOUT_S
+        while time.monotonic() < einde:
+            try:
+                if not controller.is_busy:
+                    return
+            except Exception:
+                return
+            time.sleep(0.05)
 
     def is_running(self):
         return self._thread is not None and self._thread.is_alive()

@@ -62,6 +62,21 @@ def test_the_pixels_can_be_fetched(client, loaded):
     assert Image.open(io.BytesIO(response.content)).size == (120, 80)
 
 
+def test_the_pixels_are_as_long_as_the_answer_says(client, loaded):
+    """
+    De lengte die het antwoord meldt moet de lengte zijn die het levert.
+
+    Dit ging via één vast bestand per element. Vroeg het canvas twee keer
+    tegelijk om hetzelfde plaatje — en dat doet het, want elke verversing hangt
+    er een nieuw `?v=`-nummer aan — dan schreef de ene aanvraag het bestand
+    opnieuw terwijl de andere het verstuurde. Uvicorn viel dan om met
+    `Too little data for declared Content-Length`, in het log van de gebruiker.
+    """
+    response = client.get(f"/api/design/elements/{loaded['id']}/image.png")
+
+    assert int(response.headers["content-length"]) == len(response.content)
+
+
 def test_asking_a_rectangle_for_pixels_is_refused(client):
     created = client.post(
         "/api/design/elements",

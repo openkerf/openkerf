@@ -12,7 +12,6 @@
 		stopArmed = false,
 		canEdit = false,
 		smal = false,
-		krap = false,
 		canPause = false,
 		canResume = false,
 		paused = false,
@@ -50,10 +49,6 @@
 		/** Onder ~950px passen de bestandsknoppen er niet meer bij; ze staan dan
 		 *  in het menu van de gereedschapsrail. */
 		smal?: boolean;
-		/** Onder ~1500px is er geen ruimte voor vier bestandsknoppen mét woord
-		 *  náást machine, materiaal en de bediening. Ze houden hun icoon, hun
-		 *  tooltip en hun plek; alleen het woord gaat weg. */
-		krap?: boolean;
 		canPause?: boolean;
 		canResume?: boolean;
 		paused?: boolean;
@@ -74,6 +69,31 @@
 		onOpenProject?: (file: File) => void;
 		onToggleTheme: () => void;
 	} = $props();
+
+	/**
+	 * Het projectmenu.
+	 *
+	 * Vast gepositioneerd en met de knoppositie mee: de balk scrollt intern
+	 * (`overflow-x: auto`), dus een absoluut geplaatst menu wordt afgeknipt op de
+	 * balkhoogte en is dan onbruikbaar.
+	 */
+	let projectOpen = $state(false);
+	let projectPos = $state({ x: 0, y: 0 });
+
+	function openProjectMenu(knop: HTMLElement) {
+		if (projectOpen) {
+			projectOpen = false;
+			return;
+		}
+		const doos = knop.getBoundingClientRect();
+		// Uitlijnen op de rechterrand van de knop, maar nooit buiten het scherm.
+		const breedte = 250;
+		projectPos = {
+			x: Math.max(8, Math.min(doos.right - breedte, window.innerWidth - breedte - 8)),
+			y: doos.bottom + 6
+		};
+		projectOpen = true;
+	}
 
 	// De bovenbalk staat altijd; hier hangt het meeluisteren naar de
 	// schermbreedte, zodat de rest van de app het niet nog eens hoeft te doen.
@@ -140,6 +160,11 @@
 	 * daarom is er een tweede weg die overal bestaat.
 	 */
 	function sneltoets(e: KeyboardEvent) {
+		// Een open menu sluit met Escape, ook midden in het typen van een naam.
+		if (e.key === 'Escape' && projectOpen) {
+			projectOpen = false;
+			return;
+		}
 		// Niet ingrijpen terwijl iemand een maat of een naam intypt: daar is
 		// Ctrl+. een teken en geen noodrem.
 		const doel = e.target as HTMLElement | null;
@@ -185,7 +210,7 @@
 
 <svelte:window onkeydown={sneltoets} />
 
-<header class="topbar" class:smal class:krap class:weg>
+<header class="topbar" class:smal class:weg>
 	<div class="brand" title="OpenKerf"><Logo /><span class="woord">OpenKerf</span></div>
 
 	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
@@ -235,28 +260,72 @@
 
 	<div class="spacer"></div>
 
-	<!-- Openen hoort naast opslaan: in de Job-tab vindt niemand het. -->
-	<label class="btn file docs project" title="Project openen (ontwerp + bibliotheek)">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
-		<span class="btn-label">Project openen</span>
-		<input
-			type="file"
-			aria-label="Projectbestand kiezen"
-			accept=".openkerf,.zip"
-			onchange={(e) => {
-				const input = e.currentTarget as HTMLInputElement;
-				const file = input.files?.[0];
-				input.value = '';
-				if (file) onOpenProject?.(file);
-			}}
-		/>
-	</label>
-	<a class="btn docs project" href="/api/project/export.openkerf" download="project.openkerf" title="Project opslaan">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
-		<span class="btn-label">Project opslaan</span>
-	</a>
+	<!-- Openen en opslaan van het project: één knop, op elke breedte.
+	     Twee losse knoppen mét woord kostten 310px, en die waren er onder 1600
+	     niet — dan stonden ze alleen nog in het menu van de gereedschapsrail, en
+	     daar vond de gebruiker ze twee ronden lang niet ("ik zie alleen
+	     exporteren en importeren"). Besluit "project is leidend" staat; alleen de
+	     uitvoering deugde niet.
+	     Deze knop kost 106px met woord en 44px zonder, dus hij past ook op 768
+	     naast de noodrem (gemeten met c7-balk). Het woord "Project" staat er in
+	     beeld bij: dát is wat er ontbrak — niet de handeling, maar het bestaan
+	     van het begrip in de balk. -->
+	<button
+		class="btn project-knop"
+		aria-haspopup="menu"
+		aria-expanded={projectOpen}
+		aria-label="Project — openen en opslaan"
+		title="Project — openen en opslaan (ontwerp, vellen en bibliotheek in één bestand)"
+		onclick={(e) => openProjectMenu(e.currentTarget as HTMLElement)}
+	>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+		<!-- Zonder `blijft`: onder 1200px valt het woord weg, net als bij de andere
+		     bestandsknoppen. Gemeten met c7-balk: mét woord loopt de balk op 768
+		     44px over de rand en dan schuift de startknop van het scherm. Een map
+		     met een pijltje omlaag is op die breedte het menu-idioom, en de
+		     tooltip en het aria-label dragen het woord. -->
+		<span class="btn-label">Project</span>
+		<svg class="pijl" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+	</button>
 
-	<span class="scheiding docs project" aria-hidden="true"></span>
+	{#if projectOpen}
+		<!-- `position: fixed`, want de balk zelf scrollt intern (`overflow-x`) en
+		     zou een absoluut menu afknippen. -->
+		<div class="afdek" role="presentation" onclick={() => (projectOpen = false)}></div>
+		<div class="projectmenu" role="menu" style="left: {projectPos.x}px; top: {projectPos.y}px">
+			<!-- Een label met een verborgen bestandsveld erin: geen `menuitem`-rol,
+			     want het invoerveld is al het bedienbare element. -->
+			<label class="regel">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
+				<span>Project openen…</span>
+				<input
+					type="file"
+					aria-label="Projectbestand kiezen"
+					accept=".openkerf,.zip"
+					onchange={(e) => {
+						const input = e.currentTarget as HTMLInputElement;
+						const file = input.files?.[0];
+						input.value = '';
+						projectOpen = false;
+						if (file) onOpenProject?.(file);
+					}}
+				/>
+			</label>
+			<a
+				class="regel"
+				role="menuitem"
+				href="/api/project/export.openkerf"
+				download="project.openkerf"
+				onclick={() => (projectOpen = false)}
+			>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
+				<span>Project opslaan</span>
+			</a>
+			<p class="uitleg">Ontwerp, vellen, materialen en machineprofielen in één bestand.</p>
+		</div>
+	{/if}
+
+	<span class="scheiding docs" aria-hidden="true"></span>
 	<label class="btn file docs" title="Bestand in dit vel importeren — SVG, DXF, RD, G-code of een afbeelding">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
 		<span class="btn-label">Importeren</span>
@@ -445,6 +514,20 @@
 		   850px blijft de chip staan — daar is de ruimte er (gemeten). */
 		.topbar.weg .materiaal { display: none; }
 	}
+	/* Daar houdt de projectknop op.
+	   Hij is de enige knop in deze balk die geen machinehandeling is, en het
+	   materiaal is het enige buigzame ding ernaast: gemeten kromp de
+	   materiaalnaam van 63px naar 40px op 850 en naar 7px op 768 zodra deze knop
+	   erbij stond — "M…", en dat is geen chip meer. Vanaf 880 is er ruimte voor
+	   allebei (gemeten: 63px, geen krimp). Waarín je brandt weegt zwaarder
+	   (besluit B1) dan iets wat je aan het begin en eind van een sessie doet.
+	   Onder deze breedte staat het project in het menu van de gereedschapsrail,
+	   mét zijn woord — zie `projectInRail` in +page.svelte. Daarboven staat het
+	   in de balk, en dát is de verbetering: de grens lag op 1600, en daar vond de
+	   gebruiker het twee ronden lang niet. */
+	@media (max-width: 879px) {
+		.topbar .project-knop { display: none; }
+	}
 	/* Onder ~950px verdwijnen de bestandsknoppen; het materiaal blijft, want het
 	   hoort bij wat er straks gebeurt. Alleen krapper. */
 	/* Was 8ch op de hele tabletbreedte, toen het merk nog 120px kostte. Dat merk
@@ -484,17 +567,61 @@
 	   afgekapte uitnodiging ("Materiaa…") is onbegrijpelijk. Deze selector moet
 	   de regel hierboven verslaan, dus staat de hele keten erin. */
 	.topbar.smal .materiaal.leeg .naam { max-width: none; }
-	/* Vier bestandsknoppen mét label kosten 560px; dat paste zolang de balk
-	   verder alleen de machine droeg. Met het materiaal erbij (besluit B1) liep
-	   hij op 1440 — onze eigen maat — over de rand, en dan staat de startknop
-	   buiten beeld.
-
-	   Niet de woorden weghalen maar het projectpaar: vier naamloze icoontjes
-	   waarvan er twee een doos met een pijltje zijn, is geen balk maar een
-	   raadsel. Openen en opslaan van het hele project staan in het menu van de
-	   gereedschapsrail, met hun woord erbij; importeren en exporteren — wat je
-	   tijdens het werken doet — houden hier hun naam. */
-	.topbar.krap .project { display: none; }
+	/* Het projectpaar is één knop met een menu geworden.
+	   Vier bestandsknoppen mét label kosten 560px en pasten op 1440 niet naast
+	   machine, materiaal en bediening; het projectpaar week toen uit naar het
+	   railmenu. Dat was te ver weg — de gebruiker vond ze twee ronden lang niet.
+	   Eén knop "Project" kost 106px, past overal, en houdt het woord in beeld.
+	   Importeren en exporteren blijven losse knoppen: dát is wat je tijdens het
+	   werken doet. */
+	.project-knop .pijl { color: var(--text-2); margin-left: -2px; }
+	.afdek {
+		position: fixed;
+		inset: 0;
+		z-index: 39;
+	}
+	.projectmenu {
+		position: fixed;
+		width: 250px;
+		padding: var(--space-2);
+		background: var(--surface-1);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-float);
+		z-index: 40;
+	}
+	.projectmenu .regel {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		/* Ook met een handschoen aan te raken. */
+		min-height: 44px;
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-field);
+		color: var(--text-1);
+		text-align: left;
+		text-decoration: none;
+		cursor: pointer;
+		transition: background var(--transition);
+	}
+	.projectmenu .regel svg { flex: none; color: var(--text-2); }
+	.projectmenu .regel:hover,
+	.projectmenu .regel:focus-within { background: var(--surface-2); }
+	.projectmenu input[type='file'] {
+		position: absolute;
+		width: 0;
+		height: 0;
+		opacity: 0;
+	}
+	/* Wat er in dat bestand zit, één keer, hier — niet in een tooltip die op een
+	   aanraakscherm niet bestaat. */
+	.projectmenu .uitleg {
+		margin: var(--space-2) 0 0;
+		padding: 0 var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
 	/* Onder ~950px is er geen ruimte meer voor bestandsacties náást de
 	   machinebediening. De machine wint; de bestanden staan dan in het menu van
 	   de gereedschapsrail, één tik verderop. */

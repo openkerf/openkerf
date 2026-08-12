@@ -6,12 +6,18 @@
 		sheets,
 		library,
 		canEdit = false,
+		elementen = 0,
 		onSwitched,
 		onEditMaterial
 	}: {
 		sheets: SheetStore;
 		library: LibraryStore;
 		canEdit?: boolean;
+		/** Hoeveel er op het actieve vel staat — het ontwerp in beeld. Alleen dat
+		 *  vel is te verwijderen (de editor opent nergens anders). Dient hier als
+		 *  terugval: op het moment van verwijderen telt `tellen()` bij de server,
+		 *  want deze waarde loopt na een velwissel even achter. */
+		elementen?: number;
 		onSwitched?: () => void;
 		/** Opent het materiaalvenster van de bovenbalk — dezelfde plek, want daar
 		 *  hoort deze keuze thuis (besluit B1). */
@@ -19,6 +25,67 @@
 	} = $props();
 
 	let editing = $state<string | null>(null);
+	/**
+	 * Bevestiging vóór het weggooien van werk.
+	 *
+	 * Een vel verwijderen nam het ontwerp erop mee zonder één vraag — precies het
+	 * soort verlies waar je pas achter komt als het al gebeurd is. Op een leeg vel
+	 * blijft het één klik: dan valt er niets te verliezen, en een vraag stellen
+	 * over niets leert je alleen ze weg te klikken.
+	 */
+	let bevestigen = $state<string | null>(null);
+	$effect(() => {
+		// Sluit de editor of wissel van vel, dan is de vraag van de baan.
+		void editing;
+		bevestigen = null;
+	});
+
+	/** Hoeveel er weggaat, vastgelegd op het moment van vragen. */
+	let teVerwijderen = $state(0);
+
+	function telling(n: number) {
+		return n === 1 ? '1 element' : `${n} elementen`;
+	}
+
+	/**
+	 * Tellen bij de bron, niet in de etalage.
+	 *
+	 * `elementen` komt uit het ontwerp in beeld en loopt een paar honderd ms
+	 * achter op een velwissel. Dat is precies lang genoeg om een vel mét werk
+	 * voor leeg aan te zien en het zonder vraag weg te gooien — de fout die deze
+	 * reparatie moet voorkomen. Valt de server weg, dan is de prop het beste wat
+	 * er is.
+	 */
+	async function tellen() {
+		try {
+			const response = await fetch('/api/design');
+			if (!response.ok) return elementen;
+			const data = await response.json();
+			return Array.isArray(data.elements) ? data.elements.length : elementen;
+		} catch {
+			return elementen;
+		}
+	}
+
+	async function vraagOfWeg(id: string) {
+		const aantal = await tellen();
+		// Leeg vel: geen vraag. Er is niets te verliezen, en een vraag over niets
+		// leert je alleen ze weg te klikken.
+		if (aantal === 0) {
+			await verwijder(id);
+			return;
+		}
+		teVerwijderen = aantal;
+		bevestigen = id;
+	}
+
+	async function verwijder(id: string) {
+		if (await sheets.remove(id)) {
+			bevestigen = null;
+			editing = null;
+			onSwitched?.();
+		}
+	}
 
 	async function go(id: string) {
 		if (sheets.active?.id === id) {
@@ -115,15 +182,27 @@
 			class="drop"
 			disabled={sheets.sheets.length < 2 || sheets.busy}
 			title={sheets.sheets.length < 2 ? 'Een project heeft minstens één vel' : undefined}
-			onclick={async () => {
-				if (await sheets.remove(sheet.id)) {
-					editing = null;
-					onSwitched?.();
-				}
-			}}
+			onclick={() => vraagOfWeg(sheet.id)}
 		>Vel verwijderen</button>
 		<button class="close" onclick={() => (editing = null)}>Klaar</button>
 	</div>
+
+	{#if bevestigen === sheet.id}
+		<!-- De vraag staat waar de knop staat, met het aantal erin: "7 elementen"
+		     is het verschil tussen een formaliteit en een waarschuwing. -->
+		<div class="bevestig" role="alertdialog" aria-label="Vel verwijderen">
+			<p>
+				Op <strong>{sheet.name}</strong> staat {telling(teVerwijderen)}. Verwijderen gooit dat
+				werk weg — dit is niet terug te halen.
+			</p>
+			<div class="knoppen">
+				<button class="annuleer" onclick={() => (bevestigen = null)}>Annuleren</button>
+				<button class="weg" disabled={sheets.busy} onclick={() => verwijder(sheet.id)}>
+					{sheets.busy ? 'Bezig…' : `Vel en ${telling(teVerwijderen)} verwijderen`}
+				</button>
+			</div>
+		</div>
+	{/if}
 {/if}
 
 <style>
@@ -210,6 +289,49 @@
 		background: var(--surface-1);
 	}
 	.drop { color: var(--danger); }
+	/* De vraag hoort onder de knop die hem stelt, niet in een venster midden op
+	   het scherm: je blijft in dezelfde strook kijken. */
+	.bevestig {
+		flex: none;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-2) var(--space-3);
+		background: var(--surface-2);
+		border-bottom: 1px solid var(--line);
+		border-left: 3px solid var(--danger-solid);
+	}
+	.bevestig p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
+	.knoppen {
+		display: flex;
+		/* Twee uitkomsten die elkaar uitsluiten, en één ervan is onomkeerbaar:
+		   ver genoeg uit elkaar om er niet naast te mikken. */
+		gap: var(--space-6);
+		margin-left: auto;
+	}
+	.annuleer,
+	.weg {
+		font-size: var(--text-xs);
+		min-height: 32px;
+		padding: 4px 12px;
+		border-radius: var(--radius-field);
+		border: 1px solid var(--line);
+		background: var(--surface-1);
+	}
+	.annuleer:hover { background: var(--hover); }
+	.weg {
+		background: var(--danger-solid);
+		border-color: var(--danger-solid);
+		color: var(--on-color);
+		font-weight: 600;
+	}
+	.weg:hover:not(:disabled) { filter: brightness(1.06); }
+	.weg:disabled { opacity: 0.45; cursor: not-allowed; }
+	@media (pointer: coarse) {
+		.annuleer,
+		.weg { min-height: 44px; }
+	}
 	.drop:disabled { opacity: 0.45; cursor: not-allowed; }
 	.close { margin-left: auto; }
 </style>
