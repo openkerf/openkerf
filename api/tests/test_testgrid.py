@@ -504,6 +504,44 @@ def test_the_newest_grid_wins_a_shared_operation_id(client):
     assert {o["grid"]["grid_id"] for o in marked} == {second["id"]}
 
 
+def test_removing_a_grid_never_touches_another_sheets_work(kernel, client):
+    """
+    Een raster van vel 1 weghalen terwijl je op vel 2 staat, wiste daar het werk.
+
+    Id's worden per document uitgedeeld, dus `meerk40t:3` op vel 2 is een ander
+    ding dan `meerk40t:3` op vel 1 — en het weghalen zocht ze puur op id op.
+    Gemeten: dertien lagen van een ánder raster verdwenen zonder een woord.
+    """
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    geleend_op = grid["cells"][0]["operation_id"]
+    geleend_elem = grid["cells"][0]["element_id"]
+    groep = grid["group_id"]
+
+    client.post("/api/sheets", json={"name": "Tweede"})
+    client.post("/api/sheets/vel-2/activate")
+    laag = client.post(
+        "/api/design/operations", json={"type": "cut", "speed": 99, "power_percent": 33}
+    ).json()["id"]
+    rect = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 100, "y_mm": 100, "width_mm": 30, "height_mm": 30},
+    ).json()["ids"][0]
+    client.post("/api/design/assign", json={"ids": [rect], "operation_id": laag})
+    # Precies de botsing die in het echt vanzelf ontstaat: dezelfde id's.
+    kernel.elements.find_node(laag).id = geleend_op
+    kernel.elements.find_node(rect).id = geleend_elem
+    if groep:
+        for node in kernel.elements.elems():
+            node.id = groep
+            break
+
+    client.post(f"/api/library/testgrids/{grid['id']}/remove-from-design")
+
+    overgebleven = client.get("/api/design").json()
+    assert len(overgebleven["elements"]) == 1, "het werk op dit vel is verdwenen"
+    assert any(o["id"] == geleend_op for o in overgebleven["operations"])
+
+
 def test_the_series_lands_on_values_a_person_would_type():
     """
     Een raster dat rijen snijdt op 11,667 mm/s is geen naslagwerk. Begin en eind

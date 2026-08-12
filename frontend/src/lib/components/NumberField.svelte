@@ -29,6 +29,13 @@
 		onchange?: (value: string) => void;
 	} = $props();
 
+	// Het label moet expliciet aan het invoerveld hangen. Een <label> die zijn
+	// controls omvat, kiest de *eerste* labelbare afstammeling — en dat is hier
+	// de −-knop, niet het veld. Gevolg vóór deze fix: klikken op het woord
+	// "Breedte (mm)" verlaagde de breedte met een stap, en het veld zelf had
+	// helemaal geen toegankelijke naam ("textbox: 609.6").
+	const id = $props.id();
+
 	function zet(richting: number) {
 		const nu = Number(value);
 		const basis = Number.isFinite(nu) ? nu : 0;
@@ -41,11 +48,12 @@
 	}
 </script>
 
-<label class="veld">
-	<span class="naam">{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</span>
+<div class="veld">
+	<label class="naam" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
 	<span class="teller">
 		<button type="button" {disabled} aria-label="{label} verlagen" onclick={() => zet(-1)}>−</button>
 		<input
+			{id}
 			class="mono"
 			type="text"
 			inputmode="decimal"
@@ -55,7 +63,7 @@
 		/>
 		<button type="button" {disabled} aria-label="{label} verhogen" onclick={() => zet(1)}>+</button>
 	</span>
-</label>
+</div>
 
 <style>
 	/* min-width: 0 op alle drie de niveaus. Zonder dat houdt het invoerveld

@@ -12,6 +12,14 @@ export type Job = {
 	status: string | null;
 	priority: number | null;
 	running: boolean | null;
+	/**
+	 * Staat deze job stil omdat er op Pauze gedrukt is?
+	 *
+	 * Komt van `driver.paused` en niet uit `status`: dat veld kent maar vier
+	 * waarden en "pause" zit er niet bij (meerk40t/core/laserjob.py:66). Zie
+	 * `StatusReader.paused` in api/openkerf_api/status.py.
+	 */
+	paused?: boolean | null;
 	steps_done: number | null;
 	steps_total: number | null;
 	progress: number | null;
@@ -45,6 +53,8 @@ export type Device = {
 	path: string | null;
 	active: boolean;
 	laser_status: string | null;
+	/** Pauzeknop ingedrukt? `null` als deze driver het niet vertelt. */
+	paused?: boolean | null;
 	connection?: Connection;
 	bed: Bed;
 	position: Position;
@@ -132,6 +142,10 @@ export function machineState(device: Device | null, connected: boolean): Machine
 	// `running === false` en viel daardoor buiten beeld — inclusief zijn pauze.
 	const job = currentJob(device);
 	if (device.laser_status === 'pause' || device.laser_status === 'paused') return 'paused';
+	// De driver zelf, en dat is de enige harde bron (zie `StatusReader.paused`).
+	// Ook zonder job telt hij: een machine die op pauze staat begint niet aan
+	// het volgende werk, en dan is "Gereed" een belofte die niet uitkomt.
+	if (device.paused === true) return 'paused';
 	// De drivers seinen een pauze niet terug (FEATURE-GAPS P3), dus een job die
 	// al gelopen heeft en nu stilstaat is het enige bewijs dat we krijgen.
 	// Zonder dit zei de balk "Bezig" naast een knop met "Hervatten" erop.
@@ -150,8 +164,19 @@ export function runningJob(device: Device | null): Job | null {
 	return device?.spooler.jobs.find((job) => job.running) ?? null;
 }
 
-/** Is deze job gepauzeerd? De engine schrijft dat in het statusveld. */
+/**
+ * Is deze job gepauzeerd?
+ *
+ * `status` stond hier als enige bron, en dat kón nooit werken: `LaserJob.status`
+ * geeft Running, Queued, Waiting of Disabled terug en nooit iets met "pause"
+ * erin (meerk40t/core/laserjob.py:66). Gemeten gevolg op een lopende job: na
+ * een druk op Pauze bleef alles staan zoals het stond — dezelfde pauzeknop,
+ * geen hervatknop, een groen "Bezig" — terwijl de driver wel degelijk
+ * gepauzeerd was. De API levert die vlag nu mee als `paused`; het statusveld
+ * blijft staan voor het geval een driver het ooit wél schrijft.
+ */
 export function isPaused(job: Job | null): boolean {
+	if (job?.paused === true) return true;
 	return (job?.status ?? '').toLowerCase().includes('pause');
 }
 
@@ -271,7 +296,46 @@ export function jobLabel(job: Job | null): string {
 		const n = Number(anoniem[1]);
 		return n === 1 ? '1 bewerking' : `${n} bewerkingen`;
 	}
+	const beweging = tupleLabel(raw);
+	if (beweging) return beweging;
 	return raw || 'Naamloze job';
+}
+
+/**
+ * Een bewegingsjob draagt geen naam maar zijn eerste instructie.
+ *
+ * Kader tonen spoolt een losse beweging, en de engine gebruikt daarvoor de
+ * repr van de Python-tuple als label. In het Job-paneel en op de telefoon stond
+ * dus letterlijk `('move_abs', 114.7544mm, 80.0mm)` onder een bewegende kop.
+ * Wat er staat is waar — het is echt de opdracht die loopt — maar het is de
+ * taal van de engine, en het hoort niet in beeld.
+ *
+ * Er staat bewust geen "Kader tonen" in deze tabel: dezelfde `move_abs` komt
+ * ook van jog en van "naar een punt", en een naam verzinnen die er soms naast
+ * zit, is precies het soort label waar deze ronde naar op zoek is.
+ */
+const BEWEGING: Record<string, string> = {
+	move_abs: 'Kop verplaatsen',
+	move_rel: 'Kop verplaatsen',
+	home: 'Naar huis',
+	physical_home: 'Naar huis',
+	rapid_mode: 'Kop verplaatsen',
+	set_origin: 'Nulpunt zetten'
+};
+
+function tupleLabel(raw: string): string | null {
+	const tuple = /^\(\s*'([a-z_]+)'\s*(?:,\s*([^)]*?))?,?\s*\)$/.exec(raw);
+	if (!tuple) return null;
+	const naam = BEWEGING[tuple[1]] ?? 'Machinebeweging';
+	const argumenten = (tuple[2] ?? '')
+		.split(',')
+		.map((deel) => deel.trim())
+		.filter(Boolean);
+	// Twee getallen zijn een punt op het bed; dat is het enige argument dat
+	// iemand naast de machine iets zegt.
+	const punt = argumenten.filter((a) => /^-?[\d.]+\s*mm$/.test(a));
+	if (punt.length === 2) return `${naam} naar ${punt[0]} × ${punt[1]}`;
+	return naam;
 }
 
 /** De engine spreekt Engels; deze app niet. */

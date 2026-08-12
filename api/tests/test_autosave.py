@@ -82,6 +82,39 @@ def test_it_can_be_thrown_away(client, server):
     assert client.get("/api/design/autosave").json()["exists"] is False
 
 
+def test_throwing_it_away_does_not_leave_you_without_a_net(client, server):
+    """
+    "Beginnen met een leeg canvas" gooit het herstelbestand weg, en daarna werk
+    je gewoon door. De rem meet vanaf de laatste schrijfbeurt, dus zonder deze
+    reset zwijgt de autosave nog een hele interval — en als je in die tijd
+    ophoudt met tekenen, staat er helemaal niets. Gemeten op een draaiende
+    server: weggooien, vier vormen tekenen, dertig seconden wachten, geen
+    herstelbestand.
+    """
+    a_rect(client)
+    # Via touch(), niet save(): de rem gaat pas lopen als er langs de rem
+    # geschreven is, en dat is precies de toestand waar het misgaat.
+    assert server.autosave.touch() is True
+
+    client.delete("/api/design/autosave")
+    a_rect(client)
+
+    assert server.autosave.touch() is True
+    assert client.get("/api/design/autosave").json()["exists"] is True
+
+
+def test_after_restoring_the_next_change_is_saved_again(client, server):
+    """Hetzelfde na herstellen: wat je ná het terugzetten doet, hoort beschermd."""
+    a_rect(client)
+    assert server.autosave.touch() is True
+    client.post("/api/design/clear")
+    client.post("/api/design/autosave/restore")
+
+    a_rect(client)
+
+    assert server.autosave.touch() is True
+
+
 def test_autosaving_does_not_rename_your_document(kernel, client, tmp_path):
     """
     Automatisch bewaren schrijft naar `herstel.svg`, en `save` zet die naam op

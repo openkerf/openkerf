@@ -197,11 +197,19 @@
 	 *
 	 * De engine laadt een bestand bovenop wat er al staat. Dat is soms handig
 	 * maar het is niet wat "openen" betekent, dus maken we eerst leeg — en
-	 * vragen we het eerst als daarmee onopgeslagen werk zou verdwijnen.
+	 * vragen we het eerst als daarmee werk zou verdwijnen.
+	 *
+	 * De vraag hing aan `dirty`, en dat is één stap te streng. Een net
+	 * geïmporteerde tekening staat op `dirty === false` (`/api/job/load` roept
+	 * `document.clean()` aan — terecht, hij is gelijk aan het bestand), en er is
+	 * op dat moment ook geen autosave. Gemeten: importeer een tekening, importeer
+	 * er nog een, en de eerste is weg — zonder vraag, zonder melding, zonder iets
+	 * om op terug te vallen. Wat op het bed ligt is werk, of het nu getypt of
+	 * geopend is; vragen doen we dus zodra er iets ligt.
 	 */
 	async function openFile(file: File) {
 		if (!canEdit) return;
-		if (!design.isEmpty && design.dirty) {
+		if (!design.isEmpty) {
 			pendingFile = file;
 			return;
 		}
@@ -900,12 +908,21 @@
 
 <!-- Openen zou werk weggooien: eerst vragen. -->
 <Dialog
-	title="Niet-opgeslagen wijzigingen"
+	title={design.dirty ? 'Niet-opgeslagen wijzigingen' : 'Er ligt al werk op dit vel'}
 	open={pendingFile !== null}
 	width="420px"
 >
+	<!-- Twee aanleidingen, twee zinnen. "Gewijzigd sinds de laatste keer
+	     opslaan" boven een net geopende tekening klopt niet, en een vraag die
+	     iets beweert wat je zelf kunt tegenspreken, leer je wegklikken. -->
 	<p class="ask">
-		Dit ontwerp is gewijzigd sinds de laatste keer opslaan. Openen vervangt wat er nu staat.
+		{#if design.dirty}
+			Dit ontwerp is gewijzigd sinds de laatste keer opslaan. Openen vervangt wat er nu staat.
+		{:else}
+			Openen vervangt wat er nu op dit vel staat:
+			{design.elements.length === 1 ? 'die ene vorm' : `die ${design.elements.length} vormen`}
+			verdwijnen van het bed.
+		{/if}
 	</p>
 	<div class="ask-actions">
 		<button class="btn" onclick={() => (pendingFile = null)}>Annuleren</button>

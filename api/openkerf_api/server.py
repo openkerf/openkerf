@@ -39,7 +39,15 @@ from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
 from .sheets import Sheets
-from .testgrid import TestGridGenerator, markeer_foto, plan_grid, raster_supported
+from .testgrid import (
+    TestGridGenerator,
+    is_cel_element,
+    is_cel_operatie,
+    is_raster_groep,
+    markeer_foto,
+    plan_grid,
+    raster_supported,
+)
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
 from .status import StatusReader
@@ -1647,15 +1655,21 @@ class ApiServer:
             def run():
                 grid = self.library.test_grid(grid_id)
                 removed = {"elements": 0, "operations": 0}
+                # Alleen wat werkelijk van dit raster is. Id's gelden per
+                # document, dus hetzelfde id staat op een ander vel voor iets
+                # anders — zie de toelichting bij `is_cel_operatie`.
                 if grid.get("group_id"):
                     node = self.kernel.elements.find_node(grid["group_id"])
-                    if node is not None:
+                    if node is not None and is_raster_groep(node):
                         removed["elements"] = len(list(node.flat())) - 1
                         node.remove_node(children=True, destroy=True)
                 for cell in grid["cells"]:
-                    for key in ("element_id", "operation_id"):
+                    for key, hoort_erbij in (
+                        ("element_id", is_cel_element),
+                        ("operation_id", is_cel_operatie),
+                    ):
                         node = self.kernel.elements.find_node(cell.get(key) or "")
-                        if node is not None:
+                        if node is not None and hoort_erbij(node, cell):
                             node.remove_node(children=True, destroy=True)
                             removed["operations" if key == "operation_id" else "elements"] += 1
                 for op in list(self.kernel.elements.ops()):

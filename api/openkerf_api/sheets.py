@@ -34,6 +34,9 @@ class Sheets:
         self.document = document
         self.directory = Path(directory)
         self._active: str | None = None
+        # Of het actieve vel in deze draai al werkelijk op tafel gelegd is.
+        # Zie `_materialiseer`.
+        self._geladen = False
 
     # ------------------------------------------------------------- opslag
 
@@ -108,7 +111,29 @@ class Sheets:
             self._write(sheets)
         if self._active is None or all(s["id"] != self._active for s in sheets):
             self._active = sheets[0]["id"]
+        self._materialiseer()
         return sheets
+
+    def _materialiseer(self) -> None:
+        """
+        Het actieve vel inladen bij de eerste vraag na het opstarten.
+
+        Zonder dit stond de vellenbalk na een herstart op "Vel 1" terwijl het
+        canvas leeg was: het bestand lag er wel, maar niemand had het ingeladen.
+        Erger dan de lege aanblik was wat er daarna gebeurde — wegwisselen ziet
+        een lege boom, leest dat als "de gebruiker heeft dit vel leeggemaakt",
+        en gooit `vel-1.svg` weg. Eén klik, alles kwijt.
+
+        Alleen als de boom leeg is: staat er al werk in (herstel na een
+        crash, of iets dat vóór de eerste vraag getekend werd), dan wint dat.
+        """
+        if self._geladen:
+            return
+        self._geladen = True
+        if any(True for _ in self.kernel.elements.elems()):
+            return
+        if self._active and self._file(self._active).is_file():
+            self._load(self._active)
 
     def _bed(self) -> tuple[float, float]:
         from meerk40t.core.units import Length
@@ -270,6 +295,16 @@ class Sheets:
             for operation in self.kernel.elements.ops():
                 if getattr(operation, "id", None):
                     self.drawing.user_operations.add(operation.id)
+            # `load` zet de bestandsnaam op het document, en die naam komt
+            # daarna terug als jobnaam in de spooler: elke job heette
+            # `vel-2.svg` terwijl de gebruiker "Proefstuk" op zijn tabblad ziet
+            # — dezelfde fout als `herstel.svg` in autosave.py. Dit bestand is
+            # onze opslag, geen document dat de gebruiker een naam gaf, dus het
+            # document blijft naamloos en de vellenbalk bepaalt de naam.
+            try:
+                self.kernel.elements._filename = None
+            except Exception:  # pragma: no cover - de engine mag ons niet breken
+                pass
         self.kernel.elements.signal("rebuild_tree", "all")
         self.kernel.elements.signal("refresh_scene", "Scene")
 

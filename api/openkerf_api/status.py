@@ -56,11 +56,38 @@ class StatusReader:
             "path": _attr(device, "path"),
             "active": _attr(device, "path") == active_path,
             "laser_status": _attr(device, "laser_status"),
+            "paused": self.paused(device),
             "connection": self.connection(device),
             "bed": self.bed(device),
             "position": self.position(device),
             "spooler": self.spooler_snapshot(device),
         }
+
+    @staticmethod
+    def paused(device):
+        """
+        Staat de machine stil op verzoek?
+
+        Dit ontbrak, en het is de enige bron die er is. `LaserJob.status`
+        kent maar vier waarden — Running, Queued, Waiting, Disabled
+        (core/laserjob.py:66) — en `is_running()` is `not self._stopped`, wat
+        pauzeren niet aanraakt. Een gepauzeerde job ziet er in de spooler dus
+        exact hetzelfde uit als een lopende. Gevolg in de app: je drukt op
+        Pauze, de machine stopt, en het scherm blijft "Bezig" tonen met een
+        pauzeknop erbij. De hervatknop verscheen nooit, want er was niets waar
+        hij op kon afgaan.
+
+        `driver.paused` wordt wél door alle drie de families gezet, op dezelfde
+        manier: lihuiyu/driver.py:325, ruida/driver.py:494, grbl/driver.py:869.
+        Geen driver of geen vlag = `None`, want "niet gepauzeerd" beweren over
+        een apparaat dat het niet vertelt is dezelfde gok die we bij de
+        verbinding al niet maken.
+        """
+        driver = _attr(device, "driver")
+        if driver is None:
+            return None
+        flag = _attr(driver, "paused")
+        return flag if isinstance(flag, bool) else None
 
     def connection(self, device) -> dict:
         """
@@ -182,14 +209,23 @@ class StatusReader:
             return {"present": False, "idle": None, "queue_length": 0, "jobs": []}
 
         queue = _safe(lambda: list(spooler.queue), []) or []
+        # De pauze zit op de driver, niet op de job (zie `paused`). Hem hier
+        # meegeven scheelt de frontend een tweede bron: wie de job leest, leest
+        # ook of hij stilstaat.
+        paused = self.paused(device)
         return {
             "present": True,
             "idle": _safe(lambda: bool(spooler.is_idle)),
             "queue_length": len(queue),
-            "jobs": [self.job_snapshot(job) for job in queue],
+            # Alleen de eerste in de rij is de job waar de driver mee bezig is;
+            # wat erachter staat, wacht op zijn beurt en is niet gepauzeerd.
+            "jobs": [
+                self.job_snapshot(job, paused if index == 0 else False)
+                for index, job in enumerate(queue)
+            ],
         }
 
-    def job_snapshot(self, job) -> dict:
+    def job_snapshot(self, job, device_paused=None) -> dict:
         steps_done = _attr(job, "steps_done")
         steps_total = _attr(job, "steps_total")
         if steps_total == 0 and hasattr(job, "calc_steps"):
@@ -198,12 +234,19 @@ class StatusReader:
             steps_total = _attr(job, "steps_total")
 
         loops = _attr(job, "loops")
+        running = _safe(lambda: bool(job.is_running()))
         return {
             "label": _attr(job, "label") or type(job).__name__,
             "type": type(job).__name__,
             "status": _safe(lambda: job.status),
             "priority": _attr(job, "priority"),
-            "running": _safe(lambda: bool(job.is_running())),
+            "running": running,
+            # Niet aan `running` ophangen: een job die nog niet begonnen is
+            # meldt `running is False`, en dan verdween een echte pauze uit
+            # beeld — de balk zei "Bezig" met een pauzeknop erbij, terwijl de
+            # machine stilstond en die job ook niet ging beginnen. Wie
+            # vooraan staat, staat stil.
+            "paused": bool(device_paused),
             "steps_done": steps_done,
             "steps_total": steps_total,
             "progress": self._progress(steps_done, steps_total),

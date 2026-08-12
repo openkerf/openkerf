@@ -13,7 +13,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import Segmented from '$components/Segmented.svelte';
-	import { KINDS, kindOf, type CatalogFamily, type ScanResult, type Vondst } from '$lib/machines.svelte';
+	import { KINDS, kindOfMachine, type CatalogFamily, type ScanResult, type Vondst } from '$lib/machines.svelte';
 	import { createStore } from '$lib/setup.svelte';
 
 	const store = createStore();
@@ -24,12 +24,11 @@
 	let aantallen = $derived(
 		KINDS.map((kind) => ({
 			...kind,
-			count: store.catalog
-				.filter(
-					(f: CatalogFamily) =>
-						kindOf(f.family, f.machines.map((m) => m.key)) === kind.id
-				)
-				.reduce((n: number, f: CatalogFamily) => n + f.machines.length, 0)
+			count: store.catalog.reduce(
+				(n: number, f: CatalogFamily) =>
+					n + f.machines.filter((m) => kindOfMachine(m) === kind.id).length,
+				0
+			)
 		}))
 	);
 

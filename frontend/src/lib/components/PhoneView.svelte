@@ -223,8 +223,33 @@
 		if (!r.ok) return;
 		rasters = await r.json();
 	}
+	/**
+	 * De rasterlijst bijhouden, want dit scherm is de tweede in de kamer.
+	 *
+	 * Dit haalde één keer op, bij het opbouwen van de pagina, en daarna nooit
+	 * meer. Gemeten met twee vensters op dezelfde server: de desktop maakt een
+	 * raster, je pakt de telefoon die al aanstond, en er staat niets — het
+	 * raster verscheen pas na handmatig verversen. Precies de volgorde waarin
+	 * je hem gebruikt: eerst instellen op de desktop, dan met de telefoon naar
+	 * de machine.
+	 *
+	 * Geen WebSocket: die draagt machinestatus, en de bibliotheek zit in een
+	 * andere database die geen signalen geeft. Tien seconden is ruim genoeg
+	 * voor iets wat op een gebrand bord wacht, en het is één klein verzoek.
+	 * Terugkomen op het tabblad haalt meteen op — dat is het moment waarop je
+	 * kijkt.
+	 */
 	$effect(() => {
 		haalRasters();
+		const klok = setInterval(haalRasters, 10_000);
+		const terug = () => {
+			if (document.visibilityState === 'visible') haalRasters();
+		};
+		document.addEventListener('visibilitychange', terug);
+		return () => {
+			clearInterval(klok);
+			document.removeEventListener('visibilitychange', terug);
+		};
 	});
 
 	async function foto(gridId: number, bestand: File) {

@@ -204,6 +204,76 @@ def test_sheet_names_stay_unique(client):
     assert names == ["Vel 1", "Doos 2", "Doos 2 (2)"]
 
 
+# -------------------------------------------------------------- jobnaam (P4)
+
+
+def _job_labels(kernel):
+    return [str(getattr(job, "label", "")) for job in kernel.device.spooler.queue]
+
+
+def _burnable_rect(client, x=10):
+    """Een rechthoek in een eigen laag: genoeg om een job te mogen starten."""
+    rect = a_rect(client, x=x)
+    layer = client.post(
+        "/api/design/operations", json={"type": "cut", "label": "Snijden"}
+    ).json()["id"]
+    client.post("/api/design/assign", json={"ids": [rect], "operation_id": layer})
+    return rect
+
+
+def test_a_job_carries_the_sheet_name_after_switching_sheets(kernel, client):
+    """
+    Elke job heette ooit `herstel.svg`. Dezelfde fout zit één deur verder: het
+    wisselen van vel laadt `vel-1.svg` terug, en die interne bestandsnaam ging
+    als jobnaam de wachtrij in. Bij de machine staan dan jobs die `vel-1.svg`
+    heten, terwijl de gebruiker "Vel 1" en "Proefstuk" op zijn tabbladen ziet.
+    """
+    _burnable_rect(client)
+    second = client.post("/api/sheets", json={"name": "Proefstuk"}).json()["sheets"][1]
+    client.post(f"/api/sheets/{second['id']}/activate")
+    _burnable_rect(client, x=30)
+
+    assert client.post("/api/job/start").status_code == 200
+    assert _job_labels(kernel)[-1] == "Proefstuk"
+
+    client.post("/api/spooler/clear")
+    # Terug naar een vel dat wél een bewaard bestand heeft: dat is het pad waar
+    # de bestandsnaam de naam van het vel overschreef.
+    client.post("/api/sheets/vel-1/activate")
+    assert client.post("/api/job/start").status_code == 200
+    assert _job_labels(kernel)[-1] == "Vel 1"
+
+
+# ------------------------------------------------------------------ herstart
+
+
+def test_a_restart_comes_back_to_the_sheet_you_left(kernel, tmp_path):
+    """
+    Na een herstart stond de vellenbalk op "Vel 1" terwijl het canvas leeg was:
+    het vel was nooit ingeladen. Wie dan één keer van vel wisselde, verloor
+    alles — wegwisselen ziet een lege boom en gooit `vel-1.svg` weg.
+    """
+    library = tmp_path / "v.db"
+    with TestClient(ApiServer(kernel, library_path=library).build_app()) as first:
+        a_rect(first)
+        first.post("/api/sheets", json={"name": "Tweede"})
+        first.post("/api/sheets/vel-2/activate")
+        first.post("/api/sheets/vel-1/activate")
+        assert count(first) == 1
+
+    # De herstart: verse server, lege elementenboom, dezelfde map op schijf.
+    kernel.elements.clear_all()
+    with TestClient(ApiServer(kernel, library_path=library).build_app()) as second:
+        # De vellenbalk vraagt dit bij het openen van de pagina.
+        second.get("/api/sheets")
+        assert count(second) == 1, "het actieve vel hoort weer op tafel te liggen"
+
+        second.post("/api/sheets/vel-2/activate")
+
+    bewaard = tmp_path / "openkerf-vellen" / "vel-1.svg"
+    assert bewaard.is_file(), "wisselen na een herstart gooide het vel weg"
+
+
 # ----------------------------------------------------------------- materiaal
 
 def test_a_sheet_carries_a_material_and_a_thickness(client):

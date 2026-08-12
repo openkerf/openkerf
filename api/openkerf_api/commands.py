@@ -200,11 +200,52 @@ class CommandRunner:
         except Exception:  # pragma: no cover - de engine mag ons niet breken
             pass
 
+    def _driver_paused(self):
+        """`driver.paused` van het actieve apparaat, of None als niemand het zegt."""
+        try:
+            flag = self.kernel.device.driver.paused
+        except Exception:
+            return None
+        return flag if isinstance(flag, bool) else None
+
     def pause(self) -> list[str]:
+        """
+        Pauzeren, en niet iets anders.
+
+        `pause` is bij lihuiyu, ruida én grbl een *toggle*: staat de driver al
+        op pauze, dan hervat hetzelfde commando (lihuiyu/device.py:844,
+        ruida/device.py:425, grbl/device.py:982). Twee keer op Pauze drukken
+        zet de machine dus weer aan het branden, en dat is precies het
+        tegenovergestelde van wat er op de knop staat.
+        """
+        if self._driver_paused() is True:
+            return ["already paused"]
         return self.run("pause")
 
     def resume(self) -> list[str]:
-        return self.run("resume")
+        """
+        Hervatten, en controleren dat het ook gebeurd is.
+
+        Gemeten op een lihuiyu-apparaat: `resume` meldt "Lihuiyu Channel
+        Resumed." en de machine blijft staan. Oorzaak zit in de engine — het
+        apparaat registreert `resume` twee keer, eerst als realtime-hervat
+        (device.py:855) en later nog eens als "Resume Controller"
+        (device.py:1045). De tweede wint, en die start de controller in plaats
+        van de driver: `driver.paused` blijft True en `hold_work()` houdt het
+        werk vast. Op een K40 kwam een gepauzeerde job daardoor nooit meer op
+        gang — de hervatknop deed niets, elke keer opnieuw.
+
+        Wij kunnen dat niet in `meerk40t/` repareren, dus controleren we het
+        resultaat: staat de driver na afloop nog op pauze, dan halen we hem er
+        met de toggle af. Voor ruida en grbl verandert er niets; daar is de
+        vlag na de eerste poging al weg.
+        """
+        if self._driver_paused() is False:
+            return ["not paused"]
+        output = self.run("resume")
+        if self._driver_paused() is True:
+            output = output + self.run("pause")
+        return output
 
     def stop(self) -> list[str]:
         """Abort the running job. estop is realtime; abort is the fallback."""

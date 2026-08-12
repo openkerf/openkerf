@@ -566,6 +566,49 @@ def cel_veelhoek(grid: dict, cell: dict) -> list[tuple[float, float]]:
     return [naar_foto(u0, v0), naar_foto(u1, v0), naar_foto(u1, v1), naar_foto(u0, v1)]
 
 
+# -------------------------------------------------- is dit knooppunt van ons?
+#
+# De koppeling raster → knooppunt staat in de database en overleeft een
+# herstart; id's worden per document uitgedeeld. `meerk40t:3` op vel 2 is dus
+# een ánder ding dan `meerk40t:3` op vel 1. Wie een raster van het canvas haalt
+# terwijl hij op een ander vel staat, wiste daar het werk — gemeten: dertien
+# lagen van een ander raster, zonder een woord. Daarom kijkt het weghalen niet
+# alleen naar het id maar ook of het gevonden knooppunt werkelijk deze cel is.
+# Dezelfde eis als `DesignReader._grid_for` stelt bij het markeren.
+
+MAAT_SPELING_MM = 0.6  # de lijndikte telt mee in `bounds`
+
+
+def is_raster_groep(node) -> bool:
+    return str(getattr(node, "type", "")).startswith("group")
+
+
+def is_cel_operatie(node, cell: dict) -> bool:
+    speed = getattr(node, "speed", None)
+    power = getattr(node, "power", None)
+    if speed is None or power is None:
+        return False
+    try:
+        return (
+            abs(float(speed) - float(cell["speed_mm_s"])) <= 0.01
+            and abs(float(power) - float(cell["power_percent"]) * 10) <= 0.1
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def is_cel_element(node, cell: dict) -> bool:
+    from meerk40t.core.units import UNITS_PER_MM
+
+    bounds = getattr(node, "bounds", None)
+    if not bounds or len(bounds) != 4:
+        return False
+    x0, y0, x1, y1 = (float(v) / UNITS_PER_MM for v in bounds)
+    gemeten = (x0, y0, x1 - x0, y1 - y0)
+    verwacht = (cell["x_mm"], cell["y_mm"], cell["width_mm"], cell["height_mm"])
+    return all(abs(a - b) <= MAAT_SPELING_MM for a, b in zip(gemeten, verwacht))
+
+
 def markeer_foto(grid: dict, path, row: int, column: int) -> bytes:
     """
     De rasterfoto met één vakje omcirkeld, als JPEG-bytes.

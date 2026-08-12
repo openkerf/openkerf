@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { kindOf, KINDS } from '$lib/machines.svelte';
+	import { kindOfMachine, KINDS } from '$lib/machines.svelte';
 	import { createStore } from '$lib/setup.svelte';
 
 	const store = createStore();
@@ -16,16 +16,17 @@
 
 	let families = $derived(
 		store.catalog
-			.filter(
-				(family) =>
-					!soort || kindOf(family.family, family.machines.map((m) => m.key)) === soort
-			)
+			// Per machine filteren, niet per familie: één familie kan machines van
+			// verschillende soorten bevatten (K-Series huisvest zowel de Nano's als
+			// de enige Ruida).
 			.map((family) => ({
 				...family,
-				machines: family.machines.filter((machine) =>
-					`${machine.friendly_name} ${family.family}`
-						.toLowerCase()
-						.includes(search.trim().toLowerCase())
+				machines: family.machines.filter(
+					(machine) =>
+						(!soort || kindOfMachine(machine) === soort) &&
+						`${machine.friendly_name} ${family.family}`
+							.toLowerCase()
+							.includes(search.trim().toLowerCase())
 				)
 			}))
 			.filter((family) => family.machines.length > 0)

@@ -81,6 +81,20 @@ class Autosave:
             "age_seconds": max(0, int(time.time() - stamp)),
         }
 
+    def _open_de_rem(self) -> None:
+        """
+        De rem lostrekken, zodat de eerstvolgende wijziging meteen bewaard wordt.
+
+        De rem meet vanaf de laatste schrijfbeurt, en dat klopt zolang er een
+        herstelbestand staat. Na weggooien of terugzetten staat er iets anders
+        op schijf dan wat de rem denkt, en dan is wachten fout. Gemeten vóór
+        deze regel: herstelbestand weggooien, daarna vier vormen tekenen en
+        dertig seconden wachten — en er stond nog steeds geen herstelbestand.
+        Wie in het openingsvenster voor "leeg beginnen" kiest, werkte dus een
+        hele sessie zonder vangnet.
+        """
+        self._last = 0.0
+
     def restore(self) -> dict:
         """Het herstelbestand terugladen, over een leeg canvas."""
         from .edits import DesignError
@@ -93,8 +107,10 @@ class Autosave:
         # Herstellen is geen opslaan: het werk staat nog steeds nergens waar de
         # gebruiker het zelf kan terugvinden.
         self.document.touch()
+        self._open_de_rem()
         return {"restored": True, **self.state()}
 
     def discard(self) -> dict:
         self.path.unlink(missing_ok=True)
+        self._open_de_rem()
         return {"exists": False}

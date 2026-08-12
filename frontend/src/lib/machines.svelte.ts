@@ -86,18 +86,41 @@ export const KINDS: {
 ];
 
 /**
- * Bij welke soort een familie uit de catalogus hoort.
+ * Bij welke soort één machine uit de catalogus hoort.
  *
- * Op naam classificeren is grof, maar de catalogus geeft niets beters mee dan
- * de familienaam en de sleutel. Wat nergens in past komt bij "diode" terecht —
- * dat is waar de meeste GRBL-borden thuishoren.
+ * Classificeren gebeurt per **machine**, niet per familie. Dat is geen detail:
+ * MeerK40t's familie "K-Series CO2-Laser" bevat naast twee Nano-borden en twee
+ * GRBL-borden óók `ruida-beta` — de enige Ruida in de hele catalogus. Wie op
+ * familienaam sorteerde, schoof die ene Ruida mee naar "K40 CO2" en liet de
+ * soort "CO2 met Ruida of Newly" achter met eenendertig Newly's en nul Ruida's.
+ *
+ * De `provider` is de betrouwbaarste bron die de catalogus meegeeft: hij zegt
+ * welke driver de machine aanstuurt, en dat is precies wat de soort betekent.
+ * Familienaam en sleutel zijn alleen nog terugval voor providers die we niet
+ * kennen — nieuwe upstream-drivers vallen dan niet meteen uit de lijst.
  */
-export function kindOf(family: string, keys: string[]): Kind {
-	const naam = family.toLowerCase();
-	const sleutels = keys.join(' ').toLowerCase();
-	if (/balor|fibre|fiber|uv/.test(naam + sleutels)) return 'galvo';
-	if (/k-series|k40/.test(naam) || /nano|k40/.test(sleutels)) return 'co2-k40';
-	if (/newly|ruida|moshi|co2/.test(naam) || /ruida|newly|moshi/.test(sleutels)) return 'co2-ruida';
+export function kindOfMachine(machine: {
+	family?: string;
+	key?: string;
+	provider?: string | null;
+}): Kind {
+	const driver = (machine.provider ?? '').toLowerCase().split('/').pop() ?? '';
+	if (driver === 'balor') return 'galvo';
+	if (driver === 'ruida' || driver === 'newly' || driver === 'moshi') return 'co2-ruida';
+	if (driver === 'lhystudios') return 'co2-k40';
+	if (driver === 'grbl') {
+		// Een GRBL-bord in een K40-kast is nog steeds een K40 voor wie ernaar
+		// kijkt; alle andere GRBL's zijn open diodeframes.
+		const context = `${machine.family ?? ''} ${machine.key ?? ''}`.toLowerCase();
+		return /k-series|k40/.test(context) ? 'co2-k40' : 'diode';
+	}
+
+	const naam = (machine.family ?? '').toLowerCase();
+	const sleutel = (machine.key ?? '').toLowerCase();
+	if (/balor|fibre|fiber|uv/.test(naam + sleutel)) return 'galvo';
+	if (/ruida|newly|moshi/.test(naam + sleutel)) return 'co2-ruida';
+	if (/k-series|k40|nano/.test(naam + sleutel)) return 'co2-k40';
+	if (/co2/.test(naam)) return 'co2-ruida';
 	return 'diode';
 }
 

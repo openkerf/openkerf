@@ -31,14 +31,19 @@ WRITE_ROUTES_PUT = [
 
 
 @pytest.fixture
-def local_client(kernel):
-    with TestClient(ApiServer(kernel).build_app()) as client:
+def local_client(kernel, tmp_path):
+    # Een eigen bibliotheek, en dus een eigen vellenmap: zonder pad schrijft en
+    # leest deze test in de échte instellingenmap van de gebruiker, tot en met
+    # de vellen van zijn lopende project.
+    with TestClient(ApiServer(kernel, library_path=tmp_path / "w.db").build_app()) as client:
         yield client
 
 
 @pytest.fixture
-def lan_server(kernel):
-    return ApiServer(kernel, bind="0.0.0.0", token="test-token")
+def lan_server(kernel, tmp_path):
+    return ApiServer(
+        kernel, bind="0.0.0.0", token="test-token", library_path=tmp_path / "lan.db"
+    )
 
 
 # --------------------------------------------------------------------- guard
@@ -273,3 +278,87 @@ def test_layers_that_are_all_switched_off_count_as_empty(local_client):
             )
 
     assert local_client.post("/api/job/start").status_code == 409
+
+
+# ------------------------------------------------------------- pauze/hervat
+
+
+class _Driver:
+    def __init__(self):
+        self.paused = False
+
+
+class _KaputteLihuiyu:
+    """
+    Een lihuiyu-apparaat, met precies de fout die de echte engine heeft.
+
+    `resume` staat er twee keer in (device.py:855 en device.py:1045); de tweede
+    registratie wint en start de controller in plaats van de driver. De vlag
+    blijft dus staan en de machine blijft stil. `pause` is een toggle.
+    """
+
+    def __init__(self):
+        self.driver = _Driver()
+        self.uitgevoerd = []
+
+    def console(self, regel):
+        opdracht = regel.strip()
+        self.uitgevoerd.append(opdracht)
+        if opdracht == "pause":
+            self.driver.paused = not self.driver.paused
+        # "resume" doet hier met opzet niets aan driver.paused.
+
+    def channel(self, _naam):
+        class Kanaal:
+            @staticmethod
+            def watch(_fn):
+                pass
+
+            @staticmethod
+            def unwatch(_fn):
+                pass
+
+        return Kanaal()
+
+    @property
+    def device(self):
+        return self
+
+
+def test_resume_actually_resumes_on_a_lihuiyu():
+    """
+    Hervatten moet de machine laten lopen, niet alleen een regel op het console
+    zetten. Zonder de controle achteraf bleef `driver.paused` True en kwam een
+    gepauzeerde job op een K40 nooit meer op gang.
+    """
+    kernel = _KaputteLihuiyu()
+    runner = CommandRunner(kernel)
+
+    runner.pause()
+    assert kernel.driver.paused is True
+
+    runner.resume()
+    assert kernel.driver.paused is False, "de hervatknop liet de machine staan"
+    assert kernel.uitgevoerd == ["pause", "resume", "pause"]
+
+
+def test_pause_does_not_double_as_resume():
+    """
+    `pause` is in de engine een toggle. Twee keer op Pauze drukken zette de
+    machine dus weer aan het branden, onder een knop waar "Pauze" op staat.
+    """
+    kernel = _KaputteLihuiyu()
+    runner = CommandRunner(kernel)
+
+    runner.pause()
+    runner.pause()
+    assert kernel.driver.paused is True
+
+
+def test_resume_is_a_no_op_when_nothing_is_paused():
+    kernel = _KaputteLihuiyu()
+    runner = CommandRunner(kernel)
+
+    runner.resume()
+    assert kernel.uitgevoerd == []
+    assert kernel.driver.paused is False
