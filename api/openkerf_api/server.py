@@ -865,7 +865,12 @@ class ApiServer:
 
         @app.post("/api/design/rotate", dependencies=write)
         def rotate_elements(body: dict):
-            return manage(self.editor.rotate, body.get("ids"), body.get("angle_deg"))
+            return manage(
+                self.editor.rotate,
+                body.get("ids"),
+                body.get("angle_deg"),
+                bool(body.get("absolute", False)),
+            )
 
         @app.post("/api/design/assign", dependencies=write)
         def assign_elements(body: dict):

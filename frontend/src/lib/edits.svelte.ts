@@ -64,8 +64,20 @@ export class EditController {
 		});
 	}
 
-	rotate(ids: string[] | string, angleDeg: number) {
-		return this.#post('/api/design/rotate', { ids, angle_deg: angleDeg });
+	/**
+	 * Draaien om het midden van de selectie.
+	 *
+	 * Met `absolute` is de hoek een bestemming en geen stap: de server rekent
+	 * uit hoeveel er nog bij moet vanaf de stand die de vormen nú hebben. Dat
+	 * is wat een hoekveld bruikbaar maakt — hetzelfde getal intikken levert
+	 * hetzelfde beeld op, hoe vaak je ook geklikt hebt.
+	 */
+	rotate(ids: string[] | string, angleDeg: number, absolute = false) {
+		return this.#post('/api/design/rotate', {
+			ids,
+			angle_deg: angleDeg,
+			absolute
+		});
 	}
 
 	assign(ids: string[] | string, operationId: string) {

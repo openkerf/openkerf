@@ -22,6 +22,7 @@ risking a stale id pointing at another element.
 import math
 
 from .commands import CommandRunner
+from .design import _visual_angle
 
 
 class DesignError(RuntimeError):
@@ -102,12 +103,41 @@ class DesignEditor:
         self.runner.run(f"resize {_mm(x)} {_mm(y)} {_mm(width)} {_mm(height)}")
         return {"ids": ids, "bounds": [x, y, width, height]}
 
-    def rotate(self, element_ids, angle_deg) -> dict:
+    def rotate(self, element_ids, angle_deg, absolute: bool = False) -> dict:
+        """
+        Rotate around the centre of the selection.
+
+        With ``absolute`` the angle is a destination rather than a step, so the
+        panel can offer an angle field whose value is a fact instead of a
+        running total. The engine has its own ``rotate -a`` for this, but it is
+        broken: it applies ``start - target`` where it means ``target - start``,
+        so every call doubles the current angle (measured, noted for upstream).
+        The delta is therefore computed here, which also keeps the selection
+        rigid: one rotation around the shared centre rather than one per node.
+        """
         angle = _finite(angle_deg, "angle_deg")
         ids = _ids(element_ids)
-        self._target(ids)
+        nodes = self._target(ids)
+        if absolute:
+            angles = [_visual_angle(node) for node in nodes]
+            known = [value for value in angles if value is not None]
+            if not known:
+                raise DesignError(
+                    "Van deze selectie is de hoek niet af te lezen; "
+                    "gebruik de stapjes van 1° of 90°."
+                )
+            spread = max(known) - min(known)
+            if spread > 0.01:
+                raise DesignError(
+                    "Deze vormen staan onder verschillende hoeken. "
+                    "Draai ze met de stapjes, of zet ze eerst gelijk."
+                )
+            angle -= known[0]
+        angle %= 360.0
+        if abs(angle) < 1e-6 or abs(angle - 360.0) < 1e-6:
+            return {"ids": ids, "rotated": 0.0, "absolute": bool(absolute)}
         self.runner.run(f"rotate {angle:.4f}deg")
-        return {"ids": ids, "rotated": angle}
+        return {"ids": ids, "rotated": angle, "absolute": bool(absolute)}
 
     # --------------------------------------------------------------- layers
 

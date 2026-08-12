@@ -22,6 +22,12 @@ def editor(kernel):
     return DesignEditor(kernel)
 
 
+def pose(kernel, element_id):
+    from openkerf_api.design import _pose_of
+
+    return _pose_of(kernel.elements.find_node(element_id))
+
+
 def bounds_mm(kernel, element_id):
     node = kernel.elements.find_node(element_id)
     return [round(v / UNITS_PER_MM, 1) for v in node.bounds]
@@ -206,6 +212,70 @@ def test_rotate_changes_the_bounding_box(kernel, editor):
 def test_rotate_rejects_nonsense(kernel, editor):
     with pytest.raises(DesignError):
         editor.rotate(first_id(kernel), "scheef")
+
+
+def test_pose_reports_the_angle_and_the_mirroring(kernel, editor):
+    """
+    De stand van een vorm is een feit uit de engine, geen optelsom van het
+    paneel. Zonder deze twee velden kan de rechterbalk wel draaien maar niet
+    tonen waar je staat.
+    """
+    element_id = first_id(kernel)
+    assert pose(kernel, element_id) == {"angle_deg": 0.0, "mirrored": False}
+
+    editor.rotate(element_id, 30)
+    assert pose(kernel, element_id)["angle_deg"] == pytest.approx(30.0, abs=0.01)
+    assert pose(kernel, element_id)["mirrored"] is False
+
+
+def test_pose_does_not_call_mirroring_a_half_turn(kernel, editor):
+    """
+    `matrix.rotation` telt een spiegeling als 180° mee. Een vorm die alleen
+    gespiegeld is, staat niet op zijn kop, dus die halve slag hoort er weer af
+    voordat het getal in beeld komt.
+    """
+    element_id = first_id(kernel)
+    DrawingMirror = __import__(
+        "openkerf_api.drawing", fromlist=["Drawing"]
+    ).Drawing(kernel)
+    DrawingMirror.mirror([element_id], "horizontal")
+
+    assert pose(kernel, element_id) == {"angle_deg": 0.0, "mirrored": True}
+
+
+def test_absolute_rotation_is_a_destination_not_a_step(kernel, editor):
+    """
+    Hetzelfde getal twee keer moet hetzelfde beeld geven. Dat is de hele reden
+    dat het hoekveld intikbaar mag zijn.
+
+    De engine heeft hier zelf `rotate -a` voor, maar die rekent
+    `start - doel` waar `doel - start` bedoeld is en verdubbelt daardoor de
+    hoek bij elke aanroep; vandaar dat het verschil in onze laag wordt
+    uitgerekend. Deze test valt om zodra upstream dat repareert én wij het weer
+    gaan gebruiken.
+    """
+    element_id = first_id(kernel)
+    before = bounds_mm(kernel, element_id)
+
+    editor.rotate(element_id, 40, absolute=True)
+    once = bounds_mm(kernel, element_id)
+    assert pose(kernel, element_id)["angle_deg"] == pytest.approx(40.0, abs=0.01)
+
+    editor.rotate(element_id, 40, absolute=True)
+    assert bounds_mm(kernel, element_id) == once
+
+    # En terug naar nul is echt terug: geen drift over een reeks draaiingen.
+    editor.rotate(element_id, 0, absolute=True)
+    assert bounds_mm(kernel, element_id) == before
+
+
+def test_absolute_rotation_refuses_a_selection_at_mixed_angles(kernel, editor):
+    kernel.console("rect 100mm 10mm 20mm 20mm\n")
+    ids = [e["id"] for e in DesignReader(kernel).snapshot()["elements"]]
+    editor.rotate(ids[0], 25)
+
+    with pytest.raises(DesignError, match="verschillende hoeken"):
+        editor.rotate(ids, 90, absolute=True)
 
 
 def test_rotate_over_http(kernel, editor, client):

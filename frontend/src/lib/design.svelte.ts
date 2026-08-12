@@ -38,6 +38,13 @@ export type DesignElement = {
 	} | null;
 	/** Hatch of wobble waar dit element in zit. */
 	effect: { id: string | null; type: string; label: string } | null;
+	/**
+	 * Hoe de vorm staat: de hoek in graden binnen [0, 360) en of hij
+	 * gespiegeld is. Komt uit de matrix van de engine, dus het is de stand van
+	 * het document en geen optelsom van wat het paneel toevallig gestuurd
+	 * heeft. Null als de matrix niets prijsgeeft.
+	 */
+	pose: { angle_deg: number; mirrored: boolean } | null;
 	operation_id: string | null;
 	operation_ids: string[];
 };
