@@ -73,7 +73,17 @@ for (const theme of ['light', 'dark']) {
 					? { naam: (laatste.textContent || '').trim().slice(0, 16) || '(icoon)', ...doos(laatste) }
 					: null,
 				stop: stop ? doos(stop) : null,
-				aantal: zichtbaar.length
+				aantal: zichtbaar.length,
+				// De materiaalchip is het enige element in deze balk dat mag
+				// krimpen. Elke knop die erbij komt betaalt zichzelf dus met de
+				// naam van het materiaal, en overloop meten ziet dat niet: de
+				// balk past nog, alleen staat er "Mul…" waar je in brandt.
+				// Gemeten tijdens de bugronde: met één knop erbij kromp hij op
+				// 768px van 63 naar 7 pixels.
+				materiaal: (() => {
+					const naam = balk.querySelector('.materiaal .naam');
+					return naam ? Math.round(naam.getBoundingClientRect().width) : null;
+				})()
 			};
 		}, width);
 
@@ -102,6 +112,15 @@ for (const theme of ['light', 'dark']) {
 				evidence: `"${meting.laatste.naam}" eindigt op ${meting.laatste.rechts} bij een venster van ${width} (${theme})`
 			});
 		}
+		// Uitholling: de balk past, maar het materiaal is onleesbaar geworden.
+		if (meting.materiaal !== null && meting.materiaal > 0 && meting.materiaal < 40) {
+			findings.push({
+				severity: 'major',
+				what: 'De materiaalchip is uitgehold om ruimte te maken',
+				evidence: `naam nog ${meting.materiaal}px breed op ${width}px/${theme} — waarín je brandt hoort leesbaar te blijven; overloop meten ziet dit niet`
+			});
+		}
+
 		// De noodrem is geen knop als de rest: hij moet er altijd helemaal staan.
 		if (!meting.stop) {
 			findings.push({
