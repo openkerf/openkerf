@@ -103,6 +103,26 @@ def test_throwing_it_away_does_not_leave_you_without_a_net(client, server):
     assert client.get("/api/design/autosave").json()["exists"] is True
 
 
+def test_clearing_the_design_does_not_use_up_the_throttle(client, server):
+    """
+    Leegmaken stuurt een boomsignaal, dus `touch()` komt langs — maar er is
+    niets te bewaren. Zonder deze regel zette dat wél de klok, en stond de
+    eerste twintig seconden van je volgende ontwerp buiten het vangnet.
+    Gemeten op een draaiende server: leegmaken, vier vormen tekenen, geen
+    herstelbestand.
+    """
+    a_rect(client)
+    assert server.autosave.touch() is True
+
+    client.delete("/api/design/autosave")
+    client.post("/api/design/clear")
+    assert server.autosave.touch() is False, "een leeg ontwerp schrijft niets"
+
+    a_rect(client)
+
+    assert server.autosave.touch() is True
+
+
 def test_after_restoring_the_next_change_is_saved_again(client, server):
     """Hetzelfde na herstellen: wat je ná het terugzetten doet, hoort beschermd."""
     a_rect(client)

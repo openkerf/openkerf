@@ -37,6 +37,15 @@ class Autosave:
         Geeft terug of er daadwerkelijk geschreven is — handig in tests, en het
         maakt zichtbaar dat de rem werkt.
         """
+        if not any(True for _ in self.kernel.elements.elems()):
+            # Een leeg ontwerp levert niets om te bewaren (zie `save`), dus het
+            # mag de rem ook niet opgebruiken. Dat deed het wél: leegmaken stuurt
+            # een boomsignaal, dat zette de klok, en `save` schreef vervolgens
+            # niets. Gemeten: ontwerp leegmaken, meteen daarna vier vormen
+            # tekenen — geen herstelbestand, tot er twintig seconden later
+            # toevallig nog een wijziging kwam. "Nieuw ontwerp" is precies het
+            # moment waarop je daarna gaat tekenen.
+            return False
         now = time.monotonic()
         if now - self._last < INTERVAL:
             return False
