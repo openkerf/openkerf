@@ -47,6 +47,74 @@ def maak(drawing, *soorten):
 # ------------------------------------------------------- L1: naar een plek
 
 
+def zichtbaar(drawing):
+    """De lagen zoals het paneel ze toont — dus zonder de lege standaardlagen."""
+    from openkerf_api.design import DesignReader
+
+    reader = DesignReader(
+        drawing.kernel,
+        keep_operations=drawing.user_operations,
+        grid_operations=drawing.grid_operations,
+    )
+    return [op.get("label") for op in reader.snapshot()["operations"]]
+
+
+@pytest.fixture
+def volle_boom(kernel):
+    """
+    Een boom zoals hij in het echt is: mét de standaardlagen van de engine.
+
+    De fixture hierboven veegt die weg, en juist dáárdoor stond deze suite
+    groen terwijl verschuiven in de app niets deed. Een verse boom heeft ruim
+    tweehonderd lege `op`-knopen die het paneel niet toont; wie in knopen telt
+    in plaats van in zichtbare lagen, schuift een laag langs een buur die
+    niemand ziet. Deze fixture houdt ze dus expres staan.
+    """
+    return Drawing(kernel)
+
+
+def test_moving_a_layer_down_moves_it_past_a_layer_you_can_see(volle_boom):
+    drawing = volle_boom
+    een = drawing.create_operation("engrave", label="Een")["id"]
+    drawing.create_operation("cut", label="Twee")
+    assert zichtbaar(drawing) == ["Een", "Twee"]
+
+    uit = drawing.move_operation(een, direction="down")
+
+    assert uit["moved"] is True
+    assert zichtbaar(drawing) == ["Twee", "Een"]
+
+
+def test_dragging_a_layer_lands_where_the_list_says(volle_boom):
+    """Slepen telt in de lijst waaruit je sleept, niet in knopen van de boom."""
+    drawing = volle_boom
+    drawing.create_operation("engrave", label="Een")
+    drawing.create_operation("cut", label="Twee")
+    drie = drawing.create_operation("raster", label="Drie")["id"]
+
+    drawing.move_operation(drie, index=0)
+
+    assert zichtbaar(drawing) == ["Drie", "Een", "Twee"]
+
+
+def test_a_layer_at_the_edge_does_not_pretend_to_move(volle_boom):
+    """
+    De bovenste laag omhoog is geen beweging, en mag dat ook niet melden.
+
+    Meldde hij `moved: true`, dan verversde het paneel voor niets — en erger:
+    dat was precies het signaal waarmee de kapotte versie deed alsof er iets
+    gebeurd was.
+    """
+    drawing = volle_boom
+    een = drawing.create_operation("engrave", label="Een")["id"]
+    drawing.create_operation("cut", label="Twee")
+
+    uit = drawing.move_operation(een, direction="up")
+
+    assert uit["moved"] is False
+    assert zichtbaar(drawing) == ["Een", "Twee"]
+
+
 def test_move_to_index_places_the_layer_there(kernel, drawing):
     ids = maak(drawing, "cut", "engrave", "raster", "dots")
 
@@ -96,7 +164,14 @@ def test_move_to_index_out_of_range_is_refused(drawing):
 
 
 def test_move_route_accepts_an_index(client, kernel, drawing):
-    ids = maak(drawing, "cut", "engrave")
+    # Via de route aanmaken, niet via de fixture: de server houdt zijn eigen
+    # `Drawing` en dus zijn eigen lijst van "door de gebruiker gemaakt". Maak
+    # je de lagen ernaast, dan kent de route ze niet als zichtbare laag en
+    # rangschik je iets wat voor de server niet in de lijst staat.
+    ids = [
+        client.post("/api/design/operations", json={"type": soort}).json()["id"]
+        for soort in ("cut", "engrave")
+    ]
 
     response = client.post(
         f"/api/design/operations/{ids[1]}/move", json={"index": 0}
@@ -169,7 +244,8 @@ def test_sort_reports_nothing_to_do_when_already_in_order(drawing):
 
 
 def test_sort_route(client, kernel, drawing):
-    maak(drawing, "cut", "raster")
+    for soort in ("cut", "raster"):
+        client.post("/api/design/operations", json={"type": soort})
 
     response = client.post("/api/design/operations/sort")
 

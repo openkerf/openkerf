@@ -639,15 +639,31 @@ class Drawing:
         except ValueError:  # pragma: no cover - de boom is dan al inconsistent
             raise DesignError("Deze laag staat niet in zijn eigen tak.")
 
+        # De lijst telt in lagen, wij tellen in kinderen van `branch ops`. Voor
+        # de gebruiker is "plek 3" de derde láág, niet de derde knoop; met een
+        # testraster of een lege standaardlaag ertussen is dat niet hetzelfde
+        # getal. Beide manieren rekenen daarom in deze lijst.
+        plain = [node for node in siblings if self._plain_layer(node)]
+
         if direction is not None:
             step = -1 if direction == "up" else 1
-            target = here + step
+            # Eén stap is één zichtbare laag verder, niet één knoop. Stapte dit
+            # over knopen, dan schoof de laag langs een onzichtbare buur en
+            # bleef het scherm hetzelfde — de fout die deze reparatie oplost.
+            try:
+                spot = plain.index(operation)
+            except ValueError:
+                # Geen zichtbare laag (een rastercel): dan telt de oude weg.
+                spot = None
+            if spot is None:
+                target = here + step
+            else:
+                buur = spot + step
+                if not 0 <= buur < len(plain):
+                    return {"id": operation_id, "moved": False, "index": here}
+                target = siblings.index(plain[buur])
             below = direction == "down"
         else:
-            # De lijst telt in lagen, wij tellen in kinderen van `branch ops`.
-            # Voor de gebruiker is "plek 3" de derde láág, niet de derde knoop;
-            # met een testraster ertussen is dat niet hetzelfde getal.
-            plain = [node for node in siblings if self._plain_layer(node)]
             try:
                 wanted = int(index)
             except (TypeError, ValueError):
@@ -688,10 +704,34 @@ class Drawing:
     }
 
     def _plain_layer(self, node) -> bool:
-        """Een gewone laag: een bewerking die geen cel van een testraster is."""
+        """
+        Een laag zoals de gebruiker hem ziet staan.
+
+        Drie eisen, en de derde is degene die ontbrak. Het moet een bewerking
+        zijn, het mag geen cel van een testraster zijn, én hij moet in beeld
+        staan: **een verse boom bevat ruim tweehonderd lege standaardlagen** die
+        de engine achter de hand houdt, en `DesignReader` laat die weg — een
+        bewerking zonder vormen is geen laag, tenzij de gebruiker hem net zelf
+        aanmaakte (`user_operations`).
+
+        Zonder die derde eis rekende het verschuiven in een lijst van
+        tweehonderd terwijl het paneel er twee toonde. Wat je dan ziet: op
+        "later branden" drukken verplaatst de laag netjes één plek — langs een
+        onzichtbare standaardlaag. De API meldt `moved: true`, de volgorde op
+        het scherm verandert niet, en slepen landt op een plek die niet bestaat
+        in de lijst waaruit je sleepte. Gemeten met twee lagen: tien lege
+        `op cut`-lagen ertussen, elke druk op de knop een schijnbeweging.
+        """
         if not str(getattr(node, "type", "")).startswith("op "):
             return False
-        return not self._is_grid_cell(node, getattr(node, "id", "") or "")
+        if self._is_grid_cell(node, getattr(node, "id", "") or ""):
+            return False
+        # Dezelfde regel als in `DesignReader.snapshot`: vormen erin, of door
+        # de gebruiker net aangemaakt. Blijven die twee uit elkaar lopen, dan
+        # loopt het verschuiven weer mis op lagen die niemand ziet.
+        if getattr(node, "children", None):
+            return True
+        return (getattr(node, "id", "") or "") in self.user_operations
 
     def sort_operations(self) -> dict:
         """
