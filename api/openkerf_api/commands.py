@@ -38,6 +38,12 @@ ERROR_MARKERS = (
 # gebrand zou zijn: de machine snijdt elke vorm net zo vaak over.
 PLAN_AND_SPOOL = "plan clear copy preprocess validate blob preopt optimize spool"
 
+# Dezelfde pijplijn, maar in tweeën geknipt zodat er tussen `copy` en de rest
+# iets in het plan gezet kan worden. Alleen gebruikt als een laag een Z-stap
+# draagt; zonder dat blijft de regel hierboven letterlijk wat hij was.
+PLAN_COPY = "plan clear copy"
+PLAN_REST = "plan preprocess validate blob preopt optimize spool"
+
 
 class CommandError(RuntimeError):
     def __init__(self, command, output):
@@ -167,9 +173,129 @@ class CommandRunner:
                     "'meebranden' uit wordt overgeslagen."
                 ],
             )
-        output = self.run(PLAN_AND_SPOOL)
+        output = self._plan_and_spool()
         self._name_job(name, burnable)
         return output
+
+    # ------------------------------------------------------ zakken per pass
+
+    def _plan_and_spool(self) -> list[str]:
+        """
+        Het plan bouwen. Met een Z-stap in twee stappen, anders in één.
+
+        De gewone weg blijft letterlijk één regel — dat pad wordt bij elke job
+        gelopen en verdient geen extra bochten voor een functie die alleen op
+        een GRBL met Z-as iets doet.
+        """
+        if not self._z_stepped_layers():
+            return self.run(PLAN_AND_SPOOL)
+        return self._plan_with_z_steps()
+
+    def _z_stepped_layers(self) -> list:
+        """
+        Lagen die meebranden, meer dan één pass doen én een Z-stap dragen.
+
+        De machine wordt eerst gevraagd of ze een Z-as heeft. Dat is niet
+        dubbelop met de weigering bij het instellen: een laag houdt zijn stap
+        als je naar een andere machine wisselt, en zonder deze vraag zou een
+        ontwerp dat op een diode-laser gemaakt is op de Ruida een `z_move`
+        sturen die daar niet bestaat — middenin de job, met de kop op het werk.
+        """
+        gevonden = []
+        device = getattr(self.kernel, "device", None)
+        if device is None or not getattr(device, "supports_z_axis", False):
+            return gevonden
+        if not self.kernel.find("command", "None", "z_move$"):
+            return gevonden
+        try:
+            operations = list(self.kernel.elements.ops())
+        except Exception:  # pragma: no cover - een boom zonder ops-tak
+            return gevonden
+        for operation in operations:
+            if not str(getattr(operation, "type", "")).startswith("op "):
+                continue
+            if not getattr(operation, "output", True):
+                continue
+            if not getattr(operation, "z_step_mm", None):
+                continue
+            if int(getattr(operation, "passes", 1) or 1) < 2:
+                continue
+            gevonden.append(operation)
+        return gevonden
+
+    def _plan_with_z_steps(self) -> list[str]:
+        """
+        Elke pass een eigen plek in het plan, met een Z-beweging ertussen.
+
+        De engine kan dit niet uit zichzelf: `passes` is bij haar een teller op
+        één cutcode-object (`CutObject.passes`/`burns_done`), en alle passes
+        delen dus één settings-dict — er is geen plek waar pass 2 een andere
+        hoogte kan dragen. Wat er wél is: `util console`-bewerkingen draaien
+        middenin een job, en de GRBL-driver kent `z_move <lengte>`. Door de
+        bewerking in het plan te herhalen met zo'n consolestap ertussen krijg je
+        precies wat LightBurn "Z step per pass" noemt.
+
+        Drie dingen die gemeten zijn en waar het op stukloopt als je ze mist:
+
+        1. **Niet kopiëren.** `copy(op_node)` levert een knoop zónder kinderen
+           op (gemeten: 1 kind vóór, 0 erna). Die kopie brandt niets, en dat
+           merk je pas op materiaal. Dezelfde knoop meerdere keren in de lijst
+           zetten werkt wél: `blob` maakt per plekje verse cutcode.
+        2. **Samenvoegen uit.** Met `opt_merge_ops`/`opt_merge_passes` aan
+           plakt de optimalisatie de drie stukken tot één cutcode en schuift de
+           consolestappen naar áchteren — dan zakt de Z pas als er al gebrand
+           is. Wij zetten ze uit voor deze job en daarna terug.
+        3. **Terug naar het begin.** Na de laatste pass gaat de kop weer
+           omhoog naar de hoogte waarop hij begon. Zonder dat begint de
+           volgende job een paar millimeter te laag, en dat merk je aan het
+           werkstuk in plaats van aan het scherm.
+
+        Het plan is een kopie van de boom (`planner.py:706` kopieert elke
+        bewerking mét kinderen), dus `passes` hier op 1 zetten laat de laag van
+        de gebruiker ongemoeid.
+        """
+        from meerk40t.core.node.util_console import ConsoleOperation
+
+        root = self.kernel.root
+        # Onthouden en terugzetten: dit zijn instellingen van de gebruiker, geen
+        # instellingen van deze job.
+        root.setting(bool, "opt_merge_ops", True)
+        root.setting(bool, "opt_merge_passes", True)
+        eerder = (root.opt_merge_ops, root.opt_merge_passes)
+        root.opt_merge_ops = False
+        root.opt_merge_passes = False
+        try:
+            output = self.run(PLAN_COPY)
+            plan = self.kernel.planner.get_or_make_plan("0")
+            plan.plan[:] = self._with_z_moves(plan.plan, ConsoleOperation)
+            output += self.run(PLAN_REST)
+            return output
+        finally:
+            root.opt_merge_ops, root.opt_merge_passes = eerder
+
+    @staticmethod
+    def _with_z_moves(steps, console_operation) -> list:
+        """De planstappen met de Z-bewegingen erin. Puur rekenwerk, dus testbaar."""
+        uitgebreid = []
+        for step in steps:
+            z_step = getattr(step, "z_step_mm", None)
+            passes = int(getattr(step, "passes", 1) or 1)
+            if not z_step or passes < 2:
+                uitgebreid.append(step)
+                continue
+            # De teller op de bewerking gaat naar één: het herhalen doen wij nu.
+            step.passes = 1
+            step.passes_custom = True
+            for index in range(passes):
+                uitgebreid.append(step)
+                if index < passes - 1:
+                    uitgebreid.append(
+                        console_operation(command=f"z_move {z_step:.3f}mm")
+                    )
+            uitgebreid.append(
+                console_operation(command=f"z_move {-z_step * (passes - 1):.3f}mm")
+            )
+        return uitgebreid
 
     def _name_job(self, name, burnable: int) -> None:
         """

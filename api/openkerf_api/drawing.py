@@ -829,6 +829,26 @@ class Drawing:
         except Exception:  # pragma: no cover - een driver die niet meewerkt
             return False
 
+    # Meer dan 20 mm zakken tussen twee passes is geen snijgang meer maar een
+    # verkeerd ingetikt getal, en een Z-as die zo ver wegloopt tikt tegen de kop.
+    Z_STEP_LIMIT_MM = 20.0
+
+    def z_step_supported(self) -> bool:
+        """
+        Kan deze machine de Z-as bewegen tussen twee passes door?
+
+        Twee eisen, en allebei nodig. De driver moet een Z-as **hebben**
+        (`supports_z_axis`, een instelling die alleen het GRBL-apparaat kent) en
+        er moet een `z_move`-commando geregistreerd staan dat hem beweegt. Op
+        een Ruida is er geen van beide: die driver kent het woord niet, dus daar
+        hoort dit veld ook niet op het scherm te staan (besluit B11).
+        """
+        device = getattr(self.kernel, "device", None)
+        if device is None or not getattr(device, "supports_z_axis", False):
+            return False
+        # Dezelfde vraag die de consoleparser stelt, dus hetzelfde antwoord.
+        return bool(self.kernel.find("command", "None", "z_move$"))
+
     def update_operation(self, operation_id: str, **fields) -> dict:
         operation = self._operation(operation_id)
         if self._is_grid_cell(operation, operation_id):
@@ -859,6 +879,29 @@ class Drawing:
                 operation.passes_custom = True
                 operation.passes = int(_positive(fields["passes"], "passes"))
                 applied["passes"] = operation.passes
+            if fields.get("z_step_mm") is not None:
+                # Zakken per pass: bij dik materiaal snijd je in lagen en gaat de
+                # focus elke pass mee naar beneden. De engine kent dit niet — een
+                # pass is bij haar een teller op één cutcode-object, en alle
+                # passes delen dus letterlijk één settings-dict. Wij bouwen het
+                # daarom in het plan op (zie CommandRunner.start_job), en slaan
+                # hier alleen op wat de gebruiker koos.
+                stap = _finite(fields["z_step_mm"], "z_step_mm")
+                if stap and not self.z_step_supported():
+                    raise DesignError(
+                        "Deze machine heeft geen Z-as die de driver kan bewegen, "
+                        "dus een stap per pass zou niets doen. Zet de Z-as aan bij "
+                        "de machine, of laat dit veld leeg."
+                    )
+                if abs(stap) > self.Z_STEP_LIMIT_MM:
+                    raise DesignError(
+                        f"z_step_mm moet tussen -{self.Z_STEP_LIMIT_MM:g} en "
+                        f"{self.Z_STEP_LIMIT_MM:g} mm liggen."
+                    )
+                # 0 is "uit", niet "nul millimeter zakken": zonder dat verschil
+                # zou een uitgezette stap alsnog het gesplitste plan opleveren.
+                operation.z_step_mm = stap or None
+                applied["z_step_mm"] = operation.z_step_mm
             if fields.get("output") is not None:
                 operation.output = bool(fields["output"])
                 applied["output"] = operation.output
@@ -1051,6 +1094,39 @@ class Drawing:
         self.user_operations.discard(operation_id)
         self._refresh()
         return {"removed": operation_id}
+
+    def delete_all_operations(self) -> dict:
+        """
+        Alle gewone lagen in één handeling weg.
+
+        Per laag kost dat drie klikken (uitklappen, verwijderen, bevestigen), en
+        wie een geïmporteerde SVG met tien kleuren opnieuw wil indelen, klikt
+        dus dertig keer. Hier is het één keer, met dezelfde belofte als bij één
+        laag: **de vormen blijven staan.** Ze zitten daarna in geen enkele laag
+        en het canvas tekent ze gestippeld — zichtbaar werk zonder bestemming,
+        precies wat je wil zien voordat je opnieuw indeelt.
+
+        Cellen van een testraster tellen niet mee: die horen bij één bord en
+        gaan er als geheel uit ("Raster uit ontwerp verwijderen"). Ze los
+        weggooien zou een half testresultaat achterlaten.
+        """
+        doomed = [
+            op
+            for op in self.elements.ops()
+            if str(op.type).startswith("op ")
+            and not self._is_grid_cell(op, getattr(op, "id", "") or "")
+        ]
+        if not doomed:
+            raise DesignError("Er is geen laag om weg te gooien.")
+        ids = [op.id for op in doomed]
+        with self.elements.undoscope("Alle lagen verwijderen"):
+            for op in doomed:
+                op.remove_node()
+        for operation_id in ids:
+            self.user_operations.discard(operation_id)
+        self._refresh()
+        # Het aantal vormen erbij, want dat is de belofte: die staan er nog.
+        return {"removed": ids, "kept_elements": sum(1 for _ in self.elements.elems())}
 
     # Dezelfde tien als `--layer-1..10` in tokens.css en LAYER_COLORS in de
     # frontend. Ze staan hier nog een keer omdat een nieuwe laag zijn kleur van

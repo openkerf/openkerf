@@ -261,6 +261,68 @@ for (const theme of ['light', 'dark']) {
 	await page.context().close();
 }
 
+// --- markeringen op het canvas in schermpixels, bij zoom
+// De tekstmeting hierboven keek alleen naar `svg text`, dus een bolletje van
+// "1.6" in een SVG die in millimeters rekent kwam er nooit langs: ingezoomd
+// werd het een schijf van 40 px over het pad dat je aan het zetten was.
+// Een greep, een punt of een ring is net zo goed schermmeubel als een label.
+{
+	const page = await open(b, { width: 1440 });
+	await page.waitForTimeout(700);
+	const later = await page.$('button:has-text("Later")');
+	if (later) { await later.click(); await page.waitForTimeout(300); }
+	await page.click('button[title^="Pen"]').catch(() => {});
+	await page.waitForTimeout(300);
+
+	const surface = await page.$('svg[role="img"]');
+	const box = surface && (await surface.boundingBox());
+	if (box) {
+		for (const [dx, dy] of [[-60, -40], [40, -20], [10, 50]]) {
+			await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+			await page.waitForTimeout(120);
+		}
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+		// De straal zoals hij op het scherm staat: de opgegeven r maal de schaal
+		// waarmee de SVG getekend wordt. Dat is de enige maat die de gebruiker ziet.
+		const meet = () =>
+			page.$$eval('svg circle', (ns) =>
+				ns
+					.filter((n) => n.getBoundingClientRect().width > 0)
+					// Trefzones zijn met opzet groot én onzichtbaar; die tellen niet mee.
+					.filter((n) => getComputedStyle(n).fill !== 'transparent')
+					.map((n) => {
+						const ctm = n.getScreenCTM();
+						const schaal = ctm ? Math.sqrt(Math.abs(ctm.a * ctm.d - ctm.b * ctm.c)) : 1;
+						return {
+							cls: String(n.getAttribute('class') ?? '?'),
+							px: +(n.r.baseVal.value * schaal).toFixed(1)
+						};
+					})
+			);
+
+		const gemeten = [];
+		for (const zoom of [0, 6, 12]) {
+			for (let i = 0; i < (zoom ? 6 : 0); i++) {
+				await page.mouse.wheel(0, -120);
+				await page.waitForTimeout(25);
+			}
+			for (const m of await meet()) gemeten.push({ ...m, zoom });
+		}
+		const tegroot = gemeten.filter((m) => m.px > 16);
+		if (tegroot.length) {
+			add('major', 'Markeringen op het canvas schalen mee met de zoom',
+				tegroot.slice(0, 6).map((m) => `.${m.cls} ${m.px}px na ${m.zoom} zoomstappen`).join(' | ') +
+					' (moet onder 16 px blijven)');
+		} else {
+			console.log('canvasmarkeringen blijven een schermmaat:',
+				gemeten.map((m) => `.${m.cls}@${m.zoom}=${m.px}px`).join(' | ') || 'geen gemeten');
+		}
+	}
+	await page.evaluate(() => fetch('/api/design/clear', { method: 'POST' }));
+	await page.context().close();
+}
+
 // --- gevulde knoppen in hover-staat
 // De hoofdknop werd grijs met witte tekst zodra je hem aanwees, en dat is drie
 // rondes lang aan elke meting ontsnapt omdat niemand hover mat. Nu wel.

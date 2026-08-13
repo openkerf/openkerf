@@ -83,6 +83,17 @@ class Provenance:
         if data.pop(sheet_id, None) is not None:
             self._write(data)
 
+    def clear(self) -> None:
+        """
+        Alle briefjes weg — bij een nieuw project.
+
+        Om dezelfde reden als `forget_sheet`: een nieuw project begint weer op
+        "vel-1", en zonder dit draagt de eerste laag daarvan de herkomst van
+        het werk van gisteren. Een instelling die zegt dat hij uit een testraster
+        komt terwijl niemand die preset toepaste, is erger dan geen herkomst.
+        """
+        self.path.unlink(missing_ok=True)
+
     # ------------------------------------------------------------ opzoeken
 
     def lookup(

@@ -147,7 +147,16 @@
 	let calibrateOpen = $state(false);
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
-	let pendingFile = $state<File | null>(null);
+	/** Een handeling die het huidige werk vervangt, in afwachting van een ja. */
+	type Vervanging =
+		| { soort: 'bestand'; file: File }
+		| { soort: 'project'; file: File }
+		| { soort: 'nieuw' };
+	let pending = $state<Vervanging | null>(null);
+	/** Tijdstip van het herstelbestand dat deze handeling zou overleven. */
+	let herstelbaar = $state<string | null>(null);
+	/** Welke vraag er nu staat; een laat antwoord op een oudere telt niet mee. */
+	let vraagTeller = 0;
 	// Werk van een vorige sessie. Nooit stilzwijgend terugladen: wie met een
 	// leeg canvas wil beginnen, moet dat kunnen.
 	let recovery = $state<{ exists: boolean; when: string | null } | null>(null);
@@ -209,11 +218,67 @@
 	 */
 	async function openFile(file: File) {
 		if (!canEdit) return;
-		if (!design.isEmpty) {
-			pendingFile = file;
+		await misschienEerstVragen({ soort: 'bestand', file });
+	}
+
+	/**
+	 * Elke handeling die het huidige werk vervangt, stelt dezelfde vraag.
+	 *
+	 * Openen van een bestand deed dat al; een projectbestand openen ging er
+	 * zonder één woord overheen — inclusief de vellen, want die komen uit het
+	 * bestand mee. Dat is de ergste vorm: stil werk weggooien.
+	 *
+	 * Wat "werk" is verschilt per handeling. Een bestand komt op dít vel, dus
+	 * daar telt alleen dit vel. Een project en opnieuw beginnen vervangen álle
+	 * vellen, dus dan telt de doos van gisteren ook mee, ook als het vel dat je
+	 * nu ziet leeg is.
+	 */
+	async function misschienEerstVragen(actie: Vervanging) {
+		const raaktAlleVellen = actie.soort !== 'bestand';
+		const erLigtWerk = !design.isEmpty || (raaktAlleVellen && sheets.sheets.length > 1);
+		if (!erLigtWerk) {
+			await voerUit(actie);
 			return;
 		}
-		await replaceWith(file);
+		herstelbaar = null;
+		pending = actie;
+		// Wat er ná deze handeling nog terug te halen is, verandert wat je
+		// kiest — dus staat het in de vraag. Alleen bij een gewijzigd ontwerp:
+		// een ontwerp dat gelijk is aan een bestand op schijf laat het
+		// herstelbestand juist opruimen (`autosave.forget_if_saved`), dus dan
+		// zou de belofte niet kloppen.
+		if (!design.dirty) return;
+		// Een teller en geen vergelijking met `actie`: `$state` levert een proxy
+		// terug, dus `pending === actie` is altijd onwaar en het antwoord kwam
+		// nooit aan. Gemeten: autosave bestond, ontwerp was vuil, en de regel
+		// bleef weg.
+		const nummer = ++vraagTeller;
+		const response = await fetch('/api/design/autosave');
+		if (!response.ok) return;
+		const staat = await response.json();
+		if (vraagTeller === nummer && pending !== null && staat.exists) herstelbaar = staat.when;
+	}
+
+	/** Opnieuw beginnen. Zie `/api/project/new`: de bibliotheek blijft staan. */
+	async function newProject() {
+		if (!canEdit) return;
+		await misschienEerstVragen({ soort: 'nieuw' });
+	}
+
+	async function voerUit(actie: Vervanging) {
+		if (actie.soort === 'bestand') {
+			await replaceWith(actie.file);
+		} else if (actie.soort === 'project') {
+			await laadProject(actie.file);
+		} else {
+			const response = await fetch('/api/project/new', {
+				method: 'POST',
+				headers: authHeaders()
+			});
+			if (!response.ok) return;
+			design.select(null);
+			await Promise.all([design.load(), sheets.load()]);
+		}
 	}
 
 	function authHeaders(): Record<string, string> {
@@ -234,9 +299,13 @@
 		});
 	}
 
-	/** Een project draagt ook de bibliotheek-context, dus eigen route. */
 	async function openProject(file: File) {
 		if (!canEdit) return;
+		await misschienEerstVragen({ soort: 'project', file });
+	}
+
+	/** Een project draagt ook de bibliotheek-context, dus eigen route. */
+	async function laadProject(file: File) {
 		const form = new FormData();
 		form.append('file', file);
 		const token = localStorage.getItem('openkerf.token') ?? '';
@@ -268,12 +337,17 @@
 	}
 
 	async function saveThenOpen() {
-		const file = pendingFile;
-		pendingFile = null;
-		if (!file) return;
+		const actie = pending;
+		pending = null;
+		if (!actie) return;
 		// Downloaden telt als opslaan: de API markeert het ontwerp schoon.
-		window.location.href = '/api/design/export.svg';
-		setTimeout(() => replaceWith(file), 800);
+		// Wat er weg zou gaan bepaalt wat je bewaart: bij een bestand is dat
+		// dit vel, bij een project en bij opnieuw beginnen gaan álle vellen
+		// weg — dan is een SVG van het actieve vel geen redding maar een
+		// halve.
+		window.location.href =
+			actie.soort === 'bestand' ? '/api/design/export.svg' : '/api/project/export.openkerf';
+		setTimeout(() => voerUit(actie), 800);
 	}
 
 	async function draw(shape: Record<string, unknown>) {
@@ -554,6 +628,7 @@
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
 	onOpenProject={openProject}
+	onNewProject={newProject}
 	material={velMateriaal}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
 	onOpenMaterial={() => (materiaalOpen = true)}
@@ -583,6 +658,7 @@
 		onPlaceImage={placeImage}
 		onOpenFile={openFile}
 		onOpenProject={openProject}
+		onNewProject={newProject}
 	/>
 	<!-- Vellen boven het canvas: elk vel is een eigen document, dus dit is
 	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->
@@ -906,35 +982,72 @@
 	</div>
 </Dialog>
 
-<!-- Openen zou werk weggooien: eerst vragen. -->
+<!-- Openen, een project openen en opnieuw beginnen gooien alle drie werk weg:
+     eerst vragen, met dezelfde woorden en dezelfde uitweg. -->
 <Dialog
-	title={design.dirty ? 'Niet-opgeslagen wijzigingen' : 'Er ligt al werk op dit vel'}
-	open={pendingFile !== null}
-	width="420px"
+	title={pending?.soort === 'nieuw'
+		? 'Opnieuw beginnen'
+		: design.dirty
+			? 'Niet-opgeslagen wijzigingen'
+			: pending?.soort === 'project'
+				? 'Er ligt al werk in dit project'
+				: 'Er ligt al werk op dit vel'}
+	open={pending !== null}
+	width="510px"
 >
 	<!-- Twee aanleidingen, twee zinnen. "Gewijzigd sinds de laatste keer
 	     opslaan" boven een net geopende tekening klopt niet, en een vraag die
 	     iets beweert wat je zelf kunt tegenspreken, leer je wegklikken. -->
 	<p class="ask">
 		{#if design.dirty}
-			Dit ontwerp is gewijzigd sinds de laatste keer opslaan. Openen vervangt wat er nu staat.
-		{:else}
-			Openen vervangt wat er nu op dit vel staat:
+			Dit ontwerp is gewijzigd sinds de laatste keer opslaan.
+		{:else if pending?.soort === 'bestand'}
+			Op dit vel staat werk:
 			{design.elements.length === 1 ? 'die ene vorm' : `die ${design.elements.length} vormen`}
 			verdwijnen van het bed.
+		{:else}
+			Er staat werk in dit project.
+		{/if}
+		{#if pending?.soort === 'bestand'}
+			Openen vervangt wat er nu op dit vel staat.
+		{:else if pending?.soort === 'project'}
+			Openen vervangt het hele project: het ontwerp,
+			{sheets.sheets.length === 1 ? 'het vel' : `alle ${sheets.sheets.length} vellen`} en het
+			materiaal komen uit het bestand.
+		{:else if sheets.sheets.length === 1}
+			Opnieuw beginnen leegt het bed. Je materialen en instellingen blijven staan.
+		{:else}
+			Opnieuw beginnen leegt het bed en verwijdert alle {sheets.sheets.length} vellen. Je
+			materialen en instellingen blijven staan.
 		{/if}
 	</p>
+	{#if herstelbaar}
+		<!-- Wat er hoe dan ook terug te halen is, hoort in de vraag te staan;
+		     het verandert wat je kiest. Alleen dít vel, want zo ver reikt het
+		     herstelbestand — die grens noemen we erbij. -->
+		<p class="ask nuance">
+			Van dit vel blijft een automatisch bewaarde versie van {herstelbaar} staan; die wordt bij
+			de volgende start aangeboden. De andere vellen niet.
+		</p>
+	{/if}
 	<div class="ask-actions">
-		<button class="btn" onclick={() => (pendingFile = null)}>Annuleren</button>
+		<button class="btn" onclick={() => (pending = null)}>Annuleren</button>
 		<button
 			class="btn"
 			onclick={() => {
-				const file = pendingFile;
-				pendingFile = null;
-				if (file) replaceWith(file);
+				const actie = pending;
+				pending = null;
+				if (actie) voerUit(actie);
 			}}
-		>Zonder opslaan openen</button>
-		<button class="btn primary" onclick={saveThenOpen}>Opslaan en openen</button>
+		>Niet opslaan</button>
+		<!-- Annuleren / Niet opslaan / Opslaan: het drieluik dat elk besturings-
+		     systeem bij deze vraag gebruikt. "Zonder opslaan openen" stond er
+		     eerst, en dan passen de drie knoppen niet op één regel — gemeten op
+		     1024: de primaire viel op een eigen regel. De werkwoorden staan al
+		     in de titel en de zin erboven. -->
+		<button class="btn primary" onclick={saveThenOpen}
+			>{pending?.soort === 'nieuw' ? 'Opslaan en beginnen' : 'Opslaan en openen'}</button
+		>
 	</div>
 </Dialog>
 
@@ -1252,6 +1365,11 @@
 		color: var(--text-2);
 	}
 	:global(.ask) { margin: 0 0 var(--space-4); }
+	/* De nuance staat onder de hoofdzin en mag hem niet overstemmen. */
+	:global(.ask.nuance) {
+		font-size: var(--text-sm);
+		color: var(--text-2);
+	}
 	:global(.ask-actions) {
 		display: flex;
 		gap: var(--space-2);

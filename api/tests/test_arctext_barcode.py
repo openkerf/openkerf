@@ -59,6 +59,38 @@ def test_arc_text_actually_bends(client):
     assert y1 - y0 > 8 * 1.5
 
 
+def test_arc_text_takes_the_font_you_pick(client):
+    """
+    De boogtekstgenerator liet geen letter kiezen: het venster vroeg er niet
+    om, dus kwam elke boog er in de standaardletter uit. De route kon het al —
+    dit pint dat de gekozen letter ook echt bij de generator terechtkomt, en
+    dat een andere letter een andere vorm oplevert.
+    """
+    letters = client.get("/api/design/fonts").json()
+    keuze = next(
+        (f for f in letters if f["file"].lower().endswith((".ttf", ".jhf", ".shx"))),
+        None,
+    )
+    if keuze is None:
+        pytest.skip("geen lettertype op deze machine")
+
+    vraag = {"text": "OPENKERF", "cx_mm": 100, "cy_mm": 100, "radius_mm": 40}
+    standaard = client.post("/api/design/generate/arctext", json=vraag)
+    assert standaard.status_code == 201
+    _, doos_standaard = only_element(client)
+
+    client.post("/api/design/clear")
+    gekozen = client.post(
+        "/api/design/generate/arctext", json={**vraag, "font": keuze["file"]}
+    )
+
+    assert gekozen.status_code == 201, gekozen.json()
+    _, doos_gekozen = only_element(client)
+    # Een andere letter tekent andere omtrekken; identieke maten zouden
+    # betekenen dat de keuze onderweg verdampt is.
+    assert doos_gekozen != doos_standaard or keuze["file"] == ""
+
+
 def test_inside_text_sits_below_the_centre(client):
     client.post(
         "/api/design/generate/arctext",

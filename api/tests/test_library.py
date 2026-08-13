@@ -347,6 +347,10 @@ def test_presets_follow_the_active_machine(client):
     Een preset is een uitspraak over déze laser op dit materiaal. Standaard
     toont de bibliotheek dus wat bij de actieve machine hoort.
     """
+    # Een machine die iemand heeft ingesteld; de engine start met een
+    # lhystudios-plaatsvervanger die niemand koos, en die krijgt bewust geen
+    # profiel (zie test_machine_profiles.py).
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "Mijn 5030"})
     profiel = client.get("/api/library/active-machine").json()
     assert profiel["device_path"], "het profiel hangt aan een device van de engine"
 
@@ -386,6 +390,7 @@ def test_presets_follow_the_active_machine(client):
 
 def test_a_machine_can_declare_a_z_axis_and_autofocus(client):
     """Wat de machine kán, bepaalt wat er in de jog verschijnt."""
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "Mijn 5030"})
     profiel = client.get("/api/library/active-machine").json()
     assert profiel["has_z"] == 0 and profiel["has_autofocus"] == 0
 

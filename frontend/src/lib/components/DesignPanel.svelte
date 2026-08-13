@@ -288,6 +288,9 @@
 	// Een laag weggooien neemt zijn toewijzingen mee. Dat mag niet op één tik
 	// naast de snelheidsvelden gebeuren, dus er komt een bevestiging tussen.
 	let confirmDrop = $state<string | null>(null);
+	// Alles tegelijk weggooien is dezelfde handeling maal tien, dus dezelfde
+	// bevestiging — maar wel eentje die zegt hóéveel er weggaat en wat blijft.
+	let confirmDropAll = $state(false);
 
 	const LAYER_TYPES = [
 		{ value: 'cut', label: 'Snijden', noun: 'Snijlaag' },
@@ -424,6 +427,11 @@
 	async function dropLayer(id: string) {
 		confirmDrop = null;
 		if (await edits.removeLayer(id)) onLayerChange?.();
+	}
+
+	async function dropAllLayers() {
+		confirmDropAll = false;
+		if (await edits.removeAllLayers()) onLayerChange?.();
 	}
 
 	/** Het soort bewerking in het Nederlands; de engine noemt ze "op cut". */
@@ -1043,6 +1051,15 @@
 						     op filteren lijkt. -->
 						Graveren vóór snijden
 					</button>
+					<!-- Alles weggooien staat hier omdat het over de hele lijst gaat,
+					     net als sorteren. De knop zelf draagt geen waarschuwkleur:
+					     hij haalt niets weg, hij stelt de vraag. -->
+					<button
+						class="rot"
+						disabled={edits.busy}
+						title="Haalt alle lagen weg. De vormen blijven op het bed staan."
+						onclick={() => (confirmDropAll = true)}
+					>Alle lagen weg…</button>
 				{/if}
 				<button
 					class="dichtheid"
@@ -1060,6 +1077,30 @@
 						{/if}
 					</svg>
 					{compact ? 'Compact' : 'Ruim'}
+				</button>
+			</div>
+		{/if}
+		{#if confirmDropAll}
+			<!-- Zeggen wat er weggaat én wat er blijft. Een laag weggooien mag geen
+			     werk weggooien, en dat moet je hier kunnen lezen vóór je klikt —
+			     dezelfde regel als bij het verwijderen van een vel. -->
+			<div class="confirm">
+				<span>
+					Alle {plainLayers.length} lagen weggooien?
+					{#if design.elements.length === 1}
+						De vorm op het bed blijft staan, daarna in geen enkele laag.
+					{:else if design.elements.length}
+						De {design.elements.length} vormen op het bed blijven staan, daarna in geen enkele laag.
+					{:else}
+						Er staat nog geen vorm op het bed.
+					{/if}
+					{#if gridGroups.length}
+						Testrasters blijven staan.
+					{/if}
+				</span>
+				<button class="rot" onclick={() => (confirmDropAll = false)}>Annuleren</button>
+				<button class="rot drop" disabled={edits.busy} onclick={dropAllLayers}>
+					Alle lagen weggooien
 				</button>
 			</div>
 		{/if}
@@ -1530,6 +1571,40 @@
 						</label>
 					{/if}
 
+					{#if design.layerCapabilities.z_step}
+						<!-- Zakken per pass, dezelfde regel als bij air assist (B11): alleen
+						     te zien als de driver een Z-as heeft die hij ook echt beweegt.
+						     Op een Ruida staat dit veld er dus niet, want daar zou het niets
+						     doen. De engine kent dit niet uit zichzelf — een pass is bij haar
+						     een teller op één cutcode-object — dus wij bouwen het op in het
+						     plan, met een `z_move` tussen de passes en een beweging terug
+						     naar de begin­hoogte na de laatste. -->
+						<div class="zstep wide">
+							<NumberField
+								label="Zakken per pass"
+								unit="mm"
+								value={String(op.z_step_mm ?? 0)}
+								step={0.1}
+								min={-20}
+								max={20}
+								disabled={edits.busy}
+								onchange={(v) => patchLayer(op.id, { z_step_mm: Number(v) })}
+							/>
+							<p class="hint">
+								{#if !op.z_step_mm}
+									Uit. Elke pass snijdt op dezelfde hoogte.
+								{:else if (op.passes ?? 1) < 2}
+									Doet nog niets: deze laag brandt één pass. Zet het aantal
+									passes hoger om in lagen te snijden.
+								{:else}
+									{op.passes}× snijden, elke keer {Math.abs(op.z_step_mm)} mm
+									{op.z_step_mm > 0 ? 'lager' : 'hoger'}. Na de laatste pass gaat
+									de kop terug naar de hoogte waarop hij begon.
+								{/if}
+							</p>
+						</div>
+					{/if}
+
 					{#if op.type === 'op raster' || op.type === 'op image'}
 						<!-- Alleen rasteren gebruikt deze; bij snijden zijn ze zinloos. -->
 						<!-- Elk over de volle breedte: een stepper is twee knoppen van
@@ -1911,6 +1986,12 @@
 	}
 	.soort :global(.segmented) {
 		width: 100%;
+	}
+	/* Het veld met zijn uitleg als één blok: de zin eronder zegt wat er gebeurt
+	   bij dit aantal passes, en die hoort bij het getal te staan. */
+	.zstep {
+		display: grid;
+		gap: var(--space-1);
 	}
 	/* Vier woorden in 222 px: met de standaard tussenruimte van 12 px per zijde
 	   liep "Graveren" over zijn eigen segment heen en las er "Gravere". De

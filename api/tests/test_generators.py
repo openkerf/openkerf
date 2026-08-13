@@ -1,5 +1,7 @@
 """Generatoren: herhalen, veelhoeken, dozen en QR-codes."""
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -66,6 +68,46 @@ def test_a_radial_copy_places_the_requested_number(client):
 
     assert response.status_code == 200
     assert len(elements(client)) == 6
+
+
+def path_box(element):
+    """De omhullende van het pad zoals het canvas het tekent, in eenheden."""
+    getallen = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?(?:E-?\d+)?", element["path"])]
+    xs, ys = getallen[0::2], getallen[1::2]
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
+def assert_bounds_follow_the_shape(client):
+    """
+    De handvatten staan om de vorm die je aanklikt.
+
+    `bounds` voedt het selectiekader, `path` de tekening. Lopen ze uiteen, dan
+    krijgt de aangeklikte kopie wel een dikke rand maar staat het kader om een
+    andere vorm — precies wat er gebeurde toen de engine de omhullende van het
+    origineel meekopieerde zonder hem opnieuw te berekenen.
+    """
+    for element in elements(client):
+        box = path_box(element)
+        for gemeten, getekend in zip(element["bounds"], box):
+            assert gemeten == pytest.approx(getekend, abs=1.0), element["id"]
+
+
+def test_a_grid_copy_carries_its_own_bounds(client):
+    client.post(
+        "/api/design/generate/grid",
+        json={"ids": [a_rect(client)], "columns": 3, "rows": 2, "gap_x_mm": 5, "gap_y_mm": 5},
+    )
+
+    assert_bounds_follow_the_shape(client)
+
+
+def test_a_radial_copy_carries_its_own_bounds(client):
+    client.post(
+        "/api/design/generate/radial",
+        json={"ids": [a_rect(client)], "repeats": 6, "radius_mm": 40},
+    )
+
+    assert_bounds_follow_the_shape(client)
 
 
 # -------------------------------------------------------------------- vormen

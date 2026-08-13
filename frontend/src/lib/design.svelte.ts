@@ -63,6 +63,8 @@ export type DesignOperation = {
 	bidirectional: boolean;
 	/** Air assist tijdens deze laag (besluit B11). */
 	air_assist: boolean;
+	/** Hoeveel de Z-as per pass zakt, in mm. `null` is uit. */
+	z_step_mm: number | null;
 	output: boolean;
 	element_ids: string[];
 	/** Gezet als deze laag een cel van een testraster is. */
@@ -314,6 +316,8 @@ export class DesignStore {
 	}
 
 	#pending = false;
+	/** Het herintredingsslot van `load()`; bewust geen `$state` — zie load(). */
+	#busy = false;
 
 	get elements() {
 		return this.design?.elements ?? [];
@@ -550,7 +554,10 @@ export class DesignStore {
 	 * Z-as. Standaard alles uit: liever een schakelaar die er even niet staat
 	 * dan een schakelaar die niets doet.
 	 */
-	layerCapabilities = $state<{ air_assist: boolean }>({ air_assist: false });
+	layerCapabilities = $state<{ air_assist: boolean; z_step: boolean }>({
+		air_assist: false,
+		z_step: false
+	});
 
 	async loadCapabilities() {
 		try {
@@ -594,10 +601,21 @@ export class DesignStore {
 
 	async load() {
 		// Signalen komen in bursts binnen; één herlaadslag per burst is genoeg.
-		if (this.loading) {
+		//
+		// Het slot is met opzet géén `$state`. Er stond hier `this.loading`, en
+		// dat maakte van elke `$effect` die load() aanroept een lus: het effect
+		// leest `loading` mee als afhankelijkheid, load() zet hem op true, het
+		// effect wordt daarmee ongeldig en roept opnieuw aan — en zodra hij weer
+		// op false gaat, nog een keer. Eén getekende vorm was genoeg om het te
+		// starten, en daarna stopte het nooit meer: gemeten 300 tot 430
+		// verzoeken per seconde naar /api/design, ook nadat het werk weer
+		// weggegooid was. Een gewoon veld wordt niet gevolgd en breekt de kring.
+		// Meting: `node gauntlet/canvas-lus.mjs`.
+		if (this.#busy) {
 			this.#pending = true;
 			return;
 		}
+		this.#busy = true;
 		this.loading = true;
 		try {
 			const response = await fetch('/api/design');
@@ -619,6 +637,7 @@ export class DesignStore {
 		} catch {
 			// Verbinding weg: de statusbalk meldt dat al, hier niets doen.
 		} finally {
+			this.#busy = false;
 			this.loading = false;
 			if (this.#pending) {
 				this.#pending = false;

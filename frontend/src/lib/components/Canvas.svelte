@@ -1709,8 +1709,10 @@
 						x2={endpointPreview.x2_mm}
 						y2={endpointPreview.y2_mm}
 					/>
+					<!-- `.measure-label` en niet `.measure`: die tweede is de gestippelde
+					     meetlijn, en tekst met een stippelrand eromheen is onleesbaar. -->
 					<text
-						class="mono measure"
+						class="mono measure-label"
 						x={(endpointPreview.x1_mm + endpointPreview.x2_mm) / 2}
 						y={(endpointPreview.y1_mm + endpointPreview.y2_mm) / 2 - labelSize}
 						text-anchor="middle"
@@ -1775,7 +1777,10 @@
 						fill="none"
 					/>
 					{#each penPoints as point, index (index)}
-						<circle class="pen-dot" cx={point.x} cy={point.y} r="1.6" />
+						<!-- `handleR` en niet een vast getal: 1,6 in deze SVG is 1,6 mm,
+						     dus de punten van het pentekenen groeiden mee met de zoom en
+						     bedekten ingezoomd het pad dat je aan het zetten was. -->
+						<circle class="pen-dot" cx={point.x} cy={point.y} r={handleR} />
 					{/each}
 				{/if}
 
@@ -2583,15 +2588,6 @@
 		stroke-width: 1;
 		stroke-dasharray: 4 3;
 		vector-effect: non-scaling-stroke;
-	}
-	.pen-line {
-		stroke: var(--accent);
-		stroke-width: 1;
-		vector-effect: non-scaling-stroke;
-	}
-	.pen-dot { fill: var(--accent); }
-	.measure {
-		fill: var(--text-2);
 	}
 	.endpoint {
 		fill: var(--surface-1);

@@ -201,6 +201,10 @@ class MachineManager:
         device.setting(str, "openkerf_info_key", "")
         device.openkerf_info_key = info_key
         self._mark_configured(device)
+        # `device add` maakt hem meteen actief; die keuze hoort de herstart te
+        # overleven. Zie `_remember_active`.
+        if getattr(self.kernel.device, "path", None) == device.path:
+            self._remember_active(device)
         self.flush()
         return {
             "path": device.path,
@@ -211,7 +215,34 @@ class MachineManager:
     def activate(self, path: str) -> dict:
         device = self._find(path)
         self.kernel.activate_service_path("device", device.path)
+        self._remember_active(device)
         return {"path": device.path, "active": True}
+
+    def _remember_active(self, device) -> None:
+        """
+        Vastleggen welke machine actief is, meteen.
+
+        MeerK40t schrijft `activated_device` pas bij `preshutdown`
+        (`device/basedevice.py:322`) en valt bij het opstarten anders terug op
+        `preferred_device`, en dat is standaard `lhystudios` — de
+        plaatsvervanger die de kernel zelf aanmaakt. Een headless engine die
+        gestopt of omgevallen wordt zonder nette afsluiting draait dus na de
+        herstart op een K40-driver in plaats van op de laser die je koos, en de
+        bovenbalk zegt dan "lihuiyu-device". Gemeten: server herstarten, en het
+        actieve apparaat is de plaatsvervanger.
+
+        Dezelfde sleutel als de engine gebruikt, alleen eerder geschreven; er
+        verandert niets in `meerk40t/`.
+        """
+        try:
+            setattr(self.kernel.root, "activated_device", device.path)
+            self.kernel.write_persistent("/", "activated_device", device.path)
+            # En meteen naar schijf: `write_persistent` vult alleen de
+            # instellingen in het geheugen, en die worden pas bij een nette
+            # afsluiting weggeschreven — precies wat hier niet gebeurt.
+            self.flush()
+        except Exception:  # pragma: no cover - de engine mag ons niet breken
+            pass
 
     def rename(self, path: str, label: str) -> dict:
         device = self._find(path)

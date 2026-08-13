@@ -167,6 +167,16 @@ export class EditController {
 		return this.#send(`/api/design/operations/${encodeURIComponent(id)}`, 'DELETE');
 	}
 
+	/**
+	 * Alle gewone lagen in één handeling (punt 4 uit de tweede testronde).
+	 *
+	 * De vormen blijven; ze zitten daarna in geen enkele laag. Cellen van een
+	 * testraster blijven staan — die gaan er als bord uit, niet als losse laag.
+	 */
+	async removeAllLayers() {
+		return this.#send('/api/design/operations', 'DELETE');
+	}
+
 	async #send(path: string, method: string, body?: unknown): Promise<EditResult> {
 		this.busy = true;
 		this.error = null;

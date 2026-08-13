@@ -189,6 +189,25 @@ export type ImportResult = {
 	presets: { added: number; updated: number; skipped: number };
 };
 
+export type MachineProfile = {
+	id: number;
+	name: string;
+	power_watt: number | null;
+	device_path: string | null;
+	/**
+	 * Het apparaat waar dit profiel bij hoort, bestaat niet meer in de engine.
+	 *
+	 * De bibliotheek staat naast de engine en gaat niet mee als je een machine
+	 * weggooit of de instellingen wist. Zonder dit onderscheid groeit de lijst
+	 * met namen waar niets meer achter zit — en dan zegt "voor deze machine"
+	 * niets meer.
+	 */
+	orphaned: boolean;
+	/** Hoeveel bewijs eraan hangt; bepaalt of hij weg kan. */
+	presets: number;
+	test_grids: number;
+};
+
 export type ActiveMachine = {
 	id: number;
 	name: string;
@@ -200,7 +219,7 @@ export type ActiveMachine = {
 export class LibraryStore {
 	materials = $state<Material[]>([]);
 	presets = $state<Preset[]>([]);
-	machines = $state<{ id: number; name: string; power_watt: number | null }[]>([]);
+	machines = $state<MachineProfile[]>([]);
 	/** Het profiel van de machine die nu actief is; bepaalt wat je hier ziet. */
 	activeMachine = $state<ActiveMachine | null>(null);
 	/** Uit: ook presets van andere machines tonen. */
@@ -301,6 +320,15 @@ export class LibraryStore {
 		});
 		if (created) await this.load();
 		return created;
+	}
+
+	async removeMachineProfile(id: number) {
+		const done = await this.#request(`/api/library/machines/${id}`, {
+			method: 'DELETE',
+			headers: this.#headers()
+		});
+		if (done) await this.load();
+		return done;
 	}
 
 	suggest(materialId: number | null, operation: string, thicknessMm: number | null) {

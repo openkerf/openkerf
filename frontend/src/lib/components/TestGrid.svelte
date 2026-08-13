@@ -79,6 +79,17 @@
 	// Het voorbeeld ververst elke 250 ms; dat mag de hoofdknop niet uitzetten.
 	let bezigVoorbeeld = $state(false);
 	let error = $state<string | null>(null);
+	/**
+	 * Waarom de huidige invoer nog geen bord oplevert.
+	 *
+	 * Apart van `error`, want dit is geen mislukking maar een tussenstand.
+	 * Tijdens het typen van "5" naar "30" is "van" even hoger dan "tot", en dat
+	 * duurt precies zolang als het kost om het tweede veld ook aan te passen.
+	 * Vóór deze scheiding viel het hele voorbeeldblok dan weg: het formulier
+	 * sprong van 506 naar 810 pixels breed en de reden stond onder de vouw.
+	 * Nu blijft het laatste geldige beeld staan met deze melding erboven.
+	 */
+	let voorbeeldFout = $state<string | null>(null);
 	let gelukt = $state<{ id: number; cellen: number } | null>(null);
 	// De maten in het plan zijn getallen, row_axis/column_axis zijn woorden.
 	type Plan = Record<string, number> & {
@@ -211,7 +222,11 @@
 	async function send(path: string, metOpschrift = false, stil = false) {
 		if (stil) bezigVoorbeeld = true;
 		else busy = true;
-		error = null;
+		// Een stille voorbeeldronde raakt `error` niet aan: dat blok staat
+		// onderaan het formulier en hoort bij een mislukte handeling, niet bij
+		// een half getypt getal.
+		if (stil) voorbeeldFout = null;
+		else error = null;
 		try {
 			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 			const token =
@@ -224,15 +239,19 @@
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				error =
+				const melding =
 					typeof data?.detail === 'string'
 						? data.detail
 						: `De engine weigerde het raster (${response.status}).`;
+				if (stil) voorbeeldFout = melding;
+				else error = melding;
 				return null;
 			}
 			return data;
 		} catch (e) {
-			error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			const melding = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			if (stil) voorbeeldFout = melding;
+			else error = melding;
 			return null;
 		} finally {
 			if (stil) bezigVoorbeeld = false;
@@ -277,7 +296,12 @@
 		];
 		if (timer) clearTimeout(timer);
 		timer = setTimeout(async () => {
-			preview = await send('/api/library/testgrids/preview', false, true);
+			const verse = await send('/api/library/testgrids/preview', false, true);
+			// Alleen vervangen als er een geldig bord uitkwam. Het laatste
+			// geldige beeld laten staan is rustiger dan een gat laten vallen —
+			// en het is ook eerlijker: dát is nog steeds wat je zou branden als
+			// je nu ophield met typen.
+			if (verse) preview = verse;
 		}, 250);
 		return () => {
 			if (timer) clearTimeout(timer);
@@ -399,14 +423,74 @@
 	);
 	let stap = $derived(gelukt ? 2 : 1);
 
+	/**
+	 * Waar het vorige bord kwam te liggen.
+	 *
+	 * Nodig omdat een tweede raster standaard op precies dezelfde plek valt:
+	 * Start X en Start Y staan nog op wat ze stonden. Gemeten: twee borden,
+	 * allebei op 20, 20 mm, exact over elkaar heen — op het canvas niet te zien
+	 * en in de machine een dubbele brand.
+	 */
+	let vorigBord = $state<{
+		id: number;
+		x: number;
+		y: number;
+		breedte: number;
+		hoogte: number;
+	} | null>(null);
+
 	async function generate() {
 		gelukt = null;
 		const grid = await send('/api/library/testgrids', true);
 		if (grid) {
 			gelukt = { id: grid.id, cellen: grid.cells?.length ?? 0 };
+			const plan = preview?.plan;
+			vorigBord = plan
+				? {
+						id: grid.id,
+						x: plan.outer_x_mm ?? plan.origin_x_mm,
+						y: plan.outer_y_mm ?? plan.origin_y_mm,
+						breedte: plan.outer_width_mm ?? plan.width_mm,
+						hoogte: plan.outer_height_mm ?? plan.height_mm
+					}
+				: null;
 			onGenerated?.(grid.id);
 		}
 	}
+
+	/**
+	 * Terug naar stap 1 voor een volgend bord.
+	 *
+	 * Dit was één knop met `generate()`: "Nog een raster tekenen" tékende
+	 * meteen, zonder je de kans te geven iets te veranderen — en liet daarbij
+	 * de melding van het vórige bord staan ("De job staat in de wachtrij"),
+	 * onder het nummer van het nieuwe. Nu doet de knop wat hij zegt: hij zet je
+	 * terug bij de instellingen, met de plek van het vorige bord in beeld zodat
+	 * je het nieuwe ernaast legt in plaats van erop.
+	 */
+	function opnieuw() {
+		gelukt = null;
+		naarMachine = null;
+		machineFout = null;
+		machineLet = null;
+		error = null;
+	}
+
+	/** Zou het nieuwe bord bovenop het vorige vallen? */
+	let botsing = $derived.by(() => {
+		if (!vorigBord || gelukt || !preview) return false;
+		const plan = preview.plan;
+		const x = plan.outer_x_mm ?? plan.origin_x_mm;
+		const y = plan.outer_y_mm ?? plan.origin_y_mm;
+		const b = plan.outer_width_mm ?? plan.width_mm;
+		const h = plan.outer_height_mm ?? plan.height_mm;
+		return (
+			x < vorigBord.x + vorigBord.breedte &&
+			vorigBord.x < x + b &&
+			y < vorigBord.y + vorigBord.hoogte &&
+			vorigBord.y < y + h
+		);
+	});
 
 	// ------------------------------------------------- vorige keer (gat T3)
 	//
@@ -1032,6 +1116,25 @@
 
 			{#if preview}
 				<aside class="preview" aria-label="Voorbeeld van het bord">
+					{#if voorbeeldFout}
+						<!-- Tijdens het typen is een tussenstand bijna altijd even
+						     ongeldig: je past "van" aan en die is dan hoger dan "tot"
+						     totdat je die ook aanpast. Het voorbeeld blijft staan, met
+						     de reden erboven — een gat laten vallen leert je niets en
+						     laat de halve wizard verspringen. -->
+						<p class="onaf" role="status">
+							{voorbeeldFout}<br />
+							<span class="stil">Hieronder staat je laatste geldige bord.</span>
+						</p>
+					{:else if botsing}
+						<!-- Het vorige bord ligt er nog, en Start X/Y staat nog op
+						     dezelfde plek. Twee borden over elkaar zie je op het canvas
+						     niet en in de machine wel. -->
+						<p class="onaf" role="status">
+							Dit bord valt over raster #{vorigBord?.id}, dat nog op je vel ligt.
+							Schuif het {form.anchor === 'center' ? 'midden' : 'startpunt'} op.
+						</p>
+					{/if}
 					<div class="figures">
 						<span class="mono">{preview.cells.length} vakjes</span>
 						<!-- De maat van het hele bord, niet van de vakjes alleen: het
@@ -1204,27 +1307,33 @@
 			     maar hij belooft niet dat dit de bedoelde weg is. -->
 			<!-- Zodra er een raster staat, is starten de volgende stap en niet nóg
 			     een raster. Twee even felle knoppen naast elkaar laten je kiezen
-			     tussen twee dingen waarvan er maar één aan de orde is. -->
-			<button
-				class="btn"
-				class:primary={!geenMateriaal && !gelukt}
-				disabled={busy || !preview}
-				onclick={generate}
-			>
-				{#if busy}
-					Bezig…
-				{:else if geenMateriaal}
-					Toch tekenen zonder materiaal
-				{:else if gelukt}
-					Nog een raster tekenen
-				{:else if preview}
-					Raster tekenen — {preview.cells.length} vakjes, {preview.plan.outer_width_mm ??
-						preview.plan.width_mm} × {preview.plan.outer_height_mm ??
-						preview.plan.height_mm} mm
-				{:else}
-					Raster tekenen
-				{/if}
-			</button>
+			     tussen twee dingen waarvan er maar één aan de orde is.
+			     De knop bij een gebrand bord tékent niet, hij zet je terug bij de
+			     instellingen: een tweede bord valt anders op de eerste. -->
+			{#if gelukt}
+				<button class="btn" onclick={opnieuw}>Nog een raster instellen</button>
+			{:else}
+				<button
+					class="btn"
+					class:primary={!geenMateriaal}
+					disabled={busy || !preview || voorbeeldFout !== null}
+					onclick={generate}
+				>
+					{#if busy}
+						Bezig…
+					{:else if voorbeeldFout}
+						Raster tekenen
+					{:else if geenMateriaal}
+						Toch tekenen zonder materiaal
+					{:else if preview}
+						Raster tekenen — {preview.cells.length} vakjes, {preview.plan.outer_width_mm ??
+							preview.plan.width_mm} × {preview.plan.outer_height_mm ??
+							preview.plan.height_mm} mm
+					{:else}
+						Raster tekenen
+					{/if}
+				</button>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -1381,10 +1490,14 @@
 	}
 	.schakelaars .hint { margin: 0; max-width: 52ch; }
 
-	/* Instellen en zien wat je instelt, naast elkaar. Onder 720px stapelt het. */
+	/* Instellen en zien wat je instelt, naast elkaar. Onder 720px stapelt het.
+	   De voorbeeldkolom heeft een vaste breedte in plaats van `auto`: met
+	   `auto` volgde hij de breedte van het bord, dus veranderde hij mee met de
+	   labels ("5" tegenover "12.5 mm/s") en schoof het formulier ernaast heen
+	   en weer tijdens het typen. Gemeten: 274 → 304 px bij één cijfer erbij. */
 	.werkbank {
 		display: grid;
-		grid-template-columns: 1fr auto;
+		grid-template-columns: minmax(0, 1fr) 292px;
 		gap: var(--space-4);
 		align-items: start;
 	}
@@ -1408,6 +1521,19 @@
 		background: var(--surface-1);
 		box-shadow: var(--lift-1);
 	}
+	/* De reden dat het voorbeeld even niet meeloopt. Een rustige melding en
+	   geen alarm: dit is een tussenstand tijdens het typen, geen fout. */
+	.onaf {
+		margin: 0 0 var(--space-2);
+		padding: var(--space-1h) var(--space-2);
+		border-radius: var(--radius-field);
+		border-left: 3px solid var(--warn-solid, var(--warn));
+		background: color-mix(in srgb, var(--warn-solid, var(--warn)) 12%, transparent);
+		font-size: var(--text-xs);
+		color: var(--text-1);
+	}
+	.onaf .stil { color: var(--text-2); }
+
 	.figures {
 		display: flex;
 		justify-content: space-between;

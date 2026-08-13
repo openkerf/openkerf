@@ -258,6 +258,38 @@ def test_a_removed_layer_disappears_again(kernel, client):
     )
 
 
+def test_all_layers_go_in_one_action_and_the_shapes_stay(kernel, client):
+    """
+    Punt 4 van Jelle: alle lagen weggooien moest per laag, drie klikken elk.
+
+    De belofte is dezelfde als bij één laag: een laag weggooien is geen werk
+    weggooien. De vormen staan er na afloop nog, in geen enkele laag.
+    """
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
+    )
+    client.post("/api/design/operations", json={"type": "cut", "label": "Snijden"})
+    client.post("/api/design/operations", json={"type": "engrave", "label": "Graveren"})
+    voor = client.get("/api/design").json()
+    assert len(voor["operations"]) >= 2
+    vormen = len(voor["elements"])
+
+    response = client.delete("/api/design/operations")
+
+    assert response.status_code == 200
+    assert response.json()["kept_elements"] == vormen
+    na = client.get("/api/design").json()
+    assert na["operations"] == []
+    assert len(na["elements"]) == vormen
+
+
+def test_dropping_all_layers_without_any_is_refused(client):
+    client.delete("/api/design/operations")
+
+    assert client.delete("/api/design/operations").status_code == 409
+
+
 def test_export_writes_an_svg_that_carries_the_operations(kernel, client):
     """
     Without saving, all work is fleeting. MeerK40t's own writer keeps its

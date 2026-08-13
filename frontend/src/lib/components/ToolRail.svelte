@@ -12,6 +12,7 @@
 		onPlaceImage,
 		onOpenFile,
 		onOpenProject,
+		onNewProject,
 		onOpenCatalogue,
 		onOpenGenerators,
 		onOpenClipart
@@ -34,6 +35,8 @@
 		onPlaceImage?: (file: File) => void;
 		onOpenFile?: (file: File) => void;
 		onOpenProject?: (file: File) => void;
+		/** Opnieuw beginnen. Vraagt zelf om bevestiging als er werk ligt. */
+		onNewProject?: () => void;
 		onOpenCatalogue?: () => void;
 		onOpenGenerators?: () => void;
 		onOpenClipart?: () => void;
@@ -193,6 +196,11 @@
 				</label>
 				{#if projectInRail}
 					<!-- Alleen onder 850px: daarboven staat "Project" in de bovenbalk. -->
+					<button class="regel" role="menuitem" type="button"
+						onclick={() => { meerOpen = false; onNewProject?.(); }}>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M12 11v6m-3-3h6"/></svg>
+						<span>Nieuw project</span>
+					</button>
 					<label class="regel">
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
 						<span>Project openen</span>

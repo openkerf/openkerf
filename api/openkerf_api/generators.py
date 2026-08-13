@@ -560,9 +560,30 @@ class Generators:
 
     def _added(self, generator: str, expected: int) -> dict:
         self.elements.validate_ids()
+        self._recalculate_bounds()
         self.elements.signal("rebuild_tree", "all")
         self.elements.signal("refresh_scene", "Scene")
         return {"generator": generator, "expected": expected}
+
+    def _recalculate_bounds(self):
+        """
+        De omhullende opnieuw laten uitrekenen na een herhaling.
+
+        `grid` en `radial` maken hun kopieën met `copy(node)` en schuiven ze
+        daarna met een rauwe `e.matrix *= ...` (core/elements/grid.py:240,360).
+        Die toekenning meldt niets aan de node, dus de kopie houdt de
+        omhullende die hij van het origineel meekreeg — `bounds` wijst naar de
+        oude plek terwijl `as_geometry()` de nieuwe geeft. Op het canvas is dat
+        precies wat je ziet: de aangeklikte kopie krijgt zijn dikke rand, maar
+        de handvatten staan om het origineel.
+
+        Wij kunnen dat hier niet in de engine repareren (kernprincipe 1), dus
+        vragen we de nodes hun omhullende te vergeten. Zie de upstream-lijst.
+        """
+        for node in self.elements.elems():
+            marker = getattr(node, "set_dirty_bounds", None)
+            if marker is not None:
+                marker()
 
 
 # Wie heeft de tand en wie het gat. Twee panelen die aan elkaar zitten, moeten

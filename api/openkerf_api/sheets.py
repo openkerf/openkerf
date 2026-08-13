@@ -254,6 +254,24 @@ class Sheets:
         self._write([s for s in sheets if s["id"] != sheet_id])
         return self.state()
 
+    def reset(self) -> dict:
+        """
+        Terug naar één leeg vel — wat "nieuw project" met de vellen doet.
+
+        De opgeslagen vellen gaan mee weg. Ze staan naast de database en
+        overleven anders het nieuwe project: je begint dan schoon en vindt in
+        de vellenbalk nog de dozen van gisteren.
+        """
+        self.directory.mkdir(parents=True, exist_ok=True)
+        for old in self.directory.glob("*.svg"):
+            old.unlink(missing_ok=True)
+        self.index_path.unlink(missing_ok=True)
+        self._active = None
+        # Er valt niets in te laden en de boom is net geleegd; zonder dit zou
+        # `_ensure` het net weggegooide vel alsnog van schijf willen halen.
+        self._geladen = True
+        return self.state()
+
     # ------------------------------------------------------------ wisselen
 
     def activate(self, sheet_id: str) -> dict:

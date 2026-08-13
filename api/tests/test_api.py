@@ -74,6 +74,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/elements/{element_id}/vectorise",
         "/api/design/elements/{element_id}/crop",
         "/api/project/open",
+        # Opnieuw beginnen. Gooit het ontwerp en de vellen weg, dus hij hoort
+        # achter dezelfde poort als openen; de frontend vraagt het eerst.
+        "/api/project/new",
         "/api/design/elements",
         "/api/design/elements/delete",
         "/api/design/elements/duplicate",

@@ -272,7 +272,12 @@ def test_air_assist_is_not_offered_without_a_driver_command(client, drawing):
     scherm. Het dummy-apparaat heeft geen coolant-methode geclaimd.
     """
     assert drawing.air_assist_supported() is False
-    assert client.get("/api/design/capabilities").json() == {"air_assist": False}
+    # Dezelfde regel geldt voor de Z-stap per pass: het dummy-apparaat heeft
+    # geen Z-as, dus staat er geen veld voor op het scherm.
+    assert client.get("/api/design/capabilities").json() == {
+        "air_assist": False,
+        "z_step": False,
+    }
 
 
 def test_air_assist_is_refused_while_the_machine_has_none(drawing):

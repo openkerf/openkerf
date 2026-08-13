@@ -456,6 +456,9 @@ class DesignReader:
             # `coolant`: 0 laat staan, 1 aan, 2 uit. Voor de gebruiker is het
             # een schakelaar, dus alles wat niet 1 is, is uit.
             "air_assist": _plain(getattr(op, "coolant", None)) == 1,
+            # Zakken per pass; van ons, niet van de engine (zie
+            # Drawing.z_step_supported). `null` betekent uit.
+            "z_step_mm": _plain(getattr(op, "z_step_mm", None)),
             "output": bool(getattr(op, "output", True)),
             "element_ids": referenced,
         }

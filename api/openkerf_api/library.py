@@ -230,6 +230,47 @@ class Library:
         ):
             if kolom not in profiel:
                 db.execute(f"ALTER TABLE machine_profile ADD COLUMN {kolom} {definitie}")
+        Library._dedupe_machines(db)
+
+    @staticmethod
+    def _dedupe_machines(db):
+        """
+        Eén profiel per apparaat, en daarna een slot op die regel.
+
+        `profile_for_device` deed eerst een SELECT en daarna een INSERT. De
+        bibliotheek laadt `/api/library/presets`, `/api/library/machines` en
+        `/api/library/active-machine` gelijktijdig, en meerdere daarvan vragen
+        om het actieve profiel — dus reden er drie verzoeken door dat gat en
+        stonden er drie profielen voor dezelfde laser in de lijst. Gemeten met
+        acht gelijktijdige aanroepen: acht profielen. In de bibliotheek van
+        Jelle staan twee regels `lihuiyu-device` met dezelfde seconde erop.
+
+        Wat blijft is het oudste profiel; presets, rasters en instellingen van
+        de dubbelen verhuizen ernaartoe, want ze gaan over dezelfde machine.
+        """
+        rijen = db.execute(
+            "SELECT id, device_path FROM machine_profile "
+            "WHERE device_path IS NOT NULL AND device_path <> '' ORDER BY id"
+        ).fetchall()
+        houden: dict[str, int] = {}
+        for rij in rijen:
+            pad = rij["device_path"]
+            if pad in houden:
+                db.execute(
+                    "UPDATE preset SET machine_id = ? WHERE machine_id = ?",
+                    (houden[pad], rij["id"]),
+                )
+                db.execute(
+                    "UPDATE test_grid SET machine_id = ? WHERE machine_id = ?",
+                    (houden[pad], rij["id"]),
+                )
+                db.execute("DELETE FROM machine_profile WHERE id = ?", (rij["id"],))
+            else:
+                houden[pad] = rij["id"]
+        db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS machine_profile_device "
+            "ON machine_profile(device_path) WHERE device_path IS NOT NULL"
+        )
 
     def _connect(self):
         db = sqlite3.connect(self.path)
@@ -274,17 +315,101 @@ class Library:
         Een preset is een uitspraak over *deze laser op dit materiaal*. Zonder
         een profiel om aan te hangen zou elke preset "voor alle machines" zijn,
         en dat is precies de verwarring die dit oplost.
+
+        De naam is een kopie van hoe de machine in de engine heet, en die kopie
+        blijft vers. Anders staat er in de bibliotheek nog de naam van het
+        moment waarop het profiel ontstond: bij Jelle heet het apparaat
+        "KH-5030 50W" en het profiel nog altijd "K50 CO2", en op een verse
+        installatie is dat de interne naam van MeerK40t's standaardapparaat
+        ("lihuiyu-device"). Niemand kan zijn machines dan uit elkaar houden.
+        Hernoemen gebeurt bij de machine zelf; hier wordt het alleen nagelopen.
         """
         pad = str(device_path or "").strip()
         if not pad:
             raise LibraryError("Er is geen actieve machine om bij aan te sluiten.")
+        naam = str(label or "").strip() or pad
         with self._connect() as db:
             row = db.execute(
                 "SELECT * FROM machine_profile WHERE device_path = ?", (pad,)
             ).fetchone()
             if row is not None:
+                if row["name"] != naam:
+                    db.execute(
+                        "UPDATE machine_profile SET name = ? WHERE id = ?",
+                        (naam, row["id"]),
+                    )
+                    return self._one(db, "machine_profile", row["id"])
                 return dict(row)
-        return self.add_machine(name=label or pad, device_path=pad)
+        try:
+            return self.add_machine(name=naam, device_path=pad)
+        except sqlite3.IntegrityError:
+            # Een gelijktijdig verzoek was ons voor; het slot op device_path
+            # doet zijn werk en wij pakken wat er nu staat.
+            with self._connect() as db:
+                row = db.execute(
+                    "SELECT * FROM machine_profile WHERE device_path = ?", (pad,)
+                ).fetchone()
+            if row is None:  # pragma: no cover - alleen bij een ander slot
+                raise
+            return dict(row)
+
+    def refresh_names(self, labels: dict) -> None:
+        """
+        De namen van bestaande profielen gelijktrekken met de machines.
+
+        `profile_for_device` doet dit voor de machine waarop je werkt, maar de
+        lijst toont ze allemaal — en dan staat er bij de machines waar je nu
+        even niet op werkt nog de naam van het moment waarop hun profiel
+        ontstond. Maakt niets aan: een machine zonder instellingen heeft nog
+        geen profiel nodig.
+        """
+        if not labels:
+            return
+        with self._connect() as db:
+            for pad, naam in labels.items():
+                naam = str(naam or "").strip() or pad
+                db.execute(
+                    "UPDATE machine_profile SET name = ? "
+                    "WHERE device_path = ? AND name <> ?",
+                    (naam, pad, naam),
+                )
+
+    def machine_usage(self, machine_id: int) -> dict:
+        """Hoeveel bewijs er aan dit profiel hangt."""
+        with self._connect() as db:
+            return {
+                "presets": db.execute(
+                    "SELECT COUNT(*) FROM preset WHERE machine_id = ?", (machine_id,)
+                ).fetchone()[0],
+                "test_grids": db.execute(
+                    "SELECT COUNT(*) FROM test_grid WHERE machine_id = ?", (machine_id,)
+                ).fetchone()[0],
+            }
+
+    def remove_machine(self, machine_id: int) -> dict:
+        """
+        Een profiel opruimen.
+
+        Alleen als er niets aan hangt. Een preset zonder machine is een
+        snelheid zonder laser erbij, en dat is precies de uitspraak-over-niets
+        die deze tabel moet voorkomen — dus liever een weigering met een reden
+        dan een lijst die stilletjes onbetrouwbaar wordt.
+        """
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM machine_profile WHERE id = ?", (machine_id,)
+            ).fetchone()
+        if row is None:
+            raise LibraryError(f"Machineprofiel {machine_id} bestaat niet.")
+        gebruik = self.machine_usage(machine_id)
+        if gebruik["presets"] or gebruik["test_grids"]:
+            raise LibraryError(
+                f"'{row['name']}' draagt nog {gebruik['presets']} instelling(en) en "
+                f"{gebruik['test_grids']} testraster(s). Verwijder of verplaats die eerst."
+            )
+        with self._connect() as db:
+            db.execute("DELETE FROM machine_profile WHERE id = ?", (machine_id,))
+        return {"removed": machine_id}
 
     def update_machine(self, machine_id: int, fields: dict) -> dict:
         toegestaan = (
@@ -1040,9 +1165,16 @@ class Library:
             naam = str(machine.get("name") or "").strip()
             if not naam:
                 continue
-            treffer = next(
-                (m for m in self.machines() if _norm(m["name"]) == _norm(naam)), None
-            )
+            eigen = self.machines()
+            treffer = next((m for m in eigen if _norm(m["name"]) == _norm(naam)), None)
+            if treffer is None and machine.get("device_path"):
+                # Eén profiel per apparaat is een harde regel in het schema.
+                # Draagt het bestand een ander wóórd voor dezelfde laser, dan
+                # is dat dezelfde laser en niet een tweede.
+                treffer = next(
+                    (m for m in eigen if m["device_path"] == machine["device_path"]),
+                    None,
+                )
             if treffer is None:
                 treffer = self.add_machine(**{k: v for k, v in machine.items() if k != "id"})
             machine_id[machine.get("id")] = treffer["id"]

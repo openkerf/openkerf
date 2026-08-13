@@ -127,3 +127,76 @@ def test_a_zip_without_a_design_is_refused(client):
     )
 
     assert response.status_code == 409
+
+
+# ------------------------------------------------------------ nieuw project
+
+
+def test_a_new_project_empties_the_bed(client, kernel):
+    """Opnieuw beginnen bestond niet: alleen opslaan en openen."""
+    stocked(client)
+    assert len(list(kernel.elements.elems())) == 1
+
+    response = client.post("/api/project/new")
+
+    assert response.status_code == 200
+    assert list(kernel.elements.elems()) == []
+    assert client.get("/api/design").json()["dirty"] is False
+
+
+def test_a_new_project_keeps_the_library(client):
+    """
+    Materialen en presets zijn wat je over je laser weet, niet wat er op het
+    bed ligt. Ze horen bij de werkplaats en niet bij dit project.
+    """
+    stocked(client)
+
+    client.post("/api/project/new")
+
+    assert [m["name"] for m in client.get("/api/library/materials").json()] == ["Multiplex"]
+    assert len(client.get("/api/library/presets?all_machines=true").json()) == 1
+
+
+def test_a_new_project_leaves_one_empty_sheet(client, kernel):
+    client.post("/api/sheets", json={"name": "Doos"})
+    client.post("/api/design/elements",
+                json={"type": "rect", "x_mm": 5, "y_mm": 5, "width_mm": 10, "height_mm": 10})
+
+    state = client.post("/api/project/new").json()
+
+    assert [s["name"] for s in state["sheets"]] == ["Vel 1"]
+    assert state["active"] == "vel-1"
+    assert list(kernel.elements.elems()) == []
+
+
+def test_the_sheets_of_the_old_project_are_gone(server, client, kernel):
+    """
+    Een vel leeft als bestand naast de database en overleeft anders het nieuwe
+    project: je begint schoon en vindt in de vellenbalk de doos van gisteren.
+    """
+    client.post("/api/design/elements",
+                json={"type": "rect", "x_mm": 5, "y_mm": 5, "width_mm": 10, "height_mm": 10})
+    client.post("/api/sheets", json={"name": "Doos"})
+    client.post("/api/sheets/vel-2/activate")  # schrijft vel-1 weg naar schijf
+    assert list(server.sheets.directory.glob("*.svg"))
+
+    client.post("/api/project/new")
+
+    assert list(server.sheets.directory.glob("*.svg")) == []
+    assert list(kernel.elements.elems()) == []
+
+
+def test_a_new_project_does_not_inherit_yesterdays_provenance(server, client):
+    """
+    Vel-nummers worden hergebruikt, dus een briefje op "vel-1" plakt zonder dit
+    aan het eerste vel van het volgende project — en dan staat er "uit een
+    testraster" onder een instelling die niemand heeft toegepast.
+    """
+    server.provenance.record(
+        "vel-1", "op-1", {"id": 1, "source": "testraster", "speed_mm_s": 12, "power_percent": 65}
+    )
+    assert server.provenance.lookup("vel-1", "op-1", 12, 65) is not None
+
+    client.post("/api/project/new")
+
+    assert server.provenance.lookup("vel-1", "op-1", 12, 65) is None

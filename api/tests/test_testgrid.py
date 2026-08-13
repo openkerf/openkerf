@@ -95,8 +95,11 @@ def test_generating_draws_a_square_and_an_operation_per_cell(kernel, client):
     # Nine squares plus the axis labels drawn beside them.
     drawn = {n.id for n in kernel.elements.elems()}
     assert {c["element_id"] for c in grid["cells"]} <= drawn
-    # Negen vakjes, de aslabels, plus het opschrift op het bord.
-    assert len(drawn) == 9 + BASE["speed_steps"] + BASE["power_steps"] + 1
+    # Negen vakjes, de aslabels, plus de opschriftregels op het bord.
+    plan = client.post("/api/library/testgrids/preview", json=BASE).json()["plan"]
+    assert len(drawn) == 9 + BASE["speed_steps"] + BASE["power_steps"] + len(
+        plan["caption_lines"]
+    )
 
     snapshot = DesignReader(kernel).snapshot()
     labels = {op["label"] for op in snapshot["operations"]}
@@ -221,11 +224,11 @@ def test_the_axes_are_labelled(kernel, client):
     labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"]
 
     assert labels, "there is a layer holding the axis labels"
-    # One per row, one per column, plus the caption on the board.
-    assert (
-        len(labels[0]["element_ids"])
-        == BASE["speed_steps"] + BASE["power_steps"] + 1
-    )
+    # One per row, one per column, plus the caption lines on the board.
+    plan = client.post("/api/library/testgrids/preview", json=BASE).json()["plan"]
+    assert len(labels[0]["element_ids"]) == BASE["speed_steps"] + BASE[
+        "power_steps"
+    ] + len(plan["caption_lines"])
 
 
 def test_labels_sit_outside_the_grid(kernel, client):
@@ -594,8 +597,103 @@ def test_the_board_carries_a_caption(kernel, client):
     # lezen. Wat wel klopt: het opschrift staat bóven de kolomlabels en is
     # breder dan één vakje — geen enkel aslabel is dat.
     boven = [d for d in dozen if d[3] < BASE["origin_y_mm"] - 4]
-    assert len(boven) == 1, dozen
-    assert boven[0][2] - boven[0][0] > BASE["cell_mm"] * 2, boven
+    assert boven, dozen
+    assert max(d[2] - d[0] for d in boven) > BASE["cell_mm"] * 2, boven
+    # En de regels liggen onder elkaar, niet over elkaar heen.
+    op_hoogte = sorted(boven, key=lambda d: d[1])
+    for hoger, lager in zip(op_hoogte, op_hoogte[1:]):
+        assert hoger[3] <= lager[1] + 0.01, op_hoogte
+
+
+# ------------------------------- het opschrift blijft binnen het bord (punt 3)
+
+
+def test_the_caption_never_makes_the_board_wider_than_its_grid():
+    """
+    Het opschrift stond op één regel en het bord kreeg er rechts ruimte bij
+    tot die regel paste: een raster van 38 mm werd een bord van 134 mm. Dat is
+    geen bord meer maar een banier. Het bord is nu nooit breder dan zijn
+    vakjes plus de rijlabels links.
+    """
+    plan, _ = plan_grid(
+        **{**BASE, "cell_mm": 8, "speed_steps": 4, "power_steps": 4},
+        material_name="Acrylaat (geëxtrudeerd)",
+        thickness_mm=3,
+        caption="3MM Acryl Graveren",
+        stamp="2026-08-13",
+    )
+
+    # Alles rechts van de vakjes is nul: de breedte is de labelmarge plus de
+    # vakjes en verder niets.
+    assert plan["outer_width_mm"] == pytest.approx(
+        plan["label_margin_mm"] + plan["width_mm"]
+    )
+    assert plan["outer_width_mm"] < plan["width_mm"] * 1.5
+
+
+def test_the_caption_does_not_repeat_what_the_user_already_wrote():
+    """
+    "3MM Acryl Graveren · Acrylaat (geëxtrudeerd) · 3 mm · graveren-raster" is
+    dezelfde zin drie keer. Wat de gebruiker zelf benoemde, herhaalt het bord
+    niet — wat hij níét benoemde (raster tegenover vector) juist wel.
+    """
+    from openkerf_api.testgrid import caption_lines
+
+    regels = caption_lines(
+        {
+            "caption": "3MM Acryl Graveren",
+            "material_name": "Acrylaat (geëxtrudeerd)",
+            "thickness_mm": 3,
+            "operation": "graveren-raster",
+            "row_axis": "speed",
+            "column_axis": "power",
+            "stamp": "2026-08-13",
+        }
+    )
+    tekst = " ".join(regels).lower()
+
+    assert regels[0] == "3MM Acryl Graveren"
+    assert "acrylaat" not in tekst
+    assert "3 mm" not in tekst
+    assert tekst.count("graveren") == 1
+    assert "raster" in tekst  # het deel dat hij níét zei, blijft staan
+    assert "graveren-raster" not in tekst  # geen databasesleutel op het hout
+
+
+def test_the_caption_still_names_everything_when_the_user_says_nothing():
+    """Zonder eigen opschrift draagt het bord materiaal, dikte en bewerking."""
+    from openkerf_api.testgrid import caption_lines
+
+    tekst = " ".join(
+        caption_lines(
+            {
+                "material_name": "Berkentriplex",
+                "thickness_mm": 3,
+                "operation": "snijden",
+                "row_axis": "speed",
+                "column_axis": "power",
+                "stamp": "2026-08-13",
+            }
+        )
+    )
+
+    assert "Berkentriplex" in tekst
+    assert "3 mm" in tekst
+    assert "snijden" in tekst
+    assert "2026-08-13" in tekst
+
+
+def test_the_fixed_quantity_reaches_the_caption():
+    """
+    De grootheid die níét op een as staat, hoort op het bord: zonder haar is
+    het over twee weken niet terug te rekenen naar een instelling. De tak
+    bestond al, maar `plan_grid` gaf de sleutels nooit mee — hij vuurde dus
+    nooit.
+    """
+    plan, _ = plan_grid(**{**BASE, "operation": "graveren-raster", "interval_mm": 0.1})
+
+    assert "interval" in plan["caption_text"]
+    assert "0.1" in plan["caption_text"]
 
 
 # ------------------------------------------------- interval als derde as (B12)
@@ -1109,6 +1207,40 @@ def test_the_reported_size_covers_everything_that_is_drawn(kernel, client):
         assert y1 <= plan["outer_y_mm"] + plan["outer_height_mm"] + 0.5, element["id"]
 
 
+def test_a_wrapped_caption_stays_inside_the_reported_board(kernel, client):
+    """
+    Hetzelfde als hierboven, maar voor het geval dat punt 3 introduceerde: een
+    opschrift dat over meerdere regels breekt, mét randkader eromheen. Als de
+    hoogtereservering niet meegroeit met het aantal regels, steekt de bovenste
+    regel door het kader heen.
+    """
+    material = client.post("/api/library/materials", json={"name": "Acrylaat"}).json()
+    vraag = {
+        **BASE,
+        "cell_mm": 4,
+        "origin_x_mm": 60,
+        "origin_y_mm": 60,
+        "border": True,
+        "material_id": material["id"],
+        "thickness_mm": 3,
+        "caption": "proef achterkant tweede poging",
+    }
+    plan = client.post("/api/library/testgrids/preview", json=vraag).json()["plan"]
+    client.post("/api/library/testgrids", json=vraag)
+
+    assert len(plan["caption_lines"]) >= 2, plan["caption_lines"]
+    snapshot = DesignReader(kernel).snapshot()
+    per_mm = snapshot["units_per_mm"]
+    for element in snapshot["elements"]:
+        if not element["bounds"]:
+            continue
+        x0, y0, x1, y1 = (v / per_mm for v in element["bounds"])
+        assert x0 >= plan["outer_x_mm"] - 0.5, element["id"]
+        assert y0 >= plan["outer_y_mm"] - 0.5, element["id"]
+        assert x1 <= plan["outer_x_mm"] + plan["outer_width_mm"] + 0.5, element["id"]
+        assert y1 <= plan["outer_y_mm"] + plan["outer_height_mm"] + 0.5, element["id"]
+
+
 def test_a_centred_board_that_runs_off_the_bed_is_refused(kernel, client):
     response = client.post(
         "/api/library/testgrids",
@@ -1256,8 +1388,10 @@ def test_there_is_no_border_unless_you_ask(kernel, client):
     client.post("/api/library/testgrids", json=BASE)
 
     snapshot = DesignReader(kernel).snapshot()
-    # Negen vakjes, drie rijlabels, drie kolomlabels, één opschrift.
-    assert len(snapshot["elements"]) == 16
+    plan = client.post("/api/library/testgrids/preview", json=BASE).json()["plan"]
+    # Negen vakjes, drie rijlabels, drie kolomlabels, het opschrift — en geen
+    # kader, want daar vraagt niemand om.
+    assert len(snapshot["elements"]) == 15 + len(plan["caption_lines"])
 
 
 def test_the_label_layer_can_be_set(kernel, client):

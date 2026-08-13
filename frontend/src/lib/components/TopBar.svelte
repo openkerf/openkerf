@@ -26,6 +26,7 @@
 		onOpenMaterial,
 		onOpenFile,
 		onOpenProject,
+		onNewProject,
 		onToggleTheme
 	}: {
 		device: Device | null;
@@ -67,6 +68,8 @@
 		onOpenMaterial?: () => void;
 		onOpenFile?: (file: File) => void;
 		onOpenProject?: (file: File) => void;
+		/** Opnieuw beginnen. Vraagt zelf om bevestiging als er werk ligt. */
+		onNewProject?: () => void;
 		onToggleTheme: () => void;
 	} = $props();
 
@@ -293,6 +296,23 @@
 		     zou een absoluut menu afknippen. -->
 		<div class="afdek" role="presentation" onclick={() => (projectOpen = false)}></div>
 		<div class="projectmenu" role="menu" style="left: {projectPos.x}px; top: {projectPos.y}px">
+			<!-- Opslaan en openen stonden hier al, opnieuw beginnen niet: je kon
+			     alleen aan iets nieuws beginnen door alles met de hand weg te
+			     halen. Boven het paar, want het is de eerste handeling van een
+			     sessie — en het vraagt eerst, net als openen. -->
+			<button
+				class="regel"
+				role="menuitem"
+				type="button"
+				onclick={() => {
+					projectOpen = false;
+					onNewProject?.();
+				}}
+			>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M12 11v6m-3-3h6"/></svg>
+				<span>Nieuw project</span>
+			</button>
+			<span class="menuscheiding" role="separator"></span>
 			<!-- Een label met een verborgen bestandsveld erin: geen `menuitem`-rol,
 			     want het invoerveld is al het bedienbare element. -->
 			<label class="regel">
@@ -604,8 +624,19 @@
 		text-decoration: none;
 		cursor: pointer;
 		transition: background var(--transition);
+		/* De rij is een label, een link én een knop; die laatste brengt zijn
+		   eigen achtergrond, rand en lettertype mee. */
+		background: none;
+		border: 0;
+		font: inherit;
 	}
 	.projectmenu .regel svg { flex: none; color: var(--text-2); }
+	.projectmenu .menuscheiding {
+		display: block;
+		height: 1px;
+		margin: var(--space-2) var(--space-2);
+		background: var(--line);
+	}
 	.projectmenu .regel:hover,
 	.projectmenu .regel:focus-within { background: var(--surface-2); }
 	.projectmenu input[type='file'] {

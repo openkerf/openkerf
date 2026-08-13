@@ -364,6 +364,14 @@
 		return `${aantal} ${aantal === 1 ? enkel : meer}`;
 	}
 
+	/** Wat er aan een machineprofiel hangt; alleen wat er werkelijk is. */
+	function bewijs(machine: { presets: number; test_grids: number }) {
+		const delen = [];
+		if (machine.presets) delen.push(tel(machine.presets, 'instelling', 'instellingen'));
+		if (machine.test_grids) delen.push(tel(machine.test_grids, 'raster', 'rasters'));
+		return delen.join(' · ');
+	}
+
 	/**
 	 * De rasterfoto, met het gekozen vakje omcirkeld als we weten welk vakje het was.
 	 *
@@ -1176,9 +1184,33 @@
 		{#if library.machines.length}
 			<ul class="profiles">
 				{#each library.machines as machine (machine.id)}
-					<li>
+					{@const leeg = machine.presets + machine.test_grids === 0}
+					{@const actief = machine.id === library.activeMachine?.id}
+					<li class:verweesd={machine.orphaned}>
 						<span>{machine.name}</span>
 						<span class="mono">{machine.power_watt ? `${machine.power_watt} W` : ''}</span>
+						{#if machine.orphaned}
+							<!-- Er hoort geen ingestelde machine meer bij dit profiel. -->
+							<span
+								class="merk"
+								title="Er is geen ingestelde machine (meer) die bij dit profiel hoort"
+							>
+								geen machine
+							</span>
+						{/if}
+						{#if !leeg}
+							<!-- Wát eraan hangt, want dat bepaalt of hij weg kan: een profiel
+							     met instellingen of rasters is bewijs, een profiel zonder is
+							     rommel. Alleen noemen wat er is — "0 instellingen" naast een
+							     profiel dat wél een testraster draagt, is een halve waarheid. -->
+							<span class="fijn">{bewijs(machine)}</span>
+						{:else if canEdit && !actief}
+							<button
+								class="mini"
+								disabled={library.busy}
+								onclick={() => library.removeMachineProfile(machine.id)}>Opruimen</button
+							>
+						{/if}
 					</li>
 				{/each}
 			</ul>
@@ -1608,12 +1640,27 @@
 	.profiles { list-style: none; margin: var(--space-2) 0; padding: 0; }
 	.profiles li {
 		display: flex;
-		justify-content: space-between;
+		align-items: center;
+		gap: var(--space-2);
 		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		margin-bottom: 4px;
 		font-size: var(--text-xs);
+	}
+	/* De naam duwt de rest naar rechts; zo staan het vermogen en het merkje
+	   op één lijn, ook als het ene profiel wel een merkje heeft en het andere niet. */
+	.profiles li > span:first-child { flex: 1; min-width: 0; }
+	/* Verweesd is geen fout maar wel iets om te weten: gedempt, niet rood. */
+	.profiles li.verweesd { border-style: dashed; }
+	.profiles li.verweesd > span:first-child { color: var(--text-2); }
+	.profiles .merk {
+		flex: none;
+		padding: 2px 8px;
+		border-radius: var(--radius-pill, 999px);
+		background: var(--surface-2);
+		color: var(--text-2);
+		white-space: nowrap;
 	}
 	.grid {
 		display: grid;

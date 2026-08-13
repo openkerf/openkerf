@@ -269,10 +269,23 @@ class ApiServer:
 
         De engine kent devices, de bibliotheek kent profielen; dit is de knoop
         ertussen. Geen actief device betekent geen profiel — dan tonen we alles.
+
+        Alleen voor een machine die iemand heeft ingesteld. MeerK40t start met
+        een lhystudios-apparaat zodat de kernel altijd iets heeft om tegen te
+        praten; niemand koos dat. Deze functie wordt op zes leesroutes
+        aangeroepen en maakt aan wat er niet is, dus zonder deze horde levert
+        het openen van de bibliotheek op een verse installatie meteen een
+        profiel op met de interne naam van dat apparaat — en zo staan er straks
+        namen in de lijst van machines die de gebruiker nooit heeft gehad.
         """
         device = getattr(self.kernel, "device", None)
         pad = getattr(device, "path", None) if device is not None else None
         if not pad:
+            return None
+        try:
+            if not self.machines._configured(device):
+                return None
+        except Exception:
             return None
         try:
             return self.library.profile_for_device(
@@ -519,6 +532,34 @@ class ApiServer:
                 self.drawing.user_operations.clear()
                 self.document.clean()
                 return {"cleared": True}
+
+            return manage(run)
+
+        @app.post("/api/project/new", dependencies=write)
+        def new_project():
+            """
+            Opnieuw beginnen: leeg ontwerp, één leeg vel.
+
+            Opslaan en openen bestonden al, opnieuw beginnen niet — je kon een
+            nieuw project alleen maken door alles met de hand weg te halen, en
+            wie dat vergeet brandt de resten van gisteren mee.
+
+            De bibliotheek blijft staan. Materialen, presets en machineprofielen
+            zijn wat je over je laser weet; die horen niet bij dít project maar
+            bij deze werkplaats. Een projectbestand draagt ze wél mee, want daar
+            gaan ze naar iemand anders toe.
+            """
+
+            def run():
+                # Vóór `clean()`: die wist het antwoord op de vraag of er nog
+                # iets te herstellen valt. Zie `/api/design/clear`.
+                self.autosave.forget_if_saved()
+                self.kernel.elements.clear_all()
+                self.drawing.user_operations.clear()
+                self.sheets.reset()
+                self.provenance.clear()
+                self.document.clean()
+                return {"new": True, **self.sheets.state()}
 
             return manage(run)
 
@@ -953,7 +994,10 @@ class ApiServer:
             driver er een commando voor kent — dezelfde regel als bij de Z-as.
             Wat de machine niet kan, hoort niet als knop op het scherm.
             """
-            return {"air_assist": self.drawing.air_assist_supported()}
+            return {
+                "air_assist": self.drawing.air_assist_supported(),
+                "z_step": self.drawing.z_step_supported(),
+            }
 
         @app.post("/api/design/operations/sort", dependencies=write)
         def sort_operations():
@@ -989,6 +1033,12 @@ class ApiServer:
                     operation_id, body.get("type")
                 )
             )
+
+        # Vóór de route met `{operation_id}`: anders vangt die dit pad af.
+        @app.delete("/api/design/operations", dependencies=write)
+        def delete_all_operations():
+            """Alle gewone lagen weg; de vormen blijven staan."""
+            return manage(self.drawing.delete_all_operations)
 
         @app.delete("/api/design/operations/{operation_id}", dependencies=write)
         def delete_operation(operation_id: str):
@@ -1118,7 +1168,50 @@ class ApiServer:
 
         @app.get("/api/library/machines")
         def list_machine_profiles():
-            return self.library.machines()
+            """
+            De machineprofielen, met de vraag erbij of er nog een machine is.
+
+            Een profiel overleeft zijn apparaat: de bibliotheek staat naast de
+            engine en gaat niet mee als iemand een machine weggooit of de
+            engine-instellingen wist. Zonder dit vlaggetje groeit de lijst met
+            namen waar niets meer achter zit, en dan zegt "voor deze machine"
+            niets meer.
+
+            Alleen ingestelde machines tellen. Profielen die de oude versie voor
+            MeerK40t's lhystudios-plaatsvervanger aanmaakte, staan er anders bij
+            als levende machine terwijl niemand ze koos — precies de namen die
+            de lijst vervuilden.
+            """
+            levend = {
+                device.path: str(getattr(device, "label", "") or device.path)
+                for device in self.kernel.services("device")
+                if self.machines._configured(device)
+            }
+            self.library.refresh_names(levend)
+            paden = set(levend)
+            return [
+                {
+                    **profiel,
+                    "orphaned": bool(profiel["device_path"])
+                    and profiel["device_path"] not in paden,
+                    **self.library.machine_usage(profiel["id"]),
+                }
+                for profiel in self.library.machines()
+            ]
+
+        @app.delete("/api/library/machines/{machine_id}", dependencies=write)
+        def remove_machine_profile(machine_id: int):
+            # De machine waarop je nu werkt houdt zijn profiel. Weg is hij toch
+            # niet: de eerstvolgende leesroute maakt hem opnieuw aan, en dan is
+            # het verschil alleen dat alle presets die eraan hingen losgeraakt
+            # zijn.
+            actief = self._active_profile()
+            if actief and actief["id"] == machine_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Dit is de machine waarop je nu werkt; die kan niet weg.",
+                )
+            return manage(self.library.remove_machine, machine_id)
 
         @app.post("/api/library/machines", dependencies=write, status_code=201)
         def add_machine_profile(body: dict):
@@ -1874,7 +1967,16 @@ class ApiServer:
             label = (body.get("label") or "").strip()
             if not label:
                 raise HTTPException(status_code=422, detail="'label' ontbreekt.")
-            return manage(self.machines.rename, path, label)
+            resultaat = manage(self.machines.rename, path, label)
+            # De bibliotheek draagt een kopie van de naam. Hij loopt vanzelf bij
+            # zodra iemand het actieve profiel opvraagt, maar dan staat er tot
+            # dat moment een oude naam in de lijst — en juist na een hernoeming
+            # kijk je daarnaar. Hier is de gebeurtenis, dus hier gebeurt het.
+            try:
+                self.library.profile_for_device(path, label)
+            except LibraryError:
+                pass
+            return resultaat
 
         @app.delete("/api/machines/{path}", dependencies=write)
         def machine_remove(path: str):

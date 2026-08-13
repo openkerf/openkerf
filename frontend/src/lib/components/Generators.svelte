@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Dialog from './Dialog.svelte';
+	import FontPicker from './FontPicker.svelte';
 	import GeneratorPreview from './GeneratorPreview.svelte';
 	import NumberField from './NumberField.svelte';
 
@@ -43,7 +44,12 @@
 		cy_mm: '100',
 		radius_mm: '40',
 		font_size_mm: '10',
-		inside: false
+		inside: false,
+		// De API kende `font` al; alleen dit venster vroeg er nooit naar, dus
+		// kwam elke boogtekst er in de standaardletter uit. Zelfde kiezer als
+		// het tekstvenster — met voorbeeld in de letter zelf.
+		font: '',
+		fontNaam: ''
 	});
 
 	// De typen die python-barcode aankan en die op een laser zinnig zijn.
@@ -103,6 +109,8 @@
 	let blocked = $derived(current.needsSelection && !hasSelection);
 
 	let notice = $state<string | null>(null);
+	/** De lettertypelade van de boogtekst; dicht tot je hem opent. */
+	let letterOpen = $state(false);
 
 	async function run(body: Record<string, unknown>) {
 		notice = null;
@@ -257,9 +265,24 @@
 			<NumberField label="Letterhoogte" unit="mm" step={0.5} bind:value={arc.font_size_mm} />
 			<label class="check"><input type="checkbox" bind:checked={arc.inside} /><span>Onderlangs</span></label>
 		</div>
+		<!-- Ingeklapt tot je hem opent: de lijst is 200 lettertypen lang en duwde
+		     de knop "Plaatsen" uit beeld (gemeten: van 725 naar 865 px). De
+		     regel zegt wél welke letter er nu gekozen is, want anders is een
+		     dichte lade hetzelfde als geen keuze. -->
+		<div class="letterkeuze">
+			<button class="letterregel" aria-expanded={letterOpen} onclick={() => (letterOpen = !letterOpen)}>
+				<span>Lettertype</span>
+				<strong>{arc.font ? arc.fontNaam || arc.font : 'Standaard'}</strong>
+				<span class="pijl" aria-hidden="true">{letterOpen ? '▴' : '▾'}</span>
+			</button>
+			{#if letterOpen}
+				<FontPicker bind:font={arc.font} bind:fontName={arc.fontNaam} sample={arc.text} />
+			{/if}
+		</div>
 		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run({
 			text: arc.text.trim(), cx_mm: n(arc.cx_mm), cy_mm: n(arc.cy_mm),
-			radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm), inside: arc.inside
+			radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm),
+			inside: arc.inside, font: arc.font || null
 		})}>Plaatsen</button>
 	{/if}
 	</div>
@@ -317,6 +340,24 @@
 	.fields label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
 	.fields .wide { grid-column: 1 / -1; }
 	.fields .check { display: flex; align-items: center; gap: 6px; align-self: end; }
+	.letterkeuze { margin-bottom: var(--space-4); }
+	.letterregel {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		width: 100%;
+		min-height: 40px;
+		padding: 8px var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		color: var(--text-2);
+		font-size: var(--text-xs);
+		text-align: left;
+	}
+	.letterregel strong { flex: 1; color: var(--text-1); font-weight: 500; }
+	.letterregel .pijl { color: var(--text-2); }
+	.letterregel:hover { border-color: var(--accent); }
 	input,
 	select {
 		font: inherit;

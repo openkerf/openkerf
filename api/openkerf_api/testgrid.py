@@ -11,6 +11,9 @@ with one square referenced from it. That is exactly how MeerK40t models a job,
 and it means the existing plan → spool route runs the grid without changes.
 """
 
+import re
+import unicodedata
+
 from .edits import DesignError
 
 MAX_CELLS = 400  # A 20x20 sweep is already more than anyone reads off a photo.
@@ -112,9 +115,15 @@ LABEL_FONT_SIZE_PX = 20
 CAPTION_CHAR_RATIO = 0.62
 
 # Waar een gegraveerd opschrift ophoudt leesbaar te zijn. Kleiner dan dit is
-# het geen opschrift meer maar een streep, dus krimpt het niet verder — en dus
-# moet het bord er breed genoeg voor zijn.
+# het geen opschrift meer maar een streep, dus krimpt het niet verder — het
+# breekt dan af naar een volgende regel.
 MIN_CAPTION_MM = 2.0
+
+# Hoeveel hoger de ene opschriftregel boven de andere staat, als deel van de
+# teksthoogte. 1,4 is de gebruikelijke regelafstand; krapper gaan de stokken
+# en staarten van twee regels door elkaar lopen en is het gegraveerd niet meer
+# te lezen.
+CAPTION_LINE_PITCH = 1.4
 
 # ------------------------------------------------- waar het bord komt te liggen
 #
@@ -182,15 +191,21 @@ def _spread(low: float, high: float, steps: int) -> list[float]:
 
 def _bereik(naam: str, lo, hi, aantal) -> list[float]:
     """De waarden op één as, gecontroleerd en afgerond op nette getallen."""
-    laag = _positive(lo, f"{naam}_min")
-    hoog = _positive(hi, f"{naam}_max")
+    # De reden staat sinds punt 2 náást het voorbeeld in beeld in plaats van
+    # onder de vouw, dus hij is nu tekst voor een mens en geen veldnaam uit de
+    # API. "speed_max moet minstens speed_min zijn" is geen Nederlands.
+    label = AXES[naam]["label"]
+    laag = _positive(lo, f"De {label} bij 'van'")
+    hoog = _positive(hi, f"De {label} bij 'tot'")
     if hoog < laag:
-        raise DesignError(f"{naam}_max moet minstens {naam}_min zijn.")
+        raise DesignError(
+            f"De {label} bij 'tot' moet minstens de {label} bij 'van' zijn."
+        )
     if naam == "power" and hoog > 100:
-        raise DesignError("power_max kan niet boven 100 procent.")
+        raise DesignError("Vermogen kan niet boven 100 procent.")
     if naam == "interval" and hoog > 5:
-        raise DesignError("interval_max boven 5 mm is geen gravering meer.")
-    return _spread(laag, hoog, _steps(aantal, f"{naam}_steps"))
+        raise DesignError("Een interval boven 5 mm is geen gravering meer.")
+    return _spread(laag, hoog, _steps(aantal, f"Het aantal stappen {label}"))
 
 
 def _vast(naam: str, waarde, terugval) -> float:
@@ -337,29 +352,18 @@ def plan_grid(
         (len(toon(row_axis, waarde)) for waarde in waarden[row_axis]), default=0
     )
     marge = round(2 + 0.62 * tekst_hoogte * langste, 1)
-    # Boven het raster: de kolomlabels 2 mm erboven, en daar weer boven het
-    # opschrift. `_caption` zet de ónderkant van het opschrift op
-    # `origin_y - 4 - hoogte`, dus de bovenkant ligt daar nog een teksthoogte
-    # boven. Nagemeten tegen de werkelijk getekende vormen (zie
-    # `test_the_reported_size_covers_everything_that_is_drawn`).
-    boven = round(max(2 + tekst_hoogte, 4 + 2 * opschrift_hoogte), 1)
 
-    links_pad = (marge if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
-    boven_pad = (boven if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
-    rechts_pad = onder_pad = BORDER_PAD_MM if kader else 0.0
-
-    # Ruimte rechts voor het opschrift. Dat staat links uitgelijnd op het bord
-    # en loopt naar rechts door; op een bord van 46 mm is het al 49 mm breed.
-    # `_caption` krimpt het tot het past, maar niet onder MIN_CAPTION_MM —
-    # anders is het geen opschrift meer maar een streep. Zonder deze
-    # reservering liep het op elk klein bord tegen die ondergrens aan en stak
-    # het er alsnog buiten, buiten de maat die wij als "past dit op mijn plaat"
-    # melden. Wij reserveren wat het op die ondergrens nodig heeft; het
-    # opschrift zelf meet daarna zijn eigen breedte en krimpt zo nodig verder,
-    # dus een ruime schatting kost geen leesbaarheid — alleen een iets ruimere
-    # gemelde maat.
-    opschrift = (
-        caption_text(
+    # Het opschrift past zich aan het bord aan, niet andersom.
+    #
+    # Het stond op één regel en het bord kreeg er rechts ruimte bij tot die
+    # regel paste: op een raster van 38 mm werd het bord 134 mm breed. Dat is
+    # geen bord meer maar een wapperende banier, en het maakt het testpaneel
+    # onbruikbaar breed op het scherm. Nu krimpt het opschrift eerst mee tot
+    # het binnen de bordbreedte valt, en breekt het pas af naar een tweede
+    # regel als het onder de leesbaarheidsgrens zou zakken. Het bord wordt dus
+    # nooit breder dan zijn eigen vakjes plus de rijlabels — alleen iets hoger.
+    opschrift_regels = (
+        caption_lines(
             {
                 "caption": caption,
                 "material_name": material_name,
@@ -368,15 +372,54 @@ def plan_grid(
                 "operation": operation,
                 "row_axis": row_axis,
                 "column_axis": column_axis,
+                # De vaste grootheid hoort erbij: zonder haar is het bord over
+                # twee weken niet terug te rekenen naar een instelling. Dit
+                # stond in `caption_text` al klaar, maar de sleutels werden
+                # nooit meegegeven — de tak vuurde dus nooit.
+                **{
+                    f"{naam}_min": vaste[naam]
+                    for naam in AXES
+                    if vaste[naam] is not None
+                },
             }
         )
         if tekst
-        else ""
+        else []
     )
-    if opschrift:
-        rand = BORDER_PAD_MM if kader else 0.0
-        nodig = CAPTION_CHAR_RATIO * MIN_CAPTION_MM * len(opschrift) + 2 * rand
-        rechts_pad += max(0.0, round(nodig - (links_pad + breedte), 1))
+    if opschrift_regels:
+        beschikbaar = marge + breedte
+        # Eerst krimpen: de hoogte waarbij de langste regel nog net past.
+        krap = beschikbaar / (
+            CAPTION_CHAR_RATIO * max(len(r) for r in opschrift_regels)
+        )
+        if krap < MIN_CAPTION_MM:
+            # Zelfs op de ondergrens past het niet — dan een regel erbij.
+            per_regel = max(8, int(beschikbaar / (CAPTION_CHAR_RATIO * MIN_CAPTION_MM)))
+            opschrift_regels = _breek(opschrift_regels, per_regel)
+            krap = beschikbaar / (
+                CAPTION_CHAR_RATIO * max(len(r) for r in opschrift_regels)
+            )
+        opschrift_hoogte = round(max(MIN_CAPTION_MM, min(opschrift_hoogte, krap)), 3)
+
+    # Boven het raster: de kolomlabels 2 mm erboven, en daar weer boven het
+    # opschrift. `_caption` zet de ónderkant van de onderste opschriftregel op
+    # `origin_y - 4 - hoogte`, dus de bovenkant van de bovenste ligt daar nog
+    # een teksthoogte plus de regelafstanden boven. Nagemeten tegen de
+    # werkelijk getekende vormen (zie
+    # `test_the_reported_size_covers_everything_that_is_drawn`).
+    boven = round(
+        max(
+            2 + tekst_hoogte,
+            4
+            + 2 * opschrift_hoogte
+            + max(0, len(opschrift_regels) - 1) * CAPTION_LINE_PITCH * opschrift_hoogte,
+        ),
+        1,
+    )
+
+    links_pad = (marge if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
+    boven_pad = (boven if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
+    rechts_pad = onder_pad = BORDER_PAD_MM if kader else 0.0
 
     buiten_breedte = round(links_pad + breedte + rechts_pad, 3)
     buiten_hoogte = round(boven_pad + hoogte + onder_pad, 3)
@@ -448,7 +491,11 @@ def plan_grid(
         "caption": str(caption or "").strip(),
         "material_name": material_name,
         "stamp": stamp,
-        "caption_text": opschrift,
+        "caption_lines": opschrift_regels,
+        "caption_text": " · ".join(opschrift_regels),
+        # De maat waarop het opschrift past; de tekenaar hoeft hem dan niet
+        # opnieuw te raden en zet exact wat hier gemaat is.
+        "caption_height_mm": opschrift_hoogte if opschrift_regels else 0.0,
     }
     # Wat dit bord gaat kosten aan tijd, vóórdat er iets getekend is.
     #
@@ -655,35 +702,121 @@ def toon(naam: str, waarde) -> str:
     return f"{waarde:g}{'' if eenheid == '%' else ' '}{eenheid}"
 
 
-def caption_text(plan: dict) -> str:
+def _woorden(tekst) -> list[str]:
+    """De losse woorden van een stuk tekst, klein en zonder accenten."""
+    plat = unicodedata.normalize("NFKD", str(tekst or "").lower())
+    plat = "".join(c for c in plat if not unicodedata.combining(c))
+    return [w for w in re.split(r"[^0-9a-z]+", plat) if w]
+
+
+def _al_gezegd(woord: str, gezegd: list[str]) -> bool:
     """
-    Het opschrift zoals het op het hout komt.
+    Staat dit woord al in het opschrift dat de gebruiker zelf typte?
+
+    Op stam en niet op letter: wie "3MM Acryl Graveren" intikt heeft het
+    materiaal "Acrylaat (geëxtrudeerd)" al benoemd, ook al staat er een andere
+    uitgang achter. Korte woorden doen niet mee — "mm" of "cm" komt overal in
+    voor en zou halve opschriften wegvagen.
+    """
+    if len(woord) < 4:
+        return False
+    return any(w.startswith(woord) or woord.startswith(w) for w in gezegd if len(w) >= 4)
+
+
+# Hoe een bewerking op het hout heet. `graveren-raster` is een sleutel uit onze
+# database, geen woord dat je op een plankje graveert.
+OPERATION_LABELS = {
+    "snijden": "snijden",
+    "graveren-vector": "graveren vector",
+    "graveren-raster": "graveren raster",
+    "markeren": "markeren",
+}
+
+
+def caption_lines(plan: dict) -> list[str]:
+    """
+    Het opschrift zoals het op het hout komt, als losse regels.
+
+    Twee regels en geen banier. De eerste zegt wáár dit over gaat — het woord
+    dat de gebruiker zelf koos, of anders het materiaal — en de tweede hoe het
+    gebrand is. Ze staan onder elkaar omdat het bord een bord moet blijven: een
+    opschrift dat op één regel doorloopt was op een raster van 38 mm ruim
+    130 mm breed, en dan is het bord drie keer zo breed als de proef erop.
+
+    Wat de gebruiker zelf al zei, herhalen we niet. "3MM Acryl Graveren" naast
+    "Acrylaat (geëxtrudeerd) · 3 mm · graveren-raster" is dezelfde zin drie
+    keer; dat maakt het opschrift lang zonder er iets aan toe te voegen.
 
     Hier en niet in de tekenaar, want `plan_grid` moet er ruimte voor
-    reserveren: de opschriftregel is op een klein bord breder dan het raster
-    zelf, en wat wij als maat melden moet dekken wat er brandt.
+    reserveren — en wat wij als maat melden moet dekken wat er brandt.
     """
-    delen = [str(plan.get("caption") or "").strip()]
-    if plan.get("material_name"):
-        delen.append(str(plan["material_name"]))
-    if plan.get("thickness_mm"):
-        delen.append(f"{plan['thickness_mm']:g} mm")
-    delen.append(str(plan.get("operation") or ""))
+    eigen = str(plan.get("caption") or "").strip()
+    gezegd = _woorden(eigen)
+
+    kop = [eigen] if eigen else []
+    materiaal = str(plan.get("material_name") or "").strip()
+    if materiaal:
+        stam = _woorden(materiaal)
+        if not (stam and _al_gezegd(stam[0], gezegd)):
+            kop.append(materiaal)
+    dikte = plan.get("thickness_mm")
+    if dikte and not re.search(rf"(?<![0-9]){dikte:g}\s*mm", " ".join(gezegd)):
+        kop.append(f"{dikte:g} mm")
+
+    bewerking = plan.get("operation") or ""
+    naam = OPERATION_LABELS.get(bewerking, str(bewerking))
+    # Alleen het deel dat nog niet gezegd is: wie "Graveren" typte hoeft geen
+    # tweede "graveren" op zijn plank, maar "raster" tegenover "vector" is wél
+    # het verschil tussen twee heel andere proeven.
+    resterend = " ".join(w for w in naam.split() if not _al_gezegd(w, gezegd))
+    voet = [resterend] if resterend else []
+
     # Welke as welke grootheid draagt. Zonder dit is een bord met vrij gekozen
     # assen niet te lezen: "0,05" links kan snelheid of interval zijn.
     # LightBurn zet de asnamen naast de waarden; wij hebben ze harder nodig,
     # want bij ons staat niet vast wát er op de as staat.
     assen = (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
-    delen.append(f"{AXES[assen[0]]['label']} v / {AXES[assen[1]]['label']} >")
+    voet.append(f"{AXES[assen[0]]['label']} v / {AXES[assen[1]]['label']} >")
     # De grootheid die níét op een as staat, hoort er ook op: zonder haar is
     # een bord over twee weken niet terug te rekenen naar een instelling.
-    for naam in AXES:
-        if naam in assen or plan.get(f"{naam}_min") is None:
+    for as_naam in AXES:
+        if as_naam in assen or plan.get(f"{as_naam}_min") is None:
             continue
-        delen.append(f"{AXES[naam]['label']} {toon(naam, plan[f'{naam}_min'])}")
+        voet.append(f"{AXES[as_naam]['label']} {toon(as_naam, plan[f'{as_naam}_min'])}")
     if plan.get("stamp"):
-        delen.append(str(plan["stamp"]))
-    return " · ".join(d for d in delen if d)
+        voet.append(str(plan["stamp"]))
+
+    regels = [" · ".join(kop), " · ".join(voet)]
+    return [r for r in regels if r]
+
+
+def caption_text(plan: dict) -> str:
+    """Dezelfde regels achter elkaar — voor waar één string genoeg is."""
+    return " · ".join(caption_lines(plan))
+
+
+def _breek(regels: list[str], tekens: int) -> list[str]:
+    """
+    Regels die te lang zijn afbreken op de scheidingstekens die er al in staan.
+
+    Alleen als het echt niet past: het opschrift krimpt eerst mee (zie
+    `plan_grid`), en pas onder de leesbaarheidsgrens gaat er een regel bij.
+    Een deel dat op zichzelf al te lang is blijft heel — afbreken middenin
+    "Acrylaat" levert geen leesbaarder bord op.
+    """
+    uit: list[str] = []
+    for regel in regels:
+        lopend = ""
+        for deel in regel.split(" · "):
+            kandidaat = f"{lopend} · {deel}" if lopend else deel
+            if lopend and len(kandidaat) > tekens:
+                uit.append(lopend)
+                lopend = deel
+            else:
+                lopend = kandidaat
+        if lopend:
+            uit.append(lopend)
+    return uit
 
 
 def _cel_label(plan: dict, cell: dict) -> str:
@@ -915,45 +1048,55 @@ class TestGridGenerator:
         instelling — het opschrift moet leesbaar zijn ongeacht welke cel het
         beste uitpakt.
         """
-        # Wat `plan_grid` al uitrekende, zodat de regel die hier gebrand wordt
-        # dezelfde is als die waar het bord op gemaat is.
-        tekst = plan.get("caption_text") or caption_text(plan)
-        if not tekst:
+        # Wat `plan_grid` al uitrekende, zodat wat hier gebrand wordt dezelfde
+        # regels zijn als waar het bord op gemaat is — hoogte inbegrepen.
+        regels = plan.get("caption_lines")
+        if regels is None:
+            regels = caption_lines(plan)
+        regels = [r for r in regels if r]
+        if not regels:
             return
 
-        hoogte = max(2.5, plan["cell_mm"] * 0.4)
+        hoogte = float(plan.get("caption_height_mm") or 0) or max(
+            2.5, plan["cell_mm"] * 0.4
+        )
         # Binnen de breedte van het bord blijven. Op ware grootte werd dit
         # opschrift 70 mm breed op een bord van 46 mm — het stak er rechts
         # uit, en dan klopt de maat die we melden (T9) niet met wat er brandt.
-        # Niet onder de 2 mm: dan is het geen opschrift meer maar een streep.
-        # Die ondergrens is de reden dat `plan_grid` rechts ruimte reserveert:
-        # zonder die reservering kon het opschrift op de ondergrens vastlopen
-        # en er alsnog buiten steken.
+        # `plan_grid` heeft de hoogte hierop al gekozen; deze meting is de
+        # vangnet voor de tekens waar de schatting van CAPTION_CHAR_RATIO
+        # naast zit. Het bord groeit er niet meer voor: liever een iets
+        # kleinere regel dan een bord dat breder is dan zijn eigen proef.
         rand = BORDER_PAD_MM if plan.get("border") else 0.0
         beschikbaar = plan.get("outer_width_mm", plan["width_mm"]) - 2 * rand
-        node = self._text(tekst, hoogte)
-        if node is None:
-            return
-        breedte = self._breedte_mm(node)
-        if breedte > beschikbaar:
-            self._scale_to_height(node, max(MIN_CAPTION_MM, hoogte * beschikbaar / breedte))
-
-        labels = self._label_op(plan)
-        self._place(
-            node,
-            # Links uitgelijnd op het bord, niet op de vakjes: de rijlabels
-            # steken links uit, en een opschrift dat halverwege begint leest
-            # als een onderschrift bij de verkeerde kolom.
-            left=plan.get("outer_x_mm", plan["origin_x_mm"]) + rand,
-            # Bóven de kolomlabels, met dezelfde marge als die labels zelf —
-            # en op de plek die `plan_grid` ervoor reserveerde, dus met de
-            # volle opschrifthoogte en niet met de gekrompen maat. Anders zakt
-            # een gekrompen opschrift naar beneden en gaat het dwars door de
-            # kolomlabels heen; op een bord met grote vakjes was dat precies
-            # wat er gebeurde.
-            bottom=plan["origin_y_mm"] - 2 - hoogte - 2,
-        )
-        labels.add_reference(node)
+        labels = None
+        for index, regel in enumerate(regels):
+            node = self._text(regel, hoogte)
+            if node is None:
+                return
+            breedte = self._breedte_mm(node)
+            if breedte > beschikbaar:
+                self._scale_to_height(node, hoogte * beschikbaar / breedte)
+            labels = labels or self._label_op(plan)
+            self._place(
+                node,
+                # Links uitgelijnd op het bord, niet op de vakjes: de rijlabels
+                # steken links uit, en een opschrift dat halverwege begint
+                # leest als een onderschrift bij de verkeerde kolom.
+                left=plan.get("outer_x_mm", plan["origin_x_mm"]) + rand,
+                # Bóven de kolomlabels, met dezelfde marge als die labels zelf
+                # — en op de plek die `plan_grid` ervoor reserveerde, dus met
+                # de volle opschrifthoogte en niet met de gekrompen maat.
+                # Anders zakt een gekrompen opschrift naar beneden en gaat het
+                # dwars door de kolomlabels heen; op een bord met grote vakjes
+                # was dat precies wat er gebeurde. De onderste regel houdt zijn
+                # oude plek; elke regel erboven schuift een regelafstand op.
+                bottom=plan["origin_y_mm"]
+                - 4
+                - hoogte
+                - (len(regels) - 1 - index) * CAPTION_LINE_PITCH * hoogte,
+            )
+            labels.add_reference(node)
 
     @staticmethod
     def _breedte_mm(node) -> float:
