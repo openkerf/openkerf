@@ -1597,3 +1597,181 @@ def test_a_recipe_reads_like_a_previous_grid(client):
     assert "speed_min" in gedeeld and "cell_mm" in gedeeld
     for sleutel in gedeeld:
         assert recept["settings"][sleutel] == vorige[sleutel], sleutel
+
+
+# ------------------------------------- een bord is één ding, ook naast een ander
+#
+# Drie bevindingen uit eigen gebruik, één oorzaak: een bord had geen eigen
+# identiteit. Wie erbij hoorde werd afgeleid uit documentbrede dingen — "welke
+# paden hangen aan de labellaag" — en die labellaag is gedeeld door álle borden.
+
+
+def _cel_rooster(design, cellen):
+    """
+    Rij en kolom zoals ze op het bed liggen, afgeleid uit de posities.
+
+    Niet uit de administratie: juist de vraag is of vakje (3,5) na een handeling
+    nog steeds op de plek van (3,5) ligt. Een bord is een meetinstrument; zodra
+    de vakjes onderling herschikt zijn, betekent de foto niets meer.
+    """
+    plek = {
+        e["id"]: (e["bounds"][0], e["bounds"][1])
+        for e in design["elements"]
+        if e["bounds"]
+    }
+    xs = sorted({round(plek[c][0], 1) for c in cellen})
+    ys = sorted({round(plek[c][1], 1) for c in cellen})
+    return {
+        cellen[c]: (xs.index(round(plek[c][0], 1)), ys.index(round(plek[c][1], 1)))
+        for c in cellen
+    }
+
+
+def test_a_second_board_leaves_the_first_boards_labels_alone(client):
+    """
+    De opschriften van bord 1 blijven van bord 1.
+
+    Ze werden opgezocht via de gedeelde labellaag, dus bord 2 trok ze zijn eigen
+    groep in. Daarna selecteerde één aslabel van bord 1 het hele bord 2 — en
+    verhuisde het mee als je bord 2 versleepte.
+    """
+    eerste = client.post("/api/library/testgrids", json=BASE).json()
+    tweede = client.post(
+        "/api/library/testgrids", json={**BASE, "origin_x_mm": 120}
+    ).json()
+
+    assert eerste["group_id"] and tweede["group_id"]
+    assert eerste["group_id"] != tweede["group_id"]
+
+    design = client.get("/api/design").json()
+    per_groep = {}
+    for element in design["elements"]:
+        per_groep.setdefault(element["group_id"], []).append(element)
+
+    # Elk bord telt evenveel elementen: negen vakjes plus de opschriften.
+    links = per_groep[eerste["group_id"]]
+    rechts = per_groep[tweede["group_id"]]
+    assert len(links) == len(rechts)
+    # En ze liggen ook echt uit elkaar: geen enkel element van bord 1 staat bij
+    # bord 2 in de groep. Bord 1 begint op x=10, bord 2 op x=120.
+    grens = 100 * design["units_per_mm"]
+    assert all(e["bounds"][0] < grens for e in links)
+    assert all(e["bounds"][2] > grens for e in rechts)
+    # Niets zwerft buiten een bord rond: elk element hoort ergens bij.
+    assert None not in per_groep
+
+
+def test_bringing_everything_back_onto_the_bed_keeps_the_cells_in_place(client):
+    """
+    "Terughalen op het bed" mag een bord verplaatsen, niet uit elkaar trekken.
+
+    Het nestte élke vorm los, dus je kreeg mooie rijen vakjes waarvan er geen
+    één meer op zijn eigen rij en kolom lag. De proef is dan weg: het vakje dat
+    op de foto het mooist uitpakt, hoort niet meer bij de instelling ernaast.
+    """
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    client.post("/api/library/testgrids", json={**BASE, "origin_x_mm": 120})
+    cellen = {c["element_id"]: (c["row"], c["column"]) for c in grid["cells"]}
+
+    voor = _cel_rooster(client.get("/api/design").json(), cellen)
+    design = client.get("/api/design").json()
+    antwoord = client.post(
+        "/api/design/nest",
+        json={
+            "ids": [e["id"] for e in design["elements"] if not e["hidden"]],
+            "margin_mm": 5,
+        },
+    )
+    assert antwoord.status_code == 200
+    na = _cel_rooster(client.get("/api/design").json(), cellen)
+
+    assert na == voor
+    # En specifiek het vakje waar Jelle naar wees: rij 2, kolom 1 (nul-geteld).
+    assert na[(2, 1)] == voor[(2, 1)]
+
+
+def test_the_group_carries_the_boards_name(kernel, client):
+    """Een groep die "Testraster" heet, leest als één ding in paneel en balk."""
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    group = kernel.elements.find_node(grid["group_id"])
+    assert group.label == "Testraster"
+
+
+def test_the_label_layer_never_catches_fresh_work(client):
+    """
+    De labellaag van een bord is geen laag van de gebruiker.
+
+    Hij draagt de standaardkleur van de engine (#0000ff) en staat daarmee níét
+    in de paletstrook onder het canvas. Was hij de enige blauwe graveerlaag —
+    en dat is hij zodra iemand zijn eigen lagen heeft weggegooid — dan viel elke
+    verse vorm erin: onzichtbaar in de balk, en gebrand op de instelling van een
+    opschrift in plaats van op die van de vorm.
+    """
+    client.post("/api/library/testgrids", json=BASE)
+    client.delete("/api/design/operations")
+
+    gemaakt = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 5, "y_mm": 200, "width_mm": 10, "height_mm": 10},
+    ).json()["ids"][0]
+
+    design = client.get("/api/design").json()
+    vorm = next(e for e in design["elements"] if e["id"] == gemaakt)
+    lagen = [o for o in design["operations"] if o["id"] in vorm["operation_ids"]]
+
+    assert lagen, "een verse vorm hoort in een laag te vallen"
+    assert all(o["label"] != "Raster-labels" for o in lagen)
+    assert all(not o.get("grid") for o in lagen)
+
+
+def test_clearing_all_layers_leaves_the_board_intact(client):
+    """
+    "Alle lagen weg" hoort een bord met rust te laten — ook zijn opschriften.
+
+    De cellen werden al gespaard, de labellaag niet. Het opschrift en het
+    randkader bleven dan zonder laag achter: ze stonden nog op het canvas en
+    brandden niet meer, aan een bord waar je verder niets aan zag.
+    """
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+    voor = client.get("/api/design").json()
+    opschriften = {
+        e["id"]
+        for e in voor["elements"]
+        if e["operation_ids"]
+        and all(
+            o["label"] == "Raster-labels"
+            for o in voor["operations"]
+            if o["id"] in e["operation_ids"]
+        )
+    }
+    assert opschriften, "een bord met tekst hoort opschriften te hebben"
+
+    client.delete("/api/design/operations")
+
+    na = client.get("/api/design").json()
+    labellaag = [o for o in na["operations"] if o["label"] == "Raster-labels"]
+    assert len(labellaag) == 1
+    assert set(labellaag[0]["element_ids"]) >= opschriften
+    # En de cellen staan er nog steeds, zoals ze al deden.
+    assert len([o for o in na["operations"] if o.get("grid")]) == len(grid["cells"])
+
+
+def test_the_colour_for_new_work_is_one_you_can_point_at(client):
+    """
+    De actieve kleur staat in de strook onder het canvas, of hij bestaat niet.
+
+    De engine begint op #0000ff, en dat vakje is er niet. De onderrand meldde
+    daardoor "laag 1 · Raster-labels" als de laag van je volgende vorm: de enige
+    laag die die kleur droeg, was de labellaag van het testbord.
+    """
+    client.post("/api/library/testgrids", json=BASE)
+
+    palet = client.get("/api/design/palette").json()
+
+    assert palet["default_color"] in [c["color"] for c in palet["colors"]]
+    # En de labellaag draagt geen paletkleur, dus hij kan ook nooit "de laag
+    # van dat vakje" blijken te zijn.
+    design = client.get("/api/design").json()
+    labellaag = next(o for o in design["operations"] if o["label"] == "Raster-labels")
+    assert labellaag["color"] not in [c["color"] for c in palet["colors"]]

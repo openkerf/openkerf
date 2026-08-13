@@ -1,23 +1,56 @@
+<script module lang="ts">
+	/** Wat de server terugstuurt: omtrekken in mm, en waar ze komen te liggen. */
+	export type Voorbeeld = {
+		what: string;
+		shapes: string[];
+		parts: { shape: number; x: number; y: number; rot: number; rx?: number; ry?: number }[];
+		bounds: [number, number, number, number];
+		sheet: { width_mm: number; height_mm: number };
+		sheets: number;
+		notes: string[];
+		labels?: string[];
+		modules?: number;
+		bars?: number;
+	};
+</script>
+
 <script lang="ts">
 	/**
 	 * De vorm naast het formulier dat hem maakt.
 	 *
-	 * Een parameter zonder beeld is een gok: "vinger 10 mm" begrijp je niet
-	 * zonder eerst hout te verbranden. Dit is geen versiering maar de uitleg —
-	 * de alinea's eronder mogen erdoor krimpen. Zie DESIGN-SYSTEM v3,
-	 * "Een formulier dat vorm maakt, toont die vorm".
+	 * Dit is geen schets meer maar het werkelijke resultaat: de engine rekent
+	 * hetzelfde uit als bij het echte werk (`Generators.preview`, dezelfde
+	 * `_plan_*`-functies) en stuurt de omtrekken in millimeters terug. Wat je
+	 * hier ziet is dus wat er straks gebrand wordt — inclusief de plek op het
+	 * vel, want "past dit nog" is de vraag die je aan een generator stelt.
 	 *
-	 * De tekening is schematisch, niet op schaal: hij laat de verhoudingen en
-	 * de betekenis van elk veld zien, niet het eindresultaat in millimeters.
+	 * Twee regels die uit de vorige ronde komen en hier weer gelden:
+	 *
+	 * 1. **Bij ongeldige invoer springt het beeld niet weg.** Half getypte
+	 *    getallen zijn even ongeldig; het laatste geldige beeld blijft staan
+	 *    met de reden erboven. Zie `TestGrid.svelte`, `voorbeeldFout`.
+	 * 2. **Het voorbeeld toont niet meer dan er brandt.** Het vel is een dunne
+	 *    hulplijn, geen vorm, en is als zodanig herkenbaar.
+	 *
+	 * Voor herhalen en cirkel is er een terugval: die twee hebben de gekozen
+	 * elementen nodig, en zolang het venster die niet krijgt, blijft daar de
+	 * oude schets staan. Een verzonnen vorm herhalen zou een voorbeeld zijn
+	 * dat er wel uitziet als het jouwe en het niet is.
 	 */
+
 	let {
 		soort,
 		waarden,
+		voorbeeld = null,
+		fout = null,
 		children
 	}: {
 		soort: string;
-		/** De ruwe formuliervelden; alles is tekst omdat het uit invoervelden komt. */
+		/** De ruwe formuliervelden, voor de terugvalschets. */
 		waarden: Record<string, unknown>;
+		voorbeeld?: Voorbeeld | null;
+		/** Waarom het laatste beeld niet ververst is; het beeld blijft staan. */
+		fout?: string | null;
 		children?: import('svelte').Snippet;
 	} = $props();
 
@@ -26,20 +59,61 @@
 		return Number.isFinite(v) && v !== 0 ? v : standaard;
 	}
 
-	// --- herhalen: kolommen, rijen en de ruimte ertussen
+	// --- terugvalschets: herhalen en cirkel
 	let kolommen = $derived(Math.min(6, Math.max(1, Math.round(n('columns', 4)))));
 	let rijen = $derived(Math.min(6, Math.max(1, Math.round(n('rows', 3)))));
-
-	// --- cirkel: hoeveel kopieën rond het midden
 	let herhalingen = $derived(Math.min(16, Math.max(2, Math.round(n('repeats', 8)))));
 	let draait = $derived(waarden.rotate !== false);
 
-	// --- veelhoek
-	let hoeken = $derived(Math.min(12, Math.max(3, Math.round(n('corners', 6)))));
-	let ster = $derived(Number(waarden.inner) > 0);
+	// De vlakken die je als vlák wilt zien: een QR-code van losse omtrekjes is
+	// geen QR-code meer. De rest is een lijn, want dat is wat de laser volgt.
+	const GEVULD = new Set(['qrcode', 'barcode']);
 
-	// --- doos
-	let deksel = $derived(waarden.lid !== false);
+	/**
+	 * Het venster op de tekening, in mm.
+	 *
+	 * Inzoomen op het werk zelf, niet op het vel: een QR-code van 30 mm op een
+	 * bed van 500 mm zou anders vier pixels groot zijn. De velrand wordt wél
+	 * getekend, dus zodra je er in de buurt komt, zie je hem liggen.
+	 */
+	let venster = $derived.by(() => {
+		if (!voorbeeld) return null;
+		const [x0, y0, x1, y1] = voorbeeld.bounds;
+		const marge = Math.max((x1 - x0) * 0.08, (y1 - y0) * 0.08, 1);
+		return {
+			x: x0 - marge,
+			y: y0 - marge,
+			w: Math.max(x1 - x0 + marge * 2, 0.01),
+			h: Math.max(y1 - y0 + marge * 2, 0.01)
+		};
+	});
+
+	let breed = $derived(voorbeeld ? voorbeeld.bounds[2] - voorbeeld.bounds[0] : 0);
+	let hoog = $derived(voorbeeld ? voorbeeld.bounds[3] - voorbeeld.bounds[1] : 0);
+
+	/** Steekt er iets buiten het vel uit? Dat is geen detail op een laser. */
+	let buitenVel = $derived.by(() => {
+		if (!voorbeeld) return false;
+		const [x0, y0, x1, y1] = voorbeeld.bounds;
+		return x0 < -0.01 || y0 < -0.01 || x1 > voorbeeld.sheet.width_mm + 0.01
+			|| y1 > voorbeeld.sheet.height_mm + 0.01;
+	});
+
+	const maat = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
+
+	/** Wat er onder de tekening staat: het aantal, in de eenheid van dit ding. */
+	let telling = $derived.by(() => {
+		if (!voorbeeld) return null;
+		if (voorbeeld.what === 'box') {
+			const panelen = `${voorbeeld.parts.length} panelen`;
+			return voorbeeld.sheets > 1 ? `${panelen} · vel 1 van ${voorbeeld.sheets}` : panelen;
+		}
+		if (voorbeeld.what === 'grid' || voorbeeld.what === 'radial')
+			return `${voorbeeld.parts.length} stuks`;
+		if (voorbeeld.modules) return `${voorbeeld.modules} modules`;
+		if (voorbeeld.bars) return `${voorbeeld.bars} streepjes`;
+		return null;
+	});
 
 	function veelhoekPunten(zijden: number, straal: number, binnen: number) {
 		const punten: string[] = [];
@@ -54,8 +128,45 @@
 </script>
 
 <figure class="proef">
-	<svg viewBox="0 0 100 100" role="img" aria-label="Schets van wat deze generator maakt">
-		{#if soort === 'grid'}
+	{#if fout}
+		<!-- Tijdens het typen is een tussenstand bijna altijd even ongeldig: je
+		     haalt een cijfer weg en dan is de straal nul totdat je het volgende
+		     typt. Het beeld blijft staan, met de reden erboven — een gat laten
+		     vallen leert je niets en laat het halve venster verspringen. -->
+		<p class="onaf" role="status">
+			{fout}
+			{#if voorbeeld}<br /><span class="stil">Hieronder staat je laatste geldige vorm.</span>{/if}
+		</p>
+	{/if}
+
+	{#if voorbeeld && venster}
+		<svg
+			viewBox="{venster.x} {venster.y} {venster.w} {venster.h}"
+			role="img"
+			aria-label="Voorbeeld van wat deze generator maakt, {maat(breed)} bij {maat(hoog)} millimeter"
+		>
+			<!-- Het vel als hulplijn, niet als vorm: hij wordt niet gebrand. -->
+			<rect
+				class="vel"
+				x="0"
+				y="0"
+				width={voorbeeld.sheet.width_mm}
+				height={voorbeeld.sheet.height_mm}
+			/>
+			<g class:vlak={GEVULD.has(voorbeeld.what)}>
+				{#each voorbeeld.parts as deel (deel)}
+					<path
+						class="vorm"
+						d={voorbeeld.shapes[deel.shape]}
+						transform="translate({deel.x} {deel.y}) rotate({deel.rot} {deel.rx ?? 0} {deel.ry ?? 0})"
+					/>
+				{/each}
+			</g>
+		</svg>
+	{:else if soort === 'grid'}
+		<!-- Terugval: zonder de gekozen elementen weten we niet wat er herhaald
+		     wordt, dus blijft het bij de betekenis van de velden. -->
+		<svg viewBox="0 0 100 100" role="img" aria-label="Schets van wat deze generator maakt">
 			{#each Array(rijen) as _, r}
 				{#each Array(kolommen) as _, c}
 					<rect
@@ -67,12 +178,13 @@
 					/>
 				{/each}
 			{/each}
-			<!-- De maat die verwarring geeft: de ruimte tússen de vormen. -->
 			{#if kolommen > 1}
 				<line class="maat" x1={12 + 76 / kolommen - 76 / kolommen / 4} y1="8" x2={12 + 76 / kolommen} y2="8" />
 				<text class="bij" x={12 + 76 / kolommen - 76 / kolommen / 8} y="6">ruimte</text>
 			{/if}
-		{:else if soort === 'radial'}
+		</svg>
+	{:else if soort === 'radial'}
+		<svg viewBox="0 0 100 100" role="img" aria-label="Schets van wat deze generator maakt">
 			<circle class="hulp" cx="50" cy="50" r="32" />
 			{#each Array(herhalingen) as _, i}
 				{@const hoek = (i / herhalingen) * Math.PI * 2 - Math.PI / 2}
@@ -87,61 +199,33 @@
 						: undefined}
 				/>
 			{/each}
-		{:else if soort === 'polygon'}
-			<polygon class="vorm" points={veelhoekPunten(hoeken, 34, ster ? 17 : 0)} />
-		{:else if soort === 'box'}
-			<!-- Isometrische doos met de drie maten en de vingerlassen op de rand. -->
-			<g class="vorm">
-				<path d="M22 42 L50 28 L78 42 L50 56 Z" />
-				<path d="M22 42 v22 l28 14 v-22" />
-				<path d="M78 42 v22 l-28 14" />
-				{#if !deksel}
-					<path class="hulp" d="M28 39 L50 28 L72 39" stroke-dasharray="3 2" />
-				{/if}
-			</g>
-			<g class="tanden">
-				<path d="M26 62 v6 M33 65.5 v6 M40 69 v6" />
-			</g>
-			<!-- Losse woorden pasten niet naast elkaar op 100 eenheden zonder onder
-			     de 11 schermpixels te duiken. Letters bij de maatlijnen, met de
-			     legenda eronder: even eenduidig, wel leesbaar. -->
-			<g class="bemating">
-				<path d="M22 86 H50 M50 86 H78 M84 42 V64" />
-				<text class="bij" x="33" y="95">B</text>
-				<text class="bij" x="62" y="95">D</text>
-				<text class="bij" x="88" y="56">H</text>
-				<text class="bij tand" x="14" y="78">V</text>
-			</g>
-		{:else if soort === 'arctext'}
-			<path class="hulp" d="M14 66 A36 36 0 0 1 86 66" />
-			{#each 'ABCDE'.split('') as letter, i}
-				{@const hoek = Math.PI - (i / 4) * Math.PI}
-				<text
-					class="letter"
-					x={50 + Math.cos(hoek) * 36}
-					y={66 - Math.sin(hoek) * 36}
-					transform="rotate({90 - (hoek * 180) / Math.PI} {50 + Math.cos(hoek) * 36} {66 - Math.sin(hoek) * 36})"
-				>{letter}</text>
-			{/each}
-		{:else if soort === 'qrcode'}
-			<g class="vorm">
-				<rect x="16" y="16" width="20" height="20" /><rect x="64" y="16" width="20" height="20" />
-				<rect x="16" y="64" width="20" height="20" />
-				<rect x="46" y="46" width="8" height="8" /><rect x="64" y="56" width="8" height="8" />
-				<rect x="74" y="70" width="8" height="8" /><rect x="56" y="74" width="8" height="8" />
-			</g>
-		{:else if soort === 'barcode'}
-			<g class="vorm">
-				{#each [16, 22, 25, 32, 38, 41, 48, 55, 58, 64, 71, 78, 81] as x, i}
-					<rect {x} y="24" width={i % 3 === 0 ? 4 : 2} height="46" />
-				{/each}
-			</g>
-		{/if}
-	</svg>
-	{#if soort === 'box'}
-		<figcaption class="legenda">B breedte · D diepte · H hoogte · V vinger</figcaption>
+		</svg>
+	{:else if soort === 'polygon'}
+		<!-- Alleen tot het eerste antwoord binnen is; daarna komt het echte
+		     beeld ervoor. Een leeg vak zou het venster laten verspringen. -->
+		<svg viewBox="0 0 100 100" role="img" aria-label="Schets van wat deze generator maakt">
+			<polygon class="hulp" points={veelhoekPunten(6, 34, 0)} />
+		</svg>
+	{:else}
+		<svg viewBox="0 0 100 100" role="img" aria-label="Het voorbeeld wordt berekend">
+			<rect class="hulp" x="14" y="20" width="72" height="60" />
+		</svg>
 	{/if}
-	<figcaption>{@render children?.()}</figcaption>
+
+	{#if voorbeeld}
+		<figcaption class="cijfers">
+			<span class="mono">{maat(breed)} × {maat(hoog)} mm</span>
+			{#if telling}<span class="stil">{telling}</span>{/if}
+		</figcaption>
+		{#if buitenVel}
+			<figcaption class="waarschuwing">Dit valt buiten het vel.</figcaption>
+		{/if}
+		{#each voorbeeld.notes as note (note)}
+			<figcaption class="waarschuwing">{note}</figcaption>
+		{/each}
+	{:else}
+		<figcaption>{@render children?.()}</figcaption>
+	{/if}
 </figure>
 
 <style>
@@ -155,9 +239,9 @@
 		background: var(--surface-2);
 	}
 	svg { width: 190px; height: 150px; display: block; margin: 0 auto; }
-	/* Alle maten hierin staan in viewBox-eenheden, niet in pixels — daarom
-	   non-scaling-stroke, anders verandert de lijndikte met de kolombreedte. */
-	.vorm, .vorm > :global(path), .hulp, .tanden > :global(path), .bemating > :global(path) {
+	/* Alle maten hierin staan in millimeters, niet in pixels — daarom
+	   non-scaling-stroke, anders verandert de lijndikte met de zoom. */
+	.vorm, .hulp {
 		fill: none;
 		stroke: var(--accent);
 		stroke-width: 1.4;
@@ -165,16 +249,24 @@
 		stroke-linejoin: round;
 	}
 	.hulp { stroke: var(--text-2); stroke-dasharray: 3 2; }
-	.tanden > :global(path) { stroke-width: 2.6; }
-	.bemating > :global(path) { stroke: var(--text-2); stroke-width: 0.8; }
-	/* @svg-space: deze SVG rekent in viewBox-eenheden (100 breed op 190 px), niet
-	   in CSS-pixels. Wat er op het scherm van terechtkomt, wordt gemeten door
-	   criticus 2 — een uitzondering zonder meting is precies hoe het reuzenlabel
-	   uit ronde 4 drie rondes lang onopgemerkt bleef. */
+	/* Een QR-code van losse omtrekjes leest niemand; die hoort dicht te zijn. */
+	.vlak .vorm { fill: var(--accent); stroke: none; }
+	.vel {
+		fill: none;
+		stroke: var(--text-2);
+		stroke-width: 1;
+		stroke-dasharray: 4 3;
+		vector-effect: non-scaling-stroke;
+		opacity: 0.6;
+	}
+	.maat { stroke: var(--text-2); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
+	/* @svg-space: deze terugvalschets rekent in viewBox-eenheden (100 breed op
+	   190 px), niet in CSS-pixels. */
 	.bij { font-size: 7.5px; fill: var(--text-2); font-family: var(--font-mono); }
-	.bij.tand { fill: var(--accent); }
-	/* @svg-space: zie hierboven. */
-	.letter { font-size: 10px; fill: var(--accent); text-anchor: middle; font-weight: 600; }
 	figcaption { font-size: var(--text-xs); color: var(--text-2); text-align: center; }
-	.legenda { color: var(--text-1); }
+	.cijfers { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
+	.cijfers .mono { color: var(--text-1); font-family: var(--font-mono); }
+	.stil { color: var(--text-2); }
+	.waarschuwing { color: var(--warn); }
+	.onaf { margin: 0; font-size: var(--text-xs); color: var(--warn); text-align: left; line-height: 1.4; }
 </style>

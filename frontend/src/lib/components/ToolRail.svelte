@@ -1,6 +1,8 @@
 <script lang="ts">
 	export type Tool = 'select' | 'nodes' | 'measure' | 'pen' | 'rect' | 'circle' | 'line' | 'text';
 
+	import { bewaarBestand } from '$lib/opslaan';
+
 	let {
 		tool = $bindable(),
 		canEdit = false,
@@ -13,6 +15,7 @@
 		onOpenFile,
 		onOpenProject,
 		onNewProject,
+		onSaved,
 		onOpenCatalogue,
 		onOpenGenerators,
 		onOpenClipart
@@ -37,6 +40,8 @@
 		onOpenProject?: (file: File) => void;
 		/** Opnieuw beginnen. Vraagt zelf om bevestiging als er werk ligt. */
 		onNewProject?: () => void;
+		/** Na een geslaagde download: de pagina haalt zijn "gewijzigd"-vlag op. */
+		onSaved?: () => void;
 		onOpenCatalogue?: () => void;
 		onOpenGenerators?: () => void;
 		onOpenClipart?: () => void;
@@ -87,6 +92,17 @@
 		pen: 'Pen'
 	};
 	let meerOpen = $state(false);
+
+	/**
+	 * Opslaan via `bewaarBestand`, niet via een kale `<a download>`: de app moet
+	 * ná de download weten dat het ontwerp opgeslagen is. Zie `$lib/opslaan`.
+	 */
+	async function bewaar(event: MouseEvent, url: string, naam: string) {
+		event.preventDefault();
+		meerOpen = false;
+		if (await bewaarBestand(url, naam)) onSaved?.();
+	}
+
 	let zichtbaar = $derived(compact ? TOOLS.filter((t) => KERN.includes(t.id)) : TOOLS);
 	let verborgen = $derived(compact ? TOOLS.filter((t) => !KERN.includes(t.id)) : []);
 	$effect(() => {
@@ -207,12 +223,12 @@
 						<input type="file" aria-label="Project openen" accept=".openkerf,.zip"
 							onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenProject?.(f); }} />
 					</label>
-					<a class="regel" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={() => (meerOpen = false)}>
+					<a class="regel" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={(e) => bewaar(e, '/api/project/export.openkerf', 'project.openkerf')}>
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
 						<span>Project opslaan</span>
 					</a>
 				{/if}
-				<a class="regel" role="menuitem" href="/api/design/export.svg" download="ontwerp.svg" onclick={() => (meerOpen = false)}>
+				<a class="regel" role="menuitem" href="/api/design/export.svg" download="ontwerp.svg" onclick={(e) => bewaar(e, '/api/design/export.svg', 'ontwerp.svg')}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
 					<span>Dit vel als SVG</span>
 				</a>

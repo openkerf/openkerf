@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { STATE_LABEL, STOP_TOETS, type Device, type MachineState } from '$lib/api';
 	import { apparaat } from '$lib/apparaat.svelte';
+	import { bewaarBestand } from '$lib/opslaan';
 	import { verbinding } from '$lib/verbinding.svelte';
 	import Logo from './Logo.svelte';
 
@@ -27,6 +28,7 @@
 		onOpenFile,
 		onOpenProject,
 		onNewProject,
+		onSaved,
 		onToggleTheme
 	}: {
 		device: Device | null;
@@ -70,8 +72,26 @@
 		onOpenProject?: (file: File) => void;
 		/** Opnieuw beginnen. Vraagt zelf om bevestiging als er werk ligt. */
 		onNewProject?: () => void;
+		/** Na een geslaagde download: de pagina moet zijn "gewijzigd"-vlag opnieuw
+		 *  ophalen, want de server heeft het ontwerp dan schoon verklaard. */
+		onSaved?: () => void;
 		onToggleTheme: () => void;
 	} = $props();
+
+	/**
+	 * Opslaan gaat door `bewaarBestand` en niet door een kale `<a download>`.
+	 *
+	 * De link werkt op zichzelf prima, maar de app hoort erna te weten dat het
+	 * ontwerp opgeslagen is — anders blijft `dirty` op de client staan en
+	 * beweert het volgende venster dat er niet-opgeslagen werk is. Zie
+	 * `$lib/opslaan`. De `href` blijft staan, zodat de knop ook zonder
+	 * JavaScript een echte link is.
+	 */
+	async function bewaar(event: MouseEvent, url: string, naam: string) {
+		event.preventDefault();
+		projectOpen = false;
+		if (await bewaarBestand(url, naam)) onSaved?.();
+	}
 
 	/**
 	 * Het projectmenu.
@@ -336,7 +356,7 @@
 				role="menuitem"
 				href="/api/project/export.openkerf"
 				download="project.openkerf"
-				onclick={() => (projectOpen = false)}
+				onclick={(e) => bewaar(e, '/api/project/export.openkerf', 'project.openkerf')}
 			>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
 				<span>Project opslaan</span>
@@ -364,7 +384,13 @@
 
 	<!-- Opslaan als SVG: MeerK40t's eigen schrijver, dus operaties komen bij
 	     terugladen weer mee. -->
-	<a class="btn docs" href="/api/design/export.svg" download="ontwerp.svg" title="Dit vel opslaan als SVG">
+	<a
+		class="btn docs"
+		href="/api/design/export.svg"
+		download="ontwerp.svg"
+		title="Dit vel opslaan als SVG"
+		onclick={(e) => bewaar(e, '/api/design/export.svg', 'ontwerp.svg')}
+	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
 		<span class="btn-label">Exporteren</span>
 	</a>

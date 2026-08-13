@@ -6,6 +6,7 @@
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
+	import { bewaarBestand } from '$lib/opslaan';
 	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
@@ -345,9 +346,20 @@
 		// dit vel, bij een project en bij opnieuw beginnen gaan álle vellen
 		// weg — dan is een SVG van het actieve vel geen redding maar een
 		// halve.
-		window.location.href =
-			actie.soort === 'bestand' ? '/api/design/export.svg' : '/api/project/export.openkerf';
-		setTimeout(() => voerUit(actie), 800);
+		//
+		// Wachten tot het bestand er werkelijk is, en niet 800 ms hopen: het
+		// volgende dat gebeurt, gooit het bed leeg. Mislukt het opslaan, dan
+		// gaat het leegmaken niet door en staat het venster er nog.
+		const opgeslagen =
+			actie.soort === 'bestand'
+				? await bewaarBestand('/api/design/export.svg', 'ontwerp.svg')
+				: await bewaarBestand('/api/project/export.openkerf', 'project.openkerf');
+		if (!opgeslagen) {
+			pending = actie;
+			return;
+		}
+		await design.load();
+		await voerUit(actie);
 	}
 
 	async function draw(shape: Record<string, unknown>) {
@@ -629,6 +641,7 @@
 	onOpenFile={openFile}
 	onOpenProject={openProject}
 	onNewProject={newProject}
+	onSaved={() => design.load()}
 	material={velMateriaal}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
 	onOpenMaterial={() => (materiaalOpen = true)}
@@ -659,6 +672,7 @@
 		onOpenFile={openFile}
 		onOpenProject={openProject}
 		onNewProject={newProject}
+		onSaved={() => design.load()}
 	/>
 	<!-- Vellen boven het canvas: elk vel is een eigen document, dus dit is
 	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->

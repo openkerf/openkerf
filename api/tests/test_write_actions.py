@@ -51,7 +51,13 @@ def lan_server(kernel, tmp_path):
 # POSTs that compute rather than change. They take a body, which is why they
 # are not GETs, but they touch neither the engine nor the database — see
 # test_preview_plans_without_drawing, which proves it for this one.
-READ_ONLY_POSTS = {"/api/library/testgrids/preview"}
+READ_ONLY_POSTS = {
+    "/api/library/testgrids/preview",
+    # Het voorbeeld van een generator: rekent de vorm uit en stuurt hem als
+    # paddata terug, zonder hem aan de tekening te hangen. Bewezen door
+    # test_the_preview_leaves_the_drawing_alone.
+    "/api/design/generate/preview",
+}
 
 
 def test_every_mutating_route_requires_the_write_guard(local_client):

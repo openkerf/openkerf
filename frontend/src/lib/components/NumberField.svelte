@@ -46,12 +46,47 @@
 		value = String(Math.round(nieuw * 1000) / 1000);
 		onchange?.(value);
 	}
+
+	/**
+	 * Pijltjes op het veld zelf verhogen en verlagen.
+	 *
+	 * Dit is de tegenhanger van `tabindex="-1"` op de twee knoppen hieronder.
+	 * Stonden die in de tabvolgorde, dan kost één veld verder drie keer Tab en
+	 * land je onderweg op de + van het veld dat je net verliet en op de − van
+	 * het volgende. In een formulier met zes maten is dat achttien keer Tab om
+	 * er zes in te vullen.
+	 *
+	 * Ze eruit halen mag alleen omdat hun werk hier gedaan kan worden: een
+	 * gewone `<input type=number>` doet het precies zo — zijn spinner is niet
+	 * focusbaar en de pijltjes stappen. Wie geen muis gebruikt, verliest dus
+	 * niets: Home en End springen naar de grenzen als die er zijn, en de
+	 * knoppen houden hun naam en blijven met een schermlezer of aanwijzer
+	 * gewoon te bedienen — alleen niet meer met Tab.
+	 */
+	function toets(event: KeyboardEvent) {
+		if (disabled) return;
+		if (event.key === 'ArrowUp') zet(1);
+		else if (event.key === 'ArrowDown') zet(-1);
+		else if (event.key === 'Home' && min !== null) value = String(min);
+		else if (event.key === 'End' && max !== null) value = String(max);
+		else return;
+		// Anders springt de cursor ook nog naar begin of eind van de tekst, en
+		// bij Pijl omhoog scrolt het venster eronder mee.
+		event.preventDefault();
+		if (event.key === 'Home' || event.key === 'End') onchange?.(value);
+	}
 </script>
 
 <div class="veld">
 	<label class="naam" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
 	<span class="teller">
-		<button type="button" {disabled} aria-label="{label} verlagen" onclick={() => zet(-1)}>−</button>
+		<button
+			type="button"
+			tabindex="-1"
+			{disabled}
+			aria-label="{label} verlagen"
+			onclick={() => zet(-1)}>−</button
+		>
 		<input
 			{id}
 			class="mono"
@@ -59,9 +94,16 @@
 			inputmode="decimal"
 			bind:value
 			{disabled}
+			onkeydown={toets}
 			onchange={() => onchange?.(value)}
 		/>
-		<button type="button" {disabled} aria-label="{label} verhogen" onclick={() => zet(1)}>+</button>
+		<button
+			type="button"
+			tabindex="-1"
+			{disabled}
+			aria-label="{label} verhogen"
+			onclick={() => zet(1)}>+</button
+		>
 	</span>
 </div>
 

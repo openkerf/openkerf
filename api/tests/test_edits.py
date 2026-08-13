@@ -122,6 +122,73 @@ def test_undo_reports_that_ids_are_no_longer_valid(kernel, editor):
     assert result["ids_invalidated"] is True
 
 
+def test_undo_steps_back_one_edit_and_not_two(kernel, editor):
+    """
+    Upstream #3258, afgevangen in `_undo_target`.
+
+    De stapel bewaart per wijziging de toestand *vóór* die wijziging, maar
+    `Undo.undo()` herstelt er nog eentje onder. Gemeten op de oude code: drie
+    getekende vormen, één keer ongedaan maken, en er stond er nog één.
+    """
+    from openkerf_api.drawing import Drawing
+
+    drawing = Drawing(kernel)
+    for i in range(3):
+        drawing.create("rect", x_mm=5 + 20 * i, y_mm=90, width_mm=8, height_mm=8)
+    before = len(DesignReader(kernel).snapshot()["elements"])
+
+    editor.undo()
+
+    assert len(DesignReader(kernel).snapshot()["elements"]) == before - 1
+
+
+def test_undo_and_redo_land_on_the_same_states(kernel, editor):
+    """Wat één keer terug gaat, komt met één keer vooruit weer terug."""
+    from openkerf_api.drawing import Drawing
+
+    drawing = Drawing(kernel)
+    for i in range(3):
+        drawing.create("rect", x_mm=5 + 20 * i, y_mm=90, width_mm=8, height_mm=8)
+    full = len(DesignReader(kernel).snapshot()["elements"])
+
+    editor.undo()
+    editor.undo()
+    assert len(DesignReader(kernel).snapshot()["elements"]) == full - 2
+
+    editor.redo()
+    editor.redo()
+    assert len(DesignReader(kernel).snapshot()["elements"]) == full
+
+
+def test_undo_puts_a_shape_back_in_the_layer_it_came_from(kernel, editor):
+    """
+    De vraag van Jelle: valt een laagtoewijzing onder ongedaan maken?
+
+    Ja — maar op de oude code sprong de vorm niet naar de vórige laag terug
+    maar naar die van de handeling dáárvoor, en als dat dezelfde was, leek
+    ongedaan maken niets te doen.
+    """
+    from openkerf_api.drawing import Drawing
+
+    drawing = Drawing(kernel)
+    element_id = first_id(kernel)
+    rood = drawing.paint([element_id], "#ff0000", None)["operation_id"]
+    drawing.paint([element_id], "#0000ff", None)
+
+    def in_laag(operation_id):
+        return any(
+            element_id in op["element_ids"]
+            for op in DesignReader(kernel).snapshot()["operations"]
+            if op["id"] == operation_id
+        )
+
+    assert in_laag(rood) is False
+
+    editor.undo()
+
+    assert in_laag(rood) is True
+
+
 def test_undo_at_the_bottom_of_the_stack_is_not_an_error(kernel, editor):
     for _ in range(40):
         result = editor.undo()

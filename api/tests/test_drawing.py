@@ -402,6 +402,42 @@ def test_fonts_are_listed(kernel, drawing):
     assert all("file" in f and "name" in f for f in fonts)
 
 
+def test_a_font_whose_file_is_gone_is_not_offered(kernel, drawing, tmp_path):
+    """
+    De engine houdt zijn fontlijst in een cache die een verwijderd bestand niet
+    opmerkt. Zo'n regel kan alleen maar mislukken: de kiezer toont hem, haalt
+    het bestand op voor het voorbeeld en krijgt een 409 terug — zonder dat er
+    iets op het scherm staat over wat er aan de hand is.
+    """
+    weg = tmp_path / "Weggegooid.ttf"
+    er_nog = tmp_path / "Aanwezig.ttf"
+    er_nog.write_bytes(b"niet echt een font, maar het bestaat")
+
+    registry = kernel.root.fonts
+
+    class Verzonnen:
+        @staticmethod
+        def available_fonts():
+            return [
+                (str(weg), "Weggegooid"),
+                (str(er_nog), "Aanwezig"),
+                # Zoals de engine zijn eigen Hershey-fonts opgeeft: een kale
+                # naam, geen pad. Dat font bestaat wél en moet blijven staan —
+                # wij zetten er de opschriften van elk testbord mee.
+                ("meerk40t.jhf", "MeerK40t Simple"),
+            ]
+
+    kernel.root.fonts = Verzonnen()
+    try:
+        namen = [f["name"] for f in drawing.fonts()]
+    finally:
+        kernel.root.fonts = registry
+
+    assert "Aanwezig" in namen
+    assert "MeerK40t Simple" in namen
+    assert "Weggegooid" not in namen
+
+
 # --------------------------------------------------------- tijdschatting
 
 def test_estimate_before_starting(kernel, drawing, client):

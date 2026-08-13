@@ -148,11 +148,16 @@
 			class:picked={font === item.file}
 			onclick={() => kies(item)}
 		>
-			<!-- De naam in zijn eigen letter: kiezen op zicht, niet op naam. -->
-			<span
-				class="naam"
-				style={familie.has(item.file) ? `font-family: "${familie.get(item.file)}", var(--font-ui)` : ''}
-			>{item.name}</span>
+			<!--
+				Links de naam in het interfacelettertype, rechts het voorbeeld in
+				de letter zelf. Ze stonden allebei in de letter, en dan is een
+				lettertype zonder leesbaar latijns alfabet — Aurebesh, Wingdings,
+				een symbolenset — niet meer te vinden: je leest de naam niet en
+				het voorbeeld ook niet. De naam is de sleutel om iets terug te
+				vinden, het voorbeeld is waar je op kiest; die twee taken
+				verdragen niet hetzelfde lettertype.
+			-->
+			<span class="naam">{item.name}</span>
 			<span class="proef" style={familie.has(item.file) ? `font-family: "${familie.get(item.file)}", var(--font-ui)` : ''}
 				>{sample.trim().slice(0, 18) || 'Handgemaakt 123'}</span>
 		</button>
@@ -226,8 +231,22 @@
 		color: var(--text-1);
 		text-align: left;
 	}
-	.font .naam { font-size: var(--text-sm); }
+	/* Nadrukkelijk het interfacelettertype: de naam is de sleutel waarmee je
+	   een letter terugvindt en moet dus altijd leesbaar zijn. */
+	.font .naam {
+		font-family: var(--font-ui);
+		font-size: var(--text-sm);
+		/* Een lange naam mag het voorbeeld niet van de rij duwen. */
+		flex: 0 1 auto;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.font .proef {
+		flex: 1 1 auto;
+		min-width: 0;
+		text-align: right;
 		font-size: var(--text-md);
 		color: var(--text-2);
 		white-space: nowrap;

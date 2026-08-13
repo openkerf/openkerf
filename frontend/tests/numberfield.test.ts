@@ -61,3 +61,31 @@ test('de stapknoppen houden hun eigen naam', () => {
 	assert.match(html, /aria-label="Breedte verlagen"/);
 	assert.match(html, /aria-label="Breedte verhogen"/);
 });
+
+/**
+ * Tabben gaat van waarde naar waarde.
+ *
+ * Gemeten vóór deze fix, met Playwright vanaf het veld "Kolommen" in het
+ * generatorvenster: input → "Kolommen verhogen" → "Rijen verlagen" → input →
+ * "Rijen verhogen" → … Drie keer Tab per veld, en twee daarvan zijn knoppen
+ * waar je niet heen wilde.
+ *
+ * De knoppen mogen alleen uit de tabvolgorde omdat hun werk op het veld zelf
+ * kan: pijl omhoog en omlaag stappen, precies zoals bij een gewone
+ * `<input type=number>`, waarvan de spinner ook niet focusbaar is. Ze houden
+ * hun naam en blijven aanwijsbaar.
+ */
+test('de stapknoppen staan niet in de tabvolgorde', () => {
+	const knoppen = html.match(/<button[^>]*>/g) ?? [];
+	assert.equal(knoppen.length, 2, `verwachtte twee knoppen, kreeg:\n${html}`);
+	for (const knop of knoppen) {
+		assert.match(knop, /tabindex="-1"/, `deze knop vangt nog een Tab:\n${knop}`);
+	}
+});
+
+test('het invoerveld blijft wél gewoon een tabstop', () => {
+	const veld = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+	assert.ok(veld, 'geen invoerveld gevonden');
+	assert.ok(!/tabindex/.test(veld), `het veld hoort in de tabvolgorde te staan:\n${veld}`);
+	assert.ok(!/\bdisabled\b/.test(veld), veld);
+});

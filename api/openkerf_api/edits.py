@@ -250,10 +250,53 @@ class DesignEditor:
     # -------------------------------------------------------------- history
 
     def undo(self) -> dict:
-        return self._history("undo", self.runner.run("undo"))
+        doel = self._undo_target()
+        opdracht = "undo" if doel is None else f"undo {doel}"
+        return self._history("undo", self.runner.run(opdracht))
 
     def redo(self) -> dict:
         return self._history("redo", self.runner.run("redo"))
+
+    def _undo_target(self) -> int | None:
+        """
+        Welke toestand hoort er bij één keer ongedaan maken (upstream #3258).
+
+        De stapel bewaart per wijziging de toestand **vóór** die wijziging:
+        `undoscope` roept `mark()` aan voordat er iets gebeurt. `Undo.undo()`
+        herstelt vervolgens `_undo_index - 1`, en dat is de toestand vóór de
+        wijziging dáárvoor — één stap te ver. Gemeten met drie getekende
+        vormen: één keer ongedaan maken liet er één over, niet twee.
+
+        Voor een laagtoewijzing is dat precies het geval waar het niet opvalt
+        en toch fout is: de vorm springt niet terug naar de vorige laag maar
+        naar de laag waar hij twee handelingen geleden zat, en als dat dezelfde
+        is, lijkt ongedaan maken helemaal niets te doen. Dát is wat Jelle zag.
+
+        We rekenen de juiste index daarom zelf uit en geven hem mee aan het
+        console-commando (`undo <index>`), zodat de rest van de engine — de
+        selectie bijwerken, de boom herbouwen — precies hetzelfde gebeurt.
+
+        Alleen de **eerste** stap terug na een wijziging is fout; daarna klopt
+        de telling weer, want de engine zet zijn index dan op wat wij hersteld
+        hebben. Die eerste stap is te herkennen zonder eigen boekhouding: de
+        index staat dan bovenop de stapel én wijst niet naar het
+        "Last status"-vangnet dat `validate()` erbovenop legt.
+
+        `None` betekent: het gewone `undo` doet het goede.
+        """
+        try:
+            stapel = self.elements.undo
+            index = stapel._undo_index
+            staten = stapel._undo_stack
+            if index != len(staten) - 1 or index <= 0:
+                return None
+            if staten[index].message == stapel.LAST_STATE:
+                return None
+            return index
+        except (AttributeError, IndexError, TypeError):
+            # Verandert de engine zijn interne stapel, dan doen we het weer
+            # zoals hij het zelf doet: liever een stap te ver dan geen undo.
+            return None
 
     def _history(self, action: str, output: list[str]) -> dict:
         # The console reports exhaustion as text rather than an error.

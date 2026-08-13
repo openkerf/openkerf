@@ -130,3 +130,54 @@ def test_a_path_of_one_point_is_refused(client):
 def test_a_malformed_point_is_refused(client):
     response = client.post("/api/design/path", json={"points": [[10, 10], [1, 2, 3]]})
     assert response.status_code == 409
+
+
+# ------------------------------------------------------- een groep is één ding
+
+
+def test_nesting_moves_a_group_as_one_thing(client):
+    """
+    Wat gegroepeerd is, houdt onderling exact zijn plek.
+
+    Het nestte élk element los, dus een tandwiel van vier vormen — of een
+    testbord van negen vakjes — kwam er als losse onderdelen in nette rijen uit.
+    """
+    links = a_rect(client, 5, 5, 20, 10)
+    rechts = a_rect(client, 40, 5, 20, 10)
+    client.post("/api/design/group", json={"ids": [links, rechts]})
+    los = a_rect(client, 5, 200, 30, 30)
+
+    voor = boxes(client)
+    onderling = [
+        voor[rechts][0] - voor[links][0],
+        voor[rechts][1] - voor[links][1],
+    ]
+
+    antwoord = client.post(
+        "/api/design/nest", json={"ids": [links, rechts, los], "margin_mm": 3}
+    )
+    assert antwoord.status_code == 200
+
+    na = boxes(client)
+    assert [na[rechts][0] - na[links][0], na[rechts][1] - na[links][1]] == pytest.approx(
+        onderling
+    )
+    # De groep is als geheel verhuisd — dat is wat nesten hoort te doen.
+    assert na[los][1] == pytest.approx(na[links][1], abs=0.1) or na[los] != voor[los]
+
+
+def test_one_group_and_one_shape_are_two_units(client):
+    """
+    Twee vormen die samen één groep zijn, tellen als één ding.
+
+    Anders zou "nest deze twee" op een gegroepeerd paar zeggen dat het er twee
+    zijn en het paar alsnog uit elkaar trekken.
+    """
+    a = a_rect(client, 5, 5)
+    b = a_rect(client, 40, 5)
+    client.post("/api/design/group", json={"ids": [a, b]})
+
+    antwoord = client.post("/api/design/nest", json={"ids": [a, b], "margin_mm": 3})
+
+    assert antwoord.status_code == 409
+    assert "minstens twee" in antwoord.json()["detail"]

@@ -1508,6 +1508,41 @@ class ApiServer:
                 body.get("origin_y_mm", 0.0),
             )
 
+        @app.post("/api/design/generate/preview")
+        def preview_generator(body: dict):
+            """
+            Wat een generator zou maken, zonder het te maken.
+
+            **Een POST zonder `write`, en dat is een bewuste uitzondering.**
+            POST omdat er een formulier in gaat dat niet in een querystring
+            past, niet omdat er iets verandert: `Generators.preview` rekent de
+            vorm uit met dezelfde `_plan_*`-functies als het echte werk en
+            geeft hem terug als paddata. Hij hangt niets aan de elementenboom,
+            maakt geen vel aan en zet niets op de ongedaan-stapel — ook niet
+            tijdelijk. Dat is de hele grond voor het ontbreken van de guard:
+            zou hij de boom aanraken en achteraf opruimen, dan wijzigde hij bij
+            elke toetsaanslag het werk van wie er verder meekijkt, en dat is
+            een schrijfactie hoe netjes het opruimen ook is.
+
+            Bewezen, niet beweerd: `test_the_preview_leaves_the_drawing_alone`
+            legt de hele momentopname van vóór en ná dertig voorbeelden naast
+            elkaar (inclusief de doos die over twee vellen gaat, waar de échte
+            generator wél een vel bijmaakt), en
+            `test_the_preview_adds_nothing_to_undo` doet hetzelfde voor de
+            ongedaan-stapel. De andere kant van de afspraak staat in
+            `test_write_actions.py`: de route staat daar in `READ_ONLY_POSTS`,
+            en elke andere POST móét de guard hebben.
+
+            Twee dingen die daaruit volgen en die je niet moet weghalen:
+            - De boogtekst haalt zijn letters op met `cfont.render()` in een
+              losse `FontPath` in plaats van via een tekstnode, juist omdat een
+              node in het document zou belanden.
+            - Diezelfde route zet `context.last_font` níét, terwijl de echte
+              tekstplaatsing dat wel doet (extra/hershey.py:492).
+            """
+            what = str(body.get("what") or "")
+            return manage(self.generators.preview, what, body)
+
         @app.post("/api/design/generate/grid", dependencies=write)
         def generate_grid(body: dict):
             """De selectie in rijen en kolommen herhalen."""
@@ -1682,11 +1717,11 @@ class ApiServer:
                 # bepaalt mede hoe breed het bord wordt. Achteraf toevoegen gaf
                 # een gemelde maat die smaller was dan wat er brandt.
                 plan, cells = plan_grid(**grid_fields(body))
-                drawn = self.grids.draw(plan, cells)
+                # Het raster is één object op het canvas — vakjes, aslabels,
+                # opschrift en kader in één groep, in één handeling. De cellen
+                # houden hun eigen operaties, want die zijn de sweep.
+                drawn, group_id = self.grids.draw(plan, cells)
                 grid = self.library.add_test_grid(plan, drawn)
-                # Het raster is één object op het canvas; de cellen houden hun
-                # eigen operaties, want die zijn de sweep.
-                group_id = self.grids.group_drawn(drawn)
                 if group_id:
                     self.library.set_grid_group(grid["id"], group_id)
                     grid = self.library.test_grid(grid["id"])

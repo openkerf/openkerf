@@ -18,6 +18,15 @@ from .edits import DesignError
 
 MAX_CELLS = 400  # A 20x20 sweep is already more than anyone reads off a photo.
 
+# De laag waar alle opschriften van alle borden in gaan. Eén naam op één plek,
+# want zowel de generator als het tekengedeelte moet hem herkennen: hij is een
+# láág van het bord en geen laag van de gebruiker, en mag dus nooit vers werk
+# opvangen (zie Drawing._single_layer).
+LABEL_LAYER = "Raster-labels"
+
+# Hoe de groep heet die één bord bij elkaar houdt.
+BOARD_LABEL = "Testraster"
+
 
 def _positive(value, name: str) -> float:
     try:
@@ -870,12 +879,18 @@ class TestGridGenerator:
     def elements(self):
         return self.kernel.elements
 
-    def draw(self, plan: dict, cells: list[dict]) -> list[dict]:
+    def draw(self, plan: dict, cells: list[dict]) -> tuple[list[dict], str | None]:
         """
         Draw the grid: one square per cell, each in its own operation.
 
         Returns the cells enriched with the element and operation ids, so a
-        photo overlay can later map a tap back to speed and power.
+        photo overlay can later map a tap back to speed and power — plus het
+        id van de groep die het bord bij elkaar houdt.
+
+        Het groeperen gebeurt binnen dezelfde handeling als het tekenen. Een
+        bord is één ding, dus het maken ervan is één keer ongedaan maken; stond
+        het groeperen erbuiten, dan haalde de eerste `undo` alleen de groep weg
+        en bleven er negentien losse vormen op het bed liggen.
         """
         op_type = OPERATION_TYPES.get(plan["operation"])
         if op_type is None:
@@ -899,7 +914,6 @@ class TestGridGenerator:
                 f"van {bed[0]:.0f}×{bed[1]:.0f} mm."
             )
 
-        drawn = []
         # Zonder dit belandt elke cel óók in elke bestaande operatie waarvan de
         # kleur matcht — de engine classificeert nieuwe elementen automatisch.
         # Het raster zou dan dubbel gebrand worden: één keer op de instelling van
@@ -909,56 +923,47 @@ class TestGridGenerator:
         if classify is not None:
             self.elements.classify_new = False
         try:
-            drawn = self._draw_cells(plan, cells)
+            drawn, group = self._draw_cells(plan, cells)
         finally:
             if classify is not None:
                 self.elements.classify_new = classify
 
         self.elements.signal("rebuild_tree", "all")
         self.elements.signal("refresh_scene", "Scene")
-        return drawn
+        return drawn, (getattr(group, "id", None) if group is not None else None)
 
-    def group_drawn(self, drawn: list[dict]) -> str | None:
+    def _group_board(self, members: list):
         """
-        Vouw het hele raster tot één groep.
+        Vouw dít bord tot één groep — vakjes, aslabels, opschrift en kader.
 
         Een raster is één ding: half verslepen slaat nergens op, en als losse
         vierkanten vult het de selectie en het canvas met ruis. De cellen
         houden wél elk hun eigen operatie — anders brandt de sweep niet.
+
+        Wie erbij hoort is wat dit bord zelf getekend heeft, niet wat een
+        rondgang door het document oplevert. Die rondgang zocht de opschriften
+        op de labellaag — en die is gedeeld door álle borden, dus een tweede
+        bord trok de opschriften van het eerste zijn eigen groep in. Daarna
+        selecteerde één aslabel van bord 1 het hele bord 2, en verhuisde het
+        mee zodra je bord 2 versleepte.
         """
-        nodes = [
-            node
-            for node in (
-                self.elements.find_node(entry["element_id"]) for entry in drawn
-            )
-            if node is not None
-        ]
-        labels = [
-            node
-            for node in self.elements.elems()
-            if node.type == "elem path" and node not in nodes
-        ]
-        members = nodes + [n for n in labels if self._is_label(n)]
         if len(members) < 2:
             return None
         self.elements.set_emphasis(members)
         self.kernel.console("group\n")
-        self.elements.validate_ids()
         for node in self.elements.elem_branch.flat():
             if node.type == "group" and any(c in members for c in node.children):
-                return node.id
+                # Een naam, zodat het paneel en de selectiebalk "Testraster"
+                # kunnen zeggen in plaats van "groep".
+                node.label = BOARD_LABEL
+                return node
         return None
 
-    def _is_label(self, node) -> bool:
-        for reference in getattr(node, "_references", []) or []:
-            parent = getattr(reference, "parent", None)
-            if parent is not None and getattr(parent, "label", None) == "Raster-labels":
-                return True
-        return False
-
-    def _draw_cells(self, plan: dict, cells: list[dict]) -> list[dict]:
+    def _draw_cells(self, plan: dict, cells: list[dict]) -> tuple[list[dict], object]:
         op_type = OPERATION_TYPES[plan["operation"]]
         drawn = []
+        # Alles wat níét een vakje is maar wel bij dit bord hoort.
+        extras: list = []
         with self.elements.undoscope("Testraster genereren"):
             for cell in cells:
                 node = self._square(cell, gevuld=op_type == "op raster")
@@ -982,19 +987,23 @@ class TestGridGenerator:
             # proefje op een restje is het opschrift verspilling; voor een bord
             # dat in de kast gaat is het het halve bewijsstuk. Standaard aan.
             if plan.get("text", True):
-                self._label_axes(plan, cells)
-                self._caption(plan)
+                self._label_axes(plan, cells, extras)
+                self._caption(plan, extras)
             if plan.get("border"):
-                self._border(plan)
+                self._border(plan, extras)
+
+            # Binnen dezelfde handeling: het bord is één ding, dus ook één stap
+            # in de geschiedenis.
+            group = self._group_board([entry["_node"] for entry in drawn] + extras)
 
         # Ids only exist once the engine has handed them out.
         self.elements.validate_ids()
         for entry in drawn:
             entry["element_id"] = entry.pop("_node").id
             entry["operation_id"] = entry.pop("_op").id
-        return drawn
+        return drawn, group
 
-    def _label_axes(self, plan: dict, cells: list[dict]):
+    def _label_axes(self, plan: dict, cells: list[dict], extras: list):
         """
         Engrave the axis labels: the row quantity left, the column one on top.
 
@@ -1027,6 +1036,7 @@ class TestGridGenerator:
                 middle=plan["origin_y_mm"] + row * pitch + plan["cell_mm"] / 2,
             )
             labels.add_reference(node)
+            extras.append(node)
 
         for column, power in sorted(powers.items()):
             node = self._text(toon(kolom_as, power), text_height)
@@ -1038,8 +1048,9 @@ class TestGridGenerator:
                 bottom=plan["origin_y_mm"] - 2,
             )
             labels.add_reference(node)
+            extras.append(node)
 
-    def _caption(self, plan: dict):
+    def _caption(self, plan: dict, extras: list):
         """
         Het opschrift op het bord: wat is dit, waarvan, wanneer.
 
@@ -1097,6 +1108,7 @@ class TestGridGenerator:
                 - (len(regels) - 1 - index) * CAPTION_LINE_PITCH * hoogte,
             )
             labels.add_reference(node)
+            extras.append(node)
 
     @staticmethod
     def _breedte_mm(node) -> float:
@@ -1105,7 +1117,7 @@ class TestGridGenerator:
         x0, _, x1, _ = node.bounds
         return (x1 - x0) / UNITS_PER_MM
 
-    def _border(self, plan: dict):
+    def _border(self, plan: dict, extras: list):
         """
         Het randkader om het hele bord (T10).
 
@@ -1124,6 +1136,7 @@ class TestGridGenerator:
         if node is None:
             return
         self._label_op(plan).add_reference(node)
+        extras.append(node)
 
     def _label_op(self, plan: dict | None = None):
         """De laag waar alle opschriften in gaan; één voor alle rasters samen."""
@@ -1135,7 +1148,7 @@ class TestGridGenerator:
             float(plan.get("label_power_percent") or DEFAULT_LABEL_POWER_PERCENT) * 10
         )
         for node in self.elements.op_branch.children:
-            if getattr(node, "label", None) == "Raster-labels":
+            if getattr(node, "label", None) == LABEL_LAYER:
                 # De laag is er al van een vorig bord. Wie nu een andere
                 # labelinstelling vraagt, krijgt hem ook: anders zet je iets in
                 # het formulier dat stilletjes niets doet.
@@ -1146,7 +1159,7 @@ class TestGridGenerator:
             type="op engrave",
             speed=snelheid,
             power=vermogen,
-            label="Raster-labels",
+            label=LABEL_LAYER,
         )
 
     def _label_font(self) -> str | None:

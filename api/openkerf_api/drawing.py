@@ -17,6 +17,7 @@ from .commands import CommandRunner
 from .design import _xy, operation_label
 from .edits import DesignError, _finite, _positive
 from .palette import normalise
+from .testgrid import LABEL_LAYER
 
 # What a shape needs, and the console command that draws it. Millimetres in,
 # because that is what the user sees.
@@ -161,23 +162,29 @@ class Drawing:
 
         before = {id(n) for n in self.elements.elems()}
         before_ops = {id(o) for o in self.elements.ops()}
+        # Tekenen én in een laag zetten binnen dezelfde handeling: een vorm
+        # neerzetten is één stap, dus één keer ongedaan maken. Zou het opzoeken
+        # van de laag erbuiten vallen, dan haalde de eerste `undo` alleen die
+        # laag weg en bleef de vorm staan.
         with self.elements.undoscope(f"{kind} tekenen"):
             self.runner.run(self._command(kind, values, fields))
-        created = [n for n in self.elements.elems() if id(n) not in before]
+            created = [n for n in self.elements.elems() if id(n) not in before]
+            if created:
+                self.elements.validate_ids()
+                for node in created:
+                    self._single_layer(node)
+                self._seed_from_memory(before_ops)
         if not created:
             raise DesignError("De engine heeft niets getekend.")
 
-        self.elements.validate_ids()
-        for node in created:
-            self._single_layer(node)
-        self._seed_from_memory(before_ops)
         self.elements.set_emphasis(created)
         self._refresh()
         return {"ids": [n.id for n in created], "type": created[0].type}
 
     def _single_layer(self, node) -> None:
         """
-        Een verse vorm hoort in één laag te vallen, niet in twee.
+        Een verse vorm hoort in één laag te vallen, niet in twee — en nooit in
+        een laag van een testbord.
 
         De classificatie van de engine kijkt naar de lijnkleur, en meerdere
         operaties kunnen dezelfde kleur claimen. Dan zit dezelfde rechthoek in
@@ -185,14 +192,61 @@ class Drawing:
         vaak op 100%. Precies de val die eerder bij het testraster toesloeg.
         Een element in meerdere lagen zetten blijft kunnen, maar dan omdat
         iemand daarvoor kiest.
+
+        De lagen van een testbord tellen niet mee als kandidaat. De labellaag
+        draagt de standaardkleur van de engine (#0000ff) en staat níét in de
+        paletstrook onder het canvas, dus een vorm die daarin belandt is werk
+        dat verdwijnt: onzichtbaar in de balk, en gebrand op 80 mm/s @ 30 %
+        omdat dat de instelling van een opschrift is. Gemeten: in een document
+        waar de gebruiker zijn eigen lagen had weggegooid, viel élke nieuwe
+        vorm in "Raster-labels".
         """
         references = [
             reference
             for reference in list(getattr(node, "_references", []))
             if reference.parent is not None
         ]
-        for extra in references[1:]:
-            extra.remove_node()
+        eigen = [r for r in references if not self._is_board_layer(r.parent)]
+        # Alleen bordlagen? Dan hoort deze vorm daar sowieso niet, en is er ook
+        # geen alternatief onder de referenties: alles eraf, en de vorm krijgt
+        # via zijn eigen lijnkleur een echte laag.
+        houden = eigen[:1]
+        for extra in references:
+            if extra not in houden:
+                extra.remove_node()
+        if not houden:
+            self._own_layer(node)
+
+    def _own_layer(self, node) -> None:
+        """Geef een vorm zonder laag er een, op zijn eigen lijnkleur."""
+        kleur = normalise(str(getattr(node, "stroke", "") or "")[:7])
+        if kleur is None:
+            return
+        try:
+            # Hetzelfde geheugen als bij het paletvakje (besluit B2): een verse
+            # laag begint op wat deze kleur op deze machine eerder deed.
+            onthouden = None
+            try:
+                onthouden = self.color_memory(kleur)
+            except Exception:
+                pass
+            layer = self.layer_for_color(kleur, onthouden)
+        except DesignError:
+            return
+        self._operation(layer["id"]).add_reference(node)
+
+    def _is_board_layer(self, operation) -> bool:
+        """
+        Een laag die bij een testbord hoort in plaats van bij de gebruiker.
+
+        Twee soorten: de cellen (elk hun eigen sweep-instelling) en de gedeelde
+        labellaag waar de opschriften van alle borden in gaan.
+        """
+        if operation is None:
+            return False
+        if getattr(operation, "label", None) == LABEL_LAYER:
+            return True
+        return self._is_grid_cell(operation, getattr(operation, "id", "") or "")
 
     def _command(self, kind: str, v: dict, fields: dict) -> str:
         if kind == "rect":
@@ -965,7 +1019,11 @@ class Drawing:
             # het is een container in de elementenboom en geen laag.
             if not str(op.type).startswith("op "):
                 continue
-            if self._is_grid_cell(op, getattr(op, "id", "") or ""):
+            # Lagen van een testbord tellen niet mee: de cellen omdat hun
+            # waarden de proef zíjn, de labellaag omdat hij de blauwe
+            # standaardkleur van de engine draagt en dus zomaar de laag "van
+            # blauw" zou blijken te zijn.
+            if self._is_board_layer(op):
                 continue
             if self._usable_color(op) == wanted:
                 return {"id": op.id, "type": op.type, "created": False}
@@ -1073,10 +1131,31 @@ class Drawing:
         return {"color": wanted}
 
     def default_color(self) -> str | None:
+        """
+        De kleur waarin nieuw werk getekend wordt, altijd een kleur uit het palet.
+
+        De engine begint op `#0000ff`, en die kleur staat in geen van de tien
+        vakjes onder het canvas. Dat leverde een strook op waarin geen enkel
+        vakje aan stond terwijl er wél een kleur actief was, en — erger — de
+        laag die "van blauw" bleek te zijn, was de labellaag van het testraster:
+        `Raster-labels`, op 80 mm/s @ 30 %. De onderrand meldde dan doodleuk
+        "laag 1 · Raster-labels" als de laag van je volgende vorm.
+
+        We schuiven daarom één keer op naar de eerste paletkleur. Alleen als de
+        engine op een kleur staat die het palet niet kent: heeft de gebruiker
+        zelf een vakje gekozen, dan blijft die keuze staan.
+        """
         try:
-            return normalise(str(self.elements.default_stroke.hexrgb))
+            kleur = normalise(str(self.elements.default_stroke.hexrgb))
         except (AttributeError, TypeError, ValueError):
-            return None
+            kleur = None
+        palet = {normalise(c) for c in self.PALETTE}
+        if kleur is not None and kleur not in palet:
+            try:
+                return self.set_default_color(self.PALETTE[0])["color"]
+            except (AttributeError, DesignError, TypeError, ValueError):
+                return kleur
+        return kleur
 
     @staticmethod
     def _valid_color(color) -> str:
@@ -1106,15 +1185,17 @@ class Drawing:
         en het canvas tekent ze gestippeld — zichtbaar werk zonder bestemming,
         precies wat je wil zien voordat je opnieuw indeelt.
 
-        Cellen van een testraster tellen niet mee: die horen bij één bord en
+        Lagen van een testraster tellen niet mee: die horen bij één bord en
         gaan er als geheel uit ("Raster uit ontwerp verwijderen"). Ze los
-        weggooien zou een half testresultaat achterlaten.
+        weggooien zou een half testresultaat achterlaten — en dat gold ook voor
+        de labellaag, die hier wél sneuvelde: de opschriften en het randkader
+        van elk bord bleven achter zonder laag en brandden dus niet meer, aan
+        een bord waar je verder niets aan zag.
         """
         doomed = [
             op
             for op in self.elements.ops()
-            if str(op.type).startswith("op ")
-            and not self._is_grid_cell(op, getattr(op, "id", "") or "")
+            if str(op.type).startswith("op ") and not self._is_board_layer(op)
         ]
         if not doomed:
             raise DesignError("Er is geen laag om weg te gooien.")
@@ -1215,7 +1296,16 @@ class Drawing:
 
         De Hershey-plugin registreert zowel zijn eigen fonts als de systeem-TTF's;
         namen die met een punt beginnen zijn verborgen systeemfonts.
+
+        Bestanden die er niet meer zijn vallen af. De engine houdt zijn lijst in
+        een cache die een verwijderd bestand niet opmerkt, en zo'n regel kan
+        alleen maar mislukken: de kiezer toont hem, haalt het bestand op voor
+        het voorbeeld en krijgt een 409 terug. Gemeten met twee weggegooide
+        fonts — twee rijen in de lijst, twee mislukte verzoeken, en geen woord
+        op het scherm over wat er aan de hand was.
         """
+        from pathlib import Path
+
         registry = getattr(self.kernel.root, "fonts", None)
         if registry is None:
             return []
@@ -1224,6 +1314,13 @@ class Drawing:
             path = entry[0] if len(entry) > 0 else None
             display = entry[1] if len(entry) > 1 else None
             if not path or not display or str(display).startswith("."):
+                continue
+            # Alleen absolute paden toetsen. De engine zet zijn eigen
+            # Hershey-fonts als kale naam in de lijst (`meerk40t.jhf`) en die
+            # zijn wel degelijk bruikbaar — dat is zelfs het font waarmee wij
+            # de opschriften op een testbord zetten.
+            plek = Path(str(path))
+            if plek.is_absolute() and not plek.is_file():
                 continue
             # De engine bewaart alleen de bestandsnaam op de node, dus die
             # geven we mee — anders kan de UI niet zien welk font actief is.

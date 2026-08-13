@@ -154,6 +154,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/path",
         "/api/design/autosave/restore",
         "/api/design/nest",
+        # Rekent alleen: geeft de vorm terug als paddata, en laat de tekening
+        # met rust. Zie test_generator_preview.py.
+        "/api/design/generate/preview",
         "/api/design/generate/grid",
         "/api/design/generate/radial",
         "/api/design/generate/polygon",

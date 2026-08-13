@@ -1,17 +1,25 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Dialog from './Dialog.svelte';
 	import FontPicker from './FontPicker.svelte';
 	import GeneratorPreview from './GeneratorPreview.svelte';
 	import NumberField from './NumberField.svelte';
 
+	import type { Voorbeeld } from './GeneratorPreview.svelte';
+
 	let {
 		open = $bindable(),
 		hasSelection = false,
+		selectedIds = [],
 		busy = false,
 		onGenerate
 	}: {
 		open: boolean;
 		hasSelection?: boolean;
+		/** Wat er herhaald moet worden. Herhalen en cirkel kunnen zonder deze
+		 *  lijst geen echt voorbeeld tonen; dan valt het beeld terug op de
+		 *  schets die alleen de velden uitlegt. */
+		selectedIds?: string[];
 		busy?: boolean;
 		onGenerate: (
 			what: string,
@@ -123,6 +131,189 @@
 	}
 
 	const n = (value: string) => Number(value);
+
+	/**
+	 * Wat er naar de server gaat — één plek, zodat de knop en het voorbeeld
+	 * gegarandeerd hetzelfde vragen. Stonden ze los, dan kon het voorbeeld
+	 * iets anders laten zien dan de knop maakt, en dat is precies het soort
+	 * verschil dat niemand opmerkt tot er hout in de machine ligt.
+	 */
+	function opdracht(): Record<string, unknown> {
+		if (tab === 'grid')
+			return {
+				columns: n(grid.columns), rows: n(grid.rows),
+				gap_x_mm: n(grid.gap_x_mm), gap_y_mm: n(grid.gap_y_mm)
+			};
+		if (tab === 'radial')
+			return {
+				repeats: n(radial.repeats), radius_mm: n(radial.radius_mm), rotate: radial.rotate
+			};
+		if (tab === 'polygon')
+			return {
+				corners: n(polygon.corners), radius_mm: n(polygon.radius_mm),
+				cx_mm: n(polygon.cx_mm), cy_mm: n(polygon.cy_mm),
+				inner_radius_mm: polygon.inner.trim() === '' ? null : n(polygon.inner)
+			};
+		if (tab === 'box')
+			return {
+				width_mm: n(box.width_mm), depth_mm: n(box.depth_mm), height_mm: n(box.height_mm),
+				thickness_mm: n(box.thickness_mm), finger_mm: n(box.finger_mm),
+				kerf_mm: n(box.kerf_mm), lid: box.lid, spread: box.spread
+			};
+		if (tab === 'qrcode') return { text: qr.text.trim(), size_mm: n(qr.size_mm) };
+		if (tab === 'barcode')
+			return {
+				text: bar.text.trim(), kind: bar.kind,
+				width_mm: n(bar.width_mm), height_mm: n(bar.height_mm)
+			};
+		return {
+			text: arc.text.trim(), cx_mm: n(arc.cx_mm), cy_mm: n(arc.cy_mm),
+			radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm),
+			inside: arc.inside, font: arc.font || null
+		};
+	}
+
+	// ---------------------------------------------------------- het voorbeeld
+
+	let voorbeeld = $state<Voorbeeld | null>(null);
+	let voorbeeldFout = $state<string | null>(null);
+	/**
+	 * Valt er iets te tonen?
+	 *
+	 * Twee redenen van niet. Herhalen en cirkel hebben de gekozen elementen
+	 * nodig; die vallen zonder terug op de schets in plaats van op iets
+	 * verzonnens. En een QR-code zonder inhoud bestaat niet — daar wachten we
+	 * op je eerste letter in plaats van bij elke opening van het venster een
+	 * afwijzing op te halen die je zelf al kon zien aankomen.
+	 */
+	let voorbeeldbaar = $derived(
+		(!current.needsSelection || selectedIds.length > 0) &&
+			(tab !== 'qrcode' || qr.text.trim() !== '') &&
+			(tab !== 'barcode' || bar.text.trim() !== '') &&
+			(tab !== 'arctext' || arc.text.trim() !== '')
+	);
+
+	/**
+	 * Welke velden een getal moeten bevatten voordat er iets te tekenen valt.
+	 *
+	 * Een veld waar je het getal net uit gewist hebt, is niet fout maar nog
+	 * niet af. Stuurden we het toch op, dan leest `Number('')` als nul en komt
+	 * er "finger_mm moet groter dan nul zijn" terug — de naam van een
+	 * variabele, niet van een veld dat op het scherm "Vinger (mm)" heet. Zelf
+	 * zien aankomen is korter dan het antwoord vertalen.
+	 *
+	 * De binnenstraal van de veelhoek staat er niet bij: leeg betekent daar
+	 * "geen ster", en dat is een geldige keuze.
+	 */
+	const GETALVELDEN: Record<Tab, string[]> = {
+		grid: ['columns', 'rows', 'gap_x_mm', 'gap_y_mm'],
+		radial: ['repeats', 'radius_mm'],
+		polygon: ['corners', 'radius_mm', 'cx_mm', 'cy_mm'],
+		box: ['width_mm', 'depth_mm', 'height_mm', 'thickness_mm', 'finger_mm', 'kerf_mm'],
+		qrcode: ['size_mm'],
+		barcode: ['width_mm', 'height_mm'],
+		arctext: ['cx_mm', 'cy_mm', 'radius_mm', 'font_size_mm']
+	};
+	let onaf = $derived(
+		GETALVELDEN[tab].some((veld) => {
+			const waarde = huidig[veld];
+			return (
+				typeof waarde !== 'string' ||
+				waarde.trim() === '' ||
+				!Number.isFinite(Number(waarde))
+			);
+		})
+	);
+
+	// Antwoorden kunnen elkaar inhalen: je typt door terwijl de vorige ronde
+	// nog onderweg is. Alleen de laatste vraag mag het beeld nog zetten.
+	let ronde = 0;
+
+	async function haalVoorbeeld(mijn: number, what: string, body: Record<string, unknown>) {
+		try {
+			const token =
+				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
+			const response = await fetch('/api/design/generate/preview', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {})
+				},
+				body: JSON.stringify({ ...body, what, ids: selectedIds })
+			});
+			const data = await response.json().catch(() => null);
+			if (mijn !== ronde) return;
+			if (!response.ok) {
+				voorbeeldFout =
+					typeof data?.detail === 'string' ? data.detail : 'Dit kan de engine niet tekenen.';
+				return;
+			}
+			voorbeeldFout = null;
+			// Alleen vervangen als er iets geldigs uitkwam; het laatste geldige
+			// beeld laten staan is rustiger dan een gat laten vallen, en ook
+			// eerlijker: dát is nog steeds wat je zou krijgen als je nu ophield
+			// met typen.
+			voorbeeld = data;
+		} catch (e) {
+			if (mijn === ronde) voorbeeldFout = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+		}
+	}
+
+	let timer: ReturnType<typeof setTimeout> | null = null;
+	// Alleen om te zien óf het tabblad veranderde. Met `untrack` omdat dit
+	// geen abonnement mag worden: het staat buiten het effect.
+	let vorigTabblad: Tab = untrack(() => tab);
+	/**
+	 * Meekijken tijdens het typen.
+	 *
+	 * Een voorbeeld achter een knop is geen voorbeeld: je ziet pas wat je
+	 * instelt nadat je besloten hebt dat je het wilt zien. Dus bij elke
+	 * wijziging, met 200 ms rust ertussen zodat er niet per aanslag gerekend
+	 * wordt. Dit raakt `error` niet aan: dat blok onderaan het formulier hoort
+	 * bij een mislukte handeling, niet bij een half getypt getal.
+	 */
+	$effect(() => {
+		const what = tab;
+		const body = opdracht();
+		// Wat er nog onderweg is, telt niet meer: het hoort bij een vraag die
+		// door deze ronde is ingehaald. Zonder dit kan een antwoord op de
+		// vórige, nog geldige invoer de melding hieronder weer wegpoetsen.
+		if (timer) clearTimeout(timer);
+		const mijn = ++ronde;
+
+		// Van tabblad wisselen laat geen vorm van het vorige tabblad achter:
+		// dat zou een voorbeeld zijn van iets anders dan het formulier ernaast.
+		if (what !== vorigTabblad) {
+			vorigTabblad = what;
+			voorbeeld = null;
+			voorbeeldFout = null;
+		}
+		if (!open || !voorbeeldbaar) {
+			voorbeeld = null;
+			voorbeeldFout = null;
+			return;
+		}
+		if (onaf) {
+			voorbeeldFout = 'Nog niet compleet: vul de lege velden in.';
+			return;
+		}
+		timer = setTimeout(() => haalVoorbeeld(mijn, what, body), 200);
+		return () => {
+			if (timer) clearTimeout(timer);
+		};
+	});
+
+	/** "Panelen maken — 6 stuks, past op dit vel": de knop zegt wát er komt. */
+	let knopStaart = $derived.by(() => {
+		if (!voorbeeld || voorbeeldFout) return '';
+		if (voorbeeld.what === 'box')
+			return voorbeeld.sheets > 1
+				? ` — ${voorbeeld.parts.length} op dit vel, ${voorbeeld.sheets} vellen`
+				: ` — ${voorbeeld.parts.length} stuks, past op dit vel`;
+		const b = voorbeeld.bounds;
+		const maat = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
+		return ` — ${maat(b[2] - b[0])} × ${maat(b[3] - b[1])} mm`;
+	});
 </script>
 
 <Dialog title="Generatoren" bind:open width="800px">
@@ -160,11 +351,8 @@
 			<NumberField label="Ruimte X" unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
 			<NumberField label="Ruimte Y" unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
 		</div>
-		<button class="go" disabled={blocked || busy} onclick={() => run({
-			columns: n(grid.columns), rows: n(grid.rows),
-			gap_x_mm: n(grid.gap_x_mm), gap_y_mm: n(grid.gap_y_mm)
-		})}>
-			{n(grid.columns) * n(grid.rows)} stuks maken
+		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}>
+			{n(grid.columns) * n(grid.rows)} stuks maken{knopStaart}
 		</button>
 	{:else if tab === 'radial'}
 		<p class="lead">De selectie rond een middelpunt herhalen.</p>
@@ -173,9 +361,9 @@
 			<NumberField label="Straal" unit="mm" step={1} bind:value={radial.radius_mm} />
 			<label class="check"><input type="checkbox" bind:checked={radial.rotate} /><span>Meedraaien</span></label>
 		</div>
-		<button class="go" disabled={blocked || busy} onclick={() => run({
-			repeats: n(radial.repeats), radius_mm: n(radial.radius_mm), rotate: radial.rotate
-		})}>Rondzetten</button>
+		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}
+			>Rondzetten{knopStaart}</button
+		>
 	{:else if tab === 'polygon'}
 		<p class="lead">
 			Een regelmatige veelhoek. Vul een binnenstraal in en het wordt een ster.
@@ -187,11 +375,9 @@
 			<NumberField label="Midden X" unit="mm" step={1} bind:value={polygon.cx_mm} />
 			<NumberField label="Midden Y" unit="mm" step={1} bind:value={polygon.cy_mm} />
 		</div>
-		<button class="go" disabled={busy} onclick={() => run({
-			corners: n(polygon.corners), radius_mm: n(polygon.radius_mm),
-			cx_mm: n(polygon.cx_mm), cy_mm: n(polygon.cy_mm),
-			inner_radius_mm: polygon.inner.trim() === '' ? null : n(polygon.inner)
-		})}>Tekenen</button>
+		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+			>Tekenen{knopStaart}</button
+		>
 	{:else if tab === 'box'}
 		<p class="lead">
 			Losse panelen met vingerlassen. De maten zijn buitenmaten; de kerf wordt
@@ -211,11 +397,9 @@
 				<span>Verdelen over vellen als het niet past</span>
 			</label>
 		</div>
-		<button class="go" disabled={busy} onclick={() => run({
-			width_mm: n(box.width_mm), depth_mm: n(box.depth_mm), height_mm: n(box.height_mm),
-			thickness_mm: n(box.thickness_mm), finger_mm: n(box.finger_mm),
-			kerf_mm: n(box.kerf_mm), lid: box.lid, spread: box.spread
-		})}>Panelen maken</button>
+		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+			>Panelen maken{knopStaart}</button
+		>
 	{:else if tab === 'qrcode'}
 		<p class="lead">
 			Een QR-code als vlakken, niet als plaatje: gegraveerde bitmaps worden op
@@ -225,9 +409,9 @@
 			<label class="wide"><span>Inhoud</span><input type="text" placeholder="https://…" bind:value={qr.text} /></label>
 			<NumberField label="Formaat" unit="mm" step={1} bind:value={qr.size_mm} />
 		</div>
-		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run({
-			text: qr.text.trim(), size_mm: n(qr.size_mm)
-		})}>Plaatsen</button>
+		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run(opdracht())}
+			>Plaatsen{knopStaart}</button
+		>
 	{:else if tab === 'barcode'}
 		<p class="lead">
 			Een streepjescode als vlakken. EAN en UPC stellen eisen aan lengte en
@@ -247,10 +431,9 @@
 			<NumberField label="Breedte" unit="mm" step={1} bind:value={bar.width_mm} />
 			<NumberField label="Hoogte" unit="mm" step={1} bind:value={bar.height_mm} />
 		</div>
-		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run({
-			text: bar.text.trim(), kind: bar.kind,
-			width_mm: n(bar.width_mm), height_mm: n(bar.height_mm)
-		})}>Plaatsen</button>
+		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
+			>Plaatsen{knopStaart}</button
+		>
 	{:else}
 		<p class="lead">
 			Tekst langs een boog, voor een rond bordje of een deksel. Let op: hierna is
@@ -279,17 +462,21 @@
 				<FontPicker bind:font={arc.font} bind:fontName={arc.fontNaam} sample={arc.text} />
 			{/if}
 		</div>
-		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run({
-			text: arc.text.trim(), cx_mm: n(arc.cx_mm), cy_mm: n(arc.cy_mm),
-			radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm),
-			inside: arc.inside, font: arc.font || null
-		})}>Plaatsen</button>
+		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
+			>Plaatsen{knopStaart}</button
+		>
 	{/if}
 	</div>
 
 	<!-- De vorm naast het formulier dat hem maakt. -->
-	<GeneratorPreview soort={tab} waarden={huidig}>
-		Schets, niet op schaal
+	<GeneratorPreview soort={tab} waarden={huidig} {voorbeeld} fout={voorbeeldFout}>
+		{#if current.needsSelection}
+			Schets, niet op schaal
+		{:else if !voorbeeldbaar}
+			Typ iets, dan staat het hier
+		{:else}
+			Even rekenen…
+		{/if}
 	</GeneratorPreview>
 	</div>
 </Dialog>
