@@ -481,11 +481,13 @@ class TileRun:
         try:
             sheet = self._sheet()
         except DesignError:
-            # Het vel is weggegooid of er is er geen actief. De reeks is dan
-            # niet stuk, hij is verlopen — en dat hoort hier als staat terug te
-            # komen, niet als fout. Anders krijgt de gebruiker "er is geen
-            # actief vel" te zien op het moment dat hij op branden drukt, en dat
-            # zegt niets over de reeks waar hij middenin zit.
+            # Vangnet, geen pad: `Sheets` houdt er altijd precies één actief
+            # (`remove` activeert eerst een ander, `_ensure` herstelt een kapotte
+            # verwijzing), dus langs de gewone weg komt hier niemand. Het staat
+            # er omdat `state()` uit de statuspayload gelezen wordt: als dit ooit
+            # tóch gooit, valt niet deze reeks om maar het hele statusverzoek.
+            # Een vel weggooien tijdens een reeks komt hieronder terecht, bij de
+            # gewone vergelijking op sheet_id.
             return {
                 **data,
                 "aligned": False,
@@ -539,9 +541,15 @@ class TileRun:
         een bewaarde uitlijning is een aanname over waar de plaat ligt, en dat
         is precies wat je na een pauze niet moet vertrouwen.
         """
-        data = self._read()
-        if data is None:
+        # Dezelfde poort als bij `burn`: is de reeks verlopen — vel weg, ontwerp
+        # gewijzigd — dan hoort de gebruiker dát te lezen, en niet een melding
+        # over vellen die uit de diepte omhoog komt terwijl hij een merk aantikt.
+        stand = self.state()
+        if stand is None:
             raise DesignError("Er loopt geen tegelreeks.")
+        if stand["stale"]:
+            raise DesignError(stand["message"])
+        data = self._read()
         gemeten = [Point(float(p["x_mm"]), float(p["y_mm"])) for p in points]
         try:
             if reference == "plate_corner":
@@ -571,16 +579,21 @@ class TileRun:
         raise DesignError("Voor deze tegel zijn geen merken berekend.")
 
     def burn(self) -> dict:
-        data = self._read()
-        if data is None:
+        # Eerst of de reeks nog geldig is, dán pas of hij uitgelijnd is. In de
+        # omgekeerde volgorde krijgt iemand met een verlopen reeks te horen dat
+        # hij "nog moet uitlijnen" — een uitnodiging om merken aan te tikken op
+        # een opdeling die niet meer klopt. Dezelfde poort als bij `align`.
+        stand = self.state()
+        if stand is None:
             raise DesignError("Er loopt geen tegelreeks.")
+        if stand["stale"]:
+            raise DesignError(stand["message"])
         if self._alignment is None:
             raise DesignError(
                 "Deze tegel is nog niet uitgelijnd. Tik eerst de twee merken aan, "
                 "anders weet de machine niet waar de plaat ligt."
             )
-        if self.state()["stale"]:
-            raise DesignError(self.state()["message"])
+        data = self._read()
 
         opdeling = self.layout()
         index = data["current"]

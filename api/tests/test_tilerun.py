@@ -113,6 +113,70 @@ def test_the_fingerprint_is_the_same_in_a_fresh_process(kernel, tmp_path):
     assert eerste == tweede != ""
 
 
+def test_the_fingerprint_is_a_digest_and_not_a_process_hash(kernel, tmp_path):
+    """
+    Samen met de test hierboven sluit dit de keten: sha1 is over processen heen
+    stabiel, en de vingerafdruk ís een sha1-digest.
+
+    Veertig hexcijfers is het bewijs. `str(hash(...))` is een decimaal getal en
+    valt hier meteen door — en dat is precies de fout die dit moet vangen, want
+    zonder deze test kwam hij er pas na een herstart uit, als een reeks die
+    zichzelf zonder reden ongeldig verklaart.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _wide_sheet(server)
+    vel = server.sheets.state()["sheets"][0]
+
+    afdruk = server.tiles._fingerprint(vel)
+
+    assert len(afdruk) == 40
+    assert all(teken in "0123456789abcdef" for teken in afdruk)
+    assert afdruk == server.tiles._fingerprint(vel)
+
+
+def test_a_run_whose_sheet_is_deleted_expires_gracefully(kernel, tmp_path):
+    """
+    Het vel weggooien terwijl er een reeks loopt.
+
+    Wat er dan feitelijk gebeurt is niet "geen vel meer": `Sheets.remove`
+    activeert eerst een ander vel en gooit het oude daarna pas weg, en er is
+    altijd precies één actief vel. De reeks hoort bij een vel dat er niet meer
+    is, dus hij verloopt — en dat is precies goed.
+
+    Wat deze test vastpint is dat je dat als staat terugkrijgt, en dat zowel
+    branden als uitlijnen daarna netjes weigert met díe uitleg, niet met een
+    melding uit de diepte over vellen terwijl je een merk staat aan te tikken.
+    """
+    from openkerf_api.edits import DesignError
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _wide_sheet(server)
+    server.tiles.start()
+
+    vel = server.sheets.state()["sheets"][0]
+    server.sheets.add(name="Ander vel")
+    server.sheets.remove(vel["id"])
+
+    stand = server.tiles.state()
+    assert stand["stale"] is True
+    assert stand["message"]
+
+    for aanroep in (
+        lambda: server.tiles.burn(),
+        lambda: server.tiles.align(
+            [{"x_mm": 0.0, "y_mm": 0.0}], reference="plate_corner"
+        ),
+    ):
+        with pytest.raises(DesignError) as fout:
+            aanroep()
+        # De reeks legt uit dat hij verlopen is. Een kale "Er is geen actief
+        # vel." zou hier de verkeerde vraag beantwoorden.
+        assert str(fout.value) == stand["message"]
+
+
 def test_changing_the_design_invalidates_a_running_series(kernel, tmp_path):
     """
     Half het oude ontwerp en half het nieuwe branden is de duurste fout die dit
