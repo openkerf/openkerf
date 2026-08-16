@@ -51,6 +51,13 @@
 	}
 </script>
 
+{#if tiling.error}
+	<!-- Buiten `{#if run}`: een mislukte start (bijvoorbeeld het aanbod op het
+	     canvas, vóórdat er een reeks loopt) moet je ook zien als er nog geen
+	     tegel is. Anders lijkt een knop die 409't niets te doen. -->
+	<p class="melding" role="alert">{tiling.error}</p>
+{/if}
+
 {#if run}
 	<section class="tegels" aria-label="Tegelreeks">
 		<header>
@@ -113,8 +120,8 @@
 			</div>
 		{/if}
 
-		{#if lokaleFout || tiling.error}
-			<p class="melding" role="alert">{lokaleFout || tiling.error}</p>
+		{#if lokaleFout}
+			<p class="melding" role="alert">{lokaleFout}</p>
 		{/if}
 	</section>
 {/if}

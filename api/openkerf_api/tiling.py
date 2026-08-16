@@ -108,6 +108,20 @@ def tile_layout(
     columns = _axis(plate_w_mm, bed_w_mm, settings)
     rows = _axis(plate_h_mm, bed_h_mm, settings)
 
+    if len(columns) > 1 and len(rows) > 1:
+        # Opdelen in twee richtingen is een eigen ontwerp: elke naad krijgt
+        # eigen merken, de volgorde van de tegels gaat ertoe doen en het
+        # uitlijnen wordt een keten in plaats van een stap. Half werkend
+        # opleveren is hier erger dan weigeren — gemeten: `_marks` legt de
+        # merken van de rijgrens en de kolomgrens dan op hetzelfde punt, zodat
+        # één rondje twee keer gebrand wordt.
+        raise TilingError(
+            "Deze plaat is in beide richtingen groter dan het bed. In twee "
+            "richtingen opdelen kan nog niet: elke naad heeft dan eigen merken "
+            "en een eigen volgorde. Snijd de plaat eerst op bedhoogte, of neem "
+            "een smallere plaat."
+        )
+
     x_splits = _splits([c[0] for c in columns], [c[1] for c in columns], plate_w_mm)
     y_splits = _splits([r[0] for r in rows], [r[1] for r in rows], plate_h_mm)
 

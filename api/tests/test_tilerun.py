@@ -420,6 +420,50 @@ def test_the_marks_are_burned_last(kernel):
     assert len(laatste.children) == 1
 
 
+def test_a_tile_whose_marks_fall_off_the_bed_is_refused(kernel, tmp_path):
+    """
+    De merken liggen in de overlapzone en dus buiten het brandgebied. Een
+    controle die alleen naar het brandgebied kijkt, laat een tegel door
+    waarvan de merken naast het bed gebrand zouden worden — de kop tegen zijn
+    eindaanslag, met materiaal in de machine.
+    """
+    from openkerf_api.edits import DesignError
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _wide_sheet(server)
+    server.tiles.start()
+    # Zo ver naar rechts dat het brandgebied nog past en de merken niet.
+    server.tiles.align([{"x_mm": 30.0, "y_mm": 0.0}], reference="plate_corner")
+
+    with pytest.raises(DesignError) as fout:
+        server.tiles.burn()
+
+    assert "buiten het bed" in str(fout.value)
+
+
+def test_burning_the_same_tile_twice_asks_first(kernel, tmp_path):
+    """
+    Opnieuw branden mag — een afgebroken job moet je over kunnen doen — maar
+    niet per ongeluk. De tweede keer gaat de laser over werk dat er al ligt.
+    """
+    from openkerf_api.edits import DesignError
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _wide_sheet(server)
+    server.tiles.start()
+    server.tiles.align([{"x_mm": 0.0, "y_mm": 0.0}], reference="plate_corner")
+    server.tiles.burn()
+
+    with pytest.raises(DesignError) as fout:
+        server.tiles.burn()
+    assert "al gebrand" in str(fout.value)
+
+    # Met bevestiging mag het wel.
+    assert server.tiles.burn(confirm_reburn=True)["burned_length_mm"] > 0
+
+
 def test_the_last_tile_burns_no_marks(kernel):
     """Geen volgende tegel, dus niets om op uit te lijnen — en dus geen merk."""
     _design(kernel)

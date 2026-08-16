@@ -590,7 +590,7 @@ class TileRun:
                 return tuple(Point(p["x_mm"], p["y_mm"]) for p in merk["points"])
         raise DesignError("Voor deze tegel zijn geen merken berekend.")
 
-    def burn(self) -> dict:
+    def burn(self, confirm_reburn: bool = False) -> dict:
         # Eerst of de reeks nog geldig is, dán pas of hij uitgelijnd is. In de
         # omgekeerde volgorde krijgt iemand met een verlopen reeks te horen dat
         # hij "nog moet uitlijnen" — een uitnodiging om merken aan te tikken op
@@ -606,9 +606,15 @@ class TileRun:
                 "anders weet de machine niet waar de plaat ligt."
             )
         data = self._read()
+        index = data["current"]
+        if index in data.get("burned", []) and not confirm_reburn:
+            raise DesignError(
+                "Deze tegel is al gebrand. Nog een keer branden betekent dat de "
+                "laser over werk gaat dat er al ligt — doe dat alleen als de "
+                "vorige poging is afgebroken. Bevestig om door te gaan."
+            )
 
         opdeling = self.layout()
-        index = data["current"]
         tegel = opdeling["tiles"][index]
         burn = self._brandgebied(tegel, opdeling["tiles"])
         u = self.drawing._units_per_mm()
@@ -623,12 +629,15 @@ class TileRun:
             else None
         )
         mutator = TileMutator(burn, self._alignment, u, marker_geometry=geom)
-        self._check_bed(burn, mutator)
+        merkpunten = [Point(p["x_mm"], p["y_mm"]) for m in merken for p in m["points"]]
+        self._check_bed(burn, mutator, merkpunten)
         # Twee verschuivingen over elkaar is een fout die je pas op materiaal
         # ziet: de tegelmatrix doet al wat het nulpunt zou doen, en hij is
         # gemeten in plaats van ingesteld.
         with self.drawing.verschoven(None):
             self.runner.start_job(f"Tegel {index + 1}", mutators=[mutator])
+        data["burned"] = sorted(set(data.get("burned", [])) | {index})
+        self._write(data)
         return {
             **self.state(),
             # Wat deze tegel werkelijk brandt. Tijdens het klippen geteld, want
@@ -659,23 +668,41 @@ class TileRun:
             y1 += self.PLAATRAND_MARGE_MM
         return Rect(tegel["burn"]["x0_mm"], tegel["burn"]["y0_mm"], x1, y1)
 
-    def _check_bed(self, burn, mutator) -> None:
+    def _check_bed(self, burn, mutator, marks=()) -> None:
         """
         Past deze tegel na de correctie nog in het bed?
 
         Een halve graad scheefstand duwt een tegel van 480 mm er zomaar 4 mm
         overheen, en dan loopt de kop tegen zijn eindaanslag terwijl er al werk
         in de plaat zit.
+
+        De merken tellen mee, en dat is niet vanzelfsprekend: ze liggen in de
+        overlapzone en dus *buiten* het brandgebied. Een controle op alleen het
+        brandgebied liet een tegel door waarvan de merken negen millimeter naast
+        het bed gebrand werden — gemeten, met de kop tegen zijn eindaanslag en
+        materiaal in de machine.
         """
         bed = self.drawing.bed_mm()
         if bed is None:
             return
+        straal = self._settings(self._sheet()).marker_size_mm / 2
         hoeken = [
             (burn.x0, burn.y0),
             (burn.x1, burn.y0),
             (burn.x0, burn.y1),
             (burn.x1, burn.y1),
         ]
+        for merk in marks:
+            # Een merk is een rondje: zijn rand ligt een halve maat verder dan
+            # zijn middelpunt, en die rand wordt gebrand.
+            hoeken.extend(
+                [
+                    (merk.x_mm - straal, merk.y_mm - straal),
+                    (merk.x_mm + straal, merk.y_mm - straal),
+                    (merk.x_mm - straal, merk.y_mm + straal),
+                    (merk.x_mm + straal, merk.y_mm + straal),
+                ]
+            )
         hoek = math.radians(mutator.alignment.angle_deg)
         draai = complex(math.cos(hoek), math.sin(hoek))
         # Hoe ver hij eroverheen steekt, aan wélke kant dan ook. Alleen naar de

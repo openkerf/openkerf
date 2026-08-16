@@ -31,6 +31,7 @@
 		cameraSrc = null,
 		cameraOpacity = 0.6,
 		sheet = null,
+		sheetId = null,
 		tiling = null
 	}: {
 		/** Waar de muis staat, in mm op het bed. `null` als hij weg is. */
@@ -52,6 +53,8 @@
 		cameraOpacity?: number;
 		/** Het actieve vel: het stuk materiaal binnen het bed. */
 		sheet?: { name: string; width: number; height: number } | null;
+		/** Het id van het actieve vel — nodig om tegels op aan te zetten. */
+		sheetId?: string | null;
 		/** Tegelopdeling en lopende reeks — voor de tekening en het aanbod
 		 *  zodra het vel groter is dan het bed. */
 		tiling?: TilingStore | null;
@@ -2207,8 +2210,8 @@
 				<button
 					class="btn subtle"
 					type="button"
-					disabled={tiling?.busy}
-					onclick={() => tiling?.start()}
+					disabled={tiling?.busy || !sheetId}
+					onclick={() => sheetId && tiling?.enableAndStart(sheetId)}
 				>
 					In tegels branden?
 				</button>

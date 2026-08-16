@@ -101,9 +101,46 @@ export class TilingStore {
 	}
 
 	start = () => this.#send('/api/tiling/start');
-	burn = () => this.#send('/api/tiling/burn');
+	/** `confirm: true` bevestigt dat een al gebrande tegel opnieuw mag. */
+	burn = (confirm = false) => this.#send('/api/tiling/burn', confirm ? { confirm: true } : undefined);
 	advance = () => this.#send('/api/tiling/advance');
 	cancel = () => this.#send('/api/tiling/cancel');
+
+	/**
+	 * Het aanbod op het canvas: tegels aanzetten en meteen beginnen.
+	 *
+	 * In twee stappen omdat het twee dingen zijn — een instelling op het vel, en
+	 * een reeks die loopt — maar voor de gebruiker is het één antwoord op één
+	 * vraag. Hem eerst naar een instelling sturen die nergens op het scherm
+	 * staat, is precies wat deze knop moet voorkomen.
+	 */
+	async enableAndStart(sheetId: string) {
+		this.busy = true;
+		this.error = null;
+		try {
+			const token = this.#token();
+			const headers = {
+				'Content-Type': 'application/json',
+				...(token ? { Authorization: `Bearer ${token}` } : {})
+			};
+			const aan = await fetch(`/api/sheets/${sheetId}`, {
+				method: 'PATCH',
+				headers,
+				body: JSON.stringify({ tiling: { enabled: true } })
+			});
+			if (!aan.ok) {
+				this.error = (await aan.json().catch(() => null))?.detail ?? 'Dat lukte niet.';
+				return false;
+			}
+		} catch {
+			this.error = 'Geen verbinding met de machine. Probeer het opnieuw.';
+			return false;
+		} finally {
+			this.busy = false;
+		}
+		await this.load();
+		return this.start();
+	}
 
 	/**
 	 * "Hier": de huidige kopstand als aangetikt punt.

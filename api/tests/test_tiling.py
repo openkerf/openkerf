@@ -115,6 +115,19 @@ def test_no_tile_burns_less_than_the_strip_it_shares():
             assert tile.burn.width >= settings().overlap_mm
 
 
+def test_a_plate_too_big_in_both_directions_is_refused():
+    """
+    Opdelen in twee richtingen kan dit ontwerp niet: elke naad heeft eigen
+    merken, de volgorde van de tegels gaat meetellen en het uitlijnen wordt een
+    keten. Half werkend opleveren is hier erger dan niet leveren — dan staat er
+    een raster met merken die op elkaar liggen.
+    """
+    with pytest.raises(TilingError) as fout:
+        tile_layout(900.0, 600.0, 500.0, 300.0, settings())
+
+    assert "twee richtingen" in str(fout.value)
+
+
 def test_a_bed_smaller_than_the_overlap_is_refused_with_a_sentence():
     with pytest.raises(TilingError) as fout:
         tile_layout(900.0, 200.0, 40.0, 300.0, settings(overlap_mm=25.0))

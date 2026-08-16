@@ -1515,8 +1515,9 @@ class ApiServer:
             return manage(run)
 
         @app.post("/api/tiling/burn", dependencies=write)
-        def tiling_burn():
-            return manage(self.tiles.burn)
+        def tiling_burn(body: dict | None = None):
+            confirm = bool((body or {}).get("confirm"))
+            return manage(lambda: self.tiles.burn(confirm_reburn=confirm))
 
         @app.post("/api/tiling/advance", dependencies=write)
         def tiling_advance():

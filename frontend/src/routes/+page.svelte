@@ -718,6 +718,7 @@
 						height: sheets.active.height_mm
 					}
 				: null}
+			sheetId={sheets.active?.id ?? null}
 			onPath={async (points, closed) => {
 				if (!canEdit) return;
 				await post('/api/design/path', { points, closed });
