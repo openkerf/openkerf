@@ -131,6 +131,76 @@ def test_the_alignment_shift_moves_the_tile_into_the_bed(kernel):
     assert vormen[0].bounds[0] / UNITS_PER_MM == pytest.approx(100.0, abs=0.5)
 
 
+def test_the_mutator_counts_what_it_actually_burns(kernel):
+    """
+    `burned_length_units` is het getal waarop de dekkingstest van taak 12 rust:
+    daar wordt het over alle tegels opgeteld en vergeleken met het hele ontwerp.
+    Als het meetelt wat er niet gebrand wordt, of dubbel telt, gaat die test
+    groen terwijl er van alles misgaat. Dus hier vastgepind tegen een vorm
+    waarvan we de omtrek met de hand kunnen uitrekenen.
+    """
+    kernel.console("rect 10mm 10mm 30mm 20mm\n")
+    kernel.console("classify\n")
+    runner = CommandRunner(kernel)
+    mutator = TileMutator(
+        burn_mm=Rect(0, 0, 200, 200),
+        alignment=Alignment(0.0, 0.0, 0.0, 0.0),
+        units_per_mm=UNITS_PER_MM,
+    )
+
+    runner.build_plan([mutator])
+
+    omtrek_mm = 2 * (30 + 20)
+    assert mutator.burned_length_units / UNITS_PER_MM == pytest.approx(
+        omtrek_mm, rel=1e-3
+    )
+
+
+def test_a_picture_belongs_to_one_tile_and_is_not_repeated(kernel):
+    """
+    Een afbeelding heeft geen geometrie om te klippen, dus hij gaat in zijn
+    geheel mee of niet. Zonder die toets kwam een foto in élke tegel terecht —
+    op de verkeerde plek, met de volle brandtijd, en dat per tegel opnieuw.
+    """
+    from meerk40t.core.node.elem_image import ImageNode
+    from meerk40t.svgelements import Matrix
+    from PIL import Image
+
+    plaatje = ImageNode(
+        image=Image.new("L", (20, 20), 0),
+        matrix=Matrix.translate(20 * UNITS_PER_MM, 20 * UNITS_PER_MM),
+        dpi=500,
+    )
+    kernel.elements.elem_branch.add_node(plaatje)
+    # `classify` als consolecommando classificeert alleen wat geëmphaseerd is;
+    # deze afbeelding is nooit geselecteerd geweest (in tegenstelling tot een
+    # vorm die via `rect` getekend wordt). Rechtstreeks aanroepen omzeilt dat.
+    kernel.elements.classify([plaatje])
+    runner = CommandRunner(kernel)
+
+    binnen = runner.build_plan(
+        [
+            TileMutator(
+                burn_mm=Rect(0, 0, 200, 200),
+                alignment=Alignment(0.0, 0.0, 0.0, 0.0),
+                units_per_mm=UNITS_PER_MM,
+            )
+        ]
+    )
+    buiten = runner.build_plan(
+        [
+            TileMutator(
+                burn_mm=Rect(400, 0, 600, 200),
+                alignment=Alignment(0.0, 0.0, 0.0, 0.0),
+                units_per_mm=UNITS_PER_MM,
+            )
+        ]
+    )
+
+    assert any(c.type == "elem image" for c in _shapes(binnen))
+    assert not any(c.type == "elem image" for c in _shapes(buiten))
+
+
 def test_an_operation_that_ends_up_empty_leaves_the_plan(kernel):
     """Een laag die niets meer doet hoort niet in de job te staan."""
     _design(kernel)

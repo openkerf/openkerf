@@ -88,9 +88,10 @@ class TileMutator:
         for child in list(operation.children):
             geom = self._geometry(child)
             if geom is None:
-                # Een knoop zonder geometrie (een afbeelding) verplaatsen we
-                # met zijn eigen matrix; klippen gebeurt bij het rasteren.
-                vervangers.append(self._moved_image(child, mx))
+                # Een knoop zonder geometrie — een afbeelding. Zie `_hoort_erbij`:
+                # die gaat in zijn geheel mee of helemaal niet.
+                if self._hoort_erbij(child):
+                    vervangers.append(self._moved_image(child, mx))
                 continue
             geklipt = clip_geometry(geom, venster)
             if geklipt.index == 0:
@@ -114,6 +115,36 @@ class TileMutator:
         for node in [v for v in vervangers if v is not None]:
             operation.add_node(node)
         return bool(operation.children)
+
+    def _hoort_erbij(self, node) -> bool:
+        """
+        Hoort deze afbeelding bij deze tegel? Alles of niets.
+
+        Een afbeelding heeft geen `as_geometry`, dus klippen zoals bij een vorm
+        kan niet. Een halve foto branden zou het bijsnijden van de bitmap zelf
+        vragen, en een gedraaide afbeelding laat zich niet op een rechte naad
+        bijsnijden zonder in béide tegels een randje dubbel te branden — precies
+        wat we bij vormen met zorg voorkomen.
+
+        Dus: een afbeelding valt in zijn geheel binnen één brandgebied, of hij
+        gaat niet mee. Ligt hij over een naad, dan wordt dat bij het opdelen
+        geweigerd met een zin (`TileRun.layout`), niet hier stilletjes in twee
+        tegels verdubbeld. Zonder deze toets werd een foto in élke tegel
+        gebrand, op de verkeerde plek.
+        """
+        bounds = getattr(node, "bounds", None)
+        if not bounds:
+            # Geen omhullende betekent: we weten niet waar hij ligt. Meesturen
+            # zou hem in elke tegel branden, dus laten we hem staan.
+            return False
+        venster = self.burn_units
+        x0, y0, x1, y1 = bounds
+        return (
+            venster.x0 <= x0
+            and x1 <= venster.x1
+            and venster.y0 <= y0
+            and y1 <= venster.y1
+        )
 
     @staticmethod
     def _geometry(node):
