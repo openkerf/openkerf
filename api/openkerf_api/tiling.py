@@ -62,7 +62,9 @@ class Tile(NamedTuple):
     window: Rect
 
 
-def _axis(plate: float, bed: float, settings: TilingSettings) -> list[tuple[float, float]]:
+def _axis(
+    plate: float, bed: float, settings: TilingSettings
+) -> list[tuple[float, float]]:
     """
     De vensters op één as: paren (begin, eind) in plaatcoördinaten.
 
@@ -118,7 +120,10 @@ def tile_layout(
                     row=row,
                     column=column,
                     burn=Rect(
-                        x_splits[column], y_splits[row], x_splits[column + 1], y_splits[row + 1]
+                        x_splits[column],
+                        y_splits[row],
+                        x_splits[column + 1],
+                        y_splits[row + 1],
                     ),
                     window=Rect(wx0, wy0, wx1, wy1),
                 )
