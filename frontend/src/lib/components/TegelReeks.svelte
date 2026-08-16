@@ -24,6 +24,17 @@
 	const run = $derived(tiling.run);
 	const eerste = $derived(run?.current === 0);
 	const nodig = $derived(eerste ? 1 : 2);
+	// Deze ene weigering vraagt om een bevestiging die het scherm anders nergens
+	// aanbiedt: zonder deze knop is "Bevestig om door te gaan" een doodlopende
+	// weg, en de enige uitweg zou de reeks stoppen zijn — en daarmee de
+	// uitlijning weggooien voor niets.
+	const magOpnieuw = $derived(
+		typeof tiling.error === 'string' && tiling.error.includes('al gebrand')
+	);
+
+	async function opnieuwBranden() {
+		await tiling.burn(true);
+	}
 
 	async function hier() {
 		lokaleFout = null;
@@ -117,6 +128,13 @@
 				<button class="btn" type="button" onclick={volgende} disabled={tiling.busy}>
 					Tegel klaar, volgende
 				</button>
+				{#if magOpnieuw}
+					<!-- De uitzondering, niet de gewone weg: alleen zichtbaar ná de
+					     weigering, en met opzet niet de primaire knop. -->
+					<button class="btn warn" type="button" onclick={opnieuwBranden} disabled={tiling.busy}>
+						Toch opnieuw branden
+					</button>
+				{/if}
 			</div>
 		{/if}
 
@@ -180,6 +198,10 @@
 		background: var(--accent);
 		border-color: var(--accent);
 		color: var(--accent-ink);
+	}
+	.btn.warn {
+		border-color: var(--warn);
+		color: var(--warn);
 	}
 	.btn.subtle {
 		flex: none;
