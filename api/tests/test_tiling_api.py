@@ -138,6 +138,15 @@ def test_three_tiles_together_burn_the_whole_design_exactly_once(client, kernel)
         "/api/design/elements",
         json={"type": "rect", "x_mm": 480, "y_mm": 40, "width_mm": 90, "height_mm": 60},
     )
+    # En een cirkel over de ándere naad. Rechthoeken hebben alleen rechte
+    # segmenten, en juist bij bogen zaten de drie enginefouten die deze branch
+    # heeft moeten omzeilen: de vastlopende batchberekening, het verdwijnende
+    # segment in polycut, en `Geomstr.split` die bogen helemaal niet splitst.
+    # Een dekkingsproef zonder één boog laat precies dat ongemeten.
+    client.post(
+        "/api/design/elements",
+        json={"type": "ellipse", "cx_mm": 275, "cy_mm": 75, "rx_mm": 45, "ry_mm": 45},
+    )
 
     origineel = _design_length_mm(kernel)
 
