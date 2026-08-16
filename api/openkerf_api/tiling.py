@@ -167,3 +167,51 @@ def best_split(low_mm: float, high_mm: float, spans) -> float:
         return sum(1 for a, b in spans if a < x < b)
 
     return min(sorted(candidates), key=lambda x: (crossings(x), abs(x - middle)))
+
+
+class Point(NamedTuple):
+    x_mm: float
+    y_mm: float
+
+
+def _overlaps(a: Rect, b: Rect) -> bool:
+    return not (a.x1 <= b.x0 or b.x1 <= a.x0 or a.y1 <= b.y0 or b.y1 <= a.y0)
+
+
+def marker_spots(
+    zone: Rect, blocked, size_mm: float, clearance_mm: float = 2.0
+) -> tuple[Point, Point]:
+    """
+    Twee vrije plekken in de overlapzone, zo ver mogelijk uit elkaar.
+
+    De zone wordt in vakjes ter grootte van een merk plus speling verdeeld; een
+    vakje valt af zodra het de omhullende van een vorm raakt. Van wat overblijft
+    nemen we de twee uiterste langs de lange as van de zone — verder uit elkaar
+    betekent een nauwkeuriger hoek, en de uitersten zijn deterministisch waar
+    'het verste paar' bij gelijkspel dat niet is.
+    """
+    stap = size_mm + clearance_mm
+    half = size_mm / 2 + clearance_mm / 2
+
+    vrij: list[Point] = []
+    y = zone.y0 + half
+    while y <= zone.y1 - half + 1e-9:
+        x = zone.x0 + half
+        while x <= zone.x1 - half + 1e-9:
+            vak = Rect(x - half, y - half, x + half, y + half)
+            if not any(_overlaps(vak, b) for b in blocked):
+                vrij.append(Point(x, y))
+            x += stap
+        y += stap
+
+    if len(vrij) < 2:
+        raise TilingError(
+            "Er is in de overlapstrook geen plek voor twee uitlijnmerken die "
+            "vrij van het werk ligt. Maak de overlap groter, of schuif een vorm "
+            "bij de naad weg."
+        )
+
+    langs_y = zone.height >= zone.width
+    sleutel = (lambda p: p.y_mm) if langs_y else (lambda p: p.x_mm)
+    geordend = sorted(vrij, key=sleutel)
+    return geordend[0], geordend[-1]

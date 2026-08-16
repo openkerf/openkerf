@@ -9,7 +9,15 @@ import math
 
 import pytest
 
-from openkerf_api.tiling import Rect, TilingError, TilingSettings, best_split, tile_layout
+from openkerf_api.tiling import (
+    Point,
+    Rect,
+    TilingError,
+    TilingSettings,
+    best_split,
+    marker_spots,
+    tile_layout,
+)
 
 
 def settings(**kw):
@@ -142,3 +150,33 @@ def test_the_seam_takes_the_least_bad_place_when_everything_is_covered():
 
 def test_without_shapes_the_seam_falls_in_the_middle():
     assert best_split(100.0, 200.0, []) == pytest.approx(150.0)
+
+
+def test_two_marks_land_as_far_apart_as_the_zone_allows():
+    """Hoe verder uit elkaar, hoe nauwkeuriger de hoek die eruit volgt."""
+    een, twee = marker_spots(Rect(400.0, 0.0, 440.0, 600.0), [], size_mm=8.0)
+
+    assert abs(twee.y_mm - een.y_mm) > 500.0
+
+
+def test_a_mark_never_lands_on_a_shape():
+    """Merken horen in het afval; op het werkstuk zou je ze terugzien."""
+    blokkade = Rect(400.0, 100.0, 440.0, 500.0)
+
+    een, twee = marker_spots(Rect(400.0, 0.0, 440.0, 600.0), [blokkade], size_mm=8.0)
+
+    for punt in (een, twee):
+        assert not (100.0 <= punt.y_mm <= 500.0)
+
+
+def test_no_room_is_a_refusal_and_not_a_single_mark():
+    """
+    Stilzwijgend terugvallen op één merk kost de scheefstandcorrectie zonder
+    dat iemand het merkt. Dus: weigeren, met wat eraan te doen is.
+    """
+    vol = Rect(400.0, 0.0, 440.0, 600.0)
+
+    with pytest.raises(TilingError) as fout:
+        marker_spots(Rect(400.0, 0.0, 440.0, 600.0), [vol], size_mm=8.0)
+
+    assert "overlap" in str(fout.value).lower()
