@@ -22,12 +22,20 @@ def wide_plate(client):
     breed en 800 mm plaat geeft drie tegels. Bij 900 worden het er vier.
     """
     vel = client.get("/api/sheets").json()["sheets"][0]
-    client.patch(f"/api/sheets/{vel['id']}", json={"width_mm": 800.0, "height_mm": 150.0})
+    client.patch(
+        f"/api/sheets/{vel['id']}", json={"width_mm": 800.0, "height_mm": 150.0}
+    )
     client.patch(f"/api/sheets/{vel['id']}", json={"tiling": {"enabled": True}})
     for x in (10, 300, 600):
         client.post(
             "/api/design/elements",
-            json={"type": "rect", "x_mm": x, "y_mm": 40, "width_mm": 40, "height_mm": 40},
+            json={
+                "type": "rect",
+                "x_mm": x,
+                "y_mm": 40,
+                "width_mm": 40,
+                "height_mm": 40,
+            },
         )
     return vel
 
