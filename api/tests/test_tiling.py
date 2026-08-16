@@ -180,3 +180,23 @@ def test_no_room_is_a_refusal_and_not_a_single_mark():
         marker_spots(Rect(400.0, 0.0, 440.0, 600.0), [vol], size_mm=8.0)
 
     assert "overlap" in str(fout.value).lower()
+
+
+def test_in_a_wide_zone_the_marks_spread_sideways():
+    """
+    Een plaat die in de hoogte opgedeeld wordt, geeft een brede, lage
+    overlapzone. Dan moeten de merken langs de lange as uit elkaar — dezelfde
+    regel, andere as, en die tak wordt anders nooit gelopen.
+
+    Dat ze niet op dezelfde hoogte uitkomen is geen tekortkoming: het
+    uitlijnen rekent met de lijn tussen twee punten, niet met een as. Wat telt
+    is de afstand, want die bepaalt hoe nauwkeurig de hoek wordt.
+    """
+    zone = Rect(0.0, 400.0, 600.0, 440.0)
+
+    een, twee = marker_spots(zone, [], size_mm=8.0)
+
+    assert abs(twee.x_mm - een.x_mm) > 500.0
+    for punt in (een, twee):
+        assert zone.x0 <= punt.x_mm <= zone.x1
+        assert zone.y0 <= punt.y_mm <= zone.y1

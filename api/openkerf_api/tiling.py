@@ -184,7 +184,7 @@ def _overlaps(a: Rect, b: Rect) -> bool:
 
 
 def marker_spots(
-    zone: Rect, blocked, size_mm: float, clearance_mm: float = 2.0
+    zone: Rect, blocked: list[Rect], size_mm: float, clearance_mm: float = 2.0
 ) -> tuple[Point, Point]:
     """
     Twee vrije plekken in de overlapzone, zo ver mogelijk uit elkaar.
