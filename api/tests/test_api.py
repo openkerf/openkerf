@@ -180,6 +180,13 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/machines/import",
         # Rekent alleen; zie READ_ONLY_POSTS in test_write_actions.py.
         "/api/library/testgrids/preview",
+        # Tegelreeks: de plaat is groter dan het bed, dus start/align/burn/
+        # advance/cancel schrijven de reeks weg en sturen de spooler aan.
+        "/api/tiling/start",
+        "/api/tiling/align",
+        "/api/tiling/burn",
+        "/api/tiling/advance",
+        "/api/tiling/cancel",
     }
 
     methods = {

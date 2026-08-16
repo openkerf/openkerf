@@ -28,6 +28,7 @@
 	import { SheetStore } from '$lib/sheets.svelte';
 	import { CameraStore } from '$lib/camera.svelte';
 	import { PresetariatStore } from '$lib/presetariat.svelte';
+	import { TilingStore } from '$lib/tiling.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
 	import TestGridResult from '$components/TestGridResult.svelte';
 	import TextDialog from '$components/TextDialog.svelte';
@@ -148,6 +149,7 @@
 	let calibrateOpen = $state(false);
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
+	const tiling = new TilingStore(token);
 	/** Een handeling die het huidige werk vervangt, in afwachting van een ja. */
 	type Vervanging =
 		| { soort: 'bestand'; file: File }
@@ -544,6 +546,11 @@
 	$effect(() => {
 		bewaker.status(status.device, status.connected);
 	});
+	// Dezelfde socket draagt de stand van een lopende tegelreeks; de bovenbalk,
+	// het canvas en de telefoon lezen straks allemaal deze ene bron.
+	$effect(() => {
+		tiling.adopt(status.snapshot?.tiling ?? null);
+	});
 
 	function requestStart() {
 		selectTab('job');
@@ -703,6 +710,7 @@
 			}}
 			cameraSrc={camera.src}
 			cameraOpacity={camera.opacity}
+			{tiling}
 			sheet={sheets.active
 				? {
 						name: sheets.active.name,
@@ -710,6 +718,7 @@
 						height: sheets.active.height_mm
 					}
 				: null}
+			sheetId={sheets.active?.id ?? null}
 			onPath={async (points, closed) => {
 				if (!canEdit) return;
 				await post('/api/design/path', { points, closed });
@@ -876,6 +885,7 @@
 			{:else}
 				<JobPanel
 					{device}
+					{tiling}
 					events={status.events}
 					{control}
 					activeJob={status.activeJob}

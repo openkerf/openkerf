@@ -39,6 +39,7 @@ from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
 from .sheets import Sheets
+from .tilerun import TileRun
 from .testgrid import (
     TestGridGenerator,
     is_cel_element,
@@ -212,6 +213,13 @@ class ApiServer:
             self.document,
             Path(self.library.path).with_name("openkerf-vellen"),
         )
+        self.tiles = TileRun(
+            kernel,
+            self.drawing,
+            self.sheets,
+            self.commands,
+            Path(self.library.path).with_name("openkerf-tegelreeks.json"),
+        )
         # Waar de instellingen van een laag vandaan komen. Naast de bibliotheek,
         # want het gaat over presets; niet erín, want het gaat over dit project.
         self.provenance = Provenance(
@@ -362,6 +370,34 @@ class ApiServer:
                 naam = None
         return {**sheet, "material_name": naam}
 
+    def _tiling_state(self):
+        """
+        De stand van de tegelreeks, of niets.
+
+        In de statuspayload en niet in een eigen route: bovenbalk, canvas en
+        telefoonweergave moeten dezelfde stand zien, en drie losse verzoeken
+        laten ze uit elkaar lopen.
+        """
+        try:
+            return self.tiles.state()
+        except Exception:  # pragma: no cover - status mag nooit omvallen
+            return None
+
+    def _status_payload(self) -> dict:
+        """
+        Eén snapshot, overal hetzelfde.
+
+        `reader.snapshot()` alleen was de kernel- en devicestatus; de
+        tegelreeks ontbrak op de WebSocket (`/api/ws`, gebruikt door de
+        lopende app) terwijl `/api/status` hem al meestuurde. Bovenbalk,
+        canvas en telefoonweergave lezen alle drie de live socket, dus zonder
+        dit veld hier kwam een lopende tegelreeks daar nooit aan — precies wat
+        de docstring van `_tiling_state` beloofde te voorkomen.
+        """
+        payload = self.reader.snapshot()
+        payload["tiling"] = self._tiling_state()
+        return payload
+
     def build_app(self):
         from contextlib import asynccontextmanager
 
@@ -433,7 +469,7 @@ class ApiServer:
 
         @app.get("/api/status")
         def status():
-            return self.reader.snapshot()
+            return self._status_payload()
 
         @app.get("/api/devices")
         def devices():
@@ -1440,6 +1476,57 @@ class ApiServer:
         def move_to_sheet(sheet_id: str, body: dict):
             return manage(self.sheets.move_selection, body.get("ids") or [], sheet_id)
 
+        # ----------------------------------------------------------------- tegels
+
+        @app.get("/api/tiling")
+        def tiling_layout():
+            """
+            De opdeling van het actieve vel: tegels, naden, merkposities.
+
+            Berekend, niet opgeslagen — hij is een functie van de plaatmaat, de
+            bedmaat en het ontwerp, dus hij klopt vanzelf zodra daar iets
+            verandert.
+            """
+            return manage(self.tiles.layout)
+
+        @app.post("/api/tiling/start", dependencies=write)
+        def tiling_start():
+            return manage(self.tiles.start)
+
+        @app.post("/api/tiling/align", dependencies=write)
+        def tiling_align(body: dict):
+            """
+            De aangetikte punten. `use_current: true` pakt de kopstand, zodat je
+            met de jogknoppen kunt richten en dan één keer op 'Hier' drukt.
+            """
+
+            def run():
+                punten = list(body.get("points") or [])
+                if body.get("use_current"):
+                    huidig = self.motion._current_mm()
+                    if huidig is None:
+                        raise DesignError(
+                            "Deze machine meldt geen positie, dus 'Hier' weet niet "
+                            "waar hij staat. Vul de coördinaten met de hand in."
+                        )
+                    punten.append({"x_mm": huidig[0], "y_mm": huidig[1]})
+                return self.tiles.align(punten, body.get("reference") or "markers")
+
+            return manage(run)
+
+        @app.post("/api/tiling/burn", dependencies=write)
+        def tiling_burn(body: dict | None = None):
+            confirm = bool((body or {}).get("confirm"))
+            return manage(lambda: self.tiles.burn(confirm_reburn=confirm))
+
+        @app.post("/api/tiling/advance", dependencies=write)
+        def tiling_advance():
+            return manage(self.tiles.advance)
+
+        @app.post("/api/tiling/cancel", dependencies=write)
+        def tiling_cancel():
+            return manage(self.tiles.cancel)
+
         # --------------------------------------------------------------- clipart
 
         @app.get("/api/clipart/search")
@@ -2042,7 +2129,7 @@ class ApiServer:
                 )
                 await websocket.send_text(
                     json.dumps(
-                        {"type": "snapshot", "data": self.reader.snapshot()},
+                        {"type": "snapshot", "data": self._status_payload()},
                         default=str,
                     )
                 )
@@ -2075,7 +2162,7 @@ class ApiServer:
             await asyncio.sleep(HEARTBEAT_SECONDS)
             if self.bridge.client_count:
                 await self.bridge.broadcast(
-                    {"type": "snapshot", "data": self.reader.snapshot()}
+                    {"type": "snapshot", "data": self._status_payload()}
                 )
 
     # ------------------------------------------------------------- lifecycle

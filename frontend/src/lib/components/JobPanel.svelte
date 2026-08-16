@@ -13,11 +13,14 @@
 		type SignalEvent
 	} from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
+	import type { TilingStore } from '$lib/tiling.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
 	import JobControls from './JobControls.svelte';
+	import TegelReeks from './TegelReeks.svelte';
 
 	let {
 		device,
+		tiling,
 		events,
 		control,
 		activeJob,
@@ -31,6 +34,7 @@
 		profile = null
 	}: {
 		device: Device | null;
+		tiling: TilingStore;
 		events: SignalEvent[];
 		control: Controller;
 		activeJob: Job | null;
@@ -48,6 +52,7 @@
 	let jobs = $derived(spooler?.jobs ?? []);
 </script>
 
+<TegelReeks {tiling} {device} />
 <JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
 
 <div class="section">
