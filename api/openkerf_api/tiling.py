@@ -220,3 +220,79 @@ def marker_spots(
     sleutel = (lambda p: p.y_mm) if langs_y else (lambda p: p.x_mm)
     geordend = sorted(vrij, key=sleutel)
     return geordend[0], geordend[-1]
+
+
+@dataclass(frozen=True)
+class Alignment:
+    """Hoe de plaat er nu bij ligt, ten opzichte van hoe hij getekend is."""
+
+    angle_deg: float
+    dx_mm: float
+    dy_mm: float
+    #: hoeveel de gemeten afstand afwijkt van de gebrande — een controle, geen correctie
+    distance_error_mm: float
+
+
+def alignment(
+    p1: Point,
+    p2: Point,
+    m1: Point,
+    m2: Point,
+    max_angle_deg: float = 3.0,
+    tolerance_mm: float = 1.0,
+) -> Alignment:
+    """
+    De stand van de plaat, uit twee gebrande merken en twee aangetikte punten.
+
+    Schaal wordt **niet** overgenomen en wél gecontroleerd. De afstand tussen
+    twee gebrande merken verandert niet; wijkt de gemeten afstand af, dan is er
+    verkeerd aangetikt. Zou je de schaal wel overnemen, dan rekent één tikfout
+    van 2 mm de hele tegel uit elkaar.
+    """
+    plaat = complex(p2.x_mm - p1.x_mm, p2.y_mm - p1.y_mm)
+    gemeten = complex(m2.x_mm - m1.x_mm, m2.y_mm - m1.y_mm)
+    if abs(plaat) < 1e-6 or abs(gemeten) < 1e-6:
+        raise TilingError("De twee aangetikte punten liggen op elkaar.")
+
+    afwijking = abs(gemeten) - abs(plaat)
+    if abs(afwijking) > tolerance_mm:
+        raise TilingError(
+            f"Deze twee punten liggen {abs(afwijking):.1f} mm "
+            f"{'verder' if afwijking > 0 else 'dichter'} "
+            "uit elkaar dan de merken die ik gebrand heb. Heb je het juiste "
+            "merk aangetikt?"
+        )
+
+    hoek = math.atan2(gemeten.imag, gemeten.real) - math.atan2(plaat.imag, plaat.real)
+    hoek = math.atan2(math.sin(hoek), math.cos(hoek))
+    graden = math.degrees(hoek)
+    if abs(graden) > max_angle_deg:
+        raise TilingError(
+            f"De plaat zou {abs(graden):.1f}° scheef liggen. Dat is meer dan een "
+            "plaat scheef kán liggen zonder dat je het ziet — waarschijnlijk is "
+            "het verkeerde merk aangetikt. Leg hem recht en tik opnieuw aan."
+        )
+
+    gedraaid = complex(p1.x_mm, p1.y_mm) * complex(math.cos(hoek), math.sin(hoek))
+    return Alignment(
+        angle_deg=graden,
+        dx_mm=m1.x_mm - gedraaid.real,
+        dy_mm=m1.y_mm - gedraaid.imag,
+        distance_error_mm=afwijking,
+    )
+
+
+def alignment_from_corner(plate_corner: Point, measured: Point) -> Alignment:
+    """
+    Tegel 1: er zijn nog geen merken, dus uitlijnen gebeurt op de plaat zelf.
+
+    Zonder tweede punt is er geen hoek te meten, en dan rekenen we met nul — en
+    zeggen dat erbij, want een aanname die je niet ziet is een aanname die je
+    op materiaal betaalt.
+    """
+    return Alignment(
+        angle_deg=0.0,
+        dx_mm=measured.x_mm - plate_corner.x_mm,
+        dy_mm=measured.y_mm - plate_corner.y_mm,
+        distance_error_mm=0.0,
+    )

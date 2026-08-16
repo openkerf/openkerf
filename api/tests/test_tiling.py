@@ -10,10 +10,13 @@ import math
 import pytest
 
 from openkerf_api.tiling import (
+    Alignment,
     Point,
     Rect,
     TilingError,
     TilingSettings,
+    alignment,
+    alignment_from_corner,
     best_split,
     marker_spots,
     tile_layout,
@@ -200,3 +203,61 @@ def test_in_a_wide_zone_the_marks_spread_sideways():
     for punt in (een, twee):
         assert zone.x0 <= punt.x_mm <= zone.x1
         assert zone.y0 <= punt.y_mm <= zone.y1
+
+
+def test_a_plate_that_only_moved_gives_a_pure_shift():
+    merk1, merk2 = Point(470.0, 40.0), Point(470.0, 560.0)
+    gemeten1, gemeten2 = Point(30.0, 45.0), Point(30.0, 565.0)
+
+    uit = alignment(merk1, merk2, gemeten1, gemeten2)
+
+    assert uit.angle_deg == pytest.approx(0.0, abs=1e-6)
+    assert uit.dx_mm == pytest.approx(-440.0)
+    assert uit.dy_mm == pytest.approx(5.0)
+
+
+def test_a_skewed_plate_gives_the_angle_it_lies_at():
+    """Twee graden scheef: dat moet er als twee graden uit komen, niet als vier."""
+    hoek = math.radians(2.0)
+    merk1, merk2 = Point(0.0, 0.0), Point(0.0, 500.0)
+    gemeten1 = Point(0.0, 0.0)
+    gemeten2 = Point(-500.0 * math.sin(hoek), 500.0 * math.cos(hoek))
+
+    uit = alignment(merk1, merk2, gemeten1, gemeten2)
+
+    assert uit.angle_deg == pytest.approx(2.0, abs=1e-6)
+
+
+def test_marks_that_moved_apart_are_a_refusal():
+    """
+    De afstand tussen twee gebrande merken verandert niet. Verandert hij toch,
+    dan is er verkeerd aangetikt — en dan moet je stoppen, niet doorrekenen.
+    """
+    with pytest.raises(TilingError) as fout:
+        alignment(
+            Point(0.0, 0.0), Point(0.0, 500.0), Point(0.0, 0.0), Point(0.0, 504.0)
+        )
+
+    assert "uit elkaar" in str(fout.value)
+
+
+def test_an_impossible_angle_is_a_refusal():
+    hoek = math.radians(12.0)
+    with pytest.raises(TilingError) as fout:
+        alignment(
+            Point(0.0, 0.0),
+            Point(0.0, 500.0),
+            Point(0.0, 0.0),
+            Point(-500.0 * math.sin(hoek), 500.0 * math.cos(hoek)),
+        )
+
+    assert "scheef" in str(fout.value).lower()
+
+
+def test_the_first_tile_aligns_on_the_plate_corner_without_an_angle():
+    """Tegel 1 heeft geen merken; die lijnt uit op de plaat, zonder scheefstand."""
+    uit = alignment_from_corner(Point(0.0, 0.0), Point(25.0, 15.0))
+
+    assert uit == Alignment(
+        angle_deg=0.0, dx_mm=25.0, dy_mm=15.0, distance_error_mm=0.0
+    )
