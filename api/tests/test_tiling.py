@@ -292,34 +292,62 @@ def test_the_original_geometry_is_left_alone():
     assert lijn.index == voor
 
 
-def test_an_arc_across_the_seam_stays_an_arc():
+def test_an_arc_cut_off_centre_stays_an_arc():
     """
-    Dit pint de aanname vast waar het hele ontwerp op rust: splitsen gebeurt op
-    de parameter, er wordt niet geïnterpoleerd. Een cirkel die de naad kruist
-    mag geen veelhoek worden — dat zou je op het werkstuk zien.
+    De aanname waar het ontwerp op rust: splitsen gebeurt op de parameter, er
+    wordt niet geïnterpoleerd. Een boog die de naad kruist mag geen veelhoek
+    worden — dat zou je op het werkstuk zien.
+
+    De naad ligt op 130 en niet op 100. Een cirkel uit `Geomstr.circle` heeft
+    zijn laslijnen op de assen, dus met de naad op 100 wordt er nooit een boog
+    doormidden gesneden en bewijst de test niets.
     """
     from meerk40t.core.geomstr import TYPE_ARC
 
     cirkel = Geomstr.circle(60, 100, 50)
 
-    geklipt = clip_geometry(cirkel, Rect(0, -100, 100, 200))
+    geklipt = clip_geometry(cirkel, Rect(-200, -200, 130, 300))
 
     soorten = {int(geklipt.segments[i][2].real) for i in range(geklipt.index)}
     assert TYPE_ARC in soorten
 
 
-def test_a_circle_split_in_two_keeps_all_of_its_length():
+def test_a_circle_cut_off_centre_keeps_all_of_its_length():
     """
-    De regressietest op de reden dat we `geomstr.Clip` niet gebruiken: die liet
-    een kwartboog vallen die de grens niet eens kruiste, en dat is precies de
-    fout die je pas op materiaal ziet — een cirkel met een hap eruit.
+    De regressietest op de duurste van de drie enginefouten: `Geomstr.split`
+    heeft geen tak voor bogen en levert er nul stukken voor, waardoor een boog
+    die de naad middenin kruist uit *beide* tegels verdwijnt. Gemeten vóór de
+    reparatie: 188,49 van 376,97 over — een halve cirkel spoorloos.
+
+    De tolerantie is 1·10⁻⁴ en niet nul, omdat de engine de lengte van een boog
+    schat; het verschil tussen één boog en zijn stukken is daar 3·10⁻⁵ van, wat
+    op 100 mm neerkomt op 0,003 mm. Geen verloren geometrie, wel een som die
+    niet tot op de bit sluit.
     """
     cirkel = Geomstr.circle(60, 100, 50)
 
-    links = clip_geometry(cirkel, Rect(0, -100, 100, 200))
-    rechts = clip_geometry(cirkel, Rect(100, -100, 200, 200))
+    links = clip_geometry(cirkel, Rect(-200, -200, 130, 300))
+    rechts = clip_geometry(cirkel, Rect(130, -200, 300, 300))
 
-    assert _length(links) + _length(rechts) == pytest.approx(_length(cirkel), rel=1e-6)
+    assert _length(links) + _length(rechts) == pytest.approx(_length(cirkel), rel=1e-4)
+
+
+def test_geometry_on_the_seam_lands_in_exactly_one_tile():
+    """
+    Een lijn die pal op de naad ligt hoort bij één tegel, niet bij allebei.
+
+    Bij allebei zou de laser er tweemaal overheen gaan: dubbel gesneden,
+    zichtbaar verbrand, op dun materiaal doorgezakt. De onderrand van een
+    brandgebied telt mee, de bovenrand niet — dan valt zo'n lijn altijd in de
+    tegel erna, en nooit in geen van beide.
+    """
+    op_de_naad = Geomstr()
+    op_de_naad.line(complex(100, 0), complex(100, 80))
+
+    links = clip_geometry(op_de_naad, Rect(0, 0, 100, 100))
+    rechts = clip_geometry(op_de_naad, Rect(100, 0, 200, 100))
+
+    assert _length(links) + _length(rechts) == pytest.approx(80.0, rel=1e-6)
 
 
 def test_geometry_entirely_outside_comes_back_empty():

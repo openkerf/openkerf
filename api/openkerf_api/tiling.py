@@ -323,33 +323,67 @@ def _rand_segmenten(rect_units: Rect):
     return randen
 
 
+def _stukken(geom, index: int, ts):
+    """
+    De stukken van één segment, gesplitst op de gegeven parameters.
+
+    Lijnen, quads en cubics laat de engine zelf splitsen; die takken bestaan en
+    werken. **Bogen niet:** `Geomstr.split` heeft geen tak voor `TYPE_ARC` en
+    geeft er nul stukken voor terug, waardoor een boog die de naad middenin
+    kruist uit beide tegels verdwijnt. Gemeten op een cirkel met de naad naast
+    de laslijnen: een halve cirkel spoorloos.
+
+    Zelf splitsen kan exact, want een boog door drie punten van een cirkel ís
+    die cirkel: elk stuk wordt opgebouwd uit zijn begin, zijn midden en zijn
+    eind, alle drie opgevraagd met `position`.
+    """
+    from meerk40t.core.geomstr import Geomstr, TYPE_ARC
+
+    if not ts:
+        return [geom.segments[index]]
+    if int(geom.segments[index][2].real) != TYPE_ARC:
+        return list(geom.split(index, sorted(ts)))
+
+    grenzen = [0.0] + sorted(ts) + [1.0]
+    hulp = Geomstr()
+    for begin, eind in zip(grenzen, grenzen[1:]):
+        if eind - begin < 1e-12:
+            continue
+        hulp.arc(
+            geom.position(index, begin),
+            geom.position(index, (begin + eind) / 2),
+            geom.position(index, eind),
+        )
+    return [hulp.segments[i] for i in range(hulp.index)]
+
+
 def clip_geometry(geom, rect_units: Rect):
     """
     De geometrie die binnen dit brandgebied valt, als nieuwe Geomstr.
 
     Elk segment wordt gesplitst op zijn snijpunten met de vier vensterranden,
     en van de stukken houden we wat met zijn midden binnen ligt. Splitsen
-    gebeurt op de parameter (`Geomstr.split`), dus **een boog blijft een boog**
-    — er wordt niet geïnterpoleerd, en dat is te zien aan het werkstuk.
+    gebeurt op de parameter, dus **een boog blijft een boog** — er wordt niet
+    geïnterpoleerd, en dat is te zien aan het werkstuk.
 
     `rect_units` is in engine-eenheden, niet in millimeters: het klippen gebeurt
     in dezelfde ruimte als de geometrie. Het origineel wordt niet aangeraakt.
 
+    **De onderrand telt mee, de bovenrand niet.** Een lijn die pal op een naad
+    ligt wordt door geen van beide tegels doorgesneden — hij kruist niets — dus
+    zonder dat verschil zou zijn midden in allebei de rechthoeken vallen en ging
+    de laser er tweemaal overheen. Met `x0 <= midden < x1` valt hij altijd in de
+    tegel erna, en nooit in geen van beide. De uiterste rand van de plaat is
+    daarmee de enige plek waar iets buiten de boot valt; `TileRun.burn` rekt het
+    brandgebied van de laatste tegel daarom een haar op.
+
     **Waarom niet `geomstr.Clip`, die dit lijkt te doen?** Omdat hij op bogen
-    stukloopt, en dat is gemeten:
-
-    1. `Clip.inside` berekent alle middens in één keer met
-       `position(slice(...), 0.5)`. Die batchweg loopt via
-       `Geomstr._arc_position` (`geomstr.py:5784`), waar `self._arc_position(line, ...)`
-       staat in plaats van `_line` — oneindige recursie zodra er twee of meer
-       bogen in zitten. Op een gewone cirkel: `RecursionError`.
-    2. `Clip.polycut` laat een segment vallen: vier kwartbogen erin, drie eruit,
-       en de verdwenen boog kruiste de grens niet eens.
-
-    Upstream merkt het niet omdat hun eigen `Clip`-test alleen lijnen klipt. Wij
-    wijzigen niets in `meerk40t/`; hier staat de weg eromheen, en die is voor ons
-    geval ook eenvoudiger: ons venster is altijd een asgerichte rechthoek, dus
-    "ligt dit erbinnen" is vier vergelijkingen in plaats van een punt-in-veelhoek.
+    stukloopt: `Clip.inside` vraagt zijn middens in één keer op en belandt in de
+    oneindige recursie van `Geomstr._arc_position` (`geomstr.py:5784`, `line` in
+    plaats van `_line`), en `Clip.polycut` laat een boogsegment vallen dat de
+    grens niet eens kruist. Upstream merkt het niet omdat hun eigen `Clip`-test
+    alleen lijnen klipt. Wij wijzigen niets in `meerk40t/`; dit is de weg
+    eromheen, en voor ons geval ook de eenvoudigere.
     """
     from meerk40t.core.geomstr import Geomstr
 
@@ -371,18 +405,15 @@ def clip_geometry(geom, rect_units: Rect):
                 # toch al op, en splitsen op 0 of 1 levert een leeg stuk.
                 if 1e-9 < float(t) < 1 - 1e-9:
                     snijpunten.add(round(float(t), 9))
-        if snijpunten:
-            for stuk in geom.split(index, sorted(snijpunten)):
-                stukken.append_segment(*stuk)
-        else:
-            stukken.append_segment(*geom.segments[index])
+        for stuk in _stukken(geom, index, sorted(snijpunten)):
+            stukken.append_segment(*stuk)
 
     binnen = Geomstr()
     for index in range(stukken.index):
         midden = stukken.position(index, 0.5)
         if (
-            rect_units.x0 <= midden.real <= rect_units.x1
-            and rect_units.y0 <= midden.imag <= rect_units.y1
+            rect_units.x0 <= midden.real < rect_units.x1
+            and rect_units.y0 <= midden.imag < rect_units.y1
         ):
             binnen.append_segment(*stukken.segments[index])
     return binnen
