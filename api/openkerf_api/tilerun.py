@@ -10,9 +10,24 @@ dit ontwerp zo weinig hoeft aan te raken.
 
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 
-from .tiling import Alignment, Rect, clip_geometry
+from .edits import DesignError
+from .tiling import (
+    Alignment,
+    Point,
+    Rect,
+    TilingError,
+    TilingSettings,
+    alignment,
+    alignment_from_corner,
+    best_split,
+    clip_geometry,
+    marker_spots,
+    tile_layout,
+)
 
 #: Snelheid en vermogen van een uitlijnmerk. Een merk hoeft niet diep, het moet
 #: zichtbaar zijn: hard erin branden maakt de rand juist waziger om op te
@@ -223,3 +238,420 @@ class TileMutator:
             # draagt hij de omhullende van zijn oude plek.
             marker()
         return node
+
+
+class TileRun:
+    """
+    Waar je in een tegelreeks bent, en wat de volgende stap is.
+
+    De reeks staat op schijf naast `vellen.json`: een plaat van 900 mm is werk
+    van uren, en dat moet een verversing van de pagina overleven. De uitlijning
+    staat er nadrukkelijk níet in — zie `align`.
+    """
+
+    def __init__(self, kernel, drawing, sheets, runner, path):
+        self.kernel = kernel
+        self.drawing = drawing
+        self.sheets = sheets
+        self.runner = runner
+        self.path = Path(path)
+        self._alignment = None
+
+    # ------------------------------------------------------------- opslag
+
+    def _read(self) -> dict | None:
+        try:
+            data = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _write(self, data: dict | None) -> None:
+        if data is None:
+            self.path.unlink(missing_ok=True)
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(data, indent=1, ensure_ascii=False))
+
+    # ------------------------------------------------------------ opdeling
+
+    def _sheet(self) -> dict:
+        for sheet in self.sheets.state()["sheets"]:
+            if sheet.get("active"):
+                return sheet
+        raise DesignError("Er is geen actief vel.")
+
+    def _settings(self, sheet) -> TilingSettings:
+        blok = sheet.get("tiling") or {}
+        return TilingSettings(
+            margin_mm=float(blok.get("margin_mm", 10.0)),
+            overlap_mm=float(blok.get("overlap_mm", 25.0)),
+            marker_size_mm=float(blok.get("marker_size_mm", 8.0)),
+        )
+
+    def layout(self) -> dict:
+        """
+        De opdeling van het actieve vel. Berekend, nooit opgeslagen.
+
+        Hij is een functie van de maten, de instellingen en het ontwerp, dus
+        hij klopt vanzelf zodra daar iets aan verandert.
+        """
+        sheet = self._sheet()
+        bed = self.drawing.bed_mm()
+        if bed is None:
+            raise DesignError("Deze machine meldt geen bedmaat.")
+        settings = self._settings(sheet)
+        try:
+            tiles = tile_layout(
+                sheet["width_mm"], sheet["height_mm"], bed[0], bed[1], settings
+            )
+        except TilingError as e:
+            raise DesignError(str(e)) from e
+
+        spans = self._shape_spans()
+        tiles = self._nudge_seams(tiles, spans, settings)
+        self._check_images(tiles)
+        return {
+            "tiles": [self._tile_json(t) for t in tiles],
+            "marks": self._marks(tiles, settings),
+            "crossings": self._crossings(tiles, spans),
+        }
+
+    def _shape_spans(self) -> list:
+        """De omhullenden van alle vormen, in millimeters."""
+        u = self.drawing._units_per_mm()
+        vakken = []
+        for node in self.kernel.elements.elems():
+            bounds = getattr(node, "bounds", None)
+            if not bounds:
+                continue
+            x0, y0, x1, y1 = bounds
+            vakken.append(Rect(x0 / u, y0 / u, x1 / u, y1 / u))
+        return vakken
+
+    def _nudge_seams(self, tiles, spans, settings):
+        """
+        De naad binnen de overlapzone naar waar hij de minste vormen kruist.
+
+        Alleen op de as waarop opgedeeld is; op de andere as is er geen naad.
+        """
+        if len(tiles) < 2:
+            return tiles
+        horizontaal = tiles[-1].column > 0
+        aangepast = list(tiles)
+        for links, rechts in zip(tiles, tiles[1:]):
+            if horizontaal and rechts.column == 0:
+                continue
+            if horizontaal:
+                zone = (rechts.window.x0, links.window.x1)
+                x = best_split(zone[0], zone[1], [(s.x0, s.x1) for s in spans])
+                aangepast[links.index] = links._replace(burn=links.burn._replace(x1=x))
+                aangepast[rechts.index] = rechts._replace(
+                    burn=rechts.burn._replace(x0=x)
+                )
+            else:
+                zone = (rechts.window.y0, links.window.y1)
+                y = best_split(zone[0], zone[1], [(s.y0, s.y1) for s in spans])
+                aangepast[links.index] = links._replace(burn=links.burn._replace(y1=y))
+                aangepast[rechts.index] = rechts._replace(
+                    burn=rechts.burn._replace(y0=y)
+                )
+        return aangepast
+
+    def _check_images(self, tiles) -> None:
+        """
+        Weiger een afbeelding die over een naad ligt.
+
+        Vormen worden op de naad doormidden gesneden; een afbeelding niet — die
+        heeft geen geometrie om te splitsen, en een bitmap bijsnijden op een
+        naad zou bij een gedraaide afbeelding in beide tegels een randje dubbel
+        branden. Dus hoort een afbeelding in zijn geheel in één tegel, en als
+        dat niet kan zeggen we dat, in plaats van hem stilletjes weg te laten of
+        in elke tegel te herhalen.
+        """
+        u = self.drawing._units_per_mm()
+        for node in self.kernel.elements.elems():
+            if str(getattr(node, "type", "")) != "elem image":
+                continue
+            bounds = getattr(node, "bounds", None)
+            if not bounds:
+                continue
+            x0, y0, x1, y1 = (v / u for v in bounds)
+            past = any(
+                t.burn.x0 <= x0
+                and x1 <= t.burn.x1
+                and t.burn.y0 <= y0
+                and y1 <= t.burn.y1
+                for t in tiles
+            )
+            if not past:
+                naam = getattr(node, "label", None) or "een afbeelding"
+                raise DesignError(
+                    f"{naam} ligt over de naad tussen twee tegels. Een afbeelding "
+                    "kan niet doormidden: verplaats hem zodat hij binnen één tegel "
+                    "valt, of maak de overlap groter."
+                )
+
+    def _marks(self, tiles, settings) -> list[dict]:
+        """
+        Per grens twee merken. Weigert als er ergens geen plek is.
+
+        Bewust hier en niet pas bij die tegel: zonder plek op grens 2 is de hele
+        reeks onuitvoerbaar, en dat hoor je te weten vóór de eerste tegel.
+        """
+        blokkade = self._shape_spans()
+        merken = []
+        for links, rechts in zip(tiles, tiles[1:]):
+            zone = Rect(
+                max(links.window.x0, rechts.window.x0),
+                max(links.window.y0, rechts.window.y0),
+                min(links.window.x1, rechts.window.x1),
+                min(links.window.y1, rechts.window.y1),
+            )
+            try:
+                een, twee = marker_spots(zone, blokkade, settings.marker_size_mm)
+            except TilingError as e:
+                raise DesignError(
+                    f"Tussen tegel {links.index + 1} en {rechts.index + 1}: {e}"
+                ) from e
+            merken.append(
+                {
+                    "boundary": links.index,
+                    "points": [
+                        {"x_mm": een.x_mm, "y_mm": een.y_mm},
+                        {"x_mm": twee.x_mm, "y_mm": twee.y_mm},
+                    ],
+                }
+            )
+        return merken
+
+    @staticmethod
+    def _crossings(tiles, spans) -> int:
+        naden = [t.burn.x1 for t in tiles[:-1]]
+        return sum(1 for x in naden for s in spans if s.x0 < x < s.x1)
+
+    def _tile_json(self, tile) -> dict:
+        return {
+            "index": tile.index,
+            "row": tile.row,
+            "column": tile.column,
+            "burn": {
+                "x0_mm": tile.burn.x0,
+                "y0_mm": tile.burn.y0,
+                "x1_mm": tile.burn.x1,
+                "y1_mm": tile.burn.y1,
+            },
+        }
+
+    # ------------------------------------------------------------- de reeks
+
+    def _fingerprint(self, sheet) -> str:
+        """
+        Een goedkope samenvatting van ontwerp en plaat.
+
+        Genoeg om te zien dát er iets veranderd is; niet bedoeld om te zeggen
+        wát. Bij twijfel ongeldig verklaren is hier het goedkope antwoord.
+        """
+        stukken = [
+            f"{sheet['width_mm']}x{sheet['height_mm']}",
+            json.dumps(sheet.get("tiling"), sort_keys=True),
+        ]
+        for node in self.kernel.elements.elems():
+            bounds = getattr(node, "bounds", None)
+            stukken.append(
+                f"{node.type}:"
+                + ("-".join(f"{v:.1f}" for v in bounds) if bounds else "?")
+            )
+        return str(hash(tuple(stukken)))
+
+    def state(self) -> dict | None:
+        data = self._read()
+        if data is None:
+            return None
+        sheet = self._sheet()
+        stale = data.get("sheet_id") != sheet["id"] or data.get(
+            "fingerprint"
+        ) != self._fingerprint(sheet)
+        return {
+            **data,
+            "aligned": self._alignment is not None,
+            "stale": stale,
+            "message": (
+                "Het ontwerp of de plaat is veranderd sinds deze reeks begon. De "
+                "tegels die al gebrand zijn horen bij het oude ontwerp; verder "
+                "gaan zou half oud en half nieuw opleveren."
+                if stale
+                else ""
+            ),
+        }
+
+    def start(self) -> dict:
+        sheet = self._sheet()
+        if not (sheet.get("tiling") or {}).get("enabled"):
+            raise DesignError(
+                "Tegels staan uit voor dit vel. Zet ze aan bij de plaatmaat."
+            )
+        opdeling = self.layout()  # weigert hier al als er geen merken passen
+        self._alignment = None
+        self._write(
+            {
+                "sheet_id": sheet["id"],
+                "tiles": len(opdeling["tiles"]),
+                "done": [],
+                "current": 0,
+                "fingerprint": self._fingerprint(sheet),
+            }
+        )
+        return self.state()
+
+    def align(self, points, reference: str = "markers") -> dict:
+        """
+        De aangetikte punten omzetten in een stand van de plaat.
+
+        De uitkomst blijft in het geheugen van deze draai. Zodra je de app
+        verlaat of een tegel afrondt, vervalt hij en moet je opnieuw aantikken:
+        een bewaarde uitlijning is een aanname over waar de plaat ligt, en dat
+        is precies wat je na een pauze niet moet vertrouwen.
+        """
+        data = self._read()
+        if data is None:
+            raise DesignError("Er loopt geen tegelreeks.")
+        gemeten = [Point(float(p["x_mm"]), float(p["y_mm"])) for p in points]
+        try:
+            if reference == "plate_corner":
+                if not gemeten:
+                    raise DesignError("Tik eerst de hoek van de plaat aan.")
+                self._alignment = alignment_from_corner(Point(0.0, 0.0), gemeten[0])
+            else:
+                if len(gemeten) != 2:
+                    raise DesignError("Uitlijnen vraagt twee aangetikte merken.")
+                merken = self._marks_for(data["current"] - 1)
+                self._alignment = alignment(
+                    merken[0], merken[1], gemeten[0], gemeten[1]
+                )
+        except TilingError as e:
+            self._alignment = None
+            raise DesignError(str(e)) from e
+        return {
+            **self.state(),
+            "angle_deg": round(self._alignment.angle_deg, 3),
+            "distance_error_mm": round(self._alignment.distance_error_mm, 2),
+        }
+
+    def _marks_for(self, boundary: int) -> tuple:
+        for merk in self.layout()["marks"]:
+            if merk["boundary"] == boundary:
+                return tuple(Point(p["x_mm"], p["y_mm"]) for p in merk["points"])
+        raise DesignError("Voor deze tegel zijn geen merken berekend.")
+
+    def burn(self) -> dict:
+        data = self._read()
+        if data is None:
+            raise DesignError("Er loopt geen tegelreeks.")
+        if self._alignment is None:
+            raise DesignError(
+                "Deze tegel is nog niet uitgelijnd. Tik eerst de twee merken aan, "
+                "anders weet de machine niet waar de plaat ligt."
+            )
+        if self.state()["stale"]:
+            raise DesignError(self.state()["message"])
+
+        opdeling = self.layout()
+        index = data["current"]
+        tegel = opdeling["tiles"][index]
+        burn = self._brandgebied(tegel, opdeling["tiles"])
+        u = self.drawing._units_per_mm()
+        merken = [m for m in opdeling["marks"] if m["boundary"] == index]
+        geom = (
+            marker_geometry(
+                [Point(p["x_mm"], p["y_mm"]) for p in merken[0]["points"]],
+                self._settings(self._sheet()).marker_size_mm,
+                u,
+            )
+            if merken
+            else None
+        )
+        mutator = TileMutator(burn, self._alignment, u, marker_geometry=geom)
+        self._check_bed(burn, mutator)
+        # Twee verschuivingen over elkaar is een fout die je pas op materiaal
+        # ziet: de tegelmatrix doet al wat het nulpunt zou doen, en hij is
+        # gemeten in plaats van ingesteld.
+        with self.drawing.verschoven(None):
+            self.runner.start_job(f"Tegel {index + 1}", mutators=[mutator])
+        return {
+            **self.state(),
+            # Wat deze tegel werkelijk brandt. Tijdens het klippen geteld, want
+            # daarna bestaat het plan uit cutcode en is het niet meer te zien.
+            "burned_length_mm": round(mutator.burned_length_units / u, 2),
+        }
+
+    #: Waarmee de buitenrand van de plaat opgerekt wordt. `clip_geometry` houdt
+    #: zijn bovenrand open zodat geometrie pal op een naad in precies één tegel
+    #: valt; op de buitenrand van de plaat is er geen tegel erna om hem op te
+    #: vangen, dus daar zou een lijn die pal op de rand ligt wegvallen. Een haar
+    #: is genoeg: dit is een tie-break, geen maat.
+    PLAATRAND_MARGE_MM = 1e-6
+
+    def _brandgebied(self, tegel, alle) -> Rect:
+        """
+        Het brandgebied van deze tegel, met de buitenrand van de plaat opgerekt.
+
+        Zie `PLAATRAND_MARGE_MM`: de bovenrand van een brandgebied hoort bij de
+        tegel erna, maar de laatste tegel heeft er geen, dus daar moet de rand
+        wél meedoen.
+        """
+        x1 = tegel["burn"]["x1_mm"]
+        y1 = tegel["burn"]["y1_mm"]
+        if x1 >= max(t["burn"]["x1_mm"] for t in alle) - 1e-9:
+            x1 += self.PLAATRAND_MARGE_MM
+        if y1 >= max(t["burn"]["y1_mm"] for t in alle) - 1e-9:
+            y1 += self.PLAATRAND_MARGE_MM
+        return Rect(tegel["burn"]["x0_mm"], tegel["burn"]["y0_mm"], x1, y1)
+
+    def _check_bed(self, burn, mutator) -> None:
+        """
+        Past deze tegel na de correctie nog in het bed?
+
+        Een halve graad scheefstand duwt een tegel van 480 mm er zomaar 4 mm
+        overheen, en dan loopt de kop tegen zijn eindaanslag terwijl er al werk
+        in de plaat zit.
+        """
+        bed = self.drawing.bed_mm()
+        if bed is None:
+            return
+        hoeken = [
+            (burn.x0, burn.y0),
+            (burn.x1, burn.y0),
+            (burn.x0, burn.y1),
+            (burn.x1, burn.y1),
+        ]
+        hoek = math.radians(mutator.alignment.angle_deg)
+        for x, y in hoeken:
+            draai = complex(x, y) * complex(math.cos(hoek), math.sin(hoek))
+            mx = draai.real + mutator.alignment.dx_mm
+            my = draai.imag + mutator.alignment.dy_mm
+            if not (0 <= mx <= bed[0] and 0 <= my <= bed[1]):
+                raise DesignError(
+                    f"Na de correctie valt deze tegel {abs(min(mx, my, 0)):.0f} mm "
+                    "buiten het bed. Leg de plaat rechter of iets verder naar "
+                    "binnen en tik opnieuw aan."
+                )
+
+    def advance(self) -> dict:
+        data = self._read()
+        if data is None:
+            raise DesignError("Er loopt geen tegelreeks.")
+        done = sorted(set(data["done"]) | {data["current"]})
+        volgende = data["current"] + 1
+        self._alignment = None  # de plaat gaat verschuiven; de oude stand vervalt
+        if volgende >= data["tiles"]:
+            self._write(None)
+            return {"finished": True, "tiles": data["tiles"], "done": done}
+        data.update({"done": done, "current": volgende})
+        self._write(data)
+        return self.state()
+
+    def cancel(self) -> dict:
+        self._alignment = None
+        self._write(None)
+        return {"finished": False, "cancelled": True}

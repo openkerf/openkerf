@@ -39,6 +39,7 @@ from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
 from .sheets import Sheets
+from .tilerun import TileRun
 from .testgrid import (
     TestGridGenerator,
     is_cel_element,
@@ -211,6 +212,13 @@ class ApiServer:
             self.drawing,
             self.document,
             Path(self.library.path).with_name("openkerf-vellen"),
+        )
+        self.tiles = TileRun(
+            kernel,
+            self.drawing,
+            self.sheets,
+            self.commands,
+            Path(self.library.path).with_name("openkerf-tegelreeks.json"),
         )
         # Waar de instellingen van een laag vandaan komen. Naast de bibliotheek,
         # want het gaat over presets; niet erín, want het gaat over dit project.

@@ -49,6 +49,82 @@ def test_a_mutator_gets_the_plan_steps_and_can_replace_them(kernel):
     assert "aantal" in gezien
 
 
+def _wide_sheet(server):
+    """
+    Een plaat van 800 × 150 mm op het dummy-bed, met tegels aan.
+
+    Die maat is niet willekeurig: het dummy-apparaat heeft een bed van
+    320 × 220 mm (gemeten, niet de 500 × 300 die je zou verwachten), dus het
+    bruikbare venster is 300 mm en deze plaat wordt precies drie tegels. Kies
+    je 900, dan worden het er vier en vallen de tests om op een reden die
+    niets met tegels te maken heeft.
+    """
+    vel = server.sheets.state()["sheets"][0]
+    server.sheets.update(vel["id"], width_mm=800.0, height_mm=150.0)
+    server.sheets.update(vel["id"], tiling={"enabled": True})
+    server.kernel.console("rect 10mm 10mm 30mm 30mm\n")
+    server.kernel.console("rect 600mm 10mm 30mm 30mm\n")
+    server.kernel.console("classify\n")
+
+
+def test_a_run_survives_a_restart_but_its_alignment_does_not(kernel, tmp_path):
+    """
+    De reeks is uren werk en overleeft afsluiten. De uitlijning niet: die zegt
+    waar de plaat lag, en dat weet je na een pauze niet meer.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    run = server.tiles
+    _wide_sheet(server)
+    run.start()
+    run.align([{"x_mm": 0.0, "y_mm": 0.0}], reference="plate_corner")
+    assert run.state()["aligned"] is True
+
+    opnieuw = ApiServer(kernel, library_path=tmp_path / "v.db").tiles
+
+    assert opnieuw.state()["current"] == 0
+    assert opnieuw.state()["aligned"] is False
+
+
+def test_changing_the_design_invalidates_a_running_series(kernel, tmp_path):
+    """
+    Half het oude ontwerp en half het nieuwe branden is de duurste fout die dit
+    systeem kan maken. Dus: ongeldig, en zichtbaar.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _wide_sheet(server)
+    server.tiles.start()
+
+    kernel.console("rect 500mm 100mm 20mm 20mm\n")
+    kernel.console("classify\n")
+
+    stand = server.tiles.state()
+    assert stand["stale"] is True
+    assert "ontwerp" in stand["message"].lower()
+
+
+def test_burning_without_alignment_is_refused(kernel, tmp_path):
+    from openkerf_api.server import ApiServer
+    from openkerf_api.edits import DesignError
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _wide_sheet(server)
+    server.tiles.start()
+
+    with pytest.raises(DesignError) as fout:
+        server.tiles.burn()
+
+    # Op "uitgelijnd" en niet op "uitlijn": dat laatste zit er niet in — er
+    # staat "ge" tussen. En op "merken", want een weigering die niet zegt wat
+    # je eraan doet, is een weigering waar de gebruiker niets aan heeft.
+    melding = str(fout.value).lower()
+    assert "uitgelijnd" in melding
+    assert "merken" in melding
+
+
 def _design(kernel):
     """Twee vierkanten: één links op de plaat, één rechts."""
     kernel.console("rect 10mm 10mm 30mm 30mm\n")
