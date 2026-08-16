@@ -513,9 +513,7 @@ class TileRun:
                 round(self._alignment.angle_deg, 3) if self._alignment else None
             ),
             "distance_error_mm": (
-                round(self._alignment.distance_error_mm, 2)
-                if self._alignment
-                else None
+                round(self._alignment.distance_error_mm, 2) if self._alignment else None
             ),
             "stale": stale,
             "message": (
