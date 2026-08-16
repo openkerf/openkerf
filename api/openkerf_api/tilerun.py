@@ -14,6 +14,34 @@ import math
 
 from .tiling import Alignment, Rect, clip_geometry
 
+#: Snelheid en vermogen van een uitlijnmerk. Een merk hoeft niet diep, het moet
+#: zichtbaar zijn: hard erin branden maakt de rand juist waziger om op te
+#: richten, en op dun materiaal snijd je er zo doorheen.
+MARKER_SPEED_MM_S = 60.0
+MARKER_POWER = 300.0  # 30 %
+
+
+def marker_geometry(points, size_mm: float, units_per_mm: float):
+    """
+    De uitlijnmerken als geometrie: een cirkel met een kruis erin.
+
+    De cirkel geeft een rand om de kop op te richten die een los kruis niet
+    heeft; het snijpunt van het kruis is het punt dat je aantikt.
+    """
+    from meerk40t.core.geomstr import Geomstr
+
+    straal = size_mm / 2 * units_per_mm
+    geom = Geomstr()
+    for punt in points:
+        cx = punt.x_mm * units_per_mm
+        cy = punt.y_mm * units_per_mm
+        geom.append(Geomstr.circle(straal, cx, cy))
+        geom.line(complex(cx - straal, cy), complex(cx + straal, cy))
+        geom.end()
+        geom.line(complex(cx, cy - straal), complex(cx, cy + straal))
+        geom.end()
+    return geom
+
 
 class TileMutator:
     """
@@ -75,7 +103,33 @@ class TileMutator:
                 continue
             if self._reshape(step):
                 blijft.append(step)
+        if self.marker_geometry is not None and self.marker_geometry.index:
+            blijft.append(self._marker_operation())
         return blijft
+
+    def _marker_operation(self):
+        """
+        De merken als laatste bewerking van de tegel.
+
+        Ze ondergaan dezelfde uitlijning als de rest: ze worden op de plaat
+        gebrand, dus ze moeten op de plaat terechtkomen waar de opdeling ze
+        heeft berekend.
+        """
+        from meerk40t.core.node.elem_path import PathNode
+        from meerk40t.core.node.op_engrave import EngraveOpNode
+        from meerk40t.svgelements import Color, Matrix
+
+        geom = type(self.marker_geometry)(self.marker_geometry)
+        geom.transform(self.matrix())
+        operation = EngraveOpNode(
+            label="Uitlijnmerken",
+            speed=MARKER_SPEED_MM_S,
+            power=MARKER_POWER,
+        )
+        operation.add_node(
+            PathNode(geom, matrix=Matrix(), stroke=Color("black"), fill=None)
+        )
+        return operation
 
     def _reshape(self, operation) -> bool:
         """Klip de kinderen van deze bewerking. Geeft terug of er iets overblijft."""

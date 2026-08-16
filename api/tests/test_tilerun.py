@@ -8,8 +8,8 @@ elementenboom van de gebruiker komt er onveranderd uit.
 import pytest
 
 from openkerf_api.commands import PLAN_AND_SPOOL, CommandRunner
-from openkerf_api.tiling import Alignment, Rect
-from openkerf_api.tilerun import TileMutator
+from openkerf_api.tiling import Alignment, Point, Rect
+from openkerf_api.tilerun import TileMutator, marker_geometry
 
 UNITS_PER_MM = 65535 / 25.4
 
@@ -217,3 +217,57 @@ def test_an_operation_that_ends_up_empty_leaves_the_plan(kernel):
     )
 
     assert not [s for s in steps if getattr(s, "children", None)]
+
+
+def test_a_mark_is_a_circle_with_a_cross_in_it(kernel):
+    """
+    De cirkel geeft een rand om de kop op te richten die een los kruis niet
+    heeft; het kruis geeft het middelpunt dat je aantikt.
+    """
+    geom = marker_geometry([Point(100.0, 50.0)], size_mm=8.0, units_per_mm=UNITS_PER_MM)
+
+    x0, y0, x1, y1 = geom.bbox()
+    assert (x1 - x0) / UNITS_PER_MM == pytest.approx(8.0, abs=0.1)
+    assert (y1 - y0) / UNITS_PER_MM == pytest.approx(8.0, abs=0.1)
+
+
+def test_the_marks_are_burned_last(kernel):
+    """
+    Eerder branden betekent dat een latere snede er nog doorheen kan lopen, en
+    dan lijn je uit op een merk dat half weg is.
+    """
+    _design(kernel)
+    runner = CommandRunner(kernel)
+    mutator = TileMutator(
+        burn_mm=Rect(0, 0, 200, 200),
+        alignment=Alignment(0.0, 0.0, 0.0, 0.0),
+        units_per_mm=UNITS_PER_MM,
+        marker_geometry=marker_geometry(
+            [Point(180.0, 20.0), Point(180.0, 180.0)], 8.0, UNITS_PER_MM
+        ),
+    )
+
+    steps = runner.build_plan([mutator])
+
+    laatste = [s for s in steps if getattr(s, "children", None)][-1]
+    assert laatste.label == "Uitlijnmerken"
+    assert len(laatste.children) == 1
+
+
+def test_the_last_tile_burns_no_marks(kernel):
+    """Geen volgende tegel, dus niets om op uit te lijnen — en dus geen merk."""
+    _design(kernel)
+    runner = CommandRunner(kernel)
+
+    steps = runner.build_plan(
+        [
+            TileMutator(
+                burn_mm=Rect(0, 0, 200, 200),
+                alignment=Alignment(0.0, 0.0, 0.0, 0.0),
+                units_per_mm=UNITS_PER_MM,
+                marker_geometry=None,
+            )
+        ]
+    )
+
+    assert not [s for s in steps if getattr(s, "label", None) == "Uitlijnmerken"]
