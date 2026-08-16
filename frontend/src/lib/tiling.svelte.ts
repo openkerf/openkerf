@@ -73,6 +73,13 @@ export class TilingStore {
 			}
 			this.run = this.#normaliseer(await response.json());
 			return true;
+		} catch {
+			// Zonder dit valt er bij een wegvallende verbinding niets te zien:
+			// de fout vliegt ongevangen naar buiten, `error` blijft leeg en de
+			// gebruiker staat aan de machine naar een knop te kijken die niets
+			// deed. In een werkplaats is dat geen randgeval.
+			this.error = 'Geen verbinding met de machine. Probeer het opnieuw.';
+			return false;
 		} finally {
 			this.busy = false;
 		}
@@ -88,9 +95,9 @@ export class TilingStore {
 	 * seconde later overschrijft. Hier is dat gewoon `null`, wat het is.
 	 */
 	#normaliseer(data: unknown): TileRun | null {
-		const antwoord = data as Record<string, unknown> | null;
-		if (!antwoord || antwoord.cancelled || antwoord.finished) return null;
-		return antwoord as unknown as TileRun;
+		const body = data as Record<string, unknown> | null;
+		if (!body || body.cancelled || body.finished) return null;
+		return body as unknown as TileRun;
 	}
 
 	start = () => this.#send('/api/tiling/start');
