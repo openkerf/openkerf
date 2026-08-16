@@ -147,7 +147,7 @@ class CommandRunner:
         except Exception:
             return 0
 
-    def start_job(self, name: str | None = None) -> list[str]:
+    def start_job(self, name: str | None = None, mutators=()) -> list[str]:
         """
         Het plan bouwen en naar de spooler sturen.
 
@@ -155,6 +155,9 @@ class CommandRunner:
         vrolijk doorheen en meldde "gelukt": de gebruiker drukt op starten, de
         app zegt ja, en er gebeurt niets bij de machine. Dat is de vervelendste
         soort fout — je gaat ernaast staan wachten.
+
+        `mutators` zijn bewerkingen op het gekopieerde plan (tegels, Z-stappen).
+        Zie `_plan_and_spool`.
         """
         elements = self.kernel.elements
         burnable = 0
@@ -173,23 +176,86 @@ class CommandRunner:
                     "'meebranden' uit wordt overgeslagen."
                 ],
             )
-        output = self._plan_and_spool()
+        output = self._plan_and_spool(mutators)
         self._name_job(name, burnable)
         return output
 
     # ------------------------------------------------------ zakken per pass
 
-    def _plan_and_spool(self) -> list[str]:
+    def _plan_and_spool(self, mutators=()) -> list[str]:
         """
-        Het plan bouwen. Met een Z-stap in twee stappen, anders in één.
+        Het plan bouwen. Met bewerkers in twee stappen, anders in één.
 
-        De gewone weg blijft letterlijk één regel — dat pad wordt bij elke job
-        gelopen en verdient geen extra bochten voor een functie die alleen op
-        een GRBL met Z-as iets doet.
+        Een bewerker is een callable die de planstappen krijgt en teruggeeft.
+        De volgorde telt: tegels eerst (klippen en verplaatsen), Z-stappen
+        daarna (de passes uitvouwen) — andersom klip je hetzelfde werk zes keer.
+
+        De gewone weg blijft letterlijk één regel: dat pad wordt bij elke job
+        gelopen en verdient geen extra bochten.
         """
-        if not self._z_stepped_layers():
+        alle = list(mutators)
+        if self._z_stepped_layers():
+            from meerk40t.core.node.util_console import ConsoleOperation
+
+            alle.append(lambda steps: self._with_z_moves(steps, ConsoleOperation))
+        if not alle:
             return self.run(PLAN_AND_SPOOL)
-        return self._plan_with_z_steps()
+        return self._plan_with_mutators(alle)
+
+    def _plan_with_mutators(self, mutators) -> list[str]:
+        """
+        Het plan opbouwen, bewerken, en dan pas afmaken.
+
+        `opt_merge_ops`/`opt_merge_passes` gaan uit zolang wij aan het plan
+        zitten. Met die vlaggen aan plakt de optimalisatie stukken tot één
+        cutcode en schuift consolestappen naar achteren — dan zakt een Z pas
+        als er al gebrand is, en dat merk je aan het werkstuk in plaats van aan
+        het scherm. Het zijn instellingen van de gebruiker, dus ze gaan in een
+        `finally` terug.
+
+        Het plan is een kopie van de boom: `plan copy` roept
+        `copy_children_as_real` aan, dat de ReferenceNodes dereferentieert en de
+        vormen zelf kopieert. Wat hier bewerkt wordt, raakt het ontwerp van de
+        gebruiker dus niet.
+        """
+        root = self.kernel.root
+        root.setting(bool, "opt_merge_ops", True)
+        root.setting(bool, "opt_merge_passes", True)
+        eerder = (root.opt_merge_ops, root.opt_merge_passes)
+        root.opt_merge_ops = False
+        root.opt_merge_passes = False
+        try:
+            output = self.run(PLAN_COPY)
+            self._apply_mutators(mutators)
+            output += self.run(PLAN_REST)
+            return output
+        finally:
+            root.opt_merge_ops, root.opt_merge_passes = eerder
+
+    def _apply_mutators(self, mutators) -> list:
+        """De bewerkers over het gekopieerde plan. Geeft de nieuwe stappen terug."""
+        plan = self.kernel.planner.get_or_make_plan("0")
+        steps = list(plan.plan)
+        for mutator in mutators:
+            steps = list(mutator(steps))
+        plan.plan[:] = steps
+        return steps
+
+    def build_plan(self, mutators=()) -> list:
+        """
+        Het gekopieerde en bewerkte plan, zonder het af te maken.
+
+        Bestaat omdat je er anders niet naar kunt kijken: `blob` vervangt de
+        bewerkingen door één `CutCode`, dus na een volledige `plan`-regel is er
+        geen laag met kinderen meer om iets over vast te stellen. Wat de
+        bewerkers doen is precies wat hier getest hoort te worden, en dit is de
+        enige plek waar dat nog zichtbaar is.
+
+        Draait bewust niet de spooler: dit is de haak voor tests, niet een
+        tweede manier om een job te starten.
+        """
+        self.run(PLAN_COPY)
+        return self._apply_mutators(mutators)
 
     def _z_stepped_layers(self) -> list:
         """
@@ -222,56 +288,6 @@ class CommandRunner:
                 continue
             gevonden.append(operation)
         return gevonden
-
-    def _plan_with_z_steps(self) -> list[str]:
-        """
-        Elke pass een eigen plek in het plan, met een Z-beweging ertussen.
-
-        De engine kan dit niet uit zichzelf: `passes` is bij haar een teller op
-        één cutcode-object (`CutObject.passes`/`burns_done`), en alle passes
-        delen dus één settings-dict — er is geen plek waar pass 2 een andere
-        hoogte kan dragen. Wat er wél is: `util console`-bewerkingen draaien
-        middenin een job, en de GRBL-driver kent `z_move <lengte>`. Door de
-        bewerking in het plan te herhalen met zo'n consolestap ertussen krijg je
-        precies wat LightBurn "Z step per pass" noemt.
-
-        Drie dingen die gemeten zijn en waar het op stukloopt als je ze mist:
-
-        1. **Niet kopiëren.** `copy(op_node)` levert een knoop zónder kinderen
-           op (gemeten: 1 kind vóór, 0 erna). Die kopie brandt niets, en dat
-           merk je pas op materiaal. Dezelfde knoop meerdere keren in de lijst
-           zetten werkt wél: `blob` maakt per plekje verse cutcode.
-        2. **Samenvoegen uit.** Met `opt_merge_ops`/`opt_merge_passes` aan
-           plakt de optimalisatie de drie stukken tot één cutcode en schuift de
-           consolestappen naar áchteren — dan zakt de Z pas als er al gebrand
-           is. Wij zetten ze uit voor deze job en daarna terug.
-        3. **Terug naar het begin.** Na de laatste pass gaat de kop weer
-           omhoog naar de hoogte waarop hij begon. Zonder dat begint de
-           volgende job een paar millimeter te laag, en dat merk je aan het
-           werkstuk in plaats van aan het scherm.
-
-        Het plan is een kopie van de boom (`planner.py:706` kopieert elke
-        bewerking mét kinderen), dus `passes` hier op 1 zetten laat de laag van
-        de gebruiker ongemoeid.
-        """
-        from meerk40t.core.node.util_console import ConsoleOperation
-
-        root = self.kernel.root
-        # Onthouden en terugzetten: dit zijn instellingen van de gebruiker, geen
-        # instellingen van deze job.
-        root.setting(bool, "opt_merge_ops", True)
-        root.setting(bool, "opt_merge_passes", True)
-        eerder = (root.opt_merge_ops, root.opt_merge_passes)
-        root.opt_merge_ops = False
-        root.opt_merge_passes = False
-        try:
-            output = self.run(PLAN_COPY)
-            plan = self.kernel.planner.get_or_make_plan("0")
-            plan.plan[:] = self._with_z_moves(plan.plan, ConsoleOperation)
-            output += self.run(PLAN_REST)
-            return output
-        finally:
-            root.opt_merge_ops, root.opt_merge_passes = eerder
 
     @staticmethod
     def _with_z_moves(steps, console_operation) -> list:
