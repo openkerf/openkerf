@@ -27,14 +27,32 @@ def test_a_plate_that_fits_is_one_tile():
 
 
 def test_a_wide_plate_splits_only_on_the_wide_axis():
-    """900 mm op een bed van 500: opdelen in de breedte, niet in de hoogte."""
+    """
+    900 mm op een bed van 500: opdelen in de breedte, niet in de hoogte.
+
+    Twee tegels, niet drie. Het bruikbare venster is 480 mm, dus twee vensters
+    dekken 900 mm met 60 mm overlap — ruim boven de 25 die gevraagd is. Een
+    derde tegel zou een extra keer verschuiven en uitlijnen betekenen, en elke
+    uitlijning is een kans om het mis te hebben.
+    """
     tiles = tile_layout(900.0, 250.0, 500.0, 300.0, settings())
 
-    assert len(tiles) == 3
+    assert len(tiles) == 2
     assert {t.row for t in tiles} == {0}
-    assert [t.column for t in tiles] == [0, 1, 2]
+    assert [t.column for t in tiles] == [0, 1]
     for tile in tiles:
         assert tile.burn.y0 == 0.0 and tile.burn.y1 == 250.0
+
+
+def test_the_tile_count_is_the_fewest_that_still_overlap_enough():
+    """
+    Het aantal volgt uit één eis: twee opeenvolgende vensters delen minstens
+    `overlap_mm`. Daaruit volgt n ≥ (plaat − overlap) / (venster − overlap), en
+    dat is precies wat er gerekend hoort te worden — niet één meer.
+    """
+    assert len(tile_layout(900.0, 200.0, 500.0, 300.0, settings())) == 2
+    assert len(tile_layout(1000.0, 200.0, 500.0, 300.0, settings())) == 3
+    assert len(tile_layout(1400.0, 200.0, 500.0, 300.0, settings())) == 4
 
 
 def test_the_burn_regions_tile_the_plate_exactly():
@@ -55,16 +73,33 @@ def test_every_tile_fits_the_usable_window():
         assert tile.window.x1 - tile.window.x0 <= 480.0 + 1e-9
 
 
-def test_tiles_are_spread_evenly_instead_of_leaving_a_sliver():
+def test_the_windows_are_spread_evenly_instead_of_leaving_a_sliver():
     """
     'Vol, vol, vol, restje' geeft een laatste tegel waar geen merk in past.
-    Gelijk verdelen maakt de overlap groter dan het minimum, en dat is precies
-    de bedoeling.
+
+    Wat gelijk verdeeld wordt zijn de **vensters**: de plaat schuift elke keer
+    even ver op. De brandgebieden zijn daarmee niet even breed, en dat hoort
+    ook niet — een middelste tegel staat aan twee kanten een halve overlap af
+    en brandt dus minder dan de buitenste. Waar het om gaat is dat er geen
+    strookje overblijft.
     """
     tiles = tile_layout(1000.0, 200.0, 500.0, 300.0, settings())
 
-    breedtes = [t.burn.x1 - t.burn.x0 for t in tiles]
-    assert max(breedtes) - min(breedtes) < 1e-6
+    stappen = [b.window.x0 - a.window.x0 for a, b in zip(tiles, tiles[1:])]
+    assert max(stappen) - min(stappen) < 1e-6
+
+
+def test_no_tile_burns_less_than_the_strip_it_shares():
+    """
+    Een tegel die minder brandt dan de overlap die hij weggeeft, is geen tegel
+    maar een reepje: dan kost hij een verschuiving en een uitlijning voor bijna
+    niets. Nagerekend over plaatmaten van 490 tot 3000 mm is het smalste
+    brandgebied 227,6 mm, ruim boven de overlap.
+    """
+    for plate in (490.0, 700.0, 935.1, 1000.0, 1500.0, 2400.0):
+        tiles = tile_layout(plate, 200.0, 500.0, 300.0, settings())
+        for tile in tiles:
+            assert tile.burn.width >= settings().overlap_mm
 
 
 def test_a_bed_smaller_than_the_overlap_is_refused_with_a_sentence():

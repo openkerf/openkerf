@@ -85,7 +85,7 @@ def _axis(plate: float, bed: float, settings: TilingSettings) -> list[tuple[floa
             "Twee tegels zouden elkaar dan volledig overlappen. Zet de overlap "
             "lager of de marge kleiner."
         )
-    count = math.ceil((plate + settings.overlap_mm) / (usable - settings.overlap_mm))
+    count = math.ceil((plate - settings.overlap_mm) / (usable - settings.overlap_mm))
     step = (plate - usable) / (count - 1)
     return [(i * step, i * step + usable) for i in range(count)]
 
@@ -130,16 +130,11 @@ def _splits(starts: list[float], ends: list[float], plate: float) -> list[float]
     """
     De grenzen van de brandgebieden: 0, de naden, en de plaatmaat.
 
-    De naden worden gelijk verdeeld, zodat geen tegel groter of kleiner is dan
-    een ander. Ze vallen altijd in de overlapzone, dus Taak 2 kan ze daarna
-    binnen die zone verschuiven naar waar ze de minste vormen kruist.
+    De naad valt in het midden van de overlapzone. Taak 2 mag hem daarna binnen
+    die zone verschuiven naar waar hij de minste vormen kruist.
     """
-    if len(starts) == 1:
-        return [0.0, plate]
-
     bounds = [0.0]
-    num_windows = len(starts)
-    for i in range(1, num_windows):
-        bounds.append(i * plate / num_windows)
+    for left, right in zip(range(len(starts) - 1), range(1, len(starts))):
+        bounds.append((starts[right] + ends[left]) / 2)
     bounds.append(plate)
     return bounds
