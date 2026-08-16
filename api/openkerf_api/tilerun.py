@@ -503,6 +503,20 @@ class TileRun:
         return {
             **data,
             "aligned": self._alignment is not None,
+            # De gemeten stand hoort bij de uitlijning en dus bij de staat, niet
+            # alleen bij het antwoord van `align`. Zonder dit verdween "1,2°
+            # scheef · 0,3 mm afwijking" van het scherm bij de eerstvolgende
+            # statusmelding, een paar seconden nadat de gebruiker het had
+            # afgelezen — en dat getal is nu juist zijn bevestiging dat de plaat
+            # goed ligt.
+            "angle_deg": (
+                round(self._alignment.angle_deg, 3) if self._alignment else None
+            ),
+            "distance_error_mm": (
+                round(self._alignment.distance_error_mm, 2)
+                if self._alignment
+                else None
+            ),
             "stale": stale,
             "message": (
                 "Het ontwerp of de plaat is veranderd sinds deze reeks begon. De "
@@ -566,11 +580,9 @@ class TileRun:
         except TilingError as e:
             self._alignment = None
             raise DesignError(str(e)) from e
-        return {
-            **self.state(),
-            "angle_deg": round(self._alignment.angle_deg, 3),
-            "distance_error_mm": round(self._alignment.distance_error_mm, 2),
-        }
+        # `state()` draagt `angle_deg`/`distance_error_mm` nu zelf al, dus dit
+        # is niet langer het enige antwoord dat ze meegeeft.
+        return self.state()
 
     def _marks_for(self, boundary: int) -> tuple:
         for merk in self.layout()["marks"]:

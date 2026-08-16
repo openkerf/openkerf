@@ -18,8 +18,8 @@ export type TileRun = {
 	aligned: boolean;
 	stale: boolean;
 	message: string;
-	angle_deg?: number;
-	distance_error_mm?: number;
+	angle_deg: number | null;
+	distance_error_mm: number | null;
 };
 
 export class TilingStore {

@@ -85,11 +85,21 @@
 			<button class="btn primary" type="button" onclick={hier} disabled={tiling.busy}>
 				Hier ({getikt.length}/{nodig})
 			</button>
+			{#if !eerste && getikt.length > 0}
+				<!-- De aangetikte merken staan alleen in het geheugen van deze
+				     pagina; een refresh kent ze niet meer. De geometrie zelf loopt
+				     geen gevaar, maar iemand die net een tik zette hoort niet
+				     stilzwijgend terug op 0 te komen. -->
+				<p class="nulpunt">
+					Ververs je de pagina, dan begin je met aantikken opnieuw. De
+					merken zelf blijven gewoon staan.
+				</p>
+			{/if}
 		{:else}
 			<p class="uitgelijnd">
 				Uitgelijnd
-				{#if run.angle_deg !== undefined}· {run.angle_deg.toFixed(2)}° scheef{/if}
-				{#if run.distance_error_mm !== undefined}
+				{#if run.angle_deg != null}· {run.angle_deg.toFixed(2)}° scheef{/if}
+				{#if run.distance_error_mm != null}
 					· {run.distance_error_mm.toFixed(1)} mm afwijking
 				{/if}
 			</p>
