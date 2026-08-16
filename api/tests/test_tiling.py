@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from openkerf_api.tiling import Rect, TilingError, TilingSettings, tile_layout
+from openkerf_api.tiling import Rect, TilingError, TilingSettings, best_split, tile_layout
 
 
 def settings(**kw):
@@ -107,3 +107,38 @@ def test_a_bed_smaller_than_the_overlap_is_refused_with_a_sentence():
         tile_layout(900.0, 200.0, 40.0, 300.0, settings(overlap_mm=25.0))
 
     assert "overlap" in str(fout.value).lower()
+
+
+def test_the_seam_falls_in_empty_space_when_there_is_any():
+    """
+    Een naad door de leegte zie je niet terug op het werkstuk. Vormen van
+    100-140 en 180-220: tussen 140 en 180 kruist hij niets.
+    """
+    x = best_split(120.0, 200.0, [(100.0, 140.0), (180.0, 220.0)])
+
+    assert 140.0 <= x <= 180.0
+
+
+def test_the_seam_takes_the_least_bad_place_when_everything_is_covered():
+    """
+    Alles bedekt: dan de stand die de minste vormen doormidden snijdt.
+
+    De vormen lopen hier tot buiten de zone door, want anders is de rand van de
+    zone zelf al kruisingsvrij — een vorm die precies op de naad begint wordt
+    niet doorgesneden, hij wordt geraakt. Dat is geen kunstgreep in de test maar
+    de reden dat de randen van de zone gewoon kandidaat mogen zijn: de hele
+    overlapzone is vanaf beide tegels bereikbaar.
+    """
+    spans = [(-10.0, 110.0), (-10.0, 40.0), (-10.0, 40.0)]
+
+    x = best_split(0.0, 100.0, spans)
+
+    def kruisingen(punt: float) -> int:
+        return sum(1 for a, b in spans if a < punt < b)
+
+    assert kruisingen(x) == 1
+    assert kruisingen(x) < kruisingen(0.0)
+
+
+def test_without_shapes_the_seam_falls_in_the_middle():
+    assert best_split(100.0, 200.0, []) == pytest.approx(150.0)

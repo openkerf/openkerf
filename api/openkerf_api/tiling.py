@@ -138,3 +138,32 @@ def _splits(starts: list[float], ends: list[float], plate: float) -> list[float]
         bounds.append((starts[right] + ends[left]) / 2)
     bounds.append(plate)
     return bounds
+
+
+def best_split(low_mm: float, high_mm: float, spans) -> float:
+    """
+    Waar de naad tussen twee tegels het beste valt.
+
+    `spans` zijn de uitgestrektheden van de vormen langs de deelas. Een vorm
+    telt als doorsneden zodra de naad er strikt binnen valt. Kandidaten zijn de
+    randen van de overlapzone, het midden, en net naast elke vormgrens die in
+    de zone ligt — meer standen dan dat maken het antwoord niet beter.
+
+    Gelijkspel gaat naar de stand die het dichtst bij het midden ligt: dat houdt
+    de tegels zo gelijk mogelijk van grootte.
+    """
+    middle = (low_mm + high_mm) / 2
+    if not spans:
+        return middle
+
+    nudge = 0.01
+    candidates = {low_mm, high_mm, middle}
+    for a, b in spans:
+        for edge in (a - nudge, b + nudge):
+            if low_mm <= edge <= high_mm:
+                candidates.add(edge)
+
+    def crossings(x: float) -> int:
+        return sum(1 for a, b in spans if a < x < b)
+
+    return min(sorted(candidates), key=lambda x: (crossings(x), abs(x - middle)))
