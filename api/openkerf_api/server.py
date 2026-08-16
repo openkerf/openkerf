@@ -383,6 +383,21 @@ class ApiServer:
         except Exception:  # pragma: no cover - status mag nooit omvallen
             return None
 
+    def _status_payload(self) -> dict:
+        """
+        Eén snapshot, overal hetzelfde.
+
+        `reader.snapshot()` alleen was de kernel- en devicestatus; de
+        tegelreeks ontbrak op de WebSocket (`/api/ws`, gebruikt door de
+        lopende app) terwijl `/api/status` hem al meestuurde. Bovenbalk,
+        canvas en telefoonweergave lezen alle drie de live socket, dus zonder
+        dit veld hier kwam een lopende tegelreeks daar nooit aan — precies wat
+        de docstring van `_tiling_state` beloofde te voorkomen.
+        """
+        payload = self.reader.snapshot()
+        payload["tiling"] = self._tiling_state()
+        return payload
+
     def build_app(self):
         from contextlib import asynccontextmanager
 
@@ -454,9 +469,7 @@ class ApiServer:
 
         @app.get("/api/status")
         def status():
-            payload = self.reader.snapshot()
-            payload["tiling"] = self._tiling_state()
-            return payload
+            return self._status_payload()
 
         @app.get("/api/devices")
         def devices():
@@ -2115,7 +2128,7 @@ class ApiServer:
                 )
                 await websocket.send_text(
                     json.dumps(
-                        {"type": "snapshot", "data": self.reader.snapshot()},
+                        {"type": "snapshot", "data": self._status_payload()},
                         default=str,
                     )
                 )
@@ -2148,7 +2161,7 @@ class ApiServer:
             await asyncio.sleep(HEARTBEAT_SECONDS)
             if self.bridge.client_count:
                 await self.bridge.broadcast(
-                    {"type": "snapshot", "data": self.reader.snapshot()}
+                    {"type": "snapshot", "data": self._status_payload()}
                 )
 
     # ------------------------------------------------------------- lifecycle

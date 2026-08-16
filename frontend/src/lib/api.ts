@@ -1,5 +1,7 @@
 /** Types mirroring the openkerf-api snapshot (api/openkerf_api/status.py). */
 
+import type { TileRun } from './tiling.svelte';
+
 export type Position = {
 	native: [number, number] | null;
 	mm: [number, number] | null;
@@ -94,6 +96,8 @@ export type Capabilities = {
 export type Snapshot = {
 	kernel: { name: string | null; version: string | null };
 	devices: Device[];
+	/** De lopende tegelreeks, of niets. Zie `$lib/tiling.svelte` (`TileRun`). */
+	tiling?: TileRun | null;
 };
 
 export type SignalEvent = {
