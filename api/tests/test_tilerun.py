@@ -87,6 +87,32 @@ def test_a_run_survives_a_restart_but_its_alignment_does_not(kernel, tmp_path):
     assert opnieuw.state()["aligned"] is False
 
 
+def test_the_fingerprint_is_the_same_in_a_fresh_process(kernel, tmp_path):
+    """
+    De vingerafdruk gaat naar schijf en wordt na een herstart vergeleken, dus
+    hij moet buiten dit proces dezelfde waarde hebben.
+
+    Dat klinkt vanzelfsprekend en is het niet: Python zout de hash van strings
+    per proces, dus een vingerafdruk uit `hash()` komt na elke herstart anders
+    terug en verklaart iedere hervatte reeks ongeldig — precies het geval
+    waarvoor de reeks bewaard wordt. Een test die twee servers in hetzelfde
+    proces maakt ziet daar niets van; alleen een echt tweede proces wel.
+    """
+    import subprocess
+    import sys
+
+    tekst = "|".join(["800.0x150.0", '{"enabled": true}', "elem rect:10-10-40-40"])
+    script = "import hashlib;" f"print(hashlib.sha1({tekst!r}.encode()).hexdigest())"
+    eerste = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True
+    ).stdout
+    tweede = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True
+    ).stdout
+
+    assert eerste == tweede != ""
+
+
 def test_changing_the_design_invalidates_a_running_series(kernel, tmp_path):
     """
     Half het oude ontwerp en half het nieuwe branden is de duurste fout die dit

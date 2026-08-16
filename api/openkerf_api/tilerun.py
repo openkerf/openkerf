@@ -451,7 +451,17 @@ class TileRun:
 
         Genoeg om te zien dát er iets veranderd is; niet bedoeld om te zeggen
         wát. Bij twijfel ongeldig verklaren is hier het goedkope antwoord.
+
+        **Met sha1 en nadrukkelijk niet met `hash()`.** Python zout de hash van
+        strings per proces, dus een `hash()` die naar schijf gaat, komt na een
+        herstart gegarandeerd anders terug — en dan is élke hervatte reeks
+        ongeldig, precies het geval waarvoor dit bestand bestaat. Dat is niet
+        te zien in een test die twee servers in hetzelfde proces maakt; alleen
+        een echte herstart laat het zien. Gemeten: dezelfde tuple gaf
+        1444352915328149249 en 5992177919278113137 in twee processen.
         """
+        import hashlib
+
         stukken = [
             f"{sheet['width_mm']}x{sheet['height_mm']}",
             json.dumps(sheet.get("tiling"), sort_keys=True),
@@ -462,13 +472,29 @@ class TileRun:
                 f"{node.type}:"
                 + ("-".join(f"{v:.1f}" for v in bounds) if bounds else "?")
             )
-        return str(hash(tuple(stukken)))
+        return hashlib.sha1("|".join(stukken).encode()).hexdigest()
 
     def state(self) -> dict | None:
         data = self._read()
         if data is None:
             return None
-        sheet = self._sheet()
+        try:
+            sheet = self._sheet()
+        except DesignError:
+            # Het vel is weggegooid of er is er geen actief. De reeks is dan
+            # niet stuk, hij is verlopen — en dat hoort hier als staat terug te
+            # komen, niet als fout. Anders krijgt de gebruiker "er is geen
+            # actief vel" te zien op het moment dat hij op branden drukt, en dat
+            # zegt niets over de reeks waar hij middenin zit.
+            return {
+                **data,
+                "aligned": False,
+                "stale": True,
+                "message": (
+                    "Het vel waar deze tegelreeks bij hoort, is er niet meer of "
+                    "staat niet meer aan. Kies dat vel weer, of stop de reeks."
+                ),
+            }
         stale = data.get("sheet_id") != sheet["id"] or data.get(
             "fingerprint"
         ) != self._fingerprint(sheet)
@@ -626,16 +652,22 @@ class TileRun:
             (burn.x1, burn.y1),
         ]
         hoek = math.radians(mutator.alignment.angle_deg)
+        draai = complex(math.cos(hoek), math.sin(hoek))
+        # Hoe ver hij eroverheen steekt, aan wélke kant dan ook. Alleen naar de
+        # onderkant kijken gaf "0 mm buiten het bed" zodra de tegel er rechts of
+        # onderlangs uitliep — een melding die de gebruiker niets vertelt over
+        # het enige wat hij moet weten: hoeveel het scheelt.
+        buiten = 0.0
         for x, y in hoeken:
-            draai = complex(x, y) * complex(math.cos(hoek), math.sin(hoek))
-            mx = draai.real + mutator.alignment.dx_mm
-            my = draai.imag + mutator.alignment.dy_mm
-            if not (0 <= mx <= bed[0] and 0 <= my <= bed[1]):
-                raise DesignError(
-                    f"Na de correctie valt deze tegel {abs(min(mx, my, 0)):.0f} mm "
-                    "buiten het bed. Leg de plaat rechter of iets verder naar "
-                    "binnen en tik opnieuw aan."
-                )
+            punt = complex(x, y) * draai
+            mx = punt.real + mutator.alignment.dx_mm
+            my = punt.imag + mutator.alignment.dy_mm
+            buiten = max(buiten, -mx, -my, mx - bed[0], my - bed[1])
+        if buiten > 0:
+            raise DesignError(
+                f"Na de correctie valt deze tegel {buiten:.1f} mm buiten het bed. "
+                "Leg de plaat rechter of iets verder naar binnen en tik opnieuw aan."
+            )
 
     def advance(self) -> dict:
         data = self._read()
