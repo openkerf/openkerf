@@ -26,6 +26,13 @@ from .edits import DesignError, _finite, _positive
 
 MAX_SHEETS = 20
 
+DEFAULT_TILING = {
+    "enabled": False,
+    "margin_mm": 10.0,
+    "overlap_mm": 25.0,
+    "marker_size_mm": 8.0,
+}
+
 
 class Sheets:
     def __init__(self, kernel, drawing, document, directory: Path | str):
@@ -49,6 +56,8 @@ class Sheets:
             data = json.loads(self.index_path.read_text())
         except (OSError, ValueError):
             return []
+        for sheet in data if isinstance(data, list) else []:
+            sheet.setdefault("tiling", dict(DEFAULT_TILING))
         return data if isinstance(data, list) else []
 
     def _write(self, sheets: list[dict]) -> None:
@@ -100,6 +109,7 @@ class Sheets:
                     "height_mm": height,
                     "material_id": None,
                     "thickness_mm": None,
+                    "tiling": dict(DEFAULT_TILING),
                 }
             ]
             self._write(sheets)
@@ -192,6 +202,7 @@ class Sheets:
             "height_mm": self._side(height_mm, bed_height, "height_mm"),
             "material_id": material_id,
             "thickness_mm": self._thickness(thickness_mm),
+            "tiling": dict(DEFAULT_TILING),
         }
         sheets.append(sheet)
         self._write(sheets)
@@ -221,6 +232,35 @@ class Sheets:
             raise DesignError(f"{label} moet tussen 5 en 5000 mm liggen.")
         return round(size, 1)
 
+    def _tiling(self, huidig, gevraagd) -> dict:
+        """
+        De tegelinstellingen van dit vel, gecontroleerd op samenhang.
+
+        Marge, overlap en markergrootte hangen samen: past er geen merk in de
+        overlapstrook, dan is er niets om op uit te lijnen. Dat hoort hier te
+        stuiten en niet pas bij het branden — daar sta je al met een plaat in
+        de machine.
+        """
+        blok = dict(DEFAULT_TILING)
+        blok.update(huidig or {})
+        if not isinstance(gevraagd, dict):
+            raise DesignError("tiling moet een blokje instellingen zijn.")
+        blok["enabled"] = bool(gevraagd.get("enabled", blok["enabled"]))
+        for sleutel in ("margin_mm", "overlap_mm", "marker_size_mm"):
+            if gevraagd.get(sleutel) is not None:
+                blok[sleutel] = round(_positive(gevraagd[sleutel], sleutel), 1)
+
+        speling = 4.0
+        if blok["overlap_mm"] < blok["marker_size_mm"] + speling:
+            raise DesignError(
+                f"Een uitlijnmerk is {blok['marker_size_mm']:g} mm groot en past niet "
+                f"in een overlap van {blok['overlap_mm']:g} mm. Maak de overlap "
+                f"minstens {blok['marker_size_mm'] + speling:g} mm."
+            )
+        if blok["margin_mm"] > 100:
+            raise DesignError("Een marge van meer dan 100 mm laat geen bed over.")
+        return blok
+
     def update(self, sheet_id: str, **fields) -> dict:
         sheets = self._ensure()
         sheet = self._find(sheets, sheet_id)
@@ -236,6 +276,8 @@ class Sheets:
             sheet["material_id"] = fields["material_id"]
         if "thickness_mm" in fields:
             sheet["thickness_mm"] = self._thickness(fields["thickness_mm"])
+        if fields.get("tiling") is not None:
+            sheet["tiling"] = self._tiling(sheet.get("tiling"), fields["tiling"])
         self._write(sheets)
         return self.state()
 

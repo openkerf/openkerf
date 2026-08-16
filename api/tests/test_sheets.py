@@ -326,3 +326,42 @@ def test_each_sheet_keeps_its_own_material(client):
 
     assert [s["material_id"] for s in sheets] == [berken["id"], acryl["id"]]
     assert [s["thickness_mm"] for s in sheets] == [3, 5]
+
+
+# -------------------------------------------------------------------- tegels
+
+
+def test_a_sheet_starts_without_tiling(client):
+    """Tegels zijn een uitzondering, geen standaardwerkwijze."""
+    vel = client.get("/api/sheets").json()["sheets"][0]
+
+    assert vel["tiling"]["enabled"] is False
+
+
+def test_an_overlap_too_small_for_a_mark_is_refused_at_the_setting(client):
+    """
+    Niet pas bij het branden weigeren: dan sta je al met een plaat in de
+    machine.
+    """
+    vel = client.get("/api/sheets").json()["sheets"][0]
+
+    antwoord = client.patch(
+        f"/api/sheets/{vel['id']}",
+        json={"tiling": {"enabled": True, "overlap_mm": 6.0, "marker_size_mm": 8.0}},
+    )
+
+    assert antwoord.status_code == 409
+    assert "merk" in antwoord.json()["detail"]
+
+
+def test_tiling_settings_survive_a_reload(client):
+    vel = client.get("/api/sheets").json()["sheets"][0]
+    client.patch(
+        f"/api/sheets/{vel['id']}",
+        json={"tiling": {"enabled": True, "overlap_mm": 30.0}},
+    )
+
+    opnieuw = client.get("/api/sheets").json()["sheets"][0]
+
+    assert opnieuw["tiling"]["enabled"] is True
+    assert opnieuw["tiling"]["overlap_mm"] == 30.0
