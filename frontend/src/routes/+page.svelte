@@ -710,6 +710,7 @@
 			}}
 			cameraSrc={camera.src}
 			cameraOpacity={camera.opacity}
+			{tiling}
 			sheet={sheets.active
 				? {
 						name: sheets.active.name,

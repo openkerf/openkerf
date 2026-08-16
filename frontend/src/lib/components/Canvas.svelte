@@ -5,6 +5,7 @@
 	import { nulpunt } from '$lib/control.svelte';
 	import type { DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
+	import type { TilingStore, Tile } from '$lib/tiling.svelte';
 	import LagenPalet from './LagenPalet.svelte';
 	import {
 		omgevingstrefpunten,
@@ -29,7 +30,8 @@
 		onPath,
 		cameraSrc = null,
 		cameraOpacity = 0.6,
-		sheet = null
+		sheet = null,
+		tiling = null
 	}: {
 		/** Waar de muis staat, in mm op het bed. `null` als hij weg is. */
 		onPointerMm?: (punt: { x: number; y: number } | null) => void;
@@ -50,6 +52,9 @@
 		cameraOpacity?: number;
 		/** Het actieve vel: het stuk materiaal binnen het bed. */
 		sheet?: { name: string; width: number; height: number } | null;
+		/** Tegelopdeling en lopende reeks — voor de tekening en het aanbod
+		 *  zodra het vel groter is dan het bed. */
+		tiling?: TilingStore | null;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -393,6 +398,51 @@
 		return () => {
 			cancelled = true;
 		};
+	});
+
+	// ── Tegels: plaat groter dan bed (Task 15) ─────────────────────────────────
+	//
+	// 'Valt buiten het bed' is bij een plaat die zélf groter is dan het bed geen
+	// fout maar een werkwijze — dat is precies waarvoor tegelen bestaat. Dezelfde
+	// vergelijking als `buitenstaanders` hieronder, maar dan op het vel zelf in
+	// plaats van op een vorm erin.
+	let plaatTeGroot = $derived(
+		Boolean(sheet && buitenKader({ x: 0, y: 0, width: sheet.width, height: sheet.height }, bed))
+	);
+
+	// De opdeling is een functie van de plaatmaat, de bedmaat en het ontwerp
+	// (de naad schuift naar de minste kruisingen), dus hij moet net zo vaak
+	// opnieuw komen als de tekening zelf.
+	$effect(() => {
+		void design.revision;
+		void sheet;
+		tiling?.load();
+	});
+
+	let tegelLayout = $derived(tiling?.layout ?? null);
+	let huidigeTegel = $derived(tiling?.run?.current ?? -1);
+	let klareTegels = $derived(new Set(tiling?.run?.done ?? []));
+
+	let tegelPositie = $derived.by(() => {
+		const m = new Map<string, Tile>();
+		for (const t of tegelLayout?.tiles ?? []) m.set(`${t.row},${t.column}`, t);
+		return m;
+	});
+
+	/** Naadlijnen: één segment per rij- of kolomgrens. De opdeling is een
+	 *  regelmatig rooster, dus de segmenten van opeenvolgende rijen (of
+	 *  kolommen) sluiten aaneen tot dezelfde doorlopende lijn. */
+	let tegelNaden = $derived.by(() => {
+		const lijnen: { x1: number; y1: number; x2: number; y2: number }[] = [];
+		for (const t of tegelLayout?.tiles ?? []) {
+			const rechts = tegelPositie.get(`${t.row},${t.column + 1}`);
+			if (rechts)
+				lijnen.push({ x1: t.burn.x1_mm, y1: t.burn.y0_mm, x2: t.burn.x1_mm, y2: t.burn.y1_mm });
+			const onder = tegelPositie.get(`${t.row + 1},${t.column}`);
+			if (onder)
+				lijnen.push({ x1: t.burn.x0_mm, y1: t.burn.y1_mm, x2: t.burn.x1_mm, y2: t.burn.y1_mm });
+		}
+		return lijnen;
 	});
 
 	// De pen: klikken zet een punt, Enter of een klik op het beginpunt sluit af.
@@ -1401,6 +1451,57 @@
 					/>
 				{/if}
 
+				<!-- De tegelopdeling (Task 15): naden als lijn, de tegel die aan de
+				     beurt is in gewone kleur, de rest gedimd, klare tegels iets minder
+				     gedimd dan wat nog komt, en de merken als cirkel-met-kruis. Zo
+				     zie je in één blik wat er al ligt en wat er nog komt. Alleen bij
+				     twee of meer tegels: bij één tegel is er niets op te delen. -->
+				{#if tegelLayout && tegelLayout.tiles.length > 1}
+					<g class="tegels" aria-hidden="true">
+						{#each tegelLayout.tiles as tegel (tegel.index)}
+							{#if tegel.index !== huidigeTegel}
+								<rect
+									class="tegel-vlak"
+									class:tegel-klaar={klareTegels.has(tegel.index)}
+									x={tegel.burn.x0_mm}
+									y={tegel.burn.y0_mm}
+									width={tegel.burn.x1_mm - tegel.burn.x0_mm}
+									height={tegel.burn.y1_mm - tegel.burn.y0_mm}
+								/>
+							{/if}
+						{/each}
+						{#each tegelNaden as naad, i (i)}
+							<line
+								class="tegel-naad"
+								x1={naad.x1}
+								y1={naad.y1}
+								x2={naad.x2}
+								y2={naad.y2}
+								vector-effect="non-scaling-stroke"
+							/>
+						{/each}
+						{#each tegelLayout.marks as merk (merk.boundary)}
+							{#each merk.points as punt, i (i)}
+								<g class="tegel-merk">
+									<circle cx={punt.x_mm} cy={punt.y_mm} r={4 * mmPerPx} />
+									<line
+										x1={punt.x_mm - 4 * mmPerPx}
+										y1={punt.y_mm}
+										x2={punt.x_mm + 4 * mmPerPx}
+										y2={punt.y_mm}
+									/>
+									<line
+										x1={punt.x_mm}
+										y1={punt.y_mm - 4 * mmPerPx}
+										x2={punt.x_mm}
+										y2={punt.y_mm + 4 * mmPerPx}
+									/>
+								</g>
+							{/each}
+						{/each}
+					</g>
+				{/if}
+
 				<!-- Het ontwerp. Eén schaaltransform rekent Tats om naar mm; de
 				     paddata zelf blijft onaangeroerd zoals de engine hem gaf. -->
 				{#if design.design}
@@ -2093,9 +2194,26 @@
 		>
 	</p>
 {/if}
-{#if buitenBed || buitenVel}
+{#if plaatTeGroot || buitenBed || buitenVel}
 	<div class="buiten-strook" role="status">
-		{#if buitenBed}
+		{#if plaatTeGroot}
+			<!-- Task 15: dit is bij een plaat die zélf groter is dan het bed geen
+			     fout maar een werkwijze — de melding wordt dan het aanbod om in
+			     tegels te branden, in plaats van de gewone "valt buiten het
+			     bed"-regel (die zou hier toch op bijna elke vorm afgaan). -->
+			<span class="regel aanbod">
+				<span class="teken" aria-hidden="true">!</span>
+				<span>Deze plaat is groter dan het bed.</span>
+				<button
+					class="btn subtle"
+					type="button"
+					disabled={tiling?.busy}
+					onclick={() => tiling?.start()}
+				>
+					In tegels branden?
+				</button>
+			</span>
+		{:else if buitenBed}
 			<span class="regel bedrand">
 				<span class="teken" aria-hidden="true">!</span>
 				<span
@@ -2430,6 +2548,17 @@
 		background: var(--warn-solid);
 		color: var(--void);
 	}
+	/* Task 15: dit is geen fout maar een aanbod, dus het accent in plaats van
+	   het gevaar- of waarschuwingsrood, en een knop erbij in plaats van alleen
+	   een zin. */
+	.buiten-strook .regel.aanbod {
+		align-items: center;
+		border-left-color: var(--accent);
+	}
+	.buiten-strook .regel.aanbod .teken {
+		background: var(--accent);
+		color: var(--on-color);
+	}
 	.head line {
 		stroke: var(--accent);
 		stroke-width: 1;
@@ -2457,6 +2586,42 @@
 		stroke-opacity: 0.38;
 		stroke-linejoin: round;
 		stroke-linecap: round;
+	}
+	/* De tegelopdeling (Task 15). De tegel die aan de beurt is krijgt geen vlak
+	   — die staat er al gewoon, in zijn eigen laagkleuren. De rest wordt met
+	   een wasachtige vlak in de bedkleur gedempt: nog te zien, niet aan te zien
+	   voor waar de kop nu is. Een afgevinkte tegel is iets minder gedimd dan
+	   wat nog moet komen, zodat "al gebrand" en "komt nog" ook zonder de
+	   stappenlijst uit elkaar te houden zijn. */
+	.tegel-vlak {
+		fill: color-mix(in oklab, var(--bed) 62%, transparent);
+		pointer-events: none;
+	}
+	.tegel-vlak.tegel-klaar {
+		fill: color-mix(in oklab, var(--bed) 82%, transparent);
+	}
+	.tegel-naad {
+		stroke: var(--text-2);
+		stroke-width: 1.4;
+		stroke-dasharray: 6 4;
+		stroke-opacity: 0.7;
+		pointer-events: none;
+	}
+	.tegel-merk {
+		pointer-events: none;
+	}
+	.tegel-merk circle {
+		fill: none;
+		stroke: var(--text-1);
+		stroke-width: 1.4;
+		stroke-opacity: 0.75;
+		vector-effect: non-scaling-stroke;
+	}
+	.tegel-merk line {
+		stroke: var(--text-1);
+		stroke-width: 1.4;
+		stroke-opacity: 0.75;
+		vector-effect: non-scaling-stroke;
 	}
 	/* Het verse stuk in het accent: daar is de machine nu bezig, en dat is het
 	   enige stuk waarvan je zeker weet dat het net gebeurd is. */

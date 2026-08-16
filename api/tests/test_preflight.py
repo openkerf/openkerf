@@ -427,3 +427,20 @@ def test_a_layer_that_does_burn_keeps_its_estimate(client):
 
     assert schatting["seconds"] > 0
     assert all(l["burns"] for l in schatting["layers"])
+
+
+def test_a_plate_bigger_than_the_bed_is_offered_tiles_instead_of_an_error(client):
+    """
+    'Valt buiten het bed' is bij een plaat die zélf groter is dan het bed geen
+    fout maar een werkwijze. De melding hoort de weg naar binnen te zijn.
+    """
+    vel = client.get("/api/sheets").json()["sheets"][0]
+    client.patch(f"/api/sheets/{vel['id']}", json={"width_mm": 900.0, "height_mm": 250.0})
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 600, "y_mm": 40, "width_mm": 40, "height_mm": 40},
+    )
+
+    verslag = client.get("/api/job/layers").json()
+
+    assert verslag["bounds"]["tiling_offered"] is True
