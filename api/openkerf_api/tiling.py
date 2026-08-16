@@ -296,3 +296,93 @@ def alignment_from_corner(plate_corner: Point, measured: Point) -> Alignment:
         dy_mm=measured.y_mm - plate_corner.y_mm,
         distance_error_mm=0.0,
     )
+
+
+#: De segmentsoorten die echte geometrie dragen. De rest (einde, nop, punt)
+#: heeft geen lengte en hoort niet in een geklipt resultaat.
+def _dragende_soorten():
+    from meerk40t.core.geomstr import TYPE_ARC, TYPE_CUBIC, TYPE_LINE, TYPE_QUAD
+
+    return (TYPE_LINE, TYPE_QUAD, TYPE_CUBIC, TYPE_ARC)
+
+
+def _rand_segmenten(rect_units: Rect):
+    """De vier randen van het klipvenster, elk als los lijnsegment."""
+    from meerk40t.core.geomstr import Geomstr
+
+    hoeken = (
+        (complex(rect_units.x0, rect_units.y0), complex(rect_units.x1, rect_units.y0)),
+        (complex(rect_units.x1, rect_units.y0), complex(rect_units.x1, rect_units.y1)),
+        (complex(rect_units.x1, rect_units.y1), complex(rect_units.x0, rect_units.y1)),
+        (complex(rect_units.x0, rect_units.y1), complex(rect_units.x0, rect_units.y0)),
+    )
+    randen = Geomstr()
+    for begin, eind in hoeken:
+        randen.line(begin, eind)
+        randen.end()
+    return randen
+
+
+def clip_geometry(geom, rect_units: Rect):
+    """
+    De geometrie die binnen dit brandgebied valt, als nieuwe Geomstr.
+
+    Elk segment wordt gesplitst op zijn snijpunten met de vier vensterranden,
+    en van de stukken houden we wat met zijn midden binnen ligt. Splitsen
+    gebeurt op de parameter (`Geomstr.split`), dus **een boog blijft een boog**
+    — er wordt niet geïnterpoleerd, en dat is te zien aan het werkstuk.
+
+    `rect_units` is in engine-eenheden, niet in millimeters: het klippen gebeurt
+    in dezelfde ruimte als de geometrie. Het origineel wordt niet aangeraakt.
+
+    **Waarom niet `geomstr.Clip`, die dit lijkt te doen?** Omdat hij op bogen
+    stukloopt, en dat is gemeten:
+
+    1. `Clip.inside` berekent alle middens in één keer met
+       `position(slice(...), 0.5)`. Die batchweg loopt via
+       `Geomstr._arc_position` (`geomstr.py:5784`), waar `self._arc_position(line, ...)`
+       staat in plaats van `_line` — oneindige recursie zodra er twee of meer
+       bogen in zitten. Op een gewone cirkel: `RecursionError`.
+    2. `Clip.polycut` laat een segment vallen: vier kwartbogen erin, drie eruit,
+       en de verdwenen boog kruiste de grens niet eens.
+
+    Upstream merkt het niet omdat hun eigen `Clip`-test alleen lijnen klipt. Wij
+    wijzigen niets in `meerk40t/`; hier staat de weg eromheen, en die is voor ons
+    geval ook eenvoudiger: ons venster is altijd een asgerichte rechthoek, dus
+    "ligt dit erbinnen" is vier vergelijkingen in plaats van een punt-in-veelhoek.
+    """
+    from meerk40t.core.geomstr import Geomstr
+
+    randen = _rand_segmenten(rect_units)
+    dragend = _dragende_soorten()
+
+    # Eerst alle stukken verzamelen, dan pas filteren: het midden van een stuk
+    # is alleen te vragen aan een Geomstr die het stuk al bevat.
+    stukken = Geomstr()
+    for index in range(geom.index):
+        if int(geom.segments[index][2].real) not in dragend:
+            continue
+        snijpunten = set()
+        for rand in range(randen.index):
+            if int(randen.segments[rand][2].real) not in dragend:
+                continue
+            for t, _ander in geom.intersections(index, randen.segments[rand]):
+                # De uiteinden zelf zijn geen splitsing: daar houdt het segment
+                # toch al op, en splitsen op 0 of 1 levert een leeg stuk.
+                if 1e-9 < float(t) < 1 - 1e-9:
+                    snijpunten.add(round(float(t), 9))
+        if snijpunten:
+            for stuk in geom.split(index, sorted(snijpunten)):
+                stukken.append_segment(*stuk)
+        else:
+            stukken.append_segment(*geom.segments[index])
+
+    binnen = Geomstr()
+    for index in range(stukken.index):
+        midden = stukken.position(index, 0.5)
+        if (
+            rect_units.x0 <= midden.real <= rect_units.x1
+            and rect_units.y0 <= midden.imag <= rect_units.y1
+        ):
+            binnen.append_segment(*stukken.segments[index])
+    return binnen

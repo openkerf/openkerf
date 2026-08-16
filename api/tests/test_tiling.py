@@ -8,6 +8,7 @@ die je op materiaal betaalt, dus het is het deel dat volledig getest is.
 import math
 
 import pytest
+from meerk40t.core.geomstr import Geomstr
 
 from openkerf_api.tiling import (
     Alignment,
@@ -18,6 +19,7 @@ from openkerf_api.tiling import (
     alignment,
     alignment_from_corner,
     best_split,
+    clip_geometry,
     marker_spots,
     tile_layout,
 )
@@ -261,3 +263,67 @@ def test_the_first_tile_aligns_on_the_plate_corner_without_an_angle():
     assert uit == Alignment(
         angle_deg=0.0, dx_mm=25.0, dy_mm=15.0, distance_error_mm=0.0
     )
+
+
+def _length(geom) -> float:
+    return sum(abs(geom.length(i)) for i in range(geom.index))
+
+
+def test_a_line_across_the_seam_is_cut_in_two_without_losing_length():
+    """Samen even lang als het origineel: niets dubbel, niets kwijt."""
+    lijn = Geomstr()
+    lijn.line(complex(0, 50), complex(200, 50))
+
+    links = clip_geometry(lijn, Rect(0, 0, 100, 100))
+    rechts = clip_geometry(lijn, Rect(100, 0, 200, 100))
+
+    assert _length(links) == pytest.approx(100.0, rel=1e-3)
+    assert _length(rechts) == pytest.approx(100.0, rel=1e-3)
+
+
+def test_the_original_geometry_is_left_alone():
+    """Het ontwerp van de gebruiker mag door het klippen niet veranderen."""
+    lijn = Geomstr()
+    lijn.line(complex(0, 50), complex(200, 50))
+    voor = lijn.index
+
+    clip_geometry(lijn, Rect(0, 0, 100, 100))
+
+    assert lijn.index == voor
+
+
+def test_an_arc_across_the_seam_stays_an_arc():
+    """
+    Dit pint de aanname vast waar het hele ontwerp op rust: splitsen gebeurt op
+    de parameter, er wordt niet geïnterpoleerd. Een cirkel die de naad kruist
+    mag geen veelhoek worden — dat zou je op het werkstuk zien.
+    """
+    from meerk40t.core.geomstr import TYPE_ARC
+
+    cirkel = Geomstr.circle(60, 100, 50)
+
+    geklipt = clip_geometry(cirkel, Rect(0, -100, 100, 200))
+
+    soorten = {int(geklipt.segments[i][2].real) for i in range(geklipt.index)}
+    assert TYPE_ARC in soorten
+
+
+def test_a_circle_split_in_two_keeps_all_of_its_length():
+    """
+    De regressietest op de reden dat we `geomstr.Clip` niet gebruiken: die liet
+    een kwartboog vallen die de grens niet eens kruiste, en dat is precies de
+    fout die je pas op materiaal ziet — een cirkel met een hap eruit.
+    """
+    cirkel = Geomstr.circle(60, 100, 50)
+
+    links = clip_geometry(cirkel, Rect(0, -100, 100, 200))
+    rechts = clip_geometry(cirkel, Rect(100, -100, 200, 200))
+
+    assert _length(links) + _length(rechts) == pytest.approx(_length(cirkel), rel=1e-6)
+
+
+def test_geometry_entirely_outside_comes_back_empty():
+    lijn = Geomstr()
+    lijn.line(complex(500, 50), complex(600, 50))
+
+    assert clip_geometry(lijn, Rect(0, 0, 100, 100)).index == 0
