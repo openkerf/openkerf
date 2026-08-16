@@ -1571,11 +1571,6 @@ class Drawing:
                 "y_mm": round(werk["y_mm"] + oy, 2),
             }
 
-        # Een plaat die zelf groter is dan het bed is geen fout maar een
-        # werkwijze: dan is 'valt buiten het bed' de weg naar de tegels, niet
-        # een reden om te stoppen.
-        te_groot = bool(vel and bed and (vel[0] > bed[0] or vel[1] > bed[1]))
-
         return {
             "bed": None if not bed else {"width_mm": round(bed[0], 2), "height_mm": round(bed[1], 2)},
             "sheet": None if not vel else {"width_mm": vel[0], "height_mm": vel[1]},
@@ -1586,7 +1581,6 @@ class Drawing:
             "outside_sheet": len(buiten_vel),
             "outside_bed_ids": buiten_bed,
             "outside_sheet_ids": buiten_vel,
-            "tiling_offered": te_groot,
         }
 
     @classmethod
