@@ -11,10 +11,11 @@
 	 * onthouden (de huidige kopstand uit de status), en pas de tweede tik gaat
 	 * naar de server, die er zijn eigen kopstand aan toevoegt.
 	 */
-	import type { Device } from '$lib/api';
 	import type { TilingStore } from '$lib/tiling.svelte';
 
-	let { tiling, device }: { tiling: TilingStore; device: Device | null } = $props();
+	// Geen `device`-prop meer: de kopstand komt sinds de twee-bronnen-fout via
+	// `tiling.liveHead()` bij de server vandaan, niet uit de statussnapshot.
+	let { tiling }: { tiling: TilingStore } = $props();
 
 	let getikt = $state<{ x_mm: number; y_mm: number }[]>([]);
 	/** Fout bij het lokaal vastleggen van een tik; los van `tiling.error`, dat
@@ -79,13 +80,16 @@
 		// die zou met één punt meteen mislukken. Onthoud hem lokaal en wacht op
 		// de tweede tik.
 		if (!eerste && getikt.length < nodig - 1) {
-			const punt = device?.position?.mm;
+			// De live stand bij de server opvragen, niet de statussnapshot: die is
+			// tot twee seconden oud, en de tweede tik gebruikt wél de live stand.
+			// Twee bronnen voor één meting leverden 230 mm verschil op (gemeten).
+			const punt = await tiling.liveHead();
 			if (!punt) {
 				lokaleFout =
 					'Deze machine meldt geen positie, dus Hier weet niet waar hij staat.';
 				return;
 			}
-			getikt = [...getikt, { x_mm: punt[0], y_mm: punt[1] }];
+			getikt = [...getikt, punt];
 			return;
 		}
 		const ok = await tiling.alignHere(eerste ? 'plate_corner' : 'markers', getikt);

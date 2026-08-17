@@ -52,7 +52,7 @@
 	let jobs = $derived(spooler?.jobs ?? []);
 </script>
 
-<TegelReeks {tiling} {device} />
+<TegelReeks {tiling} />
 <JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
 
 <div class="section">

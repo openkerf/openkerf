@@ -58,6 +58,29 @@ export class TilingStore {
 		}
 	}
 
+	/**
+	 * Waar de kop nú staat, gelezen bij de server.
+	 *
+	 * Niet uit de statussnapshot: die is tot twee seconden oud, en bij het
+	 * aantikken van een merk is dat het verschil tussen "waar de kop staat" en
+	 * "waar hij stond". Gemeten met de grbl-mock: het paneel dacht (5,5) terwijl
+	 * de server (0,235) las — 230 mm ernaast, en de tweede tik gebruikt wél de
+	 * live stand van de server. Twee bronnen voor één meting is precies de fout
+	 * die dit hele onderdeel moet uitsluiten, dus lezen beide tikken nu hetzelfde.
+	 */
+	async liveHead(): Promise<{ x_mm: number; y_mm: number } | null> {
+		try {
+			const response = await fetch('/api/devices');
+			if (!response.ok) return null;
+			const alle = await response.json();
+			const actief = alle.find((d: { active?: boolean }) => d.active) ?? alle[0];
+			const mm = actief?.position?.mm;
+			return Array.isArray(mm) ? { x_mm: mm[0], y_mm: mm[1] } : null;
+		} catch {
+			return null;
+		}
+	}
+
 	/** De reeks komt uit de statuspayload; deze wordt daar aangeroepen. */
 	adopt(state: TileRun | null) {
 		this.run = state;
