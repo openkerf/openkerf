@@ -7,7 +7,16 @@
  */
 
 export type TileRect = { x0_mm: number; y0_mm: number; x1_mm: number; y1_mm: number };
-export type Tile = { index: number; row: number; column: number; burn: TileRect };
+export type Tile = {
+	index: number;
+	row: number;
+	column: number;
+	burn: TileRect;
+	/** Hoe ver de plaat moet opschuiven ten opzichte van de vorige tegel. Null
+	 *  bij de eerste. De server rekent dit uit, want het is de stap tussen de
+	 *  vensters en niet die tussen de brandgebieden — zie `_tile_json`. */
+	shift_mm: { x: number; y: number } | null;
+};
 export type Mark = { boundary: number; points: { x_mm: number; y_mm: number }[] };
 
 export type TileLayout = { tiles: Tile[]; marks: Mark[]; crossings: number };

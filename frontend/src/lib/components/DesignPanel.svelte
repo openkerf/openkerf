@@ -891,7 +891,7 @@
 					open={openGroups.path}
 					ontoggle={(e) => (openGroups.path = e.currentTarget.open)}
 				>
-					<summary>Pad bewerken <span class="fold-note">hoeken, offset, vulling, nesten</span></summary>
+					<summary>Pad bewerken <span class="fold-note">offset, vulling, nesten</span></summary>
 					<div class="arrange">
 						<button
 							class="rot"

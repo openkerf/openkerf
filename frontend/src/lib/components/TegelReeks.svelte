@@ -29,23 +29,21 @@
 	// weg, en de enige uitweg zou de reeks stoppen zijn — en daarmee de
 	// uitlijning weggooien voor niets.
 	/**
-	 * Hoe ver de plaat moet opschuiven, in millimeters.
+	 * Hoe ver de plaat moet opschuiven, zoals de server hem uitrekent.
 	 *
-	 * Het verschil tussen de brandgebieden van deze tegel en de vorige: precies
-	 * de afstand die de plaat aflegt. Zonder dit getal stond er "schuif de plaat
-	 * op tot de merken onder de kop kunnen", en dan sta je te schatten met je
-	 * handen op een plaat van negentig centimeter.
+	 * Zelf uitrekenen ging mis: het verschil tussen twee brandgebieden is een
+	 * halve overlap groter dan dat tussen twee vensters, en met dat grotere getal
+	 * schuif je de merken van het bed af. Gemeten op een plaat van 500 mm met een
+	 * bed van 235 mm: 179 mm in plaats van 143 legde het eerste merk op bed-x
+	 * −31,5. Nu komt de afstand uit `shift_mm`, waar hij één eigenaar heeft.
 	 */
 	const verschuiving = $derived.by(() => {
-		const tegels = tiling.layout?.tiles;
-		const nu = run?.current ?? 0;
-		if (!tegels || nu < 1 || !tegels[nu] || !tegels[nu - 1]) return null;
-		const dx = tegels[nu].burn.x0_mm - tegels[nu - 1].burn.x0_mm;
-		const dy = tegels[nu].burn.y0_mm - tegels[nu - 1].burn.y0_mm;
-		if (Math.abs(dx) >= Math.abs(dy)) {
-			return { mm: Math.abs(dx), richting: dx > 0 ? 'naar links' : 'naar rechts' };
+		const stap = tiling.layout?.tiles?.[run?.current ?? 0]?.shift_mm;
+		if (!stap) return null;
+		if (Math.abs(stap.x) >= Math.abs(stap.y)) {
+			return { mm: Math.abs(stap.x), richting: stap.x > 0 ? 'naar links' : 'naar rechts' };
 		}
-		return { mm: Math.abs(dy), richting: dy > 0 ? 'naar boven' : 'naar beneden' };
+		return { mm: Math.abs(stap.y), richting: stap.y > 0 ? 'naar boven' : 'naar beneden' };
 	});
 
 	/**

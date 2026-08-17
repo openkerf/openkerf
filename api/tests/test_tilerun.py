@@ -481,3 +481,35 @@ def test_the_last_tile_burns_no_marks(kernel):
     )
 
     assert not [s for s in steps if getattr(s, "label", None) == "Uitlijnmerken"]
+
+
+def test_the_shift_puts_the_marks_on_the_bed(kernel, tmp_path):
+    """
+    Na de opgegeven verschuiving moeten de merken op het bed liggen.
+
+    Dit is de eigenschap, niet de rekensom — en hij is met een screenshot
+    gevonden, niet met een test. Het paneel rekende de verschuiving uit de
+    *brandgebieden*, en die staan een halve overlap verder uit elkaar dan de
+    vensters. Gemeten op een plaat van 500 mm met een bed van 235: met de
+    brandstap (178,75 mm) landen de merken op bed-x −31,5 en 28,5, dus het eerste
+    ligt buiten het bed en is niet aan te tikken. De instructie stuurde de
+    operator te ver en vroeg hem daarna een merk aan te wijzen dat er niet meer
+    was.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _wide_sheet(server)
+    opdeling = server.tiles.layout()
+    bed = server.drawing.bed_mm()
+
+    assert opdeling["tiles"][0]["shift_mm"] is None, "de eerste tegel schuift niet"
+
+    for grens, merk in enumerate(opdeling["marks"]):
+        verschuiving = opdeling["tiles"][grens + 1]["shift_mm"]
+        assert verschuiving is not None
+        for punt in merk["points"]:
+            x = punt["x_mm"] - verschuiving["x"]
+            y = punt["y_mm"] - verschuiving["y"]
+            assert 0 <= x <= bed[0], f"merk op bed-x {x:.1f} valt buiten 0..{bed[0]}"
+            assert 0 <= y <= bed[1], f"merk op bed-y {y:.1f} valt buiten 0..{bed[1]}"

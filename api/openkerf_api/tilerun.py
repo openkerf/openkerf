@@ -312,7 +312,10 @@ class TileRun:
         tiles = self._nudge_seams(tiles, spans, settings)
         self._check_images(tiles)
         return {
-            "tiles": [self._tile_json(t) for t in tiles],
+            "tiles": [
+                self._tile_json(t, tiles[i - 1] if i else None)
+                for i, t in enumerate(tiles)
+            ],
             "marks": self._marks(tiles, settings),
             "crossings": self._crossings(tiles, spans),
         }
@@ -430,7 +433,21 @@ class TileRun:
         naden = [t.burn.x1 for t in tiles[:-1]]
         return sum(1 for x in naden for s in spans if s.x0 < x < s.x1)
 
-    def _tile_json(self, tile) -> dict:
+    def _tile_json(self, tile, vorige=None) -> dict:
+        """
+        Eén tegel voor de buitenwereld, met erbij hoe ver de plaat moet opschuiven.
+
+        Die verschuiving is de stap tussen de **vensters**, niet tussen de
+        brandgebieden. Dat verschil is niet academisch: de brandgebieden staan
+        een halve overlap verder uit elkaar dan de vensters, en wie de plaat over
+        die grotere afstand opschuift, schuift de merken van het bed af. Gemeten
+        op een plaat van 500 mm met een bed van 235: met de brandstap (178,75 mm)
+        landen de merken op bed-x −31,5 en 28,5 — het eerste is onbereikbaar. Met
+        de vensterstap (142,5 mm) landen ze op 5,0 en 65,0.
+
+        Het venster zelf komt niet mee naar buiten: dat is een intern begrip, en
+        wat de gebruiker nodig heeft is de afstand, niet de rechthoek.
+        """
         return {
             "index": tile.index,
             "row": tile.row,
@@ -441,6 +458,14 @@ class TileRun:
                 "x1_mm": tile.burn.x1,
                 "y1_mm": tile.burn.y1,
             },
+            "shift_mm": (
+                None
+                if vorige is None
+                else {
+                    "x": round(tile.window.x0 - vorige.window.x0, 2),
+                    "y": round(tile.window.y0 - vorige.window.y0, 2),
+                }
+            ),
         }
 
     # ------------------------------------------------------------- de reeks
