@@ -856,7 +856,7 @@
 					open={openGroups.path}
 					ontoggle={(e) => (openGroups.path = e.currentTarget.open)}
 				>
-					<summary>Pad bewerken <span class="fold-note">offset, vulling, nesten</span></summary>
+					<summary>Pad bewerken <span class="fold-note">hoeken, offset, vulling, nesten</span></summary>
 					<div class="arrange">
 						<button
 							class="rot"
@@ -864,6 +864,24 @@
 							title="Leg de selectie dicht op elkaar om materiaal te sparen"
 							onclick={() => onArrange?.('nest')}
 						>Nesten</button>
+						<!-- Afronden en afschuinen staan naast elkaar omdat ze hetzelfde
+						     lijken, maar ze zijn het niet: afronden van een rechthoek laat
+						     hem een rechthoek (breedte en hoogte blijven werken, de radius
+						     is later te wijzigen), afschuinen maakt er een pad van en dat
+						     is eenrichting. Dat verschil staat in de titel van de knop en
+						     nog eens in de vraag erna. -->
+						<button
+							class="rot"
+							disabled={edits.busy}
+							title="Ronde hoeken. Een rechthoek blijft een rechthoek, dus je kunt de radius later bijstellen"
+							onclick={() => onArrange?.('round')}
+						>Hoeken afronden…</button>
+						<button
+							class="rot"
+							disabled={edits.busy}
+							title="Schuine hoeken. Hiervan wordt de vorm een pad: breedte en hoogte zijn daarna niet meer los te wijzigen"
+							onclick={() => onArrange?.('chamfer')}
+						>Hoeken afschuinen…</button>
 						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('offset')}>Offset…</button>
 						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('simplify')}>Vereenvoudigen</button>
 						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('hatch')}>Vulling</button>

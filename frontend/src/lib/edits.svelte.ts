@@ -244,6 +244,40 @@ export class EditController {
 		return this.#post('/api/design/simplify', { ids });
 	}
 
+	/**
+	 * Hoeken afronden of afschuinen.
+	 *
+	 * Geeft het antwoord zelf terug in plaats van alleen `ok`, want er staan twee
+	 * dingen in die de gebruiker moet zien: hoeveel hoeken zijn overgeslagen
+	 * (te korte zijden, of een boog die op de hoek uitkomt), en welke id's het
+	 * geworden zijn — afschuinen maakt er een pad van, en dat krijgt een nieuw id.
+	 */
+	async corners(
+		ids: string[],
+		style: 'round' | 'chamfer',
+		sizeMm: number
+	): Promise<{ rounded: string[]; paths: string[]; skipped: number } | null> {
+		this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch('/api/design/corners', {
+				method: 'POST',
+				headers: this.#headers(),
+				body: JSON.stringify({ ids, style, size_mm: sizeMm })
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return null;
+			}
+			return await response.json();
+		} catch (e) {
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return null;
+		} finally {
+			this.busy = false;
+		}
+	}
+
 	effect(ids: string[], effect: string) {
 		return this.#post('/api/design/effect', { ids, effect });
 	}

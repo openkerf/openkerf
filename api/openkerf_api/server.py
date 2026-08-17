@@ -801,6 +801,21 @@ class ApiServer:
         def offset_elements(body: dict):
             return manage(self.drawing.offset, body.get("ids"), body.get("distance_mm"))
 
+        @app.post("/api/design/corners", dependencies=write)
+        def corner_elements(body: dict):
+            """
+            Hoeken afronden of afschuinen.
+
+            Afronden van een rechthoek blijft een rechthoek (de engine tekent dat
+            met `rx`/`ry`); al het andere wordt een pad, en dat is eenrichting.
+            """
+            return manage(
+                self.drawing.corners,
+                body.get("ids"),
+                body.get("style") or "round",
+                body.get("size_mm"),
+            )
+
         @app.post("/api/design/simplify", dependencies=write)
         def simplify_elements(body: dict):
             return manage(self.drawing.simplify, body.get("ids"))

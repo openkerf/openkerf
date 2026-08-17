@@ -250,7 +250,26 @@ class Drawing:
 
     def _command(self, kind: str, v: dict, fields: dict) -> str:
         if kind == "rect":
-            return f"rect {_mm(v['x_mm'])} {_mm(v['y_mm'])} {_mm(v['width_mm'])} {_mm(v['height_mm'])}"
+            regel = (
+                f"rect {_mm(v['x_mm'])} {_mm(v['y_mm'])} "
+                f"{_mm(v['width_mm'])} {_mm(v['height_mm'])}"
+            )
+            # Afgeronde hoeken meteen bij het tekenen: het commando heeft er
+            # `-x`/`-y` voor, en de engine doet de rest. Eén getal, want een
+            # hoek met twee verschillende radii is een vormgeversding waar aan
+            # een machine niemand om vraagt.
+            radius = fields.get("corner_radius_mm")
+            if radius not in (None, ""):
+                maat = _positive(radius, "corner_radius_mm")
+                halve = min(v["width_mm"], v["height_mm"]) / 2
+                if maat > halve:
+                    raise DesignError(
+                        f"Een hoekradius van {maat:g} mm past niet in een rechthoek "
+                        f"van {v['width_mm']:g}×{v['height_mm']:g} mm. Hoogstens "
+                        f"{halve:g} mm."
+                    )
+                regel += f" -x {_mm(maat)} -y {_mm(maat)}"
+            return regel
         if kind == "circle":
             return f"circle {_mm(v['cx_mm'])} {_mm(v['cy_mm'])} {_mm(v['r_mm'])}"
         if kind == "ellipse":
@@ -489,6 +508,78 @@ class Drawing:
         self.elements.set_emphasis(created)
         self._refresh()
         return {"ids": [n.id for n in created], "distance_mm": distance}
+
+    def corners(self, element_ids, style: str, size_mm) -> dict:
+        """
+        Hoeken afronden of afschuinen.
+
+        Twee wegen, en welke het is bepaalt de engine, niet wij:
+
+        - **Afronden van een rechthoek** zet `rx`/`ry` op de knoop. Hij blíjft
+          een rechthoek: breedte en hoogte blijven werken, de radius is later te
+          wijzigen, en de SVG-rondgang klopt. De engine tekent dat al.
+        - **Afschuinen, of afronden van iets anders**, wordt geometrie die wij
+          maken, en het resultaat is een pad. Dat is eenrichting: een pad heeft
+          geen breedte- en hoogteveld meer. De engine bepaalt dat een `elem rect`
+          altijd rónd afloopt, dus een afgeschuinde rechthoek kán daar niet
+          blijven — zie de kop van `corners.py`.
+        """
+        from meerk40t.core.geomstr import Geomstr
+        from meerk40t.svgelements import Matrix
+
+        from .corners import STYLES, CornerError, corner_geometry
+
+        if style not in STYLES:
+            raise DesignError(
+                f"Onbekende hoekstijl: {style}. Kies 'round' of 'chamfer'."
+            )
+        maat = _positive(size_mm, "size_mm")
+        nodes = self._nodes(element_ids)
+        units = self._units_per_mm()
+
+        afgerond, paden, overgeslagen = [], [], 0
+        with self.elements.undoscope("Hoeken"):
+            for node in nodes:
+                if style == "round" and str(getattr(node, "type", "")) == "elem rect":
+                    node.rx = node.ry = maat * units
+                    # Een rauwe toekenning meldt niets aan de knoop, dus hij
+                    # draagt anders zijn oude omhullende — dezelfde valkuil als
+                    # bij `grid`/`radial` (zie CLAUDE.md).
+                    vergeet = getattr(node, "set_dirty_bounds", None)
+                    if vergeet is not None:
+                        vergeet()
+                    node.altered()
+                    afgerond.append(node.id)
+                    continue
+                geom = node.as_geometry()
+                try:
+                    nieuw, _gewijzigd, gemist = corner_geometry(
+                        geom, maat * units, style
+                    )
+                except CornerError as e:
+                    raise DesignError(str(e)) from e
+                overgeslagen += gemist
+                # `replace_node` geeft de níeuwe knoop terug; de oude is daarna
+                # losgekoppeld en zijn id zegt niets meer.
+                paden.append(
+                    node.replace_node(
+                        type="elem path",
+                        geometry=nieuw,
+                        matrix=Matrix(),
+                        stroke=getattr(node, "stroke", None),
+                        fill=getattr(node, "fill", None),
+                    )
+                )
+
+        self.elements.validate_ids()
+        self._refresh()
+        return {
+            "rounded": afgerond,
+            "paths": [n.id for n in paden],
+            "skipped": overgeslagen,
+            "style": style,
+            "size_mm": maat,
+        }
 
     def simplify(self, element_ids) -> dict:
         """Minder knooppunten, zelfde vorm — scheelt tijd bij ingewikkelde paden."""

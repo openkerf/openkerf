@@ -398,6 +398,36 @@
 			if ((await edits.offset(ids, Number(answer))).ok) await design.load();
 			return;
 		}
+		if (action === 'round' || action === 'chamfer') {
+			// Afschuinen is eenrichting: de vorm wordt een pad. Dat staat in de
+			// vraag zelf, want het is het soort ding dat je één keer per ongeluk
+			// doet en dan niet begrijpt waarom je maatvelden weg zijn.
+			const uitleg =
+				action === 'chamfer'
+					? 'Afschuinen in mm (de vorm wordt hierdoor een pad)'
+					: 'Hoekradius in mm';
+			const answer = prompt(uitleg, '3');
+			if (!answer) return;
+			const uitkomst = await edits.corners(ids, action, Number(answer));
+			if (!uitkomst) return;
+			if (uitkomst.paths.length) {
+				// Afgeschuinde vormen hebben een nieuw id gekregen; de oude
+				// selectie wijst naar iets dat niet meer bestaat.
+				design.select(null);
+			}
+			await design.load();
+			if (uitkomst.skipped) {
+				// Met een `alert`, in dezelfde stijl als de `prompt` hierboven. Niet
+				// mooi, maar het alternatief is zwijgen, en dan denkt iemand dat al
+				// zijn hoeken gedaan zijn terwijl de helft er nog scherp bij staat.
+				// Hoort een echte melding in de app te worden bij de UI-ronde.
+				alert(
+					`${uitkomst.skipped} ${uitkomst.skipped === 1 ? 'hoek is' : 'hoeken zijn'} ` +
+						'overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.'
+				);
+			}
+			return;
+		}
 		if (action === 'rescue') {
 			// Alles op het bed leggen, ook wat je niet kunt aanwijzen omdat het
 			// buiten beeld ligt.

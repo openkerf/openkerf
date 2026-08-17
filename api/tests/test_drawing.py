@@ -981,3 +981,111 @@ def test_the_preflight_lists_one_layer_for_one_shape(client):
 
     layers = client.get("/api/job/estimate").json()["layers"]
     assert len(layers) == 1, [l["label"] for l in layers]
+
+
+# ---------------------------------------------------------------- hoeken
+
+
+def een_rechthoek(client, w=40, h=30):
+    antwoord = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": w, "height_mm": h},
+    )
+    assert antwoord.status_code == 201, antwoord.json()
+    return antwoord.json()["ids"][0]
+
+
+def test_a_rect_can_be_drawn_with_rounded_corners(client, kernel):
+    """
+    De engine kent afgeronde rechthoeken al: `rx`/`ry` op de knoop, en het
+    console-commando heeft er opties voor. Wij gaven ze alleen niet door.
+    """
+    gemaakt = client.post(
+        "/api/design/elements",
+        json={
+            "type": "rect",
+            "x_mm": 10,
+            "y_mm": 10,
+            "width_mm": 40,
+            "height_mm": 30,
+            "corner_radius_mm": 5,
+        },
+    )
+
+    assert gemaakt.status_code == 201, gemaakt.json()
+    element = client.get("/api/design").json()["elements"][0]
+    assert element["type"] == "elem rect"
+    # En de radius is werkelijk aangekomen. Alleen op het type toetsen zou
+    # groen blijven als de opties stil weggevallen waren.
+    knoop = next(n for n in kernel.elements.elems() if n.type == "elem rect")
+    units = 65535 / 25.4
+    assert knoop.rx / units == pytest.approx(5.0, rel=1e-3)
+    assert knoop.ry / units == pytest.approx(5.0, rel=1e-3)
+
+
+def test_a_radius_that_does_not_fit_is_refused_with_the_maximum(client):
+    """Weigeren is prima; weigeren zonder te zeggen wat wél kan, niet."""
+    antwoord = client.post(
+        "/api/design/elements",
+        json={
+            "type": "rect",
+            "x_mm": 0,
+            "y_mm": 0,
+            "width_mm": 20,
+            "height_mm": 10,
+            "corner_radius_mm": 8,
+        },
+    )
+
+    assert antwoord.status_code == 409
+    assert "5" in antwoord.json()["detail"]
+
+
+def test_rounding_a_rect_keeps_it_a_rect(client, kernel):
+    """
+    Dit is de hele reden dat afronden een eigenschap is en geen nieuwe vorm:
+    breedte en hoogte blijven bestaan, en de radius is later te wijzigen.
+    """
+    element_id = een_rechthoek(client, w=40, h=30)
+
+    antwoord = client.post(
+        "/api/design/corners",
+        json={"ids": [element_id], "style": "round", "size_mm": 5},
+    )
+
+    assert antwoord.status_code == 200, antwoord.json()
+    assert antwoord.json()["rounded"] == [element_id]
+    assert client.get("/api/design").json()["elements"][0]["type"] == "elem rect"
+    knoop = next(n for n in kernel.elements.elems() if n.type == "elem rect")
+    assert knoop.rx / (65535 / 25.4) == pytest.approx(5.0, rel=1e-3)
+
+
+def test_chamfering_a_rect_turns_it_into_a_path(client):
+    """
+    En dit is waarom afschuinen géén eigenschap kan zijn: de engine tekent een
+    `elem rect` altijd rond, dus een afgeschuinde rechthoek moet geometrie van
+    onszelf worden. Dat is eenrichting, en de test legt dat vast in plaats van
+    het aan de UI over te laten.
+    """
+    element_id = een_rechthoek(client, w=40, h=30)
+
+    antwoord = client.post(
+        "/api/design/corners",
+        json={"ids": [element_id], "style": "chamfer", "size_mm": 5},
+    )
+
+    assert antwoord.status_code == 200, antwoord.json()
+    assert antwoord.json()["paths"]
+    assert client.get("/api/design").json()["elements"][0]["type"] == "elem path"
+
+
+def test_a_corner_size_too_large_is_refused(client):
+    element_id = een_rechthoek(client, w=10, h=10)
+
+    antwoord = client.post(
+        "/api/design/corners",
+        json={"ids": [element_id], "style": "chamfer", "size_mm": 8},
+    )
+
+    assert antwoord.status_code == 409
+    assert "kleinere maat" in antwoord.json()["detail"]
