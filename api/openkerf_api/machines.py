@@ -339,6 +339,7 @@ class MachineManager:
     def update_settings(self, path: str, values: dict) -> dict:
         device = self._find(path)
         types = self._setting_types(device)
+        extra = self._setting_signals(device)
         applied = {}
         for attr, value in values.items():
             if attr not in types:
@@ -351,6 +352,11 @@ class MachineManager:
             applied[attr] = coerced
             # The device listens for these to re-realize its view and pipes.
             device.signal(attr, coerced)
+            # En de signalen die de instelling zélf opgeeft. Zie
+            # `_setting_signals`: zonder deze regel wordt een instelling wel
+            # opgeslagen maar doet er niemand iets mee.
+            for code in extra.get(attr, ()):
+                device.signal(code)
         # Same reasoning as in rename(): setting a bed size on the engine's
         # default device is an act of adoption.
         self._mark_configured(device)
@@ -377,6 +383,42 @@ class MachineManager:
             coolant.claim_coolant(device, getattr(device, "device_coolant", ""))
         except Exception:  # pragma: no cover - een driver die niet meewerkt
             pass
+
+    def _setting_signals(self, device) -> dict:
+        """
+        Welke extra signalen bij een instelling horen, volgens de instelling zelf.
+
+        De engine kent hier een afspraak voor die wij misten: een keuze mag een
+        `signals`-sleutel dragen met de codes die bij een wijziging horen, naast
+        de naam van de instelling. De wxPython-GUI honoreert dat
+        (`gui/choicepropertypanel.py:_get_additional_signals`); wij seinden
+        alleen de naam, en dat is precies één signaal te weinig.
+
+        Wat dat kostte: de grbl-controller bouwt zijn verbinding opnieuw op bij
+        `update_interface` (`grbl/controller.py:523`), niet bij `interface`. Wie
+        in OpenKerf de interface op `mock` zette, kreeg zijn instelling
+        opgeslagen en bleef op de oude verbinding zitten tot een herstart. Er
+        staan zevenendertig van die declaraties in de engine, in elke driver —
+        `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart` — en
+        ze vielen allemaal stil.
+
+        Zelfde semantiek als de GUI: een string of een lijst, en de extra
+        signalen gaan zonder argumenten de deur uit.
+        """
+        signals = {}
+        for sheet_path in device.match("choices"):
+            entries = device.lookup(sheet_path)
+            if not isinstance(entries, (list, tuple)):
+                continue
+            for choice in entries:
+                if not isinstance(choice, dict) or "attr" not in choice:
+                    continue
+                declared = choice.get("signals")
+                if isinstance(declared, str):
+                    signals[choice["attr"]] = (declared,)
+                elif isinstance(declared, (list, tuple)):
+                    signals[choice["attr"]] = tuple(declared)
+        return signals
 
     def _setting_types(self, device) -> dict:
         types = {}

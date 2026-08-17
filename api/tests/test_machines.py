@@ -650,3 +650,55 @@ def test_an_imported_machine_can_be_exported_again(client):
 
     assert opnieuw["machine"]["info"] == profiel["machine"]["info"]
     assert opnieuw["machine"]["label"] == "Kopie"
+
+
+def test_a_setting_also_emits_the_signals_it_declares(kernel):
+    """
+    Een instelling mag zeggen welke signalen erbij horen, en die horen mee.
+
+    De engine kent daar een afspraak voor: een keuze draagt een `signals`-sleutel
+    met de extra signalen die bij een wijziging horen. Wij seinden alleen de
+    naam van de instelling zelf, en dat is precies één signaal te weinig — de
+    grbl-controller luistert bijvoorbeeld op `update_interface` om zijn
+    verbinding opnieuw op te bouwen (`grbl/controller.py:523`), niet op
+    `interface`. Wie in OpenKerf de interface op `mock` zette, kreeg zijn
+    instelling wél opgeslagen maar bleef op de oude verbinding zitten.
+
+    Zeven-en-dertig van die declaraties staan in de engine, in elke driver:
+    `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart`. Ze
+    vielen allemaal stil.
+    """
+    manager = MachineManager(kernel)
+    device = kernel.device
+    device.proefstand = "aan"
+    device.register_choices(
+        "proefstand",
+        [
+            {
+                "attr": "proefstand",
+                "object": device,
+                "default": "aan",
+                "type": str,
+                "label": "Proefstand",
+                "signals": ("bouw_opnieuw", "en_deze_ook"),
+            }
+        ],
+    )
+
+    gezien = []
+    codes = ("proefstand", "bouw_opnieuw", "en_deze_ook")
+    luisteraars = {
+        code: (lambda origin, *args, code=code: gezien.append(code)) for code in codes
+    }
+    for code, luisteraar in luisteraars.items():
+        kernel.listen(code, luisteraar)
+    try:
+        manager.update_settings(device.path, {"proefstand": "uit"})
+        kernel.process_queue()
+    finally:
+        for code, luisteraar in luisteraars.items():
+            kernel.unlisten(code, luisteraar)
+
+    assert device.proefstand == "uit"
+    assert "proefstand" in gezien
+    assert "bouw_opnieuw" in gezien and "en_deze_ook" in gezien
