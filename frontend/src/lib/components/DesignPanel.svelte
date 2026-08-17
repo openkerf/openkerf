@@ -16,6 +16,8 @@
 		onLayerChange,
 		onEditText,
 		onArrange,
+	onCorners,
+	cornerNote = null,
 		onImage,
 		onImageDpi,
 		onVectorise,
@@ -41,6 +43,12 @@
 		onLayerChange?: () => void;
 		onEditText?: (id: string) => void;
 		onArrange?: (action: string) => void;
+		/** Hoeken afronden of afschuinen. Aparte prop en niet via `onArrange`,
+		 *  omdat dit twee waarden meestuurt in plaats van alleen een actienaam. */
+		onCorners?: (style: 'round' | 'chamfer', sizeMm: number) => void;
+		/** Wat er van de laatste hoekbewerking te melden valt (overgeslagen
+		 *  hoeken). Op een vaste plek in het paneel, niet in een browserpopup. */
+		cornerNote?: string | null;
 		onImage?: (adjustment: string) => void;
 		onImageDpi?: (dpi: number) => void;
 		onVectorise?: () => void;
@@ -257,6 +265,33 @@
 	// Wat er open staat van de zelden gebruikte groepen. Onthouden per paneel,
 	// niet per selectie: wie booleans gebruikt, gebruikt ze de hele middag.
 	let openGroups = $state<Record<string, boolean>>({});
+
+	// Hoekbewerking: de stijl en de maat blijven staan tussen twee bewerkingen,
+	// want wie één hoek afrondt, rondt er meestal meer af met dezelfde maat.
+	let hoekstijl = $state<'round' | 'chamfer'>('round');
+	let hoekmaat = $state('3');
+
+	const hoekLabel = $derived.by(() => {
+		const maat = Number(hoekmaat);
+		const wat = hoekstijl === 'round' ? 'afronden' : 'afschuinen';
+		if (!chosen.length) return `Hoeken ${wat}`;
+		const aantal = chosen.length === 1 ? '1 vorm' : `${chosen.length} vormen`;
+		if (!Number.isFinite(maat) || maat <= 0) return `${aantal} ${wat}`;
+		// De primaire knop zegt wát er komt, niet dát er iets komt (DESIGN-SYSTEM).
+		return `${aantal} ${wat} — ${maat} mm`;
+	});
+
+	/** Eén hoek van 30 mm met de gekozen maat eraf, als voorbeeldtekening. */
+	const hoekVoorbeeld = $derived.by(() => {
+		const zijde = 30;
+		const maat = Math.min(Math.max(Number(hoekmaat) || 0, 0), zijde / 2);
+		const p = 2; // marge in de viewBox
+		if (maat <= 0) return `M ${p} ${p + zijde} L ${p} ${p} L ${p + zijde} ${p}`;
+		const start = `M ${p} ${p + zijde} L ${p} ${p + maat}`;
+		const eind = `L ${p + zijde} ${p}`;
+		if (hoekstijl === 'chamfer') return `${start} L ${p + maat} ${p} ${eind}`;
+		return `${start} A ${maat} ${maat} 0 0 1 ${p + maat} ${p} ${eind}`;
+	});
 
 	let editingLayer = $state<string | null>(null);
 	let openGrid = $state<number | null>(null);
@@ -864,28 +899,79 @@
 							title="Leg de selectie dicht op elkaar om materiaal te sparen"
 							onclick={() => onArrange?.('nest')}
 						>Nesten</button>
-						<!-- Afronden en afschuinen staan naast elkaar omdat ze hetzelfde
-						     lijken, maar ze zijn het niet: afronden van een rechthoek laat
-						     hem een rechthoek (breedte en hoogte blijven werken, de radius
-						     is later te wijzigen), afschuinen maakt er een pad van en dat
-						     is eenrichting. Dat verschil staat in de titel van de knop en
-						     nog eens in de vraag erna. -->
-						<button
-							class="rot"
-							disabled={edits.busy}
-							title="Ronde hoeken. Een rechthoek blijft een rechthoek, dus je kunt de radius later bijstellen"
-							onclick={() => onArrange?.('round')}
-						>Hoeken afronden…</button>
-						<button
-							class="rot"
-							disabled={edits.busy}
-							title="Schuine hoeken. Hiervan wordt de vorm een pad: breedte en hoogte zijn daarna niet meer los te wijzigen"
-							onclick={() => onArrange?.('chamfer')}
-						>Hoeken afschuinen…</button>
 						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('offset')}>Offset…</button>
 						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('simplify')}>Vereenvoudigen</button>
 						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('hatch')}>Vulling</button>
 						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('wobble')}>Wobble</button>
+					</div>
+				</details>
+			{/if}
+
+			{#if canEdit}
+				<details
+					class="fold"
+					open={openGroups.corners}
+					ontoggle={(e) => (openGroups.corners = e.currentTarget.open)}
+				>
+					<summary>Hoeken <span class="fold-note">afronden of afschuinen</span></summary>
+					<div class="hoeken">
+						<div class="hoekstijl" role="radiogroup" aria-label="Hoekstijl">
+							<button
+								class="rot"
+								class:aan={hoekstijl === 'round'}
+								role="radio"
+								aria-checked={hoekstijl === 'round'}
+								onclick={() => (hoekstijl = 'round')}
+							>Rond</button>
+							<button
+								class="rot"
+								class:aan={hoekstijl === 'chamfer'}
+								role="radio"
+								aria-checked={hoekstijl === 'chamfer'}
+								onclick={() => (hoekstijl = 'chamfer')}
+							>Schuin</button>
+						</div>
+
+						<!-- Een formulier dat vorm maakt, toont die vorm (DESIGN-SYSTEM):
+						     "5 mm" zegt zonder beeld niets over hoe rond die hoek wordt.
+						     Deze tekening is één hoek op ware verhouding — de maat schaalt
+						     mee met een zijde van 30, zodat je ziet wanneer je hem te groot
+						     maakt. -->
+						<svg class="voorbeeld" viewBox="0 0 34 34" aria-hidden="true">
+							<path d={hoekVoorbeeld} />
+						</svg>
+
+						<NumberField
+							label="Maat"
+							unit="mm"
+							step={0.5}
+							min={0.1}
+							bind:value={hoekmaat}
+						/>
+
+						<button
+							class="rot primair"
+							disabled={edits.busy || !chosen.length}
+							onclick={() => onCorners?.(hoekstijl, Number(hoekmaat))}
+						>{hoekLabel}</button>
+
+						<!-- Vaste plek voor wat het betekent, zoals "Zekerheid is een zin"
+						     voorschrijft: eerst wát het is, en bij risico een tweede zin
+						     die zegt wat je moet doen. -->
+						{#if hoekstijl === 'chamfer'}
+							<p class="hoekregel let-op">
+								Hiervan wordt de vorm een pad: breedte en hoogte zijn daarna
+								niet meer los te wijzigen. Ongedaan maken brengt hem terug.
+							</p>
+						{:else}
+							<p class="hoekregel">
+								Een rechthoek blijft een rechthoek, dus je kunt de radius
+								later bijstellen.
+							</p>
+						{/if}
+						{#if cornerNote}
+							<p class="hoekregel let-op" role="status">{cornerNote}</p>
+						{/if}
 					</div>
 				</details>
 			{/if}
@@ -2420,6 +2506,40 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-1);
+	}
+	.hoeken {
+		display: grid;
+		gap: var(--space-2);
+	}
+	.hoekstijl {
+		display: flex;
+		gap: var(--space-1);
+	}
+	.rot.aan {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+	.rot.primair {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-ink);
+	}
+	.voorbeeld {
+		width: 68px;
+		height: 68px;
+		justify-self: center;
+		fill: none;
+		stroke: var(--text-1);
+		stroke-width: 1.5;
+		stroke-linecap: round;
+	}
+	.hoekregel {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.hoekregel.let-op {
+		color: var(--warn);
 	}
 	.rot-label {
 		font-size: var(--text-xs);

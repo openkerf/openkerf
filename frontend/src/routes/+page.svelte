@@ -388,6 +388,27 @@
 		if (await edits.duplicate(design.selectedIds)) await design.load();
 	}
 
+	/** Wat de laatste hoekbewerking te melden had; het paneel toont het. */
+	let hoekMelding = $state<string | null>(null);
+
+	async function hoeken(style: 'round' | 'chamfer', sizeMm: number) {
+		if (!canEdit || !hasSelection) return;
+		hoekMelding = null;
+		const uitkomst = await edits.corners(design.selectedIds, style, sizeMm);
+		if (!uitkomst) return;
+		if (uitkomst.paths.length) {
+			// Afgeschuinde vormen zijn paden geworden en hebben een nieuw id; de
+			// oude selectie wijst naar iets dat niet meer bestaat.
+			design.select(null);
+		}
+		await design.load();
+		if (uitkomst.skipped) {
+			hoekMelding =
+				`${uitkomst.skipped} ${uitkomst.skipped === 1 ? 'hoek is' : 'hoeken zijn'} ` +
+				'overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.';
+		}
+	}
+
 	async function arrange(action: string) {
 		// 'rescue' werkt op het hele ontwerp; de rest op de selectie.
 		if (!canEdit || (!hasSelection && action !== 'rescue')) return;
@@ -396,36 +417,6 @@
 			const answer = prompt('Offset in mm (negatief = naar binnen)', '2');
 			if (!answer) return;
 			if ((await edits.offset(ids, Number(answer))).ok) await design.load();
-			return;
-		}
-		if (action === 'round' || action === 'chamfer') {
-			// Afschuinen is eenrichting: de vorm wordt een pad. Dat staat in de
-			// vraag zelf, want het is het soort ding dat je één keer per ongeluk
-			// doet en dan niet begrijpt waarom je maatvelden weg zijn.
-			const uitleg =
-				action === 'chamfer'
-					? 'Afschuinen in mm (de vorm wordt hierdoor een pad)'
-					: 'Hoekradius in mm';
-			const answer = prompt(uitleg, '3');
-			if (!answer) return;
-			const uitkomst = await edits.corners(ids, action, Number(answer));
-			if (!uitkomst) return;
-			if (uitkomst.paths.length) {
-				// Afgeschuinde vormen hebben een nieuw id gekregen; de oude
-				// selectie wijst naar iets dat niet meer bestaat.
-				design.select(null);
-			}
-			await design.load();
-			if (uitkomst.skipped) {
-				// Met een `alert`, in dezelfde stijl als de `prompt` hierboven. Niet
-				// mooi, maar het alternatief is zwijgen, en dan denkt iemand dat al
-				// zijn hoeken gedaan zijn terwijl de helft er nog scherp bij staat.
-				// Hoort een echte melding in de app te worden bij de UI-ronde.
-				alert(
-					`${uitkomst.skipped} ${uitkomst.skipped === 1 ? 'hoek is' : 'hoeken zijn'} ` +
-						'overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.'
-				);
-			}
 			return;
 		}
 		if (action === 'rescue') {
@@ -580,6 +571,32 @@
 	// het canvas en de telefoon lezen straks allemaal deze ene bron.
 	$effect(() => {
 		tiling.adopt(status.snapshot?.tiling ?? null);
+	});
+	/**
+	 * De opdeling ophalen, en opnieuw zodra iets eraan verandert.
+	 *
+	 * De opdeling wordt op de server berekend en nooit opgeslagen, dus hij moet
+	 * hier opgevraagd worden — en dat gebeurde nergens. Gevolg: `tiling.layout`
+	 * bleef leeg, en dan tekent het canvas geen naden, geen merken en geen
+	 * gedimde tegels, en weet het paneel niet hoe ver de plaat moet opschuiven.
+	 * Alles klopte, er kwam alleen nooit iets in.
+	 *
+	 * Hij hangt aan het aantal elementen, het actieve vel en de stand van de
+	 * reeks: dat zijn precies de drie dingen die de opdeling kunnen verzetten.
+	 */
+	$effect(() => {
+		void design.elements.length;
+		void sheets.active?.id;
+		void tiling.run?.current;
+		// Alleen ophalen als tegels ook kunnen spelen: een plaat die groter is dan
+		// het bed, of een reeks die al loopt. Zonder die rem gaat er bij elke
+		// wijziging in het ontwerp een verzoek uit dat vrijwel altijd 409't.
+		const vel = sheets.active;
+		const bed = device?.bed;
+		const teGroot =
+			Boolean(vel && bed) &&
+			(vel!.width_mm > (bed!.width_mm ?? 0) || vel!.height_mm > (bed!.height_mm ?? 0));
+		if (teGroot || tiling.run) tiling.load();
 	});
 
 	function requestStart() {
@@ -879,6 +896,8 @@
 						}
 					}}
 					onArrange={arrange}
+					onCorners={hoeken}
+					cornerNote={hoekMelding}
 					onCrop={() => (cropping = true)}
 
 					onVectorise={async () => {

@@ -28,6 +28,45 @@
 	// aanbiedt: zonder deze knop is "Bevestig om door te gaan" een doodlopende
 	// weg, en de enige uitweg zou de reeks stoppen zijn — en daarmee de
 	// uitlijning weggooien voor niets.
+	/**
+	 * Hoe ver de plaat moet opschuiven, in millimeters.
+	 *
+	 * Het verschil tussen de brandgebieden van deze tegel en de vorige: precies
+	 * de afstand die de plaat aflegt. Zonder dit getal stond er "schuif de plaat
+	 * op tot de merken onder de kop kunnen", en dan sta je te schatten met je
+	 * handen op een plaat van negentig centimeter.
+	 */
+	const verschuiving = $derived.by(() => {
+		const tegels = tiling.layout?.tiles;
+		const nu = run?.current ?? 0;
+		if (!tegels || nu < 1 || !tegels[nu] || !tegels[nu - 1]) return null;
+		const dx = tegels[nu].burn.x0_mm - tegels[nu - 1].burn.x0_mm;
+		const dy = tegels[nu].burn.y0_mm - tegels[nu - 1].burn.y0_mm;
+		if (Math.abs(dx) >= Math.abs(dy)) {
+			return { mm: Math.abs(dx), richting: dx > 0 ? 'naar links' : 'naar rechts' };
+		}
+		return { mm: Math.abs(dy), richting: dy > 0 ? 'naar boven' : 'naar beneden' };
+	});
+
+	/**
+	 * Welk merk je nu moet aantikken, in woorden die op het bed te vinden zijn.
+	 *
+	 * "Het eerste merk" zegt niets als er twee rondjes voor je liggen. Welke van
+	 * de twee het is, volgt uit hun plek: liggen ze naast elkaar dan is het het
+	 * linker of rechter, liggen ze boven elkaar dan het bovenste of onderste.
+	 */
+	const welkMerk = $derived.by(() => {
+		const merken = tiling.layout?.marks?.find((m) => m.boundary === (run?.current ?? 0) - 1);
+		const punten = merken?.points;
+		if (!punten || punten.length < 2) return getikt.length === 0 ? 'eerste' : 'tweede';
+		const [a, b] = punten;
+		const horizontaal = Math.abs(b.x_mm - a.x_mm) >= Math.abs(b.y_mm - a.y_mm);
+		const eerstIsLaag = horizontaal ? a.x_mm <= b.x_mm : a.y_mm <= b.y_mm;
+		const namen = horizontaal ? ['linker', 'rechter'] : ['bovenste', 'onderste'];
+		const index = getikt.length === 0 ? 0 : 1;
+		return `${eerstIsLaag ? namen[index] : namen[1 - index]} merk`;
+	});
+
 	const magOpnieuw = $derived(
 		typeof tiling.error === 'string' && tiling.error.includes('al gebrand')
 	);
@@ -87,6 +126,17 @@
 			</button>
 		</header>
 
+			<!-- Waar je bent in de reeks, in één regel. Het canvas vinkt de gedane
+			     tegels af, maar wie in het paneel staat te werken hoort het daar ook
+			     te kunnen lezen. -->
+			<ol class="voortgang" aria-label="Voortgang">
+				{#each Array(run.tiles) as _, i (i)}
+					<li class:klaar={run.done.includes(i)} class:nu={i === run.current}>
+						{i + 1}{#if run.done.includes(i)}&nbsp;✓{/if}
+					</li>
+				{/each}
+			</ol>
+
 		{#if run.stale}
 			<p class="melding stale" role="alert">{run.message}</p>
 		{:else if !run.aligned}
@@ -95,13 +145,23 @@
 					Leg de plaat zo dat de linkerbovenhoek onder de kop kan. Jog
 					ernaartoe en druk op Hier.
 				{:else}
-					Schuif de plaat op tot de twee merken onder de kop kunnen. Jog
-					naar het {getikt.length === 0 ? 'eerste' : 'tweede'} merk en druk op
-					Hier.
+					{#if verschuiving}
+						Schuif de plaat {verschuiving.mm.toFixed(0)} mm
+						{verschuiving.richting}, tot de twee merken onder de kop kunnen.
+					{:else}
+						Schuif de plaat op tot de twee merken onder de kop kunnen.
+					{/if}
+					Jog naar het {welkMerk} en druk op Hier.
 				{/if}
 			</p>
+			<!-- Ook deze knop zegt wát hij vastlegt: met twee rondjes voor je neus is
+			     "Hier" alleen niet genoeg om te weten welk van de twee je nu bevestigt. -->
 			<button class="btn primary" type="button" onclick={hier} disabled={tiling.busy}>
-				Hier ({getikt.length}/{nodig})
+				{#if eerste}
+					Hier · hoek van de plaat
+				{:else}
+					Hier · {welkMerk} ({getikt.length + 1}/{nodig})
+				{/if}
 			</button>
 			{#if !eerste && getikt.length > 0}
 				<!-- De aangetikte merken staan alleen in het geheugen van deze
@@ -163,6 +223,22 @@
 		margin: 2px 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
+	}
+	.voortgang {
+		display: flex;
+		gap: var(--space-2);
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.voortgang .klaar {
+		color: var(--text-1);
+	}
+	.voortgang .nu {
+		color: var(--accent);
+		font-weight: 600;
 	}
 	.uitgelijnd {
 		color: var(--text-1);
