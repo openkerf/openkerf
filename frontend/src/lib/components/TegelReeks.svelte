@@ -30,21 +30,31 @@
 	// weg, en de enige uitweg zou de reeks stoppen zijn — en daarmee de
 	// uitlijning weggooien voor niets.
 	/**
-	 * Hoe ver de plaat moet opschuiven, zoals de server hem uitrekent.
+	 * Hoe ver de plaat moet opschuiven, en welke kant op.
 	 *
-	 * Zelf uitrekenen ging mis: het verschil tussen twee brandgebieden is een
-	 * halve overlap groter dan dat tussen twee vensters, en met dat grotere getal
-	 * schuif je de merken van het bed af. Gemeten op een plaat van 500 mm met een
-	 * bed van 235 mm: 179 mm in plaats van 143 legde het eerste merk op bed-x
-	 * −31,5. Nu komt de afstand uit `shift_mm`, waar hij één eigenaar heeft.
+	 * De afstand komt van de server (`shift_mm`): zelf uitrekenen ging mis, want
+	 * het verschil tussen twee brandgebieden is een halve overlap groter dan dat
+	 * tussen twee vensters, en met dat grotere getal schuif je de merken van het
+	 * bed af.
+	 *
+	 * De richting is **vast per as**, en dat is geen versimpeling: de vensters
+	 * lopen op, dus de verschuiving is altijd positief. Hier stond een keuze
+	 * tussen "boven" en "beneden" alsof beide konden voorkomen — nagerekend over
+	 * platen van 500 tot 1200 mm is de stap in élk geval positief, dus die tweede
+	 * tak was onbereikbaar en suggereerde een zorgvuldigheid die er niet was.
+	 *
+	 * Overschrijdt de plaat het bed in de hoogte, dan gaat hij **naar boven** —
+	 * dat is de richting die Jelles 5030 nodig heeft, en de enige die een machine
+	 * zonder zij-invoer kan. Voor een te brede plaat staat er "naar links"; dat is
+	 * niet op een machine bevestigd en geldt zolang niemand het tegendeel meet.
 	 */
 	const verschuiving = $derived.by(() => {
 		const stap = tiling.layout?.tiles?.[run?.current ?? 0]?.shift_mm;
 		if (!stap) return null;
-		if (Math.abs(stap.x) >= Math.abs(stap.y)) {
-			return { mm: Math.abs(stap.x), richting: stap.x > 0 ? 'naar links' : 'naar rechts' };
+		if (Math.abs(stap.y) >= Math.abs(stap.x)) {
+			return { mm: Math.abs(stap.y), richting: 'naar boven' };
 		}
-		return { mm: Math.abs(stap.y), richting: stap.y > 0 ? 'naar boven' : 'naar beneden' };
+		return { mm: Math.abs(stap.x), richting: 'naar links' };
 	});
 
 	/**
