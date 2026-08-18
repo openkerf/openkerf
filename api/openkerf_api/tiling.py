@@ -73,14 +73,19 @@ def _axis(
     zodat de overlap ruimer wordt dan het minimum en er nooit een laatste
     strookje overblijft waar geen merk in past.
     """
+    if bed >= plate:
+        # De plaat past. De marge is er om merken van de bedrand te houden, en
+        # bij één venster is er geen naad en dus geen merk — meten met
+        # `bed - 2·marge` verklaarde een vel van precies de bedmaat 'te groot',
+        # op Jelles 5030 de standaardmaat.
+        return [(0.0, plate)]
+
     usable = bed - 2 * settings.margin_mm
     if usable <= 0:
         raise TilingError(
             "Het bed is kleiner dan tweemaal de marge, dus er blijft niets over "
             "om in te branden. Zet de marge lager."
         )
-    if usable >= plate:
-        return [(0.0, plate)]
     if usable <= settings.overlap_mm:
         raise TilingError(
             f"Het bruikbare bed is {usable:.0f} mm en de overlap {settings.overlap_mm:.0f} mm. "

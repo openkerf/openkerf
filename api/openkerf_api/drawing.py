@@ -1325,11 +1325,19 @@ class Drawing:
         snijden, gooit eerst de lagen weg die hij niet wil, maakt een snijlaag
         en wijst alles opnieuw toe.
 
-        Het losmaken is hier de kern, niet het toewijzen. Een element mag in
-        meerdere lagen zitten (operaties houden verwijzingen, geen elementen),
-        dus alleen toewijzen laat de vorm in zijn oude laag staan en brandt hem
-        twee keer.
+        Het losmaken is de kern, niet het toewijzen. Een element mag in meerdere
+        lagen zitten (operaties houden verwijzingen, geen elementen), dus alleen
+        toewijzen laat de vorm in zijn oude laag staan en brandt hem twee keer.
+
+        Dit is hetzelfde verplaatsen als `paint`, met een ander adres: `paint`
+        vraagt om een **kleur** (de strook onder het canvas), dit om een
+        **soort**. Dat verschil is het hele punt — "dit moet gesneden worden" is
+        wat iemand bedoelt, en welk vakje in de strook de snijlaag is, weet hij
+        niet. De lijnkleur gaat om dezelfde reden als daar mee: in MeerK40t is
+        de lijnkleur waar de classificatie op werkt, dus zonder dat springt de
+        vorm bij een volgende classificatie terug naar zijn oude laag.
         """
+        from meerk40t.svgelements import Color
         nodes = self._nodes(element_ids)
 
         if operation_id is not None:
@@ -1353,24 +1361,29 @@ class Drawing:
                 else self._operation(self.create_operation(kind)["id"])
             )
 
+        kleur = getattr(doel, "color", None)
         assigned = 0
         removed = 0
         with self.elements.undoscope("Naar één laag"):
-            for operation in list(self.elements.ops()):
-                if operation is doel:
-                    continue
-                for child in list(operation.children):
-                    if str(getattr(child, "type", "")) != "reference":
-                        continue
-                    if any(getattr(child, "node", None) is node for node in nodes):
-                        child.remove_node()
-                        removed += 1
             for node in nodes:
-                if not any(
-                    getattr(c, "node", None) is node for c in doel.children
-                ):
+                # De knoop weet zelf in welke lagen hij hangt; dat is korter dan
+                # alle lagen aflopen, en het is hoe `paint` het ook doet.
+                for reference in list(getattr(node, "_references", [])):
+                    if reference.parent is None:
+                        continue
+                    if reference.parent is doel:
+                        continue
+                    reference.remove_node()
+                    removed += 1
+                if not any(getattr(c, "node", None) is node for c in doel.children):
                     doel.add_reference(node)
                     assigned += 1
+                if kleur is not None and hasattr(node, "stroke"):
+                    node.stroke = Color(kleur)
+                    # Zoals de engine het in `element_stroke` doet: geen
+                    # altered(), want dat gooit de gecachete geometrie weg.
+                    node.translated(0, 0)
+        self.elements.signal("element_property_reload", nodes)
         self.elements.set_emphasis(nodes)
         self._refresh()
         return {

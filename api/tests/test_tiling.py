@@ -128,6 +128,27 @@ def test_a_plate_too_big_in_both_directions_is_refused():
     assert "twee richtingen" in str(fout.value)
 
 
+def test_a_plate_that_exactly_fits_the_bed_needs_no_tiles():
+    """
+    Een plaat die op het bed past, hoeft niet opgedeeld — ook niet als hij
+    precies zo groot is als het bed.
+
+    Gemeten fout: de as rekende met `bed − 2·marge`, dus een vel van 500×300 op
+    een bed van 500×300 gold als 'te groot in beide richtingen' en werd
+    geweigerd. Dat is precies de standaardmaat van Jelles 5030, en het leverde
+    bij elke paginalading een 409 op. De marge is er voor de merken op een naad;
+    bij één tegel is er geen naad en dus geen merk, en dan mag de plaat het hele
+    bed gebruiken.
+    """
+    assert len(tile_layout(500.0, 300.0, 500.0, 300.0, settings())) == 1
+    assert len(tile_layout(499.0, 299.0, 500.0, 300.0, settings())) == 1
+
+    # Eén millimeter te hoog is wél opdelen, en dan alleen in de hoogte.
+    tegels = tile_layout(500.0, 301.0, 500.0, 300.0, settings())
+    assert len(tegels) > 1
+    assert {t.column for t in tegels} == {0}
+
+
 def test_a_bed_smaller_than_the_overlap_is_refused_with_a_sentence():
     with pytest.raises(TilingError) as fout:
         tile_layout(900.0, 200.0, 40.0, 300.0, settings(overlap_mm=25.0))

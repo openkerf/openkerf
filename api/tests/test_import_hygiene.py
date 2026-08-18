@@ -191,6 +191,24 @@ def test_one_layer_can_be_pointed_at_an_existing_layer(kernel, drawing):
     assert [op.id for op in layers_with_live_work(kernel)] == [doel["id"]]
 
 
+def test_the_shape_takes_the_colour_of_the_layer_it_moves_to(kernel, drawing):
+    """
+    Zonder de lijnkleur springt de vorm bij een volgende classificatie terug.
+
+    In MeerK40t ís de lijnkleur waar de classificatie op werkt. Dezelfde regel
+    als bij de kleurenstrook (`Drawing.paint`), en hier net zo nodig: een
+    geïmporteerd zwart pad blijft anders 'zwart = raster'.
+    """
+    vorm = drawing.create("rect", x_mm=10, y_mm=10, width_mm=20, height_mm=20)
+    laag = drawing.create_operation("cut", label="Buitenrand")
+    doel = kernel.elements.find_node(laag["id"])
+
+    drawing.single_layer(vorm["ids"], operation_id=laag["id"])
+
+    node = kernel.elements.find_node(vorm["ids"][0])
+    assert str(node.stroke).lower() == str(doel.color).lower()
+
+
 # --------------------------------------------------------------- opruimen
 
 

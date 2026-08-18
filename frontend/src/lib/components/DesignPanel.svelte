@@ -908,7 +908,7 @@
 							stukken pas na het splitsen.
 						</p>
 						<button
-							class="primair"
+							class="rot primair"
 							disabled={edits.busy}
 							onclick={() => onSplit?.()}
 						>Splitsen in {teSplitsen.stukken} vormen</button>
