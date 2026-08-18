@@ -409,6 +409,14 @@
 	// fout maar een werkwijze — dat is precies waarvoor tegelen bestaat. Dezelfde
 	// vergelijking als `buitenstaanders` hieronder, maar dan op het vel zelf in
 	// plaats van op een vorm erin.
+	/**
+	 * De naad waarvan je nú de merken aantikt, of null als er geen reeks loopt.
+	 *
+	 * Aantikken doe je de merken van de naad vóór de huidige tegel: die heeft de
+	 * vorige tegel gebrand. Zonder reeks is er geen "nu" en staat alles even hard.
+	 */
+	let actieveGrens = $derived(tiling?.run ? tiling.run.current - 1 : null);
+
 	let plaatTeGroot = $derived(
 		Boolean(sheet && buitenKader({ x: 0, y: 0, width: sheet.width, height: sheet.height }, bed))
 	);
@@ -1485,7 +1493,15 @@
 						{/each}
 						{#each tegelLayout.marks as merk (merk.boundary)}
 							{#each merk.points as punt, i (i)}
-								<g class="tegel-merk">
+								<!-- De merken van de naad die je nú aantikt staan vol; de rest
+								     dimt. Zonder dat verschil staan er bij drie tegels vier merken
+								     die 1, 2, 1, 2 heten, en dan is een nummer net zo verwarrend
+								     als een positiewoord. Aantikken doe je de merken van de naad
+								     vóór de huidige tegel — die heeft de vorige tegel gebrand. -->
+								<g
+									class="tegel-merk"
+									class:actief={actieveGrens === null || merk.boundary === actieveGrens}
+								>
 									<circle cx={punt.x_mm} cy={punt.y_mm} r={4 * mmPerPx} />
 									<line
 										x1={punt.x_mm - 4 * mmPerPx}
@@ -1499,6 +1515,17 @@
 										x2={punt.x_mm}
 										y2={punt.y_mm + 4 * mmPerPx}
 									/>
+									<!-- Hetzelfde nummer dat naast het rondje gebrand wordt, aan
+									     dezelfde kant. Op schermgrootte, net als het symbool zelf:
+									     dit is een aanwijzer, geen maatvaste weergave. Tekst in een
+									     SVG die in millimeters meet moet tegengeschaald worden,
+									     vandaar `mmPerPx` in de fontgrootte. -->
+									<text
+										x={merk.along_y ? punt.x_mm : punt.x_mm + 7 * mmPerPx}
+										y={merk.along_y ? punt.y_mm + 13 * mmPerPx : punt.y_mm + 4 * mmPerPx}
+										font-size={11 * mmPerPx}
+										text-anchor={merk.along_y ? 'middle' : 'start'}
+									>{i + 1}</text>
 								</g>
 							{/each}
 						{/each}
@@ -2612,6 +2639,14 @@
 	}
 	.tegel-merk {
 		pointer-events: none;
+		/* Niet de merken van de naad die nu aan de beurt is. Zonder dit verschil
+		   staan er bij drie tegels vier merken die 1, 2, 1, 2 heten, en is een
+		   nummer even verwarrend als een positiewoord. Loopt er geen reeks, dan is
+		   er ook geen "nu" en staan ze allemaal even hard — dan is dit een plan. */
+		opacity: 0.35;
+	}
+	.tegel-merk.actief {
+		opacity: 1;
 	}
 	.tegel-merk circle {
 		fill: none;
@@ -2625,6 +2660,12 @@
 		stroke-width: 1.4;
 		stroke-opacity: 0.75;
 		vector-effect: non-scaling-stroke;
+	}
+	.tegel-merk text {
+		fill: var(--text-1);
+		fill-opacity: 0.8;
+		font-weight: 600;
+		stroke: none;
 	}
 	/* Het verse stuk in het accent: daar is de machine nu bezig, en dat is het
 	   enige stuk waarvan je zeker weet dat het net gebeurd is. */

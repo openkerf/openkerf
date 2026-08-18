@@ -197,6 +197,40 @@ def _overlaps(a: Rect, b: Rect) -> bool:
     return not (a.x1 <= b.x0 or b.x1 <= a.x0 or a.y1 <= b.y0 or b.y1 <= a.y0)
 
 
+#: Breedte van het gebrande cijfer naast een merk, als fractie van de
+#: markergrootte. Een cijfer hoeft niet groot: het staat naast een rondje dat je
+#: al gevonden hebt, en moet alleen 1 van 2 onderscheiden.
+CIJFER_FRACTIE = 0.7
+
+#: Ruimte tussen het rondje en zijn cijfer.
+CIJFER_GAT_MM = 1.5
+
+
+def mark_footprint(punt: Point, size_mm: float, zone: Rect) -> Rect:
+    """
+    Wat een merk in beslag neemt: het rondje én zijn cijfer.
+
+    Het cijfer staat langs de **lange as** van de overlapzone, niet er dwars op.
+    Dat is geen smaak: de breedte van de overlap is de krappe maat — bij het
+    instellen wordt al geëist dat een merk erin past (`Sheets._tiling`) — en zou
+    het cijfer die kant op staan, dan werden bestaande instellingen ineens te
+    smal. In de lengte is er ruimte over: gemeten zijn die zones 150 tot 200 mm
+    lang tegen 50 tot 72 mm breed.
+    """
+    half = size_mm / 2
+    extra = size_mm * CIJFER_FRACTIE + CIJFER_GAT_MM
+    if zone.height >= zone.width:
+        return Rect(
+            punt.x_mm - half,
+            punt.y_mm - half,
+            punt.x_mm + half,
+            punt.y_mm + half + extra,
+        )
+    return Rect(
+        punt.x_mm - half, punt.y_mm - half, punt.x_mm + half + extra, punt.y_mm + half
+    )
+
+
 def marker_spots(
     zone: Rect, blocked: list[Rect], size_mm: float, clearance_mm: float = 2.0
 ) -> tuple[Point, Point]:
@@ -209,19 +243,30 @@ def marker_spots(
     betekent een nauwkeuriger hoek, en de uitersten zijn deterministisch waar
     'het verste paar' bij gelijkspel dat niet is.
     """
-    stap = size_mm + clearance_mm
     half = size_mm / 2 + clearance_mm / 2
+    extra = size_mm * CIJFER_FRACTIE + CIJFER_GAT_MM
+    langs_y = zone.height >= zone.width
+    # De stap is in de lengterichting groter, want daar staat het cijfer.
+    stap_x = size_mm + clearance_mm + (0.0 if langs_y else extra)
+    stap_y = size_mm + clearance_mm + (extra if langs_y else 0.0)
 
     vrij: list[Point] = []
     y = zone.y0 + half
     while y <= zone.y1 - half + 1e-9:
         x = zone.x0 + half
         while x <= zone.x1 - half + 1e-9:
-            vak = Rect(x - half, y - half, x + half, y + half)
-            if not any(_overlaps(vak, b) for b in blocked):
-                vrij.append(Point(x, y))
-            x += stap
-        y += stap
+            punt = Point(x, y)
+            vak = mark_footprint(punt, size_mm, zone)
+            binnen = (
+                zone.x0 <= vak.x0
+                and vak.x1 <= zone.x1
+                and zone.y0 <= vak.y0
+                and vak.y1 <= zone.y1
+            )
+            if binnen and not any(_overlaps(vak, b) for b in blocked):
+                vrij.append(punt)
+            x += stap_x
+        y += stap_y
 
     if len(vrij) < 2:
         raise TilingError(

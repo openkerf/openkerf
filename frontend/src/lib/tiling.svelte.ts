@@ -17,7 +17,13 @@ export type Tile = {
 	 *  vensters en niet die tussen de brandgebieden — zie `_tile_json`. */
 	shift_mm: { x: number; y: number } | null;
 };
-export type Mark = { boundary: number; points: { x_mm: number; y_mm: number }[] };
+export type Mark = {
+	boundary: number;
+	/** Of de overlapzone hoog-en-smal is. Bepaalt aan welke kant het nummer van
+	 *  een merk staat — gebrand én op het canvas, zodat ze overeenkomen. */
+	along_y: boolean;
+	points: { x_mm: number; y_mm: number }[];
+};
 
 export type TileLayout = { tiles: Tile[]; marks: Mark[]; crossings: number };
 export type TileRun = {

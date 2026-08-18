@@ -48,23 +48,15 @@
 	});
 
 	/**
-	 * Welk merk je nu moet aantikken, in woorden die op het bed te vinden zijn.
+	 * Welk merk nu aan de beurt is — bij nummer, niet bij plaats.
 	 *
-	 * "Het eerste merk" zegt niets als er twee rondjes voor je liggen. Welke van
-	 * de twee het is, volgt uit hun plek: liggen ze naast elkaar dan is het het
-	 * linker of rechter, liggen ze boven elkaar dan het bovenste of onderste.
+	 * Hier stond "het linker" of "het bovenste merk", afgeleid uit de onderlinge
+	 * ligging. Dat woord hing af van `flip_x`, `swap_xy` en de thuishoek van de
+	 * machine, en kon dus omgekeerd zijn zonder dat iemand het merkte. Een nummer
+	 * hangt van niets af, en het staat gebrand naast het rondje — daarom is het
+	 * ook op de plaat te vinden, wat een nummer zonder die gravure niet zou zijn.
 	 */
-	const welkMerk = $derived.by(() => {
-		const merken = tiling.layout?.marks?.find((m) => m.boundary === (run?.current ?? 0) - 1);
-		const punten = merken?.points;
-		if (!punten || punten.length < 2) return getikt.length === 0 ? 'eerste' : 'tweede';
-		const [a, b] = punten;
-		const horizontaal = Math.abs(b.x_mm - a.x_mm) >= Math.abs(b.y_mm - a.y_mm);
-		const eerstIsLaag = horizontaal ? a.x_mm <= b.x_mm : a.y_mm <= b.y_mm;
-		const namen = horizontaal ? ['linker', 'rechter'] : ['bovenste', 'onderste'];
-		const index = getikt.length === 0 ? 0 : 1;
-		return `${eerstIsLaag ? namen[index] : namen[1 - index]} merk`;
-	});
+	const welkMerk = $derived(`merk ${getikt.length + 1}`);
 
 	const magOpnieuw = $derived(
 		typeof tiling.error === 'string' && tiling.error.includes('al gebrand')
@@ -153,7 +145,7 @@
 					{:else}
 						Schuif de plaat op tot de twee merken onder de kop kunnen.
 					{/if}
-					Jog naar het {welkMerk} en druk op Hier.
+					Jog naar {welkMerk} en druk op Hier.
 				{/if}
 			</p>
 			<!-- Ook deze knop zegt wát hij vastlegt: met twee rondjes voor je neus is
@@ -162,7 +154,7 @@
 				{#if eerste}
 					Hier · hoek van de plaat
 				{:else}
-					Hier · {welkMerk} ({getikt.length + 1}/{nodig})
+					Hier · {welkMerk} van {nodig}
 				{/if}
 			</button>
 			{#if !eerste && getikt.length > 0}

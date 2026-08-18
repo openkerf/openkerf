@@ -36,24 +36,86 @@ MARKER_SPEED_MM_S = 60.0
 MARKER_POWER = 300.0  # 30 %
 
 
-def marker_geometry(points, size_mm: float, units_per_mm: float):
-    """
-    De uitlijnmerken als geometrie: een cirkel met een kruis erin.
+#: De twee cijfers die we ooit nodig hebben, als polylijn in een eenheidsvak:
+#: x en y van 0 tot 1, y naar beneden zoals de scène zelf. Zelf getekend, want
+#: voor twee glyphs een font-engine binnenhalen is buiten verhouding — en
+#: `linetext` overschrijft bovendien bij elke aanroep `last_font` (CLAUDE.md).
+#: Eén doorlopende streek per cijfer: dat brandt een laser in één beweging.
+CIJFERS = {
+    1: [(0.15, 0.22), (0.5, 0.0), (0.5, 1.0)],
+    2: [
+        (0.08, 0.22),
+        (0.26, 0.0),
+        (0.62, 0.0),
+        (0.8, 0.22),
+        (0.8, 0.42),
+        (0.1, 1.0),
+        (0.86, 1.0),
+    ],
+}
 
-    De cirkel geeft een rand om de kop op te richten die een los kruis niet
-    heeft; het snijpunt van het kruis is het punt dat je aantikt.
+
+def digit_geometry(cijfer: int, x: float, y: float, hoogte: float):
+    """
+    Eén cijfer als geometrie, met zijn linkerbovenhoek op (x, y).
+
+    `hoogte` is de volle hoogte; de breedte volgt uit de vorm van het cijfer.
     """
     from meerk40t.core.geomstr import Geomstr
 
-    straal = size_mm / 2 * units_per_mm
+    punten = CIJFERS.get(cijfer)
+    if punten is None:
+        raise ValueError(f"Geen cijfer getekend voor {cijfer}.")
     geom = Geomstr()
-    for punt in points:
+    vorig = None
+    for px, py in punten:
+        nu = complex(x + px * hoogte, y + py * hoogte)
+        if vorig is not None:
+            geom.line(vorig, nu)
+        vorig = nu
+    return geom
+
+
+def marker_geometry(points, size_mm: float, units_per_mm: float, along_y: bool = True):
+    """
+    De uitlijnmerken als geometrie: een cirkel met een kruis erin, én zijn nummer.
+
+    De cirkel geeft een rand om de kop op te richten die een los kruis niet
+    heeft; het snijpunt van het kruis is het punt dat je aantikt.
+
+    **Het nummer wordt meegebrand, en dat is de hele reden dat het bestaat.** Op
+    het scherm "merk 1" zeggen is niets waard als er op de plaat twee identieke
+    rondjes liggen — dan is een positiewoord ("het linker") nog altijd beter, en
+    dat woord was juist het probleem: het hangt af van `flip_x`, `swap_xy` en de
+    thuishoek, en kan dus omgekeerd zijn. Een gebrand cijfer hangt van niets af.
+
+    `along_y` zegt of de zone hoog-en-smal is (cijfer onder het rondje) of
+    breed-en-laag (cijfer ernaast). Alleen dát heeft de tekening nodig van de
+    zone, dus dat geven we mee in plaats van de rechthoek — om dezelfde reden als
+    in `mark_footprint`: de breedte van de overlap is de krappe maat, dus daar
+    komt nooit iets bij.
+    """
+    from meerk40t.core.geomstr import Geomstr
+
+    from .tiling import CIJFER_FRACTIE, CIJFER_GAT_MM
+
+    straal = size_mm / 2 * units_per_mm
+    hoogte = size_mm * CIJFER_FRACTIE * units_per_mm
+    gat = CIJFER_GAT_MM * units_per_mm
+    geom = Geomstr()
+    for nummer, punt in enumerate(points, 1):
         cx = punt.x_mm * units_per_mm
         cy = punt.y_mm * units_per_mm
         geom.append(Geomstr.circle(straal, cx, cy))
         geom.line(complex(cx - straal, cy), complex(cx + straal, cy))
         geom.end()
         geom.line(complex(cx, cy - straal), complex(cx, cy + straal))
+        geom.end()
+        if along_y:
+            hoek_x, hoek_y = cx - hoogte / 2, cy + straal + gat
+        else:
+            hoek_x, hoek_y = cx + straal + gat, cy - hoogte / 2
+        geom.append(digit_geometry(nummer, hoek_x, hoek_y, hoogte))
         geom.end()
     return geom
 
@@ -433,6 +495,9 @@ class TileRun:
             merken.append(
                 {
                     "boundary": links.index,
+                    # Welke as de lange is: het cijfer van een merk staat daar
+                    # langs, en het canvas moet hem aan dezelfde kant zetten.
+                    "along_y": zone.height >= zone.width,
                     "points": [
                         {"x_mm": een.x_mm, "y_mm": een.y_mm},
                         {"x_mm": twee.x_mm, "y_mm": twee.y_mm},
@@ -675,6 +740,7 @@ class TileRun:
                 [Point(p["x_mm"], p["y_mm"]) for p in merken[0]["points"]],
                 self._settings(self._sheet()).marker_size_mm,
                 u,
+                merken[0].get("along_y", True),
             )
             if merken
             else None

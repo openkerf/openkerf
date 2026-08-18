@@ -389,12 +389,19 @@ def test_a_mark_is_a_circle_with_a_cross_in_it(kernel):
     """
     De cirkel geeft een rand om de kop op te richten die een los kruis niet
     heeft; het kruis geeft het middelpunt dat je aantikt.
+
+    Het rondje is precies de gevraagde maat. Het mérk is groter, want er staat
+    een cijfer naast — die maat zit in `mark_footprint`, want alleen de zoeker
+    hoeft hem te weten. Dwars op de lange as verandert er niets, en dat is met
+    opzet: de overlapbreedte is de krappe maat.
     """
     geom = marker_geometry([Point(100.0, 50.0)], size_mm=8.0, units_per_mm=UNITS_PER_MM)
 
     x0, y0, x1, y1 = geom.bbox()
+    # Zonder zone staat het cijfer eronder (de gewone stand, een smalle zone),
+    # dus de breedte is die van het rondje en de hoogte niet.
     assert (x1 - x0) / UNITS_PER_MM == pytest.approx(8.0, abs=0.1)
-    assert (y1 - y0) / UNITS_PER_MM == pytest.approx(8.0, abs=0.1)
+    assert (y1 - y0) / UNITS_PER_MM > 8.0
 
 
 def test_the_marks_are_burned_last(kernel):
@@ -679,3 +686,77 @@ def test_bands_stay_contiguous_after_a_seam_is_nudged(kernel, tmp_path):
             "gat of overlap tussen twee banden: wat ertussen ligt wordt nooit "
             "gebrand, of tweemaal"
         )
+
+
+# ------------------------------------------------------- genummerde merken
+
+
+def test_a_digit_is_one_continuous_stroke_of_the_asked_size():
+    """
+    De cijfers worden zelf getekend, niet via een font.
+
+    Twee glyphs is te weinig om er font-machinerie voor binnen te halen — en
+    `linetext` sleept bovendien de valstrik mee dat élke tekstplaatsing
+    `last_font` overschrijft (zie CLAUDE.md). Eén doorlopende streek per cijfer is
+    voor een laser ook het prettigst.
+    """
+    from openkerf_api.tilerun import digit_geometry
+
+    for cijfer in (1, 2):
+        geom = digit_geometry(cijfer, 0.0, 0.0, 6.0)
+        assert geom.index >= 2, "een cijfer bestaat uit meer dan één streek"
+        x0, y0, x1, y1 = geom.bbox()
+        assert y1 - y0 == pytest.approx(6.0, rel=1e-6)
+        assert 0 < x1 - x0 <= 6.0
+
+
+def test_the_two_digits_are_not_the_same_shape():
+    """Anders had het geen zin: het verschil is het hele punt."""
+    from openkerf_api.tilerun import digit_geometry
+
+    een = digit_geometry(1, 0.0, 0.0, 6.0)
+    twee = digit_geometry(2, 0.0, 0.0, 6.0)
+
+    def lengte(g):
+        return sum(abs(g.length(i)) for i in range(g.index))
+
+    assert lengte(een) != pytest.approx(lengte(twee), rel=0.05)
+
+
+def test_a_burned_mark_carries_its_number(kernel):
+    """
+    Het nummer moet op de plaat staan, niet alleen op het scherm.
+
+    Zonder gebrand cijfer is "jog naar merk 1" onbruikbaar: dan liggen er twee
+    identieke rondjes en is het positiewoord dat we juist wegdeden nog altijd het
+    enige houvast. Deze test meet dat de geometrie van twee merken méér is dan
+    tweemaal hetzelfde rondje.
+    """
+    from openkerf_api.tilerun import marker_geometry
+    from openkerf_api.tiling import Point
+
+    een = marker_geometry([Point(100.0, 20.0)], 8.0, UNITS_PER_MM)
+    twee = marker_geometry([Point(100.0, 20.0), Point(100.0, 180.0)], 8.0, UNITS_PER_MM)
+
+    # Twee merken zijn meer dan tweemaal één merk: er komt per merk een cijfer bij.
+    assert twee.index > 2 * een.index
+
+
+def test_a_mark_reserves_room_for_its_digit(kernel):
+    """
+    De vrije-plek-zoeker moet het cijfer meerekenen, anders komt het op het werk
+    terecht — en dan is het merk zelf nog vrij maar zijn label niet.
+    """
+    from openkerf_api.tiling import Rect, marker_spots
+
+    # Een liggende zone met ruimte voor meerdere merken, zodat de zoeker echt
+    # kiest in plaats van te weigeren.
+    zone = Rect(0.0, 0.0, 60.0, 14.0)
+    een, twee = marker_spots(zone, [], size_mm=8.0)
+
+    from openkerf_api.tiling import mark_footprint
+
+    for punt in (een, twee):
+        vak = mark_footprint(punt, 8.0, zone)
+        assert zone.x0 <= vak.x0 and vak.x1 <= zone.x1, "cijfer valt buiten de zone"
+        assert zone.y0 <= vak.y0 and vak.y1 <= zone.y1
