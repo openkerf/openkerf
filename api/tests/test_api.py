@@ -103,6 +103,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # Hoeken afronden of afschuinen. Afronden van een rechthoek blijft een
         # rechthoek; al het andere wordt een pad, en dat is eenrichting.
         "/api/design/corners",
+        "/api/design/split",
+        "/api/design/single-layer",
+        "/api/design/operations/prune",
         "/api/design/effect",
         "/api/design/mirror",
         "/api/design/boolean",

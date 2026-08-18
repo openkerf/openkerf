@@ -45,6 +45,16 @@ OPERATIONS = {
     "dots": "dots",
 }
 
+# Het knooptype dat bij elk laagtype hoort — nodig om een bestaande laag van
+# het gevraagde soort terug te vinden in plaats van er nog een aan te maken.
+_OPERATION_TYPES = {
+    "cut": "op cut",
+    "engrave": "op engrave",
+    "raster": "op raster",
+    "image": "op image",
+    "dots": "op dots",
+}
+
 
 def _mm(value: float) -> str:
     return f"{value:.4f}mm"
@@ -1304,6 +1314,117 @@ class Drawing:
         self.user_operations.discard(operation_id)
         self._refresh()
         return {"removed": operation_id}
+
+    def single_layer(self, element_ids, kind: str = "cut", operation_id=None) -> dict:
+        """
+        Alles uit de selectie in één laag, en in geen enkele andere.
+
+        Wat een import kost zonder deze handeling: een tekening komt binnen in
+        de laag die de engine erbij vindt — bij een zwarte lijn is dat een
+        rasterlaag, want `classify_black_as_raster` staat aan — en wie het wil
+        snijden, gooit eerst de lagen weg die hij niet wil, maakt een snijlaag
+        en wijst alles opnieuw toe.
+
+        Het losmaken is hier de kern, niet het toewijzen. Een element mag in
+        meerdere lagen zitten (operaties houden verwijzingen, geen elementen),
+        dus alleen toewijzen laat de vorm in zijn oude laag staan en brandt hem
+        twee keer.
+        """
+        nodes = self._nodes(element_ids)
+
+        if operation_id is not None:
+            doel = self._operation(operation_id)
+            created = False
+        else:
+            wanted = _OPERATION_TYPES.get(kind)
+            if wanted is None:
+                raise DesignError(
+                    f"Onbekend laagtype: {kind}. Kies uit {', '.join(sorted(OPERATIONS))}."
+                )
+            bestaand = [
+                op
+                for op in self.elements.ops()
+                if str(op.type) == wanted and not self._is_board_layer(op)
+            ]
+            created = not bestaand
+            doel = (
+                bestaand[0]
+                if bestaand
+                else self._operation(self.create_operation(kind)["id"])
+            )
+
+        assigned = 0
+        removed = 0
+        with self.elements.undoscope("Naar één laag"):
+            for operation in list(self.elements.ops()):
+                if operation is doel:
+                    continue
+                for child in list(operation.children):
+                    if str(getattr(child, "type", "")) != "reference":
+                        continue
+                    if any(getattr(child, "node", None) is node for node in nodes):
+                        child.remove_node()
+                        removed += 1
+            for node in nodes:
+                if not any(
+                    getattr(c, "node", None) is node for c in doel.children
+                ):
+                    doel.add_reference(node)
+                    assigned += 1
+        self.elements.set_emphasis(nodes)
+        self._refresh()
+        return {
+            "operation_id": doel.id,
+            "type": str(doel.type),
+            "assigned": assigned,
+            "removed": removed,
+            "created": created,
+        }
+
+    def prune_operations(self) -> dict:
+        """
+        Lege lagen weg.
+
+        Een leeg project heeft er twaalf voor je iets gedaan hebt — de engine
+        maakt bij het opstarten een rasterlaag, twee graveerlagen en negen
+        snijlagen aan, één per palettekleur. Wie een tekening indeelt, houdt
+        daar de helft van over als lege regels in de lijst.
+
+        Een laag met alleen dode verwijzingen telt als leeg: na het splitsen van
+        een pad houdt een laag een verwijzing naar het verdwenen origineel, en
+        die laag stelt niets meer voor. Lagen van een testbord blijven staan,
+        ook leeg: die horen bij een bord en gaan er als geheel uit.
+        """
+        levend = {id(node) for node in self.elements.elems()}
+
+        def heeft_werk(operation) -> bool:
+            return any(
+                id(getattr(child, "node", None)) in levend
+                for child in operation.children
+                if str(getattr(child, "type", "")) == "reference"
+            ) or any(
+                str(getattr(child, "type", "")) != "reference"
+                for child in operation.children
+            )
+
+        doomed = [
+            op
+            for op in self.elements.ops()
+            if str(op.type).startswith("op ")
+            and not self._is_board_layer(op)
+            and not heeft_werk(op)
+        ]
+        if not doomed:
+            return {"removed": 0, "ids": []}
+
+        ids = [op.id for op in doomed]
+        with self.elements.undoscope("Lege lagen opruimen"):
+            for op in doomed:
+                op.remove_node()
+        for operation_id in ids:
+            self.user_operations.discard(operation_id)
+        self._refresh()
+        return {"removed": len(ids), "ids": ids}
 
     def delete_all_operations(self) -> dict:
         """

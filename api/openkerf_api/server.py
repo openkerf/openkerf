@@ -1123,6 +1123,31 @@ class ApiServer:
                 bool(body.get("absolute", False)),
             )
 
+        @app.post("/api/design/split", dependencies=write)
+        def split_elements(body: dict):
+            """
+            Een pad opdelen in zijn losse stukken.
+
+            Een CAD-export is vaak één pad met tientallen subpaden; daar valt
+            niets los aan te klikken. Hierna is elk stuk een eigen vorm.
+            """
+            return manage(self.editor.split, body.get("ids"))
+
+        @app.post("/api/design/single-layer", dependencies=write)
+        def single_layer(body: dict):
+            """De selectie in één laag, en uit alle andere."""
+            return manage(
+                self.drawing.single_layer,
+                body.get("ids"),
+                body.get("type") or "cut",
+                body.get("operation_id"),
+            )
+
+        @app.post("/api/design/operations/prune", dependencies=write)
+        def prune_operations():
+            """Lege lagen weg — een leeg project heeft er twaalf."""
+            return manage(self.drawing.prune_operations)
+
         @app.post("/api/design/assign", dependencies=write)
         def assign_elements(body: dict):
             """Add the elements to an operation — a layer in the UI."""

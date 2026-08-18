@@ -414,6 +414,11 @@ class DesignReader:
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,
+            # Uit hoeveel losse stukken de vorm bestaat. Een CAD-export is vaak
+            # één pad met tientallen panelen erin, en het paneel moet kunnen
+            # zeggen hoeveel vormen splitsen oplevert. Gratis af te lezen: elk
+            # stuk begint in de pad-data met een `M`.
+            "subpaths": (path or "").count("M"),
             "path": path or "",
         }
 

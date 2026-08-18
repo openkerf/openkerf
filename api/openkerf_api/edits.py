@@ -59,6 +59,18 @@ def _ids(value) -> list[str]:
     return [str(v) for v in value]
 
 
+def _subpath_count(node) -> int:
+    """Hoeveel losse stukken een vorm heeft; 0 als er geen geometrie is."""
+    try:
+        geometry = (
+            node.final_geometry() if hasattr(node, "final_geometry") else node.as_geometry()
+        )
+        geometry.ensure_proper_subpaths()
+        return len(list(geometry.as_subpaths()))
+    except AttributeError:
+        return 0
+
+
 class DesignEditor:
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
@@ -174,6 +186,62 @@ class DesignEditor:
                     removed += 1
         self._refresh()
         return {"operation_id": operation_id, "removed": removed}
+
+    # ---------------------------------------------------------------- splitsen
+
+    def split(self, element_ids) -> dict:
+        """
+        Break paths into their subpaths — one shape per piece.
+
+        A CAD export often holds a whole model in a single ``<path>``: 46
+        panels, nothing selectable on its own. The engine has ``subpath`` for
+        that. What it leaves behind is the problem: the original node is
+        replaced by a group, but every operation that referenced it keeps its
+        reference, now pointing at a node that is no longer in the tree.
+        Measured in a bare kernel — an engrave layer with one child had three
+        after splitting: the two new pieces plus the original. That layer would
+        burn the whole path *and* its pieces, so the dead references go here.
+        """
+        ids = _ids(element_ids)
+        nodes = [self._node(node_id) for node_id in ids]
+        splitsbaar = [node for node in nodes if _subpath_count(node) > 1]
+        skipped = len(nodes) - len(splitsbaar)
+        if not splitsbaar:
+            self.elements.set_emphasis(nodes)
+            return {"ids": [], "count": 0, "skipped": skipped}
+
+        before = {id(node) for node in self.elements.elems()}
+        self.elements.set_emphasis(splitsbaar)
+        self.runner.run("element subpath")
+        self._drop_dead_references()
+        self.elements.validate_ids()
+        created = [node for node in self.elements.elems() if id(node) not in before]
+        self.elements.set_emphasis(created)
+        self._refresh()
+        return {
+            "ids": [node.id for node in created],
+            "count": len(created),
+            "skipped": skipped,
+        }
+
+    def _drop_dead_references(self) -> int:
+        """
+        Verwijzingen naar elementen die niet meer in de boom staan, weghalen.
+
+        Alleen `reference`-kinderen: een operatie kan ook een echt kind hebben
+        (`effect hatch`), en dat is geen verwijzing en mag blijven staan.
+        """
+        levend = {id(node) for node in self.elements.elems()}
+        weg = 0
+        for operation in list(self.elements.ops()):
+            for child in list(operation.children):
+                if str(getattr(child, "type", "")) != "reference":
+                    continue
+                node = getattr(child, "node", None)
+                if node is None or id(node) not in levend:
+                    child.remove_node()
+                    weg += 1
+        return weg
 
     def apply_settings(
         self,
