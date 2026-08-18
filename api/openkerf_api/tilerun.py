@@ -337,27 +337,40 @@ class TileRun:
         De naad binnen de overlapzone naar waar hij de minste vormen kruist.
 
         Alleen op de as waarop opgedeeld is; op de andere as is er geen naad.
+        Beide assen tegelijk bestaat niet — dat weigert `tile_layout`.
+
+        **Lees uit `aangepast`, niet uit `tiles`.** Elke naad raakt twee tegels,
+        dus de middelste tegel wordt tweemaal beschreven: eerst zijn begin door
+        de naad ervóór, dan zijn eind door de naad erna. Wie voor die tweede
+        schrijfactie het origineel als basis neemt, gooit de eerste weg — en dan
+        eindigt tegel 0 op de verschoven naad terwijl tegel 1 nog op de oude
+        begint. Gemeten op een plaat van 200×500: tegel 0 tot 150,0 en tegel 1
+        vanaf 175,0, een gat van 25 mm dat bij geen enkele tegel hoort en dus
+        nooit gebrand wordt. Dat bleef verborgen zolang het verschuiven niets
+        veranderde, wat het geval is als er niets te ontwijken valt.
         """
         if len(tiles) < 2:
             return tiles
-        horizontaal = tiles[-1].column > 0
+        horizontaal = len({t.column for t in tiles}) > 1
         aangepast = list(tiles)
-        for links, rechts in zip(tiles, tiles[1:]):
-            if horizontaal and rechts.column == 0:
-                continue
+        for index in range(len(tiles) - 1):
+            links, rechts = aangepast[index], aangepast[index + 1]
             if horizontaal:
-                zone = (rechts.window.x0, links.window.x1)
-                x = best_split(zone[0], zone[1], [(s.x0, s.x1) for s in spans])
-                aangepast[links.index] = links._replace(burn=links.burn._replace(x1=x))
-                aangepast[rechts.index] = rechts._replace(
-                    burn=rechts.burn._replace(x0=x)
+                # Het venster verschuift niet mee, dus de zone blijft de zone.
+                naad = best_split(
+                    rechts.window.x0, links.window.x1, [(s.x0, s.x1) for s in spans]
+                )
+                aangepast[index] = links._replace(burn=links.burn._replace(x1=naad))
+                aangepast[index + 1] = rechts._replace(
+                    burn=rechts.burn._replace(x0=naad)
                 )
             else:
-                zone = (rechts.window.y0, links.window.y1)
-                y = best_split(zone[0], zone[1], [(s.y0, s.y1) for s in spans])
-                aangepast[links.index] = links._replace(burn=links.burn._replace(y1=y))
-                aangepast[rechts.index] = rechts._replace(
-                    burn=rechts.burn._replace(y0=y)
+                naad = best_split(
+                    rechts.window.y0, links.window.y1, [(s.y0, s.y1) for s in spans]
+                )
+                aangepast[index] = links._replace(burn=links.burn._replace(y1=naad))
+                aangepast[index + 1] = rechts._replace(
+                    burn=rechts.burn._replace(y0=naad)
                 )
         return aangepast
 
@@ -430,8 +443,23 @@ class TileRun:
 
     @staticmethod
     def _crossings(tiles, spans) -> int:
-        naden = [t.burn.x1 for t in tiles[:-1]]
-        return sum(1 for x in naden for s in spans if s.x0 < x < s.x1)
+        """
+        Hoeveel vormen door een naad gaan.
+
+        Op de as waarop opgedeeld is, en dat is niet altijd x: een plaat die
+        alleen te hóóg is wordt in banden opgedeeld en heeft dan geen enkele
+        x-naad. Alleen op x tellen gaf daar nul terwijl er wel degelijk vormen
+        doormidden gingen — stil verkeerd, en juist dit getal is waarop iemand
+        besluit een vorm te verschuiven. Beide assen tegelijk bestaat niet: dat
+        weigert `tile_layout`.
+        """
+        if len(tiles) < 2:
+            return 0
+        if len({t.column for t in tiles}) > 1:
+            naden = sorted({t.burn.x1 for t in tiles[:-1]})
+            return sum(1 for x in naden for s in spans if s.x0 < x < s.x1)
+        naden = sorted({t.burn.y1 for t in tiles[:-1]})
+        return sum(1 for y in naden for s in spans if s.y0 < y < s.y1)
 
     def _tile_json(self, tile, vorige=None) -> dict:
         """

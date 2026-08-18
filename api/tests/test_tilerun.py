@@ -513,3 +513,169 @@ def test_the_shift_puts_the_marks_on_the_bed(kernel, tmp_path):
             y = punt["y_mm"] - verschuiving["y"]
             assert 0 <= x <= bed[0], f"merk op bed-x {x:.1f} valt buiten 0..{bed[0]}"
             assert 0 <= y <= bed[1], f"merk op bed-y {y:.1f} valt buiten 0..{bed[1]}"
+
+
+def _hoog_vel(server):
+    """
+    Een plaat die alleen te hóóg is: 200 × 500 mm op het dummy-bed.
+
+    Dit is de richting die een machine zonder zij-invoer nodig heeft — je schuift
+    de plaat naar voren of naar achteren, niet zijwaarts. Geen enkele test
+    gebruikte hem, terwijl het de helft van de mogelijke opdelingen is.
+    """
+    vel = server.sheets.state()["sheets"][0]
+    server.sheets.update(vel["id"], width_mm=200.0, height_mm=500.0)
+    server.sheets.update(vel["id"], tiling={"enabled": True})
+    # Een vorm die de héle overlapzone van de eerste naad bedekt (die loopt van
+    # 142,5 tot 215), zodat er geen kruisingsvrije stand is om naartoe te
+    # schuiven. Een vorm die de zone maar deels raakt, wordt door de naadschuiver
+    # juist netjes ontweken — dat is de bedoeling, maar dan telt hij nul en toets
+    # je niets.
+    server.kernel.console("rect 40mm 120mm 100mm 120mm\n")
+    server.kernel.console("classify\n")
+
+
+def test_a_plate_that_is_only_too_tall_splits_into_bands(kernel, tmp_path):
+    """
+    De opdelingsrichting volgt het vel: te hoog geeft banden, geen kolommen.
+
+    Dat is geen detail voor wie een machine zonder zij-invoer heeft — dan is dit
+    de enige richting waarin hij een plaat kan verschuiven.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _hoog_vel(server)
+
+    opdeling = server.tiles.layout()
+
+    assert len(opdeling["tiles"]) > 1
+    assert {t["row"] for t in opdeling["tiles"]} == set(range(len(opdeling["tiles"])))
+    assert {t["column"] for t in opdeling["tiles"]} == {0}
+    # De brandgebieden liggen boven elkaar en raken elkaar, net als bij kolommen.
+    for boven, onder in zip(opdeling["tiles"], opdeling["tiles"][1:]):
+        assert boven["burn"]["y1_mm"] == pytest.approx(onder["burn"]["y0_mm"])
+        assert boven["burn"]["x0_mm"] == onder["burn"]["x0_mm"]
+
+
+def test_a_band_shifts_along_its_own_axis(kernel, tmp_path):
+    """De verschuiving hoort in y te zitten, niet in x."""
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _hoog_vel(server)
+
+    opdeling = server.tiles.layout()
+
+    assert opdeling["tiles"][0]["shift_mm"] is None
+    stap = opdeling["tiles"][1]["shift_mm"]
+    assert stap["x"] == pytest.approx(0.0)
+    assert stap["y"] > 0
+
+
+def test_the_marks_of_a_band_lie_side_by_side(kernel, tmp_path):
+    """
+    Bij banden is de overlapzone breed en laag, dus de merken liggen náást
+    elkaar. Hoe verder uit elkaar, hoe nauwkeuriger de hoek — en dat betekent
+    hier: langs de breedte van de plaat.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _hoog_vel(server)
+
+    merken = server.tiles.layout()["marks"][0]["points"]
+
+    breedte = abs(merken[1]["x_mm"] - merken[0]["x_mm"])
+    hoogte = abs(merken[1]["y_mm"] - merken[0]["y_mm"])
+    assert breedte > hoogte, "merken horen langs de lange as van de zone te liggen"
+    assert breedte > 100
+
+
+def test_crossings_are_counted_on_the_axis_that_was_split(kernel, tmp_path):
+    """
+    Het aantal doorgesneden vormen werd alleen op x geteld, dus bij banden kwam
+    er nul uit terwijl er wel degelijk iets doormidden ging. Dit ontwerp heeft
+    een vorm die over de eerste naad heen ligt, dus nul is hier het foute
+    antwoord.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    _hoog_vel(server)
+
+    opdeling = server.tiles.layout()
+
+    naad = opdeling["tiles"][0]["burn"]["y1_mm"]
+    assert 120.0 < naad < 240.0, "de naad hoort door de vorm te lopen"
+    assert opdeling["crossings"] >= 1
+
+
+def test_burn_regions_stay_contiguous_after_a_seam_is_nudged(kernel, tmp_path):
+    """
+    Ook in de kolomrichting mogen de brandgebieden na het verschuiven van een
+    naad geen gat laten.
+
+    Dit is dezelfde fout als bij de banden, van de andere kant benaderd: elke
+    naad raakt twee tegels, dus de middelste wordt tweemaal beschreven. Er ligt
+    hier één vorm die de eerste overlapzone maar déélt bedekt, zodat de naad
+    ernaartoe schuift en de tweede naad blijft liggen — precies de stand waarin
+    het gat zichtbaar werd.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    vel = server.sheets.state()["sheets"][0]
+    # 800 mm op het dummy-bed van 320 geeft drie tegels, en dus een middelste
+    # die tweemaal beschreven wordt — met twee tegels bestaat de fout niet.
+    server.sheets.update(vel["id"], width_mm=800.0, height_mm=150.0)
+    server.sheets.update(vel["id"], tiling={"enabled": True})
+    # Deze vorm ligt midden ín de eerste overlapzone (250-300), dus over het
+    # middelpunt 275 heen, met vrije ruimte aan weerszijden. Alleen dán verschuift
+    # de naad écht — een vorm die de zone volledig bedekt laat hem juist op het
+    # midden staan, en dan treedt de dubbel-schrijf-fout niet op en bewijst deze
+    # test niets. Dat is de valkuil waar de eerste versie in liep.
+    server.kernel.console("rect 265mm 20mm 20mm 60mm\n")
+    server.kernel.console("classify\n")
+
+    tegels = server.tiles.layout()["tiles"]
+
+    assert len(tegels) == 3
+    assert tegels[0]["burn"]["x0_mm"] == pytest.approx(0.0)
+    assert tegels[-1]["burn"]["x1_mm"] == pytest.approx(800.0)
+    for links, rechts in zip(tegels, tegels[1:]):
+        assert links["burn"]["x1_mm"] == pytest.approx(rechts["burn"]["x0_mm"]), (
+            "een gat of overlap tussen twee brandgebieden: geometrie ertussen "
+            "wordt nooit gebrand, of tweemaal"
+        )
+
+
+def test_bands_stay_contiguous_after_a_seam_is_nudged(kernel, tmp_path):
+    """
+    Hetzelfde in de bandrichting, en dit is de test die het gat vond.
+
+    De vorm ligt midden in de eerste overlapzone, zodat de naad ernaartoe
+    schuift. Zonder die verschuiving blijft de fout onzichtbaar.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "v.db")
+    vel = server.sheets.state()["sheets"][0]
+    server.sheets.update(vel["id"], width_mm=200.0, height_mm=500.0)
+    server.sheets.update(vel["id"], tiling={"enabled": True})
+    server.kernel.console("rect 40mm 168mm 100mm 14mm\n")
+    server.kernel.console("classify\n")
+
+    tegels = server.tiles.layout()["tiles"]
+
+    assert len(tegels) == 3
+    assert tegels[0]["burn"]["y1_mm"] != pytest.approx(
+        175.0
+    ), "de naad hoort verschoven te zijn; zonder verschuiving toetst deze test niets"
+    assert tegels[0]["burn"]["y0_mm"] == pytest.approx(0.0)
+    assert tegels[-1]["burn"]["y1_mm"] == pytest.approx(500.0)
+    for boven, onder in zip(tegels, tegels[1:]):
+        assert boven["burn"]["y1_mm"] == pytest.approx(onder["burn"]["y0_mm"]), (
+            "gat of overlap tussen twee banden: wat ertussen ligt wordt nooit "
+            "gebrand, of tweemaal"
+        )
