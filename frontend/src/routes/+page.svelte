@@ -390,6 +390,8 @@
 
 	/** Wat de laatste hoekbewerking te melden had; het paneel toont het. */
 	let hoekMelding = $state<string | null>(null);
+	/** Wat de laatste indeel-handeling deed (splitsen, laag, opruimen). */
+	let indeelMelding = $state<string | null>(null);
 
 	async function hoeken(style: 'round' | 'chamfer', sizeMm: number) {
 		if (!canEdit || !hasSelection) return;
@@ -407,6 +409,51 @@
 				`${uitkomst.skipped} ${uitkomst.skipped === 1 ? 'hoek is' : 'hoeken zijn'} ` +
 				'overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.';
 		}
+	}
+
+	async function splitsen() {
+		if (!canEdit || !hasSelection) return;
+		indeelMelding = null;
+		const uitkomst = await edits.split(design.selectedIds);
+		if (!uitkomst) return;
+		// De stukken zijn nieuwe elementen; de oude selectie wijst naar een pad
+		// dat door een groep vervangen is.
+		design.select(null);
+		await design.load();
+		if (uitkomst.count) {
+			design.selectMany(uitkomst.ids);
+			indeelMelding = `${uitkomst.count} vormen — los aan te klikken.`;
+		} else {
+			indeelMelding = 'Deze vorm bestaat uit één stuk; er valt niets te splitsen.';
+		}
+	}
+
+	async function naarEenLaag(kind: 'cut' | 'engrave') {
+		if (!canEdit || !hasSelection) return;
+		indeelMelding = null;
+		const uitkomst = await edits.singleLayer(design.selectedIds, kind);
+		if (!uitkomst) return;
+		await design.load();
+		const laag = design.operations.find((o) => o.id === uitkomst.operation_id);
+		const naam = laag?.label ?? (kind === 'cut' ? 'Snijden' : 'Graveren');
+		const uit = uitkomst.removed
+			? `, uit ${uitkomst.removed} ${uitkomst.removed === 1 ? 'toewijzing' : 'toewijzingen'} gehaald`
+			: '';
+		indeelMelding =
+			`${uitkomst.assigned || design.selectedIds.length} ` +
+			`${(uitkomst.assigned || design.selectedIds.length) === 1 ? 'vorm' : 'vormen'} ` +
+			`in ${uitkomst.created ? 'een nieuwe laag' : 'laag'} “${naam}”${uit}.`;
+	}
+
+	async function opruimen() {
+		if (!canEdit) return;
+		indeelMelding = null;
+		const uitkomst = await edits.prune();
+		if (!uitkomst) return;
+		await design.load();
+		indeelMelding = uitkomst.removed
+			? `${uitkomst.removed} lege ${uitkomst.removed === 1 ? 'laag' : 'lagen'} weg.`
+			: 'Er stond geen lege laag in de lijst.';
 	}
 
 	async function arrange(action: string) {
@@ -898,6 +945,10 @@
 					onArrange={arrange}
 					onCorners={hoeken}
 					cornerNote={hoekMelding}
+					onSplit={splitsen}
+					onSingleLayer={naarEenLaag}
+					onPrune={opruimen}
+					tidyNote={indeelMelding}
 					onCrop={() => (cropping = true)}
 
 					onVectorise={async () => {

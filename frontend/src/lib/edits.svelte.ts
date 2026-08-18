@@ -252,6 +252,60 @@ export class EditController {
 	 * (te korte zijden, of een boog die op de hoek uitkomt), en welke id's het
 	 * geworden zijn — afschuinen maakt er een pad van, en dat krijgt een nieuw id.
 	 */
+	/** Een pad opdelen in zijn losse stukken. */
+	async split(
+		ids: string[]
+	): Promise<{ ids: string[]; count: number; skipped: number } | null> {
+		return this.#postJson('/api/design/split', { ids });
+	}
+
+	/** De selectie in één laag zetten, en uit alle andere halen. */
+	async singleLayer(
+		ids: string[],
+		kind: 'cut' | 'engrave'
+	): Promise<{
+		operation_id: string;
+		type: string;
+		assigned: number;
+		removed: number;
+		created: boolean;
+	} | null> {
+		return this.#postJson('/api/design/single-layer', { ids, type: kind });
+	}
+
+	/** Lege lagen weg. */
+	async prune(): Promise<{ removed: number; ids: string[] } | null> {
+		return this.#postJson('/api/design/operations/prune', {});
+	}
+
+	/**
+	 * POST waarvan het antwoord zelf nodig is.
+	 *
+	 * `#post` hierboven geeft alleen ok/idsInvalidated terug; deze handelingen
+	 * melden hoeveel ze gedaan hebben, en dat getal staat in het paneel.
+	 */
+	async #postJson<T>(pad: string, body: unknown): Promise<T | null> {
+		this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch(pad, {
+				method: 'POST',
+				headers: this.#headers(),
+				body: JSON.stringify(body)
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return null;
+			}
+			return await response.json();
+		} catch (e) {
+			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			return null;
+		} finally {
+			this.busy = false;
+		}
+	}
+
 	async corners(
 		ids: string[],
 		style: 'round' | 'chamfer',

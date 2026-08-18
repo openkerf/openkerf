@@ -15,6 +15,11 @@ export type DesignElement = {
 	fill: string | null;
 	bounds: [number, number, number, number] | null;
 	path: string;
+	/**
+	 * Uit hoeveel losse stukken de vorm bestaat. Een CAD-export is vaak één pad
+	 * met tientallen panelen erin; meer dan 1 betekent dat splitsen iets doet.
+	 */
+	subpaths: number;
 	/** Groep waar dit element in zit; een raster is één groep. */
 	group_id: string | null;
 	/** Gezet voor vector-tekst: de bron waaruit het pad gerenderd is. */

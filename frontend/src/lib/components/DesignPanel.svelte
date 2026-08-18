@@ -18,6 +18,10 @@
 		onArrange,
 	onCorners,
 	cornerNote = null,
+		onSplit,
+		onSingleLayer,
+		onPrune,
+	tidyNote = null,
 		onImage,
 		onImageDpi,
 		onVectorise,
@@ -49,6 +53,14 @@
 		/** Wat er van de laatste hoekbewerking te melden valt (overgeslagen
 		 *  hoeken). Op een vaste plek in het paneel, niet in een browserpopup. */
 		cornerNote?: string | null;
+		/** Een pad opdelen in zijn losse stukken. */
+		onSplit?: () => void;
+		/** De selectie in één laag zetten en uit alle andere halen. */
+		onSingleLayer?: (kind: 'cut' | 'engrave') => void;
+		/** Lege lagen weg. */
+		onPrune?: () => void;
+		/** Wat er van de laatste indeel-handeling te melden valt. */
+		tidyNote?: string | null;
 		onImage?: (adjustment: string) => void;
 		onImageDpi?: (dpi: number) => void;
 		onVectorise?: () => void;
@@ -298,7 +310,27 @@
 
 	// Rasterlagen zijn geen gewone lagen: ze horen bij één testraster en hun
 	// snelheid en vermogen zíjn de test. Eén regel per raster dus.
+	/**
+	 * Wat splitsen zou opleveren. Een geïmporteerd pad houdt al zijn panelen in
+	 * één vorm; het getal hier is het aantal vormen dat de knop belooft.
+	 */
+	const teSplitsen = $derived.by(() => {
+		const samengesteld = chosen.filter((e) => (e.subpaths ?? 1) > 1);
+		return {
+			vormen: samengesteld.length,
+			stukken: samengesteld.reduce((n, e) => n + (e.subpaths ?? 1), 0)
+		};
+	});
+
+	/** In hoeveel lagen de selectie nu zit — het getal dat 'alleen in' opheft. */
+	const nuInLagen = $derived(
+		new Set(chosen.flatMap((e) => e.operation_ids ?? [])).size
+	);
+
 	let plainLayers = $derived(operations.filter((o) => !o.grid));
+	/** Lagen zonder werk: wat 'lege lagen opruimen' weghaalt. */
+	const legeLagen = $derived(plainLayers.filter((op) => !op.element_ids.length));
+
 	let gridGroups = $derived.by(() => {
 		const byGrid = new Map<number, typeof operations>();
 		for (const op of operations) {
@@ -859,6 +891,48 @@
 				<p class="hint">Zit in effect: {selected.effect.label}</p>
 			{/if}
 
+			{#if canEdit && (teSplitsen.vormen || chosen.length)}
+				<!-- Indelen: wat een geïmporteerde tekening bruikbaar maakt. Staat
+				     hier en niet in een uitklapper, omdat het precies één keer
+				     nodig is — meteen na het laden, wanneer nog niets klikt en
+				     alles in de verkeerde laag ligt. De splitsregel verschijnt
+				     alleen als er iets te splitsen is. -->
+				<div class="indelen">
+					{#if teSplitsen.vormen}
+						<p class="tip">
+							{teSplitsen.vormen === 1
+								? 'Deze vorm bestaat'
+								: `Deze ${teSplitsen.vormen} vormen bestaan`}
+							uit {teSplitsen.stukken} losse stukken. Een export uit een
+							CAD-programma is vaak één pad; los aan te klikken zijn de
+							stukken pas na het splitsen.
+						</p>
+						<button
+							class="primair"
+							disabled={edits.busy}
+							onclick={() => onSplit?.()}
+						>Splitsen in {teSplitsen.stukken} vormen</button>
+					{/if}
+					{#if chosen.length}
+						<div class="alleen-in">
+							{#each [['cut', 'snijlaag'], ['engrave', 'graveerlaag']] as [kind, naam] (kind)}
+								<button
+									class="rot"
+									disabled={edits.busy}
+									title={nuInLagen > 1
+										? `Zet de selectie in de ${naam} en haalt hem uit de ${nuInLagen} lagen waar hij nu in zit`
+										: `Zet de selectie in de ${naam} en haalt hem uit elke andere laag`}
+									onclick={() => onSingleLayer?.(kind as 'cut' | 'engrave')}
+								>Alleen in {naam}</button>
+							{/each}
+						</div>
+					{/if}
+					{#if tidyNote}
+						<p class="tip">{tidyNote}</p>
+					{/if}
+				</div>
+			{/if}
+
 			{#if canEdit}
 				<!-- Wat hieronder staat is er voor de uitzondering, niet voor het
 				     werk van elke dag. Ingeklapt, maar wel met hun naam in beeld:
@@ -1164,6 +1238,17 @@
 						title="Haalt alle lagen weg. De vormen blijven op het bed staan."
 						onclick={() => (confirmDropAll = true)}
 					>Alle lagen weg…</button>
+					{#if legeLagen.length}
+						<!-- Alleen zichtbaar als er iets te halen is, en met het aantal
+						     in de knop: een leeg project heeft er tien, en dan is dit
+						     de knop die je zoekt. -->
+						<button
+							class="rot"
+							disabled={edits.busy}
+							title="Haalt de lagen weg waar geen vorm in zit. Vormen en gevulde lagen blijven staan."
+							onclick={() => onPrune?.()}
+						>{legeLagen.length} lege {legeLagen.length === 1 ? 'laag' : 'lagen'} opruimen</button>
+					{/if}
 				{/if}
 				<button
 					class="dichtheid"
@@ -2507,6 +2592,18 @@
 		align-items: center;
 		gap: var(--space-1);
 	}
+	.indelen {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.alleen-in {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
+	.alleen-in button { flex: 1 1 auto; }
+
 	.hoeken {
 		display: grid;
 		gap: var(--space-2);
