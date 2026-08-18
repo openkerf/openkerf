@@ -18,7 +18,9 @@ import { mkdirSync } from 'node:fs';
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8141';
 const BESTAND = '/Users/Jelle.Tigchelaar/Downloads/k2_wled_lightbar_16.svg';
 const UIT = '/Users/Jelle.Tigchelaar/git/openkerf/screenshots/aaa/import';
-const BREEDTES = [1440, 1024, 390];
+// Geen 390: op telefoonbreedte toont de app bewust alleen de machine
+// ("Ontwerpen doe je op de desktop"), dus daar is dit paneel er niet.
+const BREEDTES = [1440, 1024];
 const THEMAS = ['light', 'dark'];
 mkdirSync(UIT, { recursive: true });
 
