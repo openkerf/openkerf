@@ -346,10 +346,14 @@
 			de vormen, want daar gaat de snede doorheen.
 		</p>
 		<div class="fields">
-			<NumberField label="Kolommen" step={1} min={1} bind:value={grid.columns} />
-			<NumberField label="Rijen" step={1} min={1} bind:value={grid.rows} />
-			<NumberField label="Ruimte X" unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
-			<NumberField label="Ruimte Y" unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
+			<div class="paar">
+				<NumberField label="Kolommen" step={1} min={1} bind:value={grid.columns} />
+				<NumberField label="Rijen" step={1} min={1} bind:value={grid.rows} />
+			</div>
+			<div class="paar">
+				<NumberField label="Ruimte X" unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
+				<NumberField label="Ruimte Y" unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
+			</div>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}>
 			{n(grid.columns) * n(grid.rows)} stuks maken{knopStaart}
@@ -357,8 +361,10 @@
 	{:else if tab === 'radial'}
 		<p class="lead">De selectie rond een middelpunt herhalen.</p>
 		<div class="fields">
-			<NumberField label="Aantal" step={1} min={2} bind:value={radial.repeats} />
-			<NumberField label="Straal" unit="mm" step={1} bind:value={radial.radius_mm} />
+			<div class="paar">
+				<NumberField label="Aantal" step={1} min={2} bind:value={radial.repeats} />
+				<NumberField label="Straal" unit="mm" step={1} bind:value={radial.radius_mm} />
+			</div>
 			<label class="check"><input type="checkbox" bind:checked={radial.rotate} /><span>Meedraaien</span></label>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}
@@ -369,11 +375,17 @@
 			Een regelmatige veelhoek. Vul een binnenstraal in en het wordt een ster.
 		</p>
 		<div class="fields">
-			<NumberField label="Hoeken" step={1} min={3} bind:value={polygon.corners} />
-			<NumberField label="Straal" unit="mm" step={1} bind:value={polygon.radius_mm} />
-			<NumberField label="Binnenstraal" unit="mm" step={1} bind:value={polygon.inner} />
-			<NumberField label="Midden X" unit="mm" step={1} bind:value={polygon.cx_mm} />
-			<NumberField label="Midden Y" unit="mm" step={1} bind:value={polygon.cy_mm} />
+			<div class="paar">
+				<NumberField label="Hoeken" step={1} min={3} bind:value={polygon.corners} />
+				<NumberField label="Straal" unit="mm" step={1} bind:value={polygon.radius_mm} />
+			</div>
+			<div class="paar">
+				<NumberField label="Binnenstraal" unit="mm" step={1} bind:value={polygon.inner} />
+			</div>
+			<div class="paar">
+				<NumberField label="Midden X" unit="mm" step={1} bind:value={polygon.cx_mm} />
+				<NumberField label="Midden Y" unit="mm" step={1} bind:value={polygon.cy_mm} />
+			</div>
 		</div>
 		<button class="go" disabled={busy} onclick={() => run(opdracht())}
 			>Tekenen{knopStaart}</button
@@ -385,12 +397,20 @@
 			wegneemt. Past het niet op één vel, dan gaat de rest naar een volgend vel.
 		</p>
 		<div class="fields">
-			<NumberField label="Breedte" unit="mm" step={1} bind:value={box.width_mm} />
-			<NumberField label="Diepte" unit="mm" step={1} bind:value={box.depth_mm} />
-			<NumberField label="Hoogte" unit="mm" step={1} bind:value={box.height_mm} />
-			<NumberField label="Materiaaldikte" unit="mm" step={0.1} bind:value={box.thickness_mm} />
-			<NumberField label="Vinger" unit="mm" step={1} bind:value={box.finger_mm} />
-			<NumberField label="Kerf" unit="mm" step={0.05} bind:value={box.kerf_mm} />
+			<!-- Breedte, diepte en hoogte zijn één maat in drieën en staan dus op
+			     één regel; de dikte van het materiaal is iets anders en staat eronder. -->
+			<div class="drie">
+				<NumberField label="Breedte" unit="mm" step={1} bind:value={box.width_mm} />
+				<NumberField label="Diepte" unit="mm" step={1} bind:value={box.depth_mm} />
+				<NumberField label="Hoogte" unit="mm" step={1} bind:value={box.height_mm} />
+			</div>
+			<div class="paar">
+				<NumberField label="Materiaaldikte" unit="mm" step={0.1} bind:value={box.thickness_mm} />
+			</div>
+			<div class="paar">
+				<NumberField label="Vinger" unit="mm" step={1} bind:value={box.finger_mm} />
+				<NumberField label="Kerf" unit="mm" step={0.05} bind:value={box.kerf_mm} />
+			</div>
 			<label class="check"><input type="checkbox" bind:checked={box.lid} /><span>Met deksel</span></label>
 			<label class="check">
 				<input type="checkbox" bind:checked={box.spread} />
@@ -406,8 +426,10 @@
 			hout vaak vaag, gevulde vierkanten niet.
 		</p>
 		<div class="fields">
-			<label class="wide"><span>Inhoud</span><input type="text" placeholder="https://…" bind:value={qr.text} /></label>
-			<NumberField label="Formaat" unit="mm" step={1} bind:value={qr.size_mm} />
+			<label><span>Inhoud</span><input type="text" placeholder="https://…" bind:value={qr.text} /></label>
+			<div class="paar">
+				<NumberField label="Formaat" unit="mm" step={1} bind:value={qr.size_mm} />
+			</div>
 		</div>
 		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run(opdracht())}
 			>Plaatsen{knopStaart}</button
@@ -419,7 +441,7 @@
 			te maken die niet scant.
 		</p>
 		<div class="fields">
-			<label class="wide"><span>Inhoud</span><input type="text" placeholder="OPENKERF-1" bind:value={bar.text} /></label>
+			<label><span>Inhoud</span><input type="text" placeholder="OPENKERF-1" bind:value={bar.text} /></label>
 			<label>
 				<span>Type</span>
 				<select bind:value={bar.kind}>
@@ -428,8 +450,10 @@
 					{/each}
 				</select>
 			</label>
-			<NumberField label="Breedte" unit="mm" step={1} bind:value={bar.width_mm} />
-			<NumberField label="Hoogte" unit="mm" step={1} bind:value={bar.height_mm} />
+			<div class="paar">
+				<NumberField label="Breedte" unit="mm" step={1} bind:value={bar.width_mm} />
+				<NumberField label="Hoogte" unit="mm" step={1} bind:value={bar.height_mm} />
+			</div>
 		</div>
 		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
 			>Plaatsen{knopStaart}</button
@@ -441,11 +465,15 @@
 			eerstvolgende wijziging weer recht renderen en de boog wegpoetsen.
 		</p>
 		<div class="fields">
-			<label class="wide"><span>Tekst</span><input type="text" placeholder="OPENKERF" bind:value={arc.text} /></label>
-			<NumberField label="Midden X" unit="mm" step={1} bind:value={arc.cx_mm} />
-			<NumberField label="Midden Y" unit="mm" step={1} bind:value={arc.cy_mm} />
-			<NumberField label="Straal" unit="mm" step={1} bind:value={arc.radius_mm} />
-			<NumberField label="Letterhoogte" unit="mm" step={0.5} bind:value={arc.font_size_mm} />
+			<label><span>Tekst</span><input type="text" placeholder="OPENKERF" bind:value={arc.text} /></label>
+			<div class="paar">
+				<NumberField label="Midden X" unit="mm" step={1} bind:value={arc.cx_mm} />
+				<NumberField label="Midden Y" unit="mm" step={1} bind:value={arc.cy_mm} />
+			</div>
+			<div class="paar">
+				<NumberField label="Straal" unit="mm" step={1} bind:value={arc.radius_mm} />
+				<NumberField label="Letterhoogte" unit="mm" step={0.5} bind:value={arc.font_size_mm} />
+			</div>
 			<label class="check"><input type="checkbox" bind:checked={arc.inside} /><span>Onderlangs</span></label>
 		</div>
 		<!-- Ingeklapt tot je hem opent: de lijst is 200 lettertypen lang en duwde
@@ -484,7 +512,12 @@
 <style>
 	/* Instellen links, zien wat je instelt rechts. Onder 720px stapelt het. */
 	.werkbank { display: grid; grid-template-columns: 1fr 210px; gap: var(--space-4); align-items: start; }
-	.formulier { min-width: 0; }
+	/* Een kolom, zodat de primaire knop zich onderaan rechts kan zetten. */
+	.formulier {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
 	@media (max-width: 720px) { .werkbank { grid-template-columns: 1fr; } }
 
 	.tabs {
@@ -518,14 +551,26 @@
 	.hint { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--warn); }
 	.error { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--danger); }
 	.notice { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--accent); }
+	/* Formulierregel v4, hetzelfde model als in het testraster: een stapel
+	   regels, en wat bij elkaar hoort staat in een `.paar` of een `.drie`. In het
+	   doorlopende raster van twee kolommen dat hier stond, viel "Midden X" op de
+	   ene regel en "Midden Y" op de volgende, en werd de drieslag
+	   breedte-diepte-hoogte van de doos door de materiaaldikte opgebroken. */
 	.fields {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-2) var(--space-3);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 		margin-bottom: var(--space-4);
 	}
 	.fields label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
-	.fields .wide { grid-column: 1 / -1; }
+	.paar,
+	.drie {
+		display: grid;
+		gap: var(--space-3);
+		align-items: end;
+	}
+	.paar { grid-template-columns: 1fr 1fr; }
+	.drie { grid-template-columns: 1fr 1fr 1fr; }
 	.fields .check { display: flex; align-items: center; gap: 6px; align-self: end; }
 	.letterkeuze { margin-bottom: var(--space-4); }
 	.letterregel {
@@ -556,9 +601,12 @@
 		color: var(--text-1);
 	}
 	.check input { width: auto; }
+	/* Formulierregel v4: de primaire knop staat rechtsonder, niet over de volle
+	   breedte. Een knop van 500px voor één handeling leest als een banner, en hij
+	   lijnde met geen enkel ander formulier in de app uit. */
 	.go {
-		width: 100%;
-		padding: 8px 16px;
+		align-self: flex-end;
+		padding: 8px 20px;
 		border-radius: var(--radius-field);
 		border: 1px solid var(--accent);
 		background: var(--accent);

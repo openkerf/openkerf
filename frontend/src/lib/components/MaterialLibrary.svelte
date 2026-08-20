@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import NumberField from './NumberField.svelte';
+	import Menu from './Menu.svelte';
+	import type { Menu as MenuLijst } from '$lib/acties';
 	import {
 		OPERATION_LAYER,
 		OPERATIONS,
@@ -62,6 +64,91 @@
 	let shareError = $state<string | null>(null);
 	let machineDraft = $state({ name: '', power_watt: '', lens_mm: '' });
 
+	/**
+	 * Het menu op een instelling.
+	 *
+	 * Herkomst, bewerken, delen en verwijderen stonden als vier knoppen op elke
+	 * regel. Ze horen bij één instelling en zijn geen van de vier de handeling
+	 * die je hier komt doen, dus staan ze achter één ⋯ — en achter de
+	 * rechterklik, net als overal elders in de app.
+	 */
+	let rijMenu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
+
+	function presetMenu(preset: Preset): MenuLijst {
+		return [
+			{
+				items: [
+					{
+						id: 'toepassen',
+						label: chosenOperation ? `Toepassen op laag ${laagNummer}` : 'Toepassen',
+						uit: chosenOperation ? undefined : 'Maak eerst een laag aan in de tab Lagen',
+						doen: () => apply(preset)
+					}
+				]
+			},
+			{
+				items: [
+					{
+						id: 'herkomst',
+						label: 'Herkomst en bewijs',
+						aan: herkomst === preset.id,
+						uitleg: 'Waar deze waarden vandaan komen',
+						doen: () => {
+							editing = null;
+							herkomst = herkomst === preset.id ? null : preset.id;
+						}
+					},
+					{
+						id: 'bewerken',
+						label: 'Waarden bijstellen',
+						aan: editing === preset.id,
+						uit: canEdit ? undefined : 'Vereist een token',
+						doen: () => {
+							herkomst = null;
+							editing = editing === preset.id ? null : preset.id;
+						}
+					},
+					{
+						id: 'raster',
+						label: `Testraster maken voor ${preset.material_name}`,
+						uit: canEdit ? undefined : 'Vereist een token',
+						doen: () => onMakeGrid?.(preset.material_id)
+					},
+					{
+						id: 'delen',
+						label: 'Delen met Presetariat',
+						uit: canEdit ? undefined : 'Vereist een token',
+						doen: () => share(preset)
+					}
+				]
+			},
+			{
+				items: [
+					{
+						id: 'weg',
+						label: 'Instelling verwijderen',
+						uit: canEdit ? undefined : 'Vereist een token',
+						gevaar: true,
+						doen: () => (weghalen = preset.id)
+					}
+				]
+			}
+		];
+	}
+
+	function opendMenu(event: MouseEvent, preset: Preset) {
+		event.preventDefault();
+		const doel = event.currentTarget as HTMLElement | null;
+		const doos = doel?.getBoundingClientRect();
+		rijMenu = {
+			lijst: presetMenu(preset),
+			// Een klik op de ⋯-knop hangt het menu onder die knop; een rechterklik
+			// op de regel hangt het bij de cursor.
+			x: event.type === 'contextmenu' || !doos ? event.clientX : doos.left - 180,
+			y: event.type === 'contextmenu' || !doos ? event.clientY : doos.bottom + 4
+		};
+	}
+
 	let chosenOperation = $derived(
 		operations.find((o) => o.id === targetOperation) ?? operations[0] ?? null
 	);
@@ -96,9 +183,16 @@
 			.every((woord) => hooiberg.includes(woord));
 	}
 
-	let zichtbaar = $derived(
-		library.presetsFor(materialId).filter((p) => raakt(p, zoek.trim()))
-	);
+	/**
+	 * Alle instellingen die aan het zoekwoord en het machinefilter voldoen —
+	 * bewust **niet** aan het gekozen materiaal.
+	 *
+	 * Het materiaal is sinds v4 de lijst links, en die lijst moet alle materialen
+	 * blijven tonen: filterde hij zichzelf, dan bleef er na één klik één regel
+	 * over en was er geen weg meer naar het volgende materiaal. Het inperken op
+	 * materiaal gebeurt in `zichtbarePresets`, aan de rechterkant.
+	 */
+	let zichtbaar = $derived(library.presetsFor(null).filter((p) => raakt(p, zoek.trim())));
 
 	function gebruikt(preset: Preset) {
 		return preset.last_used_at ? Date.parse(`${preset.last_used_at.replace(' ', 'T')}Z`) : 0;
@@ -116,6 +210,40 @@
 			.sort((a, b) => gebruikt(b) - gebruikt(a))
 			.slice(0, 3)
 	);
+
+	/** Op welke dikte er gefilterd wordt binnen het gekozen materiaal. */
+	let dikte = $state<number | null>(null);
+	// Van materiaal wisselen zet het diktefilter terug: een dikte die dit
+	// materiaal niet heeft, geeft een leeg paneel zonder dat je ziet waarom.
+	$effect(() => {
+		void materialId;
+		untrack(() => (dikte = null));
+	});
+
+	/** De diktes die dit materiaal werkelijk heeft, dun naar dik. */
+	let diktes = $derived.by(() => {
+		const groep = groepen.find((g) => g.materialId === materialId);
+		const waarden = new Set<number | null>();
+		for (const preset of groep?.presets ?? []) waarden.add(preset.thickness_mm);
+		return [...waarden].sort((a, b) => (a ?? -1) - (b ?? -1));
+	});
+
+	/**
+	 * Wat er rechts staat, op leesvolgorde: dun naar dik, en binnen een dikte de
+	 * gemeten instellingen eerst. Een gemeten waarde is meer waard dan een
+	 * geschatte, dus die hoort bovenaan te staan en niet op alfabet.
+	 */
+	const BRON_ORDE: Record<string, number> = { testraster: 0, presetariat: 1, geextrapoleerd: 2, handmatig: 3 };
+	let zichtbarePresets = $derived.by(() => {
+		const groep = groepen.find((g) => g.materialId === materialId);
+		const lijst = (groep?.presets ?? []).filter((p) => dikte === null || p.thickness_mm === dikte);
+		return [...lijst].sort(
+			(a, b) =>
+				(a.thickness_mm ?? -1) - (b.thickness_mm ?? -1) ||
+				(BRON_ORDE[a.source] ?? 9) - (BRON_ORDE[b.source] ?? 9) ||
+				a.operation.localeCompare(b.operation, 'nl')
+		);
+	});
 
 	type Groep = { naam: string; materialId: number; presets: Preset[]; laatst: number };
 	let groepen = $derived.by<Groep[]>(() => {
@@ -137,7 +265,6 @@
 		// Materialen zonder presets horen er ook bij: zonder die groep is er
 		// geen plek waar "testraster maken" logisch staat.
 		for (const materiaal of library.materials) {
-			if (materialId !== null && materiaal.id !== materialId) continue;
 			if (kaart.has(materiaal.id)) continue;
 			if (zoek.trim() && !materiaal.name.toLowerCase().includes(zoek.trim().toLowerCase()))
 				continue;
@@ -387,7 +514,7 @@
 	}
 
 	/** Past deze preset bij het laagtype waar hij op gezet wordt? */
-	function past(preset: Preset, laag: DesignOperation | null) {
+	function pastBij(preset: Preset, laag: DesignOperation | null) {
 		if (!laag) return true;
 		const toegestaan = OPERATION_LAYER[preset.operation];
 		return !toegestaan || toegestaan.includes(laag.type);
@@ -427,54 +554,74 @@
 
 {#snippet kaart(preset: Preset, toonMateriaal: boolean)}
 	{@const bron = SOURCE_LABEL[preset.source]}
-	<article class="preset {bron.tone}">
-		<div class="head">
-			<div class="what">
-				<span class="titel"
-					>{#if toonMateriaal}<span class="mat">{preset.material_name}</span>{', '}{/if}{#if preset.thickness_mm !== null}<span
-							class="mono dikte">{preset.thickness_mm} mm</span
-						>&nbsp;{/if}{operationLabel(preset.operation)}</span
-				>
-				{#if preset.last_used_at}
-					<span class="laatst">{toen(preset.last_used_at)} gebruikt</span>
+	{@const past = !canEdit || pastBij(preset, chosenOperation)}
+	{@const uit = herkomst === preset.id || editing === preset.id}
+	<article
+		class="preset {bron.tone}"
+		class:open={uit}
+		role="presentation"
+		oncontextmenu={(e) => canEdit && opendMenu(e, preset)}
+	>
+		<!--
+			Eén regel per instelling in plaats van een kaart van 200 px hoog.
+
+			Wat de taak vraagt is vergelijken: welke dikte, welke bewerking, hoe
+			hard, en is het gemeten of gegokt. Dat zijn vier dingen en die passen
+			op één regel. In de oude kaart stonden dezelfde vier dingen verspreid
+			over vier blokken met een tussenkop per waarde, plus een volle alinea
+			uitleg en vijf knoppen — samen 200 px, dus twee instellingen per
+			schermvulling. Gemeten in de oude opzet: dertien instellingen was
+			2 600 px scrollen. Wat er verder over een instelling te weten valt,
+			staat er nog steeds, maar pas als je erom vraagt.
+		-->
+		<div class="rij">
+			<div class="wat">
+				<span class="maat mono">
+					{#if preset.thickness_mm !== null}{preset.thickness_mm} mm{:else}—{/if}
+				</span>
+				<span class="bewerking">
+					{#if toonMateriaal}<span class="mat">{preset.material_name}</span> · {/if}
+					{operationLabel(preset.operation)}
+				</span>
+				{#if !past}
+						<!-- De bewerking van deze instelling past niet bij de laag waar hij
+						     op gezet zou worden. Dat is een eigenschap van deze regel, dus
+						     staat het bij de bewerking — niet als kleur op de knop. Met tien
+						     van de dertien regels oranje leest het scherm als tien fouten in
+						     plaats van als één mismatch die je zelf koos. -->
+						<span
+							class="mismatch"
+							title="Dit zijn waarden voor {operationLabel(
+								preset.operation
+							).toLowerCase()}; laag {laagNummer} is een {chosenOperation?.label.toLowerCase()}-laag"
+						>
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5" /><path d="M12 17h.01" /><path d="M10.3 3.9 2.4 18a1.8 1.8 0 0 0 1.6 2.7h16a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z" /></svg>
+						ander soort
+					</span>
 				{/if}
 			</div>
-			<span class="badge {bron.tone}" title={bron.means}>
+
+			<div class="waarden mono">
+				<span title="Snelheid">{preset.speed_mm_s}<small>mm/s</small></span>
+				<span title="Vermogen">{preset.power_percent}<small>%</small></span>
+				{#if preset.passes > 1}<span title="Passes">{preset.passes}<small>×</small></span>{/if}
+				{#if preset.interval_mm && preset.operation === 'graveren-raster'}
+					<span title="Lijnafstand">{preset.interval_mm}<small>mm</small></span>
+				{/if}
+			</div>
+
+			<!-- De bron als één merk, met de volle uitleg in de tooltip en in de
+			     herkomst. De alinea die dit op elke kaart uitschreef was op één
+			     kaart nuttig en op dertien ruis. -->
+			<span class="badge {bron.tone}" title="{bron.means}{bron.advice ? ' ' + bron.advice : ''}">
 				{@render bronIcoon(bron.icon)}
 				{bron.text}
 			</span>
-		</div>
 
-		<div class="cijfers">
-			<div class="param">
-				<div class="k">Snelheid</div>
-				<div class="v mono">{preset.speed_mm_s} <small>mm/s</small></div>
-			</div>
-			<div class="param">
-				<div class="k">Vermogen</div>
-				<div class="v mono">{preset.power_percent} <small>%</small></div>
-			</div>
-			{#if preset.passes > 1}
-				<!-- Eén pass is de regel; die kolom op elke kaart herhalen maakt van
-				     een uitzondering ruis. -->
-				<div class="param">
-					<div class="k">Passes</div>
-					<div class="v mono">{preset.passes}</div>
-				</div>
-			{/if}
-			{#if preset.interval_mm && preset.operation === 'graveren-raster'}
-				<!-- Zonder lijnafstand is een rasterinstelling niet na te branden;
-				     bij de andere bewerkingen bestaat hij niet. -->
-				<div class="param">
-					<div class="k">Lijnafstand</div>
-					<div class="v mono">{preset.interval_mm} <small>mm</small></div>
-				</div>
-			{/if}
 			{#if preset.grid_photo}
-				<!-- Het bewijs hoort naast de bewering te staan, niet drie schermen
-				     verderop. Klikken opent de herkomst met de foto op formaat. -->
 				<button
 					class="bewijs"
+					aria-label="Foto van het testraster"
 					onclick={() => (herkomst = herkomst === preset.id ? null : preset.id)}
 					title={preset.grid_cell
 						? `Het testraster, met vakje rij ${preset.grid_cell.row + 1}, kolom ${preset.grid_cell.column + 1} omcirkeld`
@@ -482,60 +629,53 @@
 				>
 					<img src={fotoUrl(preset)} alt="" />
 				</button>
+			{:else}
+				<span class="geenfoto" aria-hidden="true"></span>
+			{/if}
+
+			{#if canEdit}
+				<!-- Eén knop die de taak afmaakt, en de rest achter een menu. Er
+				     stonden vier knoppen op elke regel — toepassen, herkomst,
+				     bewerken, verwijderen — en dan is de knop die je 95 % van de tijd
+				     wil, één van de vier. -->
+				<button
+					class="doe"
+					disabled={library.busy || !chosenOperation}
+					title={chosenOperation
+						? past
+							? `Zet snelheid en vermogen op laag ${laagNummer}`
+							: `Let op: dit zijn waarden voor ${operationLabel(preset.operation).toLowerCase()}, en laag ${laagNummer} is daar niet voor bedoeld`
+						: 'Maak eerst een laag aan in de tab Lagen'}
+					onclick={() => apply(preset)}
+				>
+					Toepassen
+				</button>
+				<button
+					class="meer"
+					aria-label="Meer voor deze instelling"
+					aria-haspopup="menu"
+					title="Meer — of rechterklik op de regel"
+					onclick={(e) => opendMenu(e, preset)}
+				>
+					<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
+				</button>
 			{/if}
 		</div>
 
-		<!-- Twijfel hoort niet in een badge alleen. Elke bron krijgt dezelfde
-		     regel op dezelfde plek, zodat het verschil zit in wat er staat en
-		     niet in of er iets staat — dát is wat je niet over het hoofd ziet. -->
-		<p class="raad {bron.tone}">
-			{@render bronIcoon(bron.icon)}
-			<span>
-				{bron.means}{#if preset.source === 'testraster' && preset.grid_date}{' '}({toen(
-						preset.grid_date
-					)}){/if}.{#if bron.advice}{' '}{bron.advice}{/if}
-			</span>
-		</p>
-
-		{#if canEdit && !past(preset, chosenOperation)}
-			<p class="botst">
-				Let op: dit zijn waarden voor {operationLabel(preset.operation).toLowerCase()}. Laag
-				{laagNummer} is daar niet voor bedoeld.
-			</p>
-		{/if}
-
-		{#if canEdit}
-			<div class="foot">
-				<button
-					class="btn primary"
-					disabled={library.busy || !chosenOperation}
-					title={chosenOperation ? undefined : 'Maak eerst een laag aan in de Lagen-tab'}
-					onclick={() => apply(preset)}
-				>
-					{chosenOperation ? `Toepassen op laag ${laagNummer}` : 'Toepassen'}
+		{#if weghalen === preset.id}
+			<!-- Bevestigen onder de regel die het raakt, niet in een venster: het
+			     is één instelling en de vraag hoort naast wat er weggaat. -->
+			<div class="zekerweg" role="alert">
+				<span>
+					{#if preset.thickness_mm !== null}{preset.thickness_mm} mm {/if}{operationLabel(
+						preset.operation
+					).toLowerCase()} van {preset.material_name} weggooien?
+					{#if preset.source === 'testraster'}Deze is gemeten op een testraster.{/if}
+				</span>
+				<button class="mini" onclick={() => (weghalen = null)}>Bewaren</button>
+				<button class="mini gevaar" onclick={() => library.removePreset(preset.id)}>
+					Weggooien
 				</button>
-				<button
-					class="mini"
-					aria-expanded={herkomst === preset.id}
-					onclick={() => (herkomst = herkomst === preset.id ? null : preset.id)}
-				>
-					{herkomst === preset.id ? 'Herkomst sluiten' : 'Herkomst'}
-				</button>
-				<button
-					class="mini"
-					aria-expanded={editing === preset.id}
-					onclick={() => (editing = editing === preset.id ? null : preset.id)}
-				>
-					{editing === preset.id ? 'Klaar met bewerken' : 'Bewerken'}
-				</button>
-				<span class="rek"></span>
-				{#if weghalen === preset.id}
-					<span class="zeker">Weg?</span>
-					<button class="mini gevaar" onclick={() => library.removePreset(preset.id)}>Ja</button>
-					<button class="mini" onclick={() => (weghalen = null)}>Nee</button>
-				{:else}
-					<button class="mini stil" onclick={() => (weghalen = preset.id)}>Verwijderen</button>
-				{/if}
 			</div>
 		{/if}
 
@@ -617,8 +757,18 @@
 							</label>
 						{/if}
 					{:else}
+						<!-- Twee verschillende gevallen, en ze mogen niet dezelfde zin
+						     krijgen. Zegt de bron "gemeten" maar hangt er geen raster aan,
+						     dan is dát het bericht — niet "niet gemeten", want dat spreekt
+						     de badge op dezelfde regel tegen. -->
 						<p class="onder">
-							Geen testraster: deze waarden zijn niet gemeten maar ingevoerd.
+							{#if preset.source === 'testraster'}
+								Deze instelling zegt dat hij gemeten is, maar er hangt geen
+								testraster aan — bijvoorbeeld omdat hij uit een import komt. Het
+								bewijs is er dus niet meer bij.
+							{:else}
+								Geen testraster: deze waarden zijn niet gemeten maar ingevoerd.
+							{/if}
 						</p>
 						{#if canEdit}
 							<button class="mini" onclick={() => onMakeGrid?.(preset.material_id)}>
@@ -958,12 +1108,10 @@
 		placeholder="Zoek materiaal, dikte of bewerking"
 		aria-label="Zoeken in de bibliotheek"
 	/>
-	<select class="picker" aria-label="Materiaal filteren" bind:value={materialId}>
-		<option value={null}>Alle materialen</option>
-		{#each library.materials as material (material.id)}
-			<option value={material.id}>{material.name}</option>
-		{/each}
-	</select>
+	<!-- Hier stond een keuzelijst "Alle materialen". Die deed precies hetzelfde
+	     als de lijst links, en twee bedieningen voor één keuze levert vooral de
+	     vraag op welke van de twee de echte is. De lijst won: die toont ook hoe
+	     véél instellingen een materiaal heeft, en welk materiaal op het vel ligt. -->
 	{#if canEdit}
 		<button class="btn" onclick={() => (adding = !adding)}>
 			{adding ? 'Annuleren' : 'Nieuw materiaal'}
@@ -1002,14 +1150,22 @@
 		</label>
 	{/if}
 	</div>
-	{#if operations.length > 1}
+	<!-- Het doel stond er alleen bij twee of meer lagen. Maar "Toepassen" moet
+	     altijd zeggen wáárop, ook als er één laag is: anders is de knop een
+	     belofte zonder adres, en dan is de waarschuwing dat de bewerking niet
+	     past ook niet te plaatsen. -->
+	{#if operations.length}
 		<label class="doel">
 			<span>Toepassen op</span>
-			<select bind:value={targetOperation}>
-				{#each operations as op, index (op.id)}
-					<option value={op.id}>Laag {index + 1} · {op.label}</option>
-				{/each}
-			</select>
+			{#if operations.length > 1}
+				<select bind:value={targetOperation}>
+					{#each operations as op, index (op.id)}
+						<option value={op.id}>Laag {index + 1} · {op.label}</option>
+					{/each}
+				</select>
+			{:else}
+				<strong>Laag 1 · {operations[0].label}</strong>
+			{/if}
 		</label>
 	{/if}
 	</div>
@@ -1082,56 +1238,151 @@
 		<button class="btn" onclick={() => (zoek = '')}>Zoekopdracht wissen</button>
 	</div>
 {:else}
-	<!-- Onlangs gebruikt is een snelkoppeling voor wie bladert. Wie zoekt of
-	     al op één materiaal gefilterd heeft, krijgt er alleen dubbele kaarten
-	     van. -->
-	{#if recent.length && !zoek.trim() && materialId === null}
-		<section>
-			<h2 class="kop">
-				Onlangs gebruikt <span class="hint">— staan hieronder ook bij hun materiaal</span>
-			</h2>
-			{#each recent as preset (preset.id)}
-				{@render kaart(preset, true)}
-			{/each}
-		</section>
-	{/if}
+	<!--
+		Twee panelen in plaats van één lange kolom.
 
-	{#each groepen as groep (groep.materialId)}
-		<section>
-			<div class="band {textuur(groep.naam)}">
-				<div class="bandtekst">
-					<span class="naam">{groep.naam}</span>
-					<span class="aantal mono">
-						{groep.presets.length === 0
-							? 'nog geen instellingen'
-							: `${groep.presets.length} ${groep.presets.length === 1 ? 'instelling' : 'instellingen'}`}
-					</span>
-				</div>
-			</div>
-			{#if groep.presets.length === 0}
-				<!-- Waar de vraag ontstaat: niemand denkt "ik wil een testraster",
-				     men denkt "ik weet niet wat 3 mm berk nodig heeft". -->
-				<p class="leeg">
-					Een testraster brandt een reeks vakjes op dit materiaal; van het beste vakje
-					maak je een instelling die hier komt te staan.
-				</p>
-				{#if canEdit}
-					<button class="btn primary" onclick={() => onMakeGrid?.(groep.materialId)}>
-						Testraster maken
-					</button>
+		De taak is "vind de instelling voor wat er in de machine ligt". Dat is
+		eerst een materiaal kiezen en dan één regel aanwijzen. In de oude opzet
+		stonden álle materialen onder elkaar met álle instellingen uitgeklapt, dus
+		was stap één scrollen en stap twee opnieuw scrollen. Nu staat links wát je
+		hebt en rechts wát erbij hoort — de vorm die LightBurn en xTool er beide
+		voor gebruiken, en de vorm die past bij de vraag.
+	-->
+	<div class="tweeluik">
+		<nav class="materialen" aria-label="Materialen">
+			<ul>
+				<!-- Onlangs gebruikt is de eerste regel en geen aparte sectie met
+				     dubbele kaarten: het is een kéuze in dezelfde lijst. -->
+				{#if recent.length}
+					<li>
+						<button
+							class="matrij"
+							class:aan={materialId === null && !zoek.trim()}
+							onclick={() => {
+								materialId = null;
+								zoek = '';
+							}}
+						>
+							<span class="matnaam">Onlangs gebruikt</span>
+							<span class="mataantal mono">{recent.length}</span>
+						</button>
+					</li>
+				{/if}
+				{#each groepen as groep (groep.materialId)}
+					<li>
+						<button
+							class="matrij"
+							class:aan={materialId === groep.materialId}
+							onclick={() => (materialId = groep.materialId)}
+							oncontextmenu={(e) => {
+								e.preventDefault();
+								rijMenu = {
+									x: e.clientX,
+									y: e.clientY,
+									lijst: [
+										{
+											items: [
+												{
+													id: 'alleen',
+													label: 'Alleen dit materiaal tonen',
+													aan: materialId === groep.materialId,
+													doen: () => (materialId = groep.materialId)
+												},
+												{
+													id: 'grid',
+													label: 'Testraster maken',
+													uit: canEdit ? undefined : 'Vereist een token',
+													doen: () => onMakeGrid?.(groep.materialId)
+												}
+											]
+										}
+									]
+								};
+							}}
+						>
+							<span class="matnaam">{groep.naam}</span>
+							{#if groep.materialId === sheetMaterialId}
+								<!-- Wát er in de machine ligt is de reden dat je hier bent; dat
+								     hoort in de lijst te staan en niet alleen in een filtervinkje. -->
+								<span class="ligt" title="Het materiaal van dit vel">op het vel</span>
+							{/if}
+							<span class="mataantal mono">{groep.presets.length}</span>
+						</button>
+					</li>
+				{/each}
+			</ul>
+		</nav>
+
+		<div class="instellingen">
+			{#if materialId === null}
+				{#if recent.length}
+					<h2 class="kop">Onlangs gebruikt</h2>
+					{#each recent as preset (preset.id)}
+						{@render kaart(preset, true)}
+					{/each}
+					<p class="fijn">
+						Kies links een materiaal voor alles wat daarbij hoort.
+					</p>
+				{:else}
+					{#each groepen as groep (groep.materialId)}
+						{#each groep.presets as preset (preset.id)}
+							{@render kaart(preset, true)}
+						{/each}
+					{/each}
 				{/if}
 			{:else}
-				{#each groep.presets as preset (preset.id)}
-					{@render kaart(preset, false)}
-				{/each}
-				{#if canEdit}
-					<button class="mini raster" onclick={() => onMakeGrid?.(groep.materialId)}>
-						Testraster maken voor {groep.naam}
-					</button>
+				{@const groep = groepen.find((g) => g.materialId === materialId)}
+				{#if groep}
+					<div class="materiaalkop">
+						<h2 class="kop">{groep.naam}</h2>
+						{#if canEdit}
+							<button class="mini" onclick={() => onMakeGrid?.(groep.materialId)}>
+								Testraster maken
+							</button>
+						{/if}
+					</div>
+
+					{#if diktes.length > 1}
+						<!-- Dikte is de tweede vraag die iedereen stelt en de eerste die je
+						     kunt afvinken. Als filter en niet als kop, want je wil de
+						     buurdikte er soms bij zien staan. -->
+						<div class="diktes" role="group" aria-label="Dikte">
+							<button class="chip" class:aan={dikte === null} onclick={() => (dikte = null)}>
+								Alle diktes
+							</button>
+							{#each diktes as d (d)}
+								<button class="chip" class:aan={dikte === d} onclick={() => (dikte = d)}>
+									{d === null ? 'geen dikte' : `${d} mm`}
+								</button>
+							{/each}
+						</div>
+					{/if}
+
+					{#if zichtbarePresets.length === 0}
+						<p class="leeg">
+							{#if groep.presets.length === 0}
+								Nog geen instellingen voor {groep.naam}. Een testraster brandt een reeks
+								vakjes op dit materiaal; van het beste vakje maak je een instelling die
+								hier komt te staan.
+							{:else}
+								Geen instelling voor {dikte} mm. Kies een andere dikte, of brand er een
+								testraster voor.
+							{/if}
+						</p>
+						{#if canEdit}
+							<button class="btn primary" onclick={() => onMakeGrid?.(groep.materialId)}>
+								Testraster maken
+							</button>
+						{/if}
+					{:else}
+						{#each zichtbarePresets as preset (preset.id)}
+							{@render kaart(preset, false)}
+						{/each}
+					{/if}
 				{/if}
 			{/if}
-		</section>
-	{/each}
+		</div>
+	</div>
 {/if}
 
 {#if canEdit && library.materials.length}
@@ -1267,6 +1518,10 @@
 </section>
 {/if}
 
+{#if rijMenu}
+	<Menu menu={rijMenu.lijst} x={rijMenu.x} y={rijMenu.y} onSluit={() => (rijMenu = null)} />
+{/if}
+
 <style>
 	/* Zoeken moet bereikbaar blijven als je door twintig materialen scrollt;
 	   het venster zelf is de scrollbak, dus dit plakt aan zijn bovenkant. */
@@ -1284,7 +1539,6 @@
 		align-items: center;
 	}
 	.zoek { flex: 1; min-width: 0; }
-	.picker { flex: none; max-width: 40%; }
 	.context {
 		display: flex;
 		align-items: center;
@@ -1326,7 +1580,6 @@
 		color: var(--text-2);
 		margin: var(--space-4) 0 var(--space-2);
 	}
-	section + section { margin-top: var(--space-4); }
 	.leeg { color: var(--text-2); margin: 0 0 var(--space-2); }
 	/* Een lege staat mag ruimte innemen: hij is hier het scherm, niet een
 	   voetnoot eronder. */
@@ -1354,7 +1607,6 @@
 	.mini:hover { background: var(--surface-2); }
 	.mini.stil { color: var(--text-2); }
 	.mini.gevaar { color: var(--danger); font-weight: 600; }
-	.mini.raster { margin-top: var(--space-2); }
 	.row { display: flex; gap: var(--space-2); margin: var(--space-2) 0; }
 	.row input { flex: 1; min-width: 0; }
 	input,
@@ -1384,78 +1636,106 @@
 
 	/* Materiaal als beeld — maar één keer per materiaal. Tien keer dezelfde
 	   houtstrook onder elkaar is behang; één band boven de groep is identiteit. */
-	.band {
-		position: relative;
-		height: 56px;
-		border-radius: var(--radius-card) var(--radius-card) 0 0;
-		border: 1px solid var(--line);
-		border-bottom: 0;
-		overflow: hidden;
-		background-color: var(--surface-2);
+	/* Nerf: twee lagen strepen onder een lichte hoek, met een warme ondergrond. */
+	/* Acryl: glad, met één schuine glans. */
+	/* Leer: onregelmatige korrel uit gestapelde radiale vlekken. */
+	/* Karton: golfprofiel, van opzij gezien. */
+	/* Metaal: geborsteld, met een lopende glans. */
+
+	/* ── Het tweeluik ────────────────────────────────────────────────────────
+	   Links wat je hebt, rechts wat erbij hoort. De linkerkolom is vast: hij
+	   moet niet meebewegen zodra je een materiaal met een lange naam aanwijst,
+	   want dan schuift de lijst onder je cursor vandaan. */
+	.tweeluik {
+		display: grid;
+		grid-template-columns: 232px minmax(0, 1fr);
+		gap: var(--space-4);
+		align-items: start;
 	}
-	.bandtekst {
-		position: absolute;
-		inset: auto 0 0 0;
+	.materialen ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+	.matrij {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		width: 100%;
+		padding: 7px var(--space-2);
+		border: none;
+		border-radius: var(--radius-field);
+		background: none;
+		color: var(--text-1);
+		text-align: left;
+		font: inherit;
+		font-size: var(--text-sm);
+	}
+	.matrij:hover { background: var(--surface-2); }
+	.matrij.aan {
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		color: var(--accent);
+		font-weight: 500;
+	}
+	.matnaam { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.mataantal { flex: none; font-size: var(--text-xs); color: var(--text-2); }
+	.matrij.aan .mataantal { color: inherit; }
+	/* Wat er in de machine ligt: één woord, niet een tweede kleur. */
+	.ligt {
+		flex: none;
+		font-size: 10px;
+		letter-spacing: 0.03em;
+		padding: 1px 5px;
+		border-radius: var(--radius-dot);
+		border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+		color: var(--accent);
+		white-space: nowrap;
+	}
+	.materiaalkop {
 		display: flex;
 		align-items: baseline;
-		justify-content: space-between;
-		gap: var(--space-2);
-		padding: var(--space-1h) var(--space-3);
-		/* Zonder deze sluier haalt witte tekst op een houtnerf geen AA. */
-		background: linear-gradient(to top, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0.42) 70%, transparent);
-		color: var(--on-color);
+		gap: var(--space-3);
+		margin-bottom: var(--space-2);
 	}
-	.bandtekst .naam { font-weight: 600; font-size: var(--text-md); }
-	.bandtekst .aantal { font-size: var(--text-xs); opacity: 0.85; }
-	/* Nerf: twee lagen strepen onder een lichte hoek, met een warme ondergrond. */
-	.band.hout {
-		background-color: var(--mat-hout);
-		background-image:
-			repeating-linear-gradient(97deg, rgb(0 0 0 / 0.1) 0 1px, transparent 1px 7px),
-			repeating-linear-gradient(93deg, rgb(255 255 255 / 0.13) 0 2px, transparent 2px 15px);
+	.materiaalkop .kop { margin: 0; }
+	.diktes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1h);
+		margin-bottom: var(--space-3);
 	}
-	/* Acryl: glad, met één schuine glans. */
-	.band.acryl {
-		background-color: var(--mat-acryl);
-		background-image: linear-gradient(103deg, rgb(255 255 255 / 0.45) 0 18%, transparent 40%);
+	.chip {
+		padding: 3px 10px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: var(--surface-1);
+		color: var(--text-2);
+		font: inherit;
+		font-size: var(--text-xs);
 	}
-	/* Leer: onregelmatige korrel uit gestapelde radiale vlekken. */
-	.band.leer {
-		background-color: var(--mat-leer);
-		background-image:
-			radial-gradient(circle at 20% 40%, rgb(0 0 0 / 0.18) 0 2px, transparent 3px),
-			radial-gradient(circle at 62% 70%, rgb(0 0 0 / 0.14) 0 3px, transparent 4px),
-			radial-gradient(circle at 85% 25%, rgb(255 255 255 / 0.12) 0 2px, transparent 3px);
-		background-size: 26px 22px, 33px 29px, 19px 17px;
-		background-position: 0 0, 11px 7px, 5px 13px;
-	}
-	/* Karton: golfprofiel, van opzij gezien. */
-	.band.karton {
-		background-color: var(--mat-karton);
-		background-image: repeating-linear-gradient(90deg, rgb(0 0 0 / 0.13) 0 1px, transparent 1px 9px);
-	}
-	/* Metaal: geborsteld, met een lopende glans. */
-	.band.metaal {
-		background-color: var(--mat-metaal);
-		background-image:
-			repeating-linear-gradient(90deg, rgb(255 255 255 / 0.35) 0 1px, transparent 1px 4px),
-			linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.4) 48%, transparent 62%);
-	}
-	.band.onbekend {
-		background-image: repeating-linear-gradient(45deg, rgb(0 0 0 / 0.04) 0 6px, transparent 6px 12px);
+	.chip:hover { background: var(--surface-2); color: var(--text-1); }
+	.chip.aan {
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		color: var(--accent);
+		font-weight: 500;
 	}
 
+	/* ── Eén instelling = één regel ──────────────────────────────────────── */
 	.preset {
 		position: relative;
 		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
+		border-radius: var(--radius-field);
 		background: var(--surface-1);
-		box-shadow: var(--lift-1);
-		margin-top: var(--space-2);
-		padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-3) + 4px);
+		margin-top: 4px;
+		padding: 0 var(--space-2) 0 calc(var(--space-2) + 4px);
 	}
-	/* De bron zit ook in de rand van de kaart: bij het scrollen zie je aan de
-	   linkerkant welke instellingen gemeten zijn en welke gegokt. */
+	.preset:first-of-type { margin-top: 0; }
+	/* De bron zit ook in de rand: bij het scrollen zie je aan de linkerkant
+	   welke instellingen gemeten zijn en welke gegokt. */
 	.preset::before {
 		content: '';
 		position: absolute;
@@ -1463,33 +1743,58 @@
 		top: -1px;
 		bottom: -1px;
 		width: 4px;
-		border-radius: var(--radius-card) 0 0 var(--radius-card);
+		border-radius: var(--radius-field) 0 0 var(--radius-field);
 		background: var(--line);
 	}
 	.preset.ok::before { background: var(--ok); }
 	.preset.warn::before { background: var(--warn-solid); }
-	/* Direct onder een materiaalband: één doorlopend blok. */
-	.band + .preset {
-		margin-top: 0;
-		border-radius: 0 0 var(--radius-card) var(--radius-card);
+	.preset.open {
+		border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+		box-shadow: var(--lift-1);
 	}
-	.band + .preset::before { border-radius: 0 0 0 var(--radius-card); }
-	.preset + .preset { margin-top: var(--space-2); }
 
-	.head { display: flex; align-items: flex-start; gap: var(--space-2); }
-	.what { flex: 1; min-width: 0; }
-	.titel { font-weight: 600; }
-	.titel .mat { font-weight: 600; }
-	.titel .dikte { font-weight: 500; }
-	.laatst { display: block; font-size: var(--text-xs); color: var(--text-2); }
+	.rij {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-height: 40px;
+	}
+	.wat { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-2); }
+	/* De dikte in een eigen kolom van vaste breedte: dat is waar het oog langs
+	   loopt als je "3 mm" zoekt, en dan moeten de getallen onder elkaar staan. */
+	.maat {
+		flex: none;
+		width: 4.4em;
+		font-weight: 600;
+		font-size: var(--text-sm);
+	}
+	.bewerking {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--text-sm);
+	}
+	.bewerking .mat { font-weight: 500; }
+	.waarden {
+		flex: none;
+		display: flex;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		font-variant-numeric: tabular-nums;
+	}
+	.waarden span { min-width: 4.2em; text-align: right; }
+	.waarden small { color: var(--text-2); margin-left: 1px; }
+
 	.badge {
 		flex: none;
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: 3px;
+		width: 7.6em;
 		font-size: var(--text-xs);
 		font-weight: 600;
-		padding: 2px 8px;
+		padding: 1px 6px;
 		border-radius: var(--radius-dot);
 		border: 1px solid var(--line);
 		background: var(--surface-2);
@@ -1508,68 +1813,74 @@
 	}
 	.ico { flex: none; }
 
-	.cijfers {
-		display: flex;
-		align-items: center;
-		gap: var(--space-4);
-		margin-top: var(--space-2);
-	}
-	.param { min-width: 0; }
-	.param .k {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-	.param .v { font-size: var(--text-md); }
-	.param .v small { font-size: var(--text-xs); color: var(--text-2); }
-	.bewijs {
-		margin-left: auto;
+	.bewijs,
+	.geenfoto {
 		flex: none;
-		width: 44px;
-		height: 44px;
+		width: 28px;
+		height: 28px;
 		padding: 0;
-		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		overflow: hidden;
+	}
+	.bewijs {
+		border: 1px solid var(--line);
 		background: var(--surface-2);
 	}
 	.bewijs img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-	/* Eigen invoer is geen waarschuwing: wel dezelfde regel op dezelfde plek,
-	   maar zonder vlak. Wat risico draagt, houdt zijn kleurvlak. */
-	.raad.neutral {
-		color: var(--text-2);
-		background: none;
-		padding: 2px 0 0;
-	}
-	.raad.ok {
-		color: var(--ok);
-		background: color-mix(in srgb, var(--ok) 9%, transparent);
-	}
-	.raad,
-	.botst {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-1h);
-		margin: var(--space-2) 0 0;
-		padding: var(--space-1h) 8px;
+	.doe {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 5px 12px;
+		border: 1px solid var(--accent);
 		border-radius: var(--radius-field);
+		background: var(--accent);
+		color: var(--accent-ink);
+		font: inherit;
 		font-size: var(--text-xs);
-		color: var(--warn);
-		background: color-mix(in srgb, var(--warn) 10%, transparent);
+		font-weight: 500;
 	}
-	.raad .ico { margin-top: 2px; }
+	.doe:disabled { opacity: 0.4; cursor: not-allowed; }
+	/* Een instelling voor een ander soort bewerking mag je toepassen, maar niet
+	   zonder dat je het weet. Eén teken bij de bewerking, met de hele uitleg in
+	   de tooltip. */
+	.mismatch {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		margin-left: 4px;
+		font-size: 10px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		color: var(--warn);
+		white-space: nowrap;
+	}
+	.meer {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border: none;
+		border-radius: var(--radius-field);
+		background: none;
+		color: var(--text-2);
+	}
+	.meer:hover { background: var(--surface-2); color: var(--text-1); }
 
-	.foot {
+	.zekerweg {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		flex-wrap: wrap;
-		margin-top: var(--space-2);
+		padding: var(--space-2) 0 var(--space-2);
+		border-top: 1px solid var(--line);
+		font-size: var(--text-xs);
 	}
-	/* Toepassen en verwijderen hebben tegengestelde gevolgen; die horen niet
-	   naast elkaar te staan (design system: ≥24px ertussen). */
+	.zekerweg span { flex: 1; min-width: 12em; }
+
 	.rek { flex: 1; min-width: var(--space-6); }
 	.zeker { font-size: var(--text-xs); color: var(--text-2); }
 

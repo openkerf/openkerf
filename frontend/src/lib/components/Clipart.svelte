@@ -129,10 +129,12 @@
 				if (e.key === 'Enter') search();
 			}}
 		/>
+		<!-- Formulierregel v4: het label staat bóven het veld, ook in een regel
+		     met een zoekveld. Hiervóór stond "Breedte" ervoor en "mm" erachter,
+		     en daarmee was dit het enige veld in de app met een label links. -->
 		<label class="w">
-			<span>Breedte</span>
+			<span>Breedte (mm)</span>
 			<input class="mono" type="number" min="1" max="2000" step="5" bind:value={width} />
-			<span>mm</span>
 		</label>
 		<button
 			class="btn primary"
@@ -221,10 +223,12 @@
 
 <style>
 	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
-	.bar { display: flex; gap: var(--space-2); align-items: center; }
+	/* Onderlangs uitlijnen, niet in het midden: de velden hebben nu een label
+	   erboven en het zoekveld niet, dus "midden" zou de zoekknop scheef zetten. */
+	.bar { display: flex; gap: var(--space-2); align-items: flex-end; }
 	.bar input[type='search'] { flex: 1; }
-	.w { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--text-2); }
-	.w input { width: 5em; }
+	.w { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
+	.w input { width: 7em; }
 	input {
 		font: inherit;
 		padding: 8px 8px;

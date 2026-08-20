@@ -115,6 +115,8 @@ class Drawing:
         # `MachineControl.origin` in; zonder dat is er geen nulpunt en
         # verandert er niets aan de plek van het werk.
         self.origin = lambda: None
+        # Lag er een hele groep op het klembord? Zie `clipboard_paste`.
+        self._klembord_groep = False
 
     @property
     def elements(self):
@@ -663,6 +665,138 @@ class Drawing:
         self.elements.set_emphasis(created)
         self._refresh()
         return {"ids": [n.id for n in created]}
+
+    # ----------------------------------------------------------------- klembord
+    #
+    # De engine heeft een compleet klembord (`core/elements/clipboard.py`:
+    # `clipboard copy | cut | paste | clear`). Wij zetten alleen de nadruk en
+    # lezen de stand terug, zodat het klembord van de engine de enige waarheid
+    # blijft — ook als iemand er tegelijk via de console aan zit.
+    #
+    # Eén ding vangen we wél af: `clipboard paste` stopt méér dan één vorm in
+    # een nieuwe groep ("Group", id "Copy"). Plakken dat stilzwijgend groepeert
+    # is een verrassing die je pas merkt als je één vorm wil verslepen en er
+    # drie meekomen. Hebben we zelf om die groep gevraagd, dan halen we hem er
+    # weer af. Wie een échte groep kopieerde, plakt één knoop en houdt zijn
+    # groep — de engine wikkelt alleen bij meer dan één.
+
+    def _clipboard_nodes(self) -> list:
+        buffer = getattr(self.elements, "_clipboard", None) or {}
+        sleutel = getattr(self.elements, "_clipboard_default", "0")
+        return list(buffer.get(sleutel) or [])
+
+    def _clipboard_bounds(self):
+        from meerk40t.core.units import UNITS_PER_MM
+
+        vakken = [n.bounds for n in self._clipboard_nodes() if getattr(n, "bounds", None)]
+        if not vakken:
+            return None
+        x0 = min(v[0] for v in vakken) / UNITS_PER_MM
+        y0 = min(v[1] for v in vakken) / UNITS_PER_MM
+        x1 = max(v[2] for v in vakken) / UNITS_PER_MM
+        y1 = max(v[3] for v in vakken) / UNITS_PER_MM
+        return {
+            "x_mm": x0,
+            "y_mm": y0,
+            "width_mm": max(0.0, x1 - x0),
+            "height_mm": max(0.0, y1 - y0),
+        }
+
+    def clipboard_state(self) -> dict:
+        return {"count": len(self._clipboard_nodes()), "bounds": self._clipboard_bounds()}
+
+    def _hele_groep(self, nodes) -> bool:
+        """
+        Is dit precies één volledige groep?
+
+        Dat bepaalt of het omhulsel dat de engine bij het plakken maakt mag
+        blijven staan. Wie een groep kopieert, verwacht een groep terug; wie
+        drie losse vormen kopieert, verwacht drie losse vormen.
+        """
+        ouders = {getattr(n, "parent", None) for n in nodes}
+        if len(ouders) != 1:
+            return False
+        ouder = ouders.pop()
+        if ouder is None or getattr(ouder, "type", None) != "group":
+            return False
+        return len(list(ouder.children)) == len(nodes)
+
+    def clipboard_copy(self, element_ids) -> dict:
+        nodes = self._nodes(element_ids)
+        self._klembord_groep = self._hele_groep(nodes)
+        self.elements.set_emphasis(nodes)
+        self.runner.run("clipboard copy")
+        return self.clipboard_state()
+
+    def clipboard_cut(self, element_ids) -> dict:
+        nodes = self._nodes(element_ids)
+        self._klembord_groep = self._hele_groep(nodes)
+        self.elements.set_emphasis(nodes)
+        # De engine zet zelf een undoscope om het verwijderen.
+        self.runner.run("clipboard cut")
+        self._refresh()
+        return self.clipboard_state()
+
+    def clipboard_paste(self, x_mm=None, y_mm=None, offset_mm: float = 5.0) -> dict:
+        """
+        Plakken, met of zonder doelplek.
+
+        Zonder `x_mm`/`y_mm` komt het werk `offset_mm` naast het origineel te
+        liggen: precies op elkaar plakken ziet eruit als "er gebeurde niets", en
+        dan sleep je per ongeluk het origineel weg. Mét een doelplek is dat de
+        linkerbovenhoek van wat er geplakt wordt — dat is wat "plakken hier" in
+        een rechterklikmenu belooft.
+        """
+        aantal = len(self._clipboard_nodes())
+        if not aantal:
+            raise DesignError("Het klembord is leeg.")
+        doos = self._clipboard_bounds()
+        if x_mm is not None and y_mm is not None and doos is not None:
+            dx = _finite(x_mm, "x_mm") - doos["x_mm"]
+            dy = _finite(y_mm, "y_mm") - doos["y_mm"]
+        else:
+            dx = dy = float(offset_mm)
+
+        before = {id(n) for n in self.elements.elems()}
+        groepen_voor = {id(n) for n in self._alle_groepen()}
+        self.runner.run(f"clipboard paste -x {_mm(dx)} -y {_mm(dy)}")
+        geplakt = [n for n in self.elements.elems() if id(n) not in before]
+        if not geplakt:
+            raise DesignError("De engine heeft niets geplakt.")
+
+        # Dezelfde valstrik als bij `grid`/`radial`: `clipboard paste` schuift
+        # zijn kopieën met een rauwe `node.matrix *= matrix`, en die toekenning
+        # meldt niets aan de node. De omhullende bleef dus op de plek van het
+        # origineel staan terwijl de vorm elders getekend werd — je klikt de
+        # kopie aan en de handvatten verschijnen om het origineel. Zie de
+        # upstream-lijst in CLAUDE.md.
+        for node in geplakt:
+            marker = getattr(node, "set_dirty_bounds", None)
+            if marker is not None:
+                marker()
+
+        # De omhullende groep die de engine er zelf om zette, weer weghalen —
+        # met de eigen `ungroup` van de engine, zodat de boom op dezelfde manier
+        # herbouwd wordt als wanneer de gebruiker het zelf doet. Tenzij er een
+        # hele groep gekopieerd werd: dan is dat omhulsel precies wat je terug
+        # wilde hebben.
+        if aantal > 1 and not getattr(self, "_klembord_groep", False):
+            wikkels = [
+                n
+                for n in self._alle_groepen()
+                if id(n) not in groepen_voor and getattr(n, "id", None) == "Copy"
+            ]
+            if wikkels:
+                self.elements.set_emphasis(wikkels)
+                self.runner.run("ungroup")
+
+        self.elements.validate_ids()
+        self.elements.set_emphasis(geplakt)
+        self._refresh()
+        return {"ids": [n.id for n in geplakt], "count": len(geplakt)}
+
+    def _alle_groepen(self) -> list:
+        return [n for n in self.elements.elem_branch.flat() if n.type == "group"]
 
     def _nodes(self, element_ids):
         from .edits import _ids

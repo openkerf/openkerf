@@ -1,0 +1,22 @@
+/** Het formulier van het testraster in zijn geheel, buiten de vouw om. */
+import { chromium } from 'playwright';
+import { mkdirSync } from 'node:fs';
+const BASE = process.env.OK_BASE ?? 'http://localhost:8090';
+const ronde = process.argv[2] ?? 'na';
+const OUT = `/Users/Jelle.Tigchelaar/git/openkerf/screenshots/usability/${ronde}`;
+mkdirSync(OUT, { recursive: true });
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 }, colorScheme: 'light' });
+const page = await ctx.newPage();
+await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.statusbar').catch(() => {});
+await page.waitForTimeout(900);
+const later = page.getByRole('button', { name: /^Later$/ });
+if (await later.count()) await later.first().click().catch(() => {});
+await page.click('button[title^="Testraster"]').catch(() => {});
+await page.waitForTimeout(1600);
+const grid = page.locator('.grid').first();
+if (await grid.count()) await grid.screenshot({ path: `${OUT}/f-testraster-formulier.png` });
+else console.log('geen .grid');
+await b.close();
+console.log('klaar');

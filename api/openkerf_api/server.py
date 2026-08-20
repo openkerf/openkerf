@@ -989,6 +989,25 @@ class ApiServer:
         def duplicate_elements(body: dict):
             return manage(self.drawing.duplicate, body.get("ids"))
 
+        @app.get("/api/design/clipboard")
+        def clipboard_state():
+            """Wat er op het klembord ligt — het menu moet weten of plakken kan."""
+            return manage(self.drawing.clipboard_state)
+
+        @app.post("/api/design/clipboard/copy", dependencies=write)
+        def clipboard_copy(body: dict):
+            return manage(self.drawing.clipboard_copy, body.get("ids"))
+
+        @app.post("/api/design/clipboard/cut", dependencies=write)
+        def clipboard_cut(body: dict):
+            return manage(self.drawing.clipboard_cut, body.get("ids"))
+
+        @app.post("/api/design/clipboard/paste", dependencies=write)
+        def clipboard_paste(body: dict):
+            return manage(
+                self.drawing.clipboard_paste, body.get("x_mm"), body.get("y_mm")
+            )
+
         @app.post("/api/design/operations", dependencies=write, status_code=201)
         def create_operation(body: dict):
             return manage(

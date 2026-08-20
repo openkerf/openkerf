@@ -4,7 +4,6 @@
 		formatMm,
 		isStalled,
 		remainingSeconds,
-		STATE_LABEL,
 		totalSeconds,
 		type Device,
 		type Job,
@@ -97,9 +96,21 @@
 	let onbekend = $derived(
 		connected && machineState !== 'unplugged' && device?.connection?.state !== 'connected'
 	);
+	/**
+	 * Twee indicatoren, twee onderwerpen.
+	 *
+	 * De balk zei het twee keer: hier stond "Machine niet verbonden" en helemaal
+	 * rechts stond "Niet verbonden" — dezelfde mededeling, twee keer, 700 px van
+	 * elkaar. En het énige dat er níet stond was of de pagina zelf nog aan de
+	 * server hangt; dat zag je alleen doordat deze tekst rood werd.
+	 *
+	 * Dus: hier de machine (met de knop erbij, want dáár kun je iets aan doen),
+	 * en rechts de lijn naar OpenKerf. Twee dingen die los kunnen stukgaan
+	 * krijgen twee plekken die dat los kunnen zeggen.
+	 */
 	let verbindingstekst = $derived(
 		!connected
-			? 'Geen verbinding met OpenKerf'
+			? 'Machine onbekend'
 			: machineState === 'unplugged'
 				? 'Machine niet verbonden'
 				: onbekend
@@ -295,8 +306,13 @@
 			</button>
 		</span>
 	{/if}
-	<span class="right">
-		<span class="dot {machineState}" aria-hidden="true"></span>{STATE_LABEL[machineState]}
+	<!-- De lijn naar OpenKerf zelf. Hier stond de machinetoestand, en die staat
+	     al links in deze balk én in de bovenbalk. -->
+	<span class="right" class:offline={!connected} title={connected
+		? 'De pagina krijgt live gegevens van de OpenKerf-server'
+		: 'De pagina heeft geen verbinding met de OpenKerf-server; wat je ziet is de laatste stand'}>
+		<span class="dot {connected ? 'ready' : 'offline'}" aria-hidden="true"></span>
+		OpenKerf {connected ? 'live' : 'weg'}
 	</span>
 </footer>
 
@@ -462,8 +478,4 @@
 		background: var(--text-2);
 	}
 	.dot.ready { background: var(--ok); }
-	.dot.unplugged { background: var(--warn-solid); }
-	.dot.busy { background: var(--accent); }
-	.dot.paused { background: var(--warn-solid); }
-	.dot.alarm { background: var(--danger-solid); }
 </style>

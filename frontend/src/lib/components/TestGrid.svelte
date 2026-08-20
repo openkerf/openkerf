@@ -876,6 +876,7 @@
 
 		<div class="werkbank">
 			<div class="grid">
+				<div class="paar">
 				<label class="veld">
 					<span class="naam">Materiaal</span>
 					<select bind:value={form.material_id}>
@@ -893,6 +894,7 @@
 						{/each}
 					</select>
 				</label>
+				</div>
 
 				{#if geenMateriaal}
 					<!-- Vóór het hout eraan gaat, niet erna: zonder materiaal kan er
@@ -952,21 +954,30 @@
 					</p>
 				{/if}
 
-				<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={form.thickness_mm} />
-				<NumberField label="Vakje" unit="mm" step={1} min={1} bind:value={form.cell_mm} />
+				<div class="paar">
+					<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={form.thickness_mm} />
+					<NumberField label="Vakje" unit="mm" step={1} min={1} bind:value={form.cell_mm} />
+				</div>
 				<!-- Voor het hele bord, niet per vakje: passes als as zou een bord
 				     opleveren dat niemand meer terugleest, en het getal komt op het
-				     opschrift zodat je het bord over twee weken nog kunt plaatsen. -->
-				<NumberField
-					label="Passes"
-					unit="× per vakje"
-					step={1}
-					min={1}
-					bind:value={form.passes}
-				/>
+				     opschrift zodat je het bord over twee weken nog kunt plaatsen.
+
+				     In een `.paar` met één kind: dan houdt het veld dezelfde breedte
+				     als de velden erboven. Over de volle breedte is een getalveld van
+				     500px voor één cijfer, en dan lijnt de kolom niet meer uit. -->
+				<div class="paar">
+					<NumberField
+						label="Passes"
+						unit="× per vakje"
+						step={1}
+						min={1}
+						bind:value={form.passes}
+					/>
+				</div>
 
 				<!-- Besluit B12: je kiest zelf welke twee grootheden je aftast. De
 				     derde blijft vast en staat straks op het opschrift van het bord. -->
+				<div class="paar">
 				<label class="veld">
 					<span class="naam">Rijen, naar beneden</span>
 					<select
@@ -993,6 +1004,7 @@
 						{/each}
 					</select>
 				</label>
+				</div>
 
 				<!-- De vaste grootheid staat bij de assen en niet onderaan: hij hoort
 				     bij de vraag "wat varieert er", en op een venster van 80vh viel
@@ -1008,62 +1020,75 @@
 					/>
 				{/each}
 
+				<!-- Van, tot en het aantal stappen zijn samen één uitspraak over één
+				     as. Ze stonden verspreid over drie plekken in het raster; nu staat
+				     elke as in zijn eigen blok, met van en tot naast elkaar. -->
 				{#each assen as as (as)}
-					<NumberField
-						label="{AXIS_LABEL[as]} van"
-						unit={AXIS_UNIT[as]}
-						step={INVOER[as].stap}
-						min={0}
-						max={INVOER[as].max ?? null}
-						bind:value={form[`${as}_min`]}
-					/>
-					<NumberField
-						label="tot"
-						unit={AXIS_UNIT[as]}
-						step={INVOER[as].stap}
-						min={0}
-						max={INVOER[as].max ?? null}
-						bind:value={form[`${as}_max`]}
-					/>
+					<fieldset class="asblok">
+						<!-- De eenheid één keer, in de kop van het blok. Hij stond in beide
+						     veldlabels ("van (mm/s)", "tot (mm/s)") en dan lees je hem twee
+						     keer om één bereik te begrijpen. -->
+						<legend class="naam">{AXIS_LABEL[as]} ({AXIS_UNIT[as]})</legend>
+						<div class="paar">
+							<NumberField
+								label="van"
+								step={INVOER[as].stap}
+								min={0}
+								max={INVOER[as].max ?? null}
+								bind:value={form[`${as}_min`]}
+							/>
+							<NumberField
+								label="tot"
+								step={INVOER[as].stap}
+								min={0}
+								max={INVOER[as].max ?? null}
+								bind:value={form[`${as}_max`]}
+							/>
+						</div>
+						<div class="paar">
+							<NumberField
+								label="Stappen"
+								unit={as === assen[0] ? 'rijen' : 'kolommen'}
+								step={1}
+								min={2}
+								bind:value={form[`${as}_steps`]}
+							/>
+						</div>
+					</fieldset>
 				{/each}
 
-				{#each assen as as (as)}
-					<NumberField
-						label="Stappen {AXIS_LABEL[as].toLowerCase()}"
-						step={1}
-						min={2}
-						bind:value={form[`${as}_steps`]}
-					/>
-				{/each}
-
-				<NumberField label="Tussenruimte" unit="mm" step={1} min={0} bind:value={form.gap_mm} />
+				<div class="paar">
+					<NumberField label="Tussenruimte" unit="mm" step={1} min={0} bind:value={form.gap_mm} />
+				</div>
 
 				<!-- Gat T9: LightBurn vraagt X Center/Y Center. Op een restplank weet
 				     je waar het midden van je stuk hout ligt, niet waar de hoek van
 				     een raster moet komen dat je nog niet gezien hebt. Het midden
 				     slaat op het hele bord, opschriften inbegrepen — anders ligt het
 				     scheef zodra de rijlabels links uitsteken. -->
-				<label class="veld breed">
+				<label class="veld">
 					<span class="naam">Positie meten vanaf</span>
 					<select bind:value={form.anchor}>
 						<option value="corner">De linkerbovenhoek van het bord</option>
 						<option value="center">Het midden van het bord</option>
 					</select>
 				</label>
-				<NumberField
-					label={form.anchor === 'center' ? 'Midden X' : 'Start X'}
-					unit="mm"
-					step={5}
-					min={0}
-					bind:value={form.origin_x_mm}
-				/>
-				<NumberField
-					label={form.anchor === 'center' ? 'Midden Y' : 'Start Y'}
-					unit="mm"
-					step={5}
-					min={0}
-					bind:value={form.origin_y_mm}
-				/>
+				<div class="paar">
+					<NumberField
+						label={form.anchor === 'center' ? 'Midden X' : 'Start X'}
+						unit="mm"
+						step={5}
+						min={0}
+						bind:value={form.origin_x_mm}
+					/>
+					<NumberField
+						label={form.anchor === 'center' ? 'Midden Y' : 'Start Y'}
+						unit="mm"
+						step={5}
+						min={0}
+						bind:value={form.origin_y_mm}
+					/>
+				</div>
 
 				<!-- Gat T10: LightBurn heeft Enable Text en Enable Border. Voor een
 				     proefje op een restje is het opschrift verspilling; voor een bord
@@ -1321,6 +1346,10 @@
 
 		<div class="actions">
 			<button class="btn" disabled={busy} onclick={suggest}>Bereik voorstellen</button>
+			<!-- Formulierregel v4: de primaire knop staat rechts, de hulpknop links.
+			     Ze stonden naast elkaar links, en dan is de knop die het hout in gaat
+			     even prominent als de knop die een getal voorstelt. -->
+			<span class="rek"></span>
 			<!-- E4: zonder materiaal blijft dit een gewone knop. Hij werkt — soms
 			     wíl je even een bord branden zonder er een preset uit te halen —
 			     maar hij belooft niet dat dit de bedoelde weg is. -->
@@ -1402,15 +1431,39 @@
 	.lead { margin: 0; font-size: var(--text-sm); color: var(--text-1); max-width: 62ch; }
 	.muted { color: var(--text-2); margin: 0; font-size: var(--text-xs); }
 
+	/* Formulierregel v4: het formulier is een stapel regels, geen doorlopend
+	   raster van twee kolommen. In dat raster viel elk veld op de eerstvolgende
+	   vrije plek, en dus stond "Snelheid van" naast "Kolommen, naar rechts" met
+	   "tot" op de regel eronder — twee velden die één waarde zijn, diagonaal uit
+	   elkaar getrokken. Nu bepaalt de opmaak wat bij elkaar hoort: `.paar` zet
+	   precies twee velden naast elkaar, al het andere staat op zijn eigen regel.
+	   Zie DESIGN-SYSTEM v4, "Formulieren". */
 	.grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-2) var(--space-3);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 		align-content: start;
 	}
+	.paar {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-3);
+		align-items: end;
+	}
 	.veld { display: grid; gap: 4px; }
-	.veld.breed { grid-column: 1 / -1; }
 	.naam { font-size: var(--text-xs); color: var(--text-2); }
+	/* Een as is één uitspraak: van, tot en het aantal stappen horen in één
+	   omlijnd blok, want los in de stroom lazen ze als drie losse getallen. */
+	.asblok {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin: 0;
+		padding: var(--space-2) var(--space-3) var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+	}
+	.asblok legend { padding: 0 4px; }
 	.hint { font-size: var(--text-xs); color: var(--text-2); }
 	select, input[type='text'] {
 		font: inherit;
@@ -1631,6 +1684,7 @@
 	/* De knop van stap 1 hoort in beeld te blijven. In een venster van 80vh met
 	   twaalf velden erboven verdween hij onder de vouw, en dan lijkt de wizard
 	   doodlopend. */
+	.actions .rek { flex: 1; }
 	.actions {
 		position: sticky;
 		bottom: 0;
