@@ -439,7 +439,6 @@ export class Bewaker {
 export function jobNaam(label: string | null | undefined): string {
 	const tekst = label ?? '';
 	const m = tekst.match(/^Spooler:\s*(\d+)\s*items?$/i);
-	if (!m) return tekst || 'De job';
-	const n = Number(m[1]);
-	return `${n} ${n === 1 ? 'bewerking' : 'bewerkingen'}`;
+	if (!m) return tekst || t('notify.job.unnamed');
+	return t('job.label.operations', { n: Number(m[1]) });
 }

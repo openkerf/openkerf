@@ -2,7 +2,7 @@
 	import '$lib/tokens.css';
 	import { page } from '$app/stores';
 	import Welkom from '$components/Welkom.svelte';
-	import { i18n } from '$lib/i18n/index.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 
 	let { children } = $props();
 
@@ -98,7 +98,7 @@
 	     langzame server duurde "één tel" merkbaar langer dan een tel. Deze regel
 	     verschijnt daarom pas ná 400 ms: is de server snel, dan zie je hem
 	     nooit; is hij traag, dan staat er waar we op wachten. -->
-	<p class="wachten" role="status">Even kijken welke machine er is…</p>
+	<p class="wachten" role="status">{t('layout.lookingForMachine')}</p>
 {/if}
 
 <style>

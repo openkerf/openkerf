@@ -719,7 +719,12 @@
 			     on its own on the second — and then two pairs no longer read as two
 			     pairs. -->
 			<div class="figures mono">
-				{#each [['B', 'width', t('panel.width')], ['H', 'height', t('panel.height')]] as [label, key, naam] (key)}
+				<!-- The one-letter labels are translated too: "B" is Breedte in Dutch and
+				     means nothing in English, where the same column reads "W". -->
+				{#each [
+					[t('panel.widthShort'), 'width', t('panel.width')],
+					[t('panel.heightShort'), 'height', t('panel.height')]
+				] as [label, key, naam] (key)}
 					<label class="f">
 						<span>{label}</span>
 						<input
@@ -903,10 +908,10 @@
 					ontoggle={(e) => (openGroups.image = e.currentTarget.open)}
 				>
 					<summary>
-						Afbeelding
+						{t('panel.image')}
 						{#if image?.adjustments.some((a) => a.enabled)}
 							<span class="fold-note on">
-								{image.adjustments.filter((a) => a.enabled).length} aan
+								{t('panel.image.on', { n: image.adjustments.filter((a) => a.enabled).length })}
 							</span>
 						{/if}
 					</summary>
@@ -916,7 +921,7 @@
 							class="rot"
 							disabled={edits.busy || !image?.adjustments.some((a) => a.enabled)}
 							onclick={() => onImageClear?.()}
-						>Alles wissen</button>
+						>{t('panel.image.clearAll')}</button>
 					</div>
 
 					{#each image?.adjustments ?? [] as item (item.name)}
@@ -951,7 +956,7 @@
 										</label>
 									{:else if key === 'type' && item.name === 'dither'}
 										<label class="fx-value">
-											<span>soort</span>
+											<span>{t('panel.image.kind')}</span>
 											<select
 												disabled={edits.busy}
 												onchange={(e) =>
@@ -2595,8 +2600,12 @@
 	}
 	/* De naam mag wijken vóór de rest: hij is het langste en het minst kritiek
 	   — wat je vast hebt zie je ook op het canvas, "Wis" nergens anders. */
-	.selected .head .name { flex: 0 1 auto; }
-	.selected .head .in-layers { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+	/* The name keeps its width and the layer chips give way. "3 shapes" is short
+	   and is what you are holding; "3 sha…" beside two full layer names is the
+	   wrong half to lose. Measured in English, where the same header truncated and
+	   the Dutch one did not — a language should not decide which half survives. */
+	.selected .head .name { flex: 0 0 auto; }
+	.selected .head .in-layers { flex: 1 1 auto; min-width: 0; overflow: hidden; }
 	.selected .name {
 		font-weight: 600;
 		min-width: 0;

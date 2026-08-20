@@ -44,18 +44,18 @@ export type Preset = {
 };
 
 export const OPERATIONS = [
-	{ value: 'snijden', label: 'Snijden' },
-	{ value: 'graveren-vector', label: 'Graveren · vector' },
-	{ value: 'graveren-raster', label: 'Graveren · raster' },
-	{ value: 'markeren', label: 'Markeren' }
+	{ value: 'snijden', label: t('operation.cut') },
+	{ value: 'graveren-vector', label: t('operation.engraveVector') },
+	{ value: 'graveren-raster', label: t('operation.engraveRaster') },
+	{ value: 'markeren', label: t('operation.mark') }
 ];
 
 /**
- * Dezelfde bewerking, zonder middenpunt.
+ * The same operation, without the middle dot.
  *
- * In een keuzelijst leest "Graveren · vector" prima, maar op een kaart waar het
- * middenpunt al de scheiding is tussen dikte en bewerking, krijg je
- * "3 mm · Graveren · vector" en weet je niet meer wat bij wat hoort.
+ * In a dropdown "Engrave · vector" reads fine, but on a card where the middle dot
+ * is already the separator between thickness and operation you get
+ * "3 mm · Engrave · vector" and no longer know what belongs to what.
  */
 export function operationName(value: string): string {
 	const label = OPERATIONS.find((o) => o.value === value)?.label ?? value;
@@ -64,11 +64,11 @@ export function operationName(value: string): string {
 }
 
 /**
- * Welk laagtype bij welke bewerking hoort.
+ * Which layer type belongs to which operation.
  *
- * Een snijpreset op een graveerlaag zetten is geen tikfout maar verbrand
- * materiaal: 12 mm/s op 65% doet iets heel anders dan 250 mm/s op 20%. We
- * blokkeren het niet — soms weet de gebruiker beter — maar we zeggen het wel.
+ * Putting a cut preset on an engrave layer is not a typo but burned material:
+ * 12 mm/s at 65% does something very different from 250 mm/s at 20%. We do not
+ * block it — sometimes the user knows better — but we do say it.
  */
 export const OPERATION_LAYER: Record<string, string[]> = {
 	snijden: ['op cut'],

@@ -340,7 +340,7 @@
 				body: form
 			});
 			if (!response.ok) {
-				error = 'Foto opslaan mislukte.';
+				error = t('error.photoFailed');
 				return;
 			}
 			await load();
@@ -372,7 +372,7 @@
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				error = typeof data?.detail === 'string' ? data.detail : 'Preset maken mislukte.';
+				error = typeof data?.detail === 'string' ? data.detail : t('error.presetFailed');
 				return;
 			}
 			gemaakt = cells.length;

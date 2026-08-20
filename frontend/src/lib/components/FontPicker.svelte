@@ -76,7 +76,7 @@
 			});
 			if (!response.ok) {
 				importError =
-					(await response.json().catch(() => null))?.detail ?? 'Importeren mislukte.';
+					(await response.json().catch(() => null))?.detail ?? t('error.importFailed');
 				return;
 			}
 			const added = await response.json();

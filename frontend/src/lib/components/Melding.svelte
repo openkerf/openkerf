@@ -11,6 +11,7 @@
 	 * Blijft staan tot je hem wegklikt. Een melding die vanzelf verdwijnt, mis je
 	 * precies wanneer je even naar de machine keek.
 	 */
+	import { t } from '$lib/i18n/index.svelte';
 	import type { Controller } from '$lib/control.svelte';
 
 	let { control }: { control: Controller } = $props();
@@ -20,7 +21,7 @@
 	<div class="melding" role="alert">
 		<span class="stip" aria-hidden="true"></span>
 		<p>{control.error}</p>
-		<button aria-label="Melding sluiten" onclick={() => (control.error = null)}>×</button>
+		<button aria-label={t('message.close')} onclick={() => (control.error = null)}>×</button>
 	</div>
 {/if}
 

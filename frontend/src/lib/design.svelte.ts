@@ -18,17 +18,19 @@
  *
  * Wat een vorm hier heet: wat hij ís, en bij tekst wat er staat.
  */
-const SOORT: Record<string, string> = {
-	'elem rect': 'Rechthoek',
-	'elem ellipse': 'Ellips',
-	'elem circle': 'Cirkel',
-	'elem line': 'Lijn',
-	'elem polyline': 'Gebroken lijn',
-	'elem path': 'Pad',
-	'elem point': 'Punt',
-	'elem text': 'Tekst',
-	'elem image': 'Afbeelding',
-	group: 'Groep'
+import { t, type MessageKey } from './i18n/core.ts';
+
+const SOORT: Record<string, MessageKey> = {
+	'elem rect': 'shape.rect',
+	'elem ellipse': 'shape.ellipse',
+	'elem circle': 'shape.circle',
+	'elem line': 'shape.line',
+	'elem polyline': 'shape.polyline',
+	'elem path': 'shape.path',
+	'elem point': 'shape.point',
+	'elem text': 'shape.text',
+	'elem image': 'shape.image',
+	group: 'shape.group'
 };
 
 export function elementNaam(element: {
@@ -39,13 +41,15 @@ export function elementNaam(element: {
 }): string {
 	if (element.text?.text) {
 		const kort = element.text.text.trim();
-		return `Tekst “${kort.length > 22 ? kort.slice(0, 21) + '…' : kort}”`;
+		return t('shape.textNamed', {
+			text: kort.length > 22 ? kort.slice(0, 21) + '…' : kort
+		});
 	}
-	if (element.image) return 'Afbeelding';
+	if (element.image) return t('shape.image');
 	const soort = SOORT[element.type];
-	if (soort) return soort;
-	// Onbekend type: het engine-label is dan beter dan niets, maar zonder het
-	// interne id en de kleurcode erachter.
+	if (soort) return t(soort);
+	// Unknown type: the engine's label is better than nothing then, but without the
+	// internal id and the colour code behind it.
 	const schoon = (element.label ?? element.type).replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '').trim();
 	return schoon || element.type;
 }

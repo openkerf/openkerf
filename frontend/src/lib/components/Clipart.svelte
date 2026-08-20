@@ -60,7 +60,7 @@
 			});
 			const response = await fetch(`/api/clipart/search?${params}`);
 			if (!response.ok) {
-				error = (await response.json().catch(() => null))?.detail ?? 'Zoeken mislukte.';
+				error = (await response.json().catch(() => null))?.detail ?? t('error.searchFailed');
 				return;
 			}
 			const data = await response.json();
@@ -97,7 +97,7 @@
 				body: JSON.stringify({ url: item.svg_url, width_mm: Number(width) || 60 })
 			});
 			if (!response.ok) {
-				error = (await response.json().catch(() => null))?.detail ?? 'Invoegen mislukte.';
+				error = (await response.json().catch(() => null))?.detail ?? t('error.insertFailed');
 				return;
 			}
 			notes = (await response.json()).notes ?? [];
@@ -212,7 +212,7 @@
 					{loadingMore ? t('clipart.fetching') : t('clipart.more')}
 				</button>
 			{:else}
-				<span class="count">dit is alles</span>
+				<span class="count">{t('clipart.thatIsAll')}</span>
 			{/if}
 		</div>
 	{/if}

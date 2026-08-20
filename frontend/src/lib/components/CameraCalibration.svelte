@@ -11,7 +11,12 @@
 	// Vier hoeken in beeldpixels, linksboven met de klok mee. Die volgorde is
 	// niet vrij: de engine trekt ze in precies deze volgorde naar een rechthoek,
 	// dus door elkaar gooien geeft een gespiegeld of gedraaid beeld.
-	const NAMES = ['linksboven', 'rechtsboven', 'rechtsonder', 'linksonder'];
+	const NAMES = [
+		t('result.corner.topLeft'),
+		t('result.corner.topRight'),
+		t('result.corner.bottomRight'),
+		t('result.corner.bottomLeft')
+	];
 
 	let points = $state<{ x: number; y: number }[]>([]);
 	let box = $state({ width: 640, height: 480 });
@@ -109,7 +114,7 @@
 					r={Math.max(box.width, box.height) / 55}
 					role="button"
 					tabindex="0"
-					aria-label="Hoek {NAMES[index]}"
+					aria-label={t('calibrate.corner', { corner: NAMES[index] })}
 					onpointerdown={(e) => {
 						(e.target as Element).setPointerCapture?.(e.pointerId);
 						dragging = index;
@@ -130,9 +135,9 @@
 	</div>
 
 	<div class="actions">
-		<button class="btn" onclick={() => camera.resetCalibration()}>IJking wissen</button>
-		<button class="btn" onclick={cancel}>Annuleren</button>
-		<button class="btn primary" disabled={camera.busy} onclick={save}>Opslaan</button>
+		<button class="btn" onclick={() => camera.resetCalibration()}>{t('calibrate.clear')}</button>
+		<button class="btn" onclick={cancel}>{t('common.cancel')}</button>
+		<button class="btn primary" disabled={camera.busy} onclick={save}>{t('common.save')}</button>
 	</div>
 </Dialog>
 

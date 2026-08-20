@@ -11,6 +11,7 @@
 	 * citeert de engine en zegt erbij wat je zélf moet controleren — wij zien de
 	 * machine niet (besluit B3).
 	 */
+	import { t } from '$lib/i18n/index.svelte';
 	import type { Bewaker } from '$lib/meldingen.svelte';
 
 	let { bewaker, groot = false }: { bewaker: Bewaker; groot?: boolean } = $props();
@@ -35,7 +36,7 @@
 				<p class="bron mono">{bewaker.alarm.bron.trim()}</p>
 			{/if}
 		</div>
-		<button class="gezien" onclick={() => bewaker.sluit()}>Gezien</button>
+		<button class="gezien" onclick={() => bewaker.sluit()}>{t('alarm.seen')}</button>
 	</div>
 {/if}
 

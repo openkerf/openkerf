@@ -141,7 +141,7 @@
 		<button
 			class="sheet add"
 			disabled={sheets.busy}
-			title="Vel toevoegen"
+			title={t('sheets.addSheet')}
 			onclick={voegToe}
 		>+</button>
 	{/if}

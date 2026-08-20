@@ -784,7 +784,7 @@
 		materiaalFout = null;
 		const gemaakt = await library.addMaterial(naam);
 		if (!gemaakt) {
-			materiaalFout = library.error ?? 'Materiaal aanmaken mislukte.';
+			materiaalFout = library.error ?? t('error.materialFailed');
 			return;
 		}
 		nieuwMateriaal = '';

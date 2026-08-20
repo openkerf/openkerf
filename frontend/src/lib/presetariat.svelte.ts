@@ -63,7 +63,7 @@ export class PresetariatStore {
 		try {
 			const response = await fetch(`/api/presetariat?${query}`);
 			if (!response.ok) {
-				this.error = (await response.json().catch(() => null))?.detail ?? 'Ophalen mislukt.';
+				this.error = (await response.json().catch(() => null))?.detail ?? t('error.fetchFailed');
 				return;
 			}
 			const data = await response.json();
@@ -100,7 +100,7 @@ export class PresetariatStore {
 				body: JSON.stringify({ ids: [...this.chosen], machine_id: machineId })
 			});
 			if (!response.ok) {
-				this.error = (await response.json().catch(() => null))?.detail ?? 'Importeren mislukt.';
+				this.error = (await response.json().catch(() => null))?.detail ?? t('error.importFailed');
 				return null;
 			}
 			this.chosen = new Set();

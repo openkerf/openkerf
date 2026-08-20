@@ -53,6 +53,12 @@ async function open(path = '/') {
 	return page;
 }
 
+// The tool rail is the way into most of these windows, and its buttons carry a
+// translated title. So they are found by a pattern that covers both languages, or
+// by position where the position is what is stable: the library is the last button
+// in the rail, in either language.
+const RAIL = '.rail button:not([disabled])';
+
 const SCREENS = [
 	['01-canvas', '/?tab=design', null],
 	['02-selection', `/?tab=design&select=${ELS.slice(0, 3).join(',')}`, null],
@@ -80,23 +86,35 @@ const SCREENS = [
 		'07-library',
 		'/',
 		async (page) => {
-			await page.click('button[title*="ibrary"], button[title*="ibliotheek"]').catch(() => {});
-			await page.waitForTimeout(1000);
+			await page.locator(RAIL).last().click().catch(() => {});
+			await page.waitForTimeout(1400);
 		}
 	],
 	[
 		'08-testgrid',
 		'/',
 		async (page) => {
-			await page.click('button[title*="est grid"], button[title*="estraster"]').catch(() => {});
-			await page.waitForTimeout(1300);
+			await page
+				.locator(RAIL, { has: undefined })
+				.filter({ hasNot: page.locator('nothing') })
+				.nth(-1);
+			await page
+				.locator(`${RAIL}[title*="est"]`)
+				.first()
+				.click()
+				.catch(() => {});
+			await page.waitForTimeout(1400);
 		}
 	],
 	[
 		'09-generators',
 		'/',
 		async (page) => {
-			await page.click('button[title*="enerator"]').catch(() => {});
+			await page
+				.locator(`${RAIL}[title*="enerator"]`)
+				.first()
+				.click()
+				.catch(() => {});
 			await page.waitForTimeout(900);
 		}
 	],
@@ -104,7 +122,11 @@ const SCREENS = [
 		'10-text',
 		'/',
 		async (page) => {
-			await page.click('button[title*="Text"], button[title*="Tekst"]').catch(() => {});
+			await page
+				.locator(`${RAIL}[title*="ext"], ${RAIL}[title*="ekst"]`)
+				.first()
+				.click()
+				.catch(() => {});
 			await page.mouse.click(600, 420);
 			await page.waitForTimeout(900);
 		}
