@@ -24,6 +24,7 @@
 		events,
 		control,
 		activeJob,
+		revisie = 0,
 		preflight = $bindable(),
 		onJog,
 		onHome,
@@ -38,6 +39,8 @@
 		events: SignalEvent[];
 		control: Controller;
 		activeJob: Job | null;
+		/** Revisie van het ontwerp; de tijdschatting in de voorbereiding volgt hem. */
+		revisie?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
 		onHome?: () => void;
@@ -50,13 +53,27 @@
 
 	let spooler = $derived(device?.spooler ?? null);
 	let jobs = $derived(spooler?.jobs ?? []);
+	/**
+	 * De wachtrij mínus de job waar de bediening over gaat.
+	 *
+	 * Die staat sinds v5 bovenaan in het voortgangsblok, met dezelfde balk,
+	 * hetzelfde percentage en dezelfde resterende tijd. Hem hier nóg een keer
+	 * tonen is twee keer hetzelfde getal op één scherm — en dan is de vraag welke
+	 * van de twee je moet geloven zodra ze een pollronde uit elkaar lopen.
+	 */
+	let wachtenden = $derived(jobs.filter((job) => job !== activeJob));
 </script>
 
 <TegelReeks {tiling} />
-<JobControls {control} {device} job={activeJob} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
+<JobControls {control} {device} job={activeJob} {revisie} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
 
+<!-- Alleen als er iets te melden is. "Spooler — niets in de wachtrij" onder een
+     blok dat al zegt dat er niets loopt, is een tweede keer hetzelfde. -->
+{#if !verbinding.online || !spooler?.present || wachtenden.length}
 <div class="section">
-	<h2 class="section-title">Spooler</h2>
+	<!-- "Spooler" is de naam die de engine ervoor heeft. Wat het voor de
+	     gebruiker is, is de wachtrij. -->
+	<h2 class="section-title">Wachtrij</h2>
 	<!-- Drie soorten leegte, en ze betekenen niet hetzelfde: we weten het niet
 	     (geen verbinding), de machine heeft geen wachtrij (protocolprobleem), of
 	     er staat gewoon niets klaar. Eén regel "Wachtrij is leeg" voor alle drie
@@ -71,13 +88,12 @@
 			Deze machine meldt geen wachtrij. Starten kan wel; je ziet alleen de
 			voortgang niet.
 		</p>
-	{:else if jobs.length === 0}
-		<p class="empty">
-			Niets in de wachtrij. Wat je start komt hier te staan, met voortgang en
-			resterende tijd.
-		</p>
 	{:else}
-		{#each jobs as job, i (i)}
+		<p class="empty klein">
+			{wachtenden.length === 1 ? 'Nog één job' : `Nog ${wachtenden.length} jobs`} na deze.
+			Ze beginnen in deze volgorde.
+		</p>
+		{#each wachtenden as job, i (i)}
 			<!-- Alleen de job waar de bediening over gaat kan stilstaan; de rest
 			     staat gewoon in de rij te wachten. Zonder dat onderscheid kreeg
 			     elke wachtende job het pauze-uiterlijk. -->
@@ -139,6 +155,7 @@
 		{/each}
 	{/if}
 </div>
+{/if}
 
 <div class="section">
 	<!-- Dit was "Engine-signalen" met ruwe codes: ontwikkelaarstaal op de plek

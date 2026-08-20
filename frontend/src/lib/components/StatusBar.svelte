@@ -256,56 +256,13 @@
 			</button>
 		{/if}
 	{/if}
-	{#if busy && acties}
-		<span class="acties">
-			{#if paused}
-				<button
-					class="hervat"
-					disabled={control.needsToken || !canResume || !connected}
-					title={!connected
-						? 'Geen verbinding met OpenKerf'
-						: control.needsToken
-							? 'Eerst een token invullen'
-							: 'Verder waar hij gebleven was'}
-					onclick={() => control.resume()}
-				>
-					Hervatten
-				</button>
-			{:else}
-				<button
-					class="pauze"
-					disabled={control.needsToken || !canPause || !job?.running || !connected}
-					title={!connected
-						? 'Geen verbinding met OpenKerf'
-						: control.needsToken
-							? 'Eerst een token invullen'
-						: !canPause
-							? 'Deze machine kent geen pauze — gebruik de knop op de machine'
-							: 'Job pauzeren'}
-					onclick={() => control.pause()}
-				>
-					Pauze
-				</button>
-			{/if}
-			<!-- 24px ertussen: pauze en stop hebben tegengestelde gevolgen, en een
-			     mistik kost je het werkstuk. Zie DESIGN-SYSTEM v2, "Touch". -->
-			<!-- Uitgeschakeld zodra de server weg is. Een stopknop die er levend
-			     uitziet en niets doet, is gevaarlijker dan geen stopknop: je drukt
-			     hem in, loopt weg, en denkt dat het geregeld is. -->
-			<button
-				class="stop"
-				disabled={control.needsToken || !connected}
-				title={!connected
-					? 'Geen verbinding met OpenKerf — stoppen kan alleen met de knop op de machine'
-					: control.needsToken
-						? 'Zonder token kan de app niet stoppen — gebruik de stopknop op de machine'
-						: 'Job afbreken'}
-				onclick={() => control.stop()}
-			>
-				Stop
-			</button>
-		</span>
-	{/if}
+	<!--
+		Hier stonden pauze en stop. Ze zijn naar de bovenbalk gegaan, waar starten
+		en stoppen al stonden: het transport hoort bij elkaar, en drie balken met
+		elk een deel ervan is precies de verspreiding waar de klacht over ging. Wat
+		de statusbalk houdt is de voortgang, en die hoort hier — hij geldt voor de
+		hele app, op elk tabblad.
+	-->
 	<!-- De lijn naar OpenKerf zelf. Hier stond de machinetoestand, en die staat
 	     al links in deze balk én in de bovenbalk. -->
 	<span class="right" class:offline={!connected} title={connected
@@ -432,38 +389,6 @@
 	.pct { margin-right: var(--space-2); }
 	.van { color: var(--text-2); }
 
-	.acties {
-		margin-left: auto;
-		display: flex;
-		align-items: center;
-		/* 24px: tegengestelde gevolgen horen niet naast elkaar te plakken. */
-		gap: var(--space-6);
-	}
-	.pauze,
-	.hervat,
-	.stop {
-		padding: 4px 12px;
-		font: inherit;
-		font-weight: 600;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		color: var(--text-1);
-	}
-	.hervat {
-		border-color: var(--accent);
-		background: var(--accent);
-		color: var(--accent-ink);
-	}
-	.stop {
-		border-color: var(--danger-solid);
-		background: var(--danger-solid);
-		color: var(--on-color);
-	}
-	.pauze:disabled,
-	.hervat:disabled,
-	.stop:disabled { opacity: 0.5; cursor: not-allowed; }
-	.acties + .right { margin-left: var(--space-3); }
 	.right {
 		margin-left: auto;
 		display: flex;

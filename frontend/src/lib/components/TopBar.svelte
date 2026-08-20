@@ -414,11 +414,19 @@
 		     de hele zin staat in de tooltip. -->
 		<span class="btn-label blijft">Kader<span class="tonen">&nbsp;tonen</span></span>
 	</button>
-	{#if balkdraagt}
-		<!-- Op de tablet kan het paneel dicht zijn en past de statusbalk op 768
-		     niet; dan stond de pauzeknop nergens. Hij houdt zijn plek ook als er
-		     niets loopt: een knop die verspringt zodra de job start is precies op
-		     dat moment onvindbaar. -->
+	<!--
+		Pauzeren hoort naast starten en stoppen, op elke breedte.
+
+		Dit stond achter `balkdraagt`, dus op de desktop droeg de bovenbalk wél
+		start en stop maar níet pauze — die stond in de statusbalk, onderaan het
+		scherm. Twee van de drie transportknoppen bij elkaar en de derde ergens
+		anders is de soort inconsistentie waar je pas achter komt op het moment dat
+		je hem nodig hebt. De statusbalk houdt de voortgang (die hoort daar: hij
+		geldt voor de hele app) en is zijn knoppen kwijt.
+
+		Hij houdt zijn plek ook als er niets loopt: een knop die verspringt zodra de
+		job start is precies op dat moment onvindbaar.
+	-->
 		{#if paused}
 			<button
 				class="btn hervat"
@@ -440,7 +448,6 @@
 				<span class="btn-label blijft">Pauze</span>
 			</button>
 		{/if}
-	{/if}
 	<!-- Stoppen kan altijd, overal, in één tik. Vol rood alleen als er ook echt
 	     iets loopt: een knop die uren per dag alarm staat te slaan zonder reden
 	     leert de gebruiker hem te negeren, en dan mist hij hem als het telt. -->

@@ -353,11 +353,106 @@ export function jobStatusLabel(job: Job): string {
 	const raw = (job.status ?? '').toLowerCase();
 	if (raw.includes('pause')) return 'Gepauzeerd';
 	if (raw.includes('run')) return 'Bezig';
-	if (raw.includes('queue')) return 'In wachtrij';
+	// "Waiting" is wat de engine een gespoolde job noemt die de machine nog niet
+	// heeft opgepakt. Die viel door alle takken heen en kwam ongefilterd op het
+	// scherm — het enige Engelse woord in de Job-tab, precies op de plek waar je
+	// wil weten of er iets stuk is.
+	if (raw.includes('queue') || raw.includes('wait')) return 'In wachtrij';
 	if (raw.includes('complete') || raw.includes('done')) return 'Klaar';
 	if (job.running) return 'Bezig';
 	return job.status ? job.status : 'In wachtrij';
 }
+
+// ─── De fase van de job ──────────────────────────────────────────────────────
+//
+// Waarom dit bestaat. Vóór deze ronde las elk oppervlak zijn eigen veld om te
+// bepalen of er werk onderweg was: de bovenbalk keek naar de machinetoestand, het
+// Job-paneel naar `job.running`, de spoolerkaart naar `job.status`, en de
+// statusbalk naar de voortgang. Gemeten met een job in de wachtrij van een
+// machine die niet antwoordde (`status: "Waiting"`, `running: false`,
+// `progress: 0`): de bovenbalk zette "Start job" uit, het paneel liet "Job
+// starten" áán staan, de kaart zei "Waiting" en de statusbalk "0 % nog 4:58".
+// Vier antwoorden op één vraag, en de gevaarlijkste stond in het paneel — één
+// tik daar spoolt een tweede job bovenop de eerste.
+//
+// Dus: één functie bepaalt de fase, en alle oppervlakken lezen die.
+
+export type JobFase =
+	/** Er ligt geen werk op het bed. */
+	| 'niets'
+	/** Werk op het bed, niets onderweg: dit is het moment om te starten. */
+	| 'klaar-om-te-starten'
+	/** Gespoold, maar de machine heeft hem nog niet opgepakt. */
+	| 'in-de-wachtrij'
+	| 'brandt'
+	| 'gepauzeerd'
+	/** Vrijwel op 100 % en niet meer vooruit: de engine meldt hem niet af. */
+	| 'klaar';
+
+/**
+ * Vanaf welke voortgang een stilstaande job als klaar gelezen wordt.
+ *
+ * `LaserJob.calc_steps` telt één stap meer dan `execute` uitvoert, dus de
+ * voortgang haalt 0,998 en niet 1, en de job blijft daarna als "Waiting" in de
+ * wachtrij staan (zie de upstream-lijst in CLAUDE.md). Zonder deze grens leest
+ * de app een afgeronde job als "staat stil" — precies het bericht dat je niet
+ * wil zien onder werk dat klaar is. Gemeten: 576/577 en 584/585 stappen.
+ */
+const AF = 0.995;
+
+export function jobFase(
+	device: Device | null,
+	job: Job | null,
+	ontwerpLeeg: boolean
+): JobFase {
+	if (!job) return ontwerpLeeg ? 'niets' : 'klaar-om-te-starten';
+	if (isPaused(job)) return 'gepauzeerd';
+	if (job.running) return 'brandt';
+	if ((job.progress ?? 0) >= AF) return 'klaar';
+	// Begonnen maar staat stil is een pauze; nog niets gedaan is zijn beurt
+	// afwachten. Zelfde grens als `isStalled`, want twee grenzen voor hetzelfde
+	// verschil is hoe de oppervlakken uit elkaar liepen.
+	if (isStalled(job)) return 'gepauzeerd';
+	return 'in-de-wachtrij';
+}
+
+/** Loopt er werk waar de machine niet bij gestoord mag worden? */
+export function jobBezig(fase: JobFase): boolean {
+	return fase === 'brandt' || fase === 'gepauzeerd' || fase === 'in-de-wachtrij';
+}
+
+/**
+ * Hoe de fase heet, en wat hij betekent.
+ *
+ * De uitleg is geen decoratie: "In de wachtrij" is voor de gebruiker niet te
+ * onderscheiden van "hij hangt", en dat verschil is precies waar je op dat
+ * moment naar zoekt.
+ */
+export const FASE: Record<JobFase, { kop: string; uitleg: string }> = {
+	niets: {
+		kop: 'Niets om te branden',
+		uitleg: 'Er ligt geen werk op het bed. Teken iets, of importeer een bestand.'
+	},
+	'klaar-om-te-starten': {
+		kop: 'Klaar om te starten',
+		uitleg: 'Loop de controle na en start dan de job.'
+	},
+	'in-de-wachtrij': {
+		kop: 'In de wachtrij',
+		uitleg:
+			'De job staat klaar, maar de machine heeft hem nog niet opgepakt. Dat duurt normaal een seconde; blijft het hangen, controleer dan de verbinding.'
+	},
+	brandt: { kop: 'Aan het branden', uitleg: 'Blijf erbij en houd de stopknop binnen bereik.' },
+	gepauzeerd: {
+		kop: 'Gepauzeerd',
+		uitleg: 'De kop staat stil. Hervatten gaat verder waar hij gebleven was.'
+	},
+	klaar: {
+		kop: 'Klaar',
+		uitleg:
+			'Het werk is af. De engine meldt een job niet af, dus hij blijft in de wachtrij staan tot je hem weghaalt.'
+	}
+};
 
 /**
  * De sneltoetsen voor de twee acties die haast hebben (gat J4).

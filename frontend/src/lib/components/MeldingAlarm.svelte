@@ -62,7 +62,14 @@
 		 * de bediening rechtsboven (Melding.svelte, z-index 60). Die staat er nog,
 		 * en links uitlijnen helpt daar juist: zo raken die twee elkaar niet.
 		 */
-		top: calc(var(--topbar-height) + var(--space-3) + var(--melding-kolom, 0px));
+		/* Onder de balken die boven het canvas staan (actiebalk + vellenbalk), niet
+		   erover: die dekte hij af, en dat zijn juist de knoppen die je nodig hebt
+		   terwijl er een melding staat. `--bovenrand-hoogte` wordt opgemeten in
+		   `+page.svelte`; nul zolang er geen balken zijn (telefoon). */
+		top: calc(
+			var(--topbar-height) + var(--bovenrand-hoogte, 0px) + var(--space-3) +
+				var(--melding-kolom, 0px)
+		);
 		left: calc(var(--rail-width) + var(--space-3));
 		width: min(620px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		border-radius: var(--radius-card);
