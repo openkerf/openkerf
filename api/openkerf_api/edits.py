@@ -318,53 +318,50 @@ class DesignEditor:
     # -------------------------------------------------------------- history
 
     def undo(self) -> dict:
-        doel = self._undo_target()
-        opdracht = "undo" if doel is None else f"undo {doel}"
-        return self._history("undo", self.runner.run(opdracht))
+        self._stel_de_stapel_bij()
+        return self._history("undo", self.runner.run("undo"))
 
     def redo(self) -> dict:
         return self._history("redo", self.runner.run("redo"))
 
-    def _undo_target(self) -> int | None:
+    def _stel_de_stapel_bij(self) -> None:
         """
-        Welke toestand hoort er bij één keer ongedaan maken (upstream #3258).
+        Eén keer ongedaan maken moet één wijziging terugdraaien (upstream #3258).
 
         De stapel bewaart per wijziging de toestand **vóór** die wijziging:
         `undoscope` roept `mark()` aan voordat er iets gebeurt. `Undo.undo()`
-        herstelt vervolgens `_undo_index - 1`, en dat is de toestand vóór de
-        wijziging dáárvoor — één stap te ver. Gemeten met drie getekende
-        vormen: één keer ongedaan maken liet er één over, niet twee.
+        berekent zijn doel als `_undo_index - 1` — en doet dat **vóór** hij
+        `validate()` aanroept. Dat is de fout, want `validate()` verzet
+        `_undo_index` precies in het geval dat het misgaat:
 
-        Voor een laagtoewijzing is dat precies het geval waar het niet opvalt
-        en toch fout is: de vorm springt niet terug naar de vorige laag maar
-        naar de laag waar hij twee handelingen geleden zat, en als dat dezelfde
-        is, lijkt ongedaan maken helemaal niets te doen. Dát is wat Jelle zag.
+        1. Het legt een "Last status"-vangnet bovenop de stapel en verhóogt
+           `_undo_index` als die al bovenaan stond. Dat is exact de stand na een
+           wijziging, dus bij de eerste stap terug rekent `undo()` met een index
+           van vóór die verhoging: één stap te ver.
+        2. Loopt de stapel daarmee over de twintig toestanden die hij vasthoudt
+           (`Undo.levels`), dan gooit hij de oudste eruit en schuiven **alle**
+           indexen één op. Het al berekende doel schuift niet mee, dus wijst het
+           dan naar de tóestand ná die je bedoelde — en ongedaan maken doet
+           helemaal niets. Gemeten: na 25 wijzigingen een vorm weghalen en
+           ongedaan maken, en de vorm bleef weg.
 
-        We rekenen de juiste index daarom zelf uit en geven hem mee aan het
-        console-commando (`undo <index>`), zodat de rest van de engine — de
-        selectie bijwerken, de boom herbouwen — precies hetzelfde gebeurt.
+        Punt 2 was het gat in onze eigen omweg. Die rekende zelf een index uit
+        en gaf die mee als `undo <index>`, maar liep tegen precies dezelfde
+        verschuiving aan: bij een volle stapel wees ook die index verkeerd.
 
-        Alleen de **eerste** stap terug na een wijziging is fout; daarna klopt
-        de telling weer, want de engine zet zijn index dan op wat wij hersteld
-        hebben. Die eerste stap is te herkennen zonder eigen boekhouding: de
-        index staat dan bovenop de stapel én wijst niet naar het
-        "Last status"-vangnet dat `validate()` erbovenop legt.
-
-        `None` betekent: het gewone `undo` doet het goede.
+        De oplossing is een stap eerder: zélf `validate()` aanroepen vóórdat het
+        commando uitgaat. Daarna staat het vangnet er al, verzet `validate()`
+        binnen `undo()` niets meer, en is `_undo_index - 1` wél de toestand van
+        vóór de laatste wijziging — bij een volle stapel net zo goed als bij een
+        lege. We rekenen dus niets meer zelf uit; we zorgen alleen dat de engine
+        rekent met een stapel die niet meer onder zijn handen vandaan schuift.
         """
         try:
-            stapel = self.elements.undo
-            index = stapel._undo_index
-            staten = stapel._undo_stack
-            if index != len(staten) - 1 or index <= 0:
-                return None
-            if staten[index].message == stapel.LAST_STATE:
-                return None
-            return index
-        except (AttributeError, IndexError, TypeError):
-            # Verandert de engine zijn interne stapel, dan doen we het weer
-            # zoals hij het zelf doet: liever een stap te ver dan geen undo.
-            return None
+            self.elements.undo.validate()
+        except AttributeError:
+            # Verandert de engine zijn stapel, dan doen we het weer zoals hij
+            # het zelf doet: liever een stap te ver dan geen undo.
+            pass
 
     def _history(self, action: str, output: list[str]) -> dict:
         # The console reports exhaustion as text rather than an error.

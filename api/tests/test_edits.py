@@ -429,3 +429,36 @@ def test_assign_over_http(kernel, editor, client):
 
     assert response.status_code == 200
     assert response.json()["added"] == 1
+
+
+def _aantal(c):
+    return len(c.get("/api/design").json()["elements"])
+
+
+@pytest.mark.parametrize("vooraf", [0, 25])
+def test_undo_after_delete_regardless_of_history_length(kernel, vooraf):
+    """
+    De stapel van de engine houdt 20 toestanden vast (`Undo.levels`). Zit hij
+    vol, dan gooit `validate()` de oudste eruit en schuiven alle indexen op —
+    terwijl `undo()` zijn doelindex al vóór die validate berekend heeft.
+    """
+    with TestClient(ApiServer(kernel).build_app()) as c:
+        for i in range(vooraf):
+            c.post(
+                "/api/design/elements",
+                json={"type": "rect", "x_mm": 1 + i, "y_mm": 200, "width_mm": 2, "height_mm": 2},
+            )
+        basis = _aantal(c)
+        for i in range(3):
+            c.post(
+                "/api/design/elements",
+                json={"type": "rect", "x_mm": 10 + i * 30, "y_mm": 10, "width_mm": 20, "height_mm": 20},
+            )
+        assert _aantal(c) == basis + 3
+        ids = [e["id"] for e in c.get("/api/design").json()["elements"]]
+        c.post("/api/design/elements/delete", json={"ids": [ids[-1]]})
+        assert _aantal(c) == basis + 2
+
+        c.post("/api/design/undo", json={})
+
+        assert _aantal(c) == basis + 3

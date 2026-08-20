@@ -80,6 +80,13 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/elements",
         "/api/design/elements/delete",
         "/api/design/elements/duplicate",
+        # Knippen, kopiëren en plakken (usability-ronde). Het klembord van de
+        # engine is de bewaarplaats; deze drie routes zetten alleen de nadruk en
+        # geven de stand terug. Plakken schrijft in de boom, dus achter dezelfde
+        # poort als de rest.
+        "/api/design/clipboard/copy",
+        "/api/design/clipboard/cut",
+        "/api/design/clipboard/paste",
         "/api/design/operations",
         # Volgorde en soort van een laag. Alle drie schrijven in de
         # bewerkingenboom en niet aan de machine: `move` schuift een laag op in
