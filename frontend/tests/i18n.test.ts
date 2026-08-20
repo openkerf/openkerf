@@ -93,7 +93,7 @@ test('every key is used somewhere', () => {
 	// their keys never appear as a literal. Those are listed here by prefix, and the
 	// prefix itself has to be built somewhere, otherwise a whole family could go
 	// unnoticed.
-	const DYNAMIC = ['machine.state.', 'machine.hint.', 'job.phase.', 'axis.'];
+	const DYNAMIC = ['machine.state.', 'machine.hint.', 'job.phase.', 'axis.', 'panel.type.', 'notify.permission.'];
 	for (const prefix of DYNAMIC)
 		assert.ok(CODE.includes(`${prefix}$`), `nothing composes ${prefix}… any more — drop it here`);
 	const unused = Object.keys(en).filter(

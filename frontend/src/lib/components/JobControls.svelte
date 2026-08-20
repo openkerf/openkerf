@@ -571,7 +571,7 @@
 								     too: where the numbers come from is beside the point when they
 								     are not used. -->
 								{#if layer.burns === false}
-									<td class="pf-blind" colspan="4">{t('job.doesNotBurn')}</td>
+									<td class="pf-blind" colspan="4">{t('panel.tag.doesNotBurn')}</td>
 								{:else}
 									<td class="mono">{layer.speed_mm_s ?? '—'}</td>
 									<td class="mono">{layer.power_percent ?? '—'}</td>

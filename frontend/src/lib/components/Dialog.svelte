@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
 	/**
 	 * Overlayvenster voor bibliotheken en gereedschappen.
 	 *
@@ -52,7 +53,7 @@
 		>
 			<header>
 				<h2>{title}</h2>
-				<button class="close" aria-label="Sluiten" onclick={() => (open = false)}>×</button>
+				<button class="close" aria-label={t('common.close')} onclick={() => (open = false)}>×</button>
 			</header>
 			<div class="body">
 				{@render children()}

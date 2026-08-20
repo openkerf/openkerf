@@ -1,19 +1,20 @@
 <script lang="ts">
 	/**
-	 * Meldingen aan- en uitzetten, en zien wat de browser ervan vindt.
+	 * Turning notifications on and off, and seeing what the browser makes of it.
 	 *
-	 * Twee gedaanten, één component, omdat het over hetzelfde ding gaat:
+	 * Two guises, one component, because it is about the same thing:
 	 *
-	 * - `aanleiding` — de vraag zelf, en die stellen we alleen op het moment dat
-	 *   er iets te melden valt (een job die net begon). Een toestemmingsvraag
-	 *   zonder aanleiding wordt weggeklikt, en die weigering krijg je niet meer
-	 *   terug: de browser onthoudt hem voorgoed. Daarom vragen wij het eerst zelf,
-	 *   met de reden erbij, en pas na "ja" de browser.
-	 * - `instellingen` — de vaste plek. Toestemming geweigerd is een toestand die
-	 *   je moet kunnen zien én herstellen, dus staat er niet alleen dát het
-	 *   geblokkeerd is maar ook waar je dat terugdraait.
+	 * - `aanleiding` — the question itself, and we only ask it at the moment there
+	 *   is something to report (a job that has just started). A permission prompt
+	 *   without an occasion gets clicked away, and that refusal does not come back:
+	 *   the browser remembers it for good. So we ask first ourselves, with the
+	 *   reason, and only after a "yes" do we ask the browser.
+	 * - `instellingen` — the fixed place. Permission denied is a state you have to
+	 *   be able to see *and* undo, so it says not only that it is blocked but also
+	 *   where you turn that back.
 	 */
-	import { TOESTEMMING_TEKST, type Meldingen } from '$lib/meldingen.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
+	import { toestemmingTekst, type Meldingen } from '$lib/meldingen.svelte';
 
 	let {
 		meldingen,
@@ -37,35 +38,32 @@
 		if (meldingen.toestemming === 'granted') onKlaar?.();
 	}
 
+	// The clock in the reader's own notation: 14:05 here, 2:05 pm elsewhere.
 	function tijdstip(ms: number) {
-		return new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+		return new Intl.DateTimeFormat(i18n.locale, { timeStyle: 'short' }).format(new Date(ms));
 	}
 </script>
 
 <div class="kaart" class:vraag={variant === 'aanleiding'}>
 	{#if variant === 'aanleiding'}
-		<h3>Zal ik het melden als deze job klaar is?</h3>
-		<p>
-			Dan hoef je er niet bij te blijven kijken. Je krijgt ook bericht bij een storing
-			of als de teller stil komt te staan. Ingrijpen doet OpenKerf nooit zelf.
-		</p>
+		<h3>{t('notify.ask.title')}</h3>
+		<p>{t('notify.ask.body')}</p>
 		<div class="acties">
-			<button class="btn" onclick={() => { meldingen.nietNu(); onKlaar?.(); }}>Niet nu</button>
+			<button class="btn" onclick={() => { meldingen.nietNu(); onKlaar?.(); }}
+				>{t('notify.ask.notNow')}</button
+			>
 			<button class="btn primary" disabled={bezig} onclick={aanzetten}>
-				{bezig ? 'Bezig…' : 'Meldingen aanzetten'}
+				{bezig ? t('common.busy') : t('notify.ask.turnOn')}
 			</button>
 		</div>
-		<p class="klein">
-			De browser vraagt hierna zelf om toestemming. Je kunt het later altijd nog
-			aanzetten bij Meldingen.
-		</p>
+		<p class="klein">{t('notify.ask.after')}</p>
 	{:else}
 		<!--
-			De schakelaar staat uit zolang de browser niet meewerkt, ook als de
-			voorkeur "aan" is. Anders belooft een petrolkleurige schakelaar iets wat
-			niet gebeurt: op een geblokkeerde site stond hij aan terwijl er nooit
-			een melding zou komen. De voorkeur blijft wel bewaard — hij springt
-			terug zodra de toestemming er is.
+			The switch is off as long as the browser does not co-operate, even when the
+			preference is "on". Otherwise a teal switch promises something that does
+			not happen: on a blocked site it was on while no notification would ever
+			arrive. The preference is kept, though — it springs back the moment the
+			permission is there.
 		-->
 		<label class="schakel" class:machteloos={meldingen.toestemming !== 'granted'}>
 			<input
@@ -76,8 +74,8 @@
 			/>
 			<span class="spoor" aria-hidden="true"><span class="knikker"></span></span>
 			<span class="tekst">
-				<span class="titel">Melden als een job klaar is of vastloopt</span>
-				<span class="klein">Ook als dit tabblad op de achtergrond staat.</span>
+				<span class="titel">{t('notify.switch.title')}</span>
+				<span class="klein">{t('notify.switch.body')}</span>
 			</span>
 		</label>
 
@@ -87,21 +85,17 @@
 			class:goed={meldingen.toestemming === 'granted'}
 		>
 			<span class="stip" aria-hidden="true"></span>
-			{TOESTEMMING_TEKST[meldingen.toestemming]}
+			{toestemmingTekst(meldingen.toestemming)}
 		</p>
 
 		{#if meldingen.toestemming === 'default'}
 			<button class="btn primary" disabled={bezig} onclick={aanzetten}>
-				{bezig ? 'Bezig…' : 'Toestemming vragen'}
+				{bezig ? t('common.busy') : t('notify.askPermission')}
 			</button>
 		{:else if meldingen.toestemming === 'denied'}
-			<p class="herstel">
-				Klik links in de adresbalk op het slotje of het ⓘ-teken, zet <em>Meldingen</em>
-				op <em>Toestaan</em> en ververs deze pagina. Op een telefoon staat het onder
-				de site-instellingen van de browser.
-			</p>
+			<p class="herstel">{t('notify.blocked.howto')}</p>
 		{:else if meldingen.toestemming === 'granted'}
-			<button class="btn" onclick={() => meldingen.test()}>Testmelding sturen</button>
+			<button class="btn" onclick={() => meldingen.test()}>{t('notify.sendTest')}</button>
 		{/if}
 
 		{#if meldingen.fout}
@@ -110,18 +104,17 @@
 
 		{#if meldingen.laatste}
 			<p class="laatste">
-				Laatste melding {tijdstip(meldingen.laatste.tijd)} — “{meldingen.laatste.titel}”
+				{t('notify.last', {
+					time: tijdstip(meldingen.laatste.tijd),
+					title: meldingen.laatste.titel
+				})}
 				{#if !meldingen.laatste.getoond}
-					<span class="klein">(niet als pop-up getoond: het scherm stond aan, of meldingen staan uit)</span>
+					<span class="klein">{t('notify.last.notShown')}</span>
 				{/if}
 			</p>
 		{/if}
 
-		<p class="klein grens">
-			OpenKerf meldt, maar grijpt niet in: er is geen vlam- of rookdetectie. De camera
-			hangt aan de computer en niet aan de machine, dus wij kunnen niet zien of er iets
-			misgaat in het bed. Blijf in de buurt van een lopende job.
-		</p>
+		<p class="klein grens">{t('notify.limits')}</p>
 	{/if}
 </div>
 

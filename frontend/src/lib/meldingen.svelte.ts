@@ -18,6 +18,7 @@
  */
 
 import { currentJob, formatDuration, type Device, type SignalEvent } from './api';
+import { t, type MessageKey } from './i18n/core.ts';
 
 export type Toestemming = 'unsupported' | 'default' | 'granted' | 'denied';
 
@@ -25,11 +26,8 @@ const AAN_KEY = 'openkerf.meldingen';
 const GEVRAAGD_KEY = 'openkerf.meldingen.gevraagd';
 
 /** Wat de browser ervan vindt, in mensentaal. Wordt getoond, niet gelogd. */
-export const TOESTEMMING_TEKST: Record<Toestemming, string> = {
-	unsupported: 'Deze browser kan geen meldingen tonen.',
-	default: 'De browser heeft er nog niet om gevraagd.',
-	granted: 'De browser mag meldingen tonen.',
-	denied: 'De browser blokkeert meldingen voor deze site.'
+export function toestemmingTekst(toestemming: Toestemming): string {
+	return t(`notify.permission.${toestemming}` as never);
 };
 
 export class Meldingen {
@@ -155,7 +153,7 @@ export class Meldingen {
 			return true;
 		} catch {
 			this.fout =
-				'De browser weigerde de melding te tonen. Bij een geïnstalleerde app helpt het vaak om hem opnieuw te openen.';
+				t('notify.refused');
 			return false;
 		}
 	}
@@ -163,8 +161,8 @@ export class Meldingen {
 	/** Zelf controleren of het werkt, zonder op een job te wachten. */
 	test() {
 		return this.meld(
-			'OpenKerf-melding',
-			'Zo ziet een melding eruit. Klaar of storing komt op dezelfde manier binnen.',
+			t('notify.test.title'),
+			t('notify.test.body'),
 			'openkerf-test',
 			{ altijd: true }
 		);
@@ -198,41 +196,41 @@ export type Alarm = {
  * geraden). Komt er upstream een regel bij, dan zwijgt deze lijst — dat is de
  * veilige kant van de fout.
  */
-const STORINGEN: { patroon: RegExp; zin: string; raad: string }[] = [
+const STORINGEN: { patroon: RegExp; zin: MessageKey; raad: MessageKey }[] = [
 	{
 		patroon: /usb connection did not exist/i,
-		zin: 'Er was geen USB-verbinding met de machine.',
-		raad: 'Er is dus niets gebrand. Controleer kabel en aan/uit, en probeer opnieuw.'
+		zin: 'fault.usb.none',
+		raad: 'fault.usb.none.advice'
 	},
 	{
 		patroon: /connection (to usb )?failed/i,
-		zin: 'De verbinding met de machine kwam niet tot stand.',
-		raad: 'Controleer kabel en aan/uit. Er is niets naar de laser gestuurd.'
+		zin: 'fault.usb.failed',
+		raad: 'fault.usb.failed.advice'
 	},
 	{
 		patroon: /devices? not found|no ch341 devices detected/i,
-		zin: 'Er is geen controller op de USB-poort gevonden.',
-		raad: 'Controleer of de machine aanstaat en of de kabel in deze computer zit.'
+		zin: 'fault.usb.notFound',
+		raad: 'fault.usb.notFound.advice'
 	},
 	{
 		patroon: /no backend libusb|driver detected: none/i,
-		zin: 'De USB-driver die de engine nodig heeft, ontbreekt op deze computer.',
-		raad: 'Installeer LibUSB. Tot dan kan OpenKerf deze machine niet aansturen.'
+		zin: 'fault.usb.noDriver',
+		raad: 'fault.usb.noDriver.advice'
 	},
 	{
 		patroon: /does not give you permissions/i,
-		zin: 'Het besturingssysteem geeft geen toegang tot de USB-poort.',
-		raad: 'Geef de engine USB-rechten; zonder dat blijft de machine onbereikbaar.'
+		zin: 'fault.usb.noPermission',
+		raad: 'fault.usb.noPermission.advice'
 	},
 	{
 		patroon: /interface claim: failed/i,
-		zin: 'Een ander programma houdt de USB-poort van de machine bezet.',
-		raad: 'Sluit andere lasersoftware (LightBurn, RDWorks) en probeer opnieuw.'
+		zin: 'fault.usb.busy',
+		raad: 'fault.usb.busy.advice'
 	},
 	{
 		patroon: /requires serial number confirmation/i,
-		zin: 'De machine vraagt om bevestiging van haar serienummer.',
-		raad: 'Bevestig het serienummer in de instellingen van de engine.'
+		zin: 'fault.usb.serial',
+		raad: 'fault.usb.serial.advice'
 	}
 ];
 
@@ -324,9 +322,9 @@ export class Bewaker {
 		if (!storing) return;
 		this.#zet({
 			code: `usb:${storing.zin}`,
-			titel: 'Geen verbinding met de machine',
-			tekst: storing.zin,
-			raad: storing.raad,
+			titel: t('fault.noConnection'),
+			tekst: t(storing.zin),
+			raad: t(storing.raad),
 			bron: tekst
 		});
 	}
@@ -356,10 +354,10 @@ export class Bewaker {
 
 	#stuurKlaar() {
 		this.#meldingen.meld(
-			'Job klaar',
+			t('notify.job.done'),
 			this.#duur > 0
-				? `${this.#naam} — ${formatDuration(this.#duur)} gebrand.`
-				: `${this.#naam} is afgelopen.`,
+				? t('notify.job.doneBody', { name: this.#naam, time: formatDuration(this.#duur) })
+				: t('notify.job.endedBody', { name: this.#naam }),
 			'openkerf-job'
 		);
 	}
@@ -386,12 +384,9 @@ export class Bewaker {
 				//
 				// De systeemmelding blijft wél: die bereikt je met de tab op de
 				// achtergrond of het scherm op zwart, en dáár staat geen kaart.
-				this.#meldingen.meld(
-					'De verbinding viel weg tijdens een job',
-					'OpenKerf kan de server niet meer bereiken terwijl er gebrand werd. De machine loopt waarschijnlijk door; stoppen kan alleen op de machine zelf.',
-					'openkerf-alarm',
-					{ altijd: true }
-				);
+				this.#meldingen.meld(t('notify.lost.title'), t('notify.lost.body'), 'openkerf-alarm', {
+					altijd: true
+				});
 			}
 			return;
 		}
@@ -424,9 +419,12 @@ export class Bewaker {
 			this.#stilGemeld = true;
 			this.#zet({
 				code: 'stil',
-				titel: 'De job komt niet vooruit',
-				tekst: `De teller staat al ${Math.round((nu - this.#standSinds) / 60_000)} minuten stil op ${Math.round((job.progress ?? 0) * 100)}%.`,
-				raad: 'Kijk of de machine nog beweegt. Wij weten alleen dat het getal niet verandert.'
+				titel: t('notify.stalled.title'),
+				tekst: t('notify.stalled.body', {
+					minutes: Math.round((nu - this.#standSinds) / 60_000),
+					percent: Math.round((job.progress ?? 0) * 100)
+				}),
+				raad: t('notify.stalled.advice')
 			});
 		}
 	}

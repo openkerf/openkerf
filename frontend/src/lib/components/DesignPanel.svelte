@@ -11,7 +11,8 @@
 	import Segmented from './Segmented.svelte';
 	import ArrangeIcon from './ArrangeIcon.svelte';
 	import Menu from './Menu.svelte';
-	import { t } from '$lib/i18n/index.svelte';
+	import { en } from '$lib/i18n/en';
+	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { layerMenu, type Menu as MenuList } from '$lib/actions';
 	import { untrack } from 'svelte';
 
@@ -205,7 +206,7 @@
 		return Math.abs(a - b) < slack;
 	}
 
-	/** Staat de selectie ergens anders dan waar je hem pakte? */
+	/** Is the selection somewhere other than where you grabbed it? */
 	let moved = $derived.by(() => {
 		if (!anchor || !size) return false;
 		if (pose.mirrored !== anchor.mirrored) return true;
@@ -220,39 +221,41 @@
 	});
 
 	/**
-	 * In woorden wat er sinds het aanklikken veranderd is.
+	 * In words, what has changed since it was clicked.
 	 *
-	 * Alleen wat de knop ernaast terugdraait, en niet wat er nú staat: de
-	 * maten staan al in de velden erboven, en dat twee keer zeggen maakt de
-	 * regel langer zonder hem duidelijker te maken.
+	 * Only what the button beside it undoes, and not what is there now: the sizes
+	 * are already in the fields above, and saying that twice makes the line longer
+	 * without making it clearer.
 	 */
 	let movedSummary = $derived.by(() => {
 		if (!anchor || !size) return '';
 		const parts: string[] = [];
 		if (pose.angle !== null && anchor.angle !== null && !near(pose.angle, anchor.angle))
-			parts.push(`gedraaid naar ${format(pose.angle)}°`);
-		if (pose.mirrored !== anchor.mirrored) parts.push('gespiegeld');
-		// Draaien om het midden verandert het omhullende kader, dus grootte en
-		// plaats alleen melden als er verder níets veranderd is — anders staat
-		// er "verplaatst" bij elke draai en betekent het woord niets meer.
+			parts.push(t('panel.moved.rotated', { angle: format(pose.angle) }));
+		if (pose.mirrored !== anchor.mirrored) parts.push(t('panel.moved.mirrored'));
+		// Rotating about the centre changes the bounding box, so size and place are
+		// only reported when nothing else changed — otherwise it says "moved" on
+		// every rotation and the word stops meaning anything.
 		if (!parts.length) {
-			const anderMaat =
+			const otherSize =
 				!near(size.width, anchor.box.width) || !near(size.height, anchor.box.height);
-			const anderePlek = !near(size.x, anchor.box.x) || !near(size.y, anchor.box.y);
-			// Bij één vorm is een ander kader ook echt een andere maat. Bij meer
-			// vormen is het kader de omhullende van de hele selectie, en die
-			// verandert óók als de vormen alleen ten opzichte van elkáár schuiven —
-			// uitlijnen bijvoorbeeld. Dan "geschaald" zeggen is onwaar: er is niets
-			// groter of kleiner geworden. Gemeten na één klik op "Boven uitlijnen"
-			// met drie vormen: het kader werd lager en de regel zei "geschaald".
-			if (anderMaat) parts.push(chosen.length > 1 ? 'geschikt' : 'geschaald');
-			else if (anderePlek) parts.push('verplaatst');
+			const otherPlace = !near(size.x, anchor.box.x) || !near(size.y, anchor.box.y);
+			// With one shape a different box really is a different size. With more
+			// shapes the box is the hull of the whole selection, and that changes as
+			// well when the shapes only move relative to *each other* — aligning, for
+			// instance. Saying "scaled" then is untrue: nothing got bigger or smaller.
+			// Measured after one click on "Align top" with three shapes: the box got
+			// shorter and the line said "scaled".
+			if (otherSize) parts.push(t(chosen.length > 1 ? 'panel.moved.arranged' : 'panel.moved.scaled'));
+			else if (otherPlace) parts.push(t('panel.moved.moved'));
 		}
-		return parts.join(' · ') || 'gewijzigd';
+		return parts.join(' · ') || t('panel.moved.changed');
 	});
 
+	// One decimal, but not a bare ".0": an angle of 45 is 45°, not 45.0°. The
+	// decimal separator comes from the reader's locale.
 	function format(value: number) {
-		return value.toFixed(1).replace('.', ',').replace(',0', '');
+		return i18n.number(Math.round(value * 10) / 10);
 	}
 
 	async function setAngle(raw: string) {
@@ -421,13 +424,13 @@
 	let confirmDropAll = $state(false);
 
 	const LAYER_TYPES = [
-		{ value: 'cut', label: 'Snijden', noun: 'Snijlaag' },
-		{ value: 'engrave', label: 'Graveren', noun: 'Graveerlaag' },
-		{ value: 'raster', label: 'Raster', noun: 'Rasterlaag' },
-		{ value: 'dots', label: 'Punten', noun: 'Puntenlaag' }
+		{ value: 'cut', label: t('panel.kind.cut'), noun: t('panel.kind.cutNoun') },
+		{ value: 'engrave', label: t('panel.kind.engrave'), noun: t('panel.kind.engraveNoun') },
+		{ value: 'raster', label: t('panel.kind.raster'), noun: t('panel.kind.rasterNoun') },
+		{ value: 'dots', label: t('panel.kind.dots'), noun: t('panel.kind.dotsNoun') }
 	];
 	let newLayerNoun = $derived(
-		LAYER_TYPES.find((t) => t.value === newLayerType)?.noun ?? 'Laag'
+		LAYER_TYPES.find((type) => type.value === newLayerType)?.noun ?? t('panel.kind.layerNoun')
 	);
 
 	async function addLayer() {
@@ -562,43 +565,36 @@
 		if (await edits.removeAllLayers()) onLayerChange?.();
 	}
 
-	/** Het soort bewerking in het Nederlands; de engine noemt ze "op cut". */
+	/** The kind of operation in the reader's language; the engine calls it "op cut". */
 	function typeName(type: string): string {
-		const soort = type.replace(/^(op|effect) /, '');
-		return (
-			{
-				cut: 'snijden',
-				engrave: 'graveren',
-				grid: 'rasteren',
-				image: 'afbeelding',
-				dots: 'punten'
-			}[soort] ?? soort
-		);
+		const kind = type.replace(/^(op|effect) /, '');
+		const key = `panel.type.${kind}` as MessageKey;
+		return key in en ? t(key) : kind;
 	}
 
 	/**
-	 * Het laagtype zoals de keuzebalk het kent.
+	 * The layer type as the segmented control knows it.
 	 *
-	 * De engine noemt ze `op cut`; onze vier keuzes heten `cut`. Een
-	 * afbeeldingslaag (`op image`) heeft geen eigen keuze — die maakt de engine
-	 * zelf bij het plaatsen van een afbeelding — en valt onder rasteren, want dat
-	 * is wat hij doet.
+	 * The engine calls them `op cut`; our four choices are called `cut`. An image
+	 * layer (`op image`) has no choice of its own — the engine makes that itself
+	 * when an image is placed — and falls under raster, because that is what it
+	 * does.
 	 */
-	function soortVan(type: string): string {
-		const soort = String(type).replace(/^op /, '');
-		return soort === 'image' ? 'raster' : soort;
+	function kindOf(type: string): string {
+		const kind = String(type).replace(/^op /, '');
+		return kind === 'image' ? 'raster' : kind;
 	}
 
-	/** Vermogen zit in de engine op 0–1000; de gebruiker rekent in procenten. */
+	/** Power sits at 0–1000 in the engine; the user reckons in per cent. */
 	function powerPercent(op: { power: number | null }): number | null {
 		return op.power === null ? null : Math.round(op.power / 10);
 	}
 
 	/**
-	 * Een getal uit een veld dat direct in de rij staat.
+	 * A number from a field that sits right in the row.
 	 *
-	 * Leeg of onzin laten we staan zoals het was in plaats van er nul van te
-	 * maken: nul mm/s is een machine die stilstaat met de laser aan.
+	 * Empty or nonsense is left as it was rather than turned into zero: zero mm/s
+	 * is a machine standing still with the laser on.
 	 */
 	function commitNumber(
 		event: Event & { currentTarget: HTMLInputElement },
@@ -615,7 +611,7 @@
 		patchLayer(id, { [field]: value });
 	}
 
-	// Een bewerking is "aan" voor de selectie als élk gekozen element erin zit.
+	// An operation is "on" for the selection when *every* chosen element is in it.
 	function membership(operationId: string): 'all' | 'some' | 'none' {
 		if (chosen.length === 0) return 'none';
 		const inside = chosen.filter((e) => e.operation_ids.includes(operationId)).length;
@@ -624,19 +620,19 @@
 	}
 
 	/**
-	 * De drie waarden van een laag als één regel, voor de compacte stand.
+	 * The three values of a layer as one line, for the compact mode.
 	 *
-	 * Met eenheden erbij, want "35 · 100 · 1" is een reeks getallen zonder
-	 * betekenis. Passes alleen als er meer dan één is: dat is het geval bij
-	 * hoogstens een paar lagen, en "1×" bij alle andere is ruis.
+	 * With units, because "35 · 100 · 1" is a row of numbers without meaning.
+	 * Passes only when there is more than one: that is the case for a couple of
+	 * layers at most, and "1×" on all the others is noise.
 	 */
-	function kort(op: { speed: number | null; power: number | null; passes: number | null }) {
-		const delen: string[] = [];
-		delen.push(op.speed === null ? '—' : `${op.speed}`);
+	function short(op: { speed: number | null; power: number | null; passes: number | null }) {
+		const parts: string[] = [];
+		parts.push(op.speed === null ? '—' : `${op.speed}`);
 		const percent = powerPercent(op);
-		delen.push(percent === null ? '—' : `${percent}%`);
-		if ((op.passes ?? 1) > 1) delen.push(`${op.passes}×`);
-		return delen.join(' · ');
+		parts.push(percent === null ? '—' : `${percent}%`);
+		if ((op.passes ?? 1) > 1) parts.push(`${op.passes}×`);
+		return parts.join(' · ');
 	}
 
 	function describe(op: { speed: number | null; power: number | null }) {
@@ -649,98 +645,88 @@
 
 {#if show === 'selection' && strays.length}
 	<div class="section stray">
-		<!-- Zelfde woorden als de strook onder het canvas (gat C2): daar staat wat
-		     er aan de hand is, hier staat de uitweg. Twee plekken die hetzelfde
-		     probleem anders benoemen, laat de lezer denken dat het twee problemen
-		     zijn. -->
-		<p>
-			{strays.length}
-			{strays.length === 1 ? 'vorm ligt' : 'vormen liggen'} buiten het bed — daar
-			komt de kop niet.
-		</p>
+		<!-- The same words as the strip under the canvas (gap C2): there says what is
+		     going on, here says the way out. Two places naming the same problem
+		     differently makes the reader think there are two problems. -->
+		<p>{t('canvas.outsideBed', { n: strays.length })}</p>
 		{#if canEdit}
 			<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('rescue')}>
-				Terughalen op het bed
+				{t('action.rescue')}
 			</button>
 		{/if}
 	</div>
 {/if}
 
 <div class="section">
-	<!-- Kop, telling en geschiedenis op één regel. Ze stonden op drie, en drie
-	     regels boven de selectie zijn drie regels die de selectie naar beneden
-	     duwen. -->
+	<!-- Heading, count and history on one line. They used to be on three, and
+	     three lines above the selection are three lines pushing the selection
+	     down. -->
 	<div class="section-head">
-		<h2 class="section-title">Ontwerp</h2>
+		<h2 class="section-title">{t('panel.design')}</h2>
 		{#if elements.length}
-			<span class="muted mono tally">
-				{elements.length} element{elements.length === 1 ? '' : 'en'}
-			</span>
+			<span class="muted mono tally">{t('panel.elements', { n: elements.length })}</span>
 		{/if}
-		<!-- Ongedaan maken en opnieuw stonden hier. Ze zijn verhuisd naar de
-		     actiebalk boven het canvas: het waren de enige twee knoppen in de app
-		     die verdwenen zodra je op het tabblad Job stond, terwijl je juist
-		     dáár nog wel eens iets terug wil draaien. Sinds de verhuizing hebben
-		     ze ook ⌘Z en ⌘⇧Z. -->
+		<!-- Undo and redo used to be here. They moved to the action bar above the
+		     canvas: they were the only two buttons in the app that disappeared the
+		     moment you were on the Job tab, while that is precisely where you
+		     sometimes want to take something back. Since the move they have ⌘Z and
+		     ⌘⇧Z as well. -->
 	</div>
 	{#if edits.error}
 		<p class="edit-error" role="alert">{edits.error}</p>
 	{/if}
 	{#if elements.length === 0}
-		<!-- Hier stond "Gebruik 'Ontwerp laden…' in de Job-tab". Die knop bestaat
-		     niet en heeft nooit bestaan (repo-brede grep: deze regel was de enige
-		     vindplaats van die naam). Een lege staat die naar een verzonnen knop
-		     wijst, is erger dan een lege staat die zwijgt: je gaat zoeken. -->
-		<p class="empty">
-			Nog niets op het bed. <b>Importeren</b> in de bovenbalk haalt een SVG,
-			DXF of afbeelding binnen; met het gereedschap links teken je zelf.
-		</p>
+		<!-- This used to say "Use 'Load design…' in the Job tab". That button does
+		     not exist and never has (repo-wide grep: this line was the only place
+		     that name appeared). An empty state pointing at an invented button is
+		     worse than one that keeps quiet: you go looking. -->
+		<p class="empty">{t('panel.empty')}</p>
 	{/if}
 </div>
 
 {#if show === 'selection' && selected && size}
 	<div class="section">
-		<h2 class="section-title">Selectie</h2>
+		<h2 class="section-title">{t('panel.selection')}</h2>
 		<div class="selected">
 			<div class="head">
 				<span class="name" title={chosen.length > 1 ? undefined : selected.label}>
-					{chosen.length > 1 ? `${chosen.length} vormen` : elementNaam(selected)}
+					{chosen.length > 1 ? t('panel.shapes', { n: chosen.length }) : elementNaam(selected)}
 				</span>
-				<!-- In hoeveel lagen de selectie zit stond als eigen alinea onderaan
-				     het paneel, buiten beeld. Het hoort bij de identiteit van wat je
-				     vast hebt, dus staat het naast de naam. -->
-				<!-- Wélke laag, niet hoevéél. "in 1 laag" was waar en nutteloos: dat
-				     de vorm ergens in zit is niet de vraag, de vraag is waarin. En
-				     dit is precies wat je nakijkt vóór je start — met de laagkleur
-				     erbij, zodat het klopt met wat je op het canvas ziet. -->
+				<!-- How many layers the selection is in used to be a paragraph of its own
+				     at the bottom of the panel, out of sight. It belongs to the identity
+				     of what you are holding, so it sits next to the name. -->
+				<!-- *Which* layer, not how many. "in 1 layer" was true and useless: that
+				     the shape is in something is not the question, the question is what.
+				     And this is exactly what you check before starting — with the layer
+				     colour, so it matches what you see on the canvas. -->
 				<span class="in-layers">
 					{#if inLagen.length === 0}
-						<span class="geenlaag" title="Deze vorm brandt niet mee">in geen laag</span>
+						<span class="geenlaag" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
 					{:else}
 						{#each inLagen as laag (laag.id)}
-							<span class="laagchip" title="Laag {laag.nummer}: {laag.label}">
+							<span class="laagchip" title={t('panel.layerChip', { n: laag.nummer, label: laag.label })}>
 								<span class="stip" style="background: {laag.color}"></span>
 								{laag.label}
 							</span>
 						{/each}
 					{/if}
 				</span>
-				<button class="clear" onclick={() => design.select(null)}>Wis</button>
+				<button class="clear" onclick={() => design.select(null)}>{t('panel.clear')}</button>
 			</div>
-			<!-- Maten, positie en hoek als één raster van drie regels: twee
-			     kolommen getallen met de eenheid één keer rechts. Ze stonden
-			     als vrij wrappende pillen naast elkaar, waardoor X op de eerste
-			     regel eindigde en Y in zijn eentje op de tweede — en dan lees je
-			     twee paren niet meer als twee paren. -->
+			<!-- Sizes, position and angle as one grid of three lines: two columns of
+			     numbers with the unit once on the right. They used to be freely
+			     wrapping pills beside each other, so X ended up on the first line and Y
+			     on its own on the second — and then two pairs no longer read as two
+			     pairs. -->
 			<div class="figures mono">
-				{#each [['B', 'width', 'Breedte'], ['H', 'height', 'Hoogte']] as [label, key, naam] (key)}
+				{#each [['B', 'width', t('panel.width')], ['H', 'height', t('panel.height')]] as [label, key, naam] (key)}
 					<label class="f">
 						<span>{label}</span>
 						<input
 							type="number"
 							step="0.1"
 							min="0.1"
-							aria-label="{naam} in millimeter"
+							aria-label={t('panel.inMillimetres', { what: naam })}
 							disabled={!canEdit}
 							value={(live ?? size)[key as 'width' | 'height'].toFixed(1)}
 							onchange={(e) => commitSize(key as 'width' | 'height', e.currentTarget.value)}
@@ -751,8 +737,8 @@
 					class="link"
 					aria-pressed={linked}
 					disabled={!canEdit}
-					title={linked ? 'Verhouding vast — breedte en hoogte schalen samen' : 'Breedte en hoogte los'}
-					aria-label={linked ? 'Verhouding vast' : 'Verhouding los'}
+					title={linked ? t('panel.ratio.locked') : t('panel.ratio.free')}
+					aria-label={linked ? t('panel.ratio.lockedShort') : t('panel.ratio.freeShort')}
 					onclick={() => (linked = !linked)}
 				>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -764,13 +750,13 @@
 						{/if}
 					</svg>
 				</button>
-				{#each [['X', 'x', 'Positie X'], ['Y', 'y', 'Positie Y']] as [label, key, naam] (key)}
+				{#each [['X', 'x', t('panel.positionX')], ['Y', 'y', t('panel.positionY')]] as [label, key, naam] (key)}
 					<label class="f">
 						<span>{label}</span>
 						<input
 							type="number"
 							step="0.1"
-							aria-label="{naam} in millimeter"
+							aria-label={t('panel.inMillimetres', { what: naam })}
 							disabled={!canEdit}
 							value={(live ?? size)[key as 'x' | 'y'].toFixed(1)}
 							onchange={(e) => commitPosition(key as 'x' | 'y', e.currentTarget.value)}
@@ -793,10 +779,8 @@
 							type="number"
 							step="1"
 							inputmode="decimal"
-							aria-label="Hoek in graden"
-							title={pose.mixed
-								? 'Deze vormen staan onder verschillende hoeken — draai ze met de stapjes'
-								: 'De huidige hoek. Tik een getal om er precies naartoe te draaien.'}
+							aria-label={t('panel.angle')}
+							title={pose.mixed ? t('panel.angle.mixed') : t('panel.angle.title')}
 							disabled={edits.busy || pose.mixed || pose.angle === null}
 							value={pose.angle === null
 								? ''
@@ -806,20 +790,24 @@
 							placeholder={pose.mixed ? '—' : ''}
 							onchange={(e) => setAngle(e.currentTarget.value)}
 						/>
-						<!-- De graad hoort ín het veld. Als eigen kolom stond hij op de
-						     tablet drie kolommen verderop, los van het getal waar hij
-						     bij hoort. -->
+						<!-- The degree sign belongs *in* the field. As a column of its own it
+						     sat three columns away on a tablet, apart from the number it
+						     belongs to. -->
 						<span class="suffix" aria-hidden="true">°</span>
 					</label>
-					<!-- Alleen nog de stapjes van één graad: dat is de spinner die bij
-					     dit veld hoort. Draaien per 90° is een handeling en staat in het
-					     rechterklikmenu onder "Draaien" (met , en . als sneltoets). -->
+					<!-- Only the one-degree steps are left: that is the spinner belonging to
+					     this field. Rotating by 90° is an operation and lives in the
+					     right-click menu under "Rotate" (with , and . as shortcuts). -->
 					{#each [[-1, ''], [1, '']] as [angle, icon] (angle)}
 						<button
 							class="icon step"
 							disabled={edits.busy}
-							title="{Number(angle) > 0 ? '+' : ''}{angle}° draaien"
-							aria-label="{Number(angle) > 0 ? '+' : ''}{angle} graden draaien"
+							title={t('panel.rotate.step', {
+								angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
+							})}
+							aria-label={t('panel.rotate.stepAria', {
+								angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
+							})}
 							onclick={() => onRotate?.(Number(angle))}
 						>
 							{#if icon}
@@ -831,68 +819,60 @@
 					{/each}
 				</div>
 				{#if pose.mixed}
-					<p class="tip">
-						Deze vormen staan onder verschillende hoeken. De stapjes werken;
-						een hoek intikken zou ze allemaal gelijk zetten en dat is zelden
-						wat je bedoelt.
-					</p>
+					<p class="tip">{t('panel.angle.mixedNote')}</p>
 				{/if}
 			{/if}
 
 			{#if selected.text}
-				<!-- De inhoud van de tekst is een eigenschap en hoort hier te staan;
-				     hem bewerken is een handeling en staat in het rechterklikmenu.
-				     Hiervóór was dit één knop die beide deed, en dan is de tekst pas
-				     te lezen als je hem al aanklikt. -->
+				<!-- The content of the text is a value and belongs here; editing it is an
+				     operation and lives in the right-click menu. This used to be one
+				     button doing both, and then the text is only readable once you have
+				     already clicked it. -->
 				<p class="tekstwaarde" title={selected.text.text}>“{selected.text.text}”</p>
 			{/if}
 
-			<!-- Twaalf pictogrammen — uitlijnen, verdelen, spiegelen, groeperen —
-			     stonden hier. Ze zijn verhuisd naar de actiebalk boven het canvas:
-			     daar zijn ze op elk tabblad zichtbaar en scrollen ze niet weg. Zie
-			     DESIGN-SYSTEM v4, "Waar hoort een handeling". -->
+			<!-- Twelve icons — align, distribute, mirror, group — used to be here. They
+			     moved to the action bar above the canvas: there they are visible on
+			     every tab and do not scroll away. See DESIGN-SYSTEM v4, "Where an
+			     operation belongs". -->
 
 			{#if canEdit && (moved || pose.mirrored)}
-				<!-- Het anker. Zolang deze selectie actief is, is elke draai en elke
-				     spiegeling terug te nemen naar de stand van vóór het schikken —
-				     niet naar de vorige klik. Wegklikken maakt het definitief; er
-				     valt niets vast te leggen, want elke tik stond al in het
-				     document en is gewoon ongedaan te maken. -->
+				<!-- The anchor. As long as this selection is active, every rotation and
+				     every mirroring can be taken back to how it was before the arranging
+				     — not to the previous click. Clicking away makes it final; there is
+				     nothing to commit, because every tap was already in the document and
+				     can simply be undone. -->
 				<div class="anchor" class:idle={!moved}>
 					<span class="anchor-what">
 						{#if moved}
-							Sinds je hem pakte: <b>{movedSummary}</b>
+							{t('panel.anchor.since', { what: movedSummary })}
 						{:else}
-							<b>Gespiegeld</b> ten opzichte van het origineel
+							{t('panel.anchor.mirrored')}
 						{/if}
 					</span>
 					{#if moved}
 						<button
 							class="anchor-back"
 							disabled={edits.busy}
-							title="Terug naar de stand van toen je deze selectie aanklikte"
+							title={t('panel.anchor.backTitle')}
 							onclick={restore}
-						><ArrangeIcon name="restore" size={16} /> Terugzetten</button>
+						><ArrangeIcon name="restore" size={16} /> {t('panel.anchor.back')}</button>
 					{/if}
 				</div>
 			{/if}
 
 			{#if selected.effect}
-				<p class="hint">Zit in effect: {selected.effect.label}</p>
+				<p class="hint">{t('panel.inEffect', { label: selected.effect.label })}</p>
 			{/if}
 
 			{#if teSplitsen.vormen}
-				<!-- Dit is een diagnose, geen handeling: het zegt wat je vast hebt.
-				     De knop erbij ("Splitsen in n vormen") is verhuisd naar het
-				     rechterklikmenu, onder "Pad bewerken", mét hetzelfde getal.
-				     Zonder deze regel zou het menu een aantal beloven dat je nergens
-				     kunt narekenen. -->
+				<!-- This is a diagnosis, not an operation: it says what you are holding.
+				     The button that went with it ("Split into n shapes") moved to the
+				     right-click menu, under "Edit path", with the same number. Without
+				     this line the menu would promise a count you could not check
+				     anywhere. -->
 				<p class="tip">
-					{teSplitsen.vormen === 1
-						? 'Deze vorm bestaat'
-						: `Deze ${teSplitsen.vormen} vormen bestaan`}
-					uit {teSplitsen.stukken} losse stukken. Een export uit een CAD-programma is
-					vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.
+					{t('panel.splittable', { n: teSplitsen.vormen, pieces: teSplitsen.stukken })}
 				</p>
 			{/if}
 			{#if tidyNote}
@@ -902,23 +882,21 @@
 				<p class="tip" role="status">{cornerNote}</p>
 			{/if}
 
-			<!-- Hier stonden drie dichtgeklapte vouwen: Combineren (verenigen,
-			     verschil, doorsnede, uitsluiten), Pad bewerken (nesten, offset,
-			     vereenvoudigen, arcering, wobble) en Hoeken. Vijftien handelingen
-			     achter drie klikjes, in een kolom die je toch al moest scrollen.
-			     Ze staan nu alle vijftien in het rechterklikmenu op de vorm, in
-			     submenu's met dezelfde namen; Hoeken opent zijn eigen venster met
-			     het voorbeeld erbij. -->
+			<!-- Three collapsed folds used to be here: Combine (unite, difference,
+			     intersect, exclude), Edit path (nest, offset, simplify, hatch, wobble)
+			     and Corners. Fifteen operations behind three clicks, in a column you had
+			     to scroll anyway. All fifteen are in the right-click menu on the shape
+			     now, in submenus with the same names; Corners opens a window of its own
+			     with the preview in it. -->
 
 			{#if canEdit && selected.image}
-				<!-- Bewerkingen zijn niet destructief: het recept gaat elke keer
-				     opnieuw over het origineel. Vandaar schakelaars met hun
-				     waarden erbij, en niet een rij knoppen waarvan je moet
-				     onthouden waar je op gedrukt hebt.
+				<!-- The edits are not destructive: the recipe runs over the original again
+				     every time. Hence switches with their values, and not a row of
+				     buttons where you have to remember what you pressed.
 
-				     Wél ingeklapt: acht schakelaars met schuifregelaars zijn in hun
-				     eentje langer dan de rest van het paneel bij elkaar, en je zet
-				     ze één keer goed in plaats van steeds opnieuw. -->
+				     Collapsed, though: eight switches with sliders are on their own
+				     longer than the rest of the panel put together, and you set them once
+				     rather than over and over. -->
 				<details
 					class="fold"
 					open={openGroups.image}
@@ -1018,10 +996,9 @@
 
 			<p class="hint">
 				{#if canEdit}
-					Sleep het kader om te verplaatsen, de hoeken om te schalen. Pijltjes:
-					0,1 mm, met shift 1 mm.
+					{t('panel.dragHint')}
 				{:else}
-					Bewerken vereist een token.
+					{t('panel.needsToken')}
 				{/if}
 			</p>
 		</div>
@@ -1030,42 +1007,39 @@
 
 {#if show === 'selection' && !selected}
 	<div class="section">
-		<p class="muted">
-			Niets geselecteerd. Klik een vorm aan op het canvas, of sleep een kader
-			om er meerdere te pakken.
-		</p>
+		<p class="muted">{t('panel.nothingSelected')}</p>
 	</div>
 {/if}
 
 {#if show === 'layers'}
 	<div class="section">
 		<div class="section-head">
-			<h2 class="section-title">Lagen</h2>
+			<h2 class="section-title">{t('panel.layers')}</h2>
 			{#if plainLayers.length}
-				<!-- Wat het nummer op de chip betekent, staat er één keer bij. Zonder
-				     dat leest de lijst als een willekeurige stapel in plaats van als
-				     de volgorde waarin de machine werkt. -->
-				<span class="order-note mono">1 → {plainLayers.length} = brandvolgorde</span>
+				<!-- What the number on the chip means is said once. Without it the list
+				     reads as an arbitrary stack instead of as the order the machine works
+				     in. -->
+				<span class="order-note mono">{t('panel.burnOrder', { n: plainLayers.length })}</span>
 			{/if}
 		</div>
 
 		{#if plainLayers.length > 1}
 			<!--
-				De balk boven de lijst: één menu en één schakelaar.
+				The bar above the list: one menu and one switch.
 
-				Hier stonden vier knoppen op drie regels — sorteren, alles weg,
-				lege lagen opruimen, en de dichtheid. Drie daarvan zijn werkwoorden
-				over de hele lijst en die horen volgens de plaatsingsregel in een
-				menu (DESIGN-SYSTEM v4). Wat blijft staan is de dichtheid, want dat
-				is een kijkstand, en de opruimregel — die meldt een tóestand ("er
-				staan lege lagen") en biedt de uitweg in dezelfde regel aan.
+				There used to be four buttons on three lines here — sort, remove all,
+				clear out empty layers, and the density. Three of those are verbs about
+				the whole list, and by the placement rule those belong in a menu
+				(DESIGN-SYSTEM v4). What stays is the density, because that is a way of
+				looking, and the tidy-up line — which reports a *state* ("there are empty
+				layers") and offers the way out in the same line.
 			-->
 			<div class="lijst-balk">
 				{#if canEdit}
 					<button
 						class="lijstmeer"
 						aria-haspopup="menu"
-						title="Handelingen op de hele lijst"
+						title={t('panel.list.title')}
 						onclick={(e) => {
 							const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
 							rijMenu = {
@@ -1076,21 +1050,18 @@
 										items: [
 											{
 												id: 'sorteer',
-												label: 'Op brandvolgorde zetten',
-												explain:
-													'Rasteren, graveren, punten, snijden als laatste',
-												off: gesorteerd.kanSorteren
-													? undefined
-													: 'De lagen staan al op brandvolgorde',
+												label: t('panel.list.sort'),
+												explain: t('panel.list.sort.explain'),
+												off: gesorteerd.kanSorteren ? undefined : t('panel.list.sort.already'),
 												run: sorteerLagen
 											},
 											{
 												id: 'ruim',
 												label: legeLagen.length
-													? `${legeLagen.length} lege ${legeLagen.length === 1 ? 'laag' : 'lagen'} opruimen`
-													: 'Lege lagen opruimen',
-												explain: 'Vormen en gevulde lagen blijven staan',
-												off: legeLagen.length ? undefined : 'Er staat geen lege laag in de lijst',
+													? t('panel.list.pruneCount', { n: legeLagen.length })
+													: t('panel.list.prune'),
+												explain: t('panel.list.prune.explain'),
+												off: legeLagen.length ? undefined : t('panel.list.prune.none'),
 												run: () => onPrune?.()
 											}
 										]
@@ -1099,8 +1070,8 @@
 										items: [
 											{
 												id: 'alles-weg',
-												label: 'Alle lagen weghalen…',
-												explain: 'De vormen blijven op het bed staan',
+												label: t('panel.list.dropAll'),
+												explain: t('explain.layerRemove'),
 												danger: true,
 												run: () => (confirmDropAll = true)
 											}
@@ -1110,7 +1081,7 @@
 							};
 						}}
 					>
-						Lijst
+						{t('panel.list')}
 						<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
 					</button>
 				{/if}
@@ -1118,9 +1089,7 @@
 				<button
 					class="dichtheid"
 					aria-pressed={compact}
-					title={compact
-						? 'Compacte lijst — klik voor ruime rijen'
-						: 'Ruime lijst — klik voor compacte rijen'}
+					title={compact ? t('panel.density.compact') : t('panel.density.roomy')}
 					onclick={compactSchakel}
 				>
 					<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -1130,51 +1099,47 @@
 							<path d="M4 8h16M4 16h16" />
 						{/if}
 					</svg>
-					{compact ? 'Compact' : 'Ruim'}
+					{compact ? t('panel.density.compactLabel') : t('panel.density.roomyLabel')}
 				</button>
 			</div>
 			{#if canEdit && legeLagen.length}
-				<!-- Een toestand met zijn uitweg in dezelfde regel. Als knop in de balk
-				     stond hij er ook als er niets op te ruimen was; als regel staat hij
-				     er alleen wanneer hij iets betekent, en dan zegt hij hoevéél. -->
+				<!-- A state with its way out in the same line. As a button in the bar it
+				     was there even when there was nothing to clear out; as a line it is
+				     only there when it means something, and then it says how many. -->
 				<p class="opruimregel">
-					{legeLagen.length === 1 ? 'Eén laag is leeg' : `${legeLagen.length} lagen zijn leeg`}.
+					{t('panel.empties', { n: legeLagen.length })}
 					<button class="alsLink" disabled={edits.busy} onclick={() => onPrune?.()}
-						>Opruimen</button
+						>{t('panel.tidyUp')}</button
 					>
 				</p>
 			{/if}
 		{/if}
 		{#if confirmDropAll}
-			<!-- Zeggen wat er weggaat én wat er blijft. Een laag weggooien mag geen
-			     werk weggooien, en dat moet je hier kunnen lezen vóór je klikt —
-			     dezelfde regel als bij het verwijderen van een vel. -->
+			<!-- Say what goes and what stays. Throwing away a layer must not throw away
+			     work, and that has to be readable here before you click — the same rule
+			     as when removing a sheet. -->
 			<div class="confirm">
 				<span>
-					Alle {plainLayers.length} lagen weggooien?
+					{t('panel.dropAll.ask', { n: plainLayers.length })}
 					{#if design.elements.length === 1}
-						De vorm op het bed blijft staan, daarna in geen enkele laag.
+						{t('panel.dropAll.oneShape')}
 					{:else if design.elements.length}
-						De {design.elements.length} vormen op het bed blijven staan, daarna in geen enkele laag.
+						{t('panel.dropAll.shapes', { n: design.elements.length })}
 					{:else}
-						Er staat nog geen vorm op het bed.
+						{t('panel.dropAll.noShapes')}
 					{/if}
 					{#if gridGroups.length}
-						Testrasters blijven staan.
+						{t('panel.dropAll.gridsStay')}
 					{/if}
 				</span>
-				<button class="rot" onclick={() => (confirmDropAll = false)}>Annuleren</button>
+				<button class="rot" onclick={() => (confirmDropAll = false)}>{t('common.cancel2')}</button>
 				<button class="rot drop" disabled={edits.busy} onclick={dropAllLayers}>
-					Alle lagen weggooien
+					{t('panel.dropAll.confirm')}
 				</button>
 			</div>
 		{/if}
 		{#if !operations.length}
-			<p class="muted">
-				Nog geen lagen. Een laag is een bewerking — snijden, graveren of
-				rasteren — met een eigen snelheid en vermogen. Maak er hieronder
-				een aan; selecteer daarna een vorm om hem erin te zetten.
-			</p>
+			<p class="muted">{t('panel.noLayers')}</p>
 		{/if}
 		{#each plainLayers as op, index (op.id)}
 			{@const open = editingLayer === op.id}
@@ -1215,8 +1180,8 @@
 					-->
 					<button
 						class="greep"
-						aria-label="Volgorde van {op.label} — sleep, of gebruik de pijltjestoetsen"
-						title="Sleep om te herordenen (of pijltje omhoog/omlaag). Rechterklik voor eerder of later branden."
+						aria-label={t('panel.layer.dragAria', { label: op.label })}
+						title={t('panel.layer.dragTitle')}
 						disabled={edits.busy}
 						onpointerdown={(e) => startSleep(e, op.id, index)}
 						onpointermove={beweegSleep}
@@ -1239,45 +1204,41 @@
 						</svg>
 					</button>
 					{/if}
-					<!-- Het nummer op de chip ís de brandvolgorde. Klikken opent de
-					     laag, dus de kleur is ook de weg naar zijn instellingen. -->
+					<!-- The number on the chip *is* the burn order. Clicking opens the
+					     layer, so the colour is also the way to its settings. -->
 					<button
 						class="chip mono"
 						style="background: {design.colorFor(op.id)}; color: {inktOp(
 							design.colorFor(op.id)
 						)}"
 						disabled={!canEdit}
-						title="Laag {index + 1} van {plainLayers.length} — instellingen en kleur"
+						title={t('panel.layer.chipTitle', { n: index + 1, total: plainLayers.length })}
 						aria-expanded={open}
-						aria-label="Laag {op.label} openen"
+						aria-label={t('panel.layer.openAria', { label: op.label })}
 						onclick={() => (editingLayer = open ? null : op.id)}
 					>{index + 1}</button>
-					<!-- Eén regel voor de identiteit. Het aantal elementen ging naar de
-					     waarderegel: als naam en telling onder elkaar staan wordt een
-					     rij op een tablet 186 px hoog en passen er drie lagen op een
-					     scherm. -->
+					<!-- One line for the identity. The element count went to the value line:
+					     with name and count stacked, a row is 186 px tall on a tablet and
+					     three layers fit on a screen. -->
 					<div class="layer-name">{op.label}</div>
-					<!-- Alleen het getal, naast de naam. Op de waarderegel gezet werd de
-					     rij 96 px: die regel is met drie velden werkelijk vol (215 van
-					     218 px, zoals de opmerking daar al zei). Wat het getal betekent
-					     staat in de tooltip; nul valt op omdat de kolom uitlijnt. -->
-					<span
-						class="count"
-						title="{op.element_ids.length} vorm{op.element_ids.length === 1
-							? ''
-							: 'en'} in deze laag"
-					>{op.element_ids.length}</span>
+					<!-- Only the number, next to the name. Put on the value line the row
+					     became 96 px: that line is genuinely full with three fields (215 of
+					     218 px, as the note there already said). What the number means is in
+					     the tooltip; zero stands out because the column aligns. -->
+					<span class="count" title={t('panel.layer.count', { n: op.element_ids.length })}
+						>{op.element_ids.length}</span
+					>
 					{#if canEdit}
-						<!-- Meebranden hoort in de rij: het is de schakelaar waar je
-						     tijdens het werk het vaakst aan zit, en verstopt in een
-						     submenu kun je niet zien welke lagen uitstaan. -->
+						<!-- Burn-along belongs in the row: it is the switch you touch most
+						     often while working, and hidden in a submenu you cannot see which
+						     layers are off. -->
 						<button
 							class="out"
 							class:on={op.output}
 							role="switch"
 							aria-checked={op.output}
-							title={op.output ? 'Brandt mee — klik om uit te zetten' : 'Staat uit — klik om mee te branden'}
-							aria-label="Meebranden voor {op.label}"
+							title={op.output ? t('panel.layer.burnsOn') : t('panel.layer.burnsOff')}
+							aria-label={t('panel.layer.burnsAria', { label: op.label })}
 							disabled={edits.busy}
 							onclick={() => patchLayer(op.id, { output: !op.output })}
 						>
@@ -1286,39 +1247,36 @@
 								<path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
 							</svg>
 						</button>
-						<!-- Besluit B4: zichtbaar en meebranden zijn twee dingen. Een
-						     uitlijnkader op het canvas houden zonder het te branden is
-						     een standaardtruc, en met één schakelaar kan dat niet.
-						     Zichtbaarheid is een kijkstand: die gaat niet naar de engine
-						     en verandert dus niets aan wat er gebrand wordt.
+						<!-- Decision B4: visible and burn-along are two things. Keeping an
+						     alignment box on the canvas without burning it is a standard
+						     trick, and with one switch that is impossible. Visibility is a way
+						     of looking: it does not go to the engine and so changes nothing
+						     about what gets burned.
 
-						     In de compacte stand verhuist deze naar de uitklap. Gemeten op
-						     een tablet: met beide schakelaars van 44 px naast elkaar houdt de
-						     laagnaam 30 px over en staat er "Sni…" — en een lijst waarin je
-						     de lagen niet kunt uitéénhouden is geen compacte lijst maar een
-						     onleesbare. Meebranden blijft in de rij, want dat is de
-						     schakelaar waar je tijdens het werk aan zit; verbergen doe je
-						     één keer. Dát een laag verborgen is, blijft in de rij staan als
-						     woord. -->
-						<!--
-							Het oogje stond hier, naast de aan-uitschakelaar en de ⋯. Drie
-							raakdoelen van 28 px plus de chip, de greep en de telling lieten
-							de laagnaam 37 van 215 px — gemeten, en dat is waarom er
-							"Bui-ten-…" stond. Verbergen doe je één keer per laag en het
-							staat in het rijmenu; meebranden is de schakelaar waar je tijdens
-							het werk aan zit en blijft hier. Dát een laag verborgen is, staat
-							als woord in de rij.
-						-->
-						<!-- De ⋯ deed hetzelfde als de chip ernaast: de uitklap openen. Twee
-						     knoppen voor één handeling, en tegelijk was het rijmenu alleen met
-						     de rechtermuisknop te vinden. Nu opent de chip de instellingen en
-						     de ⋯ het menu — twee verschillende dingen, en de weg naar het menu
-						     is zichtbaar geworden. -->
+						     In compact mode this one moves into the fold. Measured on a
+						     tablet: with both 44 px switches side by side the layer name has
+						     30 px left and reads "Cu…" — and a list in which you cannot tell
+						     the layers apart is not a compact list but an unreadable one.
+						     Burn-along stays in the row, because that is the switch you touch
+						     while working; hiding you do once. *That* a layer is hidden stays
+						     in the row as a word.
+
+						     The eye used to be here, next to the on/off switch and the ⋯.
+						     Three 28 px touch targets plus the chip, the grip and the count
+						     left the layer name 37 of 215 px — measured, and that is why it
+						     read "Out-si-…". Hiding you do once per layer and it is in the row
+						     menu.
+
+						     The ⋯ did the same as the chip beside it: open the fold. Two
+						     buttons for one operation, while the row menu could only be found
+						     with the right mouse button. Now the chip opens the settings and
+						     the ⋯ the menu — two different things, and the way to the menu has
+						     become visible. -->
 						<button
 							class="more"
 							aria-haspopup="menu"
-							title="Meer voor {op.label} — of rechterklik op de rij"
-							aria-label="Meer voor {op.label}"
+							title={t('panel.layer.moreTitle', { label: op.label })}
+							aria-label={t('panel.layer.moreAria', { label: op.label })}
 							onclick={(e) => {
 								const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
 								opendLaagMenu(op, index, doos.right - 200, doos.bottom + 4);
@@ -1327,24 +1285,23 @@
 					{/if}
 				</div>
 
-				<!-- Snelheid, vermogen en passes staan als velden in de rij zelf.
-				     Dat is de hele reden dat dit paneel bestaat: bijstellen naast
-				     een draaiende machine mag geen submenu kosten.
+				<!-- Speed, power and passes are fields in the row itself. That is the whole
+				     reason this panel exists: adjusting next to a running machine must not
+				     cost a submenu.
 
-				     Compact (gat L5) is de uitzondering: daar staan de waarden als één
-				     leesbare regel en verhuizen de velden naar de uitklap. Drie velden
-				     naast een naam en drie schakelaars passen niet in een paneel van
-				     280 px zonder om te breken, en dan is de rij weer twee regels hoog
-				     en heb je niets gewonnen. -->
+				     Compact (gap L5) is the exception: there the values are one readable
+				     line and the fields move into the fold. Three fields beside a name and
+				     three switches do not fit in a 280 px panel without wrapping, and then
+				     the row is two lines tall again and nothing has been gained. -->
 				<div class="vals">
 					{#if canEdit && compact}
 						<button
 							class="kort mono"
-							title="Snelheid, vermogen en passes — klik om ze bij te stellen"
+							title={t('panel.layer.valuesTitle')}
 							aria-expanded={open}
-							aria-label="Instellingen van {op.label}: {kort(op)}"
+							aria-label={t('panel.layer.valuesAria', { label: op.label, values: short(op) })}
 							onclick={() => (editingLayer = open ? null : op.id)}
-						>{kort(op)}</button>
+						>{short(op)}</button>
 					{:else if canEdit}
 						<label class="val">
 							<input
@@ -1353,7 +1310,7 @@
 								step="1"
 								min="0.1"
 								inputmode="decimal"
-								aria-label="Snelheid van {op.label} in mm per seconde"
+								aria-label={t('panel.layer.speedAria', { label: op.label })}
 								value={op.speed ?? ''}
 								disabled={edits.busy}
 								onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
@@ -1367,7 +1324,7 @@
 								min="1"
 								max="100"
 								inputmode="numeric"
-								aria-label="Vermogen van {op.label} in procent"
+								aria-label={t('panel.layer.powerAria', { label: op.label })}
 								value={percent ?? ''}
 								disabled={edits.busy}
 								onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
@@ -1380,7 +1337,7 @@
 								step="1"
 								min="1"
 								inputmode="numeric"
-								aria-label="Aantal passes van {op.label}"
+								aria-label={t('panel.layer.passesAria', { label: op.label })}
 								value={op.passes ?? 1}
 								disabled={edits.busy}
 								onchange={(e) => commitNumber(e, op.id, 'passes', op.passes ?? 1)}
@@ -1392,65 +1349,63 @@
 						{/each}
 					{/if}
 					{#if !op.output}
-						<!-- Kleur alleen is niet genoeg: dit staat er ook in woorden,
-						     want dit is het verschil tussen "het is gesneden" en "ik
-						     was het vergeten". -->
-						<span class="tag">brandt niet mee</span>
+						<!-- Colour alone is not enough: this is here in words too, because it
+						     is the difference between "it has been cut" and "I forgot
+						     it". -->
+						<span class="tag">{t('panel.tag.doesNotBurn')}</span>
 					{/if}
 					{#if design.isLayerHidden(op.id)}
-						<!-- En dit is de andere helft van B4: verborgen zegt niets over
-						     branden. Twee aparte woorden, want twee aparte standen. -->
-						<span class="tag zicht">verborgen</span>
+						<!-- And this is the other half of B4: hidden says nothing about
+						     burning. Two separate words, because two separate states. -->
+						<span class="tag zicht">{t('panel.tag.hidden')}</span>
 					{/if}
 					{#if design.layerCapabilities.air_assist && (compact || op.air_assist)}
-						<!-- Air assist in de rij (besluit B11, gat L10).
-						     Stond hier als dood woord zodra hij aanstond; nu is het een
-						     schakelaar, want of de blazer meedoet is het verschil tussen een
-						     schone snede en een geschroeide rand, en dat zet je per
-						     materiaal om. Uitzetten kostte tot nu toe een tik naar de
-						     uitklap en een tik terug.
+						<!-- Air assist in the row (decision B11, gap L10).
+						     It used to sit here as a dead word once it was on; now it is a
+						     switch, because whether the blower joins in is the difference
+						     between a clean cut and a scorched edge, and you flip that per
+						     material. Switching it off cost a tap into the fold and a tap
+						     back until now.
 
-						     Waarom hij in de ruime stand alleen verschijnt als hij áán
-						     staat, en in de compacte altijd: gemeten met vier lagen op
-						     1440 en 1024. In de compacte stand past de pil naast de
-						     waarderegel en blijft de rij 36 px (desktop) en 54 px (tablet)
-						     — precies de maten uit L5. In de ruime stand is de waarderegel
-						     al vol (215 van 218 px op desktop) en valt de pil op een derde
-						     regel: 76 → 101 px, en op tablet 111 → 159 px. Dat is de helft
-						     van de lijst kwijt voor een schakelaar die je zelden aanraakt.
-						     LightBurn krijgt hem er wél bij in één regel, maar hun paneel is
-						     480–512 px; wij hebben er 280.
+						     Why it only appears in roomy mode when it is *on*, and always in
+						     compact: measured with four layers at 1440 and 1024. In compact
+						     mode the pill fits beside the value line and the row stays 36 px
+						     (desktop) and 54 px (tablet) — exactly the sizes from L5. In roomy
+						     mode the value line is already full (215 of 218 px on desktop) and
+						     the pill drops to a third line: 76 → 101 px, and on a tablet
+						     111 → 159 px. That is half the list gone for a switch you rarely
+						     touch. LightBurn does fit it on one line, but their panel is
+						     480–512 px; ours has 280.
 
-						     Aanzetten gebeurt in de ruime stand dus in de uitklap, uitzetten
-						     kan vanaf de rij — dat is de kant waar haast bij zit.
+						     So in roomy mode switching on happens in the fold, switching off
+						     can be done from the row — that is the side with the hurry in it.
 
-						     De pil verschijnt alleen als de driver een commando heeft dat de
-						     blazer werkelijk schakelt; op een Ruida is dat er niet (L8). -->
+						     The pill only appears when the driver has a command that really
+						     switches the blower; on a Ruida there is none (L8). -->
 						<button
 							class="tag lucht"
 							class:uit={!op.air_assist}
 							role="switch"
 							aria-checked={op.air_assist}
-							aria-label="Air assist tijdens {op.label}"
-							title={op.air_assist
-								? 'Air assist staat aan — klik om uit te zetten'
-								: 'Air assist staat uit — klik om aan te zetten'}
+							aria-label={t('panel.air.aria', { label: op.label })}
+							title={op.air_assist ? t('panel.air.on') : t('panel.air.off')}
 							disabled={edits.busy}
 							onclick={() => patchLayer(op.id, { air_assist: !op.air_assist })}
-						>lucht</button>
+						>{t('panel.tag.air')}</button>
 					{/if}
 					{#if canEdit && selectedIds.length}
-						<!-- Toewijzen staat achteraan en niet vóór de naam: anders
-						     verschuift de hele rij zodra je iets selecteert. -->
+						<!-- Assigning is at the end and not before the name: otherwise the
+						     whole row shifts the moment you select something. -->
 						<button
 							class="assign"
 							class:in={membership(op.id) === 'all'}
 							class:partly={membership(op.id) === 'some'}
 							aria-pressed={membership(op.id) === 'all'}
-							title="Zet de selectie in {op.label}"
+							title={t('panel.assign.title', { label: op.label })}
 							disabled={edits.busy}
 							onclick={() => onAssign?.(op.id, membership(op.id) !== 'all')}
-						>{membership(op.id) === 'all' ? '✓' : membership(op.id) === 'some' ? '–' : '+'} hierin</button>
+						>{membership(op.id) === 'all' ? '✓' : membership(op.id) === 'some' ? '–' : '+'}
+							{t('panel.assign.label')}</button>
 					{/if}
 				</div>
 			</div>
@@ -1459,9 +1414,8 @@
 				{@const onthouden = design.memoryFor(design.colorFor(op.id))}
 				<div class="layer-edit">
 					{#if compact}
-						<!-- In de compacte stand staan de velden hier, want in de rij is er
-						     geen plek voor. Zelfde velden, zelfde gedrag — alleen een regel
-						     lager. -->
+						<!-- In compact mode the fields are here, because there is no room in
+						     the row. Same fields, same behaviour — just one line lower. -->
 						<div class="vals wide">
 							<label class="val">
 								<input
@@ -1470,7 +1424,7 @@
 									step="1"
 									min="0.1"
 									inputmode="decimal"
-									aria-label="Snelheid van {op.label} in mm per seconde"
+									aria-label={t('panel.layer.speedAria', { label: op.label })}
 									value={op.speed ?? ''}
 									disabled={edits.busy}
 									onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
@@ -1484,7 +1438,7 @@
 									min="1"
 									max="100"
 									inputmode="numeric"
-									aria-label="Vermogen van {op.label} in procent"
+									aria-label={t('panel.layer.powerAria', { label: op.label })}
 									value={percent ?? ''}
 									disabled={edits.busy}
 									onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
@@ -1497,7 +1451,7 @@
 									step="1"
 									min="1"
 									inputmode="numeric"
-									aria-label="Aantal passes van {op.label}"
+									aria-label={t('panel.layer.passesAria', { label: op.label })}
 									value={op.passes ?? 1}
 									disabled={edits.busy}
 									onchange={(e) => commitNumber(e, op.id, 'passes', op.passes ?? 1)}
@@ -1505,14 +1459,14 @@
 							</label>
 						</div>
 					{/if}
-					<div class="swatches" role="group" aria-label="Kleur van {op.label}">
+					<div class="swatches" role="group" aria-label={t('panel.colourAria', { label: op.label })}>
 						{#each LAYER_COLORS as swatch (swatch)}
 							<button
 								class="swatch"
 								class:picked={design.colorFor(op.id).toLowerCase() === swatch.toLowerCase()}
 								style="background: {swatch}"
-								title="Laagkleur {swatch}"
-								aria-label="Laagkleur {swatch}"
+								title={t('panel.swatch', { colour: swatch })}
+								aria-label={t('panel.swatch', { colour: swatch })}
 								aria-pressed={design.colorFor(op.id).toLowerCase() === swatch.toLowerCase()}
 								disabled={edits.busy}
 								onclick={() => patchLayer(op.id, { color: swatch })}
@@ -1520,30 +1474,28 @@
 						{/each}
 					</div>
 
-					<!-- Wat deze kleur op deze machine onthouden heeft (besluit B2).
-					     Het staat er met zoveel woorden bij dat het geen preset is:
-					     een preset hoort bij een materiaal en een dikte en zegt dat er
-					     iets gebrand is. Dit zegt alleen wat jij hier het laatst deed,
-					     en dat mag nooit voor bewijs doorgaan. -->
+					<!-- What this colour has remembered on this machine (decision B2). It
+					     says in so many words that it is not a preset: a preset belongs to a
+					     material and a thickness and says something has been burned. This
+					     only says what you last did here, and that must never pass for
+					     evidence. -->
 					<p class="geheugen wide">
 						{#if onthouden?.speed_mm_s}
-							<span class="mono"
-								>{onthouden.speed_mm_s} mm/s{onthouden.power_percent == null
-									? ''
-									: ` · ${Math.round(onthouden.power_percent)}%`}</span
-							>
-							onthouden voor deze kleur op {onthouden.machine_name ?? 'deze machine'} —
-							daarmee begint een volgende laag in deze kleur. Geen preset: dit
-							draagt geen herkomst.
+							{t('panel.memory.remembered', {
+								values: `${onthouden.speed_mm_s} mm/s${
+									onthouden.power_percent == null
+										? ''
+										: ` · ${Math.round(onthouden.power_percent)}%`
+								}`,
+								machine: onthouden.machine_name ?? t('panel.memory.thisMachine')
+							})}
 						{:else}
-							Deze kleur heeft op deze machine nog niets onthouden. Zodra je
-							snelheid of vermogen bijstelt, begint een volgende laag in deze
-							kleur daarop.
+							{t('panel.memory.none')}
 						{/if}
 					</p>
 
 					<label class="wide">
-						<span>Naam</span>
+						<span>{t('panel.name')}</span>
 						<input
 							type="text"
 							value={op.label}
@@ -1551,43 +1503,40 @@
 						/>
 					</label>
 
-					<!-- Wat deze laag doet, ná het aanmaken te wijzigen (gat L3). Een
-					     snijlaag graveerlaag maken kon alleen door hem weg te gooien en
-					     alle toewijzingen opnieuw te doen; LightBurn heeft er een keuzelijst
-					     voor in de rij. De vormen en de instellingen gaan mee. -->
+					<!-- What this layer does, changeable after creating it (gap L3). Making a
+					     cut layer into an engrave layer could only be done by throwing it away
+					     and redoing every assignment; LightBurn has a dropdown for it in the
+					     row. The shapes and the settings come along. -->
 					<div class="soort wide">
-						<span class="rot-label">Soort bewerking</span>
+						<span class="rot-label">{t('panel.kind')}</span>
 						<Segmented
-							label="Soort bewerking van {op.label}"
+							label={t('panel.kindOf', { label: op.label })}
 							options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
 							disabled={edits.busy}
-							bind:value={() => soortVan(op.type), (waarde) => retypeLayer(op.id, waarde)}
+							bind:value={() => kindOf(op.type), (waarde) => retypeLayer(op.id, waarde)}
 						/>
-						<p class="hint">
-							De vormen en de instellingen blijven; alleen wat de machine ermee
-							doet verandert.
-						</p>
+						<p class="hint">{t('panel.kind.hint')}</p>
 					</div>
 
 					{#if compact}
-						<!-- De kijkstand uit de rij, hier als vinkje (zie het commentaar bij
-						     het oog in de rij). Zelfde gedrag, zelfde explain: dit verandert
-						     niets aan wat er gebrand wordt. -->
+						<!-- The way-of-looking switch from the row, here as a checkbox (see the
+						     note about the eye in the row). Same behaviour, same explanation:
+						     this changes nothing about what gets burned. -->
 						<label class="check wide">
 							<input
 								type="checkbox"
 								checked={!design.isLayerHidden(op.id)}
 								onchange={() => design.toggleLayer(op.id)}
 							/>
-							<span>Zichtbaar op het canvas (verandert niets aan de job)</span>
+							<span>{t('panel.visibleOnCanvas')}</span>
 						</label>
 					{/if}
 
 					{#if design.layerCapabilities.air_assist}
-						<!-- Besluit B11: alleen zichtbaar als de driver er een commando voor
-						     kent. Dezelfde regel als bij de Z-as — wat de machine kán,
-						     bepaalt wat je ziet. Staat de schakelaar er niet, dan heeft deze
-						     machine geen methode ingesteld om de blazer aan te sturen. -->
+						<!-- Decision B11: only visible when the driver has a command for it. The
+						     same rule as with the Z axis — what the machine *can* do decides
+						     what you see. If the switch is not there, this machine has no
+						     method set up to drive the blower. -->
 						<label class="check wide">
 							<input
 								type="checkbox"
@@ -1595,7 +1544,7 @@
 								disabled={edits.busy}
 								onchange={(e) => patchLayer(op.id, { air_assist: e.currentTarget.checked })}
 							/>
-							<span>Air assist tijdens deze laag</span>
+							<span>{t('panel.airDuring')}</span>
 						</label>
 					{/if}
 
@@ -1609,7 +1558,7 @@
 						     naar de begin­hoogte na de laatste. -->
 						<div class="zstep wide">
 							<NumberField
-								label="Zakken per pass"
+								label={t('panel.zStep')}
 								unit="mm"
 								value={String(op.z_step_mm ?? 0)}
 								step={0.1}
@@ -1620,24 +1569,25 @@
 							/>
 							<p class="hint">
 								{#if !op.z_step_mm}
-									Uit. Elke pass snijdt op dezelfde hoogte.
+									{t('panel.zStep.off')}
 								{:else if (op.passes ?? 1) < 2}
-									Doet nog niets: deze laag brandt één pass. Zet het aantal
-									passes hoger om in lagen te snijden.
+									{t('panel.zStep.onePass')}
 								{:else}
-									{op.passes}× snijden, elke keer {Math.abs(op.z_step_mm)} mm
-									{op.z_step_mm > 0 ? 'lager' : 'hoger'}. Na de laatste pass gaat
-									de kop terug naar de hoogte waarop hij begon.
+									{t('panel.zStep.explain', {
+										passes: op.passes,
+										step: i18n.number(Math.abs(op.z_step_mm)),
+										direction: t(op.z_step_mm > 0 ? 'panel.zStep.lower' : 'panel.zStep.higher')
+									})}
 								{/if}
 							</p>
 						</div>
 					{/if}
 
 					{#if op.type === 'op raster' || op.type === 'op image'}
-						<!-- Alleen rasteren gebruikt deze; bij snijden zijn ze zinloos. -->
-						<!-- Elk over de volle breedte: een stepper is twee knoppen van
-						     38 px plus een veld, en in een halve kolom van 112 px
-						     blijft er voor "2000" niets over. -->
+						<!-- Only rastering uses these; on a cut they are meaningless. -->
+						<!-- Each over the full width: a stepper is two 38 px buttons plus a
+						     field, and in a half column of 112 px there is nothing left for
+						     "2000". -->
 						<div class="steppers wide">
 						<NumberField
 							label="DPI"
@@ -1649,7 +1599,7 @@
 							onchange={(v) => patchLayer(op.id, { dpi: Number(v) })}
 						/>
 						<NumberField
-							label="Overscan"
+							label={t('panel.overscan')}
 							unit="mm"
 							value={String(parseFloat(op.overscan ?? '0.5') || 0)}
 							step={0.5}
@@ -1666,40 +1616,41 @@
 								onchange={(e) =>
 									patchLayer(op.id, { bidirectional: e.currentTarget.checked })}
 							/>
-							<span>Heen en weer graveren</span>
+							<span>{t('panel.bidirectional')}</span>
 						</label>
 					{/if}
 
-					<!-- Volgorde is brandvolgorde: eerst graveren, dan pas snijden,
-					     anders valt het werkstuk uit het vel voor het opschrift
-					     erop staat. -->
+					<!-- Order is burn order: engrave first, only then cut, otherwise the
+					     workpiece falls out of the sheet before the lettering is on it. -->
 					<div class="order wide">
-						<span class="rot-label">Volgorde · {typeName(op.type)}</span>
+						<span class="rot-label">{t('panel.order', { kind: typeName(op.type) })}</span>
 						<button
 							class="rot"
 							disabled={edits.busy || index === 0}
-							title={index === 0 ? 'Deze laag brandt al als eerste' : 'Eerder branden'}
+							title={index === 0 ? t('reason.alreadyFirst') : t('panel.order.burnEarlier')}
 							onclick={() => moveLayer(op.id, 'up')}
-						>↑ Eerder</button>
+						>↑ {t('panel.order.earlier')}</button>
 						<button
 							class="rot"
 							disabled={edits.busy || index === plainLayers.length - 1}
 							title={index === plainLayers.length - 1
-								? 'Deze laag brandt al als laatste'
-								: 'Later branden'}
+								? t('reason.alreadyLast')
+								: t('panel.order.burnLater')}
 							onclick={() => moveLayer(op.id, 'down')}
-						>↓ Later</button>
+						>↓ {t('panel.order.later')}</button>
 					</div>
 
 					{#if confirmDrop === op.id}
 						<div class="confirm wide">
-							<span>“{op.label}” weggooien? De vormen blijven, de instellingen niet.</span>
-							<button class="rot" onclick={() => (confirmDrop = null)}>Annuleren</button>
-							<button class="rot drop" onclick={() => dropLayer(op.id)}>Verwijderen</button>
+							<span>{t('panel.drop.ask', { label: op.label })}</span>
+							<button class="rot" onclick={() => (confirmDrop = null)}>{t('common.cancel2')}</button>
+							<button class="rot drop" onclick={() => dropLayer(op.id)}
+								>{t('panel.drop.confirm')}</button
+							>
 						</div>
 					{:else}
 						<button class="weg wide" onclick={() => (confirmDrop = op.id)}>
-							Laag verwijderen…
+							{t('panel.drop.layer')}
 						</button>
 					{/if}
 				</div>
@@ -1711,13 +1662,13 @@
 				<div class="ident">
 					<span class="chip mono grid-chip">R</span>
 					<div class="layer-name">
-						<div class="op">Testraster #{group.id}</div>
-						<div class="obj">{group.ops.length} cellen · snelheid en vermogen liggen vast</div>
+						<div class="op">{t('panel.grid.title', { id: group.id })}</div>
+						<div class="obj">{t('panel.grid.cells', { n: group.ops.length })}</div>
 					</div>
 					<button
 						class="more"
 						aria-expanded={openGrid === group.id}
-						aria-label="Cellen van raster {group.id} tonen"
+						aria-label={t('panel.grid.showCells', { id: group.id })}
 						onclick={() => (openGrid = openGrid === group.id ? null : group.id)}
 					>{openGrid === group.id ? '−' : '+'}</button>
 				</div>
@@ -1726,7 +1677,7 @@
 			{#if openGrid === group.id}
 				<div class="cells">
 					{#each group.ops as op (op.id)}
-						<label class="cell" title="rij {op.grid?.row}, kolom {op.grid?.column}">
+						<label class="cell" title={t('panel.grid.cell', { row: op.grid?.row, column: op.grid?.column })}>
 							<input
 								type="checkbox"
 								checked={op.output}
@@ -1738,7 +1689,7 @@
 					{/each}
 					{#if canEdit}
 						<button class="weg cells-remove" onclick={() => removeGrid(group.id)}>
-							Raster uit ontwerp verwijderen
+							{t('panel.grid.remove')}
 						</button>
 					{/if}
 				</div>
@@ -1772,7 +1723,7 @@
 						upward: true,
 						lijst: [
 							{
-								title: 'Laag toevoegen',
+								title: t('panel.addLayer'),
 								items: LAYER_TYPES.map(({ value, label }) => ({
 									id: `nieuw-${value}`,
 									label,
@@ -1786,15 +1737,14 @@
 					};
 				}}
 			>
-				+ Laag toevoegen
+				+ {t('panel.addLayer')}
 			</button>
 		{/if}
 		<p class="hint">
 			{#if selected}
-				“<strong>hierin</strong>” zet de huidige selectie in die laag.
+				{t('panel.assign.hint', { into: t('panel.assign.label') })}
 			{:else}
-				Selecteer een vorm op het canvas; dan kun je hem hier met één tik in
-				een laag zetten.
+				{t('panel.assign.hintNone')}
 			{/if}
 		</p>
 	</div>
@@ -2147,11 +2097,6 @@
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		padding: var(--space-2);
-	}
-	.geheugen .mono {
-		font-family: var(--font-mono);
-		font-variant-numeric: tabular-nums;
-		color: var(--text-1);
 	}
 	.more {
 		flex: none;
@@ -2843,8 +2788,10 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.anchor-what { min-width: 0; }
-	.anchor-what b { color: var(--text-1); font-weight: 600; }
+	/* The whole line carries the emphasis now: the change used to be bold inside
+	   the sentence, and a message is one string — splitting it to keep the tag
+	   would make the halves untranslatable. */
+	.anchor-what { min-width: 0; color: var(--text-1); }
 	.anchor-back {
 		display: inline-flex;
 		align-items: center;
