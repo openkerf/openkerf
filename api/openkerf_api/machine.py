@@ -36,9 +36,36 @@ OORSPRONG_KEY = "openkerf_origin"
 # als bij pauzeren en stoppen: vragen wat dit apparaat kent, niet aannemen.
 FOCUS = "focusz"
 
+# Verbinden en verbreken.
+#
+# Elke driverfamilie noemt het anders en zet het op `hidden=True`: Ruida heeft
+# `ruida_connect` (`ruida/device.py:448`), lihuiyu, moshi, newly en balor hebben
+# `usb_connect`. Grbl registreert er geen — die opent zijn verbinding zelf zodra
+# er data heen moet. Daarom vragen we het actieve apparaat wat het kent, in
+# dezelfde volgorde, en krijgt een machine die het niet kent ook geen knop.
+CONNECTS = ("ruida_connect", "usb_connect")
+DISCONNECTS = ("ruida_disconnect", "usb_disconnect")
+
 
 def _mm(value: float) -> str:
     return f"{value:.4f}mm"
+
+
+def _zonder_echo(output, command: str) -> str:
+    """
+    Wat de engine te melden had, zonder de echo van de opdracht zelf.
+
+    Het console-kanaal echoot elke regel die erin gaat, met tijdstempel. Gemeten
+    op de echte machine met een adres waar niets staat: de UDP-sessie meldt
+    helemaal niets, dus het enige dat overbleef was "[11:51:29] ruida_connect".
+    Dat als reden voorschotelen is erger dan zeggen dat er geen reden is.
+    """
+    regels = [
+        line
+        for line in output
+        if line.strip() and not line.strip().endswith(command)
+    ]
+    return " ".join(regels).strip()
 
 
 class MachineControl:
@@ -52,6 +79,66 @@ class MachineControl:
         caps["jog"] = self.runner.supports("move_relative")
         caps["focus"] = self.runner.supports(FOCUS)
         return caps
+
+    def connection_capabilities(self) -> dict:
+        """Eigen blok, niet bij `motion`: verbinden zet de kop niet in beweging."""
+        return {
+            "connect": self._link_command(CONNECTS) is not None,
+            "disconnect": self._link_command(DISCONNECTS) is not None,
+        }
+
+    # ------------------------------------------------------------- verbinding
+
+    def _link_command(self, names) -> str | None:
+        for name in names:
+            if self.runner.supports(name):
+                return name
+        return None
+
+    def _connection(self) -> dict:
+        """
+        Hangt er een machine aan de lijn? Dezelfde bron als de statusbalk.
+
+        `StatusReader.connection` weet per familie waar het staat en zegt
+        "unknown" waar niets het meldt — en dat laatste is hier het verschil
+        tussen "kon niet controleren" en "staat open".
+        """
+        from .status import StatusReader
+
+        return StatusReader(self.kernel).connection(getattr(self.kernel, "device", None))
+
+    def connect(self) -> dict:
+        return self._link(CONNECTS, "verbinden", "connected")
+
+    def disconnect(self) -> dict:
+        return self._link(DISCONNECTS, "verbreken", "disconnected")
+
+    def _link(self, names, verb: str, wanted: str) -> dict:
+        command = self._link_command(names)
+        if command is None:
+            raise DesignError(
+                f"Dit apparaat kent geen opdracht om te {verb}. Grbl bijvoorbeeld "
+                "opent zijn verbinding zelf zodra er werk naartoe gaat."
+            )
+        output = self.runner.run(command)
+        state = self._connection()
+
+        # De engine meldt een mislukte verbinding alleen op het kanaal en geeft
+        # daarna netjes terug (`ruida/device.py:452`). De toestand erna is dus
+        # het enige eerlijke antwoord; is die niet te lezen, dan is de uitvoer
+        # alles wat we hebben en spreken we ons er niet over uit.
+        if state.get("state") not in (wanted, "unknown"):
+            klacht = _zonder_echo(output, command)
+            raise DesignError(
+                f"{verb.capitalize()} lukte niet. De engine meldt: {klacht}"
+                if klacht
+                else f"{verb.capitalize()} lukte niet, en de engine zegt niet waarom. "
+                "Staat de machine aan, en klopt het adres in de machine-instellingen? "
+                "Ook mogelijk: er is in deze sessie al eens verbroken of van machine "
+                "gewisseld — dat overleeft de Ruida-sessie niet altijd, en dan helpt "
+                "alleen een herstart van de server."
+            )
+        return {"connection": state, "output": output}
 
     def _idle(self) -> None:
         """

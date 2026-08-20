@@ -18,7 +18,7 @@
 
 	let {
 		device,
-		state,
+		machineState,
 		job,
 		connected,
 		control,
@@ -26,7 +26,7 @@
 		acties = true
 	}: {
 		device: Device | null;
-		state: MachineState;
+		machineState: MachineState;
 		job: Job | null;
 		connected: boolean;
 		control: Controller;
@@ -95,17 +95,43 @@
 	 * door zonder machine; hij is dus geen handshake.
 	 */
 	let onbekend = $derived(
-		connected && state !== 'unplugged' && device?.connection?.state !== 'connected'
+		connected && machineState !== 'unplugged' && device?.connection?.state !== 'connected'
 	);
 	let verbindingstekst = $derived(
 		!connected
 			? 'Geen verbinding met OpenKerf'
-			: state === 'unplugged'
+			: machineState === 'unplugged'
 				? 'Machine niet verbonden'
 				: onbekend
 					? 'Verbinding onbekend'
 					: 'Verbonden met de laser'
 	);
+	/**
+	 * De knop naast de toestand.
+	 *
+	 * De balk kon lezen dat er geen machine aan de lijn hing en er niets aan
+	 * doen — "niet verbonden" zonder knop. Alleen zichtbaar als de driver het
+	 * kent: grbl opent zelf zodra er werk naartoe gaat, en dan hoort er geen
+	 * knop te zijn die niets betekent.
+	 *
+	 * Verbreken vraagt om bevestiging, verbinden niet. Gemeten op de echte
+	 * KH-5030 gaat opnieuw verbinden na een verbreken soms wél en soms niet: op
+	 * een server waar alleen curl tegen praat faalde het drie op drie, met de
+	 * app eraan stond de verbinding binnen ~6 s vanzelf weer open. Wat hem
+	 * heropent is niet gevonden. Zolang dat zo is, mag verbreken geen knop van
+	 * één klik zijn — en mag de tekst niet meer beloven dan we weten.
+	 */
+	let hangt = $derived(device?.connection?.state === 'connected');
+	let kanVerbinden = $derived(
+		connected &&
+			Boolean(
+				hangt
+					? control.capabilities?.connection?.disconnect
+					: control.capabilities?.connection?.connect
+			)
+	);
+	let zekerVerbreken = $state(false);
+
 	let verbindingsuitleg = $derived(
 		onbekend
 			? 'De engine draait, maar deze driver meldt niet of er een machine aan hangt. ' +
@@ -177,12 +203,48 @@
 	     luistert, niet of er een socket openstaat. -->
 	<span
 		class:offline={!connected}
-		class:onthecht={connected && state === 'unplugged'}
+		class:onthecht={connected && machineState === 'unplugged'}
 		class:afwachtend={Boolean(verbindingsuitleg)}
 		title={verbindingsuitleg}
 	>
 		{verbindingstekst}
 	</span>
+	{#if kanVerbinden}
+		{#if zekerVerbreken}
+			<span class="verbreek-vraag">
+				Verbreken? Opnieuw verbinden lukt daarna niet altijd; soms helpt alleen een
+				herstart van de server.
+				<button
+					class="verbind"
+					disabled={control.busy === 'disconnect'}
+					onclick={() => {
+						zekerVerbreken = false;
+						control.disconnect();
+					}}
+				>Verbreken</button>
+				<button class="verbind" onclick={() => (zekerVerbreken = false)}>Laten hangen</button>
+			</span>
+		{:else}
+			<button
+				class="verbind"
+				disabled={control.needsToken || control.busy === 'connect' || control.busy === 'disconnect'}
+				title={control.needsToken
+					? 'Eerst een token invullen'
+					: hangt
+						? 'De verbinding met de machine vrijgeven'
+						: 'De verbinding met de machine opzetten. Dit beweegt niets.'}
+				onclick={() => (hangt ? (zekerVerbreken = true) : control.connect())}
+			>
+				{control.busy === 'connect'
+					? 'Verbinden…'
+					: control.busy === 'disconnect'
+						? 'Verbreken…'
+						: hangt
+							? 'Verbreken…'
+							: 'Verbinden'}
+			</button>
+		{/if}
+	{/if}
 	{#if busy && acties}
 		<span class="acties">
 			{#if paused}
@@ -234,7 +296,7 @@
 		</span>
 	{/if}
 	<span class="right">
-		<span class="dot {state}" aria-hidden="true"></span>{STATE_LABEL[state]}
+		<span class="dot {machineState}" aria-hidden="true"></span>{STATE_LABEL[machineState]}
 	</span>
 </footer>
 
@@ -308,6 +370,26 @@
 	   dit gelijkstellen aan een storing, en dan gelooft niemand het rood meer
 	   dat er wél toe doet. */
 	.onthecht { color: var(--warn); }
+	.verbind {
+		margin-left: var(--space-1);
+		padding: 1px var(--space-1);
+		font: inherit;
+		color: var(--text-1);
+		background: var(--surface-2);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-1);
+		cursor: pointer;
+	}
+	.verbind:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+	.verbind:disabled { opacity: 0.5; cursor: default; }
+	.verbreek-vraag {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		margin-left: var(--space-1);
+		color: var(--text-1);
+	}
+
 	/* Nog niet verbonden is geen storing en geen belofte. Dezelfde gedempte
 	   tint als de rest van de balk, met een streepje eronder dat zegt dat er
 	   uitleg achter zit. Geel zou hier alarm slaan over iets wat volkomen

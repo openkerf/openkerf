@@ -174,6 +174,19 @@ export class Controller {
 	stop() {
 		return this.#post('/api/job/stop', 'stop');
 	}
+	/**
+	 * De verbinding met de machine opzetten of verbreken.
+	 *
+	 * Niet elke driver kent het: Ruida heeft `ruida_connect`, de USB-families
+	 * `usb_connect`, en grbl opent zelf zodra er werk naartoe gaat. Wat de
+	 * capabilities op false zetten, hoort geen knop te zijn.
+	 */
+	connect() {
+		return this.#post('/api/machine/connect', 'connect');
+	}
+	disconnect() {
+		return this.#post('/api/machine/disconnect', 'disconnect');
+	}
 	clearQueue() {
 		return this.#post('/api/spooler/clear', 'clear');
 	}

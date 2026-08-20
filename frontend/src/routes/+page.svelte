@@ -1052,7 +1052,7 @@
 <StatusBar
 	pointerMm={muisMm}
 	{device}
-	state={machine}
+	machineState={machine}
 	job={status.activeJob}
 	connected={status.connected}
 	{control}

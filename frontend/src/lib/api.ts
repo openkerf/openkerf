@@ -90,6 +90,12 @@ export type Capabilities = {
 		power: boolean;
 		speed: boolean;
 	};
+	/** Kan deze machine verbinden en verbreken? Ruida en de USB-families wel,
+	 *  grbl niet — die opent zijn verbinding zelf zodra er werk naartoe gaat. */
+	connection?: {
+		connect: boolean;
+		disconnect: boolean;
+	};
 	auth_required: boolean;
 };
 

@@ -128,6 +128,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # Dit stuurt realtime bytes naar de driver; dat is de machine aanraken.
         "/api/job/adjust",
         "/api/machine/unlock",
+        "/api/machine/connect",
+        "/api/machine/disconnect",
         "/api/machine/lock",
         "/api/design/resize",
         "/api/design/rotate",

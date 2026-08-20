@@ -497,6 +497,9 @@ class ApiServer:
                 # driver een realtime kanaal heeft. Op een Ruida staat hier
                 # false, en dan hoort er geen knop te zijn.
                 "adjust": self.motion.adjust_capabilities(),
+                # Verbinden en verbreken. Elke driverfamilie noemt het anders en
+                # grbl kent het niet; wat hier false is, hoort geen knop te zijn.
+                "connection": self.motion.connection_capabilities(),
                 "auth_required": not self.local_only,
             }
 
@@ -948,6 +951,22 @@ class ApiServer:
                 )
 
             return manage(run)
+
+        @app.post("/api/machine/connect", dependencies=write)
+        def connect_machine():
+            """
+            De verbinding opzetten.
+
+            Beweegt niets. De engine meldt een mislukte poging alleen op het
+            console-kanaal en geeft daarna netjes terug, dus wij kijken naar de
+            toestand erna en geven de melding door — anders is dit een knop die
+            stil niets doet.
+            """
+            return manage(self.motion.connect)
+
+        @app.post("/api/machine/disconnect", dependencies=write)
+        def disconnect_machine():
+            return manage(self.motion.disconnect)
 
         @app.post("/api/machine/unlock", dependencies=write)
         def machine_unlock():
