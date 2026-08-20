@@ -79,7 +79,7 @@ class StatusReader:
 
         `driver.paused` wordt wél door alle drie de families gezet, op dezelfde
         manier: lihuiyu/driver.py:325, ruida/driver.py:494, grbl/driver.py:869.
-        Geen driver of geen vlag = `None`, want "niet gepauzeerd" beweren over
+        Geen driver of geen vlag = `None`, want "not paused" beweren over
         een apparaat dat het niet vertelt is dezelfde gok die we bij de
         verbinding al niet maken.
         """

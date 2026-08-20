@@ -160,11 +160,11 @@ class Autosave:
         self._wachtend = False
 
     def restore(self) -> dict:
-        """Het herstelbestand terugladen, over een leeg canvas."""
+        """Load the recovery file back, over an empty canvas."""
         from .edits import DesignError
 
         if not self.path.is_file():
-            raise DesignError("Er is geen automatisch bewaard ontwerp.")
+            raise DesignError("There is no automatically saved design.")
         self.drawing.runner.run(f'load "{self.path}"')
         self.kernel.elements.validate_ids()
         self.kernel.elements.signal("rebuild_tree", "all")

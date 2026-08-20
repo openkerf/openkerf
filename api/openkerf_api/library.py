@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS test_grid (
 -- Benoemde generatorinstellingen (gat T7).
 --
 -- T3 onthoudt één instelling per materiaal: het vórige raster. Dat dekt "ik
--- test elke week 3 mm berk" maar niet "berk snijden" náást "berk graveren" —
+-- test elke week 3 mm berk" but not "berk snijden" náást "berk graveren" —
 -- twee recepten voor hetzelfde materiaal kunnen daar niet naast elkaar staan.
 -- Dit is dezelfde inhoud onder een naam, en bewust in dezelfde vorm: één rij
 -- met precies de sleutels die `Library.GRID_DEFAULTS` beschrijft, zodat een
@@ -198,7 +198,7 @@ class Library:
 
     @staticmethod
     def _migrate(db):
-        """Kolommen die later bijkwamen, voor databases van vóór die versie."""
+        """Columns that came later, for databases from before that version."""
         existing = {row["name"] for row in db.execute("PRAGMA table_info(test_grid)")}
         for kolom, definitie in (
             ("group_id", "TEXT"),
@@ -302,7 +302,7 @@ class Library:
     def add_machine(self, **fields) -> dict:
         name = str(fields.get("name") or "").strip()
         if not name:
-            raise LibraryError("Een machineprofiel heeft een naam nodig.")
+            raise LibraryError("A machine profile needs a name.")
         with self._connect() as db:
             cursor = db.execute(
                 """INSERT INTO machine_profile
@@ -328,7 +328,7 @@ class Library:
         Het profiel van de machine die nu actief is, desnoods vers aangemaakt.
 
         Een preset is een uitspraak over *deze laser op dit materiaal*. Zonder
-        een profiel om aan te hangen zou elke preset "voor alle machines" zijn,
+        een profiel om aan te hangen zou elke preset "for all machines" zijn,
         en dat is precies de verwarring die dit oplost.
 
         De naam is een kopie van hoe de machine in de engine heet, en die kopie
@@ -341,7 +341,7 @@ class Library:
         """
         pad = str(device_path or "").strip()
         if not pad:
-            raise LibraryError("Er is geen actieve machine om bij aan te sluiten.")
+            raise LibraryError("There is no active machine to attach to.")
         naam = str(label or "").strip() or pad
         with self._connect() as db:
             row = db.execute(
@@ -390,7 +390,7 @@ class Library:
                 )
 
     def machine_usage(self, machine_id: int) -> dict:
-        """Hoeveel bewijs er aan dit profiel hangt."""
+        """How much evidence hangs off this profile."""
         with self._connect() as db:
             return {
                 "presets": db.execute(
@@ -415,12 +415,12 @@ class Library:
                 "SELECT * FROM machine_profile WHERE id = ?", (machine_id,)
             ).fetchone()
         if row is None:
-            raise LibraryError(f"Machineprofiel {machine_id} bestaat niet.")
+            raise LibraryError(f"Machine profile {machine_id} does not exist.")
         gebruik = self.machine_usage(machine_id)
         if gebruik["presets"] or gebruik["test_grids"]:
             raise LibraryError(
-                f"'{row['name']}' draagt nog {gebruik['presets']} instelling(en) en "
-                f"{gebruik['test_grids']} testraster(s). Verwijder of verplaats die eerst."
+                f"'{row['name']}' still carries {gebruik['presets']} setting(s) and "
+                f"{gebruik['test_grids']} test grid(s). Remove or move those first."
             )
         with self._connect() as db:
             db.execute("DELETE FROM machine_profile WHERE id = ?", (machine_id,))
@@ -443,7 +443,7 @@ class Library:
             else:
                 waarden.append(_number(fields[sleutel], sleutel, optional=True))
         if not stukken:
-            raise LibraryError("Niets om bij te werken.")
+            raise LibraryError("Nothing to update.")
         with self._connect() as db:
             db.execute(
                 f"UPDATE machine_profile SET {', '.join(stukken)} WHERE id = ?",
@@ -463,7 +463,7 @@ class Library:
     def add_material(self, name: str, synonyms=None) -> dict:
         name = str(name or "").strip()
         if not name:
-            raise LibraryError("Een materiaal heeft een naam nodig.")
+            raise LibraryError("A material needs a name.")
         joined = "|".join(str(s).strip() for s in (synonyms or []) if str(s).strip())
         try:
             with self._connect() as db:
@@ -480,7 +480,7 @@ class Library:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM material WHERE id = ?", (material_id,))
             if not cursor.rowcount:
-                raise LibraryError(f"Materiaal {material_id} bestaat niet.")
+                raise LibraryError(f"Material {material_id} does not exist.")
         return {"removed": material_id}
 
     # ---------------------------------------------------------------- presets
@@ -526,7 +526,7 @@ class Library:
     def add_preset(self, **fields) -> dict:
         material_id = fields.get("material_id")
         if material_id is None:
-            raise LibraryError("Een preset hoort bij een materiaal.")
+            raise LibraryError("A preset belongs to a material.")
         operation = str(fields.get("operation") or "").strip()
         if operation not in OPERATIONS:
             raise LibraryError(f"Onbekende bewerking: {operation or '(leeg)'}")
@@ -537,7 +537,7 @@ class Library:
         speed = _number(fields.get("speed_mm_s"), "speed_mm_s", positive=True)
         power = _number(fields.get("power_percent"), "power_percent", positive=True)
         if power > 100:
-            raise LibraryError("power_percent kan niet boven 100.")
+            raise LibraryError("power_percent cannot go above 100.")
 
         try:
             with self._connect() as db:
@@ -564,7 +564,7 @@ class Library:
                 )
                 preset_id = cursor.lastrowid
         except sqlite3.IntegrityError as e:
-            raise LibraryError("Dat materiaal bestaat niet.") from e
+            raise LibraryError("That material does not exist.") from e
         return self.preset(preset_id)
 
     def preset(self, preset_id: int) -> dict:
@@ -578,7 +578,7 @@ class Library:
                 (preset_id,),
             ).fetchone()
         if row is None:
-            raise LibraryError(f"Preset {preset_id} bestaat niet.")
+            raise LibraryError(f"Preset {preset_id} does not exist.")
         return _preset_row(row)
 
     # Wat je aan een bestaande preset mag bijstellen.
@@ -607,8 +607,8 @@ class Library:
         rejected = sorted(set(fields) - set(self.PRESET_FIELDS) - {"id"})
         if rejected:
             raise LibraryError(
-                f"Niet te wijzigen: {', '.join(rejected)}. Materiaal, bewerking en "
-                "bron horen bij de identiteit van een preset."
+                f"Cannot be changed: {', '.join(rejected)}. Material, operation and "
+                "source belong to the identity of a preset."
             )
         if not updates:
             return self.preset(preset_id)
@@ -655,7 +655,7 @@ class Library:
         }
 
     def touch_preset(self, preset_id: int) -> None:
-        """Onthoud dat deze instelling gebruikt is; dat is wat 'gisteren' maakt."""
+        """Remember that this setting was used; that is what makes 'yesterday'."""
         with self._connect() as db:
             db.execute(
                 "UPDATE preset SET last_used_at = datetime('now') WHERE id = ?",
@@ -666,7 +666,7 @@ class Library:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM preset WHERE id = ?", (preset_id,))
             if not cursor.rowcount:
-                raise LibraryError(f"Preset {preset_id} bestaat niet.")
+                raise LibraryError(f"Preset {preset_id} does not exist.")
         return {"removed": preset_id}
 
     # ------------------------------------------------------------ testrasters
@@ -691,7 +691,7 @@ class Library:
                 (grid_id,),
             ).fetchone()
         if row is None:
-            raise LibraryError(f"Testraster {grid_id} bestaat niet.")
+            raise LibraryError(f"Test grid {grid_id} does not exist.")
         return _grid_row(row)
 
     def set_grid_group(self, grid_id: int, group_id: str | None) -> None:
@@ -715,11 +715,11 @@ class Library:
             schoon = _uitlijning(corners)
             if schoon is None:
                 raise LibraryError(
-                    "Een uitlijning bestaat uit vier punten met een x en een y."
+                    "An alignment consists of four points with an x and a y."
                 )
             for punt in schoon:
                 if not (0 <= punt["x"] <= 1 and 0 <= punt["y"] <= 1):
-                    raise LibraryError("Een hoek ligt buiten de foto.")
+                    raise LibraryError("A corner lies outside the photo.")
         with self._connect() as db:
             db.execute(
                 "UPDATE test_grid SET alignment = ? WHERE id = ?",
@@ -801,18 +801,18 @@ class Library:
         """
         naam = str(name or "").strip()
         if not naam:
-            raise LibraryError("Een recept heeft een naam nodig.")
+            raise LibraryError("A recipe needs a name.")
         if len(naam) > 60:
-            raise LibraryError("Hou de naam onder de 60 tekens.")
+            raise LibraryError("Keep the name under 60 characters.")
         if not isinstance(settings, dict):
-            raise LibraryError("Een recept bestaat uit instellingen.")
+            raise LibraryError("A recipe consists of settings.")
         schoon = _recept_instellingen(settings)
         if not schoon:
-            raise LibraryError("Er zaten geen bruikbare instellingen in dit recept.")
+            raise LibraryError("There were no usable settings in this recipe.")
         if material_id is not None and not any(
             m["id"] == material_id for m in self.materials()
         ):
-            raise LibraryError(f"Materiaal {material_id} bestaat niet.")
+            raise LibraryError(f"Material {material_id} does not exist.")
         with self._connect() as db:
             bestaand = db.execute(
                 """SELECT id FROM grid_recipe
@@ -838,17 +838,17 @@ class Library:
         for recept in self.grid_recipes():
             if recept["id"] == recipe_id:
                 return recept
-        raise LibraryError(f"Recept {recipe_id} bestaat niet.")
+        raise LibraryError(f"Recipe {recipe_id} does not exist.")
 
     def remove_grid_recipe(self, recipe_id: int) -> dict:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM grid_recipe WHERE id = ?", (recipe_id,))
             if not cursor.rowcount:
-                raise LibraryError(f"Recept {recipe_id} bestaat niet.")
+                raise LibraryError(f"Recipe {recipe_id} does not exist.")
         return {"removed": recipe_id}
 
     def grid_operations(self) -> dict:
-        """Welke operatie bij welk raster hoort — voor het lagenpaneel."""
+        """Which operation belongs to which grid — for the layer panel."""
         mapping = {}
         # test_grids() staat nieuwste eerst; setdefault laat de nieuwste winnen.
         # Element-id's worden per document uitgedeeld, dus een oud raster kan
@@ -917,7 +917,7 @@ class Library:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM test_grid WHERE id = ?", (grid_id,))
             if not cursor.rowcount:
-                raise LibraryError(f"Testraster {grid_id} bestaat niet.")
+                raise LibraryError(f"Test grid {grid_id} does not exist.")
         return {"removed": grid_id}
 
     def set_grid_photo(self, grid_id: int, suffix: str, data: bytes) -> dict:
@@ -925,7 +925,7 @@ class Library:
         grid = self.test_grid(grid_id)
         safe = (suffix or "").lower()
         if safe not in (".jpg", ".jpeg", ".png", ".webp", ".heic"):
-            raise LibraryError(f"Onbekend fotoformaat: {suffix or '(geen)'}")
+            raise LibraryError(f"Unknown photo format: {suffix or '(none)'}")
         target = self.photos / f"grid-{grid['id']}{safe}"
         target.write_bytes(data)
         with self._connect() as db:
@@ -944,7 +944,7 @@ class Library:
                 cell["preset_id"] = preset_id
                 break
         else:
-            raise LibraryError(f"Cel {row},{column} hoort niet bij raster {grid_id}.")
+            raise LibraryError(f"Cell {row},{column} does not belong to grid {grid_id}.")
         with self._connect() as db:
             db.execute(
                 "UPDATE test_grid SET cells = ? WHERE id = ?",
@@ -1010,29 +1010,29 @@ class Library:
         return doel
 
     def read_bundle(self, path) -> dict:
-        """Inlezen en meteen afwijzen wat geen bibliotheek is."""
+        """Read it and refuse at once what is not a library."""
         import zipfile
 
         bron = Path(path)
         if not bron.exists():
-            raise LibraryError("Dat bestand is er niet (meer).")
+            raise LibraryError("That file is not there (any more).")
         if not zipfile.is_zipfile(bron):
             raise LibraryError(
-                "Dit is geen OpenKerf-bibliotheek. Een bibliotheekbestand eindigt "
-                f"op {BUNDLE_SUFFIX}."
+                "This is not an OpenKerf library. A library file ends "
+                f"in {BUNDLE_SUFFIX}."
             )
         with zipfile.ZipFile(bron) as bundel:
             if BUNDLE_INDEX not in bundel.namelist():
-                raise LibraryError("Dit bestand bevat geen bibliotheek.")
+                raise LibraryError("This file holds no library.")
             try:
                 data = json.loads(bundel.read(BUNDLE_INDEX))
             except ValueError as e:
                 raise LibraryError("De bibliotheek in dit bestand is beschadigd.") from e
         if not isinstance(data, dict) or data.get("format") != BUNDLE_FORMAT:
-            raise LibraryError("Dit bestand komt niet uit een OpenKerf-bibliotheek.")
+            raise LibraryError("This file did not come from an OpenKerf library.")
         if int(data.get("version") or 0) > BUNDLE_VERSION:
             raise LibraryError(
-                "Dit bestand komt uit een nieuwere versie van OpenKerf. Werk eerst bij."
+                "This file comes from a newer version of OpenKerf. Update first."
             )
         return data
 
@@ -1155,7 +1155,7 @@ class Library:
         if mode not in ("samenvoegen", "vervangen"):
             raise LibraryError(f"Onbekende keuze: {mode}")
         if on_conflict not in ("eigen", "bestand"):
-            raise LibraryError(f"Onbekende keuze bij botsing: {on_conflict}")
+            raise LibraryError(f"Unknown choice on a clash: {on_conflict}")
         data = self.read_bundle(path)
         koppeling = _merge_map(merge_materials)
         verwijderd = self._counts() if mode == "vervangen" else None
@@ -1296,7 +1296,7 @@ class Library:
         }
 
     def clear(self) -> dict:
-        """Alles weg — alleen voor 'vervangen', en alleen na een bevestiging."""
+        """Everything gone — only for 'replace', and only after a confirmation."""
         weg = self._counts()
         with self._connect() as db:
             for tabel in (
@@ -1320,7 +1320,7 @@ class Library:
             }
 
     def _insert_grid(self, raster: dict, materiaal_id: dict, machine_id: dict) -> int:
-        """Een raster overnemen mét zijn datum: die datum ís het bewijs."""
+        """Take over a grid with its date: that date is the evidence."""
         cellen = raster.get("cells")
         if isinstance(cellen, str):
             cellen = json.loads(cellen)
@@ -1511,7 +1511,7 @@ def _met_ankerpunt(instelling: dict) -> dict:
 
 
 def _uitlijning(ruw):
-    """De vier hoeken als lijst van punten, of None als er niets bewaard is."""
+    """The four corners as a list of points, or None when nothing is stored."""
     if not ruw:
         return None
     try:
@@ -1566,7 +1566,7 @@ def _merge_map(keuzes: dict | None) -> dict:
 
 
 def _same_material(naam: str, synonyms, eigen: list[dict]) -> dict | None:
-    """Exact dezelfde naam, of een naam die al als synoniem bekend staat."""
+    """Exactly the same name, or a name already known as a synonym."""
     doel = _norm(naam)
     binnen = {_norm(s) for s in (synonyms or [])}
     for materiaal in eigen:
@@ -1613,7 +1613,7 @@ def _looks_like(naam: str, eigen: list[dict]) -> tuple[dict, str] | None:
 
 
 def _rond(waarde):
-    """3 en 3.0 zijn dezelfde dikte; None blijft None."""
+    """3 and 3.0 are the same thickness; None stays None."""
     return None if waarde in (None, "") else round(float(waarde), 2)
 
 
@@ -1647,7 +1647,7 @@ def _same_values(mijne: dict, hunne: dict) -> bool:
 
 
 def _grid_key(raster: dict) -> tuple:
-    """Een raster is hetzelfde raster als het op hetzelfde moment gebrand is."""
+    """A grid is the same grid when it was burned at the same moment."""
     return (
         str(raster.get("created_at") or ""),
         str(raster.get("operation") or ""),
@@ -1660,7 +1660,7 @@ def _grid_key(raster: dict) -> tuple:
 def _percent(value):
     number = _number(value, "power_percent", positive=True)
     if number > 100:
-        raise LibraryError("power_percent kan niet boven 100.")
+        raise LibraryError("power_percent cannot go above 100.")
     return number
 
 
@@ -1672,7 +1672,7 @@ def _number(value, name: str, positive: bool = False, optional: bool = False):
     try:
         number = float(value)
     except (TypeError, ValueError) as e:
-        raise LibraryError(f"{name} moet een getal zijn.") from e
+        raise LibraryError(f"{name} has to be a number.") from e
     if positive and number <= 0:
-        raise LibraryError(f"{name} moet groter dan nul zijn.")
+        raise LibraryError(f"{name} has to be greater than zero.")
     return number

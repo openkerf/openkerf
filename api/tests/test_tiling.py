@@ -125,7 +125,7 @@ def test_a_plate_too_big_in_both_directions_is_refused():
     with pytest.raises(TilingError) as fout:
         tile_layout(900.0, 600.0, 500.0, 300.0, settings())
 
-    assert "twee richtingen" in str(fout.value)
+    assert "both directions" in str(fout.value)
 
 
 def test_a_plate_that_exactly_fits_the_bed_needs_no_tiles():
@@ -274,7 +274,7 @@ def test_marks_that_moved_apart_are_a_refusal():
             Point(0.0, 0.0), Point(0.0, 500.0), Point(0.0, 0.0), Point(0.0, 504.0)
         )
 
-    assert "uit elkaar" in str(fout.value)
+    assert "apart" in str(fout.value)
 
 
 def test_an_impossible_angle_is_a_refusal():
@@ -287,7 +287,7 @@ def test_an_impossible_angle_is_a_refusal():
             Point(-500.0 * math.sin(hoek), 500.0 * math.cos(hoek)),
         )
 
-    assert "scheef" in str(fout.value).lower()
+    assert "askew" in str(fout.value).lower()
 
 
 def test_the_first_tile_aligns_on_the_plate_corner_without_an_angle():

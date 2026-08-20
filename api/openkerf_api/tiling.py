@@ -18,7 +18,7 @@ from typing import NamedTuple
 
 
 class TilingError(Exception):
-    """Wat de gebruiker moet weten voordat er materiaal in gaat."""
+    """What the user has to know before any material goes in."""
 
 
 class Rect(NamedTuple):
@@ -83,14 +83,14 @@ def _axis(
     usable = bed - 2 * settings.margin_mm
     if usable <= 0:
         raise TilingError(
-            "Het bed is kleiner dan tweemaal de marge, dus er blijft niets over "
-            "om in te branden. Zet de marge lager."
+            "The bed is smaller than twice the margin, so nothing is left "
+            "to burn in. Set the margin lower."
         )
     if usable <= settings.overlap_mm:
         raise TilingError(
-            f"Het bruikbare bed is {usable:.0f} mm en de overlap {settings.overlap_mm:.0f} mm. "
-            "Twee tegels zouden elkaar dan volledig overlappen. Zet de overlap "
-            "lager of de marge kleiner."
+            f"The usable bed is {usable:.0f} mm and the overlap {settings.overlap_mm:.0f} mm. "
+            "Two tiles would then overlap completely. Set the overlap "
+            "lower or the margin smaller."
         )
     count = math.ceil((plate - settings.overlap_mm) / (usable - settings.overlap_mm))
     step = (plate - usable) / (count - 1)
@@ -121,10 +121,10 @@ def tile_layout(
         # merken van de rijgrens en de kolomgrens dan op hetzelfde punt, zodat
         # één rondje twee keer gebrand wordt.
         raise TilingError(
-            "Deze plaat is in beide richtingen groter dan het bed. In twee "
-            "richtingen opdelen kan nog niet: elke naad heeft dan eigen merken "
-            "en een eigen volgorde. Snijd de plaat eerst op bedhoogte, of neem "
-            "een smallere plaat."
+            "This plate is larger than the bed in both directions. Dividing in two "
+            "directions is not possible yet: every seam would then have its own marks "
+            "and its own order. Cut the plate to bed height first, or take "
+            "a narrower plate."
         )
 
     x_splits = _splits([c[0] for c in columns], [c[1] for c in columns], plate_w_mm)
@@ -246,7 +246,7 @@ def marker_spots(
     vakje valt af zodra het de omhullende van een vorm raakt. Van wat overblijft
     nemen we de twee uiterste langs de lange as van de zone — verder uit elkaar
     betekent een nauwkeuriger hoek, en de uitersten zijn deterministisch waar
-    'het verste paar' bij gelijkspel dat niet is.
+    'the furthest pair' bij gelijkspel dat niet is.
     """
     half = size_mm / 2 + clearance_mm / 2
     extra = size_mm * CIJFER_FRACTIE + CIJFER_GAT_MM
@@ -275,9 +275,9 @@ def marker_spots(
 
     if len(vrij) < 2:
         raise TilingError(
-            "Er is in de overlapstrook geen plek voor twee uitlijnmerken die "
-            "vrij van het werk ligt. Maak de overlap groter, of schuif een vorm "
-            "bij de naad weg."
+            "There is no room in the overlap strip for two alignment marks that lie "
+            "clear of the work. Make the overlap larger, or move a shape "
+            "away from the seam."
         )
 
     langs_y = zone.height >= zone.width
@@ -288,7 +288,7 @@ def marker_spots(
 
 @dataclass(frozen=True)
 class Alignment:
-    """Hoe de plaat er nu bij ligt, ten opzichte van hoe hij getekend is."""
+    """How the plate lies now, relative to how it was drawn."""
 
     angle_deg: float
     dx_mm: float
@@ -316,15 +316,14 @@ def alignment(
     plaat = complex(p2.x_mm - p1.x_mm, p2.y_mm - p1.y_mm)
     gemeten = complex(m2.x_mm - m1.x_mm, m2.y_mm - m1.y_mm)
     if abs(plaat) < 1e-6 or abs(gemeten) < 1e-6:
-        raise TilingError("De twee aangetikte punten liggen op elkaar.")
+        raise TilingError("The two tapped points lie on top of each other.")
 
     afwijking = abs(gemeten) - abs(plaat)
     if abs(afwijking) > tolerance_mm:
         raise TilingError(
-            f"Deze twee punten liggen {abs(afwijking):.1f} mm "
-            f"{'verder' if afwijking > 0 else 'dichter'} "
-            "uit elkaar dan de merken die ik gebrand heb. Heb je het juiste "
-            "merk aangetikt?"
+            f"These two points lie {abs(afwijking):.1f} mm "
+            f"{'further' if afwijking > 0 else 'closer'} "
+            "apart than the marks I burned. Did you tap the right mark?"
         )
 
     hoek = math.atan2(gemeten.imag, gemeten.real) - math.atan2(plaat.imag, plaat.real)
@@ -332,9 +331,9 @@ def alignment(
     graden = math.degrees(hoek)
     if abs(graden) > max_angle_deg:
         raise TilingError(
-            f"De plaat zou {abs(graden):.1f}° scheef liggen. Dat is meer dan een "
-            "plaat scheef kán liggen zonder dat je het ziet — waarschijnlijk is "
-            "het verkeerde merk aangetikt. Leg hem recht en tik opnieuw aan."
+            f"The plate would lie {abs(graden):.1f}° askew. That is more than a "
+            "plate *can* lie askew without you seeing it — the wrong mark was "
+            "probably tapped. Lay it straight and tap again."
         )
 
     gedraaid = complex(p1.x_mm, p1.y_mm) * complex(math.cos(hoek), math.sin(hoek))
@@ -371,7 +370,7 @@ def _dragende_soorten():
 
 
 def _rand_segmenten(rect_units: Rect):
-    """De vier randen van het klipvenster, elk als los lijnsegment."""
+    """The four edges of the clip window, each as a separate line segment."""
     from meerk40t.core.geomstr import Geomstr
 
     hoeken = (

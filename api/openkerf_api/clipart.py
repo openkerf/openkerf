@@ -4,7 +4,7 @@ Clipart zoeken in openbare collecties.
 Bewust géén eigen bibliotheek: verwijzen in plaats van hosten. Dat scheelt
 onderhoud en, belangrijker, het legt de licentieverantwoordelijkheid waar hij
 hoort — bij de bron, zichtbaar bij elk resultaat. Wie lasert, verkoopt vaak wat
-hij snijdt, en dan is "gratis gevonden" niet hetzelfde als "vrij te gebruiken".
+hij snijdt, en dan is "gratis gevonden" niet hetzelfde als "free to use".
 
 Drie dingen die dit bruikbaar maken:
 
@@ -47,16 +47,16 @@ SOURCES = ("iconify", "wikimedia", "openclipart")
 # maat en een echte kleur weet de engine niet wat hij moet tekenen.
 ICON_SIZE = 240
 
-# Wat op een laser niet bestaat, of anders uitpakt dan je ziet. Geen weigering
-# maar een melding: de engine laat ze vallen, en dan hoor je te weten wat er
-# verdwijnt.
+# What does not exist on a laser, or turns out differently from what you see. Not
+# a refusal but a note: the engine drops them, and then you ought to know what
+# disappears.
 DROPPED = {
-    "linearGradient": "kleurverlopen",
-    "radialGradient": "kleurverlopen",
+    "linearGradient": "gradients",
+    "radialGradient": "gradients",
     "filter": "filters",
-    "mask": "maskers",
-    "text": "tekst (wordt geen pad)",
-    "image": "ingesloten pixels",
+    "mask": "masks",
+    "text": "text (does not become a path)",
+    "image": "embedded pixels",
 }
 
 
@@ -78,14 +78,14 @@ class Clipart:
     def search(self, query: str, sources=None, limit: int = 24, page: int = 1) -> dict:
         text = str(query or "").strip()
         if len(text) < 2:
-            raise DesignError("Geef minstens twee letters om op te zoeken.")
+            raise DesignError("Give at least two letters to search for.")
         wanted = [s for s in (sources or SOURCES) if s in SOURCES]
         if not wanted:
-            raise DesignError(f"Onbekende bron. Kies uit {', '.join(SOURCES)}.")
+            raise DesignError(f"Unknown source. Choose from {', '.join(SOURCES)}.")
         try:
             number = int(page)
         except (TypeError, ValueError) as e:
-            raise DesignError("De pagina moet een geheel getal zijn.") from e
+            raise DesignError("The page has to be a whole number.") from e
         if not 1 <= number <= 50:
             raise DesignError("De pagina moet tussen 1 en 50 liggen.")
         per_source = max(4, int(limit) // len(wanted))
@@ -123,7 +123,7 @@ class Clipart:
             if name in found:
                 results.extend(found[name])
             elif name not in problems:
-                problems[name] = "reageerde niet op tijd"
+                problems[name] = "did not answer in time"
 
         # Meer te halen zolang minstens één bron zijn pagina helemaal vulde.
         # Geen van beide API's zegt hoeveel resultaten er in totaal zijn, dus
@@ -142,16 +142,16 @@ class Clipart:
         if isinstance(error, TimeoutError) or isinstance(
             getattr(error, "reason", None), TimeoutError
         ):
-            return "reageerde niet op tijd"
+            return "did not answer in time"
         if isinstance(error, urllib.error.HTTPError):
-            return f"gaf een foutmelding ({error.code})"
+            return f"returned an error ({error.code})"
         if isinstance(error, urllib.error.URLError):
-            return "was niet bereikbaar"
+            return "was unreachable"
         if isinstance(error, (json.JSONDecodeError, UnicodeDecodeError)):
             # Openclipart geeft bij storing een HTML-pagina of niets terug. De
             # gebruiker heeft niets aan een parse-fout.
-            return "gaf een onverwacht antwoord"
-        return str(error)[:120] or "gaf een onverwacht antwoord"
+            return "gave an unexpected answer"
+        return str(error)[:120] or "gave an unexpected answer"
 
     def _iconify(self, query: str, limit: int, offset: int = 0) -> list[dict]:
         """
@@ -185,7 +185,7 @@ class Clipart:
                     "svg_url": f"{image}?height={ICON_SIZE}&color=%23000000",
                     "thumbnail_url": f"{image}?height=64&color=%23000000",
                     "page_url": f"https://icon-sets.iconify.design/{prefix}/{icon}/",
-                    "license": licence or "zie de iconenset",
+                    "license": licence or "see the icon set",
                     "author": (collection.get("author") or {}).get("name")
                     or collection.get("name"),
                 }
@@ -285,8 +285,8 @@ class Clipart:
             # Alleen https, en alleen van de bronnen die we zelf aanbieden:
             # een willekeurige URL laten ophalen door de server is een open deur.
             raise DesignError(
-                "Alleen beveiligde adressen (https) worden opgehaald. Kies een "
-                "tekening uit het zoekvenster in plaats van een adres te plakken."
+                "Only secure addresses (https) are fetched. Choose a "
+                "drawing from the search window instead of pasting an address."
             )
         if not any(
             address.lower().startswith(prefix)
@@ -297,8 +297,8 @@ class Clipart:
             )
         ):
             raise DesignError(
-                "Dit adres hoort niet bij Iconify, Wikimedia Commons of "
-                "Openclipart. Kies een tekening uit het zoekvenster; alleen die "
+                "This address does not belong to Iconify, Wikimedia Commons or "
+                "Openclipart. Choose a drawing from the search window; only those "
                 "bronnen worden opgehaald."
             )
         width = float(width_mm)
@@ -310,7 +310,7 @@ class Clipart:
         except Exception as error:
             raise DesignError(f"Ophalen mislukte: {self._reason(error)}") from error
         if len(body) > MAX_BYTES:
-            raise DesignError("Deze tekening is te groot om te verwerken.")
+            raise DesignError("This drawing is too large to process.")
 
         notes = self._inspect(body)
 
@@ -326,7 +326,7 @@ class Clipart:
             added = [n for n in self.elements.elems() if id(n) not in before]
             if not added:
                 raise DesignError(
-                    "Hier viel niets uit te tekenen. "
+                    "There was nothing to draw out of this. "
                     + (" ".join(notes) if notes else "De engine kon de SVG niet lezen.")
                 )
             self.elements.validate_ids()
@@ -345,7 +345,7 @@ class Clipart:
         return self.kernel.elements
 
     def _inspect(self, body: bytes) -> list[str]:
-        """Wat er op een laser niet overkomt. Meldingen, geen weigering."""
+        """What does not come across on a laser. Notes, not a refusal."""
         try:
             text = body.decode("utf-8", errors="ignore")
         except Exception:
@@ -365,13 +365,13 @@ class Clipart:
             # Een tekening uit een encyclopedie heeft er zo duizend. Dat brandt
             # niet fout, maar het duurt uren en dat weet je liever vooraf.
             notes.append(
-                f"Deze tekening bestaat uit {paths} losse paden; dat wordt een "
-                "lange job. Overweeg een eenvoudiger afbeelding."
+                f"This drawing consists of {paths} loose paths; that makes a "
+                "long job. Consider a simpler image."
             )
         return notes
 
     def _place(self, nodes, width_units: float, x_mm, y_mm) -> None:
-        """Op maat schalen en neerleggen, zodat hij niet ergens buiten het bed valt."""
+        """Scale it to size and put it down, so it does not land outside the bed."""
         from meerk40t.core.units import UNITS_PER_MM
 
         boxes = [n.bounds for n in nodes if getattr(n, "bounds", None)]
@@ -399,12 +399,12 @@ class Clipart:
 
 
 def _without_query(url: str) -> str:
-    """Commons hangt tracking achter zijn bestands-URL's; die willen we niet."""
+    """Commons hangs tracking behind its file URLs; we do not want that."""
     return url.split("?", 1)[0]
 
 
 def _plain_text(field) -> str | None:
-    """Wikimedia levert HTML in zijn metadata; daar wil de gebruiker niets van zien."""
+    """Wikimedia delivers HTML in its metadata; the user wants to see none of it."""
     import re
 
     if not field:

@@ -187,14 +187,14 @@ def test_the_preview_draws_the_panels_the_box_is_made_of(client):
     # ze mogen elkaars vorm niet lenen.
     assert sketch["sheets"] == 1
     assert len(sketch["shapes"]) == len(sketch["parts"]) == 6
-    assert sketch["labels"] == ["bodem", "voor", "achter", "links", "rechts", "deksel"]
+    assert sketch["labels"] == ["bottom", "front", "back", "left", "right", "lid"]
     # Voor en achter zijn elkaars gelijke, net als links/rechts en
     # bodem/deksel; drie verschillende omtrekken is dus goed, zes zou juist
     # verdacht zijn.
     assert len(set(sketch["shapes"])) == 3
 
     zonder_deksel = preview(client, "box", dict(body, lid=False))
-    assert "deksel" not in zonder_deksel["labels"]
+    assert "lid" not in zonder_deksel["labels"]
     assert len(zonder_deksel["parts"]) == 5
 
 
@@ -247,7 +247,7 @@ def test_a_box_that_needs_two_sheets_says_so(client):
          "finger_mm": 20, "kerf_mm": 0.1},
     )
     assert sketch["sheets"] > 1
-    assert any("niet op één vel" in note for note in sketch["notes"])
+    assert any("not fit on one sheet" in note for note in sketch["notes"])
 
 
 def test_the_preview_stops_drawing_at_five_hundred_copies(client):
@@ -320,7 +320,7 @@ def test_a_grid_without_a_selection_says_what_to_do(client):
         json={"what": "grid", "ids": [], "columns": 2, "rows": 2},
     )
     assert response.status_code == 409
-    assert "Kies eerst" in response.json()["detail"]
+    assert "Choose what" in response.json()["detail"]
 
 
 def test_an_unknown_generator_is_refused(client):

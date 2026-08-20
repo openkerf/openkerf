@@ -193,7 +193,7 @@ def test_changing_the_design_invalidates_a_running_series(kernel, tmp_path):
 
     stand = server.tiles.state()
     assert stand["stale"] is True
-    assert "ontwerp" in stand["message"].lower()
+    assert "design" in stand["message"].lower()
 
 
 def test_burning_without_alignment_is_refused(kernel, tmp_path):
@@ -211,8 +211,8 @@ def test_burning_without_alignment_is_refused(kernel, tmp_path):
     # staat "ge" tussen. En op "merken", want een weigering die niet zegt wat
     # je eraan doet, is een weigering waar de gebruiker niets aan heeft.
     melding = str(fout.value).lower()
-    assert "uitgelijnd" in melding
-    assert "merken" in melding
+    assert "aligned" in melding
+    assert "marks" in melding
 
 
 def _design(kernel):
@@ -446,7 +446,7 @@ def test_a_tile_whose_marks_fall_off_the_bed_is_refused(kernel, tmp_path):
     with pytest.raises(DesignError) as fout:
         server.tiles.burn()
 
-    assert "buiten het bed" in str(fout.value)
+    assert "outside the bed" in str(fout.value)
 
 
 def test_burning_the_same_tile_twice_asks_first(kernel, tmp_path):
@@ -465,7 +465,7 @@ def test_burning_the_same_tile_twice_asks_first(kernel, tmp_path):
 
     with pytest.raises(DesignError) as fout:
         server.tiles.burn()
-    assert "al gebrand" in str(fout.value)
+    assert "already been burned" in str(fout.value)
 
     # Met bevestiging mag het wel.
     assert server.tiles.burn(confirm_reburn=True)["burned_length_mm"] > 0

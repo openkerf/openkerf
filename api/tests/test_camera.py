@@ -79,13 +79,13 @@ def test_starting_gives_a_frame(camera, source):
 
 
 def test_asking_for_a_frame_before_starting_is_refused(camera):
-    with pytest.raises(DesignError, match="geen camerabeeld"):
+    with pytest.raises(DesignError, match="no camera image"):
         camera.frame_png()
 
 
 def test_a_camera_that_does_not_exist_is_reported_not_hung(camera):
     """Beter een nette melding dan een venster dat blijft draaien op zwart."""
-    with pytest.raises(DesignError, match="Geen beeld"):
+    with pytest.raises(DesignError, match="No image"):
         camera.start(uri="/bestaat/niet.mp4")
 
 
@@ -112,14 +112,14 @@ def test_calibration_changes_the_picture(camera, source):
 def test_three_corners_is_not_a_bed(camera, source):
     camera.start(uri=source)
 
-    with pytest.raises(DesignError, match="vier hoeken"):
+    with pytest.raises(DesignError, match="four corners"):
         camera.calibrate(CORNERS[:3])
 
 
 def test_corners_on_top_of_each_other_are_refused(camera, source):
     camera.start(uri=source)
 
-    with pytest.raises(DesignError, match="op elkaar"):
+    with pytest.raises(DesignError, match="on top of each other"):
         camera.calibrate([[10, 10], [10, 10], [100, 100], [0, 100]])
 
 
@@ -217,7 +217,7 @@ def test_the_failure_says_what_to_do_about_it(camera, monkeypatch):
     monkeypatch.setattr(camera, "detected", lambda: ["MacBook Pro-camera"])
     met = camera._why_no_picture("0")
 
-    assert "geen enkele camera" in zonder
+    assert "no camera at all" in zonder
     assert "MacBook Pro-camera" in met
     assert zonder != met
     if platform.system() == "Darwin":

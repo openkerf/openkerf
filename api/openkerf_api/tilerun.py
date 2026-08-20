@@ -65,7 +65,7 @@ def digit_geometry(cijfer: int, x: float, y: float, hoogte: float):
 
     punten = CIJFERS.get(cijfer)
     if punten is None:
-        raise ValueError(f"Geen cijfer getekend voor {cijfer}.")
+        raise ValueError(f"No digit drawn for {cijfer}.")
     geom = Geomstr()
     vorig = None
     for px, py in punten:
@@ -85,7 +85,7 @@ def marker_geometry(points, size_mm: float, units_per_mm: float, along_y: bool =
 
     **Het nummer wordt meegebrand, en dat is de hele reden dat het bestaat.** Op
     het scherm "merk 1" zeggen is niets waard als er op de plaat twee identieke
-    rondjes liggen — dan is een positiewoord ("het linker") nog altijd beter, en
+    rondjes liggen — dan is een positiewoord ("the left") nog altijd beter, en
     dat woord was juist het probleem: het hangt af van `flip_x`, `swap_xy` en de
     thuishoek, en kan dus omgekeerd zijn. Een gebrand cijfer hangt van niets af.
 
@@ -160,7 +160,7 @@ class TileMutator:
         )
 
     def matrix(self):
-        """De uitlijning als matrix in engine-eenheden."""
+        """The alignment as a matrix in engine units."""
         from meerk40t.svgelements import Matrix
 
         u = self.units_per_mm
@@ -209,7 +209,7 @@ class TileMutator:
         return operation
 
     def _reshape(self, operation) -> bool:
-        """Klip de kinderen van deze bewerking. Geeft terug of er iets overblijft."""
+        """Clip the children of this operation. Returns whether anything is left."""
         from meerk40t.core.node.elem_path import PathNode
         from meerk40t.svgelements import Matrix
 
@@ -289,7 +289,7 @@ class TileMutator:
 
     @staticmethod
     def _moved_image(node, mx):
-        """Een afbeelding verplaatst mee; hij draagt zijn eigen matrix."""
+        """An image moves along; it carries its own matrix."""
         matrix = getattr(node, "matrix", None)
         if matrix is None:
             return node
@@ -341,7 +341,7 @@ class TileRun:
         for sheet in self.sheets.state()["sheets"]:
             if sheet.get("active"):
                 return sheet
-        raise DesignError("Er is geen actief vel.")
+        raise DesignError("There is no active sheet.")
 
     def _settings(self, sheet) -> TilingSettings:
         blok = sheet.get("tiling") or {}
@@ -361,7 +361,7 @@ class TileRun:
         sheet = self._sheet()
         bed = self.drawing.bed_mm()
         if bed is None:
-            raise DesignError("Deze machine meldt geen bedmaat.")
+            raise DesignError("This machine reports no bed size.")
         settings = self._settings(sheet)
         try:
             tiles = tile_layout(
@@ -383,7 +383,7 @@ class TileRun:
         }
 
     def _shape_spans(self) -> list:
-        """De omhullenden van alle vormen, in millimeters."""
+        """The bounding boxes of every shape, in millimetres."""
         u = self.drawing._units_per_mm()
         vakken = []
         for node in self.kernel.elements.elems():
@@ -463,11 +463,11 @@ class TileRun:
                 for t in tiles
             )
             if not past:
-                naam = getattr(node, "label", None) or "een afbeelding"
+                naam = getattr(node, "label", None) or "an image"
                 raise DesignError(
-                    f"{naam} ligt over de naad tussen twee tegels. Een afbeelding "
-                    "kan niet doormidden: verplaats hem zodat hij binnen één tegel "
-                    "valt, of maak de overlap groter."
+                    f"{naam} lies across the seam between two tiles. An image "
+                    "cannot be cut in half: move it so that it falls within one tile, "
+                    "or make the overlap larger."
                 )
 
     def _marks(self, tiles, settings) -> list[dict]:
@@ -611,8 +611,8 @@ class TileRun:
                 "aligned": False,
                 "stale": True,
                 "message": (
-                    "Het vel waar deze tegelreeks bij hoort, is er niet meer of "
-                    "staat niet meer aan. Kies dat vel weer, of stop de reeks."
+                    "The sheet this tile run belongs to is gone or is no longer "
+                    "active. Choose that sheet again, or stop the run."
                 ),
             }
         stale = data.get("sheet_id") != sheet["id"] or data.get(
@@ -635,9 +635,9 @@ class TileRun:
             ),
             "stale": stale,
             "message": (
-                "Het ontwerp of de plaat is veranderd sinds deze reeks begon. De "
-                "tegels die al gebrand zijn horen bij het oude ontwerp; verder "
-                "gaan zou half oud en half nieuw opleveren."
+                "The design or the plate has changed since this run began. The "
+                "tiles already burned belong to the old design; carrying on "
+                "would give you half old and half new."
                 if stale
                 else ""
             ),
@@ -647,7 +647,7 @@ class TileRun:
         sheet = self._sheet()
         if not (sheet.get("tiling") or {}).get("enabled"):
             raise DesignError(
-                "Tegels staan uit voor dit vel. Zet ze aan bij de plaatmaat."
+                "Tiles are switched off for this sheet. Switch them on at the plate size."
             )
         opdeling = self.layout()  # weigert hier al als er geen merken passen
         self._alignment = None
@@ -676,7 +676,7 @@ class TileRun:
         # over vellen die uit de diepte omhoog komt terwijl hij een merk aantikt.
         stand = self.state()
         if stand is None:
-            raise DesignError("Er loopt geen tegelreeks.")
+            raise DesignError("There is no tile run going.")
         if stand["stale"]:
             raise DesignError(stand["message"])
         data = self._read()
@@ -684,7 +684,7 @@ class TileRun:
         try:
             if reference == "plate_corner":
                 if not gemeten:
-                    raise DesignError("Tik eerst de hoek van de plaat aan.")
+                    raise DesignError("Tap the corner of the plate first.")
                 self._alignment = alignment_from_corner(Point(0.0, 0.0), gemeten[0])
             else:
                 if len(gemeten) != 2:
@@ -704,7 +704,7 @@ class TileRun:
         for merk in self.layout()["marks"]:
             if merk["boundary"] == boundary:
                 return tuple(Point(p["x_mm"], p["y_mm"]) for p in merk["points"])
-        raise DesignError("Voor deze tegel zijn geen merken berekend.")
+        raise DesignError("No marks have been calculated for this tile.")
 
     def burn(self, confirm_reburn: bool = False) -> dict:
         # Eerst of de reeks nog geldig is, dán pas of hij uitgelijnd is. In de
@@ -713,21 +713,21 @@ class TileRun:
         # een opdeling die niet meer klopt. Dezelfde poort als bij `align`.
         stand = self.state()
         if stand is None:
-            raise DesignError("Er loopt geen tegelreeks.")
+            raise DesignError("There is no tile run going.")
         if stand["stale"]:
             raise DesignError(stand["message"])
         if self._alignment is None:
             raise DesignError(
-                "Deze tegel is nog niet uitgelijnd. Tik eerst de twee merken aan, "
-                "anders weet de machine niet waar de plaat ligt."
+                "This tile has not been aligned yet. Tap the two marks first, "
+                "otherwise the machine does not know where the plate is."
             )
         data = self._read()
         index = data["current"]
         if index in data.get("burned", []) and not confirm_reburn:
             raise DesignError(
-                "Deze tegel is al gebrand. Nog een keer branden betekent dat de "
-                "laser over werk gaat dat er al ligt — doe dat alleen als de "
-                "vorige poging is afgebroken. Bevestig om door te gaan."
+                "This tile has already been burned. Burning it again means the "
+                "laser goes over work that is already there — only do that when the "
+                "previous attempt was aborted. Confirm to carry on."
             )
 
         opdeling = self.layout()
@@ -834,14 +834,14 @@ class TileRun:
             buiten = max(buiten, -mx, -my, mx - bed[0], my - bed[1])
         if buiten > 0:
             raise DesignError(
-                f"Na de correctie valt deze tegel {buiten:.1f} mm buiten het bed. "
-                "Leg de plaat rechter of iets verder naar binnen en tik opnieuw aan."
+                f"After the correction this tile falls {buiten:.1f} mm outside the bed. "
+                "Lay the plate straighter or a little further in and tap again."
             )
 
     def advance(self) -> dict:
         data = self._read()
         if data is None:
-            raise DesignError("Er loopt geen tegelreeks.")
+            raise DesignError("There is no tile run going.")
         done = sorted(set(data["done"]) | {data["current"]})
         volgende = data["current"] + 1
         self._alignment = None  # de plaat gaat verschuiven; de oude stand vervalt

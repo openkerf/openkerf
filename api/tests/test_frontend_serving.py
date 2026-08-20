@@ -60,7 +60,7 @@ def test_an_unknown_api_path_is_a_404_not_the_html_page(tmp_path, kernel):
         post = client.post("/api/bestaat-niet", json={})
 
         assert get.status_code == 404
-        assert "Onbekende API-route" in get.json()["detail"]
+        assert "Unknown API route" in get.json()["detail"]
         assert post.status_code == 404
         # De echte SPA-route blijft wél de app teruggeven.
         assert client.get("/setup").status_code == 200

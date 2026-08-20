@@ -32,9 +32,9 @@ def _positive(value, name: str) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError) as e:
-        raise DesignError(f"{name} moet een getal zijn.") from e
+        raise DesignError(f"{name} has to be a number.") from e
     if number <= 0:
-        raise DesignError(f"{name} moet groter dan nul zijn.")
+        raise DesignError(f"{name} has to be greater than zero.")
     return number
 
 
@@ -42,9 +42,9 @@ def _steps(value, name: str) -> int:
     try:
         number = int(value)
     except (TypeError, ValueError) as e:
-        raise DesignError(f"{name} moet een geheel getal zijn.") from e
+        raise DesignError(f"{name} has to be a whole number.") from e
     if number < 2:
-        raise DesignError(f"{name} moet minstens 2 zijn — anders varieer je niets.")
+        raise DesignError(f"{name} has to be at least 2 — otherwise you vary nothing.")
     return number
 
 
@@ -54,16 +54,16 @@ def _passes(value) -> int:
 
     Streng op halve passes: `int(2.5)` is 2, en dat is precies het soort stille
     afronding waar iemand op materiaal achter komt. Een leeg veld is wél goed —
-    het formulier stuurt "" voor "niet ingevuld".
+    het formulier stuurt "" for "niet ingevuld".
     """
     if value in (None, ""):
         return 1
     try:
         getal = float(value)
     except (TypeError, ValueError) as e:
-        raise DesignError("passes moet een heel getal van 1 of meer zijn.") from e
+        raise DesignError("passes has to be a whole number of 1 or more.") from e
     if getal != int(getal) or int(getal) < 1:
-        raise DesignError("passes moet een heel getal van 1 of meer zijn.")
+        raise DesignError("passes has to be a whole number of 1 or more.")
     return int(getal)
 
 
@@ -218,35 +218,35 @@ def _spread(low: float, high: float, steps: int) -> list[float]:
 
 
 def _bereik(naam: str, lo, hi, aantal) -> list[float]:
-    """De waarden op één as, gecontroleerd en afgerond op nette getallen."""
+    """The values on one axis, checked and rounded to tidy numbers."""
     # De reden staat sinds punt 2 náást het voorbeeld in beeld in plaats van
     # onder de vouw, dus hij is nu tekst voor een mens en geen veldnaam uit de
     # API. "speed_max moet minstens speed_min zijn" is geen Nederlands.
     label = AXES[naam]["label"]
-    laag = _positive(lo, f"De {label} bij 'van'")
-    hoog = _positive(hi, f"De {label} bij 'tot'")
+    laag = _positive(lo, f"The {label} at 'from'")
+    hoog = _positive(hi, f"The {label} at 'to'")
     if hoog < laag:
         raise DesignError(
-            f"De {label} bij 'tot' moet minstens de {label} bij 'van' zijn."
+            f"The {label} at 'to' has to be at least the {label} at 'from'."
         )
     if naam == "power" and hoog > 100:
-        raise DesignError("Vermogen kan niet boven 100 procent.")
+        raise DesignError("Power cannot go above 100 per cent.")
     if naam == "interval" and hoog > 5:
-        raise DesignError("Een interval boven 5 mm is geen gravering meer.")
+        raise DesignError("An interval above 5 mm is no longer an engraving.")
     return _spread(laag, hoog, _steps(aantal, f"Het aantal stappen {label}"))
 
 
 def _vast(naam: str, waarde, terugval) -> float:
-    """De waarde van de grootheid die níét op een as staat."""
+    """The value of the quantity that is *not* on an axis."""
     if waarde in (None, ""):
         waarde = terugval
     if waarde in (None, ""):
         raise DesignError(
-            f"Zet een vaste waarde voor {AXES[naam]['label']}; die staat niet op een as."
+            f"Set a fixed value for {AXES[naam]['label']}; it is not on an axis."
         )
     getal = _positive(waarde, AXES[naam]["fixed_key"])
     if naam == "power" and getal > 100:
-        raise DesignError("Vermogen kan niet boven 100 procent.")
+        raise DesignError("Power cannot go above 100 per cent.")
     return getal
 
 
@@ -299,19 +299,19 @@ def plan_grid(
     """
     if row_axis not in AXES or column_axis not in AXES:
         raise DesignError(
-            f"Onbekende as: kies uit {', '.join(AXES)}."
+            f"Unknown axis: choose from {', '.join(AXES)}."
         )
     if row_axis == column_axis:
         raise DesignError(
-            "De twee assen moeten verschillende grootheden zijn — anders varieer "
-            "je één ding in twee richtingen."
+            "The two axes have to be different quantities — otherwise you vary "
+            "one thing in two directions."
         )
     assen = (row_axis, column_axis)
     interval_telt = operation in INTERVAL_OPERATIONS
     if "interval" in assen and not interval_telt:
         raise DesignError(
-            "Interval is alleen een as bij rasteren: bij snijden en vectorgraveren "
-            "legt de kop één lijn en is er geen lijnafstand."
+            "Interval is only an axis when rastering: with cutting and vector engraving "
+            "the head lays one line and there is no line spacing."
         )
 
     reeksen = {
@@ -341,18 +341,18 @@ def plan_grid(
     columns = len(waarden[column_axis])
     if rows * columns > MAX_CELLS:
         raise DesignError(
-            f"{rows}×{columns} cellen is te veel; hou het onder {MAX_CELLS}."
+            f"{rows}×{columns} cells is too many; keep it under {MAX_CELLS}."
         )
 
     aantal_passes = _passes(passes)
     cell = _positive(cell_mm, "cell_mm")
     gap = float(gap_mm)
     if gap < 0:
-        raise DesignError("gap_mm kan niet negatief zijn.")
+        raise DesignError("gap_mm cannot be negative.")
     pitch = cell + gap
 
     if anchor not in ANCHORS:
-        raise DesignError("Kies 'corner' (vanaf de hoek) of 'center' (vanaf het midden).")
+        raise DesignError("Choose 'corner' (from the corner) or 'center' (from the middle).")
     tekst = bool(text)
     kader = bool(border)
     label_speed = _positive(
@@ -366,7 +366,7 @@ def plan_grid(
         "label_power_percent",
     )
     if label_power > 100:
-        raise DesignError("Het vermogen van de labellaag kan niet boven 100 procent.")
+        raise DesignError("The power of the label layer cannot go above 100 per cent.")
 
     breedte = round(columns * pitch - gap, 3)
     hoogte = round(rows * pitch - gap, 3)
@@ -634,7 +634,7 @@ def _homografie(hoeken: list[dict]):
 
 
 def cel_veelhoek(grid: dict, cell: dict) -> list[tuple[float, float]]:
-    """De vier hoeken van één vakje in fotocoördinaten (0–1)."""
+    """The four corners of one square in photo coordinates (0–1)."""
     pitch = grid["cell_mm"] + grid["gap_mm"]
     kolommen = grid.get("columns") or grid["power_steps"]
     rijen = grid.get("rows") or grid["speed_steps"]
@@ -711,7 +711,7 @@ def markeer_foto(grid: dict, path, row: int, column: int) -> bytes:
         (c for c in grid["cells"] if c["row"] == row and c["column"] == column), None
     )
     if cell is None:
-        raise DesignError(f"Cel rij {row}, kolom {column} hoort niet bij dit raster.")
+        raise DesignError(f"Cell row {row}, column {column} does not belong to this grid.")
 
     foto = Image.open(path).convert("RGB")
     breedte, hoogte = foto.size
@@ -728,12 +728,12 @@ def markeer_foto(grid: dict, path, row: int, column: int) -> bytes:
 
 
 def as_waarde(cell: dict, naam: str):
-    """De waarde van één grootheid in een cel, of None als hij niet meedoet."""
+    """The value of one quantity in a cell, or None when it does not take part."""
     return cell.get(AXES[naam]["cell_key"])
 
 
 def toon(naam: str, waarde) -> str:
-    """Een aswaarde met zijn eenheid, zoals hij op het hout komt te staan."""
+    """An axis value with its unit, as it ends up on the wood."""
     if waarde is None:
         return ""
     eenheid = AXES[naam]["unit"]
@@ -743,7 +743,7 @@ def toon(naam: str, waarde) -> str:
 
 
 def _woorden(tekst) -> list[str]:
-    """De losse woorden van een stuk tekst, klein en zonder accenten."""
+    """The separate words of a piece of text, lower case and without accents."""
     plat = unicodedata.normalize("NFKD", str(tekst or "").lower())
     plat = "".join(c for c in plat if not unicodedata.combining(c))
     return [w for w in re.split(r"[^0-9a-z]+", plat) if w]
@@ -837,7 +837,7 @@ def caption_lines(plan: dict) -> list[str]:
 
 
 def caption_text(plan: dict) -> str:
-    """Dezelfde regels achter elkaar — voor waar één string genoeg is."""
+    """The same lines one after another — for where one string is enough."""
     return " · ".join(caption_lines(plan))
 
 
@@ -947,8 +947,8 @@ class TestGridGenerator:
         if bed and (buiten_x + buiten_b > bed[0] or buiten_y + buiten_h > bed[1]):
             raise DesignError(
                 f"Het bord ({buiten_b:.0f}×{buiten_h:.0f} mm vanaf "
-                f"{buiten_x:.0f},{buiten_y:.0f}) valt buiten het bed "
-                f"van {bed[0]:.0f}×{bed[1]:.0f} mm."
+                f"{buiten_x:.0f},{buiten_y:.0f}) falls outside the bed "
+                f"of {bed[0]:.0f}×{bed[1]:.0f} mm."
             )
 
         # Zonder dit belandt elke cel óók in elke bestaande operatie waarvan de
@@ -1186,7 +1186,7 @@ class TestGridGenerator:
         extras.append(node)
 
     def _label_op(self, plan: dict | None = None):
-        """De laag waar alle opschriften in gaan; één voor alle rasters samen."""
+        """The layer all the captions go into; one for every grid together."""
         # Sinds T10 in te stellen: hardgecodeerd 80 mm/s @ 30% werkt op berken en
         # niet op acryl, en dan brandt je opschrift er dwars doorheen.
         plan = plan or {}
@@ -1321,7 +1321,7 @@ class TestGridGenerator:
 
                     node.fill = Color("black")
                 return node
-        raise DesignError("De engine heeft geen vierkant aangemaakt.")
+        raise DesignError("The engine created no square.")
 
     def _bed_mm(self):
         device = getattr(self.kernel, "device", None)

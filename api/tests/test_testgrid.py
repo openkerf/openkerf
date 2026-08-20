@@ -370,7 +370,7 @@ def test_a_grid_without_a_material_cannot_produce_presets(client):
     )
 
     assert response.status_code == 409
-    assert "materiaal" in str(response.json()["detail"])
+    assert "material" in str(response.json()["detail"])
 
 
 def test_a_cell_outside_the_grid_is_refused(client, grid_with_material):
@@ -737,7 +737,7 @@ def test_interval_is_refused_where_it_means_nothing():
     with pytest.raises(DesignError) as fout:
         plan_grid(**{**RASTER, "operation": "snijden"})
 
-    assert "rasteren" in str(fout.value)
+    assert "rastering" in str(fout.value)
 
 
 def test_two_axes_cannot_be_the_same_quantity():

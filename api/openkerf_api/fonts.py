@@ -2,7 +2,7 @@
 Eigen lettertypen bruikbaar maken.
 
 De engine leest alleen `.ttf`, `.shx` en `.jhf`, en houdt de gevonden lijst in
-een cachebestand. Twee gevolgen die een gebruiker als "mijn font doet het niet"
+een cachebestand. Twee gevolgen die een gebruiker als "my font does not work"
 ervaart:
 
 1. **Een `.otf` verschijnt nooit**, ook niet als hij gewoon TrueType-omtrekken
@@ -49,7 +49,7 @@ class Fonts:
     def registry(self):
         registry = getattr(self.kernel.root, "fonts", None)
         if registry is None:
-            raise DesignError("De lettertype-plugin van de engine is niet geladen.")
+            raise DesignError("The engine's font plugin is not loaded.")
         return registry
 
     def directory(self) -> Path:
@@ -96,9 +96,9 @@ class Fonts:
             if wanted not in (str(path), path.name):
                 continue
             if path.suffix.lower() not in self.PREVIEWABLE:
-                raise DesignError("Van dit lettertype kan een browser niets tonen.")
+                raise DesignError("A browser can show nothing of this font.")
             if not path.is_file():
-                raise DesignError("Dat lettertype staat er niet meer.")
+                raise DesignError("That font is no longer there.")
             return path
         raise DesignError("Onbekend lettertype.")
 
@@ -139,12 +139,12 @@ class Fonts:
         path = Path(os.path.expanduser(str(source or ""))).resolve()
         if not path.is_file():
             raise DesignError(
-                f"'{source}' bestaat niet. Kies een lettertype uit de lijst in "
-                "het tekstvenster; die toont wat er op deze computer staat."
+                f"'{source}' does not exist. Choose a font from the list in "
+                "the text window; it shows what is on this computer."
             )
         if path.suffix.lower() not in CONVERTIBLE + (".ttf",):
             raise DesignError(
-                f"'{path.suffix}' kan niet; kies een .ttf of .otf-bestand."
+                f"'{path.suffix}' is not possible; choose a .ttf or .otf file."
             )
         if not any(
             str(path).lower().startswith(str(Path(os.path.expanduser(w)).resolve()).lower())
@@ -152,13 +152,13 @@ class Fonts:
         ):
             # Alleen uit de fontmappen van het systeem: een willekeurig pad laten
             # inlezen door de server is een open deur.
-            raise DesignError("Dit bestand staat niet in een lettertypemap.")
+            raise DesignError("This file is not in a font folder.")
         if path.stat().st_size > MAX_FONT_BYTES:
-            raise DesignError("Dit bestand is te groot voor een lettertype.")
+            raise DesignError("This file is too large for a font.")
 
         target = self.directory() / f"{path.stem}.ttf"
         if target.exists():
-            raise DesignError(f"'{target.name}' staat er al.")
+            raise DesignError(f"'{target.name}' is already there.")
 
         if path.suffix.lower() == ".ttf":
             shutil.copyfile(path, target)
@@ -175,13 +175,13 @@ class Fonts:
             from fontTools.ttLib import TTFont
         except ImportError as e:  # pragma: no cover - alleen zonder fonttools
             raise DesignError(
-                "Omzetten vraagt het pakket 'fonttools'; installeer dat naast de API."
+                "Converting needs the 'fonttools' package; install it beside the API."
             ) from e
 
         try:
             font = TTFont(str(source), fontNumber=0)
         except Exception as e:
-            raise DesignError(f"Dit lettertype is niet te lezen: {e}") from e
+            raise DesignError(f"This font cannot be read: {e}") from e
 
         if "glyf" in font:
             # Al TrueType van binnen; alleen de extensie zei iets anders.
@@ -203,7 +203,7 @@ class Fonts:
 
     @staticmethod
     def _build_glyf(font, pens) -> None:
-        """De omgezette omtrekken als TrueType-tabellen in het font hangen."""
+        """Hang the converted outlines in the font as TrueType tables."""
         from fontTools.ttLib import newTable
 
         glyf = newTable("glyf")

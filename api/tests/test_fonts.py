@@ -71,7 +71,7 @@ def a_font(path, cff=False):
 
 def test_an_otf_outside_a_font_folder_is_refused(fonts, tmp_path):
     """De server een willekeurig pad laten inlezen is een open deur."""
-    with pytest.raises(DesignError, match="lettertypemap"):
+    with pytest.raises(DesignError, match="font folder"):
         fonts.import_font(str(a_font(tmp_path / "Proef.otf")))
 
 
@@ -120,7 +120,7 @@ def test_importing_the_same_font_twice_is_refused(fonts, tmp_path, monkeypatch):
     source = a_font(tmp_path / "Eenmalig.otf")
     fonts.import_font(str(source))
 
-    with pytest.raises(DesignError, match="staat er al"):
+    with pytest.raises(DesignError, match="already there"):
         fonts.import_font(str(source))
 
 
@@ -146,7 +146,7 @@ def test_a_file_that_is_not_a_font_is_refused(fonts, tmp_path, monkeypatch):
     fake = tmp_path / "Nep.otf"
     fake.write_bytes(b"dit is geen lettertype")
 
-    with pytest.raises(DesignError, match="niet te lezen"):
+    with pytest.raises(DesignError, match="cannot be read"):
         fonts.import_font(str(fake))
 
 

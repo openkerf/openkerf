@@ -112,7 +112,7 @@ def test_a_file_that_is_not_a_library_is_refused(leeg, tmp_path):
 
     with pytest.raises(LibraryError) as fout:
         leeg.read_bundle(nep)
-    assert "geen OpenKerf-bibliotheek" in str(fout.value)
+    assert "not an OpenKerf library" in str(fout.value)
 
 
 def test_a_zip_without_a_library_is_refused(leeg, tmp_path):
@@ -370,7 +370,7 @@ def test_uploading_something_else_is_a_clean_refusal(client):
         files={"file": ("foto.png", FOTO, "image/png")},
     )
     assert response.status_code == 409
-    assert "bibliotheek" in json.dumps(response.json())
+    assert "library" in json.dumps(response.json())
 
 
 def test_the_alignment_survives_a_backup(bib, leeg):

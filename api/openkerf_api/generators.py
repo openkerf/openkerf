@@ -46,11 +46,11 @@ class Generators:
         """
         columns, rows = self._count(columns, "kolommen"), self._count(rows, "rijen")
         if columns * rows <= 1:
-            raise DesignError("Een raster van één vak is geen raster.")
+            raise DesignError("A grid of one cell is not a grid.")
         gap_x = _finite(gap_x_mm, "gap_x_mm")
         gap_y = _finite(gap_y_mm, "gap_y_mm")
         if gap_x < 0 or gap_y < 0:
-            raise DesignError("Een negatieve tussenruimte laat de vormen overlappen.")
+            raise DesignError("A negative gap makes the shapes overlap.")
 
         with self._selection(ids), self.elements.undoscope("Grid repeat"):
             self.runner.run(
@@ -59,10 +59,10 @@ class Generators:
         return self._added("grid", columns * rows)
 
     def radial(self, ids, repeats, radius_mm, start_deg=0.0, end_deg=360.0, rotate=True) -> dict:
-        """De selectie rond een middelpunt herhalen."""
+        """Repeat the selection around a centre point."""
         count = self._count(repeats, "herhalingen")
         if count < 2:
-            raise DesignError("Minder dan twee kopieën is geen cirkel.")
+            raise DesignError("Fewer than two copies is not a circle.")
         radius = _positive(radius_mm, "radius_mm")
         start = _finite(start_deg, "start_deg")
         end = _finite(end_deg, "end_deg")
@@ -108,7 +108,7 @@ class Generators:
         if inner_radius_mm is not None:
             inner = _positive(inner_radius_mm, "inner_radius_mm")
             if inner >= radius:
-                raise DesignError("De binnenstraal moet kleiner zijn dan de straal.")
+                raise DesignError("The inner radius has to be smaller than the radius.")
             command += f" --radius_inner {inner:.4f}mm --alternate_seq 1"
 
         with self.elements.undoscope("Polygon"):
@@ -160,7 +160,7 @@ class Generators:
         geometry = node.as_geometry()
         bounds = node.bounds
         if not bounds:
-            raise DesignError("De tekst leverde geen vorm op.")
+            raise DesignError("The text yielded no shape.", code="gen.noShape")
         _bend_in_place(geometry, bounds, cx, cy, radius * UNITS_PER_MM, inside)
 
         with self.elements.undoscope("Arc text"):
@@ -243,9 +243,10 @@ class Generators:
 
         if len(pages) > 1 and not (spread and self.sheets):
             raise DesignError(
-                f"Deze doos past niet op één vel van {bed_width:.0f} x "
-                f"{bed_height:.0f} mm; er zijn er {len(pages)} nodig. Zet "
-                "'verdelen over vellen' aan, of kies kleinere maten."
+                f"This box does not fit on one sheet of {bed_width:.0f} x "
+                f"{bed_height:.0f} mm; {len(pages)} are needed. Switch 'spread over "
+                "sheets' on, or choose smaller sizes.",
+                code="gen.boxTooBig",
             )
 
         started_on = self.sheets.state()["active"] if self.sheets else None
@@ -255,7 +256,7 @@ class Generators:
                 # Volgend vel, even groot als dit: dan klopt de indeling met wat
                 # er berekend is.
                 self.sheets.add(
-                    name=f"Doos {index + 1}",
+                    name=f"Box {index + 1}",
                     width_mm=bed_width,
                     height_mm=bed_height,
                 )
@@ -264,7 +265,7 @@ class Generators:
                 for name, points, at_x, at_y in page:
                     node = self._add_polygon(
                         [(px + at_x, py + at_y) for px, py in points],
-                        f"Doos — {name}",
+                        f"Box — {name}",
                     )
                     if index == 0:
                         ids.append(node)
@@ -344,7 +345,7 @@ class Generators:
             "arctext": self._preview_arctext,
         }.get(str(what))
         if maker is None:
-            raise DesignError(f"Van '{what}' is geen voorbeeld te maken.")
+            raise DesignError(f"No preview can be made of '{what}'.")
 
         result = maker(body or {})
         sheet_width, sheet_height = self._surface()
@@ -364,11 +365,11 @@ class Generators:
         columns = self._count(body.get("columns"), "kolommen")
         rows = self._count(body.get("rows"), "rijen")
         if columns * rows <= 1:
-            raise DesignError("Een raster van één vak is geen raster.")
+            raise DesignError("A grid of one cell is not a grid.")
         gap_x = _finite(body.get("gap_x_mm", 5.0), "gap_x_mm")
         gap_y = _finite(body.get("gap_y_mm", 5.0), "gap_y_mm")
         if gap_x < 0 or gap_y < 0:
-            raise DesignError("Een negatieve tussenruimte laat de vormen overlappen.")
+            raise DesignError("A negative gap makes the shapes overlap.")
 
         shape, box, (left, top, width, height) = self._selection_outline(
             body.get("ids")
@@ -380,8 +381,8 @@ class Generators:
         parts, notes = [], []
         if columns * rows > self.PREVIEW_LIMIT:
             notes.append(
-                f"{columns * rows} kopieën is meer dan het voorbeeld tekent; "
-                f"hieronder staan de eerste {self.PREVIEW_LIMIT}."
+                f"{columns * rows} copies is more than the preview draws; "
+                f"the first {self.PREVIEW_LIMIT} are below."
             )
         for row in range(rows):
             for column in range(columns):
@@ -400,7 +401,7 @@ class Generators:
     def _preview_radial(self, body: dict) -> dict:
         count = self._count(body.get("repeats"), "herhalingen")
         if count < 2:
-            raise DesignError("Minder dan twee kopieën is geen cirkel.")
+            raise DesignError("Fewer than two copies is not a circle.")
         radius = _positive(body.get("radius_mm"), "radius_mm")
         start = _finite(body.get("start_deg", 0.0), "start_deg")
         end = _finite(body.get("end_deg", 360.0), "end_deg")
@@ -492,11 +493,11 @@ class Generators:
         if len(pages) > 1:
             spread = body.get("spread", True) is not False
             notes.append(
-                f"Past niet op één vel; er zijn er {len(pages)} nodig. "
+                f"Does not fit on one sheet; {len(pages)} are needed. "
                 + (
-                    "Hieronder staat het eerste."
+                    "The first one is below."
                     if spread and self.sheets
-                    else "Zet 'verdelen over vellen' aan, of kies kleinere maten."
+                    else "Switch 'spread over sheets' on, or choose smaller sizes."
                 )
             )
         return {
@@ -565,14 +566,14 @@ class Generators:
         size = _positive(body.get("font_size_mm", 10.0), "font_size_mm")
         text = str(body.get("text") or "").strip()
         if not text:
-            raise DesignError("Tekst mag niet leeg zijn.")
+            raise DesignError("Text cannot be empty.", code="draw.emptyText")
 
         geometry = self._text_geometry(
             text, size * UNITS_PER_MM, body.get("font"), body.get("spacing")
         )
         bounds = geometry.bbox()
         if bounds is None:
-            raise DesignError("De tekst leverde geen vorm op.")
+            raise DesignError("The text yielded no shape.", code="gen.noShape")
         _bend_in_place(
             geometry, bounds, cx, cy, radius * UNITS_PER_MM,
             bool(body.get("inside")),
@@ -587,7 +588,7 @@ class Generators:
         }
 
     def _text_geometry(self, text, font_size, font, spacing):
-        """Rechte tekst als losse geometrie, zonder node en zonder bijwerking."""
+        """Straight text as loose geometry, without a node and without side effects."""
         from meerk40t.extra.hershey import FontPath
 
         registry = getattr(self.kernel.root, "fonts", None)
@@ -596,7 +597,7 @@ class Generators:
         registry.context.setting(str, "last_font", "")
         name, path = registry.retrieve_font(font or None)
         if not name:
-            raise DesignError("Er staat geen enkel bruikbaar lettertype op deze computer.")
+            raise DesignError("There is not one usable font on this computer.", code="gen.noFont")
         rendered = FontPath(False)
         try:
             registry.cached_fontclass(path).render(
@@ -608,7 +609,7 @@ class Generators:
                 align="start",
             )
         except Exception as e:
-            raise DesignError(f"Dit lettertype is niet te tekenen: {e}") from e
+            raise DesignError(f"This font cannot be drawn: {e}") from e
         return rendered.geometry
 
     def _selection_outline(self, ids):
@@ -625,14 +626,14 @@ class Generators:
         for element_id in ids or []:
             node = self.elements.find_node(element_id)
             if node is None:
-                raise DesignError(f"Element {element_id} bestaat niet (meer).")
+                raise DesignError(f"Element {element_id} does not exist (any more).")
             nodes.append(node)
         if not nodes:
-            raise DesignError("Kies eerst wat er herhaald moet worden.")
+            raise DesignError("Choose what should be repeated first.", code="gen.needsSelection")
 
         bounds = Node.union_bounds(nodes)
         if not bounds:
-            raise DesignError("De selectie heeft geen afmeting.")
+            raise DesignError("The selection has no size.")
         x0, y0, x1, y1 = bounds
 
         from meerk40t.core.geomstr import Geomstr
@@ -673,7 +674,7 @@ class Generators:
     def _plan_barcode(self, text, kind, x_mm, y_mm, width_mm, height_mm):
         content = str(text or "").strip()
         if not content:
-            raise DesignError("Een streepjescode zonder inhoud bestaat niet.")
+            raise DesignError("A barcode without content does not exist.")
         width = _positive(width_mm, "width_mm")
         height = _positive(height_mm, "height_mm")
         x0 = _finite(x_mm, "x_mm")
@@ -683,21 +684,22 @@ class Generators:
             import barcode as barcodes
         except ImportError as e:  # pragma: no cover - alleen bij kale installatie
             raise DesignError(
-                "Streepjescodes vragen het pakket 'python-barcode'."
+                "Barcodes need the 'python-barcode' package.", code="gen.noBarcodeLib"
             ) from e
 
         if kind not in barcodes.PROVIDED_BARCODES:
             raise DesignError(
-                f"Onbekend type: {kind}. Kies uit {', '.join(barcodes.PROVIDED_BARCODES)}."
+                f"Unknown type: {kind}. Choose from {', '.join(barcodes.PROVIDED_BARCODES)}."
             )
         try:
             bits = "".join(barcodes.get_barcode_class(kind)(content).build())
         except Exception as e:
             # EAN en vrienden stellen eisen aan lengte en controlecijfer; die
             # melding is voor de gebruiker nuttiger dan een 500.
-            raise DesignError(f"'{content}' past niet in een {kind}: {e}") from e
+            raise DesignError(f"'{content}' does not fit in a {kind}: {e}",
+                code="gen.badBarcode",) from e
         if "1" not in bits:
-            raise DesignError("De codering leverde geen streepjes op.")
+            raise DesignError("The encoding yielded no bars.")
 
         step = width / len(bits)
         bars, index = [], 0
@@ -719,9 +721,9 @@ class Generators:
     def _plan_qrcode(self, text, x_mm, y_mm, size_mm, border):
         content = str(text or "").strip()
         if not content:
-            raise DesignError("Een QR-code zonder inhoud bestaat niet.")
+            raise DesignError("A QR code without content does not exist.")
         if len(content) > 1000:
-            raise DesignError("Deze tekst is te lang voor een leesbare QR-code.")
+            raise DesignError("This text is too long for a readable QR code.", code="gen.qrTooLong")
         size = _positive(size_mm, "size_mm")
         quiet = int(_finite(border, "border"))
         if not 0 <= quiet <= 8:
@@ -731,7 +733,8 @@ class Generators:
             import segno
         except ImportError as e:  # pragma: no cover - alleen bij kale installatie
             raise DesignError(
-                "QR-codes vragen het pakket 'segno'; installeer het naast de API."
+                "QR codes need the 'segno' package; install it beside the API.",
+                code="gen.noQrLib",
             ) from e
 
         code = segno.make(content, error="m")
@@ -770,21 +773,26 @@ class Generators:
         kerf = _finite(kerf_mm, "kerf_mm")
         gap = _finite(gap_mm, "gap_mm")
         if not 0 <= kerf <= 2:
-            raise DesignError("Een kerf buiten 0–2 mm klopt niet.")
+            raise DesignError("A kerf outside 0–2 mm is not right.")
         if gap < 0:
-            raise DesignError("De tussenruimte tussen de panelen kan niet negatief zijn.")
+            raise DesignError("The gap between the panels cannot be negative.")
         if thickness * 3 >= min(width, depth, height):
             raise DesignError(
-                "Het materiaal is te dik voor deze buitenmaten; de wanden zouden "
-                "elkaar raken."
+                "The material is too thick for these outside sizes; the walls would "
+                "touch each other.",
+                code="gen.tooThick",
             )
         if finger < thickness:
             raise DesignError(
-                "Een vinger smaller dan het materiaal dik is, breekt af. "
-                f"Kies minstens {thickness} mm."
+                "A finger narrower than the material is thick snaps off. "
+                f"Choose at least {thickness} mm.",
+                code="gen.fingerTooNarrow",
             )
         if finger * 3 > min(width, depth, height):
-            raise DesignError("De vinger is te breed: er passen er geen drie op een rand.")
+            raise DesignError(
+                "The finger is too wide: three of them do not fit on an edge.",
+                code="gen.fingerTooWide",
+            )
 
         panels = box_panels(
             width, depth, height, thickness, finger, kerf, lid=lid
@@ -800,8 +808,9 @@ class Generators:
         )
         if widest > bed_width:
             raise DesignError(
-                f"Het breedste paneel is {widest:.0f} mm en past niet op een vel "
-                f"van {bed_width:.0f} mm. Kies kleinere buitenmaten."
+                f"The widest panel is {widest:.0f} mm and does not fit on a sheet of "
+                f"{bed_width:.0f} mm. Choose smaller outside sizes.",
+                code="gen.panelTooWide",
             )
 
         # Eerst uitrekenen waar alles komt, dan pas tekenen. Anders staat er een
@@ -829,7 +838,7 @@ class Generators:
         if inner_radius_mm is not None:
             inner = _positive(inner_radius_mm, "inner_radius_mm")
             if inner >= radius:
-                raise DesignError("De binnenstraal moet kleiner zijn dan de straal.")
+                raise DesignError("The inner radius has to be smaller than the radius.")
 
         # `corners` telt de hoekpunten, niet de punten van de ster: een ster van
         # vijf heeft er vijf, om en om buiten en binnen op stappen van 360°/5
@@ -845,7 +854,7 @@ class Generators:
     # --------------------------------------------------------------- intern
 
     def _surface(self) -> tuple[float, float]:
-        """Waar het op moet passen: het actieve vel, of het bed als die er niet zijn."""
+        """What it has to fit on: the active sheet, or the bed when there is none."""
         if self.sheets is not None:
             for sheet in self.sheets.state()["sheets"]:
                 if sheet["active"]:
@@ -901,7 +910,7 @@ class Generators:
         return node
 
     def _file_under(self, node, intent: str):
-        """De vorm in één laag van het gevraagde soort, en nergens anders in."""
+        """The shape in one layer of the requested kind, and in nothing else."""
         label = {"cut": "Cut", "engrave": "Engrave"}.get(intent, "Cut")
         for operation in self.elements.ops():
             if operation.type == f"op {intent}" and getattr(operation, "label", "") == label:
@@ -921,7 +930,7 @@ class Generators:
         try:
             count = int(value)
         except (TypeError, ValueError) as e:
-            raise DesignError(f"Het aantal {what} moet een geheel getal zijn.") from e
+            raise DesignError(f"The number of {what} has to be a whole number.") from e
         if not 1 <= count <= 500:
             raise DesignError(f"Het aantal {what} moet tussen 1 en 500 liggen.")
         return count
@@ -935,10 +944,10 @@ class Generators:
             for element_id in ids or []:
                 node = self.elements.find_node(element_id)
                 if node is None:
-                    raise DesignError(f"Element {element_id} bestaat niet (meer).")
+                    raise DesignError(f"Element {element_id} does not exist (any more).")
                 nodes.append(node)
             if not nodes:
-                raise DesignError("Kies eerst wat er herhaald moet worden.")
+                raise DesignError("Choose what should be repeated first.", code="gen.needsSelection")
             self.elements.set_emphasis(nodes)
             yield nodes
 
@@ -973,7 +982,7 @@ class Generators:
 
 
 def _as_d(groups) -> tuple[str, tuple[float, float, float, float]]:
-    """Gesloten veelhoeken als één d-string, met de doos eromheen."""
+    """Closed polygons as one d-string, with the box around them."""
     parts, xs, ys = [], [], []
     for points in groups:
         if not points:
@@ -984,7 +993,7 @@ def _as_d(groups) -> tuple[str, tuple[float, float, float, float]]:
         xs += [x for x, _ in points]
         ys += [y for _, y in points]
     if not parts:
-        raise DesignError("Hier komt geen vorm uit.")
+        raise DesignError("No shape comes out of this.")
     return " ".join(parts), (min(xs), min(ys), max(xs), max(ys))
 
 
@@ -1028,8 +1037,9 @@ def _bend_in_place(geometry, bounds, cx, cy, scale, inside):
     x0, _, x1, y1 = bounds
     if x1 - x0 >= 2 * math.pi * scale * 0.98:
         raise DesignError(
-            "Deze tekst is te lang voor deze straal; hij zou over zichzelf "
-            "heen lopen. Kies een grotere straal of een kleinere letter."
+            "This text is too long for this radius; it would run over itself. "
+            "Choose a larger radius or a smaller letter.",
+            code="gen.arcTooLong",
         )
     middle = (x0 + x1) / 2
     baseline = y1  # onderkant van de tekst
@@ -1059,53 +1069,53 @@ def _bend_in_place(geometry, bounds, cx, cy, scale, inside):
 # hier tegengesteld staan; `test_generators.py` controleert dat voor elk paar.
 # Sleutel: (paneel, rand) → True als dit paneel op die rand de tand heeft.
 PHASE = {
-    ("voor", "links"): True,
-    ("voor", "rechts"): True,
-    ("voor", "onder"): True,
-    ("achter", "links"): True,
-    ("achter", "rechts"): True,
-    ("achter", "onder"): True,
-    ("links", "voor"): False,
-    ("links", "achter"): False,
-    ("links", "onder"): True,
-    ("rechts", "voor"): False,
-    ("rechts", "achter"): False,
-    ("rechts", "onder"): True,
-    ("bodem", "voor"): False,
-    ("bodem", "achter"): False,
-    ("bodem", "links"): False,
-    ("bodem", "rechts"): False,
-    ("deksel", "voor"): False,
-    ("deksel", "achter"): False,
-    ("deksel", "links"): False,
-    ("deksel", "rechts"): False,
+    ("front", "left"): True,
+    ("front", "right"): True,
+    ("front", "under"): True,
+    ("back", "left"): True,
+    ("back", "right"): True,
+    ("back", "under"): True,
+    ("left", "front"): False,
+    ("left", "back"): False,
+    ("left", "under"): True,
+    ("right", "front"): False,
+    ("right", "back"): False,
+    ("right", "under"): True,
+    ("bottom", "front"): False,
+    ("bottom", "back"): False,
+    ("bottom", "left"): False,
+    ("bottom", "right"): False,
+    ("lid", "front"): False,
+    ("lid", "back"): False,
+    ("lid", "left"): False,
+    ("lid", "right"): False,
     # De bovenrand van elke wand, spiegelbeeld van de onderrand: daar pakt het
     # deksel op, net zoals de bodem onderaan pakt. Alleen getekend als er een
     # deksel is — zie `box_panels`.
-    ("voor", "boven"): True,
-    ("achter", "boven"): True,
-    ("links", "boven"): True,
-    ("rechts", "boven"): True,
+    ("front", "over"): True,
+    ("back", "over"): True,
+    ("left", "over"): True,
+    ("right", "over"): True,
 }
 
 # Welke rand van welk paneel op welke rand van welk ander paneel past.
 JOINTS = [
-    (("voor", "links"), ("links", "voor")),
-    (("voor", "rechts"), ("rechts", "voor")),
-    (("achter", "links"), ("links", "achter")),
-    (("achter", "rechts"), ("rechts", "achter")),
-    (("voor", "onder"), ("bodem", "voor")),
-    (("achter", "onder"), ("bodem", "achter")),
-    (("links", "onder"), ("bodem", "links")),
-    (("rechts", "onder"), ("bodem", "rechts")),
+    (("front", "left"), ("left", "front")),
+    (("front", "right"), ("right", "front")),
+    (("back", "left"), ("left", "back")),
+    (("back", "right"), ("right", "back")),
+    (("front", "under"), ("bottom", "front")),
+    (("back", "under"), ("bottom", "back")),
+    (("left", "under"), ("bottom", "left")),
+    (("right", "under"), ("bottom", "right")),
     # Hetzelfde nog eens, bovenaan. Deze stonden er niet, en daarom kwam het
     # deksel als een bodem zonder tegenhangers uit de machine: uitsparingen
     # rondom en een kaarsrechte bovenrand op elke wand om ze in te laten
     # vallen. Gevonden op het hout.
-    (("voor", "boven"), ("deksel", "voor")),
-    (("achter", "boven"), ("deksel", "achter")),
-    (("links", "boven"), ("deksel", "links")),
-    (("rechts", "boven"), ("deksel", "rechts")),
+    (("front", "over"), ("lid", "front")),
+    (("back", "over"), ("lid", "back")),
+    (("left", "over"), ("lid", "left")),
+    (("right", "over"), ("lid", "right")),
 ]
 
 
@@ -1189,16 +1199,16 @@ def box_panels(width, depth, height, thickness, finger, kerf, lid=True):
     # De bovenrand van een wand: recht bij een open doos, met tanden zodra er
     # een deksel op moet. Zonder deze keuze snijd je bij een open doos een rand
     # vol uitsteeksels waar niets op komt.
-    top = "boven" if lid else None
+    top = "over" if lid else None
     panels = [
-        ("bodem", width, depth, ("voor", "rechts", "achter", "links")),
-        ("voor", width, height, ("onder", "rechts", top, "links")),
-        ("achter", width, height, ("onder", "rechts", top, "links")),
-        ("links", depth, height, ("onder", "voor", top, "achter")),
-        ("rechts", depth, height, ("onder", "achter", top, "voor")),
+        ("bottom", width, depth, ("front", "right", "back", "left")),
+        ("front", width, height, ("under", "right", top, "left")),
+        ("back", width, height, ("under", "right", top, "left")),
+        ("left", depth, height, ("under", "front", top, "back")),
+        ("right", depth, height, ("under", "back", top, "front")),
     ]
     if lid:
-        panels.append(("deksel", width, depth, ("voor", "rechts", "achter", "links")))
+        panels.append(("lid", width, depth, ("front", "right", "back", "left")))
     return [
         (name, panel_outline(name, w, h, thickness, finger, kerf, edges))
         for name, w, h, edges in panels

@@ -153,7 +153,7 @@ def test_a_source_that_answers_nonsense_says_so_plainly(kernel):
 
     assert shop.search("hart", sources=["wikimedia", "openclipart"])[
         "unavailable"
-    ] == {"openclipart": "gaf een onverwacht antwoord"}
+    ] == {"openclipart": "gave an unexpected answer"}
 
 
 def test_the_licence_travels_along(shop):
@@ -179,7 +179,7 @@ def test_a_source_that_is_down_does_not_hold_up_the_rest(kernel):
     found = shop.search("hart", sources=["wikimedia", "openclipart"])
 
     assert [r["source"] for r in found["results"]] == ["Wikimedia Commons"]
-    assert found["unavailable"] == {"openclipart": "reageerde niet op tijd"}
+    assert found["unavailable"] == {"openclipart": "did not answer in time"}
 
 
 def test_both_down_is_reported_not_pretended_empty(kernel):
@@ -238,8 +238,8 @@ def test_what_a_laser_cannot_do_is_reported(inserter):
     """
     result = inserter.insert("https://upload.wikimedia.org/rommel.svg")
 
-    assert any("kleurverlopen" in note for note in result["notes"])
-    assert any("tekst" in note for note in result["notes"])
+    assert any("gradients" in note for note in result["notes"])
+    assert any("text" in note for note in result["notes"])
 
 
 def test_a_random_address_is_not_fetched(inserter):
@@ -294,7 +294,7 @@ def test_a_very_busy_drawing_is_flagged(kernel):
 
     result = shop.insert("https://upload.wikimedia.org/druk.svg")
 
-    assert any("losse paden" in note for note in result["notes"])
+    assert any("loose paths" in note for note in result["notes"])
 
 
 def watcher(kernel):

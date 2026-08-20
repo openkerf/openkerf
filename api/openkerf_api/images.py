@@ -98,9 +98,9 @@ class Images:
     def _node(self, element_id: str):
         node = self.elements.find_node(element_id)
         if node is None:
-            raise DesignError(f"Element {element_id} bestaat niet (meer).")
+            raise DesignError(f"Element {element_id} does not exist (any more).")
         if node.type != "elem image":
-            raise DesignError("Dit element is geen afbeelding.")
+            raise DesignError("This element is not an image.")
         return node
 
     def adjustments(self, element_id: str) -> dict:
@@ -145,7 +145,7 @@ class Images:
         spec = ADJUSTMENTS.get(name)
         if spec is None:
             usable = ", ".join(k for k in ADJUSTMENTS if k != "crop")
-            raise DesignError(f"Onbekende bewerking: {name}. Kies uit {usable}.")
+            raise DesignError(f"Unknown adjustment: {name}. Choose from {usable}.")
         node = self._node(element_id)
 
         operation = self._find(node, name)
@@ -158,12 +158,12 @@ class Images:
 
         for key, value in (values or {}).items():
             if key not in spec["defaults"]:
-                raise DesignError(f"'{key}' hoort niet bij {name}.")
+                raise DesignError(f"'{key}' does not belong to {name}.")
             operation[key] = self._checked(name, key, value, spec)
 
         if name == "dither" and operation.get("type") not in DITHER_TYPES:
             raise DesignError(
-                f"Onbekend dither-type. Kies uit {', '.join(DITHER_TYPES)}."
+                f"Unknown dither type. Choose from {', '.join(DITHER_TYPES)}."
             )
 
         with self.elements.undoscope(f"Image: {spec['label']}"):
@@ -171,7 +171,7 @@ class Images:
         return self.adjustments(element_id)
 
     def clear_adjustments(self, element_id: str) -> dict:
-        """Alles eraf: terug naar de afbeelding zoals hij binnenkwam."""
+        """Everything off: back to the image as it came in."""
         node = self._node(element_id)
         with self.elements.undoscope("Image: clear the adjustments"):
             node.operations = []
@@ -191,14 +191,14 @@ class Images:
         try:
             number = float(value)
         except (TypeError, ValueError) as e:
-            raise DesignError(f"{key} moet een getal zijn.") from e
+            raise DesignError(f"{key} has to be a number.") from e
         low, high = bounds
         if not low <= number <= high:
             raise DesignError(f"{key} moet tussen {low} en {high} liggen.")
         return number if isinstance(spec["defaults"][key], float) else int(number)
 
     def _reprocess(self, node):
-        """Het recept opnieuw over het origineel halen."""
+        """Run the recipe over the original again."""
         node._processed_image = None
         node.update(self.kernel.root)
         # update() rekent in een eigen thread; active_image wacht daar netjes op.
@@ -215,7 +215,7 @@ class Images:
         try:
             value = float(dpi)
         except (TypeError, ValueError) as e:
-            raise DesignError("dpi moet een getal zijn.") from e
+            raise DesignError("dpi has to be a number.") from e
         if not 10 <= value <= 2000:
             raise DesignError("dpi moet tussen 10 en 2000 liggen.")
         with self.elements.undoscope("Image DPI"):
@@ -239,8 +239,8 @@ class Images:
         available = self.vectorisers()
         if method not in available:
             raise DesignError(
-                "Vectoriseren met "
-                f"{method} kan niet; beschikbaar: {', '.join(available) or 'geen'}."
+                "Tracing with "
+                f"{method} is not possible; available: {', '.join(available) or 'none'}."
             )
         node = self._node(element_id)
         before = {id(n) for n in self.elements.elems()}
@@ -271,18 +271,18 @@ class Images:
         image = getattr(node, "image", None)
         bounds = getattr(node, "bounds", None)
         if image is None or not bounds:
-            raise DesignError("Deze afbeelding heeft geen pixels om te snijden.")
+            raise DesignError("This image has no pixels to crop.")
         try:
             rect = [float(v) for v in (x_mm, y_mm, width_mm, height_mm)]
         except (TypeError, ValueError) as e:
-            raise DesignError("Het snijkader moet uit getallen bestaan.") from e
+            raise DesignError("The crop box has to consist of numbers.") from e
         if rect[2] <= 0 or rect[3] <= 0:
             raise DesignError("Het snijkader moet breedte en hoogte hebben.")
 
         x0, y0, x1, y1 = (v / UNITS_PER_MM for v in bounds)
         width, height = image.size
         if x1 - x0 <= 0 or y1 - y0 <= 0:
-            raise DesignError("Deze afbeelding heeft geen kader.")
+            raise DesignError("This image has no box.")
 
         def to_pixels(value, low, high, count):
             return int(round((value - low) / (high - low) * count))
@@ -294,7 +294,7 @@ class Images:
         left, right = max(0, min(left, width)), max(0, min(right, width))
         upper, lower = max(0, min(upper, height)), max(0, min(lower, height))
         if right - left < 1 or lower - upper < 1:
-            raise DesignError("Het snijkader valt buiten de afbeelding.")
+            raise DesignError("The crop box falls outside the image.")
 
         operation = self._find(node, "crop")
         if operation is None:
@@ -326,7 +326,7 @@ class Images:
         node = self._node(element_id)
         image = getattr(node, "active_image", None) or getattr(node, "image", None)
         if image is None:
-            raise DesignError("Deze afbeelding heeft geen pixels.")
+            raise DesignError("This image has no pixels.")
         buffer = BytesIO()
         image.convert("RGBA").save(buffer, "PNG")
         return buffer.getvalue()

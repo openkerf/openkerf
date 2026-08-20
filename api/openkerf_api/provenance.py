@@ -51,7 +51,7 @@ class Provenance:
     # ------------------------------------------------------------ noteren
 
     def record(self, sheet_id: str | None, operation_id: str | None, preset: dict) -> None:
-        """Onthoud dat deze preset op deze laag van dit vel gezet is."""
+        """Remember that this preset was put on this layer of this sheet."""
         if not sheet_id or not operation_id:
             return
         data = self._read()

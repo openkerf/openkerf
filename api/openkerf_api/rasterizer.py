@@ -145,7 +145,7 @@ def make_raster(
 
 
 def _supersample_for(pixel_width: int, pixel_height: int) -> int:
-    """Zoveel hulpschaal als er in het geheugen past, en niet meer."""
+    """As much supersampling as fits in memory, and no more."""
     pixels = max(pixel_width * pixel_height, 1)
     supersample = SUPERSAMPLE
     while supersample > 1 and pixels * supersample * supersample > MAX_SUPERSAMPLED_PIXELS:
@@ -183,7 +183,7 @@ def _union_paint_bounds(nodes, fallback):
 
 
 class _Transform:
-    """Scene-eenheden naar pixels, plus de pennendikte die daarbij hoort."""
+    """Scene units to pixels, plus the pen width that goes with it."""
 
     def __init__(self, scale_x, scale_y, offset_x, offset_y, supersample):
         self.scale_x = scale_x
@@ -193,7 +193,7 @@ class _Transform:
         self.supersample = supersample
 
     def points(self, complex_points):
-        """Een rij complexe punten naar een lijst (x, y) in pixels."""
+        """A row of complex points to a list of (x, y) in pixels."""
         array = np.asarray(complex_points, dtype=complex)
         xs = (array.real + self.offset_x) * self.scale_x
         ys = (array.imag + self.offset_y) * self.scale_y
@@ -345,7 +345,7 @@ def _is_closed(points, tolerance=1.0) -> bool:
 
 
 def _paint(color) -> bool:
-    """Wordt er met deze kleur daadwerkelijk iets gezet?"""
+    """Does this colour actually put anything down?"""
     if color is None:
         return False
     value = getattr(color, "value", "unset")

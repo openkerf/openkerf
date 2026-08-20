@@ -66,14 +66,14 @@ class Presetariat:
         except (urllib.error.URLError, TimeoutError, ValueError, OSError) as error:
             if cached is None:
                 raise LibraryError(
-                    f"De catalogus is niet op te halen en er is geen eerdere kopie: {error}"
+                    f"The catalogue cannot be fetched and there is no earlier copy: {error}"
                 ) from error
             return {**cached, "stale": True, "error": str(error)}
 
         if not isinstance(payload, dict) or not isinstance(
             payload.get("presets"), list
         ):
-            raise LibraryError("De catalogus heeft een onverwachte vorm.")
+            raise LibraryError("The catalogue has an unexpected shape.")
 
         payload["fetched_at"] = time.time()
         self._write_cache(payload)
@@ -132,7 +132,7 @@ class Presetariat:
         regel te maken: de catalogus is een bron, geen tweede bibliotheek.
         """
         if not ids:
-            raise LibraryError("Kies eerst een preset.")
+            raise LibraryError("Choose a preset first.")
         catalogue = self.catalogue()
         by_id = {p.get("id"): p for p in catalogue["presets"]}
         known = self._imported_ids()
@@ -173,15 +173,15 @@ class Presetariat:
     # ---------------------------------------------------------------- delen
 
     def as_contribution(self, preset_id: int) -> dict:
-        """Een eigen preset in het formaat van de catalogus, klaar om te delen."""
+        """One of your own presets in the catalogue's format, ready to share."""
         preset = self.library.preset(preset_id)
         machine = None
         if preset.get("machine_id"):
             machine = self._machine(preset["machine_id"])
         if machine is None or not machine.get("power_watt"):
             raise LibraryError(
-                "Deze preset hoort bij geen machineprofiel met vermogen. Zonder "
-                "te weten op wat voor machine hij gemeten is, is hij voor "
+                "This preset belongs to no machine profile with a power. Without "
+                "knowing what kind of machine it was measured on, it is "
                 "niemand anders bruikbaar."
             )
 
@@ -239,7 +239,7 @@ class Presetariat:
         for row in self.library.machines():
             if row["id"] == machine_id:
                 return row
-        raise LibraryError(f"Machineprofiel {machine_id} bestaat niet.")
+        raise LibraryError(f"Machine profile {machine_id} does not exist.")
 
     def _imported_ids(self) -> set[str]:
         return {
@@ -287,7 +287,7 @@ def _note(preset: dict) -> str:
     if source.get("by"):
         parts.append(f"door {source['by']}")
     if preset.get("verified"):
-        parts.append("nagebrand door een tweede persoon")
+        parts.append("burned again by a second person")
     note = str(preset.get("note") or "").strip()
     return " — ".join([", ".join(parts)] + ([note] if note else []))
 
@@ -324,7 +324,7 @@ def _issue_url(preset: dict) -> str:
     import urllib.parse
 
     body = (
-        "Nieuwe preset voor de catalogus.\n\n"
+        "New preset for the catalogue.\n\n"
         f"Bestand: `presets/{preset['id']}.json`\n\n"
         "```json\n" + json.dumps(preset, indent=2, ensure_ascii=False) + "\n```\n"
     )

@@ -208,7 +208,7 @@ def test_a_profile_with_evidence_is_not_thrown_away(client, server):
     response = client.delete(f"/api/library/machines/{profiel['id']}")
 
     assert response.status_code == 409
-    assert "1 instelling" in response.json()["detail"]
+    assert "1 setting" in response.json()["detail"]
     assert len(client.get("/api/library/machines").json()) == 1
 
 

@@ -56,7 +56,7 @@ from .status import StatusReader
 # Kernel signals worth forwarding to connected clients. Every one of these is
 # emitted by the engine itself; we only listen.
 CAMERA_HINT = (
-    "Camerabeeld vraagt OpenCV. Installeer het naast de engine met "
+    "A camera image needs OpenCV. Install it beside the engine with "
     "'pip install opencv-python-headless'."
 )
 
@@ -162,9 +162,9 @@ def _spa_files(directory: str):
                     status_code=404,
                     content={
                         "detail": (
-                            f"Onbekende API-route '/{path}'. Draait de server "
-                            "misschien op oudere code dan de frontend? Herstart "
-                            "hem dan."
+                            f"Unknown API route '/{path}'. Is the server perhaps "
+                            "running older code than the frontend? Restart it "
+                            "if so."
                         )
                     },
                 )
@@ -573,7 +573,7 @@ class ApiServer:
 
         @app.post("/api/design/clear", dependencies=write)
         def clear_design():
-            """Leeg het ontwerp — wat openen doet voordat het een bestand inleest."""
+            """Empty the design — what opening does before it reads a file."""
             def run():
                 # Vóór `clean()`, want die wist juist het antwoord: stond dit
                 # ontwerp al veilig op schijf, dan valt er na het leegmaken
@@ -641,7 +641,7 @@ class ApiServer:
 
         @app.get("/api/design/elements/{element_id}/image.png")
         def element_image(element_id: str):
-            """De pixels van een afbeelding, zodat het canvas hem kan tonen."""
+            """The pixels of an image, so the canvas can show it."""
             from fastapi.responses import Response
 
             return Response(
@@ -651,7 +651,7 @@ class ApiServer:
 
         @app.get("/api/design/elements/{element_id}/image")
         def image_adjustments(element_id: str):
-            """Welke bewerkingen aanstaan en met welke waarden."""
+            """Which adjustments are on and with what values."""
             return manage(self.images.adjustments, element_id)
 
         @app.post("/api/design/elements/{element_id}/image", dependencies=write)
@@ -670,7 +670,7 @@ class ApiServer:
 
         @app.get("/api/design/elements/{element_id}/nodes")
         def element_nodes(element_id: str):
-            """De knooppunten van een vorm, om ze los te kunnen verslepen."""
+            """The nodes of a shape, so they can be dragged separately."""
             return manage(self.nodes.points, element_id)
 
         @app.patch("/api/design/elements/{element_id}/nodes", dependencies=write)
@@ -685,7 +685,7 @@ class ApiServer:
 
         @app.delete("/api/design/elements/{element_id}/crop", dependencies=write)
         def uncrop_image(element_id: str):
-            """Bijsnijden terugdraaien; het origineel is nooit weggegooid."""
+            """Undo the crop; the original was never thrown away."""
             return manage(
                 self.images.set_adjustment, element_id, "crop", False, None
             )
@@ -708,7 +708,7 @@ class ApiServer:
 
         @app.get("/api/design/vectorisers")
         def list_vectorisers():
-            """Welke vectoriseerders geladen zijn — potrace kan ontbreken."""
+            """Which tracers are loaded — potrace may be missing."""
             return {"methods": self.images.vectorisers()}
 
         @app.get("/api/design/fonts")
@@ -740,7 +740,7 @@ class ApiServer:
 
         @app.get("/api/design/fonts/importable")
         def importable_fonts():
-            """Lettertypen op dit systeem die de engine niet leest, maar wij wel."""
+            """Fonts on this system the engine does not read, but we do."""
             return manage(self.fonts.importable)
 
         @app.post("/api/design/fonts/import", dependencies=write, status_code=201)
@@ -763,7 +763,7 @@ class ApiServer:
             Om diezelfde reden dragen ook `bounds` en `engine` hier: dat een
             vorm buiten het bed valt of dat deze engine geen rasters brandt, is
             geen klokgegeven maar een blokkade. Stond het alleen in
-            `/api/job/estimate`, dan verscheen "valt buiten het bed" pas als de
+            `/api/job/estimate`, dan verscheen "falls outside the bed" pas als de
             tijdschatting terug was.
             """
             sheet = self._active_sheet()
@@ -810,7 +810,7 @@ class ApiServer:
 
         @app.patch("/api/design/elements/{element_id}/line", dependencies=write)
         def update_line(element_id: str, body: dict):
-            """Een eindpunt verzetten; een lijn is twee punten, geen kader."""
+            """Move one end; a line is two points, not a box."""
             return manage(lambda: self.drawing.update_line(element_id, **body))
 
         @app.post("/api/design/offset", dependencies=write)
@@ -865,7 +865,7 @@ class ApiServer:
 
         @app.post("/api/machine/home", dependencies=write)
         def machine_home(body: dict | None = None):
-            """Naar het nulpunt. De kop beweegt echt."""
+            """To the zero point. The head really moves."""
             return manage(self.motion.home, bool((body or {}).get("physical")))
 
         @app.post("/api/machine/move", dependencies=write)
@@ -879,12 +879,12 @@ class ApiServer:
         # -- bewaarde posities (gat J6) — eigen blokje, zie machine.py ------
         @app.get("/api/machine/positions")
         def machine_positions():
-            """Posities die deze machine onthoudt: mal, nulpunt van een jig."""
+            """Positions this machine remembers: a jig, the zero of a fixture."""
             return manage(lambda: {"positions": self.motion.positions()})
 
         @app.post("/api/machine/positions", dependencies=write, status_code=201)
         def save_machine_position(body: dict):
-            """Zonder x/y: waar de kop nu staat."""
+            """Without x/y: where the head is now."""
             return manage(
                 self.motion.save_position,
                 body.get("name"),
@@ -901,12 +901,12 @@ class ApiServer:
         # -- gebruikersoorsprong (gat J12) — zie machine.py -----------------
         @app.get("/api/machine/origin")
         def machine_origin():
-            """Het nulpunt van deze machine, of null als er geen gezet is."""
+            """The zero point of this machine, or null when none is set."""
             return manage(lambda: {"origin": self.motion.origin()})
 
         @app.post("/api/machine/origin", dependencies=write)
         def set_machine_origin(body: dict | None = None):
-            """Zonder x/y: waar de kop nu staat."""
+            """Without x/y: where the head is now."""
             velden = body or {}
             return manage(
                 self.motion.set_origin, velden.get("x_mm"), velden.get("y_mm")
@@ -919,17 +919,17 @@ class ApiServer:
         # -- bijstellen tijdens een lopende job (gat J11) -------------------
         @app.get("/api/job/adjust")
         def job_adjustment():
-            """Wat er nu bijgesteld staat, en of deze machine het überhaupt kan."""
+            """What is adjusted right now, and whether this machine can do it at all."""
             return manage(self.motion.adjustment)
 
         @app.post("/api/job/adjust", dependencies=write)
         def adjust_job(body: dict):
-            """Snelheid en/of vermogen schalen, ook midden in een job."""
+            """Scale speed and/or power, even in the middle of a job."""
             return manage(self.motion.adjust, body.get("power"), body.get("speed"))
 
         @app.post("/api/machine/focus", dependencies=write)
         def focus_machine(body: dict):
-            """Scherpstellen: de kop hoger of lager. Alleen als het apparaat het kent."""
+            """Focusing: the head higher or lower. Only when the device knows it."""
             return manage(self.motion.focus, body.get("distance_mm"))
 
         @app.post("/api/machine/frame", dependencies=write)
@@ -949,7 +949,7 @@ class ApiServer:
                     )
                 doos = self.design.bounds_mm()
                 if doos is None:
-                    raise DesignError("Er ligt niets op het bed om te omkaderen.")
+                    raise DesignError("There is nothing on the bed to frame.")
                 # Gat J12: kaderen moet laten zien waar het écht komt te
                 # liggen. Een kader op de tekencoördinaten terwijl het nulpunt
                 # het werk 100 mm opzij zet, is precies de controle die je
@@ -991,7 +991,7 @@ class ApiServer:
 
         @app.patch("/api/design/elements/{element_id}/text", dependencies=write)
         def update_text(element_id: str, body: dict):
-            """Bestaande tekst bijwerken in plaats van weggooien en opnieuw plaatsen."""
+            """Update existing text instead of throwing it away and placing it again."""
             return manage(lambda: self.drawing.update_text(element_id, **body))
 
         @app.post("/api/design/elements/delete", dependencies=write)
@@ -1004,7 +1004,7 @@ class ApiServer:
 
         @app.get("/api/design/clipboard")
         def clipboard_state():
-            """Wat er op het klembord ligt — het menu moet weten of plakken kan."""
+            """What is on the clipboard — the menu has to know whether pasting is possible."""
             return manage(self.drawing.clipboard_state)
 
         @app.post("/api/design/clipboard/copy", dependencies=write)
@@ -1139,7 +1139,7 @@ class ApiServer:
         # Vóór de route met `{operation_id}`: anders vangt die dit pad af.
         @app.delete("/api/design/operations", dependencies=write)
         def delete_all_operations():
-            """Alle gewone lagen weg; de vormen blijven staan."""
+            """Every ordinary layer gone; the shapes stay."""
             return manage(self.drawing.delete_all_operations)
 
         @app.delete("/api/design/operations/{operation_id}", dependencies=write)
@@ -1201,7 +1201,7 @@ class ApiServer:
 
         @app.post("/api/design/single-layer", dependencies=write)
         def single_layer(body: dict):
-            """De selectie in één laag, en uit alle andere."""
+            """The selection in one layer, and out of all the others."""
             return manage(
                 self.drawing.single_layer,
                 body.get("ids"),
@@ -1211,7 +1211,7 @@ class ApiServer:
 
         @app.post("/api/design/operations/prune", dependencies=write)
         def prune_operations():
-            """Lege lagen weg — een leeg project heeft er twaalf."""
+            """Empty layers gone — an empty project has twelve of them."""
             return manage(self.drawing.prune_operations)
 
         @app.post("/api/design/assign", dependencies=write)
@@ -1273,7 +1273,7 @@ class ApiServer:
             """
             profiel = self._active_profile()
             if profiel is None:
-                raise HTTPException(status_code=409, detail="Er is geen actieve machine.")
+                raise HTTPException(status_code=409, detail="There is no active machine.")
             return profiel
 
         @app.patch("/api/library/machines/{machine_id}", dependencies=write)
@@ -1301,7 +1301,7 @@ class ApiServer:
             operation: str | None = None,
             thickness_mm: float | None = None,
         ):
-            """Voorstel voor een rasterbereik rond bestaande presets."""
+            """A suggested grid range around existing presets."""
             return self.library.suggest_range(material_id, operation, thickness_mm)
 
         @app.delete("/api/library/presets/{preset_id}", dependencies=write)
@@ -1316,7 +1316,7 @@ class ApiServer:
             Een profiel overleeft zijn apparaat: de bibliotheek staat naast de
             engine en gaat niet mee als iemand een machine weggooit of de
             engine-instellingen wist. Zonder dit vlaggetje groeit de lijst met
-            namen waar niets meer achter zit, en dan zegt "voor deze machine"
+            namen waar niets meer achter zit, en dan zegt "for this machine"
             niets meer.
 
             Alleen ingestelde machines tellen. Profielen die de oude versie voor
@@ -1351,7 +1351,7 @@ class ApiServer:
             if actief and actief["id"] == machine_id:
                 raise HTTPException(
                     status_code=409,
-                    detail="Dit is de machine waarop je nu werkt; die kan niet weg.",
+                    detail="This is the machine you are working on; it cannot go.",
                 )
             return manage(self.library.remove_machine, machine_id)
 
@@ -1363,7 +1363,7 @@ class ApiServer:
 
         @app.get("/api/library/export.openkerf-lib")
         def export_library(filename: str = "bibliotheek"):
-            """De hele bibliotheek als één bestand, foto's inbegrepen."""
+            """The whole library as one file, photos included."""
             from fastapi.responses import FileResponse
 
             path = manage(self.library.export_bundle, filename)
@@ -1388,12 +1388,12 @@ class ApiServer:
         def _bundle(body: dict) -> Path:
             naam = Path(str(body.get("bundle") or "")).name
             if not naam:
-                raise HTTPException(status_code=422, detail="Kies eerst een bestand.")
+                raise HTTPException(status_code=422, detail="Choose a file first.")
             return self._upload_path(naam)
 
         @app.post("/api/library/import/preview", dependencies=write)
         def preview_library(body: dict):
-            """Hetzelfde voorbeeld, herrekend met de samenvoegkeuzes erin."""
+            """The same preview, recalculated with the merge choices in it."""
             target = _bundle(body)
             preview = manage(
                 self.library.preview_import, target, body.get("merge_materials")
@@ -1457,7 +1457,7 @@ class ApiServer:
 
         @app.get("/api/camera")
         def camera_state():
-            """Of er een camera is, of hij draait, en of hij geijkt is."""
+            """Whether there is a camera, whether it runs, and whether it is calibrated."""
             return self.camera.state()
 
         @app.get("/api/camera/list")
@@ -1474,7 +1474,7 @@ class ApiServer:
 
         @app.get("/api/camera/frame.png")
         def camera_frame():
-            """Eén beeld — voor het ijken, en als terugval zonder stream."""
+            """One frame — for calibrating, and as a fallback without a stream."""
             from fastapi.responses import Response
 
             return Response(
@@ -1522,7 +1522,7 @@ class ApiServer:
 
         @app.post("/api/camera/calibrate", dependencies=write)
         def camera_calibrate(body: dict):
-            """De vier bedhoeken in het beeld: linksboven met de klok mee."""
+            """The four bed corners in the image: top left, clockwise."""
             return manage(
                 self.camera.calibrate, body.get("points"), body.get("corrected")
             )
@@ -1533,14 +1533,14 @@ class ApiServer:
 
         @app.post("/api/camera/corrected", dependencies=write)
         def camera_corrected(body: dict):
-            """Tijdens het ijken wil je juist het onbewerkte beeld zien."""
+            """While calibrating you want to see the unprocessed image."""
             return manage(self.camera.set_corrected, bool(body.get("corrected")))
 
         # ----------------------------------------------------------------- vellen
 
         @app.get("/api/sheets")
         def list_sheets():
-            """De vellen van dit project, en welke actief is."""
+            """The sheets of this project, and which one is active."""
             return manage(self.sheets.state)
 
         @app.post("/api/sheets", dependencies=write, status_code=201)
@@ -1612,8 +1612,8 @@ class ApiServer:
                     huidig = self.motion._current_mm()
                     if huidig is None:
                         raise DesignError(
-                            "Deze machine meldt geen positie, dus 'Hier' weet niet "
-                            "waar hij staat. Vul de coördinaten met de hand in."
+                            "This machine reports no position, so 'Here' does not know "
+                            "where it is. Fill in the coordinates by hand."
                         )
                     punten.append({"x_mm": huidig[0], "y_mm": huidig[1]})
                 return self.tiles.align(punten, body.get("reference") or "markers")
@@ -1662,7 +1662,7 @@ class ApiServer:
 
         @app.get("/api/design/autosave")
         def autosave_state():
-            """Of er werk van een vorige sessie klaarstaat."""
+            """Whether work from a previous session is waiting."""
             return self.autosave.state()
 
         @app.post("/api/design/autosave/restore", dependencies=write)
@@ -1670,8 +1670,8 @@ class ApiServer:
             def run():
                 if any(True for _ in self.kernel.elements.elems()):
                     raise LibraryError(
-                        "Er staat al iets op het canvas. Maak eerst leeg; "
-                        "herstellen bovenop bestaand werk geeft een mengelmoes."
+                        "There is already something on the canvas. Empty it first; "
+                        "recovering on top of existing work gives a jumble."
                     )
                 return self.autosave.restore()
 
@@ -1683,7 +1683,7 @@ class ApiServer:
 
         @app.post("/api/design/path", dependencies=write, status_code=201)
         def create_path(body: dict):
-            """Een vrij getekend pad: de pen."""
+            """A freely drawn path: the pen."""
             return manage(
                 self.drawing.create_path,
                 body.get("points"),
@@ -1789,7 +1789,7 @@ class ApiServer:
 
         @app.post("/api/design/generate/arctext", dependencies=write, status_code=201)
         def generate_arc_text(body: dict):
-            """Tekst langs een boog; daarna een pad, geen tekst meer."""
+            """Text along an arc; a path afterwards, no longer text."""
             return manage(
                 self.generators.arc_text,
                 body.get("text"),
@@ -1834,7 +1834,7 @@ class ApiServer:
             operation: str | None = None,
             refresh: bool = False,
         ):
-            """De gedeelde catalogus, gefilterd op wat deze machine is."""
+            """The shared catalogue, filtered on what this machine is."""
             return manage(
                 self.presetariat.browse, machine_id, material, operation, refresh
             )
@@ -1849,7 +1849,7 @@ class ApiServer:
 
         @app.get("/api/presetariat/contribution/{preset_id}")
         def preset_contribution(preset_id: int):
-            """Een eigen preset in catalogusvorm, met een voorgevuld voorstel."""
+            """One of your own presets in catalogue form, with a prefilled proposal."""
             return manage(self.presetariat.as_contribution, preset_id)
 
         # ---------------------------------------------------------- testrasters
@@ -2046,14 +2046,14 @@ class ApiServer:
             grid = manage(self.library.test_grid, grid_id)
             path = grid.get("photo_path")
             if not path or not Path(path).is_file():
-                raise HTTPException(status_code=404, detail="Nog geen foto.")
+                raise HTTPException(status_code=404, detail="No photo yet.")
             if not cell:
                 return FileResponse(path)
             try:
                 row, column = (int(deel) for deel in str(cell).split("-", 1))
             except ValueError:
                 raise HTTPException(
-                    status_code=422, detail="cell heeft de vorm <rij>-<kolom>."
+                    status_code=422, detail="cell has the shape <row>-<column>."
                 ) from None
             data = manage(markeer_foto, grid, path, row, column)
             return Response(content=data, media_type="image/jpeg")
@@ -2075,7 +2075,7 @@ class ApiServer:
                 grid = self.library.test_grid(grid_id)
                 if grid["material_id"] is None:
                     raise LibraryError(
-                        "Dit raster hoort bij geen materiaal; koppel er eerst een aan."
+                        "This grid belongs to no material; link one to it first."
                     )
                 by_position = {(c["row"], c["column"]): c for c in grid["cells"]}
                 created = []
@@ -2083,7 +2083,7 @@ class ApiServer:
                     key = (pick.get("row"), pick.get("column"))
                     cell = by_position.get(key)
                     if cell is None:
-                        raise LibraryError(f"Cel {key} hoort niet bij dit raster.")
+                        raise LibraryError(f"Cell {key} does not belong to this grid.")
                     preset = self.library.add_preset(
                         material_id=grid["material_id"],
                         machine_id=grid["machine_id"],
@@ -2144,7 +2144,7 @@ class ApiServer:
 
         @app.post("/api/machines/import/upload", dependencies=write)
         async def upload_machine_profile(file: UploadFile):
-            """Het profiel aannemen en zeggen wat het zou doen — nog niets meer."""
+            """Accept the profile and say what it would do — nothing more yet."""
             from .machines import PROFILE_SUFFIX
 
             target = self._upload_path(file.filename or f"machine{PROFILE_SUFFIX}")
@@ -2157,7 +2157,7 @@ class ApiServer:
         def import_machine_profile(body: dict):
             naam = Path(str(body.get("profile") or "")).name
             if not naam:
-                raise HTTPException(status_code=422, detail="Kies eerst een bestand.")
+                raise HTTPException(status_code=422, detail="Choose a file first.")
             return manage(
                 self.machines.import_profile,
                 self._upload_path(naam),

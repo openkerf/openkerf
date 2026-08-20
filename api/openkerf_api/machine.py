@@ -81,7 +81,7 @@ class MachineControl:
         return caps
 
     def connection_capabilities(self) -> dict:
-        """Eigen blok, niet bij `motion`: verbinden zet de kop niet in beweging."""
+        """A block of its own, not under `motion`: connecting does not move the head."""
         return {
             "connect": self._link_command(CONNECTS) is not None,
             "disconnect": self._link_command(DISCONNECTS) is not None,
@@ -101,42 +101,42 @@ class MachineControl:
 
         `StatusReader.connection` weet per familie waar het staat en zegt
         "unknown" waar niets het meldt — en dat laatste is hier het verschil
-        tussen "kon niet controleren" en "staat open".
+        tussen "could not check" en "staat open".
         """
         from .status import StatusReader
 
         return StatusReader(self.kernel).connection(getattr(self.kernel, "device", None))
 
     def connect(self) -> dict:
-        return self._link(CONNECTS, "verbinden", "connected")
+        return self._link(CONNECTS, "connect", "connected")
 
     def disconnect(self) -> dict:
-        return self._link(DISCONNECTS, "verbreken", "disconnected")
+        return self._link(DISCONNECTS, "disconnect", "disconnected")
 
     def _link(self, names, verb: str, wanted: str) -> dict:
         command = self._link_command(names)
         if command is None:
             raise DesignError(
-                f"Dit apparaat kent geen opdracht om te {verb}. Grbl bijvoorbeeld "
-                "opent zijn verbinding zelf zodra er werk naartoe gaat."
+                f"This device has no command to {verb}. Grbl, for instance, "
+                "opens its connection itself as soon as work goes to it."
             )
         output = self.runner.run(command)
         state = self._connection()
 
-        # De engine meldt een mislukte verbinding alleen op het kanaal en geeft
-        # daarna netjes terug (`ruida/device.py:452`). De toestand erna is dus
-        # het enige eerlijke antwoord; is die niet te lezen, dan is de uitvoer
-        # alles wat we hebben en spreken we ons er niet over uit.
+        # The engine reports a failed connection only on the channel and then
+        # returns quietly (`ruida/device.py:452`). The state afterwards is therefore
+        # the only honest answer; when that cannot be read, the output is all we have
+        # and we do not commit ourselves.
         if state.get("state") not in (wanted, "unknown"):
             klacht = _zonder_echo(output, command)
             raise DesignError(
-                f"{verb.capitalize()} lukte niet. De engine meldt: {klacht}"
+                f"{verb.capitalize()}ing did not work. The engine reports: {klacht}"
                 if klacht
-                else f"{verb.capitalize()} lukte niet, en de engine zegt niet waarom. "
-                "Staat de machine aan, en klopt het adres in de machine-instellingen? "
-                "Ook mogelijk: er is in deze sessie al eens verbroken of van machine "
-                "gewisseld — dat overleeft de Ruida-sessie niet altijd, en dan helpt "
-                "alleen een herstart van de server."
+                else f"{verb.capitalize()}ing did not work, and the engine does not say why. "
+                "Is the machine on, and is the address in the machine settings right? "
+                "Also possible: something was disconnected or switched in this session "
+                "— the Ruida session does not always survive that, and then only "
+                "a restart of the server helps."
             )
         return {"connection": state, "output": output}
 
@@ -161,14 +161,14 @@ class MachineControl:
             return
         if running:
             raise DesignError(
-                "Er loopt een job. Stop hem eerst; bewegen tijdens het branden "
-                "verpest de job."
+                "A job is running. Stop it first; moving while burning "
+                "ruins the job."
             )
 
     def _require(self, command: str):
         if not self.runner.supports(command):
             raise DesignError(
-                f"Dit apparaat kent '{command}' niet; beweging wordt door de "
+                f"This device does not know '{command}'; movement is handled by the "
                 "device-service geleverd."
             )
 
@@ -179,7 +179,7 @@ class MachineControl:
         return {"output": self.runner.run(command)}
 
     def move_to(self, x_mm, y_mm) -> dict:
-        """Absolute positie. De kop beweegt; dit is geen tekenopdracht."""
+        """Absolute position. The head moves; this is not a drawing command."""
         self._require("move_absolute")
         self._idle()
         x = _finite(x_mm, "x_mm")
@@ -201,13 +201,13 @@ class MachineControl:
         breedte = _finite(width_mm, "width_mm")
         hoogte = _finite(height_mm, "height_mm")
         if breedte <= 0 or hoogte <= 0:
-            raise DesignError("Er is niets om een kader omheen te trekken.")
+            raise DesignError("There is nothing to draw a frame around.")
 
         bed = self._bed_mm()
         if bed and (x < 0 or y < 0 or x + breedte > bed[0] or y + hoogte > bed[1]):
             raise DesignError(
                 f"Het kader ({breedte:.0f}x{hoogte:.0f} mm vanaf {x:.0f},{y:.0f}) "
-                f"valt buiten het bed van {bed[0]:.0f}x{bed[1]:.0f} mm."
+                f"falls outside the bed of {bed[0]:.0f}x{bed[1]:.0f} mm."
             )
 
         # Terug naar de eerste hoek, zodat je de ronde ook echt ziet sluiten.
@@ -237,15 +237,15 @@ class MachineControl:
             "output": uitvoer,
             "corners": len(hoeken),
             "notice": (
-                "De machine meldde dat hij bezig was; het kader is mogelijk niet "
-                "helemaal gelopen. Probeer het opnieuw als de kop stilstaat."
+                "The machine reported it was busy; the frame may not have run "
+                "all the way. Try again when the head is standing still."
                 if bezet
                 else None
             ),
         }
 
     def _bed_mm(self):
-        """Het werkgebied in millimeters, of None als het apparaat het niet zegt."""
+        """The work area in millimetres, or None when the device does not say."""
         device = getattr(self.kernel, "device", None)
         try:
             from meerk40t.core.units import Length
@@ -260,7 +260,7 @@ class MachineControl:
         dx = _finite(dx_mm, "dx_mm")
         dy = _finite(dy_mm, "dy_mm")
         if dx == 0 and dy == 0:
-            raise DesignError("Een jog van nul doet niets.")
+            raise DesignError("A jog of zero does nothing.")
         return {"output": self.runner.run(f"move_relative {_mm(dx)} {_mm(dy)}")}
 
     def focus(self, distance_mm) -> dict:
@@ -272,9 +272,9 @@ class MachineControl:
         self._idle()
         distance = _finite(distance_mm, "distance_mm")
         if distance == 0:
-            raise DesignError("Een verplaatsing van nul doet niets.")
+            raise DesignError("A movement of zero does nothing.")
         if abs(distance) > 100:
-            raise DesignError("Meer dan 100 mm in één keer is geen scherpstellen.")
+            raise DesignError("More than 100 mm at once is not focusing.")
         return {"output": self.runner.run(f"{FOCUS} {_mm(distance)}")}
 
     # ------------------------------------------------- bewaarde posities (J6)
@@ -282,7 +282,7 @@ class MachineControl:
     def _device(self):
         device = getattr(self.kernel, "device", None)
         if device is None:
-            raise DesignError("Er is geen actieve machine.")
+            raise DesignError("There is no active machine.")
         return device
 
     def positions(self) -> list[dict]:
@@ -290,7 +290,7 @@ class MachineControl:
         De posities die deze machine onthoudt.
 
         LightBurn's Move-venster heeft ze en wij niet: wie een mal op het bed
-        heeft liggen, wil "linkerbovenhoek van de mal" één keer vastleggen in
+        heeft liggen, wil "top-left corner of the jig" één keer vastleggen in
         plaats van hem elke sessie opnieuw bij elkaar te joggen.
         """
         device = self._device()
@@ -333,14 +333,14 @@ class MachineControl:
         """
         naam = str(name or "").strip()[:MAX_NAAM]
         if not naam:
-            raise DesignError("Een bewaarde positie heeft een naam nodig.")
+            raise DesignError("A saved position needs a name.")
 
         if x_mm is None or y_mm is None:
             huidig = self._current_mm()
             if huidig is None:
                 raise DesignError(
-                    "Deze machine meldt geen positie, dus er valt niets te "
-                    "bewaren. Vul de coördinaten met de hand in."
+                    "This machine reports no position, so there is nothing to "
+                    "keep. Fill in the coordinates by hand."
                 )
             x_mm, y_mm = huidig
         x = _finite(x_mm, "x_mm")
@@ -350,8 +350,8 @@ class MachineControl:
         posities.append({"name": naam, "x_mm": round(x, 2), "y_mm": round(y, 2)})
         if len(posities) > MAX_POSITIES:
             raise DesignError(
-                f"Meer dan {MAX_POSITIES} bewaarde posities wordt een lijst waar "
-                "je in moet zoeken. Gooi er eerst een weg."
+                f"More than {MAX_POSITIES} saved positions becomes a list you have "
+                "to search through. Throw one away first."
             )
         self._write_positions(posities)
         return {"name": naam, "x_mm": round(x, 2), "y_mm": round(y, 2)}
@@ -363,7 +363,7 @@ class MachineControl:
         return {"deleted": naam}
 
     def _current_mm(self):
-        """Waar de kop nu staat, in millimeters — of None als hij het niet zegt."""
+        """Where the head is now, in millimetres — or None when it does not say."""
         from .status import StatusReader
 
         positie = StatusReader(self.kernel).position(self._device())
@@ -387,7 +387,7 @@ class MachineControl:
     # machine in gaat — zie `Drawing.verschoven`.
 
     def origin(self) -> dict | None:
-        """Het nulpunt van deze machine, of None als er geen gezet is."""
+        """The zero point of this machine, or None when none is set."""
         try:
             device = self._device()
         except DesignError:
@@ -418,8 +418,8 @@ class MachineControl:
             huidig = self._current_mm()
             if huidig is None:
                 raise DesignError(
-                    "Deze machine meldt geen positie, dus er valt geen nulpunt "
-                    "vast te leggen. Vul de coördinaten met de hand in."
+                    "This machine reports no position, so no zero point can be "
+                    "set. Fill in the coordinates by hand."
                 )
             x_mm, y_mm = huidig
         x = round(_finite(x_mm, "x_mm"), 2)
@@ -428,8 +428,8 @@ class MachineControl:
         bed = self._bed_mm()
         if bed and not (0 <= x <= bed[0] and 0 <= y <= bed[1]):
             raise DesignError(
-                f"Dat punt ({x:.0f},{y:.0f} mm) ligt buiten het bed van "
-                f"{bed[0]:.0f}x{bed[1]:.0f} mm. Daar komt de kop niet."
+                f"That point ({x:.0f},{y:.0f} mm) lies outside the bed of "
+                f"{bed[0]:.0f}x{bed[1]:.0f} mm. The head does not go there."
             )
 
         device = self._device()
@@ -439,7 +439,7 @@ class MachineControl:
         return {"x_mm": x, "y_mm": y}
 
     def clear_origin(self) -> dict:
-        """Terug naar het nulpunt van de machine zelf."""
+        """Back to the machine's own zero point."""
         device = self._device()
         device.setting(str, OORSPRONG_KEY, "")
         setattr(device, OORSPRONG_KEY, "")
@@ -487,7 +487,7 @@ class MachineControl:
         return {"power": self._kan("power"), "speed": self._kan("speed")}
 
     def adjustment(self) -> dict:
-        """Wat er nu bijgesteld staat, als factor (1.0 = zoals ontworpen)."""
+        """What is adjusted right now, as a factor (1.0 = as designed)."""
         driver = self._driver()
         caps = self.adjust_capabilities()
         return {
@@ -510,31 +510,31 @@ class MachineControl:
         """
         driver = self._driver()
         if driver is None:
-            raise DesignError("Er is geen actieve machine.")
+            raise DesignError("There is no active machine.")
         gedaan = {}
         for naam, waarde in (("power", power), ("speed", speed)):
             if waarde is None:
                 continue
             if not self._kan(naam):
                 raise DesignError(
-                    "Deze machine kan snelheid en vermogen niet tijdens een job "
-                    "bijstellen. De driver heeft er geen realtime kanaal voor; "
-                    "stop de job, wijzig de laag en start opnieuw."
+                    "This machine cannot adjust speed and power during a job. "
+                    "The driver has no realtime channel for it; "
+                    "stop the job, change the layer and start again."
                 )
             factor = _finite(waarde, naam)
             if not self.ADJUST_MIN <= factor <= self.ADJUST_MAX:
                 raise DesignError(
-                    f"Een factor van {factor:.2f} valt buiten wat de machine "
-                    f"aanneemt ({self.ADJUST_MIN:g}–{self.ADJUST_MAX:g})."
+                    f"A factor of {factor:.2f} falls outside what the machine "
+                    f"accepts ({self.ADJUST_MIN:g}–{self.ADJUST_MAX:g})."
                 )
             getattr(driver, f"set_{naam}_scale")(factor)
             gedaan[naam] = factor
         if not gedaan:
-            raise DesignError("Geef een factor voor snelheid of vermogen op.")
+            raise DesignError("Give a factor for speed or power.")
         return {**self.adjustment(), "applied": gedaan}
 
     def unlock(self) -> dict:
-        """Motoren vrijgeven, zodat je de kop met de hand kunt verzetten."""
+        """Release the motors, so the head can be moved by hand."""
         self._require("unlock")
         return {"output": self.runner.run("unlock")}
 

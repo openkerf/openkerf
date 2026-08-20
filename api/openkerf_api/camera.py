@@ -40,7 +40,7 @@ from .edits import DesignError
 # Zonder deze twee is er geen camera; dat is een nette melding waard en geen
 # stacktrace. OpenCV zit niet in de standaardinstallatie van MeerK40t.
 IMPORT_HINT = (
-    "Camerabeeld vraagt OpenCV. Installeer het naast de engine met "
+    "A camera image needs OpenCV. Install it beside the engine with "
     "'pip install opencv-python-headless'."
 )
 
@@ -62,7 +62,7 @@ class Camera:
 
     @property
     def available(self) -> bool:
-        """Of er überhaupt een camera te openen valt."""
+        """Whether a camera can be opened at all."""
         try:
             import cv2  # noqa: F401
         except ImportError:
@@ -101,7 +101,7 @@ class Camera:
         }
 
     def cameras(self) -> list[dict]:
-        """De camera's die de engine kent, plus wat het apparaat zelf ziet."""
+        """The cameras the engine knows, plus what the device itself sees."""
         if not self.available:
             raise DesignError(IMPORT_HINT)
         found = []
@@ -122,7 +122,7 @@ class Camera:
             raise DesignError(IMPORT_HINT)
         camera = self.service(start=True)
         if camera is None:
-            raise DesignError("De cameraservice liet zich niet starten.")
+            raise DesignError("The camera service would not start.")
         if uri is not None and str(uri).strip():
             camera.set_uri(str(uri).strip())
         camera.open_camera()
@@ -138,17 +138,17 @@ class Camera:
 
     def _why_no_picture(self, uri) -> str:
         """
-        Een bruikbare uitleg in plaats van "er is geen beeld".
+        Een bruikbare uitleg in plaats van "there is no image".
 
-        Het verschil tussen "er zit geen camera aan" en "dit programma mag niet
+        Het verschil tussen "there is no camera attached" en "dit programma mag niet
         bij de camera" bepaalt volledig wat je eraan moet doen, en dat verschil
         kunnen we opzoeken.
         """
         found = self.detected()
-        base = f"Geen beeld van camera '{uri}'."
+        base = f"No image from camera '{uri}'."
         if not found:
             return (
-                f"{base} Dit apparaat ziet geen enkele camera. Zit hij aangesloten "
+                f"{base} This device sees no camera at all. Is it plugged in "
                 "en aan?"
             )
         names = ", ".join(found)
@@ -158,22 +158,22 @@ class Camera:
             # engine kan dat niet vragen (het verzoek moet van de hoofdthread
             # komen), dus de gebruiker moet het één keer zelf uitlokken.
             return (
-                f"{base} Er is wel een camera ({names}), dus dit is een "
-                "toestemmingskwestie. macOS laat je een programma niet zelf aan "
-                "de cameralijst toevoegen — het moet er één keer om vragen. "
-                "Draai daarom in je eigen Terminal:\n\n"
+                f"{base} There is a camera ({names}), so this is a "
+                "permissions matter. macOS does not let you add a program to the "
+                "camera list yourself — it has to ask for it once. "
+                "So run in your own Terminal:\n\n"
                 "    python3 -c \"import cv2; cv2.VideoCapture(0)\"\n\n"
-                "Dan verschijnt het toestemmingsvenster en staat je terminal "
-                "daarna in Systeeminstellingen › Privacy en beveiliging › "
-                "Camera. Start de engine vervolgens vanuit diezelfde terminal."
+                "The permission dialog then appears and your terminal ends up in "
+                "System Settings › Privacy & Security › Camera. Then start the "
+                "engine from that same terminal."
             )
         return (
-            f"{base} Er is wel een camera ({names}); mogelijk is hij in gebruik "
-            "door een ander programma, of klopt het cameranummer niet."
+            f"{base} There is a camera ({names}); it may be in use "
+            "by another program, or the camera number may be wrong."
         )
 
     def detected(self) -> list[str]:
-        """Welke camera's dit apparaat zelf ziet, buiten OpenCV om."""
+        """Which cameras this device sees itself, outside OpenCV."""
         system = platform.system()
         try:
             if system == "Darwin":
@@ -209,12 +209,12 @@ class Camera:
     # ---------------------------------------------------------------- beeld
 
     def frame_png(self) -> bytes:
-        """Eén beeld, voor een stilstaande weergave of om op te meten."""
+        """One frame, for a still view or to measure on."""
         frame = self._frame()
         return self._encode(frame, "png")
 
     def viewer(self):
-        """Telt zolang er iemand kijkt; de camera sluit pas als de teller nul is."""
+        """Counts as long as somebody is watching; the camera only closes at zero."""
         from contextlib import contextmanager
 
         @contextmanager
@@ -291,16 +291,16 @@ class Camera:
         """
         camera = self.service()
         if camera is None:
-            raise DesignError("Er draait geen camera om te ijken.")
+            raise DesignError("No camera is running to calibrate.")
         cleaned = []
         for point in points or []:
             if not isinstance(point, (list, tuple)) or len(point) != 2:
                 raise DesignError("Elk hoekpunt is [x, y] in beeldpixels.")
             cleaned.append([float(point[0]), float(point[1])])
         if len(cleaned) != 4:
-            raise DesignError("Een bed heeft vier hoeken; geef er precies vier.")
+            raise DesignError("A bed has four corners; give exactly four.")
         if len({tuple(p) for p in cleaned}) != 4:
-            raise DesignError("Twee hoeken liggen op elkaar.")
+            raise DesignError("Two corners lie on top of each other.")
 
         camera.perspective = cleaned
         camera.correction_perspective = True if corrected is None else bool(corrected)
@@ -309,16 +309,16 @@ class Camera:
     def reset_calibration(self) -> dict:
         camera = self.service()
         if camera is None:
-            raise DesignError("Er draait geen camera.")
+            raise DesignError("No camera is running.")
         camera.reset_perspective()
         camera.correction_perspective = False
         return self.state()
 
     def set_corrected(self, corrected: bool) -> dict:
-        """Tijdens het ijken wil je juist het ónbewerkte beeld zien."""
+        """While calibrating you want to see the *unprocessed* image."""
         camera = self.service()
         if camera is None:
-            raise DesignError("Er draait geen camera.")
+            raise DesignError("No camera is running.")
         camera.correction_perspective = bool(corrected)
         return self.state()
 
@@ -328,7 +328,7 @@ class Camera:
         camera = self.service()
         frame = None if camera is None else camera.get_display_frame()
         if frame is None:
-            raise DesignError("Er is geen camerabeeld; start de camera eerst.")
+            raise DesignError("There is no camera image; start the camera first.")
         return frame
 
     def _size(self, camera) -> dict | None:

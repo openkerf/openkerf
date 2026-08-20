@@ -54,7 +54,7 @@ def test_origin_outside_the_bed_is_refused(client):
     """Een nulpunt waar de kop niet komt, is geen nulpunt maar een fout."""
     response = client.post("/api/machine/origin", json={"x_mm": 5000, "y_mm": 5})
     assert response.status_code == 409
-    assert "buiten het bed" in response.json()["detail"]
+    assert "outside the bed" in response.json()["detail"]
 
 
 def test_shifting_moves_the_work_and_puts_it_back(kernel, client):
@@ -206,7 +206,7 @@ def test_ruida_cannot_adjust_and_says_so(kernel, client):
 
     geweigerd = client.post("/api/job/adjust", json={"power": 0.9})
     assert geweigerd.status_code == 409
-    assert "niet tijdens een job" in geweigerd.json()["detail"]
+    assert "during a job" in geweigerd.json()["detail"]
 
 
 def test_adjustment_is_offered_when_the_driver_has_it(kernel):
@@ -241,9 +241,9 @@ def test_adjustment_is_offered_when_the_driver_has_it(kernel):
     assert uitslag["power"] == pytest.approx(0.9)
     assert uitslag["speed"] == pytest.approx(1.1)
 
-    with pytest.raises(DesignError, match="buiten wat de machine aanneemt"):
+    with pytest.raises(DesignError, match="outside what the machine accepts"):
         motion.adjust(power=3.0)
-    with pytest.raises(DesignError, match="snelheid of vermogen"):
+    with pytest.raises(DesignError, match="speed or power"):
         motion.adjust()
 
 

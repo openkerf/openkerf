@@ -107,7 +107,7 @@ def test_moving_is_refused_while_a_job_is_running(kernel, motion):
         lambda: motion.home(),
         lambda: motion.move_to(10, 10),
     ):
-        with pytest.raises(DesignError, match="loopt een job"):
+        with pytest.raises(DesignError, match="A job is running"):
             call()
 
 
@@ -176,4 +176,4 @@ def test_an_empty_bed_has_nothing_to_frame(client):
     response = client.post("/api/machine/frame")
 
     assert response.status_code == 409
-    assert "niets" in response.json()["detail"].lower()
+    assert "nothing" in response.json()["detail"].lower()

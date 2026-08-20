@@ -75,7 +75,7 @@ def test_burning_before_aligning_is_refused_in_a_sentence(client):
     assert antwoord.status_code == 409
     # Zie de gelijknamige test in test_tilerun.py: "uitlijn" staat niet in
     # "uitgelijnd" — er zit "ge" tussen.
-    assert "uitgelijnd" in antwoord.json()["detail"].lower()
+    assert "aligned" in antwoord.json()["detail"].lower()
 
 
 def test_the_series_shows_up_in_the_status_payload(client):

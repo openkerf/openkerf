@@ -75,7 +75,7 @@ def test_connecting_without_a_command_says_so_instead_of_failing_silently(kernel
     with pytest.raises(DesignError) as fout:
         control.connect()
 
-    assert "verbind" in str(fout.value).lower()
+    assert "connect" in str(fout.value).lower()
 
 
 # ------------------------------------------------------------- de uitkomst
@@ -160,11 +160,11 @@ def test_the_echo_of_the_command_is_not_offered_as_a_reason():
 
     bericht = str(fout.value)
     assert "ruida_connect" not in bericht
-    assert "adres" in bericht
+    assert "address" in bericht
     # De tweede oorzaak staat er ook, want die is even waarschijnlijk en je
     # zoekt hem nooit zelf: gemeten op de echte machine gaat verbinden stuk
     # zodra je in dezelfde sessie van machine gewisseld hebt.
-    assert "gewisseld" in bericht
+    assert "switched" in bericht
 
 
 def test_a_real_complaint_does_reach_the_user():

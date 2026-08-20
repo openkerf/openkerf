@@ -186,7 +186,7 @@ def test_a_box_panel_is_the_size_you_asked_for(client):
 
     design = client.get("/api/design").json()
     per_mm = design["units_per_mm"]
-    bodem = next(e for e in design["elements"] if e["label"].endswith("bodem"))
+    bodem = next(e for e in design["elements"] if e["label"].endswith("bottom"))
     x0, y0, x1, y1 = (v / per_mm for v in bodem["bounds"])
     # Breedte plus de tanden die aan weerszijden uitsteken (2 x de dikte).
     assert (x1 - x0) == pytest.approx(60 + 2 * 3, abs=0.2)
@@ -222,7 +222,7 @@ def test_a_box_yields_six_panels(client):
 
     assert response.status_code == 201
     body = response.json()
-    assert body["panels"] == ["bodem", "voor", "achter", "links", "rechts", "deksel"]
+    assert body["panels"] == ["bottom", "front", "back", "left", "right", "lid"]
     assert len(elements(client)) == 6
 
 
@@ -252,7 +252,7 @@ def test_the_kerf_makes_tabs_bigger_not_smaller():
     def widest(points):
         return max(px for px, _ in points) - min(px for px, _ in points)
 
-    assert widest(met["voor"]) > widest(zonder["voor"])
+    assert widest(met["front"]) > widest(zonder["front"])
 
 
 def test_material_thicker_than_the_box_is_refused(client):
@@ -365,7 +365,7 @@ def test_spreading_can_be_switched_off(client):
     )
 
     assert response.status_code == 409
-    assert "past niet op één vel" in response.json()["detail"]
+    assert "does not fit on one sheet" in response.json()["detail"]
     assert client.get("/api/design").json()["elements"] == []
 
 
@@ -383,7 +383,7 @@ def test_a_panel_wider_than_the_sheet_stays_refused(client):
     )
 
     assert response.status_code == 409
-    assert "breedste paneel" in response.json()["detail"]
+    assert "widest panel" in response.json()["detail"]
 
 
 
@@ -431,9 +431,9 @@ def test_a_lid_used_to_be_a_bottom_with_nowhere_to_go():
 
     naden = {links for links, _ in JOINTS} | {rechts for _, rechts in JOINTS}
 
-    for rand in ("voor", "achter", "links", "rechts"):
-        assert ("deksel", rand) in naden, f"het deksel staat los op zijn {rand}rand"
-        assert (rand, "boven") in naden, f"de {rand}wand heeft geen tand voor het deksel"
+    for rand in ("front", "back", "left", "right"):
+        assert ("lid", rand) in naden, f"het deksel staat los op zijn {rand}rand"
+        assert (rand, "over") in naden, f"de {rand}wand heeft geen tand voor het deksel"
 
 
 def test_the_walls_grow_teeth_on_top_only_when_there_is_a_lid():
@@ -446,9 +446,9 @@ def test_the_walls_grow_teeth_on_top_only_when_there_is_a_lid():
     met = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=True))
     zonder = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=False))
 
-    assert "deksel" not in zonder
-    assert len(met["voor"]) > len(zonder["voor"]), "met deksel horen er tanden bij"
-    assert len(zonder["voor"]) == 28  # zoals het altijd was: recht van boven
+    assert "lid" not in zonder
+    assert len(met["front"]) > len(zonder["front"]), "met deksel horen er tanden bij"
+    assert len(zonder["front"]) == 28  # zoals het altijd was: recht van boven
 
 
 def test_the_lid_seam_is_the_same_construction_as_the_bottom_seam():
@@ -466,16 +466,16 @@ def test_the_lid_seam_is_the_same_construction_as_the_bottom_seam():
     breedte, dikte, vinger, kerf = 80.0, 3.0, 10.0, 0.1
     heen = ((0.0, 0.0), (breedte, 0.0))
 
-    wand_onder = edge_points(*heen, dikte, vinger, kerf, PHASE[("voor", "onder")])
-    bodem_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("bodem", "voor")])
-    wand_boven = edge_points(*heen, dikte, vinger, kerf, PHASE[("voor", "boven")])
-    deksel_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("deksel", "voor")])
+    wand_onder = edge_points(*heen, dikte, vinger, kerf, PHASE[("front", "under")])
+    bodem_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("bottom", "front")])
+    wand_boven = edge_points(*heen, dikte, vinger, kerf, PHASE[("front", "over")])
+    deksel_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("lid", "front")])
 
     assert wand_boven == wand_onder
     assert deksel_rand == bodem_rand
     # En de naad zelf: tegengestelde fase, en de tanden vallen op dezelfde
     # plekken op ±kerf na — precies zoals bij de bodem.
-    assert PHASE[("voor", "boven")] != PHASE[("deksel", "voor")]
+    assert PHASE[("front", "over")] != PHASE[("lid", "front")]
     boven = sorted({round(a[0] - b[0], 4) for a, b in zip(wand_boven, deksel_rand)})
     onder = sorted({round(a[0] - b[0], 4) for a, b in zip(wand_onder, bodem_rand)})
     assert boven == onder == [-kerf, kerf]
@@ -497,10 +497,10 @@ def test_a_box_with_a_lid_still_fits_on_the_sheet(client):
 
     assert antwoord.status_code == 201, antwoord.text
     assert antwoord.json()["panels"] == [
-        "bodem",
-        "voor",
-        "achter",
-        "links",
-        "rechts",
-        "deksel",
+        "bottom",
+        "front",
+        "back",
+        "left",
+        "right",
+        "lid",
     ]

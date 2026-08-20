@@ -25,5 +25,5 @@ class Document:
         self.dirty = True
 
     def clean(self) -> None:
-        """Na opslaan, openen of leegmaken staat het bestand gelijk aan het ontwerp."""
+        """After saving, opening or emptying, the file equals the design."""
         self.dirty = False

@@ -200,7 +200,7 @@ class MachineManager:
             if device.path not in before
         ]
         if not created:
-            raise MachineError("De engine heeft geen machine aangemaakt.")
+            raise MachineError("The engine created no machine.")
 
         device = created[0]
         if label:
@@ -269,7 +269,7 @@ class MachineManager:
         device = self._find(path)
         if self.kernel.device is device:
             # Destroying the active service leaves the kernel without a device.
-            raise MachineError("De actieve machine kan niet verwijderd worden.")
+            raise MachineError("The active machine cannot be removed.")
         device.destroy()
         self.flush()
         return {"removed": path}
@@ -358,7 +358,7 @@ class MachineManager:
             try:
                 coerced = _coerce(value, types[attr])
             except (TypeError, ValueError) as e:
-                raise MachineError(f"Ongeldige waarde voor {attr}: {value}") from e
+                raise MachineError(f"Invalid value for {attr}: {value}") from e
             setattr(device, attr, coerced)
             applied[attr] = coerced
             # The device listens for these to re-realize its view and pipes.
@@ -383,7 +383,7 @@ class MachineManager:
         De engine claimt de methode alleen bij het opstarten van de
         device-service. Zonder dit staat de instelling wel op de machine maar
         kent de coolant-registratie het apparaat nog niet, en dan meldt
-        `/api/design/capabilities` "geen air assist" terwijl de gebruiker hem
+        `/api/design/capabilities` "no air assist" terwijl de gebruiker hem
         net heeft ingesteld — of erger: de schakelaar staat er wel en de blazer
         doet niets. Dezelfde aanroep als de drivers zelf doen.
         """
@@ -477,7 +477,7 @@ class MachineManager:
         return kandidaten[0]["key"] if kandidaten else None
 
     def export_profile(self, path: str) -> dict:
-        """Het hele profiel van één machine, als één leesbaar bestand."""
+        """The whole profile of one machine, as one readable file."""
         from datetime import datetime, timezone
 
         device = self._find(path)
@@ -493,8 +493,8 @@ class MachineManager:
         sleutel = self._info_key(device)
         if sleutel is None:
             raise MachineError(
-                "Van deze machine is niet te achterhalen uit welk type hij komt; "
-                "een profiel eruit zou elders niet aan te maken zijn."
+                "It cannot be traced which type this machine comes from; "
+                "a profile made from it could not be created elsewhere."
             )
         return {
             "format": PROFILE_FORMAT,
@@ -509,30 +509,30 @@ class MachineManager:
         }
 
     def read_profile(self, data) -> dict:
-        """Inlezen en meteen afwijzen wat geen machineprofiel is."""
+        """Read it and refuse at once what is not a machine profile."""
         import json
         from pathlib import Path
 
         if isinstance(data, (str, Path)):
             bron = Path(data)
             if not bron.exists():
-                raise MachineError("Dat bestand is er niet (meer).")
+                raise MachineError("That file is not there (any more).")
             try:
                 data = json.loads(bron.read_text())
             except ValueError as e:
-                raise MachineError("Dit bestand is geen leesbaar profiel.") from e
+                raise MachineError("This file is not a readable profile.") from e
         if not isinstance(data, dict) or data.get("format") != PROFILE_FORMAT:
             raise MachineError(
-                "Dit bestand komt niet uit OpenKerf. Een machineprofiel eindigt "
-                f"op {PROFILE_SUFFIX}."
+                "This file did not come from OpenKerf. A machine profile ends "
+                f"in {PROFILE_SUFFIX}."
             )
         if int(data.get("version") or 0) > PROFILE_VERSION:
             raise MachineError(
-                "Dit profiel komt uit een nieuwere versie van OpenKerf. Werk eerst bij."
+                "This profile comes from a newer version of OpenKerf. Update first."
             )
         machine = data.get("machine")
         if not isinstance(machine, dict) or not machine.get("info"):
-            raise MachineError("Dit profiel zegt niet om welk machinetype het gaat.")
+            raise MachineError("This profile does not say which machine type it is for.")
         return data
 
     def preview_profile(self, data) -> dict:
@@ -579,7 +579,7 @@ class MachineManager:
         }
 
     def import_profile(self, data, label: str | None = None) -> dict:
-        """Het profiel als nieuwe machine aanmaken, met zijn instellingen erop."""
+        """Create the profile as a new machine, with its settings on it."""
         data = self.read_profile(data)
         machine = data["machine"]
         naam = (label or machine.get("label") or "").strip() or None
@@ -645,7 +645,7 @@ USB_SIGNATURES = (
         "kind": "co2-k40",
         "keys": ("m2-nano", "m3-nano"),
         "confidence": "waarschijnlijk",
-        "why": "Dit is de CH341-chip die op de M2- en M3-Nano-borden van een K40 zit.",
+        "why": "This is the CH341 chip on the M2 and M3 Nano boards of a K40.",
         "settings": {},
     },
     {
@@ -655,7 +655,7 @@ USB_SIGNATURES = (
         "kind": "co2-ruida",
         "keys": ("g3v8-raylaser",),
         "confidence": "waarschijnlijk",
-        "why": "Deze USB-identiteit hoort bij de Newly JCZ-besturing.",
+        "why": "This USB identity belongs to the Newly JCZ controller.",
         "settings": {},
     },
     {
@@ -665,7 +665,7 @@ USB_SIGNATURES = (
         "kind": "galvo",
         "keys": ("balor-fiber", "balor-fiber-mopa", "balor-co2", "balor-uv"),
         "confidence": "waarschijnlijk",
-        "why": "De LMC-controller van een fiber- of UV-galvo meldt zich zo aan.",
+        "why": "The LMC controller of a fibre or UV galvo announces itself like this.",
         "settings": {},
     },
     {
@@ -675,7 +675,7 @@ USB_SIGNATURES = (
         "kind": "galvo",
         "keys": ("balor-fiber", "balor-fiber-mopa", "balor-co2", "balor-uv"),
         "confidence": "waarschijnlijk",
-        "why": "De LMC-controller van een fiber- of UV-galvo meldt zich zo aan.",
+        "why": "The LMC controller of a fibre or UV galvo announces itself like this.",
         "settings": {},
     },
 )
@@ -691,7 +691,7 @@ SERIAL_SIGNATURES = (
         "kind": "co2-ruida",
         "keys": ("ruida-beta", "grbl-generic"),
         "confidence": "onzeker",
-        "why": "Een Ruida RDC6442 hangt via deze FTDI-chip aan USB, maar hij is niet exclusief.",
+        "why": "A Ruida RDC6442 hangs off USB through this FTDI chip, but it is not exclusive.",
         "settings": {"interface": "usb"},
     },
     {
@@ -701,7 +701,7 @@ SERIAL_SIGNATURES = (
         "kind": "diode",
         "keys": ("grbl-generic", "grbl-fluidnc"),
         "confidence": "onzeker",
-        "why": "De CH340 zit op vrijwel elk GRBL-diodeframe, en op veel andere apparaten.",
+        "why": "The CH340 is on nearly every GRBL diode frame, and on many other devices.",
         "settings": {},
     },
     {
@@ -711,7 +711,7 @@ SERIAL_SIGNATURES = (
         "kind": "diode",
         "keys": ("grbl-generic", "grbl-fluidnc"),
         "confidence": "onzeker",
-        "why": "De CH9102 is de opvolger van de CH340 op nieuwere GRBL-borden.",
+        "why": "The CH9102 is the successor to the CH340 on newer GRBL boards.",
         "settings": {},
     },
     {
@@ -721,7 +721,7 @@ SERIAL_SIGNATURES = (
         "kind": "diode",
         "keys": ("grbl-generic", "grbl-fluidnc"),
         "confidence": "onzeker",
-        "why": "De CP2102 zit op ESP32-borden, waaronder FluidNC.",
+        "why": "The CP2102 is on ESP32 boards, FluidNC among them.",
         "settings": {},
     },
     {
@@ -731,7 +731,7 @@ SERIAL_SIGNATURES = (
         "kind": "diode",
         "keys": ("grbl-generic",),
         "confidence": "onzeker",
-        "why": "GRBL draait van oudsher op een Arduino Uno met een schild.",
+        "why": "GRBL has traditionally run on an Arduino Uno with a shield.",
         "settings": {},
     },
 )
@@ -798,15 +798,15 @@ class MachineScanner:
         try:
             import usb.core
         except ImportError:
-            notes.append("USB niet doorzocht: pyusb is niet geïnstalleerd.")
+            notes.append("USB not searched: pyusb is not installed.")
             return []
 
         try:
             devices = list(usb.core.find(find_all=True))
         except Exception as e:  # noqa: BLE001 — libusb throws a whole zoo
             notes.append(
-                "USB niet doorzocht: het besturingssysteem gaf geen toegang "
-                f"tot de USB-bus ({type(e).__name__})."
+                "USB not searched: the operating system gave no access "
+                f"to the USB bus ({type(e).__name__})."
             )
             return []
 
@@ -836,13 +836,13 @@ class MachineScanner:
         try:
             from serial.tools import list_ports
         except ImportError:
-            notes.append("Seriële poorten niet doorzocht: pyserial ontbreekt.")
+            notes.append("Serial ports not searched: pyserial is missing.")
             return []
 
         try:
             ports = list(list_ports.comports())
         except Exception as e:  # noqa: BLE001
-            notes.append(f"Seriële poorten niet doorzocht ({type(e).__name__}).")
+            notes.append(f"Serial ports not searched ({type(e).__name__}).")
             return []
 
         searched.append("seriële poorten")
@@ -872,7 +872,7 @@ class MachineScanner:
         subnet = self._local_subnet()
         if subnet is None:
             notes.append(
-                "Netwerk niet doorzocht: deze computer heeft geen adres in een "
+                "Network not searched: this computer has no address in a "
                 "lokaal netwerk."
             )
             return []
@@ -880,7 +880,7 @@ class MachineScanner:
         try:
             probe = ruida_probe_packet()
         except ImportError:
-            notes.append("Netwerk niet doorzocht: de Ruida-module ontbreekt in de engine.")
+            notes.append("Network not searched: the Ruida module is missing from the engine.")
             return []
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -890,8 +890,8 @@ class MachineScanner:
         except OSError:
             sock.close()
             notes.append(
-                f"Netwerk niet doorzocht: poort {RUIDA_LISTEN_PORT} is al in gebruik. "
-                "Waarschijnlijk praat er al iets met een Ruida."
+                f"Network not searched: port {RUIDA_LISTEN_PORT} is already in use. "
+                "Something is probably already talking to a Ruida."
             )
             return []
 
@@ -918,26 +918,26 @@ class MachineScanner:
 
         if not replies:
             notes.append(
-                f"Op {subnet} antwoordde niets op poort {RUIDA_SEND_PORT}. "
-                "Staat de machine aan en hangt hij aan hetzelfde netwerk?"
+                f"Nothing on {subnet} answered on port {RUIDA_SEND_PORT}. "
+                "Is the machine on and is it on the same network?"
             )
 
         return [
             self._candidate(
                 {
-                    "title": "Ruida-besturing op het netwerk",
+                    "title": "Ruida controller on the network",
                     "kind": "co2-ruida",
                     "keys": ("ruida-beta",),
                     "confidence": "zeker",
                     "why": (
-                        "Dit adres antwoordde op de vraag die de Ruida-driver "
-                        "ook stelt bij het verbinden."
+                        "This address answered the question the Ruida driver "
+                        "asks when it connects."
                     ),
                 },
                 kind_id=f"udp:{ip}",
                 transport="netwerk",
                 where=ip,
-                detail=f"antwoordde op poort {RUIDA_SEND_PORT}",
+                detail=f"answered on port {RUIDA_SEND_PORT}",
                 settings={"interface": "udp", "address": ip},
             )
             for ip in sorted(replies, key=_ip_sort_key)
