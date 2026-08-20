@@ -149,7 +149,12 @@ test('no message is half a sentence', () => {
 	// glued together in the markup. That works in two languages with the same word
 	// order and nowhere else.
 	const fragments = /^(of|and|or|en|van|in|op|to|for|met|the|de|het|een|a|mm|%|·|—)$/i;
+	// A one-word *label* is not a fragment: "from" and "to" above two number fields
+	// are the whole message, and a language that needs more words has room for them.
+	// Listed by key so a genuinely glued sentence cannot hide behind the exception.
+	const LABELS = new Set(['grid.from', 'grid.to']);
 	for (const [key, value] of Object.entries(en)) {
+		if (LABELS.has(key)) continue;
 		const texts =
 			typeof value === 'string'
 				? [value]

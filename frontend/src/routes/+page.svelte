@@ -423,15 +423,13 @@
 		const uitkomst = await edits.corners(design.selectedIds, style, sizeMm);
 		if (!uitkomst) return;
 		if (uitkomst.paths.length) {
-			// Afgeschuinde vormen zijn paden geworden en hebben een nieuw id; de
-			// oude selectie wijst naar iets dat niet meer bestaat.
+			// Chamfered shapes have become paths and have a new id; the old selection
+			// points at something that no longer exists.
 			design.select(null);
 		}
 		await design.load();
 		if (uitkomst.skipped) {
-			hoekMelding =
-				`${uitkomst.skipped} ${uitkomst.skipped === 1 ? 'hoek is' : 'hoeken zijn'} ` +
-				'overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.';
+			hoekMelding = t('notice.corners.skipped', { n: uitkomst.skipped });
 		}
 	}
 
@@ -440,24 +438,24 @@
 		indeelMelding = null;
 		const uitkomst = await edits.split(design.selectedIds);
 		if (!uitkomst) return;
-		// De stukken zijn nieuwe elementen; de oude selectie wijst naar een pad
-		// dat door een groep vervangen is.
+		// The pieces are new elements; the old selection points at a path that has
+		// been replaced by a group.
 		design.select(null);
 		await design.load();
 		if (uitkomst.count) {
 			design.selectMany(uitkomst.ids);
-			indeelMelding = `${uitkomst.count} vormen — los aan te klikken.`;
+			indeelMelding = t('notice.split.done', { n: uitkomst.count });
 		} else {
-			indeelMelding = 'Deze vorm bestaat uit één stuk; er valt niets te splitsen.';
+			indeelMelding = t('notice.split.nothing');
 		}
 	}
 
 	/**
-	 * Een vlak van de selectie maken, of het weghalen.
+	 * Making an area out of the selection, or taking it away.
 	 *
-	 * Zonder vulling rastert een vorm alleen zijn omtrek — gemeten: 8 % van het
-	 * vlak zwart in plaats van boven 90 %. Vandaar dat dit een eigen knop is en
-	 * geen bijwerking van "naar de rasterlaag".
+	 * Without a fill a shape only rasters its outline — measured: 8 % of the area
+	 * black instead of over 90 %. Hence this is a button of its own and not a side
+	 * effect of "into the raster layer".
 	 */
 	async function vullen(filled: boolean) {
 		if (!canEdit || !hasSelection) return;
@@ -466,14 +464,9 @@
 		if (!uitkomst) return;
 		await design.load();
 		const aantal = filled ? uitkomst.filled : uitkomst.cleared;
-		const woord = aantal === 1 ? 'vorm' : 'vormen';
 		indeelMelding =
-			(filled
-				? `${aantal} ${woord} gevuld — een rasterlaag brandt nu het vlak.`
-				: `Vulling weg bij ${aantal} ${woord}.`) +
-			(uitkomst.skipped
-				? ` ${uitkomst.skipped} overgeslagen: een lijn heeft geen binnenkant.`
-				: '');
+			t(filled ? 'notice.fill.filled' : 'notice.fill.cleared', { n: aantal }) +
+			(uitkomst.skipped ? ` ${t('notice.fill.skipped', { n: uitkomst.skipped })}` : '');
 	}
 
 	async function naarEenLaag(kind: 'cut' | 'engrave' | 'raster') {
@@ -485,14 +478,19 @@
 		const laag = design.operations.find((o) => o.id === uitkomst.operation_id);
 		const naam =
 			laag?.label ??
-			{ cut: 'Snijden', engrave: 'Graveren', raster: 'Rasteren' }[kind];
-		const uit = uitkomst.removed
-			? `, uit ${uitkomst.removed} ${uitkomst.removed === 1 ? 'toewijzing' : 'toewijzingen'} gehaald`
-			: '';
-		indeelMelding =
-			`${uitkomst.assigned || design.selectedIds.length} ` +
-			`${(uitkomst.assigned || design.selectedIds.length) === 1 ? 'vorm' : 'vormen'} ` +
-			`in ${uitkomst.created ? 'een nieuwe laag' : 'laag'} “${naam}”${uit}.`;
+			t(
+				({
+					cut: 'panel.kind.cut',
+					engrave: 'panel.kind.engrave',
+					raster: 'panel.kind.raster'
+				} as const)[kind]
+			);
+		const hoeveel = uitkomst.assigned || design.selectedIds.length;
+		indeelMelding = t('notice.layer.assigned', {
+			n: hoeveel,
+			layer: t(uitkomst.created ? 'notice.layer.newLayer' : 'notice.layer.existing', { name: naam }),
+			removed: uitkomst.removed ? t('notice.layer.removedFrom', { n: uitkomst.removed }) : ''
+		});
 	}
 
 	async function opruimen() {
@@ -502,12 +500,12 @@
 		if (!uitkomst) return;
 		await design.load();
 		indeelMelding = uitkomst.removed
-			? `${uitkomst.removed} lege ${uitkomst.removed === 1 ? 'laag' : 'lagen'} weg.`
-			: 'Er stond geen lege laag in de lijst.';
+			? t('notice.prune.done', { n: uitkomst.removed })
+			: t('notice.prune.none');
 	}
 
 	async function arrange(action: string) {
-		// 'rescue' werkt op het hele ontwerp; de rest op de selectie.
+		// 'rescue' works on the whole design; the rest on the selection.
 		if (!canEdit || (!hasSelection && action !== 'rescue')) return;
 		const ids = design.selectedIds;
 		if (action === 'offset') {
@@ -876,7 +874,7 @@
 	function sneltoets(event: KeyboardEvent) {
 		const doel = event.target as HTMLElement | null;
 		if (doel?.closest('input, textarea, select, [contenteditable="true"]')) return;
-		if (menu) return; // het menu bedient zijn eigen toetsen
+		if (menu) return; // the menu handles its own keys
 		const combo = comboOf(event);
 
 		if (combo === 'escape') {
@@ -1351,53 +1349,45 @@
 	</div>
 </Dialog>
 
-<!-- Openen, een project openen en opnieuw beginnen gooien alle drie werk weg:
-     eerst vragen, met dezelfde woorden en dezelfde uitweg. -->
+<!-- Opening, opening a project and starting over all three throw work away: ask
+     first, with the same words and the same way out. -->
 <Dialog
 	title={pending?.soort === 'nieuw'
-		? 'Opnieuw beginnen'
+		? t('replace.title.new')
 		: design.dirty
-			? 'Niet-opgeslagen wijzigingen'
+			? t('replace.title.unsaved')
 			: pending?.soort === 'project'
-				? 'Er ligt al werk in dit project'
-				: 'Er ligt al werk op dit vel'}
+				? t('replace.title.project')
+				: t('replace.title.sheet')}
 	open={pending !== null}
 	width="510px"
 >
-	<!-- Twee aanleidingen, twee zinnen. "Gewijzigd sinds de laatste keer
-	     opslaan" boven een net geopende tekening klopt niet, en een vraag die
-	     iets beweert wat je zelf kunt tegenspreken, leer je wegklikken. -->
+	<!-- Two occasions, two sentences. "Changed since it was last saved" above a
+	     drawing you have just opened is untrue, and a question that claims something
+	     you can contradict yourself is one you learn to click away. -->
 	<p class="ask">
 		{#if design.dirty}
-			Dit ontwerp is gewijzigd sinds de laatste keer opslaan.
+			{t('replace.changed')}
 		{:else if pending?.soort === 'bestand'}
-			Op dit vel staat werk:
-			{design.elements.length === 1 ? 'die ene vorm' : `die ${design.elements.length} vormen`}
-			verdwijnen van het bed.
+			{t('replace.workOnSheet', { n: design.elements.length })}
 		{:else}
-			Er staat werk in dit project.
+			{t('replace.workInProject')}
 		{/if}
 		{#if pending?.soort === 'bestand'}
-			Openen vervangt wat er nu op dit vel staat.
+			{t('replace.opensSheet')}
 		{:else if pending?.soort === 'project'}
-			Openen vervangt het hele project: het ontwerp,
-			{sheets.sheets.length === 1 ? 'het vel' : `alle ${sheets.sheets.length} vellen`} en het
-			materiaal komen uit het bestand.
+			{t('replace.opensProject', { n: sheets.sheets.length })}
 		{:else if sheets.sheets.length === 1}
-			Opnieuw beginnen leegt het bed. Je materialen en instellingen blijven staan.
+			{t('replace.emptiesBed')}
 		{:else}
-			Opnieuw beginnen leegt het bed en verwijdert alle {sheets.sheets.length} vellen. Je
-			materialen en instellingen blijven staan.
+			{t('replace.emptiesSheets', { n: sheets.sheets.length })}
 		{/if}
 	</p>
 	{#if herstelbaar}
-		<!-- Wat er hoe dan ook terug te halen is, hoort in de vraag te staan;
-		     het verandert wat je kiest. Alleen dít vel, want zo ver reikt het
-		     herstelbestand — die grens noemen we erbij. -->
-		<p class="ask nuance">
-			Van dit vel blijft een automatisch bewaarde versie van {herstelbaar} staan; die wordt bij
-			de volgende start aangeboden. De andere vellen niet.
-		</p>
+		<!-- What can be recovered regardless belongs in the question; it changes what
+		     you choose. Only *this* sheet, because that is as far as the recovery file
+		     reaches — and we name that boundary. -->
+		<p class="ask nuance">{t('replace.recoverable', { when: herstelbaar })}</p>
 	{/if}
 	<div class="ask-actions">
 		<button class="btn" onclick={() => (pending = null)}>{t('common.cancel')}</button>
@@ -1409,19 +1399,19 @@
 				if (actie) voerUit(actie);
 			}}
 		>{t('replace.dontSave')}</button>
-		<!-- Annuleren / Niet opslaan / Opslaan: het drieluik dat elk besturings-
-		     systeem bij deze vraag gebruikt. "Zonder opslaan openen" stond er
-		     eerst, en dan passen de drie knoppen niet op één regel — gemeten op
-		     1024: de primaire viel op een eigen regel. De werkwoorden staan al
-		     in de titel en de zin erboven. -->
+		<!-- Cancel / Do not save / Save: the triptych every operating system uses for
+		     this question. "Open without saving" was there first, and then the three
+		     buttons do not fit on one line — measured at 1024: the primary one dropped
+		     to a line of its own. The verbs are already in the title and the sentence
+		     above. -->
 		<button class="btn primary" onclick={saveThenOpen}
-			>{pending?.soort === 'nieuw' ? 'Opslaan en beginnen' : 'Opslaan en openen'}</button
+			>{pending?.soort === 'nieuw' ? t('replace.saveAndStart') : t('replace.saveAndOpen')}</button
 		>
 	</div>
 </Dialog>
 
-<!-- De aanleidingkaart zweeft en blokkeert niet: er is net een job gestart, en
-     die mag niet achter een modaal venster verdwijnen. -->
+<!-- The prompt card floats and does not block: a job has just started, and that
+     must not disappear behind a modal window. -->
 {#if !telefoon && vraagOpen && meldingen.vragen}
 	<div class="vraagkaart">
 		<MeldingKaart {meldingen} variant="aanleiding" onKlaar={() => (vraagOpen = false)} />
@@ -1474,7 +1464,7 @@
 		});
 		if (!response.ok) {
 			const detail = await response.json().catch(() => null);
-			return { error: detail?.detail ?? 'Dat lukte niet.' };
+			return { error: detail?.detail ?? t('notice.failed') };
 		}
 		const result = await response.json().catch(() => null);
 		await Promise.all([design.load(), sheets.load()]);
@@ -1483,8 +1473,7 @@
 		return {
 			notice:
 				used > 1
-					? `Dit past niet op één vel: het staat nu op ${used} vellen. ` +
-						`Kijk in de vellenbalk boven het canvas.`
+					? t('notice.sheets.spread', { n: used })
 					: null
 		};
 	}}

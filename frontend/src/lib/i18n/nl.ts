@@ -328,6 +328,26 @@ export const nl: Catalogue = {
 	'recovery.restore': 'Terugzetten',
 
 	// ── Werk vervangen ────────────────────────────────────────────────────────
+	'replace.title.new': 'Opnieuw beginnen',
+	'replace.title.unsaved': 'Niet-opgeslagen wijzigingen',
+	'replace.title.project': 'Er ligt al werk in dit project',
+	'replace.title.sheet': 'Er ligt al werk op dit vel',
+	'replace.changed': 'Dit ontwerp is gewijzigd sinds de laatste keer opslaan.',
+	'replace.workOnSheet': {
+		one: 'Op dit vel staat werk: die ene vorm verdwijnt van het bed.',
+		other: 'Op dit vel staat werk: die {n} vormen verdwijnen van het bed.'
+	},
+	'replace.workInProject': 'Er staat werk in dit project.',
+	'replace.opensSheet': 'Openen vervangt wat er nu op dit vel staat.',
+	'replace.opensProject': {
+		one: 'Openen vervangt het hele project: het ontwerp, het vel en het materiaal komen uit het bestand.',
+		other: 'Openen vervangt het hele project: het ontwerp, alle {n} vellen en het materiaal komen uit het bestand.'
+	},
+	'replace.emptiesBed': 'Opnieuw beginnen leegt het bed. Je materialen en instellingen blijven staan.',
+	'replace.emptiesSheets': 'Opnieuw beginnen leegt het bed en verwijdert alle {n} vellen. Je materialen en instellingen blijven staan.',
+	'replace.recoverable': 'Van dit vel blijft een automatisch bewaarde versie van {when} staan; die wordt bij de volgende start aangeboden. De andere vellen niet.',
+	'replace.saveAndStart': 'Opslaan en beginnen',
+	'replace.saveAndOpen': 'Opslaan en openen',
 	'replace.dontSave': 'Niet opslaan',
 
 	// ── Venstertitels ─────────────────────────────────────────────────────────
@@ -1000,8 +1020,8 @@ export const nl: Catalogue = {
 	'grid.legend.rows': 'Rijen: {axis} in {unit}.',
 	'grid.legend.columns': 'Kolommen: {axis}.',
 	'grid.legend.fixed': '{axis} vast op {value}.',
-	'grid.legend.darker': 'Donkerder is meer verbranding{deepest}.',
-	'grid.legend.deepest': ' — {corner} gaat het diepst',
+	'grid.legend.darker': 'Donkerder is meer verbranding.',
+	'grid.legend.deepest': 'Donkerder is meer verbranding — {corner} gaat het diepst.',
 	'grid.suggested': {
 		one: 'Bereik voorgesteld op basis van 1 bestaande preset.',
 		other: 'Bereik voorgesteld op basis van {n} bestaande presets.'
@@ -1067,5 +1087,100 @@ export const nl: Catalogue = {
 	'grid.newMaterial.create': 'Aanmaken en kiezen',
 	'grid.noRaster.body': 'De omzetter die een rastervlak naar laserregels rekent, zit in de wxPython-versie van de engine en ontbreekt hier. Een rasterbord komt blanco uit de machine. Kies Graveren · vector of Snijden, of brand dit raster vanuit de wxPython-UI.',
 	'grid.carriedOver': 'Instellingen overgenomen van je vorige raster voor dit materiaal ({date}, #{grid}). Pas ze gerust aan.',
-	'grid.cell': 'Vakje'
+	'grid.cell': 'Vakje',
+
+	// ── Generators ────────────────────────────────────────────────────────────────
+	'gen.withLid': 'Met deksel',
+	'gen.makePanels': 'Panelen maken{tail}',
+	'gen.underneath': 'Onderlangs',
+	'gen.barcode.type': 'Type',
+	'gen.title': 'Generatoren',
+	'gen.tab.grid': 'Herhalen',
+	'gen.tab.radial': 'Cirkel',
+	'gen.tab.polygon': 'Veelhoek',
+	'gen.tab.box': 'Doos',
+	'gen.tab.qrcode': 'QR-code',
+	'gen.tab.barcode': 'Streepjescode',
+	'gen.tab.arctext': 'Boogtekst',
+	'gen.cannotDraw': 'Dit kan de engine niet tekenen.',
+	'gen.incomplete': 'Nog niet compleet: vul de lege velden in.',
+	'gen.needsSelection': 'Selecteer eerst wat er herhaald moet worden.',
+	'gen.grid.lead': 'De selectie in rijen en kolommen herhalen. De afstand is de ruimte tussen de vormen, want daar gaat de snede doorheen.',
+	'gen.columns': 'Kolommen',
+	'gen.rows': 'Rijen',
+	'gen.gapX': 'Ruimte X',
+	'gen.gapY': 'Ruimte Y',
+	'gen.grid.go': '{n} stuks maken{tail}',
+	'gen.radial.lead': 'De selectie rond een middelpunt herhalen.',
+	'gen.count': 'Aantal',
+	'gen.radius': 'Straal',
+	'gen.rotateAlong': 'Meedraaien',
+	'gen.radial.go': 'Rondzetten{tail}',
+	'gen.polygon.lead': 'Een regelmatige veelhoek. Vul een binnenstraal in en het wordt een ster.',
+	'gen.corners': 'Hoeken',
+	'gen.innerRadius': 'Binnenstraal',
+	'gen.centreX': 'Midden X',
+	'gen.centreY': 'Midden Y',
+	'gen.draw': 'Tekenen{tail}',
+	'gen.box.lead': 'Losse panelen met vingerlassen. De maten zijn buitenmaten; de kerf wordt bij de tanden opgeteld omdat de laser aan beide kanten materiaal wegneemt. Past het niet op één vel, dan gaat de rest naar een volgend vel.',
+	'gen.width': 'Breedte',
+	'gen.depth': 'Diepte',
+	'gen.height': 'Hoogte',
+	'gen.materialThickness': 'Materiaaldikte',
+	'gen.finger': 'Vinger',
+	'gen.kerf': 'Kerf',
+	'gen.spreadSheets': 'Verdelen over vellen als het niet past',
+	'gen.qr.lead': 'Een QR-code als vlakken, niet als plaatje: gegraveerde bitmaps worden op hout vaak vaag, gevulde vierkanten niet.',
+	'gen.content': 'Inhoud',
+	'gen.size': 'Formaat',
+	'gen.barcode.lead': 'Een streepjescode als vlakken. EAN en UPC stellen eisen aan lengte en controlecijfer; klopt het niet, dan zegt de app dat in plaats van een code te maken die niet scant.',
+	'gen.arc.lead': 'Tekst langs een boog, voor een rond bordje of een deksel. Let op: hierna is het een pad en geen tekst meer — de engine zou de tekst anders bij de eerstvolgende wijziging weer recht renderen en de boog wegpoetsen.',
+	'gen.text': 'Tekst',
+	'gen.letterHeight': 'Letterhoogte',
+	'gen.font': 'Lettertype',
+	'gen.font.default': 'Standaard',
+	'gen.place': 'Plaatsen{tail}',
+	'gen.preview.sketch': 'Schets, niet op schaal',
+	'gen.preview.typeSomething': 'Typ iets, dan staat het hier',
+	'gen.preview.calculating': 'Even rekenen…',
+	'gen.tail.sheets': '{parts} op dit vel, {sheets} vellen',
+	'gen.tail.fits': '{parts} stuks, past op dit vel',
+	'gen.tail.size': '{width} × {height} mm',
+
+	// ── Edit notices ──────────────────────────────────────────────────────────────
+	'notice.corners.skipped': {
+		one: 'Eén hoek is overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.',
+		other: '{n} hoeken zijn overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.'
+	},
+	'notice.split.done': '{n} vormen — los aan te klikken.',
+	'notice.split.nothing': 'Deze vorm bestaat uit één stuk; er valt niets te splitsen.',
+	'notice.fill.filled': {
+		one: '1 vorm gevuld — een rasterlaag brandt nu het vlak.',
+		other: '{n} vormen gevuld — een rasterlaag brandt nu het vlak.'
+	},
+	'notice.fill.cleared': {
+		one: 'Vulling weg bij 1 vorm.',
+		other: 'Vulling weg bij {n} vormen.'
+	},
+	'notice.fill.skipped': {
+		one: 'Eén overgeslagen: een lijn heeft geen binnenkant.',
+		other: '{n} overgeslagen: een lijn heeft geen binnenkant.'
+	},
+	'notice.layer.assigned': {
+		one: '1 vorm in {layer}{removed}.',
+		other: '{n} vormen in {layer}{removed}.'
+	},
+	'notice.layer.newLayer': 'een nieuwe laag “{name}”',
+	'notice.layer.existing': 'laag “{name}”',
+	'notice.layer.removedFrom': {
+		one: ', uit 1 toewijzing gehaald',
+		other: ', uit {n} toewijzingen gehaald'
+	},
+	'notice.prune.done': {
+		one: '1 lege laag weg.',
+		other: '{n} lege lagen weg.'
+	},
+	'notice.prune.none': 'Er stond geen lege laag in de lijst.',
+	'notice.failed': 'Dat lukte niet.',
+	'notice.sheets.spread': 'Dit past niet op één vel: het staat nu op {n} vellen. Kijk in de vellenbalk boven het canvas.'
 };

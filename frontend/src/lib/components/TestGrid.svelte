@@ -1301,9 +1301,9 @@
 								value: toon(as, Number(form[VAST_VELD[as]]))
 							})}
 						{/each}
-						{t('grid.legend.darker', {
-							deepest: diepsteHoek ? t('grid.legend.deepest', { corner: diepsteHoek }) : ''
-						})}
+						{diepsteHoek
+							? t('grid.legend.deepest', { corner: diepsteHoek })
+							: t('grid.legend.darker')}
 					</p>
 				</aside>
 			{/if}

@@ -333,6 +333,26 @@ export const en = {
 	'recovery.restore': 'Restore',
 
 	// ── Replacing what is on the bed ──────────────────────────────────────────
+	'replace.title.new': 'Start over',
+	'replace.title.unsaved': 'Unsaved changes',
+	'replace.title.project': 'There is already work in this project',
+	'replace.title.sheet': 'There is already work on this sheet',
+	'replace.changed': 'This design has changed since it was last saved.',
+	'replace.workOnSheet': {
+		one: 'There is work on this sheet: that one shape will disappear from the bed.',
+		other: 'There is work on this sheet: those {n} shapes will disappear from the bed.'
+	},
+	'replace.workInProject': 'There is work in this project.',
+	'replace.opensSheet': 'Opening replaces what is on this sheet now.',
+	'replace.opensProject': {
+		one: 'Opening replaces the whole project: the design, the sheet and the material come from the file.',
+		other: 'Opening replaces the whole project: the design, all {n} sheets and the material come from the file.'
+	},
+	'replace.emptiesBed': 'Starting over empties the bed. Your materials and settings stay.',
+	'replace.emptiesSheets': 'Starting over empties the bed and removes all {n} sheets. Your materials and settings stay.',
+	'replace.recoverable': 'An automatically saved version of this sheet from {when} stays; it is offered at the next start. The other sheets are not.',
+	'replace.saveAndStart': 'Save and start',
+	'replace.saveAndOpen': 'Save and open',
 	'replace.dontSave': 'Do not save',
 
 	// ── Window titles ─────────────────────────────────────────────────────────
@@ -1005,8 +1025,8 @@ export const en = {
 	'grid.legend.rows': 'Rows: {axis} in {unit}.',
 	'grid.legend.columns': 'Columns: {axis}.',
 	'grid.legend.fixed': '{axis} fixed at {value}.',
-	'grid.legend.darker': 'Darker is more burning{deepest}.',
-	'grid.legend.deepest': ' — {corner} goes deepest',
+	'grid.legend.darker': 'Darker is more burning.',
+	'grid.legend.deepest': 'Darker is more burning — {corner} goes deepest.',
 	'grid.suggested': {
 		one: 'Range suggested on the basis of 1 existing preset.',
 		other: 'Range suggested on the basis of {n} existing presets.'
@@ -1072,5 +1092,100 @@ export const en = {
 	'grid.newMaterial.create': 'Create and choose',
 	'grid.noRaster.body': 'The converter that turns a raster area into laser lines lives in the wxPython version of the engine and is missing here. A raster board comes out of the machine blank. Choose Engrave · vector or Cut, or burn this grid from the wxPython UI.',
 	'grid.carriedOver': 'Settings carried over from your previous grid for this material ({date}, #{grid}). Feel free to adjust them.',
-	'grid.cell': 'Square'
+	'grid.cell': 'Square',
+
+	// ── Generators ────────────────────────────────────────────────────────────────
+	'gen.withLid': 'With a lid',
+	'gen.makePanels': 'Make panels{tail}',
+	'gen.underneath': 'Along the underside',
+	'gen.barcode.type': 'Type',
+	'gen.title': 'Generators',
+	'gen.tab.grid': 'Repeat',
+	'gen.tab.radial': 'Circle',
+	'gen.tab.polygon': 'Polygon',
+	'gen.tab.box': 'Box',
+	'gen.tab.qrcode': 'QR code',
+	'gen.tab.barcode': 'Barcode',
+	'gen.tab.arctext': 'Arc text',
+	'gen.cannotDraw': 'The engine cannot draw this.',
+	'gen.incomplete': 'Not complete yet: fill in the empty fields.',
+	'gen.needsSelection': 'Select what should be repeated first.',
+	'gen.grid.lead': 'Repeat the selection in rows and columns. The distance is the space between the shapes, because that is where the cut goes.',
+	'gen.columns': 'Columns',
+	'gen.rows': 'Rows',
+	'gen.gapX': 'Space X',
+	'gen.gapY': 'Space Y',
+	'gen.grid.go': 'Make {n} copies{tail}',
+	'gen.radial.lead': 'Repeat the selection around a centre point.',
+	'gen.count': 'Count',
+	'gen.radius': 'Radius',
+	'gen.rotateAlong': 'Rotate along',
+	'gen.radial.go': 'Place around{tail}',
+	'gen.polygon.lead': 'A regular polygon. Fill in an inner radius and it becomes a star.',
+	'gen.corners': 'Corners',
+	'gen.innerRadius': 'Inner radius',
+	'gen.centreX': 'Centre X',
+	'gen.centreY': 'Centre Y',
+	'gen.draw': 'Draw{tail}',
+	'gen.box.lead': 'Loose panels with finger joints. The sizes are outside sizes; the kerf is added to the teeth because the laser takes material off both sides. If it does not fit on one sheet, the rest goes to a next sheet.',
+	'gen.width': 'Width',
+	'gen.depth': 'Depth',
+	'gen.height': 'Height',
+	'gen.materialThickness': 'Material thickness',
+	'gen.finger': 'Finger',
+	'gen.kerf': 'Kerf',
+	'gen.spreadSheets': 'Spread over sheets when it does not fit',
+	'gen.qr.lead': 'A QR code as areas, not as a picture: engraved bitmaps often come out vague on wood, filled squares do not.',
+	'gen.content': 'Content',
+	'gen.size': 'Size',
+	'gen.barcode.lead': 'A barcode as areas. EAN and UPC make demands on length and check digit; if it does not add up the app says so instead of making a code that will not scan.',
+	'gen.arc.lead': 'Text along an arc, for a round sign or a lid. Note: after this it is a path and no longer text — the engine would otherwise render the text straight again on the next change and wipe the arc away.',
+	'gen.text': 'Text',
+	'gen.letterHeight': 'Letter height',
+	'gen.font': 'Font',
+	'gen.font.default': 'Default',
+	'gen.place': 'Place{tail}',
+	'gen.preview.sketch': 'Sketch, not to scale',
+	'gen.preview.typeSomething': 'Type something and it appears here',
+	'gen.preview.calculating': 'Calculating…',
+	'gen.tail.sheets': '{parts} on this sheet, {sheets} sheets',
+	'gen.tail.fits': '{parts} pieces, fits on this sheet',
+	'gen.tail.size': '{width} × {height} mm',
+
+	// ── Edit notices ──────────────────────────────────────────────────────────────
+	'notice.corners.skipped': {
+		one: 'One corner was skipped: the sides are too short for it, or an arc meets there.',
+		other: '{n} corners were skipped: the sides are too short for it, or an arc meets there.'
+	},
+	'notice.split.done': '{n} shapes — clickable separately.',
+	'notice.split.nothing': 'This shape consists of one piece; there is nothing to split.',
+	'notice.fill.filled': {
+		one: '1 shape filled — a raster layer now burns the area.',
+		other: '{n} shapes filled — a raster layer now burns the area.'
+	},
+	'notice.fill.cleared': {
+		one: 'Fill removed from 1 shape.',
+		other: 'Fill removed from {n} shapes.'
+	},
+	'notice.fill.skipped': {
+		one: 'One was skipped: a line has no inside.',
+		other: '{n} were skipped: a line has no inside.'
+	},
+	'notice.layer.assigned': {
+		one: '1 shape into {layer}{removed}.',
+		other: '{n} shapes into {layer}{removed}.'
+	},
+	'notice.layer.newLayer': 'a new layer “{name}”',
+	'notice.layer.existing': 'layer “{name}”',
+	'notice.layer.removedFrom': {
+		one: ', taken out of 1 assignment',
+		other: ', taken out of {n} assignments'
+	},
+	'notice.prune.done': {
+		one: '1 empty layer gone.',
+		other: '{n} empty layers gone.'
+	},
+	'notice.prune.none': 'There was no empty layer in the list.',
+	'notice.failed': 'That did not work.',
+	'notice.sheets.spread': 'This does not fit on one sheet: it is now on {n} sheets. Look in the sheet bar above the canvas.'
 } as const;
