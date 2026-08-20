@@ -5,6 +5,8 @@
  * machinetypes uit upstream verschijnen hier zonder codewijziging.
  */
 
+import { t } from './i18n/core.ts';
+
 export type CatalogMachine = {
 	key: string;
 	family: string;
@@ -57,30 +59,30 @@ export const KINDS: {
 }[] = [
 	{
 		id: 'co2-ruida',
-		label: 'CO2 met Ruida of Newly',
-		blurb: 'Grote kast, glazen buis, waterkoeling, meestal een Z-as. K50/K60 en groter.',
-		// Rechtop en hoog, met een koeler ernaast. Het silhouet moet van de K40
-		// te onderscheiden zijn zónder de details te lezen — DESIGN-SYSTEM v3
-		// eist onderscheidende silhouetten, en twee lage doosjes zijn dat niet.
+		label: t('kind.co2Ruida'),
+		blurb: t('kind.co2Ruida.blurb'),
+		// Upright and tall, with a chiller beside it. The silhouette has to be
+		// distinguishable from the K40 *without* reading the details — DESIGN-SYSTEM v3
+		// demands distinct silhouettes, and two low boxes are not that.
 		icon: 'M3 4h12v16H3zM3 9h12M6 20v1.5M12 20v1.5M18 8h3v8h-3z'
 	},
 	{
 		id: 'co2-k40',
-		label: 'K40 CO2',
-		blurb: 'De blauwe doos van 40 W, met een M2- of M3-Nano-bord.',
-		// Laag en breed: de blauwe doos met zijn klapdeksel.
+		label: t('kind.k40'),
+		blurb: t('kind.k40.blurb'),
+		// Low and wide: the blue box with its hinged lid.
 		icon: 'M3 11h18v7H3zM4.5 11l2-3h11l2 3M9 14.5h6'
 	},
 	{
 		id: 'diode',
-		label: 'Diode op GRBL',
-		blurb: 'Open frame zonder koeling. Ortur, Longer, Sculpfun, zelfbouw.',
+		label: t('kind.diode'),
+		blurb: t('kind.diode.blurb'),
 		icon: 'M3 19h18M5 19V7M19 19V7M4 7h16M11 7v4M9.5 11h3l-1.5 3.5z'
 	},
 	{
 		id: 'galvo',
-		label: 'Galvo — fiber of UV',
-		blurb: 'Spiegelkop op een statief, markeert metaal. Balor-besturing.',
+		label: t('kind.galvo'),
+		blurb: t('kind.galvo.blurb'),
 		icon: 'M12 3v3M9 6h6v3H9zM12 9v2M8 11h8l-4 6zM6 20h12'
 	}
 ];
@@ -279,8 +281,8 @@ async function describe(response: Response): Promise<string> {
 		const body = await response.json();
 		if (typeof body.detail === 'string') return body.detail;
 		if (body.detail?.output?.length) return body.detail.output.join(' · ');
-		return `De engine weigerde de opdracht (${response.status}).`;
+		return t('error.engineRefused', { status: response.status });
 	} catch {
-		return `De engine weigerde de opdracht (${response.status}).`;
+		return t('error.engineRefused', { status: response.status });
 	}
 }

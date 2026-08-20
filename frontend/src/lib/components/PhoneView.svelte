@@ -15,6 +15,7 @@
 	 * 3. Wat je meet, toon je één keer. Voortgang stond hier drie keer en de
 	 *    resterende tijd — het enige getal waar je op wacht — nul keer.
 	 */
+	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import {
 		currentJob,
 		gridSummary,
@@ -185,33 +186,36 @@
 	}
 
 	/** De sleutels van de generator zijn geen woorden voor op het scherm. */
-	const BEWERKING: Record<string, string> = {
-		snijden: 'snijden',
-		'graveren-vector': 'graveren',
-		'graveren-raster': 'rasteren',
-		markeren: 'markeren'
+	const BEWERKING: Record<string, MessageKey> = {
+		snijden: 'phone.operation.cut',
+		'graveren-vector': 'phone.operation.engrave',
+		'graveren-raster': 'phone.operation.raster',
+		markeren: 'phone.operation.mark'
 	};
 
-	/** "2026-08-11 19:33:37" → "11 aug 19:33". Zonder seconden, zonder jaar. */
+	function bewerking(kind: string): string {
+		return kind in BEWERKING ? t(BEWERKING[kind]) : kind;
+	}
+
+	/** "2026-08-11 19:33:37" → "11 Aug 19:33". No seconds, no year. */
 	function stempel(waarde: string): string {
 		const d = new Date(waarde.replace(' ', 'T'));
 		if (Number.isNaN(d.getTime())) return waarde;
-		// Niet toLocaleString: die zet er een komma tussen, en dan breekt de
-		// regel juist daar af — "11 aug," op de ene regel, "19:51" op de volgende.
-		const dag = d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
-		const tijd = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-		// Harde spatie: datum en tijd horen bij elkaar en mogen niet uiteenvallen.
+		// Not toLocaleString: that puts a comma between them, and then the line breaks
+		// exactly there — "11 Aug," on one line, "19:51" on the next.
+		const dag = new Intl.DateTimeFormat(i18n.locale, { day: 'numeric', month: 'short' }).format(d);
+		const tijd = new Intl.DateTimeFormat(i18n.locale, { timeStyle: 'short' }).format(d);
+		// Hard space: date and time belong together and must not fall apart.
 		return `${dag} ${tijd}`.replace(/ /g, ' ');
 	}
 
 	/**
-	 * De fotolijst kende maar twee standen: foto nodig, of weg (gat P9).
+	 * The photo list knew only two states: photo needed, or gone (gap P9).
 	 *
-	 * Sinds er een uitlijning op de rasterrij staat is er een derde — foto
-	 * binnen, nog niet uitgelijnd — en die verdween stil uit de lijst. Een
-	 * halfafgemaakte stap hoort niet te verdwijnen: het bord ligt er nog, de
-	 * preset is er nog niet, en niemand die alleen op zijn telefoon kijkt wist
-	 * dat er nog iets te doen was.
+	 * Since there is an alignment on the grid row there is a third — photo in, not
+	 * aligned yet — and that one quietly disappeared from the list. A half-finished
+	 * step should not disappear: the board is still there, the preset is not yet, and
+	 * nobody looking only at their phone knew there was still something to do.
 	 */
 	let wachtend = $derived(rasters.filter((g) => !g.photo_path));
 	let uitlijnen = $derived(rasters.filter((g) => g.photo_path && !g.alignment));
@@ -264,7 +268,7 @@
 				body: form
 			});
 			await haalRasters();
-			gelukt = 'Foto opgeslagen. De preset haal je er op de desktop uit.';
+			gelukt = t('phone.photoSaved');
 		} finally {
 			bezig = null;
 		}
@@ -469,42 +473,46 @@
 
 <div class="telefoon">
 	<!--
-		Bovenaan en buiten het scrolgebied: een alarm dat je weg kunt scrollen is
-		geen alarm (besluit B3). Bewust géén overlay: als vast blok dúwt hij de
-		rest omlaag in plaats van de kop en de helft van de bedtekening af te
-		dekken. Op 390 px kostte de zwevende versie 270 px aan afgesneden inhoud,
-		en de machinestatus — juist bij een verbindingsalarm het eerste wat je wilt
-		zien — was permanent onbereikbaar.
+		At the top and outside the scroll area: an alarm you can scroll away is not an
+		alarm (decision B3). Deliberately not an overlay: as a fixed block it pushes
+		the rest down instead of covering the header and half the bed drawing. At
+		390 px the floating version cost 270 px of cut-off content, and the machine
+		status — precisely the first thing you want to see with a connection alarm —
+		was permanently out of reach.
 	-->
 	<MeldingAlarm {bewaker} groot />
 	<header>
 		<span class="dot {machineState}" aria-hidden="true"></span>
-		<span class="staat">{connected ? machineStateLabel(machineState) : 'Geen verbinding'}</span>
-		<span class="machine mono">{device?.label ?? 'geen machine'}</span>
+		<span class="staat"
+			>{connected ? machineStateLabel(machineState) : t('phone.noConnection')}</span
+		>
+		<span class="machine mono">{device?.label ?? t('phone.noMachine')}</span>
 	</header>
 
 	<!--
-		De rangorde volgt wat je hier doet, niet hoe het scherm heet (besluit B13).
+		The ranking follows what you do here, not what the screen is called
+		(decision B13).
 
-		Bij een lopende job blijft de voortgang boven: dan is "hoe ver" de vraag.
-		Staat de machine stil en ligt er een gebrand bord te wachten, dan is er
-		precies één ding te doen waarvoor je een telefoon in je hand moet hebben —
-		een foto maken van iets dat op het bed ligt. Dat staat bovenaan, en de
-		machinestand zakt terug tot één regel.
+		With a running job the progress stays on top: then "how far" is the question.
+		If the machine is idle and a burned board is waiting, there is exactly one
+		thing to do for which you need a phone in your hand — taking a photo of
+		something lying on the bed. That goes on top, and the machine state falls back
+		to one line.
 
-		De noodrem verhuist niet mee. Zie "De noodrem: een afweging met een prijs"
-		in DESIGN-SYSTEM.md: blind vindbaar weegt zwaarder dan de dode knop.
+		The emergency brake does not move with it. See "The emergency brake: a
+		trade-off with a price" in DESIGN-SYSTEM.md: findable blind weighs more than
+		the dead button.
 	-->
 	{#snippet beeld()}
-		<!-- Camera: als je kunt kijken, kijk je. -->
+		<!-- Camera: if you can look, you look. -->
 		<div class="podium">
-			<img src={camera.src} alt="Camerabeeld van het bed" onerror={() => (beeldStuk = true)} />
+			<img src={camera.src} alt={t('phone.cameraAlt')} onerror={() => (beeldStuk = true)} />
 		</div>
 	{/snippet}
 
 	{#snippet bedkaart()}
-		<!-- Wat er op het bed ligt: het bed op schaal, het vel erin, het werk in
-		     laagkleur en een kruis op de kop. -->
+		<!-- What is on the bed: the bed to scale, the sheet in it, the work in layer
+		     colour and a cross on the head. -->
 		<div class="rust">
 			{#if bedW > 0 && bedH > 0}
 				<svg
@@ -515,9 +523,9 @@
 					bind:clientWidth={bedBreedtePx}
 				>
 					<rect class="vlak" x="0" y="0" width={bedW} height={bedH} vector-effect="non-scaling-stroke" />
-					<!-- Het vel: waar het materiaal ligt. Zonder dat kader zweeft het
-					     werk ergens in een bed van 610 mm en zie je niet of het op je
-					     restje past. -->
+					<!-- The sheet: where the material is. Without that frame the work floats
+					     somewhere in a 610 mm bed and you cannot see whether it fits on your
+					     offcut. -->
 					{#if sheet && sheet.width_mm > 0 && sheet.height_mm > 0}
 						<rect
 							class="vel"
@@ -564,64 +572,58 @@
 				</svg>
 			{/if}
 			<dl class="feiten">
-				<div><dt>Bed</dt><dd class="mono">{bedW && bedH
+				<div><dt>{t('phone.bed')}</dt><dd class="mono">{bedW && bedH
 						? `${Math.round(bedW)} × ${Math.round(bedH)} mm`
 						: '—'}</dd></div>
-				<div><dt>Kop</dt><dd class="mono">{position}</dd></div>
-				<!-- Wat er ligt, in woorden. Een grijze stippellijn tussen zeven
-				     gekleurde is op een telefoon in de zon niet te zien; het getal
-				     erbij wel. -->
+				<div><dt>{t('phone.head')}</dt><dd class="mono">{position}</dd></div>
+				<!-- What is there, in words. A grey dotted line among seven coloured ones
+				     cannot be seen on a phone in the sun; the number can. -->
 				<div>
-					<dt>Op het bed</dt>
+					<dt>{t('phone.onTheBed')}</dt>
 					<dd>
 						{#if vormen.length === 0}
-							niets
+							{t('phone.nothing')}
 						{:else}
-							<span class="mono">{brandt}</span>
-							{brandt === 1 ? 'vorm brandt' : 'vormen branden'}{#if stille}<span class="stilnoot"
-									>, <span class="mono">{stille}</span> in geen laag</span
+							{t('preview.shapesBurn', { n: brandt })}{#if stille}<span class="stilnoot"
+									>{t('phone.noLayer', { n: stille })}</span
 								>{/if}
 						{/if}
 					</dd>
 				</div>
 			</dl>
-			<!-- Gat P8: hetzelfde als de strook onder het canvas (C2), in dezelfde
-			     twee zinnen. Buiten het bed komt de kop niet; buiten het vel komt
-			     hij wel, maar ligt er geen materiaal. Dat verschil bepaalt of je
-			     het werk verschuift of je plaat vervangt, dus het staat er als
-			     twee regels en niet als één "let op". -->
+			<!-- Gap P8: the same as the strip under the canvas (C2), in the same two
+			     sentences. Outside the bed the head does not go; outside the sheet it
+			     does, but there is no material. That difference decides whether you move
+			     the work or replace your board, so it is two lines and not one "careful". -->
 			{#if buitenstaanders.bed || buitenstaanders.vel}
 				<div class="buiten" role="status">
 					{#if buitenstaanders.bed}
 						<p class="bedrand">
 							<span class="teken" aria-hidden="true">!</span>
-							{buitenstaanders.bed === 1
-								? 'Eén vorm ligt'
-								: `${buitenstaanders.bed} vormen liggen`} buiten het bed — daar komt de kop niet.
+							{t('canvas.outsideBed', { n: buitenstaanders.bed })}
 						</p>
 					{/if}
 					{#if buitenstaanders.vel}
 						<p class="velrand">
 							<span class="teken" aria-hidden="true">!</span>
-							{buitenstaanders.vel === 1
-								? 'Eén vorm ligt'
-								: `${buitenstaanders.vel} vormen liggen`} buiten {sheet ? sheet.name : 'het vel'} —
-							daar ligt geen materiaal.
+							{t('canvas.outsideSheet', {
+								n: buitenstaanders.vel,
+								sheet: sheet ? sheet.name : t('canvas.theSheet')
+							})}
 						</p>
 					{/if}
 				</div>
 			{/if}
-			<!-- Een bed zonder job zei alleen "Gereed" bovenin. Dat is een
-			     toestand, geen antwoord: wie hier kijkt wil weten of het stil is
-			     omdat het klaar is, of stil omdat er iets mis is. -->
+			<!-- A bed without a job only said "Ready" at the top. That is a state, not an
+			     answer: whoever looks here wants to know whether it is quiet because it is
+			     finished, or quiet because something is wrong. -->
 			<p class="waarom">
 				{#if !connected}
-					Dit is de laatste stand die we gezien hebben.
+					{t('phone.lastSeen')}
 				{:else if machineState === 'unplugged'}
-					Er hangt geen machine aan de server. Controleer of hij aanstaat en
-					of de kabel erin zit.
+					{t('phone.unplugged')}
 				{:else}
-					Niets aan het branden. Een job start je op de desktop.
+					{t('phone.idle')}
 				{/if}
 			</p>
 		</div>
@@ -629,14 +631,18 @@
 
 	{#snippet camerablok()}
 		{#if beeldStuk}
-			<p class="uitleg">De camera staat aan maar levert geen beeld. Kabel los?</p>
+			<p class="uitleg">{t('phone.cameraNoImage')}</p>
 		{/if}
 		{#if camera.state.available && !camAan}
 			<button class="camknop" onclick={() => camera.start()} disabled={camera.busy}>
-				{camera.busy ? 'Camera starten…' : beeldStuk ? 'Opnieuw proberen' : 'Camera aanzetten'}
+				{camera.busy
+					? t('phone.cameraStarting')
+					: beeldStuk
+						? t('phone.cameraRetry')
+						: t('phone.cameraOn')}
 			</button>
 		{:else if !camera.state.available}
-			<p class="uitleg">{camera.state.reason ?? 'Geen camera gekoppeld aan deze machine.'}</p>
+			<p class="uitleg">{camera.state.reason ?? t('phone.noCamera')}</p>
 		{/if}
 		{#if camera.error}
 			<p class="fout">{camera.error}</p>
@@ -651,21 +657,19 @@
 			<section class="rasters">
 				<h2>
 					{#if wachtend.length}
-						{wachtend.length}
-						{wachtend.length === 1 ? 'testraster wacht' : 'testrasters wachten'} op een foto
+						{t('phone.waitingPhoto', { n: wachtend.length })}
 					{:else}
-						{uitlijnen.length}
-						{uitlijnen.length === 1 ? 'testraster wacht' : 'testrasters wachten'} op uitlijnen
+						{t('phone.waitingAlign', { n: uitlijnen.length })}
 					{/if}
 				</h2>
 				{#each lijst as grid (grid.id)}
 					<label class="raster" class:gedaan={Boolean(grid.photo_path)}>
 						<span class="naam">
-							<span class="kop">{rasterNaam(grid)} · {BEWERKING[grid.operation] ?? grid.operation}</span>
+							<span class="kop">{rasterNaam(grid)} · {bewerking(grid.operation)}</span>
 							{#if grid.photo_path}
-								<!-- Halverwege, en dat mag je zien. De volgende stap is niet
-								     de jouwe: uitlijnen doe je op een groot scherm. -->
-								<span class="detail rest">foto binnen — uitlijnen op de desktop</span>
+								<!-- Halfway, and that may be visible. The next step is not yours:
+								     aligning is done on a big screen. -->
+								<span class="detail rest">{t('phone.photoIn')}</span>
 							{:else}
 								<span class="detail mono">
 									{gridSummary(grid)} · {stempel(grid.created_at)}
@@ -674,11 +678,11 @@
 						</span>
 						<span class="knop" class:zacht={Boolean(grid.photo_path)}>
 							{#if bezig === grid.id}
-								bezig…
+								{t('common.busy')}
 							{:else if grid.photo_path}
-								Opnieuw
+								{t('phone.again')}
 							{:else}
-								Foto maken
+								{t('phone.takePhoto')}
 							{/if}
 						</span>
 						<input
@@ -686,8 +690,8 @@
 							accept="image/*"
 							capture="environment"
 							aria-label={grid.photo_path
-								? `Nieuwe foto van testraster ${grid.id}`
-								: `Foto van testraster ${grid.id}`}
+								? t('phone.newPhotoOf', { id: grid.id })
+								: t('library.photo.alt', { id: grid.id })}
 							onchange={(e) => {
 								const f = e.currentTarget.files?.[0];
 								e.currentTarget.value = '';
@@ -702,8 +706,8 @@
 
 	<div class="rol">
 		{#if fotoEerst}
-			<!-- Er staat een gebrand bord op het bed en de machine is stil: dit is
-			     waarvoor je de telefoon in je hand hebt. -->
+			<!-- There is a burned board on the bed and the machine is idle: this is what
+			     you have the phone in your hand for. -->
 			{@render fotolijst()}
 			{#if standInEenRegel}
 				<section class="standsectie">
@@ -713,7 +717,7 @@
 						onclick={() => (bedOpen = !bedOpen)}
 					>
 						<span class="dot {machineState}" aria-hidden="true"></span>
-						<span class="naam">Niets aan het branden</span>
+						<span class="naam">{t('phone.notBurning')}</span>
 						<span class="stand mono">{position}</span>
 						<span class="pijl" aria-hidden="true">{bedOpen ? '▴' : '▾'}</span>
 					</button>
@@ -722,7 +726,7 @@
 					{/if}
 				</section>
 			{:else}
-				<!-- Niet gewoon stil: dan is de machinestand geen bijzin meer. -->
+				<!-- Not simply idle: then the machine state is no longer a subclause. -->
 				{@render bedkaart()}
 			{/if}
 			{#if camAan}
@@ -738,12 +742,12 @@
 					</div>
 				{/if}
 			{:else if huidig}
-				<!-- Eén ring draagt de voortgang; het getal erbinnen is hetzelfde
-				     verhaal, niet een tweede. -->
+				<!-- One ring carries the progress; the number inside it is the same story,
+				     not a second one. -->
 				<div class="podium">
 					<svg class="ring" viewBox="0 0 200 200" role="progressbar"
 						aria-valuenow={percent} aria-valuemin="0" aria-valuemax="100"
-						aria-label="Voortgang van de job">
+						aria-label={t('job.progressAria')}>
 						<circle class="baan" cx="100" cy="100" r={STRAAL} />
 						<circle
 							class="voor"
@@ -756,14 +760,14 @@
 					<div class="binnen">
 						<span class="groot mono">{percent}<span class="pct">%</span></span>
 						{#if stil}
-							<span class="onder">gepauzeerd</span>
+							<span class="onder">{t('phone.paused')}</span>
 						{:else if pauzeGevraagd}
-							<span class="onder">pauze gevraagd…</span>
+							<span class="onder">{t('phone.pauseAsked')}</span>
 						{:else if resterend !== null}
-							<span class="onder">nog <span class="mono">{formatDuration(resterend)}</span></span>
-							<span class="klaar">klaar om <span class="mono">{klaarOm}</span></span>
+							<span class="onder">{t('phone.remaining', { time: formatDuration(resterend) })}</span>
+							<span class="klaar">{t('phone.doneAt', { time: klaarOm })}</span>
 						{:else}
-							<span class="onder">bezig met branden</span>
+							<span class="onder">{t('phone.burning')}</span>
 						{/if}
 					</div>
 				</div>
@@ -776,7 +780,7 @@
 			{/if}
 
 			{#if vraagNu}
-				<!-- De aanleiding is er nu: er ligt werk in de machine. -->
+				<!-- The occasion is here now: there is work in the machine. -->
 				<MeldingKaart {meldingen} variant="aanleiding" onKlaar={() => (vraagWeg = true)} />
 			{/if}
 
@@ -784,16 +788,16 @@
 			{@render fotolijst()}
 		{/if}
 
-		<!-- De vaste plek waar meldingen aan en uit gaan, en waar staat wat de
-		     browser ervan vindt. Ingeklapt kost dat één regel; geblokkeerd is een
-		     toestand die je hier ziet én terugdraait. -->
+		<!-- The fixed place where notifications go on and off, and where it says what
+		     the browser makes of it. Collapsed that costs one line; blocked is a state
+		     you see *and* undo here. -->
 		<section class="meldsectie">
 			<button
 				class="meldrij"
 				aria-expanded={instellingenOpen}
 				onclick={() => (instellingenOpen = !instellingenOpen)}
 			>
-				<span class="naam">Meldingen</span>
+				<span class="naam">{t('notifications.title')}</span>
 				<span class="stand {meldStand}">{meldStand}</span>
 				<span class="pijl" aria-hidden="true">{instellingenOpen ? '▴' : '▾'}</span>
 			</button>
@@ -804,23 +808,21 @@
 			{/if}
 		</section>
 
-		<p class="elders">
-			Ontwerpen doe je op de desktop — dit scherm houdt de machine in de gaten.
-		</p>
+		<p class="elders">{t('phone.designElsewhere')}</p>
 	</div>
 
-	<!-- De noodrem: vast onderin, scrollt niet mee, ver uit elkaar. Wat de
-	     machine weigert hoort hier te staan en niet in de console te verdwijnen. -->
+	<!-- The emergency brake: fixed at the bottom, does not scroll, far apart. What
+	     the machine refuses belongs here and must not disappear into the console. -->
 	<div class="noodrem">
 		{#if !connected}
-			<!-- De enige rem die nu nog werkt, staat niet op dit scherm. Dat mag je
-			     niet zelf hoeven concluderen uit twee grijze knoppen. -->
+			<!-- The only brake that still works is not on this screen. You should not
+			     have to conclude that yourself from two grey buttons. -->
 			<p class="fout" role="alert">
-				Geen verbinding — stoppen kan alleen met de knop op de machine.
+				{t('phone.stopOnMachine')}
 				<button class="opnieuw" onclick={() => verbinding.nuProberen()}>
-					Opnieuw proberen{verbinding.overSeconden > 0
-						? ` (vanzelf over ${verbinding.overSeconden} s)`
-						: ''}
+					{verbinding.overSeconden > 0
+						? t('phone.retry.auto', { seconds: verbinding.overSeconden })
+						: t('phone.retry')}
 				</button>
 			</p>
 		{/if}
@@ -830,23 +832,23 @@
 		<div class="knoppen">
 			{#if stil}
 				<button class="rem hervat" disabled={control.needsToken || !connected} onclick={() => control.resume()}>
-					Hervat
+					{t('phone.resume')}
 				</button>
 			{:else}
 				<button class="rem pauze" disabled={!huidig || control.needsToken || !connected} onclick={pauzeer}>
-					{pauzeGevraagd ? 'Pauze…' : 'Pauze'}
+					{pauzeGevraagd ? t('phone.pausing') : t('job.pause')}
 				</button>
 			{/if}
-			<!-- Zonder verbinding komt deze tik nergens aan. Een rode knop die
-			     indrukbaar oogt en niets doet, is op dit scherm het gevaarlijkste
-			     wat er is: je drukt, je loopt weg, en je gelooft dat het stopt. -->
+			<!-- Without a connection this tap arrives nowhere. A red button that looks
+			     pressable and does nothing is the most dangerous thing on this screen:
+			     you press, you walk away, and you believe it stops. -->
 			<button
 				class="rem stop"
 				class:scherp={Boolean(huidig) && connected}
 				disabled={control.needsToken || !connected}
 				onclick={() => control.stop()}
 			>
-				Stop
+				{t('job.stop')}
 			</button>
 		</div>
 	</div>
@@ -872,12 +874,12 @@
 	.machine { margin-left: auto; color: var(--text-2); font-size: var(--text-xs); }
 	.dot { width: 10px; height: 10px; border-radius: var(--radius-dot); background: var(--text-2); }
 	.dot.ready { background: var(--ok); }
-	/* Was `.dot.running`, en die klasse bestond niet: MachineState heet `busy`.
-	   De stip bleef daardoor grijs terwijl de machine brandde. */
+	/* Was `.dot.running`, and that class did not exist: MachineState is called
+	   `busy`. The dot therefore stayed grey while the machine was burning. */
 	.dot.busy { background: var(--accent); }
 	.dot.paused { background: var(--warn-solid); }
-	/* `unplugged` bestond nog niet toen deze stip geschreven werd; zonder regel
-	   viel hij terug op grijs en las een dode poort als "niets aan de hand". */
+	/* `unplugged` did not exist yet when this dot was written; without a rule it
+	   fell back to grey and a dead port read as "nothing wrong". */
 	.dot.unplugged { background: var(--warn-solid); }
 	.dot.alarm { background: var(--danger-solid); }
 	.dot.unplugged { background: var(--warn-solid); }

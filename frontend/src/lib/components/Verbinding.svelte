@@ -12,6 +12,7 @@
 	 * de machine brandt, dan brandt hij door en kan deze app hem niet meer
 	 * stoppen. Dat mag je op zo'n moment niet zelf hoeven bedenken.
 	 */
+	import { t } from '$lib/i18n/index.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
 
 	let { brandt = false }: { brandt?: boolean } = $props();
@@ -32,8 +33,8 @@
 	let weg = $derived(
 		verbinding.sinds ? Math.round((Date.now() - verbinding.sinds) / 1000) : 0
 	);
-	// Alleen noemen als het lang genoeg duurt om ongerust van te worden.
-	let duur = $derived(weg >= 60 ? `${Math.floor(weg / 60)} min` : null);
+	// Only mentioned when it lasts long enough to worry about.
+	let duur = $derived(weg >= 60 ? t('connection.minutes', { n: Math.floor(weg / 60) }) : null);
 
 	/**
 	 * Deze kaart en het machine-alarm vormen één kolom, en dit is de maat ervan.
@@ -83,26 +84,21 @@
 	<div class="verbroken" role="alert" bind:this={kaart}>
 		<span class="stip" aria-hidden="true"></span>
 		<div class="tekst">
-			<strong>Geen verbinding met OpenKerf</strong>
+			<strong>{t('connection.lost')}</strong>
 			<p>
-				De server reageert niet{duur ? ` — al ${duur}` : ''}. Wat je nu tekent of
-				instelt komt niet aan, en de standen hieronder zijn de laatste die we
-				gezien hebben.
+				{duur ? t('connection.lost.bodyFor', { duration: duur }) : t('connection.lost.body')}
 			</p>
 			{#if brandt}
-				<p class="urgent">
-					De machine loopt door. Stoppen kan nu alleen met de knop op de machine
-					zelf.
-				</p>
+				<p class="urgent">{t('connection.stillBurning')}</p>
 			{/if}
 		</div>
 		<div class="actie">
-			<button onclick={() => verbinding.nuProberen()}>Nu opnieuw proberen</button>
+			<button onclick={() => verbinding.nuProberen()}>{t('connection.retryNow')}</button>
 			<span class="klok">
 				{#if verbinding.overSeconden > 0}
-					vanzelf over {verbinding.overSeconden} s
+					{t('connection.autoIn', { seconds: verbinding.overSeconden })}
 				{:else}
-					bezig met verbinden…
+					{t('connection.connecting')}
 				{/if}
 			</span>
 		</div>

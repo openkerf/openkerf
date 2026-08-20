@@ -6,6 +6,8 @@
  * statuspayload, zodat canvas, bovenbalk en telefoon dezelfde stand zien.
  */
 
+import { t } from './i18n/core.ts';
+
 export type TileRect = { x0_mm: number; y0_mm: number; x1_mm: number; y1_mm: number };
 export type Tile = {
 	index: number;
@@ -106,7 +108,7 @@ export class TilingStore {
 				body: body === undefined ? undefined : JSON.stringify(body)
 			});
 			if (!response.ok) {
-				this.error = (await response.json().catch(() => null))?.detail ?? 'Dat lukte niet.';
+				this.error = (await response.json().catch(() => null))?.detail ?? t('notice.failed');
 				return false;
 			}
 			this.run = this.#normaliseer(await response.json());
@@ -116,7 +118,7 @@ export class TilingStore {
 			// de fout vliegt ongevangen naar buiten, `error` blijft leeg en de
 			// gebruiker staat aan de machine naar een knop te kijken die niets
 			// deed. In een werkplaats is dat geen randgeval.
-			this.error = 'Geen verbinding met de machine. Probeer het opnieuw.';
+			this.error = t('error.noMachine');
 			return false;
 		} finally {
 			this.busy = false;
@@ -167,11 +169,11 @@ export class TilingStore {
 				body: JSON.stringify({ tiling: { enabled: true } })
 			});
 			if (!aan.ok) {
-				this.error = (await aan.json().catch(() => null))?.detail ?? 'Dat lukte niet.';
+				this.error = (await aan.json().catch(() => null))?.detail ?? t('notice.failed');
 				return false;
 			}
 		} catch {
-			this.error = 'Geen verbinding met de machine. Probeer het opnieuw.';
+			this.error = t('error.noMachine');
 			return false;
 		} finally {
 			this.busy = false;

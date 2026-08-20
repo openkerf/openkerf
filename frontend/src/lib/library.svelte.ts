@@ -7,6 +7,8 @@
  * vertrouwen.
  */
 
+import { t } from './i18n/core.ts';
+
 export type Material = { id: number; name: string; synonyms: string[] };
 
 export type Preset = {
@@ -89,32 +91,32 @@ export const SOURCE_LABEL: Record<
 	{ text: string; tone: string; icon: 'check' | 'alert' | 'pen' | 'down'; means: string; advice: string }
 > = {
 	testraster: {
-		text: 'Geverifieerd',
+		text: t('source.verified'),
 		tone: 'ok',
 		icon: 'check',
-		means: 'Gebrand en beoordeeld op een testraster',
+		means: t('source.verified.means'),
 		advice: ''
 	},
 	handmatig: {
-		text: 'Handmatig',
+		text: t('source.manual'),
 		tone: 'neutral',
 		icon: 'pen',
-		means: 'Zelf ingevoerd, niet gemeten',
+		means: t('source.manual.means'),
 		advice: ''
 	},
 	geextrapoleerd: {
-		text: 'Geëxtrapoleerd',
+		text: t('source.extrapolated'),
 		tone: 'warn',
 		icon: 'alert',
-		means: 'Uitgerekend vanaf een andere dikte — nooit gebrand',
-		advice: 'Probeer eerst op restmateriaal; begin lager in vermogen.'
+		means: t('source.extrapolated.means'),
+		advice: t('source.extrapolated.advice')
 	},
 	geimporteerd: {
-		text: 'Geïmporteerd',
+		text: t('source.imported'),
 		tone: 'warn',
 		icon: 'down',
-		means: 'Van iemand anders zijn machine',
-		advice: 'Andere laser, ander resultaat — behandel dit als startwaarde.'
+		means: t('source.imported.means'),
+		advice: t('source.imported.advice')
 	}
 };
 
@@ -440,5 +442,5 @@ async function describe(response: Response): Promise<string> {
 	} catch {
 		/* generieke tekst hieronder */
 	}
-	return `De bibliotheek weigerde de opdracht (${response.status}).`;
+	return t('error.libraryRefused', { status: response.status });
 }

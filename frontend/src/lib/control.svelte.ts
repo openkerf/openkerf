@@ -6,6 +6,7 @@
  * localStorage zodat de PWA hem niet elke sessie opnieuw vraagt.
  */
 
+import { t } from './i18n/core.ts';
 import type { Capabilities } from './api';
 import { verbinding } from './verbinding.svelte';
 
@@ -337,38 +338,37 @@ export class Controller {
 /**
  * Een mislukte fetch is bijna nooit "een netwerkfout".
  *
- * De browser gooit hier `TypeError: Failed to fetch`, en dat op het scherm
- * zetten is protocoltaal: het zegt niet wat er stuk is en niet wat je eraan
- * doet. Dit zijn de twee gevallen die echt voorkomen — de server is weg, of
- * je zit zelf zonder netwerk — en ze vragen om verschillende handelingen.
+ * The browser throws `TypeError: Failed to fetch` here, and putting that on the
+ * screen is protocol language: it says neither what is broken nor what you do
+ * about it. These are the two cases that really occur — the server is gone, or you
+ * are without a network yourself — and they ask for different actions.
  */
 function onbereikbaar(e: unknown): string {
 	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-		return 'Dit apparaat heeft geen netwerk. De machine loopt gewoon door; zodra je weer verbinding hebt, zie je het hier.';
+		return t('error.noNetwork');
 	}
 	verbinding.online = false;
 	verbinding.sinds ??= Date.now();
-	return 'De OpenKerf-server reageert niet — de opdracht is niet aangekomen. Controleer of hij nog draait.';
+	return t('error.serverGone');
 }
 
 async function describeFailure(response: Response, metToken: boolean): Promise<string> {
 	if (response.status === 401) {
 		return metToken
-			? 'De server weigert deze token. Vul hieronder de token in die in het venster van de engine staat.'
-			: 'Deze OpenKerf is vanaf het netwerk bereikbaar en vraagt daarom een token voordat er iets mag bewegen. Vul hem hieronder in.';
+			? t('error.tokenRefused')
+			: t('error.tokenNeeded');
 	}
 	try {
 		const body = await response.json();
 		const detail = body.detail;
 		if (typeof detail === 'string') return detail;
-		// De engine antwoordt met zijn eigen console-uitvoer. Die begint met de
-		// opdracht die we zelf verstuurden ("plan copy preprocess…") en dat is
-		// ruis voor wie alleen wil weten waarom het niet ging; alleen de laatste,
-		// betekenisvolle regels overhouden.
+		// The engine answers with its own console output. That starts with the command
+		// we sent ourselves ("plan copy preprocess…") and that is noise for anyone who
+		// only wants to know why it did not work; keep only the last meaningful lines.
 		if (detail?.output?.length) return zinnig(detail.output);
-		return `De machine weigerde de opdracht (foutcode ${response.status}).`;
+		return t('error.machineRefused', { status: response.status });
 	} catch {
-		return `De machine weigerde de opdracht (foutcode ${response.status}).`;
+		return t('error.machineRefused', { status: response.status });
 	}
 }
 

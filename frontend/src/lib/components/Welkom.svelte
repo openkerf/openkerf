@@ -1,38 +1,36 @@
 <script lang="ts">
 	/**
-	 * Het eerste scherm van een verse installatie.
+	 * The first screen of a fresh installation.
 	 *
-	 * Eén vraag, één antwoord: er staat nog geen machine, en dit is de knop.
-	 * Daarnaast staat wát de wizard vraagt en wat er daarna gebeurt, want de
-	 * meeste "wat nu?"-momenten ontstaan doordat je niet weet hoe lang iets
-	 * duurt en waar het heen gaat.
+	 * One question, one answer: there is no machine yet, and this is the button.
+	 * Beside it stands what the wizard asks and what happens afterwards, because most
+	 * "what now?" moments arise from not knowing how long something takes and where
+	 * it goes.
 	 */
 	import Logo from '$components/Logo.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { onrondkijken }: { onrondkijken: () => void } = $props();
 
-	// Deze lijst is dezelfde reeks als de stappenbalk in de wizard, en telt
-	// even ver door. Stond hier eerst "3 vragen" tegenover "Stap 1 van 5"
-	// verderop, en dan weet je meteen niet meer wat waar is.
+	// This list is the same series as the step bar in the wizard, and counts as far.
+	// It used to say "3 questions" here against "Step 1 of 5" further on, and then
+	// you immediately no longer know which is which.
 	const VRAAGT = [
-		{ kop: 'Soort', uitleg: 'Vier soorten in werkplaatstaal — geen bordnamen nodig.' },
-		{ kop: 'Model', uitleg: 'Alleen de modellen die bij die soort horen.' },
-		{ kop: 'Naam', uitleg: 'Waaraan je hem herkent in de bovenbalk.' },
-		{ kop: 'Werkgebied', uitleg: 'Breedte, hoogte en waar 0,0 ligt. Dit tekent je bed.' }
+		{ kop: t('setup.step.kind'), uitleg: t('welcome.asks.kind') },
+		{ kop: t('setup.step.model'), uitleg: t('welcome.asks.model') },
+		{ kop: t('setup.step.name'), uitleg: t('welcome.asks.name') },
+		{ kop: t('welcome.asks.workarea'), uitleg: t('welcome.asks.workarea.body') }
 	];
 
-	const DAARNA = ['Ontwerpen', 'Kader tonen', 'Snijden'];
+	const DAARNA = [t('welcome.after.design'), t('job.frame'), t('welcome.after.cut')];
 </script>
 
 <main>
 	<section class="kaart">
 		<div class="merk"><Logo /><span>OpenKerf</span></div>
 
-		<h1>Er staat nog geen machine ingesteld.</h1>
-		<p class="lead">
-			Zonder machine weet het canvas niet hoe groot je bed is. Vier stappen, ongeveer een
-			minuut — en alles is later nog aan te passen.
-		</p>
+		<h1>{t('welcome.title')}</h1>
+		<p class="lead">{t('welcome.lead')}</p>
 
 		<ol class="vraagt">
 			{#each VRAAGT as stap, index (stap.kop)}
@@ -46,15 +44,14 @@
 			{/each}
 		</ol>
 
-		<a class="knop primair" href="/setup/soort">Machine instellen</a>
+		<a class="knop primair" href="/setup/soort">{t('welcome.setUp')}</a>
 
-		<!-- De pijlen erven de tekstkleur van de regel. Ze stonden op --line en
-		     haalden daarmee 1,41 in licht en 1,62 in donker: praktisch onzichtbaar,
-		     waardoor dit als drie losse woorden las in plaats van als de volgorde
-		     die het is. --line is afgestemd op randen tégen een oppervlak, niet op
-		     iets dat gelezen moet worden. -->
+		<!-- The arrows inherit the text colour of the line. They used to be on --line
+		     and got 1.41 in light and 1.62 in dark that way: practically invisible, so
+		     this read as three loose words instead of as the sequence it is. --line is
+		     tuned for borders *against* a surface, not for something to be read. -->
 		<p class="daarna">
-			Daarna:
+			{t('welcome.after')}
 			{#each DAARNA as stap, index (stap)}<span class="stap">{stap}</span>{#if index < DAARNA.length - 1}<span
 					aria-hidden="true">→</span
 				>{/if}{/each}
@@ -63,11 +60,10 @@
 		<hr />
 
 		<p class="uitweg">
-			<button type="button" class="tekstknop" onclick={onrondkijken}>Rondkijken zonder machine</button>
-			<span class="muted">
-				Tekenen kan, branden niet — de bedmaten en de status zijn dan die van een
-				standaardapparaat dat de engine zelf verzint.
-			</span>
+			<button type="button" class="tekstknop" onclick={onrondkijken}
+				>{t('welcome.lookAround')}</button
+			>
+			<span class="muted">{t('welcome.lookAround.body')}</span>
 		</p>
 	</section>
 </main>
