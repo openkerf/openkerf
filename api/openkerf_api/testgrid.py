@@ -1001,7 +1001,7 @@ class TestGridGenerator:
         drawn = []
         # Alles wat níét een vakje is maar wel bij dit bord hoort.
         extras: list = []
-        with self.elements.undoscope("Testraster genereren"):
+        with self.elements.undoscope("Generate test grid"):
             for cell in cells:
                 node = self._square(cell, gevuld=op_type == "op raster")
                 instelling = {

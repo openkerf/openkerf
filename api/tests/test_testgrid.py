@@ -430,7 +430,7 @@ def test_speed_and_power_of_a_grid_cell_are_locked(client):
     for blocked in ({"speed": 50}, {"power_percent": 20}, {"label": "eigen naam"}):
         response = client.patch(f"/api/design/operations/{operation_id}", json=blocked)
         assert response.status_code == 409, blocked
-        assert "testraster" in str(response.json()["detail"])
+        assert "test grid" in str(response.json()["detail"])
 
 
 def test_burning_a_single_cell_can_be_switched_off(kernel, client):
@@ -1482,7 +1482,7 @@ def test_two_recipes_for_one_material_live_side_by_side(client):
     recepten die je afwisselt.
     """
     material = client.post("/api/library/materials", json={"name": "Berken"}).json()
-    for naam, bewerking in (("Snijden", "snijden"), ("Graveren", "graveren-vector")):
+    for naam, bewerking in (("Cut", "snijden"), ("Engrave", "graveren-vector")):
         client.post(
             "/api/library/testgrids/recipes",
             json={
@@ -1496,7 +1496,7 @@ def test_two_recipes_for_one_material_live_side_by_side(client):
         f"/api/library/testgrids/recipes?material_id={material['id']}"
     ).json()
 
-    assert [r["name"] for r in recepten] == ["Graveren", "Snijden"]  # alfabetisch
+    assert [r["name"] for r in recepten] == ["Cut", "Engrave"]  # alphabetical
     assert {r["settings"]["operation"] for r in recepten} == {
         "snijden",
         "graveren-vector",

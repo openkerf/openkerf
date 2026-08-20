@@ -182,7 +182,7 @@ def test_sheets_survive_a_project_file(client, tmp_path):
     assert opened.status_code == 200
 
     state = client.get("/api/sheets").json()
-    assert [s["name"] for s in state["sheets"]] == ["Vel 1", "Acryl"]
+    assert [s["name"] for s in state["sheets"]] == ["Sheet 1", "Acryl"]
     assert state["sheets"][1]["width_mm"] == 120
 
     client.post("/api/sheets/vel-1/activate")
@@ -201,7 +201,7 @@ def test_sheet_names_stay_unique(client):
 
     names = [s["name"] for s in client.get("/api/sheets").json()["sheets"]]
 
-    assert names == ["Vel 1", "Doos 2", "Doos 2 (2)"]
+    assert names == ["Sheet 1", "Doos 2", "Doos 2 (2)"]
 
 
 # -------------------------------------------------------------- jobnaam (P4)
@@ -215,7 +215,7 @@ def _burnable_rect(client, x=10):
     """Een rechthoek in een eigen laag: genoeg om een job te mogen starten."""
     rect = a_rect(client, x=x)
     layer = client.post(
-        "/api/design/operations", json={"type": "cut", "label": "Snijden"}
+        "/api/design/operations", json={"type": "cut", "label": "Cut"}
     ).json()["id"]
     client.post("/api/design/assign", json={"ids": [rect], "operation_id": layer})
     return rect
@@ -226,7 +226,7 @@ def test_a_job_carries_the_sheet_name_after_switching_sheets(kernel, client):
     Elke job heette ooit `herstel.svg`. Dezelfde fout zit één deur verder: het
     wisselen van vel laadt `vel-1.svg` terug, en die interne bestandsnaam ging
     als jobnaam de wachtrij in. Bij de machine staan dan jobs die `vel-1.svg`
-    heten, terwijl de gebruiker "Vel 1" en "Proefstuk" op zijn tabbladen ziet.
+    heten, terwijl de gebruiker "Sheet 1" en "Proefstuk" op zijn tabbladen ziet.
     """
     _burnable_rect(client)
     second = client.post("/api/sheets", json={"name": "Proefstuk"}).json()["sheets"][1]
@@ -241,7 +241,7 @@ def test_a_job_carries_the_sheet_name_after_switching_sheets(kernel, client):
     # de bestandsnaam de naam van het vel overschreef.
     client.post("/api/sheets/vel-1/activate")
     assert client.post("/api/job/start").status_code == 200
-    assert _job_labels(kernel)[-1] == "Vel 1"
+    assert _job_labels(kernel)[-1] == "Sheet 1"
 
 
 # ------------------------------------------------------------------ herstart
@@ -249,7 +249,7 @@ def test_a_job_carries_the_sheet_name_after_switching_sheets(kernel, client):
 
 def test_a_restart_comes_back_to_the_sheet_you_left(kernel, tmp_path):
     """
-    Na een herstart stond de vellenbalk op "Vel 1" terwijl het canvas leeg was:
+    Na een herstart stond de vellenbalk op "Sheet 1" terwijl het canvas leeg was:
     het vel was nooit ingeladen. Wie dan één keer van vel wisselde, verloor
     alles — wegwisselen ziet een lege boom en gooit `vel-1.svg` weg.
     """
@@ -351,7 +351,7 @@ def test_an_overlap_too_small_for_a_mark_is_refused_at_the_setting(client):
     )
 
     assert antwoord.status_code == 409
-    assert "merk" in antwoord.json()["detail"]
+    assert "marker" in antwoord.json()["detail"]
 
 
 def test_tiling_settings_survive_a_reload(client):

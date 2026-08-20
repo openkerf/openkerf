@@ -166,14 +166,14 @@ class Images:
                 f"Onbekend dither-type. Kies uit {', '.join(DITHER_TYPES)}."
             )
 
-        with self.elements.undoscope(f"Afbeelding: {spec['label']}"):
+        with self.elements.undoscope(f"Image: {spec['label']}"):
             self._reprocess(node)
         return self.adjustments(element_id)
 
     def clear_adjustments(self, element_id: str) -> dict:
         """Alles eraf: terug naar de afbeelding zoals hij binnenkwam."""
         node = self._node(element_id)
-        with self.elements.undoscope("Afbeelding: bewerkingen wissen"):
+        with self.elements.undoscope("Image: clear the adjustments"):
             node.operations = []
             self._reprocess(node)
         return self.adjustments(element_id)
@@ -218,7 +218,7 @@ class Images:
             raise DesignError("dpi moet een getal zijn.") from e
         if not 10 <= value <= 2000:
             raise DesignError("dpi moet tussen 10 en 2000 liggen.")
-        with self.elements.undoscope("Afbeelding-DPI"):
+        with self.elements.undoscope("Image DPI"):
             node.dpi = value
             node.altered()
         self.elements.signal("rebuild_tree", "all")
@@ -245,7 +245,7 @@ class Images:
         node = self._node(element_id)
         before = {id(n) for n in self.elements.elems()}
         self.elements.set_emphasis([node])
-        with self.elements.undoscope(f"Vectoriseren ({method})"):
+        with self.elements.undoscope(f"Vectorise ({method})"):
             self.runner.run(f"image {method}")
         added = [n for n in self.elements.elems() if id(n) not in before]
         self.elements.validate_ids()
@@ -303,7 +303,7 @@ class Images:
         operation["enable"] = True
         operation["bounds"] = [left, upper, right, lower]
 
-        with self.elements.undoscope("Afbeelding bijsnijden"):
+        with self.elements.undoscope("Crop image"):
             self._reprocess(node)
         return {"id": element_id, "pixels": [left, upper, right, lower]}
 

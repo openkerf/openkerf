@@ -18,7 +18,7 @@ herschikt zijn betekent "rij 3, kolom 5" niets meer en is de proef weggegooid.
 Hetzelfde geldt voor een tandwiel dat je zelf uit vier vormen bouwde.
 
 Raakt de nesting één lid van een groep, dan verhuist de hele groep — ook de
-leden die niet meegegeven zijn. Anders zou "terughalen op het bed" (dat alleen
+leden die niet meegegeven zijn. Anders zou "put everything back on the bed" (dat alleen
 de vormen kent die het ziet) een bord alsnog uit elkaar trekken.
 """
 
@@ -39,7 +39,7 @@ class Nesting:
 
         margin = _finite(margin_mm, "margin_mm")
         if margin < 0:
-            raise DesignError("Een negatieve marge laat de vormen overlappen.")
+            raise DesignError("A negative margin makes the shapes overlap.")
         origin_x = _finite(origin_x_mm, "origin_x_mm")
         origin_y = _finite(origin_y_mm, "origin_y_mm")
 
@@ -50,7 +50,7 @@ class Nesting:
         for element_id in ids or []:
             node = self.elements.find_node(element_id)
             if node is None:
-                raise DesignError(f"Element {element_id} bestaat niet (meer).")
+                raise DesignError(f"Element {element_id} does not exist (any more).")
             groep = self._group_of(node)
             leden = self._members(groep) if groep is not None else [node]
             sleutel = id(groep) if groep is not None else id(node)
@@ -71,7 +71,7 @@ class Nesting:
             volgorde.append(sleutel)
         boxes = [eenheden[key] for key in volgorde]
         if len(boxes) < 2:
-            raise DesignError("Kies minstens twee vormen om te nesten.")
+            raise DesignError("Choose at least two shapes to nest.", code="nest.needsTwo")
 
         width_mm = self._bed_width()
         widest = max(box["width"] for box in boxes)
@@ -91,7 +91,7 @@ class Nesting:
             shelf = max(shelf, box["height"])
 
         moved = 0
-        with self.elements.undoscope("Nesten"):
+        with self.elements.undoscope("Nest"):
             for box in placed:
                 dx = box["to_x"] - box["x"]
                 dy = box["to_y"] - box["y"]
@@ -131,7 +131,7 @@ class Nesting:
 
     @classmethod
     def _members(cls, groep) -> list:
-        """Alle vormen onder een groep, hoe diep ook genest."""
+        """Every shape under a group, however deeply nested."""
         leden = []
         for child in getattr(groep, "children", []) or []:
             if getattr(child, "type", "") == "group":
@@ -142,7 +142,7 @@ class Nesting:
 
     @staticmethod
     def _bounds_of(nodes):
-        """De omhullende rechthoek van een eenheid, in engine-eenheden."""
+        """The bounding rectangle of a unit, in engine units."""
         x0 = y0 = float("inf")
         x1 = y1 = float("-inf")
         for node in nodes:

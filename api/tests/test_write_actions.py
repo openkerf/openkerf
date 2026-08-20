@@ -193,7 +193,7 @@ def test_load_says_so_when_the_file_holds_no_shapes(kernel, local_client):
     )
 
     assert response.status_code == 409
-    assert "geen tekening" in " ".join(response.json()["detail"]["output"])
+    assert "no shapes" in " ".join(response.json()["detail"]["output"])
 
 
 def test_upload_filename_cannot_escape_the_upload_directory(kernel):
@@ -258,9 +258,9 @@ def test_starting_an_empty_design_is_refused(local_client):
 
     assert response.status_code == 409
     melding = " ".join(response.json()["detail"]["output"])
-    assert "niets klaar om te branden" in melding
+    assert "nothing ready to burn" in melding
     # En het zegt wat je eraan doet.
-    assert "laag" in melding
+    assert "layer" in melding
 
 
 def test_layers_that_are_all_switched_off_count_as_empty(local_client):

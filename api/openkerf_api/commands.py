@@ -127,24 +127,24 @@ class CommandRunner:
             raise CommandError(
                 "load",
                 [
-                    f"“{naam}” is niet in te lezen. Het bestand is beschadigd of "
-                    "het is geen tekening — controleer of je de juiste export "
-                    "hebt (SVG, DXF, PNG of een RD-bestand).",
+                    f"“{naam}” cannot be read. The file is damaged or it is not a "
+                    "drawing — check that you have the right export (SVG, DXF, PNG "
+                    "or an RD file).",
                 ],
             ) from e
         if self._element_count() <= voor:
             raise CommandError(
                 "load",
                 [
-                    f"In “{naam}” zit geen tekening. Het bestand is gelezen maar "
-                    "bevat geen vormen — bij een SVG uit een tekenprogramma komt "
-                    "dat meestal doordat alles op een verborgen laag staat.",
+                    f"There is no drawing in “{naam}”. The file was read but holds "
+                    "no shapes — with an SVG from a drawing program that is usually "
+                    "because everything is on a hidden layer.",
                 ],
             )
         return output
 
     def _element_count(self) -> int:
-        """Hoeveel vormen er in de boom staan; 0 als de engine niet meewerkt."""
+        """How many shapes are in the tree; 0 when the engine does not co-operate."""
         try:
             return sum(1 for _ in self.kernel.elements.elems())
         except Exception:
@@ -174,9 +174,9 @@ class CommandRunner:
             raise CommandError(
                 "start",
                 [
-                    "Er staat niets klaar om te branden. Teken of laad iets, en "
-                    "zet het in een laag die meebrandt — een laag met "
-                    "'meebranden' uit wordt overgeslagen."
+                    "There is nothing ready to burn. Draw or load something, and "
+                    "put it in a layer that burns — a layer with 'burn along' off "
+                    "is skipped."
                 ],
             )
         output = self._plan_and_spool(mutators)
@@ -246,7 +246,7 @@ class CommandRunner:
             root.opt_merge_ops, root.opt_merge_passes = eerder
 
     def _apply_mutators(self, mutators) -> list:
-        """De bewerkers over het gekopieerde plan. Geeft de nieuwe stappen terug."""
+        """The processors over the copied plan. Returns the new steps."""
         plan = self.kernel.planner.get_or_make_plan("0")
         steps = list(plan.plan)
         for mutator in mutators:
@@ -414,7 +414,7 @@ class CommandRunner:
 
     @staticmethod
     def _with_z_moves(steps, console_operation) -> list:
-        """De planstappen met de Z-bewegingen erin. Puur rekenwerk, dus testbaar."""
+        """The plan steps with the Z movements in them. Pure arithmetic, so testable."""
         uitgebreid = []
         for step in steps:
             z_step = getattr(step, "z_step_mm", None)
@@ -466,7 +466,7 @@ class CommandRunner:
             pass
 
     def _driver_paused(self):
-        """`driver.paused` van het actieve apparaat, of None als niemand het zegt."""
+        """`driver.paused` of the active device, or None when nobody says."""
         try:
             flag = self.kernel.device.driver.paused
         except Exception:

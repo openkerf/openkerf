@@ -126,7 +126,7 @@ def test_progress_fraction():
 class _Job:
     """Een LaserJob zoals de spooler hem teruggeeft: pauze staat er níet in."""
 
-    label = "Vel 1"
+    label = "Sheet 1"
     priority = 0
     steps_done = 40
     steps_total = 100

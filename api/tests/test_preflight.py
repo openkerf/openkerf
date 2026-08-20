@@ -39,7 +39,7 @@ def test_the_preflight_says_what_the_machine_will_do(client):
     estimate = client.get("/api/job/estimate").json()
 
     assert estimate["seconds"] > 0
-    layers = [l for l in estimate["layers"] if l["label"] == "Snijden"]
+    layers = [l for l in estimate["layers"] if l["label"] == "Cut"]
     assert layers, "de laag staat niet in de pre-flight"
     layer = layers[0]
     assert layer["speed_mm_s"] == 12
@@ -64,7 +64,7 @@ def test_settings_that_came_from_a_test_grid_are_marked_as_measured(client):
     a_job(client, speed=12, power=65)
 
     layer = next(
-        l for l in client.get("/api/job/estimate").json()["layers"] if l["label"] == "Snijden"
+        l for l in client.get("/api/job/estimate").json()["layers"] if l["label"] == "Cut"
     )
     assert layer["source"] == "testraster"
 
@@ -73,7 +73,7 @@ def test_settings_nobody_measured_have_no_provenance(client):
     a_job(client, speed=37, power=42)
 
     layer = next(
-        l for l in client.get("/api/job/estimate").json()["layers"] if l["label"] == "Snijden"
+        l for l in client.get("/api/job/estimate").json()["layers"] if l["label"] == "Cut"
     )
     assert layer["source"] is None
 
@@ -84,7 +84,7 @@ def test_a_layer_that_does_not_burn_is_left_out(client):
     client.patch(f"/api/design/operations/{layer['id']}", json={"output": False})
 
     labels = [l["label"] for l in client.get("/api/job/estimate").json()["layers"]]
-    assert "Snijden" not in labels
+    assert "Cut" not in labels
 
 
 # -------------------------------------------------------------- herkomst (B1)
@@ -104,7 +104,7 @@ def a_material(client, name):
     return client.post("/api/library/materials", json={"name": name}).json()
 
 
-def layer_of(client, label="Snijden"):
+def layer_of(client, label="Cut"):
     estimate = client.get("/api/job/estimate").json()
     return next(l for l in estimate["layers"] if l["label"] == label)
 
@@ -287,7 +287,7 @@ def test_what_will_be_burned_can_be_read_without_building_the_plan(client):
     overzicht = client.get("/api/job/layers").json()
 
     assert overzicht["sheet"]["material_name"] == "Berken"
-    gevonden = next(l for l in overzicht["layers"] if l["label"] == "Snijden")
+    gevonden = next(l for l in overzicht["layers"] if l["label"] == "Cut")
     assert gevonden["preset_id"] == preset["id"]
     # Dezelfde lagen als de pre-flight, alleen zonder klok.
     assert "seconds" not in overzicht

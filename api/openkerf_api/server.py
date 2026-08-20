@@ -437,11 +437,24 @@ class ApiServer:
                 ) from e
 
         def manage(action, *args):
-            """Same for machine management, where failures are our own."""
+            """
+            Same for machine management, where failures are our own.
+
+            Our own refusals carry an optional code, and it travels in a header
+            rather than in the body: `detail` is a string everywhere in this API and
+            every client reads it that way. A header adds the machine-readable half
+            without breaking the human-readable one, so the web app can say the
+            refusal in the reader's language while curl still shows a sentence.
+            """
             try:
                 return action(*args)
             except (MachineError, DesignError, LibraryError) as e:
-                raise HTTPException(status_code=409, detail=str(e)) from e
+                code = getattr(e, "code", None)
+                raise HTTPException(
+                    status_code=409,
+                    detail=str(e),
+                    headers={"X-OpenKerf-Error": code} if code else None,
+                ) from e
             except CommandError as e:
                 raise HTTPException(
                     status_code=409, detail={"command": e.command, "output": e.output}

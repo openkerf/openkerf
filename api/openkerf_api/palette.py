@@ -2,7 +2,7 @@
 Wat een paletkleur eerder deed, per machine.
 
 Besluit B2. In LightBurn kennen gebruikers hun palet uit hun hoofd: rood is
-"snijden op 12 mm/s", blauw is "graveren op 300". Dat werkt omdat de kleur zijn
+"cutting at 12 mm/s", blauw is "engraving at 300". Dat werkt omdat de kleur zijn
 snelheid en vermogen onthoudt, over jobs heen. Bij ons begon elke nieuwe laag
 blanco, dus die reflex kon niet ontstaan.
 
@@ -13,7 +13,7 @@ geen woordenspel:
 |---|---|---|
 | hangt aan | machine + kleur | machine + materiaal + dikte |
 | komt van | wat jij het laatst deed | een meting, met herkomst |
-| zegt | "hier stond je vorige keer" | "hierop is gebrand, en dit kwam eruit" |
+| zegt | "this is where you were last time" | "hierop is gebrand, en dit kwam eruit" |
 
 Een preset draagt bewijs; het palet draagt gewoonte. Daarom overschrijven ze
 elkaar niet: een preset toepassen laat een briefje achter in `provenance.py` en
@@ -37,11 +37,11 @@ from pathlib import Path
 # die zijn instellingen kwijtraakt zodra hij zijn laser aansluit. Bij de eerste
 # echte machine begint hij wel opnieuw; dat is eerlijk, want de waarden van een
 # machineloze sessie zijn op niets gemeten.
-GEEN_MACHINE = "geen-machine"
+GEEN_MACHINE = "no-machine"
 
 
 def machine_key(profile: dict | None) -> str:
-    """De sleutel waaronder het geheugen van deze machine staat."""
+    """The key this machine's memory is stored under."""
     if not profile:
         return GEEN_MACHINE
     machine_id = profile.get("id")
@@ -52,7 +52,7 @@ def machine_key(profile: dict | None) -> str:
 
 
 def normalise(color) -> str | None:
-    """`#RRGGBB` in kleine letters, of niets als het geen kleur is."""
+    """`#RRGGBB` in lower case, or nothing when it is not a colour."""
     text = str(color or "").strip().lower()
     if len(text) != 7 or not text.startswith("#"):
         return None
@@ -142,6 +142,6 @@ class Palette:
         return (self._read().get(str(key or GEEN_MACHINE)) or {}).get(kleur)
 
     def all(self, key: str) -> dict:
-        """Alles wat deze machine onthouden heeft, op kleur."""
+        """Everything this machine has remembered, by colour."""
         machine = self._read().get(str(key or GEEN_MACHINE)) or {}
         return {k: v for k, v in machine.items() if normalise(k)}

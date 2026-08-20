@@ -402,7 +402,7 @@ def test_generated_parts_land_in_exactly_one_layer(client):
 
     design = client.get("/api/design").json()
     layers = [o for o in design["operations"] if o["element_ids"]]
-    assert [o["label"] for o in layers] == ["Snijden"]
+    assert [o["label"] for o in layers] == ["Cut"]
     assert all(len(e["operation_ids"]) == 1 for e in design["elements"])
 
 
@@ -413,7 +413,7 @@ def test_a_qr_code_is_engraved_not_cut(client):
     layers = [
         o for o in client.get("/api/design").json()["operations"] if o["element_ids"]
     ]
-    assert [o["label"] for o in layers] == ["Graveren"]
+    assert [o["label"] for o in layers] == ["Engrave"]
 
 
 # --------------------------------------------------- het deksel dat klemt

@@ -80,7 +80,7 @@ def _passes_of(node) -> int:
 
 
 def _is_filled(node) -> bool:
-    """Heeft deze vorm een vlak om te rasteren? Een afbeelding is er zelf een."""
+    """Does this shape have an area to raster? An image is one itself."""
     if str(getattr(node, "type", "")) == "elem image":
         return True
     fill = getattr(node, "fill", None)
@@ -90,7 +90,7 @@ def _is_filled(node) -> bool:
 
 
 def _number(value):
-    """Een getal, of niets. De engine levert hier soms een string of numpy."""
+    """A number, or nothing. The engine sometimes hands a string or numpy here."""
     if value is None:
         return None
     try:
@@ -163,7 +163,7 @@ class Drawing:
             else:
                 geometry.line(at(start), at(end))
 
-        with self.elements.undoscope("Pad tekenen"):
+        with self.elements.undoscope("Draw path"):
             node = self.elements.elem_branch.add(
                 geometry=geometry,
                 type="elem path",
@@ -180,7 +180,7 @@ class Drawing:
     def create(self, kind: str, **fields) -> dict:
         if kind not in SHAPES:
             raise DesignError(
-                f"Onbekende vorm: {kind}. Kies uit {', '.join(sorted(SHAPES))}."
+                f"Unknown shape: {kind}. Choose from {', '.join(sorted(SHAPES))}."
             )
         values = {}
         for name in SHAPES[kind]:
@@ -197,7 +197,7 @@ class Drawing:
         # neerzetten is één stap, dus één keer ongedaan maken. Zou het opzoeken
         # van de laag erbuiten vallen, dan haalde de eerste `undo` alleen die
         # laag weg en bleef de vorm staan.
-        with self.elements.undoscope(f"{kind} tekenen"):
+        with self.elements.undoscope(f"Draw {kind}"):
             self.runner.run(self._command(kind, values, fields))
             created = [n for n in self.elements.elems() if id(n) not in before]
             if created:
@@ -249,7 +249,7 @@ class Drawing:
             self._own_layer(node)
 
     def _own_layer(self, node) -> None:
-        """Geef een vorm zonder laag er een, op zijn eigen lijnkleur."""
+        """Give a shape without a layer one, on its own stroke colour."""
         kleur = normalise(str(getattr(node, "stroke", "") or "")[:7])
         if kleur is None:
             return
@@ -295,9 +295,10 @@ class Drawing:
                 halve = min(v["width_mm"], v["height_mm"]) / 2
                 if maat > halve:
                     raise DesignError(
-                        f"Een hoekradius van {maat:g} mm past niet in een rechthoek "
-                        f"van {v['width_mm']:g}×{v['height_mm']:g} mm. Hoogstens "
-                        f"{halve:g} mm."
+                        f"A corner radius of {maat:g} mm does not fit in a rectangle "
+                        f"of {v['width_mm']:g}×{v['height_mm']:g} mm. At most "
+                        f"{halve:g} mm.",
+                        code="draw.radiusTooBig",
                     )
                 regel += f" -x {_mm(maat)} -y {_mm(maat)}"
             return regel
@@ -309,9 +310,12 @@ class Drawing:
             return f"line {_mm(v['x1_mm'])} {_mm(v['y1_mm'])} {_mm(v['x2_mm'])} {_mm(v['y2_mm'])}"
         text = str(fields.get("text") or "").strip()
         if not text:
-            raise DesignError("Tekst mag niet leeg zijn.")
+            raise DesignError("Text cannot be empty.", code="draw.emptyText")
         if '"' in text:
-            raise DesignError("Aanhalingstekens in tekst worden nog niet ondersteund.")
+            raise DesignError(
+                "Quotation marks in text are not supported yet.",
+                code="draw.quotesInText",
+            )
         # linetext, niet text: bitmaptekst heeft geen geometrie en is dus
         # onzichtbaar op het canvas en niet te positioneren.
         parts = ["linetext", _mm(v["x_mm"]), _mm(v["y_mm"])]
@@ -343,17 +347,19 @@ class Drawing:
 
         node = self._nodes([element_id])[0]
         if getattr(node, "mktext", None) is None:
-            raise DesignError("Dit element is geen bewerkbare tekst.")
+            raise DesignError(
+                "This element is not editable text.", code="draw.notText"
+            )
         registry = getattr(self.kernel.root, "fonts", None)
         if registry is None:
-            raise DesignError("Geen lettertype-ondersteuning beschikbaar.")
+            raise DesignError("No font support available.", code="draw.noFonts")
 
         text = node.mktext
-        with self.elements.undoscope("Tekst wijzigen"):
+        with self.elements.undoscope("Change text"):
             if fields.get("text") is not None:
                 new = str(fields["text"]).strip()
                 if not new:
-                    raise DesignError("Tekst mag niet leeg zijn.")
+                    raise DesignError("Text cannot be empty.", code="draw.emptyText")
                 text = new
             if fields.get("font"):
                 node.mkfont = str(fields["font"])
@@ -365,7 +371,7 @@ class Drawing:
                 align = str(fields["align"])
                 if align not in self.ALIGNMENTS:
                     raise DesignError(
-                        f"Uitlijning moet een van {', '.join(self.ALIGNMENTS)} zijn."
+                        f"Alignment has to be one of {', '.join(self.ALIGNMENTS)}."
                     )
                 node.mkalign = align
             registry.update_linetext(node, text)
@@ -374,12 +380,12 @@ class Drawing:
         return {"id": node.id, "text": node.mktext}
 
     def update_line(self, element_id: str, **fields) -> dict:
-        """Een eindpunt van een lijn verzetten, zonder hem opnieuw te tekenen."""
+        """Move one end of a line, without drawing it again."""
         from meerk40t.core.units import UNITS_PER_MM
 
         node = self._nodes([element_id])[0]
         if node.type != "elem line":
-            raise DesignError("Dit element is geen lijn.")
+            raise DesignError("This element is not a line.", code="draw.notALine")
 
         # De client geeft punten zoals ze op het bed liggen; de node bewaart ze
         # vóór zijn matrix. Zonder terugrekenen zou een gedraaide lijn
@@ -414,7 +420,7 @@ class Drawing:
             if fields.get(name) is not None:
                 wanted[name] = _finite(fields[name], name)
 
-        with self.elements.undoscope("Lijn aanpassen"):
+        with self.elements.undoscope("Adjust line"):
             node.x1, node.y1 = to_raw(wanted["x1_mm"], wanted["y1_mm"])
             node.x2, node.y2 = to_raw(wanted["x2_mm"], wanted["y2_mm"])
             node.altered()
@@ -429,13 +435,13 @@ class Drawing:
     def align(self, element_ids, mode: str) -> dict:
         if mode not in self.ALIGNMENTS_2D:
             raise DesignError(
-                f"Onbekende uitlijning: {mode}. Kies uit {', '.join(self.ALIGNMENTS_2D)}."
+                f"Unknown alignment: {mode}. Choose from {', '.join(self.ALIGNMENTS_2D)}."
             )
         nodes = self._nodes(element_ids)
         if len(nodes) < 2:
             raise DesignError("Uitlijnen heeft minstens twee elementen nodig.")
         self.elements.set_emphasis(nodes)
-        with self.elements.undoscope("Uitlijnen"):
+        with self.elements.undoscope("Align"):
             self.runner.run(f"align {mode}")
         self._refresh()
         return {"aligned": [n.id for n in nodes], "mode": mode}
@@ -445,7 +451,7 @@ class Drawing:
         if len(nodes) < 2:
             raise DesignError("Groeperen heeft minstens twee elementen nodig.")
         self.elements.set_emphasis(nodes)
-        with self.elements.undoscope("Groeperen"):
+        with self.elements.undoscope("Group"):
             self.runner.run("group")
         self.elements.validate_ids()
         self._refresh()
@@ -464,9 +470,11 @@ class Drawing:
             if parent is not None and parent not in groups:
                 groups.append(parent)
         if not groups:
-            raise DesignError("Deze selectie zit niet in een groep.")
+            raise DesignError(
+                "This selection is not in a group.", code="draw.notInGroup"
+            )
         self.elements.set_emphasis(groups)
-        with self.elements.undoscope("Groep opheffen"):
+        with self.elements.undoscope("Ungroup"):
             self.runner.run("ungroup")
         self.elements.validate_ids()
         self._refresh()
@@ -482,11 +490,11 @@ class Drawing:
         schaalfactor.
         """
         if axis not in ("horizontal", "vertical"):
-            raise DesignError("Spiegelas moet 'horizontal' of 'vertical' zijn.")
+            raise DesignError("The mirror axis has to be 'horizontal' or 'vertical'.")
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)
         factors = "-1 1" if axis == "horizontal" else "1 -1"
-        with self.elements.undoscope("Spiegelen"):
+        with self.elements.undoscope("Mirror"):
             self.runner.run(f"scale {factors}")
         self._refresh()
         return {"mirrored": [n.id for n in nodes], "axis": axis}
@@ -501,7 +509,7 @@ class Drawing:
         """
         if operation not in self.BOOLEAN:
             raise DesignError(
-                f"Onbekende bewerking: {operation}. Kies uit {', '.join(self.BOOLEAN)}."
+                f"Unknown operation: {operation}. Choose from {', '.join(self.BOOLEAN)}."
             )
         nodes = self._nodes(element_ids)
         if len(nodes) < 2:
@@ -513,7 +521,8 @@ class Drawing:
         created = [n for n in self.elements.elems() if id(n) not in before]
         if not created:
             raise DesignError(
-                f"{operation} leverde niets op — overlappen de vormen wel?"
+                f"{operation} yielded nothing — do the shapes actually overlap?",
+                code="draw.booleanEmpty",
             )
         self.elements.validate_ids()
         self.elements.set_emphasis(created)
@@ -523,10 +532,10 @@ class Drawing:
     EFFECTS = {"hatch": "effect-hatch", "wobble": "effect-wobble"}
 
     def offset(self, element_ids, distance_mm) -> dict:
-        """Een parallelle contour op afstand — voor kerfcompensatie of een rand."""
+        """A parallel contour at a distance — for kerf compensation or a border."""
         distance = _finite(distance_mm, "distance_mm")
         if distance == 0:
-            raise DesignError("Een offset van nul levert niets op.")
+            raise DesignError("An offset of zero yields nothing.")
         nodes = self._nodes(element_ids)
         before = {id(n) for n in self.elements.elems()}
         self.elements.set_emphasis(nodes)
@@ -534,7 +543,7 @@ class Drawing:
             self.runner.run(f"offset {distance:.4f}mm")
         created = [n for n in self.elements.elems() if id(n) not in before]
         if not created:
-            raise DesignError("De engine heeft geen offset gemaakt.")
+            raise DesignError("The engine made no offset.", code="draw.noOffset")
         self.elements.validate_ids()
         self.elements.set_emphasis(created)
         self._refresh()
@@ -569,7 +578,7 @@ class Drawing:
         units = self._units_per_mm()
 
         afgerond, paden, overgeslagen = [], [], 0
-        with self.elements.undoscope("Hoeken"):
+        with self.elements.undoscope("Corners"):
             for node in nodes:
                 if style == "round" and str(getattr(node, "type", "")) == "elem rect":
                     node.rx = node.ry = maat * units
@@ -588,7 +597,7 @@ class Drawing:
                         geom, maat * units, style
                     )
                 except CornerError as e:
-                    raise DesignError(str(e)) from e
+                    raise DesignError(str(e), code=getattr(e, "code", None)) from e
                 overgeslagen += gemist
                 # `replace_node` geeft de níeuwe knoop terug; de oude is daarna
                 # losgekoppeld en zijn id zegt niets meer.
@@ -613,10 +622,10 @@ class Drawing:
         }
 
     def simplify(self, element_ids) -> dict:
-        """Minder knooppunten, zelfde vorm — scheelt tijd bij ingewikkelde paden."""
+        """Fewer nodes, same shape — saves time on complicated paths."""
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)
-        with self.elements.undoscope("Vereenvoudigen"):
+        with self.elements.undoscope("Simplify"):
             self.runner.run("simplify")
         self._refresh()
         return {"simplified": [n.id for n in nodes]}
@@ -632,11 +641,11 @@ class Drawing:
         command = self.EFFECTS.get(effect)
         if command is None:
             raise DesignError(
-                f"Onbekend effect: {effect}. Kies uit {', '.join(sorted(self.EFFECTS))}."
+                f"Unknown effect: {effect}. Choose from {', '.join(sorted(self.EFFECTS))}."
             )
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)
-        with self.elements.undoscope(f"{effect} toevoegen"):
+        with self.elements.undoscope(f"Add {effect}"):
             self.runner.run(command)
         self.elements.validate_ids()
         self._refresh()
@@ -645,7 +654,7 @@ class Drawing:
     def delete(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)
-        with self.elements.undoscope("Verwijderen"):
+        with self.elements.undoscope("Delete"):
             # `delete` alleen bestaat niet op de basiscontext; `element delete`
             # werkt op de nadruk-selectie.
             self.runner.run("element delete")
@@ -656,7 +665,7 @@ class Drawing:
         nodes = self._nodes(element_ids)
         before = {id(n) for n in self.elements.elems()}
         self.elements.set_emphasis(nodes)
-        with self.elements.undoscope("Dupliceren"):
+        with self.elements.undoscope("Duplicate"):
             self.runner.run("copy")
         created = [n for n in self.elements.elems() if id(n) not in before]
         if not created:
@@ -742,7 +751,7 @@ class Drawing:
         Plakken, met of zonder doelplek.
 
         Zonder `x_mm`/`y_mm` komt het werk `offset_mm` naast het origineel te
-        liggen: precies op elkaar plakken ziet eruit als "er gebeurde niets", en
+        liggen: precies op elkaar plakken ziet eruit als "nothing happened", en
         dan sleep je per ongeluk het origineel weg. Mét een doelplek is dat de
         linkerbovenhoek van wat er geplakt wordt — dat is wat "plakken hier" in
         een rechterklikmenu belooft.
@@ -805,7 +814,7 @@ class Drawing:
         for node_id in _ids(element_ids):
             node = self.elements.find_node(node_id)
             if node is None:
-                raise DesignError(f"Element {node_id} bestaat niet (meer).")
+                raise DesignError(f"Element {node_id} does not exist (any more).")
             nodes.append(node)
         return nodes
 
@@ -815,18 +824,18 @@ class Drawing:
     # "Cut defaultmm/s @default #ff0000" — machinetaal op de plek waar je je
     # eigen werk moet herkennen.
     LAYER_NAMES = {
-        "cut": "Snijden",
-        "engrave": "Graveren",
-        "raster": "Rasteren",
-        "image": "Afbeelding",
-        "dots": "Punten",
+        "cut": "Cut",
+        "engrave": "Engrave",
+        "raster": "Raster",
+        "image": "Image",
+        "dots": "Dots",
     }
 
     def create_operation(self, kind: str, label=None, speed=None, power_percent=None) -> dict:
         command = OPERATIONS.get(kind)
         if command is None:
             raise DesignError(
-                f"Onbekend laagtype: {kind}. Kies uit {', '.join(sorted(OPERATIONS))}."
+                f"Unknown layer type: {kind}. Choose from {', '.join(sorted(OPERATIONS))}."
             )
         parts = [command]
         if speed is not None:
@@ -839,12 +848,12 @@ class Drawing:
             parts += ["-p", f"{percent * 10:g}"]
 
         before = {id(o) for o in self.elements.ops()}
-        with self.elements.undoscope("Laag toevoegen"):
+        with self.elements.undoscope("Add layer"):
             self._ensure_colors()
             self.runner.run(" ".join(parts))
         created = [o for o in self.elements.ops() if id(o) not in before]
         if not created:
-            raise DesignError("De engine heeft geen laag aangemaakt.")
+            raise DesignError("The engine created no layer.", code="draw.noLayer")
         operation = created[0]
         # Een naam die je herkent, in plaats van "Cut defaultmm/s @default".
         operation.label = str(label) if label else self.LAYER_NAMES.get(kind, kind)
@@ -879,19 +888,19 @@ class Drawing:
         omrekenen naar stapjes zou bij elke tussenliggende rastercel misgaan.
         """
         if (direction is None) == (index is None):
-            raise DesignError("Geef één van beide: 'direction' of 'index'.")
+            raise DesignError("Give one of the two: 'direction' or 'index'.")
         if direction is not None and direction not in ("up", "down"):
-            raise DesignError("richting moet 'up' of 'down' zijn.")
+            raise DesignError("direction has to be 'up' or 'down'.")
         operation = self._operation(operation_id)
         parent = operation.parent
         if parent is None:
-            raise DesignError("Deze laag zit niet in de bewerkingenboom.")
+            raise DesignError("This layer is not in the operations tree.")
 
         siblings = list(parent.children)
         try:
             here = siblings.index(operation)
         except ValueError:  # pragma: no cover - de boom is dan al inconsistent
-            raise DesignError("Deze laag staat niet in zijn eigen tak.")
+            raise DesignError("This layer is not in its own branch.")
 
         # De lijst telt in lagen, wij tellen in kinderen van `branch ops`. Voor
         # de gebruiker is "plek 3" de derde láág, niet de derde knoop; met een
@@ -921,7 +930,7 @@ class Drawing:
             try:
                 wanted = int(index)
             except (TypeError, ValueError):
-                raise DesignError("index moet een geheel getal zijn.")
+                raise DesignError("index has to be a whole number.")
             if not 0 <= wanted < len(plain):
                 raise DesignError(
                     f"index moet tussen 0 en {len(plain) - 1} liggen."
@@ -937,7 +946,7 @@ class Drawing:
         if not 0 <= target < len(siblings):
             return {"id": operation_id, "moved": False, "index": here}
 
-        with self.elements.undoscope("Laagvolgorde wijzigen"):
+        with self.elements.undoscope("Reorder layers"):
             # `swap_node` lijkt hier de juiste zet maar wisselt óók de kinderen
             # van beide knopen om, dus de referenties naar de vormen verhuizen
             # mee en er verandert per saldo niets. `insert_sibling` verplaatst
@@ -1021,7 +1030,7 @@ class Drawing:
         if wanted == layers:
             return {"sorted": False, "order": [node.id for node in wanted]}
 
-        with self.elements.undoscope("Graveren vóór snijden"):
+        with self.elements.undoscope("Engrave before cut"):
             # De eerste laag blijft liggen waar de eerste laag lag; de rest
             # schuift er in volgorde achteraan. Zo blijft een testraster dat
             # ertussen staat op zijn eigen plek en verhuist alleen wat wij
@@ -1062,7 +1071,7 @@ class Drawing:
         """
         Een snijlaag graveerlaag maken, met de vormen erin (gat L3).
 
-        De engine kent geen "verander het type van deze bewerking": het type
+        De engine kent geen "change the type of this operation": het type
         zit in de klasse van de knoop. Wat er wél kan is een nieuwe bewerking
         maken, de referenties verhuizen en de oude weghalen — precies wat je
         met de hand zou doen, maar dan zonder de toewijzingen kwijt te raken.
@@ -1070,12 +1079,13 @@ class Drawing:
         """
         if kind not in OPERATIONS:
             raise DesignError(
-                f"Onbekend laagtype: {kind}. Kies uit {', '.join(sorted(OPERATIONS))}."
+                f"Unknown layer type: {kind}. Choose from {', '.join(sorted(OPERATIONS))}."
             )
         old = self._operation(operation_id)
         if self._is_grid_cell(old, operation_id):
             raise DesignError(
-                "Dit is een cel van een testraster; het soort bewerking is de test."
+                "This is a cell of a test grid; the kind of operation is the test.",
+                code="layer.gridCell",
             )
         if str(old.type) == f"op {kind}" or (
             kind == "image" and str(old.type) == "op image"
@@ -1104,12 +1114,12 @@ class Drawing:
             if getattr(reference, "node", None) is not None
         ]
 
-        with self.elements.undoscope("Laagsoort wijzigen"):
+        with self.elements.undoscope("Change layer type"):
             before = {id(o) for o in self.elements.ops()}
             self.runner.run(OPERATIONS[kind])
             gemaakt = [o for o in self.elements.ops() if id(o) not in before]
             if not gemaakt:
-                raise DesignError("De engine heeft geen laag aangemaakt.")
+                raise DesignError("The engine created no layer.", code="draw.noLayer")
             nieuw = gemaakt[0]
             for name, value in bewaard.items():
                 setattr(nieuw, name, value)
@@ -1164,7 +1174,7 @@ class Drawing:
     LOZE_COOLANTS = {"popup"}
 
     def air_assist_supported(self) -> bool:
-        """Kent de actieve machine een commando dat de blazer echt schakelt?"""
+        """Does the active machine have a command that really switches the blower?"""
         coolant = getattr(getattr(self.kernel, "root", None), "coolant", None)
         device = getattr(self.kernel, "device", None)
         if coolant is None or device is None:
@@ -1205,12 +1215,13 @@ class Drawing:
             )
             if blocked:
                 raise DesignError(
-                    "Dit is een cel van een testraster; snelheid en vermogen liggen "
-                    f"vast omdat ze de test zijn. Alleen meebranden is te wijzigen "
-                    f"({', '.join(blocked)} geweigerd)."
+                    "This is a cell of a test grid; speed and power are fixed "
+                    f"because they are the test. Only burn-along can be changed "
+                    f"({', '.join(blocked)} refused).",
+                    code="layer.gridCellValues",
                 )
         applied = {}
-        with self.elements.undoscope("Laag wijzigen"):
+        with self.elements.undoscope("Change layer"):
             if "label" in fields and fields["label"] is not None:
                 operation.label = str(fields["label"])
                 applied["label"] = operation.label
@@ -1237,9 +1248,10 @@ class Drawing:
                 stap = _finite(fields["z_step_mm"], "z_step_mm")
                 if stap and not self.z_step_supported():
                     raise DesignError(
-                        "Deze machine heeft geen Z-as die de driver kan bewegen, "
-                        "dus een stap per pass zou niets doen. Zet de Z-as aan bij "
-                        "de machine, of laat dit veld leeg."
+                        "This machine has no Z axis the driver can move, so a step "
+                        "per pass would do nothing. Switch the Z axis on at the "
+                        "machine, or leave this field empty.",
+                        code="layer.noZAxis",
                     )
                 if abs(stap) > self.Z_STEP_LIMIT_MM:
                     raise DesignError(
@@ -1282,9 +1294,10 @@ class Drawing:
                 # hij uitstaat omdat de schakelaar dat zegt.
                 if not self.air_assist_supported():
                     raise DesignError(
-                        "Deze machine kent geen commando voor air assist, dus "
-                        "een schakelaar hier zou niets doen. Stel eerst bij de "
-                        "machine in welke methode de blazer aanstuurt."
+                        "This machine has no command for air assist, so a switch "
+                        "here would do nothing. Set up at the machine first which "
+                        "method drives the blower.",
+                        code="layer.noAirAssist",
                     )
                 aan = bool(fields["air_assist"])
                 operation.coolant = self.COOLANT_ON if aan else self.COOLANT_OFF
@@ -1298,7 +1311,7 @@ class Drawing:
         """
         De laag met deze paletkleur, desnoods vers aangemaakt (besluit B2).
 
-        Kleur is bij ons de identiteit van een laag, dus "de laag van rood" is
+        Kleur is bij ons de identiteit van een laag, dus "the layer of red" is
         een eenduidige vraag: er is er hoogstens één. Testrastercellen tellen
         niet mee — die horen bij een testbord en hun waarden liggen vast.
 
@@ -1391,7 +1404,7 @@ class Drawing:
         layer = self.layer_for_color(wanted, memory)
         operation = self._operation(layer["id"])
 
-        with self.elements.undoscope("Naar laag verplaatsen"):
+        with self.elements.undoscope("Move to layer"):
             for node in nodes:
                 for reference in list(getattr(node, "_references", [])):
                     if reference.parent is not None:
@@ -1431,7 +1444,7 @@ class Drawing:
         De engine begint op `#0000ff`, en die kleur staat in geen van de tien
         vakjes onder het canvas. Dat leverde een strook op waarin geen enkel
         vakje aan stond terwijl er wél een kleur actief was, en — erger — de
-        laag die "van blauw" bleek te zijn, was de labellaag van het testraster:
+        laag die "of blue" bleek te zijn, was de labellaag van het testraster:
         `Raster-labels`, op 80 mm/s @ 30 %. De onderrand meldde dan doodleuk
         "laag 1 · Raster-labels" als de laag van je volgende vorm.
 
@@ -1455,12 +1468,12 @@ class Drawing:
     def _valid_color(color) -> str:
         wanted = normalise(color)
         if wanted is None:
-            raise DesignError("color moet een #rrggbb-waarde zijn.")
+            raise DesignError("color has to be a #rrggbb value.")
         return wanted
 
     def delete_operation(self, operation_id: str) -> dict:
         operation = self._operation(operation_id)
-        with self.elements.undoscope("Laag verwijderen"):
+        with self.elements.undoscope("Remove layer"):
             # Alleen de operatie verdwijnt; de elementen zelf blijven staan,
             # want die kunnen in meerdere lagen zitten.
             operation.remove_node()
@@ -1501,7 +1514,7 @@ class Drawing:
         skipped = len(nodes) - len(kan)
         filled_count = 0
         cleared = 0
-        with self.elements.undoscope("Vulling" if filled else "Vulling weghalen"):
+        with self.elements.undoscope("Fill" if filled else "Remove fill"):
             for node in kan:
                 self.elements.set_emphasis([node])
                 if not filled:
@@ -1521,7 +1534,7 @@ class Drawing:
         }
 
     def _shape_color(self, node) -> str:
-        """De lijnkleur van de vorm, of anders de kleur voor nieuw werk."""
+        """The stroke colour of the shape, or else the colour for new work."""
         stroke = getattr(node, "stroke", None)
         hex_value = getattr(stroke, "hexrgb", None) or getattr(stroke, "hex", None)
         if hex_value:
@@ -1560,7 +1573,7 @@ class Drawing:
             wanted = _OPERATION_TYPES.get(kind)
             if wanted is None:
                 raise DesignError(
-                    f"Onbekend laagtype: {kind}. Kies uit {', '.join(sorted(OPERATIONS))}."
+                    f"Unknown layer type: {kind}. Choose from {', '.join(sorted(OPERATIONS))}."
                 )
             bestaand = [
                 op
@@ -1577,7 +1590,7 @@ class Drawing:
         kleur = getattr(doel, "color", None)
         assigned = 0
         removed = 0
-        with self.elements.undoscope("Naar één laag"):
+        with self.elements.undoscope("Into one layer"):
             for node in nodes:
                 # De knoop weet zelf in welke lagen hij hangt; dat is korter dan
                 # alle lagen aflopen, en het is hoe `paint` het ook doet.
@@ -1644,7 +1657,7 @@ class Drawing:
             return {"removed": 0, "ids": []}
 
         ids = [op.id for op in doomed]
-        with self.elements.undoscope("Lege lagen opruimen"):
+        with self.elements.undoscope("Clear out empty layers"):
             for op in doomed:
                 op.remove_node()
         for operation_id in ids:
@@ -1664,7 +1677,7 @@ class Drawing:
         precies wat je wil zien voordat je opnieuw indeelt.
 
         Lagen van een testraster tellen niet mee: die horen bij één bord en
-        gaan er als geheel uit ("Raster uit ontwerp verwijderen"). Ze los
+        gaan er als geheel uit ("Remove the grid from the design"). Ze los
         weggooien zou een half testresultaat achterlaten — en dat gold ook voor
         de labellaag, die hier wél sneuvelde: de opschriften en het randkader
         van elk bord bleven achter zonder laag en brandden dus niet meer, aan
@@ -1676,9 +1689,9 @@ class Drawing:
             if str(op.type).startswith("op ") and not self._is_board_layer(op)
         ]
         if not doomed:
-            raise DesignError("Er is geen laag om weg te gooien.")
+            raise DesignError("There is no layer to throw away.")
         ids = [op.id for op in doomed]
-        with self.elements.undoscope("Alle lagen verwijderen"):
+        with self.elements.undoscope("Remove all layers"):
             for op in doomed:
                 op.remove_node()
         for operation_id in ids:
@@ -1715,7 +1728,7 @@ class Drawing:
         return None if text in ("", "#000000") else text
 
     def _next_color(self) -> str:
-        """De eerste palet-kleur die nog niet in gebruik is, anders op volgorde."""
+        """The first palette colour not in use yet, otherwise in order."""
         ops = list(self.elements.ops())
         used = {c for c in (self._usable_color(op) for op in ops) if c}
         for candidate in self.PALETTE:
@@ -1743,12 +1756,12 @@ class Drawing:
 
         text = str(value).strip()
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", text):
-            raise DesignError("color moet een #rrggbb-waarde zijn.")
+            raise DesignError("color has to be a #rrggbb value.")
         operation.color = Color(text)
         return text
 
     def _is_grid_cell(self, operation, operation_id: str) -> bool:
-        """Zelfde verificatie als de snapshot: id én instellingen moeten kloppen."""
+        """The same verification as the snapshot: id and settings both have to match."""
         cell = self.grid_operations().get(operation_id)
         if not cell:
             return False
@@ -1763,9 +1776,9 @@ class Drawing:
     def _operation(self, operation_id: str):
         node = self.elements.find_node(operation_id)
         if node is None:
-            raise DesignError(f"Laag {operation_id} bestaat niet (meer).")
+            raise DesignError(f"Layer {operation_id} does not exist (any more).")
         if not str(node.type).startswith(("op ", "effect ")):
-            raise DesignError(f"{operation_id} is geen laag.")
+            raise DesignError(f"{operation_id} is not a layer.")
         return node
 
     def fonts(self) -> list[dict]:
@@ -1872,7 +1885,7 @@ class Drawing:
     RAND_SPELING = 0.5
 
     def bed_mm(self) -> tuple[float, float] | None:
-        """De bedmaat van de actieve machine in millimeters."""
+        """The bed size of the active machine in millimetres."""
         device = getattr(self.kernel, "device", None)
         view = getattr(device, "view", None)
         try:
@@ -1920,7 +1933,7 @@ class Drawing:
             self._verzet(-dx * units, -dy * units, verzet)
 
     def _verzet(self, dx: float, dy: float, nodes=None) -> list:
-        """Alle vormen een vast stuk opschuiven, in engine-eenheden."""
+        """Move every shape along by a fixed amount, in engine units."""
         from meerk40t.svgelements import Matrix
 
         matrix = Matrix.translate(dx, dy)
@@ -2037,7 +2050,7 @@ class Drawing:
         return float(UNITS_PER_MM)
 
     def _plan_estimate(self) -> tuple[float, int]:
-        """De oude weg: het hele plan bouwen en de duur eruit optellen."""
+        """The old route: build the whole plan and add up the duration from it."""
         self.runner.run("plan copy preprocess validate blob preopt optimize")
         planner = getattr(self.kernel, "planner", None)
         seconds = 0.0
@@ -2062,7 +2075,7 @@ class Drawing:
     RAPID_MM_S = 100.0
 
     def _geometry_estimate(self) -> tuple[float, int]:
-        """Brandtijd en reistijd uit de elementenboom, zonder plan."""
+        """Burn time and travel time from the element tree, without a plan."""
         seconds = 0.0
         pieces = 0
         rapid = self._rapid_mm_s()
@@ -2355,7 +2368,7 @@ class Drawing:
         target = Path(tempfile.mkdtemp(prefix="openkerf-export-")) / safe
         self.runner.run(f'save "{target}"')
         if not target.is_file():
-            raise DesignError("De engine heeft geen bestand geschreven.")
+            raise DesignError("The engine wrote no file.")
         return target
 
     def export_project(self, library, filename: str = "project.openkerf", sheets=None):
@@ -2416,11 +2429,11 @@ class Drawing:
 
         source = Path(path)
         if not zipfile.is_zipfile(source):
-            raise DesignError("Dit is geen OpenKerf-project.")
+            raise DesignError("This is not an OpenKerf project.", code="project.notOurs")
         with zipfile.ZipFile(source) as bundle:
             names = set(bundle.namelist())
             if "design.svg" not in names:
-                raise DesignError("Het project bevat geen ontwerp.")
+                raise DesignError("The project holds no design.", code="project.noDesign")
             svg = bundle.read("design.svg")
             context = (
                 json.loads(bundle.read("library.json")) if "library.json" in names else {}
@@ -2498,10 +2511,13 @@ DIKTE_SPELING = 0.51
 
 
 def _mm_tekst(waarde) -> str:
-    """3 in plaats van 3.0, en 0,8 in plaats van 0.8 — het is een Nederlandse maat."""
-    getal = float(waarde)
-    heel = f"{getal:g}"
-    return heel.replace(".", ",")
+    """
+    3 rather than 3.0.
+
+    The decimal separator stays a point here: this is the source language of the
+    API, and the interface writes the number again in the reader's own notation.
+    """
+    return f"{float(waarde):g}"
 
 
 # Hoe zwaar een bezwaar weegt. Niet alle waarschuwingen zijn even erg, en wie ze
@@ -2530,10 +2546,10 @@ def _layer_warnings(entry: dict | None, sheet: dict | None) -> list[dict]:
     waarschuwingen = []
     sheet = sheet or {}
     vel_materiaal = sheet.get("material_id")
-    vel_naam = sheet.get("material_name") or "dit vel"
+    vel_naam = sheet.get("material_name") or "this sheet"
     vel_dikte = sheet.get("thickness_mm")
 
-    van = entry.get("material_name") or "een ander materiaal"
+    van = entry.get("material_name") or "another material"
     if (
         vel_materiaal is not None
         and entry.get("material_id") is not None
@@ -2542,7 +2558,7 @@ def _layer_warnings(entry: dict | None, sheet: dict | None) -> list[dict]:
         waarschuwingen.append(
             {
                 "code": "ander-materiaal",
-                "text": f"Deze instelling is voor {van}; dit vel is {vel_naam}.",
+                "text": f"This setting is for {van}; this sheet is {vel_naam}.",
             }
         )
     elif (
@@ -2554,8 +2570,8 @@ def _layer_warnings(entry: dict | None, sheet: dict | None) -> list[dict]:
             {
                 "code": "andere-dikte",
                 "text": (
-                    f"Deze instelling is voor {_mm_tekst(entry['thickness_mm'])} mm; "
-                    f"dit vel is {_mm_tekst(vel_dikte)} mm."
+                    f"This setting is for {_mm_tekst(entry['thickness_mm'])} mm; "
+                    f"this sheet is {_mm_tekst(vel_dikte)} mm."
                 ),
             }
         )
@@ -2564,14 +2580,14 @@ def _layer_warnings(entry: dict | None, sheet: dict | None) -> list[dict]:
         waarschuwingen.append(
             {
                 "code": "nooit-gebrand",
-                "text": "Uitgerekend vanaf een andere dikte — nooit gebrand.",
+                "text": "Calculated from another thickness — never burned.",
             }
         )
     elif entry.get("source") == "geimporteerd":
         waarschuwingen.append(
             {
                 "code": "nooit-gebrand",
-                "text": "Van een andere machine overgenomen — hier nooit gebrand.",
+                "text": "Taken from another machine — never burned here.",
             }
         )
 

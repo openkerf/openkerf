@@ -180,4 +180,4 @@ def test_one_group_and_one_shape_are_two_units(client):
     antwoord = client.post("/api/design/nest", json={"ids": [a, b], "margin_mm": 3})
 
     assert antwoord.status_code == 409
-    assert "minstens twee" in antwoord.json()["detail"]
+    assert "at least two" in antwoord.json()["detail"]

@@ -162,7 +162,18 @@ MATERIAL_FAMILIES = {
 
 
 class LibraryError(RuntimeError):
-    pass
+    """
+    A refusal the user can act on, in the user's own terms.
+
+    `code` is optional and exists for one reason: the interface can then say it in
+    the reader's language. The message is English — the source language of this
+    layer — and is what a client without a catalogue shows: curl, a script, a log.
+    A raise without a code is one whose message only a developer reads.
+    """
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 def default_path(kernel) -> Path:

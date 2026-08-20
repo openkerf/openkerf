@@ -321,7 +321,7 @@ class Clipart:
         target.write_bytes(body)
 
         before = {id(node) for node in self.elements.elems()}
-        with self.elements.undoscope("Clipart invoegen"):
+        with self.elements.undoscope("Insert clipart"):
             self.drawing.runner.run(f'load "{target}"')
             added = [n for n in self.elements.elems() if id(n) not in before]
             if not added:

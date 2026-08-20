@@ -11,7 +11,7 @@ Twee dingen om te weten:
   getallen als punten. Een punt verplaatsen betekent alle segmenten aanpassen
   waar dat punt in voorkomt — begin- én eindpunt, anders valt het pad open.
 - Vormen (`elem rect`, `elem ellipse`, …) hebben geen losse punten; ze zijn
-  parameters. Wie daar een hoek van versleept, bedoelt "maak er een pad van".
+  parameters. Wie daar een hoek van versleept, bedoelt "make it a path".
   Dat doen we dan ook, met behoud van kleur, laagtoewijzing en label — anders
   verdwijnt de vorm uit zijn bewerking en zou hij niet meer meebranden.
 """
@@ -37,7 +37,7 @@ class Nodes:
         return self.kernel.elements
 
     def points(self, element_id: str) -> dict:
-        """De knooppunten van een element, in millimeters."""
+        """The nodes of an element, in millimetres."""
         from meerk40t.core.units import UNITS_PER_MM
 
         node = self._node(element_id)
@@ -57,22 +57,23 @@ class Nodes:
 
         node = self._node(element_id)
         if node.type not in SHAPES:
-            raise DesignError(f"Van een {node.type} zijn geen knooppunten te bewerken.")
+            raise DesignError(f"The nodes of a {node.type} cannot be edited.",
+            code="nodes.notEditable",)
         try:
             position = int(index)
             target = complex(float(x_mm) * UNITS_PER_MM, float(y_mm) * UNITS_PER_MM)
         except (TypeError, ValueError) as e:
-            raise DesignError("Een knooppunt vraagt een index en een positie.") from e
+            raise DesignError("A node needs an index and a position.") from e
 
         geometry = self._geometry(node)
         points = self._unique(geometry)
         if not 0 <= position < len(points):
             raise DesignError(
-                f"Knooppunt {position} bestaat niet; er zijn er {len(points)}."
+                f"Node {position} does not exist; there are {len(points)}."
             )
 
         moved = self._with_point_moved(geometry, points[position], target)
-        with self.elements.undoscope("Knooppunt verplaatsen"):
+        with self.elements.undoscope("Move node"):
             new_id = self._replace(node, moved, element_id)
         self.elements.signal("refresh_scene", "Scene")
         return {"id": new_id, "was": element_id, "index": position}
@@ -82,14 +83,14 @@ class Nodes:
     def _node(self, element_id: str):
         node = self.elements.find_node(element_id)
         if node is None:
-            raise DesignError(f"Element {element_id} bestaat niet (meer).")
+            raise DesignError(f"Element {element_id} does not exist (any more).")
         return node
 
     def _geometry(self, node):
         try:
             return node.as_geometry()
         except Exception as e:  # pragma: no cover - alleen bij exotische nodes
-            raise DesignError(f"Van dit element is geen vorm te lezen: {e}") from e
+            raise DesignError(f"No shape can be read from this element: {e}") from e
 
     def _unique(self, geometry) -> list[complex]:
         """
@@ -107,7 +108,7 @@ class Nodes:
         return found
 
     def _with_point_moved(self, geometry, source: complex, target: complex):
-        """Een kopie van de vorm met dat ene punt verlegd."""
+        """A copy of the shape with that one point moved."""
         import copy
 
         moved = copy.deepcopy(geometry)

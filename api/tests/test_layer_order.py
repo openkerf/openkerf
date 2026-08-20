@@ -300,7 +300,7 @@ def test_retype_renames_a_default_label_but_keeps_a_chosen_one(kernel, drawing):
     een = drawing.change_operation_type(standaard, "engrave")
     twee = drawing.change_operation_type(eigen, "engrave")
 
-    assert kernel.elements.find_node(een["id"]).label == "Graveren"
+    assert kernel.elements.find_node(een["id"]).label == "Engrave"
     assert kernel.elements.find_node(twee["id"]).label == "Buitensnede"
 
 

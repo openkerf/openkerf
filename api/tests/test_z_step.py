@@ -106,7 +106,7 @@ def test_the_step_is_refused_without_a_z_axis(grbl_zonder_z, tmp_path):
         response = client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
         assert response.status_code == 409
-        assert "Z-as" in response.json()["detail"]
+        assert "Z axis" in response.json()["detail"]
 
 
 def test_an_absurd_step_is_refused(grbl, tmp_path):

@@ -269,8 +269,8 @@ def test_all_layers_go_in_one_action_and_the_shapes_stay(kernel, client):
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     )
-    client.post("/api/design/operations", json={"type": "cut", "label": "Snijden"})
-    client.post("/api/design/operations", json={"type": "engrave", "label": "Graveren"})
+    client.post("/api/design/operations", json={"type": "cut", "label": "Cut"})
+    client.post("/api/design/operations", json={"type": "engrave", "label": "Engrave"})
     voor = client.get("/api/design").json()
     assert len(voor["operations"]) >= 2
     vormen = len(voor["elements"])
@@ -940,7 +940,7 @@ def test_a_new_layer_has_a_name_you_recognise(client):
     layer = next(
         o for o in client.get("/api/design").json()["operations"] if o["id"] == made["id"]
     )
-    assert layer["label"] == "Snijden"
+    assert layer["label"] == "Cut"
 
 
 def test_a_new_layer_does_not_claim_zero_passes(client):
@@ -1088,4 +1088,4 @@ def test_a_corner_size_too_large_is_refused(client):
     )
 
     assert antwoord.status_code == 409
-    assert "kleinere maat" in antwoord.json()["detail"]
+    assert "smaller size" in antwoord.json()["detail"]

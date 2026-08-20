@@ -52,7 +52,7 @@ class Generators:
         if gap_x < 0 or gap_y < 0:
             raise DesignError("Een negatieve tussenruimte laat de vormen overlappen.")
 
-        with self._selection(ids), self.elements.undoscope("Raster herhalen"):
+        with self._selection(ids), self.elements.undoscope("Grid repeat"):
             self.runner.run(
                 f"grid {columns} {rows} {gap_x:.4f}mm {gap_y:.4f}mm --relative"
             )
@@ -72,7 +72,7 @@ class Generators:
         command = f"radial {count} {radius:.4f}mm {start}deg {end}deg"
         if not rotate:
             command += " --unrotated"
-        with self._selection(ids), self.elements.undoscope("Cirkelherhaling"):
+        with self._selection(ids), self.elements.undoscope("Radial repeat"):
             self.runner.run(command)
         return self._added("radial", count)
 
@@ -111,7 +111,7 @@ class Generators:
                 raise DesignError("De binnenstraal moet kleiner zijn dan de straal.")
             command += f" --radius_inner {inner:.4f}mm --alternate_seq 1"
 
-        with self.elements.undoscope("Veelhoek"):
+        with self.elements.undoscope("Polygon"):
             self.runner.run(command)
         return self._added("polygon", 1)
 
@@ -163,7 +163,7 @@ class Generators:
             raise DesignError("De tekst leverde geen vorm op.")
         _bend_in_place(geometry, bounds, cx, cy, radius * UNITS_PER_MM, inside)
 
-        with self.elements.undoscope("Boogtekst"):
+        with self.elements.undoscope("Arc text"):
             node.geometry = geometry
             node.matrix.reset()
             # De bron loslaten: anders rendert de engine de tekst bij de
@@ -193,7 +193,7 @@ class Generators:
         """
         content, bars = self._plan_barcode(text, kind, x_mm, y_mm, width_mm, height_mm)
 
-        with self.elements.undoscope("Streepjescode"):
+        with self.elements.undoscope("Barcode"):
             node = self._add_polygon(
                 bars, f"{kind} — {content[:24]}", subpaths=True, intent="engrave"
             )
@@ -260,7 +260,7 @@ class Generators:
                     height_mm=bed_height,
                 )
                 self.sheets.activate(self.sheets.state()["sheets"][-1]["id"])
-            with self.elements.undoscope("Doos"):
+            with self.elements.undoscope("Box"):
                 for name, points, at_x, at_y in page:
                     node = self._add_polygon(
                         [(px + at_x, py + at_y) for px, py in points],
@@ -301,7 +301,7 @@ class Generators:
             text, x_mm, y_mm, size_mm, border
         )
 
-        with self.elements.undoscope("QR-code"):
+        with self.elements.undoscope("QR code"):
             node = self._add_polygon(
                 squares, f"QR — {content[:24]}", subpaths=True, intent="engrave"
             )
@@ -902,7 +902,7 @@ class Generators:
 
     def _file_under(self, node, intent: str):
         """De vorm in één laag van het gevraagde soort, en nergens anders in."""
-        label = {"cut": "Snijden", "engrave": "Graveren"}.get(intent, "Snijden")
+        label = {"cut": "Cut", "engrave": "Engrave"}.get(intent, "Cut")
         for operation in self.elements.ops():
             if operation.type == f"op {intent}" and getattr(operation, "label", "") == label:
                 target = operation

@@ -17,7 +17,7 @@ rechte zijden: veelhoeken, sterren, ingelezen contouren.
 De maat is de **terugsnijafstand langs de zijde**, niet de radius. Bij een rechte
 hoek zijn die gelijk — daarom ziet een afgeronde veelhoek er precies zo uit als
 een afgeronde rechthoek met dezelfde `rx`. Bij een scherpere of stompere hoek
-lopen ze uiteen, en dan is "hoeveel er van mijn zijde af gaat" het getal waar
+lopen ze uiteen, en dan is "how much comes off my side" het getal waar
 iemand aan een machine iets aan heeft.
 """
 
@@ -34,7 +34,17 @@ FRACTIE_PER_ZIJDE = 0.5
 
 
 class CornerError(Exception):
-    """Wat de gebruiker moet weten voordat er iets verandert."""
+    """
+    What the user has to know before anything changes.
+
+    Carries the same optional `code` as `DesignError`, for the same reason: the
+    interface can then say the refusal in the reader's language while the message
+    stays the English source.
+    """
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 def _eenheid(z: complex) -> complex:
@@ -62,11 +72,11 @@ def corner_geometry(geom, size_units: float, style: str):
 
     if style not in STYLES:
         raise CornerError(
-            f"Onbekende hoekstijl: {style}. Kies 'round' om af te ronden of "
-            "'chamfer' om af te schuinen."
+            f"Unknown corner style: {style}. Choose 'round' to round them off or "
+            "'chamfer' to bevel them."
         )
     if size_units <= 0:
-        raise CornerError("De maat van een hoek moet groter zijn dan nul.")
+        raise CornerError("The size of a corner has to be greater than zero.")
 
     uit = Geomstr()
     gewijzigd = 0
@@ -121,15 +131,15 @@ def corner_geometry(geom, size_units: float, style: str):
 
     if not gewijzigd:
         raise CornerError(
-            "Geen enkele hoek is af te ronden of af te schuinen: er komen geen "
-            "twee rechte zijden op uit, of de maat is te groot voor de zijden. "
-            "Kies een kleinere maat."
+            "Not one corner can be rounded or bevelled: no two straight sides meet "
+            "there, or the size is too big for the sides. Choose a smaller size.",
+            code="corners.none",
         )
     return uit, gewijzigd, overgeslagen
 
 
 def _inkorten(rijen, trim_begin, trim_eind):
-    """Elke lijn aan beide kanten inkorten met wat de hoeken vragen."""
+    """Shorten every line at both ends by what the corners ask for."""
     ingekort = []
     for index, rij in enumerate(rijen):
         start, control, info, control2, eind = rij

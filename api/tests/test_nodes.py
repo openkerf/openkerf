@@ -60,7 +60,7 @@ def test_a_moved_rectangle_becomes_a_path_but_keeps_its_layer(client, rect):
     bewerking mee — anders brandt hij niet meer mee zonder dat iemand dat ziet.
     """
     operation = client.post(
-        "/api/design/operations", json={"type": "cut", "label": "Snijden"}
+        "/api/design/operations", json={"type": "cut", "label": "Cut"}
     ).json()
     client.post("/api/design/assign", json={"ids": [rect], "operation_id": operation["id"]})
 

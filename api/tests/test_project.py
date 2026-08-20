@@ -164,7 +164,7 @@ def test_a_new_project_leaves_one_empty_sheet(client, kernel):
 
     state = client.post("/api/project/new").json()
 
-    assert [s["name"] for s in state["sheets"]] == ["Vel 1"]
+    assert [s["name"] for s in state["sheets"]] == ["Sheet 1"]
     assert state["active"] == "vel-1"
     assert list(kernel.elements.elems()) == []
 

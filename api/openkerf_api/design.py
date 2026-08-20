@@ -33,11 +33,11 @@ def _plain(value):
 # de instellingen in de naam gepropt. Die staan er al netjes naast, dus we
 # tonen waar de laag over gaat.
 LAYER_NAMES = {
-    "op cut": "Snijden",
-    "op engrave": "Graveren",
-    "op raster": "Rasteren",
-    "op image": "Afbeelding",
-    "op dots": "Punten",
+    "op cut": "Cut",
+    "op engrave": "Engrave",
+    "op raster": "Raster",
+    "op image": "Image",
+    "op dots": "Dots",
 }
 
 
@@ -163,7 +163,7 @@ def _text_of(node) -> dict | None:
 
 
 def _image_of(node) -> dict | None:
-    """Kader en resolutie van een afbeelding, in millimeters."""
+    """Frame and resolution of an image, in millimetres."""
     if getattr(node, "type", None) != "elem image":
         return None
     from meerk40t.core.units import UNITS_PER_MM
@@ -267,7 +267,7 @@ def _angle_from(rotation_rad: float, mirrored: bool) -> float:
 
 
 def _visual_angle(node) -> float | None:
-    """De hoek van één node, of niets als de matrix niets prijsgeeft."""
+    """The angle of one node, or nothing when the matrix gives nothing away."""
     pose = _pose_of(node)
     return None if pose is None else pose["angle_deg"]
 

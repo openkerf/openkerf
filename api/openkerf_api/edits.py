@@ -26,23 +26,34 @@ from .design import _visual_angle
 
 
 class DesignError(RuntimeError):
-    pass
+    """
+    A refusal the user can act on, in the user's own terms.
+
+    `code` is optional and exists for one reason: the interface can then say it in
+    the reader's language. The message is English — the source language of this
+    layer — and is what a client without a catalogue shows: curl, a script, a log.
+    A raise without a code is one whose message only a developer reads.
+    """
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 def _finite(value, name: str) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError) as e:
-        raise DesignError(f"{name} moet een getal zijn.") from e
+        raise DesignError(f"{name} has to be a number.") from e
     if not math.isfinite(number):
-        raise DesignError(f"{name} moet een eindig getal zijn.")
+        raise DesignError(f"{name} has to be a finite number.")
     return number
 
 
 def _positive(value, name: str) -> float:
     number = _finite(value, name)
     if number <= 0:
-        raise DesignError(f"{name} moet groter dan nul zijn.")
+        raise DesignError(f"{name} has to be greater than zero.")
     return number
 
 
@@ -55,12 +66,12 @@ def _ids(value) -> list[str]:
     if isinstance(value, str):
         value = [value]
     if not isinstance(value, (list, tuple)) or not value:
-        raise DesignError("Geef minstens één element op.")
+        raise DesignError("Name at least one element.", code="edit.needsElement")
     return [str(v) for v in value]
 
 
 def _subpath_count(node) -> int:
-    """Hoeveel losse stukken een vorm heeft; 0 als er geen geometrie is."""
+    """How many loose pieces a shape has; 0 when there is no geometry."""
     try:
         geometry = (
             node.final_geometry() if hasattr(node, "final_geometry") else node.as_geometry()
@@ -84,7 +95,8 @@ class DesignEditor:
         node = self.elements.find_node(node_id)
         if node is None:
             raise DesignError(
-                f"Element {node_id} bestaat niet (meer). Vernieuw het ontwerp."
+                f"Element {node_id} does not exist (any more). Refresh the design.",
+            code="edit.staleElement",
             )
         return node
 
@@ -135,14 +147,15 @@ class DesignEditor:
             known = [value for value in angles if value is not None]
             if not known:
                 raise DesignError(
-                    "Van deze selectie is de hoek niet af te lezen; "
-                    "gebruik de stapjes van 1° of 90°."
+                    "The angle of this selection cannot be read off; "
+                    "use the 1° or 90° steps.",
+                    code="edit.mixedAngle",
                 )
             spread = max(known) - min(known)
             if spread > 0.01:
                 raise DesignError(
                     "Deze vormen staan onder verschillende hoeken. "
-                    "Draai ze met de stapjes, of zet ze eerst gelijk."
+                    "Turn them with the steps, or make them equal first."
                 )
             angle -= known[0]
         angle %= 360.0
@@ -165,7 +178,7 @@ class DesignEditor:
         nodes = [self._node(node_id) for node_id in _ids(element_ids)]
 
         added = 0
-        with self.elements.undoscope("Toewijzen aan bewerking"):
+        with self.elements.undoscope("Assign to operation"):
             for node in nodes:
                 if not self._referenced(operation, node):
                     operation.add_reference(node)
@@ -178,7 +191,7 @@ class DesignEditor:
         targets = {id(self._node(node_id)) for node_id in _ids(element_ids)}
 
         removed = 0
-        with self.elements.undoscope("Verwijderen uit bewerking"):
+        with self.elements.undoscope("Remove from operation"):
             for reference in list(operation.children):
                 node = getattr(reference, "node", None)
                 if node is not None and id(node) in targets:
@@ -262,7 +275,7 @@ class DesignEditor:
         """
         operation = self._operation(operation_id)
         applied = {}
-        with self.elements.undoscope("Preset toepassen"):
+        with self.elements.undoscope("Apply preset"):
             if speed is not None:
                 operation.speed = _positive(speed, "speed")
                 applied["speed"] = operation.speed
@@ -301,7 +314,7 @@ class DesignEditor:
     def _operation(self, operation_id: str):
         operation = self._node(operation_id)
         if not str(operation.type).startswith(("op ", "effect ")):
-            raise DesignError(f"{operation_id} is geen bewerking.")
+            raise DesignError(f"{operation_id} is not an operation.")
         return operation
 
     @staticmethod

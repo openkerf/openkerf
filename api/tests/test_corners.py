@@ -85,7 +85,7 @@ def test_a_size_too_large_for_every_corner_is_a_refusal():
     with pytest.raises(CornerError) as fout:
         corner_geometry(vierkant(10.0), 8.0, "chamfer")
 
-    assert "kleinere maat" in str(fout.value)
+    assert "smaller size" in str(fout.value)
 
 
 def test_the_grens_is_half_the_shortest_edge():
@@ -139,7 +139,7 @@ def test_nothing_to_do_is_a_refusal_with_a_sentence():
     with pytest.raises(CornerError) as fout:
         corner_geometry(geom, 10.0, "chamfer")
 
-    assert "hoek" in str(fout.value).lower()
+    assert "corner" in str(fout.value).lower()
 
 
 def test_the_original_geometry_is_left_alone():
