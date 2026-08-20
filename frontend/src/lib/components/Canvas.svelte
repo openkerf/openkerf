@@ -4,11 +4,12 @@
 	import { kopspoor } from '$lib/status.svelte';
 	import { nulpunt } from '$lib/control.svelte';
 	import { elementNaam, type DesignStore } from '$lib/design.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import type { TilingStore, Tile } from '$lib/tiling.svelte';
 	import LagenPalet from './LagenPalet.svelte';
 	import Menu from './Menu.svelte';
-	import type { Menu as MenuLijst } from '$lib/acties';
+	import type { Menu as MenuList } from '$lib/actions';
 	import {
 		omgevingstrefpunten,
 		klikDoosVast,
@@ -37,7 +38,7 @@
 		tiling = null,
 		onContextObject,
 		onContextCanvas,
-		bediening = $bindable(null)
+		control = $bindable(null)
 	}: {
 		/** Waar de muis staat, in mm op het bed. `null` als hij weg is. */
 		onPointerMm?: (punt: { x: number; y: number } | null) => void;
@@ -78,12 +79,12 @@
 		 * die staat naar boven te tillen geeft het canvas een handvat terug: één
 		 * object met de vier zoomstanden en de twee schakelaars.
 		 */
-		bediening?: {
-			zoom: (wat: 'alles' | 'selectie' | 'bed' | 'honderd') => void;
-			stap: (factor: number) => void;
-			vastklikken: () => void;
-			laagnummers: () => void;
-			staat: () => { vastklikken: boolean; laagnummers: boolean };
+		control?: {
+			zoom: (what: 'all' | 'selection' | 'bed' | 'hundred') => void;
+			step: (factor: number) => void;
+			snap: () => void;
+			layerNumbers: () => void;
+			state: () => { snap: boolean; layerNumbers: boolean };
 		} | null;
 	} = $props();
 
@@ -1284,27 +1285,27 @@
 	/** De uitklap achter het zoompercentage. */
 	let zoomMenu = $state(false);
 	let zoomMenuAt = $state({ x: 0, y: 0 });
-	let zoomStanden = $derived<MenuLijst>([
+	let zoomStanden = $derived<MenuList>([
 		{
 			items: [
-				{ id: 'z-alles', label: 'Alles passend in beeld', toets: '3', doen: passend },
+				{ id: 'z-alles', label: t('action.zoomAll'), key: '3', run: passend },
 				{
 					id: 'z-selectie',
-					label: 'Naar de selectie',
-					toets: '2',
-					uit: design.selectedIds.length ? undefined : 'Er is niets geselecteerd',
-					doen: naarSelectie
+					label: t('action.zoomSelection'),
+					key: '2',
+					off: design.selectedIds.length ? undefined : t('reason.nothingSelected'),
+					run: naarSelectie
 				},
-				{ id: 'z-bed', label: 'Het hele bed', toets: '0', doen: bedPassend },
-				{ id: 'z-100', label: '100 % — ware grootte', toets: '1', doen: honderd }
+				{ id: 'z-bed', label: t('action.zoomBed'), key: '0', run: bedPassend },
+				{ id: 'z-100', label: t('action.zoomHundred'), key: '1', run: honderd }
 			]
 		},
 		{
 			items: [25, 50, 100, 200, 400].map((waarde) => ({
 				id: `z-${waarde}`,
 				label: `${waarde} %`,
-				aan: procent === waarde,
-				doen: () => naarProcent(waarde)
+				on: procent === waarde,
+				run: () => naarProcent(waarde)
 			}))
 		}
 	]);
@@ -1335,19 +1336,19 @@
 	 * pagina moeten weten hoe groot het werkvlak is en waar de bedhoek ligt.
 	 */
 	$effect(() => {
-		bediening = {
-			zoom: (wat) => {
-				if (wat === 'alles') passend();
-				else if (wat === 'selectie') naarSelectie();
-				else if (wat === 'bed') bedPassend();
+		control = {
+			zoom: (what) => {
+				if (what === 'all') passend();
+				else if (what === 'selection') naarSelectie();
+				else if (what === 'bed') bedPassend();
 				else honderd();
 			},
-			stap: (factor: number) => zoomAt(factor),
-			vastklikken: snapSchakel,
-			laagnummers: nummersSchakel,
-			staat: () => ({ vastklikken: snapAan, laagnummers: nummersAan })
+			step: (factor: number) => zoomAt(factor),
+			snap: snapSchakel,
+			layerNumbers: nummersSchakel,
+			state: () => ({ snap: snapAan, layerNumbers: nummersAan })
 		};
-		return () => (bediening = null);
+		return () => (control = null);
 	});
 
 	// Niet via pointerMm: die rekent vanaf de SVG, en dit gebeurt op het
@@ -1501,7 +1502,7 @@
 				<img
 					class="camera"
 					src={cameraSrc}
-					alt="Camerabeeld van het bed"
+					alt={t('camera.title')}
 					style="opacity: {cameraOpacity}"
 				/>
 			{/if}
@@ -1517,7 +1518,7 @@
 			{/if}
 
 			<span class="bed-label mono">
-				bed {bed.width.toFixed(0)} × {bed.height.toFixed(0)} mm
+				{t('canvas.bedSize', { width: bed.width.toFixed(0), height: bed.height.toFixed(0) })}
 			</span>
 
 			<!-- `!job`: tijdens een lopende job is "Leeg bed — kies Importeren" een
@@ -1530,11 +1531,8 @@
 				     waar hij moet beginnen. Vangt geen muis af, want je moet er
 				     doorheen kunnen tekenen. -->
 				<div class="blank">
-					<h2>Leeg bed</h2>
-					<p>
-						Kies <strong>Importeren</strong> bovenin voor een bestaand ontwerp,
-						of pak links een vorm en klik op het bed.
-					</p>
+					<h2>{t('canvas.empty.title')}</h2>
+					<p>{t('canvas.empty.body')}</p>
 				</div>
 			{/if}
 
@@ -1548,8 +1546,8 @@
 				style="position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible"
 				role="img"
 				aria-label={head
-					? `Laserkop op ${head[0].toFixed(1)}, ${head[1].toFixed(1)} millimeter`
-					: 'Positie van de laserkop onbekend'}
+					? t('canvas.headAt', { x: i18n.number(head[0], 1), y: i18n.number(head[1], 1) })
+					: t('canvas.headUnknown')}
 				onclick={(e) => {
 					if (e.target !== e.currentTarget) return;
 					if (tool === 'pen' && canEdit) {
@@ -1726,7 +1724,7 @@
 									class:passive={!selectTool}
 									role="button"
 									tabindex="0"
-									aria-label="Selecteer afbeelding"
+									aria-label={t('canvas.selectImage')}
 									x={element.image.x_mm * (design.design?.units_per_mm ?? 1)}
 									y={element.image.y_mm * (design.design?.units_per_mm ?? 1)}
 									width={element.image.width_mm * (design.design?.units_per_mm ?? 1)}
@@ -1814,7 +1812,7 @@
 									vector-effect="non-scaling-stroke"
 									role="button"
 									tabindex="0"
-									aria-label="Selecteer {elementNaam(element)}"
+									aria-label={t('canvas.selectShape', { name: elementNaam(element) })}
 									aria-pressed={design.isSelected(element.id)}
 									onclick={(e) => {
 										e.stopPropagation();
@@ -1887,7 +1885,7 @@
 									class="grab"
 									role="button"
 									tabindex="-1"
-									aria-label="Sleep om te verplaatsen"
+									aria-label={t('canvas.dragMove')}
 									x={frameBox.x}
 									y={frameBox.y}
 									width={frameBox.width}
@@ -1929,7 +1927,7 @@
 								class="rotator-hit"
 								role="button"
 								tabindex="-1"
-								aria-label="Sleep om te draaien"
+								aria-label={t('canvas.dragRotate')}
 								cx={center.x}
 								cy={frameBox.y - stalk}
 								r={hitR}
@@ -1956,7 +1954,7 @@
 									class:grabbable={canEdit}
 									role="button"
 									tabindex="-1"
-									aria-label="Sleep om te schalen"
+									aria-label={t('canvas.dragScale')}
 									x={hx - hitR}
 									y={hy - hitR}
 									width={hitR * 2}
@@ -2044,7 +2042,7 @@
 							class="grip"
 							role="button"
 							tabindex="-1"
-							aria-label="Eindpunt {index + 1} verslepen"
+							aria-label={t('canvas.dragEndpoint', { n: index + 1 })}
 							cx={point.x}
 							cy={point.y}
 							r={hitR}
@@ -2068,7 +2066,7 @@
 							class="grip"
 							role="button"
 							tabindex="-1"
-							aria-label="Knooppunt {point.index + 1} verslepen"
+							aria-label={t('canvas.dragNode', { n: point.index + 1 })}
 							cx={live ? live.x : point.x_mm}
 							cy={live ? live.y : point.y_mm}
 							r={hitR}
@@ -2300,10 +2298,8 @@
 			class="snap"
 			class:aan={nummersAan}
 			aria-pressed={nummersAan}
-			title={nummersAan
-				? 'Laagnummers bij de vormen staan aan'
-				: 'Laagnummers bij de vormen staan uit'}
-			aria-label="Laagnummers bij de vormen"
+			title={nummersAan ? t('canvas.layerNumbers.on') : t('canvas.layerNumbers.off')}
+			aria-label={t('action.layerNumbers')}
 			onclick={nummersSchakel}
 		>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2318,10 +2314,8 @@
 			class="snap"
 			class:aan={snapAan}
 			aria-pressed={snapAan}
-			title={snapAan
-				? 'Vastklikken staat aan — houd Alt ingedrukt om het even over te slaan'
-				: 'Vastklikken staat uit — houd Alt ingedrukt om het even te gebruiken'}
-			aria-label="Vastklikken op raster en vormen"
+			title={snapAan ? t('canvas.snap.on') : t('canvas.snap.off')}
+			aria-label={t('action.snap')}
 			onclick={snapSchakel}
 		>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2330,7 +2324,7 @@
 			</svg>
 		</button>
 		<span class="scheiding" aria-hidden="true"></span>
-		<button title="Uitzoomen (−)" aria-label="Uitzoomen" onclick={() => zoomAt(1 / 1.25)}>−</button>
+		<button title={t('canvas.zoomOut.title')} aria-label={t('canvas.zoomOut')} onclick={() => zoomAt(1 / 1.25)}>−</button>
 		<!-- Het percentage is nu een échte schaal (100 % = ware grootte) en tegelijk
 		     de ingang naar alle zoomstanden. Hiervóór stond hier een knop met
 		     "100%" die "bed passend" deed, en waren "naar de selectie" en een
@@ -2341,7 +2335,7 @@
 			class="val mono"
 			aria-haspopup="menu"
 			aria-expanded={zoomMenu}
-			title="Zoomstanden"
+			title={t('canvas.zoomLevels')}
 			onclick={(e) => {
 				const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
 				zoomMenuAt = { x: doos.left, y: doos.top - 8 };
@@ -2351,11 +2345,9 @@
 			{procent}%
 			<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
 		</button>
-		<button class="fit" title="Alles passend in beeld (3)" onclick={passend}>
-			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
-			Passend
-		</button>
-		<button title="Inzoomen (+)" aria-label="Inzoomen" onclick={() => zoomAt(1.25)}>+</button>
+		<button class="fit" title={t('canvas.fit.title')} onclick={passend}>
+			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>{t('canvas.fit')}		</button>
+		<button title={t('canvas.zoomIn.title')} aria-label={t('canvas.zoomIn')} onclick={() => zoomAt(1.25)}>+</button>
 	</div>
 
 	{#if zoomMenu}
@@ -2363,13 +2355,13 @@
 			menu={zoomStanden}
 			x={zoomMenuAt.x}
 			y={zoomMenuAt.y}
-			omhoog
-			onSluit={() => (zoomMenu = false)}
+			upward
+			onClose={() => (zoomMenu = false)}
 		/>
 	{/if}
 
 	{#if !device}
-		<p class="empty">Geen machine verbonden</p>
+		<p class="empty">{t('canvas.noMachine')}</p>
 	{/if}
 </div>
 
@@ -2437,14 +2429,14 @@
 			     bed"-regel (die zou hier toch op bijna elke vorm afgaan). -->
 			<span class="regel aanbod">
 				<span class="teken" aria-hidden="true">!</span>
-				<span>Deze plaat is groter dan het bed.</span>
+				<span>{t('canvas.tooBig')}</span>
 				<button
 					class="btn subtle"
 					type="button"
 					disabled={tiling?.busy || !sheetId}
 					onclick={() => sheetId && tiling?.enableAndStart(sheetId)}
 				>
-					In tegels branden?
+					{t('canvas.burnInTiles')}
 				</button>
 			</span>
 		{:else if buitenBed}
@@ -2651,10 +2643,6 @@
 		font-size: var(--text-sm);
 		line-height: 1.45;
 		color: var(--text-2);
-	}
-	.blank strong {
-		color: var(--text-1);
-		font-weight: 600;
 	}
 	/* De oorsprong (C5). Bewust níet in het accent en niet in rood: het accent
 	   is de kopmarkering — dat was juist de verwarring — en rood betekent in dit

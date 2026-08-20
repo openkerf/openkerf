@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { STATE_LABEL, STOP_TOETS, type Device, type MachineState } from '$lib/api';
+	import { machineStateLabel, STOP_KEY, type Device, type MachineState } from '$lib/api';
+	import { i18n, t } from '$lib/i18n/index.svelte';
+	import LanguagePicker from './LanguagePicker.svelte';
 	import { apparaat } from '$lib/apparaat.svelte';
 	import { bewaarBestand } from '$lib/opslaan';
 	import { verbinding } from '$lib/verbinding.svelte';
@@ -139,32 +141,31 @@
 	 * een dode knop.
 	 */
 	let weg = $derived(!verbinding.online);
-	const GEEN_SERVER = 'Geen verbinding met OpenKerf — deze knop komt niet aan.';
 	let stopTitel = $derived(
 		weg
-			? `${GEEN_SERVER} Stoppen kan nu alleen met de noodstop op de machine.`
+			? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
 			: stopArmed
-				? `Job direct afbreken (${STOP_TOETS})`
-				: `Er loopt nu niets — dit breekt een job af zodra er een loopt (${STOP_TOETS})`
+				? t('transport.stop.now', { key: STOP_KEY })
+				: t('transport.stop.armed', { key: STOP_KEY })
 	);
 	let pauzeTitel = $derived(
 		weg
-			? `${GEEN_SERVER} Pauzeren kan nu alleen met de knop op de machine.`
+			? `${t('transport.noServer')} ${t('transport.noServer.pause')}`
 			: canPause
-				? 'Job pauzeren — de kop stopt, de job blijft staan (Pause)'
-				: 'Deze machine kent geen pauze — gebruik de knop op de machine'
+				? t('transport.pause.title')
+				: t('transport.pause.unsupported')
 	);
 	let hervatTitel = $derived(
 		weg
-			? `${GEEN_SERVER} Hervatten kan nu alleen op de machine.`
-			: 'Verder waar hij gebleven was (Pause)'
+			? `${t('transport.noServer')} ${t('transport.noServer.resume')}`
+			: t('transport.resume.title')
 	);
 	let startTitel = $derived(
 		weg
-			? `${GEEN_SERVER} Wacht tot de server terug is.`
+			? `${t('transport.noServer')} ${t('transport.noServer.start')}`
 			: stopArmed
-				? 'Er loopt al een job'
-				: 'De pre-flight openen'
+				? t('transport.start.busy')
+				: t('transport.start.preflight')
 	);
 
 	/**
@@ -219,22 +220,27 @@
 
 	// "3 mm", niet "3.0 mm" — en 0,8 mm blijft 0,8 mm.
 	// "3mm" aan elkaar: in de balk telt elke pixel, en het leest als één maat.
+	// "3 mm", not "3.0 mm" — and in the reader's notation: 3,5 in Dutch, 3.5 in
+	// English. Glued to the unit, because every pixel counts in the bar and it
+	// reads as one measurement.
 	let dikte = $derived(
 		thicknessMm === null || thicknessMm === undefined
 			? null
-			: `${String(thicknessMm).replace('.', ',')}mm`
+			: `${i18n.number(thicknessMm)}mm`
 	);
 	let materiaalTitel = $derived(
 		material
-			? `Dit vel is ${material}${dikte ? `, ${dikte}` : ' (dikte niet ingevuld)'} — klik om te wijzigen`
-			: 'Nog geen materiaal gekozen voor dit vel — klik om het in te vullen'
+			? dikte
+				? t('topbar.material.isThickness', { material, thickness: dikte })
+				: t('topbar.material.noThickness', { material })
+			: t('topbar.material.none')
 	);
 </script>
 
 <svelte:window onkeydown={sneltoets} />
 
 <header class="topbar" class:smal class:weg>
-	<div class="brand" title="OpenKerf"><Logo /><span class="woord">OpenKerf</span></div>
+	<div class="brand" title={t('app.name')}><Logo /><span class="woord">OpenKerf</span></div>
 
 	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
 	     leidt naar de setup — ook de route als er nog géén machine is. -->
@@ -248,19 +254,19 @@
 	<a
 		class="machine"
 		href="/setup"
-		title="{device?.label ?? 'Machine instellen'} — {STATE_LABEL[machineState]}{device
+		title="{device?.label ?? t('topbar.machine.setup')} — {machineStateLabel(machineState)}{device
 			?.bed?.width_mm && device?.bed?.height_mm
 			? ` · bed ${Math.round(device.bed.width_mm)} × ${Math.round(device.bed.height_mm)} mm`
 			: ''}"
 	>
 		<span class="dot {machineState}" aria-hidden="true"></span>
-		<span class="naam">{device?.label ?? 'Machine instellen'}</span>
+		<span class="naam">{device?.label ?? t('topbar.machine.setup')}</span>
 		<!-- Het woord bij de toestand stond hier een derde keer: de statusbalk
 		     rechtsonder zegt het voluit, en de gekleurde stip zegt het hier al.
 		     Die 55px zijn de ruimte waarin het materiaal past — en zonder die
 		     ruimte schuift de startknop van het scherm af. Op tablet was dit om
 		     dezelfde reden al verborgen. -->
-		<span class="muted toestand">{STATE_LABEL[machineState]}</span>
+		<span class="muted toestand">{machineStateLabel(machineState)}</span>
 	</a>
 
 	<!-- Waarmee (machine) en waarín (materiaal) horen naast elkaar: samen
@@ -277,7 +283,7 @@
 		<!-- Op een smalle tablet is "Materiaal kiezen" 49px die de startknop van
 		     het scherm duwen. Eén woord naast een streepjesrand en een plankje
 		     nodigt net zo goed uit, en de hele zin staat in de tooltip. -->
-		<span class="naam">{material ?? (smal ? 'Materiaal' : 'Materiaal kiezen')}</span>
+		<span class="naam">{material ?? (smal ? t('topbar.material.short') : t('topbar.material.choose'))}</span>
 		{#if dikte}<span class="dikte mono">{dikte}</span>{/if}
 	</button>
 
@@ -297,8 +303,8 @@
 		class="btn project-knop"
 		aria-haspopup="menu"
 		aria-expanded={projectOpen}
-		aria-label="Project — openen en opslaan"
-		title="Project — openen en opslaan (ontwerp, vellen en bibliotheek in één bestand)"
+		aria-label={t('topbar.project.aria')}
+		title={t('topbar.project.title')}
 		onclick={(e) => openProjectMenu(e.currentTarget as HTMLElement)}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
@@ -307,7 +313,7 @@
 		     44px over de rand en dan schuift de startknop van het scherm. Een map
 		     met een pijltje omlaag is op die breedte het menu-idioom, en de
 		     tooltip en het aria-label dragen het woord. -->
-		<span class="btn-label">Project</span>
+		<span class="btn-label">{t('topbar.project')}</span>
 		<svg class="pijl" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
 	</button>
 
@@ -330,17 +336,17 @@
 				}}
 			>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M12 11v6m-3-3h6"/></svg>
-				<span>Nieuw project</span>
+				<span>{t('topbar.project.new')}</span>
 			</button>
 			<span class="menuscheiding" role="separator"></span>
 			<!-- Een label met een verborgen bestandsveld erin: geen `menuitem`-rol,
 			     want het invoerveld is al het bedienbare element. -->
 			<label class="regel">
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
-				<span>Project openen…</span>
+				<span>{t('topbar.project.open')}</span>
 				<input
 					type="file"
-					aria-label="Projectbestand kiezen"
+					aria-label={t('topbar.project.pick')}
 					accept=".openkerf,.zip"
 					onchange={(e) => {
 						const input = e.currentTarget as HTMLInputElement;
@@ -359,19 +365,19 @@
 				onclick={(e) => bewaar(e, '/api/project/export.openkerf', 'project.openkerf')}
 			>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
-				<span>Project opslaan</span>
+				<span>{t('topbar.project.save')}</span>
 			</a>
-			<p class="uitleg">Ontwerp, vellen, materialen en machineprofielen in één bestand.</p>
+			<p class="uitleg">{t('topbar.project.hint')}</p>
 		</div>
 	{/if}
 
 	<span class="scheiding docs" aria-hidden="true"></span>
-	<label class="btn file docs" title="Bestand in dit vel importeren — SVG, DXF, RD, G-code of een afbeelding">
+	<label class="btn file docs" title={t('topbar.import.title')}>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
-		<span class="btn-label">Importeren</span>
+		<span class="btn-label">{t('topbar.import')}</span>
 		<input
 			type="file"
-			aria-label="Bestand importeren in dit vel"
+			aria-label={t('topbar.import.aria')}
 			accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
 			onchange={(e) => {
 				const input = e.currentTarget as HTMLInputElement;
@@ -388,11 +394,11 @@
 		class="btn docs"
 		href="/api/design/export.svg"
 		download="ontwerp.svg"
-		title="Dit vel opslaan als SVG"
+		title={t('topbar.export.title')}
 		onclick={(e) => bewaar(e, '/api/design/export.svg', 'ontwerp.svg')}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
-		<span class="btn-label">Exporteren</span>
+		<span class="btn-label">{t('topbar.export')}</span>
 	</a>
 
 	<!-- De laatste controle vóór je brandt: past het, ligt het recht, zit de
@@ -401,18 +407,20 @@
 		class="btn kader"
 		disabled={!canFrame || weg}
 		title={weg
-			? `${GEEN_SERVER} Het kader lopen kan pas als de server terug is.`
+			? `${t('transport.noServer')} ${t('topbar.frame.noServer')}`
 			: canFrame
-				? 'De kop langs de omtrek van je werk sturen, zonder te branden'
-				: 'Er ligt niets op het bed, of deze machine kan niet bewegen'}
+				? t('topbar.frame.title')
+				: t('topbar.frame.off')}
 		onclick={onFrame}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
-		<!-- Het woord blijft ook op tablet staan, want daar is dit een
-		     eersteklas actie en een dun gestippeld vierkantje zegt niets. Alleen
-		     "tonen" gaat weg: "Kader" naast dat vierkantje is ondubbelzinnig, en
-		     de hele zin staat in de tooltip. -->
-		<span class="btn-label blijft">Kader<span class="tonen">&nbsp;tonen</span></span>
+		<!-- The word stays even on a tablet, because there this is a first-class
+		     action and a thin dashed square says nothing. On a narrow bar only the
+		     short form is left. Two whole labels rather than a word plus a
+		     fragment: "show" on its own is not translatable, and in some languages
+		     it does not even come second. -->
+		<span class="btn-label blijft lang">{t('topbar.frame')}</span>
+		<span class="btn-label blijft kort">{t('topbar.frame.short')}</span>
 	</button>
 	<!--
 		Pauzeren hoort naast starten en stoppen, op elke breedte.
@@ -435,7 +443,7 @@
 				onclick={onResume}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-				<span class="btn-label blijft">Hervat</span>
+				<span class="btn-label blijft">{t('transport.resume')}</span>
 			</button>
 		{:else}
 			<button
@@ -445,7 +453,7 @@
 				onclick={onPause}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/></svg>
-				<span class="btn-label blijft">Pauze</span>
+				<span class="btn-label blijft">{t('transport.pause')}</span>
 			</button>
 		{/if}
 	<!-- Stoppen kan altijd, overal, in één tik. Vol rood alleen als er ook echt
@@ -464,7 +472,7 @@
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
 		<span class="btn-label blijft"
-			>Stop{#if weg}<span class="waar">&nbsp;op de machine</span>{/if}</span
+			>{weg ? t('transport.stop.onMachine') : t('transport.stop')}</span
 		>
 	</button>
 	<!-- Opent geen dialoog maar de pre-flight in het rechterpaneel. -->
@@ -475,11 +483,15 @@
 		onclick={onStart}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-		<!-- De spatie staat als entity in de span: Svelte knipt leidende witruimte
-		     binnen een element weg, en dan las de knop "Startjob". -->
-		<span class="btn-label blijft">Start<span class="job">&nbsp;job</span></span>
+		<!-- Two whole labels: on a narrow bar the short one, otherwise the long
+		     one. Gluing "job" onto "Start" made the button read "Startjob" the
+		     moment Svelte trimmed the leading space, and it is not a fragment a
+		     translator can do anything with. -->
+		<span class="btn-label blijft lang">{t('transport.start')}</span>
+		<span class="btn-label blijft kort">{t('transport.start.short')}</span>
 	</button>
-	<button class="iconbtn" onclick={onToggleTheme} title="Thema wisselen" aria-label="Thema wisselen">
+	<LanguagePicker />
+	<button class="iconbtn" onclick={onToggleTheme} title={t('topbar.theme')} aria-label={t('topbar.theme')}>
 		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
 	</button>
 </header>
@@ -511,13 +523,14 @@
 	   De grens ligt op 1200px, niet op 900: op een tablet van 1024 breken de
 	   labels anders over twee regels en groeit de balk mee. */
 	@media (max-width: 1199px) {
+		.kader .kort { display: inline; }
 		/* De knoppen die de machine aansturen houden hun woord: een rood
 		   vierkantje zonder tekst is geen noodstop. */
 		.topbar :global(.btn-label:not(.blijft)) { display: none; }
-		/* Het kader houdt zijn woord wél — op tablet is dit een eersteklas actie
-		   en een dun gestippeld vierkantje zegt niets — maar alleen het eerste
-		   woord: "Kader" naast dat vierkantje is ondubbelzinnig. */
-		.kader .tonen { display: none; }
+		/* The frame keeps its word — on a tablet this is a first-class action and a
+		   thin dashed square says nothing — but only the short form: "Frame" next to
+		   that square is unambiguous. */
+		.kader .lang { display: none; }
 		/* Het hele merk gaat weg, woord én beeld.
 		   Het woordmerk kostte al 100px; het beeldmerk kost er nog 108 met zijn
 		   gap (gemeten), en die zijn hier meer waard dan een logo. Op een tablet
@@ -690,7 +703,11 @@
 	   machinebediening. De machine wint; de bestanden staan dan in het menu van
 	   de gereedschapsrail, één tik verderop. */
 	.topbar.smal .docs { display: none; }
-	.topbar.smal .btn.primary .job { display: none; }
+	/* Narrow bar: the short label, wide bar: the long one. Two whole labels, so a
+	   translation is never half a sentence. */
+	.btn-label.kort { display: none; }
+	.topbar.smal .btn.primary .lang { display: none; }
+	.topbar.smal .btn.primary .kort { display: inline; }
 	/* Het project en de losse bestanden zijn twee soorten handelingen; een
 	   haarlijn zegt dat zonder woorden. */
 	.scheiding {
@@ -844,14 +861,12 @@
 		opacity: 1;
 	}
 	.btn.danger.dood svg { color: var(--text-2); }
-	.btn.danger.dood .waar { color: var(--text-1); font-weight: 600; }
+
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	/* Deze knop dráágt zijn eigen uitleg; de standaard-vervaging maakt hem
 	   onleesbaar en die uitleg is nu het enige wat de knop nog doet. */
 	.btn.danger.dood:disabled { opacity: 1; }
-	/* Op 768–1199 vallen de woorden van niet-machineknoppen weg; deze niet,
-	   want zonder "op de machine" is een dode stopknop alleen maar dood. */
-	.topbar.smal .btn.danger.dood .waar { display: inline; }
+
 	.iconbtn {
 		display: grid;
 		place-items: center;

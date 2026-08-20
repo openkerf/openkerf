@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Standaard dicht: dit is gereedschap voor storingen, geen dagelijkse kost.
+	// Closed by default: this is fault-finding gear, not daily fare.
 	let showEvents = $state(false);
 	import {
 		formatDuration,
@@ -14,9 +14,10 @@
 	} from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import type { TilingStore } from '$lib/tiling.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
 	import JobControls from './JobControls.svelte';
-	import TegelReeks from './TegelReeks.svelte';
+	import TileRun from './TileRun.svelte';
 
 	let {
 		device,
@@ -39,7 +40,7 @@
 		events: SignalEvent[];
 		control: Controller;
 		activeJob: Job | null;
-		/** Revisie van het ontwerp; de tijdschatting in de voorbereiding volgt hem. */
+		/** Revision of the drawing; the time estimate in the preflight follows it. */
 		revisie?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
@@ -54,76 +55,68 @@
 	let spooler = $derived(device?.spooler ?? null);
 	let jobs = $derived(spooler?.jobs ?? []);
 	/**
-	 * De wachtrij mínus de job waar de bediening over gaat.
+	 * The queue minus the job the controls are about.
 	 *
-	 * Die staat sinds v5 bovenaan in het voortgangsblok, met dezelfde balk,
-	 * hetzelfde percentage en dezelfde resterende tijd. Hem hier nóg een keer
-	 * tonen is twee keer hetzelfde getal op één scherm — en dan is de vraag welke
-	 * van de twee je moet geloven zodra ze een pollronde uit elkaar lopen.
+	 * Since v5 that one sits at the top of the progress block, with the same bar,
+	 * the same percentage and the same time remaining. Showing it here as well is
+	 * the same number twice on one screen — and then the question is which of the
+	 * two to believe as soon as they drift a poll apart.
 	 */
 	let wachtenden = $derived(jobs.filter((job) => job !== activeJob));
 </script>
 
-<TegelReeks {tiling} />
+<TileRun {tiling} />
 <JobControls {control} {device} job={activeJob} {revisie} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
 
-<!-- Alleen als er iets te melden is. "Spooler — niets in de wachtrij" onder een
-     blok dat al zegt dat er niets loopt, is een tweede keer hetzelfde. -->
+<!-- Only when there is something to report. "Spooler — nothing in the queue"
+     under a block that already says nothing is running says it twice. -->
 {#if !verbinding.online || !spooler?.present || wachtenden.length}
 <div class="section">
-	<!-- "Spooler" is de naam die de engine ervoor heeft. Wat het voor de
-	     gebruiker is, is de wachtrij. -->
-	<h2 class="section-title">Wachtrij</h2>
-	<!-- Drie soorten leegte, en ze betekenen niet hetzelfde: we weten het niet
-	     (geen verbinding), de machine heeft geen wachtrij (protocolprobleem), of
-	     er staat gewoon niets klaar. Eén regel "Wachtrij is leeg" voor alle drie
-	     stelde de gebruiker gerust op momenten dat dat niet mocht. -->
+	<!-- "Spooler" is what the engine calls it. What it is to the user is the
+	     queue. -->
+	<h2 class="section-title">{t('queue.title')}</h2>
+	<!-- Three kinds of emptiness, and they do not mean the same thing: we do not
+	     know (no connection), the machine has no queue (protocol problem), or
+	     nothing is lined up. One line "the queue is empty" for all three
+	     reassured the user at moments when it should not have. -->
 	{#if !verbinding.online}
-		<p class="empty">
-			Onbekend — zonder verbinding weten we niet wat er in de wachtrij staat.
-			Wat je hier las, is van vlak vóór de stilte.
-		</p>
+		<p class="empty">{t('queue.unknown')}</p>
 	{:else if !spooler?.present}
-		<p class="empty">
-			Deze machine meldt geen wachtrij. Starten kan wel; je ziet alleen de
-			voortgang niet.
-		</p>
+		<p class="empty">{t('queue.noQueue')}</p>
 	{:else}
-		<p class="empty klein">
-			{wachtenden.length === 1 ? 'Nog één job' : `Nog ${wachtenden.length} jobs`} na deze.
-			Ze beginnen in deze volgorde.
-		</p>
+		<p class="empty klein">{t('queue.after', { n: wachtenden.length })}</p>
 		{#each wachtenden as job, i (i)}
-			<!-- Alleen de job waar de bediening over gaat kan stilstaan; de rest
-			     staat gewoon in de rij te wachten. Zonder dat onderscheid kreeg
-			     elke wachtende job het pauze-uiterlijk. -->
+			<!-- Only the job the controls are about can stall; the rest are simply
+			     waiting their turn. Without that distinction every waiting job got
+			     the paused look. -->
 			{@const stil = job === activeJob && isStalled(job)}
 			<article class="job" class:running={job.running || stil} class:paused={stil}>
 				<header>
-					<!-- "Spooler:3 items" is de interne opsomming van de engine, geen
-					     naam (gat P4). De vertaling staat in api.ts, zodat het
-					     Job-paneel, de statusbalk en de telefoon niet ieder hun eigen
-					     omweg houden. -->
+					<!-- "Spooler:3 items" is the engine's internal tally, not a name
+					     (gap P4). The wording lives in api.ts, so the Job panel, the
+					     status bar and the phone view do not each keep their own
+					     detour. -->
 					<span class="name" title={job.label}>{jobLabel(job)}</span>
-					<!-- De engine zegt "running"/"queued"; deze app spreekt Nederlands. -->
+					<!-- The engine says "running"/"queued"; this app speaks the user's
+					     language. -->
 					<span class="status" class:nu={job.running && !stil} class:pauze={stil}
-						>{stil ? 'Gepauzeerd' : jobStatusLabel(job)}</span
+						>{stil ? t('job.status.paused') : jobStatusLabel(job)}</span
 					>
 				</header>
 
 				{#if job.running || stil}
-					<!-- "Hoe lang nog" is het enige getal dat iemand naast de machine
-					     wil weten; verstreken en totaal staan eronder om het na te
-					     kunnen rekenen. -->
+					<!-- "How much longer" is the only number someone standing next to
+					     the machine wants; elapsed and total sit below it so the sum can
+					     be checked. -->
 					<p class="resterend">
 						<span class="mono groot">{formatDuration(remainingSeconds(job))}</span>
-						<span class="rest-label">resterend</span>
+						<span class="rest-label">{t('queue.remaining')}</span>
 					</p>
 				{/if}
 
 				{#if job.progress !== null}
-					<!-- Kerflijn als voortgang: de omtrek "snijdt" zich af. Op 2px was
-					     hij niet als voortgang te lezen; nu draagt hij de kaart. -->
+					<!-- Kerf line as progress: the outline "cuts" itself away. At 2px it
+					     did not read as progress; now it carries the card. -->
 					<svg class="progress" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
 						<line x1="0" y1="3" x2="100" y2="3" class="track" />
 						<line
@@ -137,17 +130,17 @@
 					</svg>
 					<div class="figures mono">
 						<span class="pct">{Math.round(job.progress * 100)}%</span>
-						<span>{job.steps_done ?? '—'} / {job.steps_total ?? '—'} stappen</span>
+						<span>{t('job.steps', { done: job.steps_done ?? '—', total: job.steps_total ?? '—' })}</span>
 					</div>
 				{/if}
 
 				<dl class="meta mono">
-					<div><dt>Verstreken</dt><dd>{formatDuration(job.elapsed_seconds)}</dd></div>
-					<!-- Uit dezelfde bron als "resterend" hierboven; zie gat B1. Twee
-					     bronnen naast elkaar gaven "nog 0:00" onder "Totaal 13:45:04". -->
-					<div><dt>Totaal</dt><dd>{formatDuration(totalSeconds(job))}</dd></div>
+					<div><dt>{t('queue.elapsed')}</dt><dd>{formatDuration(job.elapsed_seconds)}</dd></div>
+					<!-- From the same source as "remaining" above; see gap B1. Two
+					     sources side by side gave "0:00 left" under "Total 13:45:04". -->
+					<div><dt>{t('queue.total')}</dt><dd>{formatDuration(totalSeconds(job))}</dd></div>
 					<div>
-						<dt>Passes</dt>
+						<dt>{t('queue.passes')}</dt>
 						<dd>{job.loops_executed ?? 0} / {job.loops ?? '∞'}</dd>
 					</div>
 				</dl>
@@ -158,20 +151,17 @@
 {/if}
 
 <div class="section">
-	<!-- Dit was "Engine-signalen" met ruwe codes: ontwikkelaarstaal op de plek
-	     waar een nieuwe gebruiker als eerste kijkt. Nu ingeklapt en met een
-	     naam die zegt waar het over gaat. -->
+	<!-- This was "Engine signals" with raw codes: developer language in the place
+	     a new user looks first. Now collapsed, and named after what it is
+	     about. -->
 	<button class="section-title collapse" aria-expanded={showEvents} onclick={() => (showEvents = !showEvents)}>
-		Meldingen van de machine
+		{t('queue.messages')}
 		<span class="mono">{events.length ? events.length : ''}</span>
 	</button>
 	{#if !showEvents}
-		<p class="empty">
-			Technische meldingen van de engine. Handig bij het zoeken naar een
-			storing; verder heb je ze niet nodig.
-		</p>
+		<p class="empty">{t('queue.messages.hint')}</p>
 	{:else if events.length === 0}
-		<p class="empty">Nog niets gemeld.</p>
+		<p class="empty">{t('queue.messages.none')}</p>
 	{:else}
 		<ul class="events mono">
 			{#each events.slice(0, 12) as event (event.time + event.code)}

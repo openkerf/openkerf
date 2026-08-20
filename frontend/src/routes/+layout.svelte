@@ -2,8 +2,23 @@
 	import '$lib/tokens.css';
 	import { page } from '$app/stores';
 	import Welkom from '$components/Welkom.svelte';
+	import { i18n } from '$lib/i18n/index.svelte';
 
 	let { children } = $props();
+
+	/**
+	 * The document's language follows the interface.
+	 *
+	 * `app.html` ships `lang="en"` because English is the source language and the
+	 * static build has no idea who will open it. The moment the client knows
+	 * better — a stored choice, or the browser's preference — this puts it right.
+	 * It matters: screen readers pick their voice from this attribute, and the
+	 * browser hyphenates by it. A page claiming English while showing Dutch is
+	 * read out as gibberish.
+	 */
+	$effect(() => {
+		document.documentElement.lang = i18n.language;
+	});
 
 	/**
 	 * De koude start heeft een eigen scherm.

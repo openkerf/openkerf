@@ -2,6 +2,7 @@
 	export type Tool = 'select' | 'nodes' | 'measure' | 'pen' | 'rect' | 'circle' | 'line' | 'text';
 
 	import { bewaarBestand } from '$lib/opslaan';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let {
 		tool = $bindable(),
@@ -47,9 +48,11 @@
 		onOpenClipart?: () => void;
 	} = $props();
 
-	// Elk gereedschap tekent bij een klik op het bed; selecteren is de rust-stand.
-	const TOOLS: { id: Tool; label: string; path: string }[] = [
-		{ id: 'select', label: 'Selecteren', path: 'M4 3l7 18 2.5-7.5L21 11z' },
+	// Every tool draws on a click on the bed; selecting is the resting state.
+	// The label comes from the catalogue at read time, not at module load, so it
+	// follows the language.
+	let TOOLS = $derived<{ id: Tool; label: string; path: string }[]>([
+		{ id: 'select', label: t('rail.tool.select'), path: 'M4 3l7 18 2.5-7.5L21 11z' },
 		{
 			id: 'nodes',
 			// Twee keer hetzelfde gereedschap, zei de eerste gebruiker die deze rail
@@ -58,16 +61,16 @@
 			// die punten en blijft er een streep over die niet van "Lijn" (M4 20L20
 			// 4) te onderscheiden is. Nu een kromme met vierkante handvatten: de
 			// vorm die élk knooppuntgereedschap draagt, en geen streep.
-			label: 'Knooppunten — kies eerst een vorm, sleep daarna de punten',
+			label: t('rail.tool.nodes'),
 			path: 'M5 18C5 8 19 8 19 18M3 16h4v4H3zM17 16h4v4h-4zM10 8.5h4v4h-4z'
 		},
-		{ id: 'rect', label: 'Rechthoek', path: 'M4 6h16v12H4z' },
-		{ id: 'circle', label: 'Cirkel', path: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z' },
-		{ id: 'line', label: 'Lijn', path: 'M4 20L20 4' },
-		{ id: 'pen', label: 'Pen — klik punten, Enter sluit af', path: 'M4 20l4-1 11-11-3-3L5 16z' },
-		{ id: 'text', label: 'Tekst', path: 'M5 6h14M12 6v13' },
-		{ id: 'measure', label: 'Meten', path: 'M3 15L15 3l6 6L9 21z M7 11l2 2M11 7l2 2' }
-	];
+		{ id: 'rect', label: t('rail.tool.rect'), path: 'M4 6h16v12H4z' },
+		{ id: 'circle', label: t('rail.tool.circle'), path: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z' },
+		{ id: 'line', label: t('rail.tool.line'), path: 'M4 20L20 4' },
+		{ id: 'pen', label: t('rail.tool.pen'), path: 'M4 20l4-1 11-11-3-3L5 16z' },
+		{ id: 'text', label: t('rail.tool.text'), path: 'M5 6h14M12 6v13' },
+		{ id: 'measure', label: t('rail.tool.measure'), path: 'M3 15L15 3l6 6L9 21z M7 11l2 2M11 7l2 2' }
+	]);
 
 	const ICON = {
 		beeld: 'M3.5 5h17v14h-17z',
@@ -82,15 +85,14 @@
 	const KERN: Tool[] = ['select', 'rect'];
 	// Op een aanraakscherm bestaat hover niet, dus bestaat de tooltip niet: vijf
 	// naamloze glyphs zijn daar vijf gokjes. Korte labels passen wél.
-	const KORT: Partial<Record<Tool, string>> = {
-		select: 'Kiezen',
-		rect: 'Rechthoek',
-		// De uitleg hoort in de tooltip, niet in een menuregel van 260px.
-		nodes: 'Knooppunten',
-		// In een menu is de naam een naam; de bediening staat in de tooltip. Als
-		// hele zin brak deze regel over twee regels en zakte de rest weg.
-		pen: 'Pen'
-	};
+	// The explanation belongs in the tooltip, not in a 260px menu row: as a whole
+	// sentence the row broke over two lines and the rest sank out of view.
+	let SHORT = $derived<Partial<Record<Tool, string>>>({
+		select: t('rail.tool.select'),
+		rect: t('rail.tool.rect'),
+		nodes: t('rail.tool.nodes.short'),
+		pen: t('rail.tool.pen.short')
+	});
 	let meerOpen = $state(false);
 
 	/**
@@ -120,19 +122,21 @@
 	}}
 />
 
-<nav class="rail" class:compact aria-label="Gereedschap">
+<nav class="rail" class:compact aria-label={t('rail.aria')}>
 	{#each zichtbaar as item (item.id)}
 		<button
 			class="tool"
 			aria-pressed={tool === item.id}
-			title={item.id === 'select' || canEdit ? item.label : `${item.label} — vereist een token`}
+			title={item.id === 'select' || canEdit
+				? item.label
+				: t('rail.needsToken', { label: item.label })}
 			disabled={item.id !== 'select' && !canEdit}
 			onclick={() => (tool = item.id)}
 		>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d={item.path} />
 			</svg>
-			{#if compact}<span class="naam">{KORT[item.id] ?? item.label}</span>{/if}
+			{#if compact}<span class="naam">{SHORT[item.id] ?? item.label}</span>{/if}
 		</button>
 	{/each}
 
@@ -140,13 +144,13 @@
 		<!-- De twee tablettaken uit DESIGN-SYSTEM staan hier direct, niet in het
 		     menu: op de tablet naast de machine is dít het werk. -->
 		<hr />
-		<button class="tool" title="Materiaalbibliotheek" onclick={() => { meerOpen = false; onOpenLibrary?.(); }}>
+		<button class="tool" title={t('library.title')} onclick={() => { meerOpen = false; onOpenLibrary?.(); }}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
-			<span class="naam">Materiaal</span>
+			<span class="naam">{t('rail.library.short')}</span>
 		</button>
-		<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenGrid?.(); }}>
+		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => { meerOpen = false; onOpenGrid?.(); }}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.raster} /></svg>
-			<span class="naam">Testraster</span>
+			<span class="naam">{t('testgrid.title')}</span>
 		</button>
 		<hr />
 		<button
@@ -154,11 +158,11 @@
 			class:aan={meerOpen}
 			aria-expanded={meerOpen}
 			aria-haspopup="menu"
-			title="Meer"
+			title={t('rail.more')}
 			onclick={() => (meerOpen = !meerOpen)}
 		>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-			<span class="naam">Meer</span>
+			<span class="naam">{t('rail.more')}</span>
 		</button>
 	{/if}
 
@@ -174,40 +178,40 @@
 			onclick={() => (meerOpen = false)}
 		></div>
 		<div class="menu" role="menu" tabindex="-1">
-			<p class="kop">Gereedschap</p>
+			<p class="kop">{t('rail.group.tools')}</p>
 			{#each verborgen as item (item.id)}
 				<button class="regel" role="menuitemradio" title={item.label} aria-checked={tool === item.id} disabled={!canEdit} onclick={() => kies(item.id)}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={item.path} /></svg>
-					<span>{KORT[item.id] ?? item.label}</span>
+					<span>{SHORT[item.id] ?? item.label}</span>
 				</button>
 			{/each}
 
-			<p class="kop">Toevoegen</p>
+			<p class="kop">{t('rail.group.add')}</p>
 			<label class="regel" class:off={!canEdit}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
-				<span>Afbeelding plaatsen</span>
-				<input type="file" aria-label="Afbeelding plaatsen" accept=".png,.jpg,.jpeg,.gif,.bmp,.webp" disabled={!canEdit}
+				<span>{t('rail.placeImage')}</span>
+				<input type="file" aria-label={t('rail.placeImage')} accept=".png,.jpg,.jpeg,.gif,.bmp,.webp" disabled={!canEdit}
 					onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onPlaceImage?.(f); }} />
 			</label>
 			<button class="regel" role="menuitem" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenGenerators?.(); }}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
-				<span>Generatoren</span>
+				<span>{t('rail.generators.short')}</span>
 			</button>
 			<button class="regel" role="menuitem" disabled={!canEdit} onclick={() => { meerOpen = false; onOpenClipart?.(); }}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
-				<span>Clipart zoeken</span>
+				<span>{t('rail.clipart.short')}</span>
 			</button>
 			<button class="regel" role="menuitem" onclick={() => { meerOpen = false; onOpenCatalogue?.(); }}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
-				<span>Presetariat</span>
+				<span>{t('rail.presetariat.short')}</span>
 			</button>
 
 			{#if bestanden}
-				<p class="kop">Bestand</p>
+				<p class="kop">{t('rail.group.file')}</p>
 				<label class="regel">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
-					<span>Importeren in dit vel</span>
-					<input type="file" aria-label="Bestand importeren" accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
+					<span>{t('rail.importHere')}</span>
+					<input type="file" aria-label={t('topbar.import.aria')} accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
 						onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenFile?.(f); }} />
 				</label>
 				{#if projectInRail}
@@ -215,22 +219,22 @@
 					<button class="regel" role="menuitem" type="button"
 						onclick={() => { meerOpen = false; onNewProject?.(); }}>
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M12 11v6m-3-3h6"/></svg>
-						<span>Nieuw project</span>
+						<span>{t('topbar.project.new')}</span>
 					</button>
 					<label class="regel">
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
-						<span>Project openen</span>
-						<input type="file" aria-label="Project openen" accept=".openkerf,.zip"
+						<span>{t('topbar.project.open')}</span>
+						<input type="file" aria-label={t('topbar.project.pick')} accept=".openkerf,.zip"
 							onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; meerOpen = false; if (f) onOpenProject?.(f); }} />
 					</label>
 					<a class="regel" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={(e) => bewaar(e, '/api/project/export.openkerf', 'project.openkerf')}>
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
-						<span>Project opslaan</span>
+						<span>{t('topbar.project.save')}</span>
 					</a>
 				{/if}
 				<a class="regel" role="menuitem" href="/api/design/export.svg" download="ontwerp.svg" onclick={(e) => bewaar(e, '/api/design/export.svg', 'ontwerp.svg')}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
-					<span>Dit vel als SVG</span>
+					<span>{t('rail.sheetAsSvg')}</span>
 				</a>
 			{/if}
 		</div>
@@ -238,11 +242,11 @@
 
 	{#if !compact}
 		<!-- Een afbeelding plaatsen voegt toe aan het ontwerp; "Openen" vervángt het. -->
-		<label class="tool file" class:off={!canEdit} title="Afbeelding plaatsen">
+		<label class="tool file" class:off={!canEdit} title={t('rail.placeImage')}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
 			<input
 				type="file"
-				aria-label="Afbeelding plaatsen"
+				aria-label={t('rail.placeImage')}
 				accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
 				disabled={!canEdit}
 				onchange={(e) => {
@@ -257,19 +261,19 @@
 		<hr />
 		<!-- Gereedschappen begin je links; een gereedschap dat alleen rechts te
 		     vinden is, vindt niemand. -->
-		<button class="tool" title="Generatoren — raster, cirkel, veelhoek, doos, QR" disabled={!canEdit} onclick={() => onOpenGenerators?.()}>
+		<button class="tool" title={t('rail.generators')} disabled={!canEdit} onclick={() => onOpenGenerators?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
 		</button>
-		<button class="tool" title="Clipart zoeken in openbare collecties" disabled={!canEdit} onclick={() => onOpenClipart?.()}>
+		<button class="tool" title={t('rail.clipart')} disabled={!canEdit} onclick={() => onOpenClipart?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
 		</button>
-		<button class="tool" title="Testraster" disabled={!canEdit} onclick={() => onOpenGrid?.()}>
+		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => onOpenGrid?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.raster} /></svg>
 		</button>
-		<button class="tool" title="Presetariat — gedeelde instellingen" onclick={() => onOpenCatalogue?.()}>
+		<button class="tool" title={t('rail.presetariat')} onclick={() => onOpenCatalogue?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
 		</button>
-		<button class="tool" title="Materiaalbibliotheek" onclick={() => onOpenLibrary?.()}>
+		<button class="tool" title={t('library.title')} onclick={() => onOpenLibrary?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
 		</button>
 	{/if}

@@ -21,7 +21,7 @@
 		formatDuration,
 		jobLabel,
 		remainingSeconds,
-		STATE_LABEL,
+		machineStateLabel,
 		type Device,
 		type GridAxis,
 		type Job,
@@ -479,7 +479,7 @@
 	<MeldingAlarm {bewaker} groot />
 	<header>
 		<span class="dot {machineState}" aria-hidden="true"></span>
-		<span class="staat">{connected ? STATE_LABEL[machineState] : 'Geen verbinding'}</span>
+		<span class="staat">{connected ? machineStateLabel(machineState) : 'Geen verbinding'}</span>
 		<span class="machine mono">{device?.label ?? 'geen machine'}</span>
 	</header>
 

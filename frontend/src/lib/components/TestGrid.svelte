@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { AXIS_LABEL, AXIS_UNIT, type GridAxis } from '$lib/api';
+	import { axisLabel, AXIS_UNIT, type GridAxis } from '$lib/api';
 	import { OPERATIONS, type LibraryStore } from '$lib/library.svelte';
 	import NumberField from './NumberField.svelte';
 
@@ -803,8 +803,8 @@
 	{:else}
 		<p class="lead">
 			Je brandt een bord met vakjes:
-			<strong>{AXIS_LABEL[form.column_axis].toLowerCase()} loopt naar rechts op</strong>,
-			<strong>{AXIS_LABEL[form.row_axis].toLowerCase()} naar beneden</strong>. Straks
+			<strong>{axisLabel(form.column_axis).toLowerCase()} loopt naar rechts op</strong>,
+			<strong>{axisLabel(form.row_axis).toLowerCase()} naar beneden</strong>. Straks
 			fotografeer je het bord — met de telefoon naast de machine kan ook — en tik je het
 			vakje aan dat het beste uitpakte. Daar maakt OpenKerf een preset van.
 		</p>
@@ -986,7 +986,7 @@
 					>
 						{#each AS_ORDE as waarde (waarde)}
 							{#if waarde !== 'interval' || intervalKan}
-								<option value={waarde}>{AXIS_LABEL[waarde]}</option>
+								<option value={waarde}>{axisLabel(waarde)}</option>
 							{/if}
 						{/each}
 					</select>
@@ -999,7 +999,7 @@
 					>
 						{#each AS_ORDE as waarde (waarde)}
 							{#if waarde !== 'interval' || intervalKan}
-								<option value={waarde}>{AXIS_LABEL[waarde]}</option>
+								<option value={waarde}>{axisLabel(waarde)}</option>
 							{/if}
 						{/each}
 					</select>
@@ -1011,7 +1011,7 @@
 				     hij anders achter de knoppenbalk. -->
 				{#each vasteAs as as (as)}
 					<NumberField
-						label="{AXIS_LABEL[as]} (vast, hele bord)"
+						label="{axisLabel(as)} (vast, hele bord)"
 						unit={AXIS_UNIT[as]}
 						step={INVOER[as].stap}
 						min={0}
@@ -1028,7 +1028,7 @@
 						<!-- De eenheid één keer, in de kop van het blok. Hij stond in beide
 						     veldlabels ("van (mm/s)", "tot (mm/s)") en dan lees je hem twee
 						     keer om één bereik te begrijpen. -->
-						<legend class="naam">{AXIS_LABEL[as]} ({AXIS_UNIT[as]})</legend>
+						<legend class="naam">{axisLabel(as)} ({AXIS_UNIT[as]})</legend>
 						<div class="paar">
 							<NumberField
 								label="van"
@@ -1284,10 +1284,10 @@
 					{/if}
 
 					<p class="legenda">
-						Rijen: {AXIS_LABEL[form.row_axis].toLowerCase()} in {AXIS_UNIT[form.row_axis]}.
-						Kolommen: {AXIS_LABEL[form.column_axis].toLowerCase()}.
+						Rijen: {axisLabel(form.row_axis).toLowerCase()} in {AXIS_UNIT[form.row_axis]}.
+						Kolommen: {axisLabel(form.column_axis).toLowerCase()}.
 						{#each vasteAs as as (as)}
-							{AXIS_LABEL[as]} vast op {toon(as, Number(form[VAST_VELD[as]]))}.
+							{axisLabel(as)} vast op {toon(as, Number(form[VAST_VELD[as]]))}.
 						{/each}
 						Donkerder is meer verbranding{diepsteHoek ? ` — ${diepsteHoek} gaat het diepst` : ''}.
 					</p>

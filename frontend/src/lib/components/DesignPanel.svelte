@@ -11,7 +11,8 @@
 	import Segmented from './Segmented.svelte';
 	import ArrangeIcon from './ArrangeIcon.svelte';
 	import Menu from './Menu.svelte';
-	import { laagMenu, type Menu as MenuLijst } from '$lib/acties';
+	import { t } from '$lib/i18n/index.svelte';
+	import { layerMenu, type Menu as MenuList } from '$lib/actions';
 	import { untrack } from 'svelte';
 
 	let {
@@ -319,39 +320,39 @@
 		rijMenu = {
 			x,
 			y,
-			lijst: laagMenu(
+			lijst: layerMenu(
 				{
 					label: op.label,
-					aantalVormen: op.element_ids.length,
-					meebranden: op.output,
-					zichtbaar: !design.isLayerHidden(op.id),
-					eerste: index === 0,
-					laatste: index === plainLayers.length - 1,
-					selectie: selectedIds.length,
-					erin: selectedIds.length > 0 && membership(op.id) === 'all',
-					mag: canEdit,
-					opSlot: op.grid ? 'Deze laag hoort bij een testraster' : undefined
+					shapeCount: op.element_ids.length,
+					burns: op.output,
+					visible: !design.isLayerHidden(op.id),
+					first: index === 0,
+					last: index === plainLayers.length - 1,
+					selection: selectedIds.length,
+					inside: selectedIds.length > 0 && membership(op.id) === 'all',
+					may: canEdit,
+					locked: op.grid ? t('reason.testGridLayer') : undefined
 				},
 				{
-					selecteerVormen: () => design.selectMany(op.element_ids),
-					selectieErin: (erin) => onAssign?.(op.id, erin),
-					meebranden: () => patchLayer(op.id, { output: !op.output }),
-					zichtbaar: () => design.toggleLayer(op.id),
-					omhoog: () => moveLayer(op.id, 'up'),
-					omlaag: () => moveLayer(op.id, 'down'),
-					openen: () => (editingLayer = op.id),
-					verwijderen: () => (confirmDrop = op.id)
+					selectShapes: () => design.selectMany(op.element_ids),
+					putSelection: (inside) => onAssign?.(op.id, inside),
+					toggleBurns: () => patchLayer(op.id, { output: !op.output }),
+					toggleVisible: () => design.toggleLayer(op.id),
+					up: () => moveLayer(op.id, 'up'),
+					down: () => moveLayer(op.id, 'down'),
+					openSettings: () => (editingLayer = op.id),
+					remove: () => (confirmDrop = op.id)
 				}
 			)
 		};
 	}
 
 	let rijMenu = $state<{
-		lijst: MenuLijst;
+		lijst: MenuList;
 		x: number;
 		y: number;
 		/** Voor een menu dat aan een knop onderaan het paneel hangt. */
-		omhoog?: boolean;
+		upward?: boolean;
 	} | null>(null);
 	let openGrid = $state<number | null>(null);
 
@@ -568,7 +569,7 @@
 			{
 				cut: 'snijden',
 				engrave: 'graveren',
-				raster: 'rasteren',
+				grid: 'rasteren',
 				image: 'afbeelding',
 				dots: 'punten'
 			}[soort] ?? soort
@@ -1076,21 +1077,21 @@
 											{
 												id: 'sorteer',
 												label: 'Op brandvolgorde zetten',
-												uitleg:
+												explain:
 													'Rasteren, graveren, punten, snijden als laatste',
-												uit: gesorteerd.kanSorteren
+												off: gesorteerd.kanSorteren
 													? undefined
 													: 'De lagen staan al op brandvolgorde',
-												doen: sorteerLagen
+												run: sorteerLagen
 											},
 											{
 												id: 'ruim',
 												label: legeLagen.length
 													? `${legeLagen.length} lege ${legeLagen.length === 1 ? 'laag' : 'lagen'} opruimen`
 													: 'Lege lagen opruimen',
-												uitleg: 'Vormen en gevulde lagen blijven staan',
-												uit: legeLagen.length ? undefined : 'Er staat geen lege laag in de lijst',
-												doen: () => onPrune?.()
+												explain: 'Vormen en gevulde lagen blijven staan',
+												off: legeLagen.length ? undefined : 'Er staat geen lege laag in de lijst',
+												run: () => onPrune?.()
 											}
 										]
 									},
@@ -1099,9 +1100,9 @@
 											{
 												id: 'alles-weg',
 												label: 'Alle lagen weghalen…',
-												uitleg: 'De vormen blijven op het bed staan',
-												gevaar: true,
-												doen: () => (confirmDropAll = true)
+												explain: 'De vormen blijven op het bed staan',
+												danger: true,
+												run: () => (confirmDropAll = true)
 											}
 										]
 									}
@@ -1570,7 +1571,7 @@
 
 					{#if compact}
 						<!-- De kijkstand uit de rij, hier als vinkje (zie het commentaar bij
-						     het oog in de rij). Zelfde gedrag, zelfde uitleg: dit verandert
+						     het oog in de rij). Zelfde gedrag, zelfde explain: dit verandert
 						     niets aan wat er gebrand wordt. -->
 						<label class="check wide">
 							<input
@@ -1768,14 +1769,14 @@
 					rijMenu = {
 						x: doos.left,
 						y: doos.top - 8,
-						omhoog: true,
+						upward: true,
 						lijst: [
 							{
-								titel: 'Laag toevoegen',
+								title: 'Laag toevoegen',
 								items: LAYER_TYPES.map(({ value, label }) => ({
 									id: `nieuw-${value}`,
 									label,
-									doen: () => {
+									run: () => {
 										newLayerType = value;
 										addLayer();
 									}
@@ -1804,8 +1805,8 @@
 		menu={rijMenu.lijst}
 		x={rijMenu.x}
 		y={rijMenu.y}
-		omhoog={rijMenu.omhoog ?? false}
-		onSluit={() => (rijMenu = null)}
+		upward={rijMenu.upward ?? false}
+		onClose={() => (rijMenu = null)}
 	/>
 {/if}
 
@@ -2101,7 +2102,7 @@
 	.out:hover:not(:disabled) {
 		background: var(--surface-2);
 	}
-	/* Zichtbaarheid staat naast meebranden en ziet er bewust ánders uit: dit is
+	/* Zichtbaarheid staat naast meebranden en ziet er bewust ánders off: dit is
 	   een kijkstand, geen machinestand. Daarom neutraal grijs waar meebranden
 	   groen kleurt — kleur is hier gereserveerd voor wat de laser gaat doen. */
 	/* Een verborgen laag mag je nog wél lezen — hij is niet uitgezet, hij staat
@@ -2114,7 +2115,7 @@
 		color: var(--text-2);
 		font-weight: 400;
 	}
-	/* Air assist aan: geen waarschuwing, dus niet in amber. Een stand die je moet
+	/* Air assist on: geen waarschuwing, dus niet in amber. Een stand die je moet
 	   kunnen zien, in de gewone tekstkleur met een randje eromheen. */
 	.tag.lucht {
 		color: var(--text-1);

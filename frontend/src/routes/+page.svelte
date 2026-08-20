@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { jobBezig, jobFase, machineState } from '$lib/api';
+	import { jobBusy, jobPhase, machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
@@ -33,22 +33,23 @@
 	import TestGridResult from '$components/TestGridResult.svelte';
 	import TextDialog from '$components/TextDialog.svelte';
 	import TopBar from '$components/TopBar.svelte';
-	import Actiebalk from '$components/Actiebalk.svelte';
+	import ActionBar from '$components/ActionBar.svelte';
 	import Menu from '$components/Menu.svelte';
 	import Hoeken from '$components/Hoeken.svelte';
 	import Offset from '$components/Offset.svelte';
 	import {
-		TOETSEN,
-		comboVan,
+		KEYS,
+		comboOf,
 		canvasMenu,
 		objectMenu,
-		geschiedenisActies,
-		schikActies,
-		uitlijnActies,
-		type Context as ActieContext,
-		type Handelingen,
-		type Menu as MenuLijst
-	} from '$lib/acties';
+		historyActions,
+		arrangeActions,
+		alignActions,
+		type Context as ActionContext,
+		type Handlers,
+		type Menu as MenuList
+	} from '$lib/actions';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import MeldingAlarm from '$components/MeldingAlarm.svelte';
 	import MeldingKaart from '$components/MeldingKaart.svelte';
 	import { Bewaker, Meldingen } from '$lib/meldingen.svelte';
@@ -607,8 +608,8 @@
 	 * gemeten met een niet-antwoordende machine: de balk zette starten uit, het
 	 * paneel liet het aan staan. Eén functie, één antwoord.
 	 */
-	let jobfase = $derived(jobFase(device, status.activeJob, design.isEmpty));
-	let werkOnderweg = $derived(jobBezig(jobfase));
+	let phase = $derived(jobPhase(device, status.activeJob, design.isEmpty));
+	let workUnderWay = $derived(jobBusy(phase));
 
 	onMount(() => {
 		status.connect();
@@ -746,50 +747,50 @@
 	}
 
 	/** Het handvat waarmee de zoomstanden van het canvas hier te bedienen zijn. */
-	let canvasBediening = $state<{
-		zoom: (wat: 'alles' | 'selectie' | 'bed' | 'honderd') => void;
-		stap: (factor: number) => void;
-		vastklikken: () => void;
-		laagnummers: () => void;
-		staat: () => { vastklikken: boolean; laagnummers: boolean };
+	let canvasControl = $state<{
+		zoom: (what: 'all' | 'selection' | 'bed' | 'hundred') => void;
+		step: (factor: number) => void;
+		snap: () => void;
+		layerNumbers: () => void;
+		state: () => { snap: boolean; layerNumbers: boolean };
 	} | null>(null);
 
 	let hoekenOpen = $state(false);
 	let offsetOpen = $state(false);
 
 	/** Welk menu er open staat, en waar. */
-	let menu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
+	let menu = $state<{ lijst: MenuList; x: number; y: number } | null>(null);
 	/** Waar er op het bed geklikt werd — "plakken hier" belooft die plek. */
 	let menuPunt = $state<{ x: number; y: number } | null>(null);
 
-	let handelingen: Handelingen = {
-		knippen: () => klembordActie('cut', design.selectedIds),
-		kopieren: () => klembordActie('copy', design.selectedIds),
-		plakken: (punt) => plakken(punt),
-		dupliceren: duplicateSelection,
-		verwijderen: removeSelection,
-		allesSelecteren: () =>
+	let handlers: Handlers = {
+		cut: () => klembordActie('cut', design.selectedIds),
+		copy: () => klembordActie('copy', design.selectedIds),
+		paste: (at) => plakken(at),
+		duplicate: duplicateSelection,
+		remove: removeSelection,
+		selectAll: () =>
 			design.selectMany(design.elements.filter((el) => !el.hidden).map((el) => el.id)),
-		selectieWissen: () => design.select(null),
-		schikken: (modus) => arrange(modus),
-		draaien: (graden) => rotate(graden),
-		splitsen: splitsen,
-		vullen: (aan) => vullen(aan),
-		hoeken: () => (hoekenOpen = true),
-		naarLaag: (soort) => naarEenLaag(soort),
-		laagToekennen: (id, erin) => assign(id, erin),
-		naarVel: async (id) => {
+		clearSelection: () => design.select(null),
+		arrange: (mode) => arrange(mode),
+		rotate: (degrees) => rotate(degrees),
+		split: splitsen,
+		fill: (on) => vullen(on),
+		corners: () => (hoekenOpen = true),
+		onlyLayer: (kind) => naarEenLaag(kind),
+		assignLayer: (id, inside) => assign(id, inside),
+		toSheet: async (id) => {
 			if (await sheets.move(design.selectedIds, id)) {
 				design.select(null);
 				await design.load();
 			}
 		},
-		tekstBewerken: () => {
+		editText: () => {
 			editingText = design.selectedId;
 			textOpen = true;
 		},
-		bijsnijden: () => (cropping = true),
-		bijsnijdenTerug: async () => {
+		crop: () => (cropping = true),
+		uncrop: async () => {
 			const id = design.selectedId;
 			if (!id) return;
 			await fetch(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
@@ -799,7 +800,7 @@
 			await design.load();
 			await loadImageState();
 		},
-		vectoriseren: async () => {
+		vectorise: async () => {
 			const id = design.selectedId;
 			if (!id) return;
 			await post(`/api/design/elements/${encodeURIComponent(id)}/vectorise`, {
@@ -809,54 +810,56 @@
 		},
 		undo: () => history('undo'),
 		redo: () => history('redo'),
-		zoom: (wat) => canvasBediening?.zoom(wat),
-		vastklikken: () => canvasBediening?.vastklikken(),
-		laagnummers: () => canvasBediening?.laagnummers(),
-		redden: () => arrange('rescue')
+		zoom: (what) => canvasControl?.zoom(what),
+		snap: () => canvasControl?.snap(),
+		layerNumbers: () => canvasControl?.layerNumbers(),
+		rescue: () => arrange('rescue')
 	};
 
 	/** De toestand waarin een handeling wel of niet kan. */
-	let actieContext = $derived.by<ActieContext>(() => {
-		const gekozen = design.elements.filter((e) => design.isSelected(e.id));
-		const beeld = gekozen.length === 1 && Boolean(gekozen[0]?.image);
-		const stand = canvasBediening?.staat();
+	let actionContext = $derived.by<ActionContext>(() => {
+		const chosen = design.elements.filter((e) => design.isSelected(e.id));
+		const image = chosen.length === 1 && Boolean(chosen[0]?.image);
+		const state = canvasControl?.state();
 		return {
-			aantal: gekozen.length,
-			inGroep: gekozen.some((e) => Boolean(e.group_id)),
-			isAfbeelding: beeld,
-			isTekst: gekozen.length === 1 && gekozen[0]?.text !== null,
-			isBijgesneden: beeld && Boolean(imageState?.cropped),
-			gevuld: gekozen.length > 0 && gekozen.every((e) => Boolean(e.fill)),
-			klembord,
-			bezig: edits.busy,
-			mag: canEdit,
-			lagen: design.operations
+			count: chosen.length,
+			inGroup: chosen.some((e) => Boolean(e.group_id)),
+			isImage: image,
+			isText: chosen.length === 1 && chosen[0]?.text !== null,
+			isCropped: image && Boolean(imageState?.cropped),
+			filled: chosen.length > 0 && chosen.every((e) => Boolean(e.fill)),
+			clipboard: klembord,
+			busy: edits.busy,
+			may: canEdit,
+			layers: design.operations
 				.filter((op) => !op.grid)
 				.map((op) => ({
 					id: op.id,
 					label: op.label,
-					erin: design.selectedIds.every((id) => op.element_ids.includes(id))
+					inside: design.selectedIds.every((id) => op.element_ids.includes(id))
 				})),
-			vellen: sheets.sheets.filter((sheet) => !sheet.active).map((sheet) => ({ id: sheet.id, name: sheet.name })),
-			teSplitsen: {
-				vormen: gekozen.filter((e) => (e.subpaths ?? 1) > 1).length,
-				stukken: gekozen.reduce((n, e) => n + ((e.subpaths ?? 1) > 1 ? (e.subpaths ?? 1) : 0), 0)
+			sheets: sheets.sheets
+				.filter((sheet) => !sheet.active)
+				.map((sheet) => ({ id: sheet.id, name: sheet.name })),
+			splittable: {
+				shapes: chosen.filter((e) => (e.subpaths ?? 1) > 1).length,
+				pieces: chosen.reduce((n, e) => n + ((e.subpaths ?? 1) > 1 ? (e.subpaths ?? 1) : 0), 0)
 			},
-			vastklikken: stand?.vastklikken ?? true,
-			laagnummers: stand?.laagnummers ?? true,
-			leeg: design.isEmpty
+			snap: state?.snap ?? true,
+			layerNumbers: state?.layerNumbers ?? true,
+			empty: design.isEmpty
 		};
 	});
 
 	function openObjectMenu(event: MouseEvent) {
 		menuPunt = null;
-		menu = { lijst: objectMenu(actieContext, handelingen), x: event.clientX, y: event.clientY };
+		menu = { lijst: objectMenu(actionContext, handlers), x: event.clientX, y: event.clientY };
 	}
 
 	function openCanvasMenu(event: MouseEvent, punt: { x: number; y: number }) {
 		menuPunt = punt;
 		menu = {
-			lijst: canvasMenu(actieContext, handelingen, punt),
+			lijst: canvasMenu(actionContext, handlers, punt),
 			x: event.clientX,
 			y: event.clientY
 		};
@@ -868,49 +871,49 @@
 	 * Hiervóór stonden de sneltoetsen op twee plekken — hier en in `Canvas` — en
 	 * ontbraken de toetsen die iedere desktop-app heeft: ⌘Z deed niets, ⌘C en ⌘V
 	 * bestonden niet, ⌘G niet. Wat wel of niet af te vangen is in een browser
-	 * staat toegelicht bij `TOETSEN`.
+	 * staat toegelicht bij `KEYS`.
 	 */
 	function sneltoets(event: KeyboardEvent) {
 		const doel = event.target as HTMLElement | null;
 		if (doel?.closest('input, textarea, select, [contenteditable="true"]')) return;
 		if (menu) return; // het menu bedient zijn eigen toetsen
-		const combo = comboVan(event);
+		const combo = comboOf(event);
 
 		if (combo === 'escape') {
 			design.select(null);
 			return;
 		}
 
-		const doen: Record<string, () => void> = {
-			[TOETSEN.undo]: handelingen.undo,
-			[TOETSEN.redo]: handelingen.redo,
-			[TOETSEN.knippen]: handelingen.knippen,
-			[TOETSEN.kopieren]: handelingen.kopieren,
-			[TOETSEN.plakken]: () => handelingen.plakken(),
-			[TOETSEN.dupliceren]: handelingen.dupliceren,
-			[TOETSEN.verwijderen]: handelingen.verwijderen,
-			[TOETSEN.allesSelecteren]: handelingen.allesSelecteren,
-			[TOETSEN.groeperen]: () => handelingen.schikken('group'),
-			[TOETSEN.groepOpheffen]: () => handelingen.schikken('ungroup'),
-			[TOETSEN.groepOpheffen2]: () => handelingen.schikken('ungroup'),
-			[TOETSEN.spiegelH]: () => handelingen.schikken('mirror-h'),
-			[TOETSEN.spiegelV]: () => handelingen.schikken('mirror-v'),
-			[TOETSEN.draaiLinks]: () => handelingen.draaien(-90),
-			[TOETSEN.draaiRechts]: () => handelingen.draaien(90),
-			[TOETSEN.zoom100]: () => handelingen.zoom('honderd'),
-			[TOETSEN.zoomSelectie]: () => handelingen.zoom('selectie'),
-			[TOETSEN.zoomAlles]: () => handelingen.zoom('alles'),
-			[TOETSEN.zoomBed]: () => handelingen.zoom('bed'),
-			[TOETSEN.zoomAllesOud]: () => handelingen.zoom('alles'),
-			[TOETSEN.zoomSelectieOud]: () => handelingen.zoom('selectie'),
-			[TOETSEN.zoomSelectieLightburn]: () => handelingen.zoom('selectie'),
-			[TOETSEN.zoomIn]: () => canvasBediening?.stap(1.25),
-			[TOETSEN.zoomUit]: () => canvasBediening?.stap(1 / 1.25)
+		const run: Record<string, () => void> = {
+			[KEYS.undo]: handlers.undo,
+			[KEYS.redo]: handlers.redo,
+			[KEYS.cut]: handlers.cut,
+			[KEYS.copy]: handlers.copy,
+			[KEYS.paste]: () => handlers.paste(),
+			[KEYS.duplicate]: handlers.duplicate,
+			[KEYS.delete]: handlers.remove,
+			[KEYS.selectAll]: handlers.selectAll,
+			[KEYS.group]: () => handlers.arrange('group'),
+			[KEYS.ungroup]: () => handlers.arrange('ungroup'),
+			[KEYS.ungroupAlt]: () => handlers.arrange('ungroup'),
+			[KEYS.mirrorH]: () => handlers.arrange('mirror-h'),
+			[KEYS.mirrorV]: () => handlers.arrange('mirror-v'),
+			[KEYS.rotateLeft]: () => handlers.rotate(-90),
+			[KEYS.rotateRight]: () => handlers.rotate(90),
+			[KEYS.zoomHundred]: () => handlers.zoom('hundred'),
+			[KEYS.zoomSelection]: () => handlers.zoom('selection'),
+			[KEYS.zoomAll]: () => handlers.zoom('all'),
+			[KEYS.zoomBed]: () => handlers.zoom('bed'),
+			[KEYS.zoomAllOld]: () => handlers.zoom('all'),
+			[KEYS.zoomSelectionOld]: () => handlers.zoom('selection'),
+			[KEYS.zoomSelectionLightburn]: () => handlers.zoom('selection'),
+			[KEYS.zoomIn]: () => canvasControl?.step(1.25),
+			[KEYS.zoomOut]: () => canvasControl?.step(1 / 1.25)
 		};
-		const actie = doen[combo];
-		if (actie) {
+		const action = run[combo];
+		if (action) {
 			event.preventDefault();
-			actie();
+			action();
 			return;
 		}
 
@@ -971,14 +974,14 @@
 	state={machine}
 	canStart={(control.capabilities?.actions.start ?? false) &&
 		!control.needsToken &&
-		!werkOnderweg}
+		!workUnderWay}
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
-	stopArmed={werkOnderweg}
+	stopArmed={workUnderWay}
 	canEdit={canEdit && design.preview === null}
 	{smal}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
 	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
-	paused={jobfase === 'gepauzeerd'}
+	paused={phase === 'paused'}
 	onPause={() => control.pause()}
 	onResume={() => control.resume()}
 	onStart={requestStart}
@@ -1033,16 +1036,16 @@
 		<!-- Uitlijnen, groeperen, spiegelen en de geschiedenis: werkwoorden op de
 		     selectie, dus tegen het bed aan en niet in het eigenschappenpaneel.
 		     Zie DESIGN-SYSTEM v4, "Waar hoort een handeling". -->
-		<Actiebalk
-			geschiedenis={geschiedenisActies(actieContext, handelingen)}
-			uitlijnen={uitlijnActies(actieContext, handelingen)}
-			schikken={schikActies(actieContext, handelingen)}
-			aantal={actieContext.aantal}
-			onMeer={(event) => {
+		<ActionBar
+			history={historyActions(actionContext, handlers)}
+			align={alignActions(actionContext, handlers)}
+			arrange={arrangeActions(actionContext, handlers)}
+			count={actionContext.count}
+			onMore={(event: MouseEvent) => {
 				const doos = (event.currentTarget as HTMLElement).getBoundingClientRect();
 				menuPunt = null;
 				menu = {
-					lijst: objectMenu(actieContext, handelingen),
+					lijst: objectMenu(actionContext, handlers),
 					x: doos.left,
 					y: doos.bottom + 4
 				};
@@ -1064,7 +1067,7 @@
 			onPointerMm={(punt) => (muisMm = punt)}
 			onContextObject={openObjectMenu}
 			onContextCanvas={openCanvasMenu}
-			bind:bediening={canvasBediening}
+			bind:control={canvasControl}
 			{device}
 			{design}
 			{edits}
@@ -1126,10 +1129,10 @@
 		     anders een blanco strook van 44px langs de rand staan (gat B6), en
 		     dat leest als een renderfout in plaats van als iets om aan te duwen. -->
 		<span class="pil" aria-hidden="true">{paneelOpen ? '›' : '‹'}</span>
-		<span class="vw">Paneel {paneelOpen ? 'inklappen' : 'uitklappen'}</span>
+		<span class="vw">{paneelOpen ? t('panel.collapse') : t('panel.expand')}</span>
 	</button>
 {/if}
-<aside class="panel" class:weg={tablet && !paneelOpen} aria-label="Eigenschappen">
+<aside class="panel" class:weg={tablet && !paneelOpen} aria-label={t('panel.aria')}>
 		<!-- Het belletje staat wél in dezelfde rij maar buiten de tablist: een
 		     tablist mag volgens ARIA alleen tabs bevatten, en axe rekende het
 		     belletje anders als ontbrekend kind aan (aria-required-children). -->
@@ -1141,7 +1144,7 @@
 				aria-selected={tab === 'design'}
 				onclick={() => selectTab('design')}
 			>
-				Bewerken
+				{t('tabs.edit')}
 				{#if tab === 'design'}
 					<svg aria-hidden="true"
 						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
@@ -1154,7 +1157,7 @@
 				aria-selected={tab === 'layers'}
 				onclick={() => selectTab('layers')}
 			>
-				Lagen
+				{t('tabs.layers')}
 				{#if tab === 'layers'}
 					<svg aria-hidden="true"
 						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
@@ -1162,7 +1165,7 @@
 				{/if}
 			</button>
 			<button class="tab" role="tab" aria-selected={tab === 'job'} onclick={() => selectTab('job')}>
-				Job
+				{t('tabs.job')}
 				{#if tab === 'job'}
 					<svg aria-hidden="true"
 						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
@@ -1178,8 +1181,8 @@
 				class="bel"
 				class:stil={!meldingen.actief}
 				aria-haspopup="dialog"
-				title={meldingen.actief ? 'Meldingen staan aan' : 'Meldingen staan uit'}
-				aria-label={meldingen.actief ? 'Meldingen — staan aan' : 'Meldingen — staan uit'}
+				title={meldingen.actief ? t('tabs.notifications.on') : t('tabs.notifications.off')}
+				aria-label={meldingen.actief ? t('tabs.notifications.onAria') : t('tabs.notifications.offAria')}
 				onclick={() => (meldingenOpen = true)}
 			>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
@@ -1261,11 +1264,11 @@
 			class="cam"
 			aria-pressed={camera.shown && camera.state.running}
 			disabled={camera.busy || !canEdit}
-			title={canEdit ? 'Camerabeeld van het bed' : 'Vereist een token'}
+			title={canEdit ? t('camera.title') : t('reason.needsToken')}
 			onclick={() => (camera.state.running && camera.shown ? camera.stop() : camera.start())}
 		>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h4l2-2h6l2 2h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
-			Camera
+			{t('camera.button')}
 		</button>
 		{#if camera.shown && camera.state.running}
 			<input
@@ -1273,11 +1276,11 @@
 				min="0.1"
 				max="1"
 				step="0.05"
-				aria-label="Doorzichtigheid camerabeeld"
+				aria-label={t('camera.opacity')}
 				bind:value={camera.opacity}
 			/>
 			<button class="cam" onclick={() => (calibrateOpen = true)}>
-				{camera.state.calibrated ? 'Opnieuw ijken' : 'IJken'}
+				{camera.state.calibrated ? t('camera.recalibrate') : t('camera.calibrate')}
 			</button>
 		{/if}
 	</div>
@@ -1286,7 +1289,7 @@
 		     blob. Eigen kader, leesbare regelbreedte, en zelf weg te klikken. -->
 		<div class="camerror" role="alert">
 			<p class="wrap">{camera.error}</p>
-			<button aria-label="Melding sluiten" onclick={() => (camera.error = null)}>×</button>
+			<button aria-label={t('common.dismiss')} onclick={() => (camera.error = null)}>×</button>
 		</div>
 	{/if}
 {/if}
@@ -1321,12 +1324,12 @@
 
 <!-- Werk van een vorige sessie: aanbieden, niet opdringen. -->
 <Dialog
-	title="Werk van een vorige sessie"
+	title={t('recovery.title')}
 	open={recovery?.exists === true}
 	width="420px"
 >
 	<p class="ask">
-		Er staat een automatisch bewaard ontwerp van {recovery?.when}. Terugzetten?
+		{t('recovery.body', { when: i18n.dateTime(recovery?.when) })}
 	</p>
 	<div class="ask-actions">
 		<button
@@ -1335,8 +1338,8 @@
 				await fetch('/api/design/autosave', { method: 'DELETE', headers: authHeaders() });
 				recovery = null;
 			}}
-		>Weggooien</button>
-		<button class="btn" onclick={() => (recovery = null)}>Later</button>
+		>{t('recovery.discard')}</button>
+		<button class="btn" onclick={() => (recovery = null)}>{t('recovery.later')}</button>
 		<button
 			class="btn primary"
 			onclick={async () => {
@@ -1344,7 +1347,7 @@
 				await post('/api/design/autosave/restore', {});
 				await design.load();
 			}}
-		>Terugzetten</button>
+		>{t('recovery.restore')}</button>
 	</div>
 </Dialog>
 
@@ -1397,7 +1400,7 @@
 		</p>
 	{/if}
 	<div class="ask-actions">
-		<button class="btn" onclick={() => (pending = null)}>Annuleren</button>
+		<button class="btn" onclick={() => (pending = null)}>{t('common.cancel')}</button>
 		<button
 			class="btn"
 			onclick={() => {
@@ -1405,7 +1408,7 @@
 				pending = null;
 				if (actie) voerUit(actie);
 			}}
-		>Niet opslaan</button>
+		>{t('replace.dontSave')}</button>
 		<!-- Annuleren / Niet opslaan / Opslaan: het drieluik dat elk besturings-
 		     systeem bij deze vraag gebruikt. "Zonder opslaan openen" stond er
 		     eerst, en dan passen de drie knoppen niet op één regel — gemeten op
@@ -1425,12 +1428,12 @@
 	</div>
 {/if}
 
-<Dialog title="Meldingen" bind:open={meldingenOpen} width="460px">
+<Dialog title={t('notifications.title')} bind:open={meldingenOpen} width="460px">
 	<MeldingKaart {meldingen} />
 </Dialog>
 
 {#if menu}
-	<Menu menu={menu.lijst} x={menu.x} y={menu.y} onSluit={() => (menu = null)} />
+	<Menu menu={menu.lijst} x={menu.x} y={menu.y} onClose={() => (menu = null)} />
 {/if}
 
 <Hoeken
@@ -1490,7 +1493,7 @@
 <!-- Materiaal van het vel: klein venster, twee keuzes. In de bovenbalk kan het
      niet — die scrollt horizontaal en knipt elk uitklapmenu af — en op een
      tablet is een venster bovendien met een vinger te bedienen. -->
-<Dialog title="Materiaal van dit vel" bind:open={materiaalOpen} width="440px">
+<Dialog title={t('sheetMaterial.title')} bind:open={materiaalOpen} width="440px">
 	{#if sheets.active}
 		<SheetMaterial
 			{sheets}
@@ -1505,7 +1508,7 @@
      — materialen links, instellingen rechts — is 640 precies te smal: de
      instelling zelf hield 380px over en dan wringen dikte, waarden, bron en de
      knop op één regel. -->
-<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="1120px">
+<Dialog title={t('library.title')} bind:open={libraryOpen} width="1120px">
 	<MaterialLibrary
 		{library}
 		operations={design.operations}
@@ -1523,7 +1526,7 @@
 	/>
 </Dialog>
 
-<Dialog title="Testraster" bind:open={gridOpen} width="860px">
+<Dialog title={t('testgrid.title')} bind:open={gridOpen} width="860px">
 	<TestGrid
 		{library}
 		{canEdit}

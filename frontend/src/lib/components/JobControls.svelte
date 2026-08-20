@@ -1,13 +1,14 @@
 <script lang="ts">
 	import {
-		FASE,
+		phaseBody,
+		phaseTitle,
 		formatDuration,
-		jobBezig,
-		jobFase,
+		jobBusy,
+		jobPhase,
 		isStalled,
 		remainingSeconds,
-		PAUZE_TOETS,
-		STOP_TOETS,
+		PAUSE_KEY,
+		STOP_KEY,
 		type Device,
 		type Job
 	} from '$lib/api';
@@ -269,7 +270,7 @@
 	 */
 	let schatKlok: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
-		// Bewust níet op `bezigMetWerk` kijken: die hangt via `leeg` aan de
+		// Bewust níet op `busyWithWork` kijken: die hangt via `leeg` aan de
 		// schatting, en dan zou dit effect zijn eigen aanleiding zijn. De
 		// wachtrijlengte zegt hetzelfde zonder de lus.
 		const zichtbaar = (device?.spooler?.queue_length ?? 0) === 0;
@@ -371,7 +372,7 @@
 	let leeg = $derived(!estimating && estimate !== null && estimate.parts === 0);
 
 	/**
-	 * De fase, uit één bron (`jobFase` in `$lib/api.ts`).
+	 * De phase, uit één bron (`jobPhase` in `$lib/api.ts`).
 	 *
 	 * Dit paneel las hiervóór `job.running` en de bovenbalk de machinetoestand, en
 	 * bij een job die gespoold was maar nog niet opgepakt (`status: "Waiting"`,
@@ -379,23 +380,23 @@
 	 * paneel liet het aan staan. Eén tik hier spoolde dan een tweede job bovenop
 	 * de eerste.
 	 */
-	let fase = $derived(jobFase(device, job, leeg));
-	let bezigMetWerk = $derived(jobBezig(fase));
+	let phase = $derived(jobPhase(device, job, leeg));
+	let busyWithWork = $derived(jobBusy(phase));
 	let voortgang = $derived.by(() => {
 		const deel = job?.progress;
 		if (deel === null || deel === undefined || !Number.isFinite(deel)) return null;
 		// Een job die klaar is maar door de engine niet afgemeld wordt, staat op
 		// 0,998; die tonen we als vol, want dat is wat er gebeurd is.
-		return fase === 'klaar' ? 1 : Math.min(1, Math.max(0, deel));
+		return phase === 'done' ? 1 : Math.min(1, Math.max(0, deel));
 	});
-	let resterend = $derived(fase === 'klaar' ? 0 : remainingSeconds(job));
+	let resterend = $derived(phase === 'done' ? 0 : remainingSeconds(job));
 </script>
 
 <div class="section">
 	<!-- De kop zei "Bediening" en dat is waar: het zijn bedieningsorganen. Maar
 	     het zegt niets over wat er nú aan de hand is, en dat is precies wat je op
 	     dit tabblad komt halen. -->
-	<h2 class="section-title">{bezigMetWerk || fase === 'klaar' ? 'De job' : 'Klaarmaken'}</h2>
+	<h2 class="section-title">{busyWithWork || phase === 'done' ? 'De job' : 'Klaarmaken'}</h2>
 
 	{#if control.tokenProbleem}
 		<!-- De API is vanaf het netwerk bereikbaar; zonder token blijft alles
@@ -418,7 +419,7 @@
 		</div>
 	{/if}
 
-	{#if !bezigMetWerk && fase !== 'klaar'}
+	{#if !busyWithWork && phase !== 'done'}
 		<!--
 			De voorbereiding staat er altijd, niet pas na een klik.
 
@@ -713,13 +714,13 @@
 			zodra er wél iets liep stond de enige informatie die dan iets betekent
 			— de voortgang — op 700px, onder de jogknoppen, buiten beeld.
 
-			Nu leidt de fase (`jobFase` in `$lib/api.ts`): wat er nu aan de hand is
+			Nu leidt de phase (`jobPhase` in `$lib/api.ts`): wat er nu aan de hand is
 			staat bovenaan, met de knoppen die op dít moment iets doen. De
 			sneltoetsen staan op de knoppen zelf, want dat is waar je ze leert.
 		-->
-		<div class="nu" class:brandt={fase === 'brandt'} class:pauze={fase === 'gepauzeerd'}>
+		<div class="nu" class:brandt={phase === 'burning'} class:pauze={phase === 'paused'}>
 			<div class="nu-kop">
-				<span class="nu-fase">{FASE[fase].kop}</span>
+				<span class="nu-phase">{phaseTitle(phase)}</span>
 				{#if job}
 					<span class="nu-job mono" title={job.label}>{job.label}</span>
 				{/if}
@@ -746,26 +747,26 @@
 				</div>
 			{/if}
 
-			<p class="nu-uitleg">{FASE[fase].uitleg}</p>
+			<p class="nu-uitleg">{phaseBody(phase)}</p>
 
 			<div class="nu-acties">
 				{#if paused}
 					<button
 						class="btn primary"
 						disabled={!actions?.resume || blocked}
-						title="{blockedReason ?? 'Verder waar de kop gebleven was'} · {PAUZE_TOETS}"
+						title="{blockedReason ?? 'Verder waar de kop gebleven was'} · {PAUSE_KEY}"
 						onclick={() => control.resume()}
 					>Hervatten</button>
 				{:else}
-					<!-- Op de fase en niet op `job.running`: een job die gespoold is maar
+					<!-- Op de phase en niet op `job.running`: een job die gespoold is maar
 					     nog niet opgepakt staat op `running: false`, en dan bood de
 					     bovenbalk pauze aan terwijl deze knop uit stond. `pause` is een
 					     realtime-commando; hij landt zodra de machine begint. -->
 					<button
 						class="btn"
-						disabled={!actions?.pause || !bezigMetWerk || blocked}
-						title={bezigMetWerk
-							? `${blockedReason ?? 'De kop stilzetten zonder de job te verliezen'} · ${PAUZE_TOETS}`
+						disabled={!actions?.pause || !busyWithWork || blocked}
+						title={busyWithWork
+							? `${blockedReason ?? 'De kop stilzetten zonder de job te verliezen'} · ${PAUSE_KEY}`
 							: 'Er loopt niets om te pauzeren'}
 						onclick={() => control.pause()}
 					>Pauze</button>
@@ -780,7 +781,7 @@
 					disabled={!actions?.stop || control.tokenProbleem || !verbinding.online}
 					title={!verbinding.online
 						? 'Geen verbinding met OpenKerf — deze knop komt niet aan. Stoppen kan nu alleen met de noodstop op de machine.'
-						: `${blockedReason ?? 'Job direct afbreken'} · ${STOP_TOETS}`}
+						: `${blockedReason ?? 'Job direct afbreken'} · ${STOP_KEY}`}
 					onclick={() => control.stop()}
 				>
 					{#if verbinding.online}Stop{:else}Stop <strong>op de machine</strong>{/if}
@@ -806,7 +807,7 @@
 			     venster niet werken, en dat is precies het deel dat je op het
 			     verkeerde moment ontdekt. -->
 			<p class="toetsen">
-				<kbd>{PAUZE_TOETS}</kbd> en <kbd>{STOP_TOETS}</kbd> werken overal in de app,
+				<kbd>{PAUSE_KEY}</kbd> en <kbd>{STOP_KEY}</kbd> werken overal in de app,
 				zolang dit venster voorop staat — daarbuiten kan een browser geen toetsen
 				ontvangen.
 			</p>
@@ -825,10 +826,10 @@
 			Dicht en niet weg: hij moet er zijn zodra je hem weer nodig hebt, en een
 			blok dat verdwijnt leer je niet terug te vinden.
 		-->
-		<details class="machinevouw" open={!bezigMetWerk}>
+		<details class="machinevouw" open={!busyWithWork}>
 			<summary>
 				Machine bedienen
-				{#if bezigMetWerk}<span class="waarom">— niet tijdens een job</span>{/if}
+				{#if busyWithWork}<span class="waarom">— niet tijdens een job</span>{/if}
 			</summary>
 		<div class="motion">
 			<span class="rot-label">Bewegen</span>
@@ -1453,13 +1454,13 @@
 		align-items: baseline;
 		gap: var(--space-2);
 	}
-	.nu-fase {
+	.nu-phase {
 		font-size: var(--text-md);
 		font-weight: 600;
 		color: var(--text-1);
 	}
-	.nu.brandt .nu-fase { color: var(--accent); }
-	.nu.pauze .nu-fase { color: var(--warn); }
+	.nu.brandt .nu-phase { color: var(--accent); }
+	.nu.pauze .nu-phase { color: var(--warn); }
 	.nu-job {
 		flex: 1;
 		min-width: 0;

@@ -13,6 +13,7 @@
 	 * gebrand is. Daarom staat er "onthouden", nooit "geverifieerd".
 	 */
 	import { inktOp, LAYER_COLORS, type DesignStore } from '$lib/design.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 
 	let {
@@ -62,15 +63,15 @@
 	function omschrijving(kleur: string): string {
 		const gevonden = laag(kleur);
 		const cijfers = waarden(kleur);
-		const waar = gevonden
-			? `laag ${gevonden.nummer} · ${gevonden.op.label}`
+		const where = gevonden
+			? t('palette.layerNamed', { n: gevonden.nummer, label: gevonden.op.label })
 			: cijfers
-				? 'nog geen laag — begint op wat deze kleur eerder deed'
-				: 'nog geen laag — begint blanco';
-		const doel = selectie
-			? `Zet ${selectie === 1 ? 'de selectie' : `${selectie} vormen`} in deze kleur.`
-			: 'Zet de kleur voor nieuw werk.';
-		return `${doel} ${waar}${cijfers ? ` · ${cijfers}` : ''}`;
+				? t('palette.noLayerYetRemembered')
+				: t('palette.noLayerYetBlank');
+		const what = selectie
+			? t('palette.putInColour', { n: selectie })
+			: t('palette.setForNewWork');
+		return `${what} ${where}${cijfers ? ` · ${cijfers}` : ''}`;
 	}
 
 	// De hoogte van de onderrand (deze strook plus een eventuele waarschuwing)
@@ -93,8 +94,8 @@
 	     letters, wat een klik zou doen — en dát verandert met de selectie. Eén
 	     strook met twee betekenissen, en het verschil stond op de plek waar je
 	     het laatst kijkt. Nu staat het vooraan, waar het label hoort. -->
-	<span class="kop">{selectie ? 'Selectie naar laag' : 'Kleur voor nieuw werk'}</span>
-	<div class="strook" role="group" aria-label="Laagkleuren">
+	<span class="kop">{selectie ? t('palette.selectionToLayer') : t('palette.forNewWork')}</span>
+	<div class="strook" role="group" aria-label={t('palette.aria')}>
 		{#each kleuren as kleur, index (kleur)}
 			{@const gevonden = laag(kleur)}
 			<button
@@ -104,7 +105,7 @@
 				style="background: {kleur}; color: {inktOp(kleur)}"
 				disabled={!canEdit || edits.busy}
 				aria-pressed={kleur === actief}
-				aria-label="Kleur {index + 1}. {omschrijving(kleur)}"
+				aria-label={t('palette.colourAria', { n: index + 1, description: omschrijving(kleur) })}
 				title={omschrijving(kleur)}
 				onpointerenter={() => (aangewezen = kleur)}
 				onpointerleave={() => (aangewezen = null)}
@@ -133,23 +134,21 @@
 			<span class="stip" style="background: {getoond}"></span>
 			<span class="wie">
 				{#if gevonden}
-					laag {gevonden.nummer} · {gevonden.op.label}
+					{t('palette.layerNamed', { n: gevonden.nummer, label: gevonden.op.label })}
 				{:else if getoond === actief}
-					nieuw werk
+					{t('palette.newWork')}
 				{:else}
-					nog geen laag
+					{t('palette.noLayerYet')}
 				{/if}
 			</span>
 			{#if cijfers}
 				<span class="cijfers mono">{cijfers}</span>
 				<span
 					class="bron"
-					title={gevonden
-						? 'De waarden van de laag zelf.'
-						: 'Onthouden per machine en kleur — wat jij hier het laatst mee deed. Een preset is iets anders: die hoort bij een materiaal en dikte en draagt herkomst.'}
-				>{gevonden ? 'in gebruik' : 'onthouden'}</span>
+					title={gevonden ? t('palette.layerValues') : t('palette.memory')}
+				>{gevonden ? t('palette.inUse') : t('palette.remembered')}</span>
 			{:else}
-				<span class="niets">nog niets onthouden</span>
+				<span class="niets">{t('palette.nothingRemembered')}</span>
 			{/if}
 		{/if}
 	</div>
@@ -157,9 +156,9 @@
 	<span class="uitleg">
 		{selectie
 			? selectie === 1
-				? 'Klik een kleur: die ene vorm gaat naar die laag'
-				: `Klik een kleur: die ${selectie} vormen gaan naar die laag`
-			: 'Klik een kleur: daarin komt wat je hierna tekent'}
+				? t('palette.clickHintOne')
+				: t('palette.clickHintMany', { n: selectie })
+			: t('palette.clickHintNew')}
 	</span>
 </div>
 

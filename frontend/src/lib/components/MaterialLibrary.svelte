@@ -2,7 +2,7 @@
 	import { tick, untrack } from 'svelte';
 	import NumberField from './NumberField.svelte';
 	import Menu from './Menu.svelte';
-	import type { Menu as MenuLijst } from '$lib/acties';
+	import type { Menu as MenuList } from '$lib/actions';
 	import {
 		OPERATION_LAYER,
 		OPERATIONS,
@@ -72,17 +72,17 @@
 	 * die je hier komt doen, dus staan ze achter één ⋯ — en achter de
 	 * rechterklik, net als overal elders in de app.
 	 */
-	let rijMenu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
+	let rijMenu = $state<{ lijst: MenuList; x: number; y: number } | null>(null);
 
-	function presetMenu(preset: Preset): MenuLijst {
+	function presetMenu(preset: Preset): MenuList {
 		return [
 			{
 				items: [
 					{
 						id: 'toepassen',
 						label: chosenOperation ? `Toepassen op laag ${laagNummer}` : 'Toepassen',
-						uit: chosenOperation ? undefined : 'Maak eerst een laag aan in de tab Lagen',
-						doen: () => apply(preset)
+						off: chosenOperation ? undefined : 'Maak eerst een laag aan in de tab Lagen',
+						run: () => apply(preset)
 					}
 				]
 			},
@@ -91,9 +91,9 @@
 					{
 						id: 'herkomst',
 						label: 'Herkomst en bewijs',
-						aan: herkomst === preset.id,
-						uitleg: 'Waar deze waarden vandaan komen',
-						doen: () => {
+						on: herkomst === preset.id,
+						explain: 'Waar deze waarden vandaan komen',
+						run: () => {
 							editing = null;
 							herkomst = herkomst === preset.id ? null : preset.id;
 						}
@@ -101,9 +101,9 @@
 					{
 						id: 'bewerken',
 						label: 'Waarden bijstellen',
-						aan: editing === preset.id,
-						uit: canEdit ? undefined : 'Vereist een token',
-						doen: () => {
+						on: editing === preset.id,
+						off: canEdit ? undefined : 'Vereist een token',
+						run: () => {
 							herkomst = null;
 							editing = editing === preset.id ? null : preset.id;
 						}
@@ -111,14 +111,14 @@
 					{
 						id: 'raster',
 						label: `Testraster maken voor ${preset.material_name}`,
-						uit: canEdit ? undefined : 'Vereist een token',
-						doen: () => onMakeGrid?.(preset.material_id)
+						off: canEdit ? undefined : 'Vereist een token',
+						run: () => onMakeGrid?.(preset.material_id)
 					},
 					{
 						id: 'delen',
 						label: 'Delen met Presetariat',
-						uit: canEdit ? undefined : 'Vereist een token',
-						doen: () => share(preset)
+						off: canEdit ? undefined : 'Vereist een token',
+						run: () => share(preset)
 					}
 				]
 			},
@@ -127,9 +127,9 @@
 					{
 						id: 'weg',
 						label: 'Instelling verwijderen',
-						uit: canEdit ? undefined : 'Vereist een token',
-						gevaar: true,
-						doen: () => (weghalen = preset.id)
+						off: canEdit ? undefined : 'Vereist een token',
+						danger: true,
+						run: () => (weghalen = preset.id)
 					}
 				]
 			}
@@ -445,11 +445,11 @@
 	 * verandert erdoor, en een telling die niet meebeweegt met je keuze is een
 	 * telling die je niet kunt vertrouwen.
 	 */
-	async function koppelen(paar: Voorstel, aan: boolean) {
+	async function koppelen(paar: Voorstel, on: boolean) {
 		// Onthouden vóór het herrekenen: daarna kent de server dit materiaal en
 		// draagt hij het voorstel niet meer aan.
 		gezien = { ...gezien, [paar.name]: paar };
-		koppel = aan
+		koppel = on
 			? { ...koppel, [paar.name]: paar.material_id }
 			: Object.fromEntries(Object.entries(koppel).filter(([k]) => k !== paar.name));
 		if (voorbeeld) {
@@ -1285,14 +1285,14 @@
 												{
 													id: 'alleen',
 													label: 'Alleen dit materiaal tonen',
-													aan: materialId === groep.materialId,
-													doen: () => (materialId = groep.materialId)
+													on: materialId === groep.materialId,
+													run: () => (materialId = groep.materialId)
 												},
 												{
 													id: 'grid',
 													label: 'Testraster maken',
-													uit: canEdit ? undefined : 'Vereist een token',
-													doen: () => onMakeGrid?.(groep.materialId)
+													off: canEdit ? undefined : 'Vereist een token',
+													run: () => onMakeGrid?.(groep.materialId)
 												}
 											]
 										}
@@ -1519,7 +1519,7 @@
 {/if}
 
 {#if rijMenu}
-	<Menu menu={rijMenu.lijst} x={rijMenu.x} y={rijMenu.y} onSluit={() => (rijMenu = null)} />
+	<Menu menu={rijMenu.lijst} x={rijMenu.x} y={rijMenu.y} onClose={() => (rijMenu = null)} />
 {/if}
 
 <style>
@@ -2143,7 +2143,7 @@
 	.wint { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
 	.botsingen { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 	/* Twee waarden vergelijken kan alleen als ze in een kolom staan. Elke regel
-	   deelt daarom hetzelfde raster: wat, van mij, van het bestand. */
+	   deelt daarom hetzelfde grid: wat, van mij, van het bestand. */
 	.botsingen li {
 		display: grid;
 		grid-template-columns: 1fr auto auto;

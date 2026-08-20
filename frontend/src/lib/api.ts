@@ -1,3 +1,4 @@
+import { t, type MessageKey } from './i18n/core.ts';
 /** Types mirroring the openkerf-api snapshot (api/openkerf_api/status.py). */
 
 import type { TileRun } from './tiling.svelte';
@@ -277,8 +278,8 @@ export function totalSeconds(job: Job | null): number | null {
 }
 
 /**
- * Hoe lang nog. Dat is het enige getal dat iemand naast een draaiende machine
- * echt wil weten; verstreken en totaal zijn er om het te kunnen narekenen.
+ * How much longer. That is the only number someone standing next to a running
+ * machine really wants; elapsed and total are there to check the sum.
  */
 export function remainingSeconds(job: Job | null): number | null {
 	const total = totalSeconds(job);
@@ -287,204 +288,184 @@ export function remainingSeconds(job: Job | null): number | null {
 }
 
 /**
- * De naam van een job, in mensentaal.
+ * The name of a job, in human language.
  *
- * De engine noemt een naamloze job `Spooler:3 items` (spoolers.py:612 — de
- * klassenaam plus de lengte van de opdrachtenlijst). Dat is een interne
- * opsomming, geen naam, en hij stond op drie plekken in beeld: het Job-paneel,
- * de statusbalk en de telefoon. Elk van die drie had zijn eigen omweg nodig;
- * daarom staat de vertaling hier, één keer.
+ * The engine calls a nameless job `Spooler:3 items` (spoolers.py:612 — the class
+ * name plus the length of the command list). That is an internal tally, not a
+ * name, and it appeared in three places: the Job panel, the status bar and the
+ * phone view. Each of those needed its own detour; hence the wording lives here,
+ * once.
  *
- * `openkerf_api.commands.start_job` geeft een job die wij spoolen inmiddels een
- * echte naam mee, dus dit vangt wat er van elders komt: de console, een
- * herstelde sessie, een plugin.
+ * `openkerf_api.commands.start_job` now gives a job we spool a real name, so this
+ * catches what comes from elsewhere: the console, a restored session, a plugin.
  */
 export function jobLabel(job: Job | null): string {
 	const raw = (job?.label ?? '').trim();
-	const anoniem = /^\w+:(\d+)\s+items?$/.exec(raw);
-	if (anoniem) {
-		const n = Number(anoniem[1]);
-		return n === 1 ? '1 bewerking' : `${n} bewerkingen`;
-	}
-	const beweging = tupleLabel(raw);
-	if (beweging) return beweging;
-	return raw || 'Naamloze job';
+	const anonymous = /^\w+:(\d+)\s+items?$/.exec(raw);
+	if (anonymous) return t('job.label.operations', { n: Number(anonymous[1]) });
+	const movement = tupleLabel(raw);
+	if (movement) return movement;
+	return raw || t('job.label.unnamed');
 }
 
 /**
- * Een bewegingsjob draagt geen naam maar zijn eerste instructie.
+ * A movement job carries no name but its first instruction.
  *
- * Kader tonen spoolt een losse beweging, en de engine gebruikt daarvoor de
- * repr van de Python-tuple als label. In het Job-paneel en op de telefoon stond
- * dus letterlijk `('move_abs', 114.7544mm, 80.0mm)` onder een bewegende kop.
- * Wat er staat is waar — het is echt de opdracht die loopt — maar het is de
- * taal van de engine, en het hoort niet in beeld.
+ * Show frame spools a single movement, and the engine uses the repr of the Python
+ * tuple as its label. So the Job panel and the phone view showed literally
+ * `('move_abs', 114.7544mm, 80.0mm)` under a moving head. What it says is true —
+ * it really is the command that is running — but it is the engine's language, and
+ * it does not belong on screen.
  *
- * Er staat bewust geen "Kader tonen" in deze tabel: dezelfde `move_abs` komt
- * ook van jog en van "naar een punt", en een naam verzinnen die er soms naast
- * zit, is precies het soort label waar deze ronde naar op zoek is.
+ * Deliberately no "Show frame" in this table: the same `move_abs` also comes from
+ * jogging and from "go to a point", and inventing a name that is sometimes wrong
+ * is exactly the kind of label this round is hunting for.
  */
-const BEWEGING: Record<string, string> = {
-	move_abs: 'Kop verplaatsen',
-	move_rel: 'Kop verplaatsen',
-	home: 'Naar huis',
-	physical_home: 'Naar huis',
-	rapid_mode: 'Kop verplaatsen',
-	set_origin: 'Nulpunt zetten'
+const MOVEMENT: Record<string, MessageKey> = {
+	move_abs: 'job.move.head',
+	move_rel: 'job.move.head',
+	home: 'job.move.home',
+	physical_home: 'job.move.home',
+	rapid_mode: 'job.move.head',
+	set_origin: 'job.move.setOrigin'
 };
 
 function tupleLabel(raw: string): string | null {
 	const tuple = /^\(\s*'([a-z_]+)'\s*(?:,\s*([^)]*?))?,?\s*\)$/.exec(raw);
 	if (!tuple) return null;
-	const naam = BEWEGING[tuple[1]] ?? 'Machinebeweging';
-	const argumenten = (tuple[2] ?? '')
+	const name = t(MOVEMENT[tuple[1]] ?? 'job.move.unknown');
+	const args = (tuple[2] ?? '')
 		.split(',')
-		.map((deel) => deel.trim())
+		.map((part) => part.trim())
 		.filter(Boolean);
-	// Twee getallen zijn een punt op het bed; dat is het enige argument dat
-	// iemand naast de machine iets zegt.
-	const punt = argumenten.filter((a) => /^-?[\d.]+\s*mm$/.test(a));
-	if (punt.length === 2) return `${naam} naar ${punt[0]} × ${punt[1]}`;
-	return naam;
+	// Two numbers are a point on the bed; that is the only argument that says
+	// anything to someone standing at the machine.
+	const point = args.filter((a) => /^-?[\d.]+\s*mm$/.test(a));
+	if (point.length === 2) return t('job.move.to', { what: name, x: point[0], y: point[1] });
+	return name;
 }
 
-/** De engine spreekt Engels; deze app niet. */
+/** The engine has its own words for a status; the interface has the user's. */
 export function jobStatusLabel(job: Job): string {
 	const raw = (job.status ?? '').toLowerCase();
-	if (raw.includes('pause')) return 'Gepauzeerd';
-	if (raw.includes('run')) return 'Bezig';
+	if (raw.includes('pause')) return t('job.status.paused');
+	if (raw.includes('run')) return t('job.status.running');
 	// "Waiting" is wat de engine een gespoolde job noemt die de machine nog niet
 	// heeft opgepakt. Die viel door alle takken heen en kwam ongefilterd op het
 	// scherm — het enige Engelse woord in de Job-tab, precies op de plek waar je
 	// wil weten of er iets stuk is.
-	if (raw.includes('queue') || raw.includes('wait')) return 'In wachtrij';
-	if (raw.includes('complete') || raw.includes('done')) return 'Klaar';
-	if (job.running) return 'Bezig';
-	return job.status ? job.status : 'In wachtrij';
+	if (raw.includes('queue') || raw.includes('wait')) return t('job.status.queued');
+	if (raw.includes('complete') || raw.includes('done')) return t('job.status.done');
+	if (job.running) return t('job.status.running');
+	// An unknown status from the engine is shown as-is: inventing a translation
+	// for a word we do not know is worse than showing the engine's own word.
+	return job.status ? job.status : t('job.status.queued');
 }
 
-// ─── De fase van de job ──────────────────────────────────────────────────────
+// ─── The phase of the job ────────────────────────────────────────────────────
 //
-// Waarom dit bestaat. Vóór deze ronde las elk oppervlak zijn eigen veld om te
-// bepalen of er werk onderweg was: de bovenbalk keek naar de machinetoestand, het
-// Job-paneel naar `job.running`, de spoolerkaart naar `job.status`, en de
-// statusbalk naar de voortgang. Gemeten met een job in de wachtrij van een
-// machine die niet antwoordde (`status: "Waiting"`, `running: false`,
-// `progress: 0`): de bovenbalk zette "Start job" uit, het paneel liet "Job
-// starten" áán staan, de kaart zei "Waiting" en de statusbalk "0 % nog 4:58".
-// Vier antwoorden op één vraag, en de gevaarlijkste stond in het paneel — één
-// tik daar spoolt een tweede job bovenop de eerste.
+// Why this exists. Before this round every surface read its own field to decide
+// whether work was under way: the top bar looked at the machine state, the Job
+// panel at `job.running`, the spooler card at `job.status`, and the status bar at
+// the progress. Measured with a job in the queue of a machine that did not answer
+// (`status: "Waiting"`, `running: false`, `progress: 0`): the top bar disabled
+// "Start job", the panel left "Start job" enabled, the card said "Waiting" and the
+// status bar "0 % — 4:58 left". Four answers to one question, and the most
+// dangerous one was in the panel — one tap there spools a second job on top of the
+// first.
 //
-// Dus: één functie bepaalt de fase, en alle oppervlakken lezen die.
+// So: one function decides the phase, and every surface reads it.
 
-export type JobFase =
-	/** Er ligt geen werk op het bed. */
-	| 'niets'
-	/** Werk op het bed, niets onderweg: dit is het moment om te starten. */
-	| 'klaar-om-te-starten'
-	/** Gespoold, maar de machine heeft hem nog niet opgepakt. */
-	| 'in-de-wachtrij'
-	| 'brandt'
-	| 'gepauzeerd'
-	/** Vrijwel op 100 % en niet meer vooruit: de engine meldt hem niet af. */
-	| 'klaar';
+export type JobPhase =
+	/** There is no work on the bed. */
+	| 'nothing'
+	/** Work on the bed, nothing under way: this is the moment to start. */
+	| 'ready'
+	/** Spooled, but the machine has not picked it up yet. */
+	| 'queued'
+	| 'burning'
+	| 'paused'
+	/** Practically at 100 % and going nowhere: the engine does not sign it off. */
+	| 'done';
 
 /**
- * Vanaf welke voortgang een stilstaande job als klaar gelezen wordt.
+ * From what progress a standing-still job reads as done.
  *
- * `LaserJob.calc_steps` telt één stap meer dan `execute` uitvoert, dus de
- * voortgang haalt 0,998 en niet 1, en de job blijft daarna als "Waiting" in de
- * wachtrij staan (zie de upstream-lijst in CLAUDE.md). Zonder deze grens leest
- * de app een afgeronde job als "staat stil" — precies het bericht dat je niet
- * wil zien onder werk dat klaar is. Gemeten: 576/577 en 584/585 stappen.
+ * `LaserJob.calc_steps` counts one step more than `execute` carries out, so the
+ * progress reaches 0.998 and not 1, and the job then stays in the queue as
+ * "Waiting" (see the upstream list in CLAUDE.md). Without this bound the app reads
+ * a finished job as "standing still" — exactly the message you do not want under
+ * work that is done. Measured: 576/577 and 584/585 steps.
  */
-const AF = 0.995;
+const DONE = 0.995;
 
-export function jobFase(
-	device: Device | null,
-	job: Job | null,
-	ontwerpLeeg: boolean
-): JobFase {
-	if (!job) return ontwerpLeeg ? 'niets' : 'klaar-om-te-starten';
-	if (isPaused(job)) return 'gepauzeerd';
-	if (job.running) return 'brandt';
-	if ((job.progress ?? 0) >= AF) return 'klaar';
-	// Begonnen maar staat stil is een pauze; nog niets gedaan is zijn beurt
-	// afwachten. Zelfde grens als `isStalled`, want twee grenzen voor hetzelfde
-	// verschil is hoe de oppervlakken uit elkaar liepen.
-	if (isStalled(job)) return 'gepauzeerd';
-	return 'in-de-wachtrij';
+export function jobPhase(device: Device | null, job: Job | null, designEmpty: boolean): JobPhase {
+	if (!job) return designEmpty ? 'nothing' : 'ready';
+	if (isPaused(job)) return 'paused';
+	if (job.running) return 'burning';
+	if ((job.progress ?? 0) >= DONE) return 'done';
+	// Started but standing still is a pause; nothing done yet is waiting its turn.
+	// The same bound as `isStalled`, because two bounds for the same distinction is
+	// how the surfaces drifted apart in the first place.
+	if (isStalled(job)) return 'paused';
+	return 'queued';
 }
 
-/** Loopt er werk waar de machine niet bij gestoord mag worden? */
-export function jobBezig(fase: JobFase): boolean {
-	return fase === 'brandt' || fase === 'gepauzeerd' || fase === 'in-de-wachtrij';
+/** Is there work running that the machine must not be disturbed in? */
+export function jobBusy(phase: JobPhase): boolean {
+	return phase === 'burning' || phase === 'paused' || phase === 'queued';
 }
 
 /**
- * Hoe de fase heet, en wat hij betekent.
+ * What a phase is called, and what it means.
  *
- * De uitleg is geen decoratie: "In de wachtrij" is voor de gebruiker niet te
- * onderscheiden van "hij hangt", en dat verschil is precies waar je op dat
- * moment naar zoekt.
+ * The explanation is not decoration: "in the queue" is indistinguishable from
+ * "it has hung" for a user, and that difference is exactly what you are looking
+ * for at that moment.
  */
-export const FASE: Record<JobFase, { kop: string; uitleg: string }> = {
-	niets: {
-		kop: 'Niets om te branden',
-		uitleg: 'Er ligt geen werk op het bed. Teken iets, of importeer een bestand.'
-	},
-	'klaar-om-te-starten': {
-		kop: 'Klaar om te starten',
-		uitleg: 'Loop de controle na en start dan de job.'
-	},
-	'in-de-wachtrij': {
-		kop: 'In de wachtrij',
-		uitleg:
-			'De job staat klaar, maar de machine heeft hem nog niet opgepakt. Dat duurt normaal een seconde; blijft het hangen, controleer dan de verbinding.'
-	},
-	brandt: { kop: 'Aan het branden', uitleg: 'Blijf erbij en houd de stopknop binnen bereik.' },
-	gepauzeerd: {
-		kop: 'Gepauzeerd',
-		uitleg: 'De kop staat stil. Hervatten gaat verder waar hij gebleven was.'
-	},
-	klaar: {
-		kop: 'Klaar',
-		uitleg:
-			'Het werk is af. De engine meldt een job niet af, dus hij blijft in de wachtrij staan tot je hem weghaalt.'
-	}
-};
+export function phaseTitle(phase: JobPhase): string {
+	return t(`job.phase.${phase}.title` as never);
+}
+
+export function phaseBody(phase: JobPhase): string {
+	return t(`job.phase.${phase}.body` as never);
+}
 
 /**
- * De sneltoetsen voor de twee acties die haast hebben (gat J4).
+ * The shortcuts for the two actions that are in a hurry (gap J4).
  *
- * Als tekst, want ze staan op drie plekken in beeld — twee tooltips en de
- * uitleg in het Job-paneel — en drie keer hetzelfde intypen is drie kansen om
- * te gaan afwijken. ⌘ op een Mac, Ctrl elders: het staat op de knop die je
- * werkelijk moet indrukken.
+ * As text, because they appear in three places — two tooltips and the
+ * explanation in the Job panel — and typing the same thing three times is three
+ * chances to drift. ⌘ on a Mac, Ctrl elsewhere: it says the key you actually
+ * have to press.
  */
-export const STOP_TOETS =
+export const STOP_KEY =
 	typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '')
 		? '⌘ + .'
 		: 'Ctrl + .';
-export const PAUZE_TOETS = 'Pause';
-
-export const STATE_LABEL: Record<MachineState, string> = {
-	offline: 'Offline',
-	unplugged: 'Niet verbonden',
-	ready: 'Gereed',
-	busy: 'Bezig',
-	paused: 'Pauze',
-	alarm: 'Alarm'
-};
+export const PAUSE_KEY = 'Pause';
 
 /**
- * Wat je nu kunt doen, per toestand. Een status die alleen zegt dát het mis is,
- * laat je met een dood scherm zitten; dit is de zin die eronder hoort.
+ * The name of a machine state, in the reader's language.
+ *
+ * A function and no longer a table: a table is read once at module load, and by
+ * then the language may not be settled — and switching language afterwards would
+ * not reach it. Everything that a user reads goes through the catalogue.
  */
-export const STATE_HINT: Partial<Record<MachineState, string>> = {
-	offline: 'De OpenKerf-server reageert niet. Draait hij nog?',
-	unplugged: 'Er hangt geen machine aan. Controleer kabel en aan/uit.'
-};
+export function machineStateLabel(state: MachineState): string {
+	return t(`machine.state.${state}` as never);
+}
+
+/**
+ * What you can do about a state, when there is something to do. A status that
+ * only says something is wrong leaves you with a dead screen; this is the
+ * sentence that belongs underneath it.
+ */
+export function machineStateHint(state: MachineState): string | undefined {
+	if (state === 'offline' || state === 'unplugged' || state === 'alarm')
+		return t(`machine.hint.${state}` as never);
+	return undefined;
+}
 
 export function formatMm(value: number | null | undefined): string {
 	if (value === null || value === undefined || Number.isNaN(value)) return '—';
@@ -502,24 +483,23 @@ export function formatDuration(seconds: number | null | undefined): string {
 }
 
 /**
- * De drie grootheden van een testraster, en hoe je ze opschrijft.
+ * The three quantities of a test grid, and how they are written down.
  *
- * Sinds besluit B12 kiest de gebruiker zélf welke twee op de assen staan; de
- * derde ligt vast. Een samenvatting die "snelheid × vermogen" aanneemt liegt
- * dus bij een intervalraster — dat was het geval op de telefoon, waar
- * "1×3 · 200–200 mm/s" stond bij een raster waarvan het interval de as was.
+ * Since decision B12 the user picks which two go on the axes; the third is fixed.
+ * A summary that assumes "speed × power" therefore lies about an interval grid —
+ * which is what happened on the phone, where "1×3 · 200–200 mm/s" appeared for a
+ * grid whose axis was the interval.
  *
- * Naam en eenheid staan hier omdat ze op meerdere schermen nodig zijn: de
- * wizard die het raster maakt, en de fotolijst die het terugvindt. Twee kopieën
- * van dezelfde eenheid is twee kansen om te gaan afwijken.
+ * Name and unit live here because more than one screen needs them: the wizard
+ * that makes the grid, and the photo list that finds it again. Two copies of the
+ * same unit is two chances to drift.
  */
 export type GridAxis = 'speed' | 'power' | 'interval';
 
-export const AXIS_LABEL: Record<GridAxis, string> = {
-	speed: 'Snelheid',
-	power: 'Vermogen',
-	interval: 'Interval'
-};
+/** The name of an axis, in the reader's language. */
+export function axisLabel(axis: GridAxis): string {
+	return t(`axis.${axis}` as never);
+}
 
 export const AXIS_UNIT: Record<GridAxis, string> = {
 	speed: 'mm/s',
@@ -527,7 +507,7 @@ export const AXIS_UNIT: Record<GridAxis, string> = {
 	interval: 'mm'
 };
 
-/** Wat een rasterrij minimaal moet dragen om samen te vatten. */
+/** The least a grid row has to carry to be summarised. */
 export type GridAxes = {
 	row_axis?: GridAxis | null;
 	column_axis?: GridAxis | null;
@@ -537,47 +517,47 @@ export type GridAxes = {
 	power_steps?: number | null;
 } & Partial<Record<`${GridAxis}_min` | `${GridAxis}_max`, number | null>>;
 
-/** Geen "0.10" en geen "5.00": zoveel decimalen als de waarde nodig heeft. */
-function kort(value: number): string {
+/** No "0.10" and no "5.00": as many decimals as the value needs. */
+function short(value: number): string {
 	return String(Number(value.toFixed(3)));
 }
 
 /**
- * Het bereik van één as, met eenheid: `5–20 mm/s`, `0.05–0.25 mm`.
+ * The range of one axis, with its unit: `5–20 mm/s`, `0.05–0.25 mm`.
  *
- * Staat de grootheid niet op een as, dan is min gelijk aan max en levert dit
- * één waarde in plaats van een bereik van niks naar niks.
+ * When the quantity is not on an axis, min equals max and this yields a single
+ * value instead of a range from nothing to nothing.
  */
 export function axisRange(grid: GridAxes, axis: GridAxis): string {
 	const min = grid[`${axis}_min`] ?? null;
 	const max = grid[`${axis}_max`] ?? null;
 	if (min === null && max === null) return '—';
-	const eenheid = AXIS_UNIT[axis];
-	if (min === null || max === null || min === max) return `${kort((min ?? max) as number)} ${eenheid}`;
-	return `${kort(min)}–${kort(max)} ${eenheid}`;
+	const unit = AXIS_UNIT[axis];
+	if (min === null || max === null || min === max)
+		return `${short((min ?? max) as number)} ${unit}`;
+	return `${short(min)}–${short(max)} ${unit}`;
 }
 
 /**
- * De matrixmaat, ongeacht welke grootheid waar staat.
+ * The matrix size, whichever quantity sits where.
  *
- * `rows`/`columns` zijn door de migratie voor oude rasters gevuld uit
- * `speed_steps`/`power_steps`; die val blijft staan voor een server die nog
- * ouder is dan de migratie.
+ * `rows`/`columns` were filled from `speed_steps`/`power_steps` by the migration
+ * for older grids; that fallback stays for a server older than the migration.
  */
 export function gridSize(grid: GridAxes): string {
-	const rijen = grid.rows ?? grid.speed_steps ?? 0;
-	const kolommen = grid.columns ?? grid.power_steps ?? 0;
-	return `${rijen}×${kolommen}`;
+	const rows = grid.rows ?? grid.speed_steps ?? 0;
+	const columns = grid.columns ?? grid.power_steps ?? 0;
+	return `${rows}×${columns}`;
 }
 
 /**
- * Eén regel die zegt wát dit raster varieert: de maat plus de twee assen.
+ * One line saying what this grid varies: the size plus the two axes.
  *
- * De vaste grootheid staat er niet bij — die staat op het bord gegraveerd, en
- * op een telefoonregel van 240 px is ruimte de schaarste.
+ * The fixed quantity is not in it — that is engraved on the board, and on a
+ * 240 px phone line space is the scarce thing.
  */
 export function gridSummary(grid: GridAxes): string {
-	const rij = grid.row_axis ?? 'speed';
-	const kolom = grid.column_axis ?? 'power';
-	return `${gridSize(grid)} · ${axisRange(grid, rij)} · ${axisRange(grid, kolom)}`;
+	const row = grid.row_axis ?? 'speed';
+	const column = grid.column_axis ?? 'power';
+	return `${gridSize(grid)} · ${axisRange(grid, row)} · ${axisRange(grid, column)}`;
 }

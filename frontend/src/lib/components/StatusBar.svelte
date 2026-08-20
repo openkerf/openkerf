@@ -12,6 +12,7 @@
 
 	import type { Controller } from '$lib/control.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import Verbinding from './Verbinding.svelte';
 	import Melding from './Melding.svelte';
 
@@ -110,12 +111,12 @@
 	 */
 	let verbindingstekst = $derived(
 		!connected
-			? 'Machine onbekend'
+			? t('status.machine.unknown')
 			: machineState === 'unplugged'
-				? 'Machine niet verbonden'
+				? t('status.machine.notConnected')
 				: onbekend
-					? 'Verbinding onbekend'
-					: 'Verbonden met de laser'
+					? t('status.machine.connectionUnknown')
+					: t('status.machine.connected')
 	);
 	/**
 	 * De knop naast de toestand.
@@ -145,8 +146,7 @@
 
 	let verbindingsuitleg = $derived(
 		onbekend
-			? 'De engine draait, maar deze driver meldt niet of er een machine aan hangt. ' +
-				'Bij de eerste job merk je het: die blijft in de wachtrij staan als er niets luistert.'
+			? t('status.machine.connectionUnknown.hint')
 			: undefined
 	);
 </script>
@@ -161,13 +161,12 @@
 {#if verbinding.herstart}
 	<div class="herstart" role="alert">
 		<div class="tekst">
-			<strong>De server is opnieuw gestart</strong>
+			<strong>{t('status.restart.title')}</strong>
 			<p>
-				Deze pagina toont nog het ontwerp van vóór de herstart; de engine is
-				leeg begonnen. Herlaad om te zien wat er echt is.
+				{t('status.restart.body')}
 			</p>
 		</div>
-		<button onclick={() => location.reload()}>Herladen</button>
+		<button onclick={() => location.reload()}>{t('status.restart.reload')}</button>
 	</div>
 {/if}
 <!-- Fouten uit schrijfacties zijn hier niet thuis, maar dit is de enige
@@ -178,16 +177,16 @@
 <footer class="statusbar mono">
 	<!-- Twee posities naast elkaar: waar de kop staat, en waar jouw muis staat.
 	     Zonder onderscheid leest de een als de ander. -->
-	<span class="wat">kop</span>
+	<span class="wat">{t('status.head')}</span>
 	<span class:oud={!vers}>X <b>{formatMm(mm?.[0])}</b></span>
 	<span class:oud={!vers}>Y <b>{formatMm(mm?.[1])}</b> mm</span>
 	{#if !vers}
 		<!-- Eén woord, maar het is het verschil tussen "de kop staat daar" en
 		     "de kop stond daar toen we hem voor het laatst zagen". -->
-		<span class="wat">laatst gezien</span>
+		<span class="wat">{t('status.lastSeen')}</span>
 	{/if}
 	<span class="sep muisdeel" aria-hidden="true"></span>
-	<span class="wat muisdeel">muis</span>
+	<span class="wat muisdeel">{t('status.mouse')}</span>
 	<span class="muis muisdeel">
 		{#if pointerMm}
 			<b>{pointerMm.x.toFixed(1)}</b>, <b>{pointerMm.y.toFixed(1)}</b> mm
@@ -201,12 +200,15 @@
 	<span class="tijd">
 		{#if job && remaining !== null}
 			{#if percent !== null}<b class="pct">{percent}%</b>{/if}
-			nog <b>{formatDuration(remaining)}</b>
-			<span class="van">van {formatDuration(totaal)}</span>
+			<!-- Two whole messages instead of one sentence with a styled tail: the
+			     emphasis survives (how long is left is the number that counts) and
+			     neither half is a fragment a translator cannot place. -->
+			{t('status.remaining', { remaining: formatDuration(remaining) })}
+			<span class="van">{t('status.total', { total: formatDuration(totaal) })}</span>
 		{:else if job}
-			~ {formatDuration(totaal)} geschat
+			{t('status.estimated', { total: formatDuration(totaal) })}
 		{:else}
-			geen job
+			{t('status.noJob')}
 		{/if}
 	</span>
 	<span class="sep" aria-hidden="true"></span>
@@ -223,8 +225,7 @@
 	{#if kanVerbinden}
 		{#if zekerVerbreken}
 			<span class="verbreek-vraag">
-				Verbreken? Opnieuw verbinden lukt daarna niet altijd; soms helpt alleen een
-				herstart van de server.
+				{t('status.disconnect.ask')}
 				<button
 					class="verbind"
 					disabled={control.busy === 'disconnect'}
@@ -232,27 +233,27 @@
 						zekerVerbreken = false;
 						control.disconnect();
 					}}
-				>Verbreken</button>
-				<button class="verbind" onclick={() => (zekerVerbreken = false)}>Laten hangen</button>
+				>{t('status.disconnect')}</button>
+				<button class="verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
 			</span>
 		{:else}
 			<button
 				class="verbind"
 				disabled={control.needsToken || control.busy === 'connect' || control.busy === 'disconnect'}
 				title={control.needsToken
-					? 'Eerst een token invullen'
+					? t('status.needsToken')
 					: hangt
-						? 'De verbinding met de machine vrijgeven'
-						: 'De verbinding met de machine opzetten. Dit beweegt niets.'}
+						? t('status.disconnect.title')
+						: t('status.connect.title')}
 				onclick={() => (hangt ? (zekerVerbreken = true) : control.connect())}
 			>
 				{control.busy === 'connect'
-					? 'Verbinden…'
+					? t('status.connect.busy')
 					: control.busy === 'disconnect'
-						? 'Verbreken…'
+						? t('status.disconnect.busy')
 						: hangt
-							? 'Verbreken…'
-							: 'Verbinden'}
+							? t('status.disconnect')
+							: t('status.connect')}
 			</button>
 		{/if}
 	{/if}
@@ -265,11 +266,13 @@
 	-->
 	<!-- De lijn naar OpenKerf zelf. Hier stond de machinetoestand, en die staat
 	     al links in deze balk én in de bovenbalk. -->
-	<span class="right" class:offline={!connected} title={connected
-		? 'De pagina krijgt live gegevens van de OpenKerf-server'
-		: 'De pagina heeft geen verbinding met de OpenKerf-server; wat je ziet is de laatste stand'}>
+	<span
+		class="right"
+		class:offline={!connected}
+		title={connected ? t('status.openkerf.live.title') : t('status.openkerf.away.title')}
+	>
 		<span class="dot {connected ? 'ready' : 'offline'}" aria-hidden="true"></span>
-		OpenKerf {connected ? 'live' : 'weg'}
+		{connected ? t('status.openkerf.live') : t('status.openkerf.away')}
 	</span>
 </footer>
 
