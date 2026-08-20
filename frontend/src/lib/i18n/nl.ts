@@ -23,7 +23,6 @@ export const nl: Catalogue = {
 	'topbar.material.choose': 'Materiaal kiezen',
 	'topbar.material.short': 'Materiaal',
 	'topbar.material.none': 'Nog geen materiaal gekozen voor dit vel — klik om het in te vullen',
-	'topbar.material.is': 'Dit vel is {material} — klik om te wijzigen',
 	'topbar.material.isThickness': 'Dit vel is {material}, {thickness} — klik om te wijzigen',
 	'topbar.material.noThickness':
 		'Dit vel is {material} (dikte niet ingevuld) — klik om te wijzigen',
@@ -360,6 +359,9 @@ export const nl: Catalogue = {
 	'canvas.snap.off': 'Vastklikken staat uit — houd Alt ingedrukt om het even te gebruiken',
 	'canvas.bedSize': 'bed {width} × {height} mm',
 	'canvas.empty.body': 'Gebruik Importeren bovenin voor een bestaand ontwerp, of pak links een vorm en klik op het bed.',
+	'canvas.nodes.pickOne': 'Knooppunten werkt op één vorm. Klik er een aan op het bed.',
+	'canvas.nodes.tooMany': 'Knooppunten werkt op één vorm tegelijk; er staan er {n} gekozen. Klik er één aan.',
+	'canvas.nodes.noPoints': 'Deze vorm heeft geen losse punten. Maak er eerst een pad van met Combineren, in het paneel rechts.',
 	'canvas.trace': 'Spoor van de kop — gemeten, inclusief de sprongen tussen de vormen.',
 	'canvas.traceProgress': '{percent}% staat als ring om de kop.',
 	'canvas.outsideBed': {
@@ -372,7 +374,6 @@ export const nl: Catalogue = {
 	},
 	'canvas.theSheet': 'het vel',
 	'canvas.burnsHere': 'brandt hier',
-	'canvas.combineHint': 'Combineren in het paneel rechts.',
 	'canvas.selectImage': 'Selecteer afbeelding',
 	'canvas.dragMove': 'Sleep om te verplaatsen',
 	'canvas.dragRotate': 'Sleep om te draaien',
@@ -480,6 +481,13 @@ export const nl: Catalogue = {
 		other: '{n} lagen gebruiken instellingen die niet met een testraster gemeten zijn. Op onbekend materiaal: eerst een proefje op een restje.'
 	},
 	'job.nothing.body': 'Het bed is leeg, of alles wat erop staat zit in een laag die niet meebrandt. Teken of importeer iets, geef het een laag, en kom hierna terug.',
+	'job.startJob': 'Job starten',
+	'job.starting': 'Bezig…',
+	'job.resume': 'Hervatten',
+	'job.pause': 'Pauze',
+	'job.stop': 'Stop',
+	'job.stop.onMachine': 'op de machine',
+	'job.stepSize': 'Stapgrootte',
 	'job.startNow': 'Nu starten',
 	'job.steps': '{done} / {total} stappen',
 	'job.pass': 'pass {n} van {total}',
@@ -516,6 +524,8 @@ export const nl: Catalogue = {
 	'job.blocked.duringJob': 'Kan niet tijdens een lopende job',
 	'job.adjust.power': 'Vermogen',
 	'job.adjust.speed': 'Snelheid',
+	'preset.source.measured': 'gemeten',
+	'preset.source.unmeasured': 'niet gemeten',
 	'preset.source.extrapolated': 'geëxtrapoleerd — niet gemeten',
 	'preset.source.manual': 'handmatig ingesteld',
 	'preset.source.someoneElse': 'van iemand anders',
@@ -590,7 +600,6 @@ export const nl: Catalogue = {
 	'tiles.distanceError': '{mm} mm afwijking',
 	'tiles.up': 'naar boven',
 	'tiles.left': 'naar links',
-	'tiles.alreadyBurned': 'al gebrand',
 	'tiles.noPosition': 'Deze machine meldt geen positie, dus Hier weet niet waar hij staat.',
 
 	// ── Job started ───────────────────────────────────────────────────────────────

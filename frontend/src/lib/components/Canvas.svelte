@@ -2238,7 +2238,7 @@
 								class="mono"
 								x={brandtHier.x + 2 * mmPerPx}
 								y={brandtHier.y - 3 * mmPerPx}
-								style="font-size: {labelSize}px">brandt hier</text
+								style="font-size: {labelSize}px">{t('canvas.burnsHere')}</text
 							>
 						</g>
 					{/if}
@@ -2365,68 +2365,65 @@
 	{/if}
 </div>
 
-<!-- Gat C2 in woorden, als eigen strook onder het bed.
-     De gloed op het bed is de eerste waarschuwing, maar kleur alleen mag het
-     nooit dragen: wie in de werkplaats bij een raam staat ziet die gloed als
-     eerste niet meer, en met deuteranopie is rood op een oranje lijn geen
-     verschil. Twee aparte zinnen, want buiten het bed (daar komt de kop niet)
-     en buiten het vel (daar ligt geen materiaal) zijn twee problemen.
+<!-- Gap C2 in words, as a strip of its own under the bed.
+     The glow on the bed is the first warning, but colour must never carry it
+     alone: whoever stands by a window in the workshop is the first to lose that
+     glow, and with deuteranopia red on an amber line is no difference. Two
+     separate sentences, because outside the bed (the head does not get there) and
+     outside the sheet (there is no material there) are two problems.
 
-     Bewust géén zwevend kaartje op het canvas: daar botste hij op de camerapil
-     links en op de zoombalk rechts — gemeten op 1024, de melding viel er half
-     achter. Een strook in de stroom dekt niets af en verdwijnt weer zodra het
-     werk binnen de randen ligt. -->
-<!-- Alles wat ónder het bed hangt in één blok, en dat blok meet zichzelf op.
-     De camerapil zweeft boven het canvas met een vaste afstand tot de onderkant
-     en rekent met `--palet-hoogte`; stond de kleurenstrook alleen in die maat,
-     dan lag de pil over deze waarschuwing heen zodra hij verscheen (gemeten op
-     1440: overlap van 34 px). Eén maat voor de hele onderrand is de enige die
-     klopt, want er kan meer dan één strook staan. -->
+     Deliberately not a floating card on the canvas: there it collided with the
+     camera pill on the left and the zoom bar on the right — measured at 1024, the
+     message ended up half behind it. A strip in the flow covers nothing and
+     disappears again as soon as the work is inside the edges. -->
+<!-- Everything hanging below the bed in one block, and that block measures
+     itself. The camera pill floats above the canvas at a fixed distance from the
+     bottom and reckons with `--palet-hoogte`; with only the colour strip in that
+     measurement the pill lay over this warning the moment it appeared (measured at
+     1440: 34 px of overlap). One measurement for the whole bottom edge is the only
+     one that holds, because there can be more than one strip. -->
 <div class="onderrand" bind:clientHeight={onderrandHoogte}>
-<!-- Het knooppuntgereedschap staat ingedrukt maar doet niets: zeg waarom.
-     Zonder deze regel was het verschil tussen "je moet nog een vorm kiezen" en
-     "deze vorm kán het niet" onzichtbaar, en beide zagen eruit als een kapot
-     gereedschap. -->
+<!-- The node tool is pressed but does nothing: say why. Without this line the
+     difference between "you still have to pick a shape" and "this shape cannot do
+     it" was invisible, and both looked like a broken tool. -->
 {#if nodeReden}
 	<p class="tool-uitleg" role="status">
 		{#if nodeReden === 'geen'}
-			Knooppunten werkt op één vorm. Klik er een aan op het bed.
+			{t('canvas.nodes.pickOne')}
 		{:else if nodeReden === 'meerdere'}
-			Knooppunten werkt op één vorm tegelijk; er staan er {design.selectedIds.length}
-			gekozen. Klik er één aan.
+			{t('canvas.nodes.tooMany', { n: design.selectedIds.length })}
 		{:else}
-			Deze vorm heeft geen losse punten. Maak er eerst een pad van met
-			<em>Combineren</em> in het paneel rechts.
+			{t('canvas.nodes.noPoints')}
 		{/if}
 	</p>
 {/if}
-<!-- Wat het spoor op het bed is, in woorden (gat J3).
-     Een lijn die tijdens een job over het bed groeit, leest als "dit is er al
-     gesneden" — en dat kunnen we niet waarmaken: `driver;position` zegt niet of
-     de laser aan stond, dus de sprong tussen twee vormen zit er net zo goed in.
-     Een beeld dat meer belooft dan het weet is erger dan geen beeld, dus staat
-     hier wat je voor je hebt. Alleen tijdens een job; daarbuiten is er niets te
-     zeggen. -->
+<!-- What the trace on the bed is, in words (gap J3).
+     A line growing across the bed during a job reads as "this has been cut
+     already" — and we cannot make that good: `driver;position` does not say
+     whether the laser was on, so the jump between two shapes is just as much part
+     of it. An image that promises more than it knows is worse than no image, so
+     here is what you are looking at. Only during a job; outside one there is
+     nothing to say. -->
 {#if job && spoor}
 	<p class="spoor-uitleg" role="status">
 		<span class="spoor-merk" aria-hidden="true"></span>
-		<!-- Alle tekst in één kind: met losse tekstknopen ernaast wordt elk stuk
-		     een eigen flex-item, en dan stond "62%" op een tablet in een eigen
-		     kolom naast een afgebroken zin (gemeten op 1024). -->
+		<!-- All the text in one child: with loose text nodes beside it every piece
+		     becomes a flex item of its own, and then "62%" sat in a column of its own
+		     next to a broken-off sentence on a tablet (measured at 1024). -->
 		<span
-			>Spoor van de kop — gemeten, inclusief de sprongen tussen de vormen.{#if voortgang !== null}{' '}<span
-					class="mono">{Math.round(voortgang * 100)}%</span
-				> staat als ring om de kop.{/if}</span
+			>{t('canvas.trace')}{#if voortgang !== null}{' '}{t('canvas.traceProgress', {
+					percent: Math.round(voortgang * 100)
+				})}{/if}</span
 		>
 	</p>
 {/if}
 {#if plaatTeGroot || buitenBed || buitenVel}
 	<div class="buiten-strook" role="status">
 		{#if plaatTeGroot}
-			<!-- Task 15: dit is bij een plaat die zélf groter is dan het bed geen
-			     fout maar een werkwijze — de melding wordt dan het aanbod om in
-			     tegels te branden, in plaats van de gewone "valt buiten het
-			     bed"-regel (die zou hier toch op bijna elke vorm afgaan). -->
+			<!-- Task 15: with a plate that is itself larger than the bed this is not a
+			     mistake but a way of working — the message becomes the offer to burn in
+			     tiles, instead of the ordinary "falls outside the bed" line (which
+			     would go off on nearly every shape here anyway). -->
 			<span class="regel aanbod">
 				<span class="teken" aria-hidden="true">!</span>
 				<span>{t('canvas.tooBig')}</span>
@@ -2442,29 +2439,27 @@
 		{:else if buitenBed}
 			<span class="regel bedrand">
 				<span class="teken" aria-hidden="true">!</span>
-				<span
-					>{buitenBed === 1 ? 'Eén vorm ligt' : `${buitenBed} vormen liggen`} buiten het
-					bed — daar komt de kop niet.</span
-				>
+				<span>{t('canvas.outsideBed', { n: buitenBed })}</span>
 			</span>
 		{/if}
 		{#if buitenVel}
 			<span class="regel velrand">
 				<span class="teken" aria-hidden="true">!</span>
 				<span
-					>{buitenVel === 1 ? 'Eén vorm ligt' : `${buitenVel} vormen liggen`} buiten {sheet
-						? sheet.name
-						: 'het vel'} — daar ligt geen materiaal.</span
+					>{t('canvas.outsideSheet', {
+						n: buitenVel,
+						sheet: sheet ? sheet.name : t('canvas.theSheet')
+					})}</span
 				>
 			</span>
 		{/if}
 	</div>
 {/if}
 
-<!-- Besluit B2: de kleurenstrook hoort ónder het canvas, niet in het paneel.
-     Daar hoort hij bij de vorm die je vasthebt, en niet bij een tabblad dat je
-     eerst moet opzoeken. Een eigen rij, geen zwevende balk over het bed heen:
-     hij mag nooit iets afdekken wat je aan het uitlijnen bent. -->
+<!-- Decision B2: the colour strip belongs *under* the canvas, not in the panel.
+     There it belongs to the shape you are holding, and not to a tab you have to
+     look up first. A row of its own, no floating bar across the bed: it must never
+     cover something you are aligning. -->
 <LagenPalet {design} {edits} {canEdit} onChanged={() => onEdited?.()} />
 </div>
 
@@ -2930,10 +2925,6 @@
 		color: var(--text-2);
 		border-top: 1px solid var(--line-1);
 	}
-	.tool-uitleg em {
-		font-style: normal;
-		color: var(--text-1);
-	}
 	.spoor-uitleg {
 		display: flex;
 		align-items: baseline;
@@ -2954,10 +2945,6 @@
 		margin-top: 0.5em;
 		border-top: 2px solid var(--accent);
 		opacity: 0.9;
-	}
-	.spoor-uitleg .mono {
-		color: var(--text-1);
-		font-variant-numeric: tabular-nums;
 	}
 	.hit {
 		cursor: pointer;

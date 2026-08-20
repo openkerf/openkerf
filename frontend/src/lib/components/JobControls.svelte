@@ -13,6 +13,7 @@
 		type Job
 	} from '$lib/api';
 	import { apparaat } from '$lib/apparaat.svelte';
+	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import type { Controller, Position } from '$lib/control.svelte';
 	import { verbinding } from '$lib/verbinding.svelte';
 	import { inktOp, laagNummer, type Design } from '$lib/design.svelte';
@@ -180,36 +181,37 @@
 	 */
 	let rasterUit = $derived(overzicht?.engine?.raster === false);
 	let blindeLagen = $derived(layers.filter((l) => l.burns === false));
-	// Hele millimeters waar het kan; 0,5 mm blijft 0,5 mm.
-	function maat(value: number): string {
-		return (Math.round(value * 10) / 10).toString().replace('.', ',');
+	// Whole millimetres where it can be; 0.5 mm stays 0.5 mm. Written in the
+	// reader's own notation, because these numbers get typed into a machine.
+	function size(value: number): string {
+		return i18n.number(Math.round(value * 10) / 10);
 	}
 
-	// Instellingen die niet gemeten zijn, verdienen een waarschuwing vóór het
-	// materiaal in de machine ligt — niet erna.
-	const ONZEKER: Record<string, string> = {
-		geextrapoleerd: 'geëxtrapoleerd — niet gemeten',
-		handmatig: 'handmatig ingesteld',
-		geimporteerd: 'van iemand anders'
+	// Settings that were not measured deserve a warning before the material is in
+	// the machine — not after.
+	const UNMEASURED: Record<string, MessageKey> = {
+		geextrapoleerd: 'preset.source.extrapolated',
+		handmatig: 'preset.source.manual',
+		geimporteerd: 'preset.source.someoneElse'
 	};
-	// Een laag die niet brandt, hoeft geen betrouwbare instellingen te hebben:
-	// er wordt niets mee gedaan. Hem meetellen maakt van "3 lagen zijn niet
-	// gemeten" een getal dat niet klopt met wat er straks gebeurt.
+	// A layer that does not burn need not have trustworthy settings: nothing is
+	// done with them. Counting it turns "3 layers were not measured" into a number
+	// that does not match what is about to happen.
 	let risky = $derived(layers.filter((l) => l.burns !== false && l.source !== 'testraster'));
 
 	/**
-	 * Waar de getallen van deze laag vandaan komen, in twee woorden.
+	 * Where the numbers of this layer come from, in two words.
 	 *
-	 * "Gemeten" boven een instelling die op ánder materiaal gemeten is, stelt
-	 * gerust waar dat niet hoort: het meten klopt, het materiaal niet. Dan zegt
-	 * deze kolom wat er wél aan de hand is, en de regel eronder waarom.
+	 * "Measured" above a setting that was measured on *other* material reassures
+	 * where it should not: the measuring is sound, the material is not. So this
+	 * column says what is actually going on, and the line below it says why.
 	 */
-	function bron(layer: Layer): string {
+	function source(layer: Layer): string {
 		const codes = (layer.warnings ?? []).map((w) => w.code);
-		if (codes.includes('ander-materiaal')) return 'ander materiaal';
-		if (codes.includes('andere-dikte')) return 'andere dikte';
-		if (layer.source === 'testraster') return 'gemeten';
-		return ONZEKER[layer.source ?? ''] ?? 'niet gemeten';
+		if (codes.includes('ander-materiaal')) return t('preset.source.otherMaterial');
+		if (codes.includes('andere-dikte')) return t('preset.source.otherThickness');
+		if (layer.source === 'testraster') return t('preset.source.measured');
+		return t(UNMEASURED[layer.source ?? ''] ?? 'preset.source.unmeasured');
 	}
 	let estimating = $state(false);
 	let estimateTraag = $state(false);
@@ -286,27 +288,27 @@
 		};
 	});
 
-	// Zonder token levert elke schrijfactie een 401 op. Een knop aanbieden die
-	// gegarandeerd faalt is een lege belofte, dus die blokkeren we hier al.
-	// Hetzelfde geldt voor een weggevallen server: dan komt er niets aan, en
-	// een knop die er bedienbaar uitziet belooft iets wat niet gebeurt.
+	// Without a token every write action yields a 401. Offering a button that is
+	// guaranteed to fail is an empty promise, so it is blocked here already. The
+	// same goes for a server that has dropped out: nothing arrives then, and a
+	// button that looks operable promises something that will not happen.
 	let blocked = $derived(
 		control.tokenProbleem || control.busy !== null || !verbinding.online
 	);
 	let blockedReason = $derived(
 		!verbinding.online
-			? 'Geen verbinding met OpenKerf — de opdracht komt niet aan'
+			? t('job.blocked.noServer')
 			: control.tokenProbleem
-				? 'Eerst een geldige token invullen'
+				? t('job.blocked.token')
 				: undefined
 	);
 
-	// De kop verzetten terwijl er gebrand wordt, verpest op zijn best de job.
+	// Moving the head while burning ruins the job at best.
 	let movingBlocked = $derived(
 		!verbinding.online
-			? 'Geen verbinding met OpenKerf — de kop beweegt hier niet van'
+			? t('job.blocked.noServerMove')
 			: running
-				? 'Kan niet tijdens een lopende job'
+				? t('job.blocked.duringJob')
 				: undefined
 	);
 	let bewegenUit = $derived(running || !verbinding.online);
@@ -333,9 +335,9 @@
 	});
 
 	/** De twee grootheden die tijdens een job bijgesteld kunnen worden (J11). */
-	const STELBAAR = [
-		{ wat: 'power' as const, naam: 'Vermogen' },
-		{ wat: 'speed' as const, naam: 'Snelheid' }
+	const ADJUSTABLE = [
+		{ what: 'power' as const, key: 'job.adjust.power' as MessageKey },
+		{ what: 'speed' as const, key: 'job.adjust.speed' as MessageKey }
 	];
 
 	async function bewaar() {
@@ -393,28 +395,30 @@
 </script>
 
 <div class="section">
-	<!-- De kop zei "Bediening" en dat is waar: het zijn bedieningsorganen. Maar
-	     het zegt niets over wat er nú aan de hand is, en dat is precies wat je op
-	     dit tabblad komt halen. -->
-	<h2 class="section-title">{busyWithWork || phase === 'done' ? 'De job' : 'Klaarmaken'}</h2>
+	<!-- The heading said "Controls", and that is true: these are controls. But it
+	     says nothing about what is going on right now, and that is exactly what
+	     you come to this tab for. -->
+	<h2 class="section-title">
+		{busyWithWork || phase === 'done' ? t('job.section.theJob') : t('job.section.preparing')}
+	</h2>
 
 	{#if control.tokenProbleem}
-		<!-- De API is vanaf het netwerk bereikbaar; zonder token blijft alles
-		     read-only. Ook bij een geweigerde token: die stond wél in de browser,
-		     waardoor dit veld verdween en er geen weg terug was — elke actie
-		     faalde met 401 en je kon nergens een andere token kwijt. -->
+		<!-- The API is reachable from the network; without a token everything stays
+		     read-only. A refused token counts too: it *was* in the browser, so this
+		     field disappeared and there was no way back — every action failed with a
+		     401 and there was nowhere to put a different token. -->
 		<div class="token" class:afgewezen={control.rejected}>
 			<label for="token">
-				{control.rejected ? 'Deze token wordt geweigerd' : 'Token voor schrijfacties'}
+				{control.rejected ? t('job.token.rejected') : t('job.token.label')}
 			</label>
 			<div class="token-row">
-				<input id="token" type="password" bind:value={tokenDraft} placeholder="plak de token" />
-				<button class="btn" onclick={() => control.saveToken(tokenDraft)}>Opslaan</button>
+				<input id="token" type="password" bind:value={tokenDraft} placeholder={t('job.token.placeholder')} />
+				<button class="btn" onclick={() => control.saveToken(tokenDraft)}>{t('common.save2')}</button>
 			</div>
 			<p class="hint">
 				{control.rejected
-					? 'Kijk in het venster waarin de engine draait: daar staat de token die bij deze server hoort.'
-					: 'De engine logt de token bij het starten van de API.'}
+					? t('job.token.rejectedHint')
+					: t('job.token.hint')}
 			</p>
 		</div>
 	{/if}
@@ -433,134 +437,121 @@
 			dan hiervóór verdwijnt er bij die eerste tik niets uit beeld.
 		-->
 		<div class="preflight" class:niets={leeg}>
-			<!-- "Geschatte tijd 0:00" boven een leeg bed leest als een job van nul
-			     seconden in plaats van als geen job. Bij niets te doen zwijgt de
-			     klok en spreekt de melding eronder. -->
-			<!-- Eerst het werkstuk, dan pas de getallen erover (besluit B8). Wie
-			     ziet dat er iets buiten het vel hangt, hoeft de tijd niet meer te
-			     lezen — en op tablet en telefoon staat het canvas er niet naast. -->
+			<!-- "Estimated time 0:00" above an empty bed reads as a job of zero
+			     seconds instead of as no job. With nothing to do the clock keeps
+			     quiet and the message below it speaks. -->
+			<!-- The workpiece first, the numbers about it after (decision B8).
+			     Whoever sees something hanging off the sheet need not read the time
+			     any more — and on tablet and phone the canvas is not beside it. -->
 			{#if !leeg}
-				<!-- De meldingen over bed en vel horen bij de tekening en staan er
-				     dus in, direct onder de vorm waar het over gaat (gaten J5 en
-				     C2). Ze stonden hier als twee even rode kaarten op rij; dat
-				     maakte "daar ligt geen materiaal" even ernstig als "daar komt de
-				     kop niet", en dan weegt geen van beide nog. -->
+				<!-- The messages about bed and sheet belong to the drawing and so
+				     live in it, right under the shape they are about (gaps J5 and C2).
+				     They used to be here as two equally red cards in a row; that made
+				     "there is no material there" as serious as "the head does not get
+				     there", and then neither carries any weight. -->
 				<JobPreview
 					design={ontwerp}
 					sheet={overzicht?.sheet ?? null}
 					bounds={grenzen}
 					{colorFor}
 				/>
-				<!-- De omzetter die een rastervlak naar laserregels rekent, zit in de
-				     wxPython-versie van de engine. Ontbreekt hij, dan gooit de laag
-				     tijdens het plannen zijn eigen vormen weg en komt er niets uit de
-				     machine. Dezelfde woorden als de blokkade in de testrasterwizard:
-				     wie ze daar gelezen heeft, herkent ze hier — en andersom. -->
+				<!-- The converter that turns a raster area into laser lines lives in
+				     the wxPython version of the engine. When it is missing, the layer
+				     throws its own shapes away during planning and nothing comes out
+				     of the machine. The same words as the block in the test-grid
+				     wizard: whoever read them there recognises them here — and the
+				     other way round. -->
 				{#if rasterUit && blindeLagen.length}
 					<p class="pf-geenraster" role="alert">
-						<strong>Deze server kan rasterlagen niet branden.</strong>
+						<strong>{t('job.noRaster.title')}</strong>
 						{blindeLagen.length === 1
-							? `De laag "${blindeLagen[0].label}" levert`
-							: `${blindeLagen.length} rasterlagen leveren`} niets — de omzetter
-						van rastervlak naar laserregels zit in de wxPython-versie van de
-						engine. De klok hieronder rekent er daarom nul voor. Maak er een
-						graveer- of snijlaag van, of brand deze job vanuit de wxPython-UI.
+							? t('job.noRaster.one', { label: blindeLagen[0].label })
+							: t('job.noRaster.many', { n: blindeLagen.length })}
 					</p>
 				{/if}
 				<div class="pf-time">
-					<span class="muted">Geschatte tijd</span>
+					<span class="muted">{t('job.estimatedTime')}</span>
 					<span class="v mono">
 						{#if estimating}
-							<span class="rekent">rekent…</span>
+							<span class="rekent">{t('job.calculating')}</span>
 						{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
 					</span>
 				</div>
-				<!-- Waarín gebrand wordt, vlak boven de instellingen waarmee. Zonder
-				     dat staat er een tabel met getallen zonder onderwerp. -->
-				<!-- Altijd een regel, ook zonder materiaal. Niets zeggen leest als
-				     "hoeft niet"; en dan draai je een preset van berken op acryl. -->
+				<!-- *What* is being burned, right above the settings it is burned
+				     with. Without it there is a table of numbers with no subject. -->
+				<!-- Always a line, even without material. Saying nothing reads as
+				     "not needed"; and then you run a birch preset on acrylic. -->
 				<div class="pf-time vel" class:onbekend={!velTekst}>
-					<span class="muted">Materiaal</span>
-					<span class="v">{velTekst ?? 'niet ingevuld voor dit vel'}</span>
+					<span class="muted">{t('job.material')}</span>
+					<span class="v">{velTekst ?? t('job.material.none')}</span>
 				</div>
 					{#if control.origin}
-						<!-- Gat J12: een nulpunt verplaatst het werk op het bed, en de
-						     pre-flight is het laatste moment waarop je dat nog ziet. Het
-						     staat er dus als eigen regel — zwijgen zou betekenen dat het
-						     enige scherm vóór het branden niet vertelt wáár er gebrand
-						     wordt. -->
+						<!-- Gap J12: a zero point moves the work on the bed, and the
+						     preflight is the last moment you can still see that. So it is
+						     here as a line of its own — saying nothing would mean the one
+						     screen before burning does not say *where* it burns. -->
 						<div class="pf-time vel">
-							<span class="muted">Nulpunt</span>
+							<span class="muted">{t('job.origin')}</span>
 							<span class="v mono"
-								>{maat(control.origin.x_mm)},&#8239;{maat(control.origin.y_mm)} mm</span
+								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
 							>
 						</div>
 					{/if}
-					<!-- Geen tweede regel met de jobafmeting: de weergave erboven zet
-				     "werk 120 × 80 mm" al onder de tekening (besluit B8). Datzelfde
-				     getal nog eens als eigen rij, negentig pixels lager, is geen
-				     informatie maar ruis. Wat de weergave níet doet is het werk tegen
-				     het bed houden — dat staat hieronder. -->
+					<!-- No second line with the job size: the view above already puts
+				     "work 120 × 80 mm" under the drawing (decision B8). That same
+				     number again as a row of its own, ninety pixels lower, is not
+				     information but noise. What the view does *not* do is hold the work
+				     up against the bed — that is below. -->
 			{/if}
 			{#if !leeg && device?.connection?.state === 'disconnected'}
-				<!-- Starten mag: de engine zet de job in de wachtrij en verbindt
-				     zodra de machine er is. Maar wie op "Nu starten" drukt en naar
-				     een stille machine loopt, moet weten dat het wachten daaraan
-				     ligt en niet aan de job. -->
-				<p class="pf-warn strong">
-					De machine meldt zich niet. Deze job gaat de wachtrij in en begint
-					pas zodra de verbinding er is — zet hem aan of controleer de kabel.
-				</p>
+				<!-- Starting is allowed: the engine queues the job and connects as
+				     soon as the machine is there. But whoever presses "Start now" and
+				     walks over to a silent machine has to know the waiting is down to
+				     that and not to the job. -->
+				<p class="pf-warn strong">{t('job.notResponding')}</p>
 			{/if}
 			{#if estimateTraag}
-				<p class="pf-row">
-					De engine bouwt het hele snijplan om dit te schatten; op een zwaar
-					ontwerp duurt dat even. Starten kan gewoon — de machine wacht er
-					niet op.
-				</p>
+				<p class="pf-row">{t('job.estimateSlow')}</p>
 			{/if}
-			<!-- Alleen tonen als er iets in staat: "In wachtrij: 0" vlak vóór het
-			     starten is de normale situatie, en dus geen mededeling. -->
+			<!-- Only shown when there is something in it: "In queue: 0" just before
+			     starting is the normal situation, and therefore not news. -->
 			{#if queued > 0}
-				<div class="pf-row">
-					Er staat al <span class="mono">{queued}</span>
-					{queued === 1 ? 'job' : 'jobs'} in de wachtrij; deze komt erachteraan.
-				</div>
+				<div class="pf-row">{t('job.queueAhead', { n: queued })}</div>
 			{/if}
 
-			<!-- Wat de machine gaat dóén. Tijd en aantal alleen is theater: een
-			     laseraar controleert snelheid, vermogen en passes voordat hij
-			     iets in de machine legt. -->
+			<!-- What the machine is going to *do*. Time and count alone is theatre: a
+			     laser cutter checks speed, power and passes before putting anything in
+			     the machine. -->
 			{#if layers.length}
 				<table class="pf-layers">
 					<thead>
-						<tr><th>Laag</th><th>mm/s</th><th>%</th><th>×</th><th>Bron</th></tr>
+						<tr><th>{t('job.layer')}</th><th>mm/s</th><th>%</th><th>×</th><th>{t('job.source')}</th></tr>
 					</thead>
 					<tbody>
-						<!-- Op de index, niet op het label: twee operaties van hetzelfde
-						     type heten allebei "Graveren", en een dubbele sleutel laat
-						     Svelte de tabel verkeerd bijwerken. -->
+						<!-- Keyed on the index, not on the label: two operations of the same
+						     type are both called "Engrave", and a duplicate key makes Svelte
+						     update the table wrongly. -->
 						{#each layers as layer, i (i)}
 							<tr>
 								<td class="pf-name" title={layer.label}>
-										<!-- Twee snijlagen heten allebei "Snijden"; de chip is het
-										     enige wat ze uit elkaar houdt, en het is dezelfde kleur
-										     als op het canvas en in de lagenlijst.
+										<!-- Two cut layers are both called "Cut"; the chip is the only
+										     thing telling them apart, and it is the same colour as on the
+										     canvas and in the layer list.
 
-										     Gat J7: met het laagnummer erin. Het design system verbiedt
-										     informatie die alleen in kleur zit, en van tien laagkleuren
-										     botsen er twee bij deuteranopie. Het nummer komt uit
-										     `laagNummer()` — dezelfde bron als de chip in het lagenpaneel
-										     en het cijfer bij de vorm op het canvas, zodat ze niet uiteen
-										     kunnen lopen. -->
+										     Gap J7: with the layer number in it. The design system forbids
+										     information that lives in colour alone, and of ten layer
+										     colours two collide under deuteranopia. The number comes from
+										     `laagNummer()` — the same source as the chip in the layer panel
+										     and the digit beside the shape on the canvas, so they cannot
+										     drift apart. -->
 										{#if colorFor}
 											{@const nummer = laagNummer(ontwerp, layer.id)}
-											<!-- Met `aria-hidden` eraf hoort een schermlezer anders een
-											     kaal cijfer vóór de laagnaam: "1 Snijden". `role="img"`
-											     met een naam maakt er "Laag 1, Snijden" van; zonder rol
-											     negeren de meeste schermlezers een aria-label op een
-											     span. Zonder nummer is de chip alleen kleur en dus
-											     decoratie — die blijft verborgen. -->
+											<!-- Without `aria-hidden` a screen reader would otherwise hear a
+											     bare digit in front of the layer name: "1 Cut". `role="img"`
+											     with a name turns it into "Layer 1, Cut"; without a role most
+											     screen readers ignore an aria-label on a span. With no number
+											     the chip is colour only, and therefore decoration — that one
+											     stays hidden. -->
 											{#if nummer === null}
 												<span class="chip mono" style:background={colorFor(layer.id)} aria-hidden="true"
 												></span>
@@ -570,123 +561,114 @@
 													style:background={colorFor(layer.id)}
 													style:color={inktOp(colorFor(layer.id))}
 													role="img"
-													aria-label="Laag {nummer}"
+													aria-label={t('job.layerAria', { n: nummer })}
 												>{nummer}</span>
 											{/if}
 										{/if}{layer.label}
 									</td>
-								<!-- Een laag die deze engine niet uitvoert, mag geen snelheid en
-								     vermogen tonen alsof er iets gaat gebeuren. Ook de herkomst
-								     verdwijnt: waar de getallen vandaan komen doet niet ter
-								     zake als ze niet gebruikt worden. -->
+								<!-- A layer this engine does not carry out must not show speed and
+								     power as if something is going to happen. The provenance goes
+								     too: where the numbers come from is beside the point when they
+								     are not used. -->
 								{#if layer.burns === false}
-									<td class="pf-blind" colspan="4">brandt niet</td>
+									<td class="pf-blind" colspan="4">{t('job.doesNotBurn')}</td>
 								{:else}
 									<td class="mono">{layer.speed_mm_s ?? '—'}</td>
 									<td class="mono">{layer.power_percent ?? '—'}</td>
 									<td class="mono">{layer.passes}</td>
-									<!-- "gemeten" in rustige tekst boven een instelling die op
-									     ánder materiaal gemeten is, stelt gerust waar dat niet
-									     hoort. De regel eronder zegt wat eraan schort; hier
-									     zegt de kleur alvast dát er iets is. -->
+									<!-- "measured" in calm text above a setting that was measured on
+									     *other* material reassures where it should not. The line below
+									     says what is wrong with it; here the colour says at least that
+									     there is something. -->
 									<td class:unsure={layer.source !== 'testraster' || (layer.warnings?.length ?? 0) > 0}>
-										{bron(layer)}
+										{source(layer)}
 									</td>
 								{/if}
 							</tr>
 						{/each}
 					</tbody>
 				</table>
-				<!-- Eerst het concrete bezwaar, dan het algemene. Een instelling van
-				     ánder materiaal is geen kwestie van vertrouwen maar van
-				     verkeerde plaat: dat hoort bovenaan te staan en met naam.
+				<!-- The concrete objection first, the general one after. A setting from
+				     *other* material is not a matter of trust but of the wrong board:
+				     that belongs at the top, and by name.
 
-				     Binnen de lijst weegt niet alles even zwaar. Een gemeten waarde
-				     van het verkeerde materiaal staat boven een uitgerekende waarde
-				     op het juiste, en als die twee naast elkaar staan zegt het
-				     merkje welke je eerst oplost. -->
+				     Within the list not everything weighs the same. A measured value
+				     from the wrong material outranks a calculated value on the right
+				     one, and when those two stand side by side the tag says which to
+				     fix first. -->
 				{#if mismatch.length}
 					<ul class="pf-mismatch" role="alert">
 						{#each mismatch as melding, i (i)}
 							<li class:licht={melding.ernst < 2}>
 								{#if i === 0 && eersteWeegtZwaarder}
-									<span class="eerst">Eerst</span>
+									<span class="eerst">{t('job.first')}</span>
 								{/if}<strong>{melding.laag}</strong> — {melding.tekst}
 							</li>
 						{/each}
 					</ul>
 				{/if}
 				{#if risky.length}
-					<p class="pf-warn strong">
-						{risky.length === 1 ? 'Eén laag gebruikt' : `${risky.length} lagen gebruiken`}
-						instellingen die niet met een testraster gemeten zijn. Op onbekend
-						materiaal: eerst een proefje op een restje.
-					</p>
+					<p class="pf-warn strong">{t('job.risky', { n: risky.length })}</p>
 				{/if}
 			{/if}
 
 			{#if leeg}
-				<!-- Geen checklist, geen startknop: er is niets om na te lopen. -->
+				<!-- No checklist, no start button: there is nothing to run through. -->
 				<div class="pf-leeg">
-					<strong>Er is niets om te branden</strong>
-					<p>
-						Het bed is leeg, of alles wat erop staat zit in een laag die niet
-						meebrandt. Teken of importeer iets, geef het een laag, en kom
-						hierna terug.
-					</p>
+					<strong>{t('job.nothing.title')}</strong>
+					<p>{t('job.nothing.body')}</p>
 				</div>
-				<!-- Hier stond "Terug naar het ontwerp", en dat was de enige uitweg
-				     uit een overzicht dat het paneel had overgenomen. Nu neemt het
-				     paneel niets over, dus is er ook niets om uit terug te keren. -->
+				<!-- This used to say "Back to the design", which was the only way out
+				     of an overview that had taken over the panel. The panel takes
+				     nothing over now, so there is nothing to return from. -->
 			{:else}
-			<!-- Dit stond als tweede geel blok onder de risicomelding. Twee
-			     waarschuwingen op rij van dezelfde kleur devalueren elkaar: de
-			     routinecontrole maakte de échte melding onzichtbaar. Nu neutraal
-			     en als lijst, want je loopt hem af. -->
+			<!-- This used to be a second yellow block under the risk warning. Two
+			     warnings in a row of the same colour devalue each other: the routine
+			     check made the real message invisible. Neutral now, and as a list,
+			     because you work down it. -->
 			<div class="pf-check">
-				<span class="pf-kop">Loop dit even na</span>
+				<span class="pf-kop">{t('job.checklist.title')}</span>
 				<ul>
-					<li>Deksel dicht</li>
-					<li>Afzuiging en air assist aan</li>
-					<li>Werkstuk ligt vast en vlak</li>
+					<li>{t('job.checklist.lid')}</li>
+					<li>{t('job.checklist.air')}</li>
+					<li>{t('job.checklist.workpiece')}</li>
 				</ul>
 			</div>
 
 			<!--
-				De knoppen plakken onderaan het paneel.
+				The buttons stick to the bottom of the panel.
 
-				Sinds de voorbereiding altijd openstaat, is de kolom langer dan het
-				paneel hoog is (gemeten: 1 427 px inhoud in 788 px). Zonder deze plak
-				stond de startknop onder de vouw — de primaire handeling buiten beeld,
-				en dat is precies wat deze ronde moest oplossen, niet veroorzaken.
+				Since the preparation is always open, the column is taller than the
+				panel is high (measured: 1,427 px of content in 788 px). Without this
+				sticky footer the start button sat below the fold — the primary action
+				out of sight, which is exactly what this round had to solve, not cause.
 
-				Het kader tonen staat op dezelfde regel: het is de laatste controle
-				vóór dezelfde knop, dus hoort het ernaast en niet drie blokken hoger.
+				Showing the frame is on the same line: it is the last check before that
+				same button, so it belongs beside it and not three blocks higher.
 			-->
 			<div class="pf-plak">
 				{#if preflight}
-					<!-- Twee bewuste tikken, op dezelfde plek: VEILIGHEID.md legt vast dat
-					     geen enkele klik direct brandt. De eerste wapent, de tweede vuurt —
-					     en anders dan hiervóór verdwijnt er bij die eerste tik niets uit
-					     beeld. -->
-					<button class="btn" onclick={() => (preflight = false)}>Annuleren</button>
+					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
+					     no single click burns. The first arms, the second fires — and unlike
+					     before, that first tap does not make anything disappear. -->
+					<button class="btn" onclick={() => (preflight = false)}>{t('common.cancel2')}</button>
 					<button
 						class="btn primary groot"
 						onclick={confirmStart}
 						disabled={control.busy !== null || !verbinding.online}
 						title={verbinding.online ? undefined : blockedReason}
 					>
-						{control.busy === 'start' ? 'Bezig…' : 'Nu starten'}
+						{control.busy === 'start' ? t('job.starting') : t('job.startNow')}
 					</button>
 				{:else}
 					{#if onFrame}
 						<button
 							class="btn"
 							disabled={control.busy !== null || running}
-							title="De kop langs de omtrek van je werk sturen — de laser blijft uit"
+							title={t('job.frame.title')}
 							onclick={() => onFrame?.()}
 						>
-							Kader tonen
+							{t('job.frame')}
 						</button>
 					{/if}
 					<button
@@ -695,7 +677,7 @@
 						title={blockedReason}
 						onclick={() => (preflight = true)}
 					>
-						Job starten{#if !estimating && (estimate?.seconds ?? job?.estimate_seconds)}
+						{t('job.startJob')}{#if !estimating && (estimate?.seconds ?? job?.estimate_seconds)}
 							<span class="pf-startmaat"
 								>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
 							>{/if}
@@ -706,17 +688,18 @@
 		</div>
 	{:else}
 		<!--
-			Het voortgangsblok.
+			The progress block.
 
-			Hier stonden vier knoppen (starten, pauze, wachtrij legen, stop) plus
-			vier regels uitleg over sneltoetsen, en dat stond er ongeacht wat de
-			machine deed. Drie van de vier waren dood zolang er niets liep, en
-			zodra er wél iets liep stond de enige informatie die dan iets betekent
-			— de voortgang — op 700px, onder de jogknoppen, buiten beeld.
+			There used to be four buttons here (start, pause, clear queue, stop) plus
+			four lines explaining shortcuts, and they were there regardless of what the
+			machine was doing. Three of the four were dead as long as nothing was
+			running, and the moment something *was* running the only information that
+			then means anything — the progress — sat at 700px, under the jog buttons,
+			out of sight.
 
-			Nu leidt de phase (`jobPhase` in `$lib/api.ts`): wat er nu aan de hand is
-			staat bovenaan, met de knoppen die op dít moment iets doen. De
-			sneltoetsen staan op de knoppen zelf, want dat is waar je ze leert.
+			Now the phase leads (`jobPhase` in `$lib/api.ts`): what is going on is at
+			the top, with the buttons that do something at *this* moment. The shortcuts
+			are on the buttons themselves, because that is where you learn them.
 		-->
 		<div class="nu" class:brandt={phase === 'burning'} class:pauze={phase === 'paused'}>
 			<div class="nu-kop">
@@ -727,23 +710,25 @@
 			</div>
 
 			{#if voortgang !== null}
-				<!-- De balk en het percentage horen bij elkaar en staan dus op één
-				     regel; de tijden eronder in dezelfde kolommen als altijd. -->
-				<div class="nu-balk" role="progressbar" aria-valuenow={Math.round(voortgang * 100)} aria-valuemin="0" aria-valuemax="100" aria-label="Voortgang van de job">
+				<!-- The bar and the percentage belong together and so sit on one line;
+				     the times below in the same columns as always. -->
+				<div class="nu-balk" role="progressbar" aria-valuenow={Math.round(voortgang * 100)} aria-valuemin="0" aria-valuemax="100" aria-label={t('job.progressAria')}>
 					<span class="nu-vol" style="width: {Math.round(voortgang * 1000) / 10}%"></span>
 				</div>
 				<div class="nu-cijfers mono">
 					<span class="nu-pct">{Math.round(voortgang * 100)}%</span>
 					{#if job?.steps_total}
-						<span class="nu-stap">{job.steps_done ?? 0} / {job.steps_total} stappen</span>
+						<span class="nu-stap">{t('job.steps', { done: job.steps_done ?? 0, total: job.steps_total })}</span>
 					{/if}
 					{#if (job?.loops ?? 1) > 1}
-						<span class="nu-pass">pass {(job?.loops_executed ?? 0) + 1} van {job?.loops}</span>
+						<span class="nu-pass">{t('job.pass', { n: (job?.loops_executed ?? 0) + 1, total: job?.loops })}</span>
 					{/if}
 				</div>
 				<div class="nu-tijd">
-					<span>{formatDuration(job?.elapsed_seconds ?? null)} verstreken</span>
-					{#if resterend !== null}<span class="nu-rest">nog {formatDuration(resterend)}</span>{/if}
+					<span>{t('job.elapsed', { time: formatDuration(job?.elapsed_seconds ?? null) })}</span>
+					{#if resterend !== null}<span class="nu-rest"
+							>{t('status.remaining', { remaining: formatDuration(resterend) })}</span
+						>{/if}
 				</div>
 			{/if}
 
@@ -754,62 +739,64 @@
 					<button
 						class="btn primary"
 						disabled={!actions?.resume || blocked}
-						title="{blockedReason ?? 'Verder waar de kop gebleven was'} · {PAUSE_KEY}"
+						title="{blockedReason ?? t('job.pause.keepGoing')} · {PAUSE_KEY}"
 						onclick={() => control.resume()}
-					>Hervatten</button>
+					>{t('job.resume')}</button>
 				{:else}
-					<!-- Op de phase en niet op `job.running`: een job die gespoold is maar
-					     nog niet opgepakt staat op `running: false`, en dan bood de
-					     bovenbalk pauze aan terwijl deze knop uit stond. `pause` is een
-					     realtime-commando; hij landt zodra de machine begint. -->
+					<!-- On the phase and not on `job.running`: a job that has been spooled
+					     but not picked up sits at `running: false`, and then the top bar
+					     offered pause while this button was disabled. `pause` is a realtime
+					     command; it lands the moment the machine starts. -->
 					<button
 						class="btn"
 						disabled={!actions?.pause || !busyWithWork || blocked}
 						title={busyWithWork
-							? `${blockedReason ?? 'De kop stilzetten zonder de job te verliezen'} · ${PAUSE_KEY}`
-							: 'Er loopt niets om te pauzeren'}
+							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}`
+							: t('transport.pause.nothing')}
 						onclick={() => control.pause()}
-					>Pauze</button>
+					>{t('job.pause')}</button>
 				{/if}
 				<span class="nu-rek"></span>
-				<!-- Stoppen houdt zijn eigen ruimte, links van pauze weg: een mistik
-				     hier kost het werkstuk. Zie DESIGN-SYSTEM v2, "Touch als
-				     eersteklas input". -->
+				<!-- Stop keeps its own space, away to the left of pause: a mis-tap here
+				     costs the workpiece. See DESIGN-SYSTEM v2, "Touch as first-class
+				     input". -->
 				<button
 					class="btn danger stop"
 					class:dood={!verbinding.online}
 					disabled={!actions?.stop || control.tokenProbleem || !verbinding.online}
 					title={!verbinding.online
-						? 'Geen verbinding met OpenKerf — deze knop komt niet aan. Stoppen kan nu alleen met de noodstop op de machine.'
-						: `${blockedReason ?? 'Job direct afbreken'} · ${STOP_KEY}`}
+						? t('job.stop.noServer')
+						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}`}
 					onclick={() => control.stop()}
 				>
-					{#if verbinding.online}Stop{:else}Stop <strong>op de machine</strong>{/if}
+					{#if verbinding.online}{t('job.stop')}{:else}{t('job.stop')}
+						<strong>{t('job.stop.onMachine')}</strong>{/if}
 				</button>
 			</div>
 
-			<!-- Zodra er íets in de wachtrij staat. Eerst stond hier `queued > 1`, en
-			     dan was met precies één job in de rij de wachtrij niet te legen — een
-			     handeling die verdween in plaats van verhuisde. -->
+			<!-- As soon as there is anything in the queue. This used to say
+			     `queued > 1`, and then with exactly one job in the row the queue could
+			     not be cleared — an operation that disappeared instead of moving. -->
 			{#if queued > 0}
 				<button
 					class="btn subtle wachtrij"
 					disabled={!actions?.clear_queue || queued === 0 || blocked}
-					title={queued === 0 ? 'De wachtrij is al leeg' : blockedReason}
+					title={queued === 0 ? t('job.queueEmpty') : blockedReason}
 					onclick={() => control.clearQueue()}
 				>
-					Wachtrij legen ({queued})
+					{t('job.clearQueue', { n: queued })}
 				</button>
 			{/if}
 
-			<!-- Gat J4, ingekort. De toetsen staan nu in de tooltips van de knoppen
-			     hierboven; wat een tooltip niet kan zeggen is dat ze buiten dit
-			     venster niet werken, en dat is precies het deel dat je op het
-			     verkeerde moment ontdekt. -->
+			<!-- Gap J4, shortened. The keys are in the tooltips of the buttons above
+			     now; what a tooltip cannot say is that they do not work outside this
+			     window, and that is exactly the part you discover at the wrong
+			     moment. -->
 			<p class="toetsen">
-				<kbd>{PAUSE_KEY}</kbd> en <kbd>{STOP_KEY}</kbd> werken overal in de app,
-				zolang dit venster voorop staat — daarbuiten kan een browser geen toetsen
-				ontvangen.
+				{t('job.keysWork', {
+					pause: PAUSE_KEY,
+					stop: STOP_KEY
+				})}
 			</p>
 		</div>
 
@@ -817,76 +804,74 @@
 
 	{#if !control.tokenProbleem}
 		<!--
-			De machinebediening: bewegen, naar een punt, het nulpunt, bijstellen.
+			The machine controls: moving, going to a point, the zero point, adjusting.
 
-			Dit is klaarmaak-werk. Het stond boven de voortgang en nam bij een
-			lopende job het hele zichtbare paneel in — terwijl de knoppen er dan
-			juist uit staan, want je jogt niet met een brandende laser. Nu staat het
-			ónder wat er nu gebeurt, en klapt het dicht zodra er werk onderweg is.
-			Dicht en niet weg: hij moet er zijn zodra je hem weer nodig hebt, en een
-			blok dat verdwijnt leer je niet terug te vinden.
+			This is getting-ready work. It used to sit above the progress and, during a
+			running job, took up the whole visible panel — while its buttons are
+			precisely then disabled, because you do not jog with a burning laser. Now it
+			sits *under* what is happening, and folds shut as soon as work is under way.
+			Shut and not gone: it has to be there the moment you need it again, and a
+			block that disappears is not one you learn to find back.
 		-->
 		<details class="machinevouw" open={!busyWithWork}>
 			<summary>
-				Machine bedienen
-				{#if busyWithWork}<span class="waarom">— niet tijdens een job</span>{/if}
+				{t('job.machineControls')}
+				{#if busyWithWork}<span class="waarom">— {t('job.machineControls.notNow')}</span>{/if}
 			</summary>
 		<div class="motion">
-			<span class="rot-label">Bewegen</span>
-			<!-- Omgekeerde T, zoals de pijltjes op een toetsenbord: ↑ boven ↓,
-			     met ← en → ernaast. Home staat ernaast en niet in het midden,
-			     want dat is geen richting. -->
+			<span class="rot-label">{t('job.move')}</span>
+			<!-- Inverted T, like the arrow keys on a keyboard: ↑ above ↓, with ← and →
+			     beside them. Home sits next to it and not in the middle, because it is
+			     not a direction. -->
 			<div class="pad" class:metz={control.capabilities?.motion?.focus}>
-				<button class="jog up" aria-label="Naar boven" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
-				<button class="jog left" aria-label="Naar links" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
-				<button class="jog down" aria-label="Naar beneden" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
-				<button class="jog right" aria-label="Naar rechts" disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
-				<button class="jog home" disabled={bewegenUit} title={movingBlocked} onclick={() => onHome?.()}>Home</button>
+				<button class="jog up" aria-label={t('job.jog.up')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
+				<button class="jog left" aria-label={t('job.jog.left')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="jog down" aria-label={t('job.jog.down')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
+				<button class="jog right" aria-label={t('job.jog.right')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
+				<button class="jog home" disabled={bewegenUit} title={movingBlocked} onclick={() => onHome?.()}>{t('job.home')}</button>
 				{#if control.capabilities?.motion?.focus}
-					<!-- De Z-as staat in dezelfde pad als X en Y: het is dezelfde
-					     handeling met een derde richting, en hij volgt dezelfde
-					     stapgrootte. -->
+					<!-- The Z axis is in the same pad as X and Y: it is the same operation
+					     with a third direction, and it follows the same step size. -->
 					<button
 						class="jog zup"
 						disabled={bewegenUit}
-						title={movingBlocked ?? `Kop ${step} mm omhoog`}
+						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zUp') })}
 						onclick={() => onFocus?.(-step)}
 					>Z&nbsp;↑</button>
 					<button
 						class="jog zdown"
 						disabled={bewegenUit}
-						title={movingBlocked ?? `Kop ${step} mm omlaag`}
+						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zDown') })}
 						onclick={() => onFocus?.(step)}
 					>Z&nbsp;↓</button>
 				{/if}
 			</div>
 			<div class="steps">
 				<Segmented
-					label="Stapgrootte"
+					label={t('job.stepSize')}
 					mono
 					bind:value={step}
 					options={[0.1, 1, 10, 50].map((size) => ({ value: size, label: `${size} mm` }))}
 				/>
 				<button class="rot" disabled={bewegenUit} title={movingBlocked} onclick={() => onUnlock?.()}>
-					Ontgrendelen
+					{t('job.unlock')}
 				</button>
 			</div>
 
-			<!-- Naar een punt in plaats van een richting (gat J6). LightBurn's
-			     Move-venster heeft "Go to Origin" en opgeslagen posities; wie een
-			     mal op het bed heeft liggen, jogt die hoek anders elke sessie
-			     opnieuw bij elkaar. -->
+			<!-- To a point instead of in a direction (gap J6). LightBurn's Move window
+			     has "Go to Origin" and saved positions; whoever has a jig on the bed
+			     otherwise jogs that corner together again every session. -->
 			{#if control.capabilities?.motion?.move}
 				<div class="punten">
-					<span class="rot-label">Naar een punt</span>
+					<span class="rot-label">{t('job.toPoint')}</span>
 					<div class="puntrij">
 						<button
 							class="rot"
 							disabled={bewegenUit}
-							title={movingBlocked ?? 'De kop naar 0,0 van het bed sturen'}
+							title={movingBlocked ?? t('job.toOrigin.title')}
 							onclick={() => control.moveTo(0, 0)}
 						>
-							Naar oorsprong
+							{t('job.toOrigin')}
 						</button>
 						{#each posities as plek (plek.name)}
 							<span class="plek">
@@ -894,23 +879,23 @@
 									class="rot naam"
 									disabled={bewegenUit}
 									title={movingBlocked ??
-										`Naar ${maat(plek.x_mm)}, ${maat(plek.y_mm)} mm`}
+										t('job.toSpot.title', { x: size(plek.x_mm), y: size(plek.y_mm) })}
 									onclick={() => control.moveTo(plek.x_mm, plek.y_mm)}
 								>
 									{plek.name}
-									<!-- De coördinaten erbij, niet alleen in de tooltip: op een
-									     aanraakscherm bestaat hover niet, en dan is een bewaarde
-									     positie een naam zonder plek. LightBurn zet ze in een eigen
-									     kolom; hier is daar geen kolom voor, dus staan ze gedempt
-									     achter de naam in dezelfde chip. -->
-									<span class="coord mono">{maat(plek.x_mm)},&#8239;{maat(plek.y_mm)}</span>
+									<!-- The coordinates with it, not only in the tooltip: on a touch
+									     screen there is no hover, and then a saved position is a name
+									     without a place. LightBurn puts them in a column of their own;
+									     there is no column for that here, so they sit muted behind the
+									     name in the same chip. -->
+									<span class="coord mono">{size(plek.x_mm)},&#8239;{size(plek.y_mm)}</span>
 								</button>
-								<!-- Weggooien zit in de knop zelf, niet in een menu: het zijn
-								     er hooguit twaalf en je doet het zelden. -->
+								<!-- Discarding is in the button itself, not in a menu: there are at
+								     most twelve of them and you do it rarely. -->
 								<button
 									class="rot weg"
-									aria-label="{plek.name} vergeten"
-									title="Deze positie vergeten"
+									aria-label={t('job.forgetSpotAria', { name: plek.name })}
+									title={t('job.forgetSpot')}
 									onclick={() => vergeet(plek.name)}
 								>×</button>
 							</span>
@@ -921,7 +906,7 @@
 							<!-- svelte-ignore a11y_autofocus -->
 							<input
 								class="naamveld"
-								placeholder="bijv. hoek van de mal"
+								placeholder={t('job.spotName.placeholder')}
 								maxlength="40"
 								autofocus
 								bind:value={nieuweNaam}
@@ -931,114 +916,111 @@
 								}}
 							/>
 							<button class="rot" onclick={bewaar} disabled={!nieuweNaam.trim()}>
-								Bewaren
+								{t('job.keep')}
 							</button>
-							<button class="rot" onclick={() => (bewaren = false)}>Annuleren</button>
+							<button class="rot" onclick={() => (bewaren = false)}>{t('common.cancel2')}</button>
 						</div>
 					{:else}
 						<button
 							class="rot"
 							disabled={bewegenUit || huidigMm === null}
 							title={huidigMm === null
-								? 'Deze machine meldt geen positie, dus er valt niets te bewaren'
-								: `Bewaar ${maat(huidigMm[0])}, ${maat(huidigMm[1])} mm onder een naam`}
+								? t('job.noPosition.keep')
+								: t('job.keepSpot.title', { x: size(huidigMm[0]), y: size(huidigMm[1]) })}
 							onclick={() => {
 								nieuweNaam = '';
 								bewaren = true;
 							}}
 						>
-							Deze plek bewaren
+							{t('job.keepSpot')}
 						</button>
 					{/if}
 				</div>
 			{/if}
-			<!-- Het nulpunt (gat J12). LightBurn heeft Set Origin / Clear Origin /
-			     Go to Origin; bij ons was "Naar oorsprong" letterlijk 0,0 van het
-			     bed en was er geen manier om een eigen nulpunt te leggen. Dat is
-			     dagelijks werk: de restplank ligt waar hij ligt, en je wil je hele
-			     tekening niet verslepen om hem erop te krijgen.
+			<!-- The zero point (gap J12). LightBurn has Set Origin / Clear Origin / Go
+			     to Origin; here "To origin" was literally 0,0 of the bed and there was
+			     no way to set a zero point of your own. That is daily work: the offcut
+			     lies where it lies, and you do not want to drag your whole drawing to
+			     get it onto the board.
 
-			     Bewust een eigen blokje onder "Naar een punt" en niet ertussen: de
-			     bewaarde posities zeggen "ga daarheen", dit zegt "reken daarvandaan".
-			     Tussen de plekken zou hij als nóg een plek lezen. -->
+			     Deliberately a block of its own under "To a point" and not among them:
+			     the saved positions say "go there", this says "measure from there".
+			     Among the spots it would read as one more spot. -->
 			{#if control.capabilities?.motion?.move}
 				<div class="nulpunt" class:gezet={control.origin !== null}>
-					<span class="rot-label">Nulpunt van het werk</span>
+					<span class="rot-label">{t('job.workOrigin')}</span>
 					{#if control.origin}
-						<!-- Het getal staat er altijd bij. Een nulpunt dat je niet kunt
-						     aflezen is een instelling die stilletjes je werk verplaatst,
-						     en dat is precies de verrassing die een laser duur maakt. -->
+						<!-- The number is always with it. A zero point you cannot read off is
+						     a setting that quietly moves your work, and that is exactly the
+						     kind of surprise that makes a laser expensive. -->
 						<p class="nulstand">
 							<span class="mono"
-								>{maat(control.origin.x_mm)},&#8239;{maat(control.origin.y_mm)} mm</span
+								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
 							>
-							— wat je op 0,0 tekent, brandt hier. Het vel schuift mee: het nulpunt
-							is de hoek van het materiaal dat erin ligt.
+							— {t('job.origin.here')}
 						</p>
 					{:else}
-						<p class="hint">
-							Staat uit: het werk brandt op de coördinaten waarop je het tekende.
-						</p>
+						<p class="hint">{t('job.origin.off')}</p>
 					{/if}
 					<div class="puntrij">
 						<button
 							class="rot"
 							disabled={bewegenUit || huidigMm === null}
 							title={huidigMm === null
-								? 'Deze machine meldt geen positie, dus er valt geen nulpunt vast te leggen'
-								: `Leg het nulpunt op ${maat(huidigMm[0])}, ${maat(huidigMm[1])} mm — waar de kop nu staat`}
+								? t('job.noPosition.origin')
+								: t('job.origin.setTitle', { x: size(huidigMm[0]), y: size(huidigMm[1]) })}
 							onclick={() => control.setOrigin()}
 						>
-							{control.origin ? 'Hier opnieuw' : 'Hier het nulpunt'}
+							{control.origin ? t('job.origin.reset') : t('job.origin.set')}
 						</button>
 						{#if control.origin}
 							<button
 								class="rot"
 								disabled={bewegenUit}
-								title={movingBlocked ?? 'De kop naar het nulpunt sturen'}
+								title={movingBlocked ?? t('job.origin.goTitle')}
 								onclick={() =>
 									control.origin && control.moveTo(control.origin.x_mm, control.origin.y_mm)}
 							>
-								Naar nulpunt
+								{t('job.toZero')}
 							</button>
 							<button
 								class="rot"
-								title="Terug naar het nulpunt van de machine zelf"
+								title={t('job.origin.clearTitle')}
 								onclick={() => control.clearOrigin()}
 							>
-								Wissen
+								{t('job.clearZero')}
 							</button>
 						{/if}
 					</div>
 				</div>
 			{/if}
 
-			<!-- Bijstellen tijdens een lopende job (gat J11).
-			     LightBurn heeft hier twee kolommen "Adjust Speed" en "Adjust Power"
-			     waarmee je een job rédt in plaats van hem opnieuw doet: je ziet dat
-			     het te donker wordt en draait tien procent terug zonder te stoppen.
+			<!-- Adjusting during a running job (gap J11).
+			     LightBurn has two columns here, "Adjust Speed" and "Adjust Power", with
+			     which you *save* a job instead of redoing it: you see it going too dark
+			     and dial ten per cent back without stopping.
 
-			     Alleen zichtbaar als de driver het kan, en dat is geen netheid maar
-			     noodzaak: alleen grbl heeft realtime overrides (0x90/0x99), de Ruida
-			     zet snelheid en vermogen per cut-segment uit de settings. Een knop
-			     die niets doet naast een brandende laser is erger dan geen knop.
-			     Zie FEATURE-GAPS J11. -->
+			     Only visible when the driver can do it, and that is not tidiness but
+			     necessity: only grbl has realtime overrides (0x90/0x99); the Ruida sets
+			     speed and power per cut segment from the settings. A button that does
+			     nothing next to a burning laser is worse than no button. See
+			     FEATURE-GAPS J11. -->
 			{#if control.canAdjust}
 				<div class="bijstellen">
-					<span class="rot-label">Bijstellen tijdens de job</span>
-					{#each STELBAAR as as (as.wat)}
-						{#if control.capabilities?.adjust?.[as.wat]}
-							{@const stand = control.adjust[as.wat] ?? 1}
+					<span class="rot-label">{t('job.adjust.title')}</span>
+					{#each ADJUSTABLE as axis (axis.what)}
+						{#if control.capabilities?.adjust?.[axis.what]}
+							{@const level = control.adjust[axis.what] ?? 1}
 							<div class="stelrij">
 								<span class="stelnaam">
-									{as.naam}
-									<!-- Alleen het getal in mono; "zoals ontworpen" is een zin en
-									     die staat in een cijferletter vreemd afgemeten. -->
-									<span class="stelwaarde" class:mono={stand !== 1}
-										>{stand === 1
-											? 'zoals ontworpen'
-											: `${stand > 1 ? '+' : '−'}${Math.abs(
-													Math.round((stand - 1) * 100)
+									{t(axis.key)}
+									<!-- Only the number in mono; "as designed" is a phrase, and in a
+									     figure font it sits oddly measured out. -->
+									<span class="stelwaarde" class:mono={level !== 1}
+										>{level === 1
+											? t('job.adjust.asDesigned')
+											: `${level > 1 ? '+' : '−'}${Math.abs(
+													Math.round((level - 1) * 100)
 												)}%`}</span
 									>
 								</span>
@@ -1047,51 +1029,45 @@
 										<button
 											class="rot stel"
 											disabled={!verbinding.online}
-											title="{stap > 0 ? 'Meer' : 'Minder'} {as.naam.toLowerCase()}"
-											onclick={() => control.setAdjustment(as.wat, stand + stap)}
+											title={t(stap > 0 ? 'job.adjust.more' : 'job.adjust.less', {
+												what: t(axis.key).toLowerCase()
+											})}
+											onclick={() => control.setAdjustment(axis.what, level + stap)}
 											>{stap > 0 ? '+' : '−'}{Math.abs(Math.round(stap * 100))}%</button
 										>
 									{/each}
 									<button
 										class="rot stel terug"
-										disabled={!verbinding.online || stand === 1}
-										title="Terug naar wat de laag zegt"
-										onclick={() => control.setAdjustment(as.wat, 1)}>Terug</button
+										disabled={!verbinding.online || level === 1}
+										title={t('job.adjust.resetTitle')}
+										onclick={() => control.setAdjustment(axis.what, 1)}
+										>{t('job.adjust.reset')}</button
 									>
 								</div>
 							</div>
 						{/if}
 					{/each}
-					<p class="hint">
-						Dit schaalt wat de machine nú doet. De laag houdt zijn eigen
-						instelling — die kan uit een preset komen, en dan is hij bewijs.
-					</p>
+					<p class="hint">{t('job.adjust.hint')}</p>
 				</div>
 			{/if}
 			{#if !control.capabilities?.motion?.focus && profile?.has_z}
-				<!-- Het profiel zegt dat deze machine een Z-as heeft, maar de
-				     driver van de engine kent er geen commando voor. Dat is geen
-				     ontbrekende knop maar ontbrekende ondersteuning; zeg dat. -->
-				<p class="hint">
-					Dit profiel meldt een Z-as, maar de driver van deze machine kent
-					geen commando om de kop te verzetten. Scherpstellen doe je met de
-					hand.
-				</p>
+				<!-- The profile says this machine has a Z axis, but the engine's driver
+				     has no command for it. That is not a missing button but missing
+				     support; say so. -->
+				<p class="hint">{t('job.zAxis.noCommand')}</p>
 			{/if}
 			{#if profile?.has_autofocus}
-				<!-- MeerK40t kent geen commando om een autofocus te starten. Een
-				     knop die in plaats daarvan iets ánders doet, is erger dan geen
-				     knop — dus zeggen we waar hij wél zit, in één zin. -->
-				<p class="hint">Autofocus start je op de machine zelf.</p>
+				<!-- MeerK40t has no command to start an autofocus. A button that does
+				     something *else* instead is worse than no button — so we say where it
+				     is, in one sentence. -->
+				<p class="hint">{t('job.autofocus')}</p>
 			{/if}
 		</div>
 		</details>
 	{/if}
 
 	{#if actions && !actions.pause}
-		<p class="hint">
-			Dit apparaat kent geen pauze/hervatten — die commando's komen van de device-service.
-		</p>
+		<p class="hint">{t('job.noPause')}</p>
 	{/if}
 
 	<!-- De foutmelding staat nu in de statusbalk, op elk tabblad zichtbaar.
@@ -1601,16 +1577,6 @@
 	   de tooltip van de knop, en hij werkt gewoon. */
 	@media (pointer: coarse) {
 		.toetsen { display: none; }
-	}
-	kbd {
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		padding: 1px var(--space-1h);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-		white-space: nowrap;
 	}
 	/* Naar een punt springen, naast de richtingsknoppen erboven. */
 	.punten { margin-top: var(--space-3); }
