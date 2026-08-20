@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { SheetStore } from '$lib/sheets.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 
@@ -44,11 +45,11 @@
 	let teVerwijderen = $state(0);
 
 	function telling(n: number) {
-		return n === 1 ? '1 element' : `${n} elementen`;
+		return t('sheets.elements', { n });
 	}
 
 	/**
-	 * Tellen bij de bron, niet in de etalage.
+	 * Counting at the source, not in the shop window.
 	 *
 	 * `elementen` komt uit het ontwerp in beeld en loopt een paar honderd ms
 	 * achter op een velwissel. Dat is precies lang genoeg om een vel mét werk
@@ -154,7 +155,7 @@
 	{@const sheet = sheets.active}
 	<div class="editor">
 		<label>
-			<span>Naam</span>
+			<span>{t('panel.name')}</span>
 			<input
 				type="text"
 				value={sheet.name}
@@ -162,7 +163,7 @@
 			/>
 		</label>
 		<label>
-			<span>Breedte</span>
+			<span>{t('gen.width')}</span>
 			<input
 				class="mono"
 				type="number"
@@ -173,7 +174,7 @@
 			/>
 		</label>
 		<label>
-			<span>Hoogte</span>
+			<span>{t('gen.height')}</span>
 			<input
 				class="mono"
 				type="number"
@@ -183,38 +184,38 @@
 				onchange={(e) => sheets.update(sheet.id, { height_mm: Number(e.currentTarget.value) })}
 			/>
 		</label>
-		<!-- Materiaal wordt hier niet nóg een keer ingevuld. Het staat in de
-		     bovenbalk, want alles stroomafwaarts leest het daar; twee plekken om
-		     hetzelfde te kiezen levert alleen de vraag op welke de echte is. -->
+		<!-- Material is not filled in a second time here. It is in the top bar, because
+		     everything downstream reads it there; two places to choose the same thing
+		     only raises the question which is the real one. -->
 		<label class="wide">
-			<span>Materiaal</span>
+			<span>{t('library.material')}</span>
 			<button class="materiaal" onclick={() => onEditMaterial?.()}>
-				{materialName(sheet.material_id) ?? 'niet ingevuld'}{sheet.thickness_mm === null
+				{materialName(sheet.material_id) ?? t('sheets.materialNotFilled')}{sheet.thickness_mm ===
+				null
 					? ''
-					: ` · ${String(sheet.thickness_mm).replace('.', ',')} mm`}
+					: ` · ${i18n.number(sheet.thickness_mm)} mm`}
 			</button>
 		</label>
 		<button
 			class="drop"
 			disabled={sheets.sheets.length < 2 || sheets.busy}
-			title={sheets.sheets.length < 2 ? 'Een project heeft minstens één vel' : undefined}
+			title={sheets.sheets.length < 2 ? t('sheets.needsOne') : undefined}
 			onclick={() => vraagOfWeg(sheet.id)}
-		>Vel verwijderen</button>
-		<button class="close" onclick={() => (editing = null)}>Klaar</button>
+		>{t('sheets.removeSheet')}</button>
+		<button class="close" onclick={() => (editing = null)}>{t('common.done')}</button>
 	</div>
 
 	{#if bevestigen === sheet.id}
-		<!-- De vraag staat waar de knop staat, met het aantal erin: "7 elementen"
-		     is het verschil tussen een formaliteit en een waarschuwing. -->
-		<div class="bevestig" role="alertdialog" aria-label="Vel verwijderen">
-			<p>
-				Op <strong>{sheet.name}</strong> staat {telling(teVerwijderen)}. Verwijderen gooit dat
-				werk weg — dit is niet terug te halen.
-			</p>
+		<!-- The question stands where the button stands, with the count in it: "7
+		     elements" is the difference between a formality and a warning. -->
+		<div class="bevestig" role="alertdialog" aria-label={t('sheets.removeSheet')}>
+			<p>{t('sheets.removeAsk', { sheet: sheet.name, what: telling(teVerwijderen) })}</p>
 			<div class="knoppen">
-				<button class="annuleer" onclick={() => (bevestigen = null)}>Annuleren</button>
+				<button class="annuleer" onclick={() => (bevestigen = null)}>{t('common.cancel')}</button>
 				<button class="weg" disabled={sheets.busy} onclick={() => verwijder(sheet.id)}>
-					{sheets.busy ? 'Bezig…' : `Vel en ${telling(teVerwijderen)} verwijderen`}
+					{sheets.busy
+						? t('common.busy')
+						: t('sheets.removeConfirm', { what: telling(teVerwijderen) })}
 				</button>
 			</div>
 		</div>

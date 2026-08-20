@@ -38,6 +38,7 @@
 	 * dat er wel uitziet als het jouwe en het niet is.
 	 */
 
+	import { t } from '$lib/i18n/index.svelte';
 	let {
 		soort,
 		waarden,
@@ -101,17 +102,17 @@
 
 	const maat = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
 
-	/** Wat er onder de tekening staat: het aantal, in de eenheid van dit ding. */
+	/** What is under the drawing: the count, in the unit of this thing. */
 	let telling = $derived.by(() => {
 		if (!voorbeeld) return null;
-		if (voorbeeld.what === 'box') {
-			const panelen = `${voorbeeld.parts.length} panelen`;
-			return voorbeeld.sheets > 1 ? `${panelen} · vel 1 van ${voorbeeld.sheets}` : panelen;
-		}
+		if (voorbeeld.what === 'box')
+			return voorbeeld.sheets > 1
+				? t('genPreview.panelsSheets', { n: voorbeeld.parts.length, sheets: voorbeeld.sheets })
+				: t('genPreview.panels', { n: voorbeeld.parts.length });
 		if (voorbeeld.what === 'grid' || voorbeeld.what === 'radial')
-			return `${voorbeeld.parts.length} stuks`;
-		if (voorbeeld.modules) return `${voorbeeld.modules} modules`;
-		if (voorbeeld.bars) return `${voorbeeld.bars} streepjes`;
+			return t('genPreview.pieces', { n: voorbeeld.parts.length });
+		if (voorbeeld.modules) return t('genPreview.modules', { n: voorbeeld.modules });
+		if (voorbeeld.bars) return t('genPreview.bars', { n: voorbeeld.bars });
 		return null;
 	});
 
@@ -129,13 +130,13 @@
 
 <figure class="proef">
 	{#if fout}
-		<!-- Tijdens het typen is een tussenstand bijna altijd even ongeldig: je
-		     haalt een cijfer weg en dan is de straal nul totdat je het volgende
-		     typt. Het beeld blijft staan, met de reden erboven — een gat laten
-		     vallen leert je niets en laat het halve venster verspringen. -->
+		<!-- While typing, an intermediate state is nearly always briefly invalid: you
+		     delete a digit and the radius is zero until you type the next one. The image
+		     stays, with the reason above it — dropping a hole teaches you nothing and
+		     makes half the window jump. -->
 		<p class="onaf" role="status">
 			{fout}
-			{#if voorbeeld}<br /><span class="stil">Hieronder staat je laatste geldige vorm.</span>{/if}
+			{#if voorbeeld}<br /><span class="stil">{t('genPreview.lastValid')}</span>{/if}
 		</p>
 	{/if}
 
@@ -143,9 +144,9 @@
 		<svg
 			viewBox="{venster.x} {venster.y} {venster.w} {venster.h}"
 			role="img"
-			aria-label="Voorbeeld van wat deze generator maakt, {maat(breed)} bij {maat(hoog)} millimeter"
+			aria-label={t('genPreview.aria', { width: maat(breed), height: maat(hoog) })}
 		>
-			<!-- Het vel als hulplijn, niet als vorm: hij wordt niet gebrand. -->
+			<!-- The sheet as a guide, not as a shape: it does not get burned. -->
 			<rect
 				class="vel"
 				x="0"
@@ -164,9 +165,9 @@
 			</g>
 		</svg>
 	{:else if soort === 'grid'}
-		<!-- Terugval: zonder de gekozen elementen weten we niet wat er herhaald
-		     wordt, dus blijft het bij de betekenis van de velden. -->
-		<svg viewBox="0 0 100 100" role="img" aria-label="Schets van wat deze generator maakt">
+		<!-- Fallback: without the chosen elements we do not know what is being repeated,
+		     so it stays at the meaning of the fields. -->
+		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
 			{#each Array(rijen) as _, r}
 				{#each Array(kolommen) as _, c}
 					<rect
@@ -180,11 +181,13 @@
 			{/each}
 			{#if kolommen > 1}
 				<line class="maat" x1={12 + 76 / kolommen - 76 / kolommen / 4} y1="8" x2={12 + 76 / kolommen} y2="8" />
-				<text class="bij" x={12 + 76 / kolommen - 76 / kolommen / 8} y="6">ruimte</text>
+				<text class="bij" x={12 + 76 / kolommen - 76 / kolommen / 8} y="6"
+					>{t('genPreview.space')}</text
+				>
 			{/if}
 		</svg>
 	{:else if soort === 'radial'}
-		<svg viewBox="0 0 100 100" role="img" aria-label="Schets van wat deze generator maakt">
+		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
 			<circle class="hulp" cx="50" cy="50" r="32" />
 			{#each Array(herhalingen) as _, i}
 				{@const hoek = (i / herhalingen) * Math.PI * 2 - Math.PI / 2}
@@ -201,13 +204,13 @@
 			{/each}
 		</svg>
 	{:else if soort === 'polygon'}
-		<!-- Alleen tot het eerste antwoord binnen is; daarna komt het echte
-		     beeld ervoor. Een leeg vak zou het venster laten verspringen. -->
-		<svg viewBox="0 0 100 100" role="img" aria-label="Schets van wat deze generator maakt">
+		<!-- Only until the first answer is in; after that the real image takes its
+		     place. An empty box would make the window jump. -->
+		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
 			<polygon class="hulp" points={veelhoekPunten(6, 34, 0)} />
 		</svg>
 	{:else}
-		<svg viewBox="0 0 100 100" role="img" aria-label="Het voorbeeld wordt berekend">
+		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.calculatingAria')}>
 			<rect class="hulp" x="14" y="20" width="72" height="60" />
 		</svg>
 	{/if}
@@ -218,7 +221,7 @@
 			{#if telling}<span class="stil">{telling}</span>{/if}
 		</figcaption>
 		{#if buitenVel}
-			<figcaption class="waarschuwing">Dit valt buiten het vel.</figcaption>
+			<figcaption class="waarschuwing">{t('genPreview.offSheet')}</figcaption>
 		{/if}
 		{#each voorbeeld.notes as note (note)}
 			<figcaption class="waarschuwing">{note}</figcaption>

@@ -12,6 +12,7 @@
 	 * De tekening is niet decoratie: "5 mm" zegt niets over hoe rond die hoek
 	 * wordt. Zie DESIGN-SYSTEM, "Een formulier dat vorm maakt, toont die vorm".
 	 */
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import NumberField from './NumberField.svelte';
 
@@ -47,31 +48,31 @@
 
 	const knop = $derived.by(() => {
 		const m = Number(maat);
-		const wat = stijl === 'round' ? 'afronden' : 'afschuinen';
-		if (!aantal) return `Hoeken ${wat}`;
-		const vormen = aantal === 1 ? '1 vorm' : `${aantal} vormen`;
-		if (!Number.isFinite(m) || m <= 0) return `${vormen} ${wat}`;
-		return `${vormen} ${wat} — ${m} mm`;
+		const wat = t(stijl === 'round' ? 'corners.doRound' : 'corners.doChamfer');
+		if (!aantal) return wat;
+		const vormen = t('corners.shapes', { n: aantal });
+		if (!Number.isFinite(m) || m <= 0) return t('corners.button', { shapes: vormen, what: wat });
+		return t('corners.buttonSize', { shapes: vormen, what: wat, size: i18n.number(m) });
 	});
 </script>
 
-<Dialog title="Hoeken" bind:open width="420px">
+<Dialog title={t('corners.title')} bind:open width="420px">
 	<div class="hoeken">
 		<div class="rij">
-			<div class="stijl" role="radiogroup" aria-label="Hoekstijl">
+			<div class="stijl" role="radiogroup" aria-label={t('corners.styleAria')}>
 				<button
 					class="keuze"
 					class:aan={stijl === 'round'}
 					role="radio"
 					aria-checked={stijl === 'round'}
-					onclick={() => (stijl = 'round')}>Rond</button
+					onclick={() => (stijl = 'round')}>{t('corners.round')}</button
 				>
 				<button
 					class="keuze"
 					class:aan={stijl === 'chamfer'}
 					role="radio"
 					aria-checked={stijl === 'chamfer'}
-					onclick={() => (stijl = 'chamfer')}>Schuin</button
+					onclick={() => (stijl = 'chamfer')}>{t('corners.chamfer')}</button
 				>
 			</div>
 			<svg class="voorbeeld" viewBox="0 0 34 34" aria-hidden="true">
@@ -79,17 +80,12 @@
 			</svg>
 		</div>
 
-		<NumberField label="Maat" unit="mm" step={0.5} min={0.1} bind:value={maat} />
+		<NumberField label={t('corners.size')} unit="mm" step={0.5} min={0.1} bind:value={maat} />
 
 		{#if stijl === 'chamfer'}
-			<p class="regel let-op">
-				Hiervan wordt de vorm een pad: breedte en hoogte zijn daarna niet meer los te
-				wijzigen. Ongedaan maken brengt hem terug.
-			</p>
+			<p class="regel let-op">{t('corners.chamferWarning')}</p>
 		{:else}
-			<p class="regel">
-				Een rechthoek blijft een rechthoek, dus je kunt de radius later bijstellen.
-			</p>
+			<p class="regel">{t('corners.roundKeeps')}</p>
 		{/if}
 		{#if melding}
 			<p class="regel let-op" role="status">{melding}</p>
@@ -97,7 +93,7 @@
 	</div>
 
 	<div class="ask-actions">
-		<button class="btn" onclick={() => (open = false)}>Annuleren</button>
+		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button
 			class="btn primary"
 			disabled={bezig || !aantal}

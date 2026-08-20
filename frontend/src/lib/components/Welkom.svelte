@@ -44,7 +44,7 @@
 			{/each}
 		</ol>
 
-		<a class="knop primair" href="/setup/soort">{t('welcome.setUp')}</a>
+		<a class="knop primair" href="/setup/soort">{t('setup.crumb')}</a>
 
 		<!-- The arrows inherit the text colour of the line. They used to be on --line
 		     and got 1.41 in light and 1.62 in dark that way: practically invisible, so

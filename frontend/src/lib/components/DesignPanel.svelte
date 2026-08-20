@@ -1132,7 +1132,7 @@
 						{t('panel.dropAll.gridsStay')}
 					{/if}
 				</span>
-				<button class="rot" onclick={() => (confirmDropAll = false)}>{t('common.cancel2')}</button>
+				<button class="rot" onclick={() => (confirmDropAll = false)}>{t('common.cancel')}</button>
 				<button class="rot drop" disabled={edits.busy} onclick={dropAllLayers}>
 					{t('panel.dropAll.confirm')}
 				</button>
@@ -1643,7 +1643,7 @@
 					{#if confirmDrop === op.id}
 						<div class="confirm wide">
 							<span>{t('panel.drop.ask', { label: op.label })}</span>
-							<button class="rot" onclick={() => (confirmDrop = null)}>{t('common.cancel2')}</button>
+							<button class="rot" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
 							<button class="rot drop" onclick={() => dropLayer(op.id)}
 								>{t('panel.drop.confirm')}</button
 							>

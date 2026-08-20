@@ -413,7 +413,7 @@
 			</label>
 			<div class="token-row">
 				<input id="token" type="password" bind:value={tokenDraft} placeholder={t('job.token.placeholder')} />
-				<button class="btn" onclick={() => control.saveToken(tokenDraft)}>{t('common.save2')}</button>
+				<button class="btn" onclick={() => control.saveToken(tokenDraft)}>{t('common.save')}</button>
 			</div>
 			<p class="hint">
 				{control.rejected
@@ -651,7 +651,7 @@
 					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
 					     no single click burns. The first arms, the second fires — and unlike
 					     before, that first tap does not make anything disappear. -->
-					<button class="btn" onclick={() => (preflight = false)}>{t('common.cancel2')}</button>
+					<button class="btn" onclick={() => (preflight = false)}>{t('common.cancel')}</button>
 					<button
 						class="btn primary groot"
 						onclick={confirmStart}
@@ -918,7 +918,7 @@
 							<button class="rot" onclick={bewaar} disabled={!nieuweNaam.trim()}>
 								{t('job.keep')}
 							</button>
-							<button class="rot" onclick={() => (bewaren = false)}>{t('common.cancel2')}</button>
+							<button class="rot" onclick={() => (bewaren = false)}>{t('common.cancel')}</button>
 						</div>
 					{:else}
 						<button

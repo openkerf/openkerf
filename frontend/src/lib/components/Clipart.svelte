@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 
 	let {
@@ -113,27 +114,23 @@
 	}
 </script>
 
-<Dialog title="Clipart zoeken" bind:open width="760px">
-	<p class="lead">
-		Zoekt in openbare collecties. Wat je vindt is van iemand anders: <strong>de
-		licentie staat bij elk resultaat</strong>, en die bepaalt of je het mag
-		verkopen wat je ermee snijdt.
-	</p>
+<Dialog title={t('clipart.title')} bind:open width="760px">
+	<p class="lead">{t('clipart.lead')}</p>
 
 	<div class="bar">
 		<input
 			type="search"
-			placeholder="bijv. hart, ster, vogel…"
+			placeholder={t('clipart.placeholder')}
 			bind:value={query}
 			onkeydown={(e) => {
 				if (e.key === 'Enter') search();
 			}}
 		/>
-		<!-- Formulierregel v4: het label staat bóven het veld, ook in een regel
-		     met een zoekveld. Hiervóór stond "Breedte" ervoor en "mm" erachter,
-		     en daarmee was dit het enige veld in de app met een label links. -->
+		<!-- Form rule v4: the label goes *above* the field, even in a row with a search
+		     box. Before this "Width" was in front of it and "mm" behind, which made this
+		     the only field in the app with a label on the left. -->
 		<label class="w">
-			<span>Breedte (mm)</span>
+			<span>{t('clipart.width')}</span>
 			<input class="mono" type="number" min="1" max="2000" step="5" bind:value={width} />
 		</label>
 		<button
@@ -141,7 +138,7 @@
 			disabled={busy || query.trim().length < 2}
 			onclick={() => search()}
 		>
-			{busy ? 'Zoeken…' : 'Zoeken'}
+			{busy ? t('clipart.searching') : t('clipart.search')}
 		</button>
 	</div>
 
@@ -166,7 +163,7 @@
 		<p class="error" role="alert">{error}</p>
 	{/if}
 	{#each Object.entries(unavailable) as [source, reason] (source)}
-		<p class="warn">{label(source)} {reason}. De rest staat er wel.</p>
+		<p class="warn">{t('clipart.unavailable', { source: label(source), reason })}</p>
 	{/each}
 	{#each notes as note (note)}
 		<p class="warn">{note}</p>
@@ -178,18 +175,18 @@
 				<button
 					class="pick"
 					disabled={!canEdit || placing !== null}
-					title={canEdit ? `Invoegen op ${width} mm breed` : 'Vereist een token'}
+					title={canEdit ? t('clipart.insert', { width }) : t('reason.needsToken')}
 					onclick={() => insert(item)}
 				>
 					<img src={item.thumbnail_url} alt={item.title} loading="lazy" />
-					{#if placing === item.id}<span class="busy">bezig…</span>{/if}
+					{#if placing === item.id}<span class="busy">{t('common.busy')}</span>{/if}
 				</button>
 				<figcaption>
 					<span class="title" title={item.title}>{item.title}</span>
 					<span class="meta">
-						{item.license ?? 'licentie onbekend'}
+						{item.license ?? t('clipart.licenceUnknown')}
 						{#if item.page_url}
-							· <a href={item.page_url} target="_blank" rel="noopener">bron</a>
+							· <a href={item.page_url} target="_blank" rel="noopener">{t('clipart.source')}</a>
 						{/if}
 					</span>
 				</figcaption>
@@ -197,11 +194,11 @@
 		{:else}
 			<p class="empty">
 				{#if busy}
-					Zoeken…
+					{t('clipart.searching')}
 				{:else if searched}
-					Niets gevonden. Engelse woorden geven meestal meer resultaat.
+					{t('clipart.nothing')}
 				{:else}
-					Typ een woord en druk op Enter.
+					{t('clipart.typeWord')}
 				{/if}
 			</p>
 		{/each}
@@ -209,10 +206,10 @@
 
 	{#if results.length}
 		<div class="more">
-			<span class="count mono">{results.length} getoond</span>
+			<span class="count mono">{t('clipart.shown', { n: results.length })}</span>
 			{#if hasMore}
 				<button class="btn" disabled={loadingMore} onclick={() => search(true)}>
-					{loadingMore ? 'Ophalen…' : 'Meer resultaten'}
+					{loadingMore ? t('clipart.fetching') : t('clipart.more')}
 				</button>
 			{:else}
 				<span class="count">dit is alles</span>

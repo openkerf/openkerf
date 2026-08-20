@@ -9,6 +9,8 @@
 	 * ervan zit), dus is dit één component die beide vensters gebruiken.
 	 */
 
+	import { t } from '$lib/i18n/index.svelte';
+
 	type Font = { file: string; name: string };
 
 	let {
@@ -124,13 +126,15 @@
 
 <label class="field">
 	<span>
-		Lettertype ({fonts.length} beschikbaar){current ? ` — nu: ${current}` : ''}
+		{current
+			? t('font.label.current', { n: fonts.length, current })
+			: t('font.label', { n: fonts.length })}
 	</span>
-	<input type="search" bind:value={filter} placeholder="Zoek een lettertype…" />
+	<input type="search" bind:value={filter} placeholder={t('font.search')} />
 </label>
 <!-- svelte-ignore -->
 {@html `<style>${faces}</style>`}
-<div class="fonts" role="listbox" aria-label="Lettertype">
+<div class="fonts" role="listbox" aria-label={t('font.listAria')}>
 	<button
 		class="font"
 		role="option"
@@ -138,7 +142,7 @@
 		class:picked={font === ''}
 		onclick={() => kies(null)}
 	>
-		<span class="naam">Standaard</span>
+		<span class="naam">{t('font.default')}</span>
 	</button>
 	{#each shown.slice(0, 60) as item (item.file)}
 		<button
@@ -149,42 +153,42 @@
 			onclick={() => kies(item)}
 		>
 			<!--
-				Links de naam in het interfacelettertype, rechts het voorbeeld in
-				de letter zelf. Ze stonden allebei in de letter, en dan is een
-				lettertype zonder leesbaar latijns alfabet — Aurebesh, Wingdings,
-				een symbolenset — niet meer te vinden: je leest de naam niet en
-				het voorbeeld ook niet. De naam is de sleutel om iets terug te
-				vinden, het voorbeeld is waar je op kiest; die twee taken
-				verdragen niet hetzelfde lettertype.
+				The name on the left in the interface font, the sample on the right in the
+				font itself. They both used to be in the font, and then a font without a
+				readable Latin alphabet — Aurebesh, Wingdings, a symbol set — can no longer
+				be found: you cannot read the name and you cannot read the sample either.
+				The name is the key to finding something back, the sample is what you choose
+				on; those two tasks do not tolerate the same font.
 			-->
 			<span class="naam">{item.name}</span>
 			<span class="proef" style={familie.has(item.file) ? `font-family: "${familie.get(item.file)}", var(--font-ui)` : ''}
-				>{sample.trim().slice(0, 18) || 'Handgemaakt 123'}</span>
+				>{sample.trim().slice(0, 18) || t('font.sample')}</span>
 		</button>
 	{/each}
 	{#if shown.length > 60}
-		<p class="note">Nog {shown.length - 60} andere — typ om te zoeken.</p>
+		<p class="note">{t('font.more', { n: shown.length - 60 })}</p>
 	{/if}
 </div>
 
 <div class="import">
 	<button class="link" onclick={openImport}>
-		{importing ? 'Importeren sluiten' : 'Lettertype niet in de lijst?'}
+		{importing ? t('font.import.close') : t('font.import.open')}
 	</button>
 	{#if importing}
-		<p class="note">
-			De engine leest alleen <code>.ttf</code>. Deze staan wél op je computer maar
-			worden niet gezien; importeren maakt er een bruikbare kopie van.
-		</p>
-		<input type="search" bind:value={importFilter} placeholder="Zoek in {importable.length} lettertypen…" />
+		<p class="note">{t('font.import.why')}</p>
+		<input
+			type="search"
+			bind:value={importFilter}
+			placeholder={t('font.import.search', { n: importable.length })}
+		/>
 		{#if importError}<p class="err">{importError}</p>{/if}
 		<div class="fonts">
 			{#each shownImportable as item (item.file)}
 				<button class="font" disabled={busy !== null} onclick={() => bring(item)}>
-					{busy === item.file ? 'bezig…' : item.name}
+					{busy === item.file ? t('common.busy') : item.name}
 				</button>
 			{:else}
-				<span class="note">Niets gevonden dat nog ontbreekt.</span>
+				<span class="note">{t('font.import.nothing')}</span>
 			{/each}
 		</div>
 	{/if}

@@ -12,6 +12,7 @@
 	 * Hetzelfde venster als bij Hoeken: klein, met de betekenis erbij, en een
 	 * primaire knop die zegt wat er gaat gebeuren.
 	 */
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import NumberField from './NumberField.svelte';
 
@@ -30,42 +31,42 @@
 	let afstand = $state('2');
 	let waarde = $derived(Number(afstand));
 	let geldig = $derived(Number.isFinite(waarde) && waarde !== 0);
-	let richting = $derived(waarde > 0 ? 'naar buiten' : 'naar binnen');
+	let richting = $derived(t(waarde > 0 ? 'offset.outward' : 'offset.inward'));
 </script>
 
-<Dialog title="Offset" bind:open width="400px">
+<Dialog title={t('offset.title')} bind:open width="400px">
 	<div class="offset">
 		<div class="paar">
-			<NumberField label="Afstand" unit="mm" step={0.5} bind:value={afstand} />
-			<!-- De richting in woorden naast het getal. Een minteken is de invoer,
-			     "naar binnen" is de betekenis — en die twee zijn niet hetzelfde
-			     zolang je nog moet bedenken welke kant negatief is. -->
+			<NumberField label={t('offset.distance')} unit="mm" step={0.5} bind:value={afstand} />
+			<!-- The direction in words beside the number. A minus sign is the input,
+			     "inward" is the meaning — and those two are not the same as long as you
+			     still have to work out which side is negative. -->
 			<p class="richting">
 				{#if geldig}
-					{Math.abs(waarde)} mm <strong>{richting}</strong>
+					{t('offset.reading', { mm: i18n.number(Math.abs(waarde)), direction: richting })}
 				{:else}
-					Vul een afstand in; negatief is naar binnen.
+					{t('offset.fillIn')}
 				{/if}
 			</p>
 		</div>
-		<p class="regel">
-			Er komt een nieuw pad naast het bestaande. De oorspronkelijke vorm blijft
-			staan.
-		</p>
+		<p class="regel">{t('offset.explain')}</p>
 	</div>
 
 	<div class="ask-actions">
-		<button class="btn" onclick={() => (open = false)}>Annuleren</button>
+		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button
 			class="btn primary"
 			disabled={bezig || !geldig || !aantal}
 			onclick={() => onToepassen(waarde)}
 		>
 			{#if !aantal}
-				Offset maken
+				{t('offset.make')}
 			{:else}
-				{aantal === 1 ? '1 vorm' : `${aantal} vormen`} — {Math.abs(waarde) || '?'} mm
-				{richting}
+				{t('offset.button', {
+					shapes: t('corners.shapes', { n: aantal }),
+					mm: Math.abs(waarde) ? i18n.number(Math.abs(waarde)) : '?',
+					direction: richting
+				})}
 			{/if}
 		</button>
 	</div>

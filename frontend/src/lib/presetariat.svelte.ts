@@ -6,6 +6,8 @@
  * nooit als iets wat op jouw machine gemeten is.
  */
 
+import { t } from './i18n/core.ts';
+
 export type CataloguePreset = {
 	id: string;
 	material: string;
@@ -24,16 +26,16 @@ export type CataloguePreset = {
 };
 
 export const CONFIDENCE: Record<string, { text: string; tone: string }> = {
-	testraster: { text: 'Gemeten', tone: 'ok' },
-	fabrikant: { text: 'Fabrikant', tone: 'neutral' },
-	handmatig: { text: 'Startwaarde', tone: 'warn' }
+	testraster: { text: t('presetariat.confidence.measured'), tone: 'ok' },
+	fabrikant: { text: t('presetariat.confidence.maker'), tone: 'neutral' },
+	handmatig: { text: t('presetariat.confidence.starting'), tone: 'warn' }
 };
 
 export class PresetariatStore {
 	presets = $state<CataloguePreset[]>([]);
 	version = $state<string | null>(null);
 	total = $state(0);
-	/** Uit de cache omdat het netwerk weg was — dan hoort de gebruiker dat te zien. */
+	/** From the cache because the network was gone — the user should see that. */
 	stale = $state(false);
 	busy = $state(false);
 	error = $state<string | null>(null);

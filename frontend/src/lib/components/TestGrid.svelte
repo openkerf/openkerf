@@ -865,7 +865,7 @@
 					<button
 						class="btn"
 						disabled={receptBezig || receptNaam.trim() === ''}
-						onclick={bewaarRecept}>{t('common.save2')}</button
+						onclick={bewaarRecept}>{t('common.save')}</button
 					>
 				</div>
 				<p class="hint">

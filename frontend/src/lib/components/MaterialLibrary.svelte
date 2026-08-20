@@ -1076,7 +1076,7 @@
 			>
 				{modus === 'vervangen' ? t('import.doReplace') : t('import.merge')}
 			</button>
-			<button class="btn" onclick={() => (voorbeeld = null)}>{t('common.cancel2')}</button>
+			<button class="btn" onclick={() => (voorbeeld = null)}>{t('common.cancel')}</button>
 		</div>
 	</section>
 {:else}
@@ -1120,7 +1120,7 @@
 	     many settings a material has, and which material is on the sheet. -->
 	{#if canEdit}
 		<button class="btn" onclick={() => (adding = !adding)}>
-			{adding ? t('common.cancel2') : t('library.newMaterial')}
+			{adding ? t('common.cancel') : t('library.newMaterial')}
 		</button>
 	{/if}
 </div>
@@ -1201,7 +1201,7 @@
 	<div class="row">
 		<input type="text" bind:value={newMaterial} placeholder={t('library.material.placeholder')} />
 		<button class="btn primary" disabled={library.busy || !newMaterial.trim()} onclick={createMaterial}>
-			{t('common.save2')}
+			{t('common.save')}
 		</button>
 	</div>
 {/if}
@@ -1431,7 +1431,7 @@
 				(draft.material_id ?? materialId) === null}
 			onclick={createPreset}
 		>
-			{t('common.save2')}
+			{t('common.save')}
 		</button>
 	</details>
 
@@ -1494,7 +1494,7 @@
 				/>
 			</div>
 			<button class="btn" disabled={library.busy || !machineDraft.name.trim()} onclick={createMachine}>
-				{t('common.save2')}
+				{t('common.save')}
 			</button>
 		{:else}
 			<button class="mini" onclick={() => (addingMachine = true)}

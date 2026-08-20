@@ -10,6 +10,7 @@
 	 * Leeg blijven mag. Wie een restje van onbekende herkomst in de machine legt,
 	 * moet niet eerst een naam en een getal hoeven verzinnen om te kunnen werken.
 	 */
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 	import type { Sheet, SheetStore } from '$lib/sheets.svelte';
 
@@ -67,18 +68,20 @@
 
 <div class="wrap">
 	<p class="uitleg">
-		Geldt voor <strong>{sheet.name}</strong> — {sheet.width_mm} × {sheet.height_mm} mm.
-		Elk vel houdt zijn eigen materiaal, zodat dun en dik in één project kunnen.
+		{t('sheetMat.applies', {
+			sheet: sheet.name,
+			size: `${sheet.width_mm} × ${sheet.height_mm} mm`
+		})}
 	</p>
 
 	<label class="veld">
-		<span>Materiaal</span>
+		<span>{t('library.material')}</span>
 		<select
 			value={sheet.material_id === null ? '' : String(sheet.material_id)}
 			disabled={sheets.busy}
 			onchange={(e) => kiesMateriaal(e.currentTarget.value)}
 		>
-			<option value="">Niet ingevuld</option>
+			<option value="">{t('sheetMat.notFilled')}</option>
 			{#each library.materials as material (material.id)}
 				<option value={String(material.id)}>{material.name}</option>
 			{/each}
@@ -90,22 +93,22 @@
 			<input
 				type="text"
 				bind:value={nieuw}
-				placeholder="bijv. Multiplex berken"
-				aria-label="Naam van het nieuwe materiaal"
+				placeholder={t('library.material.placeholder')}
+				aria-label={t('gen.text')}
 			/>
 			<button class="btn primary" disabled={!nieuw.trim() || library.busy} onclick={maakMateriaal}>
-				Toevoegen
+				{t('sheetMat.add')}
 			</button>
-			<button class="btn" onclick={() => (toevoegen = false)}>Annuleren</button>
+			<button class="btn" onclick={() => (toevoegen = false)}>{t('common.cancel')}</button>
 		</div>
 	{:else}
-		<button class="link" onclick={() => (toevoegen = true)}>Materiaal staat er niet bij</button>
+		<button class="link" onclick={() => (toevoegen = true)}>{t('sheetMat.notListed')}</button>
 	{/if}
 
 	<div class="veld">
-		<!-- De eenheid in het label, niet achter het invoerveld: anders staat er
-		     een rij kale getallen waarvan de maat pas rechts blijkt. -->
-		<span>Dikte in millimeter</span>
+		<!-- The unit in the label, not behind the input: otherwise there is a row of
+		     bare numbers whose measure only becomes clear on the right. -->
+		<span>{t('sheetMat.thickness')}</span>
 		<div class="diktes">
 			{#each GANGBAAR as mm (mm)}
 				<button
@@ -121,8 +124,8 @@
 				step="0.1"
 				min="0.1"
 				max="500"
-				placeholder="anders"
-				aria-label="Andere dikte in millimeter"
+				placeholder={t('sheetMat.other')}
+				aria-label={t('sheetMat.otherAria')}
 				value={dikte !== null && !GANGBAAR.includes(dikte) ? dikte : ''}
 				onchange={(e) =>
 					kiesDikte(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
@@ -134,24 +137,25 @@
 		<p class="error" role="alert">{sheets.error}</p>
 	{/if}
 
-	<!-- Wat dit oplevert, meteen zichtbaar: de bibliotheek filtert hier straks
-	     op, dus het aantal zegt of je er iets aan hebt. -->
+	<!-- What this yields, visible at once: the library filters on it later, so the
+	     count says whether it is any use to you. -->
 	<p class="opbrengst">
 		{#if sheet.material_id === null}
-			Zonder materiaal toont de bibliotheek alles en kan de pre-flight niet zien
-			of een instelling bij dit vel hoort.
+			{t('sheetMat.noMaterial')}
 		{:else if instellingen.length === 0}
-			Nog geen instellingen in de bibliotheek voor dit materiaal. Een testraster
-			is de kortste weg ernaartoe.
+			{t('sheetMat.noPresets')}
 		{:else}
-			{instellingen.length}
-			{instellingen.length === 1 ? 'instelling' : 'instellingen'} in de bibliotheek
-			voor dit materiaal{dikte === null ? '' : ` rond ${String(dikte).replace('.', ',')} mm`}.
+			{dikte === null
+				? t('sheetMat.presets', { n: instellingen.length })
+				: t('sheetMat.presetsAround', {
+						n: instellingen.length,
+						thickness: i18n.number(dikte)
+					})}
 		{/if}
 	</p>
 
 	<div class="acties">
-		<button class="btn primary" onclick={() => onDone?.()}>Klaar</button>
+		<button class="btn primary" onclick={() => onDone?.()}>{t('common.done')}</button>
 	</div>
 </div>
 

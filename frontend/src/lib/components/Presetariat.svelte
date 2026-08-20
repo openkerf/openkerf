@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import { CONFIDENCE, PresetariatStore } from '$lib/presetariat.svelte';
 	import { OPERATIONS, type LibraryStore } from '$lib/library.svelte';
@@ -52,74 +53,78 @@
 	/**
 	 * Wat de hele lijst gemeen heeft, zeggen we één keer.
 	 *
-	 * Zesentwintig regels met exact dezelfde amberkleurige pil "Startwaarde"
-	 * informeren niemand; ze maken van een waarschuwing behang. Staat er
-	 * variatie in, dan verdient elke regel zijn eigen pil.
+	 * Twenty-six rows with exactly the same amber "Starting value" pill inform
+	 * nobody; they turn a warning into wallpaper. If there is variation in it, every
+	 * row deserves its own pill.
 	 */
 	let soorten = $derived(new Set(catalogue.presets.map((p) => p.source.kind)));
 	let eenSoort = $derived(soorten.size === 1 ? [...soorten][0] : null);
 </script>
 
-<Dialog title="Presetariat" bind:open width="720px">
-	<p class="lead">
-		Instellingen die anderen deelden. Ze komen van andermans machine: neem ze als
-		startpunt, niet als waarheid. Wat met een testraster gemeten is, staat bovenaan.
-	</p>
+<Dialog title={t('presetariat.title')} bind:open width="720px">
+	<p class="lead">{t('presetariat.lead')}</p>
 
 	<div class="filters">
 		<label>
-			<span>Machine</span>
+			<span>{t('library.machine')}</span>
 			<select
 				bind:value={machineId}
 				onchange={() => refresh()}
 			>
-				<option value={null}>Alle machines</option>
+				<option value={null}>{t('presetariat.allMachines')}</option>
 				{#each library.machines as machine (machine.id)}
 					<option value={machine.id}>{machine.name}</option>
 				{/each}
 			</select>
 		</label>
 		<label>
-			<span>Bewerking</span>
+			<span>{t('library.operation')}</span>
 			<select bind:value={operation} onchange={() => refresh()}>
-				<option value="">Alle</option>
+				<option value="">{t('presetariat.allOperations')}</option>
 				{#each OPERATIONS as item (item.value)}
 					<option value={item.value}>{item.label}</option>
 				{/each}
 			</select>
 		</label>
 		<label class="grow">
-			<span>Materiaal</span>
+			<span>{t('library.material')}</span>
 			<input
 				type="search"
 				bind:value={material}
-				placeholder="bijv. berken of acrylaat"
+				placeholder={t('presetariat.materialPlaceholder')}
 				oninput={() => refresh()}
 			/>
 		</label>
-		<button class="btn" disabled={catalogue.busy} onclick={() => refresh(true)}>Verversen</button>
+		<button class="btn" disabled={catalogue.busy} onclick={() => refresh(true)}
+			>{t('presetariat.refresh')}</button
+		>
 	</div>
 
 	{#if catalogue.error}
 		<p class="warn">{catalogue.error}</p>
 	{/if}
 	{#if catalogue.stale}
-		<p class="warn">Uit de lokale kopie — de catalogus was niet bereikbaar.</p>
+		<p class="warn">{t('presetariat.stale')}</p>
 	{/if}
 	{#if result}
 		<p class="ok">
-			{result.imported} geïmporteerd{result.skipped
-				? `, ${result.skipped} overgeslagen (had je al)`
-				: ''}.
+			{result.skipped
+				? t('presetariat.imported.skipped', { n: result.imported, skipped: result.skipped })
+				: t('presetariat.imported', { n: result.imported })}
 		</p>
 	{/if}
 
 	{#if eenSoort}
 		{@const gedeeld = CONFIDENCE[eenSoort] ?? CONFIDENCE.handmatig}
 		<p class="gedeeld {gedeeld.tone}">
-			Alles hieronder is <strong>{gedeeld.text.toLowerCase()}</strong>{#if eenSoort === 'handmatig'}:
-				niet gemeten. Brand een testraster voordat je erop vertrouwt{:else if eenSoort === 'testraster'}:
-				op andermans machine gemeten{:else}: opgave van de fabrikant{/if}.
+			{t(
+				eenSoort === 'handmatig'
+					? 'presetariat.allOf.manual'
+					: eenSoort === 'testraster'
+						? 'presetariat.allOf.grid'
+						: 'presetariat.allOf.maker',
+				{ kind: gedeeld.text.toLowerCase() }
+			)}
 		</p>
 	{/if}
 
@@ -149,31 +154,37 @@
 					<span class="badge {badge.tone}">{badge.text}</span>
 				{/if}
 				{#if preset.verified}
-					<span class="badge ok" title="Door een tweede persoon nagebrand">Nagebrand</span>
+					<span class="badge ok" title={t('presetariat.verified.title')}>{t('presetariat.verified')}</span>
 				{/if}
 				{#if preset.imported}
-					<span class="badge neutral">In bibliotheek</span>
+					<span class="badge neutral">{t('presetariat.inLibrary')}</span>
 				{/if}
 			</label>
 		{:else}
 			<p class="empty">
-				{catalogue.busy ? 'Ophalen…' : 'Niets gevonden voor deze machine en filters.'}
+				{catalogue.busy ? t('presetariat.fetching') : t('presetariat.nothing')}
 			</p>
 		{/each}
 	</div>
 
 	<div class="actions">
 		<span class="meta mono">
-			{catalogue.presets.length} van {catalogue.total}{catalogue.version
-				? ` · versie ${catalogue.version}`
-				: ''}
+			{catalogue.version
+				? t('presetariat.count.version', {
+						shown: catalogue.presets.length,
+						total: catalogue.total,
+						version: catalogue.version
+					})
+				: t('presetariat.count', { shown: catalogue.presets.length, total: catalogue.total })}
 		</span>
 		<button
 			class="btn primary"
 			disabled={!canEdit || !catalogue.chosen.size || catalogue.busy}
 			onclick={importChosen}
 		>
-			{catalogue.chosen.size ? `${catalogue.chosen.size} importeren` : 'Importeren'}
+			{catalogue.chosen.size
+				? t('presetariat.importN', { n: catalogue.chosen.size })
+				: t('presetariat.import')}
 		</button>
 	</div>
 </Dialog>

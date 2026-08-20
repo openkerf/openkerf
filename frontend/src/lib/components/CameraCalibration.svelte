@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import type { CameraStore } from '$lib/camera.svelte';
 
@@ -67,18 +68,14 @@
 	}
 
 	async function cancel() {
-		// Terug naar hoe het stond: het gecorrigeerde beeld als er een ijking is.
+		// Back to how it was: the corrected image if there is a calibration.
 		await camera.setCorrected(Boolean(camera.state.calibrated));
 		open = false;
 	}
 </script>
 
-<Dialog title="Camera ijken" bind:open width="720px">
-	<p class="lead">
-		Sleep de vier punten naar de hoeken van het bed, <strong>linksboven te
-		beginnen en met de klok mee</strong>. Daarna weet de app waar elk punt in
-		het beeld op het bed ligt, en ligt je ontwerp op de goede plek.
-	</p>
+<Dialog title={t('calibrate.title')} bind:open width="720px">
+	<p class="lead">{t('calibrate.lead')}</p>
 
 	{#if camera.error}
 		<p class="error" role="alert">{camera.error}</p>
@@ -87,7 +84,7 @@
 	<div
 		class="stage"
 		role="application"
-		aria-label="Camerabeeld met vier sleepbare hoekpunten"
+		aria-label={t('calibrate.stageAria')}
 		style="aspect-ratio: {box.width} / {box.height}"
 		onpointermove={move}
 		onpointerup={() => (dragging = null)}
@@ -96,7 +93,7 @@
 		<img
 			bind:this={frame}
 			src="/api/camera/stream.mjpeg?v={camera.generation}"
-			alt="Onbewerkt camerabeeld"
+			alt={t('calibrate.rawAlt')}
 			draggable="false"
 		/>
 		<svg viewBox="0 0 {box.width} {box.height}" preserveAspectRatio="none">

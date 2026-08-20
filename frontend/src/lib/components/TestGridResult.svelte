@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 
 	type Punt = { x: number; y: number };
@@ -100,7 +101,7 @@
 	function datum(ruw: string) {
 		const d = new Date(ruw.replace(' ', 'T'));
 		if (Number.isNaN(d.getTime())) return ruw;
-		return d.toLocaleString('nl-NL', {
+		return d.toLocaleString(i18n.locale, {
 			day: 'numeric',
 			month: 'short',
 			hour: '2-digit',
@@ -147,7 +148,12 @@
 		{ x: 0.9, y: 0.9 },
 		{ x: 0.1, y: 0.9 }
 	];
-	const HOEKNAAM = ['linksboven', 'rechtsboven', 'rechtsonder', 'linksonder'];
+	const HOEKNAAM = [
+		t('result.corner.topLeft'),
+		t('result.corner.topRight'),
+		t('result.corner.bottomRight'),
+		t('result.corner.bottomLeft')
+	];
 
 	let hoeken = $state<Punt[]>(STANDAARD.map((p) => ({ ...p })));
 	let bewaarFout = $state<string | null>(null);
@@ -186,14 +192,14 @@
 					body: JSON.stringify({ corners: punten })
 				});
 				if (!response.ok) {
-					bewaarFout = 'De uitlijning kon niet bewaard worden.';
+					bewaarFout = t('result.align.failed');
 					return;
 				}
 				bewaarFout = null;
 				const bijgewerkt: Grid = await response.json();
 				grids = grids.map((g) => (g.id === id ? bijgewerkt : g));
 			} catch {
-				bewaarFout = 'De uitlijning kon niet bewaard worden — geen verbinding.';
+				bewaarFout = t('result.align.failedOffline');
 			}
 		}, 400);
 	}
@@ -380,16 +386,16 @@
 
 <div class="resultaat">
 	<div class="kop">
-		<h2 class="titel">Stap 3 en 4 — foto en preset</h2>
+		<h2 class="titel">{t('result.title')}</h2>
 		{#if grids.length}
-			<select class="picker" bind:value={openId} aria-label="Kies een testraster">
-				<option value={null}>Kies een raster…</option>
+			<select class="picker" bind:value={openId} aria-label={t('result.pickGrid')}>
+				<option value={null}>{t('result.pickGrid.option')}</option>
 				{#each grids as g (g.id)}
-					<!-- Datum erbij: wie drie proeven op hetzelfde materiaal heeft
-					     gedaan, ziet anders drie identieke regels. -->
+					<!-- The date with it: whoever has done three tests on the same material
+					     otherwise sees three identical lines. -->
 					<option value={g.id}>
-						{datum(g.created_at)} · {g.material_name ?? 'geen materiaal'} · {g.operation}
-						{g.photo_path ? '· met foto' : '· wacht op foto'}
+						{datum(g.created_at)} · {g.material_name ?? t('result.noMaterial')} · {g.operation}
+						{g.photo_path ? t('result.withPhoto') : t('result.waitingPhoto')}
 					</option>
 				{/each}
 			</select>
@@ -397,45 +403,41 @@
 	</div>
 
 	{#if grids.length === 0}
-		<p class="muted">
-			Nog geen testrasters. Zodra je er hierboven een tekent en brandt, kun je hem hier
-			fotograferen en het beste vakje aanwijzen.
-		</p>
+		<p class="muted">{t('result.noGrids')}</p>
 	{/if}
 
 	{#if error}<p class="melding fout" role="alert">{error}</p>{/if}
 	{#if gemaakt}
 		<p class="melding goed" role="status">
-			{gemaakt} preset{gemaakt === 1 ? '' : 's'} opgeslagen bij
-			{grid?.material_name ?? 'dit materiaal'}. Je vindt ze in de materiaalbibliotheek.
+			{t('result.saved', {
+				n: gemaakt,
+				material: grid?.material_name ?? t('result.thisMaterial')
+			})}
 		</p>
 	{/if}
 
 	{#if grid && box}
 		{#if !grid.photo_path}
-			<!-- Geen foto: dan geen raster van lege vakjes over het niets. Zeg wat
-			     er moet gebeuren en hoe je het met de telefoon doet. -->
+			<!-- No photo: then no grid of empty squares over nothing. Say what has to
+			     happen and how you do it with a phone. -->
 			<div class="geenfoto">
 				<p class="waarom">
-					<strong>Brand dit raster en fotografeer het bord.</strong>
-					Recht van boven, het hele bord in beeld — de hoeken lijn je hierna zelf uit.
+					<strong>{t('result.burnFirst')}</strong>
+					{t('result.burnFirst.how')}
 				</p>
 				{#if canEdit}
 					<label class="btn primary groot file">
-						Foto toevoegen
+						{t('library.addPhoto')}
 						<input type="file" accept="image/*" capture="environment" onchange={uploadPhoto} />
 					</label>
 				{/if}
-				<p class="muted">
-					Of pak je telefoon: open OpenKerf daarop en dit raster staat onder
-					“Testraster fotograferen”.
-				</p>
+				<p class="muted">{t('result.orPhone')}</p>
 			</div>
 		{:else}
 			<div class="podium" bind:this={podium}>
 				<img
 					src="/api/library/testgrids/{grid.id}/photo?v={photoStamp}"
-					alt="Foto van het gebrande raster"
+					alt={t('result.photoAlt')}
 				/>
 
 				<svg viewBox="0 0 1 1" preserveAspectRatio="none" class:uitlijnen>
@@ -479,22 +481,26 @@
 						<button
 							class="hoek"
 							style="left: {punt.x * 100}%; top: {punt.y * 100}%"
-							aria-label="Hoek {HOEKNAAM[i]} verslepen"
+							aria-label={t('result.corner.drag', { corner: HOEKNAAM[i] })}
 							onpointerdown={(e) => sleep(i, e)}
 							onkeydown={(e) => toets(i, e)}
 						><span></span></button>
 					{/each}
 				{/if}
 
-				<!-- Welke instelling ligt er onder je vinger? Zonder dit wijs je een
-				     vakje aan zonder te weten wat je kiest. -->
+				<!-- Which setting is under your finger? Without this you point at a square
+				     without knowing what you are choosing. -->
 				<div class="aflezing mono" aria-live="polite">
 					{#if uitlijnen}
-						Sleep de vier hoeken naar de hoeken van het gebrande raster
+						{t('result.dragCorners')}
 					{:else if aangewezen}
-						rij {aangewezen.row + 1}, kolom {aangewezen.column + 1} · {celtekst(aangewezen)}
+						{t('result.rowColumn', {
+							row: aangewezen.row + 1,
+							column: aangewezen.column + 1,
+							values: celtekst(aangewezen)
+						})}
 					{:else}
-						Tik het vakje aan dat het beste uitpakte
+						{t('result.tapBest')}
 					{/if}
 				</div>
 			</div>
@@ -507,11 +513,11 @@
 						uitlijnen = !uitlijnen;
 						if (!uitlijnen) bewaarUitlijning();
 					}}
-				>{uitlijnen ? 'Uitlijnen klaar' : 'Overlay uitlijnen'}</button>
+				>{uitlijnen ? t('result.alignDone') : t('result.align')}</button>
 
 				{#if canEdit}
 					<label class="btn file">
-						Andere foto
+						{t('result.otherPhoto')}
 						<input type="file" accept="image/*" capture="environment" onchange={uploadPhoto} />
 					</label>
 				{/if}
@@ -522,11 +528,19 @@
 							<button
 								class="chip mono"
 								onclick={() => toggle(cell)}
-								aria-label="Rij {cell.row + 1}, kolom {cell.column + 1}, {celtekst(cell)}: keuze ongedaan maken"
-							>rij {cell.row + 1}, kol {cell.column + 1} · {celtekst(cell)} ×</button>
+								aria-label={t('result.undoChoice', {
+									row: cell.row + 1,
+									column: cell.column + 1,
+									values: celtekst(cell)
+								})}
+							>{t('result.chip', {
+									row: cell.row + 1,
+									column: cell.column + 1,
+									values: celtekst(cell)
+								})} ×</button>
 						{/each}
 					{:else}
-						<span class="muted">Nog geen vakje gekozen</span>
+						<span class="muted">{t('result.noneChosen')}</span>
 					{/if}
 				</div>
 
@@ -537,11 +551,11 @@
 						onclick={makePresets}
 					>
 						{#if busy}
-							Bezig…
+							{t('common.busy')}
 						{:else if picked.length}
-							Preset maken van {picked.length} vakje{picked.length === 1 ? '' : 's'}
+							{t('result.makePresets', { n: picked.length })}
 						{:else}
-							Preset maken
+							{t('result.makePreset')}
 						{/if}
 					</button>
 				{/if}
@@ -550,13 +564,12 @@
 			{#if bewaarFout}<p class="melding fout" role="alert">{bewaarFout}</p>{/if}
 
 			{#if gebruikteCellen.length}
-				<!-- Gat M4: de herkomst zei "rij 2, kolom 3" en op de foto was niets
-				     gemarkeerd. Nu de uitlijning bewaard is, kan dezelfde overlay
-				     het vakje aanwijzen — hier door het op te lichten, en in de
-				     bibliotheek doordat de foto met ?cell= de rand meegebrand
-				     krijgt. -->
+				<!-- Gap M4: the provenance said "row 2, column 3" and nothing was marked on
+				     the photo. Now that the alignment is saved, the same overlay can point
+				     at the square — here by highlighting it, and in the library because the
+				     photo with ?cell= gets the outline drawn in. -->
 				<div class="herkomst">
-					<span class="muted">Werd een preset:</span>
+					<span class="muted">{t('result.becamePreset')}</span>
 					{#each gebruikteCellen as cell (key(cell))}
 						<button
 							class="chip bewijs mono"
@@ -565,17 +578,18 @@
 							onfocus={() => (aangewezen = cell)}
 							onblur={() => (aangewezen = null)}
 							onclick={() => (aangewezen = cell)}
-						>rij {cell.row + 1}, kol {cell.column + 1} · {celtekst(cell)}</button>
+						>{t('result.chip', {
+								row: cell.row + 1,
+								column: cell.column + 1,
+								values: celtekst(cell)
+							})}</button>
 					{/each}
-					<span class="muted">— aanwijzen licht het vakje op de foto op.</span>
+					<span class="muted">{t('result.pointHighlights')}</span>
 				</div>
 			{/if}
 
 			{#if grid.material_id === null}
-				<p class="melding waarschuwing">
-					Dit raster hoort bij geen materiaal, dus er kan geen preset uit. Koppel een
-					materiaal bij het genereren van het volgende raster.
-				</p>
+				<p class="melding waarschuwing">{t('result.gridNoMaterial')}</p>
 			{/if}
 		{/if}
 	{/if}
