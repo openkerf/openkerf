@@ -48,6 +48,25 @@ def _steps(value, name: str) -> int:
     return number
 
 
+def _passes(value) -> int:
+    """
+    Hoe vaak de kop over elk vakje gaat, voor het hele bord tegelijk.
+
+    Streng op halve passes: `int(2.5)` is 2, en dat is precies het soort stille
+    afronding waar iemand op materiaal achter komt. Een leeg veld is wél goed —
+    het formulier stuurt "" voor "niet ingevuld".
+    """
+    if value in (None, ""):
+        return 1
+    try:
+        getal = float(value)
+    except (TypeError, ValueError) as e:
+        raise DesignError("passes moet een heel getal van 1 of meer zijn.") from e
+    if getal != int(getal) or int(getal) < 1:
+        raise DesignError("passes moet een heel getal van 1 of meer zijn.")
+    return int(getal)
+
+
 # De stappen waarop een mens werkt. Een raster dat rijen snijdt op 11,667 mm/s
 # is geen naslagwerk: die instelling type je nooit meer over.
 # De fijnste stappen zijn er voor het interval: dat loopt van 0,05 tot 0,3 mm,
@@ -247,6 +266,11 @@ def plan_grid(
     interval_mm=None,
     row_axis="speed",
     column_axis="power",
+    # Eén getal voor het hele bord. Als as zou het een bord opleveren dat
+    # niemand meer terugleest: passes vermenigvuldigt de brandtijd en verandert
+    # de uitkomst van elk vakje, dus twee kolommen met verschillende passes
+    # zijn twee proeven op één plank.
+    passes=1,
     cell_mm=8.0,
     gap_mm=2.0,
     origin_x_mm=10.0,
@@ -320,6 +344,7 @@ def plan_grid(
             f"{rows}×{columns} cellen is te veel; hou het onder {MAX_CELLS}."
         )
 
+    aantal_passes = _passes(passes)
     cell = _positive(cell_mm, "cell_mm")
     gap = float(gap_mm)
     if gap < 0:
@@ -379,6 +404,7 @@ def plan_grid(
                 "stamp": stamp,
                 "thickness_mm": thickness_mm,
                 "operation": operation,
+                "passes": aantal_passes,
                 "row_axis": row_axis,
                 "column_axis": column_axis,
                 # De vaste grootheid hoort erbij: zonder haar is het bord over
@@ -470,6 +496,7 @@ def plan_grid(
         "machine_id": machine_id,
         "thickness_mm": thickness_mm,
         "operation": operation,
+        "passes": aantal_passes,
         "row_axis": row_axis,
         "column_axis": column_axis,
         "rows": rows,
@@ -528,7 +555,11 @@ def plan_grid(
         else:
             # Snijden of vectorgraveren: de omtrek van het vakje.
             brand_mm = 4 * cell
-        seconden += brand_mm / snelheid + pitch / RAPID_MM_S
+        # Elke pass brandt de hele weg opnieuw; de sprong naar het volgende
+        # vakje is er één keer. Zonder deze factor meldt een bord van twee
+        # passes de helft van zijn tijd, en dat getal gebruiken we ook om te
+        # zeggen of het binnen een dag past.
+        seconden += aantal_passes * brand_mm / snelheid + pitch / RAPID_MM_S
     plan["seconds"] = round(seconden, 1)
 
     plan["label_margin_mm"] = marge if tekst else 0.0
@@ -792,6 +823,12 @@ def caption_lines(plan: dict) -> list[str]:
         if as_naam in assen or plan.get(f"{as_naam}_min") is None:
             continue
         voet.append(f"{AXES[as_naam]['label']} {toon(as_naam, plan[f'{as_naam}_min'])}")
+    # Het aantal passes hoort bij de uitkomst: hetzelfde vakje op 8 mm/s is een
+    # andere proef in één dan in twee passes. Bij één pass staat het er niet —
+    # dat is de normale gang van zaken, en het opschrift bepaalt de bordbreedte.
+    passes = int(plan.get("passes") or 1)
+    if passes > 1:
+        voet.append(f"{passes} passes")
     if plan.get("stamp"):
         voet.append(str(plan["stamp"]))
 
@@ -973,6 +1010,9 @@ class TestGridGenerator:
                     # MeerK40t's power runs 0-1000, not 0-100.
                     "power": cell["power_percent"] * 10,
                     "label": _cel_label(plan, cell),
+                    # Voor het hele bord gelijk; de sweep zit in snelheid,
+                    # vermogen en interval.
+                    "passes": int(plan.get("passes") or 1),
                 }
                 # De lijnafstand heet bij de engine dpi. Alleen een rasterop
                 # kent hem; op de andere zou het een genegeerde sleutel zijn.

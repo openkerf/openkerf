@@ -130,6 +130,9 @@
 		interval_mm: '0.1',
 		cell_mm: '8',
 		gap_mm: '2',
+		// Voor het hele bord gelijk. Het geval: een materiaal dat op 5 mm/s
+		// bijna doorsnijdt en dat je op 8 mm/s in twee passes wilt proberen.
+		passes: '1',
 		// 20 en niet 10: de rijlabels worden links van het raster gegraveerd en
 		// zijn bij driecijferige snelheden ruim 17 mm breed. Vanaf 10 begon het
 		// bord dus buiten het bed, en dan opent de wizard met een waarschuwing
@@ -197,6 +200,7 @@
 			column_axis: form.column_axis,
 			cell_mm: Number(form.cell_mm),
 			gap_mm: Number(form.gap_mm),
+			passes: Number(form.passes),
 			origin_x_mm: Number(form.origin_x_mm),
 			origin_y_mm: Number(form.origin_y_mm),
 			anchor: form.anchor,
@@ -290,7 +294,7 @@
 			form.speed_min, form.speed_max, form.speed_steps, form.speed_mm_s,
 			form.power_min, form.power_max, form.power_steps, form.power_percent,
 			form.interval_min, form.interval_max, form.interval_steps, form.interval_mm,
-			form.cell_mm, form.gap_mm, form.origin_x_mm, form.origin_y_mm,
+			form.cell_mm, form.gap_mm, form.passes, form.origin_x_mm, form.origin_y_mm,
 			form.anchor, form.text, form.border,
 			form.label_speed_mm_s, form.label_power_percent
 		];
@@ -506,7 +510,7 @@
 		'speed_min', 'speed_max', 'speed_steps',
 		'power_min', 'power_max', 'power_steps',
 		'interval_min', 'interval_max', 'interval_steps',
-		'cell_mm', 'gap_mm',
+		'cell_mm', 'gap_mm', 'passes',
 		'label_speed_mm_s', 'label_power_percent'
 	] as const;
 
@@ -950,6 +954,16 @@
 
 				<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={form.thickness_mm} />
 				<NumberField label="Vakje" unit="mm" step={1} min={1} bind:value={form.cell_mm} />
+				<!-- Voor het hele bord, niet per vakje: passes als as zou een bord
+				     opleveren dat niemand meer terugleest, en het getal komt op het
+				     opschrift zodat je het bord over twee weken nog kunt plaatsen. -->
+				<NumberField
+					label="Passes"
+					unit="× per vakje"
+					step={1}
+					min={1}
+					bind:value={form.passes}
+				/>
 
 				<!-- Besluit B12: je kiest zelf welke twee grootheden je aftast. De
 				     derde blijft vast en staat straks op het opschrift van het bord. -->
@@ -1137,6 +1151,11 @@
 					{/if}
 					<div class="figures">
 						<span class="mono">{preview.cells.length} vakjes</span>
+						<!-- Alleen als het er meer dan één is: bij één pass is dit de
+						     normale gang van zaken en zegt het niets. -->
+						{#if (preview.plan.passes ?? 1) > 1}
+							<span class="mono">{preview.plan.passes}× per vakje</span>
+						{/if}
 						<!-- De maat van het hele bord, niet van de vakjes alleen: het
 						     opschrift en het kader worden net zo goed gebrand, en juist
 						     die staken links en boven uit (T11). LightBurn meldt

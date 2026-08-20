@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS test_grid (
     machine_id    INTEGER REFERENCES machine_profile(id) ON DELETE SET NULL,
     thickness_mm  REAL,
     operation     TEXT NOT NULL,
+    -- Voor het hele bord gelijk: hoe vaak de kop over elk vakje gaat.
+    passes        INTEGER NOT NULL DEFAULT 1,
     speed_min     REAL NOT NULL,
     speed_max     REAL NOT NULL,
     speed_steps   INTEGER NOT NULL,
@@ -205,6 +207,8 @@ class Library:
             ("border_enabled", "INTEGER NOT NULL DEFAULT 0"),
             ("label_speed_mm_s", "REAL"),
             ("label_power_percent", "REAL"),
+            # Borden van vóór deze versie brandden één keer over elk vakje.
+            ("passes", "INTEGER NOT NULL DEFAULT 1"),
         ):
             if kolom not in existing:
                 db.execute(f"ALTER TABLE test_grid ADD COLUMN {kolom} {definitie}")
@@ -716,7 +720,7 @@ class Library:
     # Dezelfde lijst draagt de benoemde recepten van T7: één vorm, zodat de
     # wizard niet hoeft te weten of hij een vorig raster of een recept invult.
     GRID_DEFAULTS = (
-        "operation", "thickness_mm", "row_axis", "column_axis",
+        "operation", "thickness_mm", "passes", "row_axis", "column_axis",
         "speed_min", "speed_max", "speed_steps",
         "power_min", "power_max", "power_steps",
         "interval_min", "interval_max", "interval_steps",
@@ -855,6 +859,7 @@ class Library:
         with self._connect() as db:
             cursor = db.execute(
                 """INSERT INTO test_grid (material_id, machine_id, thickness_mm, operation,
+                        passes,
                         speed_min, speed_max, speed_steps, power_min, power_max, power_steps,
                         interval_min, interval_max, interval_steps,
                         row_axis, column_axis, rows, columns,
@@ -862,12 +867,13 @@ class Library:
                         anchor, text_enabled, border_enabled,
                         label_speed_mm_s, label_power_percent)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?)""",
                 (
                     plan.get("material_id"),
                     plan.get("machine_id"),
                     plan.get("thickness_mm"),
                     plan["operation"],
+                    int(plan.get("passes") or 1),
                     plan["speed_min"],
                     plan["speed_max"],
                     plan["speed_steps"],

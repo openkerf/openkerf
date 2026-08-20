@@ -2044,6 +2044,10 @@ class ApiServer:
                         operation=grid["operation"],
                         speed_mm_s=cell["speed_mm_s"],
                         power_percent=cell["power_percent"],
+                        # Het bord brandde met dit aantal passes; zonder dat
+                        # getal snijdt de preset later één keer waar het vakje
+                        # er twee nodig had, en dat merk je op materiaal.
+                        passes=grid.get("passes") or 1,
                         # Bij een rasterproef hoort de lijnafstand bij de
                         # uitkomst; zonder haar is de preset niet na te branden.
                         interval_mm=cell.get("interval_mm"),
