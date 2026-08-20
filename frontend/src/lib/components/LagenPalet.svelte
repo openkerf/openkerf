@@ -88,7 +88,12 @@
 </script>
 
 <div class="palet" class:leeg={!canEdit}>
-	<span class="kop">Laagkleur</span>
+	<!-- De kop zegt wat een klik doet, niet wat de vakjes zijn.
+	     Hiervóór stond hier "Laagkleur" en helemaal rechts, in kleine grijze
+	     letters, wat een klik zou doen — en dát verandert met de selectie. Eén
+	     strook met twee betekenissen, en het verschil stond op de plek waar je
+	     het laatst kijkt. Nu staat het vooraan, waar het label hoort. -->
+	<span class="kop">{selectie ? 'Selectie naar laag' : 'Kleur voor nieuw werk'}</span>
 	<div class="strook" role="group" aria-label="Laagkleuren">
 		{#each kleuren as kleur, index (kleur)}
 			{@const gevonden = laag(kleur)}
@@ -150,7 +155,11 @@
 	</div>
 
 	<span class="uitleg">
-		{selectie ? 'Klik: selectie naar die laag' : 'Klik: kleur voor nieuw werk'}
+		{selectie
+			? selectie === 1
+				? 'Klik een kleur: die ene vorm gaat naar die laag'
+				: `Klik een kleur: die ${selectie} vormen gaan naar die laag`
+			: 'Klik een kleur: daarin komt wat je hierna tekent'}
 	</span>
 </div>
 

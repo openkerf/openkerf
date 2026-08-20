@@ -1,73 +1,53 @@
 <script lang="ts">
-	import { LAYER_COLORS, inktOp, type DesignStore } from '$lib/design.svelte';
+	import { LAYER_COLORS, elementNaam, inktOp, type DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import NumberField from './NumberField.svelte';
 	import Segmented from './Segmented.svelte';
 	import ArrangeIcon from './ArrangeIcon.svelte';
+	import Menu from './Menu.svelte';
+	import { laagMenu, type Menu as MenuLijst } from '$lib/acties';
 	import { untrack } from 'svelte';
 
 	let {
 		design,
 		edits,
 		canEdit = false,
-		onHistory,
 		onRotate,
 		onAssign,
 		onLayerChange,
-		onEditText,
 		onArrange,
-	onCorners,
-	cornerNote = null,
-		onSplit,
-		onSingleLayer,
+		cornerNote = null,
 		onPrune,
-		onFill,
-	tidyNote = null,
+		tidyNote = null,
 		onImage,
 		onImageDpi,
-		onVectorise,
-		onCrop,
 		box = null,
 		onSetPosition,
 		onSetSize,
 		image = null,
 		onImageSet,
 		onImageClear,
-		onUncrop,
 		show = 'selection',
-		bed = null,
-		otherSheets = [],
-		onMoveToSheet
+		bed = null
 	}: {
 		design: DesignStore;
 		edits: EditController;
 		canEdit?: boolean;
-		onHistory?: (action: 'undo' | 'redo') => void;
 		onRotate?: (angleDeg: number) => void;
 		onAssign?: (operationId: string, assigned: boolean) => void;
 		onLayerChange?: () => void;
-		onEditText?: (id: string) => void;
+		/** Alleen nog voor "alles op het bed leggen": de rest van het schikken
+		 *  woont sinds v4 in de actiebalk en het rechterklikmenu. */
 		onArrange?: (action: string) => void;
-		/** Hoeken afronden of afschuinen. Aparte prop en niet via `onArrange`,
-		 *  omdat dit twee waarden meestuurt in plaats van alleen een actienaam. */
-		onCorners?: (style: 'round' | 'chamfer', sizeMm: number) => void;
 		/** Wat er van de laatste hoekbewerking te melden valt (overgeslagen
 		 *  hoeken). Op een vaste plek in het paneel, niet in een browserpopup. */
 		cornerNote?: string | null;
-		/** Een pad opdelen in zijn losse stukken. */
-		onSplit?: () => void;
-		/** De selectie in één laag zetten en uit alle andere halen. */
-		onSingleLayer?: (kind: 'cut' | 'engrave' | 'raster') => void;
-		/** Een vlak van de selectie maken, of het weghalen. */
-		onFill?: (filled: boolean) => void;
 		/** Lege lagen weg. */
 		onPrune?: () => void;
 		/** Wat er van de laatste indeel-handeling te melden valt. */
 		tidyNote?: string | null;
 		onImage?: (adjustment: string) => void;
 		onImageDpi?: (dpi: number) => void;
-		onVectorise?: () => void;
-		onCrop?: () => void;
 		/** Live maten tijdens het slepen; valt terug op de selectie zelf. */
 		box?: { x: number; y: number; width: number; height: number } | null;
 		onSetPosition?: (x: number, y: number) => void;
@@ -90,15 +70,11 @@
 			values: Record<string, unknown> | null
 		) => void;
 		onImageClear?: () => void;
-		onUncrop?: () => void;
 		/** Welk deel getoond wordt. Selectie en lagen naast elkaar in één
 		 *  paneel werd te druk om iets in terug te vinden. */
 		show?: 'selection' | 'layers';
 		/** Bedmaat in mm, om te zien of er iets buiten valt. */
 		bed?: { width: number; height: number } | null;
-		/** De andere vellen, om de selectie naartoe te verhuizen. */
-		otherSheets?: { id: string; name: string }[];
-		onMoveToSheet?: (sheetId: string) => void;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -145,6 +121,15 @@
 		);
 	}
 	let chosen = $derived(design.selectedElements);
+
+	/** De lagen waar de selectie in zit, met hun kleur en brandnummer. */
+	let inLagen = $derived.by(() => {
+		const ids = new Set(chosen.flatMap((e) => e.operation_ids ?? []));
+		const gewoon = design.operations.filter((op) => !op.grid);
+		return gewoon
+			.map((op, index) => ({ ...op, nummer: index + 1 }))
+			.filter((op) => ids.has(op.id));
+	});
 	let selectedIds = $derived(design.selectedIds);
 
 	// ------------------------------------------------------------- de stand
@@ -244,10 +229,17 @@
 		// plaats alleen melden als er verder níets veranderd is — anders staat
 		// er "verplaatst" bij elke draai en betekent het woord niets meer.
 		if (!parts.length) {
-			if (!near(size.width, anchor.box.width) || !near(size.height, anchor.box.height))
-				parts.push('geschaald');
-			else if (!near(size.x, anchor.box.x) || !near(size.y, anchor.box.y))
-				parts.push('verplaatst');
+			const anderMaat =
+				!near(size.width, anchor.box.width) || !near(size.height, anchor.box.height);
+			const anderePlek = !near(size.x, anchor.box.x) || !near(size.y, anchor.box.y);
+			// Bij één vorm is een ander kader ook echt een andere maat. Bij meer
+			// vormen is het kader de omhullende van de hele selectie, en die
+			// verandert óók als de vormen alleen ten opzichte van elkáár schuiven —
+			// uitlijnen bijvoorbeeld. Dan "geschaald" zeggen is onwaar: er is niets
+			// groter of kleiner geworden. Gemeten na één klik op "Boven uitlijnen"
+			// met drie vormen: het kader werd lager en de regel zei "geschaald".
+			if (anderMaat) parts.push(chosen.length > 1 ? 'geschikt' : 'geschaald');
+			else if (anderePlek) parts.push('verplaatst');
 		}
 		return parts.join(' · ') || 'gewijzigd';
 	});
@@ -309,6 +301,8 @@
 	});
 
 	let editingLayer = $state<string | null>(null);
+	/** Het rechterklikmenu op een laagrij. */
+	let rijMenu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
 	let openGrid = $state<number | null>(null);
 
 	// Rasterlagen zijn geen gewone lagen: ze horen bij één testraster en hun
@@ -632,24 +626,11 @@
 				{elements.length} element{elements.length === 1 ? '' : 'en'}
 			</span>
 		{/if}
-		{#if canEdit}
-			<div class="history">
-				<button
-					class="icon"
-					disabled={edits.busy}
-					title="Ongedaan maken"
-					aria-label="Ongedaan maken"
-					onclick={() => onHistory?.('undo')}
-				><ArrangeIcon name="undo" /></button>
-				<button
-					class="icon"
-					disabled={edits.busy}
-					title="Opnieuw"
-					aria-label="Opnieuw"
-					onclick={() => onHistory?.('redo')}
-				><ArrangeIcon name="redo" /></button>
-			</div>
-		{/if}
+		<!-- Ongedaan maken en opnieuw stonden hier. Ze zijn verhuisd naar de
+		     actiebalk boven het canvas: het waren de enige twee knoppen in de app
+		     die verdwenen zodra je op het tabblad Job stond, terwijl je juist
+		     dáár nog wel eens iets terug wil draaien. Sinds de verhuizing hebben
+		     ze ook ⌘Z en ⌘⇧Z. -->
 	</div>
 	{#if edits.error}
 		<p class="edit-error" role="alert">{edits.error}</p>
@@ -672,15 +653,26 @@
 		<div class="selected">
 			<div class="head">
 				<span class="name" title={chosen.length > 1 ? undefined : selected.label}>
-					{chosen.length > 1 ? `${chosen.length} elementen` : selected.label}
+					{chosen.length > 1 ? `${chosen.length} vormen` : elementNaam(selected)}
 				</span>
 				<!-- In hoeveel lagen de selectie zit stond als eigen alinea onderaan
 				     het paneel, buiten beeld. Het hoort bij de identiteit van wat je
 				     vast hebt, dus staat het naast de naam. -->
+				<!-- Wélke laag, niet hoevéél. "in 1 laag" was waar en nutteloos: dat
+				     de vorm ergens in zit is niet de vraag, de vraag is waarin. En
+				     dit is precies wat je nakijkt vóór je start — met de laagkleur
+				     erbij, zodat het klopt met wat je op het canvas ziet. -->
 				<span class="in-layers">
-					in {selected.operation_ids.length} laag{selected.operation_ids.length === 1
-						? ''
-						: 'en'}
+					{#if inLagen.length === 0}
+						<span class="geenlaag" title="Deze vorm brandt niet mee">in geen laag</span>
+					{:else}
+						{#each inLagen as laag (laag.id)}
+							<span class="laagchip" title="Laag {laag.nummer}: {laag.label}">
+								<span class="stip" style="background: {laag.color}"></span>
+								{laag.label}
+							</span>
+						{/each}
+					{/if}
 				</span>
 				<button class="clear" onclick={() => design.select(null)}>Wis</button>
 			</div>
@@ -768,7 +760,10 @@
 						     bij hoort. -->
 						<span class="suffix" aria-hidden="true">°</span>
 					</label>
-					{#each [[-90, 'rotate-ccw'], [-1, ''], [1, ''], [90, 'rotate-cw']] as [angle, icon] (angle)}
+					<!-- Alleen nog de stapjes van één graad: dat is de spinner die bij
+					     dit veld hoort. Draaien per 90° is een handeling en staat in het
+					     rechterklikmenu onder "Draaien" (met , en . als sneltoets). -->
+					{#each [[-1, ''], [1, '']] as [angle, icon] (angle)}
 						<button
 							class="icon step"
 							disabled={edits.busy}
@@ -793,90 +788,18 @@
 				{/if}
 			{/if}
 
-			{#if canEdit && selected.text}
-				<button class="edit-text" onclick={() => onEditText?.(selected.id)}>
-					Tekst bewerken — “{selected.text.text}”
-				</button>
+			{#if selected.text}
+				<!-- De inhoud van de tekst is een eigenschap en hoort hier te staan;
+				     hem bewerken is een handeling en staat in het rechterklikmenu.
+				     Hiervóór was dit één knop die beide deed, en dan is de tekst pas
+				     te lezen als je hem al aanklikt. -->
+				<p class="tekstwaarde" title={selected.text.text}>“{selected.text.text}”</p>
 			{/if}
 
-			{#if canEdit}
-				{@const enough = chosen.length > 1}
-				{@const why = enough ? 'Uitlijnen op de laatste vorm in de selectie' : 'Selecteer minstens twee vormen'}
-				{@const three = chosen.length > 2}
-				<!-- Uitlijnen, verdelen, spiegelen en groeperen als drie rijen van
-				     vier pictogrammen. Als tekstpillen namen ze acht regels en
-				     wrapten ze zo ongelukkig dat de twee knoppen "Midden" — de
-				     horizontale en de verticale — naast elkaar konden eindigen,
-				     niet uit elkaar te houden. In een raster zegt de rij waar de
-				     as ligt: eerste rij horizontaal, tweede verticaal. -->
-				<div class="tools" role="group" aria-label="Schikken">
-					{#each [['left', 'align-left', 'Links uitlijnen'], ['centerh', 'align-centerh', 'Horizontaal centreren'], ['right', 'align-right', 'Rechts uitlijnen'], ['spaceh', 'space-h', 'Horizontaal verdelen']] as [mode, icon, label] (mode)}
-						{@const needsThree = mode === 'spaceh'}
-						<button
-							class="tool"
-							disabled={edits.busy || (needsThree ? !three : !enough)}
-							title={needsThree
-								? three
-									? 'Gelijke tussenruimte, horizontaal'
-									: 'Verdelen heeft minstens drie vormen nodig'
-								: why}
-							aria-label={label}
-							onclick={() => onArrange?.(mode)}
-						><ArrangeIcon name={icon} /></button>
-					{/each}
-					{#each [['top', 'align-top', 'Boven uitlijnen'], ['centerv', 'align-centerv', 'Verticaal centreren'], ['bottom', 'align-bottom', 'Onder uitlijnen'], ['spacev', 'space-v', 'Verticaal verdelen']] as [mode, icon, label] (mode)}
-						{@const needsThree = mode === 'spacev'}
-						<button
-							class="tool"
-							disabled={edits.busy || (needsThree ? !three : !enough)}
-							title={needsThree
-								? three
-									? 'Gelijke tussenruimte, verticaal'
-									: 'Verdelen heeft minstens drie vormen nodig'
-								: why}
-							aria-label={label}
-							onclick={() => onArrange?.(mode)}
-						><ArrangeIcon name={icon} /></button>
-					{/each}
-					<button
-						class="tool"
-						disabled={edits.busy}
-						title="Spiegelen om de verticale as. Nog een keer klikken zet het terug."
-						aria-label="Horizontaal spiegelen"
-						onclick={() => onArrange?.('mirror-h')}
-					><ArrangeIcon name="mirror-h" /></button>
-					<button
-						class="tool"
-						disabled={edits.busy}
-						title="Spiegelen om de horizontale as. Nog een keer klikken zet het terug."
-						aria-label="Verticaal spiegelen"
-						onclick={() => onArrange?.('mirror-v')}
-					><ArrangeIcon name="mirror-v" /></button>
-					<button
-						class="tool"
-						disabled={edits.busy || !enough}
-						title={enough ? 'Groeperen — de vormen bewegen voortaan samen' : 'Selecteer minstens twee vormen'}
-						aria-label="Groeperen"
-						onclick={() => onArrange?.('group')}
-					><ArrangeIcon name="group" /></button>
-					<button
-						class="tool"
-						disabled={edits.busy || !selected.group_id}
-						title={selected.group_id ? 'Groep opheffen' : 'Deze vorm zit niet in een groep'}
-						aria-label="Groep opheffen"
-						onclick={() => onArrange?.('ungroup')}
-					><ArrangeIcon name="ungroup" /></button>
-				</div>
-
-				{#if !enough}
-					<!-- Vier regels waren te veel om te lezen én genoeg om het paneel
-					     op een tablet te laten scrollen. Twee regels zeggen
-					     hetzelfde. -->
-					<p class="tip">
-						Grijs = werkt op meerdere vormen. Sleep een kader, of shift-klik.
-					</p>
-				{/if}
-			{/if}
+			<!-- Twaalf pictogrammen — uitlijnen, verdelen, spiegelen, groeperen —
+			     stonden hier. Ze zijn verhuisd naar de actiebalk boven het canvas:
+			     daar zijn ze op elk tabblad zichtbaar en scrollen ze niet weg. Zie
+			     DESIGN-SYSTEM v4, "Waar hoort een handeling". -->
 
 			{#if canEdit && (moved || pose.mirrored)}
 				<!-- Het anker. Zolang deze selectie actief is, is elke draai en elke
@@ -907,174 +830,34 @@
 				<p class="hint">Zit in effect: {selected.effect.label}</p>
 			{/if}
 
-			{#if canEdit && (teSplitsen.vormen || chosen.length)}
-				<!-- Indelen: wat een geïmporteerde tekening bruikbaar maakt. Staat
-				     hier en niet in een uitklapper, omdat het precies één keer
-				     nodig is — meteen na het laden, wanneer nog niets klikt en
-				     alles in de verkeerde laag ligt. De splitsregel verschijnt
-				     alleen als er iets te splitsen is. -->
-				<div class="indelen">
-					{#if teSplitsen.vormen}
-						<p class="tip">
-							{teSplitsen.vormen === 1
-								? 'Deze vorm bestaat'
-								: `Deze ${teSplitsen.vormen} vormen bestaan`}
-							uit {teSplitsen.stukken} losse stukken. Een export uit een
-							CAD-programma is vaak één pad; los aan te klikken zijn de
-							stukken pas na het splitsen.
-						</p>
-						<button
-							class="rot primair"
-							disabled={edits.busy}
-							onclick={() => onSplit?.()}
-						>Splitsen in {teSplitsen.stukken} vormen</button>
-					{/if}
-					{#if vulbaar.length}
-						<button
-							class="rot"
-							disabled={edits.busy}
-							title={alGevuld
-								? 'Haalt het vlak weg; de omtrek blijft'
-								: 'Geeft de vorm een vlak. Een rasterlaag brandt dan het vlak in plaats van alleen de omtrek.'}
-							onclick={() => onFill?.(!alGevuld)}
-						>{alGevuld ? 'Vulling weghalen' : 'Vullen — voor rasteren'}</button>
-					{/if}
-					{#if chosen.length}
-						<div class="alleen-in">
-							{#each [['cut', 'snijlaag'], ['engrave', 'graveerlaag'], ['raster', 'rasterlaag']] as [kind, naam] (kind)}
-								<button
-									class="rot"
-									disabled={edits.busy}
-									title={nuInLagen > 1
-										? `Zet de selectie in de ${naam} en haalt hem uit de ${nuInLagen} lagen waar hij nu in zit`
-										: `Zet de selectie in de ${naam} en haalt hem uit elke andere laag`}
-									onclick={() => onSingleLayer?.(kind as 'cut' | 'engrave' | 'raster')}
-								>Alleen in {naam}</button>
-							{/each}
-						</div>
-					{/if}
-					{#if tidyNote}
-						<p class="tip">{tidyNote}</p>
-					{/if}
-				</div>
+			{#if teSplitsen.vormen}
+				<!-- Dit is een diagnose, geen handeling: het zegt wat je vast hebt.
+				     De knop erbij ("Splitsen in n vormen") is verhuisd naar het
+				     rechterklikmenu, onder "Pad bewerken", mét hetzelfde getal.
+				     Zonder deze regel zou het menu een aantal beloven dat je nergens
+				     kunt narekenen. -->
+				<p class="tip">
+					{teSplitsen.vormen === 1
+						? 'Deze vorm bestaat'
+						: `Deze ${teSplitsen.vormen} vormen bestaan`}
+					uit {teSplitsen.stukken} losse stukken. Een export uit een CAD-programma is
+					vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.
+				</p>
+			{/if}
+			{#if tidyNote}
+				<p class="tip" role="status">{tidyNote}</p>
+			{/if}
+			{#if cornerNote}
+				<p class="tip" role="status">{cornerNote}</p>
 			{/if}
 
-			{#if canEdit}
-				<!-- Wat hieronder staat is er voor de uitzondering, niet voor het
-				     werk van elke dag. Ingeklapt, maar wel met hun naam in beeld:
-				     een dichtgeklapte regel kun je ontdekken, een verborgen knop
-				     niet. -->
-				{@const enough = chosen.length > 1}
-				<details
-					class="fold"
-					open={openGroups.boolean}
-					ontoggle={(e) => (openGroups.boolean = e.currentTarget.open)}
-				>
-					<summary>Combineren <span class="fold-note">tot één pad</span></summary>
-					<div class="tools four">
-						{#each [['union', 'union', 'Verenigen'], ['difference', 'difference', 'Verschil'], ['intersection', 'intersection', 'Doorsnede'], ['xor', 'xor', 'Uitsluiten']] as [op, icon, label] (op)}
-							<button
-								class="tool"
-								disabled={edits.busy || !enough}
-								title={enough
-									? `${label} — het resultaat is één pad, de vormen verdwijnen`
-									: 'Selecteer minstens twee vormen'}
-								aria-label={label}
-								onclick={() => onArrange?.(op)}
-							><ArrangeIcon name={icon} /></button>
-						{/each}
-					</div>
-				</details>
-
-				<details
-					class="fold"
-					open={openGroups.path}
-					ontoggle={(e) => (openGroups.path = e.currentTarget.open)}
-				>
-					<summary>Pad bewerken <span class="fold-note">offset, vulling, nesten</span></summary>
-					<div class="arrange">
-						<button
-							class="rot"
-							disabled={edits.busy || chosen.length < 2}
-							title="Leg de selectie dicht op elkaar om materiaal te sparen"
-							onclick={() => onArrange?.('nest')}
-						>Nesten</button>
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('offset')}>Offset…</button>
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('simplify')}>Vereenvoudigen</button>
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('hatch')}>Vulling</button>
-						<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('wobble')}>Wobble</button>
-					</div>
-				</details>
-			{/if}
-
-			{#if canEdit}
-				<details
-					class="fold"
-					open={openGroups.corners}
-					ontoggle={(e) => (openGroups.corners = e.currentTarget.open)}
-				>
-					<summary>Hoeken <span class="fold-note">afronden of afschuinen</span></summary>
-					<div class="hoeken">
-						<div class="hoekstijl" role="radiogroup" aria-label="Hoekstijl">
-							<button
-								class="rot"
-								class:aan={hoekstijl === 'round'}
-								role="radio"
-								aria-checked={hoekstijl === 'round'}
-								onclick={() => (hoekstijl = 'round')}
-							>Rond</button>
-							<button
-								class="rot"
-								class:aan={hoekstijl === 'chamfer'}
-								role="radio"
-								aria-checked={hoekstijl === 'chamfer'}
-								onclick={() => (hoekstijl = 'chamfer')}
-							>Schuin</button>
-						</div>
-
-						<!-- Een formulier dat vorm maakt, toont die vorm (DESIGN-SYSTEM):
-						     "5 mm" zegt zonder beeld niets over hoe rond die hoek wordt.
-						     Deze tekening is één hoek op ware verhouding — de maat schaalt
-						     mee met een zijde van 30, zodat je ziet wanneer je hem te groot
-						     maakt. -->
-						<svg class="voorbeeld" viewBox="0 0 34 34" aria-hidden="true">
-							<path d={hoekVoorbeeld} />
-						</svg>
-
-						<NumberField
-							label="Maat"
-							unit="mm"
-							step={0.5}
-							min={0.1}
-							bind:value={hoekmaat}
-						/>
-
-						<button
-							class="rot primair"
-							disabled={edits.busy || !chosen.length}
-							onclick={() => onCorners?.(hoekstijl, Number(hoekmaat))}
-						>{hoekLabel}</button>
-
-						<!-- Vaste plek voor wat het betekent, zoals "Zekerheid is een zin"
-						     voorschrijft: eerst wát het is, en bij risico een tweede zin
-						     die zegt wat je moet doen. -->
-						{#if hoekstijl === 'chamfer'}
-							<p class="hoekregel let-op">
-								Hiervan wordt de vorm een pad: breedte en hoogte zijn daarna
-								niet meer los te wijzigen. Ongedaan maken brengt hem terug.
-							</p>
-						{:else}
-							<p class="hoekregel">
-								Een rechthoek blijft een rechthoek, dus je kunt de radius
-								later bijstellen.
-							</p>
-						{/if}
-						{#if cornerNote}
-							<p class="hoekregel let-op" role="status">{cornerNote}</p>
-						{/if}
-					</div>
-				</details>
-			{/if}
+			<!-- Hier stonden drie dichtgeklapte vouwen: Combineren (verenigen,
+			     verschil, doorsnede, uitsluiten), Pad bewerken (nesten, offset,
+			     vereenvoudigen, arcering, wobble) en Hoeken. Vijftien handelingen
+			     achter drie klikjes, in een kolom die je toch al moest scrollen.
+			     Ze staan nu alle vijftien in het rechterklikmenu op de vorm, in
+			     submenu's met dezelfde namen; Hoeken opent zijn eigen venster met
+			     het voorbeeld erbij. -->
 
 			{#if canEdit && selected.image}
 				<!-- Bewerkingen zijn niet destructief: het recept gaat elke keer
@@ -1157,15 +940,10 @@
 					{/each}
 
 					<div class="fx-actions">
-						<button class="rot" disabled={edits.busy} onclick={() => onVectorise?.()}>
-							Vectoriseren
-						</button>
-						<button class="rot" disabled={edits.busy} onclick={() => onCrop?.()}>
-							Bijsnijden
-						</button>
-						<button class="rot" disabled={edits.busy} onclick={() => onUncrop?.()}>
-							Snede terug
-						</button>
+						<!-- Vectoriseren, bijsnijden en de snede terugnemen stonden hier.
+						     Het zijn handelingen, dus staan ze in het rechterklikmenu op de
+						     afbeelding. Wat blijft is DPI: dat is een eigenschap van deze
+						     afbeelding en hoort bij de rest van het recept. -->
 						<label class="dpi mono">
 							DPI
 							<input
@@ -1182,27 +960,10 @@
 				</details>
 			{/if}
 
-			{#if canEdit && otherSheets.length}
-				<details
-					class="fold"
-					open={openGroups.sheet}
-					ontoggle={(e) => (openGroups.sheet = e.currentTarget.open)}
-				>
-					<summary>Naar ander vel</summary>
-					<div class="arrange">
-						<!-- Verhuizen naar een ander vel: de selectie gaat mee via het
-						     klembord van de engine, dus operaties en kleuren blijven. -->
-						{#each otherSheets as sheet (sheet.id)}
-							<button
-								class="rot"
-								disabled={edits.busy}
-								title="Verplaats de selectie naar {sheet.name}"
-								onclick={() => onMoveToSheet?.(sheet.id)}
-							>{sheet.name}</button>
-						{/each}
-					</div>
-				</details>
-			{/if}
+			<!-- "Naar ander vel" stond hier als dichtgeklapte vouw met een knop per
+			     vel. Het is een handeling en staat nu in het rechterklikmenu onder
+			     "Naar een ander vel" — met dezelfde velnamen, zonder eerst uit te
+			     klappen. -->
 
 			<p class="hint">
 				{#if canEdit}
@@ -1340,6 +1101,42 @@
 				class:doel-boven={slepen != null && slepen.id !== op.id && slepen.naar === index && index < slepen.van}
 				class:doel-onder={slepen != null && slepen.id !== op.id && slepen.naar === index && index > slepen.van}
 				bind:this={rijElementen[index]}
+				role="presentation"
+				oncontextmenu={(e) => {
+					// Een rij met acht kleine schakelaars kan niet elke handeling
+					// dragen; wat er niet op past — de vormen van deze laag
+					// selecteren, hem verwijderen — hangt hier. Zelfde menu, zelfde
+					// gedrag als op het canvas.
+					e.preventDefault();
+					rijMenu = {
+						x: e.clientX,
+						y: e.clientY,
+						lijst: laagMenu(
+							{
+								label: op.label,
+								aantalVormen: op.element_ids.length,
+								meebranden: op.output,
+								zichtbaar: !design.isLayerHidden(op.id),
+								eerste: index === 0,
+								laatste: index === plainLayers.length - 1,
+								selectie: selectedIds.length,
+								erin: selectedIds.length > 0 && membership(op.id) === 'all',
+								mag: canEdit,
+								opSlot: op.grid ? 'Deze laag hoort bij een testraster' : undefined
+							},
+							{
+								selecteerVormen: () => design.selectMany(op.element_ids),
+								selectieErin: (erin) => onAssign?.(op.id, erin),
+								meebranden: () => patchLayer(op.id, { output: !op.output }),
+								zichtbaar: () => design.toggleLayer(op.id),
+								omhoog: () => moveLayer(op.id, 'up'),
+								omlaag: () => moveLayer(op.id, 'down'),
+								openen: () => (editingLayer = op.id),
+								verwijderen: () => (confirmDrop = op.id)
+							}
+						)
+					};
+				}}
 			>
 				<div class="ident">
 					{#if canEdit && plainLayers.length > 1}
@@ -1960,6 +1757,10 @@
 	</div>
 {/if}
 
+{#if rijMenu}
+	<Menu menu={rijMenu.lijst} x={rijMenu.x} y={rijMenu.y} onSluit={() => (rijMenu = null)} />
+{/if}
+
 <style>
 	.section + .section {
 		margin-top: var(--space-6);
@@ -2458,10 +2259,6 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.history {
-		display: flex;
-		gap: var(--space-1);
-	}
 	/* Geen nowrap: op een tablet is deze regel breder dan het paneel, en dan
 	   duwt hij de hele lijst zijwaarts uit beeld in plaats van af te breken. */
 	.order-note {
@@ -2540,17 +2337,6 @@
 		background: color-mix(in srgb, var(--danger) 14%, transparent);
 		font-size: var(--text-xs);
 	}
-	.edit-text {
-		display: block;
-		width: 100%;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		font-size: var(--text-xs);
-		text-align: left;
-		color: var(--accent);
-	}
-	.edit-text:hover { background: var(--surface-2); }
 	.imagefx { display: grid; gap: 4px; }
 	.fx-head { display: flex; align-items: center; gap: var(--space-2); }
 	.fx {
@@ -2612,58 +2398,7 @@
 	/* Geen eigen margin meer: de selectiekaart is een grid met één gap, en een
 	   groep die daar zijn eigen afstand bovenop zette maakte het ritme grillig
 	   én het paneel langer. */
-	.arrange {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--space-1);
-	}
-	.indelen {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-	.alleen-in {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-1);
-	}
-	.alleen-in button { flex: 1 1 auto; }
 
-	.hoeken {
-		display: grid;
-		gap: var(--space-2);
-	}
-	.hoekstijl {
-		display: flex;
-		gap: var(--space-1);
-	}
-	.rot.aan {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-	.rot.primair {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
-	.voorbeeld {
-		width: 68px;
-		height: 68px;
-		justify-self: center;
-		fill: none;
-		stroke: var(--text-1);
-		stroke-width: 1.5;
-		stroke-linecap: round;
-	}
-	.hoekregel {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.hoekregel.let-op {
-		color: var(--warn);
-	}
 	.rot-label {
 		font-size: var(--text-xs);
 		text-transform: uppercase;
@@ -2886,6 +2621,29 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.laagchip {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		max-width: 11ch;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.laagchip + .laagchip::before {
+		content: ',';
+		margin-right: 2px;
+	}
+	.stip {
+		flex: none;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+	}
+	/* Geen laag betekent: deze vorm gaat de machine niet in. Dat is geen fout,
+	   maar het is wel het enige geval hier waar je iets moet doen. */
+	.geenlaag { color: var(--warn); }
 	.in-layers {
 		font-size: var(--text-xs);
 		color: var(--text-2);
@@ -3016,29 +2774,6 @@
 	/* De pictogramrijen. Vier per rij, want vier van 44 px passen met tussenruimte
 	   in een paneel van 279 px en zes niet — en vier laat de indeling bovendien
 	   samenvallen met de betekenis: rij één horizontaal, rij twee verticaal. */
-	.tools {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: var(--space-2);
-	}
-	.tool {
-		display: grid;
-		place-items: center;
-		height: 36px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
-	}
-	.tool:hover:not(:disabled) {
-		background: var(--surface-2);
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-	.tool:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
 	/* Knoppen zonder rand voor geschiedenis en draaistapjes: die horen bij het
 	   veld ernaast, niet bij het raster eronder. */
 	.icon {
@@ -3093,7 +2828,6 @@
 		padding-top: var(--space-2);
 		margin-top: calc(var(--space-1) * -1);
 	}
-	.fold + .fold { margin-top: calc(var(--space-3) * -1 + var(--space-1)); }
 	.fold summary {
 		display: flex;
 		align-items: center;
@@ -3131,7 +2865,6 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.fold > :not(summary) { margin-top: var(--space-2); }
-	.fold .arrange { margin-top: var(--space-2); }
 
 	/* Naast de machine met een vinger. Deze blok staat bewust hélemaal
 	   onderaan: de regels hierboven hebben dezelfde specificiteit, dus wie
@@ -3140,10 +2873,9 @@
 	   rechterkant het paneel uit. */
 	@media (max-width: 1199px), (pointer: coarse) {
 		/* Dikke vingers: elk doel in de selectiekaart haalt 44 px, met minstens
-		   12 px ertussen. Vier van 44 plus drie tussenruimtes van 12 is 212 px
-		   en dat past in het paneel van 279 px; zes zou niet passen, en daarom
-		   staan de pictogrammen in rijen van vier. */
-		.tool,
+		   12 px ertussen. Sinds de pictogramrasters naar de actiebalk en het
+		   rechterklikmenu verhuisd zijn, gaat dit alleen nog over de velden en
+		   hun stapjes. */
 		.icon,
 		.icon.step,
 		.figures .link {
@@ -3151,11 +2883,6 @@
 			min-height: 44px;
 		}
 		.icon { width: 44px; }
-		.tools { gap: var(--space-3); }
-		/* De knoppen in een ingeklapte groep stonden 4 px uit elkaar — met een
-		   handschoen aan raak je dan "Vereenvoudigen" terwijl je "Offset…"
-		   bedoelde. Gemeten en bijgesteld naar 12. */
-		.arrange { gap: var(--space-3); }
 		.figures { gap: var(--space-2) var(--space-3); }
 		.figures input {
 			/* 44 en niet 43: het veld haalde het net niet omdat de rand van de

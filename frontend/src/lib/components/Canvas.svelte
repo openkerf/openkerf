@@ -3,10 +3,12 @@
 	import type { Device } from '$lib/api';
 	import { kopspoor } from '$lib/status.svelte';
 	import { nulpunt } from '$lib/control.svelte';
-	import type { DesignStore } from '$lib/design.svelte';
+	import { elementNaam, type DesignStore } from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import type { TilingStore, Tile } from '$lib/tiling.svelte';
 	import LagenPalet from './LagenPalet.svelte';
+	import Menu from './Menu.svelte';
+	import type { Menu as MenuLijst } from '$lib/acties';
 	import {
 		omgevingstrefpunten,
 		klikDoosVast,
@@ -32,7 +34,10 @@
 		cameraOpacity = 0.6,
 		sheet = null,
 		sheetId = null,
-		tiling = null
+		tiling = null,
+		onContextObject,
+		onContextCanvas,
+		bediening = $bindable(null)
 	}: {
 		/** Waar de muis staat, in mm op het bed. `null` als hij weg is. */
 		onPointerMm?: (punt: { x: number; y: number } | null) => void;
@@ -58,6 +63,28 @@
 		/** Tegelopdeling en lopende reeks — voor de tekening en het aanbod
 		 *  zodra het vel groter is dan het bed. */
 		tiling?: TilingStore | null;
+		/** Rechterklik op een vorm. Het canvas selecteert hem eerst als dat nog
+		 *  niet zo was; de pagina bepaalt daarna wat er in het menu staat. */
+		onContextObject?: (event: MouseEvent) => void;
+		/** Rechterklik op het bed zelf, met de plek in mm erbij: het menu belooft
+		 *  "plakken hier", en dan moet het weten waar "hier" is. */
+		onContextCanvas?: (event: MouseEvent, punt: { x: number; y: number }) => void;
+		/**
+		 * Het beeld van buitenaf bedienen.
+		 *
+		 * Het zoomen leeft hier — de schaal, de pan en de maten van het werkvlak
+		 * staan hier — maar het hoort ook in het rechterklikmenu op het canvas en
+		 * in de sneltoetsen, en die worden in de pagina afgehandeld. In plaats van
+		 * die staat naar boven te tillen geeft het canvas een handvat terug: één
+		 * object met de vier zoomstanden en de twee schakelaars.
+		 */
+		bediening?: {
+			zoom: (wat: 'alles' | 'selectie' | 'bed' | 'honderd') => void;
+			stap: (factor: number) => void;
+			vastklikken: () => void;
+			laagnummers: () => void;
+			staat: () => { vastklikken: boolean; laagnummers: boolean };
+		} | null;
 	} = $props();
 
 	const FALLBACK = { width: 500, height: 300 };
@@ -138,10 +165,41 @@
 		zoom = next;
 	}
 
-	/** Terug naar de stand waarin het bed netjes in beeld staat. */
-	function honderd() {
+	/**
+	 * Eén CSS-millimeter is 96/25,4 pixels. Dat is de maat waarin een browser
+	 * `1mm` uitrekent, dus is het ook de enige zinnige betekenis van "100 %" in
+	 * een webapp: een lijn van 10 mm op het bed is dan 10 mm op het scherm.
+	 *
+	 * Hiervóór heette de knop 100 % maar deed hij "bed passend", en het getal
+	 * ernaast was de zoom ten opzichte van díe stand. Twee dingen klopten daar
+	 * niet: er was geen 1:1 te bereiken, en 100 % betekende iets anders dan
+	 * overal elders. Nu is het percentage een echte schaal en heeft "het hele
+	 * bed" zijn eigen regel.
+	 */
+	const PX_PER_MM = 96 / 25.4;
+
+	/** De schaal als percentage van ware grootte. */
+	let procent = $derived(Math.round((scale / PX_PER_MM) * 100));
+
+	/** Het hele bed in beeld — de openingsstand. */
+	function bedPassend() {
 		zoom = 1;
 		pan = { x: 0, y: 0 };
+	}
+
+	/** Ware grootte: 1 mm op het bed is 1 mm op het scherm. */
+	function honderd() {
+		naarProcent(100);
+	}
+
+	/** Naar een gevraagd percentage, om het midden van het beeld heen. */
+	function naarProcent(doel: number) {
+		const nieuw = (doel / 100) * (PX_PER_MM / fitScale);
+		const factor = nieuw / zoom;
+		if (!Number.isFinite(factor) || factor <= 0) return;
+		// Om het midden van het werkvlak, niet om de cursor: er is geen cursor
+		// als dit uit een menu of een sneltoets komt.
+		zoomAt(factor);
 	}
 
 	/**
@@ -188,10 +246,18 @@
 		else fitTo(0, 0, bed.width, bed.height);
 	}
 
+	/**
+	 * Naar de selectie, en anders naar alles.
+	 *
+	 * Die terugval is niet luiheid maar precies wat LightBurns "Frame Selection"
+	 * doet: één toets die altijd iets zinnigs doet, in plaats van een toets die
+	 * zwijgt zodra er niets geselecteerd is.
+	 */
 	function naarSelectie() {
 		const gekozen = (design.elements ?? []).filter((e) => design.isSelected(e.id));
 		const doos = omvat(gekozen);
 		if (doos) fitTo(doos.x, doos.y, doos.width, doos.height);
+		else passend();
 	}
 
 	/** De omhullende rechthoek in mm van een verzameling elementen. */
@@ -235,6 +301,20 @@
 			y: panning.from.y + (event.clientY - panning.y)
 		};
 	}
+
+	/**
+	 * Pannen met de spatiebalk.
+	 *
+	 * Middelste knop en Alt-slepen deden dit al, maar de spatiebalk is de greep
+	 * die iedereen kent — LightBurn, Illustrator, Inkscape, Figma en Photoshop
+	 * doen het alle vijf zo, en op een trackpad zonder middelste knop is het de
+	 * enige die met één hand werkt. Alt-slepen blijft, want dat is de greep die
+	 * *ook* het vastklikken omkeert en die willen we niet afpakken.
+	 *
+	 * Zolang de spatie ingedrukt is, is de cursor een handje en trekt een
+	 * linkerklik het beeld in plaats van een selectiekader.
+	 */
+	let spatie = $state(false);
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
 
@@ -1201,6 +1281,34 @@
 	/** Waar de muis staat, als streepje op beide linialen. */
 	let pointer = $state<{ x: number; y: number } | null>(null);
 
+	/** De uitklap achter het zoompercentage. */
+	let zoomMenu = $state(false);
+	let zoomMenuAt = $state({ x: 0, y: 0 });
+	let zoomStanden = $derived<MenuLijst>([
+		{
+			items: [
+				{ id: 'z-alles', label: 'Alles passend in beeld', toets: '3', doen: passend },
+				{
+					id: 'z-selectie',
+					label: 'Naar de selectie',
+					toets: '2',
+					uit: design.selectedIds.length ? undefined : 'Er is niets geselecteerd',
+					doen: naarSelectie
+				},
+				{ id: 'z-bed', label: 'Het hele bed', toets: '0', doen: bedPassend },
+				{ id: 'z-100', label: '100 % — ware grootte', toets: '1', doen: honderd }
+			]
+		},
+		{
+			items: [25, 50, 100, 200, 400].map((waarde) => ({
+				id: `z-${waarde}`,
+				label: `${waarde} %`,
+				aan: procent === waarde,
+				doen: () => naarProcent(waarde)
+			}))
+		}
+	]);
+
 	/**
 	 * De hoogte van alles onder het canvas, als CSS-variabele op de wortel.
 	 *
@@ -1218,6 +1326,30 @@
 		return () => document.documentElement.style.removeProperty('--palet-hoogte');
 	});
 
+	/**
+	 * Het handvat naar buiten.
+	 *
+	 * De pagina heeft dit nodig voor het rechterklikmenu op het canvas en voor de
+	 * sneltoetsen; die worden daar afgehandeld omdat er één tabel met sneltoetsen
+	 * is. Alternatief was de zoomstand naar de pagina tillen, en dan zou de
+	 * pagina moeten weten hoe groot het werkvlak is en waar de bedhoek ligt.
+	 */
+	$effect(() => {
+		bediening = {
+			zoom: (wat) => {
+				if (wat === 'alles') passend();
+				else if (wat === 'selectie') naarSelectie();
+				else if (wat === 'bed') bedPassend();
+				else honderd();
+			},
+			stap: (factor: number) => zoomAt(factor),
+			vastklikken: snapSchakel,
+			laagnummers: nummersSchakel,
+			staat: () => ({ vastklikken: snapAan, laagnummers: nummersAan })
+		};
+		return () => (bediening = null);
+	});
+
 	// Niet via pointerMm: die rekent vanaf de SVG, en dit gebeurt op het
 	// omhullende vlak dat óók de linialen bevat. Rekenen vanaf de bedhoek.
 	function pointerOnRulers(event: PointerEvent) {
@@ -1230,16 +1362,19 @@
 	}
 </script>
 
+<!-- De zoomsneltoetsen stonden hier en zijn verhuisd naar de pagina: sinds er
+     één tabel met sneltoetsen is (`$lib/acties.ts`) hoort er ook één plek te
+     zijn die ze afhandelt. Wat hier blijft is wat alleen hier bestaat: de pen
+     afmaken, en de spatiebalk waarmee je pant. -->
 <svelte:window
 	onkeydown={(e) => {
-		// Zoomsneltoetsen: alleen buiten invoervelden, en zonder modifiers die
-		// bij de browser horen.
 		const doel = e.target as HTMLElement | null;
 		const tikt = doel && /^(INPUT|TEXTAREA|SELECT)$/.test(doel.tagName);
-		if (!tikt && !e.ctrlKey && !e.metaKey && !e.altKey) {
-			if (e.key === '1' && !e.shiftKey) { honderd(); return; }
-			if (e.key === '!' || (e.key === '1' && e.shiftKey)) { passend(); return; }
-			if (e.key === '@' || (e.key === '2' && e.shiftKey)) { naarSelectie(); return; }
+		if (e.key === ' ' && !tikt && !spatie) {
+			// Voorkomen dat de pagina meescrollt zolang de spatie de pan-greep is.
+			e.preventDefault();
+			spatie = true;
+			return;
 		}
 		if (tool !== 'pen' || !penPoints.length) return;
 		if (e.key === 'Enter') {
@@ -1250,6 +1385,18 @@
 			penPoints = [];
 		}
 	}}
+	onkeyup={(e) => {
+		if (e.key === ' ') {
+			spatie = false;
+			panning = null;
+		}
+	}}
+	onblur={() => {
+		// Het venster verliest de focus met de spatie nog ingedrukt: dan komt de
+		// keyup nooit en blijft het canvas in pan-stand hangen.
+		spatie = false;
+		panning = null;
+	}}
 />
 
 <!-- Wiel zoomt, alt of middelste knop pant. Toetsenbord: de zoomknoppen
@@ -1257,14 +1404,15 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="canvas-wrap"
+	class:pannen={spatie}
 	bind:this={frame}
 	onwheel={(e) => {
 		e.preventDefault();
 		zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY);
 	}}
 	onpointerdown={(e) => {
-		// Middelste knop of alt: slepen om te pannen.
-		if (e.button === 1 || e.altKey) {
+		// Middelste knop, alt, of de spatiebalk ingedrukt: slepen om te pannen.
+		if (e.button === 1 || e.altKey || (spatie && e.button === 0)) {
 			e.preventDefault();
 			startPan(e);
 		}
@@ -1279,6 +1427,13 @@
 		if (!drag) guides = [];
 	}}
 	onpointerup={() => (panning = null)}
+	oncontextmenu={(e) => {
+		// Alleen als er geen vorm onder de cursor lag: die vangt hem zelf af en
+		// stopt de bubbel. Zo is er één rechterklik met twee uitkomsten, en niet
+		// één menu dat alles moet dekken.
+		e.preventDefault();
+		onContextCanvas?.(e, pointerOnRulers(e as unknown as PointerEvent) ?? { x: 0, y: 0 });
+	}}
 >
 	<div class="corner" aria-hidden="true">mm</div>
 	<svg class="ruler-x" aria-hidden="true">
@@ -1431,7 +1586,7 @@
 					// Ook boven een element: slepen trekt een kader, klikken zonder
 					// te slepen selecteert. Zonder dit kon je binnen een groot kader
 					// geen selectie meer trekken zodra dat kader klikbaar werd.
-					if (tool === 'select' && !e.altKey && e.button === 0) {
+					if (tool === 'select' && !e.altKey && !spatie && e.button === 0) {
 						startBand(e);
 					}
 				}}
@@ -1586,6 +1741,15 @@
 										if (e.shiftKey) design.toggle(element.id);
 										else design.select(element.id);
 									}}
+									oncontextmenu={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										// Rechtsklikken op iets dat nog niet gekozen was, kiest het
+										// eerst: anders staat er een menu over een vorm dat op een
+										// ándere vorm werkt.
+										if (!design.isSelected(element.id)) design.select(element.id);
+										onContextObject?.(e);
+									}}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
 											e.preventDefault();
@@ -1650,7 +1814,7 @@
 									vector-effect="non-scaling-stroke"
 									role="button"
 									tabindex="0"
-									aria-label="Selecteer {element.label}"
+									aria-label="Selecteer {elementNaam(element)}"
 									aria-pressed={design.isSelected(element.id)}
 									onclick={(e) => {
 										e.stopPropagation();
@@ -1663,6 +1827,12 @@
 										// Shift houdt de bestaande selectie vast.
 										if (e.shiftKey) design.toggle(element.id);
 										else design.select(element.id);
+									}}
+									oncontextmenu={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										if (!design.isSelected(element.id)) design.select(element.id);
+										onContextObject?.(e);
 									}}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -1723,6 +1893,15 @@
 									width={frameBox.width}
 									height={frameBox.height}
 									onpointerdown={(e) => startDrag(e, 'move')}
+									oncontextmenu={(e) => {
+										// Het sleepvlak van de selectie ligt boven de vormen, dus
+										// een rechterklik binnen de selectie landt hier en niet op
+										// de contour eronder. Zonder deze regel kreeg je midden in
+										// je eigen selectie het canvasmenu.
+										e.preventDefault();
+										e.stopPropagation();
+										onContextObject?.(e);
+									}}
 									onpointermove={moveDrag}
 									onpointerup={endDrag}
 								/>
@@ -2151,18 +2330,43 @@
 			</svg>
 		</button>
 		<span class="scheiding" aria-hidden="true"></span>
-		<button title="Uitzoomen" aria-label="Uitzoomen" onclick={() => zoomAt(1 / 1.25)}>−</button>
-		<!-- 100% is de stand waarin het hele bed in beeld staat; dat is nu ook
-		     echt zo, sinds de schaal het werkvlak volgt in plaats van 640 px. -->
-		<button class="val mono" title="Het hele bed in beeld (toets 1)" onclick={honderd}
-			>{Math.round(zoom * 100)}%</button
+		<button title="Uitzoomen (−)" aria-label="Uitzoomen" onclick={() => zoomAt(1 / 1.25)}>−</button>
+		<!-- Het percentage is nu een échte schaal (100 % = ware grootte) en tegelijk
+		     de ingang naar alle zoomstanden. Hiervóór stond hier een knop met
+		     "100%" die "bed passend" deed, en waren "naar de selectie" en een
+		     werkelijke 1:1 alleen via een ongedocumenteerde sneltoets te bereiken.
+		     Eén uitklap in plaats van vier losse knoppen: de zoombalk staat over
+		     het canvas heen en elke knop die er bij komt, dekt werk af. -->
+		<button
+			class="val mono"
+			aria-haspopup="menu"
+			aria-expanded={zoomMenu}
+			title="Zoomstanden"
+			onclick={(e) => {
+				const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
+				zoomMenuAt = { x: doos.left, y: doos.top - 8 };
+				zoomMenu = !zoomMenu;
+			}}
 		>
-		<button class="fit" title="Alles passend in beeld (Shift+1)" onclick={passend}>
+			{procent}%
+			<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+		</button>
+		<button class="fit" title="Alles passend in beeld (3)" onclick={passend}>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
 			Passend
 		</button>
-		<button title="Inzoomen" aria-label="Inzoomen" onclick={() => zoomAt(1.25)}>+</button>
+		<button title="Inzoomen (+)" aria-label="Inzoomen" onclick={() => zoomAt(1.25)}>+</button>
 	</div>
+
+	{#if zoomMenu}
+		<Menu
+			menu={zoomStanden}
+			x={zoomMenuAt.x}
+			y={zoomMenuAt.y}
+			omhoog
+			onSluit={() => (zoomMenu = false)}
+		/>
+	{/if}
 
 	{#if !device}
 		<p class="empty">Geen machine verbonden</p>
@@ -2273,6 +2477,12 @@
 </div>
 
 <style>
+	/* Zolang de spatie ingedrukt is, zegt de cursor wat een klik nu doet. Zonder
+	   dat verschil lijkt het canvas kapot: je klikt en er komt geen kader. */
+	.canvas-wrap.pannen,
+	.canvas-wrap.pannen * {
+		cursor: grab;
+	}
 	.canvas-wrap {
 		flex: 1;
 		position: relative;

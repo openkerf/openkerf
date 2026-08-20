@@ -33,6 +33,22 @@
 	import TestGridResult from '$components/TestGridResult.svelte';
 	import TextDialog from '$components/TextDialog.svelte';
 	import TopBar from '$components/TopBar.svelte';
+	import Actiebalk from '$components/Actiebalk.svelte';
+	import Menu from '$components/Menu.svelte';
+	import Hoeken from '$components/Hoeken.svelte';
+	import Offset from '$components/Offset.svelte';
+	import {
+		TOETSEN,
+		comboVan,
+		canvasMenu,
+		objectMenu,
+		geschiedenisActies,
+		schikActies,
+		uitlijnActies,
+		type Context as ActieContext,
+		type Handelingen,
+		type Menu as MenuLijst
+	} from '$lib/acties';
 	import MeldingAlarm from '$components/MeldingAlarm.svelte';
 	import MeldingKaart from '$components/MeldingKaart.svelte';
 	import { Bewaker, Meldingen } from '$lib/meldingen.svelte';
@@ -487,9 +503,9 @@
 		if (!canEdit || (!hasSelection && action !== 'rescue')) return;
 		const ids = design.selectedIds;
 		if (action === 'offset') {
-			const answer = prompt('Offset in mm (negatief = naar binnen)', '2');
-			if (!answer) return;
-			if ((await edits.offset(ids, Number(answer))).ok) await design.load();
+			// De vraag staat in een eigen venster (`Offset.svelte`); hier stond een
+			// `window.prompt`, en die viel buiten het thema én valideerde niets.
+			offsetOpen = true;
 			return;
 		}
 		if (action === 'rescue') {
@@ -582,6 +598,7 @@
 		camera.load();
 		sheets.load();
 		library.load();
+		leesKlembord();
 		if (window.innerWidth < 850) paneelOpen = false;
 		const wantedTab = $page.url.searchParams.get('tab');
 		if (wantedTab === 'design' || wantedTab === 'layers') tab = wantedTab;
@@ -672,6 +689,228 @@
 		if (teGroot || tiling.run) tiling.load();
 	});
 
+	// ─── Klembord, menu's en sneltoetsen ──────────────────────────────────────
+	//
+	// Alles hieronder hangt aan één lijst: `$lib/acties.ts`. De actiebalk boven
+	// het canvas, het rechterklikmenu en het toetsenbord lezen daar dezelfde
+	// namen, dezelfde sneltoetsen en dezelfde redenen-waarom-niet uit. Dat is
+	// het hele punt: hiervóór stond elke handeling op precies één plek, en dus
+	// was er geen tweede plek waar hij hetzelfde kon heten.
+
+	/** Hoeveel vormen op het klembord staan; het menu moet weten of plakken kan. */
+	let klembord = $state(0);
+	async function leesKlembord() {
+		const response = await fetch('/api/design/clipboard');
+		if (response.ok) klembord = (await response.json()).count ?? 0;
+	}
+
+	async function klembordActie(wat: 'copy' | 'cut', ids: string[]) {
+		if (!ids.length || !canEdit) return;
+		const response = await post(`/api/design/clipboard/${wat}`, { ids });
+		if (!response.ok) return;
+		klembord = (await response.json()).count ?? 0;
+		if (wat === 'cut') {
+			design.select(null);
+			await design.load();
+		}
+	}
+
+	async function plakken(punt?: { x: number; y: number }) {
+		if (!canEdit || !klembord) return;
+		const response = await post('/api/design/clipboard/paste', {
+			x_mm: punt?.x ?? null,
+			y_mm: punt?.y ?? null
+		});
+		if (!response.ok) return;
+		const uitkomst = await response.json().catch(() => null);
+		await design.load();
+		if (uitkomst?.ids?.length) design.selectMany(uitkomst.ids);
+	}
+
+	/** Het handvat waarmee de zoomstanden van het canvas hier te bedienen zijn. */
+	let canvasBediening = $state<{
+		zoom: (wat: 'alles' | 'selectie' | 'bed' | 'honderd') => void;
+		stap: (factor: number) => void;
+		vastklikken: () => void;
+		laagnummers: () => void;
+		staat: () => { vastklikken: boolean; laagnummers: boolean };
+	} | null>(null);
+
+	let hoekenOpen = $state(false);
+	let offsetOpen = $state(false);
+
+	/** Welk menu er open staat, en waar. */
+	let menu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
+	/** Waar er op het bed geklikt werd — "plakken hier" belooft die plek. */
+	let menuPunt = $state<{ x: number; y: number } | null>(null);
+
+	let handelingen: Handelingen = {
+		knippen: () => klembordActie('cut', design.selectedIds),
+		kopieren: () => klembordActie('copy', design.selectedIds),
+		plakken: (punt) => plakken(punt),
+		dupliceren: duplicateSelection,
+		verwijderen: removeSelection,
+		allesSelecteren: () =>
+			design.selectMany(design.elements.filter((el) => !el.hidden).map((el) => el.id)),
+		selectieWissen: () => design.select(null),
+		schikken: (modus) => arrange(modus),
+		draaien: (graden) => rotate(graden),
+		splitsen: splitsen,
+		vullen: (aan) => vullen(aan),
+		hoeken: () => (hoekenOpen = true),
+		naarLaag: (soort) => naarEenLaag(soort),
+		laagToekennen: (id, erin) => assign(id, erin),
+		naarVel: async (id) => {
+			if (await sheets.move(design.selectedIds, id)) {
+				design.select(null);
+				await design.load();
+			}
+		},
+		tekstBewerken: () => {
+			editingText = design.selectedId;
+			textOpen = true;
+		},
+		bijsnijden: () => (cropping = true),
+		bijsnijdenTerug: async () => {
+			const id = design.selectedId;
+			if (!id) return;
+			await fetch(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
+				method: 'DELETE',
+				headers: authHeaders()
+			});
+			await design.load();
+			await loadImageState();
+		},
+		vectoriseren: async () => {
+			const id = design.selectedId;
+			if (!id) return;
+			await post(`/api/design/elements/${encodeURIComponent(id)}/vectorise`, {
+				method: 'vectrace'
+			});
+			await design.load();
+		},
+		undo: () => history('undo'),
+		redo: () => history('redo'),
+		zoom: (wat) => canvasBediening?.zoom(wat),
+		vastklikken: () => canvasBediening?.vastklikken(),
+		laagnummers: () => canvasBediening?.laagnummers(),
+		redden: () => arrange('rescue')
+	};
+
+	/** De toestand waarin een handeling wel of niet kan. */
+	let actieContext = $derived.by<ActieContext>(() => {
+		const gekozen = design.elements.filter((e) => design.isSelected(e.id));
+		const beeld = gekozen.length === 1 && Boolean(gekozen[0]?.image);
+		const stand = canvasBediening?.staat();
+		return {
+			aantal: gekozen.length,
+			inGroep: gekozen.some((e) => Boolean(e.group_id)),
+			isAfbeelding: beeld,
+			isTekst: gekozen.length === 1 && gekozen[0]?.text !== null,
+			isBijgesneden: beeld && Boolean(imageState?.cropped),
+			gevuld: gekozen.length > 0 && gekozen.every((e) => Boolean(e.fill)),
+			klembord,
+			bezig: edits.busy,
+			mag: canEdit,
+			lagen: design.operations
+				.filter((op) => !op.grid)
+				.map((op) => ({
+					id: op.id,
+					label: op.label,
+					erin: design.selectedIds.every((id) => op.element_ids.includes(id))
+				})),
+			vellen: sheets.sheets.filter((sheet) => !sheet.active).map((sheet) => ({ id: sheet.id, name: sheet.name })),
+			teSplitsen: {
+				vormen: gekozen.filter((e) => (e.subpaths ?? 1) > 1).length,
+				stukken: gekozen.reduce((n, e) => n + ((e.subpaths ?? 1) > 1 ? (e.subpaths ?? 1) : 0), 0)
+			},
+			vastklikken: stand?.vastklikken ?? true,
+			laagnummers: stand?.laagnummers ?? true,
+			leeg: design.isEmpty
+		};
+	});
+
+	function openObjectMenu(event: MouseEvent) {
+		menuPunt = null;
+		menu = { lijst: objectMenu(actieContext, handelingen), x: event.clientX, y: event.clientY };
+	}
+
+	function openCanvasMenu(event: MouseEvent, punt: { x: number; y: number }) {
+		menuPunt = punt;
+		menu = {
+			lijst: canvasMenu(actieContext, handelingen, punt),
+			x: event.clientX,
+			y: event.clientY
+		};
+	}
+
+	/**
+	 * Eén tabel, één afhandelaar.
+	 *
+	 * Hiervóór stonden de sneltoetsen op twee plekken — hier en in `Canvas` — en
+	 * ontbraken de toetsen die iedere desktop-app heeft: ⌘Z deed niets, ⌘C en ⌘V
+	 * bestonden niet, ⌘G niet. Wat wel of niet af te vangen is in een browser
+	 * staat toegelicht bij `TOETSEN`.
+	 */
+	function sneltoets(event: KeyboardEvent) {
+		const doel = event.target as HTMLElement | null;
+		if (doel?.closest('input, textarea, select, [contenteditable="true"]')) return;
+		if (menu) return; // het menu bedient zijn eigen toetsen
+		const combo = comboVan(event);
+
+		if (combo === 'escape') {
+			design.select(null);
+			return;
+		}
+
+		const doen: Record<string, () => void> = {
+			[TOETSEN.undo]: handelingen.undo,
+			[TOETSEN.redo]: handelingen.redo,
+			[TOETSEN.knippen]: handelingen.knippen,
+			[TOETSEN.kopieren]: handelingen.kopieren,
+			[TOETSEN.plakken]: () => handelingen.plakken(),
+			[TOETSEN.dupliceren]: handelingen.dupliceren,
+			[TOETSEN.verwijderen]: handelingen.verwijderen,
+			[TOETSEN.allesSelecteren]: handelingen.allesSelecteren,
+			[TOETSEN.groeperen]: () => handelingen.schikken('group'),
+			[TOETSEN.groepOpheffen]: () => handelingen.schikken('ungroup'),
+			[TOETSEN.groepOpheffen2]: () => handelingen.schikken('ungroup'),
+			[TOETSEN.spiegelH]: () => handelingen.schikken('mirror-h'),
+			[TOETSEN.spiegelV]: () => handelingen.schikken('mirror-v'),
+			[TOETSEN.draaiLinks]: () => handelingen.draaien(-90),
+			[TOETSEN.draaiRechts]: () => handelingen.draaien(90),
+			[TOETSEN.zoom100]: () => handelingen.zoom('honderd'),
+			[TOETSEN.zoomSelectie]: () => handelingen.zoom('selectie'),
+			[TOETSEN.zoomAlles]: () => handelingen.zoom('alles'),
+			[TOETSEN.zoomBed]: () => handelingen.zoom('bed'),
+			[TOETSEN.zoomAllesOud]: () => handelingen.zoom('alles'),
+			[TOETSEN.zoomSelectieOud]: () => handelingen.zoom('selectie'),
+			[TOETSEN.zoomSelectieLightburn]: () => handelingen.zoom('selectie'),
+			[TOETSEN.zoomIn]: () => canvasBediening?.stap(1.25),
+			[TOETSEN.zoomUit]: () => canvasBediening?.stap(1 / 1.25)
+		};
+		const actie = doen[combo];
+		if (actie) {
+			event.preventDefault();
+			actie();
+			return;
+		}
+
+		// Pijltjes verplaatsen 0,1 mm; met shift 1 mm (toegankelijkheidseis).
+		const step = event.shiftKey ? 1 : 0.1;
+		const moves: Record<string, [number, number]> = {
+			ArrowLeft: [-step, 0],
+			ArrowRight: [step, 0],
+			ArrowUp: [0, -step],
+			ArrowDown: [0, step]
+		};
+		const move = moves[event.key];
+		if (move && hasSelection && canEdit) {
+			event.preventDefault();
+			nudge(move[0], move[1]);
+		}
+	}
+
 	function requestStart() {
 		selectTab('job');
 		preflight = true;
@@ -683,45 +922,7 @@
 	}
 </script>
 
-<svelte:window
-	bind:innerWidth={breedte}
-	onkeydown={(e) => {
-		if (e.key === 'Escape') {
-			design.select(null);
-			return;
-		}
-		const typing = (e.target as HTMLElement | null)?.closest('input, textarea, select');
-		if (typing) return;
-		if ((e.key === 'Delete' || e.key === 'Backspace') && hasSelection && canEdit) {
-			e.preventDefault();
-			removeSelection();
-			return;
-		}
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
-			e.preventDefault();
-			design.selectMany(design.elements.filter((el) => !el.hidden).map((el) => el.id));
-			return;
-		}
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && hasSelection && canEdit) {
-			e.preventDefault();
-			duplicateSelection();
-			return;
-		}
-		// Pijltjes verplaatsen 0,1 mm; met shift 1 mm (toegankelijkheidseis).
-		const step = e.shiftKey ? 1 : 0.1;
-		const moves: Record<string, [number, number]> = {
-			ArrowLeft: [-step, 0],
-			ArrowRight: [step, 0],
-			ArrowUp: [0, -step],
-			ArrowDown: [0, step]
-		};
-		const move = moves[e.key];
-		if (move && hasSelection && canEdit) {
-			e.preventDefault();
-			nudge(move[0], move[1]);
-		}
-	}}
-/>
+<svelte:window bind:innerWidth={breedte} onkeydown={sneltoets} />
 
 {#if telefoon}
 	<!-- De telefoon is een eigen app: monitor en noodrem. Zie DESIGN-SYSTEM v2,
@@ -804,6 +1005,24 @@
 	<!-- Vellen boven het canvas: elk vel is een eigen document, dus dit is
 	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->
 	<div class="stage">
+		<!-- Uitlijnen, groeperen, spiegelen en de geschiedenis: werkwoorden op de
+		     selectie, dus tegen het bed aan en niet in het eigenschappenpaneel.
+		     Zie DESIGN-SYSTEM v4, "Waar hoort een handeling". -->
+		<Actiebalk
+			geschiedenis={geschiedenisActies(actieContext, handelingen)}
+			uitlijnen={uitlijnActies(actieContext, handelingen)}
+			schikken={schikActies(actieContext, handelingen)}
+			aantal={actieContext.aantal}
+			onMeer={(event) => {
+				const doos = (event.currentTarget as HTMLElement).getBoundingClientRect();
+				menuPunt = null;
+				menu = {
+					lijst: objectMenu(actieContext, handelingen),
+					x: doos.left,
+					y: doos.bottom + 4
+				};
+			}}
+		/>
 		<SheetTabs
 			{sheets}
 			{library}
@@ -817,6 +1036,9 @@
 		/>
 		<Canvas
 			onPointerMm={(punt) => (muisMm = punt)}
+			onContextObject={openObjectMenu}
+			onContextCanvas={openCanvasMenu}
+			bind:bediening={canvasBediening}
 			{device}
 			{design}
 			{edits}
@@ -954,59 +1176,25 @@
 					{design}
 					{edits}
 					{canEdit}
-					onHistory={history}
 					onRotate={rotate}
 					onAssign={assign}
 					onLayerChange={() => design.load()}
 					box={design.liveBox}
 					onSetPosition={setPosition}
 					onSetSize={setSize}
-					otherSheets={sheets.sheets.filter((s) => !s.active)}
-					onMoveToSheet={async (id) => {
-						if (await sheets.move(design.selectedIds, id)) {
-							design.select(null);
-							await design.load();
-						}
-					}}
 					onArrange={arrange}
-					onCorners={hoeken}
 					cornerNote={hoekMelding}
-					onSplit={splitsen}
-					onSingleLayer={naarEenLaag}
-					onFill={vullen}
 					onPrune={opruimen}
 					tidyNote={indeelMelding}
-					onCrop={() => (cropping = true)}
-
-					onVectorise={async () => {
-						const id = design.selectedId;
-						if (!id) return;
-						await post(`/api/design/elements/${encodeURIComponent(id)}/vectorise`, { method: 'vectrace' });
-						await design.load();
-					}}
 					image={imageState as never}
 					onImageSet={(name, enabled, values) =>
 						setImage({ adjustment: name, enabled, values })}
 					onImageClear={() => setImage({ clear: true })}
-					onUncrop={async () => {
-						const id = design.selectedId;
-						if (!id) return;
-						await fetch(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
-							method: 'DELETE',
-							headers: authHeaders()
-						});
-						await design.load();
-						await loadImageState();
-					}}
 					onImageDpi={async (dpi) => {
 						const id = design.selectedId;
 						if (!id) return;
 						await post(`/api/design/elements/${encodeURIComponent(id)}/image`, { dpi });
 						await design.load();
-					}}
-					onEditText={(id) => {
-						editingText = id;
-						textOpen = true;
 					}}
 				/>
 			{:else}
@@ -1214,6 +1402,31 @@
 	<MeldingKaart {meldingen} />
 </Dialog>
 
+{#if menu}
+	<Menu menu={menu.lijst} x={menu.x} y={menu.y} onSluit={() => (menu = null)} />
+{/if}
+
+<Hoeken
+	bind:open={hoekenOpen}
+	aantal={design.selectedIds.length}
+	bezig={edits.busy}
+	melding={hoekMelding}
+	onToepassen={async (stijl, maat) => {
+		await hoeken(stijl, maat);
+		if (!hoekMelding) hoekenOpen = false;
+	}}
+/>
+
+<Offset
+	bind:open={offsetOpen}
+	aantal={design.selectedIds.length}
+	bezig={edits.busy}
+	onToepassen={async (afstand) => {
+		offsetOpen = false;
+		if ((await edits.offset(design.selectedIds, afstand)).ok) await design.load();
+	}}
+/>
+
 <Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
 
 <CameraCalibration bind:open={calibrateOpen} {camera} />
@@ -1261,7 +1474,11 @@
 	{/if}
 </Dialog>
 
-<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="640px">
+<!-- Breder dan de 640px die hier stond. Sinds de bibliotheek twee panelen heeft
+     — materialen links, instellingen rechts — is 640 precies te smal: de
+     instelling zelf hield 380px over en dan wringen dikte, waarden, bron en de
+     knop op één regel. -->
+<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="1120px">
 	<MaterialLibrary
 		{library}
 		operations={design.operations}

@@ -121,7 +121,11 @@ test('annuleren laat het bestaande werk staan', async (t) => {
 test('doorzetten vervangt wél, want dat is wat openen doet', async (t) => {
 	if (!bereikbaar) return t.skip(`geen server op ${BASE}`);
 	await importeer('een.svg');
-	await page.getByRole('button', { name: 'Zonder opslaan openen' }).click();
+	// De knop heet "Niet opslaan" — het drieluik annuleren / niet opslaan /
+	// opslaan-en-openen dat elk besturingssysteem bij deze vraag gebruikt. Deze
+	// test wachtte nog op "Zonder opslaan openen", de naam van vóór die wijziging,
+	// en liep dus dertig seconden in een timeout.
+	await page.getByRole('button', { name: 'Niet opslaan' }).click();
 	await page.waitForTimeout(3000);
 	const na = await design();
 	assert.equal(na.elements.length, 1);

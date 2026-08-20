@@ -6,6 +6,50 @@
  * in plaats daarvan schaalt het canvas één keer met `units_per_mm`.
  */
 
+/**
+ * Hoe een vorm heet in de app.
+ *
+ * De engine geeft er een label bij als "Rect meerk40t:5 #0000ff": het type in
+ * het Engels, het interne id en de streekkleur. Dat stond zo in het paneel, en
+ * paste er niet in — je las "Rect meerk40t:5 #00…". Het zegt bovendien niets wat
+ * je niet al ziet, en de twee dingen die het wél verklapt (een intern id, een
+ * kleur die niet de laagkleur is) zijn precies de twee dingen die een gebruiker
+ * niet hoeft te weten.
+ *
+ * Wat een vorm hier heet: wat hij ís, en bij tekst wat er staat.
+ */
+const SOORT: Record<string, string> = {
+	'elem rect': 'Rechthoek',
+	'elem ellipse': 'Ellips',
+	'elem circle': 'Cirkel',
+	'elem line': 'Lijn',
+	'elem polyline': 'Gebroken lijn',
+	'elem path': 'Pad',
+	'elem point': 'Punt',
+	'elem text': 'Tekst',
+	'elem image': 'Afbeelding',
+	group: 'Groep'
+};
+
+export function elementNaam(element: {
+	type: string;
+	text: { text: string } | null;
+	image?: unknown;
+	label?: string;
+}): string {
+	if (element.text?.text) {
+		const kort = element.text.text.trim();
+		return `Tekst “${kort.length > 22 ? kort.slice(0, 21) + '…' : kort}”`;
+	}
+	if (element.image) return 'Afbeelding';
+	const soort = SOORT[element.type];
+	if (soort) return soort;
+	// Onbekend type: het engine-label is dan beter dan niets, maar zonder het
+	// interne id en de kleurcode erachter.
+	const schoon = (element.label ?? element.type).replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '').trim();
+	return schoon || element.type;
+}
+
 export type DesignElement = {
 	id: string;
 	type: string;
