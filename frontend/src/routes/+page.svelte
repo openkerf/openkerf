@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { machineState } from '$lib/api';
+	import { jobBezig, jobFase, machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
@@ -111,6 +111,13 @@
 	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
 	// waar je hem zoekt.
 	let muisMm = $state<{ x: number; y: number } | null>(null);
+	/** Hoogte van de actiebalk plus de vellenbalk; de alarmkaart hangt eronder. */
+	let bovenrandHoogte = $state(0);
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		document.documentElement.style.setProperty('--bovenrand-hoogte', `${bovenrandHoogte}px`);
+		return () => document.documentElement.style.removeProperty('--bovenrand-hoogte');
+	});
 	/** Materiaal waarmee het testrastervenster opent, als je er vanuit de
 	    bibliotheek naartoe springt. */
 	let gridMateriaal = $state<number | null>(null);
@@ -591,6 +598,17 @@
 	);
 	// Niet `state` noemen: `$state` zou dan als store-referentie gelezen worden.
 	let machine = $derived(machineState(device, status.connected));
+	/**
+	 * De fase van de job, uit dezelfde functie die het Job-paneel gebruikt.
+	 *
+	 * De bovenbalk las hiervóór de machinetoestand (`machine === 'busy'`) en het
+	 * paneel `job.running`. Bij een job die gespoold is maar nog niet opgepakt zijn
+	 * die twee het oneens, en dan zet de ene knop uit wat de andere aanbiedt —
+	 * gemeten met een niet-antwoordende machine: de balk zette starten uit, het
+	 * paneel liet het aan staan. Eén functie, één antwoord.
+	 */
+	let jobfase = $derived(jobFase(device, status.activeJob, design.isEmpty));
+	let werkOnderweg = $derived(jobBezig(jobfase));
 
 	onMount(() => {
 		status.connect();
@@ -953,15 +971,14 @@
 	state={machine}
 	canStart={(control.capabilities?.actions.start ?? false) &&
 		!control.needsToken &&
-		machine !== 'busy' &&
-		machine !== 'paused'}
+		!werkOnderweg}
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
-	stopArmed={machine === 'busy' || machine === 'paused'}
+	stopArmed={werkOnderweg}
 	canEdit={canEdit && design.preview === null}
 	{smal}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
 	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
-	paused={machine === 'paused'}
+	paused={jobfase === 'gepauzeerd'}
 	onPause={() => control.pause()}
 	onResume={() => control.resume()}
 	onStart={requestStart}
@@ -1005,6 +1022,14 @@
 	<!-- Vellen boven het canvas: elk vel is een eigen document, dus dit is
 	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->
 	<div class="stage">
+		<!-- Alles tussen de bovenbalk en het canvas meet zichzelf op.
+		     De alarmkaart hangt onder de bovenbalk en dekte sinds de vorige ronde de
+		     actiebalk en de vellenbalk af — precies de twee dingen die je nodig hebt
+		     terwijl er een melding staat. Gemeten met een USB-fout: de kaart lag over
+		     de uitlijnknoppen en over de plus van de vellenbalk, en Playwright kon er
+		     niet doorheen klikken. Dezelfde aanpak als `--palet-hoogte` onder het
+		     canvas: opmeten, niet uitrekenen. -->
+		<div class="bovenrand" bind:clientHeight={bovenrandHoogte}>
 		<!-- Uitlijnen, groeperen, spiegelen en de geschiedenis: werkwoorden op de
 		     selectie, dus tegen het bed aan en niet in het eigenschappenpaneel.
 		     Zie DESIGN-SYSTEM v4, "Waar hoort een handeling". -->
@@ -1034,6 +1059,7 @@
 				await design.load();
 			}}
 		/>
+		</div>
 		<Canvas
 			onPointerMm={(punt) => (muisMm = punt)}
 			onContextObject={openObjectMenu}
@@ -1204,6 +1230,7 @@
 					events={status.events}
 					{control}
 					activeJob={status.activeJob}
+					revisie={design.revision}
 					bind:preflight
 					onJog={async (dx, dy) => {
 						await edits.jog(dx, dy);
@@ -1513,6 +1540,13 @@
 </Dialog>
 
 <style>
+	/* De twee balken boven het canvas als één blok, zodat het zichzelf kan
+	   opmeten. */
+	.bovenrand {
+		flex: none;
+		display: flex;
+		flex-direction: column;
+	}
 	.stage {
 		flex: 1;
 		min-width: 0;

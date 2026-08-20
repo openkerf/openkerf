@@ -1,7 +1,11 @@
 <script lang="ts">
 	import {
+		FASE,
 		formatDuration,
+		jobBezig,
+		jobFase,
 		isStalled,
+		remainingSeconds,
 		PAUZE_TOETS,
 		STOP_TOETS,
 		type Device,
@@ -18,6 +22,7 @@
 		control,
 		device,
 		job,
+		revisie = 0,
 		preflight = $bindable(),
 		onJog,
 		onHome,
@@ -30,6 +35,8 @@
 		control: Controller;
 		device: Device | null;
 		job: Job | null;
+		/** Loopt op bij elke wijziging in het ontwerp; de schatting volgt hem. */
+		revisie?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
 		onHome?: () => void;
@@ -248,13 +255,34 @@
 		}
 	}
 
+	/**
+	 * De schatting ophalen zolang de voorbereiding in beeld staat.
+	 *
+	 * Hij hing aan het `preflight`-vlaggetje, en dat ging maar één keer om. Nu
+	 * staat het blok altijd open als er niets onderweg is, dus moet hij meelopen
+	 * met het ontwerp — anders staat er straks een tijd van een tekening die je
+	 * al vervangen hebt.
+	 *
+	 * Met een rem erop: elke vorm die je tekent geeft een signaal, en `plan` is
+	 * niet gratis. 400 ms na de laatste wijziging is snel genoeg om vers te
+	 * voelen en langzaam genoeg om niet mee te typen.
+	 */
+	let schatKlok: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
-		if (preflight) loadEstimate();
-		else {
-			estimate = null;
-			overzicht = null;
-			ontwerp = null;
+		// Bewust níet op `bezigMetWerk` kijken: die hangt via `leeg` aan de
+		// schatting, en dan zou dit effect zijn eigen aanleiding zijn. De
+		// wachtrijlengte zegt hetzelfde zonder de lus.
+		const zichtbaar = (device?.spooler?.queue_length ?? 0) === 0;
+		void revisie;
+		if (!zichtbaar) {
+			if (schatKlok) clearTimeout(schatKlok);
+			return;
 		}
+		if (schatKlok) clearTimeout(schatKlok);
+		schatKlok = setTimeout(loadEstimate, 400);
+		return () => {
+			if (schatKlok) clearTimeout(schatKlok);
+		};
 	});
 
 	// Zonder token levert elke schrijfactie een 401 op. Een knop aanbieden die
@@ -341,10 +369,33 @@
 	 * niet, en dan houden we onze mond.
 	 */
 	let leeg = $derived(!estimating && estimate !== null && estimate.parts === 0);
+
+	/**
+	 * De fase, uit één bron (`jobFase` in `$lib/api.ts`).
+	 *
+	 * Dit paneel las hiervóór `job.running` en de bovenbalk de machinetoestand, en
+	 * bij een job die gespoold was maar nog niet opgepakt (`status: "Waiting"`,
+	 * `running: false`) waren die twee het oneens: de balk zette starten uit, dit
+	 * paneel liet het aan staan. Eén tik hier spoolde dan een tweede job bovenop
+	 * de eerste.
+	 */
+	let fase = $derived(jobFase(device, job, leeg));
+	let bezigMetWerk = $derived(jobBezig(fase));
+	let voortgang = $derived.by(() => {
+		const deel = job?.progress;
+		if (deel === null || deel === undefined || !Number.isFinite(deel)) return null;
+		// Een job die klaar is maar door de engine niet afgemeld wordt, staat op
+		// 0,998; die tonen we als vol, want dat is wat er gebeurd is.
+		return fase === 'klaar' ? 1 : Math.min(1, Math.max(0, deel));
+	});
+	let resterend = $derived(fase === 'klaar' ? 0 : remainingSeconds(job));
 </script>
 
 <div class="section">
-	<h2 class="section-title">Bediening</h2>
+	<!-- De kop zei "Bediening" en dat is waar: het zijn bedieningsorganen. Maar
+	     het zegt niets over wat er nú aan de hand is, en dat is precies wat je op
+	     dit tabblad komt halen. -->
+	<h2 class="section-title">{bezigMetWerk || fase === 'klaar' ? 'De job' : 'Klaarmaken'}</h2>
 
 	{#if control.tokenProbleem}
 		<!-- De API is vanaf het netwerk bereikbaar; zonder token blijft alles
@@ -367,8 +418,19 @@
 		</div>
 	{/if}
 
-	{#if preflight}
-		<!-- Pre-flight in het paneel, geen modaal venster. -->
+	{#if !bezigMetWerk && fase !== 'klaar'}
+		<!--
+			De voorbereiding staat er altijd, niet pas na een klik.
+
+			Dit blok zat achter de knop "Job starten": je drukte, en het hele paneel
+			werd vervangen door een overzicht — "alles gaat uit beeld", zoals de
+			klacht luidde. Terwijl dit juist het beeld is waar je naar kijkt vóórdat
+			je iets brandt. Het staat nu open zolang er niets onderweg is.
+
+			De twee bewuste tikken blijven: VEILIGHEID.md legt vast dat geen enkele
+			klik direct brandt. "Job starten" wapent, "Nu starten" vuurt — en anders
+			dan hiervóór verdwijnt er bij die eerste tik niets uit beeld.
+		-->
 		<div class="preflight" class:niets={leeg}>
 			<!-- "Geschatte tijd 0:00" boven een leeg bed leest als een job van nul
 			     seconden in plaats van als geen job. Bij niets te doen zwijgt de
@@ -572,9 +634,9 @@
 						hierna terug.
 					</p>
 				</div>
-				<div class="pf-actions een">
-					<button class="btn" onclick={() => (preflight = false)}>Terug naar het ontwerp</button>
-				</div>
+				<!-- Hier stond "Terug naar het ontwerp", en dat was de enige uitweg
+				     uit een overzicht dat het paneel had overgenomen. Nu neemt het
+				     paneel niets over, dus is er ook niets om uit terug te keren. -->
 			{:else}
 			<!-- Dit stond als tweede geel blok onder de risicomelding. Twee
 			     waarschuwingen op rij van dezelfde kleur devalueren elkaar: de
@@ -589,123 +651,185 @@
 				</ul>
 			</div>
 
-			<!-- De kop langs de omtrek, zonder te branden: de laatste controle die
-			     je écht kunt uitvoeren in plaats van alleen aanvinken. Stond alleen
-			     in de bovenbalk; hier is het moment waarop je hem nodig hebt. -->
-			{#if onFrame}
-				<button
-					class="btn kader"
-					disabled={control.busy !== null || running}
-					title="De kop langs de omtrek van je werk sturen — de laser blijft uit"
-					onclick={() => onFrame?.()}
-				>
-					Eerst het kader tonen
-				</button>
-			{/if}
+			<!--
+				De knoppen plakken onderaan het paneel.
 
-			<div class="pf-actions">
-				<button class="btn" onclick={() => (preflight = false)}>Annuleren</button>
-				<button
-					class="btn primary"
-					onclick={confirmStart}
-					disabled={control.busy !== null || !verbinding.online}
-					title={verbinding.online ? undefined : blockedReason}
-				>
-					{control.busy === 'start' ? 'Bezig…' : 'Nu starten'}
-				</button>
+				Sinds de voorbereiding altijd openstaat, is de kolom langer dan het
+				paneel hoog is (gemeten: 1 427 px inhoud in 788 px). Zonder deze plak
+				stond de startknop onder de vouw — de primaire handeling buiten beeld,
+				en dat is precies wat deze ronde moest oplossen, niet veroorzaken.
+
+				Het kader tonen staat op dezelfde regel: het is de laatste controle
+				vóór dezelfde knop, dus hoort het ernaast en niet drie blokken hoger.
+			-->
+			<div class="pf-plak">
+				{#if preflight}
+					<!-- Twee bewuste tikken, op dezelfde plek: VEILIGHEID.md legt vast dat
+					     geen enkele klik direct brandt. De eerste wapent, de tweede vuurt —
+					     en anders dan hiervóór verdwijnt er bij die eerste tik niets uit
+					     beeld. -->
+					<button class="btn" onclick={() => (preflight = false)}>Annuleren</button>
+					<button
+						class="btn primary groot"
+						onclick={confirmStart}
+						disabled={control.busy !== null || !verbinding.online}
+						title={verbinding.online ? undefined : blockedReason}
+					>
+						{control.busy === 'start' ? 'Bezig…' : 'Nu starten'}
+					</button>
+				{:else}
+					{#if onFrame}
+						<button
+							class="btn"
+							disabled={control.busy !== null || running}
+							title="De kop langs de omtrek van je werk sturen — de laser blijft uit"
+							onclick={() => onFrame?.()}
+						>
+							Kader tonen
+						</button>
+					{/if}
+					<button
+						class="btn primary groot"
+						disabled={!actions?.start || blocked}
+						title={blockedReason}
+						onclick={() => (preflight = true)}
+					>
+						Job starten{#if !estimating && (estimate?.seconds ?? job?.estimate_seconds)}
+							<span class="pf-startmaat"
+								>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
+							>{/if}
+					</button>
+				{/if}
 			</div>
 			{/if}
 		</div>
 	{:else}
-		<div class="controls" class:balkdraagt>
-			<!-- Eén primaire knop per toestand. Stond "Job starten" ook tijdens een
-			     lopende job in het accent, dan is de opvallendste knop op het scherm
-			     degene die je niet moet hebben — en spoolt een tik er een tweede
-			     job achteraan. -->
-			<button
-				class="btn dubbel"
-				class:primary={!bezet}
-				disabled={!actions?.start || blocked || bezet}
-				title={bezet ? 'Er loopt al een job — eerst stoppen of afwachten' : blockedReason}
-				onclick={() => (preflight = true)}
-			>
-				Job starten
-			</button>
-			{#if paused}
+		<!--
+			Het voortgangsblok.
+
+			Hier stonden vier knoppen (starten, pauze, wachtrij legen, stop) plus
+			vier regels uitleg over sneltoetsen, en dat stond er ongeacht wat de
+			machine deed. Drie van de vier waren dood zolang er niets liep, en
+			zodra er wél iets liep stond de enige informatie die dan iets betekent
+			— de voortgang — op 700px, onder de jogknoppen, buiten beeld.
+
+			Nu leidt de fase (`jobFase` in `$lib/api.ts`): wat er nu aan de hand is
+			staat bovenaan, met de knoppen die op dít moment iets doen. De
+			sneltoetsen staan op de knoppen zelf, want dat is waar je ze leert.
+		-->
+		<div class="nu" class:brandt={fase === 'brandt'} class:pauze={fase === 'gepauzeerd'}>
+			<div class="nu-kop">
+				<span class="nu-fase">{FASE[fase].kop}</span>
+				{#if job}
+					<span class="nu-job mono" title={job.label}>{job.label}</span>
+				{/if}
+			</div>
+
+			{#if voortgang !== null}
+				<!-- De balk en het percentage horen bij elkaar en staan dus op één
+				     regel; de tijden eronder in dezelfde kolommen als altijd. -->
+				<div class="nu-balk" role="progressbar" aria-valuenow={Math.round(voortgang * 100)} aria-valuemin="0" aria-valuemax="100" aria-label="Voortgang van de job">
+					<span class="nu-vol" style="width: {Math.round(voortgang * 1000) / 10}%"></span>
+				</div>
+				<div class="nu-cijfers mono">
+					<span class="nu-pct">{Math.round(voortgang * 100)}%</span>
+					{#if job?.steps_total}
+						<span class="nu-stap">{job.steps_done ?? 0} / {job.steps_total} stappen</span>
+					{/if}
+					{#if (job?.loops ?? 1) > 1}
+						<span class="nu-pass">pass {(job?.loops_executed ?? 0) + 1} van {job?.loops}</span>
+					{/if}
+				</div>
+				<div class="nu-tijd">
+					<span>{formatDuration(job?.elapsed_seconds ?? null)} verstreken</span>
+					{#if resterend !== null}<span class="nu-rest">nog {formatDuration(resterend)}</span>{/if}
+				</div>
+			{/if}
+
+			<p class="nu-uitleg">{FASE[fase].uitleg}</p>
+
+			<div class="nu-acties">
+				{#if paused}
+					<button
+						class="btn primary"
+						disabled={!actions?.resume || blocked}
+						title="{blockedReason ?? 'Verder waar de kop gebleven was'} · {PAUZE_TOETS}"
+						onclick={() => control.resume()}
+					>Hervatten</button>
+				{:else}
+					<!-- Op de fase en niet op `job.running`: een job die gespoold is maar
+					     nog niet opgepakt staat op `running: false`, en dan bood de
+					     bovenbalk pauze aan terwijl deze knop uit stond. `pause` is een
+					     realtime-commando; hij landt zodra de machine begint. -->
+					<button
+						class="btn"
+						disabled={!actions?.pause || !bezigMetWerk || blocked}
+						title={bezigMetWerk
+							? `${blockedReason ?? 'De kop stilzetten zonder de job te verliezen'} · ${PAUZE_TOETS}`
+							: 'Er loopt niets om te pauzeren'}
+						onclick={() => control.pause()}
+					>Pauze</button>
+				{/if}
+				<span class="nu-rek"></span>
+				<!-- Stoppen houdt zijn eigen ruimte, links van pauze weg: een mistik
+				     hier kost het werkstuk. Zie DESIGN-SYSTEM v2, "Touch als
+				     eersteklas input". -->
 				<button
-					class="btn primary dubbel"
-					disabled={!actions?.resume || blocked}
-					title={blockedReason}
-					onclick={() => control.resume()}
+					class="btn danger stop"
+					class:dood={!verbinding.online}
+					disabled={!actions?.stop || control.tokenProbleem || !verbinding.online}
+					title={!verbinding.online
+						? 'Geen verbinding met OpenKerf — deze knop komt niet aan. Stoppen kan nu alleen met de noodstop op de machine.'
+						: `${blockedReason ?? 'Job direct afbreken'} · ${STOP_TOETS}`}
+					onclick={() => control.stop()}
 				>
-					Hervatten
+					{#if verbinding.online}Stop{:else}Stop <strong>op de machine</strong>{/if}
 				</button>
-			{:else}
+			</div>
+
+			<!-- Zodra er íets in de wachtrij staat. Eerst stond hier `queued > 1`, en
+			     dan was met precies één job in de rij de wachtrij niet te legen — een
+			     handeling die verdween in plaats van verhuisde. -->
+			{#if queued > 0}
 				<button
-					class="btn dubbel"
-					disabled={!actions?.pause || !running || blocked}
-					title={running
-						? blockedReason
-						: 'Er loopt niets om te pauzeren'}
-					onclick={() => control.pause()}
+					class="btn subtle wachtrij"
+					disabled={!actions?.clear_queue || queued === 0 || blocked}
+					title={queued === 0 ? 'De wachtrij is al leeg' : blockedReason}
+					onclick={() => control.clearQueue()}
 				>
-					Pauze
+					Wachtrij legen ({queued})
 				</button>
 			{/if}
-			<button
-				class="btn subtle"
-				disabled={!actions?.clear_queue || queued === 0 || blocked}
-				title={queued === 0 ? 'De wachtrij is al leeg' : blockedReason}
-				onclick={() => control.clearQueue()}
-			>
-				Wachtrij legen ({queued})
-			</button>
-			<!-- Stoppen kan altijd, in één tik — maar niet vlak naast pauze:
-			     24px eronder, eigen breedte, zodat een mistik niet je werkstuk
-			     kost. Zie DESIGN-SYSTEM v2, "Touch als eersteklas input". -->
-			<!-- Sluimerend als er niets loopt, net als de stopknop in de bovenbalk.
-			     Twee stopknoppen op één scherm met verschillend gedrag is erger
-			     dan één: dan weet je niet meer welke van de twee iets betekent. -->
-			<!-- Zonder server dezelfde behandeling als in de bovenbalk (gat E1):
-			     geen rood meer, en het woord zegt waar de stop wél zit. Twee
-			     stopknoppen op één scherm die zich verschillend gedragen is
-			     erger dan één — dan weet je op het beslissende moment niet meer
-			     welke van de twee iets betekent. -->
-			<button
-				class="btn danger stop dubbel"
-				class:sluimer={!running && !paused && verbinding.online}
-				class:dood={!verbinding.online}
-				disabled={!actions?.stop || control.tokenProbleem || !verbinding.online}
-				title={!verbinding.online
-					? 'Geen verbinding met OpenKerf — deze knop komt niet aan. Stoppen kan nu alleen met de noodstop op de machine.'
-					: (blockedReason ?? 'Job direct afbreken')}
-				onclick={() => control.stop()}
-			>
-				{#if verbinding.online}Stop{:else}Stop <strong>op de machine</strong>{/if}
-			</button>
-			<!-- Op tablet dragen starten, pauzeren en stoppen vast in de bovenbalk
-			     (die kan niet dichtklappen, dit paneel wel). Ze hier nog eens
-			     herhalen maakt er drie van dezelfde knop op één scherm van 768px,
-			     dus verwijzen we in plaats van te dupliceren. -->
-			<p class="elders">
-				Starten, pauzeren en stoppen staan vast in de balk bovenin.
-			</p>
-			<!-- Gat J4. LightBurn's Pause en Ctrl+Break werken daar ook als het
-			     venster niet vooraan staat; in een browser bestaat die
-			     mogelijkheid niet, en dat verzwijgen zou een belofte zijn die je
-			     op het verkeerde moment ontdekt. -->
+
+			<!-- Gat J4, ingekort. De toetsen staan nu in de tooltips van de knoppen
+			     hierboven; wat een tooltip niet kan zeggen is dat ze buiten dit
+			     venster niet werken, en dat is precies het deel dat je op het
+			     verkeerde moment ontdekt. -->
 			<p class="toetsen">
-				<kbd>{PAUZE_TOETS}</kbd> pauzeert, <kbd>{STOP_TOETS}</kbd> stopt — overal
-				in de app, zolang dit venster voorop staat. Erbuiten kan een browser
-				geen toetsen ontvangen; gebruik dan de knop op de machine.
+				<kbd>{PAUZE_TOETS}</kbd> en <kbd>{STOP_TOETS}</kbd> werken overal in de app,
+				zolang dit venster voorop staat — daarbuiten kan een browser geen toetsen
+				ontvangen.
 			</p>
 		</div>
 
 	{/if}
 
 	{#if !control.tokenProbleem}
-		<!-- Beweging: nodig om uit te lijnen en het nulpunt te zetten. Deze
-		     knoppen zetten de kop echt in beweging. -->
+		<!--
+			De machinebediening: bewegen, naar een punt, het nulpunt, bijstellen.
+
+			Dit is klaarmaak-werk. Het stond boven de voortgang en nam bij een
+			lopende job het hele zichtbare paneel in — terwijl de knoppen er dan
+			juist uit staan, want je jogt niet met een brandende laser. Nu staat het
+			ónder wat er nu gebeurt, en klapt het dicht zodra er werk onderweg is.
+			Dicht en niet weg: hij moet er zijn zodra je hem weer nodig hebt, en een
+			blok dat verdwijnt leer je niet terug te vinden.
+		-->
+		<details class="machinevouw" open={!bezigMetWerk}>
+			<summary>
+				Machine bedienen
+				{#if bezigMetWerk}<span class="waarom">— niet tijdens een job</span>{/if}
+			</summary>
 		<div class="motion">
 			<span class="rot-label">Bewegen</span>
 			<!-- Omgekeerde T, zoals de pijltjes op een toetsenbord: ↑ boven ↓,
@@ -960,6 +1084,7 @@
 				<p class="hint">Autofocus start je op de machine zelf.</p>
 			{/if}
 		</div>
+		</details>
 	{/if}
 
 	{#if actions && !actions.pause}
@@ -982,11 +1107,6 @@
 		color: var(--text-2);
 		margin: 0 0 var(--space-2);
 	}
-	.controls {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-2);
-	}
 	/* Onder 1200px staan starten en pauzeren in de bovenbalk en verdwijnt dit
 	   blok grotendeels (zie `.dubbel` verderop). Maar een aanraakscherm kan
 	   bréder zijn dan 1200, en daar stond alles op 8px — onder de 12px die
@@ -999,9 +1119,6 @@
 	   bruikbaar — daar beschermt de afstand tegen niets. Deze wel.)
 	   Ingezet door de tablet-agent, hier verbreed naar beide assen. */
 	@media (pointer: coarse) {
-		.controls {
-			gap: var(--space-6);
-		}
 	}
 	.btn {
 		padding: 8px 12px;
@@ -1036,20 +1153,11 @@
 		margin-top: var(--space-6);
 	}
 	/* De verwijzing bestaat alleen op tablet; op desktop staan de knoppen hier. */
-	.elders { display: none; }
 	/* Gat J9. Hier stond `@media (max-width: 1199px)` en in TopBar een JS-prop:
 	   twee bronnen voor één afspraak, die uit de pas kunnen lopen met als
 	   slechtste uitkomst dat de pauzeknop nergens of twee keer staat. Beide
 	   lezen nu `apparaat.bedieningInBalk`; de klasse hieronder is het gevolg,
 	   niet de regel. */
-	.controls.balkdraagt .dubbel { display: none; }
-	.controls.balkdraagt .elders {
-		display: block;
-		grid-column: 1 / -1;
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
 	.preflight {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -1214,16 +1322,6 @@
 		color: var(--text-1);
 	}
 	.pf-check li { padding: 1px 0; }
-	.kader {
-		width: 100%;
-		margin-bottom: var(--space-3);
-	}
-	.pf-actions {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-2);
-	}
-	.pf-actions.een { grid-template-columns: 1fr; }
 	/* De rand van de pre-flight is neutraal; bij "niets te doen" mag hij het
 	   zeggen zonder alarm te slaan — dit is geen storing, alleen een lege bak. */
 	.preflight.niets { border-color: var(--warn); }
@@ -1318,15 +1416,6 @@
 	}
 	/* Zelfde sluimerstand als in de bovenbalk: herkenbaar als de stopknop
 	   (rode rand, rood vierkant) zonder de hele dag alarm te slaan. */
-	.btn.danger.sluimer {
-		background: var(--surface-1);
-		border-color: var(--danger-solid);
-		color: var(--text-1);
-	}
-	.btn.danger.sluimer:hover:not(:disabled) {
-		background: var(--danger-solid);
-		color: var(--on-color);
-	}
 	/* Dezelfde dode staat als in de bovenbalk: onderbroken rand, geen rood, en
 	   leesbaar — de tekst ís hier het bericht, dus die mag niet vervagen. */
 	.btn.danger.dood {
@@ -1341,6 +1430,162 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
+	/* ── Het voortgangsblok ─────────────────────────────────────────────────
+	   Wat er nú aan de hand is, bovenaan het paneel. De maten zijn ruim: dit is
+	   het blok waar je vanaf twee meter naar kijkt terwijl je bij de machine
+	   staat, niet iets wat je van dichtbij afleest. */
+	.nu {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-1);
+	}
+	/* Alleen een lopende job krijgt het accent. Een gepauzeerde krijgt de
+	   waarschuwingskleur, want stilstaan met werk in de machine is een toestand
+	   waar je iets mee moet. */
+	.nu.brandt { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+	.nu.pauze { border-color: color-mix(in srgb, var(--warn-solid) 55%, var(--line)); }
+	.nu-kop {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
+	.nu-fase {
+		font-size: var(--text-md);
+		font-weight: 600;
+		color: var(--text-1);
+	}
+	.nu.brandt .nu-fase { color: var(--accent); }
+	.nu.pauze .nu-fase { color: var(--warn); }
+	.nu-job {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-align: right;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.nu-balk {
+		height: 8px;
+		border-radius: 999px;
+		background: var(--surface-2);
+		overflow: hidden;
+	}
+	.nu-vol {
+		display: block;
+		height: 100%;
+		border-radius: 999px;
+		background: var(--accent);
+		transition: width var(--transition);
+	}
+	.nu.pauze .nu-vol { background: var(--warn-solid); }
+	.nu-cijfers {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-3);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* Het percentage is het getal dat je van een afstand leest; de rest is
+	   bijschrift. */
+	.nu-pct {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--text-1);
+		font-variant-numeric: tabular-nums;
+	}
+	.nu-stap,
+	.nu-pass { font-variant-numeric: tabular-nums; }
+	.nu-tijd {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-3);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.nu-rest { color: var(--text-1); font-weight: 500; }
+	.nu-uitleg {
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: 1.5;
+		color: var(--text-2);
+	}
+	.nu-acties {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin-top: var(--space-1);
+	}
+	/* Stoppen houdt afstand van pauze: een mistik kost hier het werkstuk. */
+	.nu-rek { flex: 1; min-width: var(--space-6); }
+	.nu-acties .btn { min-height: 40px; padding: 0 var(--space-4); }
+	.wachtrij { align-self: flex-start; }
+
+	/* De machinebediening onder de voortgang, dicht zolang er werk onderweg is. */
+	.machinevouw {
+		margin-top: var(--space-4);
+		border-top: 1px solid var(--line);
+		padding-top: var(--space-3);
+	}
+	.machinevouw > summary {
+		cursor: pointer;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-2);
+		list-style: none;
+	}
+	.machinevouw > summary::-webkit-details-marker { display: none; }
+	.machinevouw > summary::before {
+		content: '▸';
+		display: inline-block;
+		width: 1em;
+		color: var(--text-2);
+	}
+	.machinevouw[open] > summary::before { content: '▾'; }
+	.machinevouw > summary:hover { color: var(--text-1); }
+	.machinevouw .waarom {
+		text-transform: none;
+		letter-spacing: 0;
+		font-weight: 400;
+	}
+
+	/* De knoppenbalk plakt onderaan het paneel: de kolom is langer dan het paneel
+	   en de primaire handeling mag nooit onder de vouw staan. Negatieve marges om
+	   de padding van `.panel-scroll` heen, zodat de balk van rand tot rand loopt
+	   en er niets onderdoor te zien is. */
+	.pf-plak {
+		position: sticky;
+		bottom: calc(-1 * var(--space-4));
+		z-index: 2;
+		display: flex;
+		gap: var(--space-2);
+		margin: var(--space-3) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+		padding: var(--space-3) var(--space-4);
+		background: var(--surface-1);
+		border-top: 1px solid var(--line);
+	}
+	/* De hulpknop houdt zijn woord op één regel; de primaire krijgt de rest.
+	   Met `flex: 1` op beide brak "Kader tonen" over twee regels en werd de rij
+	   twee keer zo hoog. */
+	.pf-plak .btn { flex: none; white-space: nowrap; }
+	.pf-plak .btn.primary { flex: 1; }
+
+	/* De startknop zegt wat hij gaat doen, met de tijd erin. */
+	.btn.groot { min-height: 44px; font-size: var(--text-md); }
+	.pf-startmaat {
+		margin-left: 6px;
+		font-size: var(--text-xs);
+		font-weight: 400;
+		opacity: 0.85;
+	}
+
 	.toetsen {
 		grid-column: 1 / -1;
 		margin: var(--space-3) 0 0;
