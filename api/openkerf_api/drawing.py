@@ -60,6 +60,25 @@ def _mm(value: float) -> str:
     return f"{value:.4f}mm"
 
 
+def _passes_of(node) -> int:
+    """
+    Hoe vaak de machine deze laag werkelijk gaat doen.
+
+    Niet het veld `passes`, maar `implicit_passes`: de engine negeert het veld
+    zolang `passes_custom` uit staat (`core/parameters.py:401`), dus een laag
+    met `passes = 3` en die vlag uit brandt één keer. Gemeten op een testbord
+    dat "2 passes" op zijn opschrift had en er één deed — en de pre-flight en
+    het paneel meldden allebei 2, want die lazen het veld.
+    """
+    getal = getattr(node, "implicit_passes", None)
+    if getal is None:
+        getal = getattr(node, "passes", None)
+    try:
+        return max(int(getal), 1)
+    except (TypeError, ValueError):
+        return 1
+
+
 def _is_filled(node) -> bool:
     """Heeft deze vorm een vlak om te rasteren? Een afbeelding is er zelf een."""
     if str(getattr(node, "type", "")) == "elem image":
@@ -895,7 +914,7 @@ class Drawing:
         """
         power = _number(getattr(node, "power", None)) or 0.0
         speed = _number(getattr(node, "speed", None)) or 0.0
-        passes = _number(getattr(node, "passes", None)) or 1.0
+        passes = float(_passes_of(node))
         if speed <= 0 or power <= 0:
             return 0.0
         return (power / speed) * max(passes, 1.0)
@@ -1872,7 +1891,7 @@ class Drawing:
             pieces += len(shapes)
             if not shapes:
                 continue
-            passes = int(getattr(operation, "passes", None) or 1)
+            passes = _passes_of(operation)
             if kind == "op dots":
                 # Een punt kost zijn verblijftijd, niet zijn lengte.
                 dwell = _number(getattr(operation, "dwell_time", None)) or 0.0
@@ -2060,7 +2079,7 @@ class Drawing:
                 continue
             speed = getattr(operation, "speed", None)
             power = getattr(operation, "power", None)
-            passes = getattr(operation, "passes", None) or 1
+            passes = _passes_of(operation)
             percent = None if power is None else round(float(power) / 10, 1)
             operation_id = getattr(operation, "id", None)
             # Het briefje van deze laag gaat vóór op raden aan de getallen: het

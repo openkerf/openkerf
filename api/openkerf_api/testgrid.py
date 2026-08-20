@@ -1012,7 +1012,14 @@ class TestGridGenerator:
                     "label": _cel_label(plan, cell),
                     # Voor het hele bord gelijk; de sweep zit in snelheid,
                     # vermogen en interval.
+                    #
+                    # Twee velden, en het tweede is niet optioneel: de planner
+                    # leest `implicit_passes`, en die geeft 1 zolang
+                    # `passes_custom` uit staat (`core/parameters.py:401`).
+                    # Alleen `passes` zetten gaf een bord dat "2 passes" op zijn
+                    # opschrift had en één keer brandde — op materiaal gevonden.
                     "passes": int(plan.get("passes") or 1),
+                    "passes_custom": int(plan.get("passes") or 1) > 1,
                 }
                 # De lijnafstand heet bij de engine dpi. Alleen een rasterop
                 # kent hem; op de andere zou het een genegeerde sleutel zijn.

@@ -450,8 +450,16 @@ class DesignReader:
             "color": _color(getattr(op, "color", None)),
             "speed": _plain(getattr(op, "speed", None)),
             "power": _plain(getattr(op, "power", None)),
+            # Wat de machine werkelijk gaat doen, en niet wat er in het veld
+            # staat. De engine leest `implicit_passes`, en die geeft 1 zolang
+            # `passes_custom` uit staat — een laag met `passes = 3` en die vlag
+            # uit brandt één keer. Gemeten op een testbord dat "2 passes" op zijn
+            # opschrift had en er één deed; het paneel zei ook 2.
+            #
             # 0 betekent bij de engine "niet ingesteld", niet "nul keer".
-            "passes": _plain(getattr(op, "passes", None)) or 1,
+            "passes": _plain(getattr(op, "implicit_passes", None))
+            or _plain(getattr(op, "passes", None))
+            or 1,
             # Alleen zinvol voor raster/afbeelding, maar elke operatie draagt de
             # velden; de frontend toont ze op type.
             "dpi": _plain(getattr(op, "dpi", None)),
