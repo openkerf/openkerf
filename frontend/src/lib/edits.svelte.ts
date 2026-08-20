@@ -8,6 +8,8 @@
  * element kunnen aanwijzen.
  */
 
+import { apiError, t } from './i18n/core.ts';
+
 export type EditResult = { ok: boolean; idsInvalidated: boolean };
 
 export class EditController {
@@ -395,13 +397,13 @@ export class EditController {
 }
 
 async function describe(response: Response): Promise<string> {
-	if (response.status === 401) return 'Geen of onjuiste token — bewerken is geblokkeerd.';
+	if (response.status === 401) return t('error.noToken');
 	try {
 		const body = await response.json();
-		if (typeof body.detail === 'string') return body.detail;
+		if (typeof body.detail === 'string') return apiError(response, body.detail);
 		if (body.detail?.output?.length) return body.detail.output.join(' · ');
 	} catch {
-		/* val terug op de generieke tekst */
+		/* fall back to the generic sentence */
 	}
-	return `De engine weigerde de bewerking (${response.status}).`;
+	return t('error.editRefused', { status: response.status });
 }

@@ -1391,6 +1391,8 @@ export const en = {
 	'error.photoFailed': 'Saving the photo failed.',
 	'error.presetFailed': 'Making the preset failed.',
 	'error.fetchFailed': 'Fetching it failed.',
+	'error.noToken': 'No token, or the wrong one — editing is blocked.',
+	'error.editRefused': 'The engine refused the edit ({status}).',
 	'error.noNetwork': 'This device has no network. The machine simply carries on; as soon as you have a connection again you will see it here.',
 	'error.serverGone': 'The OpenKerf server is not responding — the command did not arrive. Check whether it is still running.',
 	'error.tokenRefused': 'The server refuses this token. Fill in the token printed in the engine\'s window below.',
@@ -1674,5 +1676,48 @@ export const en = {
 	'text.left': 'Left',
 	'text.centred': 'Centred',
 	'text.right': 'Right',
-	'layout.lookingForMachine': 'Just checking which machine is there…'
+	'layout.lookingForMachine': 'Just checking which machine is there…',
+
+	// ── Refusals the API can name ─────────────────────────────────────────────────
+	//
+	// The engine layer sends a code in `X-OpenKerf-Error` beside its English
+	// sentence, so a refusal that is part of a normal flow can be read in the
+	// reader's own language. A code whose message carries numbers — a size, a count
+	// — is not here: those parts do not travel in a header, and half a sentence with
+	// the number missing is worse than the English one.
+	'api.corners.none': 'Not one corner can be rounded or bevelled: no two straight sides meet there, or the size is too big for the sides. Choose a smaller size.',
+	'api.draw.booleanEmpty': 'That combination yielded nothing — do the shapes actually overlap?',
+	'api.draw.emptyText': 'Text cannot be empty.',
+	'api.draw.noFonts': 'No font support available.',
+	'api.draw.noLayer': 'The engine created no layer.',
+	'api.draw.noOffset': 'The engine made no offset.',
+	'api.draw.notALine': 'This element is not a line.',
+	'api.draw.notInGroup': 'This selection is not in a group.',
+	'api.draw.notText': 'This element is not editable text.',
+	'api.draw.quotesInText': 'Quotation marks in text are not supported yet.',
+	'api.edit.mixedAngle': 'The angle of this selection cannot be read off; use the 1° or 90° steps.',
+	'api.edit.needsElement': 'Name at least one element.',
+	'api.edit.staleElement': 'That shape is gone. Refresh the design.',
+	'api.gen.needsSelection': 'Choose what should be repeated first.',
+	'api.gen.noBarcodeLib': 'Barcodes need the python-barcode package.',
+	'api.gen.noFont': 'There is not one usable font on this computer.',
+	'api.gen.noQrLib': 'QR codes need the segno package; install it beside the API.',
+	'api.gen.noShape': 'The text yielded no shape.',
+	'api.gen.qrTooLong': 'This text is too long for a readable QR code.',
+	'api.gen.tooThick': 'The material is too thick for these outside sizes; the walls would touch each other.',
+	'api.gen.fingerTooWide': 'The finger is too wide: three of them do not fit on an edge.',
+	'api.gen.arcTooLong': 'This text is too long for this radius; it would run over itself. Choose a larger radius or a smaller letter.',
+	'api.layer.gridCell': 'This is a cell of a test grid; the kind of operation is the test.',
+	'api.layer.noAirAssist': 'This machine has no command for air assist, so a switch here would do nothing. Set up at the machine first which method drives the blower.',
+	'api.layer.noZAxis': 'This machine has no Z axis the driver can move, so a step per pass would do nothing. Switch the Z axis on at the machine, or leave this field empty.',
+	'api.nest.needsTwo': 'Choose at least two shapes to nest.',
+	'api.nodes.notEditable': 'The nodes of this shape cannot be edited.',
+	'api.project.noDesign': 'The project holds no design.',
+	'api.project.notOurs': 'This is not an OpenKerf project.',
+	'api.sheet.needsName': 'A sheet needs a name.',
+	'api.sheet.needsOne': 'The last sheet cannot go; a project has one.',
+	'api.sheet.nothingSelected': 'Choose what should come along first.',
+	'api.sheet.sameSheet': 'That is the sheet you are already working on.',
+	'api.sheet.tooThick': 'A sheet more than 500 mm thick does not go in.',
+	'api.sheet.marginTooBig': 'A margin of more than 100 mm leaves no bed.'
 } as const;

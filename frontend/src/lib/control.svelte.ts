@@ -6,7 +6,7 @@
  * localStorage zodat de PWA hem niet elke sessie opnieuw vraagt.
  */
 
-import { t } from './i18n/core.ts';
+import { apiError, t } from './i18n/core.ts';
 import type { Capabilities } from './api';
 import { verbinding } from './verbinding.svelte';
 
@@ -361,7 +361,7 @@ async function describeFailure(response: Response, metToken: boolean): Promise<s
 	try {
 		const body = await response.json();
 		const detail = body.detail;
-		if (typeof detail === 'string') return detail;
+		if (typeof detail === 'string') return apiError(response, detail);
 		// The engine answers with its own console output. That starts with the command
 		// we sent ourselves ("plan copy preprocess…") and that is noise for anyone who
 		// only wants to know why it did not work; keep only the last meaningful lines.

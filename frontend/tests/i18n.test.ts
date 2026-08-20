@@ -48,11 +48,11 @@ rmSync(work, { recursive: true, force: true });
 const TRANSLATIONS: Record<string, Record<string, unknown>> = { nl };
 
 /** Every file the app is built from, so a key can be looked for in all of them. */
-function sources(dir: string, found: string[] = []): string[] {
+function sources(dir: string, found: string[] = [], match = /\.(svelte|ts)$/): string[] {
 	for (const entry of readdirSync(dir)) {
 		const path = join(dir, entry);
-		if (statSync(path).isDirectory()) sources(path, found);
-		else if (/\.(svelte|ts)$/.test(entry) && !path.includes(`${'i18n'}/`)) found.push(path);
+		if (statSync(path).isDirectory()) sources(path, found, match);
+		else if (match.test(entry) && !path.includes(`${'i18n'}/`)) found.push(path);
 	}
 	return found;
 }
@@ -97,9 +97,26 @@ test('every key is used somewhere', () => {
 	for (const prefix of DYNAMIC)
 		assert.ok(CODE.includes(`${prefix}$`), `nothing composes ${prefix}… any more — drop it here`);
 	const unused = Object.keys(en).filter(
-		(key) => !CODE.includes(`'${key}'`) && !DYNAMIC.some((p) => key.startsWith(p))
+		(key) =>
+			!CODE.includes(`'${key}'`) &&
+			!DYNAMIC.some((p) => key.startsWith(p)) &&
+			!key.startsWith('api.')
 	);
 	assert.deepEqual(unused, [], `keys in the catalogue that nothing uses: ${unused.join(', ')}`);
+});
+
+test('every api.* key answers to a refusal the API can actually send', () => {
+	// These are looked up as `api.${code}` from the `X-OpenKerf-Error` header, so
+	// they never appear as a literal. What keeps them honest is the other side: the
+	// code has to exist in the engine layer. A renamed refusal would otherwise leave
+	// a translation nobody ever reaches.
+	const python = sources(join(here, '..', '..', 'api', 'openkerf_api'), [], /\.py$/)
+		.map((p) => readFileSync(p, 'utf8'))
+		.join('\n');
+	const orphans = Object.keys(en)
+		.filter((key) => key.startsWith('api.'))
+		.filter((key) => !python.includes(`code="${key.slice(4)}"`));
+	assert.deepEqual(orphans, [], `translations for refusals the API no longer sends: ${orphans}`);
 });
 
 test('every translation has exactly the keys of the source language', () => {
@@ -200,4 +217,22 @@ test('keys are semantic and not the English text', () => {
 			`${key} does not follow the pattern group.name`
 		);
 	}
+});
+
+test('a refusal with a code is said in the reader’s language', async () => {
+	// The header is the whole mechanism, so it is worth one test end to end: a
+	// known code becomes a catalogue message, an unknown one falls back to the
+	// sentence the API sent, and a response without a code does too.
+	const { apiError, bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const known = new Response(null, { headers: { 'X-OpenKerf-Error': 'nest.needsTwo' } });
+	const unknown = new Response(null, { headers: { 'X-OpenKerf-Error': 'not.a.code' } });
+	const bare = new Response(null);
+
+	assert.equal(apiError(known, 'Choose at least two shapes to nest.'), en['api.nest.needsTwo']);
+	assert.equal(apiError(unknown, 'Something else.'), 'Something else.');
+	assert.equal(apiError(bare, 'Something else.'), 'Something else.');
+
+	bindLanguage(() => 'nl');
+	assert.equal(apiError(known, 'Choose at least two shapes to nest.'), nl['api.nest.needsTwo']);
+	bindLanguage(() => 'en');
 });

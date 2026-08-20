@@ -220,3 +220,21 @@ function sqlToIso(value: string): string {
 	return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value) ? `${value.replace(' ', 'T')}Z` : value;
 }
 
+/**
+ * The sentence for a refusal from our own API.
+ *
+ * The engine layer sends its message in `detail` and, when the refusal is one a
+ * user can act on, a code in the `X-OpenKerf-Error` header. A code we know wins,
+ * because it can be said in the reader's language; anything else falls back to the
+ * message, which is English — the source language of that layer.
+ *
+ * Deliberately not every code: a message that carries numbers ("this box needs 6
+ * sheets") keeps its own sentence, because the numbers do not travel in a header
+ * and a translated sentence without them says less than the English one with them.
+ */
+export function apiError(response: Response, detail: string | null | undefined): string {
+	const code = response.headers.get('X-OpenKerf-Error');
+	const key = `api.${code}` as MessageKey;
+	if (code && key in en) return t(key);
+	return detail ?? t('notice.failed');
+}

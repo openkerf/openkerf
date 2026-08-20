@@ -6,7 +6,7 @@
  * worden — vandaar dat elke actie hier een `onSwitched` teruggeeft.
  */
 
-import { t } from './i18n/core.ts';
+import { apiError, t } from './i18n/core.ts';
 
 export type Sheet = {
 	id: string;
@@ -58,7 +58,7 @@ export class SheetStore {
 				body: body === undefined ? undefined : JSON.stringify(body)
 			});
 			if (!response.ok) {
-				this.error = (await response.json().catch(() => null))?.detail ?? t('notice.failed');
+				this.error = apiError(response, (await response.json().catch(() => null))?.detail);
 				return false;
 			}
 			this.sheets = (await response.json()).sheets;

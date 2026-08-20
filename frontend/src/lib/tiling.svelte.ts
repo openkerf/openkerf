@@ -6,7 +6,7 @@
  * statuspayload, zodat canvas, bovenbalk en telefoon dezelfde stand zien.
  */
 
-import { t } from './i18n/core.ts';
+import { apiError, t } from './i18n/core.ts';
 
 export type TileRect = { x0_mm: number; y0_mm: number; x1_mm: number; y1_mm: number };
 export type Tile = {
@@ -108,7 +108,7 @@ export class TilingStore {
 				body: body === undefined ? undefined : JSON.stringify(body)
 			});
 			if (!response.ok) {
-				this.error = (await response.json().catch(() => null))?.detail ?? t('notice.failed');
+				this.error = apiError(response, (await response.json().catch(() => null))?.detail);
 				return false;
 			}
 			this.run = this.#normaliseer(await response.json());
@@ -169,7 +169,7 @@ export class TilingStore {
 				body: JSON.stringify({ tiling: { enabled: true } })
 			});
 			if (!aan.ok) {
-				this.error = (await aan.json().catch(() => null))?.detail ?? t('notice.failed');
+				this.error = apiError(aan, (await aan.json().catch(() => null))?.detail);
 				return false;
 			}
 		} catch {

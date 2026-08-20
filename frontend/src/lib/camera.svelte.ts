@@ -9,7 +9,7 @@
  * welke bron de `<img>` moet krijgen.
  */
 
-import { t } from './i18n/core.ts';
+import { apiError, t } from './i18n/core.ts';
 
 export type CameraState = {
 	available: boolean;
@@ -67,7 +67,7 @@ export class CameraStore {
 			});
 			if (!response.ok) {
 				this.error =
-					(await response.json().catch(() => null))?.detail ?? t('notice.failed');
+					apiError(response, (await response.json().catch(() => null))?.detail);
 				return null;
 			}
 			const state = await response.json();

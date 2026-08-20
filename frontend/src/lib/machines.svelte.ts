@@ -5,7 +5,7 @@
  * machinetypes uit upstream verschijnen hier zonder codewijziging.
  */
 
-import { t } from './i18n/core.ts';
+import { apiError, t } from './i18n/core.ts';
 
 export type CatalogMachine = {
 	key: string;
@@ -279,7 +279,7 @@ async function describe(response: Response): Promise<string> {
 	if (response.status === 401) return 'Geen of onjuiste token — wijzigen is geblokkeerd.';
 	try {
 		const body = await response.json();
-		if (typeof body.detail === 'string') return body.detail;
+		if (typeof body.detail === 'string') return apiError(response, body.detail);
 		if (body.detail?.output?.length) return body.detail.output.join(' · ');
 		return t('error.engineRefused', { status: response.status });
 	} catch {
