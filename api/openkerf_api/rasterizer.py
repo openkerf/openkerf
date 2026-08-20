@@ -27,7 +27,7 @@ en drempelt het in `process_image()`.
 from math import ceil
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 # Waar de wx-versie een GraphicsContext met INTERPOLATION_BEST heeft, tekenen
 # wij op een veelvoud en verkleinen we met LANCZOS. Een rasterlaag wordt daarna
@@ -228,7 +228,7 @@ def _draw_node(canvas, draw, node, transform):
     geometry = _geometry_of(node)
     if geometry is None:
         return
-    _draw_geometry(draw, node, geometry, transform)
+    _draw_geometry(canvas, draw, node, geometry, transform)
 
 
 def _geometry_of(node):
@@ -241,7 +241,7 @@ def _geometry_of(node):
         return None
 
 
-def _draw_geometry(draw, node, geometry, transform):
+def _draw_geometry(canvas, draw, node, geometry, transform):
     fill = _paint(getattr(node, "fill", None))
     stroke = _paint(getattr(node, "stroke", None))
     # Zonder streek en zonder vulling zou een vorm onzichtbaar zijn, en dus
@@ -255,6 +255,7 @@ def _draw_geometry(draw, node, geometry, transform):
         else getattr(node, "stroke_width", None)
     )
 
+    vlakken = []
     for polyline in _polylines(geometry):
         points = transform.points(polyline)
         if len(points) < 2:
@@ -267,9 +268,50 @@ def _draw_geometry(draw, node, geometry, transform):
             continue
         closed = _is_closed(points, tolerance=transform.supersample)
         if fill and closed and len(points) >= 3:
-            draw.polygon(points, fill="black")
+            vlakken.append(points)
         if stroke:
             draw.line(points, fill="black", width=width, joint="curve")
+    _fill(canvas, draw, vlakken)
+
+
+def _fill(canvas, draw, vlakken) -> None:
+    """
+    De gesloten deelpaden van één vorm vullen, met gaten.
+
+    Eén deelpad is één vlak; dan is `polygon` het snelst. Meerdere deelpaden
+    horen bij elkaar: de binnencontour van een "0" is een gat en niet een tweede
+    vlak. Elk deelpad los vullen gaf een nul die op het scherm open stond en op
+    het hout helemaal dichtgebrand was.
+
+    Even-oddregel, door de maskers op elkaar te XOR-en. SVG rekent standaard met
+    nonzero, en die twee verschillen alleen bij contouren die elkaar overlappen
+    én dezelfde kant op lopen — bij letters en CAD-vormen loopt een gat juist
+    andersom, dus daar komen ze op hetzelfde uit. Het masker beslaat alleen de
+    omhullende van de vorm, zodat een groot bed niet per deelpad een volledig
+    beeld kost.
+    """
+    if not vlakken:
+        return
+    if len(vlakken) == 1:
+        draw.polygon(vlakken[0], fill="black")
+        return
+
+    punten = [p for vlak in vlakken for p in vlak]
+    x0 = max(int(min(x for x, _ in punten)) - 1, 0)
+    y0 = max(int(min(y for _, y in punten)) - 1, 0)
+    x1 = min(int(max(x for x, _ in punten)) + 2, canvas.width)
+    y1 = min(int(max(y for _, y in punten)) + 2, canvas.height)
+    if x1 <= x0 or y1 <= y0:
+        return
+
+    masker = Image.new("1", (x1 - x0, y1 - y0), 0)
+    for vlak in vlakken:
+        laag = Image.new("1", masker.size, 0)
+        ImageDraw.Draw(laag).polygon(
+            [(x - x0, y - y0) for x, y in vlak], fill=1
+        )
+        masker = ImageChops.logical_xor(masker, laag)
+    canvas.paste("black", (x0, y0), masker)
 
 
 def _polylines(geometry):

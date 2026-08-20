@@ -242,3 +242,82 @@ def test_a_raster_layer_now_produces_cutcode(kernel):
     stukken = [item for item in plan.plan if hasattr(item, "duration_cut")]
     assert stukken, "het plan is niet leeg"
     assert sum(item.duration_cut() for item in stukken) > 0
+
+
+# ------------------------------------------------- gaten in een vorm (de "0")
+
+
+def ring(kernel, buiten_mm=20.0, binnen_mm=10.0):
+    """
+    Een ring als één pad met twee deelpaden: de vorm van een "0".
+
+    Precies het geval waar het op stukliep: op het canvas stond het midden open
+    en op het hout was de nul helemaal dichtgebrand.
+    """
+    from meerk40t.core.units import UNITS_PER_MM
+    from meerk40t.svgelements import Color
+    from meerk40t.core.geomstr import Geomstr
+
+    midden = 30.0 * UNITS_PER_MM
+    geometry = Geomstr()
+    geometry.append(Geomstr.circle(buiten_mm * UNITS_PER_MM, midden, midden))
+    geometry.append(Geomstr.circle(binnen_mm * UNITS_PER_MM, midden, midden))
+    node = kernel.elements.elem_branch.add(
+        geometry=geometry,
+        type="elem path",
+        stroke=Color("#000000"),
+        fill=Color("#000000"),
+    )
+    kernel.elements.validate_ids()
+    return node
+
+
+def zwart_op(beeld, x: int, y: int) -> bool:
+    """Is deze pixel gebrand? Het beeld is wit met het werk in zwart."""
+    return beeld.convert("L").getpixel((x, y)) < 128
+
+
+def test_a_hole_in_a_shape_stays_unburned(kernel, make_raster):
+    """
+    Het midden van een nul hoort wit te blijven.
+
+    Onze rasteraar vulde elk deelpad apart, dus de binnencontour werd net zo
+    zwart als de buitenkant. Op het scherm klopte het wel — het canvas tekent
+    het pad in één keer met `fill-rule="nonzero"` — en dat maakte het verschil
+    pas op het hout zichtbaar.
+    """
+    node = ring(kernel)
+    beeld = make_raster([node], node.bounds, 200, 200, None, 1, 1, True)
+
+    assert zwart_op(beeld, 100, 8), "de rand van de ring hoort gebrand te worden"
+    assert not zwart_op(beeld, 100, 100), "het gat in het midden hoort wit te blijven"
+
+
+def test_the_ring_is_not_simply_left_out(kernel, make_raster):
+    """Tegenproef: er moet wél een ring staan, en niet niets."""
+    node = ring(kernel)
+    beeld = make_raster([node], node.bounds, 200, 200, None, 1, 1, True).convert("L")
+
+    donker = sum(1 for pixel in beeld.getdata() if pixel < 128)
+    # Een ring van 20 mm buiten en 10 mm binnen: driekwart van het vlak van de
+    # cirkel, en de cirkel vult π/4 van het vierkante beeld.
+    verwacht = 200 * 200 * (3.1416 / 4) * 0.75
+    assert donker == pytest.approx(verwacht, rel=0.15)
+
+
+def test_a_shape_without_holes_is_still_solid(kernel, make_raster):
+    """De gewone weg mag er niet onder lijden."""
+    from meerk40t.core.units import UNITS_PER_MM
+    from meerk40t.svgelements import Color
+    from meerk40t.core.geomstr import Geomstr
+
+    midden = 30.0 * UNITS_PER_MM
+    node = kernel.elements.elem_branch.add(
+        geometry=Geomstr.circle(20.0 * UNITS_PER_MM, midden, midden),
+        type="elem path",
+        stroke=Color("#000000"),
+        fill=Color("#000000"),
+    )
+    beeld = make_raster([node], node.bounds, 200, 200, None, 1, 1, True)
+
+    assert zwart_op(beeld, 100, 100)
