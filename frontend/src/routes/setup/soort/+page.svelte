@@ -1,26 +1,27 @@
 <script lang="ts">
 	/**
-	 * Stap 1: wat voor machine heb je?
+	 * Step 1: what kind of machine do you have?
 	 *
-	 * De catalogus van MeerK40t telt veertig bordnamen. Wie net begint kent er
-	 * geen, maar weet wél of er een glazen buis met waterkoeling in staat. Deze
-	 * stap vertaalt dat naar een handvol modellen in de volgende.
+	 * MeerK40t's catalogue counts forty board names. Someone starting out knows none
+	 * of them, but does know whether there is a glass tube with water cooling in it.
+	 * This step translates that into a handful of models in the next one.
 	 *
-	 * En als de machine aanstaat hoeft die vertaalslag helemaal niet: dan zoekt
-	 * OpenKerf hem op (besluit B6). Zoeken is lezen — er wordt niets aangemaakt,
-	 * verbonden of geactiveerd tot je hier op "toevoegen" drukt.
+	 * And when the machine is on, that translation is not needed at all: then
+	 * OpenKerf finds it (decision B6). Searching is reading — nothing is created,
+	 * connected or activated until you press "add" here.
 	 */
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import Segmented from '$components/Segmented.svelte';
 	import { KINDS, kindOfMachine, type CatalogFamily, type ScanResult, type Vondst } from '$lib/machines.svelte';
+	import { t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 
 	const store = createStore();
 	onMount(() => store.loadCatalog());
 
-	// Hoeveel modellen er achter elke soort zitten; een soort zonder modellen
-	// hoort niet klikbaar te zijn.
+	// How many models sit behind each kind; a kind without models should not be
+	// clickable.
 	let aantallen = $derived(
 		KINDS.map((kind) => ({
 			...kind,
@@ -37,7 +38,7 @@
 	let zoekt = $state(false);
 	let resultaat = $state<ScanResult | null>(null);
 	let verstreken = $state(0);
-	/** Voorbij deze grens is "even wachten" een aanname geworden. */
+	/** Past this bound "just a moment" has become an assumption. */
 	const TRAAG = 8;
 	let keuze = $state<Record<string, string>>({});
 	let controller: AbortController | null = null;
@@ -52,8 +53,8 @@
 		zoekt = true;
 		resultaat = null;
 		verstreken = 0;
-		// Een teller in plaats van een balk: we weten niet hoe lang het duurt, en
-		// een balk die niet weet hoe ver hij is, liegt. Verstreken tijd is waar.
+		// A counter instead of a bar: we do not know how long it takes, and a bar that
+		// does not know how far it is lies. Elapsed time is true.
 		stopTikker();
 		tikker = setInterval(() => (verstreken += 1), 1000);
 		controller = new AbortController();
@@ -79,67 +80,68 @@
 	}
 
 	/**
-	 * Bevestigen. Hier begint het aanmaken pas — en zelfs dan niet meteen: je
-	 * komt in de gewone stap "naam", waar je nog steeds terug kunt.
+	 * Confirming. Only here does the creating begin — and even then not at once: you
+	 * land in the ordinary "name" step, where you can still go back.
 	 */
 	function bevestig(vondst: Vondst) {
 		const key = keuze[vondst.id] ?? vondst.suggestions[0]?.key;
 		if (!key) return;
 		const params = new URLSearchParams({ type: key });
 		if (Object.keys(vondst.settings).length) {
-			// De verbinding reist als parameter mee, zodat terugknop en verversen
-			// blijven werken — dezelfde regel als voor de rest van de wizard.
+			// The connection travels along as a parameter, so the back button and a
+			// refresh keep working — the same rule as for the rest of the wizard.
 			params.set('verbinding', JSON.stringify(vondst.settings));
-			params.set('gevonden', `${vondst.title} op ${vondst.where}`);
+			params.set('gevonden', `${vondst.title} · ${vondst.where}`);
 		}
 		goto(`/setup/naam?${params}`);
 	}
 
-	// Kort: de pil zegt langs welke weg, de regel eronder zegt precies waar. Een
-	// pil van drie woorden duwt bovendien de titels uit elkaar.
-	const TRANSPORT: Record<string, string> = {
-		usb: 'USB',
-		serieel: 'Serieel',
-		netwerk: 'Netwerk'
+	// Short: the pill says by which route, the line below says exactly where. A pill
+	// of three words also pushes the titles apart.
+	const TRANSPORT: Record<string, MessageKey> = {
+		usb: 'setup.transport.usb',
+		serieel: 'setup.transport.serial',
+		netwerk: 'setup.transport.network'
 	};
 
-	/** Zekerheid krijgt een woord én een vorm — kleur alleen is niet genoeg. */
-	const ZEKERHEID: Record<string, { woord: string; uitleg: string; icon: string }> = {
+	function transport(kind: string): string {
+		return kind in TRANSPORT ? t(TRANSPORT[kind]) : kind;
+	}
+
+	/** Certainty gets a word *and* a shape — colour alone is not enough. */
+	const ZEKERHEID: Record<string, { woord: MessageKey; uitleg: MessageKey; icon: string }> = {
 		zeker: {
-			woord: 'Antwoordde',
-			uitleg: 'Dit apparaat gaf zelf antwoord.',
+			woord: 'setup.certainty.answered',
+			uitleg: 'setup.certainty.answered.why',
 			icon: 'M4 12.5 9 17.5 20 6.5'
 		},
 		waarschijnlijk: {
-			woord: 'Waarschijnlijk',
-			uitleg: 'Herkend aan de besturingschip, maar het apparaat zei niets terug.',
+			woord: 'setup.certainty.probable',
+			uitleg: 'setup.certainty.probable.why',
 			icon: 'M12 3.5 22 20H2z'
 		},
 		onzeker: {
-			woord: 'Gok',
-			uitleg: 'Deze chip zit op meer dan één soort machine. Controleer het model zelf.',
+			woord: 'setup.certainty.guess',
+			uitleg: 'setup.certainty.guess.why',
 			icon: 'M9 8.5a3 3 0 1 1 3 3.5v2M12 18.5v.01'
 		}
 	};
 </script>
 
-<svelte:head><title>OpenKerf — wat voor machine</title></svelte:head>
+<svelte:head><title>{t('setup.head.kind')}</title></svelte:head>
 
 <section class="setup">
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
-	<h1>Wat voor machine is het?</h1>
-	<p class="muted">
-		Staat de laser aan en hangt hij aan deze computer of aan hetzelfde netwerk, dan
-		zoekt OpenKerf hem zelf op. Anders kies je hem hieronder uit de lijst.
-	</p>
+	<h1>{t('setup.whatKind')}</h1>
+	<p class="muted">{t('setup.whatKind.body')}</p>
 
 	<section class="zoeken" aria-labelledby="zoekkop">
 		<div class="kop">
-			<h2 id="zoekkop">Laat OpenKerf zoeken</h2>
+			<h2 id="zoekkop">{t('setup.scan.title')}</h2>
 			{#if !zoekt}
 				<button class="btn primary" onclick={zoek}>
-					{resultaat ? 'Opnieuw zoeken' : 'Machines zoeken'}
+					{resultaat ? t('setup.scan.again') : t('setup.scan.start')}
 				</button>
 			{/if}
 		</div>
@@ -148,57 +150,44 @@
 			<div class="bezig" role="status" aria-live="polite">
 				<span class="ring" aria-hidden="true"></span>
 				<div>
-					<div class="bezigkop">
-						Zoeken… <span class="mono">{verstreken}s</span>
-					</div>
-					<p class="muted">
-						USB en seriële poorten zijn zo bekeken; het netwerk kost een paar seconden,
-						omdat elk adres in je subnet één vraag krijgt.
-					</p>
+					<div class="bezigkop">{t('setup.scan.running', { seconds: verstreken })}</div>
+					<p class="muted">{t('setup.scan.what')}</p>
 					{#if verstreken >= TRAAG}
-						<!-- Dit hoort binnen drie seconden klaar te zijn. Duurt het langer,
-						     dan is er iets aan de hand en verdient de gebruiker een weg
-						     vooruit in plaats van een ronddraaiend rondje. -->
-						<p class="traag">
-							Dit duurt langer dan normaal. Je kunt gerust stoppen en de machine
-							hieronder zelf kiezen — dat levert precies hetzelfde op.
-						</p>
+						<!-- This ought to be done within three seconds. If it takes longer,
+						     something is going on and the user deserves a way forward instead of
+						     a spinning circle. -->
+						<p class="traag">{t('setup.scan.slow')}</p>
 					{/if}
 				</div>
-				<button class="btn subtle" onclick={afbreken}>Stoppen</button>
+				<button class="btn subtle" onclick={afbreken}>{t('setup.scan.stop')}</button>
 			</div>
 		{/if}
 
-		<!-- De belofte blijft ook tijdens het zoeken staan: juist dán vraag je je
-		     af wat er met je machine gebeurt. -->
+		<!-- The promise stays put while searching too: that is exactly when you wonder
+		     what is happening to your machine. -->
 		<p class="belofte">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" />
 			</svg>
-			Zoeken kijkt alleen. Er wordt niets aangemaakt en er gaat geen opdracht naar
-			een machine tot jij hieronder op toevoegen drukt.
+			{t('setup.scan.promise')}
 		</p>
 
 		{#if resultaat && !zoekt}
 			{#if resultaat.candidates.length}
-				<h3 class="uitslag">
-					{resultaat.candidates.length === 1
-						? 'Eén machine gevonden'
-						: `${resultaat.candidates.length} machines gevonden`}
-				</h3>
+				<h3 class="uitslag">{t('setup.scan.found', { n: resultaat.candidates.length })}</h3>
 				<ul class="vondsten">
 					{#each resultaat.candidates as vondst (vondst.id)}
 						{@const zeker = ZEKERHEID[vondst.confidence] ?? ZEKERHEID.onzeker}
 						<li class="vondst" class:gok={vondst.confidence === 'onzeker'}>
-							<!-- Gestapeld, niet naast elkaar: op 390 px werd de titel anders een
-							     kolom van twee woorden breed en brak een IP-adres middenin. -->
+							<!-- Stacked, not side by side: at 390 px the title otherwise became a
+							     column two words wide and an IP address broke in the middle. -->
 							<div class="regel">
-								<span class="transport">{TRANSPORT[vondst.transport] ?? vondst.transport}</span>
-								<span class="zekerheid" title={zeker.uitleg}>
+								<span class="transport">{transport(vondst.transport)}</span>
+								<span class="zekerheid" title={t(zeker.uitleg)}>
 									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 										<path d={zeker.icon} />
 									</svg>
-									{zeker.woord}
+									{t(zeker.woord)}
 								</span>
 							</div>
 							<div class="titel">{vondst.title}</div>
@@ -210,10 +199,10 @@
 
 							{#if vondst.suggestions.length > 1}
 								<div class="model">
-									<span class="modelkop">Welk model?</span>
+									<span class="modelkop">{t('setup.whichModel.short')}</span>
 									{#if vondst.suggestions.length <= 4}
 										<Segmented
-											label="Model"
+											label={t('setup.model')}
 											options={vondst.suggestions.map((s) => ({ value: s.key, label: s.label }))}
 											bind:value={keuze[vondst.id]}
 										/>
@@ -227,7 +216,7 @@
 								</div>
 							{:else if vondst.suggestions.length === 1}
 								<p class="model enkel">
-									Voorstel: <strong>{vondst.suggestions[0].label}</strong>
+									{t('setup.suggestion', { label: vondst.suggestions[0].label })}
 									<span class="muted">({vondst.suggestions[0].family})</span>
 								</p>
 							{/if}
@@ -235,14 +224,10 @@
 							<div class="doen">
 								{#if vondst.suggestions.length}
 									<button class="btn primary" onclick={() => bevestig(vondst)}>
-										Deze toevoegen
+										{t('setup.addThis')}
 									</button>
 								{:else}
-									<p class="muted geenmodel">
-										We herkennen het apparaat, maar niet welk model erachter zit — dat model
-										kent deze installatie niet. Kies hem hieronder zelf; dat er iets
-										aangesloten is, weet je nu in elk geval.
-									</p>
+									<p class="muted geenmodel">{t('setup.noModel')}</p>
 								{/if}
 							</div>
 						</li>
@@ -250,11 +235,8 @@
 				</ul>
 			{:else}
 				<div class="niets">
-					<h3>Niets gevonden</h3>
-					<p>
-						Staat de machine aan en zit de kabel erin? Kies hem anders hieronder zelf —
-						dat werkt net zo goed.
-					</p>
+					<h3>{t('setup.nothing')}</h3>
+					<p>{t('setup.nothing.body')}</p>
 					{#if resultaat.notes.length === 1}
 						<p class="muted">{resultaat.notes[0]}</p>
 					{:else if resultaat.notes.length}
@@ -262,23 +244,21 @@
 							{#each resultaat.notes as notitie}<li>{notitie}</li>{/each}
 						</ul>
 					{/if}
-					<!-- Waar gekeken is, hoort erbij: zonder dat is "niets gevonden" niet te
-					     controleren en dus niet te vertrouwen. -->
+					<!-- Where it looked belongs with it: without that "nothing found" cannot be
+					     checked and so cannot be trusted. -->
 					<p class="muted herkomst mono">
-						Gezocht in {resultaat.searched.join(', ') || 'niets'} · {(
-							resultaat.duration_ms / 1000
-						).toFixed(1)}s
+						{t('setup.searchedIn', {
+							where: resultaat.searched.join(', ') || t('setup.searchedIn.nothing'),
+							seconds: (resultaat.duration_ms / 1000).toFixed(1)
+						})}
 					</p>
 				</div>
 			{/if}
 		{/if}
 	</section>
 
-	<h2 class="zelfkop">Of kies zelf</h2>
-	<p class="muted">
-		Kies wat er in je werkplaats staat. De volgende stap toont alleen de modellen
-		die daarbij horen — en weet je het precies, dan kun je daar zoeken.
-	</p>
+	<h2 class="zelfkop">{t('setup.orPick')}</h2>
+	<p class="muted">{t('setup.orPick.body')}</p>
 
 	<ul class="soorten">
 		{#each aantallen as kind (kind.id)}
@@ -295,7 +275,7 @@
 					<span class="naam">{kind.label}</span>
 					<span class="uitleg">{kind.blurb}</span>
 					<span class="hoeveel mono">
-						{kind.count === 0 ? 'geen modellen' : `${kind.count} model${kind.count === 1 ? '' : 'len'}`}
+						{kind.count === 0 ? t('setup.models.none') : t('setup.models', { n: kind.count })}
 					</span>
 				</a>
 			</li>
@@ -303,13 +283,13 @@
 	</ul>
 
 	<p class="anders">
-		Staat jouw machine er niet tussen?
-		<a href="/setup/type">Bekijk de volledige lijst</a>.
+		{t('setup.notListed')}
+		<a href="/setup/type">{t('setup.fullList')}</a>
 	</p>
 </section>
 
 <style>
-	/* ------------------------------------------------------------- zoekblok */
+	/* ------------------------------------------------------------ search block */
 	.zoeken {
 		margin: var(--space-4) 0 var(--space-8);
 		padding: var(--space-4);

@@ -17,6 +17,7 @@
 	import { page } from '$app/stores';
 	import SettingFieldInput from '$components/SettingField.svelte';
 	import NumberField from '$components/NumberField.svelte';
+	import { t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import type { SettingField } from '$lib/machines.svelte';
 
@@ -47,16 +48,21 @@
 		}
 	});
 
-	const VERBINDINGSWOORD: Record<string, string> = {
-		interface: 'Verbinding',
-		address: 'Adres',
-		serial_port: 'Poort'
+	const VERBINDINGSWOORD: Record<string, MessageKey> = {
+		interface: 'setup.connection.word.interface',
+		address: 'setup.connection.word.address',
+		serial_port: 'setup.connection.word.port'
 	};
-	/** "udp" is de sleutel van de engine, geen woord voor op het scherm. */
-	const VERBINDINGSWAARDE: Record<string, string> = {
-		udp: 'netwerk (UDP)',
-		usb: 'USB'
+	/** "udp" is the engine's key, not a word for the screen. */
+	const VERBINDINGSWAARDE: Record<string, MessageKey> = {
+		udp: 'setup.connection.value.udp',
+		usb: 'setup.connection.value.usb'
 	};
+
+	/** The engine's key in words, or the key itself when we have no word for it. */
+	function woord(map: Record<string, MessageKey>, key: string): string {
+		return key in map ? t(map[key]) : key;
+	}
 
 	async function reload() {
 		if (!machinePath) return;
@@ -107,21 +113,21 @@
 		geladen = true;
 	});
 
-	// Waar de kop naartoe gaat als je "home" zegt. De engine noemt dit
-	// "Force Declared Home"; in de werkplaats is het gewoon de hoek waar de kop
-	// naartoe kruipt als je hem aanzet.
+	// Where the head goes when you say "home". The engine calls this "Force Declared
+	// Home"; in the workshop it is simply the corner the head creeps to when you
+	// switch it on.
 	const HOEKEN = [
-		{ id: 'auto', label: 'Zoals de machine zelf zegt' },
-		{ id: 'top-left', label: 'Linksboven' },
-		{ id: 'top-right', label: 'Rechtsboven' },
-		{ id: 'bottom-left', label: 'Linksonder' },
-		{ id: 'bottom-right', label: 'Rechtsonder' },
-		{ id: 'center', label: 'Midden' }
+		{ id: 'auto', label: t('setup.corner.auto') },
+		{ id: 'top-left', label: t('setup.corner.topLeft') },
+		{ id: 'top-right', label: t('setup.corner.topRight') },
+		{ id: 'bottom-left', label: t('setup.corner.bottomLeft') },
+		{ id: 'bottom-right', label: t('setup.corner.bottomRight') },
+		{ id: 'center', label: t('setup.corner.centre') }
 	];
 	let heeftHoek = $derived('home_corner' in values);
 	let hoek = $derived(String(values.home_corner ?? 'auto'));
 
-	/** Positie van de oorsprongstip in de tekening, in procenten. */
+	/** Position of the origin dot in the drawing, in per cent. */
 	let stip = $derived(
 		{
 			'top-left': { x: 0, y: 0 },
@@ -215,57 +221,51 @@
 	}
 </script>
 
-<svelte:head><title>OpenKerf — werkgebied</title></svelte:head>
+<svelte:head><title>{t('setup.head.workarea')}</title></svelte:head>
 
 <section class="setup">
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
 	{#if !machinePath}
-		<h1>Geen machine gekozen</h1>
-		<p class="muted">Begin bij het overzicht en kies of maak een machine.</p>
-		<div class="actions"><a class="btn primary" href="/setup">Naar het overzicht</a></div>
+		<h1>{t('setup.noMachine')}</h1>
+		<p class="muted">{t('setup.noMachine.body')}</p>
+		<div class="actions"><a class="btn primary" href="/setup">{t('setup.toOverview')}</a></div>
 	{:else}
 		{#if verbinding}
 			{@const ingevuld = Object.entries(verbinding).filter(([attr]) => attr in values)}
 			<p class="verbinding">
-				<strong>Verbinding uit het zoeken ingevuld.</strong>
+				<strong>{t('setup.connection.filled')}</strong>
 				{#if ingevuld.length}
 					<span class="mono">
 						{ingevuld
 							.map(
 								([attr, waarde]) =>
-									`${VERBINDINGSWOORD[attr] ?? attr}: ${VERBINDINGSWAARDE[waarde] ?? waarde}`
+									`${woord(VERBINDINGSWOORD, attr)}: ${woord(VERBINDINGSWAARDE, waarde)}`
 							)
 							.join(' · ')}
 					</span>
 				{:else}
-					<span class="muted">Deze machine kent die instellingen niet; er is niets gewijzigd.</span>
+					<span class="muted">{t('setup.connection.unknown')}</span>
 				{/if}
-				<span class="muted">
-					Je legt hem hiermee nog niet aan: OpenKerf praat pas met de machine als je een job
-					start.
-				</span>
+				<span class="muted">{t('setup.connection.notYet')}</span>
 			</p>
 		{/if}
 
-		<h1>Hoe groot is het bed?</h1>
-		<p class="muted">
-			Meet het werkgebied, niet de buitenkant van de kast. Dit wordt het bed op je canvas —
-			klopt het niet, dan denkt OpenKerf dat er ruimte is waar de kop niet komt.
-		</p>
+		<h1>{t('setup.bedSize')}</h1>
+		<p class="muted">{t('setup.bedSize.body')}</p>
 
 		<div class="werkgebied">
 			<div class="velden">
 				{#if 'bedwidth' in values}
-					<NumberField label="Breedte" unit="mm" bind:value={breedte} step={10} min={1} />
-					<NumberField label="Hoogte" unit="mm" bind:value={hoogte} step={10} min={1} />
+					<NumberField label={t('gen.width')} unit="mm" bind:value={breedte} step={10} min={1} />
+					<NumberField label={t('gen.height')} unit="mm" bind:value={hoogte} step={10} min={1} />
 				{:else}
-					<p class="muted">Deze machine geeft geen bedmaat op.</p>
+					<p class="muted">{t('setup.noBedSize')}</p>
 				{/if}
 
 				{#if heeftHoek}
 					<label class="keuze">
-						<span>Waar ligt 0,0?</span>
+						<span>{t('setup.whereIsZero')}</span>
 						<select
 							value={hoek}
 							onchange={(e) => (values.home_corner = e.currentTarget.value)}
@@ -274,17 +274,14 @@
 								<option value={optie.id}>{optie.label}</option>
 							{/each}
 						</select>
-						<span class="hint">
-							De hoek waar de kop naartoe gaat als je hem naar huis stuurt. Weet je het niet,
-							laat dan staan wat de machine zelf zegt.
-						</span>
+						<span class="hint">{t('setup.corner.hint')}</span>
 					</label>
 				{/if}
 			</div>
 
 			<figure class="tekening">
 				<svg viewBox="0 0 {TEKENING.w} {TEKENING.h}" role="img"
-					aria-label="Het bed is {breedte} bij {hoogte} millimeter">
+					aria-label={t('setup.bedAria', { width: breedte, height: hoogte })}>
 					<defs>
 						<pattern id="bedgrid" width="10" height="10" patternUnits="userSpaceOnUse">
 							<path d="M10 0 L0 0 0 10" fill="none" stroke="var(--line)" stroke-width="0.5" />
@@ -307,37 +304,33 @@
 				</svg>
 				<figcaption>
 					<span class="maat mono">{breedte} × {hoogte} mm</span>
-					{#if stip}0,0 ligt op de stip.{:else}De machine bepaalt zelf waar 0,0 ligt.{/if}
+					{#if stip}{t('setup.zeroOnDot')}{:else}{t('setup.zeroByMachine')}{/if}
 				</figcaption>
 			</figure>
 		</div>
 
-		<!-- Wat de machine kán. Dit staat niet in de engine — het is een uitspraak
-		     van de gebruiker over zijn eigen apparaat, en het bepaalt wat er in de
-		     jog-bediening verschijnt. -->
+		<!-- What the machine *can* do. This is not in the engine — it is a statement by
+		     the user about their own device, and it decides what appears in the jog
+		     controls. -->
 		<fieldset class="kunnen">
-			<legend>Wat heeft deze machine?</legend>
+			<legend>{t('setup.capabilities')}</legend>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={heeftZ} />
-				<span>Een Z-as (in hoogte verstelbaar bed of kop)</span>
+				<span>{t('setup.hasZ')}</span>
 			</label>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={heeftAutofocus} />
-				<span>Autofocus</span>
+				<span>{t('setup.hasAutofocus')}</span>
 			</label>
 		</fieldset>
 
 		{#if restVelden.length}
 			<details class="rest" bind:open={restOpen}>
 				<summary>
-					Meer van deze machine
-					<span class="muted">— spiegelen, verbinding, en wat de engine verder kent</span>
+					{t('setup.more')}
+					<span class="muted">{t('setup.more.what')}</span>
 				</summary>
-				<p class="muted waarschuwing">
-					Deze velden komen rechtstreeks uit MeerK40t en staan daarom in het Engels. Je hebt
-					ze alleen nodig als je machine gespiegeld of gedraaid werkt; anders kun je ze
-					laten staan.
-				</p>
+				<p class="muted waarschuwing">{t('setup.more.warning')}</p>
 				<label class="toggle">
 					<input
 						type="checkbox"
@@ -348,7 +341,7 @@
 							reload();
 						}}
 					/>
-					<span>Ook alles tonen wat we normaal verbergen</span>
+					<span>{t('setup.showHidden')}</span>
 				</label>
 				{#each restVelden as field (field.attr)}
 					<SettingFieldInput {field} bind:value={values[field.attr]} />
@@ -357,9 +350,9 @@
 		{/if}
 
 		<div class="actions">
-			<a class="btn" href="/setup">Overslaan</a>
+			<a class="btn" href="/setup">{t('setup.skip')}</a>
 			<button class="btn primary" onclick={save} disabled={store.busy}>
-				{store.busy ? 'Opslaan…' : 'Opslaan en afronden'}
+				{store.busy ? t('setup.saving') : t('setup.saveAndFinish')}
 			</button>
 		</div>
 	{/if}

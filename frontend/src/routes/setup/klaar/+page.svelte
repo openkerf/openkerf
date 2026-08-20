@@ -12,6 +12,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { t } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
 
@@ -78,80 +79,69 @@
 			if (dev?.bed?.width_mm > 0 && dev?.bed?.height_mm > 0)
 				bed = { w: dev.bed.width_mm, h: dev.bed.height_mm };
 		} catch {
-			/* zonder bedmaat stellen we de vraag niet — beter niets dan een gok */
+			/* without a bed size we do not ask the question — better nothing than a guess */
 		}
 	});
 
 	const STAPPEN = [
-		{
-			kop: 'Teken of importeer iets',
-			uitleg: 'Pak links een vorm en klik op het bed, of open een SVG met Importeren.'
-		},
-		{
-			kop: 'Geef het een laag',
-			uitleg: 'De laag bepaalt snelheid en vermogen. Materiaal niet zeker? Brand eerst een testraster.'
-		},
-		{
-			kop: 'Kader tonen',
-			uitleg: 'De kop loopt de omtrek af zonder te branden. Zo zie je of je werkstuk goed ligt.'
-		},
-		{ kop: 'Start job', uitleg: 'Deksel dicht, afzuiging aan, en blijf erbij kijken.' }
+		{ kop: t('setup.done.draw.title'), uitleg: t('setup.done.draw.body') },
+		{ kop: t('setup.done.layer.title'), uitleg: t('setup.done.layer.body') },
+		{ kop: t('job.frame'), uitleg: t('setup.done.frame.body') },
+		{ kop: t('job.startJob'), uitleg: t('setup.done.start.body') }
 	];
 </script>
 
-<svelte:head><title>OpenKerf — klaar</title></svelte:head>
+<svelte:head><title>{t('setup.head.done')}</title></svelte:head>
 
 <section class="setup narrow">
 	{#if geladen && !machine}
-		<h1>Deze machine bestaat niet (meer)</h1>
+		<h1>{t('setup.gone')}</h1>
 		<p class="muted">
-			{machinePath
-				? `Er is geen machine met het pad “${machinePath}”.`
-				: 'Er stond geen machine in het adres.'}
-			Waarschijnlijk ben je hier via een oude bladwijzer beland.
+			{machinePath ? t('setup.gone.path', { path: machinePath }) : t('setup.gone.noPath')}
+			{t('setup.gone.bookmark')}
 		</p>
-		<div class="actions"><a class="btn primary" href="/setup">Naar je machines</a></div>
+		<div class="actions">
+			<a class="btn primary" href="/setup">{t('setup.toYourMachines')}</a>
+		</div>
 	{:else}
-		<h1>{machine ? `${machine.label} staat klaar.` : 'Klaar.'}</h1>
-		<p class="muted">
-			Verbinding met de laser wordt pas gelegd bij de eerste job. Doe die eerste keer met de
-			deksel open en zonder werkstuk — dan zie je of de kop beweegt zoals je verwacht zonder
-			dat er iets kan branden.
-		</p>
+		<h1>{machine ? t('setup.ready', { machine: machine.label }) : t('setup.ready.plain')}</h1>
+		<p class="muted">{t('setup.firstJob')}</p>
 
 		{#if velVraag}
 			<div class="velvraag">
-				<h2 class="kop">Gaat je vel mee naar dit bed?</h2>
+				<h2 class="kop">{t('setup.sheetFits')}</h2>
 				<p>
-					<strong>{velVraag.vel.name}</strong> staat op
-					<span class="mono">{maat(velVraag.vel.width_mm)} × {maat(velVraag.vel.height_mm)} mm</span>,
-					het bed van {machine?.label ?? 'deze machine'} is
-					<span class="mono">{maat(velVraag.bed.w)} × {maat(velVraag.bed.h)} mm</span>.
+					{t('setup.sheetFits.body', {
+						sheet: `${velVraag.vel.name} — ${maat(velVraag.vel.width_mm)} × ${maat(
+							velVraag.vel.height_mm
+						)} mm`,
+						machine: machine?.label ?? t('setup.sheetFits.thisMachine'),
+						bed: `${maat(velVraag.bed.w)} × ${maat(velVraag.bed.h)} mm`
+					})}
 				</p>
 				<p class="muted">
-					Een vel is het stuk materiaal dat je erin legt, niet het bed zelf — dus als dit
-					een restje van {maat(velVraag.vel.width_mm)} mm breed is, klopt het zo.
+					{t('setup.sheetFits.offcut', { width: maat(velVraag.vel.width_mm) })}
 				</p>
 				<div class="velknoppen">
 					<button class="btn primary" disabled={sheets.busy} onclick={velNaarBed}>
-						Vel op bedmaat zetten
+						{t('setup.sheetToBed')}
 					</button>
 					<button class="btn subtle" onclick={() => (velAntwoord = 'gelaten')}>
-						Laten staan
+						{t('setup.sheetLeave')}
 					</button>
 				</div>
 				{#if sheets.error}<p class="fout" role="alert">{sheets.error}</p>{/if}
 			</div>
 		{:else if velAntwoord === 'aangepast' && sheets.active}
 			<p class="velgoed" role="status">
-				{sheets.active.name} staat nu op
-				<span class="mono"
-					>{maat(sheets.active.width_mm)} × {maat(sheets.active.height_mm)} mm</span
-				>.
+				{t('setup.sheetNow', {
+					sheet: sheets.active.name,
+					size: `${maat(sheets.active.width_mm)} × ${maat(sheets.active.height_mm)} mm`
+				})}
 			</p>
 		{/if}
 
-		<h2>Van hier naar je eerste snede</h2>
+		<h2>{t('setup.firstCut')}</h2>
 		<ol class="weg">
 			{#each STAPPEN as stap, index (stap.kop)}
 				<li>
@@ -165,8 +155,8 @@
 		</ol>
 
 		<div class="actions">
-			<a class="btn" href="/setup">Nog een machine</a>
-			<a class="btn primary" href="/">Naar het werkgebied</a>
+			<a class="btn" href="/setup">{t('setup.anotherMachine')}</a>
+			<a class="btn primary" href="/">{t('setup.toWorkArea')}</a>
 		</div>
 	{/if}
 </section>

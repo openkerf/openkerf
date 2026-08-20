@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import type { Machine } from '$lib/machines.svelte';
 
@@ -7,12 +8,11 @@
 
 	onMount(() => store.loadMachines());
 
-	// De engine maakt bij het opstarten zelf een lhystudios-apparaat aan, zodat
-	// de kernel altijd iets heeft om tegen te praten. Dat is geen machine van
-	// de gebruiker, en hem in deze lijst zetten als "In gebruik" leest als een
-	// apparaat dat je zelf hebt toegevoegd. We zetten hem apart met de reden
-	// erbij, in plaats van hem te verbergen: hij is wél actief, en dat moet je
-	// kunnen zien.
+	// The engine creates an lhystudios device itself at startup, so the kernel
+	// always has something to talk to. That is not a machine of the user's, and
+	// putting it in this list as "In use" reads as a device you added yourself. We
+	// set it apart with the reason, rather than hiding it: it *is* active, and that
+	// has to be visible.
 	let eigen = $derived(store.machines.filter((m) => m.configured !== false));
 	let placeholder = $derived(store.machines.find((m) => m.configured === false) ?? null);
 
@@ -24,13 +24,13 @@
 		if (await store.remove(machine.path)) await store.loadMachines();
 	}
 
-	// ------------------------------- machineprofiel uitwisselen (gat E5)
+	// ------------------------------- exchanging a machine profile (gap E5)
 	//
-	// LightBurn heeft `.lbdev`: een fabrikant levert een kant-en-klaar profiel
-	// mee, en wie een tweede computer inricht typt niets over. Zelfde vorm als
-	// de bibliotheek van B7 — eerst kijken wat erin zit, dan pas aanmaken. Een
-	// machineprofiel bepaalt waar de kop heen gaat; blind inladen wat iemand je
-	// mailde is één stap van een kop tegen zijn eindaanslag.
+	// LightBurn has `.lbdev`: a manufacturer ships a ready-made profile, and whoever
+	// sets up a second computer types nothing over. Same shape as the library of B7 —
+	// look at what is in it first, only then create. A machine profile decides where
+	// the head goes; loading what someone mailed you blind is one step away from a
+	// head against its end stop.
 
 	type Voorbeeld = {
 		profile: string;
@@ -45,15 +45,20 @@
 		exported_at: string | null;
 	};
 
-	/** De sleutels van de engine in woorden; "bedwidth" leest niemand als bed. */
-	const VELDNAAM: Record<string, string> = {
-		bedwidth: 'Bedbreedte',
-		bedheight: 'Bedhoogte',
-		interface: 'Verbinding',
-		address: 'Adres',
-		serial_port: 'Seriële poort',
-		port: 'Poort'
+	/** The engine's keys in words; nobody reads "bedwidth" as a bed. */
+	const VELDNAAM: Record<string, MessageKey> = {
+		bedwidth: 'setup.field.bedwidth',
+		bedheight: 'setup.field.bedheight',
+		interface: 'setup.field.interface',
+		address: 'setup.field.address',
+		serial_port: 'setup.field.serialPort',
+		port: 'setup.field.port'
 	};
+
+	/** The name of a setting, or the engine's own key when we have no word for it. */
+	function veldnaam(key: string): string {
+		return key in VELDNAAM ? t(VELDNAAM[key]) : key;
+	}
 
 	let voorbeeld = $state<Voorbeeld | null>(null);
 	let profielFout = $state<string | null>(null);
@@ -88,12 +93,14 @@
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
 				profielFout =
-					typeof data?.detail === 'string' ? data.detail : `Inlezen mislukte (${response.status}).`;
+					typeof data?.detail === 'string'
+						? data.detail
+						: t('setup.import.failed', { status: response.status });
 				return;
 			}
 			voorbeeld = data;
 		} catch (e) {
-			profielFout = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			profielFout = t('grid.error.network', { message: e instanceof Error ? e.message : e });
 		} finally {
 			profielBezig = false;
 		}
@@ -114,14 +121,15 @@
 				profielFout =
 					typeof data?.detail === 'string'
 						? data.detail
-						: `Aanmaken mislukte (${response.status}).`;
+						: t('setup.create.failed', { status: response.status });
 				return;
 			}
-			ingelezen = `${data.label ?? voorbeeld.label} staat erbij${
-				data.skipped?.length
-					? ` — ${data.skipped.length} instelling${data.skipped.length === 1 ? '' : 'en'} kende deze versie niet en ${data.skipped.length === 1 ? 'is' : 'zijn'} overgeslagen`
-					: ''
-			}. Controleer het adres en de bedmaat voor je iets brandt.`;
+			ingelezen = data.skipped?.length
+				? t('setup.imported.skipped', {
+						label: data.label ?? voorbeeld.label,
+						n: data.skipped.length
+					})
+				: t('setup.imported', { label: data.label ?? voorbeeld.label });
 			voorbeeld = null;
 			await store.loadMachines();
 		} finally {
@@ -130,19 +138,16 @@
 	}
 </script>
 
-<svelte:head><title>OpenKerf — machines</title></svelte:head>
+<svelte:head><title>{t('setup.head.machines')}</title></svelte:head>
 
 <section class="setup">
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
-	<h1>Jouw machines</h1>
+	<h1>{t('setup.yourMachines')}</h1>
 	{#if eigen.length === 0}
 		<p class="leeg">
-			<strong>Nog geen machine ingesteld.</strong>
-			<span class="muted">
-				Voeg de laser toe die in je werkplaats staat. Dat bepaalt het bed op het canvas,
-				welke bediening je krijgt en hoe OpenKerf hem aanspreekt.
-			</span>
+			<strong>{t('setup.none.title')}</strong>
+			<span class="muted">{t('setup.none.body')}</span>
 		</p>
 	{:else}
 		<ul class="machines">
@@ -153,18 +158,22 @@
 						<div class="muted mono">{machine.path}</div>
 					</div>
 					{#if machine.active}
-						<span class="badge">In gebruik</span>
+						<span class="badge">{t('setup.inUse')}</span>
 					{:else}
-						<button class="btn" onclick={() => useMachine(machine)}>Gebruiken</button>
+						<button class="btn" onclick={() => useMachine(machine)}>{t('setup.use')}</button>
 					{/if}
-					<!-- Instellingen waren alleen tijdens het aanmaken te bereiken. -->
+					<!-- Settings used to be reachable only while creating the machine. -->
 					<a class="btn" href="/setup/instellen?machine={encodeURIComponent(machine.path)}">
-						Instellingen
+						{t('setup.settings')}
 					</a>
-					<!-- Gat E5: deze machine als bestand, voor een tweede computer. -->
-					<button class="btn subtle" onclick={() => exporteer(machine)}>Profiel exporteren</button>
+					<!-- Gap E5: this machine as a file, for a second computer. -->
+					<button class="btn subtle" onclick={() => exporteer(machine)}
+						>{t('setup.exportProfile')}</button
+					>
 					{#if !machine.active}
-						<button class="btn subtle" onclick={() => removeMachine(machine)}>Verwijderen</button>
+						<button class="btn subtle" onclick={() => removeMachine(machine)}
+							>{t('common.remove')}</button
+						>
 					{/if}
 				</li>
 			{/each}
@@ -172,11 +181,11 @@
 	{/if}
 
 	<div class="actions">
-		<a class="btn primary" href="/setup/soort">Machine toevoegen</a>
-		<!-- Gat E5: dezelfde weg als "Machine toevoegen", maar dan met een
-		     profiel dat iemand anders al heeft ingevuld. -->
+		<a class="btn primary" href="/setup/soort">{t('setup.addMachine')}</a>
+		<!-- Gap E5: the same route as "Add a machine", but with a profile someone else
+		     has already filled in. -->
 		<label class="btn file">
-			Profiel importeren…
+			{t('setup.importProfile')}
 			<input
 				type="file"
 				accept=".openkerf-machine,application/json"
@@ -193,58 +202,52 @@
 	{#if ingelezen}<p class="gelukt" role="status">{ingelezen}</p>{/if}
 
 	{#if voorbeeld}
-		<!-- Eerst wat erin zit, dan pas aanmaken. Een profiel bepaalt de bedmaat,
-		     de verbinding en de spiegeling; dat hoort je niet te overkomen. -->
+		<!-- What is in it first, only then create. A profile decides the bed size, the
+		     connection and the mirroring; that should not happen *to* you. -->
 		<aside class="voorbeeld">
-			<h2>Dit profiel: {voorbeeld.label}</h2>
+			<h2>{t('setup.profile.title', { label: voorbeeld.label })}</h2>
 			{#if voorbeeld.known}
 				<p class="muted">
-					{voorbeeld.friendly_name}{voorbeeld.family ? ` · ${voorbeeld.family}` : ''} —
-					{voorbeeld.settings} instellingen.
+					{t('setup.profile.known', {
+						name: `${voorbeeld.friendly_name}${voorbeeld.family ? ` · ${voorbeeld.family}` : ''}`,
+						n: voorbeeld.settings
+					})}
 				</p>
 			{:else}
-				<p class="muted">
-					Dit profiel is gemaakt voor machinetype <span class="mono">{voorbeeld.info}</span>, en
-					dat type kent deze installatie niet. Aanmaken zal mislukken; werk eerst MeerK40t bij.
-				</p>
+				<p class="muted">{t('setup.profile.unknown', { type: voorbeeld.info })}</p>
 			{/if}
 			<dl class="feiten">
 				{#each Object.entries(voorbeeld.essential) as [naam, waarde] (naam)}
-					<div><dt>{VELDNAAM[naam] ?? naam}</dt><dd class="mono">{waarde}</dd></div>
+					<div><dt>{veldnaam(naam)}</dt><dd class="mono">{waarde}</dd></div>
 				{/each}
 			</dl>
 			{#if Object.keys(voorbeeld.local).length}
 				<p class="lokaal">
-					Hoort bij de opstelling waar dit profiel vandaan komt — controleer het hier:
-					{#each Object.entries(voorbeeld.local) as [naam, waarde], i (naam)}{i ? ', ' : ''}<span
-							class="mono">{VELDNAAM[naam] ?? naam} {waarde}</span
-						>{/each}.
+					{t('setup.profile.local', {
+						values: Object.entries(voorbeeld.local)
+							.map(([naam, waarde]) => `${veldnaam(naam)} ${waarde}`)
+							.join(', ')
+					})}
 				</p>
 			{/if}
 			<div class="uitknoppen">
 				<button class="btn primary" disabled={profielBezig || !voorbeeld.known} onclick={neemProfiel}>
-					{profielBezig ? 'Bezig…' : 'Machine aanmaken'}
+					{profielBezig ? t('common.busy') : t('setup.profile.create')}
 				</button>
-				<button class="btn subtle" onclick={() => (voorbeeld = null)}>Toch niet</button>
+				<button class="btn subtle" onclick={() => (voorbeeld = null)}
+					>{t('setup.profile.cancel')}</button
+				>
 			</div>
 		</aside>
 	{/if}
 
 	{#if placeholder}
 		<aside class="placeholder">
-			<h2>Standaardapparaat van de engine</h2>
-			<p class="muted">
-				MeerK40t maakt bij het opstarten zelf een apparaat aan
-				(<span class="mono">{placeholder.label}</span>) zodat er altijd iets actief is.
-				Niemand heeft het gekozen, en de bedmaten en verbinding zijn gokwerk — brand er niets
-				op zonder ze te controleren.
-			</p>
-			<p class="muted">
-				Heb je toevallig precies zo'n machine? Geef hem dan een naam en zijn echte bedmaat;
-				vanaf dan telt hij als jouw machine.
-			</p>
+			<h2>{t('setup.placeholder.title')}</h2>
+			<p class="muted">{t('setup.placeholder.body', { label: placeholder.label })}</p>
+			<p class="muted">{t('setup.placeholder.yours')}</p>
 			<a class="btn" href="/setup/instellen?machine={encodeURIComponent(placeholder.path)}">
-				Nakijken en overnemen
+				{t('setup.placeholder.adopt')}
 			</a>
 		</aside>
 	{/if}

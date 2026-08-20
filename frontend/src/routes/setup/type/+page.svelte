@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { t } from '$lib/i18n/index.svelte';
 	import { kindOfMachine, KINDS } from '$lib/machines.svelte';
 	import { createStore } from '$lib/setup.svelte';
 
@@ -9,16 +10,15 @@
 
 	onMount(() => store.loadCatalog());
 
-	// De gekozen soort staat in de URL: deze stap moet een verversing en de
-	// terugknop overleven.
+	// The chosen kind is in the URL: this step has to survive a refresh and the
+	// back button.
 	let soort = $derived($page.url.searchParams.get('soort'));
 	let gekozenSoort = $derived(KINDS.find((k) => k.id === soort) ?? null);
 
 	let families = $derived(
 		store.catalog
-			// Per machine filteren, niet per familie: één familie kan machines van
-			// verschillende soorten bevatten (K-Series huisvest zowel de Nano's als
-			// de enige Ruida).
+			// Filter per machine, not per family: one family can hold machines of
+			// different kinds (K-Series houses both the Nanos and the only Ruida).
 			.map((family) => ({
 				...family,
 				machines: family.machines.filter(
@@ -33,30 +33,33 @@
 	);
 </script>
 
-<svelte:head><title>OpenKerf — machinetype</title></svelte:head>
+<svelte:head><title>{t('setup.head.type')}</title></svelte:head>
 
 <section class="setup">
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
-	<h1>{gekozenSoort ? `Welke ${gekozenSoort.label}?` : 'Welk model?'}</h1>
+	<h1>
+		{gekozenSoort ? t('setup.whichKind', { kind: gekozenSoort.label }) : t('setup.whichModel')}
+	</h1>
 	<p class="muted">
-		Deze lijst komt uit MeerK40t zelf.
+		{t('setup.catalogue.from')}
 		{#if gekozenSoort}
-			Alleen de modellen die bij je keuze horen — <a href="/setup/type">toon alles</a>.
+			{t('setup.catalogue.filtered')}
+			<a href="/setup/type">{t('setup.catalogue.showAllLink')}</a>
 		{:else}
-			Weet je het merk niet? Kies de familie die past bij je controller.
+			{t('setup.catalogue.unsure')}
 		{/if}
-		De instellingen kun je hierna nog aanpassen.
+		{t('setup.catalogue.later')}
 	</p>
-	<input class="search" type="search" bind:value={search} placeholder="Zoek op merk of type…" />
+	<input class="search" type="search" bind:value={search} placeholder={t('setup.searchTypes')} />
 
 	{#each families as family (family.family)}
 		<h2>{family.family}</h2>
 		<ul class="types">
 			{#each family.machines as machine (machine.key)}
 				<li>
-					<!-- De keuze gaat als queryparameter mee: de volgende stap is een
-					     eigen pagina en moet een verversing overleven. -->
+					<!-- The choice travels as a query parameter: the next step is a page of
+					     its own and has to survive a refresh. -->
 					<a class="type" href="/setup/naam?type={encodeURIComponent(machine.key)}">
 						<span class="name">{machine.friendly_name}</span>
 						{#if machine.extended_info}
@@ -67,28 +70,28 @@
 			{/each}
 		</ul>
 	{:else}
-		<!-- Het lege geval had één tekst voor drie oorzaken, en die noemde altijd
-		     de zoekterm — ook als je niets getypt had en het de soortfilter was
-		     die alles wegliet. Dan las je "Niets gevonden voor “”" en was de
-		     enige uitweg de terugknop. -->
+		<!-- The empty case used to have one text for three causes, and it always named
+		     the search term — even when you had typed nothing and it was the kind
+		     filter that left everything out. Then it read "Nothing found for “”" and
+		     the only way out was the back button. -->
 		<p class="niets muted">
 			{#if store.busy}
-				Catalogus laden…
+				{t('setup.loadingCatalogue')}
 			{:else if search.trim()}
-				Niets gevonden voor “{search.trim()}”{soort ? ' binnen deze soort' : ''}.
+				{t(soort ? 'setup.nothingFound.within' : 'setup.nothingFound', { query: search.trim() })}
 			{:else if soort}
-				Deze soort levert geen modellen op. Waarschijnlijk klopt de soort in het adres niet.
+				{t('setup.kindEmpty')}
 			{:else}
-				De catalogus is leeg. Draait de engine wel?
+				{t('setup.catalogue.empty')}
 			{/if}
 		</p>
 		{#if !store.busy && (soort || search.trim())}
-			<p><a class="btn" href="/setup/type">Toon alle modellen</a></p>
+			<p><a class="btn" href="/setup/type">{t('setup.showAllModels')}</a></p>
 		{/if}
 	{/each}
 
 	<div class="actions">
-		<a class="btn" href="/setup">Terug</a>
+		<a class="btn" href="/setup">{t('common.back')}</a>
 	</div>
 </section>
 
@@ -120,8 +123,8 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 		gap: var(--space-2);
-		/* Gelijke hoogte per rij: de teksten komen uit upstream en lopen van
-		   twee tot acht regels, en dat leest als een raster met fouten erin. */
+		/* Equal height per row: the texts come from upstream and run from two to
+		   eight lines, and that reads as a grid with mistakes in it. */
 		align-items: stretch;
 	}
 	.type {
@@ -143,7 +146,7 @@
 	}
 	.type .muted {
 		font-size: var(--text-xs);
-		/* Drie regels is genoeg om te herkennen; de rest is upstream-proza. */
+		/* Three lines is enough to recognise it; the rest is upstream prose. */
 		display: -webkit-box;
 		-webkit-line-clamp: 3;
 		line-clamp: 3;

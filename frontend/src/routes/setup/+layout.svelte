@@ -1,45 +1,46 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import Logo from '$components/Logo.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { children } = $props();
 
-	// Elke stap is een eigen route, zodat de browser-terugknop werkt en een
-	// verversing je niet terug naar stap 1 gooit.
-	// "Machines" stond hier als eerste stap, maar dat is een overzicht van álle
-	// machines — een bestemming, geen stap binnen één machine. Twee niveaus in
-	// één rij pillen leest als een fout, en dat was het ook.
+	// Every step is a route of its own, so the browser's back button works and a
+	// refresh does not throw you back to step 1.
+	// "Machines" used to be the first step here, but that is an overview of *all*
+	// machines — a destination, not a step within one machine. Two levels in one row
+	// of pills reads as a mistake, and it was one.
 	const STEPS = [
-		{ path: '/setup/soort', title: 'Soort' },
-		{ path: '/setup/type', title: 'Model' },
-		{ path: '/setup/naam', title: 'Naam' },
-		{ path: '/setup/instellen', title: 'Instellen' },
-		{ path: '/setup/klaar', title: 'Klaar' }
+		{ path: '/setup/soort', title: t('setup.step.kind') },
+		{ path: '/setup/type', title: t('setup.step.model') },
+		{ path: '/setup/naam', title: t('setup.step.name') },
+		{ path: '/setup/instellen', title: t('setup.step.settings') },
+		{ path: '/setup/klaar', title: t('setup.step.done') }
 	];
 
 	let current = $derived(STEPS.findIndex((s) => s.path === $page.url.pathname));
 
-	// Stappen met weinig op het scherm krijgen een smallere kaart. Anders staat
-	// een kolom van 460px links in een kaart van 900 en is de rechterhelft leeg
-	// — dat leest als een pagina waar iets van weggevallen is.
+	// Steps with little on screen get a narrower card. Otherwise a 460px column sits
+	// on the left of a 900px card with the right half empty — which reads as a page
+	// something has fallen off.
 	const SMAL = ['/setup/naam', '/setup/klaar'];
 	let smal = $derived(SMAL.includes($page.url.pathname));
 </script>
 
 <header class="topbar">
 	<div class="brand"><Logo />OpenKerf</div>
-	<span class="crumb">Machine instellen</span>
+	<span class="crumb">{t('setup.crumb')}</span>
 	<div class="spacer"></div>
-	<a class="btn" href="/">Terug<span class="lang">naar werkgebied</span></a>
+	<a class="btn" href="/">{t('common.back')}<span class="lang">{t('setup.backToWorkArea')}</span></a>
 </header>
 
 <main class:smal>
 	{#if current >= 0}
-	<nav class="steps" aria-label="Voortgang">
-		<!-- Vijf pillen zonder telling zeggen niet hoe ver je bent; op een
-		     telefoon wikkelen ze bovendien, en dan is de gemarkeerde pil het
-		     enige houvast. De zin ervoor werkt altijd. -->
-		<p class="teller">Stap {current + 1} van {STEPS.length}</p>
+	<nav class="steps" aria-label={t('setup.progress')}>
+		<!-- Five pills without a count do not say how far you are; on a phone they
+		     wrap as well, and then the highlighted pill is the only foothold. The
+		     sentence before it always works. -->
+		<p class="teller">{t('setup.stepOf', { n: current + 1, total: STEPS.length })}</p>
 		<ol>
 			{#each STEPS as step, index (step.path)}
 				<li class:current={index === current} class:done={current > index}>
