@@ -43,6 +43,9 @@ PLAN_AND_SPOOL = "plan clear copy preprocess validate blob preopt optimize spool
 # draagt; zonder dat blijft de regel hierboven letterlijk wat hij was.
 PLAN_COPY = "plan clear copy"
 PLAN_REST = "plan preprocess validate blob preopt optimize spool"
+# Dezelfde weg in twee stukken, voor bewerkers die de cutcode nodig hebben.
+PLAN_BLOB = "plan preprocess validate blob preopt optimize"
+PLAN_SPOOL = "plan spool"
 
 
 class CommandError(RuntimeError):
@@ -194,15 +197,18 @@ class CommandRunner:
         gelopen en verdient geen extra bochten.
         """
         alle = list(mutators)
-        if self._z_stepped_layers():
+        na = []
+        if self._multi_pass_layers():
             from meerk40t.core.node.util_console import ConsoleOperation
 
-            alle.append(lambda steps: self._with_z_moves(steps, ConsoleOperation))
-        if not alle:
+            alle.append(lambda steps: self._with_passes(steps, ConsoleOperation))
+            # Ná het blobben: de passes van één laag horen in één RD-laag.
+            na.append(self._share_pass_settings)
+        if not alle and not na:
             return self.run(PLAN_AND_SPOOL)
-        return self._plan_with_mutators(alle)
+        return self._plan_with_mutators(alle, na)
 
-    def _plan_with_mutators(self, mutators) -> list[str]:
+    def _plan_with_mutators(self, mutators, post=()) -> list[str]:
         """
         Het plan opbouwen, bewerken, en dan pas afmaken.
 
@@ -227,7 +233,14 @@ class CommandRunner:
         try:
             output = self.run(PLAN_COPY)
             self._apply_mutators(mutators)
-            output += self.run(PLAN_REST)
+            if not post:
+                output += self.run(PLAN_REST)
+                return output
+            # In twee happen, want een bewerker die de cutcode aanraakt kan pas
+            # ná `blob` iets zien. `spool` blijft de laatste stap.
+            output += self.run(PLAN_BLOB)
+            self._apply_mutators(post)
+            output += self.run(PLAN_SPOOL)
             return output
         finally:
             root.opt_merge_ops, root.opt_merge_passes = eerder
@@ -288,6 +301,116 @@ class CommandRunner:
                 continue
             gevonden.append(operation)
         return gevonden
+
+    @staticmethod
+    def _share_pass_settings(steps) -> list:
+        """
+        De passes van één laag in één RD-laag houden.
+
+        Loopt ná `blob`, want vóór die tijd bestaan de kopieën niet. `blob`
+        geeft elke pass een eigen settings-dict (`core/cutplan.py`
+        `_blob_convert` kopieert de dict zodra `passes` en `implicit_passes`
+        verschillen) en de Ruida-driver groepeert zijn lagen op de identiteit
+        van die dict (`ruida/rdjob.py:1434`). Elke pass werd dus een extra laag
+        in het bestand. Gemeten op de echte RD-stroom van een bord met vier
+        vakjes: 4 lagen bij één pass, **8** bij twee, en 4 weer zodra de
+        kopieën hun dict delen. Een bord van zestien vakjes komt bij twee
+        passes op 33 lagen, en dan zegt de controller "file invalid" en staat de
+        laser stil.
+
+        De sleutel is de `id` uit de settings-dict: kopieën van dezelfde
+        bewerking dragen dezelfde. Lagen met een Z-stap blijven met opzet
+        buiten: daar hoort tussen de passes een `z_move`, en die reeks is
+        gemeten met een eigen laag per pass.
+        """
+        eerste: dict = {}
+        for step in steps:
+            if not hasattr(step, "__iter__"):
+                continue
+            for item in step:
+                instellingen = getattr(item, "settings", None)
+                if not isinstance(instellingen, dict):
+                    continue
+                if instellingen.get("z_step_mm"):
+                    continue
+                sleutel = instellingen.get("id")
+                if sleutel is None:
+                    continue
+                gedeeld = eerste.setdefault(sleutel, instellingen)
+                if gedeeld is not instellingen:
+                    item.settings = gedeeld
+        return list(steps)
+
+    def _multi_pass_layers(self) -> list:
+        """
+        Lagen die meebranden en meer dan één pass doen.
+
+        Waarom dit een eigen weg door het plan verdient: `blob` maakt van elke
+        pass een eigen stuk cutcode **met een eigen settings-dict**
+        (`core/cutplan.py:_blob_convert` kopieert de dict zodra `passes` en
+        `implicit_passes` verschillen). De Ruida-driver groepeert zijn RD-lagen
+        op de identiteit van die dict (`ruida/rdjob.py:1434`), dus elke pass
+        werd een éxtra laag in het bestand. Gemeten op een testbord van vier
+        vakjes: 4 RD-lagen bij één pass, 8 bij twee. Een bord van zestien
+        vakjes komt dan boven wat de controller aanneemt, en die zegt niets
+        beters dan "file invalid" — met een laser die stilstaat.
+
+        Wat wél werkt is dezelfde knoop meerdere keren in de planlijst zetten:
+        `blob` maakt per plek verse cutcode en de settings-dict blijft één
+        object, dus het aantal lagen blijft gelijk aan het aantal bewerkingen.
+        Dat is precies wat de Z-stap al deed; dit is die weg voor élke laag met
+        meer dan één pass.
+
+        Terzijde: `opt_merge_passes` zou hetzelfde oplossen door één kopie met
+        `passes=N` te maken, maar de Ruida-driver kijkt niet naar dat getal
+        (geen enkele verwijzing naar `passes` in `ruida/driver.py`) — dan zou de
+        laag stil één keer branden.
+        """
+        gevonden = []
+        try:
+            operations = list(self.kernel.elements.ops())
+        except Exception:  # pragma: no cover - een boom zonder ops-tak
+            return gevonden
+        for operation in operations:
+            if not str(getattr(operation, "type", "")).startswith("op "):
+                continue
+            if not getattr(operation, "output", True):
+                continue
+            if int(getattr(operation, "implicit_passes", 1) or 1) < 2:
+                continue
+            gevonden.append(operation)
+        return gevonden
+
+    @staticmethod
+    def _with_passes(steps, console_operation) -> list:
+        """
+        De passes uitvouwen: elke laag komt zo vaak in het plan als hij brandt.
+
+        Met een Z-stap komt er een `z_move` tussen de passes en één terug aan
+        het eind; zonder Z-stap is het alleen het herhalen. Puur rekenwerk op de
+        stappenlijst, dus testbaar zonder machine.
+        """
+        uitgebreid = []
+        for step in steps:
+            z_step = getattr(step, "z_step_mm", None)
+            passes = int(getattr(step, "implicit_passes", 0) or getattr(step, "passes", 1) or 1)
+            if passes < 2:
+                uitgebreid.append(step)
+                continue
+            # De teller op de bewerking gaat naar één: het herhalen doen wij nu.
+            step.passes = 1
+            step.passes_custom = True
+            for index in range(passes):
+                uitgebreid.append(step)
+                if z_step and index < passes - 1:
+                    uitgebreid.append(
+                        console_operation(command=f"z_move {z_step:.3f}mm")
+                    )
+            if z_step:
+                uitgebreid.append(
+                    console_operation(command=f"z_move {-z_step * (passes - 1):.3f}mm")
+                )
+        return uitgebreid
 
     @staticmethod
     def _with_z_moves(steps, console_operation) -> list:

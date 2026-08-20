@@ -451,7 +451,13 @@ def test_a_busy_listen_port_becomes_a_readable_note(monkeypatch, scanner):
     )
     notes = []
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as blocker:
-        blocker.bind(("", RUIDA_LISTEN_PORT))
+        try:
+            blocker.bind(("", RUIDA_LISTEN_PORT))
+        except OSError:
+            # Er draait al een OpenKerf met een verbonden Ruida: die houdt deze
+            # poort vast. Dan is de toestand die deze test nabouwt gewoon echt,
+            # en hoeft hij niet als eigen fout te verschijnen.
+            pytest.skip(f"poort {RUIDA_LISTEN_PORT} is al bezet buiten deze test")
         original = socket.socket
 
         class Exclusive(original):
