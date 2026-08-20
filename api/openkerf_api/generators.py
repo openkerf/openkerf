@@ -1079,6 +1079,13 @@ PHASE = {
     ("deksel", "achter"): False,
     ("deksel", "links"): False,
     ("deksel", "rechts"): False,
+    # De bovenrand van elke wand, spiegelbeeld van de onderrand: daar pakt het
+    # deksel op, net zoals de bodem onderaan pakt. Alleen getekend als er een
+    # deksel is — zie `box_panels`.
+    ("voor", "boven"): True,
+    ("achter", "boven"): True,
+    ("links", "boven"): True,
+    ("rechts", "boven"): True,
 }
 
 # Welke rand van welk paneel op welke rand van welk ander paneel past.
@@ -1091,6 +1098,14 @@ JOINTS = [
     (("achter", "onder"), ("bodem", "achter")),
     (("links", "onder"), ("bodem", "links")),
     (("rechts", "onder"), ("bodem", "rechts")),
+    # Hetzelfde nog eens, bovenaan. Deze stonden er niet, en daarom kwam het
+    # deksel als een bodem zonder tegenhangers uit de machine: uitsparingen
+    # rondom en een kaarsrechte bovenrand op elke wand om ze in te laten
+    # vallen. Gevonden op het hout.
+    (("voor", "boven"), ("deksel", "voor")),
+    (("achter", "boven"), ("deksel", "achter")),
+    (("links", "boven"), ("deksel", "links")),
+    (("rechts", "boven"), ("deksel", "rechts")),
 ]
 
 
@@ -1171,12 +1186,16 @@ def box_panels(width, depth, height, thickness, finger, kerf, lid=True):
     dat is, verschilt per paneel — een wand raakt de bodem aan zijn onderkant,
     de bodem raakt die wand aan zijn eigen voorrand.
     """
+    # De bovenrand van een wand: recht bij een open doos, met tanden zodra er
+    # een deksel op moet. Zonder deze keuze snijd je bij een open doos een rand
+    # vol uitsteeksels waar niets op komt.
+    top = "boven" if lid else None
     panels = [
         ("bodem", width, depth, ("voor", "rechts", "achter", "links")),
-        ("voor", width, height, ("onder", "rechts", None, "links")),
-        ("achter", width, height, ("onder", "rechts", None, "links")),
-        ("links", depth, height, ("onder", "voor", None, "achter")),
-        ("rechts", depth, height, ("onder", "achter", None, "voor")),
+        ("voor", width, height, ("onder", "rechts", top, "links")),
+        ("achter", width, height, ("onder", "rechts", top, "links")),
+        ("links", depth, height, ("onder", "voor", top, "achter")),
+        ("rechts", depth, height, ("onder", "achter", top, "voor")),
     ]
     if lid:
         panels.append(("deksel", width, depth, ("voor", "rechts", "achter", "links")))

@@ -414,3 +414,93 @@ def test_a_qr_code_is_engraved_not_cut(client):
         o for o in client.get("/api/design").json()["operations"] if o["element_ids"]
     ]
     assert [o["label"] for o in layers] == ["Graveren"]
+
+
+# --------------------------------------------------- het deksel dat klemt
+
+
+def test_a_lid_used_to_be_a_bottom_with_nowhere_to_go():
+    """
+    De fout die op het hout gevonden werd, als test.
+
+    Het deksel was een exacte kopie van de bodem — 48 punten, dus uitsparingen
+    rondom — en de wanden hadden een kaarsrechte bovenrand. Die happen pasten
+    dus nergens in. Nu heeft élke rand van het deksel een tegenhanger.
+    """
+    from openkerf_api.generators import JOINTS
+
+    naden = {links for links, _ in JOINTS} | {rechts for _, rechts in JOINTS}
+
+    for rand in ("voor", "achter", "links", "rechts"):
+        assert ("deksel", rand) in naden, f"het deksel staat los op zijn {rand}rand"
+        assert (rand, "boven") in naden, f"de {rand}wand heeft geen tand voor het deksel"
+
+
+def test_the_walls_grow_teeth_on_top_only_when_there_is_a_lid():
+    """
+    Zonder deksel blijft de bovenrand recht.
+
+    Anders staan er tanden op een doos die open blijft: dan snijd je een rand
+    vol uitsteeksels waar niets op komt.
+    """
+    met = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=True))
+    zonder = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=False))
+
+    assert "deksel" not in zonder
+    assert len(met["voor"]) > len(zonder["voor"]), "met deksel horen er tanden bij"
+    assert len(zonder["voor"]) == 28  # zoals het altijd was: recht van boven
+
+
+def test_the_lid_seam_is_the_same_construction_as_the_bottom_seam():
+    """
+    De sterkste proef die er zonder hout is.
+
+    De bodemnaad past — dat is op materiaal vastgesteld. Als de dekselnaad
+    punt voor punt dezelfde vorm heeft (zelfde aantal tanden, zelfde
+    x-posities, zelfde kerfcompensatie, tegengestelde fase), dan past die dus
+    ook. Een test op `teeth_count(80, 10) == teeth_count(80, 10)` bewijst
+    daarentegen niets: dat is dezelfde aanroep twee keer.
+    """
+    from openkerf_api.generators import edge_points
+
+    breedte, dikte, vinger, kerf = 80.0, 3.0, 10.0, 0.1
+    heen = ((0.0, 0.0), (breedte, 0.0))
+
+    wand_onder = edge_points(*heen, dikte, vinger, kerf, PHASE[("voor", "onder")])
+    bodem_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("bodem", "voor")])
+    wand_boven = edge_points(*heen, dikte, vinger, kerf, PHASE[("voor", "boven")])
+    deksel_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("deksel", "voor")])
+
+    assert wand_boven == wand_onder
+    assert deksel_rand == bodem_rand
+    # En de naad zelf: tegengestelde fase, en de tanden vallen op dezelfde
+    # plekken op ±kerf na — precies zoals bij de bodem.
+    assert PHASE[("voor", "boven")] != PHASE[("deksel", "voor")]
+    boven = sorted({round(a[0] - b[0], 4) for a, b in zip(wand_boven, deksel_rand)})
+    onder = sorted({round(a[0] - b[0], 4) for a, b in zip(wand_onder, bodem_rand)})
+    assert boven == onder == [-kerf, kerf]
+
+
+def test_a_box_with_a_lid_still_fits_on_the_sheet(client):
+    """De wanden worden hoger van hun tanden; dat mag het vel niet breken."""
+    antwoord = client.post(
+        "/api/design/generate/box",
+        json={
+            "width_mm": 80,
+            "depth_mm": 60,
+            "height_mm": 40,
+            "thickness_mm": 3,
+            "finger_mm": 10,
+            "lid": True,
+        },
+    )
+
+    assert antwoord.status_code == 201, antwoord.text
+    assert antwoord.json()["panels"] == [
+        "bodem",
+        "voor",
+        "achter",
+        "links",
+        "rechts",
+        "deksel",
+    ]
