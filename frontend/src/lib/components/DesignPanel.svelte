@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { LAYER_COLORS, elementNaam, inktOp, type DesignStore } from '$lib/design.svelte';
+	import {
+		LAYER_COLORS,
+		elementNaam,
+		inktOp,
+		type DesignOperation,
+		type DesignStore
+	} from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import NumberField from './NumberField.svelte';
 	import Segmented from './Segmented.svelte';
@@ -302,7 +308,51 @@
 
 	let editingLayer = $state<string | null>(null);
 	/** Het rechterklikmenu op een laagrij. */
-	let rijMenu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
+	/**
+	 * Het menu op een laagrij, uit één plek.
+	 *
+	 * De rechterklik en de ⋯-knop openen hetzelfde menu op dezelfde manier. Ze
+	 * stonden als twee aanroepen in de opmaak, en dan is het een kwestie van tijd
+	 * tot de een een regel heeft die de ander mist.
+	 */
+	function opendLaagMenu(op: DesignOperation, index: number, x: number, y: number) {
+		rijMenu = {
+			x,
+			y,
+			lijst: laagMenu(
+				{
+					label: op.label,
+					aantalVormen: op.element_ids.length,
+					meebranden: op.output,
+					zichtbaar: !design.isLayerHidden(op.id),
+					eerste: index === 0,
+					laatste: index === plainLayers.length - 1,
+					selectie: selectedIds.length,
+					erin: selectedIds.length > 0 && membership(op.id) === 'all',
+					mag: canEdit,
+					opSlot: op.grid ? 'Deze laag hoort bij een testraster' : undefined
+				},
+				{
+					selecteerVormen: () => design.selectMany(op.element_ids),
+					selectieErin: (erin) => onAssign?.(op.id, erin),
+					meebranden: () => patchLayer(op.id, { output: !op.output }),
+					zichtbaar: () => design.toggleLayer(op.id),
+					omhoog: () => moveLayer(op.id, 'up'),
+					omlaag: () => moveLayer(op.id, 'down'),
+					openen: () => (editingLayer = op.id),
+					verwijderen: () => (confirmDrop = op.id)
+				}
+			)
+		};
+	}
+
+	let rijMenu = $state<{
+		lijst: MenuLijst;
+		x: number;
+		y: number;
+		/** Voor een menu dat aan een knop onderaan het paneel hangt. */
+		omhoog?: boolean;
+	} | null>(null);
 	let openGrid = $state<number | null>(null);
 
 	// Rasterlagen zijn geen gewone lagen: ze horen bij één testraster en hun
@@ -999,44 +1049,71 @@
 		</div>
 
 		{#if plainLayers.length > 1}
-			<!-- Twee handelingen over de hele lijst, boven de lijst. Sorteren is de
-			     enige knop hier die iets aan de job verandert; daarom staat de
-			     dichtheidsschakelaar rechts en apart. -->
+			<!--
+				De balk boven de lijst: één menu en één schakelaar.
+
+				Hier stonden vier knoppen op drie regels — sorteren, alles weg,
+				lege lagen opruimen, en de dichtheid. Drie daarvan zijn werkwoorden
+				over de hele lijst en die horen volgens de plaatsingsregel in een
+				menu (DESIGN-SYSTEM v4). Wat blijft staan is de dichtheid, want dat
+				is een kijkstand, en de opruimregel — die meldt een tóestand ("er
+				staan lege lagen") en biedt de uitweg in dezelfde regel aan.
+			-->
 			<div class="lijst-balk">
 				{#if canEdit}
 					<button
-						class="rot"
-						disabled={edits.busy || !gesorteerd.kanSorteren}
-						title={gesorteerd.kanSorteren
-							? 'Zet de lagen op brandvolgorde: rasteren, graveren, punten, snijden als laatste'
-							: 'De lagen staan al op brandvolgorde'}
-						onclick={sorteerLagen}
+						class="lijstmeer"
+						aria-haspopup="menu"
+						title="Handelingen op de hele lijst"
+						onclick={(e) => {
+							const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
+							rijMenu = {
+								x: doos.left,
+								y: doos.bottom + 4,
+								lijst: [
+									{
+										items: [
+											{
+												id: 'sorteer',
+												label: 'Op brandvolgorde zetten',
+												uitleg:
+													'Rasteren, graveren, punten, snijden als laatste',
+												uit: gesorteerd.kanSorteren
+													? undefined
+													: 'De lagen staan al op brandvolgorde',
+												doen: sorteerLagen
+											},
+											{
+												id: 'ruim',
+												label: legeLagen.length
+													? `${legeLagen.length} lege ${legeLagen.length === 1 ? 'laag' : 'lagen'} opruimen`
+													: 'Lege lagen opruimen',
+												uitleg: 'Vormen en gevulde lagen blijven staan',
+												uit: legeLagen.length ? undefined : 'Er staat geen lege laag in de lijst',
+												doen: () => onPrune?.()
+											}
+										]
+									},
+									{
+										items: [
+											{
+												id: 'alles-weg',
+												label: 'Alle lagen weghalen…',
+												uitleg: 'De vormen blijven op het bed staan',
+												gevaar: true,
+												doen: () => (confirmDropAll = true)
+											}
+										]
+									}
+								]
+							};
+						}}
 					>
-						<!-- Geen icoon alleen: "sorteren" is niet te tekenen zonder dat het
-						     op filteren lijkt. -->
-						Graveren vóór snijden
+						Lijst
+						<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
 					</button>
-					<!-- Alles weggooien staat hier omdat het over de hele lijst gaat,
-					     net als sorteren. De knop zelf draagt geen waarschuwkleur:
-					     hij haalt niets weg, hij stelt de vraag. -->
-					<button
-						class="rot"
-						disabled={edits.busy}
-						title="Haalt alle lagen weg. De vormen blijven op het bed staan."
-						onclick={() => (confirmDropAll = true)}
-					>Alle lagen weg…</button>
-					{#if legeLagen.length}
-						<!-- Alleen zichtbaar als er iets te halen is, en met het aantal
-						     in de knop: een leeg project heeft er tien, en dan is dit
-						     de knop die je zoekt. -->
-						<button
-							class="rot"
-							disabled={edits.busy}
-							title="Haalt de lagen weg waar geen vorm in zit. Vormen en gevulde lagen blijven staan."
-							onclick={() => onPrune?.()}
-						>{legeLagen.length} lege {legeLagen.length === 1 ? 'laag' : 'lagen'} opruimen</button>
-					{/if}
 				{/if}
+				<span class="lijst-rek"></span>
 				<button
 					class="dichtheid"
 					aria-pressed={compact}
@@ -1055,6 +1132,17 @@
 					{compact ? 'Compact' : 'Ruim'}
 				</button>
 			</div>
+			{#if canEdit && legeLagen.length}
+				<!-- Een toestand met zijn uitweg in dezelfde regel. Als knop in de balk
+				     stond hij er ook als er niets op te ruimen was; als regel staat hij
+				     er alleen wanneer hij iets betekent, en dan zegt hij hoevéél. -->
+				<p class="opruimregel">
+					{legeLagen.length === 1 ? 'Eén laag is leeg' : `${legeLagen.length} lagen zijn leeg`}.
+					<button class="alsLink" disabled={edits.busy} onclick={() => onPrune?.()}
+						>Opruimen</button
+					>
+				</p>
+			{/if}
 		{/if}
 		{#if confirmDropAll}
 			<!-- Zeggen wat er weggaat én wat er blijft. Een laag weggooien mag geen
@@ -1103,112 +1191,52 @@
 				bind:this={rijElementen[index]}
 				role="presentation"
 				oncontextmenu={(e) => {
-					// Een rij met acht kleine schakelaars kan niet elke handeling
-					// dragen; wat er niet op past — de vormen van deze laag
-					// selecteren, hem verwijderen — hangt hier. Zelfde menu, zelfde
-					// gedrag als op het canvas.
 					e.preventDefault();
-					rijMenu = {
-						x: e.clientX,
-						y: e.clientY,
-						lijst: laagMenu(
-							{
-								label: op.label,
-								aantalVormen: op.element_ids.length,
-								meebranden: op.output,
-								zichtbaar: !design.isLayerHidden(op.id),
-								eerste: index === 0,
-								laatste: index === plainLayers.length - 1,
-								selectie: selectedIds.length,
-								erin: selectedIds.length > 0 && membership(op.id) === 'all',
-								mag: canEdit,
-								opSlot: op.grid ? 'Deze laag hoort bij een testraster' : undefined
-							},
-							{
-								selecteerVormen: () => design.selectMany(op.element_ids),
-								selectieErin: (erin) => onAssign?.(op.id, erin),
-								meebranden: () => patchLayer(op.id, { output: !op.output }),
-								zichtbaar: () => design.toggleLayer(op.id),
-								omhoog: () => moveLayer(op.id, 'up'),
-								omlaag: () => moveLayer(op.id, 'down'),
-								openen: () => (editingLayer = op.id),
-								verwijderen: () => (confirmDrop = op.id)
-							}
-						)
-					};
+					opendLaagMenu(op, index, e.clientX, e.clientY);
 				}}
 			>
 				<div class="ident">
 					{#if canEdit && plainLayers.length > 1}
-					<!-- De ordekolom in de linkermarge: eerder branden, slepen, later
-					     branden. Gat L9 — LightBurn heeft een altijd zichtbare ▲/▼-strip
-					     aan de rand van de lijst en wij hadden alleen slepen en de
-					     pijltjestoetsen op de greep; de zichtbare knop miste, en dat is
-					     de enige van de drie die zichzelf uitlegt.
+					<!--
+						Eén greep voor de volgorde, niet drie.
 
-					     In de marge en niet in de rij: de rij is 280 px breed en elke
-					     pixel daarvan gaat naar de laagnaam (zie de opmerking bij .greep).
-					     De kolom is 14 px en kost de naam er vier. -->
-					<div class="ordekolom">
-						<!-- Alleen in de ruime stand: in de compacte is de rij 36 px hoog
-						     en dan zijn drie knoppen boven elkaar elk 12 px — een raakdoel
-						     dat je alleen per ongeluk raakt. Daar blijft de greep over, en
-						     die doet met de pijltjestoetsen hetzelfde. -->
-						{#if !compact}
-							<button
-								class="pijl"
-								aria-label="{op.label} eerder branden"
-								title={index === 0 ? 'Deze laag brandt al als eerste' : 'Eerder branden'}
-								disabled={edits.busy || index === 0}
-								onclick={() => moveLayer(op.id, 'up')}
-							>
-								<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 15 7-7 7 7" /></svg>
-							</button>
-						{/if}
-						<!-- Slepen om te herordenen (gat L1). Een eigen greep en niet de
-						     hele rij: die zit vol met schakelaars en velden, en dan sleep
-						     je de laag weg terwijl je het vermogen wilde bijstellen.
-						     De pijltjestoetsen doen hier hetzelfde als slepen, zodat dit
-						     zonder muis en zonder de uitklap ook werkt. -->
-						<button
-							class="greep"
-							aria-label="Volgorde van {op.label} — sleep, of gebruik de pijltjestoetsen"
-							title="Sleep om te herordenen (of pijltje omhoog/omlaag)"
-							disabled={edits.busy}
-							onpointerdown={(e) => startSleep(e, op.id, index)}
-							onpointermove={beweegSleep}
-							onpointerup={eindSleep}
-							onpointercancel={() => (slepen = null)}
-							onkeydown={(e) => {
-								if (e.key === 'ArrowUp' && index > 0) {
-									e.preventDefault();
-									moveLayer(op.id, 'up');
-								} else if (e.key === 'ArrowDown' && index < plainLayers.length - 1) {
-									e.preventDefault();
-									moveLayer(op.id, 'down');
-								}
-							}}
-						>
-							<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-								<circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-								<circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-								<circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-							</svg>
-						</button>
-						{#if !compact}
-							<button
-								class="pijl"
-								aria-label="{op.label} later branden"
-								title={index === plainLayers.length - 1
-									? 'Deze laag brandt al als laatste'
-									: 'Later branden'}
-								disabled={edits.busy || index === plainLayers.length - 1}
-								onclick={() => moveLayer(op.id, 'down')}
-							>
-								<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7" /></svg>
-							</button>
-						{/if}
-					</div>
+						Hier stond een kolom van drie: een pijl omhoog, de sleepgreep, een
+						pijl omlaag. Die pijlen kwamen er voor gat L9 — slepen en de
+						pijltjestoetsen waren onzichtbare grepen, en er moest iets zijn dat
+						zichzelf uitlegt. Dat argument is vervallen: sinds de vorige ronde
+						heeft elke laagrij een rechterklikmenu met de woorden "Eerder
+						branden" en "Later branden" erin, en dát legt zichzelf uit beter dan
+						een pijl van 11 px. Wat overblijft is de greep, met dezelfde
+						pijltjestoetsen erop.
+
+						Winst: twee knoppen minder per rij (tien in een lijst van vijf), en
+						de rij hoeft niet meer drie knoppen hoog te zijn.
+					-->
+					<button
+						class="greep"
+						aria-label="Volgorde van {op.label} — sleep, of gebruik de pijltjestoetsen"
+						title="Sleep om te herordenen (of pijltje omhoog/omlaag). Rechterklik voor eerder of later branden."
+						disabled={edits.busy}
+						onpointerdown={(e) => startSleep(e, op.id, index)}
+						onpointermove={beweegSleep}
+						onpointerup={eindSleep}
+						onpointercancel={() => (slepen = null)}
+						onkeydown={(e) => {
+							if (e.key === 'ArrowUp' && index > 0) {
+								e.preventDefault();
+								moveLayer(op.id, 'up');
+							} else if (e.key === 'ArrowDown' && index < plainLayers.length - 1) {
+								e.preventDefault();
+								moveLayer(op.id, 'down');
+							}
+						}}
+					>
+						<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+							<circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+							<circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+							<circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+						</svg>
+					</button>
 					{/if}
 					<!-- Het nummer op de chip ís de brandvolgorde. Klikken opent de
 					     laag, dus de kleur is ook de weg naar zijn instellingen. -->
@@ -1228,9 +1256,10 @@
 					     rij op een tablet 186 px hoog en passen er drie lagen op een
 					     scherm. -->
 					<div class="layer-name">{op.label}</div>
-					<!-- Het aantal hoort bij de naam, niet bij de waarden: achter de
-					     drie velden past het net niet en dan krijgt de ene rij een
-					     derde regel en de andere niet. -->
+					<!-- Alleen het getal, naast de naam. Op de waarderegel gezet werd de
+					     rij 96 px: die regel is met drie velden werkelijk vol (215 van
+					     218 px, zoals de opmerking daar al zei). Wat het getal betekent
+					     staat in de tooltip; nul valt op omdat de kolom uitlijnt. -->
 					<span
 						class="count"
 						title="{op.element_ids.length} vorm{op.element_ids.length === 1
@@ -1270,44 +1299,30 @@
 						     schakelaar waar je tijdens het werk aan zit; verbergen doe je
 						     één keer. Dát een laag verborgen is, blijft in de rij staan als
 						     woord. -->
-						{#if !compact}
+						<!--
+							Het oogje stond hier, naast de aan-uitschakelaar en de ⋯. Drie
+							raakdoelen van 28 px plus de chip, de greep en de telling lieten
+							de laagnaam 37 van 215 px — gemeten, en dat is waarom er
+							"Bui-ten-…" stond. Verbergen doe je één keer per laag en het
+							staat in het rijmenu; meebranden is de schakelaar waar je tijdens
+							het werk aan zit en blijft hier. Dát een laag verborgen is, staat
+							als woord in de rij.
+						-->
+						<!-- De ⋯ deed hetzelfde als de chip ernaast: de uitklap openen. Twee
+						     knoppen voor één handeling, en tegelijk was het rijmenu alleen met
+						     de rechtermuisknop te vinden. Nu opent de chip de instellingen en
+						     de ⋯ het menu — twee verschillende dingen, en de weg naar het menu
+						     is zichtbaar geworden. -->
 						<button
-							class="oog"
-							class:uit={design.isLayerHidden(op.id)}
-							role="switch"
-							aria-checked={!design.isLayerHidden(op.id)}
-							title={design.isLayerHidden(op.id)
-								? 'Verborgen op het canvas — klik om te tonen. Dit verandert niets aan de job.'
-								: 'Zichtbaar op het canvas — klik om te verbergen. Dit verandert niets aan de job.'}
-							aria-label="Zichtbaar op het canvas voor {op.label}"
-							onclick={() => design.toggleLayer(op.id)}
-						>
-							{#if design.isLayerHidden(op.id)}
-								<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-									<path d="M3 3l18 18" />
-									<path d="M10.6 5.1A9.6 9.6 0 0 1 12 5c5 0 9 4.5 9 7a11 11 0 0 1-2.5 3.4" />
-									<path d="M6.2 7.4A11.6 11.6 0 0 0 3 12c0 2.5 4 7 9 7a9.7 9.7 0 0 0 3.8-.8" />
-								</svg>
-							{:else}
-								<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-									<path d="M3 12c0-2.5 4-7 9-7s9 4.5 9 7-4 7-9 7-9-4.5-9-7Z" />
-									<circle cx="12" cy="12" r="2.6" />
-								</svg>
-							{/if}
-						</button>
-						{/if}
-						{#if !compact}
-							<!-- In de compacte stand valt deze weg: de chip doet precies
-							     hetzelfde en die staat er altijd. Eén weg naar de uitklap is
-							     genoeg als de rij 34 px hoog moet blijven. -->
-							<button
-								class="more"
-								title={open ? 'Sluiten' : 'Meer instellingen'}
-								aria-expanded={open}
-								aria-label="Meer instellingen voor {op.label}"
-								onclick={() => (editingLayer = open ? null : op.id)}
-							>⋯</button>
-						{/if}
+							class="more"
+							aria-haspopup="menu"
+							title="Meer voor {op.label} — of rechterklik op de rij"
+							aria-label="Meer voor {op.label}"
+							onclick={(e) => {
+								const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
+								opendLaagMenu(op, index, doos.right - 200, doos.bottom + 4);
+							}}
+						>⋯</button>
 					{/if}
 				</div>
 
@@ -1734,17 +1749,44 @@
 			     anders leest de balk als een filter over de lijst erboven. Onder
 			     de lijst, want de lagen die er al zijn kijk je vaker aan dan dat
 			     je er een maakt. -->
-			<div class="addrow">
-				<span class="addlabel">Nieuwe laag</span>
-				<Segmented
-					label="Type nieuwe laag"
-					bind:value={newLayerType}
-					options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
-				/>
-				<button class="add" disabled={edits.busy} onclick={addLayer}>
-					{newLayerNoun} toevoegen
-				</button>
-			</div>
+			<!--
+				Eén knop met een menu, in plaats van een label, vier keuzerondjes en
+				een knop.
+
+				Het kostte vijf bedieningsorganen en drie regels om iets te doen wat
+				je een paar keer per project doet: kies een soort, druk op toevoegen.
+				Nu is het één knop die de vier soorten uitklapt — evenveel tikken,
+				een vijfde van de ruimte, en het soort staat in het menu bij zijn
+				naam in plaats van als afgekorte pil.
+			-->
+			<button
+				class="add"
+				aria-haspopup="menu"
+				disabled={edits.busy}
+				onclick={(e) => {
+					const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
+					rijMenu = {
+						x: doos.left,
+						y: doos.top - 8,
+						omhoog: true,
+						lijst: [
+							{
+								titel: 'Laag toevoegen',
+								items: LAYER_TYPES.map(({ value, label }) => ({
+									id: `nieuw-${value}`,
+									label,
+									doen: () => {
+										newLayerType = value;
+										addLayer();
+									}
+								}))
+							}
+						]
+					};
+				}}
+			>
+				+ Laag toevoegen
+			</button>
 		{/if}
 		<p class="hint">
 			{#if selected}
@@ -1758,7 +1800,13 @@
 {/if}
 
 {#if rijMenu}
-	<Menu menu={rijMenu.lijst} x={rijMenu.x} y={rijMenu.y} onSluit={() => (rijMenu = null)} />
+	<Menu
+		menu={rijMenu.lijst}
+		x={rijMenu.x}
+		y={rijMenu.y}
+		omhoog={rijMenu.omhoog ?? false}
+		onSluit={() => (rijMenu = null)}
+	/>
 {/if}
 
 <style>
@@ -1839,10 +1887,6 @@
 	   Op een aanraakscherm blijven ze 44 px — dat regelt de mediaquery onderaan,
 	   die zwaarder weegt dan deze regel. */
 	.layer.compact .out,
-	.layer.compact .oog {
-		width: 24px;
-		height: 24px;
-	}
 	.layer.compact .ident {
 		flex: 1 1 12ch;
 		min-width: 0;
@@ -1892,38 +1936,9 @@
 	   snelst met een muis, de pijltjestoetsen op de greep werken zonder muis, en
 	   de knoppen zijn de enige van de drie die zichzelf uitleggen. LightBurn
 	   heeft die derde altijd zichtbaar; wij hadden hem in de uitklap. */
-	.ordekolom {
-		position: absolute;
-		left: 0;
-		top: 0;
-		bottom: 0;
-		width: 14px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 1px;
-	}
-	.pijl {
-		flex: none;
-		width: 14px;
-		height: 15px;
-		display: grid;
-		place-items: center;
-		border-radius: var(--radius-field);
-		color: var(--text-2);
-	}
-	.pijl:hover:not(:disabled) {
-		color: var(--text-1);
-		background: var(--surface-3);
-	}
 	/* Uit én weg te klikken: een laag die al bovenaan staat, kan niet hoger.
 	   Onzichtbaar maken zou de kolom laten verspringen, dus hij blijft staan en
 	   wordt alleen stil. */
-	.pijl:disabled {
-		opacity: 0.25;
-		cursor: default;
-	}
 	/* Onder 1200 px verdwijnen ze. Dat is niet willekeurig: dezelfde grens waar
 	   tokens.css elke knop 44×44 maakt omdat je daar met een vinger werkt. Drie
 	   raakdoelen van 44 px boven elkaar in een rij van 111 px kan niet, en 14 px
@@ -1934,9 +1949,6 @@
 	   je verwacht, de pijltjestoetsen erop doen hetzelfde, en de knoppen
 	   ↑ Eerder / ↓ Later staan nog in de uitklap. */
 	@media (max-width: 1199px), (pointer: coarse) {
-		.pijl {
-			display: none;
-		}
 	}
 	/* ── Slepen om te herordenen (L1) ──────────────────────────────────────── */
 	.greep {
@@ -1975,11 +1987,46 @@
 	}
 	.lijst-balk {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-2);
 		margin-bottom: var(--space-2);
 	}
+	.lijst-rek { flex: 1; }
+	/* Het lijstmenu: dezelfde vorm als de dichtheidsschakelaar ernaast, want ze
+	   staan in dezelfde balk en horen niet om de aandacht te vechten. */
+	.lijstmeer {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1h);
+		padding: var(--space-1) var(--space-2);
+		font: inherit;
+		font-size: var(--text-xs);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+		color: var(--text-2);
+	}
+	.lijstmeer:hover { background: var(--surface-2); color: var(--text-1); }
+	/* Een toestand met zijn uitweg in dezelfde regel. */
+	.opruimregel {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.alsLink {
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		font-weight: 500;
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.alsLink:disabled { opacity: 0.5; text-decoration: none; }
 	.dichtheid {
 		display: inline-flex;
 		align-items: center;
@@ -2057,26 +2104,6 @@
 	/* Zichtbaarheid staat naast meebranden en ziet er bewust ánders uit: dit is
 	   een kijkstand, geen machinestand. Daarom neutraal grijs waar meebranden
 	   groen kleurt — kleur is hier gereserveerd voor wat de laser gaat doen. */
-	.oog {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		color: var(--text-2);
-	}
-	.oog.uit {
-		background: var(--surface-2);
-		color: var(--text-2);
-		opacity: 0.75;
-	}
-	.oog:hover:not(:disabled) {
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
 	/* Een verborgen laag mag je nog wél lezen — hij is niet uitgezet, hij staat
 	   alleen even niet op het bed. De naam vervaagt, de knoppen niet. */
 	.layer.onzichtbaar .layer-name,
@@ -2143,18 +2170,33 @@
 		align-items: center;
 		gap: 4px;
 	}
-	/* Een waarde met zijn eenheid als één ding: het veld hoort bij "mm/s", dus
-	   ze delen een rand en de eenheid is niet aan te klikken. */
+	/*
+	   Een waarde met zijn eenheid als één ding: het veld hoort bij "mm/s", dus
+	   ze delen een rand en de eenheid is niet aan te klikken.
+
+	   Kaal tot je hem aanwijst. Drie omkaderde pillen per rij maakten van een
+	   lijst van vijf lagen vijftien vakjes — 44 knoppen in het paneel, en de
+	   getallen die je juist met elkaar wil vergelijken verdwenen tussen de
+	   randen. Ze zijn nog steeds ter plekke te wijzigen (dat is de reden dat dit
+	   paneel bestaat), maar de rand komt pas als je er iets mee gaat doen. Bij
+	   aanwijzen én bij focus, dus met het toetsenbord is hij er ook.
+	*/
 	.val {
 		display: inline-flex;
 		align-items: center;
-		border: 1px solid var(--line);
+		border: 1px solid transparent;
 		border-radius: var(--radius-field);
-		background: var(--surface-2);
+		background: transparent;
 		overflow: hidden;
+		transition: background var(--transition), border-color var(--transition);
+	}
+	.val:hover {
+		border-color: var(--line);
+		background: var(--surface-2);
 	}
 	.val:focus-within {
 		border-color: var(--accent);
+		background: var(--surface-2);
 		box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 	.val input {
@@ -2195,6 +2237,7 @@
 		color: var(--warn);
 		font-weight: 500;
 	}
+
 	/* De naam mag over twee regels: "Buitensnede 3…" en "Contour grave…" zijn
 	   niet uit elkaar te houden, en juist het staartje is wat de gebruiker zelf
 	   getypt heeft. Een rij die groeit om een naam is eerlijk; een rij die een
@@ -2450,12 +2493,6 @@
 		color: var(--danger);
 		margin-top: var(--space-1);
 	}
-	.addrow { display: grid; gap: var(--space-1); margin: var(--space-3) 0; }
-	.addlabel {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.addrow :global(.segmented) { display: flex; width: 100%; }
 	/* De knop noemt de uitkomst, niet de handeling — zie DESIGN-SYSTEM, "de
 	   primaire knop zegt wát er komt". */
 	.add {
