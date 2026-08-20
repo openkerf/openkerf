@@ -1334,6 +1334,66 @@ class Drawing:
         self._refresh()
         return {"removed": operation_id}
 
+    # Vormen die een binnenkant hebben. Een lijn en een punt hebben er geen, en
+    # de engine zou de vulling dan wel zetten maar er nooit iets mee doen — een
+    # knop die aangaat en niets doet.
+    FILLABLE = ("elem rect", "elem ellipse", "elem path", "elem polyline")
+
+    def fill(self, element_ids, filled: bool = True, color=None) -> dict:
+        """
+        Een vorm een vlak geven, of het weer weghalen.
+
+        Waarom dit nodig is: onze rasteraar vult wat een `fill` heeft en trekt
+        alleen een lijn om wat er geen heeft (`rasterizer.py`). Een vierkant dat
+        je in OpenKerf tekent heeft er geen, dus in een rasterlaag brandde het
+        zijn omtrek. Gemeten op een beeld van 100×100 pixels: 8 % zwart vóór,
+        boven 90 % erna.
+
+        Let op bij het lezen van een schatting: de **tijd** verandert hier niet
+        van. Een rasterlaag scant de omtrekbox regel voor regel, gevuld of niet
+        — gemeten op een vierkant van 30 mm: 123,7 s in beide gevallen. Alleen
+        de uitkomst verschilt, en dat is precies waarom een lege rasterlaag zo
+        makkelijk over het hoofd te zien is.
+
+        De kleur volgt standaard de lijn van de vorm zelf. In MeerK40t ís de
+        kleur waar de classificatie op werkt; een vulling in een andere kleur kan
+        de vorm bij een volgende classificatie in een andere laag laten belanden
+        dan zijn eigen lijn.
+        """
+        nodes = self._nodes(element_ids)
+        wanted = self._valid_color(color) if color is not None else None
+
+        kan = [n for n in nodes if str(getattr(n, "type", "")) in self.FILLABLE]
+        skipped = len(nodes) - len(kan)
+        filled_count = 0
+        cleared = 0
+        with self.elements.undoscope("Vulling" if filled else "Vulling weghalen"):
+            for node in kan:
+                self.elements.set_emphasis([node])
+                if not filled:
+                    self.runner.run("fill none")
+                    cleared += 1
+                    continue
+                kleur = wanted or self._shape_color(node)
+                self.runner.run(f"fill {kleur}")
+                filled_count += 1
+        self.elements.set_emphasis(nodes)
+        self._refresh()
+        return {
+            "ids": [n.id for n in nodes],
+            "filled": filled_count,
+            "cleared": cleared,
+            "skipped": skipped,
+        }
+
+    def _shape_color(self, node) -> str:
+        """De lijnkleur van de vorm, of anders de kleur voor nieuw werk."""
+        stroke = getattr(node, "stroke", None)
+        hex_value = getattr(stroke, "hexrgb", None) or getattr(stroke, "hex", None)
+        if hex_value:
+            return str(hex_value)[:7]
+        return self.default_color() or "#000000"
+
     def single_layer(self, element_ids, kind: str = "cut", operation_id=None) -> dict:
         """
         Alles uit de selectie in één laag, en in geen enkele andere.

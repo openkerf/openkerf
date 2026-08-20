@@ -428,14 +428,40 @@
 		}
 	}
 
-	async function naarEenLaag(kind: 'cut' | 'engrave') {
+	/**
+	 * Een vlak van de selectie maken, of het weghalen.
+	 *
+	 * Zonder vulling rastert een vorm alleen zijn omtrek — gemeten: 8 % van het
+	 * vlak zwart in plaats van boven 90 %. Vandaar dat dit een eigen knop is en
+	 * geen bijwerking van "naar de rasterlaag".
+	 */
+	async function vullen(filled: boolean) {
+		if (!canEdit || !hasSelection) return;
+		indeelMelding = null;
+		const uitkomst = await edits.fill(design.selectedIds, filled);
+		if (!uitkomst) return;
+		await design.load();
+		const aantal = filled ? uitkomst.filled : uitkomst.cleared;
+		const woord = aantal === 1 ? 'vorm' : 'vormen';
+		indeelMelding =
+			(filled
+				? `${aantal} ${woord} gevuld — een rasterlaag brandt nu het vlak.`
+				: `Vulling weg bij ${aantal} ${woord}.`) +
+			(uitkomst.skipped
+				? ` ${uitkomst.skipped} overgeslagen: een lijn heeft geen binnenkant.`
+				: '');
+	}
+
+	async function naarEenLaag(kind: 'cut' | 'engrave' | 'raster') {
 		if (!canEdit || !hasSelection) return;
 		indeelMelding = null;
 		const uitkomst = await edits.singleLayer(design.selectedIds, kind);
 		if (!uitkomst) return;
 		await design.load();
 		const laag = design.operations.find((o) => o.id === uitkomst.operation_id);
-		const naam = laag?.label ?? (kind === 'cut' ? 'Snijden' : 'Graveren');
+		const naam =
+			laag?.label ??
+			{ cut: 'Snijden', engrave: 'Graveren', raster: 'Rasteren' }[kind];
 		const uit = uitkomst.removed
 			? `, uit ${uitkomst.removed} ${uitkomst.removed === 1 ? 'toewijzing' : 'toewijzingen'} gehaald`
 			: '';
@@ -947,6 +973,7 @@
 					cornerNote={hoekMelding}
 					onSplit={splitsen}
 					onSingleLayer={naarEenLaag}
+					onFill={vullen}
 					onPrune={opruimen}
 					tidyNote={indeelMelding}
 					onCrop={() => (cropping = true)}

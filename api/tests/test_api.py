@@ -104,6 +104,7 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # rechthoek; al het andere wordt een pad, en dat is eenrichting.
         "/api/design/corners",
         "/api/design/split",
+        "/api/design/fill",
         "/api/design/single-layer",
         "/api/design/operations/prune",
         "/api/design/effect",

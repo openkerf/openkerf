@@ -252,6 +252,19 @@ export class EditController {
 	 * (te korte zijden, of een boog die op de hoek uitkomt), en welke id's het
 	 * geworden zijn — afschuinen maakt er een pad van, en dat krijgt een nieuw id.
 	 */
+	/**
+	 * Een vorm een vlak geven, of het weghalen.
+	 *
+	 * Nodig om iets te rasteren dat je zelf getekend hebt: de rasteraar vult wat
+	 * een vulling heeft en trekt anders alleen een lijn om de vorm.
+	 */
+	async fill(
+		ids: string[],
+		filled: boolean
+	): Promise<{ filled: number; cleared: number; skipped: number } | null> {
+		return this.#postJson('/api/design/fill', { ids, filled });
+	}
+
 	/** Een pad opdelen in zijn losse stukken. */
 	async split(
 		ids: string[]
@@ -262,7 +275,7 @@ export class EditController {
 	/** De selectie in één laag zetten, en uit alle andere halen. */
 	async singleLayer(
 		ids: string[],
-		kind: 'cut' | 'engrave'
+		kind: 'cut' | 'engrave' | 'raster'
 	): Promise<{
 		operation_id: string;
 		type: string;

@@ -21,6 +21,7 @@
 		onSplit,
 		onSingleLayer,
 		onPrune,
+		onFill,
 	tidyNote = null,
 		onImage,
 		onImageDpi,
@@ -56,7 +57,9 @@
 		/** Een pad opdelen in zijn losse stukken. */
 		onSplit?: () => void;
 		/** De selectie in één laag zetten en uit alle andere halen. */
-		onSingleLayer?: (kind: 'cut' | 'engrave') => void;
+		onSingleLayer?: (kind: 'cut' | 'engrave' | 'raster') => void;
+		/** Een vlak van de selectie maken, of het weghalen. */
+		onFill?: (filled: boolean) => void;
 		/** Lege lagen weg. */
 		onPrune?: () => void;
 		/** Wat er van de laatste indeel-handeling te melden valt. */
@@ -321,6 +324,19 @@
 			stukken: samengesteld.reduce((n, e) => n + (e.subpaths ?? 1), 0)
 		};
 	});
+
+	/**
+	 * Kan deze selectie een vlak dragen, en heeft ze dat al?
+	 *
+	 * Een lijn en een punt hebben geen binnenkant; de knop hoort er dan niet te
+	 * staan. Zonder vulling rastert een vorm alleen zijn omtrek, en dat is de
+	 * hele reden dat deze knop bestaat.
+	 */
+	const VULBAAR = ['elem rect', 'elem ellipse', 'elem path', 'elem polyline'];
+	const vulbaar = $derived(chosen.filter((e) => VULBAAR.includes(e.type)));
+	const alGevuld = $derived(
+		vulbaar.length > 0 && vulbaar.every((e) => Boolean(e.fill))
+	);
 
 	/** In hoeveel lagen de selectie nu zit — het getal dat 'alleen in' opheft. */
 	const nuInLagen = $derived(
@@ -913,16 +929,26 @@
 							onclick={() => onSplit?.()}
 						>Splitsen in {teSplitsen.stukken} vormen</button>
 					{/if}
+					{#if vulbaar.length}
+						<button
+							class="rot"
+							disabled={edits.busy}
+							title={alGevuld
+								? 'Haalt het vlak weg; de omtrek blijft'
+								: 'Geeft de vorm een vlak. Een rasterlaag brandt dan het vlak in plaats van alleen de omtrek.'}
+							onclick={() => onFill?.(!alGevuld)}
+						>{alGevuld ? 'Vulling weghalen' : 'Vullen — voor rasteren'}</button>
+					{/if}
 					{#if chosen.length}
 						<div class="alleen-in">
-							{#each [['cut', 'snijlaag'], ['engrave', 'graveerlaag']] as [kind, naam] (kind)}
+							{#each [['cut', 'snijlaag'], ['engrave', 'graveerlaag'], ['raster', 'rasterlaag']] as [kind, naam] (kind)}
 								<button
 									class="rot"
 									disabled={edits.busy}
 									title={nuInLagen > 1
 										? `Zet de selectie in de ${naam} en haalt hem uit de ${nuInLagen} lagen waar hij nu in zit`
 										: `Zet de selectie in de ${naam} en haalt hem uit elke andere laag`}
-									onclick={() => onSingleLayer?.(kind as 'cut' | 'engrave')}
+									onclick={() => onSingleLayer?.(kind as 'cut' | 'engrave' | 'raster')}
 								>Alleen in {naam}</button>
 							{/each}
 						</div>

@@ -1152,6 +1152,21 @@ class ApiServer:
             """
             return manage(self.editor.split, body.get("ids"))
 
+        @app.post("/api/design/fill", dependencies=write)
+        def fill_elements(body: dict):
+            """
+            Een vorm een vlak geven, of het weghalen.
+
+            Nodig om iets te kunnen rasteren dat je zelf getekend hebt: de
+            rasteraar vult wat een vulling heeft en trekt anders alleen een lijn.
+            """
+            return manage(
+                self.drawing.fill,
+                body.get("ids"),
+                body.get("filled", True),
+                body.get("color"),
+            )
+
         @app.post("/api/design/single-layer", dependencies=write)
         def single_layer(body: dict):
             """De selectie in één laag, en uit alle andere."""
