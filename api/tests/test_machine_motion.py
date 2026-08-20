@@ -142,6 +142,34 @@ def test_the_frame_traces_the_work(client):
     assert response.json()["corners"] == 5
 
 
+def test_every_corner_of_the_frame_is_queued_and_not_refused(client):
+    """
+    Gemeten op een echte machine: de kop ging naar de eerste hoek en de andere
+    vier kregen "Busy Error".
+
+    `move_absolute` weigert zodra de spooler niet stilstaat
+    (`core/spoolers.py:243`) — en na de eerste hoek is de kop natuurlijk
+    onderweg. Met `-f` gaat de opdracht in de wachtrij in plaats van geweigerd
+    te worden, en dat is precies wat je wil: vijf bewegingen die op elkaar
+    volgen. Zonder job eromheen is er niets om voor te dringen; dat er geen job
+    loopt, is al gecontroleerd.
+    """
+    client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 20, "y_mm": 30, "width_mm": 60, "height_mm": 40},
+    )
+
+    response = client.post("/api/machine/frame")
+
+    assert response.status_code == 200
+    regels = response.json()["output"]
+    opdrachten = [r for r in regels if "move_absolute" in r]
+    assert len(opdrachten) == 5
+    assert all("-f" in r for r in opdrachten), regels
+    assert not any("busy" in r.lower() for r in regels), regels
+    assert response.json()["notice"] is None
+
+
 def test_an_empty_bed_has_nothing_to_frame(client):
     client.post("/api/design/clear")
 

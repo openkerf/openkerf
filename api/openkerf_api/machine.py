@@ -218,15 +218,20 @@ class MachineControl:
             (x, y + hoogte),
             (x, y),
         ]
+        # `-f` (force) is hier de hele reparatie. Zonder die vlag weigert
+        # `move_absolute` zodra de spooler niet stilstaat
+        # (`core/spoolers.py:243`), en na de eerste hoek is de kop natuurlijk
+        # onderweg: gemeten op een echte machine ging de kop naar linksboven en
+        # kwamen de vier volgende hoeken terug als "Busy Error". Met de vlag
+        # gaan ze in de wachtrij en volgen ze elkaar netjes op. Er kan niets
+        # voordringen: dat er geen job loopt, is hierboven al gecontroleerd.
         uitvoer = []
         for hx, hy in hoeken:
-            resultaat = self.runner.run(f"move_absolute {_mm(hx)} {_mm(hy)}")
+            resultaat = self.runner.run(f"move_absolute -f {_mm(hx)} {_mm(hy)}")
             uitvoer.extend(resultaat if isinstance(resultaat, list) else [resultaat])
 
-        # De kop kan nog van de vorige hoek onderweg zijn; sommige drivers
-        # weigeren dan de volgende opdracht. Dat stilzwijgend inslikken zou
-        # betekenen dat je denkt het kader gezien te hebben terwijl er een hoek
-        # ontbrak.
+        # De melding blijft als vangnet staan, maar hoort niet meer af te gaan:
+        # sinds de hoeken met `-f` in de wachtrij gaan, weigert er niets meer.
         bezet = [r for r in uitvoer if "busy" in str(r).lower() or "error" in str(r).lower()]
         return {
             "output": uitvoer,

@@ -427,3 +427,53 @@ def test_a_layer_that_does_burn_keeps_its_estimate(client):
 
     assert schatting["seconds"] > 0
     assert all(l["burns"] for l in schatting["layers"])
+
+
+def test_a_shape_whose_length_the_engine_cannot_compute_still_counts(kernel):
+    """
+    Gevonden in een echt project: tekst in Chalkduster, 474 contouren en
+    10 026 segmenten, waarop `Geomstr.length()` van de engine omvalt met
+    "expected a positive input, got -inf". Wij vingen dat op met een 0 — de
+    `except` stond er voor afbeeldingen, die geen pad hebben — en dus rekende de
+    schatting nul seconden voor precies de vorm die het langst duurt.
+
+    Gemeten met de terugval over de punten: 0,68 m lijn.
+    """
+    from openkerf_api.drawing import Drawing
+
+    class KapotteGeometrie:
+        """Zoals de engine zich gedraagt op die tekst."""
+
+        def length(self):
+            raise ValueError("expected a positive input, got -inf")
+
+        def as_interpolated_points(self, interpolate=20):
+            # Een vierkant van 10 mm: 40 mm lijn.
+            from meerk40t.core.units import UNITS_PER_MM
+
+            mm = UNITS_PER_MM
+            return [
+                complex(0, 0),
+                complex(10 * mm, 0),
+                complex(10 * mm, 10 * mm),
+                complex(0, 10 * mm),
+                complex(0, 0),
+            ]
+
+    class NepKnoop:
+        type = "elem path"
+
+        def as_geometry(self):
+            return KapotteGeometrie()
+
+    assert Drawing._length_mm(NepKnoop()) == pytest.approx(40.0, rel=0.01)
+
+
+def test_something_without_geometry_is_still_zero(kernel):
+    """Een afbeelding heeft geen pad; die hoort onder de rasterrekensom."""
+    from openkerf_api.drawing import Drawing
+
+    class Beeld:
+        type = "elem image"
+
+    assert Drawing._length_mm(Beeld()) == 0.0

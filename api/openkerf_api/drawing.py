@@ -2001,12 +2001,42 @@ class Drawing:
 
     @staticmethod
     def _length_mm(node) -> float:
+        """
+        De lengte van het pad in mm.
+
+        Twee wegen, want de eerste kan omvallen op geldige geometrie. Gevonden
+        in een echt project: tekst in Chalkduster, 474 contouren en 10 026
+        segmenten, waarop `Geomstr.length()` van de engine afgaat met
+        "expected a positive input, got -inf" (een ontaard segment in het log).
+        Wij vingen dat op met een 0 — de `except` stond er voor afbeeldingen,
+        die geen pad hebben — en daarmee rekende de schatting nul seconden voor
+        juist de vorm die het langst duurde. Nu meten we hem dan zelf na langs
+        de punten: gemeten 0,68 m, waar het 0,0 was.
+        """
+        from math import hypot
+
         from meerk40t.core.units import UNITS_PER_MM
 
         try:
-            return float(node.as_geometry().length()) / UNITS_PER_MM
+            geometry = node.as_geometry()
         except Exception:
             # Een afbeelding heeft geen pad; die valt onder de rasterrekensom.
+            return 0.0
+        try:
+            return float(geometry.length()) / UNITS_PER_MM
+        except Exception:
+            pass
+        try:
+            totaal, vorige = 0.0, None
+            for punt in geometry.as_interpolated_points(interpolate=20):
+                if punt is None:
+                    vorige = None
+                    continue
+                if vorige is not None:
+                    totaal += hypot(punt.real - vorige.real, punt.imag - vorige.imag)
+                vorige = punt
+            return totaal / UNITS_PER_MM
+        except Exception:
             return 0.0
 
     @staticmethod
