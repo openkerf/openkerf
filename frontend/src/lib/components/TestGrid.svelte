@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { axisLabel, AXIS_UNIT, type GridAxis } from '$lib/api';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import { OPERATIONS, type LibraryStore } from '$lib/library.svelte';
 	import NumberField from './NumberField.svelte';
 
@@ -151,7 +152,7 @@
 		label_power_percent: '30'
 	});
 
-	/** Onder welke sleutel de vaste waarde van een grootheid naar de API gaat. */
+	/** Under which key the fixed value of a quantity goes to the API. */
 	const VAST_VELD: Record<As, 'speed_mm_s' | 'power_percent' | 'interval_mm'> = {
 		speed: 'speed_mm_s',
 		power: 'power_percent',
@@ -159,9 +160,11 @@
 	};
 
 	let intervalKan = $derived(INTERVAL_BEWERKINGEN.includes(form.operation));
-	/** Waar de labellaag over gaat: opschrift, kader, of allebei (T10). */
-	let labellaagNaam = $derived(form.text ? 'Opschrift' : 'Kader');
-	/** Rasteren gekozen op een engine die het niet kan omzetten naar laserregels. */
+	/** What the label layer is about: caption, border, or both (T10). */
+	let labellaagNaam = $derived(
+		t(form.text ? 'grid.labelLayer.caption' : 'grid.labelLayer.border')
+	);
+	/** Raster chosen on an engine that cannot convert it into laser lines. */
 	let rasterOnmogelijk = $derived(
 		form.operation === 'graveren-raster' && preview?.engine?.raster === false
 	);
@@ -173,9 +176,9 @@
 	);
 
 	/**
-	 * Twee assen kunnen niet dezelfde grootheid zijn: kies je voor de rijen wat
-	 * al in de kolommen staat, dan verhuist die naar de vrijgekomen plek. Dat is
-	 * wat een gebruiker bedoelt met "omdraaien", en het scheelt een foutmelding.
+	 * Two axes cannot be the same quantity: pick for the rows what is already in
+	 * the columns and that one moves to the vacated place. That is what a user
+	 * means by "swap", and it saves an error message.
 	 */
 	function kiesAs(welke: 'row_axis' | 'column_axis', nieuw: As) {
 		const andere = welke === 'row_axis' ? 'column_axis' : 'row_axis';
@@ -183,8 +186,8 @@
 		form[welke] = nieuw;
 	}
 
-	// Springt de bewerking terug naar snijden terwijl interval op een as staat,
-	// dan bestaat die as niet meer. Zonder dit blijft het formulier fout.
+	// If the operation jumps back to cutting while interval is on an axis, that axis
+	// no longer exists. Without this the form stays invalid.
 	$effect(() => {
 		if (intervalKan) return;
 		if (form.row_axis === 'interval') kiesAs('row_axis', 'speed');
@@ -246,14 +249,14 @@
 				const melding =
 					typeof data?.detail === 'string'
 						? data.detail
-						: `De engine weigerde het raster (${response.status}).`;
+						: t('grid.error.refused', { status: response.status });
 				if (stil) voorbeeldFout = melding;
 				else error = melding;
 				return null;
 			}
 			return data;
 		} catch (e) {
-			const melding = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			const melding = t('grid.error.network', { message: e instanceof Error ? e.message : e });
 			if (stil) voorbeeldFout = melding;
 			else error = melding;
 			return null;
@@ -379,36 +382,41 @@
 		const zwaarste = preview.cells.reduce((a, b) => (score(b) > score(a) ? b : a));
 		const onder = zwaarste.row === rijwaarden.length - 1;
 		const rechts = zwaarste.column === kolomwaarden.length - 1;
-		// Nederlands zegt "rechtsboven", niet "bovenrechts".
-		return `${rechts ? 'rechts' : 'links'}${onder ? 'onder' : 'boven'}`;
+		// Word order differs per language: Dutch says "rechtsboven" as one word,
+		// English "top right" the other way round — so the catalogue joins them.
+		return t('grid.corner', {
+			horizontal: t(rechts ? 'grid.corner.right' : 'grid.corner.left'),
+			vertical: t(onder ? 'grid.corner.bottom' : 'grid.corner.top')
+		});
 	});
 
-	/** "3 min 20 s" — een tijd die je tegen je koffie kunt afwegen. */
+	/** "3 min 20 s" — a time you can weigh against your coffee. */
 	let brandtijd = $derived.by(() => {
 		const s = preview?.plan.seconds ?? 0;
 		if (!s) return '—';
-		if (s < 60) return `${Math.round(s)} s`;
+		if (s < 60) return t('grid.time.seconds', { n: Math.round(s) });
 		const minuten = Math.floor(s / 60);
-		if (minuten < 60) return `${minuten} min ${Math.round(s % 60)} s`;
-		return `${Math.floor(minuten / 60)} u ${minuten % 60} min`;
+		if (minuten < 60)
+			return t('grid.time.minutes', { minutes: minuten, seconds: Math.round(s % 60) });
+		return t('grid.time.hours', { hours: Math.floor(minuten / 60), minutes: minuten % 60 });
 	});
 
-	/** "0.05 mm", "60%", "12 mm/s" — de aswaarde zoals hij op het hout komt. */
+	/** "0.05 mm", "60%", "12 mm/s" — the axis value as it ends up on the wood. */
 	function toon(as: As, waarde: number | null | undefined) {
 		if (waarde === null || waarde === undefined) return '';
 		const eenheid = AXIS_UNIT[as];
 		return eenheid === '%' ? `${waarde}%` : `${waarde} ${eenheid}`;
 	}
 
-	// Het voorbeeld tekenen we in échte pixels in plaats van in millimeters:
-	// een SVG met een mm-viewBox maakt van elke 11px-label een reus van 11mm.
+	// The preview is drawn in real pixels rather than in millimetres: an SVG with a
+	// mm viewBox turns every 11px label into a giant of 11mm.
 	const VOORBEELD_PX = 208;
 	let schaal = $derived(preview ? VOORBEELD_PX / Math.max(1, preview.plan.width_mm) : 1);
 	let celPx = $derived(preview ? preview.plan.cell_mm * schaal : 0);
 	let gatPx = $derived(preview ? preview.plan.gap_mm * schaal : 0);
-	// Bij meer dan acht stappen wordt elk label onleesbaar; dan alleen de randen.
-	// Een label van elf pixels past niet in een vakje van twintig; dan alleen de
-	// twee randwaarden, want die dragen het bereik.
+	// With more than eight steps every label becomes unreadable; then only the
+	// edges. An eleven-pixel label does not fit in a twenty-pixel square; then only
+	// the two edge values, because those carry the range.
 	let toonAlleLabels = $derived(
 		rijwaarden.length <= 8 && kolomwaarden.length <= 8 && celPx >= 30
 	);
@@ -681,49 +689,45 @@
 		}
 	}
 
-	/** "11 aug" — de datum van het raster waar de instelling vandaan komt. */
+	/** "11 Aug" — the date of the grid the setting comes from. */
 	function kortedatum(ruw: string) {
 		const d = new Date(String(ruw).replace(' ', 'T'));
 		if (Number.isNaN(d.getTime())) return ruw;
-		return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+		return new Intl.DateTimeFormat(i18n.locale, { day: 'numeric', month: 'short' }).format(d);
 	}
 
-	// ------------------------------------------------ naar de machine (gat T1)
+	// ------------------------------------------------ to the machine (gap T1)
 	//
-	// De wizard eindigde op het canvas: het raster stond er, en niets wees je
-	// naar Kader tonen of Start job. Die twee staan nu in de succesmelding zelf.
-	// Ze roepen dezelfde API's aan als het bedieningspaneel.
+	// The wizard used to end on the canvas: the grid was there, and nothing pointed
+	// you at Show frame or Start job. Those two are in the success message itself
+	// now. They call the same APIs as the control panel.
 
 	let naarMachine = $state<string | null>(null);
 	let machineFout = $state<string | null>(null);
 	let machineLet = $state<string | null>(null);
 
 	/**
-	 * De harde controle die het bedieningspaneel vóór het starten doet.
+	 * The hard check the control panel does before starting.
 	 *
-	 * Dat paneel opent een pre-flight en start pas na bevestiging; deze knop
-	 * start rechtstreeks, en dan mag de belangrijkste controle niet wegvallen.
-	 * Buiten het bed is een blokkade — daar kán de kop niet komen, dus de
-	 * machine slaat de beweging over of loopt tegen zijn eindaanslag. Buiten het
-	 * vel is een waarschuwing: de kop kan er wel komen, er ligt alleen geen
-	 * materiaal. Precies het onderscheid dat `bounds_report` maakt.
+	 * That panel opens a preflight and only starts after a confirmation; this button
+	 * starts directly, and then the most important check must not fall away. Outside
+	 * the bed is a block — the head cannot get there, so the machine skips the
+	 * movement or runs into its end stop. Outside the sheet is a warning: the head
+	 * can get there, there is simply no material. Exactly the distinction
+	 * `bounds_report` makes.
 	 */
 	async function tegenhouder(): Promise<string | null> {
 		machineLet = null;
 		try {
 			const response = await fetch('/api/job/estimate');
-			if (!response.ok) return null; // Geen oordeel is geen blokkade.
+			if (!response.ok) return null; // No verdict is not a block.
 			const grenzen = (await response.json())?.bounds;
 			if (!grenzen) return null;
 			if (grenzen.outside_bed > 0) {
-				return `${grenzen.outside_bed} ${
-					grenzen.outside_bed === 1 ? 'vorm ligt' : 'vormen liggen'
-				} buiten het bed — daar komt de kop niet. Zet Start X of Start Y hoger en teken het raster opnieuw.`;
+				return t('grid.block.outsideBed', { n: grenzen.outside_bed });
 			}
 			if (grenzen.outside_sheet > 0) {
-				machineLet = `${grenzen.outside_sheet} ${
-					grenzen.outside_sheet === 1 ? 'vorm valt' : 'vormen vallen'
-				} buiten het vel: daar ligt geen materiaal.`;
+				machineLet = t('grid.watch.outsideSheet', { n: grenzen.outside_sheet });
 			}
 			return null;
 		} catch {
@@ -789,34 +793,32 @@
 </script>
 
 <div class="wizard">
-	<!-- De wizard is de didactische kern van de app: hij vertelt waar je bent en
-	     wat er nog komt, ook als stap 3 pas naast de machine gebeurt. -->
-	<ol class="stappen" aria-label="Stappen van de testrasterflow">
-		<li class:nu={stap === 1}><span class="nr">1</span>Instellen</li>
-		<li class:nu={stap === 2}><span class="nr">2</span>Branden</li>
-		<li><span class="nr">3</span>Fotograferen</li>
-		<li><span class="nr">4</span>Beste vakje → preset</li>
+	<!-- The wizard is the didactic core of the app: it says where you are and what
+	     is still to come, even though step 3 only happens beside the machine. -->
+	<ol class="stappen" aria-label={t('grid.steps')}>
+		<li class:nu={stap === 1}><span class="nr">1</span>{t('grid.step.setUp')}</li>
+		<li class:nu={stap === 2}><span class="nr">2</span>{t('grid.step.burn')}</li>
+		<li><span class="nr">3</span>{t('grid.step.photograph')}</li>
+		<li><span class="nr">4</span>{t('grid.step.bestCell')}</li>
 	</ol>
 
 	{#if !canEdit}
-		<p class="muted">Een testraster genereren vereist een token.</p>
+		<p class="muted">{t('grid.needsToken')}</p>
 	{:else}
 		<p class="lead">
-			Je brandt een bord met vakjes:
-			<strong>{axisLabel(form.column_axis).toLowerCase()} loopt naar rechts op</strong>,
-			<strong>{axisLabel(form.row_axis).toLowerCase()} naar beneden</strong>. Straks
-			fotografeer je het bord — met de telefoon naast de machine kan ook — en tik je het
-			vakje aan dat het beste uitpakte. Daar maakt OpenKerf een preset van.
+			{t('grid.lead', {
+				columns: t('grid.lead.right', { axis: axisLabel(form.column_axis).toLowerCase() }),
+				rows: t('grid.lead.down', { axis: axisLabel(form.row_axis).toLowerCase() })
+			})}
 		</p>
 
-		<!-- Gat T7: benoemde instellingen. Wie wekelijks 3 mm berk test heeft
-		     genoeg aan "vorige keer" (T3), maar twee recepten voor hetzelfde
-		     materiaal — snijden naast graveren — kunnen daar niet naast elkaar
-		     staan. Bovenaan, zoals in LightBurn: je kiest je recept vóór je
-		     gaat sleutelen, niet erna. -->
+		<!-- Gap T7: named settings. Whoever tests 3 mm birch weekly is served by "last
+		     time" (T3), but two recipes for the same material — cut beside engrave —
+		     cannot sit side by side in that. At the top, as in LightBurn: you pick your
+		     recipe before you start tinkering, not after. -->
 		<div class="recepten">
 			<label class="veld">
-				<span class="naam">Recept</span>
+				<span class="naam">{t('grid.recipe')}</span>
 				<select
 					value={gekozenRecept}
 					disabled={recepten.length === 0}
@@ -824,23 +826,25 @@
 						kiesRecept(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
 				>
 					<option value={null}
-						>{recepten.length === 0
-							? '— nog geen bewaarde instellingen —'
-							: '— kies een bewaarde instelling —'}</option
+						>{recepten.length === 0 ? t('grid.recipe.none') : t('grid.recipe.pick')}</option
 					>
 					{#each recepten as recept (recept.id)}
 						<option value={recept.id}
-							>{recept.name}{recept.material_name ? '' : ' · alle materialen'}</option
+							>{recept.name}{recept.material_name
+								? ''
+								: ` · ${t('grid.recipe.allMaterials')}`}</option
 						>
 					{/each}
 				</select>
 			</label>
 			<div class="receptknoppen">
 				<button class="btn" onclick={() => (bewaren = !bewaren)} aria-expanded={bewaren}>
-					{bewaren ? 'Niet opslaan' : 'Dit opslaan…'}
+					{bewaren ? t('grid.recipe.dontSave') : t('grid.recipe.save')}
 				</button>
 				{#if gekozenRecept !== null}
-					<button class="btn stil" disabled={receptBezig} onclick={wisRecept}>Verwijderen</button>
+					<button class="btn stil" disabled={receptBezig} onclick={wisRecept}
+						>{t('common.remove')}</button
+					>
 				{/if}
 			</div>
 			{#if bewaren}
@@ -849,8 +853,8 @@
 						type="text"
 						bind:value={receptNaam}
 						maxlength="60"
-						placeholder="Naam, bijv. Berk 3 mm snijden"
-						aria-label="Naam van dit recept"
+						placeholder={t('grid.recipe.namePlaceholder')}
+						aria-label={t('grid.recipe.nameAria')}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault();
@@ -861,14 +865,14 @@
 					<button
 						class="btn"
 						disabled={receptBezig || receptNaam.trim() === ''}
-						onclick={bewaarRecept}>Opslaan</button
+						onclick={bewaarRecept}>{t('common.save2')}</button
 					>
 				</div>
 				<p class="hint">
-					Bewaart alles op dit formulier behalve het opschrift.
+					{t('grid.recipe.hint')}
 					{form.material_id === null
-						? 'Zonder materiaal gekozen wordt dit een recept voor alle materialen.'
-						: 'Hoort bij het gekozen materiaal; een gelijknamig recept wordt bijgewerkt.'}
+						? t('grid.recipe.hint.noMaterial')
+						: t('grid.recipe.hint.material')}
 				</p>
 			{/if}
 			{#if receptFout}<p class="fout" role="alert">{receptFout}</p>{/if}
@@ -878,16 +882,16 @@
 			<div class="grid">
 				<div class="paar">
 				<label class="veld">
-					<span class="naam">Materiaal</span>
+					<span class="naam">{t('library.material')}</span>
 					<select bind:value={form.material_id}>
-						<option value={null}>— geen —</option>
+						<option value={null}>{t('grid.none')}</option>
 						{#each library.materials as material (material.id)}
 							<option value={material.id}>{material.name}</option>
 						{/each}
 					</select>
 				</label>
 				<label class="veld">
-					<span class="naam">Bewerking</span>
+					<span class="naam">{t('library.operation')}</span>
 					<select bind:value={form.operation}>
 						{#each OPERATIONS as op (op.value)}
 							<option value={op.value}>{op.label}</option>
@@ -897,23 +901,23 @@
 				</div>
 
 				{#if geenMateriaal}
-					<!-- Vóór het hout eraan gaat, niet erna: zonder materiaal kan er
-					     later geen preset uit dit bord komen, en dat is de hele reden
-					     dat je het brandt. De waarschuwing wijst niet alleen op het
-					     gat maar dicht het ook — anders staat er een bezwaar zonder
-					     uitweg naast een knop die gewoon doorgaat. -->
+					<!-- Before the wood goes, not after: without a material no preset can come
+					     out of this board later, and that is the whole reason you burn it. The
+					     warning does not only point at the gap but closes it — otherwise there
+					     is an objection with no way out beside a button that simply goes
+					     ahead. -->
 					<div class="waarschuwing" role="status">
 						<p>
-							<strong>Kies een materiaal.</strong> Een preset is een uitspraak over déze laser
-							op dít materiaal — zonder materiaal levert het gebrande bord straks niets op.
+							<strong>{t('grid.noMaterial.title')}</strong>
+							{t('grid.noMaterial.body')}
 						</p>
 						<div class="erbij">
 							<input
 								type="text"
 								bind:value={nieuwMateriaal}
 								maxlength="60"
-								placeholder="Nieuw materiaal, bijv. Multiplex berken"
-								aria-label="Naam van een nieuw materiaal"
+								placeholder={t('grid.newMaterial.placeholder')}
+								aria-label={t('grid.newMaterial.aria')}
 								onkeydown={(e) => {
 									if (e.key === 'Enter') {
 										e.preventDefault();
@@ -924,7 +928,7 @@
 							<button
 								class="btn"
 								disabled={library.busy || nieuwMateriaal.trim() === ''}
-								onclick={maakMateriaal}>Aanmaken en kiezen</button
+								onclick={maakMateriaal}>{t('grid.newMaterial.create')}</button
 							>
 						</div>
 						{#if materiaalFout}<p class="fout">{materiaalFout}</p>{/if}
@@ -932,54 +936,58 @@
 				{/if}
 
 				{#if rasterOnmogelijk}
-					<!-- De engine zet een rasterlaag tijdens het plannen om in een
-					     bitmap, en die omzetter zit in de wxPython-GUI. Draait de
-					     server headless — zoals hier — dan gooit de laag zijn eigen
-					     vormen weg en komt het bord blanco uit de machine. Dat is
-					     een gat in de engine, geen keuze van ons; het minste wat we
-					     kunnen doen is het zeggen vóór het hout eraan gaat. -->
+					<!-- The engine turns a raster layer into a bitmap while planning, and that
+					     converter lives in the wxPython GUI. When the server runs headless — as
+					     here — the layer throws its own shapes away and the board comes out of
+					     the machine blank. That is a gap in the engine, not a choice of ours;
+					     the least we can do is say it before the wood goes. -->
 					<p class="waarschuwing ernstig" role="alert">
-						<strong>Deze server kan rasterlagen niet branden.</strong> De omzetter die
-						een rastervlak naar laserregels rekent, zit in de wxPython-versie van de
-						engine en ontbreekt hier. Een raster­bord komt blanco uit de machine.
-						Kies <strong>Graveren · vector</strong> of <strong>Snijden</strong>, of brand
-						dit raster vanuit de wxPython-UI.
+						<strong>{t('job.noRaster.title')}</strong>
+						{t('grid.noRaster.body')}
 					</p>
 				{/if}
 
 				{#if overgenomen}
 					<p class="overgenomen" role="status">
-						Instellingen overgenomen van je vorige raster voor dit materiaal
-						({kortedatum(overgenomen.datum)}, #{overgenomen.raster}). Pas ze gerust aan.
+						{t('grid.carriedOver', {
+							date: kortedatum(overgenomen.datum),
+							grid: overgenomen.raster
+						})}
 					</p>
 				{/if}
 
 				<div class="paar">
-					<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={form.thickness_mm} />
-					<NumberField label="Vakje" unit="mm" step={1} min={1} bind:value={form.cell_mm} />
+					<NumberField
+						label={t('library.thickness')}
+						unit="mm"
+						step={0.5}
+						min={0}
+						bind:value={form.thickness_mm}
+					/>
+					<NumberField label={t('grid.cell')} unit="mm" step={1} min={1} bind:value={form.cell_mm} />
 				</div>
-				<!-- Voor het hele bord, niet per vakje: passes als as zou een bord
-				     opleveren dat niemand meer terugleest, en het getal komt op het
-				     opschrift zodat je het bord over twee weken nog kunt plaatsen.
+				<!-- For the whole board, not per square: passes as an axis would yield a
+				     board nobody reads back, and the number goes on the caption so you can
+				     still place the board in two weeks.
 
-				     In een `.paar` met één kind: dan houdt het veld dezelfde breedte
-				     als de velden erboven. Over de volle breedte is een getalveld van
-				     500px voor één cijfer, en dan lijnt de kolom niet meer uit. -->
+				     In a `.paar` with one child: that keeps the field the same width as the
+				     fields above. Over the full width a number field is 500px for one
+				     digit, and then the column no longer lines up. -->
 				<div class="paar">
 					<NumberField
-						label="Passes"
-						unit="× per vakje"
+						label={t('library.passes')}
+						unit={t('grid.passes.unit')}
 						step={1}
 						min={1}
 						bind:value={form.passes}
 					/>
 				</div>
 
-				<!-- Besluit B12: je kiest zelf welke twee grootheden je aftast. De
-				     derde blijft vast en staat straks op het opschrift van het bord. -->
+				<!-- Decision B12: you pick which two quantities you sweep. The third stays
+				     fixed and ends up on the caption of the board. -->
 				<div class="paar">
 				<label class="veld">
-					<span class="naam">Rijen, naar beneden</span>
+					<span class="naam">{t('grid.rowsDown')}</span>
 					<select
 						value={form.row_axis}
 						onchange={(e) => kiesAs('row_axis', e.currentTarget.value as As)}
@@ -992,7 +1000,7 @@
 					</select>
 				</label>
 				<label class="veld">
-					<span class="naam">Kolommen, naar rechts</span>
+					<span class="naam">{t('grid.columnsRight')}</span>
 					<select
 						value={form.column_axis}
 						onchange={(e) => kiesAs('column_axis', e.currentTarget.value as As)}
@@ -1006,12 +1014,12 @@
 				</label>
 				</div>
 
-				<!-- De vaste grootheid staat bij de assen en niet onderaan: hij hoort
-				     bij de vraag "wat varieert er", en op een venster van 80vh viel
-				     hij anders achter de knoppenbalk. -->
+				<!-- The fixed quantity sits with the axes and not at the bottom: it belongs
+				     to the question "what varies", and on an 80vh window it otherwise fell
+				     behind the button bar. -->
 				{#each vasteAs as as (as)}
 					<NumberField
-						label="{axisLabel(as)} (vast, hele bord)"
+						label={t('grid.fixedAxis', { axis: axisLabel(as) })}
 						unit={AXIS_UNIT[as]}
 						step={INVOER[as].stap}
 						min={0}
@@ -1020,25 +1028,25 @@
 					/>
 				{/each}
 
-				<!-- Van, tot en het aantal stappen zijn samen één uitspraak over één
-				     as. Ze stonden verspreid over drie plekken in het raster; nu staat
-				     elke as in zijn eigen blok, met van en tot naast elkaar. -->
+				<!-- From, to and the number of steps are one statement about one axis
+				     together. They used to be spread over three places in the grid; now
+				     every axis is in a block of its own, with from and to side by side. -->
 				{#each assen as as (as)}
 					<fieldset class="asblok">
-						<!-- De eenheid één keer, in de kop van het blok. Hij stond in beide
-						     veldlabels ("van (mm/s)", "tot (mm/s)") en dan lees je hem twee
-						     keer om één bereik te begrijpen. -->
-						<legend class="naam">{axisLabel(as)} ({AXIS_UNIT[as]})</legend>
+						<!-- The unit once, in the block's heading. It used to be in both field
+						     labels ("from (mm/s)", "to (mm/s)") and then you read it twice to
+						     understand one range. -->
+						<legend class="naam">{t('grid.axisRange', { axis: axisLabel(as), unit: AXIS_UNIT[as] })}</legend>
 						<div class="paar">
 							<NumberField
-								label="van"
+								label={t('grid.from')}
 								step={INVOER[as].stap}
 								min={0}
 								max={INVOER[as].max ?? null}
 								bind:value={form[`${as}_min`]}
 							/>
 							<NumberField
-								label="tot"
+								label={t('grid.to')}
 								step={INVOER[as].stap}
 								min={0}
 								max={INVOER[as].max ?? null}
@@ -1047,8 +1055,8 @@
 						</div>
 						<div class="paar">
 							<NumberField
-								label="Stappen"
-								unit={as === assen[0] ? 'rijen' : 'kolommen'}
+								label={t('grid.stepsLabel')}
+								unit={as === assen[0] ? t('grid.stepsUnit.rows') : t('grid.stepsUnit.columns')}
 								step={1}
 								min={2}
 								bind:value={form[`${as}_steps`]}
@@ -1058,31 +1066,31 @@
 				{/each}
 
 				<div class="paar">
-					<NumberField label="Tussenruimte" unit="mm" step={1} min={0} bind:value={form.gap_mm} />
+					<NumberField label={t('grid.gap')} unit="mm" step={1} min={0} bind:value={form.gap_mm} />
 				</div>
 
-				<!-- Gat T9: LightBurn vraagt X Center/Y Center. Op een restplank weet
-				     je waar het midden van je stuk hout ligt, niet waar de hoek van
-				     een raster moet komen dat je nog niet gezien hebt. Het midden
-				     slaat op het hele bord, opschriften inbegrepen — anders ligt het
-				     scheef zodra de rijlabels links uitsteken. -->
+				<!-- Gap T9: LightBurn asks for X Center/Y Center. On an offcut you know
+				     where the middle of your piece of wood is, not where the corner of a
+				     grid you have not seen yet should go. The centre applies to the whole
+				     board, captions included — otherwise it sits askew the moment the row
+				     labels stick out on the left. -->
 				<label class="veld">
-					<span class="naam">Positie meten vanaf</span>
+					<span class="naam">{t('grid.measureFrom')}</span>
 					<select bind:value={form.anchor}>
-						<option value="corner">De linkerbovenhoek van het bord</option>
-						<option value="center">Het midden van het bord</option>
+						<option value="corner">{t('grid.anchor.corner')}</option>
+						<option value="center">{t('grid.anchor.center')}</option>
 					</select>
 				</label>
 				<div class="paar">
 					<NumberField
-						label={form.anchor === 'center' ? 'Midden X' : 'Start X'}
+						label={form.anchor === 'center' ? t('grid.centerX') : t('grid.startX')}
 						unit="mm"
 						step={5}
 						min={0}
 						bind:value={form.origin_x_mm}
 					/>
 					<NumberField
-						label={form.anchor === 'center' ? 'Midden Y' : 'Start Y'}
+						label={form.anchor === 'center' ? t('grid.centerY') : t('grid.startY')}
 						unit="mm"
 						step={5}
 						min={0}
@@ -1090,46 +1098,44 @@
 					/>
 				</div>
 
-				<!-- Gat T10: LightBurn heeft Enable Text en Enable Border. Voor een
-				     proefje op een restje is het opschrift verspilling; voor een bord
-				     dat de kast in gaat is het het halve bewijsstuk. Standaard aan,
-				     dus wie niets doet houdt wat er stond. -->
+				<!-- Gap T10: LightBurn has Enable Text and Enable Border. For a quick test
+				     on an offcut the caption is waste; for a board that goes in the cupboard
+				     it is half the evidence. On by default, so whoever does nothing keeps
+				     what was there. -->
 				<fieldset class="schakelaars">
-					<legend class="naam">Wat er verder op het bord komt</legend>
+					<legend class="naam">{t('grid.extras')}</legend>
 					<label class="vink">
 						<input type="checkbox" bind:checked={form.text} />
-						<span>Opschrift en aslabels graveren</span>
+						<span>{t('grid.extras.text')}</span>
 					</label>
 					<label class="vink">
 						<input type="checkbox" bind:checked={form.border} />
-						<span>Randkader om het bord</span>
+						<span>{t('grid.extras.border')}</span>
 					</label>
 					<p class="hint">
 						{#if !form.text}
-							Zonder opschrift is het bord over twee weken een raadselachtig stuk hout —
-							en de aswaarden staan er dan ook niet bij.
+							{t('grid.extras.noText')}
 						{:else if form.border}
-							Het kader loopt om alles heen, opschrift inbegrepen. Handig om de foto
-							straks op uit te lijnen.
+							{t('grid.extras.bothOn')}
 						{:else}
-							Het kader is een lijn om het hele bord; hij maakt het uitlijnen van de
-							foto makkelijker.
+							{t('grid.extras.borderOnly')}
 						{/if}
 					</p>
 				</fieldset>
 
 				{#if form.text || form.border}
-					<!-- De labellaag stond hard op 80 mm/s @30%. Dat werkt op berken en
-					     niet op acryl, en dan brandt het opschrift dwars door je bord. -->
+					<!-- The label layer was hard-coded at 80 mm/s @30%. That works on birch and
+					     not on acrylic, and then the caption burns straight through your
+					     board. -->
 					<NumberField
-						label="{labellaagNaam}: snelheid"
+						label={t('grid.label.speed', { layer: labellaagNaam })}
 						unit="mm/s"
 						step={5}
 						min={1}
 						bind:value={form.label_speed_mm_s}
 					/>
 					<NumberField
-						label="{labellaagNaam}: vermogen"
+						label={t('grid.label.power', { layer: labellaagNaam })}
 						unit="%"
 						step={5}
 						min={1}
@@ -1139,52 +1145,51 @@
 				{/if}
 
 				<label class="veld breed">
-					<span class="naam">Opschrift op het bord</span>
+					<span class="naam">{t('grid.caption')}</span>
 					<input
 						type="text"
 						bind:value={form.caption}
 						maxlength="48"
-						placeholder="bijv. proef achterkant"
+						placeholder={t('grid.caption.placeholder')}
 					/>
-					<span class="hint">
-						Wordt mee gegraveerd, met materiaal, dikte en datum erachter. Een bord zonder
-						opschrift is over twee weken een raadselachtig stuk hout.
-					</span>
+					<span class="hint">{t('grid.caption.hint')}</span>
 				</label>
 			</div>
 
 			{#if preview}
-				<aside class="preview" aria-label="Voorbeeld van het bord">
+				<aside class="preview" aria-label={t('grid.preview')}>
 					{#if voorbeeldFout}
-						<!-- Tijdens het typen is een tussenstand bijna altijd even
-						     ongeldig: je past "van" aan en die is dan hoger dan "tot"
-						     totdat je die ook aanpast. Het voorbeeld blijft staan, met
-						     de reden erboven — een gat laten vallen leert je niets en
-						     laat de halve wizard verspringen. -->
+						<!-- While typing, an intermediate state is nearly always briefly
+						     invalid: you adjust "from" and it is then higher than "to" until you
+						     adjust that too. The preview stays, with the reason above it —
+						     dropping a hole teaches you nothing and makes half the wizard
+						     jump. -->
 						<p class="onaf" role="status">
 							{voorbeeldFout}<br />
-							<span class="stil">Hieronder staat je laatste geldige bord.</span>
+							<span class="stil">{t('grid.preview.lastValid')}</span>
 						</p>
 					{:else if botsing}
-						<!-- Het vorige bord ligt er nog, en Start X/Y staat nog op
-						     dezelfde plek. Twee borden over elkaar zie je op het canvas
-						     niet en in de machine wel. -->
+						<!-- The previous board is still there, and Start X/Y is still in the same
+						     place. Two boards over each other you do not see on the canvas and do
+						     see in the machine. -->
 						<p class="onaf" role="status">
-							Dit bord valt over raster #{vorigBord?.id}, dat nog op je vel ligt.
-							Schuif het {form.anchor === 'center' ? 'midden' : 'startpunt'} op.
+							{t('grid.preview.overlap', {
+								id: vorigBord?.id,
+								anchor: t(form.anchor === 'center' ? 'grid.anchor.centreWord' : 'grid.anchor.startWord')
+							})}
 						</p>
 					{/if}
 					<div class="figures">
-						<span class="mono">{preview.cells.length} vakjes</span>
-						<!-- Alleen als het er meer dan één is: bij één pass is dit de
-						     normale gang van zaken en zegt het niets. -->
+						<span class="mono">{t('grid.cells', { n: preview.cells.length })}</span>
+						<!-- Only when there is more than one: with one pass this is the ordinary
+						     course of things and says nothing. -->
 						{#if (preview.plan.passes ?? 1) > 1}
-							<span class="mono">{preview.plan.passes}× per vakje</span>
+							<span class="mono">{t('grid.passesPerCell', { n: preview.plan.passes })}</span>
 						{/if}
-						<!-- De maat van het hele bord, niet van de vakjes alleen: het
-						     opschrift en het kader worden net zo goed gebrand, en juist
-						     die staken links en boven uit (T11). LightBurn meldt
-						     hetzelfde als Output Size. -->
+						<!-- The size of the whole board, not of the squares alone: the caption and
+						     the border are burned just as much, and it was precisely those that
+						     stuck out on the left and top (T11). LightBurn reports the same as
+						     Output Size. -->
 						<span class="mono"
 							>{preview.plan.outer_width_mm ?? preview.plan.width_mm} × {preview.plan
 								.outer_height_mm ?? preview.plan.height_mm} mm</span
@@ -1192,30 +1197,29 @@
 					</div>
 					{#if (preview.plan.outer_width_mm ?? 0) > preview.plan.width_mm}
 						<p class="kosten">
-							Waarvan <span class="mono"
-								>{preview.plan.width_mm} × {preview.plan.height_mm} mm</span
-							> vakjes; de rest is {form.text && form.border
-								? 'opschrift en kader'
-								: form.text
-									? 'opschrift'
-									: 'kader'}.
+							{t('grid.ofWhich', {
+								size: `${preview.plan.width_mm} × ${preview.plan.height_mm} mm`,
+								extras:
+									form.text && form.border
+										? t('grid.extras.both')
+										: form.text
+											? t('grid.extras.captionOnly')
+											: t('grid.extras.borderOnly2')
+							})}
 						</p>
 					{/if}
-					<!-- Wat het gaat kosten, vóór je op genereren drukt. Met interval
-					     als as kan de brandtijd stil vertienvoudigen: een rij op
-					     0,05 mm legt zes keer zoveel regels als een op 0,3 mm, en dat
-					     staat in geen enkel ander getal in dit formulier. -->
-					<p class="kosten">
-						Brandtijd ongeveer <strong class="mono">{brandtijd}</strong>, zonder de
-						opschriften.
-					</p>
+					<!-- What it is going to cost, before you press generate. With interval as
+					     an axis the burn time can quietly go up tenfold: a row at 0.05 mm lays
+					     six times as many lines as one at 0.3 mm, and that is in no other
+					     number on this form. -->
+					<p class="kosten">{t('grid.burnTime', { time: brandtijd })}</p>
 
-					<!-- Het bord zoals het eruitkomt: donkerder = meer verbranding, en
-					     de waarden staan erlangs waar ze ook op het hout komen. -->
-					<!-- De schakelaars van T10 horen hier te zien te zijn en niet alleen
-					     in een getal: zet je het opschrift uit, dan verdwijnen de
-					     aswaarden ook uit het voorbeeld, want ze komen niet op het hout.
-					     Het kader is een lijn om het geheel, precies waar hij brandt. -->
+					<!-- The board as it comes out: darker = more burning, and the values are
+					     alongside where they end up on the wood. -->
+					<!-- The switches from T10 have to be visible here and not only in a
+					     number: switch the caption off and the axis values disappear from the
+					     preview too, because they do not go on the wood. The border is a line
+					     around the whole thing, exactly where it burns. -->
 					<div
 						class="bord"
 						class:kaal={!form.text}
@@ -1255,41 +1259,51 @@
 								<span
 									class="vakje"
 									style="--brand: {brand(cell)}"
-									title="{toon(form.row_axis, cell[CEL_SLEUTEL[form.row_axis]])} bij {toon(
-										form.column_axis,
-										cell[CEL_SLEUTEL[form.column_axis]]
-									)}"
+									title={t('grid.cellTitle', {
+										row: toon(form.row_axis, cell[CEL_SLEUTEL[form.row_axis]]),
+										column: toon(form.column_axis, cell[CEL_SLEUTEL[form.column_axis]])
+									})}
 								></span>
 							{/each}
 						</div>
 					</div>
 
 					{#if preview.plan.board_room === false}
-						<!-- Het bord begint links of boven buiten het bed. Dat komt bijna
-						     altijd door de rijlabels: die worden links van het raster
-						     gegraveerd en zijn zo breed als hun langste waarde. Bij het
-						     midden als ankerpunt kun je dat niet zelf uitrekenen, dus
-						     staat het getal erbij. -->
+						<!-- The board starts outside the bed on the left or the top. That is
+						     nearly always down to the row labels: they are engraved left of the
+						     grid and are as wide as their longest value. With the centre as the
+						     anchor you cannot work that out yourself, so the number is here. -->
 						<p class="krap">
-							Het bord begint op <strong class="mono"
-								>{preview.plan.outer_x_mm}, {preview.plan.outer_y_mm} mm</strong
-							>, en dat ligt buiten het bed.
+							{t('grid.tooFar', {
+								position: `${preview.plan.outer_x_mm}, ${preview.plan.outer_y_mm} mm`
+							})}
 							{#if preview.plan.label_room === false}
-								De rijlabels hebben links ruwweg {Math.ceil(preview.plan.label_margin_mm ?? 0)} mm
-								nodig.
+								{t('grid.tooFar.labels', { mm: Math.ceil(preview.plan.label_margin_mm ?? 0) })}
 							{/if}
-							Schuif het {form.anchor === 'center' ? 'midden' : 'startpunt'} naar rechts of
-							naar beneden{form.text ? ', of zet het opschrift uit' : ''}.
+							{t('grid.tooFar.move', {
+								anchor: t(
+									form.anchor === 'center' ? 'grid.anchor.centreWord' : 'grid.anchor.startWord'
+								),
+								orText: form.text ? t('grid.tooFar.orText') : ''
+							})}
 						</p>
 					{/if}
 
 					<p class="legenda">
-						Rijen: {axisLabel(form.row_axis).toLowerCase()} in {AXIS_UNIT[form.row_axis]}.
-						Kolommen: {axisLabel(form.column_axis).toLowerCase()}.
+						{t('grid.legend.rows', {
+							axis: axisLabel(form.row_axis).toLowerCase(),
+							unit: AXIS_UNIT[form.row_axis]
+						})}
+						{t('grid.legend.columns', { axis: axisLabel(form.column_axis).toLowerCase() })}
 						{#each vasteAs as as (as)}
-							{axisLabel(as)} vast op {toon(as, Number(form[VAST_VELD[as]]))}.
+							{t('grid.legend.fixed', {
+								axis: axisLabel(as),
+								value: toon(as, Number(form[VAST_VELD[as]]))
+							})}
 						{/each}
-						Donkerder is meer verbranding{diepsteHoek ? ` — ${diepsteHoek} gaat het diepst` : ''}.
+						{t('grid.legend.darker', {
+							deepest: diepsteHoek ? t('grid.legend.deepest', { corner: diepsteHoek }) : ''
+						})}
 					</p>
 				</aside>
 			{/if}
@@ -1298,23 +1312,21 @@
 		{#if suggestedFrom !== null}
 			<p class="muted">
 				{suggestedFrom
-					? `Bereik voorgesteld op basis van ${suggestedFrom} bestaande preset${suggestedFrom === 1 ? '' : 's'}.`
-					: 'Nog geen presets voor deze combinatie; dit is een breed startpunt.'}
+					? t('grid.suggested', { n: suggestedFrom })
+					: t('grid.suggested.none')}
 			</p>
 		{/if}
 
 		{#if error}<p class="error" role="alert">{error}</p>{/if}
 
 		{#if gelukt}
-			<!-- Gat T1: hier hield de wizard op en stond je met een getekend raster
-			     op het canvas zonder aanwijzing hoe je het brandt. Kader eerst,
-			     dan starten — dezelfde volgorde als bij het bedieningspaneel, en
-			     dezelfde API's. -->
+			<!-- Gap T1: this is where the wizard used to stop, leaving you with a drawn
+			     grid on the canvas and no hint how to burn it. Frame first, then start —
+			     the same order as in the control panel, and the same APIs. -->
 			<div class="gelukt" role="status">
 				<p>
-					<strong>Raster #{gelukt.id} staat op het bed</strong> — {gelukt.cellen} vakjes, als
-					één groep in je ontwerp. Controleer eerst het kader, brand het daarna, en kom
-					dan terug voor stap 3.
+					<strong>{t('grid.done.title', { id: gelukt.id })}</strong>
+					{t('grid.done.body', { cells: gelukt.cellen })}
 				</p>
 				<div class="branden">
 					<button
@@ -1322,44 +1334,42 @@
 						disabled={naarMachine === 'kader'}
 						onclick={() => machineActie('/api/machine/frame', 'kader', 'kader-klaar')}
 					>
-						{naarMachine === 'kader' ? 'Kader loopt…' : 'Kader tonen'}
+						{naarMachine === 'kader' ? t('grid.frameRunning') : t('job.frame')}
 					</button>
 					<button
 						class="btn primary"
 						disabled={naarMachine === 'start'}
 						onclick={() => machineActie('/api/job/start', 'start', 'start-klaar')}
 					>
-						{naarMachine === 'start' ? 'Bezig met starten…' : 'Job starten'}
+						{naarMachine === 'start' ? t('grid.starting') : t('job.startJob')}
 					</button>
 				</div>
 				{#if naarMachine === 'kader-klaar'}
-					<p class="nagekomen">De kop loopt de omtrek van het bed langs. Ligt je plaat goed?</p>
+					<p class="nagekomen">{t('grid.frameDone')}</p>
 				{:else if naarMachine === 'start-klaar'}
-					<p class="nagekomen">
-						De job staat in de wachtrij. Blijf erbij tot het bord uit de machine komt.
-					</p>
+					<p class="nagekomen">{t('grid.startDone')}</p>
 				{/if}
-				{#if machineLet}<p class="nagekomen">Let op: {machineLet}</p>{/if}
+				{#if machineLet}<p class="nagekomen">{t('grid.watchOut', { what: machineLet })}</p>{/if}
 				{#if machineFout}<p class="fout" role="alert">{machineFout}</p>{/if}
 			</div>
 		{/if}
 
 		<div class="actions">
-			<button class="btn" disabled={busy} onclick={suggest}>Bereik voorstellen</button>
-			<!-- Formulierregel v4: de primaire knop staat rechts, de hulpknop links.
-			     Ze stonden naast elkaar links, en dan is de knop die het hout in gaat
-			     even prominent als de knop die een getal voorstelt. -->
+			<button class="btn" disabled={busy} onclick={suggest}>{t('grid.suggestRange')}</button>
+			<!-- Form rule v4: the primary button is on the right, the helper on the left.
+			     They used to sit next to each other on the left, and then the button that
+			     goes into the wood is as prominent as the one that suggests a number. -->
 			<span class="rek"></span>
-			<!-- E4: zonder materiaal blijft dit een gewone knop. Hij werkt — soms
-			     wíl je even een bord branden zonder er een preset uit te halen —
-			     maar hij belooft niet dat dit de bedoelde weg is. -->
-			<!-- Zodra er een raster staat, is starten de volgende stap en niet nóg
-			     een raster. Twee even felle knoppen naast elkaar laten je kiezen
-			     tussen twee dingen waarvan er maar één aan de orde is.
-			     De knop bij een gebrand bord tékent niet, hij zet je terug bij de
-			     instellingen: een tweede bord valt anders op de eerste. -->
+			<!-- E4: without a material this stays an ordinary button. It works — sometimes
+			     you *do* want to burn a board without getting a preset out of it — but it
+			     does not promise that this is the intended route. -->
+			<!-- Once a grid is there, starting is the next step and not yet another grid.
+			     Two equally bright buttons side by side make you choose between two things
+			     of which only one is at issue. The button on a burned board does not draw,
+			     it puts you back at the settings: a second board would otherwise fall on
+			     the first. -->
 			{#if gelukt}
-				<button class="btn" onclick={opnieuw}>Nog een raster instellen</button>
+				<button class="btn" onclick={opnieuw}>{t('grid.another')}</button>
 			{:else}
 				<button
 					class="btn"
@@ -1368,17 +1378,20 @@
 					onclick={generate}
 				>
 					{#if busy}
-						Bezig…
+						{t('common.busy')}
 					{:else if voorbeeldFout}
-						Raster tekenen
+						{t('grid.draw')}
 					{:else if geenMateriaal}
-						Toch tekenen zonder materiaal
+						{t('grid.drawAnyway')}
 					{:else if preview}
-						Raster tekenen — {preview.cells.length} vakjes, {preview.plan.outer_width_mm ??
-							preview.plan.width_mm} × {preview.plan.outer_height_mm ??
-							preview.plan.height_mm} mm
+						{t('grid.drawWith', {
+							cells: preview.cells.length,
+							size: `${preview.plan.outer_width_mm ?? preview.plan.width_mm} × ${
+								preview.plan.outer_height_mm ?? preview.plan.height_mm
+							} mm`
+						})}
 					{:else}
-						Raster tekenen
+						{t('grid.draw')}
 					{/if}
 				</button>
 			{/if}
@@ -1663,7 +1676,6 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.kosten strong { color: var(--text-1); }
 	.krap {
 		margin: var(--space-2) 0 0;
 		padding: var(--space-1h) var(--space-2);
