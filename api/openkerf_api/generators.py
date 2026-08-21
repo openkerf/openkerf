@@ -1,19 +1,18 @@
 """
-Generatoren: dingen die je anders met de hand zou natekenen.
+Generators: things you would otherwise draw by hand.
 
-Vergelijkbaar met de "Applications"-tab van xTool Studio, zie
-XTOOL-VERGELIJKING.md. Wat hier staat is gekozen op wat een laser echt scheelt:
+Comparable to xTool Studio's "Applications" tab, see XTOOL-VERGELIJKING.md. What is here
+was chosen on what really saves a laser user work:
 
-- **Raster- en cirkelherhaling** — twintig sleutelhangers uitleggen doe je niet
-  met kopiëren en plakken.
-- **Veelhoek en ster** — de engine kan het al (`shape`), er was alleen geen weg
-  naartoe.
-- **Doos met vingerlassen** — de enige generator die echt rekenwerk uitspaart:
-  vinger­breedte, materiaaldikte en snijbreedte moeten kloppen of de doos past niet.
-- **QR-code** — een adres of serienummer graveren zonder een plaatje te zoeken.
+- **Grid and circle repeat** — you do not lay twenty key fobs out by copy and paste.
+- **Polygon and star** — the engine can already do it (`shape`), there was simply no route
+  to it.
+- **Box with finger joints** — the only generator that really saves arithmetic: finger
+  width, material thickness and kerf have to be right or the box does not fit.
+- **QR code** — engraving an address or a serial number without hunting for an image.
 
-Niet gebouwd: sieraden-, sleutelhanger- en kaartgeneratoren. Die maken één
-specifiek product; de doos maakt een categorie.
+Not built: jewellery, key fob and card generators. Those make one specific product; the
+box makes a category.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ class Generators:
         self.kernel = kernel
         self.runner = runner
         self.drawing = drawing
-        # Voor een doos die niet op één vel past; zie box().
+        # For a box that does not fit on one sheet; see box().
         self.sheets = sheets
 
     @property
@@ -39,12 +38,12 @@ class Generators:
 
     def grid(self, ids, columns, rows, gap_x_mm=5.0, gap_y_mm=5.0) -> dict:
         """
-        De selectie in rijen en kolommen herhalen.
+        Repeating the selection in rows and columns.
 
-        De afstand is een **gat** tussen de vormen, niet hart-op-hart: dat is wat
-        je op materiaal wilt kunnen kiezen, want daar gaat de zaagsnede doorheen.
+        The spacing is a **gap** between the shapes, not centre to centre: that is what you
+        want to be able to choose on material, because that is where the cut goes.
         """
-        columns, rows = self._count(columns, "kolommen"), self._count(rows, "rijen")
+        columns, rows = self._count(columns, "columns"), self._count(rows, "rows")
         if columns * rows <= 1:
             raise DesignError("A grid of one cell is not a grid.")
         gap_x = _finite(gap_x_mm, "gap_x_mm")
@@ -67,7 +66,7 @@ class Generators:
         start = _finite(start_deg, "start_deg")
         end = _finite(end_deg, "end_deg")
         if abs(end - start) < 1:
-            raise DesignError("De boog moet meer dan één graad beslaan.")
+            raise DesignError("The arc has to span more than one degree.")
 
         command = f"radial {count} {radius:.4f}mm {start}deg {end}deg"
         if not rotate:
@@ -88,13 +87,13 @@ class Generators:
         start_deg=0.0,
     ) -> dict:
         """
-        Een regelmatige veelhoek, of een ster als er een binnenstraal bij staat.
+        A regular polygon, or a star when an inner radius is given.
 
-        De engine maakt een ster door de straal om en om te wisselen
-        (`--radius_inner` met `--alternate_seq 1`); zonder die tweede optie krijg
-        je een veelhoek met dubbele punten in plaats van een ster.
+        The engine makes a star by alternating the radius (`--radius_inner` with
+        `--alternate_seq 1`); without that second option you get a polygon with doubled
+        points instead of a star.
         """
-        count = self._count(corners, "hoeken")
+        count = self._count(corners, "corners")
         if count < 3:
             raise DesignError("A polygon needs at least three corners.")
         radius = _positive(radius_mm, "radius_mm")
@@ -129,16 +128,16 @@ class Generators:
         inside=False,
     ) -> dict:
         """
-        Tekst langs een boog, bijvoorbeeld voor een rond bordje of een deksel.
+        Text along an arc, for a round sign or a lid for instance.
 
-        De engine kent geen boogtekst. We laten hem de tekst gewoon recht
-        zetten en buigen daarna de geometrie: elk punt schuift naar de cirkel,
-        waarbij de afstand tot de basislijn de afstand tot het middelpunt
-        wordt. Zo blijft de letterhoogte kloppen en rekt niets uit.
+        The engine does not know arc text. We simply have it set the text straight and then
+        bend the geometry: every point moves to the circle, with the distance to the baseline
+        becoming the distance to the centre. That way the letter height stays right and
+        nothing stretches.
 
-        Na het buigen is het **geen tekst meer maar een pad**: de bron wordt
-        losgelaten, want de engine zou de tekst bij de eerstvolgende wijziging
-        opnieuw recht renderen en de boog stilletjes wegpoetsen.
+        After the bending it is **no longer text but a path**: the source is let go, because
+        the engine would render the text straight again at the next change and silently wipe
+        the arc away.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -166,8 +165,8 @@ class Generators:
         with self.elements.undoscope("Arc text"):
             node.geometry = geometry
             node.matrix.reset()
-            # De bron loslaten: anders rendert de engine de tekst bij de
-            # volgende wijziging weer recht.
+            # Let the source go: otherwise the engine renders the text straight again at
+            # the next change.
             for attribute in ("mktext", "mkfont", "mkfontsize"):
                 if hasattr(node, attribute):
                     setattr(node, attribute, None)
@@ -184,12 +183,12 @@ class Generators:
         """
         Een streepjescode als vlakken.
 
-        De codering komt uit `python-barcode`; de streepjes tekenen we zelf, net
-        als bij de QR-code. Een gegraveerde bitmap wordt op hout vaag, en een
-        streepjescode die niet scant is nutteloos.
+        The encoding comes from `python-barcode`; we draw the bars ourselves, as with the
+        QR code. An engraved bitmap goes vague on wood, and a barcode that does not scan is
+        useless.
 
-        Het rekenwerk zit in `_plan_barcode`, zodat het voorbeeld dezelfde
-        streepjes en dezelfde foutmeldingen krijgt als het echte werk.
+        The arithmetic is in `_plan_barcode`, so that the preview gets the same bars and
+        the same error messages as the real work.
         """
         content, bars = self._plan_barcode(text, kind, x_mm, y_mm, width_mm, height_mm)
 
@@ -221,20 +220,19 @@ class Generators:
         spread=True,
     ) -> dict:
         """
-        Panelen met vingerlassen, naast elkaar gelegd om te snijden.
+        Panels with finger joints, laid out side by side for cutting.
 
-        Waarom dit rekenwerk niet met de hand moet: twee panelen die aan elkaar
-        vastzitten, moeten **complementaire** tanden hebben — waar de een een
-        tand heeft, heeft de ander een gat. Eén paneel verkeerd om en de doos
-        past niet. `PHASE` legt per rand vast wie de tand heeft; er is een test
-        die controleert dat elk paar tegengesteld is.
+        Why this arithmetic should not be done by hand: two panels that join have to have
+        **complementary** teeth — where one has a tooth, the other has a gap. One panel the
+        wrong way round and the box does not fit. `PHASE` records per edge which side has the
+        tooth; there is a test that checks every pair is opposite.
 
-        De snijbreedte (kerf) wordt bij de tanden opgeteld en niet van de gaten
-        afgetrokken: de laser haalt aan beide kanten van elke snede materiaal
-        weg, dus een tand die op papier precies past, is in hout te klein.
+        The kerf is added to the teeth and not subtracted from the gaps: the laser takes
+        material off both sides of every cut, so a tooth that fits exactly on paper is too
+        small in wood.
 
-        Het rekenwerk zit in `_plan_box`, zodat het voorbeeld dezelfde panelen,
-        dezelfde indeling en dezelfde foutmeldingen krijgt als het echte werk.
+        The arithmetic is in `_plan_box`, so that the preview gets the same panels, the
+        same layout and the same error messages as the real work.
         """
         panels, pages, (bed_width, bed_height) = self._plan_box(
             width_mm, depth_mm, height_mm, thickness_mm, finger_mm, kerf_mm,
@@ -253,8 +251,8 @@ class Generators:
         ids = []
         for index, page in enumerate(pages):
             if index:
-                # Volgend vel, even groot als dit: dan klopt de indeling met wat
-                # er berekend is.
+                # Next sheet, the same size as this one: then the layout agrees with what
+                # was computed.
                 self.sheets.add(
                     name=f"Box {index + 1}",
                     width_mm=bed_width,
@@ -273,8 +271,8 @@ class Generators:
             self._refresh()
 
         if len(pages) > 1 and self.sheets:
-            # Terug naar waar de gebruiker was: het canvas onder je vandaan
-            # laten schuiven is verwarrender dan zelf doorklikken.
+            # Back to where the user was: letting the canvas slide out from under you is
+            # more confusing than clicking through yourself.
             self.sheets.activate(started_on)
             self._refresh()
 
@@ -289,14 +287,14 @@ class Generators:
 
     def qrcode(self, text: str, x_mm=0.0, y_mm=0.0, size_mm=30.0, border=2) -> dict:
         """
-        Een QR-code als vierkantjes, klaar om te graveren.
+        A QR code as little squares, ready to engrave.
 
-        Geen plaatje maar echte vlakken: een gegraveerde bitmap wordt op hout
-        vaak vaag, gevulde vierkanten niet. Wel één pad per module, want dat
-        laat de gebruiker zelf kiezen of hij vult of omtrekt.
+        Not an image but real areas: an engraved bitmap often goes vague on wood, filled
+        squares do not. One path per module, though, because that lets the user choose
+        whether they fill or outline.
 
-        Het rekenwerk zit in `_plan_qrcode`, zodat het voorbeeld dezelfde
-        modules en dezelfde foutmeldingen krijgt als het echte werk.
+        The arithmetic is in `_plan_qrcode`, so that the preview gets the same modules and
+        the same error messages as the real work.
         """
         content, squares, modules = self._plan_qrcode(
             text, x_mm, y_mm, size_mm, border
@@ -314,26 +312,26 @@ class Generators:
             "modules": modules,
         }
 
-    # ------------------------------------------------------------ voorbeeld
+    # ------------------------------------------------------------- the preview
 
-    # Hoeveel kopieën we uittekenen voordat we het bij een omtrek per kopie
-    # houden. Vijfhonderd sleutelhangers zijn 500 paden en dat blijft snel,
-    # omdat elke kopie hetzelfde pad hergebruikt (zie `parts` hieronder).
+    # How many copies we draw out before we keep it to one outline per copy. Five hundred
+    # key fobs are 500 paths and that stays fast, because every copy reuses the same path
+    # (see `parts` below).
     PREVIEW_LIMIT = 500
 
     def preview(self, what: str, body: dict) -> dict:
         """
-        Wat er zou komen te staan, zonder het te maken.
+        What would be laid down, without making it.
 
-        Geeft vormen terug als SVG-paddata **in millimeters**, plus waar elke
-        kopie komt. Twee lagen, omdat een QR-code van 15.000 vlakjes en een
-        raster van 500 kopieën allebei door dit gaatje moeten:
+        Hands back shapes as SVG path data **in millimetres**, plus where every copy goes.
+        Two layers, because a QR code of 15,000 little squares and a grid of 500 copies both
+        have to go through this hole:
 
-        - `shapes` — de unieke omtrekken, elk één d-string (met subpaden).
-        - `parts`  — waar ze komen: `{shape, x, y, rot}` in mm en graden.
+        - `shapes` — the unique outlines, each one d-string (with subpaths).
+        - `parts`  — where they go: `{shape, x, y, rot}` in mm and degrees.
 
-        De vorm wordt niet aan de tekening toegevoegd en er verandert niets aan
-        het document; dit mag dus bij elke toetsaanslag lopen.
+        The shape is not added to the drawing and nothing about the document changes; so
+        this may run on every key stroke.
         """
         maker = {
             "grid": self._preview_grid,
@@ -353,17 +351,17 @@ class Generators:
         result.setdefault("sheets", 1)
         result["what"] = what
         result["sheet"] = {"width_mm": sheet_width, "height_mm": sheet_height}
-        # De dozen per vorm dienen alleen om uit te rekenen hoe ver het
-        # voorbeeld moet uitzoomen; de browser heeft er niets aan.
+        # The boxes per shape only serve to work out how far the preview has to zoom out;
+        # the browser has no use for them.
         result["bounds"] = _extent(result.pop("boxes"), result["parts"])
         return result
 
-    # De losse voorbeelden. Elk hergebruikt de som van het echte werk; wat er
-    # niet in staat, staat er bewust niet in (zie `_preview_arctext`).
+    # The individual previews. Each reuses the real work's sum; what is not in it is
+    # deliberately not in it (see `_preview_arctext`).
 
     def _preview_grid(self, body: dict) -> dict:
-        columns = self._count(body.get("columns"), "kolommen")
-        rows = self._count(body.get("rows"), "rijen")
+        columns = self._count(body.get("columns"), "columns")
+        rows = self._count(body.get("rows"), "rows")
         if columns * rows <= 1:
             raise DesignError("A grid of one cell is not a grid.")
         gap_x = _finite(body.get("gap_x_mm", 5.0), "gap_x_mm")
@@ -374,8 +372,8 @@ class Generators:
         shape, box, (left, top, width, height) = self._selection_outline(
             body.get("ids")
         )
-        # Dezelfde steek als `grid --relative`: de opgegeven ruimte is het gat,
-        # dus de afstand van kopie tot kopie is die ruimte plús de vorm zelf
+        # The same pitch as `grid --relative`: the space given is the gap, so the distance
+        # from copy to copy is that space *plus* the shape itself
         # (core/elements/grid.py:210).
         pitch_x, pitch_y = width + gap_x, height + gap_y
         parts, notes = [], []
@@ -406,29 +404,27 @@ class Generators:
         start = _finite(body.get("start_deg", 0.0), "start_deg")
         end = _finite(body.get("end_deg", 360.0), "end_deg")
         if abs(end - start) < 1:
-            raise DesignError("De boog moet meer dan één graad beslaan.")
+            raise DesignError("The arc has to span more than one degree.")
         rotate = body.get("rotate", True) is not False
 
         shape, box, (left, top, width, height) = self._selection_outline(
             body.get("ids")
         )
-        # Het middelpunt ligt `straal` naar **links** van het midden van de
-        # selectie, niet erboven, zodat het origineel zelf op de cirkel ligt
-        # (core/elements/grid.py:337). De hoek loopt in stappen van
-        # (eind − begin) / aantal, en de startangle bepaalt alleen de
-        # staplengte — de eerste kopie is het origineel op nul graden.
+        # The centre lies `radius` to the **left** of the selection's middle, not above it,
+        # so that the original itself lies on the circle (core/elements/grid.py:337). The
+        # angle runs in steps of (end − start) / count, and the start angle only decides the
+        # step length — the first copy is the original at zero degrees.
         cx, cy = left + width / 2 - radius, top + height / 2
         step = (end - start) / count
         parts = []
         for index in range(min(count, self.PREVIEW_LIMIT)):
             angle = index * step
             if rotate:
-                # Om het middelpunt draaien, met de vorm op zijn eigen plek.
-                # Het minteken is niet cosmetisch: de kopieën lopen linksom
-                # over het scherm ("perceived angle travel is CCW",
-                # core/elements/grid.py:335). Een volle cirkel is symmetrisch
-                # en verbergt dat; pas een boog van 180° liet zien dat het
-                # voorbeeld ze gespiegeld neerzette.
+                # Rotating about the centre, with the shape in its own place. The minus sign
+                # is not cosmetic: the copies run anticlockwise across the screen ("perceived
+                # angle travel is CCW",
+                # core/elements/grid.py:335). A full circle is symmetric and hides that;
+                # only an arc of 180° showed that the preview laid them down mirrored.
                 parts.append(
                     {
                         "shape": 0,
@@ -440,8 +436,8 @@ class Generators:
                     }
                 )
             else:
-                # Zonder meedraaien schuift de engine de kopie langs dezelfde
-                # cirkel, en dus ook linksom.
+                # Without rotating along, the engine slides the copy along the same circle,
+                # and so anticlockwise as well.
                 radians = math.radians(angle)
                 parts.append(
                     {
@@ -517,8 +513,8 @@ class Generators:
             body.get("size_mm", 30.0),
             body.get("border", 2),
         )
-        # Alle vlakjes in één pad: een QR-code van versie 40 heeft er ruim
-        # vijftienduizend, en dat zijn geen vijftienduizend losse berichten waard.
+        # All the little squares in one path: a version 40 QR code has well over fifteen
+        # thousand of them, and those are not worth fifteen thousand separate messages.
         shape, box = _as_d(squares)
         return {
             "shapes": [shape],
@@ -548,15 +544,14 @@ class Generators:
 
     def _preview_arctext(self, body: dict) -> dict:
         """
-        De boogtekst in de letter waarin hij straks gebrand wordt.
+        The arc text in the typeface it will be burned in.
 
-        De engine rendert tekst normaal gesproken in een node, en die zou hier
-        in het document belanden. Dat kan anders: `cfont.render()` schrijft in
-        een losse `FontPath` (extra/hershey.py:352), dus we halen dezelfde
-        geometrie op zonder iets aan te maken. Wat we níet doen is
-        `context.last_font` zetten — `create_linetext_node` doet dat wél
-        (hershey.py:492), en een voorbeeld dat stilletjes je lettertypekeuze
-        verandert, is een voorbeeld met bijwerkingen.
+        Normally the engine renders text in a node, and that would end up in the document
+        here. It can be done differently: `cfont.render()` writes into a loose `FontPath`
+        (extra/hershey.py:352), so we fetch the same geometry without creating anything. What
+        we do *not* do is set `context.last_font` — `create_linetext_node` does
+        (hershey.py:492), and a preview that silently changes your typeface choice is a
+        preview with side effects.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -614,10 +609,10 @@ class Generators:
 
     def _selection_outline(self, ids):
         """
-        De omtrek van de selectie als één pad in mm, plus waar hij ligt.
+        The selection's outline as one path in mm, plus where it lies.
 
-        Eén pad voor de hele selectie, zodat een raster van 500 kopieën 500
-        verwijzingen naar hetzelfde pad is en niet 500 keer de geometrie.
+        One path for the whole selection, so that a grid of 500 copies is 500 references to
+        the same path and not the geometry 500 times.
         """
         from meerk40t.core.node.node import Node
         from meerk40t.core.units import UNITS_PER_MM
@@ -647,8 +642,8 @@ class Generators:
             except Exception:
                 continue
         if together.index == 0:
-            # Een afbeelding heeft geen omtrek; dan is de omhullende het
-            # eerlijkste dat we kunnen laten zien.
+            # An image has no outline; then the bounding box is the most honest thing we
+            # can show.
             together.line(complex(x0, y0), complex(x1, y0))
             together.line(complex(x1, y0), complex(x1, y1))
             together.line(complex(x1, y1), complex(x0, y1))
@@ -664,12 +659,12 @@ class Generators:
 
     # ------------------------------------------------------- het rekenwerk
     #
-    # Alles hieronder rekent en raakt de tekening niet aan. Het echte werk én
-    # het voorbeeld lopen er allebei doorheen, en dat is de hele reden dat ze
-    # bestaan: een voorbeeld dat zijn eigen som doet, gaat op een dag iets
-    # anders zeggen dan wat er uit de machine komt, en dan is het erger dan
-    # geen voorbeeld. Zelfde regel voor de foutmeldingen — wie in het voorbeeld
-    # leest waarom het niet kan, krijgt straks niet ineens een ander verhaal.
+    # Everything below computes and does not touch the drawing. The real work *and* the
+    # preview both run through it, and that is the whole reason they exist: a preview that
+    # does its own sum will one day say something other than what comes out of the machine,
+    # and then it is worse than no preview. The same rule for the error messages — anybody
+    # who reads in the preview why it cannot be done does not suddenly get a different
+    # story later.
 
     def _plan_barcode(self, text, kind, x_mm, y_mm, width_mm, height_mm):
         content = str(text or "").strip()
@@ -682,7 +677,7 @@ class Generators:
 
         try:
             import barcode as barcodes
-        except ImportError as e:  # pragma: no cover - alleen bij kale installatie
+        except ImportError as e:  # pragma: no cover - only on a bare installation
             raise DesignError(
                 "Barcodes need the 'python-barcode' package.", code="gen.noBarcodeLib"
             ) from e
@@ -694,8 +689,8 @@ class Generators:
         try:
             bits = "".join(barcodes.get_barcode_class(kind)(content).build())
         except Exception as e:
-            # EAN en vrienden stellen eisen aan lengte en controlecijfer; die
-            # melding is voor de gebruiker nuttiger dan een 500.
+            # EAN and friends make demands about length and check digit; that message is
+            # more useful to the user than a 500.
             raise DesignError(f"'{content}' does not fit in a {kind}: {e}",
                 code="gen.badBarcode",) from e
         if "1" not in bits:
@@ -731,7 +726,7 @@ class Generators:
 
         try:
             import segno
-        except ImportError as e:  # pragma: no cover - alleen bij kale installatie
+        except ImportError as e:  # pragma: no cover - only on a bare installation
             raise DesignError(
                 "QR codes need the 'segno' package; install it beside the API.",
                 code="gen.noQrLib",
@@ -798,9 +793,9 @@ class Generators:
             width, depth, height, thickness, finger, kerf, lid=lid
         )
 
-        # Op het bed leggen in rijen, niet op één lange rij: zes panelen naast
-        # elkaar zijn zo een meter breed, en wat buiten het bed valt kun je niet
-        # meer aanwijzen om het terug te halen.
+        # Laying them on the bed in rows, not in one long row: six panels side by side are
+        # a metre wide in no time, and what falls off the bed can no longer be pointed at to
+        # bring it back.
         bed_width, bed_height = self._surface()
         widest = max(
             max(px for px, _ in points) - min(px for px, _ in points)
@@ -813,21 +808,20 @@ class Generators:
                 code="gen.panelTooWide",
             )
 
-        # Eerst uitrekenen waar alles komt, dan pas tekenen. Anders staat er een
-        # halve doos buiten het vel voordat je weet dat hij niet past.
+        # Work out where everything goes first, only then draw. Otherwise half a box is
+        # off the sheet before you know it does not fit.
         pages = _lay_out(panels, bed_width, bed_height, gap)
         return panels, pages, (bed_width, bed_height)
 
     def _plan_polygon(self, corners, cx_mm, cy_mm, radius_mm, inner_radius_mm, start_deg):
         """
-        De hoekpunten van de veelhoek, in mm.
+        The polygon's corner points, in mm.
 
-        De echte veelhoek komt uit de `shape`-opdracht van de engine; dit is de
-        som ernaast. `test_polygon_preview_matches_the_real_thing` legt beide
-        naast elkaar, want een tweede som is pas te vertrouwen als er iets
-        omvalt zodra ze uit elkaar lopen.
+        The real polygon comes from the engine's `shape` command; this is the sum beside it.
+        `test_polygon_preview_matches_the_real_thing` lays both side by side, because a
+        second sum can only be trusted once something falls over as soon as they drift apart.
         """
-        count = self._count(corners, "hoeken")
+        count = self._count(corners, "corners")
         if count < 3:
             raise DesignError("A polygon needs at least three corners.")
         radius = _positive(radius_mm, "radius_mm")
@@ -840,10 +834,10 @@ class Generators:
             if inner >= radius:
                 raise DesignError("The inner radius has to be smaller than the radius.")
 
-        # `corners` telt de hoekpunten, niet de punten van de ster: een ster van
-        # vijf heeft er vijf, om en om buiten en binnen op stappen van 360°/5
-        # (extra/param_functions.py:868). Dat is de val waar het voorbeeld eerst
-        # in trapte — die tekende er tien en werd daarmee te hoog.
+        # `corners` counts the corner points, not the star's points: a five-pointed star
+        # has five, alternating outside and inside on steps of 360°/5
+        # (extra/param_functions.py:868). That is the trap the preview fell into at first —
+        # it drew ten and so came out too tall.
         points = []
         for index in range(count):
             r = inner if (inner is not None and index % 2) else radius
@@ -880,10 +874,9 @@ class Generators:
         """
         Een gesloten vorm rechtstreeks als geometrie toevoegen.
 
-        Níet via de `path`-opdracht: die leest zijn d-string als SVG-gebruikers-
-        eenheden en schaalt hem daarna nog eens, waardoor een doos van 100 mm er
-        als 72 meter uitkwam. Geomstr rekent in Tats en laat geen ruimte voor
-        die verwarring.
+        *Not* through the `path` command: that reads its d-string as SVG user units and
+        then scales it again, which made a box of 100 mm come out as 72 metres. Geomstr
+        computes in Tats and leaves no room for that confusion.
         """
         from meerk40t.core.geomstr import Geomstr
         from meerk40t.core.units import UNITS_PER_MM
@@ -901,10 +894,10 @@ class Generators:
             stroke_width=self.elements.default_strokewidth,
             label=label,
         )
-        # Expliciet in één laag zetten, niet via kleurclassificatie: die zet een
-        # doospaneel in een gráveerlaag én meteen in een tweede laag die dezelfde
-        # kleur claimt. Dan brandt hetzelfde paneel twee keer, en dat merk je pas
-        # op materiaal.
+        # Put it in one layer explicitly, not through colour classification: that puts a
+        # box panel in an *engrave* layer *and* straight away in a second layer claiming the
+        # same colour. Then the same panel burns twice, and you only notice that on
+        # material.
         if intent:
             self._file_under(node, intent)
         return node
@@ -964,16 +957,15 @@ class Generators:
         """
         De omhullende opnieuw laten uitrekenen na een herhaling.
 
-        `grid` en `radial` maken hun kopieën met `copy(node)` en schuiven ze
-        daarna met een rauwe `e.matrix *= ...` (core/elements/grid.py:240,360).
-        Die toekenning meldt niets aan de node, dus de kopie houdt de
-        omhullende die hij van het origineel meekreeg — `bounds` wijst naar de
-        oude plek terwijl `as_geometry()` de nieuwe geeft. Op het canvas is dat
-        precies wat je ziet: de aangeklikte kopie krijgt zijn dikke rand, maar
-        de handvatten staan om het origineel.
+        `grid` and `radial` make their copies with `copy(node)` and then shift them with a
+        raw `e.matrix *= ...` (core/elements/grid.py:240,360). That assignment reports
+        nothing to the node, so the copy keeps the bounding box it got from the original —
+        `bounds` points at the old place while `as_geometry()` gives the new one. On the
+        canvas that is exactly what you see: the copy you clicked gets its thick border, but
+        the handles sit around the original.
 
-        Wij kunnen dat hier niet in de engine repareren (kernprincipe 1), dus
-        vragen we de nodes hun omhullende te vergeten. Zie de upstream-lijst.
+        We cannot fix that in the engine from here (core principle 1), so we ask the nodes to
+        forget their bounding box. See the upstream list.
         """
         for node in self.elements.elems():
             marker = getattr(node, "set_dirty_bounds", None)
@@ -1001,9 +993,9 @@ def _extent(boxes, parts):
     """
     De doos om alles heen, in mm.
 
-    Bij een gedraaide kopie draaien we de vier hoeken van zijn doos mee. Dat is
-    iets ruimer dan de vorm zelf, en dat mag: dit bepaalt alleen hoe ver het
-    voorbeeld uitzoomt.
+    For a rotated copy we rotate the four corners of its box along. That is slightly more
+    generous than the shape itself, and that is allowed: this only decides how far the
+    preview zooms out.
     """
     xs, ys = [], []
     for part in parts:
@@ -1024,15 +1016,15 @@ def _extent(boxes, parts):
 
 def _bend_in_place(geometry, bounds, cx, cy, scale, inside):
     """
-    Rechte tekst om een cirkel buigen. Alles in Tats.
+    Bending straight text around a circle. Everything in Tats.
 
-    Elk punt schuift naar de cirkel: de afstand tot de basislijn wordt de
-    afstand tot het middelpunt, de plek langs de regel wordt de hoek. Zo blijft
-    de letterhoogte kloppen en rekt niets uit.
+    Every point moves to the circle: the distance to the baseline becomes the distance to
+    the centre, the place along the line becomes the angle. That way the letter height stays
+    right and nothing stretches.
 
-    Staat apart omdat het voorbeeld precies dezelfde bocht moet maken als het
-    echte werk — inclusief de grens waarboven de tekst over zichzelf heen
-    loopt, want dat is de melding die het formulier laat zien.
+    Stands apart because the preview has to make exactly the same bend as the real work —
+    including the bound above which the text runs over itself, because that is the message
+    the form shows.
     """
     x0, _, x1, y1 = bounds
     if x1 - x0 >= 2 * math.pi * scale * 0.98:
@@ -1042,10 +1034,10 @@ def _bend_in_place(geometry, bounds, cx, cy, scale, inside):
             code="gen.arcTooLong",
         )
     middle = (x0 + x1) / 2
-    baseline = y1  # onderkant van de tekst
+    baseline = y1  # the bottom of the text
 
     def bend(point):
-        if point != point:  # NaN: geen punt maar een markering
+        if point != point:  # NaN: not a point but a marker
             return point
         angle = (point.real - middle) / scale
         above = baseline - point.imag
@@ -1060,14 +1052,14 @@ def _bend_in_place(geometry, bounds, cx, cy, scale, inside):
         )
 
     for row in geometry.segments[: geometry.index]:
-        # Kolom 2 draagt het segmenttype, geen punt; die blijft met rust.
+        # Column 2 carries the segment type, not a point; that one is left alone.
         for column in (0, 1, 3, 4):
             row[column] = bend(complex(row[column]))
 
 
-# Wie heeft de tand en wie het gat. Twee panelen die aan elkaar zitten, moeten
-# hier tegengesteld staan; `test_generators.py` controleert dat voor elk paar.
-# Sleutel: (paneel, rand) → True als dit paneel op die rand de tand heeft.
+# Which side has the tooth and which the gap. Two panels that join have to be opposite
+# here; `test_generators.py` checks that for every pair. Key: (panel, edge) → True when this
+# panel has the tooth on that edge.
 PHASE = {
     ("front", "left"): True,
     ("front", "right"): True,
@@ -1089,16 +1081,16 @@ PHASE = {
     ("lid", "back"): False,
     ("lid", "left"): False,
     ("lid", "right"): False,
-    # De bovenrand van elke wand, spiegelbeeld van de onderrand: daar pakt het
-    # deksel op, net zoals de bodem onderaan pakt. Alleen getekend als er een
-    # deksel is — zie `box_panels`.
+    # The top edge of every wall, the mirror image of the bottom edge: that is where the
+    # lid engages, just as the bottom engages below. Only drawn when there is a lid — see
+    # `box_panels`.
     ("front", "over"): True,
     ("back", "over"): True,
     ("left", "over"): True,
     ("right", "over"): True,
 }
 
-# Welke rand van welk paneel op welke rand van welk ander paneel past.
+# Which edge of which panel fits which edge of which other panel.
 JOINTS = [
     (("front", "left"), ("left", "front")),
     (("front", "right"), ("right", "front")),
@@ -1108,10 +1100,9 @@ JOINTS = [
     (("back", "under"), ("bottom", "back")),
     (("left", "under"), ("bottom", "left")),
     (("right", "under"), ("bottom", "right")),
-    # Hetzelfde nog eens, bovenaan. Deze stonden er niet, en daarom kwam het
-    # deksel als een bodem zonder tegenhangers uit de machine: uitsparingen
-    # rondom en een kaarsrechte bovenrand op elke wand om ze in te laten
-    # vallen. Gevonden op het hout.
+    # The same again, at the top. These were missing, which is why the lid came out of the
+    # machine as a bottom without counterparts: cut-outs all round and a dead straight top
+    # edge on every wall for them to drop into. Found on the wood.
     (("front", "over"), ("lid", "front")),
     (("back", "over"), ("lid", "back")),
     (("left", "over"), ("lid", "left")),
@@ -1121,10 +1112,10 @@ JOINTS = [
 
 def teeth_count(length: float, finger: float) -> int:
     """
-    Altijd oneven, zodat een rand met materiaal begint én eindigt.
+    Always odd, so that an edge begins *and* ends with material.
 
-    Twee panelen die aan elkaar zitten, rekenen dit met dezelfde lengte uit en
-    komen dus op hetzelfde aantal — dat is waarom de tanden op elkaar passen.
+    Two panels that join compute this with the same length and so arrive at the same number
+    — that is why the teeth fit each other.
     """
     count = max(3, int(length // finger))
     return count if count % 2 else count - 1
@@ -1132,11 +1123,10 @@ def teeth_count(length: float, finger: float) -> int:
 
 def edge_points(start, end, thickness, finger, kerf, tab_first: bool):
     """
-    Eén rand, van start naar end, met tanden die naar buiten steken.
+    One edge, from start to end, with teeth sticking outwards.
 
-    De kerf wordt bij de tand opgeteld (halve kerf aan elke kant): de laser
-    haalt aan beide zijden van de snede materiaal weg, dus een tand die op
-    papier precies past, is in hout te smal.
+    The kerf is added to the tooth (half a kerf on each side): the laser takes material off
+    both sides of the cut, so a tooth that fits exactly on paper is too narrow in wood.
     """
     (x0, y0), (x1, y1) = start, end
     length = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
@@ -1145,7 +1135,7 @@ def edge_points(start, end, thickness, finger, kerf, tab_first: bool):
     count = teeth_count(length, finger)
     step = length / count
     dx, dy = (x1 - x0) / length, (y1 - y0) / length
-    # Loodrecht, naar buiten (de rand loopt met de klok mee rond het paneel).
+    # Perpendicular, outwards (the edge runs clockwise around the panel).
     nx, ny = dy, -dx
     depth = thickness
 
@@ -1170,10 +1160,10 @@ def edge_points(start, end, thickness, finger, kerf, tab_first: bool):
 
 def panel_outline(name, w, h, thickness, finger, kerf, edges):
     """
-    Eén paneel als gesloten omtrek, met de klok mee: onder, rechts, boven, links.
+    One panel as a closed outline, clockwise: bottom, right, top, left.
 
-    `edges` zegt welke doos-rand elke zijde is; randen die nergens op aansluiten
-    (bijvoorbeeld de bovenkant van een wand bij een open doos) worden recht.
+    `edges` says which box edge each side is; edges that join nothing (the top of a wall on
+    an open box, for instance) become straight.
     """
     corners = [((0.0, 0.0), (w, 0.0)), ((w, 0.0), (w, h)), ((w, h), (0.0, h)), ((0.0, h), (0.0, 0.0))]
     points = []
@@ -1190,15 +1180,15 @@ def panel_outline(name, w, h, thickness, finger, kerf, edges):
 
 def box_panels(width, depth, height, thickness, finger, kerf, lid=True):
     """
-    De panelen van de doos, elk als gesloten omtrek beginnend op (0, 0).
+    The box's panels, each as a closed outline starting at (0, 0).
 
-    De randen staan met de klok mee: onder, rechts, boven, links. Welke doos-rand
-    dat is, verschilt per paneel — een wand raakt de bodem aan zijn onderkant,
-    de bodem raakt die wand aan zijn eigen voorrand.
+    The edges run clockwise: bottom, right, top, left. Which box edge that is differs per
+    panel — a wall touches the bottom at its lower edge, the bottom touches that wall at its
+    own front edge.
     """
-    # De bovenrand van een wand: recht bij een open doos, met tanden zodra er
-    # een deksel op moet. Zonder deze keuze snijd je bij een open doos een rand
-    # vol uitsteeksels waar niets op komt.
+    # The top edge of a wall: straight on an open box, with teeth as soon as a lid has to go
+    # on. Without this choice, on an open box you cut an edge full of protrusions with
+    # nothing to go on them.
     top = "over" if lid else None
     panels = [
         ("bottom", width, depth, ("front", "right", "back", "left")),
@@ -1217,10 +1207,10 @@ def box_panels(width, depth, height, thickness, finger, kerf, lid=True):
 
 def _lay_out(panels, width, height, gap):
     """
-    De panelen in rijen leggen, en aan een nieuw vel beginnen zodra het vol is.
+    Laying the panels out in rows, and starting a new sheet as soon as one is full.
 
-    Geeft een lijst van vellen terug, elk met (naam, punten, x, y). Puur
-    rekenwerk: pas als vaststaat hoeveel vellen het worden, wordt er getekend.
+    Hands back a list of sheets, each with (name, points, x, y). Pure arithmetic: only once
+    it is settled how many sheets it becomes is anything drawn.
     """
     pages, page = [], []
     x, y, shelf = gap, gap, 0.0
