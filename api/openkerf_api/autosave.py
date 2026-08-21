@@ -1,17 +1,15 @@
 """
-Automatisch bewaren, met herstel na een crash of een gesloten tabblad.
+Automatic saving, with recovery after a crash or a closed tab.
 
-xTool Studio slaat niets automatisch op en waarschuwt daar zelf voor. Dat is
-precies het soort werk dat je kwijtraakt terwijl je op de laser staat te
-wachten, dus hier wél.
+xTool Studio saves nothing automatically and warns about that itself. That is exactly the
+kind of work you lose while standing waiting for the laser, so here we do.
 
-Twee keuzes die het bruikbaar maken:
+Two choices that make it usable:
 
-- **Bewaren gebeurt vertraagd.** Elke wijziging aan de elementenboom stuurt een
-  signaal; bij het slepen van een vorm zijn dat er tientallen per seconde. Er
-  gaat er dus hooguit één per `INTERVAL` naar schijf.
-- **Het herstelbestand wordt nooit stilletjes teruggeladen.** De app vraagt het;
-  iemand die met een leeg canvas wil beginnen, moet dat kunnen.
+- **Saving happens with a delay.** Every change to the element tree sends a signal; while
+  dragging a shape that is dozens per second. So at most one per `INTERVAL` goes to disk.
+- **The recovery file is never silently reloaded.** The app asks; somebody who wants to start
+  with an empty canvas has to be able to.
 """
 
 from __future__ import annotations
@@ -29,29 +27,28 @@ class Autosave:
         self.document = document
         self.path = Path(path)
         self._last = 0.0
-        # Kwam er een wijziging binnen terwijl de rem erop stond? Dan staat er
-        # werk in de boom dat nog nergens op schijf terugkomt.
+        # Did a change come in while the brake was on? Then there is work in the tree that
+        # does not come back anywhere on disk yet.
         self._wachtend = False
 
     def touch(self) -> bool:
         """
-        Aangeroepen bij elke wijziging. Bewaart hooguit één keer per interval.
+        Called on every change. Saves at most once per interval.
 
-        Geeft terug of er daadwerkelijk geschreven is — handig in tests, en het
-        maakt zichtbaar dat de rem werkt.
+        Hands back whether anything was actually written — handy in tests, and it makes the
+        brake visible.
         """
         if not any(True for _ in self.kernel.elements.elems()):
-            # Een leeg ontwerp levert niets om te bewaren (zie `save`), dus het
-            # mag de rem ook niet opgebruiken. Dat deed het wél: leegmaken stuurt
-            # een boomsignaal, dat zette de klok, en `save` schreef vervolgens
-            # niets. Gemeten: ontwerp leegmaken, meteen daarna vier vormen
-            # tekenen — geen herstelbestand, tot er twintig seconden later
-            # toevallig nog een wijziging kwam. "Nieuw ontwerp" is precies het
-            # moment waarop je daarna gaat tekenen.
+            # An empty design produces nothing to save (see `save`), so it must not use the
+            # brake up either. It did: clearing sends a tree signal, that set the clock, and
+            # `save` then wrote nothing. Measured: clear the design, immediately draw four
+            # shapes
+            # — no recovery file, until twenty seconds later another change happened to
+            # come along. "New design" is precisely the moment you start drawing after.
             return False
         now = time.monotonic()
         if now - self._last < INTERVAL:
-            # Niet nu, maar het mag ook niet blijven liggen: `flush` haalt het op.
+            # Not now, but it must not be left lying either: `flush` picks it up.
             self._wachtend = True
             return False
         self._last = now
@@ -60,17 +57,17 @@ class Autosave:
 
     def flush(self, *args) -> bool:
         """
-        De staart: de laatste wijziging vóór je bij de machine gaat staan.
+        The tail: the last change before you go and stand at the machine.
 
-        `touch` schrijft de eerste wijziging meteen en remt daarna. Wie in die
-        twintig seconden nog drie vormen tekent en dan ophoudt, kreeg voor die
-        drie nooit meer een schrijfbeurt — er komt immers geen signaal meer.
-        Gemeten: drie vormen in drie seconden, server hard afgeschoten, en het
+        `touch` writes the first change straight away and then brakes. Anybody who draws
+        another three shapes in those twenty seconds and then stops never got a write for
+        those three — no further signal comes, after all. Measured: three shapes in three
+        seconds, server killed hard, and the
         herstelbestand bevatte er één.
 
-        Draait als kerneljob, dus op dezelfde thread als de boomsignalen. Dat is
-        geen detail: een eigen timerthread zou de elementenboom uitlezen terwijl
-        de kernel hem verzet.
+        Runs as a kernel job, so on the same thread as the tree signals. That is not a
+        detail: a timer thread of its own would read the element tree while the kernel is
+        moving it.
         """
         if not self._wachtend:
             return False
@@ -82,16 +79,15 @@ class Autosave:
 
     def save(self) -> bool:
         if not any(True for _ in self.kernel.elements.elems()):
-            # Een leeg ontwerp bewaren zou een goed herstelbestand overschrijven
-            # op het moment dat iemand "nieuw" kiest.
+            # Saving an empty design would overwrite a good recovery file at the moment
+            # somebody chooses "new".
             return False
-        # `save` zet `elements.basename` op de bestandsnaam, en die naam komt
-        # daarna terug als jobnaam in de spooler — elke job heette "herstel.svg",
-        # ook op een vers ontwerp waar niets hersteld was. Twee jobs die
-        # hetzelfde heten zijn bij een laser niet uit elkaar te houden, dus we
-        # zetten de naam terug zoals hij was.
-        # `basename` is een property zonder setter; hij leidt af van
-        # `_filename`, en dát is wat `save` zet.
+        # `save` sets `elements.basename` to the file name, and that name then comes back as
+        # the job name in the spooler — every job was called "herstel.svg", even on a fresh
+        # design where nothing had been recovered. Two jobs with the same name cannot be told
+        # apart at a laser, so we put the name back as it was.
+        # `basename` is a property without a setter; it derives from `_filename`, and that is
+        # what `save` sets.
         elements = self.kernel.elements
         bestand_voor = getattr(elements, "_filename", None)
         try:
@@ -120,21 +116,19 @@ class Autosave:
 
     def forget_if_saved(self) -> bool:
         """
-        Het vangnet opruimen als er niets meer in kan vallen.
+        Cleaning up the safety net when nothing can fall into it any more.
 
-        Het herstelbestand blijft anders eeuwig staan, en het venster "Werk van
-        een vorige sessie" komt dan bij élke start van een nieuw ontwerp langs.
-        Gemeten: tekenen, op Exporteren drukken, aan iets nieuws beginnen — en
-        de volgende laadbeurt vraagt of je die pas geëxporteerde tekening wilt
-        terugzetten. Dat is geen vorige sessie en er valt niets te herstellen;
-        het is een venster dat je leert wegklikken, en dat is precies wat je
-        niet wil op de dag dat er wél iets te herstellen valt.
+        Otherwise the recovery file stays for ever, and the "Work from a previous session"
+        dialog then comes past on *every* start of a new design. Measured: draw, press Export,
+        start something new — and the next load asks whether you want to restore that
+        just-exported drawing. That is not a previous session and there is nothing to recover;
+        it is a dialog you learn to click away, and that is exactly what you do not want on
+        the day there *is* something to recover.
 
-        `document.dirty` is hier de juiste vraag en niet "heeft de gebruiker
-        opgeslagen": hij staat op False zodra het ontwerp gelijk is aan een
-        bestand — na exporteren, na openen, na een projectbestand. Staat hij op
-        True, dan is er ongeborgen werk en blijft het vangnet liggen, ook al
-        gooit de gebruiker het canvas leeg.
+        `document.dirty` is the right question here and not "has the user saved": it is False
+        as soon as the design is identical to a file — after exporting, after opening, after a
+        project file. If it is True there is unsecured work and the safety net stays, even
+        when the user empties the canvas.
 
         Geeft terug of er werkelijk iets weggehaald is.
         """
@@ -146,10 +140,10 @@ class Autosave:
 
     def _open_de_rem(self) -> None:
         """
-        De rem lostrekken, zodat de eerstvolgende wijziging meteen bewaard wordt.
+        Releasing the brake, so that the very next change is saved straight away.
 
-        De rem meet vanaf de laatste schrijfbeurt, en dat klopt zolang er een
-        herstelbestand staat. Na weggooien of terugzetten staat er iets anders
+        The brake measures from the last write, and that holds as long as a recovery file is
+        there. After discarding or restoring, something else is there
         op schijf dan wat de rem denkt, en dan is wachten fout. Gemeten vóór
         deze regel: herstelbestand weggooien, daarna vier vormen tekenen en
         dertig seconden wachten — en er stond nog steeds geen herstelbestand.

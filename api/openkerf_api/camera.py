@@ -1,22 +1,21 @@
 """
-Camerabeeld van het bed, als achtergrond onder het ontwerp.
+The camera image of the bed, as a background under the design.
 
-Bovenop MeerK40t's eigen cameraplugin (`meerk40t/camera/`), niet ernaast: die
-doet het lastige werk al — een eigen leesthread, fisheye-correctie met een
-schaakbordpatroon, en een perspectiefcorrectie die vier hoekpunten naar een
-rechthoek trekt. Wij leveren alleen wat de browser nodig heeft.
+On top of MeerK40t's own camera plugin (`meerk40t/camera/`), not beside it: that already
+does the hard work — a read thread of its own, fisheye correction with a chequerboard
+pattern, and a perspective correction that pulls four corner points into a rectangle. We
+only supply what the browser needs.
 
-Drie keuzes die het soepel maken:
+Three choices that make it smooth:
 
-1. **MJPEG in plaats van pollen.** De browser krijgt één antwoord dat blijft
-   doorlopen (`multipart/x-mixed-replace`) en decodeert dat zelf. Geen
-   JavaScript-lus die elke 200 ms een plaatje ophaalt, geen haperende
-   verversing, en het beeld stopt vanzelf als het tabblad dichtgaat.
-2. **De plugin doet de perspectiefcorrectie, wij niet.** Het gecorrigeerde
-   beeld ís de bedrechthoek, dus de frontend kan het één-op-één over het bed
-   leggen zonder zelf te rekenen.
-3. **De camera draait alleen als er iemand kijkt.** Een leesthread die uren
-   doorloopt terwijl niemand het beeld ziet, kost stroom en houdt het apparaat
+1. **MJPEG instead of polling.** The browser gets one answer that keeps running
+   (`multipart/x-mixed-replace`) and decodes it itself. No JavaScript loop fetching an image
+   every 200 ms, no stuttering refresh, and the image stops by itself when the tab closes.
+2. **The plugin does the perspective correction, we do not.** The corrected image *is* the
+   bed rectangle, so the frontend can lay it over the bed one to one without computing
+   anything itself.
+3. **The camera only runs while somebody is watching.** A read thread that runs on for hours
+   while nobody sees the image costs power and keeps the device
    bezet voor andere programma's.
 """
 
@@ -28,25 +27,25 @@ import subprocess
 import threading
 import time
 
-# OpenCV vraagt op macOS zelf om cameratoestemming, maar dat kan alleen vanaf de
-# hoofdthread — en de engine opent de camera in een werkthread. Het verzoek
-# mislukt dan met "can not spin main run loop from other thread" en er komt
-# nooit een venster. Deze vlag slaat dat verzoek over; de toestemming zelf moet
-# dan al geregeld zijn, en dat is precies wat we in de foutmelding uitleggen.
+# On macOS OpenCV asks for camera permission itself, but that is only possible from the main
+# thread — and the engine opens the camera in a worker thread. The request then fails with
+# "can not spin main run loop from other thread" and no dialog ever appears. This flag skips
+# that request; the permission itself then has to be arranged already, and that is exactly
+# what we explain in the error message.
 os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "1")
 
 from .edits import DesignError
 
-# Zonder deze twee is er geen camera; dat is een nette melding waard en geen
-# stacktrace. OpenCV zit niet in de standaardinstallatie van MeerK40t.
+# Without these two there is no camera; that deserves a decent message and not a
+# stacktrace. OpenCV is not in MeerK40t's standard installation.
 IMPORT_HINT = (
     "A camera image needs OpenCV. Install it beside the engine with "
     "'pip install opencv-python-headless'."
 )
 
-# Zo lang blijft de camera nog draaien nadat de laatste kijker weg is. Kort
-# genoeg om niet te blijven hangen, lang genoeg om een pagina te verversen
-# zonder dat de camera opnieuw hoeft op te starten (dat kost seconden).
+# This long the camera keeps running after the last viewer has gone. Short enough not to
+# hang around, long enough to refresh a page without the camera having to start up again
+# (which costs seconds).
 LINGER = 20.0
 
 
@@ -67,17 +66,16 @@ class Camera:
             import cv2  # noqa: F401
         except ImportError:
             return False
-        # De plugin registreert dit pas als cv2 én numpy er zijn; hij trekt
-        # zichzelf anders bij "invalidate" helemaal terug. Dat is een
-        # betrouwbaarder teken dan zoeken naar het commando, dat met een regex
-        # geregistreerd staat.
+        # The plugin only registers this when cv2 *and* numpy are there; otherwise it
+        # withdraws itself entirely at "invalidate". That is a more reliable sign than looking
+        # for the command, which is registered with a regex.
         return self.kernel.lookup("camera-enabled") is not None
 
     def service(self, start: bool = False):
         camera = getattr(self.kernel, "camera", None)
         if camera is None and start:
-            # `camera0` maakt de service aan én activeert hem; zonder cijfer
-            # pakt het commando alleen de bestaande.
+            # `camera0` creates the service *and* activates it; without a digit the command
+            # only takes the existing one.
             self.runner.run("camera0")
             camera = getattr(self.kernel, "camera", None)
         return camera
@@ -126,8 +124,8 @@ class Camera:
         if uri is not None and str(uri).strip():
             camera.set_uri(str(uri).strip())
         camera.open_camera()
-        # De leesthread heeft even nodig om het apparaat te openen; zonder deze
-        # wachtlus levert het eerste verzoek een leeg beeld op en lijkt het stuk.
+        # The read thread needs a moment to open the device; without this wait loop the
+        # first request produces an empty image and it looks broken.
         deadline = time.monotonic() + 6.0
         while time.monotonic() < deadline and camera.get_display_frame() is None:
             time.sleep(0.1)
@@ -140,9 +138,9 @@ class Camera:
         """
         Een bruikbare uitleg in plaats van "there is no image".
 
-        Het verschil tussen "there is no camera attached" en "dit programma mag niet
-        bij de camera" bepaalt volledig wat je eraan moet doen, en dat verschil
-        kunnen we opzoeken.
+        The difference between "there is no camera attached" and "this program is not
+        allowed near the camera" entirely decides what you have to do about it, and that
+        difference we can look up.
         """
         found = self.detected()
         base = f"No image from camera '{uri}'."
@@ -154,9 +152,9 @@ class Camera:
         names = ", ".join(found)
         if platform.system() == "Darwin":
             # Bij Camera in Systeeminstellingen zit géén +-knop: alleen
-            # programma's die ooit toestemming vroegen komen in die lijst. Onze
-            # engine kan dat niet vragen (het verzoek moet van de hoofdthread
-            # komen), dus de gebruiker moet het één keer zelf uitlokken.
+            # programs that ever asked for permission appear in that list. Our engine
+            # cannot ask (the request has to come from the main thread), so the user has to
+            # provoke it once themselves.
             return (
                 f"{base} There is a camera ({names}), so this is a "
                 "permissions matter. macOS does not let you add a program to the "
@@ -194,7 +192,7 @@ class Camera:
 
                 return sorted(p.name for p in Path("/dev").glob("video*"))
         except Exception:
-            # Uitzoeken wélke camera's er zijn mag nooit het starten blokkeren.
+            # Working out *which* cameras exist must never block the start.
             return []
         return []
 
@@ -234,12 +232,11 @@ class Camera:
 
     def next_part(self, last):
         """
-        Het volgende MJPEG-deel, of None als er nog geen nieuw beeld is.
+        The next MJPEG part, or None when there is no new image yet.
 
-        Blokkeert niet: de aanroeper bepaalt hoe lang hij wacht. Dat is wat het
-        mogelijk maakt om tussendoor te kijken of de browser nog luistert —
-        zonder die controle blijft de camera draaien voor een kijker die er
-        allang niet meer is.
+        Does not block: the caller decides how long it waits. That is what makes it possible
+        to check in between whether the browser is still listening — without that check the
+        camera keeps running for a viewer who left long ago.
         """
         camera = self.service()
         if camera is None:
@@ -262,11 +259,10 @@ class Camera:
 
     def reap(self) -> bool:
         """
-        De camera sluiten als er al even niemand kijkt.
+        Closing the camera when nobody has been watching for a while.
 
-        Wordt vanuit de statuslus aangeroepen. Een leesthread die uren
-        doorloopt terwijl niemand kijkt, kost stroom en houdt het apparaat
-        bezet voor andere programma's.
+        Called from the status loop. A read thread that runs on for hours while nobody is
+        watching costs power and keeps the device busy for other programs.
         """
         if self._viewers or self._idle_since is None:
             return False
@@ -285,9 +281,9 @@ class Camera:
         """
         De vier bedhoeken in het camerabeeld vastleggen.
 
-        Volgorde is linksboven, rechtsboven, rechtsonder, linksonder — dezelfde
-        als de plugin gebruikt, want die trekt ze in die volgorde naar een
-        rechthoek. Door elkaar gooien geeft een gespiegeld of gedraaid beeld.
+        The order is top left, top right, bottom right, bottom left — the same as the plugin
+        uses, because it pulls them into a rectangle in that order. Shuffling them gives a
+        mirrored or rotated image.
         """
         camera = self.service()
         if camera is None:
@@ -344,7 +340,7 @@ class Camera:
 
         from PIL import Image
 
-        # De plugin levert RGB; PIL verwacht dat ook, dus geen omzetting.
+        # The plugin supplies RGB; PIL expects that too, so no conversion.
         buffer = io.BytesIO()
         Image.fromarray(frame).convert("RGB").save(
             buffer, "JPEG" if kind == "jpeg" else "PNG", quality=80

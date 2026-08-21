@@ -1,20 +1,19 @@
 """
 Een rasteraar zonder GUI.
 
-`op raster` zet zijn vormen tijdens het plannen om in een bitmap, en vraagt de
-kernel daarvoor om de dienst `render-op/make_raster`
-(`meerk40t/core/node/op_raster.py:468`). Die dienst registreert **alleen de
-wxPython-GUI** (`meerk40t/gui/plugin.py:79`, met als commentaar "This is used to
-do cut planning" — upstream weet dus dat het geen UI-taak is). Ontbreekt hij,
-dan neemt `OpRasterNode.preprocess` de `strip_rasters`-tak: de laag gooit zijn
-eigen kinderen weg en levert nul cutcode. Elke rasterbewerking komt dan blanco
-uit de machine.
+During planning `op raster` turns its shapes into a bitmap, and asks the kernel for the
+service `render-op/make_raster` for that (`meerk40t/core/node/op_raster.py:468`). That
+service is registered **only by the wxPython GUI** (`meerk40t/gui/plugin.py:79`, with the
+comment "This is used to do cut planning" — so upstream knows it is not a UI task). If it is
+absent, `OpRasterNode.preprocess` takes the `strip_rasters` branch: the layer throws its own
+children away and produces no cutcode. Every raster operation then comes out of the machine
+blank.
 
-Deze module levert dezelfde dienst op Pillow, geregistreerd vanuit onze eigen
-plugin. Er verandert dus niets in de MeerK40t-repo zelf. Draait iemand ooit mét
-GUI, dan staat de wx-rasteraar er al en laten wij hem staan.
+This module supplies the same service on Pillow, registered from our own plugin. So
+nothing changes in the MeerK40t repository itself. If somebody ever runs *with* the GUI, the
+wx rasteriser is already there and we leave it be.
 
-Het contract is afgeleid uit `meerk40t/gui/laserrender.py:1356` en de aanroep in
+The contract is derived from `meerk40t/gui/laserrender.py:1356` and the call in
 `op_raster.py:503`:
 
     make_raster(nodes, bounds, width=None, height=None, bitmap=False,
@@ -29,26 +28,26 @@ from math import ceil
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw
 
-# Waar de wx-versie een GraphicsContext met INTERPOLATION_BEST heeft, tekenen
-# wij op een veelvoud en verkleinen we met LANCZOS. Een rasterlaag wordt daarna
-# gedrempeld; zachte randen leveren dan nettere trapjes dan harde.
+# Where the wx version has a GraphicsContext with INTERPOLATION_BEST, we draw at a multiple
+# and shrink with LANCZOS. A raster layer is thresholded afterwards; soft edges then produce
+# neater steps than hard ones.
 SUPERSAMPLE = 4
 
-# Een rasterlaag over een heel bed op 1000 dpi is zo een half gigapixel. De
-# wx-versie loopt daar op een MemoryError vast, die `preprocess` opvangt als
-# "Raster too large". Wij begrenzen liever de hulpschaal dan het resultaat.
+# A raster layer across a whole bed at 1000 dpi is half a gigapixel in no time. The wx
+# version hits a MemoryError on that, which `preprocess` catches as "Raster too large". We
+# would rather bound the helper scale than the result.
 MAX_SUPERSAMPLED_PIXELS = 64_000_000
 
-# Wat we kunnen tekenen. De rest slaan we over in plaats van erop te struikelen.
+# What we can draw. The rest we skip rather than trip over.
 _SKIPPED_TYPES = ("elem text",)
 
 
 def register(kernel) -> bool:
     """
-    Registreer de rasteraar, maar alleen als er nog geen is.
+    Register the rasteriser, but only when there is none yet.
 
-    Geeft terug of wij hem geleverd hebben. Staat er al iets (de wxPython-GUI),
-    dan wint die: die tekent met de echte fonts en de echte penstreken.
+    Hands back whether we supplied it. If something is already there (the wxPython GUI),
+    that one wins: it draws with the real fonts and the real pen strokes.
     """
     root = kernel.root
     try:
@@ -71,21 +70,21 @@ def make_raster(
     keep_ratio=False,
 ):
     """
-    Zet een verzameling elementknopen om in een afbeelding van de gevraagde maat.
+    Turn a collection of element nodes into an image of the requested size.
 
-    @param nodes: de elementknopen (de engine heeft references al opgelost).
-    @param bounds: (x0, y0, x1, y1) in native eenheden; None → None.
+    @param nodes: the element nodes (the engine has already resolved references).
+    @param bounds: (x0, y0, x1, y1) in native units; None → None.
     @param width: gewenste breedte in pixels; None → `raster_width / step_x`.
-    @param height: gewenste hoogte in pixels; None → `raster_height / step_y`.
-    @param bitmap: alleen voor de wx-versie; hier zonder betekenis.
-    @param step_x: rasterstap, tevens de schaal van de afbeelding.
-    @param step_y: idem, verticaal.
-    @param keep_ratio: de kleinste van beide schalen op beide assen.
-    @return: een RGB-afbeelding, wit met het werk in zwart.
+    @param height: the wanted height in pixels; None → `raster_height / step_y`.
+    @param bitmap: for the wx version only; without meaning here.
+    @param step_x: the raster step, also the image's scale.
+    @param step_y: the same, vertically.
+    @param keep_ratio: the smaller of both scales on both axes.
+    @return: an RGB image, white with the work in black.
     """
     if bounds is None:
         return None
-    # Een stap van nul is geen stap maar een deling door nul.
+    # A step of zero is not a step but a division by zero.
     if not step_x:
         step_x = 1
     if not step_y:
@@ -113,9 +112,9 @@ def make_raster(
     pixel_width = int(ceil(abs(width)))
     pixel_height = int(ceil(abs(height)))
 
-    # De affiene afbeelding van scene- naar pixelcoördinaten. Dezelfde volgorde
-    # als de wx-versie: eerst naar de oorsprong schuiven, dan schalen; een
-    # negatieve schaal spiegelt en moet daarna terug in beeld geschoven worden.
+    # The affine mapping from scene to pixel coordinates. The same order as the wx version:
+    # shift to the origin first, then scale; a negative scale mirrors and has to be shifted
+    # back into view afterwards.
     offset_x = -x_min
     offset_y = -y_min
     if scale_x < 0:
@@ -155,8 +154,8 @@ def _supersample_for(pixel_width: int, pixel_height: int) -> int:
 
 def _union_paint_bounds(nodes, fallback):
     """
-    Het kader waarin getekend wordt: `paint_bounds` van de knopen, met terugval
-    op `bounds` van de knoop en uiteindelijk op het meegegeven kader.
+    The frame drawn in: the nodes' `paint_bounds`, falling back on the node's `bounds` and
+    finally on the frame passed in.
     """
     x_min = y_min = float("inf")
     x_max = y_max = -float("inf")
@@ -201,9 +200,9 @@ class _Transform:
 
     def line_width(self, stroke_width) -> int:
         """
-        Een streek van nul breed is op een raster onzichtbaar, en dat is precies
-        wat je niet wil: dan brandt de laag niets. Minimaal één pixel dus, en op
-        de hulpschaal ook echt zo dik als hij op het eindresultaat moet zijn.
+        A stroke of zero width is invisible on a raster, and that is exactly what you do not
+        want: then the layer burns nothing. So at least one pixel, and at the helper scale
+        really as thick as it has to be on the final result.
         """
         scale = (abs(self.scale_x) + abs(self.scale_y)) / 2
         try:
@@ -218,9 +217,9 @@ def _draw_node(canvas, draw, node, transform):
     if getattr(node, "hidden", False):
         return
     if node_type in _SKIPPED_TYPES:
-        # Tekst zonder GUI heeft geen font-engine. In onze app is tekst al naar
-        # geometrie omgezet vóór het planningsmoment; komt er toch een `elem
-        # text` langs, dan is niets tekenen beter dan omvallen.
+        # Text without a GUI has no font engine. In our app text has already been converted
+        # to geometry before the planning moment; if an `elem text` does come past, drawing
+        # nothing is better than falling over.
         return
     if node_type == "elem image" or hasattr(node, "as_image"):
         _draw_image(canvas, node, transform)
@@ -244,9 +243,9 @@ def _geometry_of(node):
 def _draw_geometry(canvas, draw, node, geometry, transform):
     fill = _paint(getattr(node, "fill", None))
     stroke = _paint(getattr(node, "stroke", None))
-    # Zonder streek en zonder vulling zou een vorm onzichtbaar zijn, en dus
-    # niet gebrand worden. Een vorm die in een rasterlaag zit, is bedoeld om te
-    # branden: dan is een haarlijn de eerlijkste weergave.
+    # Without a stroke and without a fill a shape would be invisible, and so would not be
+    # burned. A shape in a raster layer is meant to burn: then a hairline is the most honest
+    # rendering.
     if not fill and not stroke:
         stroke = True
     width = transform.line_width(
@@ -276,11 +275,11 @@ def _draw_geometry(canvas, draw, node, geometry, transform):
 
 def _fill(canvas, draw, vlakken) -> None:
     """
-    De gesloten deelpaden van één vorm vullen, met gaten.
+    Filling one shape's closed subpaths, with holes.
 
-    Eén deelpad is één vlak; dan is `polygon` het snelst. Meerdere deelpaden
-    horen bij elkaar: de binnencontour van een "0" is een gat en niet een tweede
-    vlak. Elk deelpad los vullen gaf een nul die op het scherm open stond en op
+    One subpath is one area; then `polygon` is fastest. Several subpaths belong together: the
+    inner contour of a "0" is a hole and not a second area. Filling every subpath separately
+    gave a zero that was open on the screen and on
     het hout helemaal dichtgebrand was.
 
     Even-oddregel, door de maskers op elkaar te XOR-en. SVG rekent standaard met
