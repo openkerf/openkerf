@@ -37,7 +37,7 @@
 		control: Controller;
 		device: Device | null;
 		job: Job | null;
-		/** Loopt op bij elke wijziging in het ontwerp; de schatting volgt hem. */
+		/** Increases on every change in the design; the estimate follows it. */
 		revisie?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
@@ -46,23 +46,23 @@
 		onFocus?: (distanceMm: number) => void;
 		/** De kop langs de omtrek sturen, zonder te branden. */
 		onFrame?: () => void;
-		/** Dezelfde laagkleur als het canvas en de lagenlijst tonen. */
+		/** The same layer colour the canvas and the layer list show. */
 		colorFor?: (operationId: string | null) => string;
 		/** Wat dit machineprofiel zegt te kunnen; bepaalt wat er verschijnt. */
 		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
-	// Gat J9: één bron voor "waar woont deze actie". Zie device.svelte.ts.
+	// Gap J9: one source for "where does this action live". See screen.svelte.ts.
 	let balkdraagt = $derived(screen.controlsInBar);
 	let actions = $derived(control.capabilities?.actions ?? null);
 	let running = $derived(Boolean(job?.running));
-	// Stilstaand, niet alleen "gepauzeerd volgens het statusveld": pauzeren set
-	// bij Lihuiyu `running` op false en meldt verder niets. Zonder dit stond hier
-	// "Pauze" (uitgeschakeld) op een job die juist hervat moest worden.
+	// Standing still, not only "paused according to the status field": on Lihuiyu
+	// pausing sets `running` to false and reports nothing further. Without this it read
+	// "Pause" (disabled) on a job that needed resuming.
 	let paused = $derived(isStalled(job));
 	let queued = $derived(device?.spooler.queue_length ?? 0);
-	// Een lopende job is de reden dat starten niet mag; dat moet in de tooltip
-	// staan, want een grijze knop zonder reden is een raadsel.
+	// A running job is the reason starting is not allowed; that has to be in the
+	// tooltip, because a grey button without a reason is a riddle.
 	let bezet = $derived(running || paused);
 	let tokenDraft = $state('');
 	let step = $state(10);
@@ -75,12 +75,12 @@
 		passes: number;
 		elements: number;
 		source: string | null;
-		/** Het materiaal waarvoor deze instelling gemaakt is — bekend zodra hij
-		 *  uit een preset komt (besluit B1). */
+		/** The material this setting was made for — known as soon as it comes from a
+		 *  preset (decision B1). */
 		material_name?: string | null;
 		thickness_mm?: number | null;
 		warnings?: Warning[];
-		/** Voert deze engine de laag daadwerkelijk uit? Zie `rasterUit`. */
+		/** Does this engine actually execute the layer? See `rasterUit`. */
 		burns?: boolean;
 	};
 	type Bounds = {
@@ -101,12 +101,12 @@
 	};
 	let estimate = $state<{ seconds: number; parts: number } | null>(null);
 	/**
-	 * Wat er gebrand wordt, los van hoe lang het duurt.
+	 * What gets burned, separate from how long it takes.
 	 *
-	 * Eigen bron, want `/api/job/estimate` bouwt voor de klok het hele snijplan
-	 * en dat duurt op een zwaar ontwerp minuten. De waarschuwing dat een laag
-	 * een instelling van ánder materiaal draagt, is precies wat je vóór het
-	 * starten moet zien; die hoort niet achter een tijdschatting te wachten.
+	 * A source of its own, because for the clock `/api/job/estimate` builds the whole
+	 * cut plan and on a heavy design that takes minutes. The warning that a layer
+	 * carries a setting for a *different* material is exactly what you have to see
+	 * before starting; it should not be queued behind a time estimate.
 	 */
 	let overzicht = $state<{
 		sheet?: SheetInfo | null;
@@ -116,22 +116,21 @@
 	} | null>(null);
 	let layers = $derived(overzicht?.layers ?? []);
 	/**
-	 * Het ontwerp voor de weergave erboven (besluit B8).
+	 * The design for the drawing above (decision B8).
 	 *
-	 * Eigen ophaalslag en niet de store van de pagina: dit paneel krijgt hem
-	 * niet doorgegeven, en vlak vóór het starten wil je sowieso zien wat er nú
-	 * op het bed ligt en niet wat er stond toen het canvas voor het laatst
-	 * ververste.
+	 * A fetch of its own and not the page's store: this panel is not handed it, and
+	 * just before starting you want to see what is on the bed *now* anyway, not what
+	 * was there when the canvas last refreshed.
 	 */
 	let ontwerp = $state<Design | null>(null);
 
-	// Wat de laag draagt tegenover waarin gebrand wordt. Dit is het last
-	// moment waarop dat verschil nog iets kost dat je kunt terugdraaien.
+	// What the layer carries against what is being burned. This is the last moment at
+	// which that difference still costs something you can undo.
 	//
-	// Eén regel per laag: twee bezwaren over dezelfde laag lazen als twee lagen,
-	// omdat de naam er dan twee keer boven staat. En het zwaarste bezwaar eerst
-	// — een gemeten instelling van het verkeerde materiaal is erger dan een
-	// uitgerekende op het juiste, en dan moet die bovenaan staan.
+	// One line per layer: two objections about the same layer read as two layers,
+	// because the name then sits above it twice. And the heaviest objection first — a
+	// measured setting for the wrong material is worse than a calculated one for the
+	// right material, and then that has to be at the top.
 	let mismatch = $derived(
 		layers
 			.filter((l) => l.burns !== false && l.warnings?.length)
@@ -142,8 +141,8 @@
 			}))
 			.sort((a, b) => b.ernst - a.ernst)
 	);
-	// Alleen wijzen als er iets te kiezen valt: bij bezwaren van gelijk gewicht
-	// is "eerst dit" een willekeurige aanwijzing en dus ruis.
+	// Only point when there is something to choose: between objections of equal weight
+	// "this first" is an arbitrary instruction and therefore noise.
 	let eersteWeegtZwaarder = $derived(
 		mismatch.length > 1 && mismatch[0].ernst > mismatch[mismatch.length - 1].ernst
 	);
@@ -159,25 +158,24 @@
 	/**
 	 * Past het op het bed, en past het op het vel? (gaten J5 en C2)
 	 *
-	 * Beide shouldAsk worden door de server beantwoord en niet hier: die meet ze
-	 * toch al voor het canvas en de telefoon, en drie plekken die het zelf
-	 * uitrekenen kunnen het over de rand oneens worden. `bounds` hoort daarom
-	 * in `/api/job/layers` en niet alleen in `/api/job/estimate` — anders
-	 * verschijnt "valt buiten het bed" pas als de klok terug is, en dat kan op
-	 * een zwaar ontwerp seconden duren.
+	 * Both questions are answered by the server and not here: it measures them for the
+	 * canvas and the phone anyway, and three places computing it themselves can
+	 * disagree about the edge. `bounds` therefore belongs in `/api/job/layers` and not
+	 * only in `/api/job/estimate` — otherwise "falls off the bed" only appears once the
+	 * clock is back, and on a heavy design that can take seconds.
 	 *
-	 * De melding zelf staat in `JobPreview`, direct onder de tekening waar de
-	 * vorm te zien is waar het over gaat.
+	 * The message itself lives in `JobPreview`, directly under the drawing where the
+	 * shape it is about can be seen.
 	 */
 	let grenzen = $derived(overzicht?.bounds ?? null);
 
 	/**
 	 * Brandt deze engine rasterlagen?
 	 *
-	 * Nee, headless: de omzetter van rastervlak naar laserregels zit in de
-	 * wxPython-GUI. De laag gooit tijdens het plannen zijn eigen vormen weg en
-	 * levert nul cutcode. Dat mag geen verrassing zijn ná het branden, en de
-	 * tijdschatting mag er geen seconden voor beloven.
+	 * No, headless: the converter from raster area to laser lines sits in the wxPython
+	 * GUI. During planning the layer throws its own shapes away and produces no
+	 * cutcode. That must not be a surprise *after* burning, and the time estimate must
+	 * not promise seconds for it.
 	 */
 	let rasterUit = $derived(overzicht?.engine?.raster === false);
 	let blindeLagen = $derived(layers.filter((l) => l.burns === false));
@@ -216,25 +214,25 @@
 	let estimating = $state(false);
 	let estimateTraag = $state(false);
 
-	// De engine bouwt voor deze schatting het hele snijplan op. Op een zwaar
-	// ontwerp duurde dat hier meer dan drie minuten, en de pre-flight bleef
-	// intussen op een puntje staan. Een schatting mag nooit de reden zijn dat
-	// je niet kunt starten, dus na tien seconden zeggen we het gewoon.
-	const ESTIMATE_GEDULD = 10_000;
+	// The engine builds the whole cut plan for this estimate. On a heavy design that
+	// took more than three minutes here, and meanwhile the pre-flight sat on a dot. An
+	// estimate must never be the reason you cannot start, so after ten seconds we
+	// simply say so.
+	const ESTIMATE_PATIENCE = 10_000;
 
-	// De schatting van de engine vóór het starten: de pre-flight toonde tot nu
-	// toe alleen de tijd van een al lopende job, wat precies te laat is.
+	// The engine's estimate before starting: until now the pre-flight only showed the
+	// time of a job that was already running, which is exactly too late.
 	//
-	// Twee verzoeken, bewust niet één: het overzicht (lagen, materiaal,
-	// bezwaren) komt meteen, de klok mag daarna komen. Andersom stond de
+	// Two requests, deliberately not one: the overview (layers, material, objections)
+	// arrives at once, the clock may come afterwards. The other way round the
 	// waarschuwing over verkeerd materiaal minutenlang achter een tijdschatting
 	// te wachten op een zwaar ontwerp.
 	async function loadEstimate() {
 		estimating = true;
 		estimateTraag = false;
 		try {
-			// Naast elkaar: de weergave en de lagentabel horen samen op het
-			// scherm te verschijnen, niet de een een halve seconde na de ander.
+			// Side by side: the drawing and the layer table should appear on screen
+			// together, not one half a second after the other.
 			const [lagen, snapshot] = await Promise.all([
 				fetch('/api/job/layers'),
 				fetch('/api/design')
@@ -245,7 +243,7 @@
 			overzicht = null;
 			ontwerp = null;
 		}
-		const traag = setTimeout(() => (estimateTraag = true), ESTIMATE_GEDULD);
+		const traag = setTimeout(() => (estimateTraag = true), ESTIMATE_PATIENCE);
 		try {
 			const response = await fetch('/api/job/estimate');
 			estimate = response.ok ? await response.json() : null;
@@ -259,22 +257,21 @@
 	}
 
 	/**
-	 * De schatting ophalen zolang de voorbereiding in beeld staat.
+	 * Fetching the estimate as long as the preparation is on screen.
 	 *
-	 * Hij hing aan het `preflight`-vlaggetje, en dat ging maar één keer om. Nu
-	 * staat het blok altijd open als er niets onderweg is, dus moet hij meelopen
-	 * met het ontwerp — anders staat er straks een tijd van een tekening die je
-	 * al vervangen hebt.
+	 * It hung off the `preflight` flag, and that only flipped once. Now the block is
+	 * always open when nothing is in flight, so it has to keep up with the design —
+	 * otherwise there is a time on screen for a drawing you have already replaced.
 	 *
-	 * Met een rem erop: elke vorm die je tekent geeft een signaal, en `plan` is
-	 * niet gratis. 400 ms na de last wijziging is snel genoeg om vers te
-	 * voelen en langzaam genoeg om niet mee te typen.
+	 * With a brake on it: every shape you draw gives a signal, and `plan` is not free.
+	 * 400 ms after the last change is fast enough to feel fresh and slow enough not to
+	 * type along.
 	 */
 	let schatKlok: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
-		// Bewust níet op `busyWithWork` kijken: die hangt via `leeg` aan de
-		// schatting, en dan zou dit effect zijn eigen aanleiding zijn. De
-		// wachtrijlengte zegt hetzelfde zonder de lus.
+		// Deliberately *not* looking at `busyWithWork`: that hangs off the estimate via
+		// `leeg`, and then this effect would be its own trigger. The queue length says
+		// the same thing without the loop.
 		const zichtbaar = (device?.spooler?.queue_length ?? 0) === 0;
 		void revisie;
 		if (!zichtbaar) {
@@ -323,10 +320,10 @@
 	async function ophalenPosities() {
 		posities = await control.listPositions();
 	}
-	// Bij het openen van het paneel én na een machinewissel: posities horen bij
-	// de machine, dus die van de vorige zijn hier onzin. Dat geldt net zo goed
-	// voor het nulpunt (J12) en voor de bijstelling (J11) — allebei staan ze op
-	// de machine en niet in de browser.
+	// On opening the panel *and* after a machine switch: positions belong to the
+	// machine, so the previous one's are nonsense here. The same holds for the zero
+	// point (J12) and for the adjustment (J11) — both live on the machine and not in
+	// the browser.
 	$effect(() => {
 		void device?.path;
 		ophalenPosities();
@@ -334,7 +331,7 @@
 		if (control.canAdjust) control.loadAdjustment();
 	});
 
-	/** De twee grootheden die tijdens een job bijgesteld kunnen worden (J11). */
+	/** The two quantities that can be adjusted during a job (J11). */
 	const ADJUSTABLE = [
 		{ what: 'power' as const, key: 'job.adjust.power' as MessageKey },
 		{ what: 'speed' as const, key: 'job.adjust.speed' as MessageKey }
@@ -361,34 +358,34 @@
 	/**
 	 * Valt er iets te branden?
 	 *
-	 * De pre-flight toonde bij een leeg bed opgewekt "Geschatte tijd 0:00", de
-	 * volledige veiligheidschecklist en een groene "Nu starten". Dat is twee
-	 * keer failure: je krijgt pas na het starten te horen dat er niets was, en je
-	 * leert intussen om een veiligheidslijst weg te klikken die nergens over
-	 * gaat. Een checklist die je went af te vinken, beschermt niemand meer.
+	 * On an empty bed the pre-flight cheerfully showed "Estimated time 0:00", the full
+	 * safety checklist and a green "Start now". That is wrong twice over: you only
+	 * hear there was nothing there after starting, and meanwhile you learn to click
+	 * away a safety list that is about nothing. A checklist you get used to ticking off
+	 * protects nobody any more.
 	 *
-	 * `parts` is het aantal onderdelen in het gebouwde snijplan; nul betekent
-	 * dat de machine niets zou doen. Zolang de schatting nog loopt weten we het
-	 * niet, en dan houden we onze mond.
+	 * `parts` is the number of parts in the built cut plan; zero means the machine
+	 * would do nothing. As long as the estimate is still running we do not know, and
+	 * then we keep quiet.
 	 */
 	let leeg = $derived(!estimating && estimate !== null && estimate.parts === 0);
 
 	/**
 	 * De phase, uit één bron (`jobPhase` in `$lib/api.ts`).
 	 *
-	 * Dit paneel las hiervóór `job.running` en de bovenbalk de machinetoestand, en
-	 * bij een job die gespoold was maar nog niet opgepakt (`status: "Waiting"`,
-	 * `running: false`) waren die twee het oneens: de balk zette starten uit, dit
-	 * paneel liet het aan staan. Eén tik hier spoolde dan een tweede job bovenop
-	 * de eerste.
+	 * Before this, this panel read `job.running` and the top bar read the machine
+	 * state, and for a job that had been spooled but not yet picked up (`status:
+	 * "Waiting"`, `running: false`) those two disagreed: the bar disabled starting,
+	 * this panel left it on. One tap here then spooled a second job on top of the
+	 * first.
 	 */
 	let phase = $derived(jobPhase(device, job, leeg));
 	let busyWithWork = $derived(jobBusy(phase));
 	let voortgang = $derived.by(() => {
 		const deel = job?.progress;
 		if (deel === null || deel === undefined || !Number.isFinite(deel)) return null;
-		// Een job die klaar is maar door de engine niet afgemeld wordt, staat op
-		// 0,998; die tonen we als vol, want dat is wat er gebeurd is.
+		// A job that is finished but not signed off by the engine sits at 0.998; we show
+		// that as full, because that is what has happened.
 		return phase === 'done' ? 1 : Math.min(1, Math.max(0, deel));
 	});
 	let resterend = $derived(phase === 'done' ? 0 : remainingSeconds(job));
@@ -425,16 +422,16 @@
 
 	{#if !busyWithWork && phase !== 'done'}
 		<!--
-			De voorbereiding staat er altijd, niet pas na een klik.
+			The preparation is always there, not only after a click.
 
-			Dit blok zat achter de knop "Job starten": je drukte, en het hele paneel
-			werd vervangen door een overzicht — "alles gaat uit beeld", zoals de
-			klacht luidde. Terwijl dit juist het beeld is waar je naar kijkt vóórdat
-			je iets brandt. Het staat nu open zolang er niets onderweg is.
+			This block sat behind the "Start job" button: you pressed, and the whole panel
+			was replaced by an overview — "everything goes off screen", as the complaint
+			put it. While this is precisely the image you look at *before* you burn
+			anything. It is now open as long as nothing is in flight.
 
-			De twee bewuste tikken blijven: VEILIGHEID.md legt vast dat geen enkele
-			klik direct brandt. "Job starten" wapent, "Nu starten" vuurt — en anders
-			dan hiervóór verdwijnt er bij die eerste tik niets uit beeld.
+			The two deliberate taps stay: VEILIGHEID.md lays down that no single click
+			burns directly. "Start job" arms, "Start now" fires — and unlike before,
+			nothing disappears from view on that first tap.
 		-->
 		<div class="preflight" class:niets={leeg}>
 			<!-- "Estimated time 0:00" above an empty bed reads as a job of zero
@@ -1070,9 +1067,8 @@
 		<p class="hint">{t('job.noPause')}</p>
 	{/if}
 
-	<!-- De foutmelding staat nu in de statusbalk, op elk tabblad zichtbaar.
-	     Hier nóg een keer zou hem tweemaal tonen zodra je toevallig in Job
-	     staat. -->
+	<!-- The error message now lives in the status bar, visible on every tab. Once more
+	     here would show it twice whenever you happen to be on Job. -->
 </div>
 
 <style>
@@ -1084,17 +1080,17 @@
 		color: var(--text-2);
 		margin: 0 0 var(--space-2);
 	}
-	/* Onder 1200px staan starten en pauzeren in de bovenbalk en verdwijnt dit
-	   blok grotendeels (zie `.dubbel` verderop). Maar een aanraakscherm kan
-	   bréder zijn dan 1200, en daar stond alles op 8px — onder de 12px die
-	   DESIGN-SYSTEM als ondergrens voor raakdoelen stelt.
+	/* Below 1200px start and pause live in the top bar and this block largely
+	   disappears (see `.dubbel` further down). But a touch screen can be *wider* than
+	   1200, and there everything sat at 8px — below the 12px DESIGN-SYSTEM sets as the
+	   floor for touch targets.
 
-	   Rijen tellen net zo hard als kolommen: "Pauze" en "Wachtrij legen" staan
-	   ónder elkaar en zijn tijdens een job allebei bruikbaar, en dat tweede
-	   knopje gooit je hele wachtrij weg. Dus `gap`, niet `column-gap`.
-	   (Startknop en pauzeknop naast elkaar zijn overigens nooit tegelijk
-	   bruikbaar — daar beschermt de afstand tegen niets. Deze wel.)
-	   Ingezet door de tablet-agent, hier verbreed naar beide assen. */
+	   Rows count as much as columns: "Pause" and "Clear queue" sit *under* each other
+	   and are both usable during a job, and that second button throws your whole queue
+	   away. So `gap`, not `column-gap`. (The start and pause buttons beside each other
+	   are never usable at the same time, by the way — there the distance protects
+	   against nothing. This one does.) Introduced by the tablet agent, widened here to
+	   both axes. */
 	@media (pointer: coarse) {
 	}
 	.btn {
@@ -1129,12 +1125,11 @@
 		grid-column: 1 / -1;
 		margin-top: var(--space-6);
 	}
-	/* De verwijzing bestaat alleen op tablet; op desktop staan de knoppen hier. */
-	/* Gat J9. Hier stond `@media (max-width: 1199px)` en in TopBar een JS-prop:
-	   twee bronnen voor één afspraak, die uit de pas kunnen lopen met als
-	   slechtste uitkomst dat de pauzeknop nergens of twee keer staat. Beide
-	   lezen nu `screen.controlsInBar`; de klasse hieronder is het gevolg,
-	   niet de regel. */
+	/* The reference exists only on tablet; on the desktop the buttons are here. */
+	/* Gap J9. This was `@media (max-width: 1199px)` here and a JS prop in TopBar: two
+	   sources for one agreement, which can drift apart with the worst outcome being
+	   that the pause button sits nowhere or twice. Both now read
+	   `screen.controlsInBar`; the class below is the consequence, not the rule. */
 	.preflight {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -1163,10 +1158,10 @@
 		margin-right: var(--space-1h);
 		vertical-align: baseline;
 	}
-	/* Met een nummer erin is de chip geen stip meer maar een klein vlak (gat J7).
-	   Even breed als hoog en met tabulaire cijfers, zodat een 1 en een 10 de
-	   kolom niet laten verspringen. De inkt (zwart of wit) komt uit `inkOn`:
-	   op geel is wit 1,58:1 en dan lees je het cijfer domweg niet. */
+	/* With a number in it the chip is no longer a dot but a small block (gap J7). As
+	   wide as it is tall and with tabular figures, so that a 1 and a 10 do not make the
+	   column jump. The ink (black or white) comes from `inkOn`: on yellow, white is
+	   1.58:1 and then you simply cannot read the figure. */
 	.chip.genummerd {
 		width: 15px;
 		height: 15px;
@@ -1184,22 +1179,22 @@
 		white-space: nowrap;
 	}
 	.unsure { color: var(--warn); }
-	/* Een laag die niets doet, in de rustige tint: er valt niets te controleren,
-	   dus dit is een mededeling en geen alarm. Het alarm staat erboven. */
+	/* A layer that does nothing, in the calm tone: there is nothing to check, so this
+	   is a statement and not an alarm. The alarm is above it. */
 	.pf-blind {
 		color: var(--text-2);
 		font-style: italic;
-		/* Links, direct naast de laagnaam: dit gaat over de laag en niet over een
-		   kolom. Rechts uitgelijnd stond het los aan de andere kant van de rij,
-		   waar de lezer een getal verwacht. */
+		/* Left, directly beside the layer name: this is about the layer and not about a
+		   column. Right-aligned it sat loose on the other side of the row, where the
+		   reader expects a number. */
 		text-align: left;
 		padding-left: 8px;
 	}
 	.pf-warn.strong { color: var(--warn); font-weight: 500; }
-	/* Een eigen soort, niet de vierde gele waas. De linkerbalk in de
-	   gevarenkleur zegt "dit werkt niet" tegenover "let hierop"; de tekst zelf
-	   houdt de gewone kleur, want --danger op deze waas haalt het contrast niet
-	   (dezelfde meting als bij .pf-mismatch hieronder). */
+	/* A kind of its own, not the fourth yellow wash. The left bar in the danger colour
+	   says "this does not work" as against "watch out for this"; the text itself keeps
+	   the ordinary colour, because --danger on this wash does not make the contrast
+	   (the same measurement as at .pf-mismatch below). */
 	.pf-geenraster {
 		margin: var(--space-2) 0;
 		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
@@ -1237,9 +1232,9 @@
 		background: color-mix(in srgb, var(--warn) 14%, transparent);
 		font-size: var(--text-xs);
 	}
-	/* De enige melding hier die over een concrete verwisseling gaat, en dus de
-	   enige met een linkerbalk: zwaarder dan de algemene "niet gemeten"-notitie
-	   eronder, en niet in dezelfde vlakke gele tint, want dan wegen ze gelijk. */
+	/* The only message here that is about a concrete mix-up, and therefore the only one
+	   with a left bar: heavier than the general "not measured" note below it, and not in
+	   the same flat yellow tone, because then they would weigh the same. */
 	.pf-mismatch {
 		margin: var(--space-2) 0;
 		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
@@ -1251,14 +1246,14 @@
 		display: grid;
 		gap: var(--space-1);
 	}
-	/* Het mildste bezwaar — uitgerekend maar op het juiste materiaal — hoort er
-	   wel te staan en niet even hard te roepen als een verkeerde plaat. */
+	/* The mildest objection — calculated but on the right material — belongs there but
+	   must not shout as loudly as the wrong plate. */
 	.pf-mismatch .licht { color: var(--text-2); }
 	.pf-mismatch .licht strong { color: var(--text-1); font-weight: 500; }
-	/* Geen gevuld pilletje: --warn-solid is volgens tokens.css een vlakkleur en
-	   haalt met wit erop maar 3,25:1 (zelf gemeten: 2,22 in donker). Ook --warn
-	   als tekst bleef op deze waas op 3,73 steken. Dus draagt de rand de kleur
-	   en het woord de gewone tekstkleur — gemeten 9,79:1 licht, 14,5:1 donker. */
+	/* Not a filled pill: according to tokens.css --warn-solid is a surface colour and
+	   with white on it only reaches 3.25:1 (measured ourselves: 2.22 in dark). --warn
+	   as text also stuck at 3.73 on this wash. So the border carries the colour and the
+	   word the ordinary text colour — measured 9.79:1 light, 14.5:1 dark. */
 	.eerst {
 		display: inline-block;
 		margin-right: var(--space-1h);
@@ -1271,12 +1266,12 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
-	/* De maat is secundair maar moet leesbaar blijven; geen aparte tint. */
+	/* The size is secondary but has to stay readable; no separate tone. */
 	.pf-time.vel { border-bottom: none; padding-bottom: 0; margin-bottom: var(--space-2); }
 	.pf-time.vel .v { font-size: var(--text-sm); }
-	/* Ontbrekend materiaal is geen storing maar wel een gat: dezelfde gedempte
-	   tint als de labels, zodat het leest als "hier hoort nog iets" en niet als
-	   een materiaal dat "niet ingevuld" heet. */
+	/* A missing material is not a fault but is a gap: the same muted tone as the
+	   labels, so that it reads as "something still belongs here" and not as a material
+	   called "not filled in". */
 	.pf-time.vel.onbekend .v { color: var(--text-2); font-style: italic; }
 	.pf-check {
 		margin: var(--space-3) 0;
@@ -1299,8 +1294,8 @@
 		color: var(--text-1);
 	}
 	.pf-check li { padding: 1px 0; }
-	/* De rand van de pre-flight is neutraal; bij "niets te doen" mag hij het
-	   zeggen zonder alarm te slaan — dit is geen storing, alleen een lege bak. */
+	/* The pre-flight's border is neutral; on "nothing to do" it may say so without
+	   raising an alarm — this is not a fault, only an empty tray. */
 	.preflight.niets { border-color: var(--warn); }
 	.pf-leeg { margin-bottom: var(--space-3); }
 	.pf-leeg strong {
@@ -1351,15 +1346,15 @@
 	}
 	.pad {
 		display: grid;
-		/* Vier kolommen; de vijfde bestaat alleen als er een Z-as is, anders
-		   staat er een lege kolom ruimte in te nemen. */
+		/* Four columns; the fifth exists only when there is a Z axis, otherwise an
+		   empty column sits there taking up room. */
 		grid-template-columns: repeat(4, 40px);
 		grid-template-rows: repeat(2, 34px);
 		gap: 4px;
 		margin: var(--space-2) 0;
 	}
-	/* Expliciet plaatsen: met impliciete plaatsing schoof ↓ naar de eerste
-	   kolom in plaats van onder ↑. */
+	/* Placed explicitly: with implicit placement ↓ slid into the first column instead
+	   of below ↑. */
 	.pad .up { grid-area: 1 / 2; }
 	.pad .left { grid-area: 2 / 1; }
 	.pad .down { grid-area: 2 / 2; }
@@ -1368,7 +1363,7 @@
 	.pad.metz { grid-template-columns: repeat(5, 40px); }
 	.pad .zup { grid-area: 1 / 5; }
 	.pad .zdown { grid-area: 2 / 5; }
-	/* De Z-knoppen dragen een letter én een pijl; dat past niet op 15px. */
+	/* The Z buttons carry a letter *and* an arrow; that does not fit at 15px. */
 	.pad .zup, .pad .zdown { font-size: var(--text-xs); }
 	.jog {
 		padding: 8px 0;
@@ -1378,8 +1373,8 @@
 		font-weight: 500;
 	}
 	.jog:hover:not(:disabled) { background: var(--surface-2); }
-	/* Uitgeschakeld moet je zíen. Deze knoppen waren wel geblokkeerd maar zagen
-	   er identiek uit, dus bleef je erop drukken en gebeurde er niets. */
+	/* Disabled has to be *visible*. These buttons were blocked but looked identical, so
+	   you kept pressing them and nothing happened. */
 	.jog:disabled { opacity: 0.4; cursor: not-allowed; }
 	.rot:disabled { opacity: 0.4; cursor: not-allowed; }
 	.jog.home { font-size: var(--text-xs); }
@@ -1391,10 +1386,10 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
-	/* Zelfde sluimerstand als in de bovenbalk: herkenbaar als de stopknop
-	   (rode rand, rood vierkant) zonder de hele dag alarm te slaan. */
-	/* Dezelfde dode staat als in de bovenbalk: onderbroken rand, geen rood, en
-	   leesbaar — de tekst ís hier het bericht, dus die mag niet vervagen. */
+	/* The same resting state as in the top bar: recognisable as the stop button (red
+	   border, red square) without raising an alarm all day. */
+	/* The same dead state as in the top bar: dashed border, no red, and readable — here
+	   the text *is* the message, so it must not fade. */
 	.btn.danger.dood {
 		background: transparent;
 		border: 1px dashed color-mix(in srgb, var(--text-2) 55%, transparent);
@@ -1407,10 +1402,10 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	/* ── Het voortgangsblok ─────────────────────────────────────────────────
-	   Wat er nú aan de hand is, bovenaan het paneel. De maten zijn ruim: dit is
-	   het blok waar je vanaf twee meter naar kijkt terwijl je bij de machine
-	   staat, niet iets wat je van dichtbij afleest. */
+	/* ── The progress block ───────────────────────────────────────────────────
+	   What is going on *now*, at the top of the panel. The sizes are generous: this is
+	   the block you look at from two metres away while standing at the machine, not
+	   something you read from close up. */
 	.nu {
 		display: flex;
 		flex-direction: column;
@@ -1420,9 +1415,9 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-1);
 	}
-	/* Alleen een lopende job krijgt het accent. Een gepauzeerde krijgt de
-	   waarschuwingskleur, want stilstaan met werk in de machine is een toestand
-	   waar je iets mee moet. */
+	/* Only a running job gets the accent. A paused one gets the warning colour, because
+	   standing still with work in the machine is a state you have to do something
+	   about. */
 	.nu.brandt { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 	.nu.pauze { border-color: color-mix(in srgb, var(--warn-solid) 55%, var(--line)); }
 	.nu-kop {
@@ -1468,8 +1463,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	/* Het percentage is het getal dat je van een afstand leest; de rest is
-	   bijschrift. */
+	/* The percentage is the number you read from a distance; the rest is caption. */
 	.nu-pct {
 		font-size: var(--text-lg);
 		font-weight: 600;
@@ -1498,7 +1492,7 @@
 		gap: var(--space-2);
 		margin-top: var(--space-1);
 	}
-	/* Stoppen houdt afstand van pauze: een mistik kost hier het werkstuk. */
+	/* Stop keeps its distance from pause: a mis-tap here costs the workpiece. */
 	.nu-rek { flex: 1; min-width: var(--space-6); }
 	.nu-acties .btn { min-height: 40px; padding: 0 var(--space-4); }
 	.wachtrij { align-self: flex-start; }
@@ -1533,10 +1527,10 @@
 		font-weight: 400;
 	}
 
-	/* De knoppenbalk plakt onderaan het paneel: de kolom is langer dan het paneel
-	   en de primaire handeling mag nooit onder de vouw staan. Negatieve marges om
-	   de padding van `.panel-scroll` heen, zodat de balk van rand tot rand loopt
-	   en er niets onderdoor te zien is. */
+	/* The button bar sticks to the bottom of the panel: the column is longer than the
+	   panel and the primary action must never sit below the fold. Negative margins
+	   around `.panel-scroll`'s padding, so the bar runs edge to edge and nothing shows
+	   underneath it. */
 	.pf-plak {
 		position: sticky;
 		bottom: calc(-1 * var(--space-4));
@@ -1548,13 +1542,13 @@
 		background: var(--surface-1);
 		border-top: 1px solid var(--line);
 	}
-	/* De hulpknop houdt zijn woord op één regel; de primaire krijgt de rest.
-	   Met `flex: 1` op beide brak "Kader tonen" over twee regels en werd de rij
+	/* The secondary button keeps its word on one line; the primary gets the rest. With
+	   `flex: 1` on both, "Show frame" broke over two lines and the row became
 	   twee keer zo hoog. */
 	.pf-plak .btn { flex: none; white-space: nowrap; }
 	.pf-plak .btn.primary { flex: 1; }
 
-	/* De startknop zegt wat hij gaat doen, met de tijd erin. */
+	/* The start button says what it is going to do, with the time in it. */
 	.btn.groot { min-height: 44px; font-size: var(--text-md); }
 	.pf-startmaat {
 		margin-left: 6px;
@@ -1570,15 +1564,15 @@
 		color: var(--text-2);
 		line-height: 1.5;
 	}
-	/* Vier regels over toetsen op een scherm zonder toetsenbord is de duurste
-	   ruimte van de app vullen met iets wat je daar niet kunt doen. Op tablet
-	   staat de bediening bovendien in de balk en is dit paneel al vooral proza.
-	   Een tablet met een los toetsenbord houdt de sneltoets — hij staat nog in
-	   de tooltip van de knop, en hij werkt gewoon. */
+	/* Four lines about keys on a screen without a keyboard is filling the app's most
+	   expensive space with something you cannot do there. On a tablet the controls are
+	   in the bar as well and this panel is already mostly prose. A tablet with a
+	   separate keyboard keeps the shortcut — it is still in the button's tooltip, and
+	   it simply works. */
 	@media (pointer: coarse) {
 		.toetsen { display: none; }
 	}
-	/* Naar een point springen, naast de richtingsknoppen erboven. */
+	/* Jumping to a point, beside the direction buttons above. */
 	.punten { margin-top: var(--space-3); }
 	.puntrij {
 		display: flex;
@@ -1586,8 +1580,8 @@
 		gap: var(--space-2);
 		margin: var(--space-2) 0;
 	}
-	/* Naam en kruisje zijn één ding met twee doelen; de naad ertussen is een
-	   haarlijn, zodat het als één chip leest en niet als twee losse knopjes. */
+	/* Name and cross are one thing with two targets; the seam between them is a
+	   hairline, so it reads as one chip and not as two loose buttons. */
 	.plek { display: inline-flex; }
 	.plek .naam { border-radius: var(--radius-field) 0 0 var(--radius-field); }
 	.plek .weg {
@@ -1597,17 +1591,17 @@
 		color: var(--text-2);
 	}
 	.plek .weg:hover { color: var(--danger); }
-	/* Op een aanraakscherm is een kruisje van 20px een vergissing die wacht om
-	   te gebeuren: één misgeprikte tik en je bewaarde positie is weg. Het is
-	   herstelbaar (naartoe joggen, opnieuw bewaren) en daarom geen bevestiging
-	   waard, maar het doel mag wel de handschoenmaat halen. */
+	/* On a touch screen a 20px cross is a mistake waiting to happen: one mis-aimed tap
+	   and your saved position is gone. It is
+	   recoverable (jog there, save again) and therefore not worth a confirmation, but
+	   the target may well be glove-sized. */
 	@media (pointer: coarse) {
 		.plek .naam,
 		.plek .weg { min-height: 44px; }
 		.plek .weg { padding: 0 var(--space-3); }
 	}
-	/* Gedempt en een maat kleiner: de naam is waar je op mikt, de coördinaten
-	   zijn de bevestiging dat het de juiste plek is. */
+	/* Muted and a size smaller: the name is what you aim at, the coordinates are the
+	   confirmation that it is the right place. */
 	.coord { color: var(--text-2); margin-left: var(--space-1h); }
 	.bewaarrij {
 		display: flex;
@@ -1615,11 +1609,11 @@
 		gap: var(--space-2);
 		align-items: center;
 	}
-	/* ── Het nulpunt (gat J12) ─────────────────────────────────────────────────
-	   Een eigen blokje met een rustige rand eromheen: dit is een stand die aan
-	   of uit staat en die je werk verplaatst. Zonder omlijsting leest het als
-	   nóg een rij knoppen tussen de bewaarde plekken, en dan zie je niet dát er
-	   iets aan staat. */
+	/* ── The zero point (gap J12) ─────────────────────────────────────────────
+	   A little block of its own with a calm border around it: this is a state that is
+	   on or off and that moves your work. Without the frame it reads as yet another row
+	   of buttons among the saved places, and then you do not see that something is
+	   on. */
 	.nulpunt {
 		margin-top: var(--space-3);
 		padding: var(--space-2h) var(--space-3);
@@ -1627,9 +1621,9 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	/* Staat er een nulpunt, dan draagt de linkerrand dat — zodat je het aan de
-	   rand van je oog ziet zonder de tekst te lezen. In het accent en niet in
-	   een waarschuwingskleur: dit is niet gevaarlijk, het is aan. */
+	/* When a zero point is set, the left border carries that — so you see it at the
+	   edge of your eye without reading the text. In the accent and not in a warning
+	   colour: this is not dangerous, it is on. */
 	.nulpunt.gezet {
 		border-left: 3px solid var(--accent);
 	}
@@ -1663,14 +1657,14 @@
 		gap: var(--space-1h);
 		margin-top: var(--space-1h);
 	}
-	/* Vijf knoppen op één regel in een paneel van 280 px: elk mag krimpen, maar
-	   de tekst blijft op de typeschaal — alleen de lucht eromheen gaat eraf. */
+	/* Five buttons on one row in a 280 px panel: each may shrink, but the text stays on
+	   the type scale — only the air around it comes off. */
 	.stel {
 		flex: 1;
 		min-width: 0;
 		padding: 4px 2px;
-		/* Getallen in mono: deze knoppen staan naast elkaar en verspringen
-		   anders in breedte zodra +1% een +10% wordt. */
+		/* Numbers in mono: these buttons sit beside each other and otherwise jump in
+		   width as soon as +1% becomes +10%. */
 		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 	}
