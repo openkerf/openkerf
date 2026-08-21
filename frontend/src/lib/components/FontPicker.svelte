@@ -1,27 +1,29 @@
 <script lang="ts">
 	/**
-	 * Een lettertype kiezen, met voorbeeld in de letter zelf.
+	 * Choosing a typeface, with a preview in the typeface itself.
 	 *
-	 * Stond in `TextDialog`. De boogtekstgenerator maakt dezelfde tekst met
-	 * dezelfde engine en kon er géén letter bij kiezen — hij kreeg altijd de
-	 * standaard. Een tweede keuzemechanisme bouwen zou betekenen dat dezelfde
-	 * lijst op twee plekken uiteen kan gaan lopen (en de importknop maar op één
-	 * ervan zit), dus is dit één component die beide vensters gebruiken.
+	 * This lived in `TextDialog`. The arc text generator makes the same text with the same
+	 * engine and could *not* choose a typeface for it — it always got the default.
+	 * Building a second choice mechanism would mean the same list can drift apart in two
+	 * places (and the import button only sits on one of them), so this is one component
+	 * both dialogs use.
 	 */
+
+	import { t } from '$lib/i18n/index.svelte';
 
 	type Font = { file: string; name: string };
 
 	let {
 		font = $bindable(''),
 		/**
-		 * De leesbare naam van de gekozen letter. `font` is het bestand, en dat
-		 * is bij systeemlettertypen een heel pad — "/System/Library/Fonts/Apple
-		 * Braille" is geen antwoord op "welke letter staat er nu".
+		 * The readable name of the chosen typeface. `font` is the file, and for system
+		 * fonts that is a whole path — "/System/Library/Fonts/Apple Braille" is no answer
+		 * to "which typeface is set now".
 		 */
 		fontName = $bindable(''),
-		/** Waarmee de proefregel gevuld wordt: liever je eigen tekst. */
+		/** What the sample line is filled with: preferably your own text. */
 		sample = '',
-		/** Bij bewerken: de letter die er nu op staat. */
+		/** When editing: the typeface it currently carries. */
 		current = null
 	}: {
 		font?: string;
@@ -30,15 +32,15 @@
 		current?: string | null;
 	} = $props();
 
-	function kies(item: { file: string; name: string } | null) {
+	function pick(item: { file: string; name: string } | null) {
 		font = item?.file ?? '';
 		fontName = item?.name ?? '';
 	}
 
 	let fonts = $state<Font[]>([]);
 	let filter = $state('');
-	// Eigen lettertypen: de engine leest alleen .ttf en houdt zijn lijst in een
-	// cache, dus een net geïnstalleerde .otf is onzichtbaar tot je hem importeert.
+	// Your own typefaces: the engine only reads .ttf and keeps its list in a cache, so a
+	// freshly installed .otf is invisible until you import it.
 	let importing = $state(false);
 	let importable = $state<Font[]>([]);
 	let importFilter = $state('');
@@ -74,12 +76,12 @@
 			});
 			if (!response.ok) {
 				importError =
-					(await response.json().catch(() => null))?.detail ?? 'Importeren mislukte.';
+					(await response.json().catch(() => null))?.detail ?? t('error.importFailed');
 				return;
 			}
 			const added = await response.json();
 			await loadFonts(true);
-			kies(added);
+			pick(added);
 			importable = importable.filter((f) => f.file !== item.file);
 			importing = false;
 		} finally {
@@ -101,8 +103,8 @@
 			: fonts
 	);
 
-	// Alleen wat in beeld staat krijgt een voorbeeld: 200 webfonts laden om een
-	// lijst te tonen is niet nodig, en .shx/.jhf kan een browser toch niet.
+	// Only what is on screen gets a preview: loading 200 web fonts to show a list is
+	// unnecessary, and a browser cannot handle .shx/.jhf anyway.
 	const PREVIEWABLE = /\.(ttf|otf|woff2?)$/i;
 	let familie = $derived(
 		new Map(
@@ -115,8 +117,8 @@
 	let faces = $derived(
 		[...familie]
 			.map(
-				([file, naam]) =>
-					`@font-face{font-family:"${naam}";src:url("/api/design/fonts/file?name=${encodeURIComponent(file)}");font-display:swap;}`
+				([file, name]) =>
+					`@font-face{font-family:"${name}";src:url("/api/design/fonts/file?name=${encodeURIComponent(file)}");font-display:swap;}`
 			)
 			.join('')
 	);
@@ -124,21 +126,23 @@
 
 <label class="field">
 	<span>
-		Lettertype ({fonts.length} beschikbaar){current ? ` — nu: ${current}` : ''}
+		{current
+			? t('font.label.current', { n: fonts.length, current })
+			: t('font.label', { n: fonts.length })}
 	</span>
-	<input type="search" bind:value={filter} placeholder="Zoek een lettertype…" />
+	<input type="search" bind:value={filter} placeholder={t('font.search')} />
 </label>
 <!-- svelte-ignore -->
 {@html `<style>${faces}</style>`}
-<div class="fonts" role="listbox" aria-label="Lettertype">
+<div class="fonts" role="listbox" aria-label={t('font.listAria')}>
 	<button
 		class="font"
 		role="option"
 		aria-selected={font === ''}
 		class:picked={font === ''}
-		onclick={() => kies(null)}
+		onclick={() => pick(null)}
 	>
-		<span class="naam">Standaard</span>
+		<span class="name">{t('font.default')}</span>
 	</button>
 	{#each shown.slice(0, 60) as item (item.file)}
 		<button
@@ -146,45 +150,45 @@
 			role="option"
 			aria-selected={font === item.file}
 			class:picked={font === item.file}
-			onclick={() => kies(item)}
+			onclick={() => pick(item)}
 		>
 			<!--
-				Links de naam in het interfacelettertype, rechts het voorbeeld in
-				de letter zelf. Ze stonden allebei in de letter, en dan is een
-				lettertype zonder leesbaar latijns alfabet — Aurebesh, Wingdings,
-				een symbolenset — niet meer te vinden: je leest de naam niet en
-				het voorbeeld ook niet. De naam is de sleutel om iets terug te
-				vinden, het voorbeeld is waar je op kiest; die twee taken
-				verdragen niet hetzelfde lettertype.
+				The name on the left in the interface font, the sample on the right in the
+				font itself. They both used to be in the font, and then a font without a
+				readable Latin alphabet — Aurebesh, Wingdings, a symbol set — can no longer
+				be found: you cannot read the name and you cannot read the sample either.
+				The name is the key to finding something back, the sample is what you choose
+				on; those two tasks do not tolerate the same font.
 			-->
-			<span class="naam">{item.name}</span>
+			<span class="name">{item.name}</span>
 			<span class="proef" style={familie.has(item.file) ? `font-family: "${familie.get(item.file)}", var(--font-ui)` : ''}
-				>{sample.trim().slice(0, 18) || 'Handgemaakt 123'}</span>
+				>{sample.trim().slice(0, 18) || t('font.sample')}</span>
 		</button>
 	{/each}
 	{#if shown.length > 60}
-		<p class="note">Nog {shown.length - 60} andere — typ om te zoeken.</p>
+		<p class="note">{t('font.more', { n: shown.length - 60 })}</p>
 	{/if}
 </div>
 
 <div class="import">
 	<button class="link" onclick={openImport}>
-		{importing ? 'Importeren sluiten' : 'Lettertype niet in de lijst?'}
+		{importing ? t('font.import.close') : t('font.import.open')}
 	</button>
 	{#if importing}
-		<p class="note">
-			De engine leest alleen <code>.ttf</code>. Deze staan wél op je computer maar
-			worden niet gezien; importeren maakt er een bruikbare kopie van.
-		</p>
-		<input type="search" bind:value={importFilter} placeholder="Zoek in {importable.length} lettertypen…" />
+		<p class="note">{t('font.import.why')}</p>
+		<input
+			type="search"
+			bind:value={importFilter}
+			placeholder={t('font.import.search', { n: importable.length })}
+		/>
 		{#if importError}<p class="err">{importError}</p>{/if}
 		<div class="fonts">
 			{#each shownImportable as item (item.file)}
 				<button class="font" disabled={busy !== null} onclick={() => bring(item)}>
-					{busy === item.file ? 'bezig…' : item.name}
+					{busy === item.file ? t('common.busy') : item.name}
 				</button>
 			{:else}
-				<span class="note">Niets gevonden dat nog ontbreekt.</span>
+				<span class="note">{t('font.import.nothing')}</span>
 			{/each}
 		</div>
 	{/if}
@@ -231,12 +235,12 @@
 		color: var(--text-1);
 		text-align: left;
 	}
-	/* Nadrukkelijk het interfacelettertype: de naam is de sleutel waarmee je
-	   een letter terugvindt en moet dus altijd leesbaar zijn. */
-	.font .naam {
+	/* Emphatically the interface typeface: the name is the key by which you find a
+	   typeface again and therefore has to stay readable. */
+	.font .name {
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
-		/* Een lange naam mag het voorbeeld niet van de rij duwen. */
+		/* A long name must not push the preview off the row. */
 		flex: 0 1 auto;
 		min-width: 0;
 		white-space: nowrap;

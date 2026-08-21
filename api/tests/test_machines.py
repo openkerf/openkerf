@@ -222,8 +222,8 @@ def test_bed_change_is_visible_in_the_status_snapshot(kernel, client):
 
 # ===================================================== detectie (besluit B6) ==
 #
-# De belofte van B6 is niet "hij vindt machines" maar "zoeken is lezen". Die
-# belofte is een gedragsafspraak, en gedragsafspraken die niemand test slijten.
+# B6's promise is not "it finds machines" but "searching is reading". That promise is an
+# agreement about behaviour, and agreements about behaviour nobody tests wear away.
 
 
 class FakeSerialPort:
@@ -262,7 +262,7 @@ def _no_network(monkeypatch, scanner):
 # ------------------------------------------------------- zoeken is lezen
 
 def test_scanning_creates_no_machine(kernel, client):
-    """De harde randvoorwaarde uit B6, en de reden dat dit een GET is."""
+    """The hard precondition from B6, and the reason this is a GET."""
     before = {device.path for device in kernel.services("device")}
     active = kernel.device.path
 
@@ -271,15 +271,15 @@ def test_scanning_creates_no_machine(kernel, client):
     assert response.status_code == 200
     assert {device.path for device in kernel.services("device")} == before
     assert kernel.device.path == active
-    # En niets is stiekem als "door een mens ingesteld" gestempeld.
+    # And nothing has been sneakily stamped as "set up by a human".
     assert not any(m["configured"] for m in client.get("/api/machines").json())
 
 
 def test_scan_route_carries_no_write_guard_because_it_only_reads(client):
     """
-    Een scan die zou kunnen schrijven, hoort achter het slot. Deze test legt
-    de andere kant vast: hij staat er niet achter, dus hij mag ook nooit iets
-    veranderen. Verandert dat, dan verandert deze test mee — bewust.
+    A scan that could write belongs behind the lock. This test records the other side: it is
+    not behind it, so it must never change anything. If that changes, this test changes with
+    it — deliberately.
     """
     routes = [r for r in client.app.routes if getattr(r, "path", "") == "/api/machines/scan"]
     assert routes, "de scanroute bestaat"
@@ -291,9 +291,8 @@ def test_scan_route_carries_no_write_guard_because_it_only_reads(client):
 
 def test_scanner_does_not_need_a_kernel_at_all(manager):
     """
-    De scanner krijgt de catalogus als data mee en heeft geen kernel. Daarmee
-    is 'hij kan niets aanmaken' geen belofte in een comment maar een feit van
-    de constructie.
+    The scanner is handed the catalogue as data and has no kernel. That makes 'it cannot
+    create anything' not a promise in a comment but a fact of the construction.
     """
     scanner = MachineScanner(manager.catalog())
     assert not hasattr(scanner, "kernel")
@@ -317,12 +316,12 @@ def test_serial_signature_becomes_a_candidate_with_its_port(monkeypatch, scanner
     assert found["where"] == "/dev/cu.usbserial-1420"
     assert found["settings"]["serial_port"] == "/dev/cu.usbserial-1420"
     assert "ruida-beta" in [s["key"] for s in found["suggestions"]]
-    # Een FTDI-chip is geen bewijs van een Ruida; dat moet het scherm ook zeggen.
+    # An FTDI chip is no proof of a Ruida; the screen has to say so too.
     assert found["confidence"] == "onzeker"
 
 
 def test_unknown_serial_adapter_is_not_proposed(monkeypatch, scanner):
-    """Een bluetoothpoort is geen laser. Raden waar we niets weten is erger dan zwijgen."""
+    """A bluetooth port is not a laser. Guessing where we know nothing is worse than keeping quiet."""
     _no_usb(monkeypatch, scanner)
     _no_network(monkeypatch, scanner)
     monkeypatch.setattr(
@@ -347,8 +346,8 @@ def test_usb_signature_is_recognised(monkeypatch, scanner):
 
 def test_a_suggestion_for_a_missing_plugin_is_dropped(monkeypatch):
     """
-    De testkernel laadt geen GRBL. Een voorstel voor `grbl-generic` zou dan een
-    knop opleveren die met een 409 eindigt; die filteren we eruit.
+    The test kernel does not load GRBL. A proposal for `grbl-generic` would then produce a
+    button that ends in a 409; we filter those out.
     """
     scanner = MachineScanner([])  # lege catalogus: niets is bekend
     _no_usb(monkeypatch, scanner)
@@ -383,9 +382,8 @@ def test_usb_without_permission_is_a_note_not_a_crash(monkeypatch, scanner):
 
 def test_the_ruida_probe_is_the_engines_own_enquiry():
     """
-    We verzinnen geen eigen pakket voor een machine die kan bewegen. Dit is
-    ENQ met de swizzle en checksum van de engine: dezelfde vraag die de driver
-    bij elk verbinden stelt.
+    We do not invent a packet of our own for a machine that can move. This is ENQ with the
+    engine's swizzle and checksum: the same question the driver asks on every connect.
     """
     from meerk40t.ruida.rdjob import ENQ, encode_bytes
 
@@ -398,7 +396,7 @@ def test_the_ruida_probe_is_the_engines_own_enquiry():
 
 
 def test_network_scan_reports_a_host_that_answers(monkeypatch, scanner):
-    """Een antwoordend adres komt terug als voorstel, met adres en interface ingevuld."""
+    """An address that answers comes back as a proposal, with the address and interface filled in."""
     import ipaddress
 
     monkeypatch.setattr(
@@ -441,8 +439,8 @@ def test_network_scan_reports_a_host_that_answers(monkeypatch, scanner):
 
 def test_a_busy_listen_port_becomes_a_readable_note(monkeypatch, scanner):
     """
-    Poort 40200 is niet configureerbaar. Is hij bezet, dan is dat een uitleg
-    aan de gebruiker, geen stacktrace.
+    Port 40200 is not configurable. If it is taken, that is an explanation for the
+    user, not a stack trace.
     """
     import ipaddress
 
@@ -454,15 +452,15 @@ def test_a_busy_listen_port_becomes_a_readable_note(monkeypatch, scanner):
         try:
             blocker.bind(("", RUIDA_LISTEN_PORT))
         except OSError:
-            # Er draait al een OpenKerf met een verbonden Ruida: die houdt deze
-            # poort vast. Dan is de toestand die deze test nabouwt gewoon echt,
-            # en hoeft hij niet als eigen fout te verschijnen.
-            pytest.skip(f"poort {RUIDA_LISTEN_PORT} is al bezet buiten deze test")
+            # An OpenKerf with a connected Ruida is already running: that holds
+            # this port. Then the state this test rebuilds is simply real, and it
+            # need not appear as a failure of its own.
+            pytest.skip(f"port {RUIDA_LISTEN_PORT} is already taken outside this test")
         original = socket.socket
 
         class Exclusive(original):
             def setsockopt(self, *a):
-                pass  # zonder SO_REUSEADDR botst de bind écht
+                pass  # without SO_REUSEADDR the bind really does clash
 
         monkeypatch.setattr(socket, "socket", Exclusive)
         result = scanner._scan_network(notes, [], seconds=0.5)
@@ -472,27 +470,27 @@ def test_a_busy_listen_port_becomes_a_readable_note(monkeypatch, scanner):
 
 
 def test_network_scan_is_time_boxed():
-    """Een scan die minuten hangt, is in de praktijk de scan die je afbreekt."""
+    """A scan that hangs for minutes is in practice the scan you abort."""
     assert MachineScanner.MAX_SECONDS <= 6.0
 
 
 def test_nothing_found_still_says_where_it_looked(monkeypatch, client):
     """
-    De vaakst voorkomende uitkomst. Het antwoord moet dan nog steeds vertellen
-    waar gekeken is — anders is 'niets gevonden' niet te vertrouwen.
+    The most common outcome. The answer then still has to say where it looked —
+    otherwise 'nothing found' cannot be trusted.
     """
     result = client.get("/api/machines/scan?network=false").json()
 
     assert "candidates" in result
-    assert result["searched"], "er is ergens gekeken"
+    assert result["searched"], "it looked somewhere"
     assert isinstance(result["duration_ms"], int)
 
 
-# --------------------------- een machineprofiel uitwisselen (gat E5)
+# ------------------------- exchanging a machine profile (gap E5)
 
 
 def _ruida(client):
-    """Een Ruida, want die heeft een interface en een adres om mee te nemen."""
+    """A Ruida, because that has an interface and an address to take along."""
     return client.post(
         "/api/machines", json={"info": "ruida-beta", "label": "5030 Ruida"}
     ).json()
@@ -505,14 +503,14 @@ def test_a_profile_carries_the_type_and_the_settings(client):
         json={"bedwidth": "600mm", "bedheight": "400mm"},
     )
 
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
 
-    assert profiel["format"] == "openkerf-machine"
-    assert profiel["machine"]["info"] == "ruida-beta"
-    assert profiel["machine"]["label"] == "5030 Ruida"
-    assert profiel["machine"]["settings"]["bedwidth"] == "600mm"
+    assert profile["format"] == "openkerf-machine"
+    assert profile["machine"]["info"] == "ruida-beta"
+    assert profile["machine"]["label"] == "5030 Ruida"
+    assert profile["machine"]["settings"]["bedwidth"] == "600mm"
 
 
 def test_the_export_is_offered_as_a_file(client):
@@ -526,75 +524,75 @@ def test_the_export_is_offered_as_a_file(client):
 
 def test_a_profile_recreates_the_machine_elsewhere(client, kernel):
     """
-    Wie een tweede computer inricht, typt nu niets over. Dat is de hele reden
-    van E5: LightBurn levert `.lbdev`, wij dit.
+    Anybody setting up a second computer now types nothing over. That is the whole
+    reason for E5: LightBurn delivers `.lbdev`, we deliver this.
     """
     machine = _ruida(client)
     client.patch(
         f"/api/machines/{machine['path']}/settings",
         json={"bedwidth": "600mm", "bedheight": "400mm"},
     )
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
     client.delete(f"/api/machines/{machine['path']}")
 
-    binnen = client.post(
+    uploaded = client.post(
         "/api/machines/import/upload",
-        files={"file": ("5030.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("5030.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
 
-    assert binnen["known"] is True
-    assert binnen["essential"]["bedwidth"] == "600mm"
+    assert uploaded["known"] is True
+    assert uploaded["essential"]["bedwidth"] == "600mm"
 
-    gemaakt = client.post(
-        "/api/machines/import", json={"profile": binnen["profile"]}
+    created = client.post(
+        "/api/machines/import", json={"profile": uploaded["profile"]}
     ).json()
 
-    settings = client.get(f"/api/machines/{gemaakt['path']}/settings").json()
-    waarden = {
-        veld["attr"]: veld["value"] for blad in settings for veld in blad["fields"]
+    settings = client.get(f"/api/machines/{created['path']}/settings").json()
+    values = {
+        field["attr"]: field["value"] for sheet in settings for field in sheet["fields"]
     }
-    assert waarden["bedwidth"] == "600mm"
-    assert waarden["bedheight"] == "400mm"
-    assert gemaakt["applied"] > 0
+    assert values["bedwidth"] == "600mm"
+    assert values["bedheight"] == "400mm"
+    assert created["applied"] > 0
 
 
 def test_the_preview_names_what_is_local_to_this_bench(client):
     """
-    Het IP-adres van déze controller is het eerste dat elders niet klopt. Het
-    gaat mee, maar het voorbeeld noemt het apart.
+    The IP address of *this* controller is the first thing that is wrong
+    elsewhere. It comes along, but the preview names it separately.
     """
     machine = _ruida(client)
     client.patch(
         f"/api/machines/{machine['path']}/settings", json={"address": "192.168.1.55"}
     )
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
 
-    voorbeeld = client.post(
+    preview = client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
 
-    assert voorbeeld["local"]["address"] == "192.168.1.55"
+    assert preview["local"]["address"] == "192.168.1.55"
 
 
 def test_importing_creates_nothing_before_you_say_so(client):
-    """Uploaden is kijken. Een profiel dat je nog niet accepteerde, bestaat niet."""
+    """Uploading is looking. A profile you have not accepted yet does not exist."""
     machine = _ruida(client)
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
-    voor = len(client.get("/api/machines").json())
+    before = len(client.get("/api/machines").json())
 
     client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     )
 
-    assert len(client.get("/api/machines").json()) == voor
+    assert len(client.get("/api/machines").json()) == before
 
 
 def test_something_that_is_not_a_profile_is_refused(client):
@@ -614,97 +612,96 @@ def test_a_profile_from_the_future_is_refused(manager):
 
 def test_settings_this_engine_does_not_know_are_skipped_not_fatal(client):
     """
-    Een profiel uit een nieuwere MeerK40t hoort je inrichting niet te blokkeren
-    om één instelling die hier niet bestaat.
+    A profile from a newer MeerK40t should not block your setup over one setting
+    that does not exist here.
     """
     machine = _ruida(client)
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
-    profiel["machine"]["settings"]["iets_van_later"] = 1
+    profile["machine"]["settings"]["something_from_later"] = 1
     client.delete(f"/api/machines/{machine['path']}")
 
-    binnen = client.post(
+    uploaded = client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
-    gemaakt = client.post(
-        "/api/machines/import", json={"profile": binnen["profile"]}
+    created = client.post(
+        "/api/machines/import", json={"profile": uploaded["profile"]}
     ).json()
 
-    assert gemaakt["skipped"] == ["iets_van_later"]
-    assert gemaakt["path"]
+    assert created["skipped"] == ["something_from_later"]
+    assert created["path"]
 
 
 def test_an_imported_machine_can_be_exported_again(client):
-    """De rondgang: wat eruit komt, gaat er ook weer in."""
+    """The round trip: what comes out goes back in again."""
     machine = _ruida(client)
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
-    binnen = client.post(
+    uploaded = client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
-    gemaakt = client.post(
-        "/api/machines/import", json={"profile": binnen["profile"], "label": "Kopie"}
-    ).json()
-
-    opnieuw = client.get(
-        f"/api/machines/{gemaakt['path']}/export.openkerf-machine"
+    created = client.post(
+        "/api/machines/import", json={"profile": uploaded["profile"], "label": "Copy"}
     ).json()
 
-    assert opnieuw["machine"]["info"] == profiel["machine"]["info"]
-    assert opnieuw["machine"]["label"] == "Kopie"
+    again = client.get(
+        f"/api/machines/{created['path']}/export.openkerf-machine"
+    ).json()
+
+    assert again["machine"]["info"] == profile["machine"]["info"]
+    assert again["machine"]["label"] == "Copy"
 
 
 def test_a_setting_also_emits_the_signals_it_declares(kernel):
     """
-    Een instelling mag zeggen welke signalen erbij horen, en die horen mee.
+    A setting may say which signals belong with it, and those have to come along.
 
-    De engine kent daar een afspraak voor: een keuze draagt een `signals`-sleutel
-    met de extra signalen die bij een wijziging horen. Wij seinden alleen de
-    naam van de instelling zelf, en dat is precies één signaal te weinig — de
-    grbl-controller luistert bijvoorbeeld op `update_interface` om zijn
-    verbinding opnieuw op te bouwen (`grbl/controller.py:523`), niet op
-    `interface`. Wie in OpenKerf de interface op `mock` zette, kreeg zijn
-    instelling wél opgeslagen maar bleef op de oude verbinding zitten.
+    The engine has a convention for that: a choice carries a `signals` key with the
+    extra signals that belong to a change. We only signalled the name of the
+    setting itself, and that is exactly one signal too few — the grbl controller,
+    for instance, listens on `update_interface` to rebuild its connection
+    (`grbl/controller.py:523`), not on `interface`. Anybody setting the interface to
+    `mock` in OpenKerf did get their setting saved but stayed on the old connection.
 
-    Zeven-en-dertig van die declaraties staan in de engine, in elke driver:
-    `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart`. Ze
-    vielen allemaal stil.
+    Thirty-seven of those declarations live in the engine, in every driver:
+    `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart`. They all
+    fell silent.
     """
     manager = MachineManager(kernel)
     device = kernel.device
-    device.proefstand = "aan"
+    device.bench = "aan"
     device.register_choices(
-        "proefstand",
+        "bench",
         [
             {
-                "attr": "proefstand",
+                "attr": "bench",
                 "object": device,
                 "default": "aan",
                 "type": str,
-                "label": "Proefstand",
-                "signals": ("bouw_opnieuw", "en_deze_ook"),
+                "label": "Test bench",
+                "signals": ("rebuild", "and_this_one_too"),
             }
         ],
     )
 
-    gezien = []
-    codes = ("proefstand", "bouw_opnieuw", "en_deze_ook")
-    luisteraars = {
-        code: (lambda origin, *args, code=code: gezien.append(code)) for code in codes
+    seen = []
+    codes = ("bench", "rebuild", "and_this_one_too")
+    listeners = {
+        code: (lambda origin, *args, code=code: seen.append(code)) for code in codes
     }
-    for code, luisteraar in luisteraars.items():
-        kernel.listen(code, luisteraar)
+    for code, listener in listeners.items():
+        kernel.listen(code, listener)
     try:
-        manager.update_settings(device.path, {"proefstand": "uit"})
+        manager.update_settings(device.path, {"bench": "uit"})
         kernel.process_queue()
     finally:
-        for code, luisteraar in luisteraars.items():
-            kernel.unlisten(code, luisteraar)
+        for code, listener in listeners.items():
+            kernel.unlisten(code, listener)
 
-    assert device.proefstand == "uit"
-    assert "proefstand" in gezien
-    assert "bouw_opnieuw" in gezien and "en_deze_ook" in gezien
+    assert device.bench == "uit"
+    assert "bench" in seen
+    assert "rebuild" in seen and "and_this_one_too" in seen

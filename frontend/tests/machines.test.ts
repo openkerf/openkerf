@@ -1,22 +1,22 @@
 /**
- * Eenheidstests voor de soort-indeling van de machinecatalogus.
+ * Unit tests for the kind classification of the machine catalogue.
  *
- * Draaien: `node --test frontend/tests/` — Node strippt de types zelf, en
- * `machines.svelte.ts` heeft geen runtime-imports en geen runes, dus er is geen
- * bundelstap voor nodig.
+ * Run: `node --test frontend/tests/` — Node strips the types itself, and
+ * `machines.svelte.ts` has no runtime imports and no runes, so no bundling step
+ * is needed for it.
  *
- * Waarom dit bestand bestaat: de indeling liep per *familie*, en MeerK40t's
- * familie "K-Series CO2-Laser" bevat naast de Nano-borden ook `ruida-beta`, de
- * enige Ruida in de hele catalogus. Daardoor toonde de soort "CO2 met Ruida of
- * Newly" eenendertig Newly's en nul Ruida's — precies de machine waar OpenKerf
- * zelf voor bedoeld is.
+ * Why this file exists: the classification ran per *family*, and MeerK40t's
+ * family "K-Series CO2-Laser" holds `ruida-beta` beside the Nano boards — the
+ * only Ruida in the whole catalogue. So the kind "CO2 with Ruida or Newly"
+ * showed thirty-one Newlys and zero Ruidas — precisely the machine OpenKerf is
+ * meant for.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { kindOfMachine, KINDS } from '../src/lib/machines.svelte.ts';
 
-/** De catalogus zoals `/api/machines/catalog` hem op 0.9.9040 teruggeeft. */
-const CATALOGUS = [
+/** The catalogue as `/api/machines/catalog` hands it back on 0.9.9040. */
+const CATALOGUE = [
 	{ family: 'K-Series CO2-Laser', key: 'm2-nano', provider: 'provider/device/lhystudios' },
 	{ family: 'K-Series CO2-Laser', key: 'm3-nano', provider: 'provider/device/lhystudios' },
 	{ family: 'K-Series CO2-Laser', key: 'grbl-dlc32-k40-400', provider: 'provider/device/grbl' },
@@ -36,50 +36,50 @@ const CATALOGUS = [
 	{ family: 'Newly CO2-Laser', key: 'g3v8-rabbit', provider: 'provider/device/newly' }
 ];
 
-test('de enige Ruida in de catalogus staat onder "CO2 met Ruida of Newly"', () => {
-	const ruida = CATALOGUS.find((m) => m.key === 'ruida-beta')!;
+test('the only Ruida in the catalogue sits under "CO2 with Ruida or Newly"', () => {
+	const ruida = CATALOGUE.find((m) => m.key === 'ruida-beta')!;
 	assert.equal(kindOfMachine(ruida), 'co2-ruida');
 });
 
-test('de soort die Ruida belooft levert ook minstens één Ruida op', () => {
-	const inSoort = CATALOGUS.filter((m) => kindOfMachine(m) === 'co2-ruida');
+test('the kind that promises Ruida does give at least one Ruida', () => {
+	const inKind = CATALOGUE.filter((m) => kindOfMachine(m) === 'co2-ruida');
 	assert.ok(
-		inSoort.some((m) => m.provider === 'provider/device/ruida'),
-		`geen enkele Ruida in de soort co2-ruida: ${inSoort.map((m) => m.key).join(', ')}`
+		inKind.some((m) => m.provider === 'provider/device/ruida'),
+		`not a single Ruida in the kind co2-ruida: ${inKind.map((m) => m.key).join(', ')}`
 	);
 });
 
-test('de Nano-borden en de GRBL-K40 blijven onder K40', () => {
+test('the Nano boards and the GRBL K40 stay under K40', () => {
 	for (const key of ['m2-nano', 'm3-nano', 'grbl-k40', 'grbl-dlc32-k40-400']) {
-		const m = CATALOGUS.find((x) => x.key === key)!;
+		const m = CATALOGUE.find((x) => x.key === key)!;
 		assert.equal(kindOfMachine(m), 'co2-k40', key);
 	}
 });
 
-test('GRBL buiten een K40-kast blijft diode, Balor blijft galvo, Newly en Moshi blijven CO2', () => {
-	assert.equal(kindOfMachine(CATALOGUS.find((m) => m.key === 'grbl-ortur')!), 'diode');
-	assert.equal(kindOfMachine(CATALOGUS.find((m) => m.key === 'grbl-fluidnc')!), 'diode');
-	assert.equal(kindOfMachine(CATALOGUS.find((m) => m.key === 'balor-uv')!), 'galvo');
-	assert.equal(kindOfMachine(CATALOGUS.find((m) => m.key === 'balor-co2')!), 'galvo');
-	assert.equal(kindOfMachine(CATALOGUS.find((m) => m.key === 'g3v8-amc')!), 'co2-ruida');
-	assert.equal(kindOfMachine(CATALOGUS.find((m) => m.key === 'moshi-co2')!), 'co2-ruida');
+test('GRBL outside a K40 case stays diode, Balor stays galvo, Newly and Moshi stay CO2', () => {
+	assert.equal(kindOfMachine(CATALOGUE.find((m) => m.key === 'grbl-ortur')!), 'diode');
+	assert.equal(kindOfMachine(CATALOGUE.find((m) => m.key === 'grbl-fluidnc')!), 'diode');
+	assert.equal(kindOfMachine(CATALOGUE.find((m) => m.key === 'balor-uv')!), 'galvo');
+	assert.equal(kindOfMachine(CATALOGUE.find((m) => m.key === 'balor-co2')!), 'galvo');
+	assert.equal(kindOfMachine(CATALOGUE.find((m) => m.key === 'g3v8-amc')!), 'co2-ruida');
+	assert.equal(kindOfMachine(CATALOGUE.find((m) => m.key === 'moshi-co2')!), 'co2-ruida');
 });
 
-test('geen enkele machine valt buiten de vier soorten, en elke soort is gevuld', () => {
+test('no machine falls outside the four kinds, and every kind is filled', () => {
 	const ids = new Set(KINDS.map((k) => k.id));
-	const gevuld = new Set<string>();
-	for (const m of CATALOGUS) {
-		const soort = kindOfMachine(m);
-		assert.ok(ids.has(soort), `${m.key} kreeg onbekende soort ${soort}`);
-		gevuld.add(soort);
+	const filled = new Set<string>();
+	for (const m of CATALOGUE) {
+		const kind = kindOfMachine(m);
+		assert.ok(ids.has(kind), `${m.key} got unknown kind ${kind}`);
+		filled.add(kind);
 	}
-	assert.deepEqual([...ids].filter((id) => !gevuld.has(id)), []);
+	assert.deepEqual([...ids].filter((id) => !filled.has(id)), []);
 });
 
-test('een onbekende provider uit een latere upstream valt terug op de naam', () => {
+test('an unknown provider from a later upstream falls back on the name', () => {
 	assert.equal(
-		kindOfMachine({ family: 'Something CO2-Laser', key: 'iets', provider: 'provider/device/xyz' }),
+		kindOfMachine({ family: 'Something CO2-Laser', key: 'something', provider: 'provider/device/xyz' }),
 		'co2-ruida'
 	);
-	assert.equal(kindOfMachine({ family: 'Onbekend', key: 'iets', provider: null }), 'diode');
+	assert.equal(kindOfMachine({ family: 'Unknown', key: 'something', provider: null }), 'diode');
 });

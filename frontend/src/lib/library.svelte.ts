@@ -1,11 +1,13 @@
 /**
- * De lokale materiaalbibliotheek.
+ * The local material library.
  *
- * Alles staat in SQLite naast de instellingen van de engine — geen dienst, geen
- * account. Een preset weet van welke machine hij komt en waar hij vandaan komt
- * (handmatig, geëxtrapoleerd, testraster), want dat bepaalt hoeveel je hem mag
- * vertrouwen.
+ * Everything sits in SQLite beside the engine's own settings — no service, no
+ * account. A preset knows which machine it came from and where it came from
+ * (by hand, extrapolated, test grid), because that determines how far you may
+ * trust it.
  */
+
+import { apiError, t } from './i18n/core.ts';
 
 export type Material = { id: number; name: string; synonyms: string[] };
 
@@ -19,54 +21,54 @@ export type Preset = {
 	speed_mm_s: number;
 	power_percent: number;
 	passes: number;
-	/** Lijnafstand bij rasteren; leeg bij snijden en vectorgraveren (B12). */
+	/** Line spacing when rastering; empty for cutting and vector engraving (B12). */
 	interval_mm?: number | null;
 	air_assist: boolean;
 	focus_offset_mm: number;
 	source: 'handmatig' | 'geextrapoleerd' | 'testraster' | 'geimporteerd';
 	note: string;
-	/** Het raster waar deze preset uit komt, als daar een foto van is. */
+	/** The grid this preset came from, if there is a photo of it. */
 	grid_id: number | null;
 	grid_photo: string | null;
-	/** Wanneer dat raster gebrand is — de datum van het bewijs. */
+	/** When that grid was burned — the date of the evidence. */
 	grid_date?: string | null;
-	/** Welk vakje van dat raster het werd; aanwijsbaar op de foto. */
+	/** Which square of that grid it became; pointable on the photo. */
 	grid_cell?: { row: number; column: number } | null;
 	/**
-	 * Of de foto van dat raster uitgelijnd is. Zo niet, dan valt de markering
-	 * terug op vier standaardhoeken en ligt de omtrek er bij benadering.
+	 * Whether the photo of that grid is aligned. If not, the marker falls back on
+	 * four default corners and the outline is only approximate.
 	 */
 	grid_aligned?: boolean;
-	/** Laatste keer dat deze instelling op een laag gezet is. */
+	/** The last time this setting was put on a layer. */
 	last_used_at?: string | null;
 };
 
 export const OPERATIONS = [
-	{ value: 'snijden', label: 'Snijden' },
-	{ value: 'graveren-vector', label: 'Graveren · vector' },
-	{ value: 'graveren-raster', label: 'Graveren · raster' },
-	{ value: 'markeren', label: 'Markeren' }
+	{ value: 'snijden', label: t('operation.cut') },
+	{ value: 'graveren-vector', label: t('operation.engraveVector') },
+	{ value: 'graveren-raster', label: t('operation.engraveRaster') },
+	{ value: 'markeren', label: t('operation.mark') }
 ];
 
 /**
- * Dezelfde bewerking, zonder middenpunt.
+ * The same operation, without the middle dot.
  *
- * In een keuzelijst leest "Graveren · vector" prima, maar op een kaart waar het
- * middenpunt al de scheiding is tussen dikte en bewerking, krijg je
- * "3 mm · Graveren · vector" en weet je niet meer wat bij wat hoort.
+ * In a dropdown "Engrave · vector" reads fine, but on a card where the middle dot
+ * is already the separator between thickness and operation you get
+ * "3 mm · Engrave · vector" and no longer know what belongs to what.
  */
 export function operationName(value: string): string {
 	const label = OPERATIONS.find((o) => o.value === value)?.label ?? value;
-	const [hoofd, soort] = label.split(' · ');
-	return soort ? `${hoofd} (${soort})` : hoofd;
+	const [main, kind] = label.split(' · ');
+	return kind ? `${main} (${kind})` : main;
 }
 
 /**
- * Welk laagtype bij welke bewerking hoort.
+ * Which layer type belongs to which operation.
  *
- * Een snijpreset op een graveerlaag zetten is geen tikfout maar verbrand
- * materiaal: 12 mm/s op 65% doet iets heel anders dan 250 mm/s op 20%. We
- * blokkeren het niet — soms weet de gebruiker beter — maar we zeggen het wel.
+ * Putting a cut preset on an engrave layer is not a typo but burned material:
+ * 12 mm/s at 65% does something very different from 250 mm/s at 20%. We do not
+ * block it — sometimes the user knows better — but we do say it.
  */
 export const OPERATION_LAYER: Record<string, string[]> = {
 	snijden: ['op cut'],
@@ -76,69 +78,49 @@ export const OPERATION_LAYER: Record<string, string[]> = {
 };
 
 /**
- * Hoe zeker is deze preset?
+ * How certain is this preset?
  *
- * Een badge alleen is te makkelijk over te lezen: twee pillen van dezelfde maat
- * die alleen in kleur en woord verschillen, lezen bij het scrollen als
- * hetzelfde ding. Daarom draagt elke bron ook een vorm (het icoon), een regel
- * die zegt wát het betekent, en — als het risico oplevert — een regel die zegt
- * wat je ermee moet. Kleur is dan het derde signaal, niet het enige.
+ * A badge alone is too easy to read past: two pills of the same size that differ
+ * only in colour and word read as the same thing while scrolling. So every source
+ * also carries a shape (the icon), a line saying what it means, and — where it
+ * involves risk — a line saying what to do about it. Colour is then the third
+ * signal, not the only one.
  */
 export const SOURCE_LABEL: Record<
 	Preset['source'],
 	{ text: string; tone: string; icon: 'check' | 'alert' | 'pen' | 'down'; means: string; advice: string }
 > = {
 	testraster: {
-		text: 'Geverifieerd',
+		text: t('source.verified'),
 		tone: 'ok',
 		icon: 'check',
-		means: 'Gebrand en beoordeeld op een testraster',
+		means: t('source.verified.means'),
 		advice: ''
 	},
 	handmatig: {
-		text: 'Handmatig',
+		text: t('source.manual'),
 		tone: 'neutral',
 		icon: 'pen',
-		means: 'Zelf ingevoerd, niet gemeten',
+		means: t('source.manual.means'),
 		advice: ''
 	},
 	geextrapoleerd: {
-		text: 'Geëxtrapoleerd',
+		text: t('source.extrapolated'),
 		tone: 'warn',
 		icon: 'alert',
-		means: 'Uitgerekend vanaf een andere dikte — nooit gebrand',
-		advice: 'Probeer eerst op restmateriaal; begin lager in vermogen.'
+		means: t('source.extrapolated.means'),
+		advice: t('source.extrapolated.advice')
 	},
 	geimporteerd: {
-		text: 'Geïmporteerd',
+		text: t('source.imported'),
 		tone: 'warn',
 		icon: 'down',
-		means: 'Van iemand anders zijn machine',
-		advice: 'Andere laser, ander resultaat — behandel dit als startwaarde.'
+		means: t('source.imported.means'),
+		advice: t('source.imported.advice')
 	}
 };
 
-/**
- * "Gisteren" in plaats van een tijdstempel.
- *
- * De terugkerende gebruiker zoekt op wanneer, niet op wanneer precies. SQLite
- * schrijft UTC zonder zone-achtervoegsel; zonder de Z erbij leest de browser
- * het als lokale tijd en is alles een paar uur mis.
- */
-export function toen(stamp: string | null | undefined): string {
-	if (!stamp) return '';
-	const tijd = new Date(stamp.includes('T') ? stamp : `${stamp.replace(' ', 'T')}Z`);
-	if (Number.isNaN(tijd.getTime())) return '';
-	const dag = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-	const dagen = Math.round((dag(new Date()) - dag(tijd)) / 86400000);
-	if (dagen <= 0) return 'vandaag';
-	if (dagen === 1) return 'gisteren';
-	if (dagen < 7) return `${dagen} dagen geleden`;
-	if (dagen < 14) return 'vorige week';
-	return tijd.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-/** Twee instellingen die over hetzelfde gaan maar andere getallen dragen. */
+/** Two settings about the same thing that carry different numbers. */
 export type PresetConflict = {
 	material: string;
 	thickness_mm: number | null;
@@ -148,7 +130,7 @@ export type PresetConflict = {
 	theirs: { speed_mm_s: number; power_percent: number; passes: number; source: string };
 };
 
-export type Telling = {
+export type Tally = {
 	materials: number;
 	presets: number;
 	machines: number;
@@ -156,33 +138,33 @@ export type Telling = {
 };
 
 /**
- * Wat er gaat gebeuren als je dit bestand binnenhaalt.
+ * What is going to happen if you take this file in.
  *
- * Beide keuzes zijn doorgerekend, want het verschil tussen samenvoegen en
- * vervangen moet op het scherm staan op het moment dat je kiest — niet erna.
+ * Both choices are worked out in full, because the difference between merging and
+ * replacing has to be on screen at the moment you choose — not afterwards.
  */
 export type ImportPreview = {
 	bundle: string;
 	exported_at: string | null;
-	bevat: Telling & { photos: number };
-	huidig: Telling;
-	samenvoegen: {
+	contains: Tally & { photos: number };
+	current: Tally;
+	merge: {
 		materials: {
 			new: string[];
 			existing: { name: string; as: string; material_id: number }[];
-			/** Andere naam, waarschijnlijk dezelfde plank — de valkuil uit M5. */
+			/** A different name, probably the same board — the M5 pitfall. */
 			similar: { name: string; match: string; material_id: number; why: string }[];
 		};
 		machines: { new: string[]; existing: string[] };
 		presets: { new: number; identical: number; conflicts: PresetConflict[] };
 		test_grids: { new: number; existing: number };
 	};
-	vervangen: { removes: Telling };
+	replace: { removes: Tally };
 };
 
 export type ImportResult = {
 	mode: string;
-	removed: Telling | null;
+	removed: Tally | null;
 	materials: number;
 	machines: number;
 	test_grids: number;
@@ -195,15 +177,15 @@ export type MachineProfile = {
 	power_watt: number | null;
 	device_path: string | null;
 	/**
-	 * Het apparaat waar dit profiel bij hoort, bestaat niet meer in de engine.
+	 * The device this profile belongs to no longer exists in the engine.
 	 *
-	 * De bibliotheek staat naast de engine en gaat niet mee als je een machine
-	 * weggooit of de instellingen wist. Zonder dit onderscheid groeit de lijst
-	 * met namen waar niets meer achter zit — en dan zegt "voor deze machine"
-	 * niets meer.
+	 * The library sits beside the engine and does not follow along when you throw a
+	 * machine away or wipe the settings. Without this distinction the list fills up
+	 * with names that have nothing behind them any more — and then "for this
+	 * machine" says nothing.
 	 */
 	orphaned: boolean;
-	/** Hoeveel bewijs eraan hangt; bepaalt of hij weg kan. */
+	/** How much evidence hangs off it; decides whether it may go. */
 	presets: number;
 	test_grids: number;
 };
@@ -220,9 +202,9 @@ export class LibraryStore {
 	materials = $state<Material[]>([]);
 	presets = $state<Preset[]>([]);
 	machines = $state<MachineProfile[]>([]);
-	/** Het profiel van de machine die nu actief is; bepaalt wat je hier ziet. */
+	/** The profile of the machine that is active now; decides what you see here. */
 	activeMachine = $state<ActiveMachine | null>(null);
-	/** Uit: ook presets van andere machines tonen. */
+	/** Off: show presets from other machines as well. */
 	onlyThisMachine = $state(true);
 	busy = $state(false);
 	error = $state<string | null>(null);
@@ -252,7 +234,7 @@ export class LibraryStore {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -260,20 +242,20 @@ export class LibraryStore {
 	}
 
 	async load() {
-		const alles = this.onlyThisMachine ? '' : '?all_machines=true';
+		const all = this.onlyThisMachine ? '' : '?all_machines=true';
 		const [materials, presets, machines, active] = await Promise.all([
 			this.#request('/api/library/materials'),
-			this.#request(`/api/library/presets${alles}`),
+			this.#request(`/api/library/presets${all}`),
 			this.#request('/api/library/machines'),
-			// 409 als er geen machine actief is; dan blijft het veld leeg en
-			// toont de bibliotheek zich zonder machinekop.
+			// 409 when no machine is active; then the field stays empty and the
+			// library shows itself without a machine header.
 			this.#request('/api/library/active-machine')
 		]);
 		if (materials) this.materials = materials;
 		if (presets) this.presets = presets;
 		if (machines) this.machines = machines;
 		this.activeMachine = active ?? null;
-		// Een mislukte 409 mag niet als foutmelding blijven staan.
+		// A failed 409 must not stay behind as an error message.
 		if (!active) this.error = null;
 	}
 
@@ -355,20 +337,20 @@ export class LibraryStore {
 		});
 	}
 
-	// ------------------------------------------------ uitwisselen (besluit B7)
+	// -------------------------------------------------- exchange (decision B7)
 
 	/**
-	 * De hele bibliotheek als één bestand ophalen.
+	 * Fetch the whole library as one file.
 	 *
-	 * Via een ankertje en niet via fetch: dan doet de browser wat hij goed doet
-	 * — een download met een naam, zonder het bestand eerst in het geheugen van
-	 * de pagina te trekken.
+	 * Through an anchor and not through fetch: that way the browser does what it is
+	 * good at — a download with a name, without pulling the file into the page's
+	 * memory first.
 	 */
 	exportBundle() {
-		const anker = document.createElement('a');
-		anker.href = '/api/library/export.openkerf-lib';
-		anker.download = 'bibliotheek.openkerf-lib';
-		anker.click();
+		const anchor = document.createElement('a');
+		anchor.href = '/api/library/export.openkerf-lib';
+		anchor.download = 'library.openkerf-lib';
+		anchor.click();
 	}
 
 	async uploadBundle(file: File): Promise<ImportPreview | null> {
@@ -388,14 +370,14 @@ export class LibraryStore {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
 		}
 	}
 
-	/** Hetzelfde voorbeeld, herrekend nadat je een materiaal hebt aangewezen. */
+	/** The same preview, recomputed after you have pointed at a material. */
 	previewBundle(bundle: string, mergeMaterials: Record<string, number>) {
 		return this.#request('/api/library/import/preview', {
 			method: 'POST',
@@ -406,9 +388,9 @@ export class LibraryStore {
 
 	async importBundle(
 		bundle: string,
-		mode: 'samenvoegen' | 'vervangen',
+		mode: 'merge' | 'replace',
 		mergeMaterials: Record<string, number>,
-		onConflict: 'eigen' | 'bestand'
+		onConflict: 'mine' | 'file'
 	): Promise<ImportResult | null> {
 		const done = await this.#request('/api/library/import', {
 			method: 'POST',
@@ -432,13 +414,13 @@ export class LibraryStore {
 }
 
 async function describe(response: Response): Promise<string> {
-	if (response.status === 401) return 'Geen of onjuiste token — wijzigen is geblokkeerd.';
+	if (response.status === 401) return t('error.noToken');
 	try {
 		const body = await response.json();
-		if (typeof body.detail === 'string') return body.detail;
+		if (typeof body.detail === 'string') return apiError(response, body.detail);
 		if (body.detail?.output?.length) return body.detail.output.join(' · ');
 	} catch {
-		/* generieke tekst hieronder */
+		/* generic text below */
 	}
-	return `De bibliotheek weigerde de opdracht (${response.status}).`;
+	return t('error.libraryRefused', { status: response.status });
 }

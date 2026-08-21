@@ -1,18 +1,20 @@
 /**
- * Vellen: meerdere stukken materiaal in één project.
+ * Sheets: more than one piece of material in one project.
  *
- * Elk vel is een eigen document in de engine. Wisselen slaat het huidige op en
- * laadt het andere, dus na een wissel moet het ontwerp opnieuw opgehaald
- * worden — vandaar dat elke actie hier een `onSwitched` teruggeeft.
+ * Every sheet is a document of its own in the engine. Switching saves the current
+ * one and loads the other, so after a switch the design has to be fetched again —
+ * which is why every action here reports back through `onSwitched`.
  */
+
+import { apiError, t } from './i18n/core.ts';
 
 export type Sheet = {
 	id: string;
 	name: string;
 	width_mm: number;
 	height_mm: number;
-	/** Waarin gebrand wordt. Leeg mag: een restje van onbekende herkomst hoeft
-	 *  geen verzonnen naam te krijgen. */
+	/** What is being burned in. Empty is allowed: an offcut of unknown provenance
+	 *  does not need an invented name. */
 	material_id: number | null;
 	thickness_mm: number | null;
 	active: boolean;
@@ -38,7 +40,7 @@ export class SheetStore {
 			const response = await fetch('/api/sheets');
 			if (response.ok) this.sheets = (await response.json()).sheets;
 		} catch {
-			/* zonder vellen valt de app terug op het bed */
+			/* without sheets the app falls back to the bed */
 		}
 	}
 
@@ -56,13 +58,13 @@ export class SheetStore {
 				body: body === undefined ? undefined : JSON.stringify(body)
 			});
 			if (!response.ok) {
-				this.error = (await response.json().catch(() => null))?.detail ?? 'Dat lukte niet.';
+				this.error = apiError(response, (await response.json().catch(() => null))?.detail);
 				return false;
 			}
 			this.sheets = (await response.json()).sheets;
 			return true;
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return false;
 		} finally {
 			this.busy = false;

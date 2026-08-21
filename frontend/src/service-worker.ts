@@ -2,16 +2,16 @@
 /**
  * Service worker: de app-schil offline beschikbaar houden.
  *
- * Bewust géén caching van /api — dat is de machine, en verouderde status of
- * een uit de cache geserveerde jobopdracht is precies wat je niet wilt bij
- * iets dat brandt. Alleen de gebouwde bestanden gaan in de cache.
+ * Deliberately no caching of /api — that is the machine, and a stale status or a job
+ * command served from the cache is exactly what you do not want around something that
+ * burns. Only the built files go into the cache.
  */
 import { build, files, prerendered, version } from '$service-worker';
 
 const CACHE = `openkerf-${version}`;
-// `prerendered` hoorde hier ook bij: dat zijn de pagina's zelf. Zonder die
-// stond de schil nooit in de cache, en viel de offline-terugval altijd terug op
-// een foutmelding — een PWA die alleen offline werkt als je online bent.
+// `prerendered` belonged here too: those are the pages themselves. Without them the
+// shell was never in the cache, and the offline fallback always fell back on an error
+// message — a PWA that only works offline while you are online.
 const SHELL = [...build, ...files, ...prerendered];
 
 self.addEventListener('install', (event) => {
@@ -35,17 +35,17 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
- * Een melding aantikken hoort de app te openen, niet een tweede tabblad.
+ * Tapping a notification should open the app, not a second tab.
  *
- * De meldingen zelf worden vanuit de pagina verstuurd (zie meldingen.svelte.ts);
- * ze lopen via de service worker omdat Android `new Notification()` vanuit een
- * pagina weigert. Dan hoort de klik hier ook opgevangen te worden — anders
- * gebeurt er niets als je hem aantikt terwijl de telefoon in je zak zat.
+ * The notifications themselves are sent from the page (see notifications.svelte.ts); they
+ * go through the service worker because Android refuses `new Notification()` from a page.
+ * Then the click should be caught here as well — otherwise nothing happens when you tap
+ * it while the phone was in your pocket.
  */
 self.addEventListener('notificationclick', (event) => {
 	const worker = self as unknown as ServiceWorkerGlobalScope;
-	const melding = (event as NotificationEvent).notification;
-	melding.close();
+	const notice = (event as NotificationEvent).notification;
+	notice.close();
 	event.waitUntil(
 		worker.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((vensters) => {
 			for (const venster of vensters) {
@@ -60,14 +60,14 @@ self.addEventListener('fetch', (event) => {
 	const request = event.request;
 	const url = new URL(request.url);
 
-	// De machine nooit uit de cache: status moet vers zijn en een opdracht mag
-	// niet stilletjes uit een cache komen.
+	// Never the machine from the cache: status has to be fresh and a command must not
+	// come silently out of a cache.
 	if (request.method !== 'GET' || url.pathname.startsWith('/api')) return;
 	if (url.origin !== location.origin) return;
 
-	// Pagina's eerst van het netwerk. Cache-first leek zuiniger, maar dan houd
-	// je na een nieuwe versie een oude pagina vast die naar bestanden verwijst
-	// die niet meer bestaan — en dan is de app stuk tot je de cache leegt.
+	// Pages from the network first. Cache-first seemed more frugal, but then after a new
+	// version you hold on to an old page that refers to files that no longer exist — and
+	// then the app is broken until you clear the cache.
 	if (request.mode === 'navigate') {
 		event.respondWith(
 			fetch(request).catch(() =>
@@ -80,8 +80,8 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	// De rest draagt een hash in zijn naam en verandert dus nooit van inhoud;
-	// die mag uit de cache.
+	// The rest carries a hash in its name and therefore never changes content; that may
+	// come from the cache.
 	event.respondWith(
 		caches.match(request).then(
 			(hit) =>

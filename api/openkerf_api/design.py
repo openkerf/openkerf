@@ -29,28 +29,28 @@ def _plain(value):
         return str(value)
 
 
-# Lagen die de engine zelf aanmaakt heten "Engrave 20.0mm/s @1000 #0000ff":
-# de instellingen in de naam gepropt. Die staan er al netjes naast, dus we
-# tonen waar de laag over gaat.
+# Layers the engine creates itself are called "Engrave 20.0mm/s @1000 #0000ff": the
+# settings crammed into the name. Those are already neatly beside it, so we show what the
+# layer is about.
 LAYER_NAMES = {
-    "op cut": "Snijden",
-    "op engrave": "Graveren",
-    "op raster": "Rasteren",
-    "op image": "Afbeelding",
-    "op dots": "Punten",
+    "op cut": "Cut",
+    "op engrave": "Engrave",
+    "op raster": "Raster",
+    "op image": "Image",
+    "op dots": "Dots",
 }
 
 
 def operation_label(op) -> str:
     """
-    De naam van een laag: die van de gebruiker, of het soort bewerking.
+    A layer's name: the user's, or the kind of operation.
 
-    Het kenmerk van een engine-naam is de kleurcode erin ("Engrave 20.0mm/s
-    @1000 #0000ff"). Een testrastercel heet bewust "5.0mm/s @40.0%" — dat is
-    juist informatie, en die laten we staan.
+    The hallmark of an engine name is the colour code in it ("Engrave 20.0mm/s @1000
+    #0000ff"). A test grid cell is deliberately called "5.0mm/s @40.0%" — that *is*
+    information, and we leave it.
     """
-    # Eerst laten renderen: de ruwe naam is een sjabloon met plaatshouders als
-    # "{percent}", en die horen niet in de lagenlijst.
+    # Have it rendered first: the raw name is a template with placeholders like "{percent}",
+    # and those do not belong in the layer list.
     rendered = _label(op, str(op.type).replace("op ", ""))
     if rendered and not re.search(r"#[0-9a-fA-F]{6}", rendered):
         return rendered
@@ -95,10 +95,10 @@ def _attr_or_none(node, name):
 
 def _xy(point):
     """
-    Punt uit een matrixtransformatie naar (x, y).
+    A point from a matrix transformation to (x, y).
 
-    `point_in_matrix_space` geeft een Point terug; die is indexeerbaar maar
-    niet te slicen, dus uitpakken moet expliciet.
+    `point_in_matrix_space` hands back a Point; that is indexable but not sliceable, so
+    unpacking has to be explicit.
     """
     try:
         return float(point[0]), float(point[1])
@@ -108,18 +108,18 @@ def _xy(point):
 
 def _line_of(node) -> dict | None:
     """
-    De twee eindpunten van een lijn.
+    A line's two end points.
 
-    Uit de bounds alleen kun je niet zien welke kant een lijn op loopt, dus
-    zonder deze velden kan de UI geen eindpunt aanbieden om te verslepen.
+    From the bounds alone you cannot see which way a line runs, so without these fields the
+    UI cannot offer an end point to drag.
     """
     if getattr(node, "type", None) != "elem line":
         return None
     from meerk40t.core.units import UNITS_PER_MM
 
     try:
-        # Draaien zet een matrix op de node en laat x1..y2 ongemoeid. Wie de
-        # ruwe punten tekent, zet de grepen dus op de plek van vóór de rotatie.
+        # Rotating puts a matrix on the node and leaves x1..y2 alone. So anybody drawing the
+        # raw points puts the handles in the place from before the rotation.
         matrix = getattr(node, "matrix", None)
         points = [(float(node.x1), float(node.y1)), (float(node.x2), float(node.y2))]
         if matrix is not None:
@@ -137,11 +137,11 @@ def _line_of(node) -> dict | None:
 
 def _text_of(node) -> dict | None:
     """
-    Bewerkbare vector-tekst.
+    Editable vector text.
 
-    `linetext` maakt een pad, maar de engine bewaart de bron op de node
-    (`mktext`, `mkfont`, `mkfontsize`, ...) en kan hem opnieuw renderen. Zonder
-    deze velden zou tekst na plaatsen bevroren zijn.
+    `linetext` makes a path, but the engine keeps the source on the node (`mktext`,
+    `mkfont`, `mkfontsize`, ...) and can render it again. Without these fields text would be
+    frozen once placed.
     """
     text = _attr_or_none(node, "mktext")
     if text is None:
@@ -163,7 +163,7 @@ def _text_of(node) -> dict | None:
 
 
 def _image_of(node) -> dict | None:
-    """Kader en resolutie van een afbeelding, in millimeters."""
+    """Frame and resolution of an image, in millimetres."""
     if getattr(node, "type", None) != "elem image":
         return None
     from meerk40t.core.units import UNITS_PER_MM
@@ -186,11 +186,11 @@ def _image_of(node) -> dict | None:
 
 def _effect_of(node) -> dict | None:
     """
-    Een hatch- of wobble-effect waar dit element in zit.
+    A hatch or wobble effect this element is in.
 
-    Effects zijn geen operaties maar containers in de elementenboom: het
-    commando hangt de node aan `first_node.parent` en neemt de vormen als
-    kinderen op. Wie ze in de operatieboom zoekt, vindt ze niet.
+    Effects are not operations but containers in the element tree: the command hangs the node
+    off `first_node.parent` and takes the shapes in as children. Anybody looking for them in
+    the operation tree does not find them.
     """
     parent = _attr_or_none(node, "parent")
     depth = 0
@@ -209,11 +209,10 @@ def _effect_of(node) -> dict | None:
 
 def _group_of(node) -> str | None:
     """
-    De dichtstbijzijnde groep waar dit element in zit.
+    The nearest group this element is in.
 
-    Het canvas tekent elementen plat, dus zonder deze verwijzing zou je de
-    losse vierkanten van een testraster elk apart kunnen verslepen — terwijl
-    het raster juist één ding is.
+    The canvas draws elements flat, so without this reference you could drag a test grid's
+    individual squares apart — while the grid is precisely one thing.
     """
     parent = _attr_or_none(node, "parent")
     depth = 0
@@ -227,11 +226,10 @@ def _group_of(node) -> str | None:
 
 def _pose_of(node) -> dict | None:
     """
-    Hoe dit element gedraaid en gespiegeld staat.
+    How this element is rotated and mirrored.
 
-    De engine houdt dit al bij in `node.matrix`; zonder deze twee getallen kan
-    het paneel wél draaien maar niet tónen waar je staat, en dan blijft de
-    gebruiker in het duister klikken.
+    The engine already keeps this in `node.matrix`; without these two numbers the panel can
+    rotate but not *show* where you are, and then the user goes on clicking in the dark.
     """
     matrix = _attr_or_none(node, "matrix")
     if matrix is None:
@@ -251,23 +249,22 @@ def _pose_of(node) -> dict | None:
 
 def _angle_from(rotation_rad: float, mirrored: bool) -> float:
     """
-    De hoek zoals de gebruiker hem ziet, in graden binnen [0, 360).
+    The angle as the user sees it, in degrees within [0, 360).
 
-    Een gespiegelde matrix ontleedt als "eerst spiegelen, dan draaien", en
-    `matrix.rotation` telt die spiegeling als een halve slag mee: een vorm die
-    alléén gespiegeld is meldt 180°. Dat is geen hoek maar een artefact van de
-    ontbinding, dus die halve slag gaat er weer af. Terugrekenen naar [0, 360)
-    omdat -270° en 90° hetzelfde beeld zijn, en twee namen voor één stand een
-    invoerveld onbetrouwbaar maken.
+    A mirrored matrix decomposes as "mirror first, then rotate", and `matrix.rotation` counts
+    that mirroring as half a turn: a shape that is *only* mirrored reports 180°. That is not
+    an angle but an artefact of the decomposition, so that half turn comes off again.
+    Converted back to [0, 360) because -270° and 90° are the same picture, and two names for
+    one state make an input field untrustworthy.
     """
     degrees = math.degrees(rotation_rad) - (180.0 if mirrored else 0.0)
-    # Afronden vóór de modulo, niet erna: 359.9999 wordt anders 360.0, en dan
-    # staat er een hoek in het veld die per definitie niet bestaat.
+    # Round before the modulo, not after: otherwise 359.9999 becomes 360.0, and then there
+    # is an angle in the field that by definition does not exist.
     return round(degrees, 3) % 360.0
 
 
 def _visual_angle(node) -> float | None:
-    """De hoek van één node, of niets als de matrix niets prijsgeeft."""
+    """The angle of one node, or nothing when the matrix gives nothing away."""
     pose = _pose_of(node)
     return None if pose is None else pose["angle_deg"]
 
@@ -284,12 +281,12 @@ class DesignReader:
 
     def __init__(self, kernel, keep_operations=None, grid_operations=None):
         self.kernel = kernel
-        # Operaties die de gebruiker zelf aanmaakte. Een verse boom bevat 201
-        # lege standaardoperaties, dus lege lagen tonen we normaal niet — maar
-        # een laag die je net zelf maakte moet niet meteen onzichtbaar zijn.
+        # Operations the user created themselves. A fresh tree contains 201 empty default
+        # operations, so we normally do not show empty layers — but a layer you have just made
+        # yourself should not be invisible straight away.
         self.keep_operations = keep_operations if keep_operations is not None else set()
-        # Callable die {operatie-id: {grid_id, row, column, ...}} teruggeeft.
-        # Rasteroperaties worden in de UI tot één regel samengevouwen.
+        # A callable that hands back {operation-id: {grid_id, row, column, ...}}. Grid
+        # operations are folded into one row in the UI.
         self.grid_operations = grid_operations or (lambda: {})
 
     @property
@@ -298,10 +295,10 @@ class DesignReader:
 
     def bounds_mm(self):
         """
-        De omhullende rechthoek van alles wat op het bed ligt, in millimeters.
+        The bounding rectangle of everything on the bed, in millimetres.
 
-        `None` als er niets ligt. Verborgen elementen tellen niet mee: die
-        worden ook niet gebrand, dus ze horen niet in het kader.
+        `None` when there is nothing there. Hidden elements do not count: they are not burned
+        either, so they do not belong in the frame.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -374,12 +371,11 @@ class DesignReader:
     @staticmethod
     def _grid_for(op, cell):
         """
-        Alleen markeren als de operatie ook echt die cel is.
+        Only mark it when the operation really is that cell.
 
-        De koppeling komt uit de database en overleeft een herstart, terwijl
-        element-id's per document worden uitgedeeld. Een id uit een oud raster
-        kan dus toevallig op een nieuwe operatie passen; dan zou die ten
-        onrechte op slot gaan. De instellingen moeten daarom kloppen.
+        The link comes from the database and survives a restart, while element ids are handed
+        out per document. So an id from an old grid can happen to fit a new operation; then
+        that one would be locked wrongly. So the settings have to agree.
         """
         if not cell:
             return None
@@ -396,8 +392,8 @@ class DesignReader:
     def _element(self, node, element_id) -> dict | None:
         path = self._path(node)
         image = _image_of(node)
-        # Afbeeldingen hebben geen pad; zonder deze uitzondering vielen ze uit
-        # de snapshot en waren ze onzichtbaar op het canvas.
+        # Images have no path; without this exception they fell out of the snapshot and were
+        # invisible on the canvas.
         if path is None and image is None:
             return None
         return {
@@ -414,10 +410,10 @@ class DesignReader:
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,
-            # Uit hoeveel losse stukken de vorm bestaat. Een CAD-export is vaak
-            # één pad met tientallen panelen erin, en het paneel moet kunnen
-            # zeggen hoeveel vormen splitsen oplevert. Gratis af te lezen: elk
-            # stuk begint in de pad-data met een `M`.
+            # How many separate pieces the shape consists of. A CAD export is often one path
+            # with dozens of panels in it, and the panel has to be able to say how many shapes
+            # splitting produces. Free to read off: in the path data every piece starts with
+            # an `M`.
             "subpaths": (path or "").count("M"),
             "path": path or "",
         }
@@ -450,27 +446,25 @@ class DesignReader:
             "color": _color(getattr(op, "color", None)),
             "speed": _plain(getattr(op, "speed", None)),
             "power": _plain(getattr(op, "power", None)),
-            # Wat de machine werkelijk gaat doen, en niet wat er in het veld
-            # staat. De engine leest `implicit_passes`, en die geeft 1 zolang
-            # `passes_custom` uit staat — een laag met `passes = 3` en die vlag
-            # uit brandt één keer. Gemeten op een testbord dat "2 passes" op zijn
-            # opschrift had en er één deed; het paneel zei ook 2.
+            # What the machine is really going to do, and not what is in the field. The
+            # engine reads `implicit_passes`, and that gives 1 as long as `passes_custom` is
+            # off — a layer with `passes = 3` and that flag off burns once. Measured on a test
+            # board that had "2 passes" on its caption and did one; the panel said 2 as well.
             #
-            # 0 betekent bij de engine "niet ingesteld", niet "nul keer".
+            # To the engine 0 means "not set", not "zero times".
             "passes": _plain(getattr(op, "implicit_passes", None))
             or _plain(getattr(op, "passes", None))
             or 1,
-            # Alleen zinvol voor raster/afbeelding, maar elke operatie draagt de
-            # velden; de frontend toont ze op type.
+            # Only meaningful for raster/image, but every operation carries the fields; the
+            # frontend shows them by type.
             "dpi": _plain(getattr(op, "dpi", None)),
             "overscan": _plain(getattr(op, "overscan", None)),
             "bidirectional": bool(getattr(op, "bidirectional", True)),
-            # Air assist (besluit B11). De engine kent drie standen in
-            # `coolant`: 0 laat staan, 1 aan, 2 uit. Voor de gebruiker is het
-            # een schakelaar, dus alles wat niet 1 is, is uit.
+            # Air assist (decision B11). The engine knows three states in `coolant`: 0 leave
+            # it, 1 on, 2 off. To the user it is a switch, so anything that is not 1 is off.
             "air_assist": _plain(getattr(op, "coolant", None)) == 1,
-            # Zakken per pass; van ons, niet van de engine (zie
-            # Drawing.z_step_supported). `null` betekent uit.
+            # Dropping per pass; ours, not the engine's (see Drawing.z_step_supported).
+            # `null` means off.
             "z_step_mm": _plain(getattr(op, "z_step_mm", None)),
             "output": bool(getattr(op, "output", True)),
             "element_ids": referenced,

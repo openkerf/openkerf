@@ -1,11 +1,10 @@
 """
 Het nulpunt (gat J12) en bijstellen tijdens een lopende job (gat J11).
 
-Twee dingen die LightBurn wel heeft en de engine niet — het eerste bestaat
-nergens in MeerK40t, het tweede alleen bij één driver. Deze tests pinnen vast
-wat wij eromheen bouwden: dat het werk écht verschuift op weg naar de machine,
-dat de tekening daar niets van merkt, en dat een machine die iets niet kan er
-geen knop voor krijgt.
+Two things LightBurn has and the engine does not — the first exists nowhere in MeerK40t, the
+second only on one driver. These tests pin down what we built around them: that the work
+really shifts on its way to the machine, that the drawing notices nothing of it, and that a
+machine that cannot do something gets no button for it.
 """
 
 import pytest
@@ -51,19 +50,19 @@ def test_origin_starts_empty_and_survives_a_round_trip(client):
 
 
 def test_origin_outside_the_bed_is_refused(client):
-    """Een nulpunt waar de kop niet komt, is geen nulpunt maar een fout."""
+    """A zero point the head does not reach is not a zero point but a mistake."""
     response = client.post("/api/machine/origin", json={"x_mm": 5000, "y_mm": 5})
     assert response.status_code == 409
-    assert "buiten het bed" in response.json()["detail"]
+    assert "outside the bed" in response.json()["detail"]
 
 
 def test_shifting_moves_the_work_and_puts_it_back(kernel, client):
     """
-    De kern van J12: het werk gaat verschoven de machine in, en de tekening
-    staat daarna weer precies waar hij stond.
+    The core of J12: the work goes into the machine shifted, and afterwards the drawing is
+    back exactly where it was.
 
-    Als dat laatste niet klopt, verplaatst één druk op starten je ontwerp — en
-    de tweede druk nog een keer.
+    If that last part does not hold, one press of start moves your design — and the second
+    press moves it again.
     """
     from openkerf_api.drawing import Drawing
 
@@ -71,8 +70,8 @@ def test_shifting_moves_the_work_and_puts_it_back(kernel, client):
     drawing = Drawing(kernel)
     voor = [tuple(node.bounds) for node in kernel.elements.elems()]
 
-    with drawing.verschoven({"x_mm": 100, "y_mm": 50}) as verschoof:
-        assert verschoof is True
+    with drawing.shifted({"x_mm": 100, "y_mm": 50}) as shift:
+        assert shift is True
         tijdens = [tuple(node.bounds) for node in kernel.elements.elems()]
 
     na = [tuple(node.bounds) for node in kernel.elements.elems()]
@@ -88,7 +87,7 @@ def test_shifting_moves_the_work_and_puts_it_back(kernel, client):
 
 
 def test_shift_is_undone_even_when_the_body_raises(kernel, client):
-    """Gaat het plannen stuk, dan mag het ontwerp niet verschoven blijven staan."""
+    """If the planning breaks, the design must not be left shifted."""
     from openkerf_api.drawing import Drawing
 
     _rect(client)
@@ -96,7 +95,7 @@ def test_shift_is_undone_even_when_the_body_raises(kernel, client):
     voor = [tuple(node.bounds) for node in kernel.elements.elems()]
 
     with pytest.raises(RuntimeError):
-        with drawing.verschoven({"x_mm": 100, "y_mm": 50}):
+        with drawing.shifted({"x_mm": 100, "y_mm": 50}):
             raise RuntimeError("plannen mislukt")
 
     na = [tuple(node.bounds) for node in kernel.elements.elems()]
@@ -106,9 +105,8 @@ def test_shift_is_undone_even_when_the_body_raises(kernel, client):
 
 def test_shift_does_not_touch_the_undo_history(kernel, client):
     """
-    Bewust niet via het console-commando `translate`: dat werkt in een eigen
-    undoscope, en dan levert elke start twee stappen op die de gebruiker nooit
-    heeft gemaakt.
+    Deliberately not through the console command `translate`: that works in an undo scope of
+    its own, and then every start produces two steps the user never made.
     """
     from openkerf_api.drawing import Drawing
 
@@ -116,7 +114,7 @@ def test_shift_does_not_touch_the_undo_history(kernel, client):
     drawing = Drawing(kernel)
     diep = len(kernel.elements.undo._undo_stack)
 
-    with drawing.verschoven({"x_mm": 40, "y_mm": 40}):
+    with drawing.shifted({"x_mm": 40, "y_mm": 40}):
         pass
 
     assert len(kernel.elements.undo._undo_stack) == diep
@@ -124,11 +122,11 @@ def test_shift_does_not_touch_the_undo_history(kernel, client):
 
 def test_bounds_report_measures_the_bed_from_the_origin(client):
     """
-    Het nulpunt telt voor het bed en niet voor het vel.
+    The zero point counts for the bed and not for the sheet.
 
-    Een vel is een tekening en het bed is de machine (J5): het nulpunt
-    verplaatst het werk op de máchine, dus dáár kan het buiten vallen, maar
-    binnen de tekening blijft alles staan waar je het neerzette.
+    A sheet is a drawing and the bed is the machine (J5): the zero point moves the work on the
+    *machine*, so it can fall outside *there*, but within the drawing everything stays where
+    you put it.
     """
     _rect(client, x_mm=10, y_mm=10, width_mm=60, height_mm=40)
 
@@ -144,9 +142,9 @@ def test_bounds_report_measures_the_bed_from_the_origin(client):
     )
     buiten = client.get("/api/job/layers").json()["bounds"]
 
-    assert buiten["outside_bed"] == 1, "verschoven valt de rechthoek van het bed"
-    assert buiten["outside_sheet"] == binnen["outside_sheet"], "het vel beweegt niet mee"
-    assert buiten["work"] == binnen["work"], "de tekening zelf verschuift niet"
+    assert buiten["outside_bed"] == 1, "shifted, the rectangle falls off the bed"
+    assert buiten["outside_sheet"] == binnen["outside_sheet"], "the sheet does not move along"
+    assert buiten["work"] == binnen["work"], "the drawing itself does not shift"
     assert buiten["burns_at"]["x_mm"] == pytest.approx(
         binnen["work"]["x_mm"] + bed["width_mm"] - 20
     )
@@ -154,49 +152,50 @@ def test_bounds_report_measures_the_bed_from_the_origin(client):
 
 def test_the_cutcode_that_reaches_the_machine_carries_the_offset(kernel, client):
     """
-    Het bewijs dat J12 iets doet: niet de boom maar de **cutcode** telt.
+    The proof that J12 does something: it is not the tree but the **cutcode** that
+    counts.
 
-    Dat is wat de spooler de driver in duwt, en het is het enige punt waarop je
-    kunt controleren of het nulpunt de machine ook echt bereikt. Zonder deze
-    test zou een verschuiving die net ná het bouwen van de cutcode wordt
-    teruggedraaid er van buiten precies hetzelfde uitzien — en niets doen.
+    That is what the spooler pushes into the driver, and it is the only point at
+    which you can check whether the origin really reaches the machine. Without this
+    test a shift that is undone just *after* the cutcode is built would look exactly
+    the same from the outside — and do nothing.
     """
     from openkerf_api.drawing import Drawing
 
-    operatie = client.post("/api/design/operations", json={"type": "cut"}).json()["id"]
-    vorm = _rect(client, x_mm=10, y_mm=10, width_mm=30, height_mm=20)
-    client.post("/api/design/assign", json={"ids": [vorm], "operation_id": operatie})
+    operation = client.post("/api/design/operations", json={"type": "cut"}).json()["id"]
+    shape = _rect(client, x_mm=10, y_mm=10, width_mm=30, height_mm=20)
+    client.post("/api/design/assign", json={"ids": [shape], "operation_id": operation})
     drawing = Drawing(kernel)
 
-    def hoeken(oorsprong):
-        with drawing.verschoven(oorsprong):
+    def corners(origin):
+        with drawing.shifted(origin):
             kernel.console("plan clear copy preprocess validate blob preopt optimize\n")
             code = list(kernel.planner.default_plan.plan)[0]
-            punten = [p for cut in code.flat() for p in (cut.start, cut.end)]
+            points = [p for cut in code.flat() for p in (cut.start, cut.end)]
             return (
-                min(p[0] for p in punten),
-                min(p[1] for p in punten),
+                min(p[0] for p in points),
+                min(p[1] for p in points),
             )
 
-    x0, y0 = hoeken(None)
-    x1, y1 = hoeken({"x_mm": 100, "y_mm": 60})
+    x0, y0 = corners(None)
+    x1, y1 = corners({"x_mm": 100, "y_mm": 60})
 
-    # De native eenheid van dit apparaat doet er niet toe; het verschil moet
-    # exact de verschuiving zijn, omgerekend in diezelfde eenheid.
-    schaal = (x1 - x0) / 100
-    assert schaal > 0
-    assert (y1 - y0) / 60 == pytest.approx(schaal, rel=1e-6)
+    # The native unit of this device does not matter; the difference has to be
+    # exactly the shift, converted into that same unit.
+    scale = (x1 - x0) / 100
+    assert scale > 0
+    assert (y1 - y0) / 60 == pytest.approx(scale, rel=1e-6)
 
 
-# --------------------------------------------------- bijstellen tijdens de job
+# ------------------------------------------------- adjusting during the job
 
 
 def test_ruida_cannot_adjust_and_says_so(kernel, client):
     """
-    Gat J11. Alleen de grbl-driver heeft realtime overrides; de Ruida zet
-    snelheid en vermogen per cut-segment uit de settings. Wat de machine niet
-    kan, hoort geen knop te krijgen — en de route moet het weigeren, want de
-    UI is een advies en curl trekt zich daar niets van aan.
+    Gap J11. Only the grbl driver has realtime overrides; the Ruida sets speed and
+    power per cut segment out of the settings. What the machine cannot do should
+    not get a button — and the route has to refuse it, because the UI is advice and
+    curl takes no notice of it.
     """
     caps = client.get("/api/capabilities").json()["adjust"]
     assert caps == {"power": False, "speed": False}
@@ -206,11 +205,11 @@ def test_ruida_cannot_adjust_and_says_so(kernel, client):
 
     geweigerd = client.post("/api/job/adjust", json={"power": 0.9})
     assert geweigerd.status_code == 409
-    assert "niet tijdens een job" in geweigerd.json()["detail"]
+    assert "during a job" in geweigerd.json()["detail"]
 
 
 def test_adjustment_is_offered_when_the_driver_has_it(kernel):
-    """Een driver die het wél kan, krijgt de knoppen — en de factor komt aan."""
+    """A driver that *can* do it gets the buttons — and the factor arrives."""
 
     class Driver:
         power_scale = 1.0
@@ -241,9 +240,9 @@ def test_adjustment_is_offered_when_the_driver_has_it(kernel):
     assert uitslag["power"] == pytest.approx(0.9)
     assert uitslag["speed"] == pytest.approx(1.1)
 
-    with pytest.raises(DesignError, match="buiten wat de machine aanneemt"):
+    with pytest.raises(DesignError, match="outside what the machine accepts"):
         motion.adjust(power=3.0)
-    with pytest.raises(DesignError, match="snelheid of vermogen"):
+    with pytest.raises(DesignError, match="speed or power"):
         motion.adjust()
 
 
@@ -252,12 +251,12 @@ def test_adjustment_is_offered_when_the_driver_has_it(kernel):
 
 def test_the_popup_coolant_method_does_not_count_as_air_assist(kernel):
     """
-    Gat L8. De engine kent drie coolant-methoden; twee zijn grbl-only en de
-    derde ("popup") stuurt niets naar de laser maar roept `kernel.yesno` — en
-    dat is buiten de wx-GUI een `input()` op stdin. Headless staat de
-    spoolerthread dan te wachten op een toets die niemand indrukt.
+    Gap L8. The engine knows three coolant methods; two are grbl-only and the
+    third ("popup") sends nothing to the laser but calls `kernel.yesno` — and
+    outside the wx GUI that is an `input()` on stdin. Headless, the spooler thread
+    then stands waiting for a key nobody presses.
 
-    Een schakelaar die de job laat hangen is erger dan geen schakelaar.
+    A switch that leaves the job hanging is worse than no switch.
     """
     from openkerf_api.drawing import Drawing
 
@@ -269,8 +268,8 @@ def test_the_popup_coolant_method_does_not_count_as_air_assist(kernel):
     kernel.root.coolant.claim_coolant(kernel.device, "popup")
 
     assert kernel.root.coolant.get_device_function(kernel.device) is not None, (
-        "de engine claimt hem wel"
+        "the engine does claim it"
     )
     assert drawing.air_assist_supported() is False, (
-        "maar hij schakelt niets, dus wij bieden hem niet aan"
+        "but it switches nothing, so we do not offer it"
     )

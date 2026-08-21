@@ -1,13 +1,12 @@
 """
-Tegels: een plaat branden die groter is dan het bed.
+Tiles: burning a board that is bigger than the bed.
 
-Dit bestand is met opzet kernelloos. Alles wat hier staat is rekenwerk op
-getallen in millimeters — de opdeling, waar de naad valt, waar de merken
-passen, en wat twee aangetikte punten over de stand van de plaat zeggen. Dat
-is precies het deel dat je op materiaal betaalt als het fout is, en dus het
-deel dat volledig te testen moet zijn zonder machine erbij.
+This file is deliberately kernel-free. Everything here is arithmetic on numbers in
+millimetres — the division, where the seam falls, where the marks fit, and what two tapped
+points say about the board's pose. That is exactly the part you pay for on material when it
+is wrong, and therefore the part that has to be fully testable without a machine.
 
-De omrekening naar engine-eenheden (Tats) gebeurt in `tilerun.py`, op de grens.
+The conversion to engine units (Tats) happens in `tilerun.py`, on the boundary.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from typing import NamedTuple
 
 
 class TilingError(Exception):
-    """Wat de gebruiker moet weten voordat er materiaal in gaat."""
+    """What the user has to know before any material goes in."""
 
 
 class Rect(NamedTuple):
@@ -47,18 +46,18 @@ class TilingSettings:
 
 class Tile(NamedTuple):
     """
-    Eén tegel: wat hij brandt, en wat de kop kan halen als de plaat zo ligt.
+    One tile: what it burns, and what the head can reach when the board lies like this.
 
-    Een NamedTuple en geen dataclass, omdat de naadverschuiving later
-    `tile._replace(burn=...)` gebruikt — dat is een NamedTuple-methode.
+    A NamedTuple and not a dataclass, because the seam shift later uses
+    `tile._replace(burn=...)` — that is a NamedTuple method.
     """
 
     index: int
     row: int
     column: int
-    #: wat deze tegel brandt
+    #: wat deze tile brandt
     burn: Rect
-    #: wat de kop kan halen als de plaat op deze stand ligt
+    #: what the head can reach when the board is in this position
     window: Rect
 
 
@@ -66,31 +65,31 @@ def _axis(
     plate: float, bed: float, settings: TilingSettings
 ) -> list[tuple[float, float]]:
     """
-    De vensters op één as: paren (begin, eind) in plaatcoördinaten.
+    The windows on one axis: pairs (start, end) in sheet coordinates.
 
-    Het aantal volgt uit de eis dat opeenvolgende vensters minstens `overlap_mm`
-    delen. Daarna worden ze **gelijk verdeeld** in plaats van vol-vol-restje,
-    zodat de overlap ruimer wordt dan het minimum en er nooit een laatste
-    strookje overblijft waar geen merk in past.
+    The number follows from the requirement that consecutive windows share at least
+    `overlap_mm`. After that they are **divided equally** instead of full-full-remainder, so
+    that the overlap becomes more generous than the minimum and no last strip is ever left
+    over that no mark fits in.
     """
     if bed >= plate:
-        # De plaat past. De marge is er om merken van de bedrand te houden, en
-        # bij één venster is er geen naad en dus geen merk — meten met
-        # `bed - 2·marge` verklaarde een vel van precies de bedmaat 'te groot',
-        # op Jelles 5030 de standaardmaat.
+        # The board fits. The margin is there to keep marks off the bed edge, and with one
+        # window there is no seam and therefore no mark — measuring with `bed - 2·margin`
+        # declared a sheet of exactly the bed size 'too big', which on Jelle's 5030 is the
+        # default size.
         return [(0.0, plate)]
 
     usable = bed - 2 * settings.margin_mm
     if usable <= 0:
         raise TilingError(
-            "Het bed is kleiner dan tweemaal de marge, dus er blijft niets over "
-            "om in te branden. Zet de marge lager."
+            "The bed is smaller than twice the margin, so nothing is left "
+            "to burn in. Set the margin lower."
         )
     if usable <= settings.overlap_mm:
         raise TilingError(
-            f"Het bruikbare bed is {usable:.0f} mm en de overlap {settings.overlap_mm:.0f} mm. "
-            "Twee tegels zouden elkaar dan volledig overlappen. Zet de overlap "
-            "lager of de marge kleiner."
+            f"The usable bed is {usable:.0f} mm and the overlap {settings.overlap_mm:.0f} mm. "
+            "Two tiles would then overlap completely. Set the overlap "
+            "lower or the margin smaller."
         )
     count = math.ceil((plate - settings.overlap_mm) / (usable - settings.overlap_mm))
     step = (plate - usable) / (count - 1)
@@ -105,26 +104,25 @@ def tile_layout(
     settings: TilingSettings,
 ) -> list[Tile]:
     """
-    De opdeling van deze plaat op deze machine.
+    The division of this board on this machine.
 
-    Wordt nooit opgeslagen: hij is een functie van de maten en de instellingen,
-    dus hij klopt vanzelf zodra er iets verandert.
+    Never stored: it is a function of the measures and the settings, so it holds by itself as
+    soon as something changes.
     """
     columns = _axis(plate_w_mm, bed_w_mm, settings)
     rows = _axis(plate_h_mm, bed_h_mm, settings)
 
     if len(columns) > 1 and len(rows) > 1:
-        # Opdelen in twee richtingen is een eigen ontwerp: elke naad krijgt
-        # eigen merken, de volgorde van de tegels gaat ertoe doen en het
-        # uitlijnen wordt een keten in plaats van een stap. Half werkend
-        # opleveren is hier erger dan weigeren — gemeten: `_marks` legt de
-        # merken van de rijgrens en de kolomgrens dan op hetzelfde punt, zodat
-        # één rondje twee keer gebrand wordt.
+        # Dividing in two directions is a design of its own: every seam gets its own marks,
+        # the order of the tiles starts to matter and the aligning becomes a chain instead of
+        # a step. Delivering it half working is worse here than refusing — measured: `_marks`
+        # then puts the row boundary's and the column boundary's marks on the same point, so
+        # that one circle is burned twice.
         raise TilingError(
-            "Deze plaat is in beide richtingen groter dan het bed. In twee "
-            "richtingen opdelen kan nog niet: elke naad heeft dan eigen merken "
-            "en een eigen volgorde. Snijd de plaat eerst op bedhoogte, of neem "
-            "een smallere plaat."
+            "This plate is larger than the bed in both directions. Dividing in two "
+            "directions is not possible yet: every seam would then have its own marks "
+            "and its own order. Cut the plate to bed height first, or take "
+            "a narrower plate."
         )
 
     x_splits = _splits([c[0] for c in columns], [c[1] for c in columns], plate_w_mm)
@@ -152,10 +150,10 @@ def tile_layout(
 
 def _splits(starts: list[float], ends: list[float], plate: float) -> list[float]:
     """
-    De grenzen van de brandgebieden: 0, de naden, en de plaatmaat.
+    The boundaries of the burn areas: 0, the seams, and the board size.
 
-    De naad valt in het midden van de overlapzone. Taak 2 mag hem daarna binnen
-    die zone verschuiven naar waar hij de minste vormen kruist.
+    The seam falls in the middle of the overlap zone. Task 2 may then move it within that
+    zone to where it crosses the fewest shapes.
     """
     bounds = [0.0]
     for left, right in zip(range(len(starts) - 1), range(1, len(starts))):
@@ -166,15 +164,15 @@ def _splits(starts: list[float], ends: list[float], plate: float) -> list[float]
 
 def best_split(low_mm: float, high_mm: float, spans) -> float:
     """
-    Waar de naad tussen twee tegels het beste valt.
+    Where the seam between two tiles falls best.
 
-    `spans` zijn de uitgestrektheden van de vormen langs de deelas. Een vorm
-    telt als doorsneden zodra de naad er strikt binnen valt. Kandidaten zijn de
-    randen van de overlapzone, het midden, en net naast elke vormgrens die in
-    de zone ligt — meer standen dan dat maken het antwoord niet beter.
+    `spans` are the extents of the shapes along the division axis. A shape counts as cut as
+    soon as the seam falls strictly inside it. Candidates are the edges of the overlap zone,
+    the middle, and just beside every shape boundary that lies in the zone — more positions
+    than that do not make the answer better.
 
-    Gelijkspel gaat naar de stand die het dichtst bij het midden ligt: dat houdt
-    de tegels zo gelijk mogelijk van grootte.
+    A tie goes to the position closest to the middle: that keeps the tiles as equal in size
+    as possible.
     """
     middle = (low_mm + high_mm) / 2
     if not spans:
@@ -202,37 +200,36 @@ def _overlaps(a: Rect, b: Rect) -> bool:
     return not (a.x1 <= b.x0 or b.x1 <= a.x0 or a.y1 <= b.y0 or b.y1 <= a.y0)
 
 
-#: Breedte van het gebrande cijfer naast een merk, als fractie van de
-#: markergrootte. Een cijfer hoeft niet groot: het staat naast een rondje dat je
-#: al gevonden hebt, en moet alleen 1 van 2 onderscheiden.
-CIJFER_FRACTIE = 0.7
+#: The width of the burned digit beside a mark, as a fraction of the marker size. A digit
+#: does not have to be large: it stands beside a circle you have already found, and only has
+#: to tell 1 from 2.
+DIGIT_FRACTION = 0.7
 
-#: Ruimte tussen het rondje en zijn cijfer.
-CIJFER_GAT_MM = 1.5
+#: The space between the circle and its digit.
+DIGIT_GAP_MM = 1.5
 
 
-def mark_footprint(punt: Point, size_mm: float, zone: Rect) -> Rect:
+def mark_footprint(point: Point, size_mm: float, zone: Rect) -> Rect:
     """
-    Wat een merk in beslag neemt: het rondje én zijn cijfer.
+    What a mark takes up: the circle *and* its digit.
 
-    Het cijfer staat langs de **lange as** van de overlapzone, niet er dwars op.
-    Dat is geen smaak: de breedte van de overlap is de krappe maat — bij het
-    instellen wordt al geëist dat een merk erin past (`Sheets._tiling`) — en zou
-    het cijfer die kant op staan, dan werden bestaande instellingen ineens te
-    smal. In de lengte is er ruimte over: gemeten zijn die zones 150 tot 200 mm
-    lang tegen 50 tot 72 mm breed.
+    The digit sits along the **long axis** of the overlap zone, not across it. That is not
+    taste: the width of the overlap is the tight measure — when setting it up it is already
+    required that a mark fits in it (`Sheets._tiling`) — and if the digit went that way,
+    existing settings would suddenly become too narrow. Lengthwise there is room to spare:
+    measured, those zones are 150 to 200 mm long against 50 to 72 mm wide.
     """
     half = size_mm / 2
-    extra = size_mm * CIJFER_FRACTIE + CIJFER_GAT_MM
+    extra = size_mm * DIGIT_FRACTION + DIGIT_GAP_MM
     if zone.height >= zone.width:
         return Rect(
-            punt.x_mm - half,
-            punt.y_mm - half,
-            punt.x_mm + half,
-            punt.y_mm + half + extra,
+            point.x_mm - half,
+            point.y_mm - half,
+            point.x_mm + half,
+            point.y_mm + half + extra,
         )
     return Rect(
-        punt.x_mm - half, punt.y_mm - half, punt.x_mm + half + extra, punt.y_mm + half
+        point.x_mm - half, point.y_mm - half, point.x_mm + half + extra, point.y_mm + half
     )
 
 
@@ -240,60 +237,59 @@ def marker_spots(
     zone: Rect, blocked: list[Rect], size_mm: float, clearance_mm: float = 2.0
 ) -> tuple[Point, Point]:
     """
-    Twee vrije plekken in de overlapzone, zo ver mogelijk uit elkaar.
+    Two free places in the overlap zone, as far apart as possible.
 
-    De zone wordt in vakjes ter grootte van een merk plus speling verdeeld; een
-    vakje valt af zodra het de omhullende van een vorm raakt. Van wat overblijft
-    nemen we de twee uiterste langs de lange as van de zone — verder uit elkaar
-    betekent een nauwkeuriger hoek, en de uitersten zijn deterministisch waar
-    'het verste paar' bij gelijkspel dat niet is.
+    The zone is divided into cells the size of a mark plus clearance; a cell drops out as
+    soon as it touches a shape's bounding box. Of what is left we take the two outermost
+    along the zone's long axis — further apart means a more accurate angle, and the outermost
+    are deterministic where 'the furthest pair' is not on a tie.
     """
     half = size_mm / 2 + clearance_mm / 2
-    extra = size_mm * CIJFER_FRACTIE + CIJFER_GAT_MM
-    langs_y = zone.height >= zone.width
-    # De stap is in de lengterichting groter, want daar staat het cijfer.
-    stap_x = size_mm + clearance_mm + (0.0 if langs_y else extra)
-    stap_y = size_mm + clearance_mm + (extra if langs_y else 0.0)
+    extra = size_mm * DIGIT_FRACTION + DIGIT_GAP_MM
+    along_y = zone.height >= zone.width
+    # The step is larger lengthwise, because that is where the digit is.
+    step_x = size_mm + clearance_mm + (0.0 if along_y else extra)
+    step_y = size_mm + clearance_mm + (extra if along_y else 0.0)
 
     vrij: list[Point] = []
     y = zone.y0 + half
     while y <= zone.y1 - half + 1e-9:
         x = zone.x0 + half
         while x <= zone.x1 - half + 1e-9:
-            punt = Point(x, y)
-            vak = mark_footprint(punt, size_mm, zone)
-            binnen = (
-                zone.x0 <= vak.x0
-                and vak.x1 <= zone.x1
-                and zone.y0 <= vak.y0
-                and vak.y1 <= zone.y1
+            point = Point(x, y)
+            patch = mark_footprint(point, size_mm, zone)
+            inside = (
+                zone.x0 <= patch.x0
+                and patch.x1 <= zone.x1
+                and zone.y0 <= patch.y0
+                and patch.y1 <= zone.y1
             )
-            if binnen and not any(_overlaps(vak, b) for b in blocked):
-                vrij.append(punt)
-            x += stap_x
-        y += stap_y
+            if inside and not any(_overlaps(patch, b) for b in blocked):
+                vrij.append(point)
+            x += step_x
+        y += step_y
 
     if len(vrij) < 2:
         raise TilingError(
-            "Er is in de overlapstrook geen plek voor twee uitlijnmerken die "
-            "vrij van het werk ligt. Maak de overlap groter, of schuif een vorm "
-            "bij de naad weg."
+            "There is no room in the overlap strip for two alignment marks that lie "
+            "clear of the work. Make the overlap larger, or move a shape "
+            "away from the seam."
         )
 
-    langs_y = zone.height >= zone.width
-    sleutel = (lambda p: p.y_mm) if langs_y else (lambda p: p.x_mm)
+    along_y = zone.height >= zone.width
+    sleutel = (lambda p: p.y_mm) if along_y else (lambda p: p.x_mm)
     geordend = sorted(vrij, key=sleutel)
     return geordend[0], geordend[-1]
 
 
 @dataclass(frozen=True)
 class Alignment:
-    """Hoe de plaat er nu bij ligt, ten opzichte van hoe hij getekend is."""
+    """How the plate lies now, relative to how it was drawn."""
 
     angle_deg: float
     dx_mm: float
     dy_mm: float
-    #: hoeveel de gemeten afstand afwijkt van de gebrande — een controle, geen correctie
+    #: how far the measured distance deviates from the burned one — a check, not a correction
     distance_error_mm: float
 
 
@@ -306,38 +302,36 @@ def alignment(
     tolerance_mm: float = 1.0,
 ) -> Alignment:
     """
-    De stand van de plaat, uit twee gebrande merken en twee aangetikte punten.
+    The board's pose, from two burned marks and two tapped points.
 
-    Schaal wordt **niet** overgenomen en wél gecontroleerd. De afstand tussen
-    twee gebrande merken verandert niet; wijkt de gemeten afstand af, dan is er
-    verkeerd aangetikt. Zou je de schaal wel overnemen, dan rekent één tikfout
-    van 2 mm de hele tegel uit elkaar.
+    Scale is **not** adopted and *is* checked. The distance between two burned marks does not
+    change; if the measured distance deviates, something was tapped wrong. If you did adopt
+    the scale, one 2 mm tapping error would compute the whole tile apart.
     """
-    plaat = complex(p2.x_mm - p1.x_mm, p2.y_mm - p1.y_mm)
-    gemeten = complex(m2.x_mm - m1.x_mm, m2.y_mm - m1.y_mm)
-    if abs(plaat) < 1e-6 or abs(gemeten) < 1e-6:
-        raise TilingError("De twee aangetikte punten liggen op elkaar.")
+    board = complex(p2.x_mm - p1.x_mm, p2.y_mm - p1.y_mm)
+    measured = complex(m2.x_mm - m1.x_mm, m2.y_mm - m1.y_mm)
+    if abs(board) < 1e-6 or abs(measured) < 1e-6:
+        raise TilingError("The two tapped points lie on top of each other.")
 
-    afwijking = abs(gemeten) - abs(plaat)
+    afwijking = abs(measured) - abs(board)
     if abs(afwijking) > tolerance_mm:
         raise TilingError(
-            f"Deze twee punten liggen {abs(afwijking):.1f} mm "
-            f"{'verder' if afwijking > 0 else 'dichter'} "
-            "uit elkaar dan de merken die ik gebrand heb. Heb je het juiste "
-            "merk aangetikt?"
+            f"These two points lie {abs(afwijking):.1f} mm "
+            f"{'further' if afwijking > 0 else 'closer'} "
+            "apart than the marks I burned. Did you tap the right mark?"
         )
 
-    hoek = math.atan2(gemeten.imag, gemeten.real) - math.atan2(plaat.imag, plaat.real)
-    hoek = math.atan2(math.sin(hoek), math.cos(hoek))
-    graden = math.degrees(hoek)
+    angle = math.atan2(measured.imag, measured.real) - math.atan2(board.imag, board.real)
+    angle = math.atan2(math.sin(angle), math.cos(angle))
+    graden = math.degrees(angle)
     if abs(graden) > max_angle_deg:
         raise TilingError(
-            f"De plaat zou {abs(graden):.1f}° scheef liggen. Dat is meer dan een "
-            "plaat scheef kán liggen zonder dat je het ziet — waarschijnlijk is "
-            "het verkeerde merk aangetikt. Leg hem recht en tik opnieuw aan."
+            f"The plate would lie {abs(graden):.1f}° askew. That is more than a "
+            "plate *can* lie askew without you seeing it — the wrong mark was "
+            "probably tapped. Lay it straight and tap again."
         )
 
-    gedraaid = complex(p1.x_mm, p1.y_mm) * complex(math.cos(hoek), math.sin(hoek))
+    gedraaid = complex(p1.x_mm, p1.y_mm) * complex(math.cos(angle), math.sin(angle))
     return Alignment(
         angle_deg=graden,
         dx_mm=m1.x_mm - gedraaid.real,
@@ -348,11 +342,10 @@ def alignment(
 
 def alignment_from_corner(plate_corner: Point, measured: Point) -> Alignment:
     """
-    Tegel 1: er zijn nog geen merken, dus uitlijnen gebeurt op de plaat zelf.
+    Tile 1: there are no marks yet, so aligning happens on the board itself.
 
-    Zonder tweede punt is er geen hoek te meten, en dan rekenen we met nul — en
-    zeggen dat erbij, want een aanname die je niet ziet is een aanname die je
-    op materiaal betaalt.
+    Without a second point there is no angle to measure, and then we compute with zero — and
+    say so, because an assumption you cannot see is an assumption you pay for on material.
     """
     return Alignment(
         angle_deg=0.0,
@@ -362,44 +355,43 @@ def alignment_from_corner(plate_corner: Point, measured: Point) -> Alignment:
     )
 
 
-#: De segmentsoorten die echte geometrie dragen. De rest (einde, nop, punt)
-#: heeft geen lengte en hoort niet in een geklipt resultaat.
-def _dragende_soorten():
+#: The segment types that carry real geometry. The rest (end, nop, point) has no length and
+#: does not belong in a clipped result.
+def _carrying_types():
     from meerk40t.core.geomstr import TYPE_ARC, TYPE_CUBIC, TYPE_LINE, TYPE_QUAD
 
     return (TYPE_LINE, TYPE_QUAD, TYPE_CUBIC, TYPE_ARC)
 
 
 def _rand_segmenten(rect_units: Rect):
-    """De vier randen van het klipvenster, elk als los lijnsegment."""
+    """The four edges of the clip window, each as a separate line segment."""
     from meerk40t.core.geomstr import Geomstr
 
-    hoeken = (
+    corners = (
         (complex(rect_units.x0, rect_units.y0), complex(rect_units.x1, rect_units.y0)),
         (complex(rect_units.x1, rect_units.y0), complex(rect_units.x1, rect_units.y1)),
         (complex(rect_units.x1, rect_units.y1), complex(rect_units.x0, rect_units.y1)),
         (complex(rect_units.x0, rect_units.y1), complex(rect_units.x0, rect_units.y0)),
     )
-    randen = Geomstr()
-    for begin, eind in hoeken:
-        randen.line(begin, eind)
-        randen.end()
-    return randen
+    edges = Geomstr()
+    for start, end in corners:
+        edges.line(start, end)
+        edges.end()
+    return edges
 
 
-def _stukken(geom, index: int, ts):
+def _pieces(geom, index: int, ts):
     """
-    De stukken van één segment, gesplitst op de gegeven parameters.
+    The pieces of one segment, split at the given parameters.
 
-    Lijnen, quads en cubics laat de engine zelf splitsen; die takken bestaan en
-    werken. **Bogen niet:** `Geomstr.split` heeft geen tak voor `TYPE_ARC` en
-    geeft er nul stukken voor terug, waardoor een boog die de naad middenin
-    kruist uit beide tegels verdwijnt. Gemeten op een cirkel met de naad naast
-    de laslijnen: een halve cirkel spoorloos.
+    Lines, quads and cubics we let the engine split itself; those branches exist and work.
+    **Arcs not:** `Geomstr.split` has no branch for `TYPE_ARC` and returns zero pieces for
+    one, which makes an arc that crosses the seam in the middle disappear from both tiles.
+    Measured on a circle with the seam beside the weld lines: half a circle without a trace.
 
-    Zelf splitsen kan exact, want een boog door drie punten van een cirkel ís
-    die cirkel: elk stuk wordt opgebouwd uit zijn begin, zijn midden en zijn
-    eind, alle drie opgevraagd met `position`.
+    Splitting it ourselves can be exact, because an arc through three points of a circle *is*
+    that circle: every piece is built up from its start, its middle and its end, all three
+    asked for with `position`.
     """
     from meerk40t.core.geomstr import Geomstr, TYPE_ARC
 
@@ -408,76 +400,73 @@ def _stukken(geom, index: int, ts):
     if int(geom.segments[index][2].real) != TYPE_ARC:
         return list(geom.split(index, sorted(ts)))
 
-    grenzen = [0.0] + sorted(ts) + [1.0]
+    edges_at = [0.0] + sorted(ts) + [1.0]
     hulp = Geomstr()
-    for begin, eind in zip(grenzen, grenzen[1:]):
-        if eind - begin < 1e-12:
+    for start, end in zip(edges_at, edges_at[1:]):
+        if end - start < 1e-12:
             continue
         hulp.arc(
-            geom.position(index, begin),
-            geom.position(index, (begin + eind) / 2),
-            geom.position(index, eind),
+            geom.position(index, start),
+            geom.position(index, (start + end) / 2),
+            geom.position(index, end),
         )
     return [hulp.segments[i] for i in range(hulp.index)]
 
 
 def clip_geometry(geom, rect_units: Rect):
     """
-    De geometrie die binnen dit brandgebied valt, als nieuwe Geomstr.
+    The geometry that falls within this burn area, as a new Geomstr.
 
-    Elk segment wordt gesplitst op zijn snijpunten met de vier vensterranden,
-    en van de stukken houden we wat met zijn midden binnen ligt. Splitsen
-    gebeurt op de parameter, dus **een boog blijft een boog** — er wordt niet
-    geïnterpoleerd, en dat is te zien aan het werkstuk.
+    Every segment is split at its intersections with the four window edges, and of the pieces
+    we keep what has its middle inside. Splitting happens on the parameter, so **an arc stays
+    an arc** — nothing is interpolated, and that is visible on the workpiece.
 
-    `rect_units` is in engine-eenheden, niet in millimeters: het klippen gebeurt
-    in dezelfde ruimte als de geometrie. Het origineel wordt niet aangeraakt.
+    `rect_units` is in engine units, not in millimetres: the clipping happens in the same
+    space as the geometry. The original is not touched.
 
-    **De onderrand telt mee, de bovenrand niet.** Een lijn die pal op een naad
-    ligt wordt door geen van beide tegels doorgesneden — hij kruist niets — dus
-    zonder dat verschil zou zijn midden in allebei de rechthoeken vallen en ging
-    de laser er tweemaal overheen. Met `x0 <= midden < x1` valt hij altijd in de
-    tegel erna, en nooit in geen van beide. De uiterste rand van de plaat is
-    daarmee de enige plek waar iets buiten de boot valt; `TileRun.burn` rekt het
-    brandgebied van de laatste tegel daarom een haar op.
+    **The lower edge counts, the upper edge does not.** A line lying exactly on a seam is cut
+    by neither tile — it crosses nothing — so without that difference its middle would fall
+    in both rectangles and the laser would go over it twice. With `x0 <= middle < x1` it
+    always falls in the next tile, and never in neither. The outermost edge of the board is
+    therefore the only place where something falls through; that is why `TileRun.burn`
+    stretches the last tile's burn area by a hair.
 
-    **Waarom niet `geomstr.Clip`, die dit lijkt te doen?** Omdat hij op bogen
-    stukloopt: `Clip.inside` vraagt zijn middens in één keer op en belandt in de
-    oneindige recursie van `Geomstr._arc_position` (`geomstr.py:5784`, `line` in
-    plaats van `_line`), en `Clip.polycut` laat een boogsegment vallen dat de
-    grens niet eens kruist. Upstream merkt het niet omdat hun eigen `Clip`-test
-    alleen lijnen klipt. Wij wijzigen niets in `meerk40t/`; dit is de weg
-    eromheen, en voor ons geval ook de eenvoudigere.
+    **Why not `geomstr.Clip`, which appears to do this?** Because it breaks on arcs:
+    `Clip.inside` asks for its middles in one go and lands in the infinite recursion of
+    `Geomstr._arc_position` (`geomstr.py:5784`, `line` instead of `_line`), and `Clip.polycut`
+    drops an arc segment that does not even cross the boundary. Upstream does not notice
+    because their own `Clip` test only clips lines. We change nothing in `meerk40t/`; this is
+    the way around it, and for our case the simpler one too.
     """
     from meerk40t.core.geomstr import Geomstr
 
-    randen = _rand_segmenten(rect_units)
-    dragend = _dragende_soorten()
+    edges = _rand_segmenten(rect_units)
+    dragend = _carrying_types()
 
-    # Eerst alle stukken verzamelen, dan pas filteren: het midden van een stuk
-    # is alleen te vragen aan een Geomstr die het stuk al bevat.
-    stukken = Geomstr()
+    # Collect all the pieces first, only then filter: a piece's middle can only be asked of
+    # a Geomstr that already contains the piece.
+    pieces = Geomstr()
     for index in range(geom.index):
         if int(geom.segments[index][2].real) not in dragend:
             continue
-        snijpunten = set()
-        for rand in range(randen.index):
-            if int(randen.segments[rand][2].real) not in dragend:
+        crossings = set()
+        for edge in range(edges.index):
+            if int(edges.segments[edge][2].real) not in dragend:
                 continue
-            for t, _ander in geom.intersections(index, randen.segments[rand]):
-                # De uiteinden zelf zijn geen splitsing: daar houdt het segment
-                # toch al op, en splitsen op 0 of 1 levert een leeg stuk.
+            for t, _ander in geom.intersections(index, edges.segments[edge]):
+                # The end points themselves are not a split: the segment already stops
+                # there, and splitting at 0 or 1 produces an empty piece.
                 if 1e-9 < float(t) < 1 - 1e-9:
-                    snijpunten.add(round(float(t), 9))
-        for stuk in _stukken(geom, index, sorted(snijpunten)):
-            stukken.append_segment(*stuk)
+                    crossings.add(round(float(t), 9))
+        for piece in _pieces(geom, index, sorted(crossings)):
+            pieces.append_segment(*piece)
 
-    binnen = Geomstr()
-    for index in range(stukken.index):
-        midden = stukken.position(index, 0.5)
+    inside = Geomstr()
+    for index in range(pieces.index):
+        middle = pieces.position(index, 0.5)
         if (
-            rect_units.x0 <= midden.real < rect_units.x1
-            and rect_units.y0 <= midden.imag < rect_units.y1
+            rect_units.x0 <= middle.real < rect_units.x1
+            and rect_units.y0 <= middle.imag < rect_units.y1
         ):
-            binnen.append_segment(*stukken.segments[index])
-    return binnen
+            inside.append_segment(*pieces.segments[index])
+    return inside

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import FontPicker from './FontPicker.svelte';
 	import GeneratorPreview from './GeneratorPreview.svelte';
@@ -16,9 +17,9 @@
 	}: {
 		open: boolean;
 		hasSelection?: boolean;
-		/** Wat er herhaald moet worden. Herhalen en cirkel kunnen zonder deze
-		 *  lijst geen echt voorbeeld tonen; dan valt het beeld terug op de
-		 *  schets die alleen de velden uitlegt. */
+		/** What has to be repeated. Without this list, repeat and circle cannot show
+		 *  a real preview; the image then falls back on the sketch that only explains
+		 *  the fields. */
 		selectedIds?: string[];
 		busy?: boolean;
 		onGenerate: (
@@ -53,61 +54,61 @@
 		radius_mm: '40',
 		font_size_mm: '10',
 		inside: false,
-		// De API kende `font` al; alleen dit venster vroeg er nooit naar, dus
-		// kwam elke boogtekst er in de standaardletter uit. Zelfde kiezer als
-		// het tekstvenster — met voorbeeld in de letter zelf.
+		// The API already knew `font`; only this dialog never asked for it, so every
+		// arc text came out in the default typeface. The same picker as the text
+		// dialog — with a preview in the typeface itself.
 		font: '',
-		fontNaam: ''
+		fontName: ''
 	});
 
-	// De typen die python-barcode aankan en die op een laser zinnig zijn.
+	// The types python-barcode can handle that make sense on a laser.
 	const BARCODES = ['code128', 'code39', 'ean13', 'ean8', 'upca', 'itf', 'issn'];
 
-	// "Raster" heette hetzelfde als het testraster, en dat is iets heel anders.
-	// Herhalen zegt wat het doet.
+	// "Grid" was called the same as the test grid, and that is something else
+	// entirely. "Repeat" says what it does.
 	const TABS: { id: Tab; label: string; needsSelection: boolean; icon: string }[] = [
 		{
 			id: 'grid',
-			label: 'Herhalen',
+			label: t('gen.tab.grid'),
 			needsSelection: true,
 			icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z'
 		},
 		{
 			id: 'radial',
-			label: 'Cirkel',
+			label: t('gen.tab.radial'),
 			needsSelection: true,
 			icon: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 4v3M20 12h-3M12 20v-3M4 12h3'
 		},
-		{ id: 'polygon', label: 'Veelhoek', needsSelection: false, icon: 'M12 3l8 6-3 10H7L4 9z' },
+		{ id: 'polygon', label: t('gen.tab.polygon'), needsSelection: false, icon: 'M12 3l8 6-3 10H7L4 9z' },
 		{
 			id: 'box',
-			label: 'Doos',
+			label: t('gen.tab.box'),
 			needsSelection: false,
 			icon: 'M3 8l9-5 9 5-9 5zM3 8v8l9 5 9-5V8'
 		},
 		{
 			id: 'qrcode',
-			label: 'QR-code',
+			label: t('gen.tab.qrcode'),
 			needsSelection: false,
 			icon: 'M3.5 3.5h6v6h-6zM14.5 3.5h6v6h-6zM3.5 14.5h6v6h-6zM14.5 15h2v2h-2zM19 19h1.5v1.5H19'
 		},
 		{
 			id: 'barcode',
-			label: 'Streepjescode',
+			label: t('gen.tab.barcode'),
 			needsSelection: false,
 			icon: 'M4 5v14M7.5 5v14M10 5v14M14 5v14M17 5v14M20 5v14'
 		},
 		{
 			id: 'arctext',
-			label: 'Boogtekst',
+			label: t('gen.tab.arctext'),
 			needsSelection: false,
 			icon: 'M4 16a8 8 0 0 1 16 0M8 12l.8-2.4M12 10.6V8M16 12l-.8-2.4'
 		}
 	];
 
 	let current = $derived(TABS.find((t) => t.id === tab)!);
-	/** De velden van het zichtbare tabblad, voor de schets ernaast. */
-	let huidig = $derived(
+	/** The fields of the visible tab, for the sketch beside it. */
+	let currentValues = $derived(
 		(
 			{
 				grid, radial, polygon, box, qrcode: qr, barcode: bar, arctext: arc
@@ -117,26 +118,26 @@
 	let blocked = $derived(current.needsSelection && !hasSelection);
 
 	let notice = $state<string | null>(null);
-	/** De lettertypelade van de boogtekst; dicht tot je hem opent. */
-	let letterOpen = $state(false);
+	/** The arc text's typeface drawer; closed until you open it. */
+	let fontOpen = $state(false);
 
 	async function run(body: Record<string, unknown>) {
 		notice = null;
 		const outcome = await onGenerate(tab, body);
 		error = outcome.error ?? null;
 		notice = outcome.notice ?? null;
-		// Blijft open als er iets te melden viel — een vel dat er stilzwijgend
-		// bijkomt, is precies het soort verrassing dat je niet wilt.
+		// Stays open when there was something to report — a sheet that appears
+		// silently is exactly the kind of surprise you do not want.
 		if (!error && !notice) open = false;
 	}
 
 	const n = (value: string) => Number(value);
 
 	/**
-	 * Wat er naar de server gaat — één plek, zodat de knop en het voorbeeld
-	 * gegarandeerd hetzelfde vragen. Stonden ze los, dan kon het voorbeeld
-	 * iets anders laten zien dan de knop maakt, en dat is precies het soort
-	 * verschil dat niemand opmerkt tot er hout in de machine ligt.
+	 * What goes to the server — one place, so that the button and the preview are
+	 * guaranteed to ask the same thing. Kept apart, the preview could show something
+	 * other than what the button makes, and that is exactly the kind of difference
+	 * nobody notices until there is wood in the machine.
 	 */
 	function opdracht(): Record<string, unknown> {
 		if (tab === 'grid')
@@ -173,18 +174,18 @@
 		};
 	}
 
-	// ---------------------------------------------------------- het voorbeeld
+	// ----------------------------------------------------------- the preview
 
-	let voorbeeld = $state<Voorbeeld | null>(null);
-	let voorbeeldFout = $state<string | null>(null);
+	let preview = $state<Voorbeeld | null>(null);
+	let previewError = $state<string | null>(null);
 	/**
-	 * Valt er iets te tonen?
+	 * Is there anything to show?
 	 *
-	 * Twee redenen van niet. Herhalen en cirkel hebben de gekozen elementen
-	 * nodig; die vallen zonder terug op de schets in plaats van op iets
-	 * verzonnens. En een QR-code zonder inhoud bestaat niet — daar wachten we
-	 * op je eerste letter in plaats van bij elke opening van het venster een
-	 * afwijzing op te halen die je zelf al kon zien aankomen.
+	 * Two reasons not to. Repeat and circle need the chosen elements; without them
+	 * they fall back on the sketch rather than on something invented. And a QR code
+	 * without content does not exist — there we wait for your first character
+	 * instead of fetching a refusal on every opening of the dialog that you could
+	 * see coming yourself.
 	 */
 	let voorbeeldbaar = $derived(
 		(!current.needsSelection || selectedIds.length > 0) &&
@@ -194,18 +195,18 @@
 	);
 
 	/**
-	 * Welke velden een getal moeten bevatten voordat er iets te tekenen valt.
+	 * Which fields have to hold a number before there is anything to draw.
 	 *
-	 * Een veld waar je het getal net uit gewist hebt, is niet fout maar nog
-	 * niet af. Stuurden we het toch op, dan leest `Number('')` als nul en komt
-	 * er "finger_mm moet groter dan nul zijn" terug — de naam van een
-	 * variabele, niet van een veld dat op het scherm "Vinger (mm)" heet. Zelf
-	 * zien aankomen is korter dan het antwoord vertalen.
+	 * A field you have just cleared the number out of is not wrong but unfinished.
+	 * Sending it anyway, `Number('')` reads as zero and back comes "finger_mm must be
+	 * greater than zero" — the name of a variable, not of a field that says "Finger
+	 * (mm)" on screen. Seeing it coming ourselves is shorter than translating the
+	 * answer.
 	 *
-	 * De binnenstraal van de veelhoek staat er niet bij: leeg betekent daar
-	 * "geen ster", en dat is een geldige keuze.
+	 * The polygon's inner radius is not among them: empty means "no star" there, and
+	 * that is a valid choice.
 	 */
-	const GETALVELDEN: Record<Tab, string[]> = {
+	const NUMBER_FIELDS: Record<Tab, string[]> = {
 		grid: ['columns', 'rows', 'gap_x_mm', 'gap_y_mm'],
 		radial: ['repeats', 'radius_mm'],
 		polygon: ['corners', 'radius_mm', 'cx_mm', 'cy_mm'],
@@ -214,20 +215,20 @@
 		barcode: ['width_mm', 'height_mm'],
 		arctext: ['cx_mm', 'cy_mm', 'radius_mm', 'font_size_mm']
 	};
-	let onaf = $derived(
-		GETALVELDEN[tab].some((veld) => {
-			const waarde = huidig[veld];
+	let unfinished = $derived(
+		NUMBER_FIELDS[tab].some((field) => {
+			const value = currentValues[field];
 			return (
-				typeof waarde !== 'string' ||
-				waarde.trim() === '' ||
-				!Number.isFinite(Number(waarde))
+				typeof value !== 'string' ||
+				value.trim() === '' ||
+				!Number.isFinite(Number(value))
 			);
 		})
 	);
 
-	// Antwoorden kunnen elkaar inhalen: je typt door terwijl de vorige ronde
-	// nog onderweg is. Alleen de laatste vraag mag het beeld nog zetten.
-	let ronde = 0;
+	// Answers can overtake each other: you keep typing while the previous round is
+	// still in flight. Only the last request may still set the image.
+	let round = 0;
 
 	async function haalVoorbeeld(mijn: number, what: string, body: Record<string, unknown>) {
 		try {
@@ -242,59 +243,59 @@
 				body: JSON.stringify({ ...body, what, ids: selectedIds })
 			});
 			const data = await response.json().catch(() => null);
-			if (mijn !== ronde) return;
+			if (mijn !== round) return;
 			if (!response.ok) {
-				voorbeeldFout =
-					typeof data?.detail === 'string' ? data.detail : 'Dit kan de engine niet tekenen.';
+				previewError =
+					typeof data?.detail === 'string' ? data.detail : t('gen.cannotDraw');
 				return;
 			}
-			voorbeeldFout = null;
-			// Alleen vervangen als er iets geldigs uitkwam; het laatste geldige
-			// beeld laten staan is rustiger dan een gat laten vallen, en ook
-			// eerlijker: dát is nog steeds wat je zou krijgen als je nu ophield
-			// met typen.
-			voorbeeld = data;
+			previewError = null;
+			// Only replace it when something valid came out; leaving the last valid
+			// image is calmer than dropping a hole, and also more honest: that is still
+			// what you would get if you stopped typing now.
+			preview = data;
 		} catch (e) {
-			if (mijn === ronde) voorbeeldFout = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			if (mijn === round)
+				previewError = t('error.network', { message: e instanceof Error ? e.message : e });
 		}
 	}
 
 	let timer: ReturnType<typeof setTimeout> | null = null;
-	// Alleen om te zien óf het tabblad veranderde. Met `untrack` omdat dit
-	// geen abonnement mag worden: het staat buiten het effect.
+	// Only to see *whether* the tab changed. With `untrack` because this must not
+	// become a subscription: it sits outside the effect.
 	let vorigTabblad: Tab = untrack(() => tab);
 	/**
-	 * Meekijken tijdens het typen.
+	 * Watching along while you type.
 	 *
-	 * Een voorbeeld achter een knop is geen voorbeeld: je ziet pas wat je
-	 * instelt nadat je besloten hebt dat je het wilt zien. Dus bij elke
-	 * wijziging, met 200 ms rust ertussen zodat er niet per aanslag gerekend
-	 * wordt. Dit raakt `error` niet aan: dat blok onderaan het formulier hoort
-	 * bij een mislukte handeling, niet bij een half getypt getal.
+	 * A preview behind a button is not a preview: you only see what you are setting
+	 * after you have decided you want to see it. So on every change, with 200 ms of
+	 * rest in between so it is not calculated per keystroke. This does not touch
+	 * `error`: that block at the bottom of the form belongs to a failed operation,
+	 * not to a half-typed number.
 	 */
 	$effect(() => {
 		const what = tab;
 		const body = opdracht();
-		// Wat er nog onderweg is, telt niet meer: het hoort bij een vraag die
-		// door deze ronde is ingehaald. Zonder dit kan een antwoord op de
-		// vórige, nog geldige invoer de melding hieronder weer wegpoetsen.
+		// Whatever is still in flight no longer counts: it belongs to a question this
+		// round has overtaken. Without this an answer to the previous, still valid
+		// input can wipe the message below away again.
 		if (timer) clearTimeout(timer);
-		const mijn = ++ronde;
+		const mijn = ++round;
 
-		// Van tabblad wisselen laat geen vorm van het vorige tabblad achter:
-		// dat zou een voorbeeld zijn van iets anders dan het formulier ernaast.
+		// Switching tabs leaves no shape from the previous tab behind: that would be a
+		// preview of something other than the form beside it.
 		if (what !== vorigTabblad) {
 			vorigTabblad = what;
-			voorbeeld = null;
-			voorbeeldFout = null;
+			preview = null;
+			previewError = null;
 		}
 		if (!open || !voorbeeldbaar) {
-			voorbeeld = null;
-			voorbeeldFout = null;
+			preview = null;
+			previewError = null;
 			return;
 		}
-		if (onaf) {
-			voorbeeldFout = 'Nog niet compleet: vul de lege velden in.';
+		if (unfinished) {
+			previewError = t('gen.incomplete');
 			return;
 		}
 		timer = setTimeout(() => haalVoorbeeld(mijn, what, body), 200);
@@ -303,20 +304,27 @@
 		};
 	});
 
-	/** "Panelen maken — 6 stuks, past op dit vel": de knop zegt wát er komt. */
-	let knopStaart = $derived.by(() => {
-		if (!voorbeeld || voorbeeldFout) return '';
-		if (voorbeeld.what === 'box')
-			return voorbeeld.sheets > 1
-				? ` — ${voorbeeld.parts.length} op dit vel, ${voorbeeld.sheets} vellen`
-				: ` — ${voorbeeld.parts.length} stuks, past op dit vel`;
-		const b = voorbeeld.bounds;
-		const maat = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
-		return ` — ${maat(b[2] - b[0])} × ${maat(b[3] - b[1])} mm`;
+	/**
+	 * "Make panels — 6 pieces, fits on this sheet": the button says what is coming.
+	 *
+	 * The dash is punctuation and lives here; both halves are whole messages, so a
+	 * translation can put the words in its own order within each of them.
+	 */
+	let buttonTail = $derived.by(() => {
+		if (!preview || previewError) return '';
+		if (preview.what === 'box')
+			return ` — ${
+				preview.sheets > 1
+					? t('gen.tail.sheets', { parts: preview.parts.length, sheets: preview.sheets })
+					: t('gen.tail.fits', { parts: preview.parts.length })
+			}`;
+		const b = preview.bounds;
+		const size = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
+		return ` — ${t('gen.tail.size', { width: size(b[2] - b[0]), height: size(b[3] - b[1]) })}`;
 	});
 </script>
 
-<Dialog title="Generatoren" bind:open width="800px">
+<Dialog title={t('gen.title')} bind:open width="800px">
 	<div class="tabs">
 		{#each TABS as item (item.id)}
 			<button class="tab" aria-pressed={tab === item.id} onclick={() => { tab = item.id; error = null; }}>
@@ -329,7 +337,7 @@
 	</div>
 
 	{#if blocked}
-		<p class="hint">Selecteer eerst wat er herhaald moet worden.</p>
+		<p class="hint">{t('gen.needsSelection')}</p>
 	{/if}
 	{#if error}
 		<p class="error" role="alert">{error}</p>
@@ -341,178 +349,193 @@
 	<div class="werkbank">
 	<div class="formulier">
 	{#if tab === 'grid'}
-		<p class="lead">
-			De selectie in rijen en kolommen herhalen. De afstand is de ruimte <em>tussen</em>
-			de vormen, want daar gaat de snede doorheen.
-		</p>
+		<p class="lead">{t('gen.grid.lead')}</p>
 		<div class="fields">
-			<div class="paar">
-				<NumberField label="Kolommen" step={1} min={1} bind:value={grid.columns} />
-				<NumberField label="Rijen" step={1} min={1} bind:value={grid.rows} />
+			<div class="pair">
+				<NumberField label={t('gen.columns')} step={1} min={1} bind:value={grid.columns} />
+				<NumberField label={t('gen.rows')} step={1} min={1} bind:value={grid.rows} />
 			</div>
-			<div class="paar">
-				<NumberField label="Ruimte X" unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
-				<NumberField label="Ruimte Y" unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
+			<div class="pair">
+				<NumberField label={t('gen.gapX')} unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
+				<NumberField label={t('gen.gapY')} unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
 			</div>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}>
-			{n(grid.columns) * n(grid.rows)} stuks maken{knopStaart}
+			{t('gen.grid.go', { n: n(grid.columns) * n(grid.rows), tail: buttonTail })}
 		</button>
 	{:else if tab === 'radial'}
-		<p class="lead">De selectie rond een middelpunt herhalen.</p>
+		<p class="lead">{t('gen.radial.lead')}</p>
 		<div class="fields">
-			<div class="paar">
-				<NumberField label="Aantal" step={1} min={2} bind:value={radial.repeats} />
-				<NumberField label="Straal" unit="mm" step={1} bind:value={radial.radius_mm} />
+			<div class="pair">
+				<NumberField label={t('gen.count')} step={1} min={2} bind:value={radial.repeats} />
+				<NumberField label={t('gen.radius')} unit="mm" step={1} bind:value={radial.radius_mm} />
 			</div>
-			<label class="check"><input type="checkbox" bind:checked={radial.rotate} /><span>Meedraaien</span></label>
+			<label class="check"
+				><input type="checkbox" bind:checked={radial.rotate} /><span>{t('gen.rotateAlong')}</span
+				></label
+			>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}
-			>Rondzetten{knopStaart}</button
+			>{t('gen.radial.go', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'polygon'}
-		<p class="lead">
-			Een regelmatige veelhoek. Vul een binnenstraal in en het wordt een ster.
-		</p>
+		<p class="lead">{t('gen.polygon.lead')}</p>
 		<div class="fields">
-			<div class="paar">
-				<NumberField label="Hoeken" step={1} min={3} bind:value={polygon.corners} />
-				<NumberField label="Straal" unit="mm" step={1} bind:value={polygon.radius_mm} />
+			<div class="pair">
+				<NumberField label={t('gen.corners')} step={1} min={3} bind:value={polygon.corners} />
+				<NumberField label={t('gen.radius')} unit="mm" step={1} bind:value={polygon.radius_mm} />
 			</div>
-			<div class="paar">
-				<NumberField label="Binnenstraal" unit="mm" step={1} bind:value={polygon.inner} />
+			<div class="pair">
+				<NumberField label={t('gen.innerRadius')} unit="mm" step={1} bind:value={polygon.inner} />
 			</div>
-			<div class="paar">
-				<NumberField label="Midden X" unit="mm" step={1} bind:value={polygon.cx_mm} />
-				<NumberField label="Midden Y" unit="mm" step={1} bind:value={polygon.cy_mm} />
+			<div class="pair">
+				<NumberField label={t('gen.centreX')} unit="mm" step={1} bind:value={polygon.cx_mm} />
+				<NumberField label={t('gen.centreY')} unit="mm" step={1} bind:value={polygon.cy_mm} />
 			</div>
 		</div>
 		<button class="go" disabled={busy} onclick={() => run(opdracht())}
-			>Tekenen{knopStaart}</button
+			>{t('gen.draw', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'box'}
-		<p class="lead">
-			Losse panelen met vingerlassen. De maten zijn buitenmaten; de kerf wordt
-			bij de tanden opgeteld omdat de laser aan beide kanten materiaal
-			wegneemt. Past het niet op één vel, dan gaat de rest naar een volgend vel.
-		</p>
+		<p class="lead">{t('gen.box.lead')}</p>
 		<div class="fields">
-			<!-- Breedte, diepte en hoogte zijn één maat in drieën en staan dus op
-			     één regel; de dikte van het materiaal is iets anders en staat eronder. -->
-			<div class="drie">
-				<NumberField label="Breedte" unit="mm" step={1} bind:value={box.width_mm} />
-				<NumberField label="Diepte" unit="mm" step={1} bind:value={box.depth_mm} />
-				<NumberField label="Hoogte" unit="mm" step={1} bind:value={box.height_mm} />
+			<!-- Width, depth and height are one measurement in three and so sit on one
+			     line; the thickness of the material is something else and sits below. -->
+			<div class="three">
+				<NumberField label={t('gen.width')} unit="mm" step={1} bind:value={box.width_mm} />
+				<NumberField label={t('gen.depth')} unit="mm" step={1} bind:value={box.depth_mm} />
+				<NumberField label={t('gen.height')} unit="mm" step={1} bind:value={box.height_mm} />
 			</div>
-			<div class="paar">
-				<NumberField label="Materiaaldikte" unit="mm" step={0.1} bind:value={box.thickness_mm} />
+			<div class="pair">
+				<NumberField
+					label={t('gen.materialThickness')}
+					unit="mm"
+					step={0.1}
+					bind:value={box.thickness_mm}
+				/>
 			</div>
-			<div class="paar">
-				<NumberField label="Vinger" unit="mm" step={1} bind:value={box.finger_mm} />
-				<NumberField label="Kerf" unit="mm" step={0.05} bind:value={box.kerf_mm} />
+			<div class="pair">
+				<NumberField label={t('gen.finger')} unit="mm" step={1} bind:value={box.finger_mm} />
+				<NumberField label={t('gen.kerf')} unit="mm" step={0.05} bind:value={box.kerf_mm} />
 			</div>
-			<label class="check"><input type="checkbox" bind:checked={box.lid} /><span>Met deksel</span></label>
+			<label class="check"
+				><input type="checkbox" bind:checked={box.lid} /><span>{t('gen.withLid')}</span></label
+			>
 			<label class="check">
 				<input type="checkbox" bind:checked={box.spread} />
-				<span>Verdelen over vellen als het niet past</span>
+				<span>{t('gen.spreadSheets')}</span>
 			</label>
 		</div>
 		<button class="go" disabled={busy} onclick={() => run(opdracht())}
-			>Panelen maken{knopStaart}</button
+			>{t('gen.makePanels', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'qrcode'}
-		<p class="lead">
-			Een QR-code als vlakken, niet als plaatje: gegraveerde bitmaps worden op
-			hout vaak vaag, gevulde vierkanten niet.
-		</p>
+		<p class="lead">{t('gen.qr.lead')}</p>
 		<div class="fields">
-			<label><span>Inhoud</span><input type="text" placeholder="https://…" bind:value={qr.text} /></label>
-			<div class="paar">
-				<NumberField label="Formaat" unit="mm" step={1} bind:value={qr.size_mm} />
+			<label
+				><span>{t('gen.content')}</span><input
+					type="text"
+					placeholder="https://…"
+					bind:value={qr.text}
+				/></label
+			>
+			<div class="pair">
+				<NumberField label={t('gen.size')} unit="mm" step={1} bind:value={qr.size_mm} />
 			</div>
 		</div>
 		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run(opdracht())}
-			>Plaatsen{knopStaart}</button
+			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'barcode'}
-		<p class="lead">
-			Een streepjescode als vlakken. EAN en UPC stellen eisen aan lengte en
-			controlecijfer; klopt het niet, dan zegt de app dat in plaats van een code
-			te maken die niet scant.
-		</p>
+		<p class="lead">{t('gen.barcode.lead')}</p>
 		<div class="fields">
-			<label><span>Inhoud</span><input type="text" placeholder="OPENKERF-1" bind:value={bar.text} /></label>
+			<label
+				><span>{t('gen.content')}</span><input
+					type="text"
+					placeholder="OPENKERF-1"
+					bind:value={bar.text}
+				/></label
+			>
 			<label>
-				<span>Type</span>
+				<span>{t('gen.barcode.type')}</span>
 				<select bind:value={bar.kind}>
 					{#each BARCODES as item (item)}
 						<option value={item}>{item}</option>
 					{/each}
 				</select>
 			</label>
-			<div class="paar">
-				<NumberField label="Breedte" unit="mm" step={1} bind:value={bar.width_mm} />
-				<NumberField label="Hoogte" unit="mm" step={1} bind:value={bar.height_mm} />
+			<div class="pair">
+				<NumberField label={t('gen.width')} unit="mm" step={1} bind:value={bar.width_mm} />
+				<NumberField label={t('gen.height')} unit="mm" step={1} bind:value={bar.height_mm} />
 			</div>
 		</div>
 		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
-			>Plaatsen{knopStaart}</button
+			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else}
-		<p class="lead">
-			Tekst langs een boog, voor een rond bordje of een deksel. Let op: hierna is
-			het een pad en geen tekst meer — de engine zou de tekst anders bij de
-			eerstvolgende wijziging weer recht renderen en de boog wegpoetsen.
-		</p>
+		<p class="lead">{t('gen.arc.lead')}</p>
 		<div class="fields">
-			<label><span>Tekst</span><input type="text" placeholder="OPENKERF" bind:value={arc.text} /></label>
-			<div class="paar">
-				<NumberField label="Midden X" unit="mm" step={1} bind:value={arc.cx_mm} />
-				<NumberField label="Midden Y" unit="mm" step={1} bind:value={arc.cy_mm} />
+			<label
+				><span>{t('gen.text')}</span><input
+					type="text"
+					placeholder="OPENKERF"
+					bind:value={arc.text}
+				/></label
+			>
+			<div class="pair">
+				<NumberField label={t('gen.centreX')} unit="mm" step={1} bind:value={arc.cx_mm} />
+				<NumberField label={t('gen.centreY')} unit="mm" step={1} bind:value={arc.cy_mm} />
 			</div>
-			<div class="paar">
-				<NumberField label="Straal" unit="mm" step={1} bind:value={arc.radius_mm} />
-				<NumberField label="Letterhoogte" unit="mm" step={0.5} bind:value={arc.font_size_mm} />
+			<div class="pair">
+				<NumberField label={t('gen.radius')} unit="mm" step={1} bind:value={arc.radius_mm} />
+				<NumberField
+					label={t('gen.letterHeight')}
+					unit="mm"
+					step={0.5}
+					bind:value={arc.font_size_mm}
+				/>
 			</div>
-			<label class="check"><input type="checkbox" bind:checked={arc.inside} /><span>Onderlangs</span></label>
+			<label class="check"
+				><input type="checkbox" bind:checked={arc.inside} /><span>{t('gen.underneath')}</span></label
+			>
 		</div>
-		<!-- Ingeklapt tot je hem opent: de lijst is 200 lettertypen lang en duwde
-		     de knop "Plaatsen" uit beeld (gemeten: van 725 naar 865 px). De
-		     regel zegt wél welke letter er nu gekozen is, want anders is een
-		     dichte lade hetzelfde als geen keuze. -->
-		<div class="letterkeuze">
-			<button class="letterregel" aria-expanded={letterOpen} onclick={() => (letterOpen = !letterOpen)}>
-				<span>Lettertype</span>
-				<strong>{arc.font ? arc.fontNaam || arc.font : 'Standaard'}</strong>
-				<span class="pijl" aria-hidden="true">{letterOpen ? '▴' : '▾'}</span>
+		<!-- Collapsed until you open it: the list is 200 typefaces long and pushed the
+		     "Place" button off screen (measured: from 725 to 865 px). The line does say
+		     which typeface is chosen now, because otherwise a closed drawer is the same
+		     as no choice. -->
+		<div class="fontchoice">
+			<button class="letterregel" aria-expanded={fontOpen} onclick={() => (fontOpen = !fontOpen)}>
+				<span>{t('gen.font')}</span>
+				<strong>{arc.font ? arc.fontName || arc.font : t('gen.font.default')}</strong>
+				<span class="pijl" aria-hidden="true">{fontOpen ? '▴' : '▾'}</span>
 			</button>
-			{#if letterOpen}
-				<FontPicker bind:font={arc.font} bind:fontName={arc.fontNaam} sample={arc.text} />
+			{#if fontOpen}
+				<FontPicker bind:font={arc.font} bind:fontName={arc.fontName} sample={arc.text} />
 			{/if}
 		</div>
 		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
-			>Plaatsen{knopStaart}</button
+			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{/if}
 	</div>
 
-	<!-- De vorm naast het formulier dat hem maakt. -->
-	<GeneratorPreview soort={tab} waarden={huidig} {voorbeeld} fout={voorbeeldFout}>
+	<!-- The shape beside the form that makes it. -->
+	<GeneratorPreview kind={tab} values={currentValues} {preview} failure={previewError}>
 		{#if current.needsSelection}
-			Schets, niet op schaal
+			{t('gen.preview.sketch')}
 		{:else if !voorbeeldbaar}
-			Typ iets, dan staat het hier
+			{t('gen.preview.typeSomething')}
 		{:else}
-			Even rekenen…
+			{t('gen.preview.calculating')}
 		{/if}
 	</GeneratorPreview>
 	</div>
 </Dialog>
 
 <style>
-	/* Instellen links, zien wat je instelt rechts. Onder 720px stapelt het. */
+	/* Setting on the left, seeing what you set on the right. Below 720px it stacks. */
 	.werkbank { display: grid; grid-template-columns: 1fr 210px; gap: var(--space-4); align-items: start; }
-	/* Een kolom, zodat de primaire knop zich onderaan rechts kan zetten. */
+	/* A column, so the primary button can put itself at the bottom right. */
 	.formulier {
 		min-width: 0;
 		display: flex;
@@ -527,8 +550,8 @@
 		flex-wrap: wrap;
 		border-bottom: 1px solid var(--line);
 	}
-	/* Tabbladen, geen pillen: dit is navigatie tussen formulieren. Met een
-	   icoon erboven herken je de doos zonder te lezen. */
+	/* Tabs, not pills: this is navigation between forms. With an icon above it you
+	   recognise the box without reading. */
 	.tab {
 		display: grid;
 		justify-items: center;
@@ -551,11 +574,11 @@
 	.hint { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--warn); }
 	.error { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--danger); }
 	.notice { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--accent); }
-	/* Formulierregel v4, hetzelfde model als in het testraster: een stapel
-	   regels, en wat bij elkaar hoort staat in een `.paar` of een `.drie`. In het
-	   doorlopende raster van twee kolommen dat hier stond, viel "Midden X" op de
-	   ene regel en "Midden Y" op de volgende, en werd de drieslag
-	   breedte-diepte-hoogte van de doos door de materiaaldikte opgebroken. */
+	/* Form rule v4, the same model as in the test grid: a stack of rows, and what
+	   belongs together sits in a `.pair` or a `.three`. In the continuous two-column
+	   grid that used to be here, "Centre X" fell on one row and "Centre Y" on the
+	   next, and the box's width-depth-height triad was broken up by the material
+	   thickness. */
 	.fields {
 		display: flex;
 		flex-direction: column;
@@ -563,16 +586,16 @@
 		margin-bottom: var(--space-4);
 	}
 	.fields label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
-	.paar,
-	.drie {
+	.pair,
+	.three {
 		display: grid;
 		gap: var(--space-3);
 		align-items: end;
 	}
-	.paar { grid-template-columns: 1fr 1fr; }
-	.drie { grid-template-columns: 1fr 1fr 1fr; }
+	.pair { grid-template-columns: 1fr 1fr; }
+	.three { grid-template-columns: 1fr 1fr 1fr; }
 	.fields .check { display: flex; align-items: center; gap: 6px; align-self: end; }
-	.letterkeuze { margin-bottom: var(--space-4); }
+	.fontchoice { margin-bottom: var(--space-4); }
 	.letterregel {
 		display: flex;
 		align-items: center;
@@ -601,9 +624,9 @@
 		color: var(--text-1);
 	}
 	.check input { width: auto; }
-	/* Formulierregel v4: de primaire knop staat rechtsonder, niet over de volle
-	   breedte. Een knop van 500px voor één handeling leest als een banner, en hij
-	   lijnde met geen enkel ander formulier in de app uit. */
+	/* Form rule v4: the primary button sits bottom right, not across the full width.
+	   A 500px button for one action reads as a banner, and it lined up with no other
+	   form in the app. */
 	.go {
 		align-self: flex-end;
 		padding: 8px 20px;

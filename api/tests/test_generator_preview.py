@@ -1,16 +1,14 @@
 """
 Het voorbeeld naast de werkelijkheid.
 
-Een voorbeeld dat liegt is erger dan geen voorbeeld: wie op de schets afgaat en
-er iets anders uit de machine krijgt, vertrouwt het scherm daarna nergens meer
-op. Deze tests leggen daarom van elke generator het voorbeeld en het échte
-resultaat naast elkaar en eisen dat ze op dezelfde plek en op dezelfde maat
-uitkomen — tot op een honderdste millimeter.
+A preview that lies is worse than no preview: anybody going by the sketch and getting
+something else out of the machine does not trust the screen anywhere after that. So these
+tests lay every generator's preview and its *real* result side by side and demand that they
+come out in the same place and at the same size — to within a hundredth of a millimetre.
 
-Dat is ook precies hoe de twee fouten in de eerste versie boven water kwamen:
-de ster werd te hoog (`corners` telt hoekpunten, geen sterpunten) en de
-cirkelherhaling stond 45 mm scheef (het middelpunt ligt naast de selectie, niet
-erboven). Beide zagen er op zichzelf overtuigend uit.
+That is also exactly how the two faults in the first version surfaced: the star came out too
+tall (`corners` counts corner points, not star points) and the circle repeat was 45 mm out
+(the centre lies beside the selection, not above it). Both looked convincing on their own.
 """
 
 import math
@@ -38,10 +36,10 @@ def a_rect(client):
 
 
 def drawn_extent(client):
-    """De doos om alles wat er nu op het vel staat, in mm."""
+    """The box around everything on the sheet now, in mm."""
     elements = client.get("/api/design").json()["elements"]
     boxes = [e["bounds"] for e in elements if e.get("bounds")]
-    assert boxes, "er staat niets op het vel"
+    assert boxes, "there is nothing on the sheet"
     return [
         min(b[0] for b in boxes) / UNITS_PER_MM,
         min(b[1] for b in boxes) / UNITS_PER_MM,
@@ -58,7 +56,7 @@ def preview(client, what, body):
     return response.json()
 
 
-# Elk geval: wat, het formulier, en of er eerst iets geselecteerd moet zijn.
+# Every case: what, the form, and whether something has to be selected first.
 CASES = [
     ("polygon", {"corners": 6, "cx_mm": 50, "cy_mm": 50, "radius_mm": 20}, False),
     (
@@ -102,7 +100,7 @@ def test_the_preview_lands_where_the_real_thing_lands(client, what, body, needs_
 
 
 def placed_box(part, shape_box):
-    """Waar de doos van een vorm terechtkomt, met draaiing en al."""
+    """Where a shape's box lands, rotation and all."""
     x0, y0, x1, y1 = shape_box
     angle = math.radians(part["rot"])
     px, py = part.get("rx", 0.0), part.get("ry", 0.0)
@@ -132,14 +130,13 @@ COPIES = [
 @pytest.mark.parametrize("what,body", COPIES)
 def test_every_single_copy_lands_where_the_preview_put_it(client, what, body):
     """
-    De doos om het geheel is te grof: bij een volle cirkel is die symmetrisch,
-    en dan valt een gespiegelde draairichting er niet in op. Zo stond de
-    cirkelherhaling er eerst wél naast — pas een boog van 180° liet zien dat de
-    kopieën de andere kant op liepen.
+    The box around the whole is too coarse: on a full circle it is symmetric, and then a
+    mirrored direction of rotation does not stand out in it. That is how the circle repeat was
+    out at first — only an arc of 180° showed that the copies ran the other way.
     """
     body = dict(body, ids=[a_rect(client)])
     sketch = preview(client, what, body)
-    # De selectie is één rechthoek van 20 x 10 mm; die is de vorm.
+    # The selection is one rectangle of 20 x 10 mm; that is the shape.
     voorspeld = sorted(
         placed_box(part, (0.0, 0.0, 20.0, 10.0)) for part in sketch["parts"]
     )
@@ -157,9 +154,9 @@ def test_every_single_copy_lands_where_the_preview_put_it(client, what, body):
 
 def test_a_selection_of_more_than_one_shape_is_repeated_as_a_whole(client):
     """
-    De engine herhaalt de selectie als geheel en rekent zijn steek op de doos
-    om alles heen (`Node.union_bounds`). Met één vorm valt niet op of het
-    voorbeeld dat ook doet.
+    The engine repeats the selection as a whole and computes its pitch on the box around
+    everything (`Node.union_bounds`). With one shape it does not show whether the preview does
+    that too.
     """
     eerste = a_rect(client)
     tweede = client.post(
@@ -183,18 +180,17 @@ def test_the_preview_draws_the_panels_the_box_is_made_of(client):
     }
     sketch = preview(client, "box", body)
 
-    # Elk paneel een eigen omtrek: de vingerlassen verschillen per paneel, dus
-    # ze mogen elkaars vorm niet lenen.
+    # Every panel its own outline: the finger joints differ per panel, so they must not
+    # borrow each other's shape.
     assert sketch["sheets"] == 1
     assert len(sketch["shapes"]) == len(sketch["parts"]) == 6
-    assert sketch["labels"] == ["bodem", "voor", "achter", "links", "rechts", "deksel"]
-    # Voor en achter zijn elkaars gelijke, net als links/rechts en
-    # bodem/deksel; drie verschillende omtrekken is dus goed, zes zou juist
-    # verdacht zijn.
+    assert sketch["labels"] == ["bottom", "front", "back", "left", "right", "lid"]
+    # Front and back are each other's equal, as are left/right and bottom/lid; so three
+    # different outlines is right, six would actually be suspicious.
     assert len(set(sketch["shapes"])) == 3
 
     zonder_deksel = preview(client, "box", dict(body, lid=False))
-    assert "deksel" not in zonder_deksel["labels"]
+    assert "lid" not in zonder_deksel["labels"]
     assert len(zonder_deksel["parts"]) == 5
 
 
@@ -223,7 +219,7 @@ def test_the_box_panels_lie_where_they_get_cut(client):
 
 
 def _shape_boxes(sketch):
-    """De doos om elke vorm, uit de d-string terug: alleen M/L-paden hier."""
+    """The box around every shape, back out of the d-string: only M/L paths here."""
     boxes = []
     for shape in sketch["shapes"]:
         pairs = [
@@ -247,7 +243,7 @@ def test_a_box_that_needs_two_sheets_says_so(client):
          "finger_mm": 20, "kerf_mm": 0.1},
     )
     assert sketch["sheets"] > 1
-    assert any("niet op één vel" in note for note in sketch["notes"])
+    assert any("not fit on one sheet" in note for note in sketch["notes"])
 
 
 def test_the_preview_stops_drawing_at_five_hundred_copies(client):
@@ -301,8 +297,8 @@ def test_the_preview_refuses_with_the_same_words_as_the_real_thing(
     client, what, body, needs_selection
 ):
     """
-    Anders leert het formulier je één verhaal en de knop een ander. Dit is de
-    reden dat het rekenwerk in `_plan_*` staat en niet twee keer geschreven is.
+    Otherwise the form teaches you one story and the button another. This is the reason the
+    arithmetic is in `_plan_*` and not written twice.
     """
     if needs_selection:
         body = dict(body, ids=[a_rect(client)])
@@ -320,7 +316,7 @@ def test_a_grid_without_a_selection_says_what_to_do(client):
         json={"what": "grid", "ids": [], "columns": 2, "rows": 2},
     )
     assert response.status_code == 409
-    assert "Kies eerst" in response.json()["detail"]
+    assert "Choose what" in response.json()["detail"]
 
 
 def test_an_unknown_generator_is_refused(client):
@@ -335,16 +331,15 @@ def test_an_unknown_generator_is_refused(client):
 
 def test_the_preview_leaves_the_drawing_alone(client):
     """
-    Het voorbeeld loopt bij elke toetsaanslag en heeft daarom géén write-guard.
-    Dat mag alleen als de bewering waarop dat rust ook echt waar is: hij raakt
-    de boom niet aan. Niet "hij ruimt op na zichzelf" — dan zou hij tijdens een
-    lopende job stilletjes het werk van iemand anders wijzigen, en dan hoorde
-    de guard er wél op.
+    The preview runs on every key stroke and therefore has *no* write guard. That is only
+    allowed when the claim it rests on is really true: it does not touch the tree. Not "it
+    cleans up after itself" — then during a running job it would silently change somebody
+    else's work, and then the guard would belong on it.
 
-    Vandaar dat dit de hele momentopname vergelijkt en niet alleen wat aantal
-    tellingen: elementen, bewerkingen, vellen, en alles wat eraan hangt. Zakt
-    deze test, dan is de route van soort veranderd en moet `write` erop —
-    `test_every_mutating_route_requires_the_write_guard` houdt de andere kant
+    Hence this compares the whole snapshot and not only a few counts: elements, operations,
+    sheets, and everything that hangs off them. If this test fails, the route has changed kind
+    and `write` has to go on it — `test_every_mutating_route_requires_the_write_guard` holds
+    the other side
     van diezelfde afspraak vast.
     """
     rect = a_rect(client)
@@ -352,9 +347,8 @@ def test_the_preview_leaves_the_drawing_alone(client):
     before_sheets = client.get("/api/sheets").json()
 
     for what, body, needs_selection in CASES + BAD + [
-        # Het geval met de meeste kans op sporen: de échte doosgenerator maakt
-        # hier een tweede vel aan en springt ernaartoe. Het voorbeeld zegt het
-        # alleen.
+        # The case most likely to leave traces: here the *real* box generator creates a
+        # second sheet and jumps to it. The preview only says so.
         (
             "box",
             {"width_mm": 200, "depth_mm": 190, "height_mm": 120, "thickness_mm": 4,
@@ -368,18 +362,17 @@ def test_the_preview_leaves_the_drawing_alone(client):
 
     assert client.get("/api/design").json() == before
     assert client.get("/api/sheets").json() == before_sheets
-    # En het uitgangspunt van de vergelijking klopt: er stond iets om te
-    # bewaken. Een lege boom die leeg blijft, bewijst niets.
+    # And the comparison's premise holds: there was something to guard. An empty tree that
+    # stays empty proves nothing.
     assert len(before["elements"]) == 1
     assert len(before_sheets["sheets"]) == 1
 
 
 def test_the_preview_adds_nothing_to_undo(client):
     """
-    Een voorbeeld dat een stap op de ongedaan-stapel achterlaat, is net zo
-    vervelend als een voorbeeld dat tekent: je drukt op ongedaan maken en er
-    gebeurt niets zichtbaars. Zeven keer terug is de stille variant van
-    dezelfde fout.
+    A preview that leaves a step on the undo stack is just as annoying as a preview that
+    draws: you press undo and nothing visible happens. Seven steps back is the silent variant
+    of the same fault.
     """
     rect = a_rect(client)
     for what, body, needs_selection in CASES:
@@ -387,22 +380,22 @@ def test_the_preview_adds_nothing_to_undo(client):
             body = dict(body, ids=[rect])
         client.post("/api/design/generate/preview", json=dict(body, what=what))
 
-    # Eén keer terug haalt de rechthoek weg — er zat dus niets tussen.
+    # One step back removes the rectangle — so there was nothing in between.
     assert client.post("/api/design/undo").status_code < 400
     assert client.get("/api/design").json()["elements"] == []
 
 
 def test_the_arc_text_preview_does_not_change_the_chosen_font(client, kernel):
     """
-    `create_linetext_node` schrijft het gekozen lettertype naar
-    `context.last_font` (extra/hershey.py:492), en alles wat daarna zonder
-    lettertype geplaatst wordt, erft dat stilletjes — dat is de bug die de
-    opschriften op een testbord ooit in Apple Chancery zette. Een voorbeeld
-    hoort daar helemáál buiten te blijven: je hebt nog niets gekozen.
+    `create_linetext_node` writes the chosen font to `context.last_font`
+    (extra/hershey.py:492), and everything placed after that without a font
+    inherits it quietly — that is the bug that once put the captions on a test
+    board in Apple Chancery. A preview should stay well out of it: you have not
+    chosen anything yet.
     """
     registry = kernel.root.fonts
     registry.context.setting(str, "last_font", "")
-    registry.context.last_font = "iets-van-de-gebruiker"
+    registry.context.last_font = "something-the-user-picked"
 
     preview(
         client,
@@ -411,4 +404,4 @@ def test_the_arc_text_preview_does_not_change_the_chosen_font(client, kernel):
          "font_size_mm": 10},
     )
 
-    assert registry.context.last_font == "iets-van-de-gebruiker"
+    assert registry.context.last_font == "something-the-user-picked"

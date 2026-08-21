@@ -1,10 +1,10 @@
 """
-Camerabeeld van het bed.
+A camera image of the bed.
 
-Er is geen echte camera in deze omgeving (macOS geeft een terminalproces geen
-toestemming), dus de tests gebruiken een videobestand als bron. OpenCV opent
-dat via dezelfde weg als een echte camera, dus de hele keten — service starten,
-frame ophalen, ijken, corrigeren — wordt wél doorlopen.
+There is no real camera in this environment (macOS gives a terminal process no
+permission), so the tests use a video file as their source. OpenCV opens that by
+the same road as a real camera, so the whole chain — starting the service,
+fetching a frame, calibrating, correcting — *is* walked.
 """
 
 import time
@@ -22,7 +22,7 @@ from openkerf_api.server import ApiServer
 
 cv2 = pytest.importorskip("cv2")
 
-# De hoeken van het "bed" in het nepbeeld, scheef gefotografeerd.
+# The corners of the "bed" in the fake image, photographed at an angle.
 CORNERS = [[80, 60], [560, 40], [600, 430], [40, 400]]
 
 
@@ -45,8 +45,8 @@ def source(tmp_path_factory):
 def camera(kernel):
     device = Camera(kernel, CommandRunner(kernel))
     yield device
-    # Nooit een leesthread laten staan: die houdt het apparaat bezet en de
-    # testrun open.
+    # Never leave a read thread behind: it keeps the device occupied and the
+    # test run open.
     device.stop()
 
 
@@ -60,7 +60,7 @@ def client(kernel, tmp_path):
 
 
 def test_the_plugin_is_available(camera):
-    """Zonder OpenCV trekt de cameraplugin zichzelf terug; dan is dit False."""
+    """Without OpenCV the camera plugin withdraws itself; then this is False."""
     assert camera.available is True
 
 
@@ -79,20 +79,20 @@ def test_starting_gives_a_frame(camera, source):
 
 
 def test_asking_for_a_frame_before_starting_is_refused(camera):
-    with pytest.raises(DesignError, match="geen camerabeeld"):
+    with pytest.raises(DesignError, match="no camera image"):
         camera.frame_png()
 
 
 def test_a_camera_that_does_not_exist_is_reported_not_hung(camera):
-    """Beter een nette melding dan een venster dat blijft draaien op zwart."""
-    with pytest.raises(DesignError, match="Geen beeld"):
-        camera.start(uri="/bestaat/niet.mp4")
+    """Better a clean message than a window that keeps spinning on black."""
+    with pytest.raises(DesignError, match="No image"):
+        camera.start(uri="/does/not/exist.mp4")
 
 
 def test_calibration_changes_the_picture(camera, source):
     """
-    De vier hoeken naar een rechthoek trekken is de hele truc: pas daarna ligt
-    het beeld op het bed en klopt waar je je ontwerp neerlegt.
+    Pulling the four corners into a rectangle is the whole trick: only then does
+    the image lie on the bed and only then is where you put your design right.
     """
     camera.start(uri=source)
     before = camera.frame_png()
@@ -106,20 +106,20 @@ def test_calibration_changes_the_picture(camera, source):
             break
         time.sleep(0.1)
     else:
-        pytest.fail("het beeld veranderde niet na het ijken")
+        pytest.fail("the image did not change after calibrating")
 
 
 def test_three_corners_is_not_a_bed(camera, source):
     camera.start(uri=source)
 
-    with pytest.raises(DesignError, match="vier hoeken"):
+    with pytest.raises(DesignError, match="four corners"):
         camera.calibrate(CORNERS[:3])
 
 
 def test_corners_on_top_of_each_other_are_refused(camera, source):
     camera.start(uri=source)
 
-    with pytest.raises(DesignError, match="op elkaar"):
+    with pytest.raises(DesignError, match="on top of each other"):
         camera.calibrate([[10, 10], [10, 10], [100, 100], [0, 100]])
 
 
@@ -133,7 +133,7 @@ def test_calibration_can_be_reset(camera, source):
 
 
 def test_the_raw_picture_can_be_shown_while_calibrating(camera, source):
-    """Hoeken aanwijzen doe je in het onbewerkte beeld, niet in het rechtgetrokken."""
+    """You point out corners in the raw image, not in the corrected one."""
     camera.start(uri=source)
     camera.calibrate(CORNERS)
 
@@ -147,7 +147,7 @@ def test_the_camera_closes_when_nobody_is_watching(camera, source, monkeypatch):
     monkeypatch.setattr(module, "LINGER", 0.0)
     camera.start(uri=source)
     with camera.viewer():
-        assert camera.reap() is False, "er kijkt nog iemand"
+        assert camera.reap() is False, "somebody is still watching"
 
     assert camera.reap() is True
     assert camera.state()["running"] is False
@@ -166,12 +166,12 @@ def test_the_stream_serves_jpeg_parts(camera, source):
     part, index = camera.next_part(None)
 
     assert b"image/jpeg" in part
-    assert b"\xff\xd8" in part  # JPEG-begin
+    assert b"\xff\xd8" in part  # start of a JPEG
     assert index is not None
 
 
 def test_the_same_frame_is_not_sent_twice(camera, source):
-    """Hetzelfde beeld nog eens versturen kost bandbreedte en levert niets op."""
+    """Sending the same image again costs bandwidth and gives nothing."""
     camera.start(uri=source)
 
     _, index = camera.next_part(None)
@@ -180,11 +180,11 @@ def test_the_same_frame_is_not_sent_twice(camera, source):
     assert again is None
 
 
-# Of een wegklikkende browser echt meetelt, is hier niet te testen: de
-# TestClient van Starlette speelt geen verbroken verbinding na, dus
-# `request.is_disconnected()` wordt nooit waar. Dat is met een draaiende server
-# en curl nagelopen — zie de PR. Wat hier wél vastligt, is dat de teller
-# terugloopt zodra de kijker weg is (test hierboven), want dat was de fout.
+# Whether a browser clicking away really counts cannot be tested here: Starlette's
+# TestClient does not play back a broken connection, so `request.is_disconnected()`
+# never becomes true. That was checked with a running server and curl — see the PR.
+# What *is* pinned down here is that the counter runs back down as soon as the
+# viewer is gone (the test above), because that was the bug.
 
 
 def test_the_routes_work_end_to_end(client, source):
@@ -207,31 +207,31 @@ def test_a_frame_without_a_camera_is_a_409(client):
 
 def test_the_failure_says_what_to_do_about_it(camera, monkeypatch):
     """
-    "Er is geen beeld" helpt niemand. Het verschil tussen "er zit geen camera
-    aan" en "dit programma mag niet bij de camera" bepaalt volledig wat je
-    eraan moet doen.
+    "There is no image" helps nobody. The difference between "there is no camera
+    attached" and "this program is not allowed near the camera" entirely decides
+    what you have to do about it.
     """
     monkeypatch.setattr(camera, "detected", lambda: [])
-    zonder = camera._why_no_picture("0")
+    without_one = camera._why_no_picture("0")
 
-    monkeypatch.setattr(camera, "detected", lambda: ["MacBook Pro-camera"])
-    met = camera._why_no_picture("0")
+    monkeypatch.setattr(camera, "detected", lambda: ["MacBook Pro camera"])
+    with_one = camera._why_no_picture("0")
 
-    assert "geen enkele camera" in zonder
-    assert "MacBook Pro-camera" in met
-    assert zonder != met
+    assert "no camera at all" in without_one
+    assert "MacBook Pro camera" in with_one
+    assert without_one != with_one
     if platform.system() == "Darwin":
-        # Bij Camera in Systeeminstellingen zit geen +-knop, dus "vink je
-        # terminal aan" is een doodlopend advies. Het commando dat het venster
-        # uitlokt hoort erbij.
-        assert "cv2.VideoCapture(0)" in met
+        # There is no + button under Camera in System Settings, so "tick your
+        # terminal" is dead-end advice. The command that provokes the dialog
+        # belongs with it.
+        assert "cv2.VideoCapture(0)" in with_one
 
 
 def test_opencvs_broken_permission_request_is_skipped():
     """
-    OpenCV vraagt op macOS zelf om toestemming, maar dat kan alleen vanaf de
-    hoofdthread — en de engine opent de camera in een werkthread. Zonder deze
-    vlag mislukt het verzoek en verschijnt er nooit een venster.
+    On macOS OpenCV asks for permission itself, but that can only be done from the
+    main thread — and the engine opens the camera in a worker thread. Without this
+    flag the request fails and no dialog ever appears.
     """
     import os
 

@@ -1,19 +1,16 @@
 """
-Eigen lettertypen bruikbaar maken.
+Making your own fonts usable.
 
-De engine leest alleen `.ttf`, `.shx` en `.jhf`, en houdt de gevonden lijst in
-een cachebestand. Twee gevolgen die een gebruiker als "mijn font doet het niet"
-ervaart:
+The engine only reads `.ttf`, `.shx` and `.jhf`, and keeps the list it found in a cache
+file. Two consequences a user experiences as "my font does not work":
 
-1. **Een `.otf` verschijnt nooit**, ook niet als hij gewoon TrueType-omtrekken
-   bevat — wat bij veel `.otf`-bestanden zo is. Dan scheelt het alleen een
-   extensie.
-2. **Een net geïnstalleerd lettertype verschijnt pas na het legen van de
-   cache**, en niets vertelt je dat.
+1. **An `.otf` never appears**, not even when it simply contains TrueType outlines — which
+   is the case for many `.otf` files. Then it is only an extension that stands in the way.
+2. **A freshly installed typeface only appears after clearing the cache**, and nothing tells
+   you so.
 
-Hier lossen we beide op: importeren zet een kopie als `.ttf` in de fontmap van
-de engine — met een echte omzetting als het bestand CFF-omtrekken heeft — en
-ververst daarna de lijst.
+Here we solve both: importing puts a copy as `.ttf` in the engine's font directory — with a
+real conversion when the file has CFF outlines — and then refreshes the list.
 """
 
 from __future__ import annotations
@@ -24,8 +21,8 @@ from pathlib import Path
 
 from .edits import DesignError
 
-# Waar macOS, Windows en Linux hun lettertypen bewaren. De engine kijkt hier
-# ook, maar alleen naar de uitbreidingen die hij kent.
+# Where macOS, Windows and Linux keep their typefaces. The engine looks here too, but only
+# for the extensions it knows.
 SEARCH = (
     "~/Library/Fonts",
     "/Library/Fonts",
@@ -36,7 +33,7 @@ SEARCH = (
     "C:/Windows/Fonts",
 )
 
-# Wat de engine niet leest maar wij wel kunnen omzetten.
+# What the engine does not read but we can convert.
 CONVERTIBLE = (".otf", ".ttc", ".otc")
 MAX_FONT_BYTES = 40 * 1024 * 1024
 
@@ -49,7 +46,7 @@ class Fonts:
     def registry(self):
         registry = getattr(self.kernel.root, "fonts", None)
         if registry is None:
-            raise DesignError("De lettertype-plugin van de engine is niet geladen.")
+            raise DesignError("The engine's font plugin is not loaded.")
         return registry
 
     def directory(self) -> Path:
@@ -59,10 +56,10 @@ class Fonts:
 
     def refresh(self) -> None:
         """
-        De engine opnieuw laten kijken.
+        De engine again laten kijken.
 
-        Zonder dit blijft een net geïnstalleerd lettertype onzichtbaar tot
-        MeerK40t herstart — de lijst komt uit een cachebestand.
+        Without this a freshly installed typeface stays invisible until MeerK40t restarts —
+        the list comes from a cache file.
         """
         registry = self.registry
         try:
@@ -78,17 +75,16 @@ class Fonts:
 
     # -------------------------------------------------------------- tonen
 
-    # Wat een browser als webfont kan laden. `.shx` en `.jhf` zijn plotterfonts
-    # zonder browser-equivalent; die krijgen geen voorbeeld.
+    # What a browser can load as a web font. `.shx` and `.jhf` are plotter fonts without a
+    # browser equivalent; those get no preview.
     PREVIEWABLE = (".ttf", ".otf", ".woff", ".woff2")
 
     def preview_file(self, name: str) -> Path:
         """
-        Het bestand achter een lettertype, om als webfont te serveren.
+        The file behind a typeface, to serve as a web font.
 
-        Alleen bestanden die de engine zelf al kent komen hier langs: de naam
-        wordt opgezocht in de lijst, niet als pad behandeld. Anders is dit een
-        leesbaar venster op de hele schijf.
+        Only files the engine already knows come past here: the name is looked up in the
+        list, not treated as a path. Otherwise this is a readable window onto the whole disk.
         """
         wanted = str(name or "")
         for entry in self.registry.available_fonts() or []:
@@ -96,9 +92,9 @@ class Fonts:
             if wanted not in (str(path), path.name):
                 continue
             if path.suffix.lower() not in self.PREVIEWABLE:
-                raise DesignError("Van dit lettertype kan een browser niets tonen.")
+                raise DesignError("A browser can show nothing of this font.")
             if not path.is_file():
-                raise DesignError("Dat lettertype staat er niet meer.")
+                raise DesignError("That font is no longer there.")
             return path
         raise DesignError("Onbekend lettertype.")
 
@@ -106,8 +102,7 @@ class Fonts:
 
     def importable(self) -> list[dict]:
         """
-        Lettertypen op dit systeem die de engine niet ziet maar wij wel kunnen
-        gebruiken.
+        Typefaces on this system the engine does not see but we can use.
         """
         known = {
             str(entry[0]).lower()
@@ -130,35 +125,35 @@ class Fonts:
 
     def import_font(self, source: str) -> dict:
         """
-        Een lettertype in de fontmap van de engine zetten, als `.ttf`.
+        Putting a typeface in the engine's font directory, as a `.ttf`.
 
-        Veel `.otf`-bestanden bevatten gewoon TrueType-omtrekken; dan is
-        kopiëren genoeg. Zit er PostScript (CFF) in, dan worden de omtrekken
-        omgezet naar kwadratische krommen — dat is wat TrueType kent.
+        Many `.otf` files simply contain TrueType outlines; then copying is enough. If there
+        is PostScript (CFF) in it, the outlines are converted to quadratic curves — which is
+        what TrueType knows.
         """
         path = Path(os.path.expanduser(str(source or ""))).resolve()
         if not path.is_file():
             raise DesignError(
-                f"'{source}' bestaat niet. Kies een lettertype uit de lijst in "
-                "het tekstvenster; die toont wat er op deze computer staat."
+                f"'{source}' does not exist. Choose a font from the list in "
+                "the text window; it shows what is on this computer."
             )
         if path.suffix.lower() not in CONVERTIBLE + (".ttf",):
             raise DesignError(
-                f"'{path.suffix}' kan niet; kies een .ttf of .otf-bestand."
+                f"'{path.suffix}' is not possible; choose a .ttf or .otf file."
             )
         if not any(
             str(path).lower().startswith(str(Path(os.path.expanduser(w)).resolve()).lower())
             for w in SEARCH
         ):
-            # Alleen uit de fontmappen van het systeem: een willekeurig pad laten
-            # inlezen door de server is een open deur.
-            raise DesignError("Dit bestand staat niet in een lettertypemap.")
+            # Only from the system's font directories: having the server read an arbitrary
+            # path is an open door.
+            raise DesignError("This file is not in a font folder.")
         if path.stat().st_size > MAX_FONT_BYTES:
-            raise DesignError("Dit bestand is te groot voor een lettertype.")
+            raise DesignError("This file is too large for a font.")
 
         target = self.directory() / f"{path.stem}.ttf"
         if target.exists():
-            raise DesignError(f"'{target.name}' staat er al.")
+            raise DesignError(f"'{target.name}' is already there.")
 
         if path.suffix.lower() == ".ttf":
             shutil.copyfile(path, target)
@@ -173,18 +168,18 @@ class Fonts:
             from fontTools.pens.cu2quPen import Cu2QuPen
             from fontTools.pens.ttGlyphPen import TTGlyphPen
             from fontTools.ttLib import TTFont
-        except ImportError as e:  # pragma: no cover - alleen zonder fonttools
+        except ImportError as e:  # pragma: no cover - only without fonttools
             raise DesignError(
-                "Omzetten vraagt het pakket 'fonttools'; installeer dat naast de API."
+                "Converting needs the 'fonttools' package; install it beside the API."
             ) from e
 
         try:
             font = TTFont(str(source), fontNumber=0)
         except Exception as e:
-            raise DesignError(f"Dit lettertype is niet te lezen: {e}") from e
+            raise DesignError(f"This font cannot be read: {e}") from e
 
         if "glyf" in font:
-            # Al TrueType van binnen; alleen de extensie zei iets anders.
+            # Already TrueType inside; only the extension said otherwise.
             font.save(str(target))
             return
 
@@ -203,7 +198,7 @@ class Fonts:
 
     @staticmethod
     def _build_glyf(font, pens) -> None:
-        """De omgezette omtrekken als TrueType-tabellen in het font hangen."""
+        """Hang the converted outlines in the font as TrueType tables."""
         from fontTools.ttLib import newTable
 
         glyf = newTable("glyf")

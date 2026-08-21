@@ -35,8 +35,8 @@ def test_motion_commands_are_kernel_level(kernel, motion):
 
 def test_capability_reporting_follows_the_device(kernel, motion):
     """
-    De mogelijkheden horen bij het apparaat, niet bij de app. Scherpstellen is
-    daar het bewijs van: de Ruida kent `focusz`, het K40-bord niet.
+    The capabilities belong to the device, not to the app. Focusing is the proof
+    of that: the Ruida knows `focusz`, the K40 board does not.
     """
     before = motion.capabilities()
     assert before["focus"] is False
@@ -44,10 +44,10 @@ def test_capability_reporting_follows_the_device(kernel, motion):
     kernel.console("service device start ruida -i\n")
     after = motion.capabilities()
 
-    # Bewegen blijft bestaan, want dat levert de kernel.
+    # Movement stays, because the kernel provides it.
     for shared in ("home", "jog", "move", "unlock"):
         assert after[shared] == before[shared]
-    assert after["focus"] is True, "de Ruida kent scherpstellen wel"
+    assert after["focus"] is True, "the Ruida does know focusing"
 
 
 def test_home_runs(kernel, motion):
@@ -63,7 +63,7 @@ def test_a_jog_of_nothing_is_refused(motion):
 
 
 def test_jog_validates_its_numbers(motion):
-    for bad in ("links", None, float("inf")):
+    for bad in ("left", None, float("inf")):
         with pytest.raises(DesignError):
             motion.jog(bad, 0)
 
@@ -81,15 +81,15 @@ def test_motion_over_http(client):
 
 
 def test_a_nonsense_jog_over_http_is_a_409(client):
-    response = client.post("/api/machine/jog", json={"dx_mm": "links", "dy_mm": 0})
+    response = client.post("/api/machine/jog", json={"dx_mm": "left", "dy_mm": 0})
     assert response.status_code == 409
 
 
 def test_moving_is_refused_while_a_job_is_running(kernel, motion):
     """
-    De UI zet de jogknoppen uit tijdens een job, maar de UI is een advies: een
-    tweede tabblad of een curl-opdracht komt er zo langs. De kop verzetten
-    tijdens het branden verpest de job.
+    The UI turns the jog buttons off during a job, but the UI is advice: a second
+    tab or a curl command gets past it easily. Moving the head while burning
+    ruins the job.
     """
 
     class RunningJob:
@@ -107,19 +107,19 @@ def test_moving_is_refused_while_a_job_is_running(kernel, motion):
         lambda: motion.home(),
         lambda: motion.move_to(10, 10),
     ):
-        with pytest.raises(DesignError, match="loopt een job"):
+        with pytest.raises(DesignError, match="A job is running"):
             call()
 
 
 def test_focus_is_only_offered_when_the_device_knows_it(motion):
     """
-    Scherpstellen zit op de Ruida, niet op elk apparaat. Zelfde aanpak als bij
-    pauzeren en stoppen: vragen wat dit apparaat kent in plaats van aannemen.
+    Focusing lives on the Ruida, not on every device. The same approach as for
+    pausing and stopping: ask what this device knows instead of assuming.
     """
     caps = motion.capabilities()
 
     assert "focus" in caps
-    # Het testapparaat kent het niet, dus dan wordt het ook niet aangeboden.
+    # The test device does not know it, so it is not offered either.
     if not caps["focus"]:
         with pytest.raises(DesignError, match="focusz"):
             motion.focus(2)
@@ -127,8 +127,8 @@ def test_focus_is_only_offered_when_the_device_knows_it(motion):
 
 def test_the_frame_traces_the_work(client):
     """
-    Kader tonen is de laatste controle vóór je brandt: past het, ligt het recht,
-    zit de klem in de weg. De laser blijft uit — er wordt alleen bewogen.
+    Showing the frame is the last check before you burn: does it fit, is it
+    square, is the clamp in the way. The laser stays off — only movement happens.
     """
     client.post(
         "/api/design/elements",
@@ -138,21 +138,21 @@ def test_the_frame_traces_the_work(client):
     response = client.post("/api/machine/frame")
 
     assert response.status_code == 200
-    # Vier hoeken plus terug naar het begin, zodat je de ronde ziet sluiten.
+    # Four corners plus back to the start, so you see the round close.
     assert response.json()["corners"] == 5
 
 
 def test_every_corner_of_the_frame_is_queued_and_not_refused(client):
     """
-    Gemeten op een echte machine: de kop ging naar de eerste hoek en de andere
-    vier kregen "Busy Error".
+    Measured on a real machine: the head went to the first corner and the other
+    four got "Busy Error".
 
-    `move_absolute` weigert zodra de spooler niet stilstaat
-    (`core/spoolers.py:243`) — en na de eerste hoek is de kop natuurlijk
-    onderweg. Met `-f` gaat de opdracht in de wachtrij in plaats van geweigerd
-    te worden, en dat is precies wat je wil: vijf bewegingen die op elkaar
-    volgen. Zonder job eromheen is er niets om voor te dringen; dat er geen job
-    loopt, is al gecontroleerd.
+    `move_absolute` refuses as soon as the spooler is not standing still
+    (`core/spoolers.py:243`) — and after the first corner the head is of course on
+    its way. With `-f` the command goes into the queue instead of being refused,
+    and that is exactly what you want: five movements that follow each other.
+    Without a job around it there is nothing to push in front of; that no job is
+    running has already been checked.
     """
     client.post(
         "/api/design/elements",
@@ -162,11 +162,11 @@ def test_every_corner_of_the_frame_is_queued_and_not_refused(client):
     response = client.post("/api/machine/frame")
 
     assert response.status_code == 200
-    regels = response.json()["output"]
-    opdrachten = [r for r in regels if "move_absolute" in r]
-    assert len(opdrachten) == 5
-    assert all("-f" in r for r in opdrachten), regels
-    assert not any("busy" in r.lower() for r in regels), regels
+    lines = response.json()["output"]
+    commands = [r for r in lines if "move_absolute" in r]
+    assert len(commands) == 5
+    assert all("-f" in r for r in commands), lines
+    assert not any("busy" in r.lower() for r in lines), lines
     assert response.json()["notice"] is None
 
 
@@ -176,4 +176,4 @@ def test_an_empty_bed_has_nothing_to_frame(client):
     response = client.post("/api/machine/frame")
 
     assert response.status_code == 409
-    assert "niets" in response.json()["detail"].lower()
+    assert "nothing" in response.json()["detail"].lower()

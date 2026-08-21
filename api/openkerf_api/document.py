@@ -1,15 +1,14 @@
 """
-Bijhouden of het ontwerp onopgeslagen wijzigingen heeft.
+Keeping track of whether the design has unsaved changes.
 
-MeerK40t kent zelf geen "gewijzigd sinds opslaan"-vlag, en zonder die vlag kun
-je bij het openen van een bestand niet zien of je iets weggooit. We markeren
-daarom op één plek: elke console-opdracht die niet aantoonbaar alleen leest,
-plus elke directe boomwijziging.
+MeerK40t itself has no "changed since saving" flag, and without that flag you cannot see
+whether you are throwing something away when opening a file. So we mark in one place: every
+console command that does not demonstrably only read, plus every direct tree change.
 """
 
-# Opdrachten die het ontwerp niet veranderen.
-# `plan` bouwt een snijplan op uit de bestaande operaties; het raakt de
-# elementenboom niet, dus een tijdschatting maakt je ontwerp niet vuil.
+# Commands that do not change the design.
+# `plan` builds a cut plan from the existing operations; it does not touch the element tree,
+# so a time estimate does not make your design dirty.
 READ_ONLY = {"version", "save", "flush", "channel", "help", "plan"}
 
 
@@ -25,5 +24,5 @@ class Document:
         self.dirty = True
 
     def clean(self) -> None:
-        """Na opslaan, openen of leegmaken staat het bestand gelijk aan het ontwerp."""
+        """After saving, opening or emptying, the file equals the design."""
         self.dirty = False

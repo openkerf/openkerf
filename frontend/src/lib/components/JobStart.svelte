@@ -1,20 +1,22 @@
 <script lang="ts">
 	/**
-	 * Het wauw-moment: precies één, bij het starten van een job.
+	 * The wow moment: exactly one, when a job starts.
 	 *
-	 * Op dat ene moment gebeurt er iets in de echte wereld — een laser gaat aan.
-	 * Dat mag je voelen. Overal elders is beweging alleen functioneel (zie
-	 * DESIGN-SYSTEM, "Het wauw-moment"): één keer, ~900 ms, en daarna nooit meer
-	 * in dezelfde sessie zonder dat er weer echt iets begint.
+	 * At that one moment something happens in the real world — a laser comes on.
+	 * That may be felt. Everywhere else motion is purely functional (see
+	 * DESIGN-SYSTEM, "The wow moment"): once, ~900 ms, and never again in the
+	 * same session unless something really starts again.
 	 */
+	import { t } from '$lib/i18n/index.svelte';
+
 	let { label = null }: { label?: string | null } = $props();
 </script>
 
 <div class="flits" aria-hidden="true">
 	<div class="veeg"></div>
 	<div class="woord">
-		<span class="groot">Job gestart</span>
-		{#if label}<span class="klein">{label}</span>{/if}
+		<span class="big">{t('jobStart.title')}</span>
+		{#if label}<span class="small">{label}</span>{/if}
 	</div>
 </div>
 
@@ -28,7 +30,7 @@
 		z-index: 4;
 		animation: verdwijn 900ms cubic-bezier(0.2, 0, 0, 1) forwards;
 	}
-	/* Een lichtstreep die één keer over het bed trekt — de kop die vertrekt. */
+	/* A streak of light crossing the bed once — the head setting off. */
 	.veeg {
 		position: absolute;
 		inset: 0;
@@ -51,8 +53,8 @@
 		box-shadow: var(--lift-2);
 		animation: op 900ms cubic-bezier(0.2, 0, 0, 1) forwards;
 	}
-	.groot { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; }
-	.klein { font-size: var(--text-xs); color: var(--text-2); }
+	.big { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; }
+	.small { font-size: var(--text-xs); color: var(--text-2); }
 
 	@keyframes trek {
 		from { transform: translateX(-60%); }
@@ -69,11 +71,11 @@
 		100% { opacity: 0; }
 	}
 
-	/* Wie beweging heeft uitgezet, krijgt de mededeling zonder de show. */
+	/* Anybody who has switched motion off gets the message without the show. */
 	@media (prefers-reduced-motion: reduce) {
 		.veeg { display: none; }
-		.flits, .woord { animation-duration: 900ms; animation-name: stil; }
-		@keyframes stil {
+		.flits, .woord { animation-duration: 900ms; animation-name: quiet; }
+		@keyframes quiet {
 			0%, 80% { opacity: 1; }
 			100% { opacity: 0; }
 		}

@@ -1,21 +1,21 @@
 """
 De gedeelde presetcatalogus (`openkerf/presetariat`).
 
-Ophalen, filteren op wat jouw machine is, en importeren in de eigen
-bibliotheek. Andersom kun je een eigen preset aandragen.
+Fetching, filtering on what your machine is, and importing into your own library. The other
+way round you can offer a preset of your own.
 
-Drie dingen zijn hier bewust:
+Three things here are deliberate:
 
-1. **Een preset uit de catalogus is een startpunt, geen instelling.** Machines
-   verschillen; een buis van twee jaar oud haalt niet wat hij nieuw haalde.
-   Daarom reist de herkomst mee (`testraster` weegt zwaarder dan `handmatig`)
-   en importeren we altijd als bron `geimporteerd`, nooit als `testraster`.
-2. **Het netwerk mag de app niet ophouden.** De catalogus wordt lokaal
-   opgeslagen; is het netwerk weg, dan werk je met wat je had.
-3. **Delen gaat via een voorgevuld voorstel op GitHub, niet via een device
-   flow.** Dat laatste vraagt een geregistreerde OAuth-app die er nog niet is;
-   een flow bouwen die niemand kan doorlopen levert schijnzekerheid op. Dit
-   werkt vandaag, zonder dat iemand een token hoeft te regelen.
+1. **A preset from the catalogue is a starting point, not a setting.** Machines differ; a
+   two-year-old tube does not achieve what it achieved when new. So the provenance travels
+   along (`testraster` weighs more than `handmatig`) and we always import with source
+   `geimporteerd`, never as `testraster`.
+2. **The network must not hold the app up.** The catalogue is stored locally; if the network
+   is gone you work with what you had.
+3. **Sharing goes through a pre-filled proposal on GitHub, not through a device flow.** That
+   last one needs a registered OAuth app that does not exist yet; building a flow nobody can
+   complete produces false certainty. This works today, without anybody having to arrange a
+   token.
 """
 
 from __future__ import annotations
@@ -46,10 +46,10 @@ class Presetariat:
 
     def catalogue(self, refresh: bool = False) -> dict:
         """
-        De catalogus, uit de cache tenzij die oud is of er om ververst wordt.
+        The catalogue, from the cache unless that is old or a refresh is asked for.
 
-        Faalt het ophalen, dan geven we de cache terug mét de reden — een lege
-        lijst zou eruitzien alsof er geen presets bestaan.
+        If the fetch fails we hand back the cache *with* the reason — an empty list would look
+        as if no presets existed.
         """
         cached = self._read_cache()
         fresh_enough = (
@@ -66,14 +66,14 @@ class Presetariat:
         except (urllib.error.URLError, TimeoutError, ValueError, OSError) as error:
             if cached is None:
                 raise LibraryError(
-                    f"De catalogus is niet op te halen en er is geen eerdere kopie: {error}"
+                    f"The catalogue cannot be fetched and there is no earlier copy: {error}"
                 ) from error
             return {**cached, "stale": True, "error": str(error)}
 
         if not isinstance(payload, dict) or not isinstance(
             payload.get("presets"), list
         ):
-            raise LibraryError("De catalogus heeft een onverwachte vorm.")
+            raise LibraryError("The catalogue has an unexpected shape.")
 
         payload["fetched_at"] = time.time()
         self._write_cache(payload)
@@ -87,10 +87,10 @@ class Presetariat:
         refresh: bool = False,
     ) -> dict:
         """
-        De catalogus zoals hij voor deze machine relevant is.
+        The catalogue as it is relevant for this machine.
 
-        Filteren op machine is geen kosmetiek: instellingen van een 40 W-diode
-        op een 100 W-CO2 loslaten levert onzin op.
+        Filtering on the machine is not cosmetics: letting a 40 W diode's settings loose on a
+        100 W CO2 produces nonsense.
         """
         catalogue = self.catalogue(refresh=refresh)
         presets = list(catalogue["presets"])
@@ -126,13 +126,13 @@ class Presetariat:
 
     def import_presets(self, ids: list[str], machine_id=None) -> dict:
         """
-        Gekozen presets in de eigen bibliotheek zetten.
+        Putting the chosen presets into your own library.
 
-        Al eerder geïmporteerd? Dan slaan we hem over in plaats van een tweede
-        regel te maken: de catalogus is een bron, geen tweede bibliotheek.
+        Already imported before? Then we skip it rather than making a second row: the
+        catalogue is a source, not a second library.
         """
         if not ids:
-            raise LibraryError("Kies eerst een preset.")
+            raise LibraryError("Choose a preset first.")
         catalogue = self.catalogue()
         by_id = {p.get("id"): p for p in catalogue["presets"]}
         known = self._imported_ids()
@@ -170,18 +170,18 @@ class Presetariat:
             "missing": missing,
         }
 
-    # ---------------------------------------------------------------- delen
+    # -------------------------------------------------------------- sharing
 
     def as_contribution(self, preset_id: int) -> dict:
-        """Een eigen preset in het formaat van de catalogus, klaar om te delen."""
+        """One of your own presets in the catalogue's format, ready to share."""
         preset = self.library.preset(preset_id)
         machine = None
         if preset.get("machine_id"):
             machine = self._machine(preset["machine_id"])
         if machine is None or not machine.get("power_watt"):
             raise LibraryError(
-                "Deze preset hoort bij geen machineprofiel met vermogen. Zonder "
-                "te weten op wat voor machine hij gemeten is, is hij voor "
+                "This preset belongs to no machine profile with a power. Without "
+                "knowing what kind of machine it was measured on, it is "
                 "niemand anders bruikbaar."
             )
 
@@ -229,8 +229,8 @@ class Presetariat:
                 return False
         watt, mine = machine.get("power_watt"), profile.get("power_watt")
         if watt and mine:
-            # Ruim: een 80 W-preset is op een 60 W-machine nog een bruikbaar
-            # startpunt, op een 20 W-diode niet.
+            # Generous: an 80 W preset is still a usable starting point on a 60 W machine,
+            # on a 20 W diode it is not.
             if not 0.5 <= float(watt) / float(mine) <= 2.0:
                 return False
         return True
@@ -239,7 +239,7 @@ class Presetariat:
         for row in self.library.machines():
             if row["id"] == machine_id:
                 return row
-        raise LibraryError(f"Machineprofiel {machine_id} bestaat niet.")
+        raise LibraryError(f"Machine profile {machine_id} does not exist.")
 
     def _imported_ids(self) -> set[str]:
         return {
@@ -268,12 +268,12 @@ class Presetariat:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
             self.cache_path.write_text(json.dumps(payload))
         except OSError:
-            # Geen cache is vervelend, geen reden om de aanroep te laten falen.
+            # No cache is annoying, not a reason to make the call fail.
             pass
 
 
 def _confidence(preset: dict) -> tuple:
-    """Nagebrand vóór gemeten, gemeten vóór gegokt."""
+    """Nagebrand vóór measured, measured vóór gegokt."""
     kind = (preset.get("source") or {}).get("kind")
     return (
         bool(preset.get("verified")),
@@ -287,7 +287,7 @@ def _note(preset: dict) -> str:
     if source.get("by"):
         parts.append(f"door {source['by']}")
     if preset.get("verified"):
-        parts.append("nagebrand door een tweede persoon")
+        parts.append("burned again by a second person")
     note = str(preset.get("note") or "").strip()
     return " — ".join([", ".join(parts)] + ([note] if note else []))
 
@@ -303,8 +303,8 @@ def _slug(material: str, thickness, operation: str, machine: dict) -> str:
     kind = {"co2-glass": "co2", "co2-rf": "co2rf", "diode": "diode", "fiber": "fiber"}
     parts = [clean(material)]
     if thickness:
-        # SQLite geeft 3.0 terug waar de catalogus 3 schrijft; anders zou
-        # dezelfde preset twee verschillende id's krijgen.
+        # SQLite hands back 3.0 where the catalogue writes 3; otherwise the same preset
+        # would get two different ids.
         number = float(thickness)
         text = str(int(number)) if number == int(number) else str(number)
         parts.append(f"{text.replace('.', 'p')}mm")
@@ -318,13 +318,13 @@ def _issue_url(preset: dict) -> str:
     """
     Een voorgevuld voorstel op GitHub.
 
-    Zonder eigen OAuth-app kunnen we geen pull request namens de gebruiker
-    openen; dit werkt wél, zonder dat iemand een token hoeft te regelen.
+    Without an OAuth app of our own we cannot open a pull request on the user's behalf; this
+    does work, without anybody having to arrange a token.
     """
     import urllib.parse
 
     body = (
-        "Nieuwe preset voor de catalogus.\n\n"
+        "New preset for the catalogue.\n\n"
         f"Bestand: `presets/{preset['id']}.json`\n\n"
         "```json\n" + json.dumps(preset, indent=2, ensure_ascii=False) + "\n```\n"
     )

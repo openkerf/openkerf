@@ -1,19 +1,19 @@
 """
-Vellen: meerdere stukken materiaal in één project.
+Sheets: more than one piece of material in one project.
 
-Zoals de platen van een 3D-slicer, met één verschil dat er voor een laser toe
-doet: **een vel is een stuk materiaal, geen kopie van het bed.** Het heeft een
-eigen maat — vaak kleiner dan het bed — en één materiaal, zodat de presets en
-de tijdschatting per vel kloppen.
+Like the plates of a 3D slicer, with one difference that matters for a laser:
+**a sheet is a piece of material, not a copy of the bed.** It has a size of its
+own — often smaller than the bed — and one material, so that the presets and the
+time estimate are right per sheet.
 
-Elk vel is een **eigen document**. Wisselen betekent: het huidige vel opslaan,
-de elementenboom leegmaken, en het andere vel inladen. Dat is bewust gekozen
-boven één boom met vel-labels: wat je ziet is dan altijd precies wat er gebrand
-wordt. Bij één gedeelde boom hangt dat af van een filter op het moment van
-spoolen, en een fout in dat filter kost materiaal — of erger.
+Every sheet is a **document of its own**. Switching means: save the current
+sheet, empty the element tree, load the other sheet. That was chosen deliberately
+over one tree with sheet labels: what you see is then always exactly what gets
+burned. With one shared tree that depends on a filter at the moment of spooling,
+and a mistake in that filter costs material — or worse.
 
-De prijs is dat ongedaan maken per vel werkt en dat wisselen even duurt. Dat
-weegt niet op tegen per ongeluk het verkeerde vel branden.
+The price is that undo works per sheet and that switching takes a moment. That
+does not outweigh burning the wrong sheet by accident.
 """
 
 from __future__ import annotations
@@ -25,6 +25,11 @@ from pathlib import Path
 from .edits import DesignError, _finite, _positive
 
 MAX_SHEETS = 20
+
+# The name a first sheet gets when no client supplied one. English, like the rest
+# of this layer: our own web app sends the name it wants in the reader's language,
+# and anything else gets the source language.
+DEFAULT_SHEET_NAME = "Sheet 1"
 
 DEFAULT_TILING = {
     "enabled": False,
@@ -41,9 +46,9 @@ class Sheets:
         self.document = document
         self.directory = Path(directory)
         self._active: str | None = None
-        # Of het actieve vel in deze draai al werkelijk op tafel gelegd is.
+        # Whether the active sheet has actually been put on the table this run.
         # Zie `_materialiseer`.
-        self._geladen = False
+        self._loaded = False
 
     # ------------------------------------------------------------- opslag
 
@@ -67,7 +72,7 @@ class Sheets:
     def _file(self, sheet_id: str) -> Path:
         return self.directory / f"{sheet_id}.svg"
 
-    # ------------------------------------------------------------ toestand
+    # ------------------------------------------------------------ state
 
     def state(self) -> dict:
         sheets = self._ensure()
@@ -84,7 +89,7 @@ class Sheets:
         return self._active
 
     def active(self) -> dict | None:
-        """Het vel waarop nu gewerkt wordt — inclusief zijn materiaal."""
+        """The sheet being worked on now — including its material."""
         sheets = self._ensure()
         for sheet in sheets:
             if sheet["id"] == self._active:
@@ -93,18 +98,18 @@ class Sheets:
 
     def _ensure(self) -> list[dict]:
         """
-        Er is altijd minstens één vel.
+        There is always at least one sheet.
 
-        Dat scheelt een lege toestand die niemand snapt: een project zonder vel
-        bestaat niet, net zomin als een laser zonder bed.
+        That saves an empty state nobody understands: a project without a sheet
+        does not exist, no more than a laser without a bed.
         """
         sheets = self._read()
         if not sheets:
             width, height = self._bed()
             sheets = [
                 {
-                    "id": "vel-1",
-                    "name": "Vel 1",
+                    "id": "sheet-1",
+                    "name": DEFAULT_SHEET_NAME,
                     "width_mm": width,
                     "height_mm": height,
                     "material_id": None,
@@ -114,8 +119,8 @@ class Sheets:
             ]
             self._write(sheets)
         elif any("thickness_mm" not in sheet for sheet in sheets):
-            # Dikte kwam er later bij (besluit B1). Vellen uit een ouder project
-            # missen de sleutel; zonder deze regel valt de bovenbalk erover.
+            # Thickness came later (decision B1). Sheets from an older project are
+            # missing the key; without this line the top bar trips over it.
             for sheet in sheets:
                 sheet.setdefault("thickness_mm", None)
             self._write(sheets)
@@ -126,20 +131,20 @@ class Sheets:
 
     def _materialiseer(self) -> None:
         """
-        Het actieve vel inladen bij de eerste vraag na het opstarten.
+        Load the active sheet on the first question after startup.
 
-        Zonder dit stond de vellenbalk na een herstart op "Vel 1" terwijl het
-        canvas leeg was: het bestand lag er wel, maar niemand had het ingeladen.
-        Erger dan de lege aanblik was wat er daarna gebeurde — wegwisselen ziet
-        een lege boom, leest dat als "de gebruiker heeft dit vel leeggemaakt",
-        en gooit `vel-1.svg` weg. Eén klik, alles kwijt.
+        Without this the sheet bar said "Sheet 1" after a restart while the canvas
+        was empty: the file was there, but nobody had loaded it. Worse than the
+        empty look was what happened next — switching away sees an empty tree, reads
+        that as "the user emptied this sheet", and throws `sheet-1.svg` away. One
+        click, everything gone.
 
-        Alleen als de boom leeg is: staat er al werk in (herstel na een
-        crash, of iets dat vóór de eerste vraag getekend werd), dan wint dat.
+        Only when the tree is empty: if there is work in it already (recovery after
+        a crash, or something drawn before the first question), that wins.
         """
-        if self._geladen:
+        if self._loaded:
             return
-        self._geladen = True
+        self._loaded = True
         if any(True for _ in self.kernel.elements.elems()):
             return
         if self._active and self._file(self._active).is_file():
@@ -162,10 +167,11 @@ class Sheets:
         for sheet in sheets:
             if sheet["id"] == sheet_id:
                 return sheet
-        namen = ", ".join(f"'{s['name']}'" for s in sheets) or "geen"
+        names = ", ".join(f"'{s['name']}'" for s in sheets) or "none"
         raise DesignError(
-            f"Vel '{sheet_id}' bestaat niet. Beschikbaar: {namen}. Kies er een "
-            "uit de vellenbalk boven het canvas."
+            f"Sheet '{sheet_id}' does not exist. Available: {names}. Pick one from "
+            "the sheet bar above the canvas.",
+            code="sheet.unknown",
         )
 
     # ------------------------------------------------------------ beheren
@@ -180,15 +186,18 @@ class Sheets:
     ) -> dict:
         sheets = self._ensure()
         if len(sheets) >= MAX_SHEETS:
-            raise DesignError(f"Meer dan {MAX_SHEETS} vellen wordt onoverzichtelijk.")
+            raise DesignError(
+                f"More than {MAX_SHEETS} sheets becomes unmanageable.",
+                code="sheet.tooMany",
+            )
         bed_width, bed_height = self._bed()
         number = max(
             (int(s["id"].rsplit("-", 1)[-1]) for s in sheets if s["id"][-1].isdigit()),
             default=0,
         )
-        # Namen uniek houden: twee dozen achter elkaar leverden anders twee
-        # vellen die allebei "Doos 2" heten, en dan weet je niet welke welke is.
-        wanted = str(name or f"Vel {number + 1}").strip()[:40]
+        # Keeping names unique: two boxes one after another used to give two
+        # sheets both called "Box 2", and then you cannot tell which is which.
+        wanted = str(name or f"{DEFAULT_SHEET_NAME.rstrip('1')}{number + 1}").strip()[:40]
         taken = {s["name"] for s in sheets}
         unique, suffix = wanted, 2
         while unique in taken:
@@ -196,7 +205,7 @@ class Sheets:
             suffix += 1
 
         sheet = {
-            "id": f"vel-{number + 1}",
+            "id": f"sheet-{number + 1}",
             "name": unique,
             "width_mm": self._side(width_mm, bed_width, "width_mm"),
             "height_mm": self._side(height_mm, bed_height, "height_mm"),
@@ -210,56 +219,61 @@ class Sheets:
 
     def _thickness(self, value):
         """
-        De dikte van dit stuk materiaal, of niets.
+        The thickness of this piece of material, or nothing.
 
-        Leeg is een geldig antwoord: wie een restje van onbekende dikte in de
-        machine legt, moet niet eerst een getal hoeven verzinnen. Een preset
-        zonder dikte hoort erbij te kunnen — dwingen zou de bovenbalk in een
+        Empty is a valid answer: someone putting an offcut of unknown thickness in
+        the machine should not have to invent a number first. A preset without a
+        thickness has to be possible — forcing one would turn the top bar into a
         formulier veranderen.
         """
         if value is None or value == "":
             return None
-        dikte = _positive(value, "thickness_mm")
-        if dikte > 500:
-            raise DesignError("Een vel van meer dan 500 mm dik gaat er niet in.")
-        return round(dikte, 2)
+        thickness = _positive(value, "thickness_mm")
+        if thickness > 500:
+            raise DesignError(
+                "A sheet more than 500 mm thick does not go in.",
+                code="sheet.tooThick",
+            )
+        return round(thickness, 2)
 
     def _side(self, value, fallback, label):
         if value is None:
             return fallback
         size = _positive(value, label)
         if not 5 <= size <= 5000:
-            raise DesignError(f"{label} moet tussen 5 en 5000 mm liggen.")
+            raise DesignError(f"{label} has to be between 5 and 5000 mm.")
         return round(size, 1)
 
-    def _tiling(self, huidig, gevraagd) -> dict:
+    def _tiling(self, current, asked) -> dict:
         """
-        De tegelinstellingen van dit vel, gecontroleerd op samenhang.
+        The tile settings of this sheet, checked for coherence.
 
-        Marge, overlap en markergrootte hangen samen: past er geen merk in de
-        overlapstrook, dan is er niets om op uit te lijnen. Dat hoort hier te
-        stuiten en niet pas bij het branden — daar sta je al met een plaat in
-        de machine.
+        Margin, overlap and marker size hang together: if no marker fits in the
+        overlap strip, there is nothing to align on. That has to stop here and not
+        only at burning time — by then you are already standing there with a plate
+        in the machine.
         """
-        blok = dict(DEFAULT_TILING)
-        blok.update(huidig or {})
-        if not isinstance(gevraagd, dict):
-            raise DesignError("tiling moet een blokje instellingen zijn.")
-        blok["enabled"] = bool(gevraagd.get("enabled", blok["enabled"]))
-        for sleutel in ("margin_mm", "overlap_mm", "marker_size_mm"):
-            if gevraagd.get(sleutel) is not None:
-                blok[sleutel] = round(_positive(gevraagd[sleutel], sleutel), 1)
+        block = dict(DEFAULT_TILING)
+        block.update(current or {})
+        if not isinstance(asked, dict):
+            raise DesignError("tiling has to be a block of settings.")
+        block["enabled"] = bool(asked.get("enabled", block["enabled"]))
+        for key in ("margin_mm", "overlap_mm", "marker_size_mm"):
+            if asked.get(key) is not None:
+                block[key] = round(_positive(asked[key], key), 1)
 
-        speling = 4.0
-        if blok["overlap_mm"] < blok["marker_size_mm"] + speling:
+        slack = 4.0
+        if block["overlap_mm"] < block["marker_size_mm"] + slack:
             raise DesignError(
-                f"Een uitlijnmerk is {blok['marker_size_mm']:g} mm groot en past niet "
-                f"in een overlap van {blok['overlap_mm']:g} mm. Maak de overlap "
-                f"minstens {blok['marker_size_mm'] + speling:g} mm."
+                f"An alignment marker is {block['marker_size_mm']:g} mm across and does "
+                f"not fit in an overlap of {block['overlap_mm']:g} mm. Make the overlap "
+                f"at least {block['marker_size_mm'] + slack:g} mm."
             )
-        if blok["margin_mm"] > 100:
-            raise DesignError("Een marge van meer dan 100 mm laat geen bed over.")
-        return blok
+        if block["margin_mm"] > 100:
+            raise DesignError(
+                "A margin of more than 100 mm leaves no bed.", code="sheet.marginTooBig"
+            )
+        return block
 
     def update(self, sheet_id: str, **fields) -> dict:
         sheets = self._ensure()
@@ -267,7 +281,7 @@ class Sheets:
         if fields.get("name") is not None:
             name = str(fields["name"]).strip()[:40]
             if not name:
-                raise DesignError("Een vel heeft een naam nodig.")
+                raise DesignError("A sheet needs a name.", code="sheet.needsName")
             sheet["name"] = name
         for key in ("width_mm", "height_mm"):
             if fields.get(key) is not None:
@@ -284,11 +298,13 @@ class Sheets:
     def remove(self, sheet_id: str) -> dict:
         sheets = self._ensure()
         if len(sheets) == 1:
-            raise DesignError("Het laatste vel kan niet weg; een project heeft er één.")
+            raise DesignError(
+                "The last sheet cannot go; a project has one.", code="sheet.needsOne"
+            )
         sheet = self._find(sheets, sheet_id)
         if sheet["id"] == self._active:
-            # Eerst weg van het vel dat verdwijnt, anders blijft de inhoud van
-            # een verwijderd vel op het canvas staan.
+            # Away from the sheet that is disappearing first, otherwise the contents
+            # of a removed sheet stay on the canvas.
             other = next(s for s in sheets if s["id"] != sheet_id)
             self.activate(other["id"])
             sheets = self._read()
@@ -298,20 +314,20 @@ class Sheets:
 
     def reset(self) -> dict:
         """
-        Terug naar één leeg vel — wat "nieuw project" met de vellen doet.
+        Back to one empty sheet — what "new project" does to the sheets.
 
-        De opgeslagen vellen gaan mee weg. Ze staan naast de database en
-        overleven anders het nieuwe project: je begint dan schoon en vindt in
-        de vellenbalk nog de dozen van gisteren.
+        The saved sheets go with it. They sit beside the database and would
+        otherwise survive the new project: you start clean and still find
+        yesterday's boxes in the sheet bar.
         """
         self.directory.mkdir(parents=True, exist_ok=True)
         for old in self.directory.glob("*.svg"):
             old.unlink(missing_ok=True)
         self.index_path.unlink(missing_ok=True)
         self._active = None
-        # Er valt niets in te laden en de boom is net geleegd; zonder dit zou
-        # `_ensure` het net weggegooide vel alsnog van schijf willen halen.
-        self._geladen = True
+        # There is nothing to load and the tree has just been emptied; without this
+        # `_ensure` would still want to fetch the sheet we just threw away.
+        self._loaded = True
         return self.state()
 
     # ------------------------------------------------------------ wisselen
@@ -328,17 +344,17 @@ class Sheets:
         return self.state()
 
     def save_active(self) -> None:
-        """Het huidige vel wegschrijven. Gebeurt bij elke wissel en bij opslaan."""
+        """Write out the current sheet. Happens on every switch and on save."""
         if self._active is None:
             return
         target = self._file(self._active)
         self.directory.mkdir(parents=True, exist_ok=True)
         if not any(True for _ in self.kernel.elements.elems()):
-            # Een leeg vel: geen bestand, anders lijkt het bij het terugkomen
-            # alsof er iets stukging.
+            # An empty sheet: no file, otherwise coming back looks as if something
+            # broke.
             target.unlink(missing_ok=True)
             return
-        written = self.drawing.export_svg("vel.svg")
+        written = self.drawing.export_svg("sheet.svg")
         shutil.copyfile(written, target)
 
     def _load(self, sheet_id: str) -> None:
@@ -348,22 +364,21 @@ class Sheets:
         if source.is_file():
             self.drawing.runner.run(f'load "{source}"')
             self.kernel.elements.validate_ids()
-            # De lagen van dit vel weer als "van de gebruiker" merken. Een verse
-            # boom heeft ruim tweehonderd lege standaardoperaties; zonder deze
-            # markering zijn de lagen die je zelf gemaakt hebt niet van die
-            # ruis te onderscheiden en verdwijnen ze uit de lijst.
+            # Mark the layers of this sheet as "the user's" again. A fresh tree has well
+            # over two hundred empty default operations; without this marking the layers you
+            # made yourself cannot be told apart from that noise and they disappear from the
+            # list.
             for operation in self.kernel.elements.ops():
                 if getattr(operation, "id", None):
                     self.drawing.user_operations.add(operation.id)
-            # `load` zet de bestandsnaam op het document, en die naam komt
-            # daarna terug als jobnaam in de spooler: elke job heette
-            # `vel-2.svg` terwijl de gebruiker "Proefstuk" op zijn tabblad ziet
-            # — dezelfde fout als `herstel.svg` in autosave.py. Dit bestand is
-            # onze opslag, geen document dat de gebruiker een naam gaf, dus het
-            # document blijft naamloos en de vellenbalk bepaalt de naam.
+            # `load` puts the file name on the document, and that name comes back as
+            # the job name in the spooler: every job was called `sheet-2.svg` while the
+            # user sees "Test piece" on their tab — the same mistake as `herstel.svg`
+            # in autosave.py. This file is our storage, not a document the user gave a
+            # name, so the document stays nameless and the sheet bar decides the name.
             try:
                 self.kernel.elements._filename = None
-            except Exception:  # pragma: no cover - de engine mag ons niet breken
+            except Exception:  # pragma: no cover - the engine must not break us
                 pass
         self.kernel.elements.signal("rebuild_tree", "all")
         self.kernel.elements.signal("refresh_scene", "Scene")
@@ -372,25 +387,29 @@ class Sheets:
 
     def move_selection(self, ids, sheet_id: str) -> dict:
         """
-        De selectie naar een ander vel verhuizen.
+        Move the selection to another sheet.
 
-        Via het klembord van de engine: dat leeft op de elementenservice en
-        overleeft dus het wisselen van vel. Knippen vóór het wisselen, plakken
-        erna — precies de volgorde waarin niets tussen wal en schip valt.
+        Via the engine's clipboard: that lives on the elements service and therefore
+        survives switching sheets. Cut before the switch, paste after — exactly the
+        order in which nothing falls between the two.
         """
         sheets = self._ensure()
         self._find(sheets, sheet_id)
         if sheet_id == self._active:
-            raise DesignError("Dat is het vel waar je al op werkt.")
+            raise DesignError(
+                "That is the sheet you are already working on.", code="sheet.sameSheet"
+            )
 
         nodes = []
         for element_id in ids or []:
             node = self.kernel.elements.find_node(element_id)
             if node is None:
-                raise DesignError(f"Element {element_id} bestaat niet (meer).")
+                raise DesignError(f"Element {element_id} does not exist (any more).")
             nodes.append(node)
         if not nodes:
-            raise DesignError("Kies eerst wat er mee moet.")
+            raise DesignError(
+                "Choose what should come along first.", code="sheet.nothingSelected"
+            )
 
         self.kernel.elements.set_emphasis(nodes)
         self.drawing.runner.run("clipboard cut")
@@ -404,25 +423,29 @@ class Sheets:
     # -------------------------------------------------------- projectbestand
 
     def export_into(self, bundle) -> list[dict]:
-        """De vellen in een projectbestand zetten; geeft de index terug."""
+        """Put the sheets into a project file; returns the index."""
         self.save_active()
         sheets = self._ensure()
         for sheet in sheets:
             source = self._file(sheet["id"])
             if source.is_file():
-                bundle.write(source, f"vellen/{sheet['id']}.svg")
+                bundle.write(source, f"sheets/{sheet['id']}.svg")
         return sheets
 
     def import_from(self, bundle, sheets: list[dict], active: str | None = None) -> None:
-        """Vellen uit een projectbestand terugzetten; vervangt wat er lag."""
+        """Restore sheets from a project file; replaces what was there."""
         if not sheets:
             return
         self.directory.mkdir(parents=True, exist_ok=True)
         for old in self.directory.glob("*.svg"):
             old.unlink(missing_ok=True)
+        names = set(bundle.namelist())
         for sheet in sheets:
-            name = f"vellen/{sheet['id']}.svg"
-            if name in bundle.namelist():
-                self._file(sheet["id"]).write_bytes(bundle.read(name))
+            # `vellen/` is where these lived before the interface became English; a project
+            # from that version still opens.
+            for name in (f"sheets/{sheet['id']}.svg", f"vellen/{sheet['id']}.svg"):
+                if name in names:
+                    self._file(sheet["id"]).write_bytes(bundle.read(name))
+                    break
         self._write(sheets)
         self._active = active if any(s["id"] == active for s in sheets) else sheets[0]["id"]

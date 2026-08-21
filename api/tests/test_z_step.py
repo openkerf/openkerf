@@ -1,11 +1,11 @@
 """
-Zakken per pass (punt 3 uit de tweede testronde van Jelle).
+Dropping per pass (point 3 from Jelle's second test round).
 
-De engine kent dit niet: `passes` is bij haar een teller op één cutcode-object
-en alle passes delen één settings-dict. Wat er wél is, is `util console` — een
-bewerking die middenin een job een consolecommando draait — en `z_move` op de
-GRBL-driver. Deze tests pinnen vast dat wij die twee tot een echte Z-stap
-combineren, en dat het veld wegblijft op een machine die geen Z-as heeft.
+The engine does not know this: to it `passes` is a counter on one cutcode object and all the
+passes share one settings dict. What it *does* have is `util console` — an operation that runs
+a console command in the middle of a job — and `z_move` on the GRBL driver. These tests pin
+down that we combine those two into a real Z step, and that the field stays away on a machine
+without a Z axis.
 """
 
 import pytest
@@ -21,7 +21,7 @@ from openkerf_api.server import ApiServer
 
 
 def _grbl_kernel(z_axis: bool):
-    """Een kern met een GRBL-apparaat; het enige met een Z-as in de engine."""
+    """A kernel with a GRBL device; the only one with a Z axis in the engine."""
     kernel = Kernel("MeerK40t", "0.0.0-testing", "OpenKerf_Z", ansi=False, ignore_settings=True)
     from meerk40t.core import core, svg_io
     from meerk40t.device import basedevice, dummydevice
@@ -67,8 +67,8 @@ def client_for(kernel, tmp_path):
     return TestClient(ApiServer(kernel, library_path=tmp_path / "z.db").build_app())
 
 
-def een_laag(client, passes=4):
-    """Een rechthoek in een snijlaag met meerdere passes."""
+def a_layer(client, passes=4):
+    """A rectangle in a cut layer with several passes."""
     element = client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
@@ -79,7 +79,7 @@ def een_laag(client, passes=4):
     return layer
 
 
-# ------------------------------------------------------------ wat de machine kan
+# ------------------------------------------------------- what the machine can do
 
 
 def test_a_machine_with_a_z_axis_offers_the_step(grbl, tmp_path):
@@ -93,25 +93,25 @@ def test_a_machine_without_a_z_axis_does_not(grbl_zonder_z, tmp_path):
 
 
 def test_a_ruida_does_not_offer_the_step(kernel, tmp_path):
-    """De dummy uit de gewone testkern kent geen Z-as — net als een Ruida."""
+    """The dummy from the ordinary test kernel has no Z axis — like a Ruida."""
     with client_for(kernel, tmp_path) as client:
         assert client.get("/api/design/capabilities").json()["z_step"] is False
 
 
 def test_the_step_is_refused_without_a_z_axis(grbl_zonder_z, tmp_path):
-    """Liever geen veld dan een veld dat niets doet — dezelfde regel als B11."""
+    """Better no field than a field that does nothing — the same rule as B11."""
     with client_for(grbl_zonder_z, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
 
         response = client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
         assert response.status_code == 409
-        assert "Z-as" in response.json()["detail"]
+        assert "Z axis" in response.json()["detail"]
 
 
 def test_an_absurd_step_is_refused(grbl, tmp_path):
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
 
         assert client.patch(
             f"/api/design/operations/{layer}", json={"z_step_mm": 50}
@@ -120,7 +120,7 @@ def test_an_absurd_step_is_refused(grbl, tmp_path):
 
 def test_the_step_is_stored_and_shown(grbl, tmp_path):
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
 
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
@@ -129,9 +129,9 @@ def test_the_step_is_stored_and_shown(grbl, tmp_path):
 
 
 def test_zero_turns_the_step_off(grbl, tmp_path):
-    """0 is uit, geen "nul millimeter zakken" — anders splitst het plan tóch."""
+    """0 is off, not "drop zero millimetres" — otherwise the plan splits anyway."""
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0})
@@ -144,7 +144,7 @@ def test_zero_turns_the_step_off(grbl, tmp_path):
 
 
 class Nep:
-    """Een planstap met net genoeg eigenschappen om de opbouw te toetsen."""
+    """A plan step with just enough properties to test the build-up."""
 
     def __init__(self, passes=1, z_step_mm=None):
         self.passes = passes
@@ -157,7 +157,7 @@ def commands_of(steps):
 
 
 def test_a_layer_without_a_step_is_left_alone():
-    """De gewone job mag hier geen last van hebben."""
+    """The ordinary job must not suffer from this."""
     stap = Nep(passes=3)
 
     uit = CommandRunner._with_z_moves([stap], ConsoleOperation)
@@ -167,7 +167,7 @@ def test_a_layer_without_a_step_is_left_alone():
 
 
 def test_one_pass_with_a_step_changes_nothing():
-    """Zakken tussen één pass en niets is geen zakken."""
+    """Dropping between one pass and nothing is not dropping."""
     stap = Nep(passes=1, z_step_mm=0.5)
 
     assert CommandRunner._with_z_moves([stap], ConsoleOperation) == [stap]
@@ -178,7 +178,7 @@ def test_four_passes_become_four_burns_with_a_move_between():
 
     uit = CommandRunner._with_z_moves([stap], ConsoleOperation)
 
-    # Vier keer branden, drie keer zakken, en één keer terug naar het begin.
+    # Four burns, three drops, and one return to the start.
     assert sum(1 for s in uit if s is stap) == 4
     assert commands_of(uit) == [
         "z_move 0.500mm",
@@ -189,7 +189,7 @@ def test_four_passes_become_four_burns_with_a_move_between():
 
 
 def test_the_burns_and_the_moves_alternate():
-    """Zakken ná een pass, niet ervoor: de eerste pass staat op de ingestelde focus."""
+    """Dropping *after* a pass, not before: the first pass is at the focus that was set."""
     stap = Nep(passes=3, z_step_mm=1.0)
 
     soorten = [
@@ -201,7 +201,7 @@ def test_the_burns_and_the_moves_alternate():
 
 
 def test_the_head_returns_to_the_height_it_started_at():
-    """Anders begint de volgende job te laag, en dat zie je pas aan het werkstuk."""
+    """Otherwise the next job starts too low, and you only see that on the workpiece."""
     stap = Nep(passes=5, z_step_mm=0.4)
 
     bewegingen = [
@@ -213,7 +213,7 @@ def test_the_head_returns_to_the_height_it_started_at():
 
 
 def test_the_repeat_moves_from_the_operation_to_the_plan():
-    """De teller gaat naar één; het herhalen doet het plan nu zelf."""
+    """The counter goes to one; the plan does the repeating itself now."""
     stap = Nep(passes=4, z_step_mm=0.5)
 
     CommandRunner._with_z_moves([stap], ConsoleOperation)
@@ -222,19 +222,19 @@ def test_the_repeat_moves_from_the_operation_to_the_plan():
     assert stap.passes_custom is True
 
 
-# ------------------------------------------------- en dan echt, door de engine
+# --------------------------------------------- and then for real, through the engine
 
 
 def test_the_engine_turns_it_into_alternating_cutcode_and_moves(grbl, tmp_path):
     """
     De volledige weg: laag met passes en Z-stap → plan → cutcode.
 
-    Dit is de test die telt. Hij loopt tot en met `optimize` door de echte
-    pijplijn van de engine — dezelfde stappen die `start_job` draait, alleen
-    zonder `spool`, want spoolen laat een GRBL-apparaat een verbinding zoeken.
+    This is the test that counts. It runs through the engine's real pipeline up to and
+    including `optimize` — the same steps `start_job` runs, only without `spool`, because
+    spooling makes a GRBL device look for a connection.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
     runner = CommandRunner(grbl)
@@ -260,8 +260,8 @@ def test_the_engine_turns_it_into_alternating_cutcode_and_moves(grbl, tmp_path):
         "CutCode",
         "z_move -1.000mm",
     ]
-    # Elke pass draagt echt werk. Een gekopieerde bewerking zou zijn kinderen
-    # kwijtraken en hier nul opleveren — de fout die je pas op materiaal ziet.
+    # Every pass carries real work. A copied operation would lose its children and produce
+    # zero here — the fault you only see on material.
     assert all(len(s) > 0 for s in plan.plan if not isinstance(s, ConsoleOperation))
 
 
@@ -269,17 +269,16 @@ def test_a_layer_without_a_step_does_not_split_the_pipeline(grbl, tmp_path):
     """
     De gewone job blijft de gewone job.
 
-    `_z_stepped_layers` is de schakelaar: alleen een laag met een Z-stap knipt
-    de pijplijn in tweeën. Zo raakt het pad dat élke job loopt niet aan een
-    functie die alleen op een GRBL met Z-as iets doet.
+    `_z_stepped_layers` is the switch: only a layer with a Z step cuts the pipeline in two.
+    That way the path *every* job walks does not touch a feature that only does anything on a
+    GRBL with a Z axis.
 
-    De test kijkt naar de laag die hij zelf maakte en niet naar een lege lijst:
-    de engine bewaart de laatste lagenstapel in één gedeelde `operations.cfg`
-    (sectie `[previous …]`), profiel-overstijgend en ook met
-    `ignore_settings=True`, dus een verse kern begint zelden schoon.
+    The test looks at the layer it made itself and not at an empty list: the engine keeps the
+    last layer stack in one shared `operations.cfg` (section `[previous …]`), across profiles
+    and with `ignore_settings=True` as well, so a fresh kernel rarely starts clean.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         runner = CommandRunner(grbl)
         assert layer not in [op.id for op in runner._z_stepped_layers()]
 
@@ -290,29 +289,28 @@ def test_a_layer_without_a_step_does_not_split_the_pipeline(grbl, tmp_path):
 
 def test_a_stored_step_is_ignored_on_a_machine_without_a_z_axis(grbl, tmp_path):
     """
-    Van machine wisselen mag geen commando opleveren dat die machine niet kent.
+    Switching machines must not produce a command that machine does not know.
 
-    De laag houdt zijn Z-stap — dat hoort ook, want je wisselt terug — maar het
-    plan splitst niet meer, dus er gaat geen `z_move` naar een driver die het
-    woord niet kent. Gevonden door na een screenshot te vragen wat er gebeurt
-    als je hetzelfde ontwerp op de Ruida zet.
+    The layer keeps its Z step — as it should, because you switch back — but the plan no longer
+    splits, so no `z_move` goes to a driver that does not know the word. Found by asking, after
+    a screenshot, what happens if you put the same design on the Ruida.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
         assert layer in [op.id for op in CommandRunner(grbl)._z_stepped_layers()]
 
         grbl.device.supports_z_axis = False
 
         assert CommandRunner(grbl)._z_stepped_layers() == []
-        # De instelling zelf blijft staan: terugwisselen moet hem teruggeven.
+        # The setting itself stays: switching back has to give it again.
         assert grbl.elements.find_node(layer).z_step_mm == 0.5
 
 
 def test_a_layer_that_does_not_burn_is_left_out(grbl, tmp_path):
-    """Meebranden uit betekent ook geen Z-beweging voor die laag."""
+    """Burn along off means no Z movement for that layer either."""
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
         client.patch(f"/api/design/operations/{layer}", json={"output": False})
@@ -322,16 +320,16 @@ def test_a_layer_that_does_not_burn_is_left_out(grbl, tmp_path):
 
 def test_the_step_survives_being_written_out_and_read_back(grbl, tmp_path):
     """
-    Zonder dit zou de Z-stap na een herstart weg zijn terwijl de passes bleven
-    staan — en dan snijd je vier keer op dezelfde hoogte zonder dat iets het
-    zegt. De engine schrijft elke gewone eigenschap van een bewerking mee naar
-    de opslag (`svg_io.py:456`, de generieke tak), dus onze eigen `z_step_mm`
-    gaat vanzelf mee. Hier bewezen met de opslagroutine van de engine zelf.
+    Without this the Z step would be gone after a restart while the passes stayed —
+    and then you cut four times at the same height with nothing saying so. The
+    engine writes every ordinary property of an operation out to storage
+    (`svg_io.py:456`, the generic branch), so our own `z_step_mm` comes along by
+    itself. Proved here with the engine's own save routine.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
-        # Een eigen waarde: de engine bewaart de lagenstapel in één gedeelde
-        # `operations.cfg`, dus er kunnen lagen van een andere test tussen staan.
+        layer = a_layer(client, passes=3)
+        # A value of its own: the engine keeps the layer stack in one shared
+        # `operations.cfg`, so layers from another test can be in among them.
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.37})
 
     elements = grbl.elements

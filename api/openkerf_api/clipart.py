@@ -1,22 +1,21 @@
 """
-Clipart zoeken in openbare collecties.
+Searching clipart in public collections.
 
-Bewust géén eigen bibliotheek: verwijzen in plaats van hosten. Dat scheelt
-onderhoud en, belangrijker, het legt de licentieverantwoordelijkheid waar hij
-hoort — bij de bron, zichtbaar bij elk resultaat. Wie lasert, verkoopt vaak wat
-hij snijdt, en dan is "gratis gevonden" niet hetzelfde als "vrij te gebruiken".
+Deliberately no library of our own: referring instead of hosting. That saves maintenance
+and, more importantly, it puts the licence responsibility where it belongs — with the
+source, visible at every result. Anybody who lasers often sells what they cut, and then
+"found for free" is not the same as "free to use".
 
-Drie dingen die dit bruikbaar maken:
+Three things that make this usable:
 
-1. **Zoeken loopt via onze server, niet vanuit de browser.** Anders lopen we
-   tegen CORS aan en kunnen we niets filteren of samenvoegen.
-2. **Elke bron heeft zijn eigen korte time-out en mag omvallen.** Openclipart
-   ligt er met enige regelmaat uit. Eén trage bron mag het zoeken niet ophouden;
-   de gebruiker ziet wat er wél is, plus welke bron niet antwoordde.
-3. **Bij het invoegen wordt gecontroleerd, niet bij het zoeken.** Een tekening
-   die er op het scherm goed uitziet kan op een laser waardeloos zijn: open
-   paden, gradiënten, tekst die geen pad is. Dat hoort je te weten vóór je
-   materiaal erin legt, niet erna.
+1. **Searching goes through our server, not from the browser.** Otherwise we run into CORS
+   and can filter or merge nothing.
+2. **Every source has its own short time-out and may fall over.** Openclipart is down with
+   some regularity. One slow source must not hold the search up; the user sees what *is*
+   there, plus which source did not answer.
+3. **Checking happens on insertion, not on searching.** A drawing that looks good on screen
+   can be worthless on a laser: open paths, gradients, text that is not a path. You should
+   know that before you put material in, not after.
 """
 
 from __future__ import annotations
@@ -29,8 +28,8 @@ import threading
 
 from .edits import DesignError
 
-# Kort: een gebruiker die zoekt, wacht niet. Een bron die er langer over doet,
-# is voor dit doel gewoon niet beschikbaar.
+# Short: a user who is searching does not wait. A source that takes longer is simply not
+# available for this purpose.
 TIMEOUT = 5.0
 DOWNLOAD_TIMEOUT = 10.0
 MAX_BYTES = 4 * 1024 * 1024
@@ -43,20 +42,20 @@ USER_AGENT = "OpenKerf/0.1 (https://github.com/openkerf/openkerf)"
 
 SOURCES = ("iconify", "wikimedia", "openclipart")
 
-# Iconen komen als 1em-vierkantjes in de kleur van de tekst; zonder een echte
-# maat en een echte kleur weet de engine niet wat hij moet tekenen.
+# Icons come as 1em squares in the text colour; without a real size and a real colour the
+# engine does not know what to draw.
 ICON_SIZE = 240
 
-# Wat op een laser niet bestaat, of anders uitpakt dan je ziet. Geen weigering
-# maar een melding: de engine laat ze vallen, en dan hoor je te weten wat er
-# verdwijnt.
+# What does not exist on a laser, or turns out differently from what you see. Not
+# a refusal but a note: the engine drops them, and then you ought to know what
+# disappears.
 DROPPED = {
-    "linearGradient": "kleurverlopen",
-    "radialGradient": "kleurverlopen",
+    "linearGradient": "gradients",
+    "radialGradient": "gradients",
     "filter": "filters",
-    "mask": "maskers",
-    "text": "tekst (wordt geen pad)",
-    "image": "ingesloten pixels",
+    "mask": "masks",
+    "text": "text (does not become a path)",
+    "image": "embedded pixels",
 }
 
 
@@ -70,24 +69,24 @@ class Clipart:
     def __init__(self, kernel, drawing, fetch=_fetch):
         self.kernel = kernel
         self.drawing = drawing
-        # Injecteerbaar, zodat tests niet het internet op hoeven.
+        # Injectable, so that tests do not have to go on the internet.
         self.fetch = fetch
 
-    # -------------------------------------------------------------- zoeken
+    # ------------------------------------------------------------ searching
 
     def search(self, query: str, sources=None, limit: int = 24, page: int = 1) -> dict:
         text = str(query or "").strip()
         if len(text) < 2:
-            raise DesignError("Geef minstens twee letters om op te zoeken.")
+            raise DesignError("Give at least two letters to search for.")
         wanted = [s for s in (sources or SOURCES) if s in SOURCES]
         if not wanted:
-            raise DesignError(f"Onbekende bron. Kies uit {', '.join(SOURCES)}.")
+            raise DesignError(f"Unknown source. Choose from {', '.join(SOURCES)}.")
         try:
             number = int(page)
         except (TypeError, ValueError) as e:
-            raise DesignError("De pagina moet een geheel getal zijn.") from e
+            raise DesignError("The page has to be a whole number.") from e
         if not 1 <= number <= 50:
-            raise DesignError("De pagina moet tussen 1 en 50 liggen.")
+            raise DesignError("The page has to be between 1 and 50.")
         per_source = max(4, int(limit) // len(wanted))
         offset = (number - 1) * per_source
 
@@ -98,16 +97,16 @@ class Clipart:
         }
         results, problems = [], {}
 
-        # Naast elkaar, met gewone threads: één trage bron mag de andere niet
-        # ophouden. Geen ThreadPoolExecutor — die weigert dienst zodra ergens in
-        # het proces de atexit-haak van `concurrent.futures` is afgegaan, en in
-        # een engine die zelf threads beheert gebeurt dat.
+        # Side by side, with ordinary threads: one slow source must not hold the others up.
+        # Not a ThreadPoolExecutor — that refuses service as soon as `concurrent.futures`'s
+        # atexit hook has fired somewhere in the process, and in an engine that manages
+        # threads itself that happens.
         found = {}
 
         def run(name):
             try:
                 found[name] = lookups[name](text, per_source, offset)
-            except Exception as error:  # noqa: BLE001 - de reden is het antwoord
+            except Exception as error:  # noqa: BLE001 - the reason is the answer
                 problems[name] = self._reason(error)
 
         threads = [
@@ -116,18 +115,18 @@ class Clipart:
         for thread in threads:
             thread.start()
         for thread in threads:
-            # Iets ruimer dan de time-out van het ophalen zelf, zodat een bron
-            # die netjes afbreekt zijn eigen melding kan achterlaten.
+            # Slightly more generous than the fetch's own time-out, so that a source
+            # breaking off neatly can leave its own message behind.
             thread.join(timeout=TIMEOUT + 2)
         for name in wanted:
             if name in found:
                 results.extend(found[name])
             elif name not in problems:
-                problems[name] = "reageerde niet op tijd"
+                problems[name] = "did not answer in time"
 
-        # Meer te halen zolang minstens één bron zijn pagina helemaal vulde.
-        # Geen van beide API's zegt hoeveel resultaten er in totaal zijn, dus
-        # dit is het eerlijkste teken: een halfvolle pagina is het einde.
+        # More to fetch as long as at least one source filled its page completely. Neither
+        # API says how many results there are in total, so this is the most honest sign: a
+        # half-full page is the end.
         more = any(len(found.get(name, [])) >= per_source for name in wanted)
         return {
             "query": text,
@@ -142,31 +141,31 @@ class Clipart:
         if isinstance(error, TimeoutError) or isinstance(
             getattr(error, "reason", None), TimeoutError
         ):
-            return "reageerde niet op tijd"
+            return "did not answer in time"
         if isinstance(error, urllib.error.HTTPError):
-            return f"gaf een foutmelding ({error.code})"
+            return f"returned an error ({error.code})"
         if isinstance(error, urllib.error.URLError):
-            return "was niet bereikbaar"
+            return "was unreachable"
         if isinstance(error, (json.JSONDecodeError, UnicodeDecodeError)):
-            # Openclipart geeft bij storing een HTML-pagina of niets terug. De
-            # gebruiker heeft niets aan een parse-fout.
-            return "gaf een onverwacht antwoord"
-        return str(error)[:120] or "gaf een onverwacht antwoord"
+            # On a fault Openclipart hands back an HTML page or nothing. A parse error is no
+            # use to the user.
+            return "gave an unexpected answer"
+        return str(error)[:120] or "gave an unexpected answer"
 
     def _iconify(self, query: str, limit: int, offset: int = 0) -> list[dict]:
         """
         Open-source iconensets, gebundeld door Iconify.
 
-        Voor een laser is dit het meest bruikbare materiaal dat er is: gesloten
-        paden, geen kleurverlopen, geen tekst, weinig knooppunten. Precies alles
-        wat bij andere bronnen uit de tekening valt, ontbreekt hier gewoon.
+        For a laser this is the most usable material there is: closed paths, no gradients,
+        no text, few nodes. Precisely everything that falls out of the drawing with other
+        sources is simply absent here.
         """
         params = urllib.parse.urlencode(
             {"query": query, "limit": str(max(32, limit)), "start": str(offset)}
         )
         payload = json.loads(self.fetch(f"{ICONIFY}/search?{params}").decode("utf-8"))
-        # De licentie per set zit in hetzelfde antwoord; dat scheelt een tweede
-        # verzoek per resultaat.
+        # The licence per set is in the same answer; that saves a second request per
+        # result.
         sets = payload.get("collections") or {}
 
         found = []
@@ -185,7 +184,7 @@ class Clipart:
                     "svg_url": f"{image}?height={ICON_SIZE}&color=%23000000",
                     "thumbnail_url": f"{image}?height=64&color=%23000000",
                     "page_url": f"https://icon-sets.iconify.design/{prefix}/{icon}/",
-                    "license": licence or "zie de iconenset",
+                    "license": licence or "see the icon set",
                     "author": (collection.get("author") or {}).get("name")
                     or collection.get("name"),
                 }
@@ -213,8 +212,8 @@ class Clipart:
         found = []
         for page in pages.values():
             info = (page.get("imageinfo") or [{}])[0]
-            # Op het mime-type filteren, niet op de bestandsnaam: Commons hangt
-            # er een `?utm_source=` achter, waardoor een test op ".svg" alles
+            # Filter on the mime type, not on the file name: Commons hangs a `?utm_source=`
+            # on the end, which makes a test on ".svg" throw everything
             # wegfiltert.
             if info.get("mime") != "image/svg+xml":
                 continue
@@ -237,7 +236,7 @@ class Clipart:
         return found
 
     def _openclipart(self, query: str, limit: int, offset: int = 0) -> list[dict]:
-        # Openclipart telt in pagina's, niet in een beginpositie.
+        # Openclipart counts in pages, not in a start position.
         params = urllib.parse.urlencode(
             {
                 "query": query,
@@ -256,13 +255,13 @@ class Clipart:
                 {
                     "id": f"openclipart:{item.get('id')}",
                     "source": "Openclipart",
-                    "title": item.get("title") or "zonder titel",
+                    "title": item.get("title") or "untitled",
                     "svg_url": svg,
                     "thumbnail_url": (item.get("svg") or {}).get("png_thumb") or svg,
                     "page_url": item.get("detail_link"),
-                    # Openclipart is volledig publiek domein; dat staat niet
-                    # altijd in het antwoord, maar geldt voor de hele collectie.
-                    "license": item.get("license") or "CC0 (publiek domein)",
+                    # Openclipart is entirely public domain; that is not always in the
+                    # answer, but it holds for the whole collection.
+                    "license": item.get("license") or "CC0 (public domain)",
                     "author": item.get("uploader"),
                 }
             )
@@ -272,21 +271,20 @@ class Clipart:
 
     def insert(self, url: str, width_mm=60.0, x_mm=10.0, y_mm=10.0) -> dict:
         """
-        Een gevonden tekening in het ontwerp zetten, op ware grootte.
+        Putting a drawing that was found into the design, at its real size.
 
-        De controle zit hier en niet bij het zoeken: pas als je hem echt wilt
-        gebruiken, is het de moeite om te weten wat er op een laser van
-        overblijft.
+        The check is here and not at the search: only when you really want to use it is it
+        worth knowing what is left of it on a laser.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
         address = str(url or "").strip()
         if not address.lower().startswith("https://"):
-            # Alleen https, en alleen van de bronnen die we zelf aanbieden:
-            # een willekeurige URL laten ophalen door de server is een open deur.
+            # Only https, and only from the sources we offer ourselves: having the server
+            # fetch an arbitrary URL is an open door.
             raise DesignError(
-                "Alleen beveiligde adressen (https) worden opgehaald. Kies een "
-                "tekening uit het zoekvenster in plaats van een adres te plakken."
+                "Only secure addresses (https) are fetched. Choose a "
+                "drawing from the search window instead of pasting an address."
             )
         if not any(
             address.lower().startswith(prefix)
@@ -297,20 +295,20 @@ class Clipart:
             )
         ):
             raise DesignError(
-                "Dit adres hoort niet bij Iconify, Wikimedia Commons of "
-                "Openclipart. Kies een tekening uit het zoekvenster; alleen die "
-                "bronnen worden opgehaald."
+                "This address does not belong to Iconify, Wikimedia Commons or "
+                "Openclipart. Choose a drawing from the search window; only those "
+                "sources are being fetched."
             )
         width = float(width_mm)
         if not 1 <= width <= 2000:
-            raise DesignError("De breedte moet tussen 1 en 2000 mm liggen.")
+            raise DesignError("The width has to be between 1 and 2000 mm.")
 
         try:
             body = self.fetch(address, timeout=DOWNLOAD_TIMEOUT)
         except Exception as error:
             raise DesignError(f"Ophalen mislukte: {self._reason(error)}") from error
         if len(body) > MAX_BYTES:
-            raise DesignError("Deze tekening is te groot om te verwerken.")
+            raise DesignError("This drawing is too large to process.")
 
         notes = self._inspect(body)
 
@@ -321,13 +319,13 @@ class Clipart:
         target.write_bytes(body)
 
         before = {id(node) for node in self.elements.elems()}
-        with self.elements.undoscope("Clipart invoegen"):
+        with self.elements.undoscope("Insert clipart"):
             self.drawing.runner.run(f'load "{target}"')
             added = [n for n in self.elements.elems() if id(n) not in before]
             if not added:
                 raise DesignError(
-                    "Hier viel niets uit te tekenen. "
-                    + (" ".join(notes) if notes else "De engine kon de SVG niet lezen.")
+                    "There was nothing to draw out of this. "
+                    + (" ".join(notes) if notes else "The engine could not read the SVG.")
                 )
             self.elements.validate_ids()
             self._place(added, width * UNITS_PER_MM, x_mm, y_mm)
@@ -345,7 +343,7 @@ class Clipart:
         return self.kernel.elements
 
     def _inspect(self, body: bytes) -> list[str]:
-        """Wat er op een laser niet overkomt. Meldingen, geen weigering."""
+        """What does not come across on a laser. Notes, not a refusal."""
         try:
             text = body.decode("utf-8", errors="ignore")
         except Exception:
@@ -358,20 +356,20 @@ class Clipart:
         notes = []
         if found:
             notes.append(
-                "Deze tekening bevat " + ", ".join(found) + "; dat komt niet mee."
+                "This drawing contains " + ", ".join(found) + "; that does not come along."
             )
         paths = text.count("<path")
         if paths > 400:
-            # Een tekening uit een encyclopedie heeft er zo duizend. Dat brandt
-            # niet fout, maar het duurt uren en dat weet je liever vooraf.
+            # A drawing from an encyclopedia has a thousand of them in no time. That does
+            # not burn wrongly, but it takes hours and you would rather know beforehand.
             notes.append(
-                f"Deze tekening bestaat uit {paths} losse paden; dat wordt een "
-                "lange job. Overweeg een eenvoudiger afbeelding."
+                f"This drawing consists of {paths} loose paths; that makes a "
+                "long job. Consider a simpler image."
             )
         return notes
 
     def _place(self, nodes, width_units: float, x_mm, y_mm) -> None:
-        """Op maat schalen en neerleggen, zodat hij niet ergens buiten het bed valt."""
+        """Scale it to size and put it down, so it does not land outside the bed."""
         from meerk40t.core.units import UNITS_PER_MM
 
         boxes = [n.bounds for n in nodes if getattr(n, "bounds", None)]
@@ -399,12 +397,12 @@ class Clipart:
 
 
 def _without_query(url: str) -> str:
-    """Commons hangt tracking achter zijn bestands-URL's; die willen we niet."""
+    """Commons hangs tracking behind its file URLs; we do not want that."""
     return url.split("?", 1)[0]
 
 
 def _plain_text(field) -> str | None:
-    """Wikimedia levert HTML in zijn metadata; daar wil de gebruiker niets van zien."""
+    """Wikimedia delivers HTML in its metadata; the user wants to see none of it."""
     import re
 
     if not field:

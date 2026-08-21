@@ -262,15 +262,15 @@ def test_all_layers_go_in_one_action_and_the_shapes_stay(kernel, client):
     """
     Punt 4 van Jelle: alle lagen weggooien moest per laag, drie klikken elk.
 
-    De belofte is dezelfde als bij één laag: een laag weggooien is geen werk
-    weggooien. De vormen staan er na afloop nog, in geen enkele laag.
+    The promise is the same as with one layer: throwing a layer away is not throwing work
+    away. Afterwards the shapes are still there, in no layer.
     """
     client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     )
-    client.post("/api/design/operations", json={"type": "cut", "label": "Snijden"})
-    client.post("/api/design/operations", json={"type": "engrave", "label": "Graveren"})
+    client.post("/api/design/operations", json={"type": "cut", "label": "Cut"})
+    client.post("/api/design/operations", json={"type": "engrave", "label": "Engrave"})
     voor = client.get("/api/design").json()
     assert len(voor["operations"]) >= 2
     vormen = len(voor["elements"])
@@ -404,14 +404,13 @@ def test_fonts_are_listed(kernel, drawing):
 
 def test_a_font_whose_file_is_gone_is_not_offered(kernel, drawing, tmp_path):
     """
-    De engine houdt zijn fontlijst in een cache die een verwijderd bestand niet
-    opmerkt. Zo'n regel kan alleen maar mislukken: de kiezer toont hem, haalt
-    het bestand op voor het voorbeeld en krijgt een 409 terug — zonder dat er
-    iets op het scherm staat over wat er aan de hand is.
+    The engine keeps its font list in a cache that does not notice a deleted file. Such a row
+    can only fail: the picker shows it, fetches the file for the preview and gets a 409 back —
+    without anything on the screen about what is going on.
     """
     weg = tmp_path / "Weggegooid.ttf"
-    er_nog = tmp_path / "Aanwezig.ttf"
-    er_nog.write_bytes(b"niet echt een font, maar het bestaat")
+    er_nog = tmp_path / "Present.ttf"
+    er_nog.write_bytes(b"not really a font, but it exists")
 
     registry = kernel.root.fonts
 
@@ -421,9 +420,9 @@ def test_a_font_whose_file_is_gone_is_not_offered(kernel, drawing, tmp_path):
             return [
                 (str(weg), "Weggegooid"),
                 (str(er_nog), "Aanwezig"),
-                # Zoals de engine zijn eigen Hershey-fonts opgeeft: een kale
-                # naam, geen pad. Dat font bestaat wél en moet blijven staan —
-                # wij zetten er de opschriften van elk testbord mee.
+                # As the engine states its own Hershey fonts: a bare name, not a path. That
+                # font does exist and has to stay — we set every test board's captions in
+                # it.
                 ("meerk40t.jhf", "MeerK40t Simple"),
             ]
 
@@ -475,12 +474,12 @@ def test_estimating_leaves_no_plan_behind(kernel, drawing, client):
 
 def test_estimating_never_builds_the_plan(kernel, drawing, client, monkeypatch):
     """
-    De reden dat deze route op een zwaar ontwerp minuten kostte (gat J1).
+    The reason this route cost minutes on a heavy design (gap J1).
 
     `plan copy` kopieert de cutcode één keer per pass en de optimalisatie erna
-    schaalt kwadratisch; gemeten: 960 vormen × 60 passes duurde 169 s. De
-    schatting rekent nu op de geometrie, dus de planpijplijn mag niet meer
-    aangeroepen worden — vandaar dat we hem hier laten ontploffen.
+    scales quadratically; measured: 960 shapes × 60 passes took 169 s. The estimate now
+    computes on the geometry, so the plan pipeline must no longer be called — hence we make it
+    explode here.
     """
     kernel.console("rect 20mm 15mm 60mm 40mm\n")
     kernel.console("element* cut -s 12 -p 650\n")
@@ -488,7 +487,7 @@ def test_estimating_never_builds_the_plan(kernel, drawing, client, monkeypatch):
 
     def run(command, *args, **kwargs):
         if command.startswith("plan"):
-            raise AssertionError(f"de schatting bouwde alsnog een plan: {command}")
+            raise AssertionError(f"the estimate built a plan after all: {command}")
         return origineel(command, *args, **kwargs)
 
     monkeypatch.setattr(drawing.runner, "run", run)
@@ -501,12 +500,11 @@ def test_estimating_never_builds_the_plan(kernel, drawing, client, monkeypatch):
 
 def test_the_fast_estimate_matches_the_plan(kernel, drawing, client):
     """
-    Snel mag niet ten koste van klopt.
+    Fast must not come at the cost of right.
 
-    Dezelfde som als `duration_cut` + `duration_travel`, alleen zonder eerst
-    het plan te bouwen: brandlengte gedeeld door de laagsnelheid, plus de
-    sprongen ertussen. De reisvolgorde die de optimalisatie kiest zit er niet
-    in, dus een paar procent verschil hoort erbij.
+    The same sum as `duration_cut` + `duration_travel`, only without building the plan first:
+    burn length divided by the layer's speed, plus the jumps in between. The travel order the
+    optimisation chooses is not in it, so a few per cent of difference belongs with it.
     """
     for index in range(8):
         kernel.console(f"circle {10 + index * 20}mm 30mm 8mm\n")
@@ -539,10 +537,10 @@ def test_passes_multiply_the_estimate(client):
 
 def test_an_outline_in_a_raster_layer_costs_nothing(kernel, drawing, client):
     """
-    Een rasterlaag brandt het vlak, en een omlijnde vorm heeft dat niet.
+    A raster layer burns the area, and an outlined shape does not have one.
 
-    Op de omhullende rekenen zou hier acht minuten melden voor werk dat niet
-    gebeurt: het echte plan levert voor zo'n laag nul cutcode op (gemeten).
+    Working on the bounding box would report eight minutes here for work that does
+    not happen: the real plan gives zero cutcode for such a layer (measured).
     """
     kernel.console("rect 20mm 20mm 60mm 40mm\n")
     kernel.console("element* cut -s 12 -p 650\n")
@@ -597,7 +595,7 @@ def test_changing_the_font_rerenders(kernel, drawing):
     element = next(
         e for e in DesignReader(kernel).snapshot()["elements"] if e["id"] == created["ids"][0]
     )
-    # De engine slaat alleen de bestandsnaam op, niet het volledige pad.
+    # The engine stores only the file name, not the full path.
     assert element["text"]["font"] == other["basename"]
 
 
@@ -901,8 +899,8 @@ def test_unknown_effect_is_refused(drawing):
 
 def test_raster_settings_can_be_changed(client):
     """
-    DPI en overscan bepalen hoe een gravure eruitziet en hoe lang hij duurt;
-    zonder deze velden moest je terug naar MeerK40t.
+    DPI and overscan decide what an engraving looks like and how long it takes;
+    without these fields you had to go back to MeerK40t.
     """
     created = client.post("/api/design/operations", json={"type": "raster"}).json()
 
@@ -932,20 +930,20 @@ def test_absurd_raster_settings_are_refused(client):
 
 def test_a_new_layer_has_a_name_you_recognise(client):
     """
-    De engine noemde een verse laag "Cut defaultmm/s @default #ff0000":
-    machinetaal op de plek waar je je eigen werk moet herkennen.
+    The engine called a fresh layer "Cut defaultmm/s @default #ff0000": machine
+    language in the place where you have to recognise your own work.
     """
     made = client.post("/api/design/operations", json={"type": "cut"}).json()
 
     layer = next(
         o for o in client.get("/api/design").json()["operations"] if o["id"] == made["id"]
     )
-    assert layer["label"] == "Snijden"
+    assert layer["label"] == "Cut"
 
 
 def test_a_new_layer_does_not_claim_zero_passes(client):
-    """Nul passes leest als "nul keer snijden" — precies het getal waar een
-    laseraar naar kijkt voordat hij op start drukt."""
+    """Zero passes reads as "cut zero times" — exactly the number somebody at a
+    laser looks at before pressing start."""
     made = client.post("/api/design/operations", json={"type": "engrave"}).json()
 
     layer = next(
@@ -956,9 +954,9 @@ def test_a_new_layer_does_not_claim_zero_passes(client):
 
 def test_a_new_shape_lands_in_exactly_one_layer(client):
     """
-    De classificatie kijkt naar de lijnkleur, en meerdere operaties kunnen
-    dezelfde kleur claimen. Dan brandt dezelfde vorm twee keer — de tweede keer
-    vaak op vol vermogen. Dat merk je pas op materiaal.
+    Classification looks at the stroke colour, and several operations can claim
+    the same colour. Then the same shape burns twice — the second time often at
+    full power. You only notice that on material.
     """
     made = client.post(
         "/api/design/elements",
@@ -972,7 +970,7 @@ def test_a_new_shape_lands_in_exactly_one_layer(client):
 
 
 def test_the_preflight_lists_one_layer_for_one_shape(client):
-    """Wat de pre-flight toont, is wat er gebeurt. Twee lagen voor één vorm is een dubbele brand."""
+    """What the pre-flight shows is what happens. Two layers for one shape is a double burn."""
     client.post("/api/design/clear")
     client.post(
         "/api/design/elements",
@@ -983,24 +981,24 @@ def test_the_preflight_lists_one_layer_for_one_shape(client):
     assert len(layers) == 1, [l["label"] for l in layers]
 
 
-# ---------------------------------------------------------------- hoeken
+# --------------------------------------------------------------- corners
 
 
-def een_rechthoek(client, w=40, h=30):
-    antwoord = client.post(
+def a_rectangle(client, w=40, h=30):
+    answer = client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": w, "height_mm": h},
     )
-    assert antwoord.status_code == 201, antwoord.json()
-    return antwoord.json()["ids"][0]
+    assert answer.status_code == 201, answer.json()
+    return answer.json()["ids"][0]
 
 
 def test_a_rect_can_be_drawn_with_rounded_corners(client, kernel):
     """
-    De engine kent afgeronde rechthoeken al: `rx`/`ry` op de knoop, en het
-    console-commando heeft er opties voor. Wij gaven ze alleen niet door.
+    The engine already knows rounded rectangles: `rx`/`ry` on the node, and the
+    console command has options for them. We simply did not pass them on.
     """
-    gemaakt = client.post(
+    created = client.post(
         "/api/design/elements",
         json={
             "type": "rect",
@@ -1012,20 +1010,20 @@ def test_a_rect_can_be_drawn_with_rounded_corners(client, kernel):
         },
     )
 
-    assert gemaakt.status_code == 201, gemaakt.json()
+    assert created.status_code == 201, created.json()
     element = client.get("/api/design").json()["elements"][0]
     assert element["type"] == "elem rect"
-    # En de radius is werkelijk aangekomen. Alleen op het type toetsen zou
-    # groen blijven als de opties stil weggevallen waren.
-    knoop = next(n for n in kernel.elements.elems() if n.type == "elem rect")
+    # And the radius really arrived. Testing on the type alone would stay green
+    # if the options had quietly fallen away.
+    node = next(n for n in kernel.elements.elems() if n.type == "elem rect")
     units = 65535 / 25.4
-    assert knoop.rx / units == pytest.approx(5.0, rel=1e-3)
-    assert knoop.ry / units == pytest.approx(5.0, rel=1e-3)
+    assert node.rx / units == pytest.approx(5.0, rel=1e-3)
+    assert node.ry / units == pytest.approx(5.0, rel=1e-3)
 
 
 def test_a_radius_that_does_not_fit_is_refused_with_the_maximum(client):
-    """Weigeren is prima; weigeren zonder te zeggen wat wél kan, niet."""
-    antwoord = client.post(
+    """Refusing is fine; refusing without saying what *does* fit is not."""
+    answer = client.post(
         "/api/design/elements",
         json={
             "type": "rect",
@@ -1037,55 +1035,54 @@ def test_a_radius_that_does_not_fit_is_refused_with_the_maximum(client):
         },
     )
 
-    assert antwoord.status_code == 409
-    assert "5" in antwoord.json()["detail"]
+    assert answer.status_code == 409
+    assert "5" in answer.json()["detail"]
 
 
 def test_rounding_a_rect_keeps_it_a_rect(client, kernel):
     """
-    Dit is de hele reden dat afronden een eigenschap is en geen nieuwe vorm:
-    breedte en hoogte blijven bestaan, en de radius is later te wijzigen.
+    This is the whole reason rounding is a property and not a new shape: the width
+    and height stay, and the radius can be changed later.
     """
-    element_id = een_rechthoek(client, w=40, h=30)
+    element_id = a_rectangle(client, w=40, h=30)
 
-    antwoord = client.post(
+    answer = client.post(
         "/api/design/corners",
         json={"ids": [element_id], "style": "round", "size_mm": 5},
     )
 
-    assert antwoord.status_code == 200, antwoord.json()
-    assert antwoord.json()["rounded"] == [element_id]
+    assert answer.status_code == 200, answer.json()
+    assert answer.json()["rounded"] == [element_id]
     assert client.get("/api/design").json()["elements"][0]["type"] == "elem rect"
-    knoop = next(n for n in kernel.elements.elems() if n.type == "elem rect")
-    assert knoop.rx / (65535 / 25.4) == pytest.approx(5.0, rel=1e-3)
+    node = next(n for n in kernel.elements.elems() if n.type == "elem rect")
+    assert node.rx / (65535 / 25.4) == pytest.approx(5.0, rel=1e-3)
 
 
 def test_chamfering_a_rect_turns_it_into_a_path(client):
     """
-    En dit is waarom afschuinen géén eigenschap kan zijn: de engine tekent een
-    `elem rect` altijd rond, dus een afgeschuinde rechthoek moet geometrie van
-    onszelf worden. Dat is eenrichting, en de test legt dat vast in plaats van
-    het aan de UI over te laten.
+    And this is why bevelling *cannot* be a property: the engine always draws an
+    `elem rect` rounded, so a bevelled rectangle has to become geometry of our own.
+    That is one-way, and the test pins it down instead of leaving it to the UI.
     """
-    element_id = een_rechthoek(client, w=40, h=30)
+    element_id = a_rectangle(client, w=40, h=30)
 
-    antwoord = client.post(
+    answer = client.post(
         "/api/design/corners",
         json={"ids": [element_id], "style": "chamfer", "size_mm": 5},
     )
 
-    assert antwoord.status_code == 200, antwoord.json()
-    assert antwoord.json()["paths"]
+    assert answer.status_code == 200, answer.json()
+    assert answer.json()["paths"]
     assert client.get("/api/design").json()["elements"][0]["type"] == "elem path"
 
 
 def test_a_corner_size_too_large_is_refused(client):
-    element_id = een_rechthoek(client, w=10, h=10)
+    element_id = a_rectangle(client, w=10, h=10)
 
-    antwoord = client.post(
+    answer = client.post(
         "/api/design/corners",
         json={"ids": [element_id], "style": "chamfer", "size_mm": 8},
     )
 
-    assert antwoord.status_code == 409
-    assert "kleinere maat" in antwoord.json()["detail"]
+    assert answer.status_code == 409
+    assert "smaller size" in answer.json()["detail"]

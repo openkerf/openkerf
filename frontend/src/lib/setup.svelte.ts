@@ -1,9 +1,9 @@
 /**
- * Gedeelde bouwstenen voor de setup-routes.
+ * Shared building blocks for the setup routes.
  *
- * De stappen zijn losse pagina's, dus er is geen component-state die ze
- * overleeft. Wat een volgende stap nodig heeft staat in de URL — daardoor
- * werken de terugknop, een bladwijzer en een verversing allemaal gewoon.
+ * The steps are separate pages, so there is no component state that survives them.
+ * What a next step needs is in the URL — which is why the back button, a bookmark
+ * and a refresh all simply work.
  */
 
 import { MachineStore } from './machines.svelte';

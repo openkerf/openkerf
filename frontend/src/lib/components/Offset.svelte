@@ -1,71 +1,72 @@
 <script lang="ts">
 	/**
-	 * Offset — een pad naar buiten of naar binnen zetten.
+	 * Offset — putting a path outwards or inwards.
 	 *
-	 * Dit liep via `window.prompt('Offset in mm (negatief = naar binnen)', '2')`.
-	 * Dat is de enige plek in de app waar een browservenster de vraag stelde, en
-	 * daar is alles aan mis: het staat buiten het thema, het valideert niets (een
-	 * letter komt er als NaN uit en levert stille onzin op), de tekst is niet te
-	 * vertalen, en op sommige browsers is hij door de gebruiker uit te zetten —
-	 * dan doet de knop niets, zonder één woord.
+	 * This went through `window.prompt('Offset in mm (negative = inwards)', '2')`. That is
+	 * the only place in the app where a browser dialog asked the question, and everything
+	 * about it is wrong: it sits outside the theme, it validates nothing (a letter comes
+	 * out as NaN and produces silent nonsense), the text cannot be translated, and in some
+	 * browsers the user can switch it off — and then the button does nothing, without a
+	 * word.
 	 *
-	 * Hetzelfde venster als bij Hoeken: klein, met de betekenis erbij, en een
-	 * primaire knop die zegt wat er gaat gebeuren.
+	 * The same dialog as with CornersDialog: small, with the meaning beside it, and a
+	 * primary button that says what is going to happen.
 	 */
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import NumberField from './NumberField.svelte';
 
 	let {
 		open = $bindable(false),
-		aantal = 0,
-		bezig = false,
+		count = 0,
+		busy = false,
 		onToepassen
 	}: {
 		open?: boolean;
-		aantal?: number;
-		bezig?: boolean;
-		onToepassen: (afstandMm: number) => void;
+		count?: number;
+		busy?: boolean;
+		onToepassen: (distanceMm: number) => void;
 	} = $props();
 
 	let afstand = $state('2');
-	let waarde = $derived(Number(afstand));
-	let geldig = $derived(Number.isFinite(waarde) && waarde !== 0);
-	let richting = $derived(waarde > 0 ? 'naar buiten' : 'naar binnen');
+	let value = $derived(Number(afstand));
+	let geldig = $derived(Number.isFinite(value) && value !== 0);
+	let richting = $derived(t(value > 0 ? 'offset.outward' : 'offset.inward'));
 </script>
 
-<Dialog title="Offset" bind:open width="400px">
+<Dialog title={t('offset.title')} bind:open width="400px">
 	<div class="offset">
 		<div class="paar">
-			<NumberField label="Afstand" unit="mm" step={0.5} bind:value={afstand} />
-			<!-- De richting in woorden naast het getal. Een minteken is de invoer,
-			     "naar binnen" is de betekenis — en die twee zijn niet hetzelfde
-			     zolang je nog moet bedenken welke kant negatief is. -->
+			<NumberField label={t('offset.distance')} unit="mm" step={0.5} bind:value={afstand} />
+			<!-- The direction in words beside the number. A minus sign is the input,
+			     "inward" is the meaning — and those two are not the same as long as you
+			     still have to work out which side is negative. -->
 			<p class="richting">
 				{#if geldig}
-					{Math.abs(waarde)} mm <strong>{richting}</strong>
+					{t('offset.reading', { mm: i18n.number(Math.abs(value)), direction: richting })}
 				{:else}
-					Vul een afstand in; negatief is naar binnen.
+					{t('offset.fillIn')}
 				{/if}
 			</p>
 		</div>
-		<p class="regel">
-			Er komt een nieuw pad naast het bestaande. De oorspronkelijke vorm blijft
-			staan.
-		</p>
+		<p class="row">{t('offset.explain')}</p>
 	</div>
 
 	<div class="ask-actions">
-		<button class="btn" onclick={() => (open = false)}>Annuleren</button>
+		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button
 			class="btn primary"
-			disabled={bezig || !geldig || !aantal}
-			onclick={() => onToepassen(waarde)}
+			disabled={busy || !geldig || !count}
+			onclick={() => onToepassen(value)}
 		>
-			{#if !aantal}
-				Offset maken
+			{#if !count}
+				{t('offset.make')}
 			{:else}
-				{aantal === 1 ? '1 vorm' : `${aantal} vormen`} — {Math.abs(waarde) || '?'} mm
-				{richting}
+				{t('offset.button', {
+					shapes: t('corners.shapes', { n: count }),
+					mm: Math.abs(value) ? i18n.number(Math.abs(value)) : '?',
+					direction: richting
+				})}
 			{/if}
 		</button>
 	</div>
@@ -89,7 +90,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.regel {
+	.row {
 		margin: 0;
 		font-size: var(--text-xs);
 		line-height: 1.5;

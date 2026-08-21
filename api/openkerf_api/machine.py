@@ -1,10 +1,10 @@
 """
 De machine bewegen: homen, jogpen, ontgrendelen.
 
-Deze opdrachten zetten de kop in beweging. Anders dan pauzeren en stoppen zijn
-ze niet device-specifiek: `core/spoolers.py` registreert ze op de kernel, dus
-ze bestaan altijd en gaan via de spooler van het actieve apparaat. We melden de
-beschikbaarheid alsnog, zodat de UI niet hoeft aan te nemen dat dat zo blijft.
+These commands set the head in motion. Unlike pausing and stopping they are not
+device-specific: `core/spoolers.py` registers them on the kernel, so they always exist and
+go through the active device's spooler. We report the availability anyway, so that the UI
+does not have to assume it stays that way.
 """
 
 import json
@@ -14,35 +14,34 @@ from .edits import DesignError, _finite
 
 MOVES = ("home", "physical_home", "unlock", "lock")
 
-# Waar bewaarde posities staan (gat J6).
+# Where saved positions live (gap J6).
 #
-# Op de device-service, niet in onze bibliotheek: een positie is een eigenschap
-# van déze machine met déze mal erop, en de settings van een service zijn
-# precies daarvoor gemaakt — ze verhuizen mee als de machine van profiel
-# wisselt, en ze overleven een herstart zonder dat wij een tabel hoeven te
-# migreren. De bibliotheek is van iemand anders en gaat over materiaal.
-POSITIES_KEY = "openkerf_positions"
+# On the device service, not in our library: a position is a property of *this* machine
+# with *this* jig on it, and a service's settings are made for exactly that — they move
+# along when the machine changes profile, and they survive a restart without us having to
+# migrate a table. The library belongs to somebody else and is about material.
+POSITIONS_KEY = "openkerf_positions"
 MAX_POSITIES = 12
 MAX_NAAM = 40
 
-# De gebruikersoorsprong (gat J12).
+# The user origin (gap J12).
 #
-# Naast de bewaarde posities en om dezelfde reden: een nulpunt hoort bij déze
-# machine met dít stuk restplank erop, niet bij de browser waar je toevallig
-# achter zit. Eén per machine — twee nulpunten tegelijk is geen nulpunt meer.
-OORSPRONG_KEY = "openkerf_origin"
+# Beside the saved positions and for the same reason: a zero point belongs to *this*
+# machine with *this* offcut on it, not to the browser you happen to be sitting at. One per
+# machine — two zero points at once is no longer a zero point.
+ORIGIN_KEY = "openkerf_origin"
 
-# Scherpstellen zit op de Ruida (`focusz`), niet op elk apparaat. Zelfde aanpak
-# als bij pauzeren en stoppen: vragen wat dit apparaat kent, niet aannemen.
+# Focusing sits on the Ruida (`focusz`), not on every device. The same approach as with
+# pausing and stopping: ask what this device knows, do not assume.
 FOCUS = "focusz"
 
 # Verbinden en verbreken.
 #
-# Elke driverfamilie noemt het anders en zet het op `hidden=True`: Ruida heeft
-# `ruida_connect` (`ruida/device.py:448`), lihuiyu, moshi, newly en balor hebben
-# `usb_connect`. Grbl registreert er geen — die opent zijn verbinding zelf zodra
-# er data heen moet. Daarom vragen we het actieve apparaat wat het kent, in
-# dezelfde volgorde, en krijgt een machine die het niet kent ook geen knop.
+# Every driver family calls it something different and marks it `hidden=True`: Ruida has
+# `ruida_connect` (`ruida/device.py:448`), lihuiyu, moshi, newly and balor have
+# `usb_connect`. Grbl registers none — it opens its connection itself as soon as data has to
+# go there. So we ask the active device what it knows, in the same order, and a machine that
+# does not know it gets no button either.
 CONNECTS = ("ruida_connect", "usb_connect")
 DISCONNECTS = ("ruida_disconnect", "usb_disconnect")
 
@@ -53,19 +52,19 @@ def _mm(value: float) -> str:
 
 def _zonder_echo(output, command: str) -> str:
     """
-    Wat de engine te melden had, zonder de echo van de opdracht zelf.
+    What the engine had to report, without the echo of the command itself.
 
-    Het console-kanaal echoot elke regel die erin gaat, met tijdstempel. Gemeten
-    op de echte machine met een adres waar niets staat: de UDP-sessie meldt
-    helemaal niets, dus het enige dat overbleef was "[11:51:29] ruida_connect".
-    Dat als reden voorschotelen is erger dan zeggen dat er geen reden is.
+    The console channel echoes every line that goes into it, with a timestamp. Measured on
+    the real machine with an address where nothing is: the UDP session reports nothing at
+    all, so the only thing left was "[11:51:29] ruida_connect". Serving that up as a reason
+    is worse than saying there is no reason.
     """
-    regels = [
+    lines = [
         line
         for line in output
         if line.strip() and not line.strip().endswith(command)
     ]
-    return " ".join(regels).strip()
+    return " ".join(lines).strip()
 
 
 class MachineControl:
@@ -81,13 +80,13 @@ class MachineControl:
         return caps
 
     def connection_capabilities(self) -> dict:
-        """Eigen blok, niet bij `motion`: verbinden zet de kop niet in beweging."""
+        """A block of its own, not under `motion`: connecting does not move the head."""
         return {
             "connect": self._link_command(CONNECTS) is not None,
             "disconnect": self._link_command(DISCONNECTS) is not None,
         }
 
-    # ------------------------------------------------------------- verbinding
+    # ------------------------------------------------------------- connection
 
     def _link_command(self, names) -> str | None:
         for name in names:
@@ -97,78 +96,76 @@ class MachineControl:
 
     def _connection(self) -> dict:
         """
-        Hangt er een machine aan de lijn? Dezelfde bron als de statusbalk.
+        Is a machine on the line? The same source as the status bar.
 
-        `StatusReader.connection` weet per familie waar het staat en zegt
-        "unknown" waar niets het meldt — en dat laatste is hier het verschil
-        tussen "kon niet controleren" en "staat open".
+        `StatusReader.connection` knows per family where it is and says "unknown" where
+        nothing reports it — and that last one is here the difference between "could not
+        check" and "is open".
         """
         from .status import StatusReader
 
         return StatusReader(self.kernel).connection(getattr(self.kernel, "device", None))
 
     def connect(self) -> dict:
-        return self._link(CONNECTS, "verbinden", "connected")
+        return self._link(CONNECTS, "connect", "connected")
 
     def disconnect(self) -> dict:
-        return self._link(DISCONNECTS, "verbreken", "disconnected")
+        return self._link(DISCONNECTS, "disconnect", "disconnected")
 
     def _link(self, names, verb: str, wanted: str) -> dict:
         command = self._link_command(names)
         if command is None:
             raise DesignError(
-                f"Dit apparaat kent geen opdracht om te {verb}. Grbl bijvoorbeeld "
-                "opent zijn verbinding zelf zodra er werk naartoe gaat."
+                f"This device has no command to {verb}. Grbl, for instance, "
+                "opens its connection itself as soon as work goes to it."
             )
         output = self.runner.run(command)
         state = self._connection()
 
-        # De engine meldt een mislukte verbinding alleen op het kanaal en geeft
-        # daarna netjes terug (`ruida/device.py:452`). De toestand erna is dus
-        # het enige eerlijke antwoord; is die niet te lezen, dan is de uitvoer
-        # alles wat we hebben en spreken we ons er niet over uit.
+        # The engine reports a failed connection only on the channel and then
+        # returns quietly (`ruida/device.py:452`). The state afterwards is therefore
+        # the only honest answer; when that cannot be read, the output is all we have
+        # and we do not commit ourselves.
         if state.get("state") not in (wanted, "unknown"):
             klacht = _zonder_echo(output, command)
             raise DesignError(
-                f"{verb.capitalize()} lukte niet. De engine meldt: {klacht}"
+                f"{verb.capitalize()}ing did not work. The engine reports: {klacht}"
                 if klacht
-                else f"{verb.capitalize()} lukte niet, en de engine zegt niet waarom. "
-                "Staat de machine aan, en klopt het adres in de machine-instellingen? "
-                "Ook mogelijk: er is in deze sessie al eens verbroken of van machine "
-                "gewisseld — dat overleeft de Ruida-sessie niet altijd, en dan helpt "
-                "alleen een herstart van de server."
+                else f"{verb.capitalize()}ing did not work, and the engine does not say why. "
+                "Is the machine on, and is the address in the machine settings right? "
+                "Also possible: something was disconnected or switched in this session "
+                "— the Ruida session does not always survive that, and then only "
+                "a restart of the server helps."
             )
         return {"connection": state, "output": output}
 
     def _idle(self) -> None:
         """
-        Niet bewegen terwijl er gebrand wordt.
+        No moving while something is burning.
 
-        De UI zet de knoppen uit, maar de UI is een advies: een tweede tabblad,
-        een telefoon of een curl-opdracht kan er dwars doorheen. De kop
-        verzetten tijdens een job verpest hem op zijn best.
+        The UI disables the buttons, but the UI is advice: a second tab, a phone or a curl
+        command can go straight through it. Moving the head during a job ruins it at best.
         """
         device = getattr(self.kernel, "device", None)
         spooler = getattr(device, "spooler", None)
         if spooler is None:
             return
         try:
-            # Kijken naar een *lopende* job, niet naar de wachtrij: onze eigen
-            # home en jog gaan óók door de spooler, en die zouden elkaar dan
-            # blokkeren.
+            # Look at a *running* job, not at the queue: our own home and jog also go
+            # through the spooler, and they would then block each other.
             running = any(job.is_running() for job in list(spooler.queue))
-        except Exception:  # pragma: no cover - de spooler mag ons niet breken
+        except Exception:  # pragma: no cover - the spooler must not break us
             return
         if running:
             raise DesignError(
-                "Er loopt een job. Stop hem eerst; bewegen tijdens het branden "
-                "verpest de job."
+                "A job is running. Stop it first; moving while burning "
+                "ruins the job."
             )
 
     def _require(self, command: str):
         if not self.runner.supports(command):
             raise DesignError(
-                f"Dit apparaat kent '{command}' niet; beweging wordt door de "
+                f"This device does not know '{command}'; movement is handled by the "
                 "device-service geleverd."
             )
 
@@ -179,7 +176,7 @@ class MachineControl:
         return {"output": self.runner.run(command)}
 
     def move_to(self, x_mm, y_mm) -> dict:
-        """Absolute positie. De kop beweegt; dit is geen tekenopdracht."""
+        """Absolute position. The head moves; this is not a drawing command."""
         self._require("move_absolute")
         self._idle()
         x = _finite(x_mm, "x_mm")
@@ -188,64 +185,63 @@ class MachineControl:
 
     def frame(self, x_mm, y_mm, width_mm, height_mm) -> dict:
         """
-        De kop langs de vier hoeken van het werk sturen.
+        Sending the head around the four corners of the work.
 
-        Dit is de laatste controle vóór je brandt: past het op het materiaal,
-        ligt het recht, zit de klem in de weg. De laser blijft uit — er wordt
-        alleen bewogen, met dezelfde bewaking als bij een jog.
+        This is the last check before you burn: does it fit on the material, is it straight,
+        is the clamp in the way. The laser stays off — there is only movement, with the same
+        guard as on a jog.
         """
         self._require("move_absolute")
         self._idle()
         x = _finite(x_mm, "x_mm")
         y = _finite(y_mm, "y_mm")
-        breedte = _finite(width_mm, "width_mm")
-        hoogte = _finite(height_mm, "height_mm")
-        if breedte <= 0 or hoogte <= 0:
-            raise DesignError("Er is niets om een kader omheen te trekken.")
+        width = _finite(width_mm, "width_mm")
+        height = _finite(height_mm, "height_mm")
+        if width <= 0 or height <= 0:
+            raise DesignError("There is nothing to draw a frame around.")
 
         bed = self._bed_mm()
-        if bed and (x < 0 or y < 0 or x + breedte > bed[0] or y + hoogte > bed[1]):
+        if bed and (x < 0 or y < 0 or x + width > bed[0] or y + height > bed[1]):
             raise DesignError(
-                f"Het kader ({breedte:.0f}x{hoogte:.0f} mm vanaf {x:.0f},{y:.0f}) "
-                f"valt buiten het bed van {bed[0]:.0f}x{bed[1]:.0f} mm."
+                f"The frame ({width:.0f}x{height:.0f} mm from {x:.0f},{y:.0f}) "
+                f"falls outside the bed of {bed[0]:.0f}x{bed[1]:.0f} mm."
             )
 
-        # Terug naar de eerste hoek, zodat je de ronde ook echt ziet sluiten.
-        hoeken = [
+        # Back to the first corner, so that you really see the round close.
+        corners = [
             (x, y),
-            (x + breedte, y),
-            (x + breedte, y + hoogte),
-            (x, y + hoogte),
+            (x + width, y),
+            (x + width, y + height),
+            (x, y + height),
             (x, y),
         ]
-        # `-f` (force) is hier de hele reparatie. Zonder die vlag weigert
-        # `move_absolute` zodra de spooler niet stilstaat
-        # (`core/spoolers.py:243`), en na de eerste hoek is de kop natuurlijk
-        # onderweg: gemeten op een echte machine ging de kop naar linksboven en
-        # kwamen de vier volgende hoeken terug als "Busy Error". Met de vlag
-        # gaan ze in de wachtrij en volgen ze elkaar netjes op. Er kan niets
-        # voordringen: dat er geen job loopt, is hierboven al gecontroleerd.
-        uitvoer = []
-        for hx, hy in hoeken:
+        # `-f` (force) is the whole repair here. Without that flag `move_absolute` refuses
+        # as soon as the spooler is not idle (`core/spoolers.py:243`), and after the first
+        # corner the head is of course on its way: measured on a real machine the head went
+        # to the top left and the next four corners came back as "Busy Error". With the flag
+        # they go into the queue and follow each other neatly. Nothing can jump the queue:
+        # that no job is running has already been checked above.
+        output = []
+        for hx, hy in corners:
             resultaat = self.runner.run(f"move_absolute -f {_mm(hx)} {_mm(hy)}")
-            uitvoer.extend(resultaat if isinstance(resultaat, list) else [resultaat])
+            output.extend(resultaat if isinstance(resultaat, list) else [resultaat])
 
-        # De melding blijft als vangnet staan, maar hoort niet meer af te gaan:
-        # sinds de hoeken met `-f` in de wachtrij gaan, weigert er niets meer.
-        bezet = [r for r in uitvoer if "busy" in str(r).lower() or "error" in str(r).lower()]
+        # The message stays as a safety net, but should no longer go off: since the corners
+        # go into the queue with `-f`, nothing refuses any more.
+        busy = [r for r in output if "busy" in str(r).lower() or "error" in str(r).lower()]
         return {
-            "output": uitvoer,
-            "corners": len(hoeken),
+            "output": output,
+            "corners": len(corners),
             "notice": (
-                "De machine meldde dat hij bezig was; het kader is mogelijk niet "
-                "helemaal gelopen. Probeer het opnieuw als de kop stilstaat."
-                if bezet
+                "The machine reported it was busy; the frame may not have run "
+                "all the way. Try again when the head is standing still."
+                if busy
                 else None
             ),
         }
 
     def _bed_mm(self):
-        """Het werkgebied in millimeters, of None als het apparaat het niet zegt."""
+        """The work area in millimetres, or None when the device does not say."""
         device = getattr(self.kernel, "device", None)
         try:
             from meerk40t.core.units import Length
@@ -260,110 +256,110 @@ class MachineControl:
         dx = _finite(dx_mm, "dx_mm")
         dy = _finite(dy_mm, "dy_mm")
         if dx == 0 and dy == 0:
-            raise DesignError("Een jog van nul doet niets.")
+            raise DesignError("A jog of zero does nothing.")
         return {"output": self.runner.run(f"move_relative {_mm(dx)} {_mm(dy)}")}
 
     def focus(self, distance_mm) -> dict:
         """
-        De kop hoger of lager zetten. Scherpstellen is dagelijks werk: nieuwe
-        materiaaldikte, nieuwe hoogte.
+        Moving the head up or down. Focusing is daily work: a new material
+        thickness, a new height.
         """
         self._require(FOCUS)
         self._idle()
         distance = _finite(distance_mm, "distance_mm")
         if distance == 0:
-            raise DesignError("Een verplaatsing van nul doet niets.")
+            raise DesignError("A movement of zero does nothing.")
         if abs(distance) > 100:
-            raise DesignError("Meer dan 100 mm in één keer is geen scherpstellen.")
+            raise DesignError("More than 100 mm at once is not focusing.")
         return {"output": self.runner.run(f"{FOCUS} {_mm(distance)}")}
 
-    # ------------------------------------------------- bewaarde posities (J6)
+    # ------------------------------------------------- bewaarde positions (J6)
 
     def _device(self):
         device = getattr(self.kernel, "device", None)
         if device is None:
-            raise DesignError("Er is geen actieve machine.")
+            raise DesignError("There is no active machine.")
         return device
 
     def positions(self) -> list[dict]:
         """
-        De posities die deze machine onthoudt.
+        The positions this machine remembers.
 
-        LightBurn's Move-venster heeft ze en wij niet: wie een mal op het bed
-        heeft liggen, wil "linkerbovenhoek van de mal" één keer vastleggen in
-        plaats van hem elke sessie opnieuw bij elkaar te joggen.
+        LightBurn's Move window has them and we did not: anybody with a jig on the bed wants
+        to record "top-left corner of the jig" once instead of jogging it together again
+        every session.
         """
         device = self._device()
         try:
-            device.setting(str, POSITIES_KEY, "[]")
-            ruw = json.loads(getattr(device, POSITIES_KEY, "[]") or "[]")
+            device.setting(str, POSITIONS_KEY, "[]")
+            raw = json.loads(getattr(device, POSITIONS_KEY, "[]") or "[]")
         except Exception:
             return []
-        if not isinstance(ruw, list):
+        if not isinstance(raw, list):
             return []
-        schoon = []
-        for item in ruw:
+        clean = []
+        for item in raw:
             if not isinstance(item, dict):
                 continue
-            naam = str(item.get("name", "")).strip()
+            name = str(item.get("name", "")).strip()
             x, y = item.get("x_mm"), item.get("y_mm")
-            if not naam or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            if not name or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
                 continue
-            schoon.append({"name": naam, "x_mm": float(x), "y_mm": float(y)})
-        return schoon
+            clean.append({"name": name, "x_mm": float(x), "y_mm": float(y)})
+        return clean
 
-    def _write_positions(self, posities: list[dict]) -> list[dict]:
+    def _write_positions(self, positions: list[dict]) -> list[dict]:
         device = self._device()
-        device.setting(str, POSITIES_KEY, "[]")
-        setattr(device, POSITIES_KEY, json.dumps(posities))
-        # Anders staat hij er alleen tot de volgende herstart, en dan is het
-        # geen geheugen maar een grap.
+        device.setting(str, POSITIONS_KEY, "[]")
+        setattr(device, POSITIONS_KEY, json.dumps(positions))
+        # Otherwise it is only there until the next restart, and then it is not a memory
+        # but a joke.
         try:
             self.kernel.write_configuration()
-        except Exception:  # pragma: no cover - de engine mag ons niet breken
+        except Exception:  # pragma: no cover - the engine must not break us
             pass
-        return posities
+        return positions
 
     def save_position(self, name, x_mm=None, y_mm=None) -> dict:
         """
-        Bewaar een positie. Zonder coördinaten: waar de kop nu staat.
+        Save a position. Without coordinates: where the head is now.
 
-        Dat laatste is de normale manier — je jogt naar de hoek van je mal en
-        legt hem daar vast; getallen intypen kan ook, maar dan wist je ze al.
+        That last one is the normal way — you jog to the corner of your jig and record it
+        there; typing numbers is possible too, but then you knew them already.
         """
-        naam = str(name or "").strip()[:MAX_NAAM]
-        if not naam:
-            raise DesignError("Een bewaarde positie heeft een naam nodig.")
+        name = str(name or "").strip()[:MAX_NAAM]
+        if not name:
+            raise DesignError("A saved position needs a name.")
 
         if x_mm is None or y_mm is None:
-            huidig = self._current_mm()
-            if huidig is None:
+            current = self._current_mm()
+            if current is None:
                 raise DesignError(
-                    "Deze machine meldt geen positie, dus er valt niets te "
-                    "bewaren. Vul de coördinaten met de hand in."
+                    "This machine reports no position, so there is nothing to "
+                    "keep. Fill in the coordinates by hand."
                 )
-            x_mm, y_mm = huidig
+            x_mm, y_mm = current
         x = _finite(x_mm, "x_mm")
         y = _finite(y_mm, "y_mm")
 
-        posities = [p for p in self.positions() if p["name"].lower() != naam.lower()]
-        posities.append({"name": naam, "x_mm": round(x, 2), "y_mm": round(y, 2)})
-        if len(posities) > MAX_POSITIES:
+        positions = [p for p in self.positions() if p["name"].lower() != name.lower()]
+        positions.append({"name": name, "x_mm": round(x, 2), "y_mm": round(y, 2)})
+        if len(positions) > MAX_POSITIES:
             raise DesignError(
-                f"Meer dan {MAX_POSITIES} bewaarde posities wordt een lijst waar "
-                "je in moet zoeken. Gooi er eerst een weg."
+                f"More than {MAX_POSITIES} saved positions becomes a list you have "
+                "to search through. Throw one away first."
             )
-        self._write_positions(posities)
-        return {"name": naam, "x_mm": round(x, 2), "y_mm": round(y, 2)}
+        self._write_positions(positions)
+        return {"name": name, "x_mm": round(x, 2), "y_mm": round(y, 2)}
 
     def delete_position(self, name) -> dict:
-        naam = str(name or "").strip()
-        posities = [p for p in self.positions() if p["name"].lower() != naam.lower()]
-        self._write_positions(posities)
-        return {"deleted": naam}
+        name = str(name or "").strip()
+        positions = [p for p in self.positions() if p["name"].lower() != name.lower()]
+        self._write_positions(positions)
+        return {"deleted": name}
 
     def _current_mm(self):
-        """Waar de kop nu staat, in millimeters — of None als hij het niet zegt."""
+        """Where the head is now, in millimetres — or None when it does not say."""
         from .status import StatusReader
 
         positie = StatusReader(self.kernel).position(self._device())
@@ -372,100 +368,98 @@ class MachineControl:
             return None
         return (float(mm[0]), float(mm[1]))
 
-    # ------------------------------------------- gebruikersoorsprong (J12)
+    # ----------------------------------------------- user origin (J12)
     #
-    # LightBurn heeft Set Origin / Clear Origin / Go to Origin: je legt een
-    # nulpunt op je werkstuk en het werk brandt daarvandaan. Dat is de handeling
-    # bij het uitlijnen op een restplank — de plank ligt scheef in het bed, en
-    # je wil niet je hele tekening verslepen om hem erop te krijgen.
+    # LightBurn has Set Origin / Clear Origin / Go to Origin: you put a zero point on your
+    # workpiece and the work burns from there. That is the operation when aligning on an
+    # offcut — the board lies askew in the bed, and you do not want to drag your whole
+    # drawing to get it onto it.
     #
-    # De engine kent het niet (grep over `core` en `ruida` op `user_origin` en
-    # `set_origin`: geen treffers), dus dit is onze laag. Bewust géén wijziging
-    # aan de `View` van het apparaat: die draagt ook homing en de canvasmaat, en
-    # een nulpunt dat stilletjes het bed verschuift is een val. Het is een
-    # verschuiving die één keer wordt toegepast, op het moment dat het werk de
-    # machine in gaat — zie `Drawing.verschoven`.
+    # The engine does not know it (a grep over `core` and `ruida` for `user_origin` and
+    # `set_origin`: no hits), so this is our layer. Deliberately no change to the device's
+    # `View`: that also carries homing and the canvas size, and a zero point that silently
+    # moves the bed is a trap. It is a shift applied once, at the moment the work goes into
+    # the machine — see `Drawing.shifted`.
 
     def origin(self) -> dict | None:
-        """Het nulpunt van deze machine, of None als er geen gezet is."""
+        """The zero point of this machine, or None when none is set."""
         try:
             device = self._device()
         except DesignError:
             return None
         try:
-            device.setting(str, OORSPRONG_KEY, "")
-            ruw = getattr(device, OORSPRONG_KEY, "") or ""
-            if not ruw:
+            device.setting(str, ORIGIN_KEY, "")
+            raw = getattr(device, ORIGIN_KEY, "") or ""
+            if not raw:
                 return None
-            waarde = json.loads(ruw)
+            value = json.loads(raw)
         except Exception:
             return None
-        if not isinstance(waarde, dict):
+        if not isinstance(value, dict):
             return None
-        x, y = waarde.get("x_mm"), waarde.get("y_mm")
+        x, y = value.get("x_mm"), value.get("y_mm")
         if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
             return None
         return {"x_mm": float(x), "y_mm": float(y)}
 
     def set_origin(self, x_mm=None, y_mm=None) -> dict:
         """
-        Leg het nulpunt vast. Zonder coördinaten: waar de kop nu staat.
+        Record the zero point. Without coordinates: where the head is now.
 
-        Dat laatste is de normale manier — je jogt naar de hoek van je plank en
-        drukt op de knop. Getallen intypen kan, maar dan wist je ze al.
+        That last one is the normal way — you jog to the corner of your board and press the
+        button. Typing numbers is possible, but then you knew them already.
         """
         if x_mm is None or y_mm is None:
-            huidig = self._current_mm()
-            if huidig is None:
+            current = self._current_mm()
+            if current is None:
                 raise DesignError(
-                    "Deze machine meldt geen positie, dus er valt geen nulpunt "
-                    "vast te leggen. Vul de coördinaten met de hand in."
+                    "This machine reports no position, so no zero point can be "
+                    "set. Fill in the coordinates by hand."
                 )
-            x_mm, y_mm = huidig
+            x_mm, y_mm = current
         x = round(_finite(x_mm, "x_mm"), 2)
         y = round(_finite(y_mm, "y_mm"), 2)
 
         bed = self._bed_mm()
         if bed and not (0 <= x <= bed[0] and 0 <= y <= bed[1]):
             raise DesignError(
-                f"Dat punt ({x:.0f},{y:.0f} mm) ligt buiten het bed van "
-                f"{bed[0]:.0f}x{bed[1]:.0f} mm. Daar komt de kop niet."
+                f"That point ({x:.0f},{y:.0f} mm) lies outside the bed of "
+                f"{bed[0]:.0f}x{bed[1]:.0f} mm. The head does not go there."
             )
 
         device = self._device()
-        device.setting(str, OORSPRONG_KEY, "")
-        setattr(device, OORSPRONG_KEY, json.dumps({"x_mm": x, "y_mm": y}))
-        self._bewaar()
+        device.setting(str, ORIGIN_KEY, "")
+        setattr(device, ORIGIN_KEY, json.dumps({"x_mm": x, "y_mm": y}))
+        self._store()
         return {"x_mm": x, "y_mm": y}
 
     def clear_origin(self) -> dict:
-        """Terug naar het nulpunt van de machine zelf."""
+        """Back to the machine's own zero point."""
         device = self._device()
-        device.setting(str, OORSPRONG_KEY, "")
-        setattr(device, OORSPRONG_KEY, "")
-        self._bewaar()
+        device.setting(str, ORIGIN_KEY, "")
+        setattr(device, ORIGIN_KEY, "")
+        self._store()
         return {"cleared": True}
 
-    def _bewaar(self) -> None:
-        # Anders staat het er tot de volgende herstart, en dan is het geen
-        # nulpunt maar een grap.
+    def _store(self) -> None:
+        # Otherwise it is there until the next restart, and then it is not a zero point but
+        # a joke.
         try:
             self.kernel.write_configuration()
-        except Exception:  # pragma: no cover - de engine mag ons niet breken
+        except Exception:  # pragma: no cover - the engine must not break us
             pass
 
-    # ------------------------------------------ bijstellen tijdens een job (J11)
+    # ---------------------------------------------- adjusting during a job (J11)
     #
-    # LightBurn heeft in zijn Move-venster twee kolommen "Adjust Speed" en
-    # "Adjust Power" waarmee je een lopende job redt in plaats van hem opnieuw
-    # doet. De engine kan dit, maar niet overal: alleen de grbl-driver heeft
-    # `set_power_scale`/`set_speed_scale` (realtime overrides 0x90/0x99), en hij
-    # is ook de enige die `has_adjustable_power`/`has_adjustable_speed` op True
-    # zet. De Ruida-driver zet snelheid en vermogen per cut-segment uit de
-    # settings en heeft geen realtime kanaal ervoor.
+    # In its Move window LightBurn has two columns "Adjust Speed" and "Adjust Power" with
+    # which you rescue a running job instead of doing it again. The engine can do this, but
+    # not everywhere: only the grbl driver has `set_power_scale`/`set_speed_scale` (realtime
+    # overrides 0x90/0x99), and it is also the only one that sets
+    # `has_adjustable_power`/`has_adjustable_speed` to True. The Ruida driver sets speed and
+    # power per cut segment from the settings and has no realtime channel for it.
     #
-    # Dus: dezelfde regel als bij air assist en de Z-as — wat de machine kán,
-    # bepaalt wat je ziet. Op een Ruida bestaan deze knoppen niet.
+    # So: the same rule as with air assist and the Z axis — what the machine *can* do decides
+    # what you see. On a Ruida these buttons do not exist.
 
     ADJUST_MIN = 0.1
     ADJUST_MAX = 2.0
@@ -473,21 +467,21 @@ class MachineControl:
     def _driver(self):
         return getattr(getattr(self.kernel, "device", None), "driver", None)
 
-    def _kan(self, wat: str) -> bool:
+    def _can(self, wat: str) -> bool:
         driver = self._driver()
-        vraag = getattr(driver, f"has_adjustable_{wat}", None)
-        if vraag is None:
+        question = getattr(driver, f"has_adjustable_{wat}", None)
+        if question is None:
             return False
         try:
-            return bool(vraag())
-        except Exception:  # pragma: no cover - een driver die niet meewerkt
+            return bool(question())
+        except Exception:  # pragma: no cover - a driver that does not co-operate
             return False
 
     def adjust_capabilities(self) -> dict:
-        return {"power": self._kan("power"), "speed": self._kan("speed")}
+        return {"power": self._can("power"), "speed": self._can("speed")}
 
     def adjustment(self) -> dict:
-        """Wat er nu bijgesteld staat, als factor (1.0 = zoals ontworpen)."""
+        """What is adjusted right now, as a factor (1.0 = as designed)."""
         driver = self._driver()
         caps = self.adjust_capabilities()
         return {
@@ -502,39 +496,39 @@ class MachineControl:
 
     def adjust(self, power=None, speed=None) -> dict:
         """
-        Snelheid en vermogen bijstellen, ook terwijl de job loopt.
+        Adjusting speed and power, while the job is running as well.
 
-        De factor is een vermenigvuldiging op wat de laag zegt, niet een nieuwe
-        waarde: de laag houdt zijn instelling, want die is bewijs (hij kan uit
-        een preset komen). Dit is een correctie op één brandsessie.
+        The factor is a multiplication on what the layer says, not a new value: the layer
+        keeps its setting, because that is evidence (it may come from a preset). This is a
+        correction to one burn session.
         """
         driver = self._driver()
         if driver is None:
-            raise DesignError("Er is geen actieve machine.")
-        gedaan = {}
-        for naam, waarde in (("power", power), ("speed", speed)):
-            if waarde is None:
+            raise DesignError("There is no active machine.")
+        applied = {}
+        for name, value in (("power", power), ("speed", speed)):
+            if value is None:
                 continue
-            if not self._kan(naam):
+            if not self._can(name):
                 raise DesignError(
-                    "Deze machine kan snelheid en vermogen niet tijdens een job "
-                    "bijstellen. De driver heeft er geen realtime kanaal voor; "
-                    "stop de job, wijzig de laag en start opnieuw."
+                    "This machine cannot adjust speed and power during a job. "
+                    "The driver has no realtime channel for it; "
+                    "stop the job, change the layer and start again."
                 )
-            factor = _finite(waarde, naam)
+            factor = _finite(value, name)
             if not self.ADJUST_MIN <= factor <= self.ADJUST_MAX:
                 raise DesignError(
-                    f"Een factor van {factor:.2f} valt buiten wat de machine "
-                    f"aanneemt ({self.ADJUST_MIN:g}–{self.ADJUST_MAX:g})."
+                    f"A factor of {factor:.2f} falls outside what the machine "
+                    f"accepts ({self.ADJUST_MIN:g}–{self.ADJUST_MAX:g})."
                 )
-            getattr(driver, f"set_{naam}_scale")(factor)
-            gedaan[naam] = factor
-        if not gedaan:
-            raise DesignError("Geef een factor voor snelheid of vermogen op.")
-        return {**self.adjustment(), "applied": gedaan}
+            getattr(driver, f"set_{name}_scale")(factor)
+            applied[name] = factor
+        if not applied:
+            raise DesignError("Give a factor for speed or power.")
+        return {**self.adjustment(), "applied": applied}
 
     def unlock(self) -> dict:
-        """Motoren vrijgeven, zodat je de kop met de hand kunt verzetten."""
+        """Release the motors, so the head can be moved by hand."""
         self._require("unlock")
         return {"output": self.runner.run("unlock")}
 

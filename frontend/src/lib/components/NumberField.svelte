@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
+
 	/**
-	 * Een getal met − en +.
+	 * A number with − and +.
 	 *
-	 * De eigen spinner van de browser is twee pixels hoog en met handschoenen aan
-	 * onbruikbaar; naast een draaiende laser typ je liever niet. Zie
-	 * DESIGN-SYSTEM, "Getalinvoer is overal een stepper".
+	 * The browser's own spinner is two pixels tall and unusable with gloves on; beside a
+	 * running laser you would rather not type. See DESIGN-SYSTEM, "Number input is a
+	 * stepper everywhere".
 	 */
 	let {
 		label,
@@ -17,75 +19,73 @@
 		onchange
 	}: {
 		label: string;
-		/** Als string, zodat een half getypt getal ("1.") niet wegspringt. */
+		/** As a string, so that a half-typed number ("1.") does not jump away. */
 		value: string;
 		step?: number;
 		min?: number | null;
 		max?: number | null;
 		unit?: string | null;
 		disabled?: boolean;
-		/** Voor velden die meteen naar de machine moeten in plaats van naar een
-		 *  formulier dat later opgeslagen wordt. Vuurt niet tijdens het typen. */
+		/** For fields that have to go straight to the machine rather than to a form that
+		 *  is saved later. Does not fire while typing. */
 		onchange?: (value: string) => void;
 	} = $props();
 
-	// Het label moet expliciet aan het invoerveld hangen. Een <label> die zijn
-	// controls omvat, kiest de *eerste* labelbare afstammeling — en dat is hier
-	// de −-knop, niet het veld. Gevolg vóór deze fix: klikken op het woord
-	// "Breedte (mm)" verlaagde de breedte met een stap, en het veld zelf had
-	// helemaal geen toegankelijke naam ("textbox: 609.6").
+	// The label has to hang off the input explicitly. A <label> that wraps its controls
+	// picks the *first* labelable descendant — and here that is the − button, not the
+	// field. Consequence before this fix: clicking the words "Width (mm)" lowered the
+	// width by one step, and the field itself had no accessible name at all ("textbox:
+	// 609.6").
 	const id = $props.id();
 
-	function zet(richting: number) {
-		const nu = Number(value);
-		const basis = Number.isFinite(nu) ? nu : 0;
-		let nieuw = basis + richting * step;
-		if (min !== null) nieuw = Math.max(min, nieuw);
-		if (max !== null) nieuw = Math.min(max, nieuw);
-		// Drijvende komma laat 0.1 + 0.2 als 0.30000000000000004 achter.
-		value = String(Math.round(nieuw * 1000) / 1000);
+	function set(direction: number) {
+		const now = Number(value);
+		const basis = Number.isFinite(now) ? now : 0;
+		let fresh = basis + direction * step;
+		if (min !== null) fresh = Math.max(min, fresh);
+		if (max !== null) fresh = Math.min(max, fresh);
+		// Floating point leaves 0.1 + 0.2 as 0.30000000000000004.
+		value = String(Math.round(fresh * 1000) / 1000);
 		onchange?.(value);
 	}
 
 	/**
-	 * Pijltjes op het veld zelf verhogen en verlagen.
+	 * Arrow keys on the field itself increase and decrease.
 	 *
-	 * Dit is de tegenhanger van `tabindex="-1"` op de twee knoppen hieronder.
-	 * Stonden die in de tabvolgorde, dan kost één veld verder drie keer Tab en
-	 * land je onderweg op de + van het veld dat je net verliet en op de − van
-	 * het volgende. In een formulier met zes maten is dat achttien keer Tab om
-	 * er zes in te vullen.
+	 * This is the counterpart of `tabindex="-1"` on the two buttons below. Were those in
+	 * the tab order, one field further would cost three Tabs and on the way you would land
+	 * on the + of the field you just left and on the − of the next one. In a form with six
+	 * measures that is eighteen Tabs to fill in six of them.
 	 *
-	 * Ze eruit halen mag alleen omdat hun werk hier gedaan kan worden: een
-	 * gewone `<input type=number>` doet het precies zo — zijn spinner is niet
-	 * focusbaar en de pijltjes stappen. Wie geen muis gebruikt, verliest dus
-	 * niets: Home en End springen naar de grenzen als die er zijn, en de
-	 * knoppen houden hun naam en blijven met een schermlezer of aanwijzer
-	 * gewoon te bedienen — alleen niet meer met Tab.
+	 * Taking them out is only allowed because their work can be done here: an ordinary
+	 * `<input type=number>` does exactly this — its spinner is not focusable and the arrows
+	 * step. So anybody not using a mouse loses nothing: Home and End jump to the bounds
+	 * where there are any, and the buttons keep their names and stay operable with a screen
+	 * reader or pointer — just not with Tab any more.
 	 */
 	function toets(event: KeyboardEvent) {
 		if (disabled) return;
-		if (event.key === 'ArrowUp') zet(1);
-		else if (event.key === 'ArrowDown') zet(-1);
+		if (event.key === 'ArrowUp') set(1);
+		else if (event.key === 'ArrowDown') set(-1);
 		else if (event.key === 'Home' && min !== null) value = String(min);
 		else if (event.key === 'End' && max !== null) value = String(max);
 		else return;
-		// Anders springt de cursor ook nog naar begin of eind van de tekst, en
-		// bij Pijl omhoog scrolt het venster eronder mee.
+		// Otherwise the caret also jumps to the start or end of the text, and on Arrow Up
+		// the window below scrolls along.
 		event.preventDefault();
 		if (event.key === 'Home' || event.key === 'End') onchange?.(value);
 	}
 </script>
 
-<div class="veld">
-	<label class="naam" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
-	<span class="teller">
+<div class="field">
+	<label class="name" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
+	<span class="stepper">
 		<button
 			type="button"
 			tabindex="-1"
 			{disabled}
-			aria-label="{label} verlagen"
-			onclick={() => zet(-1)}>−</button
+			aria-label={t('field.decrease', { label })}
+			onclick={() => set(-1)}>−</button
 		>
 		<input
 			{id}
@@ -101,21 +101,21 @@
 			type="button"
 			tabindex="-1"
 			{disabled}
-			aria-label="{label} verhogen"
-			onclick={() => zet(1)}>+</button
+			aria-label={t('field.increase', { label })}
+			onclick={() => set(1)}>+</button
 		>
 	</span>
 </div>
 
 <style>
-	/* min-width: 0 op alle drie de niveaus. Zonder dat houdt het invoerveld
-	   zijn eigen breedte van ~20 tekens aan en loopt de stepper uit een smalle
-	   kolom — in het lagenpaneel stak hij 28px buiten het paneel. */
-	.veld { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
-	.naam { font-size: var(--text-xs); color: var(--text-2); }
+	/* min-width: 0 at all three levels. Without that the input keeps its own width of
+	   ~20 characters and the stepper runs out of a narrow column — in the layers panel it
+	   stuck 28px outside the panel. */
+	.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
+	.name { font-size: var(--text-xs); color: var(--text-2); }
 	.eenheid { color: var(--text-2); }
-	.teller { display: flex; min-width: 0; }
-	.teller input {
+	.stepper { display: flex; min-width: 0; }
+	.stepper input {
 		flex: 1;
 		min-width: 0;
 		text-align: center;
@@ -129,7 +129,7 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.teller button {
+	.stepper button {
 		flex: none;
 		width: 38px;
 		font: inherit;
@@ -139,8 +139,8 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.teller button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
-	.teller button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
-	.teller button:hover:not(:disabled) { background: var(--surface-1); }
-	.teller button:disabled, .teller input:disabled { opacity: 0.5; }
+	.stepper button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	.stepper button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
+	.stepper button:hover:not(:disabled) { background: var(--surface-1); }
+	.stepper button:disabled, .stepper input:disabled { opacity: 0.5; }
 </style>

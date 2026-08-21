@@ -1,10 +1,10 @@
 <script lang="ts" generics="T">
 	/**
-	 * Eén keuze uit een korte, vaste rij — als één blok, niet als losse knopjes.
+	 * One choice from a short, fixed row — as one block, not as separate buttons.
 	 *
-	 * Losse knoppen laten open of er ook twee aan kunnen staan, en welke groep
-	 * bij elkaar hoort. Een aaneengesloten balk zegt allebei zonder woorden. Voor
-	 * meer dan vijf opties hoort een `<select>` (zie DESIGN-SYSTEM, Patroonkeuzewijzer).
+	 * Separate buttons leave open whether two can be on at once, and which group belongs
+	 * together. A continuous bar says both without words. For more than five options a
+	 * `<select>` is right (see DESIGN-SYSTEM, pattern guide).
 	 */
 	let {
 		options,
@@ -37,7 +37,7 @@
 <style>
 	.segmented {
 		display: inline-flex;
-		/* Eén rand om het geheel, haarlijnen ertussen: het is één ding. */
+		/* One border around the whole, hairlines in between: it is one thing. */
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
@@ -59,8 +59,8 @@
 	button:first-child { border-left: 0; }
 	button:hover:not(:disabled) { background: var(--surface-2); color: var(--text-1); }
 	button:disabled { opacity: 0.5; }
-	/* De gekozen stand is gevuld, niet omrand: dan verspringt er niets en is
-	   hij ook op een meter afstand te zien. */
+	/* The chosen state is filled, not outlined: then nothing jumps and it can be seen
+	   from a metre away too. */
 	button.on {
 		background: var(--accent);
 		color: var(--accent-ink);

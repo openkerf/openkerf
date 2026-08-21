@@ -2,11 +2,11 @@
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { jobBezig, jobFase, machineState } from '$lib/api';
+	import { jobBusy, jobPhase, machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
-	import { bewaarBestand } from '$lib/opslaan';
+	import { saveFile } from '$lib/saving';
 	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
@@ -33,36 +33,37 @@
 	import TestGridResult from '$components/TestGridResult.svelte';
 	import TextDialog from '$components/TextDialog.svelte';
 	import TopBar from '$components/TopBar.svelte';
-	import Actiebalk from '$components/Actiebalk.svelte';
+	import ActionBar from '$components/ActionBar.svelte';
 	import Menu from '$components/Menu.svelte';
-	import Hoeken from '$components/Hoeken.svelte';
+	import CornersDialog from '$components/CornersDialog.svelte';
 	import Offset from '$components/Offset.svelte';
 	import {
-		TOETSEN,
-		comboVan,
+		KEYS,
+		comboOf,
 		canvasMenu,
 		objectMenu,
-		geschiedenisActies,
-		schikActies,
-		uitlijnActies,
-		type Context as ActieContext,
-		type Handelingen,
-		type Menu as MenuLijst
-	} from '$lib/acties';
-	import MeldingAlarm from '$components/MeldingAlarm.svelte';
-	import MeldingKaart from '$components/MeldingKaart.svelte';
-	import { Bewaker, Meldingen } from '$lib/meldingen.svelte';
+		historyActions,
+		arrangeActions,
+		alignActions,
+		type Context as ActionContext,
+		type Handlers,
+		type Menu as MenuList
+	} from '$lib/actions';
+	import { i18n, t } from '$lib/i18n/index.svelte';
+	import AlarmCard from '$components/AlarmCard.svelte';
+	import NotificationCard from '$components/NotificationCard.svelte';
+	import { Notifications, Watchdog } from '$lib/notifications.svelte';
 
 	const status = new StatusConnection();
 	const control = new Controller();
-	// Besluit B3: melden ja, zelf ingrijpen nee. De bewaker leest de status en
-	// besluit wanneer er iets te zeggen valt; hij stuurt niets naar de machine.
-	const meldingen = new Meldingen();
-	const bewaker = new Bewaker(meldingen);
-	/** Staat de instelkaart open? Bereikbaar naast de paneeltabs. */
-	let meldingenOpen = $state(false);
-	/** De aanleidingkaart: alleen in beeld vlak nadat er een job begon. */
-	let vraagOpen = $state(false);
+	// Decision B3: reporting yes, intervening no. The watchdog reads the status and
+	// decides when there is something to say; it sends nothing to the machine.
+	const notifications = new Notifications();
+	const watchdog = new Watchdog(notifications);
+	/** Is the settings card open? Reachable beside the panel tabs. */
+	let notificationsOpen = $state(false);
+	/** The prompt card: only on screen just after a job has started. */
+	let promptOpen = $state(false);
 	const design = new DesignStore();
 	const token = () =>
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
@@ -74,76 +75,75 @@
 	let canEdit = $derived(!control.needsToken);
 	let hasSelection = $derived(design.selectedIds.length > 0);
 	let tool = $state<Tool>('select');
-	// Bijsnijden: het volgende sleepkader knipt de geselecteerde afbeelding bij.
+	// Cropping: the next drag frame crops the selected image.
 	let cropping = $state(false);
 
-	// Drie apparaten, drie apps (DESIGN-SYSTEM v2). Geen gekrompen desktop maar
-	// een eigen gedaante: onder 768px is dit een monitor met een noodrem.
-	let breedte = $state(1440);
-	let telefoon = $derived(breedte < 768);
-	let tablet = $derived(breedte >= 768 && breedte < 1200);
-	// Onder deze breedte passen de bestandsknoppen niet meer náást de
-	// machinebediening in de bovenbalk; ze verhuizen dan naar het railmenu.
-	// Sinds het materiaal van het vel in de balk staat (besluit B1) ligt die
-	// grens niet meer op 950 maar op de hele tabletbreedte: gemeten liep de
-	// balk op 1024 anders 99px over de rand, en dan staat de startknop buiten
-	// beeld. Waarín je brandt weegt zwaarder dan een bestandsknop die één tik
-	// verderop in het railmenu staat.
-	let smal = $derived(tablet);
-	// Onder 880px kost de projectknop in de balk de naam van het materiaal
-	// (gemeten: 63px → 40px op 850, → 7px op 768). Daar woont het project in het
-	// railmenu; daarboven staat het in de balk. Zie de mediaquery in TopBar.svelte.
-	let projectInRail = $derived(breedte < 880);
-	// `krap` stond hier: onder 1500px verdween het projectpaar uit de balk en
-	// stond het alleen nog in het railmenu. Dat was precies waar de gebruiker het
-	// niet vond. Het paar is nu één knop "Project" met een menu, die op elke
-	// breedte in de balk past — dus is er geen krappe stand meer.
+	// Three devices, three apps (DESIGN-SYSTEM v2). Not a shrunken desktop but a
+	// shape of its own: below 768px this is a monitor with an emergency stop.
+	let width = $state(1440);
+	let telefoon = $derived(width < 768);
+	let tablet = $derived(width >= 768 && width < 1200);
+	// Below this width the file buttons no longer fit *beside* the machine controls in
+	// the top bar; they move to the rail menu then. Since the sheet's material is in
+	// the bar (decision B1) that bound is no longer at 950 but at the whole tablet
+	// width: measured, the bar otherwise ran 99px over the edge at 1024, and then the
+	// start button is off screen. What you burn into weighs more than a file button one
+	// tap away in the rail menu.
+	let narrow = $derived(tablet);
+	// Below 880px the project button in the bar costs the material's name (measured:
+	// 63px → 40px at 850, → 7px at 768). There the project lives in the rail menu;
+	// above it, it is in the bar. See the media query in TopBar.svelte.
+	let projectInRail = $derived(width < 880);
+	// `krap` used to be here: below 1500px the project pair disappeared from the bar
+	// and lived only in the rail menu. That was exactly where the user did not find it.
+	// The pair is now one "Project" button with a menu, which fits in the bar at every
+	// width — so there is no tight state any more.
 	/**
-	 * Op de kleinste tablet begint het paneel dicht (gat B2).
+	 * On the smallest tablet the panel starts closed (gap B2).
 	 *
-	 * Het paneel schaalt mee met het venster, dus het is nooit meer breder dan
-	 * het canvas — maar onder 850px houdt het bed nog geen 400px over, en dan is
-	 * het eerste wat je ziet een sliver werkgebied naast een vol formulier. De
-	 * greep ernaast is één tik, en starten/pauzeren/stoppen staan op tablet toch
-	 * in de bovenbalk. Alleen bij het openen: daarna beslist de gebruiker.
+	 * The panel scales with the window, so it is never wider than the canvas — but
+	 * below 850px the bed keeps less than 400px, and then the first thing you see is a
+	 * sliver of work area beside a full form. The grip beside it is one tap, and on a
+	 * tablet start/pause/stop are in the top bar anyway. Only on opening: after that the
+	 * user decides.
 	 */
-	let paneelOpen = $state(true);
-	// De muispositie leeft in het canvas maar hoort in de statusbalk: dat is
-	// waar je hem zoekt.
-	let muisMm = $state<{ x: number; y: number } | null>(null);
-	/** Hoogte van de actiebalk plus de vellenbalk; de alarmkaart hangt eronder. */
-	let bovenrandHoogte = $state(0);
+	let panelOpen = $state(true);
+	// The pointer position lives in the canvas but belongs in the status bar: that is
+	// where you look for it.
+	let pointerMm = $state<{ x: number; y: number } | null>(null);
+	/** Height of the action bar plus the sheet bar; the alarm card hangs below it. */
+	let topEdgeHeight = $state(0);
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		document.documentElement.style.setProperty('--bovenrand-hoogte', `${bovenrandHoogte}px`);
-		return () => document.documentElement.style.removeProperty('--bovenrand-hoogte');
+		document.documentElement.style.setProperty('--topedge-height', `${topEdgeHeight}px`);
+		return () => document.documentElement.style.removeProperty('--topedge-height');
 	});
-	/** Materiaal waarmee het testrastervenster opent, als je er vanuit de
-	    bibliotheek naartoe springt. */
-	let gridMateriaal = $state<number | null>(null);
+	/** The material the test grid dialog opens with, when you jump there from the
+	    library. */
+	let gridMaterial = $state<number | null>(null);
 
-	// Het wauw-moment. Alleen op de flank van niet-draaiend naar draaiend, en
-	// daarna weer weg — anders is het decoratie in plaats van een bericht.
-	let wauw = $state(false);
-	let liep = false;
-	function vier() {
-		wauw = true;
-		setTimeout(() => (wauw = false), 900);
-		// Het enige moment waarop de toestemmingsvraag ergens op slaat: er brandt
-		// nu iets, dus er valt straks iets te melden. Bij het laden van de app zou
-		// dezelfde vraag zonder aanleiding komen — en die weigering is definitief.
-		if (meldingen.vragen) vraagOpen = true;
-		bewaker.gestart();
+	// The wow moment. Only on the edge from not-running to running, and gone again
+	// afterwards — otherwise it is decoration rather than a message.
+	let wow = $state(false);
+	let wasRunning = false;
+	function celebrate() {
+		wow = true;
+		setTimeout(() => (wow = false), 900);
+		// The only moment the permission question means anything: something is burning
+		// now, so there will be something to report. On loading the app the same
+		// question would come without an occasion — and that refusal is final.
+		if (notifications.shouldAsk) promptOpen = true;
+		watchdog.started();
 	}
-	control.onStarted = vier;
+	control.onStarted = celebrate;
 	$effect(() => {
-		const nu = Boolean(status.activeJob?.running);
-		// Ook als iemand anders startte (telefoon, console) hoort het te vieren.
-		if (nu && !liep) vier();
-		liep = nu;
+		const now = Boolean(status.activeJob?.running);
+		// It should celebrate even when somebody else started it (phone, console).
+		if (now && !wasRunning) celebrate();
+		wasRunning = now;
 	});
-	// Wat er op de gekozen afbeelding aanstaat. Komt van de API, want het recept
-	// leeft op de node in de engine — niet in de browser.
+	// What is switched on for the chosen image. Comes from the API, because the recipe
+	// lives on the node in the engine — not in the browser.
 	let imageState = $state<Record<string, unknown> | null>(null);
 
 	async function loadImageState() {
@@ -173,34 +173,34 @@
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const tiling = new TilingStore(token);
-	/** Een handeling die het huidige werk vervangt, in afwachting van een ja. */
+	/** An action that replaces the current work, awaiting a yes. */
 	type Vervanging =
-		| { soort: 'bestand'; file: File }
-		| { soort: 'project'; file: File }
-		| { soort: 'nieuw' };
+		| { kind: 'bestand'; file: File }
+		| { kind: 'project'; file: File }
+		| { kind: 'fresh' };
 	let pending = $state<Vervanging | null>(null);
-	/** Tijdstip van het herstelbestand dat deze handeling zou overleven. */
-	let herstelbaar = $state<string | null>(null);
-	/** Welke vraag er nu staat; een laat antwoord op een oudere telt niet mee. */
-	let vraagTeller = 0;
-	// Werk van een vorige sessie. Nooit stilzwijgend terugladen: wie met een
-	// leeg canvas wil beginnen, moet dat kunnen.
+	/** Timestamp of the recovery file that would survive this action. */
+	let recoverable = $state<string | null>(null);
+	/** Which question is up now; a late answer to an older one does not count. */
+	let questionCounter = 0;
+	// Work from a previous session. Never restore it silently: anybody who wants to
+	// start with an empty canvas must be able to.
 	let recovery = $state<{ exists: boolean; when: string | null } | null>(null);
 	let textOpen = $state(false);
 	let textAt = $state<{ x: number; y: number } | null>(null);
 	let editingText = $state<string | null>(null);
 	let estimate = $state<number | null>(null);
 	let gridOpen = $state(false);
-	let versRaster = $state<number | null>(null);
-	/** Het materiaal van het huidige vel wijzigen (besluit B1). */
-	let materiaalOpen = $state(false);
-	let velMateriaal = $derived(
+	let freshGrid = $state<number | null>(null);
+	/** Changing the current sheet's material (decision B1). */
+	let materialOpen = $state(false);
+	let sheetMaterial = $derived(
 		library.materials.find((m) => m.id === sheets.active?.material_id)?.name ?? null
 	);
 
-	// Undo gooit de id's van de engine weg (herstelde nodes komen terug zonder
-	// id en krijgen bij hernummeren andere). Een bewaarde selectie zou daarna
-	// een ánder element kunnen aanwijzen, dus die laten we los.
+	// Undo throws the engine's ids away (restored nodes come back without an id and get
+	// different ones on renumbering). A kept selection could point at a *different*
+	// element afterwards, so we let it go.
 	async function history(action: 'undo' | 'redo') {
 		const result = action === 'undo' ? await edits.undo() : await edits.redo();
 		if (result.idsInvalidated) design.select(null);
@@ -228,74 +228,72 @@
 	}
 
 	/**
-	 * Openen vervangt, het voegt niet toe.
+	 * Opening replaces, it does not add.
 	 *
-	 * De engine laadt een bestand bovenop wat er al staat. Dat is soms handig
-	 * maar het is niet wat "openen" betekent, dus maken we eerst leeg — en
-	 * vragen we het eerst als daarmee werk zou verdwijnen.
+	 * The engine loads a file on top of what is already there. That is sometimes handy
+	 * but it is not what "opening" means, so we empty it first — and we ask first when
+	 * work would disappear because of it.
 	 *
-	 * De vraag hing aan `dirty`, en dat is één stap te streng. Een net
-	 * geïmporteerde tekening staat op `dirty === false` (`/api/job/load` roept
-	 * `document.clean()` aan — terecht, hij is gelijk aan het bestand), en er is
-	 * op dat moment ook geen autosave. Gemeten: importeer een tekening, importeer
-	 * er nog een, en de eerste is weg — zonder vraag, zonder melding, zonder iets
-	 * om op terug te vallen. Wat op het bed ligt is werk, of het nu getypt of
-	 * geopend is; vragen doen we dus zodra er iets ligt.
+	 * The question hung off `dirty`, and that is one step too strict. A freshly
+	 * imported drawing sits at `dirty === false` (`/api/job/load` calls
+	 * `document.clean()` — rightly, it is identical to the file), and at that moment
+	 * there is no autosave either. Measured: import a drawing, import another, and the
+	 * first is gone — without a question, without a message, without anything to fall
+	 * back on. What is on the bed is work, whether it was typed or opened; so we ask as
+	 * soon as there is something there.
 	 */
 	async function openFile(file: File) {
 		if (!canEdit) return;
-		await misschienEerstVragen({ soort: 'bestand', file });
+		await misschienEerstVragen({ kind: 'bestand', file });
 	}
 
 	/**
-	 * Elke handeling die het huidige werk vervangt, stelt dezelfde vraag.
+	 * Every action that replaces the current work asks the same question.
 	 *
-	 * Openen van een bestand deed dat al; een projectbestand openen ging er
-	 * zonder één woord overheen — inclusief de vellen, want die komen uit het
-	 * bestand mee. Dat is de ergste vorm: stil werk weggooien.
+	 * Opening a file already did that; opening a project file went straight over it
+	 * without a word — including the sheets, because those come along from the file.
+	 * That is the worst form: throwing work away silently.
 	 *
-	 * Wat "werk" is verschilt per handeling. Een bestand komt op dít vel, dus
-	 * daar telt alleen dit vel. Een project en opnieuw beginnen vervangen álle
-	 * vellen, dus dan telt de doos van gisteren ook mee, ook als het vel dat je
-	 * nu ziet leeg is.
+	 * What counts as "work" differs per action. A file comes onto *this* sheet, so only
+	 * this sheet counts there. A project and starting over replace *all* the sheets, so
+	 * then yesterday's box counts too, even when the sheet you see now is empty.
 	 */
-	async function misschienEerstVragen(actie: Vervanging) {
-		const raaktAlleVellen = actie.soort !== 'bestand';
-		const erLigtWerk = !design.isEmpty || (raaktAlleVellen && sheets.sheets.length > 1);
-		if (!erLigtWerk) {
-			await voerUit(actie);
+	async function misschienEerstVragen(action: Vervanging) {
+		const touchesEverySheet = action.kind !== 'bestand';
+		const thereIsWork = !design.isEmpty || (touchesEverySheet && sheets.sheets.length > 1);
+		if (!thereIsWork) {
+			await runIt(action);
 			return;
 		}
-		herstelbaar = null;
-		pending = actie;
-		// Wat er ná deze handeling nog terug te halen is, verandert wat je
-		// kiest — dus staat het in de vraag. Alleen bij een gewijzigd ontwerp:
-		// een ontwerp dat gelijk is aan een bestand op schijf laat het
-		// herstelbestand juist opruimen (`autosave.forget_if_saved`), dus dan
-		// zou de belofte niet kloppen.
+		recoverable = null;
+		pending = action;
+		// What can still be recovered *after* this action changes what you choose — so
+		// it is in the question. Only for a changed design: a design identical to a file
+		// on disk has the recovery file cleaned up (`autosave.forget_if_saved`), so then
+		// the promise would not hold.
 		if (!design.dirty) return;
-		// Een teller en geen vergelijking met `actie`: `$state` levert een proxy
-		// terug, dus `pending === actie` is altijd onwaar en het antwoord kwam
-		// nooit aan. Gemeten: autosave bestond, ontwerp was vuil, en de regel
-		// bleef weg.
-		const nummer = ++vraagTeller;
+		// A counter and not a comparison with `action`: `$state` hands back a proxy, so
+		// `pending === action` is always false and the answer never arrived. Measured:
+		// the autosave existed, the design was dirty, and the line
+		// bleef gone.
+		const number = ++questionCounter;
 		const response = await fetch('/api/design/autosave');
 		if (!response.ok) return;
 		const staat = await response.json();
-		if (vraagTeller === nummer && pending !== null && staat.exists) herstelbaar = staat.when;
+		if (questionCounter === number && pending !== null && staat.exists) recoverable = staat.when;
 	}
 
-	/** Opnieuw beginnen. Zie `/api/project/new`: de bibliotheek blijft staan. */
+	/** Starting over. See `/api/project/new`: the library stays. */
 	async function newProject() {
 		if (!canEdit) return;
-		await misschienEerstVragen({ soort: 'nieuw' });
+		await misschienEerstVragen({ kind: 'fresh' });
 	}
 
-	async function voerUit(actie: Vervanging) {
-		if (actie.soort === 'bestand') {
-			await replaceWith(actie.file);
-		} else if (actie.soort === 'project') {
-			await laadProject(actie.file);
+	async function runIt(action: Vervanging) {
+		if (action.kind === 'bestand') {
+			await replaceWith(action.file);
+		} else if (action.kind === 'project') {
+			await laadProject(action.file);
 		} else {
 			const response = await fetch('/api/project/new', {
 				method: 'POST',
@@ -312,7 +310,7 @@
 		return token ? { Authorization: `Bearer ${token}` } : {};
 	}
 
-	/** Schrijfroutes dragen het token; één plek in plaats van bij elke aanroep. */
+	/** Write routes carry the token; one place instead of at every call. */
 	async function post(path: string, body: unknown) {
 		const token = localStorage.getItem('openkerf.token') ?? '';
 		return fetch(path, {
@@ -327,10 +325,10 @@
 
 	async function openProject(file: File) {
 		if (!canEdit) return;
-		await misschienEerstVragen({ soort: 'project', file });
+		await misschienEerstVragen({ kind: 'project', file });
 	}
 
-	/** Een project draagt ook de bibliotheek-context, dus eigen route. */
+	/** A project also carries the library context, so it has a route of its own. */
 	async function laadProject(file: File) {
 		const form = new FormData();
 		form.append('file', file);
@@ -356,35 +354,34 @@
 		}
 	}
 
-	/** Plaatsen voegt toe: de engine laadt bovenop wat er al staat. */
+	/** Placing adds: the engine loads on top of what is already there. */
 	async function placeImage(file: File) {
 		if (!canEdit) return;
 		if (await control.load(file)) await design.load();
 	}
 
 	async function saveThenOpen() {
-		const actie = pending;
+		const action = pending;
 		pending = null;
-		if (!actie) return;
-		// Downloaden telt als opslaan: de API markeert het ontwerp schoon.
-		// Wat er weg zou gaan bepaalt wat je bewaart: bij een bestand is dat
-		// dit vel, bij een project en bij opnieuw beginnen gaan álle vellen
-		// weg — dan is een SVG van het actieve vel geen redding maar een
-		// halve.
+		if (!action) return;
+		// Downloading counts as saving: the API marks the design clean. What would go
+		// away decides what you keep: for a file that is this sheet, for a project and
+		// for starting over *all* the sheets go — and then an SVG of the active sheet is
+		// not a rescue but half of one.
 		//
-		// Wachten tot het bestand er werkelijk is, en niet 800 ms hopen: het
-		// volgende dat gebeurt, gooit het bed leeg. Mislukt het opslaan, dan
-		// gaat het leegmaken niet door en staat het venster er nog.
+		// Wait until the file really is there, and do not hope for 800 ms: the next
+		// thing that happens empties the bed. If the save fails, the emptying does not
+		// go ahead and the dialog is still up.
 		const opgeslagen =
-			actie.soort === 'bestand'
-				? await bewaarBestand('/api/design/export.svg', 'ontwerp.svg')
-				: await bewaarBestand('/api/project/export.openkerf', 'project.openkerf');
+			action.kind === 'bestand'
+				? await saveFile('/api/design/export.svg', 'ontwerp.svg')
+				: await saveFile('/api/project/export.openkerf', 'project.openkerf');
 		if (!opgeslagen) {
-			pending = actie;
+			pending = action;
 			return;
 		}
 		await design.load();
-		await voerUit(actie);
+		await runIt(action);
 	}
 
 	async function draw(shape: Record<string, unknown>) {
@@ -392,8 +389,8 @@
 		const result = await edits.draw(shape);
 		if (result.ok) {
 			await design.load();
-			// Terug naar selecteren: één vorm per klik is voorspelbaarder dan
-			// per ongeluk een rij vormen achterlaten.
+			// Back to selecting: one shape per click is more predictable than
+			// accidentally leaving a row of shapes behind.
 			tool = 'select';
 		}
 	}
@@ -411,113 +408,112 @@
 		if (await edits.duplicate(design.selectedIds)) await design.load();
 	}
 
-	/** Wat de laatste hoekbewerking te melden had; het paneel toont het. */
-	let hoekMelding = $state<string | null>(null);
-	/** Wat de laatste indeel-handeling deed (splitsen, laag, opruimen). */
-	let indeelMelding = $state<string | null>(null);
+	/** What the last corner operation had to report; the panel shows it. */
+	let cornerNotice = $state<string | null>(null);
+	/** What the last tidy-up action did (split, layer, clean up). */
+	let layoutNotice = $state<string | null>(null);
 
-	async function hoeken(style: 'round' | 'chamfer', sizeMm: number) {
+	async function corners(style: 'round' | 'chamfer', sizeMm: number) {
 		if (!canEdit || !hasSelection) return;
-		hoekMelding = null;
+		cornerNotice = null;
 		const uitkomst = await edits.corners(design.selectedIds, style, sizeMm);
 		if (!uitkomst) return;
 		if (uitkomst.paths.length) {
-			// Afgeschuinde vormen zijn paden geworden en hebben een nieuw id; de
-			// oude selectie wijst naar iets dat niet meer bestaat.
+			// Chamfered shapes have become paths and have a new id; the old selection
+			// points at something that no longer exists.
 			design.select(null);
 		}
 		await design.load();
 		if (uitkomst.skipped) {
-			hoekMelding =
-				`${uitkomst.skipped} ${uitkomst.skipped === 1 ? 'hoek is' : 'hoeken zijn'} ` +
-				'overgeslagen: de zijden zijn er te kort voor, of er komt een boog op uit.';
+			cornerNotice = t('notice.corners.skipped', { n: uitkomst.skipped });
 		}
 	}
 
 	async function splitsen() {
 		if (!canEdit || !hasSelection) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.split(design.selectedIds);
 		if (!uitkomst) return;
-		// De stukken zijn nieuwe elementen; de oude selectie wijst naar een pad
-		// dat door een groep vervangen is.
+		// The pieces are new elements; the old selection points at a path that has
+		// been replaced by a group.
 		design.select(null);
 		await design.load();
 		if (uitkomst.count) {
 			design.selectMany(uitkomst.ids);
-			indeelMelding = `${uitkomst.count} vormen — los aan te klikken.`;
+			layoutNotice = t('notice.split.done', { n: uitkomst.count });
 		} else {
-			indeelMelding = 'Deze vorm bestaat uit één stuk; er valt niets te splitsen.';
+			layoutNotice = t('notice.split.nothing');
 		}
 	}
 
 	/**
-	 * Een vlak van de selectie maken, of het weghalen.
+	 * Making an area out of the selection, or taking it away.
 	 *
-	 * Zonder vulling rastert een vorm alleen zijn omtrek — gemeten: 8 % van het
-	 * vlak zwart in plaats van boven 90 %. Vandaar dat dit een eigen knop is en
-	 * geen bijwerking van "naar de rasterlaag".
+	 * Without a fill a shape only grids its outline — measured: 8 % of the area
+	 * black instead of over 90 %. Hence this is a button of its own and not a side
+	 * effect of "into the grid layer".
 	 */
 	async function vullen(filled: boolean) {
 		if (!canEdit || !hasSelection) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.fill(design.selectedIds, filled);
 		if (!uitkomst) return;
 		await design.load();
-		const aantal = filled ? uitkomst.filled : uitkomst.cleared;
-		const woord = aantal === 1 ? 'vorm' : 'vormen';
-		indeelMelding =
-			(filled
-				? `${aantal} ${woord} gevuld — een rasterlaag brandt nu het vlak.`
-				: `Vulling weg bij ${aantal} ${woord}.`) +
-			(uitkomst.skipped
-				? ` ${uitkomst.skipped} overgeslagen: een lijn heeft geen binnenkant.`
-				: '');
+		const count = filled ? uitkomst.filled : uitkomst.cleared;
+		layoutNotice =
+			t(filled ? 'notice.fill.filled' : 'notice.fill.cleared', { n: count }) +
+			(uitkomst.skipped ? ` ${t('notice.fill.skipped', { n: uitkomst.skipped })}` : '');
 	}
 
-	async function naarEenLaag(kind: 'cut' | 'engrave' | 'raster') {
+	async function toALayer(kind: 'cut' | 'engrave' | 'grid') {
 		if (!canEdit || !hasSelection) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.singleLayer(design.selectedIds, kind);
 		if (!uitkomst) return;
 		await design.load();
-		const laag = design.operations.find((o) => o.id === uitkomst.operation_id);
-		const naam =
-			laag?.label ??
-			{ cut: 'Snijden', engrave: 'Graveren', raster: 'Rasteren' }[kind];
-		const uit = uitkomst.removed
-			? `, uit ${uitkomst.removed} ${uitkomst.removed === 1 ? 'toewijzing' : 'toewijzingen'} gehaald`
-			: '';
-		indeelMelding =
-			`${uitkomst.assigned || design.selectedIds.length} ` +
-			`${(uitkomst.assigned || design.selectedIds.length) === 1 ? 'vorm' : 'vormen'} ` +
-			`in ${uitkomst.created ? 'een nieuwe laag' : 'laag'} “${naam}”${uit}.`;
+		const layer = design.operations.find((o) => o.id === uitkomst.operation_id);
+		const name =
+			layer?.label ??
+			t(
+				({
+					cut: 'panel.kind.cut',
+					engrave: 'panel.kind.engrave',
+					grid: 'panel.kind.raster'
+				} as const)[kind]
+			);
+		const hoeveel = uitkomst.assigned || design.selectedIds.length;
+		layoutNotice = t('notice.layer.assigned', {
+			n: hoeveel,
+			layer: t(uitkomst.created ? 'notice.layer.newLayer' : 'notice.layer.existing', { name: name }),
+			removed: uitkomst.removed ? t('notice.layer.removedFrom', { n: uitkomst.removed }) : ''
+		});
 	}
 
 	async function opruimen() {
 		if (!canEdit) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.prune();
 		if (!uitkomst) return;
 		await design.load();
-		indeelMelding = uitkomst.removed
-			? `${uitkomst.removed} lege ${uitkomst.removed === 1 ? 'laag' : 'lagen'} weg.`
-			: 'Er stond geen lege laag in de lijst.';
+		layoutNotice = uitkomst.removed
+			? t('notice.prune.done', { n: uitkomst.removed })
+			: t('notice.prune.none');
 	}
 
 	async function arrange(action: string) {
-		// 'rescue' werkt op het hele ontwerp; de rest op de selectie.
+		// 'rescue' works on the whole design; the rest on the selection.
 		if (!canEdit || (!hasSelection && action !== 'rescue')) return;
 		const ids = design.selectedIds;
 		if (action === 'offset') {
-			// De vraag staat in een eigen venster (`Offset.svelte`); hier stond een
-			// `window.prompt`, en die viel buiten het thema én valideerde niets.
+			// The question lives in a dialog of its own (`Offset.svelte`); there used to
+			// be a `window.prompt` here, and that fell outside the theme *and* validated
+			// nothing.
 			offsetOpen = true;
 			return;
 		}
 		if (action === 'rescue') {
-			// Alles op het bed leggen, ook wat je niet kunt aanwijzen omdat het
-			// buiten beeld ligt.
+			// Putting everything on the bed, including what you cannot point at because
+			// it is off screen.
 			await post('/api/design/nest', {
 				ids: design.elements.filter((e) => !e.hidden).map((e) => e.id),
 				margin_mm: 5
@@ -549,7 +545,7 @@
 								? await edits.boolean(ids, action)
 								: await edits.align(ids, action);
 		if (result.ok) {
-			// Booleaans levert een nieuw pad op; de oude selectie bestaat niet meer.
+			// A boolean operation produces a new path; the old selection no longer exists.
 			if (action === 'ungroup' || ['union', 'difference', 'intersection', 'xor'].includes(action))
 				design.select(null);
 			await design.load();
@@ -569,10 +565,10 @@
 			: await edits.unassign(design.selectedIds, operationId);
 		if (result.ok) await design.load();
 	}
-	// De tab staat in de URL, zodat de terugknop en een bladwijzer werken.
-	// Lokale state is de bron van waarheid, de URL volgt. Andersom werkt niet:
-	// replaceState maakt $page.url niet reactief, waardoor het paneel op de
-	// oude tab bleef staan terwijl de URL wél meeliep.
+	// The tab is in the URL, so that the back button and a bookmark work. Local state
+	// is the source of truth, the URL follows. The other way round does not work:
+	// replaceState does not make $page.url reactive, which left the panel on the old
+	// tab while the URL did follow along.
 	let tab = $state<'design' | 'layers' | 'job'>('job');
 
 	function selectTab(next: 'design' | 'layers' | 'job') {
@@ -591,24 +587,24 @@
 	let preflight = $state(false);
 
 	let device = $derived(status.device);
-	let telefoonPositie = $derived(
+	let phonePosition = $derived(
 		device?.position.mm
 			? `${device.position.mm[0].toFixed(1)}, ${device.position.mm[1].toFixed(1)} mm`
 			: '—'
 	);
-	// Niet `state` noemen: `$state` zou dan als store-referentie gelezen worden.
+	// Do not call it `state`: `$state` would then be read as a store reference.
 	let machine = $derived(machineState(device, status.connected));
 	/**
-	 * De fase van de job, uit dezelfde functie die het Job-paneel gebruikt.
+	 * The job's phase, from the same function the Job panel uses.
 	 *
-	 * De bovenbalk las hiervóór de machinetoestand (`machine === 'busy'`) en het
-	 * paneel `job.running`. Bij een job die gespoold is maar nog niet opgepakt zijn
-	 * die twee het oneens, en dan zet de ene knop uit wat de andere aanbiedt —
-	 * gemeten met een niet-antwoordende machine: de balk zette starten uit, het
-	 * paneel liet het aan staan. Eén functie, één antwoord.
+	 * Before this the top bar read the machine state (`machine === 'busy'`) and the
+	 * panel read `job.running`. For a job that has been spooled but not yet picked up
+	 * those two disagree, and then one button disables what the other offers — measured
+	 * with a machine that does not answer: the bar disabled starting, the panel left it
+	 * on. One function, one answer.
 	 */
-	let jobfase = $derived(jobFase(device, status.activeJob, design.isEmpty));
-	let werkOnderweg = $derived(jobBezig(jobfase));
+	let phase = $derived(jobPhase(device, status.activeJob, design.isEmpty));
+	let workUnderWay = $derived(jobBusy(phase));
 
 	onMount(() => {
 		status.connect();
@@ -617,12 +613,12 @@
 		sheets.load();
 		library.load();
 		leesKlembord();
-		if (window.innerWidth < 850) paneelOpen = false;
+		if (window.innerWidth < 850) panelOpen = false;
 		const wantedTab = $page.url.searchParams.get('tab');
 		if (wantedTab === 'design' || wantedTab === 'layers') tab = wantedTab;
 		design.load().then(async () => {
-			// Alleen aanbieden als er niets staat: over bestaand werk heen
-			// terugzetten geeft een mengelmoes, en dat weigert de API ook.
+			// Only offer it when there is nothing there: restoring on top of existing
+			// work gives a mishmash, and the API refuses that too.
 			if (design.isEmpty) {
 				const response = await fetch('/api/design/autosave');
 				if (response.ok) {
@@ -637,107 +633,108 @@
 				ids.slice(1).forEach((id) => design.toggle(id));
 			}
 		});
-		// Pas ná mount koppelen: replaceState vóórdat de router klaar is breekt
-		// de render. De URL volgt daarom de actie, niet een effect.
+		// Only hook up after mount: replaceState before the router is ready breaks the
+		// render. So the URL follows the action, not an effect.
 		design.onSelect = () => {
 			syncUrl();
 			loadImageState();
 		};
-		// De beschikbare acties hangen af van het actieve device, dus opnieuw
-		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
+		// The available actions depend on the active device, so fetch them again as soon
+		// as the user switches machine in MeerK40t.
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
-		// De toestemming kan buiten ons om wijzigen: wie hem in de site-instellingen
-		// van de browser terugzet, verwacht niet dat hij daarna moet verversen.
-		const herlees = () => meldingen.lees();
-		window.addEventListener('focus', herlees);
-		document.addEventListener('visibilitychange', herlees);
+		// The permission can change behind our back: anybody resetting it in the
+		// browser's site settings does not expect to have to reload afterwards.
+		const reread = () => notifications.read();
+		window.addEventListener('focus', reread);
+		document.addEventListener('visibilitychange', reread);
 		return () => {
 			clearInterval(poll);
-			window.removeEventListener('focus', herlees);
-			document.removeEventListener('visibilitychange', herlees);
+			window.removeEventListener('focus', reread);
+			document.removeEventListener('visibilitychange', reread);
 			status.close();
 		};
 	});
 
-	// De engine seint dat de elementenboom wijzigde; dan pas opnieuw ophalen.
-	// De store slikt bursts zelf, dus een signaal per wijziging is prima.
+	// The engine signals that the element tree has changed; only then fetch again. The
+	// store swallows bursts itself, so one signal per change is fine.
 	$effect(() => {
 		const latest = status.events[0];
 		if (latest && isDesignSignal(latest.code)) design.load();
 	});
 
-	// Alarmsignalen uit de engine (`pipe;usb_status`) en de tweesecondensnapshot:
-	// twee losse bronnen, dus twee losse effecten.
+	// Alarm signals from the engine (`pipe;usb_status`) and the two-second snapshot:
+	// two separate sources, so two separate effects.
 	$effect(() => {
 		const latest = status.events[0];
-		if (latest) bewaker.signaal(latest);
+		if (latest) watchdog.signal(latest);
 	});
 	$effect(() => {
-		bewaker.status(status.device, status.connected);
+		watchdog.status(status.device, status.connected);
 	});
-	// Dezelfde socket draagt de stand van een lopende tegelreeks; de bovenbalk,
-	// het canvas en de telefoon lezen straks allemaal deze ene bron.
+	// The same socket carries the state of a running tile series; the top bar, the
+	// canvas and the phone all read this one source.
 	$effect(() => {
 		tiling.adopt(status.snapshot?.tiling ?? null);
 	});
 	/**
-	 * De opdeling ophalen, en opnieuw zodra iets eraan verandert.
+	 * Fetching the division, and again as soon as something about it changes.
 	 *
-	 * De opdeling wordt op de server berekend en nooit opgeslagen, dus hij moet
-	 * hier opgevraagd worden — en dat gebeurde nergens. Gevolg: `tiling.layout`
-	 * bleef leeg, en dan tekent het canvas geen naden, geen merken en geen
-	 * gedimde tegels, en weet het paneel niet hoe ver de plaat moet opschuiven.
-	 * Alles klopte, er kwam alleen nooit iets in.
+	 * The division is computed on the server and never stored, so it has to be
+	 * requested here — and that happened nowhere. Consequence: `tiling.layout` stayed
+	 * empty, and then the canvas draws no seams, no marks and no dimmed tiles, and the
+	 * panel does not know how far the board has to shift. Everything was right, only
+	 * nothing ever came in.
 	 *
-	 * Hij hangt aan het aantal elementen, het actieve vel en de stand van de
-	 * reeks: dat zijn precies de drie dingen die de opdeling kunnen verzetten.
+	 * It hangs off the number of elements, the active sheet and the state of the
+	 * series: those are exactly the three things that can move the division.
 	 */
 	$effect(() => {
 		void design.elements.length;
 		void sheets.active?.id;
 		void tiling.run?.current;
-		// Alleen ophalen als tegels ook kunnen spelen: een plaat die groter is dan
-		// het bed, of een reeks die al loopt. Zonder die rem gaat er bij elke
-		// wijziging in het ontwerp een verzoek uit dat vrijwel altijd 409't.
-		const vel = sheets.active;
+		// Only fetch when tiling can actually apply: a board bigger than the bed, or a
+		// series that is already running. Without that brake a request goes out on every
+		// change in the design that almost always 409s.
+		const sheet = sheets.active;
 		const bed = device?.bed;
-		const teGroot =
-			Boolean(vel && bed) &&
-			(vel!.width_mm > (bed!.width_mm ?? 0) || vel!.height_mm > (bed!.height_mm ?? 0));
-		if (teGroot || tiling.run) tiling.load();
+		const tooBig =
+			Boolean(sheet && bed) &&
+			(sheet!.width_mm > (bed!.width_mm ?? 0) || sheet!.height_mm > (bed!.height_mm ?? 0));
+		if (tooBig || tiling.run) tiling.load();
 	});
 
 	// ─── Klembord, menu's en sneltoetsen ──────────────────────────────────────
 	//
-	// Alles hieronder hangt aan één lijst: `$lib/acties.ts`. De actiebalk boven
-	// het canvas, het rechterklikmenu en het toetsenbord lezen daar dezelfde
-	// namen, dezelfde sneltoetsen en dezelfde redenen-waarom-niet uit. Dat is
-	// het hele punt: hiervóór stond elke handeling op precies één plek, en dus
-	// was er geen tweede plek waar hij hetzelfde kon heten.
+	// Everything below hangs off one list: `$lib/actions.ts`. The action bar above
+	// the canvas, the context menu and the keyboard read the same names, the same
+	// shortcuts and the same reasons-why-not out of it. That is the whole point: before
+	// this every action lived in exactly one place, and so there was no second place
+	// where it could be called the same thing.
 
-	/** Hoeveel vormen op het klembord staan; het menu moet weten of plakken kan. */
-	let klembord = $state(0);
+	/** How many shapes are on the clipboard; the menu has to know whether paste is
+	    possible. */
+	let clipboard = $state(0);
 	async function leesKlembord() {
 		const response = await fetch('/api/design/clipboard');
-		if (response.ok) klembord = (await response.json()).count ?? 0;
+		if (response.ok) clipboard = (await response.json()).count ?? 0;
 	}
 
 	async function klembordActie(wat: 'copy' | 'cut', ids: string[]) {
 		if (!ids.length || !canEdit) return;
 		const response = await post(`/api/design/clipboard/${wat}`, { ids });
 		if (!response.ok) return;
-		klembord = (await response.json()).count ?? 0;
+		clipboard = (await response.json()).count ?? 0;
 		if (wat === 'cut') {
 			design.select(null);
 			await design.load();
 		}
 	}
 
-	async function plakken(punt?: { x: number; y: number }) {
-		if (!canEdit || !klembord) return;
+	async function plakken(point?: { x: number; y: number }) {
+		if (!canEdit || !clipboard) return;
 		const response = await post('/api/design/clipboard/paste', {
-			x_mm: punt?.x ?? null,
-			y_mm: punt?.y ?? null
+			x_mm: point?.x ?? null,
+			y_mm: point?.y ?? null
 		});
 		if (!response.ok) return;
 		const uitkomst = await response.json().catch(() => null);
@@ -745,51 +742,51 @@
 		if (uitkomst?.ids?.length) design.selectMany(uitkomst.ids);
 	}
 
-	/** Het handvat waarmee de zoomstanden van het canvas hier te bedienen zijn. */
-	let canvasBediening = $state<{
-		zoom: (wat: 'alles' | 'selectie' | 'bed' | 'honderd') => void;
-		stap: (factor: number) => void;
-		vastklikken: () => void;
-		laagnummers: () => void;
-		staat: () => { vastklikken: boolean; laagnummers: boolean };
+	/** The handle through which the canvas's zoom states can be operated from here. */
+	let canvasControl = $state<{
+		zoom: (what: 'all' | 'selection' | 'bed' | 'hundred') => void;
+		step: (factor: number) => void;
+		snap: () => void;
+		layerNumbers: () => void;
+		state: () => { snap: boolean; layerNumbers: boolean };
 	} | null>(null);
 
-	let hoekenOpen = $state(false);
+	let cornersOpen = $state(false);
 	let offsetOpen = $state(false);
 
-	/** Welk menu er open staat, en waar. */
-	let menu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
-	/** Waar er op het bed geklikt werd — "plakken hier" belooft die plek. */
-	let menuPunt = $state<{ x: number; y: number } | null>(null);
+	/** Which menu is open, and where. */
+	let menu = $state<{ list: MenuList; x: number; y: number } | null>(null);
+	/** Where the bed was clicked — "paste here" promises that place. */
+	let menuPoint = $state<{ x: number; y: number } | null>(null);
 
-	let handelingen: Handelingen = {
-		knippen: () => klembordActie('cut', design.selectedIds),
-		kopieren: () => klembordActie('copy', design.selectedIds),
-		plakken: (punt) => plakken(punt),
-		dupliceren: duplicateSelection,
-		verwijderen: removeSelection,
-		allesSelecteren: () =>
+	let handlers: Handlers = {
+		cut: () => klembordActie('cut', design.selectedIds),
+		copy: () => klembordActie('copy', design.selectedIds),
+		paste: (at) => plakken(at),
+		duplicate: duplicateSelection,
+		remove: removeSelection,
+		selectAll: () =>
 			design.selectMany(design.elements.filter((el) => !el.hidden).map((el) => el.id)),
-		selectieWissen: () => design.select(null),
-		schikken: (modus) => arrange(modus),
-		draaien: (graden) => rotate(graden),
-		splitsen: splitsen,
-		vullen: (aan) => vullen(aan),
-		hoeken: () => (hoekenOpen = true),
-		naarLaag: (soort) => naarEenLaag(soort),
-		laagToekennen: (id, erin) => assign(id, erin),
-		naarVel: async (id) => {
+		clearSelection: () => design.select(null),
+		arrange: (mode) => arrange(mode),
+		rotate: (degrees) => rotate(degrees),
+		split: splitsen,
+		fill: (on) => vullen(on),
+		corners: () => (cornersOpen = true),
+		onlyLayer: (kind) => toALayer(kind),
+		assignLayer: (id, inside) => assign(id, inside),
+		toSheet: async (id) => {
 			if (await sheets.move(design.selectedIds, id)) {
 				design.select(null);
 				await design.load();
 			}
 		},
-		tekstBewerken: () => {
+		editText: () => {
 			editingText = design.selectedId;
 			textOpen = true;
 		},
-		bijsnijden: () => (cropping = true),
-		bijsnijdenTerug: async () => {
+		crop: () => (cropping = true),
+		uncrop: async () => {
 			const id = design.selectedId;
 			if (!id) return;
 			await fetch(`/api/design/elements/${encodeURIComponent(id)}/crop`, {
@@ -799,7 +796,7 @@
 			await design.load();
 			await loadImageState();
 		},
-		vectoriseren: async () => {
+		vectorise: async () => {
 			const id = design.selectedId;
 			if (!id) return;
 			await post(`/api/design/elements/${encodeURIComponent(id)}/vectorise`, {
@@ -809,54 +806,56 @@
 		},
 		undo: () => history('undo'),
 		redo: () => history('redo'),
-		zoom: (wat) => canvasBediening?.zoom(wat),
-		vastklikken: () => canvasBediening?.vastklikken(),
-		laagnummers: () => canvasBediening?.laagnummers(),
-		redden: () => arrange('rescue')
+		zoom: (what) => canvasControl?.zoom(what),
+		snap: () => canvasControl?.snap(),
+		layerNumbers: () => canvasControl?.layerNumbers(),
+		rescue: () => arrange('rescue')
 	};
 
-	/** De toestand waarin een handeling wel of niet kan. */
-	let actieContext = $derived.by<ActieContext>(() => {
-		const gekozen = design.elements.filter((e) => design.isSelected(e.id));
-		const beeld = gekozen.length === 1 && Boolean(gekozen[0]?.image);
-		const stand = canvasBediening?.staat();
+	/** The state in which an action is or is not possible. */
+	let actionContext = $derived.by<ActionContext>(() => {
+		const chosen = design.elements.filter((e) => design.isSelected(e.id));
+		const image = chosen.length === 1 && Boolean(chosen[0]?.image);
+		const state = canvasControl?.state();
 		return {
-			aantal: gekozen.length,
-			inGroep: gekozen.some((e) => Boolean(e.group_id)),
-			isAfbeelding: beeld,
-			isTekst: gekozen.length === 1 && gekozen[0]?.text !== null,
-			isBijgesneden: beeld && Boolean(imageState?.cropped),
-			gevuld: gekozen.length > 0 && gekozen.every((e) => Boolean(e.fill)),
-			klembord,
-			bezig: edits.busy,
-			mag: canEdit,
-			lagen: design.operations
+			count: chosen.length,
+			inGroup: chosen.some((e) => Boolean(e.group_id)),
+			isImage: image,
+			isText: chosen.length === 1 && chosen[0]?.text !== null,
+			isCropped: image && Boolean(imageState?.cropped),
+			filled: chosen.length > 0 && chosen.every((e) => Boolean(e.fill)),
+			clipboard: clipboard,
+			busy: edits.busy,
+			may: canEdit,
+			layers: design.operations
 				.filter((op) => !op.grid)
 				.map((op) => ({
 					id: op.id,
 					label: op.label,
-					erin: design.selectedIds.every((id) => op.element_ids.includes(id))
+					inside: design.selectedIds.every((id) => op.element_ids.includes(id))
 				})),
-			vellen: sheets.sheets.filter((sheet) => !sheet.active).map((sheet) => ({ id: sheet.id, name: sheet.name })),
-			teSplitsen: {
-				vormen: gekozen.filter((e) => (e.subpaths ?? 1) > 1).length,
-				stukken: gekozen.reduce((n, e) => n + ((e.subpaths ?? 1) > 1 ? (e.subpaths ?? 1) : 0), 0)
+			sheets: sheets.sheets
+				.filter((sheet) => !sheet.active)
+				.map((sheet) => ({ id: sheet.id, name: sheet.name })),
+			splittable: {
+				shapes: chosen.filter((e) => (e.subpaths ?? 1) > 1).length,
+				pieces: chosen.reduce((n, e) => n + ((e.subpaths ?? 1) > 1 ? (e.subpaths ?? 1) : 0), 0)
 			},
-			vastklikken: stand?.vastklikken ?? true,
-			laagnummers: stand?.laagnummers ?? true,
-			leeg: design.isEmpty
+			snap: state?.snap ?? true,
+			layerNumbers: state?.layerNumbers ?? true,
+			empty: design.isEmpty
 		};
 	});
 
 	function openObjectMenu(event: MouseEvent) {
-		menuPunt = null;
-		menu = { lijst: objectMenu(actieContext, handelingen), x: event.clientX, y: event.clientY };
+		menuPoint = null;
+		menu = { list: objectMenu(actionContext, handlers), x: event.clientX, y: event.clientY };
 	}
 
-	function openCanvasMenu(event: MouseEvent, punt: { x: number; y: number }) {
-		menuPunt = punt;
+	function openCanvasMenu(event: MouseEvent, point: { x: number; y: number }) {
+		menuPoint = point;
 		menu = {
-			lijst: canvasMenu(actieContext, handelingen, punt),
+			list: canvasMenu(actionContext, handlers, point),
 			x: event.clientX,
 			y: event.clientY
 		};
@@ -865,56 +864,56 @@
 	/**
 	 * Eén tabel, één afhandelaar.
 	 *
-	 * Hiervóór stonden de sneltoetsen op twee plekken — hier en in `Canvas` — en
-	 * ontbraken de toetsen die iedere desktop-app heeft: ⌘Z deed niets, ⌘C en ⌘V
-	 * bestonden niet, ⌘G niet. Wat wel of niet af te vangen is in een browser
-	 * staat toegelicht bij `TOETSEN`.
+	 * Before this the shortcuts lived in two places — here and in `Canvas` — and the
+	 * keys every desktop app has were missing: ⌘Z did nothing, ⌘C and ⌘V did not exist,
+	 * nor did ⌘G. What can and cannot be intercepted in a browser is explained at
+	 * `KEYS`.
 	 */
 	function sneltoets(event: KeyboardEvent) {
-		const doel = event.target as HTMLElement | null;
-		if (doel?.closest('input, textarea, select, [contenteditable="true"]')) return;
-		if (menu) return; // het menu bedient zijn eigen toetsen
-		const combo = comboVan(event);
+		const target = event.target as HTMLElement | null;
+		if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+		if (menu) return; // the menu handles its own keys
+		const combo = comboOf(event);
 
 		if (combo === 'escape') {
 			design.select(null);
 			return;
 		}
 
-		const doen: Record<string, () => void> = {
-			[TOETSEN.undo]: handelingen.undo,
-			[TOETSEN.redo]: handelingen.redo,
-			[TOETSEN.knippen]: handelingen.knippen,
-			[TOETSEN.kopieren]: handelingen.kopieren,
-			[TOETSEN.plakken]: () => handelingen.plakken(),
-			[TOETSEN.dupliceren]: handelingen.dupliceren,
-			[TOETSEN.verwijderen]: handelingen.verwijderen,
-			[TOETSEN.allesSelecteren]: handelingen.allesSelecteren,
-			[TOETSEN.groeperen]: () => handelingen.schikken('group'),
-			[TOETSEN.groepOpheffen]: () => handelingen.schikken('ungroup'),
-			[TOETSEN.groepOpheffen2]: () => handelingen.schikken('ungroup'),
-			[TOETSEN.spiegelH]: () => handelingen.schikken('mirror-h'),
-			[TOETSEN.spiegelV]: () => handelingen.schikken('mirror-v'),
-			[TOETSEN.draaiLinks]: () => handelingen.draaien(-90),
-			[TOETSEN.draaiRechts]: () => handelingen.draaien(90),
-			[TOETSEN.zoom100]: () => handelingen.zoom('honderd'),
-			[TOETSEN.zoomSelectie]: () => handelingen.zoom('selectie'),
-			[TOETSEN.zoomAlles]: () => handelingen.zoom('alles'),
-			[TOETSEN.zoomBed]: () => handelingen.zoom('bed'),
-			[TOETSEN.zoomAllesOud]: () => handelingen.zoom('alles'),
-			[TOETSEN.zoomSelectieOud]: () => handelingen.zoom('selectie'),
-			[TOETSEN.zoomSelectieLightburn]: () => handelingen.zoom('selectie'),
-			[TOETSEN.zoomIn]: () => canvasBediening?.stap(1.25),
-			[TOETSEN.zoomUit]: () => canvasBediening?.stap(1 / 1.25)
+		const run: Record<string, () => void> = {
+			[KEYS.undo]: handlers.undo,
+			[KEYS.redo]: handlers.redo,
+			[KEYS.cut]: handlers.cut,
+			[KEYS.copy]: handlers.copy,
+			[KEYS.paste]: () => handlers.paste(),
+			[KEYS.duplicate]: handlers.duplicate,
+			[KEYS.delete]: handlers.remove,
+			[KEYS.selectAll]: handlers.selectAll,
+			[KEYS.group]: () => handlers.arrange('group'),
+			[KEYS.ungroup]: () => handlers.arrange('ungroup'),
+			[KEYS.ungroupAlt]: () => handlers.arrange('ungroup'),
+			[KEYS.mirrorH]: () => handlers.arrange('mirror-h'),
+			[KEYS.mirrorV]: () => handlers.arrange('mirror-v'),
+			[KEYS.rotateLeft]: () => handlers.rotate(-90),
+			[KEYS.rotateRight]: () => handlers.rotate(90),
+			[KEYS.zoomHundred]: () => handlers.zoom('hundred'),
+			[KEYS.zoomSelection]: () => handlers.zoom('selection'),
+			[KEYS.zoomAll]: () => handlers.zoom('all'),
+			[KEYS.zoomBed]: () => handlers.zoom('bed'),
+			[KEYS.zoomAllOld]: () => handlers.zoom('all'),
+			[KEYS.zoomSelectionOld]: () => handlers.zoom('selection'),
+			[KEYS.zoomSelectionLightburn]: () => handlers.zoom('selection'),
+			[KEYS.zoomIn]: () => canvasControl?.step(1.25),
+			[KEYS.zoomOut]: () => canvasControl?.step(1 / 1.25)
 		};
-		const actie = doen[combo];
-		if (actie) {
+		const action = run[combo];
+		if (action) {
 			event.preventDefault();
-			actie();
+			action();
 			return;
 		}
 
-		// Pijltjes verplaatsen 0,1 mm; met shift 1 mm (toegankelijkheidseis).
+		// The arrows move 0.1 mm; with shift 1 mm (an accessibility requirement).
 		const step = event.shiftKey ? 1 : 0.1;
 		const moves: Record<string, [number, number]> = {
 			ArrowLeft: [-step, 0],
@@ -940,10 +939,10 @@
 	}
 </script>
 
-<svelte:window bind:innerWidth={breedte} onkeydown={sneltoets} />
+<svelte:window bind:innerWidth={width} onkeydown={sneltoets} />
 
 {#if telefoon}
-	<!-- De telefoon is een eigen app: monitor en noodrem. Zie DESIGN-SYSTEM v2,
+	<!-- The phone is an app of its own: monitor and emergency stop. See DESIGN-SYSTEM v2,
 	     "Drie apparaten, drie apps". -->
 	<PhoneView
 		{device}
@@ -951,10 +950,10 @@
 		job={status.activeJob}
 		{control}
 		{camera}
-		{meldingen}
-		{bewaker}
+		{notifications}
+		{watchdog}
 		connected={status.connected}
-		position={telefoonPositie}
+		position={phonePosition}
 		{design}
 		sheet={sheets.active
 			? {
@@ -965,20 +964,20 @@
 			: null}
 	/>
 {:else}
-<MeldingAlarm {bewaker} />
+<AlarmCard watchdog={watchdog} />
 <TopBar
 	{device}
 	state={machine}
 	canStart={(control.capabilities?.actions.start ?? false) &&
 		!control.needsToken &&
-		!werkOnderweg}
+		!workUnderWay}
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
-	stopArmed={werkOnderweg}
+	stopArmed={workUnderWay}
 	canEdit={canEdit && design.preview === null}
-	{smal}
+	{narrow}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
 	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
-	paused={jobfase === 'gepauzeerd'}
+	paused={phase === 'paused'}
 	onPause={() => control.pause()}
 	onResume={() => control.resume()}
 	onStart={requestStart}
@@ -987,15 +986,15 @@
 	onOpenProject={openProject}
 	onNewProject={newProject}
 	onSaved={() => design.load()}
-	material={velMateriaal}
+	material={sheetMaterial}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
-	onOpenMaterial={() => (materiaalOpen = true)}
+	onOpenMaterial={() => (materialOpen = true)}
 	canFrame={(design.elements?.length ?? 0) > 0 &&
 		(control.capabilities?.motion?.move ?? false) &&
 		!control.needsToken}
 	onFrame={() => {
-		// Geen dialoog: dit is een controlebeweging, geen onomkeerbare stap.
-		// Via de controller, zodat een klagende machine in beeld komt.
+		// No dialog: this is a check movement, not an irreversible step. Through the
+		// controller, so that a complaining machine gets on screen.
 		control.frame();
 	}}
 	onToggleTheme={toggleTheme}
@@ -1004,7 +1003,7 @@
 <div class="main">
 	<ToolRail
 		compact={tablet}
-		bestanden={smal}
+		files={narrow}
 		{projectInRail}
 		bind:tool
 		{canEdit}
@@ -1019,32 +1018,32 @@
 		onNewProject={newProject}
 		onSaved={() => design.load()}
 	/>
-	<!-- Vellen boven het canvas: elk vel is een eigen document, dus dit is
-	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->
+	<!-- Sheets above the canvas: every sheet is a document of its own, so this is also
+	     the place where you see which piece of material you are working on. -->
 	<div class="stage">
-		<!-- Alles tussen de bovenbalk en het canvas meet zichzelf op.
-		     De alarmkaart hangt onder de bovenbalk en dekte sinds de vorige ronde de
-		     actiebalk en de vellenbalk af — precies de twee dingen die je nodig hebt
-		     terwijl er een melding staat. Gemeten met een USB-fout: de kaart lag over
-		     de uitlijnknoppen en over de plus van de vellenbalk, en Playwright kon er
-		     niet doorheen klikken. Dezelfde aanpak als `--palet-hoogte` onder het
-		     canvas: opmeten, niet uitrekenen. -->
-		<div class="bovenrand" bind:clientHeight={bovenrandHoogte}>
-		<!-- Uitlijnen, groeperen, spiegelen en de geschiedenis: werkwoorden op de
-		     selectie, dus tegen het bed aan en niet in het eigenschappenpaneel.
-		     Zie DESIGN-SYSTEM v4, "Waar hoort een handeling". -->
-		<Actiebalk
-			geschiedenis={geschiedenisActies(actieContext, handelingen)}
-			uitlijnen={uitlijnActies(actieContext, handelingen)}
-			schikken={schikActies(actieContext, handelingen)}
-			aantal={actieContext.aantal}
-			onMeer={(event) => {
-				const doos = (event.currentTarget as HTMLElement).getBoundingClientRect();
-				menuPunt = null;
+		<!-- Everything between the top bar and the canvas measures itself.
+		     The alarm card hangs below the top bar and, since the previous round, covered
+		     the action bar and the sheet bar — precisely the two things you need while a
+		     message is up. Measured with a USB failure: the card lay across the alignment
+		     buttons and across the sheet bar's plus, and Playwright could not click
+		     through it. The same approach as `--palette-height` below the canvas: measure,
+		     do not calculate. -->
+		<div class="bovenrand" bind:clientHeight={topEdgeHeight}>
+		<!-- Align, group, mirror and the history: verbs on the selection, so against the
+		     bed and not in the properties panel. See DESIGN-SYSTEM v4, "Where does an
+		     action belong". -->
+		<ActionBar
+			history={historyActions(actionContext, handlers)}
+			align={alignActions(actionContext, handlers)}
+			arrange={arrangeActions(actionContext, handlers)}
+			count={actionContext.count}
+			onMore={(event: MouseEvent) => {
+				const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+				menuPoint = null;
 				menu = {
-					lijst: objectMenu(actieContext, handelingen),
-					x: doos.left,
-					y: doos.bottom + 4
+					list: objectMenu(actionContext, handlers),
+					x: box.left,
+					y: box.bottom + 4
 				};
 			}}
 		/>
@@ -1052,8 +1051,8 @@
 			{sheets}
 			{library}
 			{canEdit}
-			elementen={design.elements?.length ?? 0}
-			onEditMaterial={() => (materiaalOpen = true)}
+			elements={design.elements?.length ?? 0}
+			onEditMaterial={() => (materialOpen = true)}
 			onSwitched={async () => {
 				design.select(null);
 				await design.load();
@@ -1061,10 +1060,10 @@
 		/>
 		</div>
 		<Canvas
-			onPointerMm={(punt) => (muisMm = punt)}
+			onPointerMm={(point) => (pointerMm = point)}
 			onContextObject={openObjectMenu}
 			onContextCanvas={openCanvasMenu}
-			bind:bediening={canvasBediening}
+			bind:control={canvasControl}
 			{device}
 			{design}
 			{edits}
@@ -1106,33 +1105,33 @@
 				await loadImageState();
 			}}
 		/>
-		{#if wauw}
-			<!-- Eén keer, bij het starten: daar gebeurt het ook echt. -->
+		{#if wow}
+			<!-- Once, on starting: that is when it actually happens. -->
 			<JobStart label={status.activeJob?.label ?? null} />
 		{/if}
 	</div>
 
 	{#if tablet}
-	<!-- Op een tablet is 280 van 1024 pixels een kwart van je werkblad. Het
-	     paneel mag weg als je aan het tekenen bent; de machineknoppen staan
-	     in de bovenbalk, dus je raakt de laser nooit kwijt. -->
+	<!-- On a tablet, 280 of 1024 pixels is a quarter of your work surface. The panel
+	     may go while you are drawing; the machine buttons are in the top bar, so you
+	     never lose the laser. -->
 	<button
-		class="paneelgreep"
-		aria-expanded={paneelOpen}
-		onclick={() => (paneelOpen = !paneelOpen)}
+		class="panelgrip"
+		aria-expanded={panelOpen}
+		onclick={() => (panelOpen = !panelOpen)}
 	>
-		<!-- De greep is de pil, niet de kolom. De knop blijft 44px breed omdat een
-		     duim dat nodig heeft, maar hij is doorzichtig: ingeklapt bleef er
-		     anders een blanco strook van 44px langs de rand staan (gat B6), en
-		     dat leest als een renderfout in plaats van als iets om aan te duwen. -->
-		<span class="pil" aria-hidden="true">{paneelOpen ? '›' : '‹'}</span>
-		<span class="vw">Paneel {paneelOpen ? 'inklappen' : 'uitklappen'}</span>
+		<!-- The grip is the pill, not the column. The button stays 44px wide because a
+		     thumb needs that, but it is transparent: collapsed, a blank 44px strip
+		     otherwise stayed along the edge (gap B6), and that reads as a render fault
+		     rather than as something to push at. -->
+		<span class="pill" aria-hidden="true">{panelOpen ? '›' : '‹'}</span>
+		<span class="vw">{panelOpen ? t('panel.collapse') : t('panel.expand')}</span>
 	</button>
 {/if}
-<aside class="panel" class:weg={tablet && !paneelOpen} aria-label="Eigenschappen">
-		<!-- Het belletje staat wél in dezelfde rij maar buiten de tablist: een
-		     tablist mag volgens ARIA alleen tabs bevatten, en axe rekende het
-		     belletje anders als ontbrekend kind aan (aria-required-children). -->
+<aside class="panel" class:gone={tablet && !panelOpen} aria-label={t('panel.aria')}>
+		<!-- The bell is in the same row but outside the tablist: according to ARIA a
+		     tablist may only contain tabs, and axe otherwise counted the bell as a
+		     missing child (aria-required-children). -->
 		<div class="tabsrij">
 		<div class="tabs" role="tablist">
 			<button
@@ -1141,7 +1140,7 @@
 				aria-selected={tab === 'design'}
 				onclick={() => selectTab('design')}
 			>
-				Bewerken
+				{t('tabs.edit')}
 				{#if tab === 'design'}
 					<svg aria-hidden="true"
 						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
@@ -1154,7 +1153,7 @@
 				aria-selected={tab === 'layers'}
 				onclick={() => selectTab('layers')}
 			>
-				Lagen
+				{t('tabs.layers')}
 				{#if tab === 'layers'}
 					<svg aria-hidden="true"
 						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
@@ -1162,7 +1161,7 @@
 				{/if}
 			</button>
 			<button class="tab" role="tab" aria-selected={tab === 'job'} onclick={() => selectTab('job')}>
-				Job
+				{t('tabs.job')}
 				{#if tab === 'job'}
 					<svg aria-hidden="true"
 						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
@@ -1170,23 +1169,23 @@
 				{/if}
 			</button>
 		</div>
-			<!-- De vaste plek voor meldingen. Naast de tabs en niet zwevend boven het
-			     canvas: dit paneel gaat over déze machine, en dat is precies waar een
-			     melding over gaat. Het belletje draagt zijn eigen toestand — uit of
-			     geblokkeerd is iets wat je moet kunnen zien zonder te klikken. -->
+			<!-- The fixed place for notifications. Beside the tabs and not floating above
+			     the canvas: this panel is about *this* machine, and that is exactly what a
+			     notification is about. The bell carries its own state — off or blocked is
+			     something you have to be able to see without clicking. -->
 			<button
-				class="bel"
-				class:stil={!meldingen.actief}
+				class="bell"
+				class:quiet={!notifications.active}
 				aria-haspopup="dialog"
-				title={meldingen.actief ? 'Meldingen staan aan' : 'Meldingen staan uit'}
-				aria-label={meldingen.actief ? 'Meldingen — staan aan' : 'Meldingen — staan uit'}
-				onclick={() => (meldingenOpen = true)}
+				title={notifications.active ? t('tabs.notifications.on') : t('tabs.notifications.off')}
+				aria-label={notifications.active ? t('tabs.notifications.onAria') : t('tabs.notifications.offAria')}
+				onclick={() => (notificationsOpen = true)}
 			>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
 					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
 					<path d="M13.7 21a2 2 0 0 1-3.4 0" />
-					{#if !meldingen.actief}
+					{#if !notifications.active}
 						<line x1="3" y1="3" x2="21" y2="21" />
 					{/if}
 				</svg>
@@ -1209,9 +1208,9 @@
 					onSetPosition={setPosition}
 					onSetSize={setSize}
 					onArrange={arrange}
-					cornerNote={hoekMelding}
+					cornerNote={cornerNotice}
 					onPrune={opruimen}
-					tidyNote={indeelMelding}
+					tidyNote={layoutNotice}
 					image={imageState as never}
 					onImageSet={(name, enabled, values) =>
 						setImage({ adjustment: name, enabled, values })}
@@ -1253,19 +1252,19 @@
 	</aside>
 </div>
 
-<!-- Camerabediening bij het canvas, niet in het rechterpaneel: je kijkt naar
-     het bed terwijl je hem aanzet. -->
+<!-- Camera controls beside the canvas, not in the right-hand panel: you are looking at
+     the bed while you switch it on. -->
 {#if camera.state.available}
 	<div class="camstrip">
 		<button
 			class="cam"
 			aria-pressed={camera.shown && camera.state.running}
 			disabled={camera.busy || !canEdit}
-			title={canEdit ? 'Camerabeeld van het bed' : 'Vereist een token'}
+			title={canEdit ? t('camera.title') : t('reason.needsToken')}
 			onclick={() => (camera.state.running && camera.shown ? camera.stop() : camera.start())}
 		>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h4l2-2h6l2 2h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
-			Camera
+			{t('camera.button')}
 		</button>
 		{#if camera.shown && camera.state.running}
 			<input
@@ -1273,43 +1272,43 @@
 				min="0.1"
 				max="1"
 				step="0.05"
-				aria-label="Doorzichtigheid camerabeeld"
+				aria-label={t('camera.opacity')}
 				bind:value={camera.opacity}
 			/>
 			<button class="cam" onclick={() => (calibrateOpen = true)}>
-				{camera.state.calibrated ? 'Opnieuw ijken' : 'IJken'}
+				{camera.state.calibrated ? t('camera.recalibrate') : t('camera.calibrate')}
 			</button>
 		{/if}
 	</div>
 	{#if camera.error}
-		<!-- Een lange melding hoort niet in een pilvormige balk: die wordt dan een
-		     blob. Eigen kader, leesbare regelbreedte, en zelf weg te klikken. -->
+		<!-- A long message does not belong in a pill-shaped bar: it becomes a blob then.
+		     Its own frame, a readable line width, and dismissible. -->
 		<div class="camerror" role="alert">
 			<p class="wrap">{camera.error}</p>
-			<button aria-label="Melding sluiten" onclick={() => (camera.error = null)}>×</button>
+			<button aria-label={t('common.dismiss')} onclick={() => (camera.error = null)}>×</button>
 		</div>
 	{/if}
 {/if}
 
 <StatusBar
-	pointerMm={muisMm}
+	pointerMm={pointerMm}
 	{device}
 	machineState={machine}
 	job={status.activeJob}
 	connected={status.connected}
 	{control}
-	acties={!tablet}
+	actions={!tablet}
 />
 {/if}
 
-<!-- Bibliotheken en gereedschappen als eigen venster: in 280px kun je niet
-     zoeken en vergelijken. Zie DESIGN-SYSTEM.md. -->
+<!-- Libraries and tools as dialogs of their own: in 280px you cannot search and
+     compare. See DESIGN-SYSTEM.md. -->
 <TextDialog
 	bind:open={textOpen}
 	initial={editingText ? (design.elements.find((e) => e.id === editingText)?.text ?? null) : null}
 	onConfirm={async (options) => {
 		if (editingText) {
-			// Tekst is een pad, maar de engine bewaart de bron en rendert opnieuw.
+			// Text is a path, but the engine keeps the source and re-renders.
 			if ((await edits.updateText(editingText, options)).ok) await design.load();
 			editingText = null;
 		} else if (textAt) {
@@ -1319,24 +1318,24 @@
 	}}
 />
 
-<!-- Werk van een vorige sessie: aanbieden, niet opdringen. -->
+<!-- Work from a previous session: offer it, do not push it. -->
 <Dialog
-	title="Werk van een vorige sessie"
+	title={t('recovery.title')}
 	open={recovery?.exists === true}
 	width="420px"
 >
 	<p class="ask">
-		Er staat een automatisch bewaard ontwerp van {recovery?.when}. Terugzetten?
+		{t('recovery.body', { when: i18n.dateTime(recovery?.when) })}
 	</p>
 	<div class="ask-actions">
 		<button
-			class="btn weg"
+			class="btn gone"
 			onclick={async () => {
 				await fetch('/api/design/autosave', { method: 'DELETE', headers: authHeaders() });
 				recovery = null;
 			}}
-		>Weggooien</button>
-		<button class="btn" onclick={() => (recovery = null)}>Later</button>
+		>{t('recovery.discard')}</button>
+		<button class="btn" onclick={() => (recovery = null)}>{t('recovery.later')}</button>
 		<button
 			class="btn primary"
 			onclick={async () => {
@@ -1344,110 +1343,102 @@
 				await post('/api/design/autosave/restore', {});
 				await design.load();
 			}}
-		>Terugzetten</button>
+		>{t('recovery.restore')}</button>
 	</div>
 </Dialog>
 
-<!-- Openen, een project openen en opnieuw beginnen gooien alle drie werk weg:
-     eerst vragen, met dezelfde woorden en dezelfde uitweg. -->
+<!-- Opening, opening a project and starting over all three throw work away: ask
+     first, with the same words and the same way out. -->
 <Dialog
-	title={pending?.soort === 'nieuw'
-		? 'Opnieuw beginnen'
+	title={pending?.kind === 'fresh'
+		? t('replace.title.new')
 		: design.dirty
-			? 'Niet-opgeslagen wijzigingen'
-			: pending?.soort === 'project'
-				? 'Er ligt al werk in dit project'
-				: 'Er ligt al werk op dit vel'}
+			? t('replace.title.unsaved')
+			: pending?.kind === 'project'
+				? t('replace.title.project')
+				: t('replace.title.sheet')}
 	open={pending !== null}
 	width="510px"
 >
-	<!-- Twee aanleidingen, twee zinnen. "Gewijzigd sinds de laatste keer
-	     opslaan" boven een net geopende tekening klopt niet, en een vraag die
-	     iets beweert wat je zelf kunt tegenspreken, leer je wegklikken. -->
+	<!-- Two occasions, two sentences. "Changed since it was last saved" above a
+	     drawing you have just opened is untrue, and a question that claims something
+	     you can contradict yourself is one you learn to click away. -->
 	<p class="ask">
 		{#if design.dirty}
-			Dit ontwerp is gewijzigd sinds de laatste keer opslaan.
-		{:else if pending?.soort === 'bestand'}
-			Op dit vel staat werk:
-			{design.elements.length === 1 ? 'die ene vorm' : `die ${design.elements.length} vormen`}
-			verdwijnen van het bed.
+			{t('replace.changed')}
+		{:else if pending?.kind === 'bestand'}
+			{t('replace.workOnSheet', { n: design.elements.length })}
 		{:else}
-			Er staat werk in dit project.
+			{t('replace.workInProject')}
 		{/if}
-		{#if pending?.soort === 'bestand'}
-			Openen vervangt wat er nu op dit vel staat.
-		{:else if pending?.soort === 'project'}
-			Openen vervangt het hele project: het ontwerp,
-			{sheets.sheets.length === 1 ? 'het vel' : `alle ${sheets.sheets.length} vellen`} en het
-			materiaal komen uit het bestand.
+		{#if pending?.kind === 'bestand'}
+			{t('replace.opensSheet')}
+		{:else if pending?.kind === 'project'}
+			{t('replace.opensProject', { n: sheets.sheets.length })}
 		{:else if sheets.sheets.length === 1}
-			Opnieuw beginnen leegt het bed. Je materialen en instellingen blijven staan.
+			{t('replace.emptiesBed')}
 		{:else}
-			Opnieuw beginnen leegt het bed en verwijdert alle {sheets.sheets.length} vellen. Je
-			materialen en instellingen blijven staan.
+			{t('replace.emptiesSheets', { n: sheets.sheets.length })}
 		{/if}
 	</p>
-	{#if herstelbaar}
-		<!-- Wat er hoe dan ook terug te halen is, hoort in de vraag te staan;
-		     het verandert wat je kiest. Alleen dít vel, want zo ver reikt het
-		     herstelbestand — die grens noemen we erbij. -->
-		<p class="ask nuance">
-			Van dit vel blijft een automatisch bewaarde versie van {herstelbaar} staan; die wordt bij
-			de volgende start aangeboden. De andere vellen niet.
-		</p>
+	{#if recoverable}
+		<!-- What can be recovered regardless belongs in the question; it changes what
+		     you choose. Only *this* sheet, because that is as far as the recovery file
+		     reaches — and we name that boundary. -->
+		<p class="ask nuance">{t('replace.recoverable', { when: recoverable })}</p>
 	{/if}
 	<div class="ask-actions">
-		<button class="btn" onclick={() => (pending = null)}>Annuleren</button>
+		<button class="btn" onclick={() => (pending = null)}>{t('common.cancel')}</button>
 		<button
 			class="btn"
 			onclick={() => {
-				const actie = pending;
+				const action = pending;
 				pending = null;
-				if (actie) voerUit(actie);
+				if (action) runIt(action);
 			}}
-		>Niet opslaan</button>
-		<!-- Annuleren / Niet opslaan / Opslaan: het drieluik dat elk besturings-
-		     systeem bij deze vraag gebruikt. "Zonder opslaan openen" stond er
-		     eerst, en dan passen de drie knoppen niet op één regel — gemeten op
-		     1024: de primaire viel op een eigen regel. De werkwoorden staan al
-		     in de titel en de zin erboven. -->
+		>{t('replace.dontSave')}</button>
+		<!-- Cancel / Do not save / Save: the triptych every operating system uses for
+		     this question. "Open without saving" was there first, and then the three
+		     buttons do not fit on one line — measured at 1024: the primary one dropped
+		     to a line of its own. The verbs are already in the title and the sentence
+		     above. -->
 		<button class="btn primary" onclick={saveThenOpen}
-			>{pending?.soort === 'nieuw' ? 'Opslaan en beginnen' : 'Opslaan en openen'}</button
+			>{pending?.kind === 'fresh' ? t('replace.saveAndStart') : t('replace.saveAndOpen')}</button
 		>
 	</div>
 </Dialog>
 
-<!-- De aanleidingkaart zweeft en blokkeert niet: er is net een job gestart, en
-     die mag niet achter een modaal venster verdwijnen. -->
-{#if !telefoon && vraagOpen && meldingen.vragen}
+<!-- The prompt card floats and does not block: a job has just started, and that
+     must not disappear behind a modal window. -->
+{#if !telefoon && promptOpen && notifications.shouldAsk}
 	<div class="vraagkaart">
-		<MeldingKaart {meldingen} variant="aanleiding" onKlaar={() => (vraagOpen = false)} />
+		<NotificationCard {notifications} variant="prompt" onDone={() => (promptOpen = false)} />
 	</div>
 {/if}
 
-<Dialog title="Meldingen" bind:open={meldingenOpen} width="460px">
-	<MeldingKaart {meldingen} />
+<Dialog title={t('notifications.title')} bind:open={notificationsOpen} width="460px">
+	<NotificationCard {notifications} />
 </Dialog>
 
 {#if menu}
-	<Menu menu={menu.lijst} x={menu.x} y={menu.y} onSluit={() => (menu = null)} />
+	<Menu menu={menu.list} x={menu.x} y={menu.y} onClose={() => (menu = null)} />
 {/if}
 
-<Hoeken
-	bind:open={hoekenOpen}
-	aantal={design.selectedIds.length}
-	bezig={edits.busy}
-	melding={hoekMelding}
-	onToepassen={async (stijl, maat) => {
-		await hoeken(stijl, maat);
-		if (!hoekMelding) hoekenOpen = false;
+<CornersDialog
+	bind:open={cornersOpen}
+	count={design.selectedIds.length}
+	busy={edits.busy}
+	notice={cornerNotice}
+	onToepassen={async (stijl, size) => {
+		await corners(stijl, size);
+		if (!cornerNotice) cornersOpen = false;
 	}}
 />
 
 <Offset
 	bind:open={offsetOpen}
-	aantal={design.selectedIds.length}
-	bezig={edits.busy}
+	count={design.selectedIds.length}
+	busy={edits.busy}
 	onToepassen={async (afstand) => {
 		offsetOpen = false;
 		if ((await edits.offset(design.selectedIds, afstand)).ok) await design.load();
@@ -1471,77 +1462,75 @@
 		});
 		if (!response.ok) {
 			const detail = await response.json().catch(() => null);
-			return { error: detail?.detail ?? 'Dat lukte niet.' };
+			return { error: detail?.detail ?? t('notice.failed') };
 		}
 		const result = await response.json().catch(() => null);
 		await Promise.all([design.load(), sheets.load()]);
-		// Een vel dat er stilzwijgend bijkomt is een verrassing; zeg het.
+		// A sheet that appears silently is a surprise; say so.
 		const used = result?.sheets ?? 1;
 		return {
 			notice:
 				used > 1
-					? `Dit past niet op één vel: het staat nu op ${used} vellen. ` +
-						`Kijk in de vellenbalk boven het canvas.`
+					? t('notice.sheets.spread', { n: used })
 					: null
 		};
 	}}
 />
 
-<!-- Materiaal van het vel: klein venster, twee keuzes. In de bovenbalk kan het
-     niet — die scrollt horizontaal en knipt elk uitklapmenu af — en op een
-     tablet is een venster bovendien met een vinger te bedienen. -->
-<Dialog title="Materiaal van dit vel" bind:open={materiaalOpen} width="440px">
+<!-- The sheet's material: a small dialog, two choices. It cannot be in the top bar —
+     that scrolls horizontally and clips every dropdown — and on a tablet a dialog can
+     be operated with a finger as well. -->
+<Dialog title={t('sheetMaterial.title')} bind:open={materialOpen} width="440px">
 	{#if sheets.active}
 		<SheetMaterial
 			{sheets}
 			{library}
 			sheet={sheets.active}
-			onDone={() => (materiaalOpen = false)}
+			onDone={() => (materialOpen = false)}
 		/>
 	{/if}
 </Dialog>
 
-<!-- Breder dan de 640px die hier stond. Sinds de bibliotheek twee panelen heeft
-     — materialen links, instellingen rechts — is 640 precies te smal: de
-     instelling zelf hield 380px over en dan wringen dikte, waarden, bron en de
-     knop op één regel. -->
-<Dialog title="Materiaalbibliotheek" bind:open={libraryOpen} width="1120px">
+<!-- Wider than the 640px that used to be here. Since the library has two panels —
+     materials on the left, settings on the right — 640 is just too narrow: the setting
+     itself kept 380px and then thickness, values, source and the button squeeze onto one
+     line. -->
+<Dialog title={t('library.title')} bind:open={libraryOpen} width="1120px">
 	<MaterialLibrary
 		{library}
 		operations={design.operations}
 		sheetMaterialId={sheets.active?.material_id ?? null}
-		sheetMaterialName={velMateriaal}
+		sheetMaterialName={sheetMaterial}
 		{canEdit}
 		onApplied={() => design.load()}
 		token={token()}
 		onMakeGrid={(id) => {
-			// Vanuit het materiaal naar het raster: dat is waar de vraag ontstaat.
+			// From the material to the grid: that is where the question arises.
 			libraryOpen = false;
-			gridMateriaal = id;
+			gridMaterial = id;
 			gridOpen = true;
 		}}
 	/>
 </Dialog>
 
-<Dialog title="Testraster" bind:open={gridOpen} width="860px">
+<Dialog title={t('testgrid.title')} bind:open={gridOpen} width="860px">
 	<TestGrid
 		{library}
 		{canEdit}
-		materialId={gridMateriaal ?? sheets.active?.material_id ?? null}
+		materialId={gridMaterial ?? sheets.active?.material_id ?? null}
 		thicknessMm={sheets.active?.thickness_mm ?? null}
 		onGenerated={(id) => {
-			// Vers gebrand raster: stap 3 hoort er meteen op te staan in plaats van
-			// op "kies een raster…" te blijven hangen.
-			versRaster = id;
+			// A freshly burned grid: step 3 should be on it straight away instead of
+			// hanging on "choose a grid…".
+			freshGrid = id;
 			design.load();
 		}}
 	/>
-	<TestGridResult {library} {canEdit} focusGrid={versRaster} />
+	<TestGridResult {library} {canEdit} focusGrid={freshGrid} />
 </Dialog>
 
 <style>
-	/* De twee balken boven het canvas als één blok, zodat het zichzelf kan
-	   opmeten. */
+	/* The two bars above the canvas as one block, so that it can measure itself. */
 	.bovenrand {
 		flex: none;
 		display: flex;
@@ -1552,16 +1541,16 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		/* Het startmoment legt zich over het bed; dat vraagt een anker. */
+		/* The starting moment lays itself over the bed; that needs an anchor. */
 		position: relative;
 	}
 	.camstrip {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));
-		/* --palet-hoogte komt van de kleurenstrook onder het canvas (B2), die
-		   zichzelf opmeet. Zonder die term lag de camerapil over de eerste
-		   kleurvakjes heen. Nul zolang er geen strook is. */
-		bottom: calc(var(--statusbar-height) + var(--space-3) + var(--palet-hoogte, 0px));
+		/* --palette-height comes from the colour strip under the canvas (B2), which
+		   measures itself. Without that term the camera pill lay across the first colour
+		   swatches. Zero as long as there is no strip. */
+		bottom: calc(var(--statusbar-height) + var(--space-3) + var(--palette-height, 0px));
 		z-index: 5;
 		display: flex;
 		align-items: center;
@@ -1573,16 +1562,16 @@
 		backdrop-filter: blur(6px);
 		box-shadow: var(--shadow-float);
 	}
-	/* Op tablet is er onderin geen ruimte náást de zoombalk: de camerapil lag er
-	   op 768 half overheen. Hij gaat er dan boven staan. */
+	/* On a tablet there is no room at the bottom *beside* the zoom bar: at 768 the
+	   camera pill lay half across it. It goes above it then. */
 	@media (max-width: 1199px) {
 		.camstrip {
 			left: calc(var(--rail-width) + var(--space-3));
-			bottom: calc(var(--statusbar-height) + var(--space-3) + 56px + var(--palet-hoogte, 0px));
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 56px + var(--palette-height, 0px));
 		}
 		.camerror {
 			left: calc(var(--rail-width) + var(--space-3));
-			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px + var(--palet-hoogte, 0px));
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px + var(--palette-height, 0px));
 		}
 	}
 	.cam {
@@ -1601,7 +1590,7 @@
 	.camerror {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));
-		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px + var(--palet-hoogte, 0px));
+		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px + var(--palette-height, 0px));
 		z-index: 5;
 		display: flex;
 		align-items: flex-start;
@@ -1619,8 +1608,8 @@
 		line-height: 1.5;
 		color: var(--text-1);
 	}
-	/* De melding bevat een commando op een eigen regel; dat mag niet als één
-	   lange lap tekst aan elkaar geplakt worden. */
+	/* The message contains a command on a line of its own; that must not be glued
+	   together as one long slab of text. */
 	.camerror .wrap { white-space: pre-wrap; }
 	.camerror button {
 		flex: none;
@@ -1633,11 +1622,11 @@
 	}
 	.camerror button:hover { background: var(--surface-2); color: var(--text-1); }
 
-	/* Rechtsonder, maar náást het paneel en niet erover: precies daar staat de
-	   spoolerkaart met de voortgang van de job die net begon, en die afdekken met
-	   de vraag "zal ik het melden als hij klaar is" is het verkeerde van het
-	   verkeerde. Dezelfde breedtes als `.panel` hieronder — twee regels die
-	   samen horen, dus ze staan naast elkaar. */
+	/* Bottom right, but *beside* the panel and not over it: that is exactly where the
+	   spooler card with the progress of the job that has just started sits, and covering
+	   that with the question "shall I tell you when it is done" is the wrong of the
+	   wrong. The same widths as `.panel` below — two rules that belong together, so they
+	   state beside each other. */
 	.vraagkaart {
 		position: fixed;
 		right: calc(280px + var(--space-4));
@@ -1647,7 +1636,7 @@
 	}
 	@media (max-width: 1199px), (pointer: coarse) {
 		.vraagkaart {
-			/* Volgt de paneelbreedte hieronder; twee regels die samen horen. */
+			/* Follows the panel width below; two rules that belong together. */
 			right: calc(clamp(280px, 38vw, 324px) + var(--space-4));
 			width: min(360px, calc(100vw - clamp(300px, 38vw + 20px, 344px) - 2 * var(--space-4)));
 		}
@@ -1667,27 +1656,27 @@
 		flex-direction: column;
 		min-height: 0;
 	}
-	/* Op tablet en telefoon staat de tekst een stap groter (15px in plaats van
-	   13), maar het paneel bleef 280px — daarmee past er een vijfde minder op
-	   een regel dan op de desktop en breken laagnamen middenin een woord.
-	   280 × 15/13 ≈ 323: hetzelfde aantal tekens per regel als op de desktop.
+	/* On tablet and phone the text is one step larger (15px instead of 13), but the
+	   panel stayed 280px — which fits a fifth less on a line than on the desktop and
+	   breaks layer names in the middle of a word. 280 × 15/13 ≈ 323: the same number of
+	   characters per line as on the desktop.
 
-	   Vaste 324px liep op de kleinste tablet mis (gat B2): op 768 hield het
-	   canvas 316px over en was het paneel dus bréder dan het werk. Nu schaalt
-	   het paneel mee met het venster, met 324 als plafond zodat de tekstregel
-	   op 1024 en hoger onveranderd blijft. Gemeten op 768: paneel 292, canvas
-	   348 — het canvas wint, zoals het hoort. */
+	   A fixed 324px went wrong on the smallest tablet (gap B2): at 768 the canvas kept
+	   316px and the panel was therefore *wider* than the work. Now the panel scales with
+	   the window, with 324 as a ceiling so that the text line at 1024 and above stays
+	   unchanged. Measured at 768: panel 292, canvas 348 — the canvas wins, as it
+	   should. */
 	@media (max-width: 1199px), (pointer: coarse) {
 		.panel {
 			width: clamp(280px, 38vw, 324px);
 		}
 	}
-	.panel.weg { display: none; }
-	/* De greep zit tegen de rand van het canvas, waar je duim al is. Het
-	   raakdoel is de hele kolom (44px, duimmaat), maar wat je ziet is een pil in
-	   het midden: een volle kolom van 44px in paneelkleur was een blanco strook
-	   naast het canvas, en die zegt niets. */
-	.paneelgreep {
+	.panel.gone { display: none; }
+	/* The grip sits against the edge of the canvas, where your thumb already is. The
+	   touch target is the whole column (44px, thumb size), but what you see is a pill in
+	   the middle: a full 44px column in the panel colour was a blank strip beside the
+	   canvas, and that says nothing. */
+	.panelgrip {
 		align-self: stretch;
 		flex: none;
 		width: 44px;
@@ -1698,7 +1687,7 @@
 		color: var(--text-2);
 		font-size: var(--text-md);
 	}
-	.paneelgreep .pil {
+	.panelgrip .pill {
 		display: grid;
 		place-items: center;
 		width: 24px;
@@ -1710,9 +1699,9 @@
 		line-height: 1;
 		transition: background var(--transition), color var(--transition);
 	}
-	.paneelgreep:hover .pil { background: var(--surface-2); color: var(--text-1); }
-	.paneelgreep:focus-visible { outline: none; }
-	.paneelgreep:focus-visible .pil { outline: 2px solid var(--accent); outline-offset: 2px; }
+	.panelgrip:hover .pill { background: var(--surface-2); color: var(--text-1); }
+	.panelgrip:focus-visible { outline: none; }
+	.panelgrip:focus-visible .pill { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.vw {
 		position: absolute;
 		width: 1px;
@@ -1746,28 +1735,28 @@
 		width: calc(100% - var(--space-8));
 		height: 2px;
 	}
-	.bel {
+	.bell {
 		flex: none;
 		width: 36px;
 		display: grid;
 		place-items: center;
 		color: var(--text-2);
 	}
-	.bel svg {
+	.bell svg {
 		width: 17px;
 		height: 17px;
 	}
-	.bel:hover {
+	.bell:hover {
 		color: var(--text-1);
 		background: var(--surface-2);
 	}
-	/* Uit is een toestand, geen fout: het doorgestreepte belletje zegt het al.
-	   Geen rood, want er is niets stuk. */
-	.bel.stil {
+	/* Off is a state, not a fault: the struck-through bell already says so. No red,
+	   because nothing is broken. */
+	.bell.quiet {
 		color: var(--text-2);
 	}
 	:global(.ask) { margin: 0 0 var(--space-4); }
-	/* De nuance staat onder de hoofdzin en mag hem niet overstemmen. */
+	/* The nuance sits below the main sentence and must not drown it out. */
 	:global(.ask.nuance) {
 		font-size: var(--text-sm);
 		color: var(--text-2);
@@ -1786,14 +1775,13 @@
 		font-weight: 500;
 	}
 	:global(.ask-actions .btn:hover) { background: var(--surface-2); }
-	/* "Weggooien" verwijdert het automatisch bewaarde ontwerp definitief en stond
-	   op 8px van "Later". Dit venster verschijnt ongevraagd bij het openen —
-	   precies wanneer je nog niet kijkt — en met een handschoen aan raak je het
-	   midden van een doel niet. 24px ertussen, alleen op aanraakschermen; de
-	   muisindeling op de desktop blijft zoals hij was. Zie DESIGN-SYSTEM,
-	   "Touch als eersteklas input". */
+	/* "Discard" removes the automatically saved design for good and sat 8px from
+	   "Later". This dialog appears unasked on opening — precisely when you are not
+	   looking yet — and with a glove on you do not hit the middle of a target. 24px
+	   between them, on touch screens only; the mouse layout on the desktop stays as it
+	   was. See DESIGN-SYSTEM, "Touch as a first-class input". */
 	@media (max-width: 1199px), (pointer: coarse) {
-		:global(.ask-actions .btn.weg) { margin-right: var(--space-4); }
+		:global(.ask-actions .btn.gone) { margin-right: var(--space-4); }
 	}
 	:global(.ask-actions .btn.primary) {
 		background: var(--accent);
@@ -1806,8 +1794,8 @@
 		padding: var(--space-4);
 	}
 
-	/* Op tablet/telefoon is de app primair monitor + foto-invoer: het paneel
-	   klapt onder het canvas, de rail verdwijnt. */
+	/* On tablet/phone the app is primarily monitor + photo input: the panel folds below
+	   the canvas, the rail disappears. */
 	@media (max-width: 720px) {
 		.main {
 			flex-direction: column;

@@ -1,24 +1,24 @@
 """
-Meer passes mag geen extra lagen in het bestand betekenen.
+More passes must not mean extra layers in the file.
 
-Gevonden op de machine: een testbord van twee passes gaf "file invalid" op het
-display en de laser deed niets. De oorzaak zit niet in de passes zelf maar in de
-vorm van het bestand.
+Found on the machine: a test board with two passes gave "file invalid" on the
+display and the laser did nothing. The cause is not in the passes themselves but
+in the shape of the file.
 
-`blob` maakt van elke pass een eigen stuk cutcode **met een eigen settings-dict**
-(`core/cutplan.py:_blob_convert` kopieert de dict zodra `passes` en
-`implicit_passes` verschillen), en de Ruida-driver groepeert zijn RD-lagen op de
-identiteit van die dict (`ruida/rdjob.py:1434`). Elke pass werd dus een extra
-laag. Gemeten op de echte RD-stroom van een bord met vier vakjes:
+`blob` turns every pass into a piece of cutcode of its own **with a settings dict
+of its own** (`core/cutplan.py:_blob_convert` copies the dict as soon as `passes`
+and `implicit_passes` differ), and the Ruida driver groups its RD layers on the
+identity of that dict (`ruida/rdjob.py:1434`). So every pass became an extra
+layer. Measured on the real RD stream of a board with four squares:
 
-    één pass  : 16 cutobjecten, 4 RD-lagen  (max_layer_part 3)
-    twee passes: 32 cutobjecten, 8 RD-lagen (max_layer_part 7)
-    twee passes, settings gedeeld: 32 cutobjecten, 4 RD-lagen
+    one pass            : 16 cut objects, 4 RD layers  (max_layer_part 3)
+    two passes          : 32 cut objects, 8 RD layers  (max_layer_part 7)
+    two passes, shared  : 32 cut objects, 4 RD layers
 
-Een bord van zestien vakjes komt bij twee passes dus op 33 lagen, en dat neemt de
-controller niet meer aan. Wat hieronder getest wordt is de vorm van het plan die
-dat voorkomt: dezelfde bewerking meerdere keren in de planlijst, zodat `blob`
-per plek verse cutcode maakt en de settings-dict één object blijft.
+So a board of sixteen squares comes to 33 layers at two passes, and the
+controller no longer accepts that. What is tested below is the shape of the plan
+that prevents it: the same operation several times in the plan list, so that
+`blob` makes fresh cutcode per place and the settings dict stays one object.
 """
 
 import pytest
@@ -34,49 +34,49 @@ def client(kernel, tmp_path):
         yield c
 
 
-def schone_lei(kernel):
+def clean_slate(kernel):
     """
-    Zonder de lagen van een vorige sessie.
+    Without the layers of a previous session.
 
-    De engine zet de lagenlijst van de vorige sessie terug uit een gedeelde
-    `operations.cfg` (zie de upstream-lijst in CLAUDE.md), en die lagen kunnen
-    zelf passes dragen. Een test die lagen telt, moet met een lege lijst
-    beginnen.
+    The engine puts the previous session's layer list back from a shared
+    `operations.cfg` (see the upstream list in CLAUDE.md), and those layers can
+    carry passes themselves. A test that counts layers has to start with an empty
+    list.
     """
     for op in list(kernel.elements.ops()):
         op.remove_node()
 
 
-def twee_lagen(client, kernel, passes: int) -> list[str]:
-    """Twee snijlagen met elk een eigen vorm, allebei met dit aantal passes."""
-    schone_lei(kernel)
+def two_layers(client, kernel, passes: int) -> list[str]:
+    """Two cut layers, each with a shape of its own, both with this many passes."""
+    clean_slate(kernel)
     ids = []
     for x in (10, 60):
-        vorm = client.post(
+        shape = client.post(
             "/api/design/elements",
             json={"type": "rect", "x_mm": x, "y_mm": 10, "width_mm": 20, "height_mm": 20},
         ).json()["ids"][0]
-        laag = client.post(
+        layer = client.post(
             "/api/design/operations", json={"type": "cut", "speed": 10}
         ).json()
-        # Exclusief, niet erbij: een vorm die de engine ook nog in een eigen
-        # laag classificeert, brandt twee keer en dan telt dit niets meer.
+        # Exclusively, not on top: a shape the engine also classifies into a
+        # layer of its own burns twice, and then none of this counts any more.
         client.post(
             "/api/design/single-layer",
-            json={"ids": [vorm], "operation_id": laag["id"]},
+            json={"ids": [shape], "operation_id": layer["id"]},
         )
-        client.patch(f"/api/design/operations/{laag['id']}", json={"passes": passes})
-        ids.append(laag["id"])
+        client.patch(f"/api/design/operations/{layer['id']}", json={"passes": passes})
+        ids.append(layer["id"])
     return ids
 
 
-def lagen_en_branden(kernel, uitvouwen=True) -> tuple[int, int]:
+def layers_and_burns(kernel, unfold=True) -> tuple[int, int]:
     """
-    (aantal RD-lagen, aantal keer branden), langs dezelfde weg als een echte job.
+    (number of RD layers, number of burns), along the same road as a real job.
 
-    Het aantal RD-lagen is het aantal verschillende settings-dicts van de
-    cutobjecten: dát is waar `ruida/rdjob.py:1434` zijn lagen op groepeert.
-    Spoolen doen we niet — dat zou de job starten.
+    The number of RD layers is the number of different settings dicts of the cut
+    objects: that is what `ruida/rdjob.py:1434` groups its layers on. We do not
+    spool — that would start the job.
     """
     from meerk40t.core.node.util_console import ConsoleOperation
 
@@ -85,63 +85,63 @@ def lagen_en_branden(kernel, uitvouwen=True) -> tuple[int, int]:
     runner = CommandRunner(kernel)
     plan = kernel.planner.get_or_make_plan("0")
     runner.run(PLAN_COPY)
-    if uitvouwen and runner._multi_pass_layers():
+    if unfold and runner._multi_pass_layers():
         plan.plan[:] = runner._with_passes(list(plan.plan), ConsoleOperation)
     runner.run(PLAN_BLOB)
-    if uitvouwen:
+    if unfold:
         plan.plan[:] = runner._share_pass_settings(list(plan.plan))
 
-    objecten = [
+    objects = [
         item
-        for stap in plan.plan
-        if hasattr(stap, "__iter__")
-        for item in stap
+        for step in plan.plan
+        if hasattr(step, "__iter__")
+        for item in step
         if isinstance(getattr(item, "settings", None), dict)
     ]
-    dicts = {id(item.settings) for item in objecten}
-    return len(dicts), len(objecten)
+    dicts = {id(item.settings) for item in objects}
+    return len(dicts), len(objects)
 
 
 def test_two_passes_keep_one_layer_per_operation(client, kernel):
-    twee_lagen(client, kernel, 2)
+    two_layers(client, kernel, 2)
 
-    lagen, branden = lagen_en_branden(kernel)
+    layers, burns = layers_and_burns(kernel)
 
-    assert lagen == 2, "twee bewerkingen horen twee RD-lagen te geven"
-    # Acht snijstukken per pass (twee rechthoeken van vier zijden), dus zestien.
-    assert branden == 16, "en toch alles twee keer branden"
+    assert layers == 2, "two operations should give two RD layers"
+    # Eight cut pieces per pass (two rectangles of four sides), so sixteen.
+    assert burns == 16, "and yet everything burns twice"
 
 
 def test_one_pass_is_the_yardstick(client, kernel):
-    twee_lagen(client, kernel, 1)
+    two_layers(client, kernel, 1)
 
-    assert lagen_en_branden(kernel) == (2, 8)
+    assert layers_and_burns(kernel) == (2, 8)
 
 
 def test_without_the_sharing_the_layers_double(client, kernel):
     """
-    De tegenproef, want anders bewijst de test hierboven niets.
+    The counter-check, because without it the test above proves nothing.
 
-    Zonder onze ingreep geeft `blob` elke pass een eigen settings-dict — de vorm
-    die de controller weigerde.
+    Without our intervention `blob` gives every pass a settings dict of its own —
+    the shape the controller refused.
     """
-    twee_lagen(client, kernel, 2)
+    two_layers(client, kernel, 2)
 
-    lagen, branden = lagen_en_branden(kernel, uitvouwen=False)
+    layers, burns = layers_and_burns(kernel, unfold=False)
 
-    assert (lagen, branden) == (4, 16)
+    assert (layers, burns) == (4, 16)
 
 
 def test_a_grid_of_sixteen_squares_stays_sixteen_layers(client, kernel):
     """
-    Het geval waar het op stukliep: een testbord met twee passes.
+    The case it broke on: a test board with two passes.
 
-    Zestien vakjes plus de labellaag is zeventien lagen, en zo hoort het te
-    blijven. Zonder de ingreep werden het drieëndertig.
+    Sixteen squares plus the label layer is seventeen layers, and that is how it
+    should stay. Without the intervention it became thirty-three.
     """
     from openkerf_api.testgrid import TestGridGenerator, plan_grid
 
-    schone_lei(kernel)
+    clean_slate(kernel)
     plan, cells = plan_grid(
         operation="snijden",
         speed_min=5, speed_max=20, speed_steps=4,
@@ -151,16 +151,16 @@ def test_a_grid_of_sixteen_squares_stays_sixteen_layers(client, kernel):
     )
     TestGridGenerator(kernel).draw(plan, cells)
 
-    lagen, branden = lagen_en_branden(kernel)
+    layers, burns = layers_and_burns(kernel)
 
     assert len(cells) == 16
-    # Zestien vakjes en één labellaag, en die laatste brandt één keer.
-    assert lagen == 17
-    assert branden > 32
+    # Sixteen squares and one label layer, and that last one burns once.
+    assert layers == 17
+    assert burns > 32
 
 
 def test_a_layer_that_does_not_burn_is_left_out(client, kernel):
-    ids = twee_lagen(client, kernel, 3)
+    ids = two_layers(client, kernel, 3)
     client.patch(f"/api/design/operations/{ids[0]}", json={"output": False})
 
     runner = CommandRunner(kernel)
@@ -168,38 +168,38 @@ def test_a_layer_that_does_not_burn_is_left_out(client, kernel):
 
 
 def test_the_z_step_still_gets_its_moves_between_passes(client, kernel):
-    """De Z-stap loopt over dezelfde uitvouwing; die mag hier niet sneuvelen."""
+    """The Z step runs over the same unfolding; it must not die here."""
     from meerk40t.core.node.util_console import ConsoleOperation
 
-    class Nep:
+    class Fake:
         def __init__(self, passes, z_step_mm=None):
             self.passes = passes
             self.passes_custom = True
             self.implicit_passes = passes
             self.z_step_mm = z_step_mm
 
-    stap = Nep(passes=3, z_step_mm=0.5)
-    uit = CommandRunner._with_passes([stap], ConsoleOperation)
+    step = Fake(passes=3, z_step_mm=0.5)
+    out = CommandRunner._with_passes([step], ConsoleOperation)
 
-    commandos = [getattr(s, "command", None) for s in uit]
-    assert commandos.count("z_move 0.500mm") == 2
-    assert "z_move -1.000mm" in commandos
-    assert uit.count(stap) == 3
-    assert stap.passes == 1
+    commands = [getattr(s, "command", None) for s in out]
+    assert commands.count("z_move 0.500mm") == 2
+    assert "z_move -1.000mm" in commands
+    assert out.count(step) == 3
+    assert step.passes == 1
 
 
 def test_without_a_z_step_there_are_no_moves(client, kernel):
     from meerk40t.core.node.util_console import ConsoleOperation
 
-    class Nep:
+    class Fake:
         def __init__(self, passes):
             self.passes = passes
             self.passes_custom = True
             self.implicit_passes = passes
             self.z_step_mm = None
 
-    stap = Nep(passes=2)
-    uit = CommandRunner._with_passes([stap], ConsoleOperation)
+    step = Fake(passes=2)
+    out = CommandRunner._with_passes([step], ConsoleOperation)
 
-    assert uit == [stap, stap]
-    assert stap.passes == 1
+    assert out == [step, step]
+    assert step.passes == 1

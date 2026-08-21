@@ -32,8 +32,8 @@ def test_arc_text_lands_around_the_centre(client):
 
     assert response.status_code == 201
     _, (x0, y0, x1, y1) = only_element(client)
-    # Aan de buitenkant: boven het middelpunt, binnen straal plus letterhoogte.
-    assert y1 < 100, "de tekst hoort boven het middelpunt te staan"
+    # On the outside: above the centre, within the radius plus the letter height.
+    assert y1 < 100, "the text should sit above the centre"
     assert 100 - 60 < (x0 + x1) / 2 < 100 + 60
     for corner in (x0, x1):
         assert abs(corner - 100) <= 60
@@ -41,8 +41,8 @@ def test_arc_text_lands_around_the_centre(client):
 
 def test_arc_text_actually_bends(client):
     """
-    Rechte tekst is een strook van een letterhoogte hoog. Gebogen tekst is
-    hoger dan dat, anders is er niets gebeurd.
+    Straight text is a strip one letter height tall. Curved text is taller than
+    that, or nothing happened.
     """
     client.post(
         "/api/design/generate/arctext",
@@ -61,34 +61,34 @@ def test_arc_text_actually_bends(client):
 
 def test_arc_text_takes_the_font_you_pick(client):
     """
-    De boogtekstgenerator liet geen letter kiezen: het venster vroeg er niet
-    om, dus kwam elke boog er in de standaardletter uit. De route kon het al —
-    dit pint dat de gekozen letter ook echt bij de generator terechtkomt, en
-    dat een andere letter een andere vorm oplevert.
+    The arc text generator let you pick no font: the dialog did not ask for one,
+    so every arc came out in the default font. The route could already do it —
+    this pins down that the chosen font really reaches the generator, and that a
+    different font gives a different shape.
     """
-    letters = client.get("/api/design/fonts").json()
-    keuze = next(
-        (f for f in letters if f["file"].lower().endswith((".ttf", ".jhf", ".shx"))),
+    fonts = client.get("/api/design/fonts").json()
+    choice = next(
+        (f for f in fonts if f["file"].lower().endswith((".ttf", ".jhf", ".shx"))),
         None,
     )
-    if keuze is None:
-        pytest.skip("geen lettertype op deze machine")
+    if choice is None:
+        pytest.skip("no font on this machine")
 
-    vraag = {"text": "OPENKERF", "cx_mm": 100, "cy_mm": 100, "radius_mm": 40}
-    standaard = client.post("/api/design/generate/arctext", json=vraag)
-    assert standaard.status_code == 201
-    _, doos_standaard = only_element(client)
+    request = {"text": "OPENKERF", "cx_mm": 100, "cy_mm": 100, "radius_mm": 40}
+    default = client.post("/api/design/generate/arctext", json=request)
+    assert default.status_code == 201
+    _, box_default = only_element(client)
 
     client.post("/api/design/clear")
-    gekozen = client.post(
-        "/api/design/generate/arctext", json={**vraag, "font": keuze["file"]}
+    picked = client.post(
+        "/api/design/generate/arctext", json={**request, "font": choice["file"]}
     )
 
-    assert gekozen.status_code == 201, gekozen.json()
-    _, doos_gekozen = only_element(client)
-    # Een andere letter tekent andere omtrekken; identieke maten zouden
-    # betekenen dat de keuze onderweg verdampt is.
-    assert doos_gekozen != doos_standaard or keuze["file"] == ""
+    assert picked.status_code == 201, picked.json()
+    _, box_picked = only_element(client)
+    # A different font draws different outlines; identical measures would mean
+    # the choice evaporated on the way.
+    assert box_picked != box_default or choice["file"] == ""
 
 
 def test_inside_text_sits_below_the_centre(client):
@@ -104,13 +104,13 @@ def test_inside_text_sits_below_the_centre(client):
     )
 
     _, (_, y0, _, _) = only_element(client)
-    assert y0 > 100, "binnenom hoort de tekst onder het middelpunt te staan"
+    assert y0 > 100, "on the inside the text should sit below the centre"
 
 
 def test_arc_text_is_no_longer_editable_text(kernel, client):
     """
-    De engine rendert tekst opnieuw zodra je hem wijzigt, en zou de boog dan
-    stilzwijgend rechttrekken. Daarom laten we de bron los.
+    The engine re-renders text as soon as you change it, and would then quietly
+    straighten the arc out. That is why we let the source go.
     """
     made = client.post(
         "/api/design/generate/arctext",
@@ -168,10 +168,10 @@ def test_a_code128_barcode_is_drawn_at_the_size_asked_for(client):
 
 def test_an_ean13_needs_a_valid_number(client):
     """
-    EAN stelt eisen aan lengte en controlecijfer. Die melding is voor de
-    gebruiker nuttiger dan een lege code die niet scant.
+    EAN puts demands on the length and the check digit. That message is more use
+    to the user than an empty code that does not scan.
     """
-    goed = client.post(
+    good = client.post(
         "/api/design/generate/barcode",
         json={"text": "590123412345", "kind": "ean13"},
     )
@@ -179,7 +179,7 @@ def test_an_ean13_needs_a_valid_number(client):
         "/api/design/generate/barcode", json={"text": "hallo", "kind": "ean13"}
     )
 
-    assert goed.status_code == 201
+    assert good.status_code == 201
     assert fout.status_code == 409
 
 

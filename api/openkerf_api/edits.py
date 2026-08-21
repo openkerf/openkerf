@@ -26,23 +26,34 @@ from .design import _visual_angle
 
 
 class DesignError(RuntimeError):
-    pass
+    """
+    A refusal the user can act on, in the user's own terms.
+
+    `code` is optional and exists for one reason: the interface can then say it in
+    the reader's language. The message is English — the source language of this
+    layer — and is what a client without a catalogue shows: curl, a script, a log.
+    A raise without a code is one whose message only a developer reads.
+    """
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 def _finite(value, name: str) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError) as e:
-        raise DesignError(f"{name} moet een getal zijn.") from e
+        raise DesignError(f"{name} has to be a number.") from e
     if not math.isfinite(number):
-        raise DesignError(f"{name} moet een eindig getal zijn.")
+        raise DesignError(f"{name} has to be a finite number.")
     return number
 
 
 def _positive(value, name: str) -> float:
     number = _finite(value, name)
     if number <= 0:
-        raise DesignError(f"{name} moet groter dan nul zijn.")
+        raise DesignError(f"{name} has to be greater than zero.")
     return number
 
 
@@ -55,12 +66,12 @@ def _ids(value) -> list[str]:
     if isinstance(value, str):
         value = [value]
     if not isinstance(value, (list, tuple)) or not value:
-        raise DesignError("Geef minstens één element op.")
+        raise DesignError("Name at least one element.", code="edit.needsElement")
     return [str(v) for v in value]
 
 
 def _subpath_count(node) -> int:
-    """Hoeveel losse stukken een vorm heeft; 0 als er geen geometrie is."""
+    """How many loose pieces a shape has; 0 when there is no geometry."""
     try:
         geometry = (
             node.final_geometry() if hasattr(node, "final_geometry") else node.as_geometry()
@@ -84,7 +95,8 @@ class DesignEditor:
         node = self.elements.find_node(node_id)
         if node is None:
             raise DesignError(
-                f"Element {node_id} bestaat niet (meer). Vernieuw het ontwerp."
+                f"Element {node_id} does not exist (any more). Refresh the design.",
+            code="edit.staleElement",
             )
         return node
 
@@ -135,14 +147,15 @@ class DesignEditor:
             known = [value for value in angles if value is not None]
             if not known:
                 raise DesignError(
-                    "Van deze selectie is de hoek niet af te lezen; "
-                    "gebruik de stapjes van 1° of 90°."
+                    "The angle of this selection cannot be read off; "
+                    "use the 1° or 90° steps.",
+                    code="edit.mixedAngle",
                 )
             spread = max(known) - min(known)
             if spread > 0.01:
                 raise DesignError(
-                    "Deze vormen staan onder verschillende hoeken. "
-                    "Draai ze met de stapjes, of zet ze eerst gelijk."
+                    "These shapes sit at different angles. "
+                    "Turn them with the steps, or make them equal first."
                 )
             angle -= known[0]
         angle %= 360.0
@@ -165,7 +178,7 @@ class DesignEditor:
         nodes = [self._node(node_id) for node_id in _ids(element_ids)]
 
         added = 0
-        with self.elements.undoscope("Toewijzen aan bewerking"):
+        with self.elements.undoscope("Assign to operation"):
             for node in nodes:
                 if not self._referenced(operation, node):
                     operation.add_reference(node)
@@ -178,7 +191,7 @@ class DesignEditor:
         targets = {id(self._node(node_id)) for node_id in _ids(element_ids)}
 
         removed = 0
-        with self.elements.undoscope("Verwijderen uit bewerking"):
+        with self.elements.undoscope("Remove from operation"):
             for reference in list(operation.children):
                 node = getattr(reference, "node", None)
                 if node is not None and id(node) in targets:
@@ -187,7 +200,7 @@ class DesignEditor:
         self._refresh()
         return {"operation_id": operation_id, "removed": removed}
 
-    # ---------------------------------------------------------------- splitsen
+    # --------------------------------------------------------------- splitting
 
     def split(self, element_ids) -> dict:
         """
@@ -226,13 +239,13 @@ class DesignEditor:
 
     def _drop_dead_references(self) -> int:
         """
-        Verwijzingen naar elementen die niet meer in de boom staan, weghalen.
+        Removing references to elements that are no longer in the tree.
 
-        Alleen `reference`-kinderen: een operatie kan ook een echt kind hebben
-        (`effect hatch`), en dat is geen verwijzing en mag blijven staan.
+        Only `reference` children: an operation can also have a real child (`effect hatch`),
+        and that is not a reference and may stay.
         """
         levend = {id(node) for node in self.elements.elems()}
-        weg = 0
+        dropped = 0
         for operation in list(self.elements.ops()):
             for child in list(operation.children):
                 if str(getattr(child, "type", "")) != "reference":
@@ -240,8 +253,8 @@ class DesignEditor:
                 node = getattr(child, "node", None)
                 if node is None or id(node) not in levend:
                     child.remove_node()
-                    weg += 1
-        return weg
+                    dropped += 1
+        return dropped
 
     def apply_settings(
         self,
@@ -262,14 +275,14 @@ class DesignEditor:
         """
         operation = self._operation(operation_id)
         applied = {}
-        with self.elements.undoscope("Preset toepassen"):
+        with self.elements.undoscope("Apply preset"):
             if speed is not None:
                 operation.speed = _positive(speed, "speed")
                 applied["speed"] = operation.speed
             if power_percent is not None:
                 percent = _finite(power_percent, "power_percent")
                 if not 0 < percent <= 100:
-                    raise DesignError("power_percent moet tussen 0 en 100 liggen.")
+                    raise DesignError("power_percent has to be between 0 and 100.")
                 operation.power = percent * 10
                 applied["power"] = operation.power
             if passes is not None:
@@ -278,18 +291,18 @@ class DesignEditor:
                 operation.passes = count
                 applied["passes"] = count
             if dpi is not None:
-                # DPI bepaalt de lijnafstand van een rastergravure: te hoog kost
-                # uren, te laag geeft strepen.
+                # DPI decides the line spacing of a raster engraving: too high costs hours,
+                # too low gives stripes.
                 value = _positive(dpi, "dpi")
                 if not 10 <= value <= 2000:
-                    raise DesignError("dpi moet tussen 10 en 2000 liggen.")
+                    raise DesignError("dpi has to be between 10 and 2000.")
                 operation.dpi = value
                 applied["dpi"] = value
             if overscan_mm is not None:
                 distance = _finite(overscan_mm, "overscan_mm")
                 if not 0 <= distance <= 50:
-                    raise DesignError("overscan_mm moet tussen 0 en 50 liggen.")
-                # Overscan is een lengte-met-eenheid in de engine, geen getal.
+                    raise DesignError("overscan_mm has to be between 0 and 50.")
+                # In the engine overscan is a length-with-unit, not a number.
                 operation.overscan = f"{distance}mm"
                 applied["overscan"] = operation.overscan
             if bidirectional is not None:
@@ -301,7 +314,7 @@ class DesignEditor:
     def _operation(self, operation_id: str):
         operation = self._node(operation_id)
         if not str(operation.type).startswith(("op ", "effect ")):
-            raise DesignError(f"{operation_id} is geen bewerking.")
+            raise DesignError(f"{operation_id} is not an operation.")
         return operation
 
     @staticmethod
@@ -318,49 +331,48 @@ class DesignEditor:
     # -------------------------------------------------------------- history
 
     def undo(self) -> dict:
-        self._stel_de_stapel_bij()
+        self._adjust_the_stack()
         return self._history("undo", self.runner.run("undo"))
 
     def redo(self) -> dict:
         return self._history("redo", self.runner.run("redo"))
 
-    def _stel_de_stapel_bij(self) -> None:
+    def _adjust_the_stack(self) -> None:
         """
-        Eén keer ongedaan maken moet één wijziging terugdraaien (upstream #3258).
+        One undo has to reverse one change (upstream #3258).
 
-        De stapel bewaart per wijziging de toestand **vóór** die wijziging:
-        `undoscope` roept `mark()` aan voordat er iets gebeurt. `Undo.undo()`
-        berekent zijn doel als `_undo_index - 1` — en doet dat **vóór** hij
-        `validate()` aanroept. Dat is de fout, want `validate()` verzet
-        `_undo_index` precies in het geval dat het misgaat:
+        The stack keeps, per change, the state **before** that change: `undoscope` calls
+        `mark()` before anything happens. `Undo.undo()` computes its target as
+        `_undo_index - 1` — and does that **before** it calls `validate()`. That is the
+        fault, because `validate()` moves `_undo_index` in precisely the case where it goes
+        wrong:
 
-        1. Het legt een "Last status"-vangnet bovenop de stapel en verhóogt
-           `_undo_index` als die al bovenaan stond. Dat is exact de stand na een
-           wijziging, dus bij de eerste stap terug rekent `undo()` met een index
-           van vóór die verhoging: één stap te ver.
-        2. Loopt de stapel daarmee over de twintig toestanden die hij vasthoudt
-           (`Undo.levels`), dan gooit hij de oudste eruit en schuiven **alle**
-           indexen één op. Het al berekende doel schuift niet mee, dus wijst het
-           dan naar de tóestand ná die je bedoelde — en ongedaan maken doet
-           helemaal niets. Gemeten: na 25 wijzigingen een vorm weghalen en
-           ongedaan maken, en de vorm bleef weg.
+        1. It puts a "Last status" safety net on top of the stack and *raises* `_undo_index`
+           when it was already at the top. That is exactly the state after a change, so on the
+           first step back `undo()` computes with an index from before that rise: one step too
+           far.
+        2. If the stack thereby exceeds the twenty states it holds (`Undo.levels`), it throws
+           the oldest out and **all** the indexes shift by one. The already computed target
+           does not shift along, so it then points at the state *after* the one you meant —
+           and undoing does nothing at all. Measured: after 25 changes, remove a shape and
+           undo, and the shape stayed gone.
 
-        Punt 2 was het gat in onze eigen omweg. Die rekende zelf een index uit
-        en gaf die mee als `undo <index>`, maar liep tegen precies dezelfde
-        verschuiving aan: bij een volle stapel wees ook die index verkeerd.
+        Point 2 was the hole in our own detour. That computed an index itself and passed it as
+        `undo <index>`, but ran into exactly the same shift: on a full stack that index pointed
+        wrongly as well.
 
-        De oplossing is een stap eerder: zélf `validate()` aanroepen vóórdat het
-        commando uitgaat. Daarna staat het vangnet er al, verzet `validate()`
-        binnen `undo()` niets meer, en is `_undo_index - 1` wél de toestand van
-        vóór de laatste wijziging — bij een volle stapel net zo goed als bij een
-        lege. We rekenen dus niets meer zelf uit; we zorgen alleen dat de engine
-        rekent met een stapel die niet meer onder zijn handen vandaan schuift.
+        The solution is one step earlier: call `validate()` ourselves *before* the command goes
+        out. After that the safety net is already there, `validate()` inside `undo()` moves
+        nothing any more, and `_undo_index - 1` *is* the state from before the last change — on
+        a full stack just as much as on an empty one. So we no longer compute anything
+        ourselves; we only make sure the engine computes with a stack that no longer shifts out
+        from under its hands.
         """
         try:
             self.elements.undo.validate()
         except AttributeError:
-            # Verandert de engine zijn stapel, dan doen we het weer zoals hij
-            # het zelf doet: liever een stap te ver dan geen undo.
+            # If the engine changes its stack, we go back to doing it the way it does
+            # itself: better one step too far than no undo.
             pass
 
     def _history(self, action: str, output: list[str]) -> dict:

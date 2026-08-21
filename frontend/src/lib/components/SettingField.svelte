@@ -1,15 +1,16 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
 	import type { SettingField } from '$lib/machines.svelte';
 
 	let { field, value = $bindable() }: { field: SettingField; value: unknown } = $props();
 
-	/** Eén stap: hele getallen bij int, tienden bij float. */
-	function stap(richting: number) {
+	/** One step: whole numbers for int, tenths for float. */
+	function step(direction: number) {
 		const grootte = field.type === 'int' ? 1 : 0.1;
-		const nu = Number(value ?? 0);
-		const nieuw = nu + richting * grootte;
-		// Drijvende komma maakt van 0.1 + 0.2 iets met zeventien cijfers.
-		value = field.type === 'int' ? String(Math.round(nieuw)) : String(Math.round(nieuw * 1000) / 1000);
+		const now = Number(value ?? 0);
+		const fresh = now + direction * grootte;
+		// Floating point turns 0.1 + 0.2 into something with seventeen digits.
+		value = field.type === 'int' ? String(Math.round(fresh)) : String(Math.round(fresh * 1000) / 1000);
 	}
 </script>
 
@@ -25,10 +26,10 @@
 			{/each}
 		</select>
 	{:else if field.type === 'int' || field.type === 'float'}
-		<!-- Getal met knoppen: op een aanraakscherm is de eigen spinner van de
-		     browser twee pixels hoog, en met handschoenen aan onbruikbaar. -->
-		<div class="teller">
-			<button type="button" aria-label="{field.label} verlagen" onclick={() => stap(-1)}>−</button>
+		<!-- A number with buttons: on a touch screen the browser's own spinner is two
+		     pixels tall, and unusable with gloves on. -->
+		<div class="stepper">
+			<button type="button" aria-label={t('field.decrease', { label: field.label })} onclick={() => step(-1)}>−</button>
 			<input
 				class="mono"
 				type="number"
@@ -36,7 +37,7 @@
 				value={Number(value ?? 0)}
 				onchange={(e) => (value = e.currentTarget.value)}
 			/>
-			<button type="button" aria-label="{field.label} verhogen" onclick={() => stap(1)}>+</button>
+			<button type="button" aria-label={t('field.increase', { label: field.label })} onclick={() => step(1)}>+</button>
 		</div>
 	{:else}
 		<input class="mono" type="text" value={String(value ?? '')} onchange={(e) => (value = e.currentTarget.value)} />
@@ -71,9 +72,9 @@
 		color: var(--text-1);
 		width: 100%;
 	}
-	/* De spinner van de browser weg: hij zit náást onze knoppen en verwart. */
-	.teller { display: flex; }
-	.teller input {
+	/* The browser's spinner gone: it sits *beside* our buttons and confuses. */
+	.stepper { display: flex; }
+	.stepper input {
 		border-radius: 0;
 		border-left: 0;
 		border-right: 0;
@@ -81,9 +82,9 @@
 		-moz-appearance: textfield;
 		appearance: textfield;
 	}
-	.teller input::-webkit-outer-spin-button,
-	.teller input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-	.teller button {
+	.stepper input::-webkit-outer-spin-button,
+	.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+	.stepper button {
 		flex: none;
 		width: 40px;
 		font: inherit;
@@ -92,9 +93,9 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.teller button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
-	.teller button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
-	.teller button:hover { background: var(--surface-1); }
+	.stepper button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	.stepper button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
+	.stepper button:hover { background: var(--surface-1); }
 
 	input[type='checkbox'] {
 		width: 18px;

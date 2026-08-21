@@ -34,20 +34,18 @@ TYPE_NAMES = {bool: "bool", int: "int", float: "float", str: "str"}
 
 # ------------------------------------------------- machineprofiel uitwisselen
 #
-# Gat E5: LightBurn heeft `.lbdev`, zodat een fabrikant een kant-en-klaar
-# profiel kan meeleveren en je op een tweede computer niets overtypt. Zelfde
-# vorm als de bibliotheek van B7 — `format`, `version`, en de inhoud eronder —
-# maar zonder zip: er hangen geen foto's aan een machine, dus één leesbaar
-# JSON-bestand is eerlijker dan een archief met één bestand erin.
+# Gap E5: LightBurn has `.lbdev`, so that a manufacturer can supply a ready-made profile
+# and you type nothing over on a second computer. The same shape as B7's library —
+# `format`, `version`, and the content below it — but without a zip: no photos hang off a
+# machine, so one readable JSON file is more honest than an archive with one file in it.
 PROFILE_FORMAT = "openkerf-machine"
 PROFILE_VERSION = 1
 PROFILE_SUFFIX = ".openkerf-machine"
 
-# Instellingen die over déze opstelling gaan en niet over het machinetype: het
-# IP-adres van de controller, de seriële poort van deze computer. Ze gaan wél
-# mee — twee computers naast dezelfde laser hebben er hetzelfde aan — maar het
-# voorbeeld bij het importeren noemt ze apart, want ze zijn het eerste dat
-# elders niet klopt.
+# Settings that are about *this* set-up and not about the machine type: the controller's IP
+# address, this computer's serial port. They do come along — two computers beside the same
+# laser have the same use for them — but the preview on import names them separately,
+# because they are the first thing that does not hold elsewhere.
 LOCAL_ATTRS = ("address", "serial_port", "port")
 
 
@@ -79,7 +77,18 @@ def _coerce(value, value_type):
 
 
 class MachineError(RuntimeError):
-    pass
+    """
+    A refusal the user can act on, in the user's own terms.
+
+    `code` is optional and exists for one reason: the interface can then say it in
+    the reader's language. The message is English — the source language of this
+    layer — and is what a client without a catalogue shows: curl, a script, a log.
+    A raise without a code is one whose message only a developer reads.
+    """
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 class MachineManager:
@@ -189,20 +198,20 @@ class MachineManager:
             if device.path not in before
         ]
         if not created:
-            raise MachineError("De engine heeft geen machine aangemaakt.")
+            raise MachineError("The engine created no machine.")
 
         device = created[0]
         if label:
             device.label = label
             self.kernel.signal("device;renamed", device.path, label)
-        # Uit welke catalogusregel hij komt. De engine bewaart dat zelf niet —
-        # `registered_path` wijst naar de driver, en tientallen merken delen er
-        # één. Zonder dit is een profiel (E5) elders niet terug te maken.
+        # Which catalogue entry it comes from. The engine does not keep that itself —
+        # `registered_path` points at the driver, and dozens of brands share one. Without
+        # this a profile (E5) cannot be recreated elsewhere.
         device.setting(str, "openkerf_info_key", "")
         device.openkerf_info_key = info_key
         self._mark_configured(device)
-        # `device add` maakt hem meteen actief; die keuze hoort de herstart te
-        # overleven. Zie `_remember_active`.
+        # `device add` makes it active straight away; that choice should survive the
+        # restart. See `_remember_active`.
         if getattr(self.kernel.device, "path", None) == device.path:
             self._remember_active(device)
         self.flush()
@@ -220,28 +229,26 @@ class MachineManager:
 
     def _remember_active(self, device) -> None:
         """
-        Vastleggen welke machine actief is, meteen.
+        Recording which machine is active, at once.
 
-        MeerK40t schrijft `activated_device` pas bij `preshutdown`
-        (`device/basedevice.py:322`) en valt bij het opstarten anders terug op
-        `preferred_device`, en dat is standaard `lhystudios` — de
-        plaatsvervanger die de kernel zelf aanmaakt. Een headless engine die
-        gestopt of omgevallen wordt zonder nette afsluiting draait dus na de
-        herstart op een K40-driver in plaats van op de laser die je koos, en de
-        bovenbalk zegt dan "lihuiyu-device". Gemeten: server herstarten, en het
-        actieve apparaat is de plaatsvervanger.
+        MeerK40t only writes `activated_device` at `preshutdown`
+        (`device/basedevice.py:322`) and at startup otherwise falls back on
+        `preferred_device`, which is `lhystudios` by default — the stand-in the kernel
+        creates itself. So a headless engine that is stopped or falls over without a clean
+        shutdown runs on a K40 driver after the restart instead of on the laser you chose,
+        and the top bar then says "lihuiyu-device". Measured: restart the server, and the
+        active device is the stand-in.
 
-        Dezelfde sleutel als de engine gebruikt, alleen eerder geschreven; er
-        verandert niets in `meerk40t/`.
+        The same key the engine uses, only written earlier; nothing changes in `meerk40t/`.
         """
         try:
             setattr(self.kernel.root, "activated_device", device.path)
             self.kernel.write_persistent("/", "activated_device", device.path)
-            # En meteen naar schijf: `write_persistent` vult alleen de
-            # instellingen in het geheugen, en die worden pas bij een nette
-            # afsluiting weggeschreven — precies wat hier niet gebeurt.
+            # And straight to disk: `write_persistent` only fills the settings in memory,
+            # and those are only written out on a clean shutdown — precisely what does not
+            # happen here.
             self.flush()
-        except Exception:  # pragma: no cover - de engine mag ons niet breken
+        except Exception:  # pragma: no cover - the engine must not break us
             pass
 
     def rename(self, path: str, label: str) -> dict:
@@ -258,7 +265,7 @@ class MachineManager:
         device = self._find(path)
         if self.kernel.device is device:
             # Destroying the active service leaves the kernel without a device.
-            raise MachineError("De actieve machine kan niet verwijderd worden.")
+            raise MachineError("The active machine cannot be removed.")
         device.destroy()
         self.flush()
         return {"removed": path}
@@ -304,7 +311,7 @@ class MachineManager:
 
         extra = self._undeclared_essentials(device, described)
         if extra:
-            sheets.append({"sheet": "verbinding", "fields": extra})
+            sheets.append({"sheet": "connection", "fields": extra})
         return sheets
 
     def _undeclared_essentials(self, device, described: set) -> list[dict]:
@@ -343,18 +350,17 @@ class MachineManager:
         applied = {}
         for attr, value in values.items():
             if attr not in types:
-                raise MachineError(f"Onbekende instelling: {attr}")
+                raise MachineError(f"Onbekende setting: {attr}")
             try:
                 coerced = _coerce(value, types[attr])
             except (TypeError, ValueError) as e:
-                raise MachineError(f"Ongeldige waarde voor {attr}: {value}") from e
+                raise MachineError(f"Invalid value for {attr}: {value}") from e
             setattr(device, attr, coerced)
             applied[attr] = coerced
             # The device listens for these to re-realize its view and pipes.
             device.signal(attr, coerced)
-            # En de signalen die de instelling zélf opgeeft. Zie
-            # `_setting_signals`: zonder deze regel wordt een instelling wel
-            # opgeslagen maar doet er niemand iets mee.
+            # And the signals the setting itself states. See `_setting_signals`: without
+            # this line a setting is saved but nobody does anything with it.
             for code in extra.get(attr, ()):
                 device.signal(code)
         # Same reasoning as in rename(): setting a bed size on the engine's
@@ -369,41 +375,38 @@ class MachineManager:
         """
         De air-assistmethode meteen laten aanhaken (besluit B11).
 
-        De engine claimt de methode alleen bij het opstarten van de
-        device-service. Zonder dit staat de instelling wel op de machine maar
-        kent de coolant-registratie het apparaat nog niet, en dan meldt
-        `/api/design/capabilities` "geen air assist" terwijl de gebruiker hem
-        net heeft ingesteld — of erger: de schakelaar staat er wel en de blazer
-        doet niets. Dezelfde aanroep als de drivers zelf doen.
+        The engine only claims the method when the device service starts. Without this the
+        setting is on the machine but the coolant registration does not know the device yet,
+        and then `/api/design/capabilities` reports "no air assist" while the user has just
+        set it up — or worse: the switch is there and the blower does nothing. The same call
+        the drivers themselves make.
         """
         coolant = getattr(getattr(self.kernel, "root", None), "coolant", None)
         if coolant is None:
             return
         try:
             coolant.claim_coolant(device, getattr(device, "device_coolant", ""))
-        except Exception:  # pragma: no cover - een driver die niet meewerkt
+        except Exception:  # pragma: no cover - a driver that does not co-operate
             pass
 
     def _setting_signals(self, device) -> dict:
         """
-        Welke extra signalen bij een instelling horen, volgens de instelling zelf.
+        Which extra signals belong with a setting, according to the setting itself.
 
-        De engine kent hier een afspraak voor die wij misten: een keuze mag een
-        `signals`-sleutel dragen met de codes die bij een wijziging horen, naast
-        de naam van de instelling. De wxPython-GUI honoreert dat
-        (`gui/choicepropertypanel.py:_get_additional_signals`); wij seinden
-        alleen de naam, en dat is precies één signaal te weinig.
+        The engine has an agreement for this that we were missing: a choice may carry a
+        `signals` key with the codes that belong to a change, beside the setting's name. The
+        wxPython GUI honours that (`gui/choicepropertypanel.py:_get_additional_signals`); we
+        signalled only the name, and that is exactly one signal too few.
 
-        Wat dat kostte: de grbl-controller bouwt zijn verbinding opnieuw op bij
-        `update_interface` (`grbl/controller.py:523`), niet bij `interface`. Wie
-        in OpenKerf de interface op `mock` zette, kreeg zijn instelling
-        opgeslagen en bleef op de oude verbinding zitten tot een herstart. Er
-        staan zevenendertig van die declaraties in de engine, in elke driver —
-        `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart` — en
+        What that cost: the grbl controller rebuilds its connection on `update_interface`
+        (`grbl/controller.py:523`), not on `interface`. Anybody setting the interface to
+        `mock` in OpenKerf got their setting saved and stayed on the old connection until a
+        restart. There are thirty-seven of those declarations in the engine, in every driver —
+        `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart` — and
         ze vielen allemaal stil.
 
-        Zelfde semantiek als de GUI: een string of een lijst, en de extra
-        signalen gaan zonder argumenten de deur uit.
+        The same semantics as the GUI: a string or a list, and the extra signals go out
+        without arguments.
         """
         signals = {}
         for sheet_path in device.match("choices"):
@@ -442,16 +445,16 @@ class MachineManager:
         """Persist settings so a machine survives a restart of the engine."""
         self.runner.run("flush")
 
-    # --------------------------------------------- profiel uitwisselen (E5)
+    # --------------------------------------------- profile uitwisselen (E5)
 
     def _info_key(self, device) -> str | None:
         """
-        Uit welke catalogusregel deze machine gemaakt is.
+        Which catalogue line this machine was created from.
 
-        Sinds E5 stempelen we hem bij het aanmaken op het apparaat. Machines van
-        vóór die versie dragen hem niet; dan is de provider het beste dat we
-        hebben, en die wijst bij Ruida naar tientallen merken die op dezelfde
-        driver draaien. Het profiel meldt dat dan als schatting.
+        Since E5 we stamp it on the device when creating it. Machines from before that
+        version do not carry it; then the provider is the best we have, and on Ruida that
+        points at dozens of brands running on the same driver. The profile then reports that
+        as an estimate.
         """
         device.setting(str, "openkerf_info_key", "")
         if device.openkerf_info_key:
@@ -459,31 +462,31 @@ class MachineManager:
         provider = getattr(device, "registered_path", None)
         kandidaten = [
             entry
-            for familie in self.catalog()
-            for entry in familie["machines"]
+            for family in self.catalog()
+            for entry in family["machines"]
             if entry["provider"] == provider
         ]
         return kandidaten[0]["key"] if kandidaten else None
 
     def export_profile(self, path: str) -> dict:
-        """Het hele profiel van één machine, als één leesbaar bestand."""
+        """The whole profile of one machine, as one readable file."""
         from datetime import datetime, timezone
 
         device = self._find(path)
-        waarden = {}
-        for blad in self.settings(path):
-            for veld in blad["fields"]:
-                # De naam staat bij sommige drivers óók in een instellingenblad.
-                # Hij hoort één keer in het bestand te staan — hierboven, waar
-                # het importeren hem kan overschrijven met een eigen naam.
-                if veld["attr"] == "label":
+        values = {}
+        for sheet in self.settings(path):
+            for field in sheet["fields"]:
+                # On some drivers the name is *also* in a settings sheet. It should be in
+                # the file once — above, where the import can overwrite it with a name of its
+                # own.
+                if field["attr"] == "label":
                     continue
-                waarden[veld["attr"]] = veld["value"]
+                values[field["attr"]] = field["value"]
         sleutel = self._info_key(device)
         if sleutel is None:
             raise MachineError(
-                "Van deze machine is niet te achterhalen uit welk type hij komt; "
-                "een profiel eruit zou elders niet aan te maken zijn."
+                "It cannot be traced which type this machine comes from; "
+                "a profile made from it could not be created elsewhere."
             )
         return {
             "format": PROFILE_FORMAT,
@@ -493,106 +496,105 @@ class MachineManager:
                 "info": sleutel,
                 "provider": getattr(device, "registered_path", None),
                 "label": getattr(device, "label", device.path),
-                "settings": waarden,
+                "settings": values,
             },
         }
 
     def read_profile(self, data) -> dict:
-        """Inlezen en meteen afwijzen wat geen machineprofiel is."""
+        """Read it and refuse at once what is not a machine profile."""
         import json
         from pathlib import Path
 
         if isinstance(data, (str, Path)):
-            bron = Path(data)
-            if not bron.exists():
-                raise MachineError("Dat bestand is er niet (meer).")
+            source = Path(data)
+            if not source.exists():
+                raise MachineError("That file is not there (any more).")
             try:
-                data = json.loads(bron.read_text())
+                data = json.loads(source.read_text())
             except ValueError as e:
-                raise MachineError("Dit bestand is geen leesbaar profiel.") from e
+                raise MachineError("This file is not a readable profile.") from e
         if not isinstance(data, dict) or data.get("format") != PROFILE_FORMAT:
             raise MachineError(
-                "Dit bestand komt niet uit OpenKerf. Een machineprofiel eindigt "
-                f"op {PROFILE_SUFFIX}."
+                "This file did not come from OpenKerf. A machine profile ends "
+                f"in {PROFILE_SUFFIX}."
             )
         if int(data.get("version") or 0) > PROFILE_VERSION:
             raise MachineError(
-                "Dit profiel komt uit een nieuwere versie van OpenKerf. Werk eerst bij."
+                "This profile comes from a newer version of OpenKerf. Update first."
             )
         machine = data.get("machine")
         if not isinstance(machine, dict) or not machine.get("info"):
-            raise MachineError("Dit profiel zegt niet om welk machinetype het gaat.")
+            raise MachineError("This profile does not say which machine type it is for.")
         return data
 
     def preview_profile(self, data) -> dict:
         """
         Wat er gaat gebeuren, vóórdat het gebeurt.
 
-        Een machineprofiel bepaalt waar de kop heen gaat. Blind inladen wat
-        iemand je mailde is precies één stap van een kop die tegen zijn
-        eindaanslag loopt, dus dit vertelt eerst wat erin zit.
+        A machine profile decides where the head goes. Blindly loading what somebody emailed
+        you is exactly one step from a head running into its end stop, so this says first what
+        is in it.
         """
         data = self.read_profile(data)
         machine = data["machine"]
         bekend = {
             entry["key"]: entry
-            for familie in self.catalog()
-            for entry in familie["machines"]
+            for family in self.catalog()
+            for entry in family["machines"]
         }
-        regel = bekend.get(machine["info"])
-        waarden = machine.get("settings") or {}
-        # Alleen wat écht ingevuld is. De engine zet niet-gebruikte velden op
-        # "UNCONFIGURED"; die als "controleer dit" tonen bij een USB-machine is
-        # een waarschuwing over niets, en daar leer je waarschuwingen van negeren.
-        lokaal = {
+        line = bekend.get(machine["info"])
+        values = machine.get("settings") or {}
+        # Only what is really filled in. The engine sets unused fields to "UNCONFIGURED";
+        # showing those as "check this" on a USB machine is a warning about nothing, and that
+        # teaches you to ignore warnings.
+        local = {
             k: v
-            for k, v in waarden.items()
+            for k, v in values.items()
             if k in LOCAL_ATTRS and str(v).strip() not in ("", "UNCONFIGURED", "None")
         }
-        kern = {
-            k: waarden[k]
+        core = {
+            k: values[k]
             for k in ("bedwidth", "bedheight", "interface")
-            if k in waarden
+            if k in values
         }
         return {
             "label": machine.get("label") or machine["info"],
             "info": machine["info"],
-            "known": regel is not None,
-            "friendly_name": regel["friendly_name"] if regel else None,
-            "family": regel["family"] if regel else None,
-            "settings": len(waarden),
-            "essential": kern,
-            # Wat elders als eerste niet klopt: het adres van déze controller.
-            "local": lokaal,
+            "known": line is not None,
+            "friendly_name": line["friendly_name"] if line else None,
+            "family": line["family"] if line else None,
+            "settings": len(values),
+            "essential": core,
+            # What does not hold elsewhere first: *this* controller's address.
+            "local": local,
             "exported_at": data.get("exported_at"),
         }
 
     def import_profile(self, data, label: str | None = None) -> dict:
-        """Het profiel als nieuwe machine aanmaken, met zijn instellingen erop."""
+        """Create the profile as a new machine, with its settings on it."""
         data = self.read_profile(data)
         machine = data["machine"]
-        naam = (label or machine.get("label") or "").strip() or None
-        gemaakt = self.create(machine["info"], naam)
+        name = (label or machine.get("label") or "").strip() or None
+        created = self.create(machine["info"], name)
 
-        waarden = machine.get("settings") or {}
-        types = self._setting_types(self._find(gemaakt["path"]))
-        # Wat deze engine niet kent, laten we liggen in plaats van het profiel af
-        # te wijzen: een profiel uit een nieuwere MeerK40t hoort niet je hele
-        # inrichting te blokkeren om één instelling die hier niet bestaat.
-        # `label` staat bij sommige drivers óók in een instellingenblad. Hem
-        # meenemen zou de naam die je bij het importeren koos meteen weer
-        # overschrijven met die van de bron — twee machines met dezelfde naam,
-        # en dat is precies wat je bij een tweede profiel niet wilt.
-        bruikbaar = {
-            k: v for k, v in waarden.items() if k in types and k != "label"
+        values = machine.get("settings") or {}
+        types = self._setting_types(self._find(created["path"]))
+        # What this engine does not know we leave alone rather than rejecting the profile: a
+        # profile from a newer MeerK40t should not block your whole set-up over one setting
+        # that does not exist here.
+        # On some drivers `label` is *also* in a settings sheet. Taking it along would
+        # immediately overwrite the name you chose on import with the source's — two machines
+        # with the same name, and that is exactly what you do not want on a second profile.
+        usable = {
+            k: v for k, v in values.items() if k in types and k != "label"
         }
-        overgeslagen = sorted(set(waarden) - set(bruikbaar))
-        if bruikbaar:
-            self.update_settings(gemaakt["path"], bruikbaar)
+        skipped = sorted(set(values) - set(usable))
+        if usable:
+            self.update_settings(created["path"], usable)
         return {
-            **gemaakt,
-            "applied": len(bruikbaar),
-            "skipped": overgeslagen,
+            **created,
+            "applied": len(usable),
+            "skipped": skipped,
         }
 
     # ------------------------------------------------------------------ scan
@@ -630,11 +632,11 @@ USB_SIGNATURES = (
     {
         "vid": 0x1A86,
         "pid": 0x5512,
-        "title": "K40-bord (CH341)",
+        "title": "K40-board (CH341)",
         "kind": "co2-k40",
         "keys": ("m2-nano", "m3-nano"),
         "confidence": "waarschijnlijk",
-        "why": "Dit is de CH341-chip die op de M2- en M3-Nano-borden van een K40 zit.",
+        "why": "This is the CH341 chip on the M2 and M3 Nano boards of a K40.",
         "settings": {},
     },
     {
@@ -644,7 +646,7 @@ USB_SIGNATURES = (
         "kind": "co2-ruida",
         "keys": ("g3v8-raylaser",),
         "confidence": "waarschijnlijk",
-        "why": "Deze USB-identiteit hoort bij de Newly JCZ-besturing.",
+        "why": "This USB identity belongs to the Newly JCZ controller.",
         "settings": {},
     },
     {
@@ -654,7 +656,7 @@ USB_SIGNATURES = (
         "kind": "galvo",
         "keys": ("balor-fiber", "balor-fiber-mopa", "balor-co2", "balor-uv"),
         "confidence": "waarschijnlijk",
-        "why": "De LMC-controller van een fiber- of UV-galvo meldt zich zo aan.",
+        "why": "The LMC controller of a fibre or UV galvo announces itself like this.",
         "settings": {},
     },
     {
@@ -664,14 +666,14 @@ USB_SIGNATURES = (
         "kind": "galvo",
         "keys": ("balor-fiber", "balor-fiber-mopa", "balor-co2", "balor-uv"),
         "confidence": "waarschijnlijk",
-        "why": "De LMC-controller van een fiber- of UV-galvo meldt zich zo aan.",
+        "why": "The LMC controller of a fibre or UV galvo announces itself like this.",
         "settings": {},
     },
 )
 
-# Serial adapters. These chips zeggen niets over de laser erachter — een CH340
-# zit op een diodeframe én op tien andere apparaten — dus de zekerheid is hier
-# bewust lager en er staan meerdere voorstellen bij.
+# Serial adapters. These chips say nothing about the laser behind them — a CH340 sits on a
+# diode frame *and* on ten other devices — so the certainty is deliberately lower here and
+# several proposals come with it.
 SERIAL_SIGNATURES = (
     {
         "vid": 0x0403,
@@ -680,7 +682,7 @@ SERIAL_SIGNATURES = (
         "kind": "co2-ruida",
         "keys": ("ruida-beta", "grbl-generic"),
         "confidence": "onzeker",
-        "why": "Een Ruida RDC6442 hangt via deze FTDI-chip aan USB, maar hij is niet exclusief.",
+        "why": "A Ruida RDC6442 hangs off USB through this FTDI chip, but it is not exclusive.",
         "settings": {"interface": "usb"},
     },
     {
@@ -690,7 +692,7 @@ SERIAL_SIGNATURES = (
         "kind": "diode",
         "keys": ("grbl-generic", "grbl-fluidnc"),
         "confidence": "onzeker",
-        "why": "De CH340 zit op vrijwel elk GRBL-diodeframe, en op veel andere apparaten.",
+        "why": "The CH340 is on nearly every GRBL diode frame, and on many other devices.",
         "settings": {},
     },
     {
@@ -700,7 +702,7 @@ SERIAL_SIGNATURES = (
         "kind": "diode",
         "keys": ("grbl-generic", "grbl-fluidnc"),
         "confidence": "onzeker",
-        "why": "De CH9102 is de opvolger van de CH340 op nieuwere GRBL-borden.",
+        "why": "The CH9102 is the successor to the CH340 on newer GRBL boards.",
         "settings": {},
     },
     {
@@ -710,17 +712,17 @@ SERIAL_SIGNATURES = (
         "kind": "diode",
         "keys": ("grbl-generic", "grbl-fluidnc"),
         "confidence": "onzeker",
-        "why": "De CP2102 zit op ESP32-borden, waaronder FluidNC.",
+        "why": "The CP2102 is on ESP32 boards, FluidNC among them.",
         "settings": {},
     },
     {
         "vid": 0x2341,
         "pid": None,
-        "title": "Arduino-bord",
+        "title": "Arduino-board",
         "kind": "diode",
         "keys": ("grbl-generic",),
         "confidence": "onzeker",
-        "why": "GRBL draait van oudsher op een Arduino Uno met een schild.",
+        "why": "GRBL has traditionally run on an Arduino Uno with a shield.",
         "settings": {},
     },
 )
@@ -787,15 +789,15 @@ class MachineScanner:
         try:
             import usb.core
         except ImportError:
-            notes.append("USB niet doorzocht: pyusb is niet geïnstalleerd.")
+            notes.append("USB not searched: pyusb is not installed.")
             return []
 
         try:
             devices = list(usb.core.find(find_all=True))
         except Exception as e:  # noqa: BLE001 — libusb throws a whole zoo
             notes.append(
-                "USB niet doorzocht: het besturingssysteem gaf geen toegang "
-                f"tot de USB-bus ({type(e).__name__})."
+                "USB not searched: the operating system gave no access "
+                f"to the USB bus ({type(e).__name__})."
             )
             return []
 
@@ -825,13 +827,13 @@ class MachineScanner:
         try:
             from serial.tools import list_ports
         except ImportError:
-            notes.append("Seriële poorten niet doorzocht: pyserial ontbreekt.")
+            notes.append("Serial ports not searched: pyserial is missing.")
             return []
 
         try:
             ports = list(list_ports.comports())
         except Exception as e:  # noqa: BLE001
-            notes.append(f"Seriële poorten niet doorzocht ({type(e).__name__}).")
+            notes.append(f"Serial ports not searched ({type(e).__name__}).")
             return []
 
         searched.append("seriële poorten")
@@ -861,15 +863,15 @@ class MachineScanner:
         subnet = self._local_subnet()
         if subnet is None:
             notes.append(
-                "Netwerk niet doorzocht: deze computer heeft geen adres in een "
-                "lokaal netwerk."
+                "Network not searched: this computer has no address in a "
+                "local netwerk."
             )
             return []
 
         try:
             probe = ruida_probe_packet()
         except ImportError:
-            notes.append("Netwerk niet doorzocht: de Ruida-module ontbreekt in de engine.")
+            notes.append("Network not searched: the Ruida module is missing from the engine.")
             return []
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -879,8 +881,8 @@ class MachineScanner:
         except OSError:
             sock.close()
             notes.append(
-                f"Netwerk niet doorzocht: poort {RUIDA_LISTEN_PORT} is al in gebruik. "
-                "Waarschijnlijk praat er al iets met een Ruida."
+                f"Network not searched: port {RUIDA_LISTEN_PORT} is already in use. "
+                "Something is probably already talking to a Ruida."
             )
             return []
 
@@ -907,26 +909,26 @@ class MachineScanner:
 
         if not replies:
             notes.append(
-                f"Op {subnet} antwoordde niets op poort {RUIDA_SEND_PORT}. "
-                "Staat de machine aan en hangt hij aan hetzelfde netwerk?"
+                f"Nothing on {subnet} answered on port {RUIDA_SEND_PORT}. "
+                "Is the machine on and is it on the same network?"
             )
 
         return [
             self._candidate(
                 {
-                    "title": "Ruida-besturing op het netwerk",
+                    "title": "Ruida controller on the network",
                     "kind": "co2-ruida",
                     "keys": ("ruida-beta",),
                     "confidence": "zeker",
                     "why": (
-                        "Dit adres antwoordde op de vraag die de Ruida-driver "
-                        "ook stelt bij het verbinden."
+                        "This address answered the question the Ruida driver "
+                        "asks when it connects."
                     ),
                 },
                 kind_id=f"udp:{ip}",
                 transport="netwerk",
                 where=ip,
-                detail=f"antwoordde op poort {RUIDA_SEND_PORT}",
+                detail=f"answered on port {RUIDA_SEND_PORT}",
                 settings={"interface": "udp", "address": ip},
             )
             for ip in sorted(replies, key=_ip_sort_key)

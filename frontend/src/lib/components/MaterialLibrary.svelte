@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import NumberField from './NumberField.svelte';
 	import Menu from './Menu.svelte';
-	import type { Menu as MenuLijst } from '$lib/acties';
+	import type { Menu as MenuList } from '$lib/actions';
 	import {
 		OPERATION_LAYER,
 		OPERATIONS,
 		SOURCE_LABEL,
 		operationName,
-		toen,
 		type ImportPreview,
 		type ImportResult,
 		type PresetConflict,
@@ -30,21 +30,21 @@
 		library: LibraryStore;
 		operations: DesignOperation[];
 		canEdit?: boolean;
-		/** Het materiaal van het vel waarop je werkt (besluit B1). De bibliotheek
-		 *  opent daarop gefilterd: je zoekt instellingen voor wat er ín de
-		 *  machine ligt, niet voor alles wat je ooit gebrand hebt. */
+		/** The material of the sheet you are working on (decision B1). The library
+		 *  opens filtered on it: you are looking for settings for what is *in* the
+		 *  machine, not for everything you have ever burned. */
 		sheetMaterialId?: number | null;
 		sheetMaterialName?: string | null;
 		onApplied?: () => void;
-		/** Opent het testrastervenster voor dit materiaal. */
+		/** Opens the test grid dialog for this material. */
 		onMakeGrid?: (materialId: number | null) => void;
 		token?: string;
 	} = $props();
 
-	// Het venster wordt bij elke opening opnieuw opgebouwd, dus dit is ook echt
-	// de stand waarin je hem elke keer aantreft. Bewust alleen de beginwaarde:
-	// wisselt het vel terwijl dit openstaat, dan hoort het filter niet onder je
-	// handen vandaan te schuiven — vandaar untrack.
+	// The dialog is rebuilt on every opening, so this really is the state you find it
+	// in every time. Deliberately only the initial value: if the sheet changes while
+	// this is open, the filter should not slide out from under your hands — hence
+	// untrack.
 	let materialId = $state<number | null>(untrack(() => sheetMaterialId));
 	let zoek = $state('');
 	let adding = $state(false);
@@ -65,24 +65,26 @@
 	let machineDraft = $state({ name: '', power_watt: '', lens_mm: '' });
 
 	/**
-	 * Het menu op een instelling.
+	 * The menu on a setting.
 	 *
-	 * Herkomst, bewerken, delen en verwijderen stonden als vier knoppen op elke
-	 * regel. Ze horen bij één instelling en zijn geen van de vier de handeling
-	 * die je hier komt doen, dus staan ze achter één ⋯ — en achter de
-	 * rechterklik, net als overal elders in de app.
+	 * Provenance, edit, share and remove used to be four buttons on every row. They
+	 * belong to one setting and none of the four is the operation you come here to
+	 * do, so they sit behind one ⋯ — and behind the right-click, as everywhere else
+	 * in the app.
 	 */
-	let rijMenu = $state<{ lijst: MenuLijst; x: number; y: number } | null>(null);
+	let rowMenu = $state<{ list: MenuList; x: number; y: number } | null>(null);
 
-	function presetMenu(preset: Preset): MenuLijst {
+	function presetMenu(preset: Preset): MenuList {
 		return [
 			{
 				items: [
 					{
 						id: 'toepassen',
-						label: chosenOperation ? `Toepassen op laag ${laagNummer}` : 'Toepassen',
-						uit: chosenOperation ? undefined : 'Maak eerst een laag aan in de tab Lagen',
-						doen: () => apply(preset)
+						label: chosenOperation
+							? t('library.menu.applyTo', { n: layerNumber })
+							: t('library.menu.apply'),
+						off: chosenOperation ? undefined : t('library.menu.needsLayer'),
+						run: () => apply(preset)
 					}
 				]
 			},
@@ -90,46 +92,46 @@
 				items: [
 					{
 						id: 'herkomst',
-						label: 'Herkomst en bewijs',
-						aan: herkomst === preset.id,
-						uitleg: 'Waar deze waarden vandaan komen',
-						doen: () => {
+						label: t('library.menu.provenance'),
+						on: herkomst === preset.id,
+						explain: t('library.menu.provenance.explain'),
+						run: () => {
 							editing = null;
 							herkomst = herkomst === preset.id ? null : preset.id;
 						}
 					},
 					{
 						id: 'bewerken',
-						label: 'Waarden bijstellen',
-						aan: editing === preset.id,
-						uit: canEdit ? undefined : 'Vereist een token',
-						doen: () => {
+						label: t('library.menu.adjust'),
+						on: editing === preset.id,
+						off: canEdit ? undefined : t('reason.needsToken'),
+						run: () => {
 							herkomst = null;
 							editing = editing === preset.id ? null : preset.id;
 						}
 					},
 					{
-						id: 'raster',
-						label: `Testraster maken voor ${preset.material_name}`,
-						uit: canEdit ? undefined : 'Vereist een token',
-						doen: () => onMakeGrid?.(preset.material_id)
+						id: 'grid',
+						label: t('library.menu.makeGrid', { material: preset.material_name }),
+						off: canEdit ? undefined : t('reason.needsToken'),
+						run: () => onMakeGrid?.(preset.material_id)
 					},
 					{
-						id: 'delen',
-						label: 'Delen met Presetariat',
-						uit: canEdit ? undefined : 'Vereist een token',
-						doen: () => share(preset)
+						id: 'parts',
+						label: t('library.menu.share'),
+						off: canEdit ? undefined : t('reason.needsToken'),
+						run: () => share(preset)
 					}
 				]
 			},
 			{
 				items: [
 					{
-						id: 'weg',
-						label: 'Instelling verwijderen',
-						uit: canEdit ? undefined : 'Vereist een token',
-						gevaar: true,
-						doen: () => (weghalen = preset.id)
+						id: 'gone',
+						label: t('library.menu.remove'),
+						off: canEdit ? undefined : t('reason.needsToken'),
+						danger: true,
+						run: () => (weghalen = preset.id)
 					}
 				]
 			}
@@ -138,31 +140,31 @@
 
 	function opendMenu(event: MouseEvent, preset: Preset) {
 		event.preventDefault();
-		const doel = event.currentTarget as HTMLElement | null;
-		const doos = doel?.getBoundingClientRect();
-		rijMenu = {
-			lijst: presetMenu(preset),
-			// Een klik op de ⋯-knop hangt het menu onder die knop; een rechterklik
-			// op de regel hangt het bij de cursor.
-			x: event.type === 'contextmenu' || !doos ? event.clientX : doos.left - 180,
-			y: event.type === 'contextmenu' || !doos ? event.clientY : doos.bottom + 4
+		const target = event.currentTarget as HTMLElement | null;
+		const box = target?.getBoundingClientRect();
+		rowMenu = {
+			list: presetMenu(preset),
+			// A click on the ⋯ button hangs the menu below that button; a right-click on
+			// the row hangs it at the cursor.
+			x: event.type === 'contextmenu' || !box ? event.clientX : box.left - 180,
+			y: event.type === 'contextmenu' || !box ? event.clientY : box.bottom + 4
 		};
 	}
 
 	let chosenOperation = $derived(
 		operations.find((o) => o.id === targetOperation) ?? operations[0] ?? null
 	);
-	let laagNummer = $derived(
+	let layerNumber = $derived(
 		chosenOperation ? operations.findIndex((o) => o.id === chosenOperation.id) + 1 : 0
 	);
 	$effect(() => {
-		const gekozen = chosenOperation;
-		if (gekozen && targetOperation !== gekozen.id) targetOperation = gekozen.id;
+		const chosen = chosenOperation;
+		if (chosen && targetOperation !== chosen.id) targetOperation = chosen.id;
 	});
 
 	const operationLabel = operationName;
 
-	/** Zoeken over alles wat op de kaart staat: naam, dikte, bewerking, notitie. */
+	/** Searching everything on the card: name, thickness, operation, note. */
 	function raakt(preset: Preset, term: string) {
 		if (!term) return true;
 		const hooiberg = [
@@ -184,99 +186,99 @@
 	}
 
 	/**
-	 * Alle instellingen die aan het zoekwoord en het machinefilter voldoen —
-	 * bewust **niet** aan het gekozen materiaal.
+	 * Every setting that matches the search term and the machine filter —
+	 * deliberately **not** the chosen material.
 	 *
-	 * Het materiaal is sinds v4 de lijst links, en die lijst moet alle materialen
-	 * blijven tonen: filterde hij zichzelf, dan bleef er na één klik één regel
-	 * over en was er geen weg meer naar het volgende materiaal. Het inperken op
-	 * materiaal gebeurt in `zichtbarePresets`, aan de rechterkant.
+	 * Since v4 the material is the list on the left, and that list has to keep showing
+	 * every material: filtering itself, one click would leave one row and there would
+	 * be no way on to the next material. Narrowing by material happens in
+	 * `zichtbarePresets`, on the right-hand side.
 	 */
-	let zichtbaar = $derived(library.presetsFor(null).filter((p) => raakt(p, zoek.trim())));
+	let visible = $derived(library.presetsFor(null).filter((p) => raakt(p, zoek.trim())));
 
 	function gebruikt(preset: Preset) {
 		return preset.last_used_at ? Date.parse(`${preset.last_used_at.replace(' ', 'T')}Z`) : 0;
 	}
 
 	/**
-	 * Wat je gisteren gebruikte, staat vandaag bovenaan.
+	 * What you used yesterday is at the top today.
 	 *
-	 * Alfabetisch sorteren is eerlijk en onbruikbaar: wie elke dag hetzelfde
-	 * multiplex snijdt, scrollde langs acryl, karton en leer om er te komen.
+	 * Sorting alphabetically is fair and unusable: anybody cutting the same plywood
+	 * every day scrolled past acrylic, cardboard and leather to get to it.
 	 */
 	let recent = $derived(
-		zichtbaar
+		visible
 			.filter((p) => p.last_used_at)
 			.sort((a, b) => gebruikt(b) - gebruikt(a))
 			.slice(0, 3)
 	);
 
-	/** Op welke dikte er gefilterd wordt binnen het gekozen materiaal. */
-	let dikte = $state<number | null>(null);
-	// Van materiaal wisselen zet het diktefilter terug: een dikte die dit
-	// materiaal niet heeft, geeft een leeg paneel zonder dat je ziet waarom.
+	/** Which thickness is being filtered on within the chosen material. */
+	let thickness = $state<number | null>(null);
+	// Switching material resets the thickness filter: a thickness this material does
+	// not have gives an empty panel without you seeing why.
 	$effect(() => {
 		void materialId;
-		untrack(() => (dikte = null));
+		untrack(() => (thickness = null));
 	});
 
-	/** De diktes die dit materiaal werkelijk heeft, dun naar dik. */
-	let diktes = $derived.by(() => {
-		const groep = groepen.find((g) => g.materialId === materialId);
-		const waarden = new Set<number | null>();
-		for (const preset of groep?.presets ?? []) waarden.add(preset.thickness_mm);
-		return [...waarden].sort((a, b) => (a ?? -1) - (b ?? -1));
+	/** The thicknesses this material really has, thin to thick. */
+	let thicknesses = $derived.by(() => {
+		const group = groepen.find((g) => g.materialId === materialId);
+		const values = new Set<number | null>();
+		for (const preset of group?.presets ?? []) values.add(preset.thickness_mm);
+		return [...values].sort((a, b) => (a ?? -1) - (b ?? -1));
 	});
 
 	/**
-	 * Wat er rechts staat, op leesvolgorde: dun naar dik, en binnen een dikte de
-	 * gemeten instellingen eerst. Een gemeten waarde is meer waard dan een
-	 * geschatte, dus die hoort bovenaan te staan en niet op alfabet.
+	 * What is on the right, in reading order: thin to thick, and within a thickness
+	 * the measured settings first. A measured value is worth more than an estimated
+	 * one, so it belongs at the top and not in alphabetical order.
 	 */
-	const BRON_ORDE: Record<string, number> = { testraster: 0, presetariat: 1, geextrapoleerd: 2, handmatig: 3 };
+	const SOURCE_ORDER: Record<string, number> = { testraster: 0, presetariat: 1, geextrapoleerd: 2, handmatig: 3 };
 	let zichtbarePresets = $derived.by(() => {
-		const groep = groepen.find((g) => g.materialId === materialId);
-		const lijst = (groep?.presets ?? []).filter((p) => dikte === null || p.thickness_mm === dikte);
-		return [...lijst].sort(
+		const group = groepen.find((g) => g.materialId === materialId);
+		const list = (group?.presets ?? []).filter((p) => thickness === null || p.thickness_mm === thickness);
+		return [...list].sort(
 			(a, b) =>
 				(a.thickness_mm ?? -1) - (b.thickness_mm ?? -1) ||
-				(BRON_ORDE[a.source] ?? 9) - (BRON_ORDE[b.source] ?? 9) ||
+				(SOURCE_ORDER[a.source] ?? 9) - (SOURCE_ORDER[b.source] ?? 9) ||
 				a.operation.localeCompare(b.operation, 'nl')
 		);
 	});
 
-	type Groep = { naam: string; materialId: number; presets: Preset[]; laatst: number };
+	type Groep = { name: string; materialId: number; presets: Preset[]; laatst: number };
 	let groepen = $derived.by<Groep[]>(() => {
-		const kaart = new Map<number, Groep>();
-		for (const preset of zichtbaar) {
-			let groep = kaart.get(preset.material_id);
-			if (!groep) {
-				groep = {
-					naam: preset.material_name,
+		const card = new Map<number, Groep>();
+		for (const preset of visible) {
+			let group = card.get(preset.material_id);
+			if (!group) {
+				group = {
+					name: preset.material_name,
 					materialId: preset.material_id,
 					presets: [],
 					laatst: 0
 				};
-				kaart.set(preset.material_id, groep);
+				card.set(preset.material_id, group);
 			}
-			groep.presets.push(preset);
-			groep.laatst = Math.max(groep.laatst, gebruikt(preset));
+			group.presets.push(preset);
+			group.laatst = Math.max(group.laatst, gebruikt(preset));
 		}
-		// Materialen zonder presets horen er ook bij: zonder die groep is er
-		// geen plek waar "testraster maken" logisch staat.
+		// Materials without presets belong here too: without that group there is
+		// nowhere that "make a test grid" sits logically.
 		for (const materiaal of library.materials) {
-			if (kaart.has(materiaal.id)) continue;
+			if (card.has(materiaal.id)) continue;
 			if (zoek.trim() && !materiaal.name.toLowerCase().includes(zoek.trim().toLowerCase()))
 				continue;
-			kaart.set(materiaal.id, {
-				naam: materiaal.name,
+			card.set(materiaal.id, {
+				name: materiaal.name,
 				materialId: materiaal.id,
 				presets: [],
 				laatst: 0
 			});
 		}
-		return [...kaart.values()].sort(
-			(a, b) => b.laatst - a.laatst || a.naam.localeCompare(b.naam, 'nl')
+		return [...card.values()].sort(
+			(a, b) => b.laatst - a.laatst || a.name.localeCompare(b.name, 'nl')
 		);
 	});
 
@@ -291,10 +293,10 @@
 	}
 
 	async function createPreset() {
-		const doel = draft.material_id ?? materialId;
-		if (doel === null) return;
+		const target = draft.material_id ?? materialId;
+		if (target === null) return;
 		const created = await library.addPreset({
-			material_id: doel,
+			material_id: target,
 			operation: draft.operation,
 			thickness_mm: draft.thickness_mm === '' ? null : Number(draft.thickness_mm),
 			speed_mm_s: Number(draft.speed_mm_s),
@@ -304,16 +306,16 @@
 	}
 
 	/**
-	 * Een eigen preset aandragen bij de gedeelde catalogus.
+	 * Offering one of your own presets to the shared catalogue.
 	 *
-	 * De API maakt er een catalogusregel van en levert een voorgevuld voorstel
-	 * op GitHub; wij openen dat, zodat de gebruiker zelf ziet wat hij deelt.
+	 * The API turns it into a catalogue entry and produces a pre-filled proposal on
+	 * GitHub; we open that, so the user sees for themselves what they are sharing.
 	 */
 	async function share(preset: Preset) {
 		shareError = null;
 		const response = await fetch(`/api/presetariat/contribution/${preset.id}`);
 		if (!response.ok) {
-			shareError = (await response.json().catch(() => null))?.detail ?? 'Delen lukte niet.';
+			shareError = (await response.json().catch(() => null))?.detail ?? t('library.share.failed');
 			return;
 		}
 		const shared = await response.json();
@@ -344,14 +346,14 @@
 	}
 
 	/**
-	 * Welke textuur bij een materiaal hoort.
+	 * Which texture belongs to a material.
 	 *
-	 * Op naam raden is grof, maar het alternatief is een veld dat niemand
-	 * invult. Onbekend materiaal krijgt een neutrale strook — dat is eerlijker
-	 * dan hout suggereren.
+	 * Guessing on the name is crude, but the alternative is a field nobody fills in.
+	 * An unknown material gets a neutral band — that is more honest than suggesting
+	 * wood.
 	 */
-	function textuur(naam: string | null): string {
-		const n = (naam ?? '').toLowerCase();
+	function textuur(name: string | null): string {
+		const n = (name ?? '').toLowerCase();
 		if (/multiplex|plywood|hout|wood|mdf|berk|populier|eiken/.test(n)) return 'hout';
 		if (/acryl|acrylic|plexi|pmma/.test(n)) return 'acryl';
 		if (/leer|leather/.test(n)) return 'leer';
@@ -360,16 +362,16 @@
 			/staal|metaal|alu|steel|metal|messing|rvs|inox|chroom|koper|brass|copper|titaan/.test(n)
 		)
 			return 'metaal';
-		return 'onbekend';
+		return 'unknown';
 	}
 
-	let bezigFoto = $state<number | null>(null);
+	let busyPhoto = $state<number | null>(null);
 
-	async function fotoBij(gridId: number, bestand: File) {
-		bezigFoto = gridId;
+	async function photoFor(gridId: number, file: File) {
+		busyPhoto = gridId;
 		try {
 			const form = new FormData();
-			form.append('file', bestand);
+			form.append('file', file);
 			const response = await fetch(`/api/library/testgrids/${gridId}/photo`, {
 				method: 'POST',
 				headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -377,151 +379,151 @@
 			});
 			if (response.ok) await library.load();
 		} finally {
-			bezigFoto = null;
+			busyPhoto = null;
 		}
 	}
 
 	// ------------------------------------------------ uitwisselen (besluit B7)
 
-	type Voorstel = ImportPreview['samenvoegen']['materials']['similar'][number];
+	type Suggestion = ImportPreview['merge']['materials']['similar'][number];
 
-	let voorbeeld = $state<ImportPreview | null>(null);
-	let bestandsnaam = $state('');
-	let modus = $state<'samenvoegen' | 'vervangen'>('samenvoegen');
-	let botsWint = $state<'eigen' | 'bestand'>('eigen');
-	/** Welk materiaal uit het bestand op welk eigen materiaal gelegd wordt. */
-	let koppel = $state<Record<string, number>>({});
-	let wisZeker = $state(false);
-	let klaar = $state<ImportResult | null>(null);
+	let preview = $state<ImportPreview | null>(null);
+	let fileName = $state('');
+	let mode = $state<'merge' | 'replace'>('merge');
+	let clashWinner = $state<'mine' | 'file'>('mine');
+	/** Which material from the file is laid onto which of your own materials. */
+	let links = $state<Record<string, number>>({});
+	let wipeConfirmed = $state(false);
+	let ready = $state<ImportResult | null>(null);
 	/**
-	 * Elk voorstel dat we ooit toonden, ook nadat het aangevinkt is.
+	 * Every proposal we ever showed, including after it has been ticked.
 	 *
-	 * Zodra je koppelt, telt het materiaal als bekend en verdwijnt het uit de
-	 * voorstellen van de server — en daarmee zou het vinkje verdwijnen dat je
-	 * net zette. Dan is de keuze niet meer terug te draaien zonder afbreken.
+	 * As soon as you link them, the material counts as known and disappears from the
+	 * server's proposals — and with it the tick you just made would disappear. Then
+	 * the choice can no longer be undone without cancelling.
 	 */
-	let gezien = $state<Record<string, Voorstel>>({});
+	let seen = $state<Record<string, Suggestion>>({});
 	let voorstellen = $derived.by(() => {
-		const lijst = [...(voorbeeld?.samenvoegen.materials.similar ?? [])];
-		for (const naam of Object.keys(koppel)) {
-			if (gezien[naam] && !lijst.some((p) => p.name === naam)) lijst.push(gezien[naam]);
+		const list = [...(preview?.merge.materials.similar ?? [])];
+		for (const name of Object.keys(links)) {
+			if (seen[name] && !list.some((p) => p.name === name)) list.push(seen[name]);
 		}
-		return lijst.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+		return list.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
 	});
 
-	/** Kwam er iets binnen dat het huidige filter niet laat zien? */
-	let verborgen = $state(false);
+	/** Did something come in that the current filter does not show? */
+	let hidden = $state(false);
 	let wisselEl = $state<HTMLElement | null>(null);
-	let klaarEl = $state<HTMLElement | null>(null);
+	let readyEl = $state<HTMLElement | null>(null);
 
 	/**
-	 * Het venster is de scrollbak, en je drukte op een knop onderaan.
+	 * The dialog is the scroll container, and you pressed a button at the bottom.
 	 *
-	 * Zonder dit verschijnt het voorbeeld met zijn kop en zijn tellingen bóven
-	 * beeld: je landt midden in een beslissing en moet eerst omhoog om te zien
-	 * waar hij over gaat.
+	 * Without this the preview appears with its heading and its tallies *above* the
+	 * viewport: you land in the middle of a decision and have to go up first to see
+	 * what it is about.
 	 */
-	async function naarBoven(welke: 'voorbeeld' | 'klaar') {
+	async function toTop(welke: 'preview' | 'ready') {
 		await tick();
-		(welke === 'klaar' ? klaarEl : wisselEl)?.scrollIntoView({ block: 'start' });
+		(welke === 'ready' ? readyEl : wisselEl)?.scrollIntoView({ block: 'start' });
 	}
 
-	async function kiesBestand(bestand: File) {
-		klaar = null;
-		modus = 'samenvoegen';
-		botsWint = 'eigen';
-		koppel = {};
-		gezien = {};
-		wisZeker = false;
-		bestandsnaam = bestand.name;
-		voorbeeld = await library.uploadBundle(bestand);
-		if (voorbeeld) naarBoven('voorbeeld');
+	async function pickFile(file: File) {
+		ready = null;
+		mode = 'merge';
+		clashWinner = 'mine';
+		links = {};
+		seen = {};
+		wipeConfirmed = false;
+		fileName = file.name;
+		preview = await library.uploadBundle(file);
+		if (preview) toTop('preview');
 	}
 
 	/**
-	 * Twee namen voor dezelfde plank aan elkaar knopen.
+	 * Tying two names for the same board together.
 	 *
-	 * Het voorbeeld wordt daarna opnieuw opgehaald: het aantal nieuwe materialen
-	 * verandert erdoor, en een telling die niet meebeweegt met je keuze is een
-	 * telling die je niet kunt vertrouwen.
+	 * The preview is fetched again afterwards: the number of new materials changes
+	 * because of it, and a tally that does not move with your choice is a tally you
+	 * cannot trust.
 	 */
-	async function koppelen(paar: Voorstel, aan: boolean) {
-		// Onthouden vóór het herrekenen: daarna kent de server dit materiaal en
-		// draagt hij het voorstel niet meer aan.
-		gezien = { ...gezien, [paar.name]: paar };
-		koppel = aan
-			? { ...koppel, [paar.name]: paar.material_id }
-			: Object.fromEntries(Object.entries(koppel).filter(([k]) => k !== paar.name));
-		if (voorbeeld) {
-			const opnieuw = await library.previewBundle(voorbeeld.bundle, koppel);
-			if (opnieuw) voorbeeld = opnieuw;
+	async function linkTo(pair: Suggestion, on: boolean) {
+		// Remember it before recomputing: after that the server knows this material and
+		// no longer offers the proposal.
+		seen = { ...seen, [pair.name]: pair };
+		links = on
+			? { ...links, [pair.name]: pair.material_id }
+			: Object.fromEntries(Object.entries(links).filter(([k]) => k !== pair.name));
+		if (preview) {
+			const again = await library.previewBundle(preview.bundle, links);
+			if (again) preview = again;
 		}
 	}
 
 	async function importeren() {
-		if (!voorbeeld) return;
-		const zichtbaarVoor = library.presets.length;
-		const uitkomst = await library.importBundle(voorbeeld.bundle, modus, koppel, botsWint);
-		if (uitkomst) {
-			// "4 instellingen erbij" terwijl het scherm niet verandert, is geen
-			// geruststelling maar een raadsel: ze horen dan bij een andere machine
-			// en vallen buiten het filter. Gemeten in plaats van geraden.
-			verborgen =
-				uitkomst.presets.added > 0 &&
-				library.presets.length - zichtbaarVoor < uitkomst.presets.added;
-			klaar = uitkomst;
-			voorbeeld = null;
-			naarBoven('klaar');
+		if (!preview) return;
+		const visibleFor = library.presets.length;
+		const outcome = await library.importBundle(preview.bundle, mode, links, clashWinner);
+		if (outcome) {
+			// "4 settings added" while the screen does not change is not reassurance but
+			// a riddle: they belong to another machine then and fall outside the filter.
+			// Measured rather than guessed.
+			hidden =
+				outcome.presets.added > 0 &&
+				library.presets.length - visibleFor < outcome.presets.added;
+			ready = outcome;
+			preview = null;
+			toTop('ready');
 		}
 	}
 
 	/**
-	 * Draagt de kant uit het bestand het betere bewijs?
+	 * Does the side from the file carry the better evidence?
 	 *
-	 * "Mijn waarden houden" is de veilige regel, maar niet als jouw waarde
-	 * uitgerekend is en die uit het bestand op een raster gebrand. Dan wint de
-	 * regel het van de meting, en dat hoort iemand te zien vóór hij kiest.
+	 * "Keep my values" is the safe rule, but not when your value is calculated and the
+	 * one from the file was burned on a grid. Then the rule beats the measurement, and
+	 * somebody should see that before they choose.
 	 */
-	function sterkerBewijs(botsing: PresetConflict) {
-		return botsing.theirs.source === 'testraster' && botsing.mine.source !== 'testraster';
+	function sterkerBewijs(clash: PresetConflict) {
+		return clash.theirs.source === 'testraster' && clash.mine.source !== 'testraster';
 	}
 
-	/** "3 instellingen" — en "1 instelling", want dat leest een mens ook. */
-	function tel(aantal: number, enkel: string, meer: string) {
-		return `${aantal} ${aantal === 1 ? enkel : meer}`;
+	/** "3 settings" — and "1 setting", because that is what a person reads too. */
+	function count(n: number, what: 'materials' | 'presets' | 'machines' | 'testGrids' | 'photos' | 'grids') {
+		return t(`count.${what}` as never, { n });
 	}
 
-	/** Wat er aan een machineprofiel hangt; alleen wat er werkelijk is. */
+	/** What hangs off a machine profile; only what is really there. */
 	function bewijs(machine: { presets: number; test_grids: number }) {
-		const delen = [];
-		if (machine.presets) delen.push(tel(machine.presets, 'instelling', 'instellingen'));
-		if (machine.test_grids) delen.push(tel(machine.test_grids, 'raster', 'rasters'));
-		return delen.join(' · ');
+		const parts = [];
+		if (machine.presets) parts.push(count(machine.presets, 'presets'));
+		if (machine.test_grids) parts.push(count(machine.test_grids, 'grids'));
+		return parts.join(' · ');
 	}
 
 	/**
-	 * De rasterfoto, met het gekozen vakje omcirkeld als we weten welk vakje het was.
+	 * The grid photo, with the chosen square circled when we know which square it was.
 	 *
-	 * De server tekent de markering in het beeld (`?cell=<rij>-<kolom>`), dus een
-	 * gewone `<img>` volstaat en er is hier geen overlay-wiskunde nodig. Zonder
-	 * bekend vakje vragen we de foto onbewerkt op — dat is de veilige val-terug.
+	 * The server draws the marker into the image (`?cell=<row>-<column>`), so a plain
+	 * `<img>` suffices and no overlay maths is needed here. Without a known square we
+	 * ask for the photo unprocessed — that is the safe fallback.
 	 */
-	function fotoUrl(preset: Preset) {
+	function photoUrl(preset: Preset) {
 		const basis = `/api/library/testgrids/${preset.grid_id}/photo`;
 		return preset.grid_cell
 			? `${basis}?cell=${preset.grid_cell.row}-${preset.grid_cell.column}`
 			: basis;
 	}
 
-	/** Past deze preset bij het laagtype waar hij op gezet wordt? */
-	function pastBij(preset: Preset, laag: DesignOperation | null) {
-		if (!laag) return true;
+	/** Does this preset suit the layer type it is being put on? */
+	function pastBij(preset: Preset, layer: DesignOperation | null) {
+		if (!layer) return true;
 		const toegestaan = OPERATION_LAYER[preset.operation];
-		return !toegestaan || toegestaan.includes(laag.type);
+		return !toegestaan || toegestaan.includes(layer.type);
 	}
 </script>
 
-{#snippet bronIcoon(soort: string)}
+{#snippet sourceIcon(kind: string)}
 	<svg
 		class="ico"
 		width="13"
@@ -534,14 +536,14 @@
 		stroke-linejoin="round"
 		aria-hidden="true"
 	>
-		{#if soort === 'check'}
+		{#if kind === 'check'}
 			<circle cx="12" cy="12" r="9" stroke-width="1.9" />
 			<path d="M8 12.4l2.6 2.6L16 9.6" />
-		{:else if soort === 'alert'}
+		{:else if kind === 'alert'}
 			<path d="M12 4.5L21 19.5H3z" stroke-width="1.9" stroke-linejoin="round" />
 			<path d="M12 10v4" />
 			<path d="M12 17h.01" />
-		{:else if soort === 'down'}
+		{:else if kind === 'down'}
 			<path d="M12 4v11" />
 			<path d="M7.5 10.5L12 15l4.5-4.5" />
 			<path d="M5 19h14" />
@@ -552,109 +554,117 @@
 	</svg>
 {/snippet}
 
-{#snippet kaart(preset: Preset, toonMateriaal: boolean)}
-	{@const bron = SOURCE_LABEL[preset.source]}
+{#snippet card(preset: Preset, showMaterial: boolean)}
+	{@const source = SOURCE_LABEL[preset.source]}
 	{@const past = !canEdit || pastBij(preset, chosenOperation)}
-	{@const uit = herkomst === preset.id || editing === preset.id}
+	{@const off = herkomst === preset.id || editing === preset.id}
 	<article
-		class="preset {bron.tone}"
-		class:open={uit}
+		class="preset {source.tone}"
+		class:open={off}
 		role="presentation"
 		oncontextmenu={(e) => canEdit && opendMenu(e, preset)}
 	>
 		<!--
-			Eén regel per instelling in plaats van een kaart van 200 px hoog.
+			One line per setting instead of a 200 px card.
 
-			Wat de taak vraagt is vergelijken: welke dikte, welke bewerking, hoe
-			hard, en is het gemeten of gegokt. Dat zijn vier dingen en die passen
-			op één regel. In de oude kaart stonden dezelfde vier dingen verspreid
-			over vier blokken met een tussenkop per waarde, plus een volle alinea
-			uitleg en vijf knoppen — samen 200 px, dus twee instellingen per
-			schermvulling. Gemeten in de oude opzet: dertien instellingen was
-			2 600 px scrollen. Wat er verder over een instelling te weten valt,
-			staat er nog steeds, maar pas als je erom vraagt.
+			What the task asks for is comparing: which thickness, which operation, how
+			hard, and was it measured or guessed. That is four things and they fit on
+			one line. In the old card the same four things were spread over four blocks
+			with a subheading per value, plus a full paragraph of explanation and five
+			buttons — 200 px together, so two settings per screenful. Measured in the
+			old layout: thirteen settings was 2,600 px of scrolling. Whatever else
+			there is to know about a setting is still there, but only when you ask.
 		-->
-		<div class="rij">
+		<div class="row">
 			<div class="wat">
-				<span class="maat mono">
+				<span class="size mono">
 					{#if preset.thickness_mm !== null}{preset.thickness_mm} mm{:else}—{/if}
 				</span>
-				<span class="bewerking">
-					{#if toonMateriaal}<span class="mat">{preset.material_name}</span> · {/if}
+				<span class="operation">
+					{#if showMaterial}<span class="mat">{preset.material_name}</span> · {/if}
 					{operationLabel(preset.operation)}
 				</span>
 				{#if !past}
-						<!-- De bewerking van deze instelling past niet bij de laag waar hij
-						     op gezet zou worden. Dat is een eigenschap van deze regel, dus
-						     staat het bij de bewerking — niet als kleur op de knop. Met tien
-						     van de dertien regels oranje leest het scherm als tien fouten in
-						     plaats van als één mismatch die je zelf koos. -->
+						<!-- The operation of this setting does not match the layer it would be
+						     put on. That is a property of this row, so it sits with the
+						     operation — not as a colour on the button. With ten of thirteen
+						     rows amber the screen reads as ten mistakes instead of as one
+						     mismatch you chose yourself. -->
 						<span
 							class="mismatch"
-							title="Dit zijn waarden voor {operationLabel(
-								preset.operation
-							).toLowerCase()}; laag {laagNummer} is een {chosenOperation?.label.toLowerCase()}-laag"
+							title={t('library.mismatch.title', {
+								operation: operationLabel(preset.operation).toLowerCase(),
+								n: layerNumber,
+								layerKind: chosenOperation?.label.toLowerCase()
+							})}
 						>
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5" /><path d="M12 17h.01" /><path d="M10.3 3.9 2.4 18a1.8 1.8 0 0 0 1.6 2.7h16a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z" /></svg>
-						ander soort
+						{t('library.mismatch.tag')}
 					</span>
 				{/if}
 			</div>
 
-			<div class="waarden mono">
-				<span title="Snelheid">{preset.speed_mm_s}<small>mm/s</small></span>
-				<span title="Vermogen">{preset.power_percent}<small>%</small></span>
-				{#if preset.passes > 1}<span title="Passes">{preset.passes}<small>×</small></span>{/if}
+			<div class="values mono">
+				<span title={t('library.speed')}>{preset.speed_mm_s}<small>mm/s</small></span>
+				<span title={t('library.power')}>{preset.power_percent}<small>%</small></span>
+				{#if preset.passes > 1}<span title={t('library.passes')}
+						>{preset.passes}<small>×</small></span
+					>{/if}
 				{#if preset.interval_mm && preset.operation === 'graveren-raster'}
-					<span title="Lijnafstand">{preset.interval_mm}<small>mm</small></span>
+					<span title={t('library.interval')}>{preset.interval_mm}<small>mm</small></span>
 				{/if}
 			</div>
 
-			<!-- De bron als één merk, met de volle uitleg in de tooltip en in de
-			     herkomst. De alinea die dit op elke kaart uitschreef was op één
-			     kaart nuttig en op dertien ruis. -->
-			<span class="badge {bron.tone}" title="{bron.means}{bron.advice ? ' ' + bron.advice : ''}">
-				{@render bronIcoon(bron.icon)}
-				{bron.text}
+			<!-- The source as one badge, with the full explanation in the tooltip and in
+			     the provenance. The paragraph that spelled this out on every card was
+			     useful on one card and noise on thirteen. -->
+			<span class="badge {source.tone}" title="{source.means}{source.advice ? ' ' + source.advice : ''}">
+				{@render sourceIcon(source.icon)}
+				{source.text}
 			</span>
 
 			{#if preset.grid_photo}
 				<button
 					class="bewijs"
-					aria-label="Foto van het testraster"
+					aria-label={t('library.photoAria')}
 					onclick={() => (herkomst = herkomst === preset.id ? null : preset.id)}
 					title={preset.grid_cell
-						? `Het testraster, met vakje rij ${preset.grid_cell.row + 1}, kolom ${preset.grid_cell.column + 1} omcirkeld`
-						: 'Foto van het testraster waar deze instelling uit komt'}
+						? t('library.photo.circled', {
+								row: preset.grid_cell.row + 1,
+								column: preset.grid_cell.column + 1
+							})
+						: t('library.photo.title')}
 				>
-					<img src={fotoUrl(preset)} alt="" />
+					<img src={photoUrl(preset)} alt="" />
 				</button>
 			{:else}
 				<span class="geenfoto" aria-hidden="true"></span>
 			{/if}
 
 			{#if canEdit}
-				<!-- Eén knop die de taak afmaakt, en de rest achter een menu. Er
-				     stonden vier knoppen op elke regel — toepassen, herkomst,
-				     bewerken, verwijderen — en dan is de knop die je 95 % van de tijd
-				     wil, één van de vier. -->
+				<!-- One button that finishes the task, and the rest behind a menu. There
+				     used to be four buttons on every row — apply, provenance, edit, remove
+				     — and then the button you want 95 % of the time is one of four. -->
 				<button
 					class="doe"
 					disabled={library.busy || !chosenOperation}
 					title={chosenOperation
 						? past
-							? `Zet snelheid en vermogen op laag ${laagNummer}`
-							: `Let op: dit zijn waarden voor ${operationLabel(preset.operation).toLowerCase()}, en laag ${laagNummer} is daar niet voor bedoeld`
-						: 'Maak eerst een laag aan in de tab Lagen'}
+							? t('library.apply.title', { n: layerNumber })
+							: t('library.apply.mismatch', {
+									operation: operationLabel(preset.operation).toLowerCase(),
+									n: layerNumber
+								})
+						: t('library.menu.needsLayer')}
 					onclick={() => apply(preset)}
 				>
-					Toepassen
+					{t('library.menu.apply')}
 				</button>
 				<button
 					class="meer"
-					aria-label="Meer voor deze instelling"
+					aria-label={t('library.more.aria')}
 					aria-haspopup="menu"
-					title="Meer — of rechterklik op de regel"
+					title={t('library.more.title')}
 					onclick={(e) => opendMenu(e, preset)}
 				>
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
@@ -663,87 +673,93 @@
 		</div>
 
 		{#if weghalen === preset.id}
-			<!-- Bevestigen onder de regel die het raakt, niet in een venster: het
-			     is één instelling en de vraag hoort naast wat er weggaat. -->
+			<!-- Confirming under the row it concerns, not in a window: it is one setting
+			     and the question belongs next to what is going away. -->
 			<div class="zekerweg" role="alert">
 				<span>
-					{#if preset.thickness_mm !== null}{preset.thickness_mm} mm {/if}{operationLabel(
-						preset.operation
-					).toLowerCase()} van {preset.material_name} weggooien?
-					{#if preset.source === 'testraster'}Deze is gemeten op een testraster.{/if}
+					{t('library.drop.ask', {
+						thickness: preset.thickness_mm !== null ? `${preset.thickness_mm} mm ` : '',
+						operation: operationLabel(preset.operation).toLowerCase(),
+						material: preset.material_name
+					})}
+					{#if preset.source === 'testraster'}{t('library.drop.measured')}{/if}
 				</span>
-				<button class="mini" onclick={() => (weghalen = null)}>Bewaren</button>
-				<button class="mini gevaar" onclick={() => library.removePreset(preset.id)}>
-					Weggooien
+				<button class="mini" onclick={() => (weghalen = null)}>{t('library.drop.keep')}</button>
+				<button class="mini danger" onclick={() => library.removePreset(preset.id)}>
+					{t('library.drop.confirm')}
 				</button>
 			</div>
 		{/if}
 
 		{#if herkomst === preset.id}
-			<!-- De community-herkomst is een eersteklas element, geen verborgen
-			     database: wie, welke machine, welk vakje, welke foto. -->
+			<!-- The community provenance is a first-class element, not a hidden
+			     database: who, which machine, which square, which photo. -->
 			<div class="herkomst">
 				<dl>
-					<dt>Bron</dt>
-					<dd>{bron.text} — {bron.means.toLowerCase()}</dd>
-					<dt>Machine</dt>
-					<dd>{preset.machine_name ?? 'Onbekend — profiel niet gekoppeld'}</dd>
+					<dt>{t('library.source')}</dt>
+					<dd>{t('library.sourceLine', { badge: source.text, means: source.means.toLowerCase() })}</dd>
+					<dt>{t('library.machine')}</dt>
+					<dd>{preset.machine_name ?? t('library.machine.unknown')}</dd>
 					{#if preset.grid_id}
-						<dt>Testraster</dt>
+						<dt>{t('library.grid')}</dt>
 						<dd>
-							<!-- Staat de foto ernaast, dan noemt het bijschrift het vakje al;
-							     twee regels verder hetzelfde herhalen is ruis. -->
-							#{preset.grid_id}{preset.grid_date ? ` · gebrand ${toen(preset.grid_date)}` : ''}{preset.grid_cell &&
-							!preset.grid_photo
-								? ` · vakje rij ${preset.grid_cell.row + 1}, kolom ${preset.grid_cell.column + 1}`
+							<!-- With the photo beside it the caption already names the square;
+							     repeating the same thing two lines further on is noise. -->
+							#{preset.grid_id}{preset.grid_date
+								? ` · ${t('library.grid.burned', { when: i18n.ago(preset.grid_date) })}`
+								: ''}{preset.grid_cell && !preset.grid_photo
+								? ` · ${t('library.grid.cell', {
+										row: preset.grid_cell.row + 1,
+										column: preset.grid_cell.column + 1
+									})}`
 								: ''}
 						</dd>
 					{/if}
 					{#if preset.note}
-						<dt>Notitie</dt>
+						<dt>{t('library.note')}</dt>
 						<dd>{preset.note}</dd>
 					{/if}
-					<dt>Luchtassist</dt>
-					<dd>{preset.air_assist ? 'aan' : 'uit'}</dd>
+					<dt>{t('library.air')}</dt>
+					<dd>{preset.air_assist ? t('library.on') : t('library.off')}</dd>
 					{#if preset.last_used_at}
-						<dt>Laatst gebruikt</dt>
-						<dd>{toen(preset.last_used_at)}</dd>
+						<dt>{t('library.lastUsed')}</dt>
+						<dd>{i18n.ago(preset.last_used_at)}</dd>
 					{/if}
 				</dl>
 				<div class="bewijsvak">
 					{#if preset.grid_photo}
 						<img
-							src={fotoUrl(preset)}
+							src={photoUrl(preset)}
 							alt={preset.grid_cell
-								? `Foto van testraster ${preset.grid_id}, met vakje rij ${preset.grid_cell.row + 1}, kolom ${preset.grid_cell.column + 1} omcirkeld`
-								: `Foto van testraster ${preset.grid_id}`}
+								? t('library.photo.altCircled', {
+										id: preset.grid_id,
+										row: preset.grid_cell.row + 1,
+										column: preset.grid_cell.column + 1
+									})
+								: t('library.photo.alt', { id: preset.grid_id })}
 						/>
-						<p class="onder">
+						<p class="below">
 							{#if preset.grid_cell}
-								<!-- De markering volgt de uitlijning van het raster; is die niet
-								     gezet, dan valt de server terug op het hele beeld en klopt
-								     de omtrek bij benadering. Daarom benoemt het bijschrift het
-								     vakje, in plaats van te beweren dat de cirkel exact zit. -->
-								De omtrek wijst vakje rij {preset.grid_cell.row + 1}, kolom
-								{preset.grid_cell.column + 1} aan — daar komen deze waarden uit.
+								<!-- The mark follows the alignment of the grid; when that has not
+								     been set the server falls back to the whole image and the
+								     outline is approximate. So the caption names the square instead
+								     of claiming the circle is exact. -->
+								{t('library.caption.cell', {
+									row: preset.grid_cell.row + 1,
+									column: preset.grid_cell.column + 1
+								})}
 								{#if preset.grid_aligned === false}
-									<span class="benadering">
-										De uitlijning van deze foto is niet gezet, dus de omtrek is bij
-										benadering — lijn het raster uit voor een exacte markering.
-									</span>
+									<span class="benadering">{t('library.caption.approximate')}</span>
 								{/if}
 							{:else}
-								Het gebrande raster waar deze waarden uit komen.
+								{t('library.caption.grid')}
 							{/if}
 						</p>
 					{:else if preset.grid_id}
-						<p class="onder">
-							Van dit raster is nog geen foto. Zonder foto is er niets om de keuze aan
-							af te lezen.
-						</p>
+						<p class="below">{t('library.caption.noPhoto')}</p>
 						{#if canEdit}
 							<label class="mini file">
-								{bezigFoto === preset.grid_id ? 'bezig…' : 'Foto toevoegen'}
+								{busyPhoto === preset.grid_id ? t('common.busy') : t('library.addPhoto')}
 								<input
 									type="file"
 									accept="image/*"
@@ -751,44 +767,42 @@
 									onchange={(e) => {
 										const f = e.currentTarget.files?.[0];
 										e.currentTarget.value = '';
-										if (f && preset.grid_id) fotoBij(preset.grid_id, f);
+										if (f && preset.grid_id) photoFor(preset.grid_id, f);
 									}}
 								/>
 							</label>
 						{/if}
 					{:else}
-						<!-- Twee verschillende gevallen, en ze mogen niet dezelfde zin
-						     krijgen. Zegt de bron "gemeten" maar hangt er geen raster aan,
-						     dan is dát het bericht — niet "niet gemeten", want dat spreekt
-						     de badge op dezelfde regel tegen. -->
-						<p class="onder">
+						<!-- Two different cases, and they must not get the same sentence. If the
+						     source says "measured" but no grid hangs off it, *that* is the
+						     message — not "not measured", because that contradicts the badge on
+						     the same line. -->
+						<p class="below">
 							{#if preset.source === 'testraster'}
-								Deze instelling zegt dat hij gemeten is, maar er hangt geen
-								testraster aan — bijvoorbeeld omdat hij uit een import komt. Het
-								bewijs is er dus niet meer bij.
+								{t('library.evidence.lost')}
 							{:else}
-								Geen testraster: deze waarden zijn niet gemeten maar ingevoerd.
+								{t('library.evidence.none')}
 							{/if}
 						</p>
 						{#if canEdit}
 							<button class="mini" onclick={() => onMakeGrid?.(preset.material_id)}>
-								Testraster maken
+								{t('library.makeGrid')}
 							</button>
 						{/if}
 					{/if}
 					{#if canEdit}
-						<button class="mini" onclick={() => share(preset)}>Delen met Presetariat</button>
+						<button class="mini" onclick={() => share(preset)}>{t('library.menu.share')}</button>
 					{/if}
 				</div>
 			</div>
 		{/if}
 
 		{#if canEdit && editing === preset.id}
-			<!-- Materiaal, bewerking en bron liggen vast: dat is de identiteit
-			     van een preset, geen instelling. -->
+			<!-- Material, operation and source are fixed: that is the identity of a
+			     preset, not a setting. -->
 			<div class="edit">
 				<NumberField
-					label="Snelheid"
+					label={t('library.speed')}
 					unit="mm/s"
 					step={1}
 					min={0.1}
@@ -796,7 +810,7 @@
 					onchange={(v) => saveEdit(preset, { speed_mm_s: Number(v) })}
 				/>
 				<NumberField
-					label="Vermogen"
+					label={t('library.power')}
 					unit="%"
 					step={1}
 					min={1}
@@ -806,7 +820,7 @@
 				/>
 				{#if preset.operation === 'graveren-raster'}
 					<NumberField
-						label="Lijnafstand"
+						label={t('library.interval')}
 						unit="mm"
 						step={0.01}
 						min={0.01}
@@ -815,14 +829,14 @@
 					/>
 				{/if}
 				<NumberField
-					label="Passes"
+					label={t('library.passes')}
 					step={1}
 					min={1}
 					value={String(preset.passes)}
 					onchange={(v) => saveEdit(preset, { passes: Number(v) })}
 				/>
 				<NumberField
-					label="Dikte"
+					label={t('library.thickness')}
 					unit="mm"
 					step={0.5}
 					min={0}
@@ -830,16 +844,16 @@
 					onchange={(v) => saveEdit(preset, { thickness_mm: Number(v) })}
 				/>
 				<label class="wide"
-					><span>Notitie</span>
+					><span>{t('library.note')}</span>
 					<input
 						type="text"
 						value={preset.note}
-						placeholder="bijv. schone onderkant, geen schroeirand"
+						placeholder={t('library.note.placeholder')}
 						onchange={(e) => saveEdit(preset, { note: e.currentTarget.value })}
 					/>
 				</label>
 				<label class="wide"
-					><span>Machineprofiel</span>
+					><span>{t('library.machineProfile')}</span>
 					<select
 						value={preset.machine_name ?? ''}
 						onchange={(e) => {
@@ -858,119 +872,113 @@
 	</article>
 {/snippet}
 
-{#if voorbeeld}
-	<!-- Het importvoorbeeld neemt het hele venster over. Dit is het moment
-	     waarop de beslissing valt; ernaast blijven bladeren door de bibliotheek
-	     die je op het punt staat te overschrijven, helpt niemand. -->
-	{@const s = voorbeeld.samenvoegen}
+{#if preview}
+	<!-- The import preview takes over the whole dialog. This is the moment
+	     where the decision falls; going on browsing beside it through the library you
+	     are about to overwrite helps nobody. -->
+	{@const s = preview.merge}
 	<section class="wissel" bind:this={wisselEl}>
 		<header class="wisselkop">
-			<h2>Dit gaat er gebeuren</h2>
-			<p class="bron">
-				<span class="mono">{bestandsnaam}</span>
-				{#if voorbeeld.exported_at}
-					<span class="scheiding">·</span> geëxporteerd {toen(voorbeeld.exported_at)}
+			<h2>{t('import.title')}</h2>
+			<p class="source">
+				<span class="mono">{fileName}</span>
+				{#if preview.exported_at}
+					<span class="scheiding">·</span>
+					{t('import.exportedAt', { when: i18n.ago(preview.exported_at) })}
 				{/if}
 			</p>
-			<ul class="inhoud">
-				<li>{tel(voorbeeld.bevat.materials, 'materiaal', 'materialen')}</li>
-				<li>{tel(voorbeeld.bevat.presets, 'instelling', 'instellingen')}</li>
-				<li>{tel(voorbeeld.bevat.machines, 'machineprofiel', 'machineprofielen')}</li>
-				<li>{tel(voorbeeld.bevat.test_grids, 'testraster', 'testrasters')}</li>
-				<li class:mist={voorbeeld.bevat.photos === 0}>
-					{tel(voorbeeld.bevat.photos, 'foto', "foto's")}
+			<ul class="contents">
+				<li>{count(preview.contains.materials, 'materials')}</li>
+				<li>{count(preview.contains.presets, 'presets')}</li>
+				<li>{count(preview.contains.machines, 'machines')}</li>
+				<li>{count(preview.contains.test_grids, 'testGrids')}</li>
+				<li class:missing={preview.contains.photos === 0}>
+					{count(preview.contains.photos, 'photos')}
 				</li>
 			</ul>
-			<!-- Waar het naast komt te liggen. Zonder dit zijn "6 instellingen"
-			     zes losse getallen; ernaast is het een verhouding. -->
-			<p class="nu">
-				Je bibliotheek nu: {tel(voorbeeld.huidig.materials, 'materiaal', 'materialen')} ·
-				{tel(voorbeeld.huidig.presets, 'instelling', 'instellingen')} ·
-				{tel(voorbeeld.huidig.test_grids, 'testraster', 'testrasters')}
+			<!-- What it will lie next to. Without this "6 settings" are six loose
+			     numbers; beside it, it is a ratio. -->
+			<p class="now">
+				{t('import.yoursNow', {
+					materials: count(preview.current.materials, 'materials'),
+					presets: count(preview.current.presets, 'presets'),
+					grids: count(preview.current.test_grids, 'testGrids')
+				})}
 			</p>
 		</header>
 
-		<!-- De twee keuzes staan naast elkaar en dragen allebei hun gevolg, zodat
-		     "vervangen" niet per ongeluk gekozen wordt omdat het korter klinkt. -->
+		<!-- The two choices sit side by side and both carry their consequence, so that
+		     "replace" is not picked by accident because it sounds shorter. -->
 		<div class="keuzes">
-			<label class="keuze" class:aan={modus === 'samenvoegen'}>
-				<input type="radio" name="importmodus" value="samenvoegen" bind:group={modus} />
-				<span class="titelklein">Samenvoegen</span>
-				<span class="uitleg">Wat je hebt blijft staan; wat er nog niet is komt erbij.</span>
+			<label class="choice" class:on={mode === 'merge'}>
+				<input type="radio" name="importmode" value="merge" bind:group={mode} />
+				<span class="titelklein">{t('import.merge')}</span>
+				<span class="hint">{t('import.merge.explain')}</span>
 			</label>
-			<label class="keuze gevaar" class:aan={modus === 'vervangen'}>
-				<input type="radio" name="importmodus" value="vervangen" bind:group={modus} />
-				<span class="titelklein">Vervangen</span>
-				<span class="uitleg">Je huidige bibliotheek gaat weg en wordt dit bestand.</span>
+			<label class="choice danger" class:on={mode === 'replace'}>
+				<input type="radio" name="importmode" value="replace" bind:group={mode} />
+				<span class="titelklein">{t('import.replace')}</span>
+				<span class="hint">{t('import.replace.explain')}</span>
 			</label>
 		</div>
 
-		{#if modus === 'samenvoegen'}
+		{#if mode === 'merge'}
 			<ul class="gevolg">
 				{#if s.materials.new.length}
 					<li class="erbij">
-						<strong>{tel(s.materials.new.length, 'nieuw materiaal', 'nieuwe materialen')}</strong>
+						<strong>{t('import.newMaterials', { n: s.materials.new.length })}</strong>
 						<span class="fijn">{s.materials.new.join(', ')}</span>
 					</li>
 				{/if}
 				{#if s.materials.existing.length}
 					<li class="zelfde">
-						{tel(s.materials.existing.length, 'materiaal', 'materialen')} herkend als wat je al hebt
+						{t('import.recognised', { n: s.materials.existing.length })}
 					</li>
 				{/if}
 				{#if s.presets.new}
 					<li class="erbij">
-						<strong>{tel(s.presets.new, 'instelling', 'instellingen')} erbij</strong>
+						<strong>{t('import.addedPresets', { n: s.presets.new })}</strong>
 					</li>
 				{/if}
 				{#if s.presets.identical}
 					<li class="zelfde">
-						{tel(s.presets.identical, 'instelling is', 'instellingen zijn')} identiek — die blijven
-						zoals ze zijn
+						{t('import.identical', { n: s.presets.identical })}
 					</li>
 				{/if}
 				{#if s.test_grids.new}
 					<li class="erbij">
-						<strong>{tel(s.test_grids.new, 'testraster', 'testrasters')} erbij</strong>
-						<span class="fijn">met de foto's die erbij horen</span>
+						<strong>{t('import.addedGrids', { n: s.test_grids.new })}</strong>
+						<span class="fijn">{t('import.withPhotos')}</span>
 					</li>
 				{/if}
 				{#if s.machines.new.length}
 					<li class="erbij">
-						<strong
-							>{tel(s.machines.new.length, 'machineprofiel', 'machineprofielen')} erbij</strong
-						>
+						<strong>{t('import.addedMachines', { n: s.machines.new.length })}</strong>
 						<span class="fijn">{s.machines.new.join(', ')}</span>
 					</li>
 				{/if}
 				{#if !s.materials.new.length && !s.presets.new && !s.test_grids.new && !s.presets.conflicts.length}
-					<li class="zelfde">
-						Er komt niets bij: dit bestand staat al helemaal in je bibliotheek.
-					</li>
+					<li class="zelfde">{t('import.nothingNew')}</li>
 				{/if}
 			</ul>
 
 			{#if voorstellen.length}
-				<!-- De valkuil uit M5: "Berkentriplex" en "Multiplex berken" zijn één
-				     plank. Zelf samenvoegen zou een gok zijn met andermans getallen op
-				     jouw materiaal; aanwijzen mag de gebruiker wel. -->
-				<div class="blok">
-					<h3>Zelfde plank, andere naam?</h3>
-					<p class="fijn">
-						Deze materialen uit het bestand lijken op iets wat je al hebt. Samenvoegen
-						zet hun instellingen bij het materiaal dat je al kent; laat je het staan,
-						dan komen er twee.
-					</p>
-					{#each voorstellen as paar (paar.name)}
+				<!-- The trap from M5: "birch plywood" and "plywood, birch" are one board.
+				     Merging them ourselves would be a guess with someone else's numbers on
+				     your material; pointing it out is something the user may do. -->
+				<div class="block">
+					<h3>{t('import.sameBoard')}</h3>
+					<p class="fijn">{t('import.sameBoard.body')}</p>
+					{#each voorstellen as pair (pair.name)}
 						<label class="samenvoeg">
 							<input
 								type="checkbox"
-								checked={koppel[paar.name] === paar.material_id}
-								onchange={(e) => koppelen(paar, e.currentTarget.checked)}
+								checked={links[pair.name] === pair.material_id}
+								onchange={(e) => linkTo(pair, e.currentTarget.checked)}
 							/>
 							<span>
-								<strong>{paar.name}</strong> samenvoegen met <strong>{paar.match}</strong>
-								<span class="fijn">— {paar.why}</span>
+								{t('import.mergeWith', { name: pair.name, match: pair.match })}
+								<span class="fijn">— {pair.why}</span>
 							</span>
 						</label>
 					{/each}
@@ -978,50 +986,49 @@
 			{/if}
 
 			{#if s.presets.conflicts.length}
-				<div class="blok bots">
-					<h3>{tel(s.presets.conflicts.length, 'instelling botst', 'instellingen botsen')}</h3>
-					<p class="fijn">
-						Dezelfde plank, dezelfde snede, andere getallen. Kies wie wint — je eigen
-						waarden zijn op jouw machine gemeten.
-					</p>
-					<div class="wint">
+				<div class="block clash">
+					<h3>{t('import.conflicts', { n: s.presets.conflicts.length })}</h3>
+					<p class="fijn">{t('import.conflicts.body')}</p>
+					<div class="wins">
 						<label class="bereik">
-							<input type="radio" name="botsing" value="eigen" bind:group={botsWint} />
-							<span>Mijn waarden houden</span>
+							<input type="radio" name="clash" value="mine" bind:group={clashWinner} />
+							<span>{t('import.keepMine')}</span>
 						</label>
 						<label class="bereik">
-							<input type="radio" name="botsing" value="bestand" bind:group={botsWint} />
-							<span>Die uit het bestand overnemen</span>
+							<input type="radio" name="clash" value="file" bind:group={clashWinner} />
+							<span>{t('import.takeTheirs')}</span>
 						</label>
 					</div>
 					<ul class="botsingen">
-						{#each s.presets.conflicts as botsing (`${botsing.material}-${botsing.operation}-${botsing.thickness_mm}`)}
+						{#each s.presets.conflicts as clash (`${clash.material}-${clash.operation}-${clash.thickness_mm}`)}
 							<li>
 								<span class="wat">
-									{botsing.material}{botsing.thickness_mm !== null
-										? `, ${botsing.thickness_mm} mm`
-										: ''} · {operationLabel(botsing.operation)}
+									{clash.material}{clash.thickness_mm !== null
+										? `, ${clash.thickness_mm} mm`
+										: ''} · {operationLabel(clash.operation)}
 								</span>
-								<span class="paar">
-									<span class="kant" class:wint={botsWint === 'eigen'}>
-										<span class="k">Van mij</span>
+								<span class="pair">
+									<span class="side" class:wins={clashWinner === 'mine'}>
+										<span class="k">{t('import.mine')}</span>
 										<span class="mono"
-											>{botsing.mine.speed_mm_s} mm/s · {botsing.mine.power_percent}%</span
+											>{clash.mine.speed_mm_s} mm/s · {clash.mine.power_percent}%</span
 										>
 									</span>
 									<span class="pijl" aria-hidden="true">→</span>
-									<span class="kant" class:wint={botsWint === 'bestand'}>
-										<span class="k">Uit het bestand</span>
+									<span class="side" class:wins={clashWinner === 'file'}>
+										<span class="k">{t('import.theirs')}</span>
 										<span class="mono"
-											>{botsing.theirs.speed_mm_s} mm/s · {botsing.theirs.power_percent}%</span
+											>{clash.theirs.speed_mm_s} mm/s · {clash.theirs.power_percent}%</span
 										>
 									</span>
 								</span>
-								{#if sterkerBewijs(botsing)}
+								{#if sterkerBewijs(clash)}
 									<span class="beter">
-										Die uit het bestand is op een testraster gebrand; die van jou is
-										{SOURCE_LABEL[botsing.mine.source as Preset['source']]?.text.toLowerCase() ??
-											botsing.mine.source}.
+										{t('import.strongerEvidence', {
+											source:
+												SOURCE_LABEL[clash.mine.source as Preset['source']]?.text.toLowerCase() ??
+												clash.mine.source
+										})}
 									</span>
 								{/if}
 							</li>
@@ -1030,26 +1037,27 @@
 				</div>
 			{/if}
 		{:else}
-			<div class="blok wis">
-				<h3>Dit wist wat je nu hebt</h3>
+			<div class="block erase">
+				<h3>{t('import.wipe.title')}</h3>
 				<p>
-					{tel(voorbeeld.vervangen.removes.materials, 'materiaal', 'materialen')},
-					{tel(voorbeeld.vervangen.removes.presets, 'instelling', 'instellingen')} en
-					{tel(voorbeeld.vervangen.removes.test_grids, 'testraster', 'testrasters')} verdwijnen,
-					met de foto's die erbij horen. Dat is niet terug te draaien.
+					{t('import.wipe.body', {
+						materials: count(preview.replace.removes.materials, 'materials'),
+						presets: count(preview.replace.removes.presets, 'presets'),
+						grids: count(preview.replace.removes.test_grids, 'testGrids')
+					})}
 				</p>
-				<!-- Het advies moet hier op te volgen zijn. Anders staat er "maak
-				     eerst een back-up" op een scherm dat je moet verlaten om er een
-				     te maken, en dan doet niemand het. -->
+				<!-- The advice has to be actionable here. Otherwise it says "make a backup
+				     first" on a screen you have to leave in order to make one, and then
+				     nobody does it. -->
 				<p class="fijn">
-					Wil je hem nog kunnen terughalen?
+					{t('import.wipe.backup')}
 					<button class="mini" onclick={() => library.exportBundle()}>
-						Exporteer hem eerst
+						{t('import.wipe.export')}
 					</button>
 				</p>
 				<label class="samenvoeg">
-					<input type="checkbox" bind:checked={wisZeker} />
-					<span>Ja, wis mijn bibliotheek en zet dit bestand ervoor in de plaats.</span>
+					<input type="checkbox" bind:checked={wipeConfirmed} />
+					<span>{t('import.wipe.confirm')}</span>
 				</label>
 			</div>
 		{/if}
@@ -1058,113 +1066,113 @@
 			<p class="error" role="alert">{library.error}</p>
 		{/if}
 
-		<div class="acties">
+		<div class="actions">
 			<button
 				class="btn primary"
-				class:danger={modus === 'vervangen'}
-				disabled={library.busy || (modus === 'vervangen' && !wisZeker)}
+				class:danger={mode === 'replace'}
+				disabled={library.busy || (mode === 'replace' && !wipeConfirmed)}
 				onclick={importeren}
 			>
-				{modus === 'vervangen' ? 'Wissen en importeren' : 'Samenvoegen'}
+				{mode === 'replace' ? t('import.doReplace') : t('import.merge')}
 			</button>
-			<button class="btn" onclick={() => (voorbeeld = null)}>Annuleren</button>
+			<button class="btn" onclick={() => (preview = null)}>{t('common.cancel')}</button>
 		</div>
 	</section>
 {:else}
 
-{#if klaar}
-	<!-- Wat er daadwerkelijk gebeurd is, in dezelfde woorden als het voorbeeld. -->
-	<div class="klaar" role="status" bind:this={klaarEl}>
+{#if ready}
+	<!-- What actually happened, in the same words as the preview. -->
+	<div class="ready" role="status" bind:this={readyEl}>
 		<strong>
-			{klaar.mode === 'vervangen' ? 'Bibliotheek vervangen' : 'Bibliotheek samengevoegd'}
+			{ready.mode === 'replace' ? t('import.done.replaced') : t('import.done.merged')}
 		</strong>
 		<span>
-			{tel(klaar.presets.added, 'instelling', 'instellingen')} erbij{klaar.presets.updated
-				? `, ${tel(klaar.presets.updated, 'bijgewerkt', 'bijgewerkt')}`
-				: ''}{klaar.presets.skipped
-				? `, ${klaar.presets.skipped} ongewijzigd gelaten`
-				: ''} · {tel(klaar.test_grids, 'testraster', 'testrasters')}.
+			{t('import.addedPresets', { n: ready.presets.added })}{ready.presets.updated
+				? `, ${t('import.done.updated', { n: ready.presets.updated })}`
+				: ''}{ready.presets.skipped
+				? `, ${t('import.done.skipped', { n: ready.presets.skipped })}`
+				: ''} · {count(ready.test_grids, 'testGrids')}.
 		</span>
-		{#if verborgen && library.activeMachine}
-			<span class="fijn">
-				Een deel hoort bij een andere machine; zet “Alleen {library.activeMachine.name}” uit om
-				het te zien.
-			</span>
+		{#if hidden && library.activeMachine}
+			<span class="fijn">{t('import.done.hidden', { machine: library.activeMachine.name })}</span>
 		{/if}
-		<button class="mini" onclick={() => (klaar = null)}>Sluiten</button>
+		<button class="mini" onclick={() => (ready = null)}>{t('common.close')}</button>
 	</div>
 {/if}
 
-<!-- Filters over een lege verzameling zijn meubilair: drie bedieningen die
-     niets te bedienen hebben, boven een venster dat zegt dat er niets is. Bij
-     een lege bibliotheek verdwijnen ze en houdt de uitnodiging het woord. -->
+<!-- Filters over an empty collection are furniture: three controls with nothing
+     to control, above a window saying there is nothing. With an empty library they
+     disappear and the invitation has the floor. -->
 {#if library.materials.length > 0}
 <div class="kopblok">
-	<div class="balk">
+	<div class="bar">
 	<input
 		class="zoek"
 		type="search"
 		bind:value={zoek}
-		placeholder="Zoek materiaal, dikte of bewerking"
-		aria-label="Zoeken in de bibliotheek"
+		placeholder={t('library.search')}
+		aria-label={t('library.searchAria')}
 	/>
-	<!-- Hier stond een keuzelijst "Alle materialen". Die deed precies hetzelfde
-	     als de lijst links, en twee bedieningen voor één keuze levert vooral de
-	     vraag op welke van de twee de echte is. De lijst won: die toont ook hoe
-	     véél instellingen een materiaal heeft, en welk materiaal op het vel ligt. -->
+	<!-- There used to be an "All materials" dropdown here. It did exactly what the
+	     list on the left does, and two controls for one choice mainly raises the
+	     question which of the two is the real one. The list won: it also shows how
+	     many settings a material has, and which material is on the sheet. -->
 	{#if canEdit}
 		<button class="btn" onclick={() => (adding = !adding)}>
-			{adding ? 'Annuleren' : 'Nieuw materiaal'}
+			{adding ? t('common.cancel') : t('library.newMaterial')}
 		</button>
 	{/if}
 </div>
 
 <div class="context">
-	<!-- De twee inperkingen horen bij elkaar: samen zeggen ze "dit is wat er bij
-	     deze laser en dit vel hoort". Los van elkaar aan de twee uiteinden van
-	     de balk leest het als twee losse instellingen. -->
+	<!-- The two narrowings belong together: together they say "this is what goes
+	     with this laser and this sheet". Apart, at the two ends of the bar, it reads
+	     as two loose settings. -->
 	<div class="filters">
 	{#if sheetMaterialId !== null && sheetMaterialName}
-		<!-- Dezelfde schakelaar als "alleen deze machine", want het is dezelfde
-		     soort inperking: een preset geldt voor één laser op één materiaal.
-		     Uitzetten toont de rest — dit filter is een startpunt, geen muur. -->
+		<!-- The same switch as "only this machine", because it is the same kind of
+		     narrowing: a preset holds for one laser on one material. Switching it off
+		     shows the rest — this filter is a starting point, not a wall. -->
 		<label class="bereik">
 			<input
 				type="checkbox"
 				checked={materialId === sheetMaterialId}
 				onchange={(e) => (materialId = e.currentTarget.checked ? sheetMaterialId : null)}
 			/>
-			<span>Alleen {sheetMaterialName} <span class="waarom">— van dit vel</span></span>
+			<span
+				>{t('library.onlyMaterial', { material: sheetMaterialName })}
+				<span class="why">{t('library.onlyMaterial.why')}</span></span
+			>
 		</label>
 	{/if}
 	{#if library.activeMachine}
-		<!-- Een preset geldt voor één laser op één materiaal. Standaard zie je
-		     die van de machine die nu aanstaat; de rest is één vinkje weg. -->
+		<!-- A preset holds for one laser on one material. By default you see those of
+		     the machine that is on now; the rest is one checkbox away. -->
 		<label class="bereik">
 			<input
 				type="checkbox"
 				checked={library.onlyThisMachine}
 				onchange={() => library.toggleScope()}
 			/>
-			<span>Alleen {library.activeMachine.name}</span>
+			<span>{t('library.onlyMachine', { machine: library.activeMachine.name })}</span>
 		</label>
 	{/if}
 	</div>
-	<!-- Het doel stond er alleen bij twee of meer lagen. Maar "Toepassen" moet
-	     altijd zeggen wáárop, ook als er één laag is: anders is de knop een
-	     belofte zonder adres, en dan is de waarschuwing dat de bewerking niet
-	     past ook niet te plaatsen. -->
+	<!-- The target used to appear only with two or more layers. But "Apply" must
+	     always say *onto what*, even with one layer: otherwise the button is a
+	     promise without an address, and then the warning that the operation does not
+	     match has nowhere to land either. -->
 	{#if operations.length}
-		<label class="doel">
-			<span>Toepassen op</span>
+		<label class="target">
+			<span>{t('library.applyTo')}</span>
 			{#if operations.length > 1}
 				<select bind:value={targetOperation}>
 					{#each operations as op, index (op.id)}
-						<option value={op.id}>Laag {index + 1} · {op.label}</option>
+						<option value={op.id}>{t('library.layerOption', { n: index + 1, label: op.label })}</option>
 					{/each}
 				</select>
 			{:else}
-				<strong>Laag 1 · {operations[0].label}</strong>
+				<strong>{t('library.layerOption', { n: 1, label: operations[0].label })}</strong>
 			{/if}
 		</label>
 	{/if}
@@ -1172,16 +1180,13 @@
 </div>
 {/if}
 
-<!-- Alleen zinnig als er iets toe te passen valt. Bij een lege bibliotheek stond
-     deze uitleg over lagen bóven de mededeling dat er nog geen materialen zijn:
-     twee keer "je hebt niets", in de verkeerde volgorde, en het antwoord op een
-     vraag die je nog niet gesteld had. -->
+<!-- Only sensible when there is something to apply. With an empty library this
+     explanation about layers sat *above* the message that there are no materials
+     yet: "you have nothing" twice, in the wrong order, and the answer to a question
+     you had not asked yet. -->
 {#if canEdit && operations.length === 0 && library.materials.length > 0}
-	<!-- Eén keer zeggen waarom "Toepassen" niet kan, niet op elke kaart opnieuw. -->
-	<p class="melding">
-		Er is nog geen laag om een instelling op te zetten. Maak er een aan in de tab
-		Lagen; daarna zet één tik de snelheid en het vermogen erop.
-	</p>
+	<!-- Say once why "Apply" cannot work, not on every card again. -->
+	<p class="notice">{t('library.noLayer')}</p>
 {/if}
 
 {#if shareError}
@@ -1193,106 +1198,94 @@
 
 {#if adding}
 	<div class="row">
-		<input type="text" bind:value={newMaterial} placeholder="bijv. Multiplex berken" />
+		<input type="text" bind:value={newMaterial} placeholder={t('library.material.placeholder')} />
 		<button class="btn primary" disabled={library.busy || !newMaterial.trim()} onclick={createMaterial}>
-			Opslaan
+			{t('common.save')}
 		</button>
 	</div>
 {/if}
 
 {#if library.materials.length === 0}
-	<!-- Een lege bibliotheek was één grijze alinea onderaan een venster vol
-	     filters die niets te filteren hadden. Dit is het eerste wat een nieuwe
-	     gebruiker hier ziet, dus krijgt het de vorm van een uitnodiging: wat dit
-	     is, waarom het de moeite waard is, en de twee wegen naar binnen. -->
-	<div class="onthaal">
-		<h2>Nog geen materialen</h2>
-		<p>
-			Hier leg je vast wat op jóuw laser werkt: per materiaal en dikte een
-			snelheid en een vermogen, met de foto van het testraster waar ze uit
-			komen. De volgende keer 3 mm berk is daarmee één tik werk in plaats van
-			opnieuw uitzoeken.
-		</p>
+	<!-- An empty library used to be one grey paragraph at the bottom of a window
+	     full of filters with nothing to filter. This is the first thing a new user
+	     sees here, so it takes the shape of an invitation: what this is, why it is
+	     worth it, and the two ways in. -->
+	<div class="welcome">
+		<h2>{t('library.welcome.title')}</h2>
+		<p>{t('library.welcome.body')}</p>
 		<div class="wegen">
 			{#if canEdit}
 				<button class="btn primary" onclick={() => (adding = true)}>
-					Eerste materiaal toevoegen
+					{t('library.welcome.first')}
 				</button>
 			{/if}
-			<p class="fijn">
-				Of haal er een op uit het Presetariat — dat is de gedeelde catalogus van
-				andere lasers.
-			</p>
+			<p class="fijn">{t('library.welcome.presetariat')}</p>
 		</div>
 	</div>
 {:else if groepen.length === 0}
-	<!-- Niets gevonden is geen doodlopende weg zolang je de zoekopdracht kunt
-	     weggooien zonder het veld te zoeken. -->
-	<div class="onthaal smal">
-		<h2>Niets gevonden voor “{zoek}”</h2>
-		<p>
-			De bibliotheek bevat {library.materials.length}
-			{library.materials.length === 1 ? 'materiaal' : 'materialen'}. Zoek op de
-			materiaalnaam zelf — “berk” vindt meer dan “berken 3mm snijden”.
-		</p>
-		<button class="btn" onclick={() => (zoek = '')}>Zoekopdracht wissen</button>
+	<!-- Nothing found is not a dead end as long as you can throw the search away
+	     without having to look for the field. -->
+	<div class="welcome narrow">
+		<h2>{t('library.nothingFound', { query: zoek })}</h2>
+		<p>{t('library.nothingFound.body', { materials: count(library.materials.length, 'materials') })}</p>
+		<button class="btn" onclick={() => (zoek = '')}>{t('library.clearSearch')}</button>
 	</div>
 {:else}
 	<!--
-		Twee panelen in plaats van één lange kolom.
+		Two panes instead of one long column.
 
-		De taak is "vind de instelling voor wat er in de machine ligt". Dat is
-		eerst een materiaal kiezen en dan één regel aanwijzen. In de oude opzet
-		stonden álle materialen onder elkaar met álle instellingen uitgeklapt, dus
-		was stap één scrollen en stap twee opnieuw scrollen. Nu staat links wát je
-		hebt en rechts wát erbij hoort — de vorm die LightBurn en xTool er beide
-		voor gebruiken, en de vorm die past bij de vraag.
+		The task is "find the setting for what is in the machine". That is picking a
+		material first and then pointing at one row. In the old layout *all* materials
+		were stacked with *all* settings expanded, so step one was scrolling and step
+		two was scrolling again. Now the left says what you have and the right says
+		what goes with it — the shape LightBurn and xTool both use for it, and the
+		shape that fits the question.
 	-->
 	<div class="tweeluik">
-		<nav class="materialen" aria-label="Materialen">
+		<nav class="materials" aria-label={t('library.materials')}>
 			<ul>
-				<!-- Onlangs gebruikt is de eerste regel en geen aparte sectie met
-				     dubbele kaarten: het is een kéuze in dezelfde lijst. -->
+				<!-- Recently used is the first row and not a separate section with
+				     duplicate cards: it is a *choice* in the same list. -->
 				{#if recent.length}
 					<li>
 						<button
 							class="matrij"
-							class:aan={materialId === null && !zoek.trim()}
+							class:on={materialId === null && !zoek.trim()}
 							onclick={() => {
 								materialId = null;
 								zoek = '';
 							}}
 						>
-							<span class="matnaam">Onlangs gebruikt</span>
+							<span class="matname">{t('library.recent')}</span>
 							<span class="mataantal mono">{recent.length}</span>
 						</button>
 					</li>
 				{/if}
-				{#each groepen as groep (groep.materialId)}
+				{#each groepen as group (group.materialId)}
 					<li>
 						<button
 							class="matrij"
-							class:aan={materialId === groep.materialId}
-							onclick={() => (materialId = groep.materialId)}
+							class:on={materialId === group.materialId}
+							onclick={() => (materialId = group.materialId)}
 							oncontextmenu={(e) => {
 								e.preventDefault();
-								rijMenu = {
+								rowMenu = {
 									x: e.clientX,
 									y: e.clientY,
-									lijst: [
+									list: [
 										{
 											items: [
 												{
 													id: 'alleen',
-													label: 'Alleen dit materiaal tonen',
-													aan: materialId === groep.materialId,
-													doen: () => (materialId = groep.materialId)
+													label: t('library.onlyThis'),
+													on: materialId === group.materialId,
+													run: () => (materialId = group.materialId)
 												},
 												{
 													id: 'grid',
-													label: 'Testraster maken',
-													uit: canEdit ? undefined : 'Vereist een token',
-													doen: () => onMakeGrid?.(groep.materialId)
+													label: t('library.makeGrid'),
+													off: canEdit ? undefined : t('reason.needsToken'),
+													run: () => onMakeGrid?.(group.materialId)
 												}
 											]
 										}
@@ -1300,83 +1293,78 @@
 								};
 							}}
 						>
-							<span class="matnaam">{groep.naam}</span>
-							{#if groep.materialId === sheetMaterialId}
-								<!-- Wát er in de machine ligt is de reden dat je hier bent; dat
-								     hoort in de lijst te staan en niet alleen in een filtervinkje. -->
-								<span class="ligt" title="Het materiaal van dit vel">op het vel</span>
+							<span class="matname">{group.name}</span>
+							{#if group.materialId === sheetMaterialId}
+								<!-- What is in the machine is the reason you are here; that belongs in
+								     the list and not only in a filter checkbox. -->
+								<span class="ligt" title={t('library.onSheet.title')}>{t('library.onSheet')}</span>
 							{/if}
-							<span class="mataantal mono">{groep.presets.length}</span>
+							<span class="mataantal mono">{group.presets.length}</span>
 						</button>
 					</li>
 				{/each}
 			</ul>
 		</nav>
 
-		<div class="instellingen">
+		<div class="settings">
 			{#if materialId === null}
 				{#if recent.length}
-					<h2 class="kop">Onlangs gebruikt</h2>
+					<h2 class="head">{t('library.recent')}</h2>
 					{#each recent as preset (preset.id)}
-						{@render kaart(preset, true)}
+						{@render card(preset, true)}
 					{/each}
-					<p class="fijn">
-						Kies links een materiaal voor alles wat daarbij hoort.
-					</p>
+					<p class="fijn">{t('library.pickMaterial')}</p>
 				{:else}
-					{#each groepen as groep (groep.materialId)}
-						{#each groep.presets as preset (preset.id)}
-							{@render kaart(preset, true)}
+					{#each groepen as group (group.materialId)}
+						{#each group.presets as preset (preset.id)}
+							{@render card(preset, true)}
 						{/each}
 					{/each}
 				{/if}
 			{:else}
-				{@const groep = groepen.find((g) => g.materialId === materialId)}
-				{#if groep}
+				{@const group = groepen.find((g) => g.materialId === materialId)}
+				{#if group}
 					<div class="materiaalkop">
-						<h2 class="kop">{groep.naam}</h2>
+						<h2 class="head">{group.name}</h2>
 						{#if canEdit}
-							<button class="mini" onclick={() => onMakeGrid?.(groep.materialId)}>
-								Testraster maken
+							<button class="mini" onclick={() => onMakeGrid?.(group.materialId)}>
+								{t('library.makeGrid')}
 							</button>
 						{/if}
 					</div>
 
-					{#if diktes.length > 1}
-						<!-- Dikte is de tweede vraag die iedereen stelt en de eerste die je
-						     kunt afvinken. Als filter en niet als kop, want je wil de
-						     buurdikte er soms bij zien staan. -->
-						<div class="diktes" role="group" aria-label="Dikte">
-							<button class="chip" class:aan={dikte === null} onclick={() => (dikte = null)}>
-								Alle diktes
+					{#if thicknesses.length > 1}
+						<!-- Thickness is the second question everyone asks and the first you can
+						     tick off. As a filter and not as a heading, because you sometimes want
+						     the neighbouring thickness in view. -->
+						<div class="thicknesses" role="group" aria-label={t('library.thickness')}>
+							<button class="chip" class:on={thickness === null} onclick={() => (thickness = null)}>
+								{t('library.allThicknesses')}
 							</button>
-							{#each diktes as d (d)}
-								<button class="chip" class:aan={dikte === d} onclick={() => (dikte = d)}>
-									{d === null ? 'geen dikte' : `${d} mm`}
+							{#each thicknesses as d (d)}
+								<button class="chip" class:on={thickness === d} onclick={() => (thickness = d)}>
+									{d === null ? t('library.noThickness') : `${d} mm`}
 								</button>
 							{/each}
 						</div>
 					{/if}
 
 					{#if zichtbarePresets.length === 0}
-						<p class="leeg">
-							{#if groep.presets.length === 0}
-								Nog geen instellingen voor {groep.naam}. Een testraster brandt een reeks
-								vakjes op dit materiaal; van het beste vakje maak je een instelling die
-								hier komt te staan.
+						<p class="empty">
+							{#if group.presets.length === 0}
+								{t('library.noPresets', { material: group.name })}
 							{:else}
-								Geen instelling voor {dikte} mm. Kies een andere dikte, of brand er een
-								testraster voor.
+								{t('library.noneForThickness', { thickness: thickness })}
 							{/if}
 						</p>
 						{#if canEdit}
-							<button class="btn primary" onclick={() => onMakeGrid?.(groep.materialId)}>
-								Testraster maken
+							<button class="btn primary" onclick={() => onMakeGrid?.(group.materialId)}>
+								{t('library.makeGrid')}
 							</button>
 						{/if}
 					{:else}
 						{#each zichtbarePresets as preset (preset.id)}
-							{@render kaart(preset, false)}
+							{@render card(preset, false)}
 						{/each}
 					{/if}
 				{/if}
@@ -1387,33 +1375,53 @@
 
 {#if canEdit && library.materials.length}
 	<details class="vouw">
-		<summary>Instelling met de hand toevoegen</summary>
+		<summary>{t('library.manual')}</summary>
 		<div class="grid">
 			<label class="wide">
-				<span>Materiaal</span>
+				<span>{t('library.material')}</span>
 				<select bind:value={draft.material_id}>
-					<option value={null}>{materialId === null ? 'Kies een materiaal' : 'Gefilterde materiaal'}</option>
+					<option value={null}
+						>{materialId === null
+							? t('library.pickMaterialOption')
+							: t('library.filteredMaterial')}</option
+					>
 					{#each library.materials as material (material.id)}
 						<option value={material.id}>{material.name}</option>
 					{/each}
 				</select>
 			</label>
 			<label>
-				<span>Bewerking</span>
+				<span>{t('library.operation')}</span>
 				<select bind:value={draft.operation}>
 					{#each OPERATIONS as op (op.value)}
 						<option value={op.value}>{op.label}</option>
 					{/each}
 				</select>
 			</label>
-			<NumberField label="Dikte" unit="mm" step={0.5} min={0} bind:value={draft.thickness_mm} />
-			<NumberField label="Snelheid" unit="mm/s" step={1} min={0.1} bind:value={draft.speed_mm_s} />
-			<NumberField label="Vermogen" unit="%" step={1} min={1} max={100} bind:value={draft.power_percent} />
+			<NumberField
+				label={t('library.thickness')}
+				unit="mm"
+				step={0.5}
+				min={0}
+				bind:value={draft.thickness_mm}
+			/>
+			<NumberField
+				label={t('library.speed')}
+				unit="mm/s"
+				step={1}
+				min={0.1}
+				bind:value={draft.speed_mm_s}
+			/>
+			<NumberField
+				label={t('library.power')}
+				unit="%"
+				step={1}
+				min={1}
+				max={100}
+				bind:value={draft.power_percent}
+			/>
 		</div>
-		<p class="fijn">
-			Met de hand ingevoerd betekent: niet gemeten. Deze instelling krijgt daarom de
-			badge “Handmatig”.
-		</p>
+		<p class="fijn">{t('library.manual.note')}</p>
 		<button
 			class="btn"
 			disabled={library.busy ||
@@ -1422,44 +1430,39 @@
 				(draft.material_id ?? materialId) === null}
 			onclick={createPreset}
 		>
-			Opslaan
+			{t('common.save')}
 		</button>
 	</details>
 
 	<details class="vouw">
-		<summary>Machineprofielen ({library.machines.length})</summary>
-		<p class="fijn">
-			Een instelling is pas herbruikbaar als je weet op welke machine hij gemaakt is —
-			daarom staat het profiel los van de instelling.
-		</p>
+		<summary>{t('library.profiles', { n: library.machines.length })}</summary>
+		<p class="fijn">{t('library.profiles.why')}</p>
 		{#if library.machines.length}
 			<ul class="profiles">
 				{#each library.machines as machine (machine.id)}
-					{@const leeg = machine.presets + machine.test_grids === 0}
-					{@const actief = machine.id === library.activeMachine?.id}
+					{@const empty = machine.presets + machine.test_grids === 0}
+					{@const active = machine.id === library.activeMachine?.id}
 					<li class:verweesd={machine.orphaned}>
 						<span>{machine.name}</span>
 						<span class="mono">{machine.power_watt ? `${machine.power_watt} W` : ''}</span>
 						{#if machine.orphaned}
-							<!-- Er hoort geen ingestelde machine meer bij dit profiel. -->
-							<span
-								class="merk"
-								title="Er is geen ingestelde machine (meer) die bij dit profiel hoort"
-							>
-								geen machine
+							<!-- No configured machine belongs to this profile any more. -->
+							<span class="mark" title={t('library.profile.orphaned.title')}>
+								{t('library.profile.orphaned')}
 							</span>
 						{/if}
-						{#if !leeg}
-							<!-- Wát eraan hangt, want dat bepaalt of hij weg kan: een profiel
-							     met instellingen of rasters is bewijs, een profiel zonder is
-							     rommel. Alleen noemen wat er is — "0 instellingen" naast een
-							     profiel dat wél een testraster draagt, is een halve waarheid. -->
+						{#if !empty}
+							<!-- What hangs off it, because that decides whether it can go: a profile
+							     with settings or grids is evidence, a profile without is clutter.
+							     Only naming what is there — "0 settings" next to a profile that
+							     does carry a test grid is a half truth. -->
 							<span class="fijn">{bewijs(machine)}</span>
-						{:else if canEdit && !actief}
+						{:else if canEdit && !active}
 							<button
 								class="mini"
 								disabled={library.busy}
-								onclick={() => library.removeMachineProfile(machine.id)}>Opruimen</button
+								onclick={() => library.removeMachineProfile(machine.id)}
+								>{t('library.profile.tidy')}</button
 							>
 						{/if}
 					</li>
@@ -1469,47 +1472,61 @@
 		{#if addingMachine}
 			<div class="grid">
 				<label class="wide"
-					><span>Naam</span><input bind:value={machineDraft.name} placeholder="bijv. 5030 CO2" /></label
+					><span>{t('panel.name')}</span><input
+						bind:value={machineDraft.name}
+						placeholder={t('library.machine.placeholder')}
+					/></label
 				>
-				<NumberField label="Vermogen" unit="W" step={5} min={0} bind:value={machineDraft.power_watt} />
-				<NumberField label="Lens" unit="mm" step={0.5} min={0} bind:value={machineDraft.lens_mm} />
+				<NumberField
+					label={t('library.power')}
+					unit="W"
+					step={5}
+					min={0}
+					bind:value={machineDraft.power_watt}
+				/>
+				<NumberField
+					label={t('library.lens')}
+					unit="mm"
+					step={0.5}
+					min={0}
+					bind:value={machineDraft.lens_mm}
+				/>
 			</div>
 			<button class="btn" disabled={library.busy || !machineDraft.name.trim()} onclick={createMachine}>
-				Opslaan
+				{t('common.save')}
 			</button>
 		{:else}
-			<button class="mini" onclick={() => (addingMachine = true)}>Profiel toevoegen</button>
+			<button class="mini" onclick={() => (addingMachine = true)}
+				>{t('library.profile.add')}</button
+			>
 		{/if}
 	</details>
 {/if}
 
-<!-- Besluit B7. Buiten het blok hierboven, want importeren in een lege
-     bibliotheek is juist de gewone reden om hier te zijn: nieuwe computer. -->
+<!-- Decision B7. Outside the block above, because importing into an empty library
+     is precisely the ordinary reason to be here: a new computer. -->
 <section class="uitwissel">
-	<h3>Bibliotheek uitwisselen</h3>
-	<p class="fijn">
-		Eén bestand met je materialen, instellingen, machineprofielen en de foto's van je
-		testrasters — voor een back-up of een andere computer.
-	</p>
+	<h3>{t('library.exchange')}</h3>
+	<p class="fijn">{t('library.exchange.body')}</p>
 	<div class="uitknoppen">
 		<button
 			class="btn"
 			disabled={library.busy || library.materials.length === 0}
-			title={library.materials.length === 0 ? 'Er is nog niets om te exporteren' : undefined}
+			title={library.materials.length === 0 ? t('library.export.nothing') : undefined}
 			onclick={() => library.exportBundle()}
 		>
-			Bibliotheek exporteren
+			{t('library.export')}
 		</button>
 		{#if canEdit}
 			<label class="btn file">
-				Bibliotheek importeren…
+				{t('library.import')}
 				<input
 					type="file"
 					accept=".openkerf-lib,application/zip"
 					onchange={(e) => {
 						const f = e.currentTarget.files?.[0];
 						e.currentTarget.value = '';
-						if (f) kiesBestand(f);
+						if (f) pickFile(f);
 					}}
 				/>
 			</label>
@@ -1518,13 +1535,13 @@
 </section>
 {/if}
 
-{#if rijMenu}
-	<Menu menu={rijMenu.lijst} x={rijMenu.x} y={rijMenu.y} onSluit={() => (rijMenu = null)} />
+{#if rowMenu}
+	<Menu menu={rowMenu.list} x={rowMenu.x} y={rowMenu.y} onClose={() => (rowMenu = null)} />
 {/if}
 
 <style>
-	/* Zoeken moet bereikbaar blijven als je door twintig materialen scrollt;
-	   het venster zelf is de scrollbak, dus dit plakt aan zijn bovenkant. */
+	/* Search has to stay reachable while you scroll through twenty materials; the
+	   window itself is the scroll container, so this sticks to its top. */
 	.kopblok {
 		position: sticky;
 		top: calc(-1 * var(--space-4));
@@ -1533,7 +1550,7 @@
 		padding: var(--space-4) var(--space-4) 0;
 		background: var(--surface-1);
 	}
-	.balk {
+	.bar {
 		display: flex;
 		gap: var(--space-2);
 		align-items: center;
@@ -1549,7 +1566,7 @@
 		padding-bottom: var(--space-2);
 		border-bottom: 1px solid var(--line);
 	}
-	.doel {
+	.target {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -1569,10 +1586,10 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	/* Waaróm dit filter aanstaat, in de schakelaar zelf: anders lijkt het een
-	   voorkeur die iemand ooit heeft aangezet. */
-	.waarom { color: var(--text-2); }
-	.kop {
+	/* *Why* this filter is on, in the toggle itself: otherwise it looks like a
+	   preference somebody once switched on. */
+	.why { color: var(--text-2); }
+	.head {
 		font-size: var(--text-xs);
 		font-weight: 600;
 		text-transform: uppercase;
@@ -1580,21 +1597,21 @@
 		color: var(--text-2);
 		margin: var(--space-4) 0 var(--space-2);
 	}
-	.leeg { color: var(--text-2); margin: 0 0 var(--space-2); }
-	/* Een lege staat mag ruimte innemen: hij is hier het scherm, niet een
-	   voetnoot eronder. */
-	.onthaal {
+	.empty { color: var(--text-2); margin: 0 0 var(--space-2); }
+	/* An empty state may take up room: here it *is* the screen, not a footnote
+	   under it. */
+	.welcome {
 		padding: var(--space-6) 0 var(--space-4);
 		max-width: 46ch;
 	}
-	.onthaal.smal { padding: var(--space-5) 0; }
-	.onthaal h2 {
+	.welcome.narrow { padding: var(--space-5) 0; }
+	.welcome h2 {
 		font-size: var(--text-md);
 		font-weight: 600;
 		margin: 0 0 var(--space-2);
 		color: var(--text-1);
 	}
-	.onthaal p { margin: 0 0 var(--space-3); color: var(--text-2); }
+	.welcome p { margin: 0 0 var(--space-3); color: var(--text-2); }
 	.wegen { display: grid; justify-items: start; gap: var(--space-3); }
 	.wegen .fijn { margin: 0; max-width: 42ch; }
 	.fijn { color: var(--text-2); font-size: var(--text-xs); margin: 0 0 var(--space-2); }
@@ -1605,8 +1622,8 @@
 		border-radius: var(--radius-field);
 	}
 	.mini:hover { background: var(--surface-2); }
-	.mini.stil { color: var(--text-2); }
-	.mini.gevaar { color: var(--danger); font-weight: 600; }
+	.mini.quiet { color: var(--text-2); }
+	.mini.danger { color: var(--danger); font-weight: 600; }
 	.row { display: flex; gap: var(--space-2); margin: var(--space-2) 0; }
 	.row input { flex: 1; min-width: 0; }
 	input,
@@ -1634,25 +1651,25 @@
 		color: var(--accent-ink);
 	}
 
-	/* Materiaal als beeld — maar één keer per materiaal. Tien keer dezelfde
-	   houtstrook onder elkaar is behang; één band boven de groep is identiteit. */
-	/* Nerf: twee lagen strepen onder een lichte hoek, met een warme ondergrond. */
-	/* Acryl: glad, met één schuine glans. */
-	/* Leer: onregelmatige korrel uit gestapelde radiale vlekken. */
-	/* Karton: golfprofiel, van opzij gezien. */
-	/* Metaal: geborsteld, met een lopende glans. */
+	/* Material as image — but once per material. The same wood band ten times over is
+	   wallpaper; one band above the group is identity. */
+	/* Grain: two layers of stripes at a slight angle, on a warm ground. */
+	/* Acrylic: smooth, with one diagonal highlight. */
+	/* Leer: onregelmatige korrel off gestapelde radiale vlekken. */
+	/* Cardboard: corrugated profile, seen from the side. */
+	/* Metal: brushed, with a running highlight. */
 
-	/* ── Het tweeluik ────────────────────────────────────────────────────────
-	   Links wat je hebt, rechts wat erbij hoort. De linkerkolom is vast: hij
-	   moet niet meebewegen zodra je een materiaal met een lange naam aanwijst,
-	   want dan schuift de lijst onder je cursor vandaan. */
+	/* ── The diptych ─────────────────────────────────────────────────────────
+	   On the left what you have, on the right what belongs with it. The left column is
+	   fixed: it must not move as soon as you point at a material with a long name,
+	   because then the list slides out from under your cursor. */
 	.tweeluik {
 		display: grid;
 		grid-template-columns: 232px minmax(0, 1fr);
 		gap: var(--space-4);
 		align-items: start;
 	}
-	.materialen ul {
+	.materials ul {
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -1675,15 +1692,15 @@
 		font-size: var(--text-sm);
 	}
 	.matrij:hover { background: var(--surface-2); }
-	.matrij.aan {
+	.matrij.on {
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 		color: var(--accent);
 		font-weight: 500;
 	}
-	.matnaam { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.matname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.mataantal { flex: none; font-size: var(--text-xs); color: var(--text-2); }
-	.matrij.aan .mataantal { color: inherit; }
-	/* Wat er in de machine ligt: één woord, niet een tweede kleur. */
+	.matrij.on .mataantal { color: inherit; }
+	/* What is in the machine: one word, not a second colour. */
 	.ligt {
 		flex: none;
 		font-size: 10px;
@@ -1700,8 +1717,8 @@
 		gap: var(--space-3);
 		margin-bottom: var(--space-2);
 	}
-	.materiaalkop .kop { margin: 0; }
-	.diktes {
+	.materiaalkop .head { margin: 0; }
+	.thicknesses {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-1h);
@@ -1717,14 +1734,14 @@
 		font-size: var(--text-xs);
 	}
 	.chip:hover { background: var(--surface-2); color: var(--text-1); }
-	.chip.aan {
+	.chip.on {
 		border-color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 		color: var(--accent);
 		font-weight: 500;
 	}
 
-	/* ── Eén instelling = één regel ──────────────────────────────────────── */
+	/* ── Eén instelling = één row ──────────────────────────────────────── */
 	.preset {
 		position: relative;
 		border: 1px solid var(--line);
@@ -1734,8 +1751,8 @@
 		padding: 0 var(--space-2) 0 calc(var(--space-2) + 4px);
 	}
 	.preset:first-of-type { margin-top: 0; }
-	/* De bron zit ook in de rand: bij het scrollen zie je aan de linkerkant
-	   welke instellingen gemeten zijn en welke gegokt. */
+	/* The source is in the border too: while scrolling you see on the left which
+	   settings are measured and which are guessed. */
 	.preset::before {
 		content: '';
 		position: absolute;
@@ -1753,38 +1770,39 @@
 		box-shadow: var(--lift-1);
 	}
 
-	.rij {
+	.row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
 		min-height: 40px;
 	}
 	.wat { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-2); }
-	/* De dikte in een eigen kolom van vaste breedte: dat is waar het oog langs
-	   loopt als je "3 mm" zoekt, en dan moeten de getallen onder elkaar staan. */
-	.maat {
+	/* The thickness in a column of its own with a fixed width: that is what the eye
+	   runs along when you are looking for "3 mm", and then the numbers have to line
+	   up under each other. */
+	.size {
 		flex: none;
 		width: 4.4em;
 		font-weight: 600;
 		font-size: var(--text-sm);
 	}
-	.bewerking {
+	.operation {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--text-sm);
 	}
-	.bewerking .mat { font-weight: 500; }
-	.waarden {
+	.operation .mat { font-weight: 500; }
+	.values {
 		flex: none;
 		display: flex;
 		gap: var(--space-3);
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
 	}
-	.waarden span { min-width: 4.2em; text-align: right; }
-	.waarden small { color: var(--text-2); margin-left: 1px; }
+	.values span { min-width: 4.2em; text-align: right; }
+	.values small { color: var(--text-2); margin-left: 1px; }
 
 	.badge {
 		flex: none;
@@ -1843,9 +1861,9 @@
 		font-weight: 500;
 	}
 	.doe:disabled { opacity: 0.4; cursor: not-allowed; }
-	/* Een instelling voor een ander soort bewerking mag je toepassen, maar niet
-	   zonder dat je het weet. Eén teken bij de bewerking, met de hele uitleg in
-	   de tooltip. */
+	/* A setting for a different kind of operation may be applied, but not without you
+	   knowing. One sign beside the operation, with the whole explanation in the
+	   tooltip. */
 	.mismatch {
 		display: inline-flex;
 		align-items: center;
@@ -1881,7 +1899,7 @@
 	}
 	.zekerweg span { flex: 1; min-width: 12em; }
 
-	.rek { flex: 1; min-width: var(--space-6); }
+	.stretch { flex: 1; min-width: var(--space-6); }
 	.zeker { font-size: var(--text-xs); color: var(--text-2); }
 
 	.herkomst {
@@ -1901,9 +1919,9 @@
 	}
 	.herkomst dt { color: var(--text-2); }
 	.herkomst dd { margin: 0; }
-	/* Zonder opgeslagen uitlijning valt de server terug op het hele beeld; bij een
-	   schuine foto met veel rand ligt de omtrek dan een halve cel mis. Dat zeggen
-	   is beter dan een markering die exact lijkt en het niet is. */
+	/* Without a stored alignment the server falls back on the whole image; on a skewed
+	   photo with a lot of margin the outline is then half a cell out. Saying so is
+	   better than a marker that looks exact and is not. */
 	.benadering { display: block; margin-top: 2px; color: var(--warn); }
 	.bewijsvak {
 		display: grid;
@@ -1917,7 +1935,7 @@
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 	}
-	.bewijsvak .onder { margin: 0; font-size: var(--text-xs); color: var(--text-2); }
+	.bewijsvak .below { margin: 0; font-size: var(--text-xs); color: var(--text-2); }
 	.file { position: relative; overflow: hidden; }
 	.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
@@ -1959,13 +1977,13 @@
 		margin-bottom: 4px;
 		font-size: var(--text-xs);
 	}
-	/* De naam duwt de rest naar rechts; zo staan het vermogen en het merkje
-	   op één lijn, ook als het ene profiel wel een merkje heeft en het andere niet. */
+	/* The name pushes the rest to the right; that way the power and the badge line up,
+	   even when one profile has a badge and the other does not. */
 	.profiles li > span:first-child { flex: 1; min-width: 0; }
-	/* Verweesd is geen fout maar wel iets om te weten: gedempt, niet rood. */
+	/* Orphaned is not an error but is worth knowing: muted, not red. */
 	.profiles li.verweesd { border-style: dashed; }
 	.profiles li.verweesd > span:first-child { color: var(--text-2); }
-	.profiles .merk {
+	.profiles .mark {
 		flex: none;
 		padding: 2px 8px;
 		border-radius: var(--radius-pill, 999px);
@@ -1988,7 +2006,7 @@
 		text-transform: none;
 		letter-spacing: 0;
 	}
-	.melding {
+	.notice {
 		margin: var(--space-2) 0 0;
 		padding: var(--space-2);
 		border-radius: var(--radius-field);
@@ -2023,8 +2041,8 @@
 	.uitwissel .fijn { max-width: 52ch; }
 	.uitknoppen { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
-	/* Het voorbeeld is een eigen scherm, geen strook onder de lijst: hier valt
-	   de beslissing, dus krijgt het de ruimte en de leesbreedte ervoor. */
+	/* The preview is a screen of its own, not a strip below the list: this is where
+	   the decision falls, so it gets the room and the reading width for it. */
 	.wisselkop { margin-bottom: var(--space-4); }
 	.wisselkop h2 {
 		font-size: var(--text-lg);
@@ -2033,9 +2051,9 @@
 		margin: 0;
 		color: var(--text-1);
 	}
-	.bron { margin: 4px 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); }
+	.source { margin: 4px 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); }
 	.scheiding { opacity: 0.5; }
-	.inhoud {
+	.contents {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-1h);
@@ -2043,7 +2061,7 @@
 		margin: 0;
 		padding: 0;
 	}
-	.inhoud li {
+	.contents li {
 		font-size: var(--text-xs);
 		padding: var(--space-1) var(--space-3);
 		border-radius: var(--radius-dot);
@@ -2051,19 +2069,19 @@
 		background: var(--surface-2);
 		color: var(--text-2);
 	}
-	/* Nul foto's is geen detail: dan komt het bewijs niet mee. */
-	.inhoud li.mist { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-	.nu { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-2); }
+	/* Zero photos is not a detail: then the evidence does not come along. */
+	.contents li.missing { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+	.now { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-2); }
 
 	.keuzes {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
 	}
-	.keuze {
+	.choice {
 		display: grid;
 		grid-template-columns: auto 1fr;
-		grid-template-areas: 'radio titel' '. uitleg';
+		grid-template-areas: 'radio titel' '. hint';
 		gap: 2px var(--space-2);
 		align-items: start;
 		padding: var(--space-2) var(--space-3);
@@ -2072,11 +2090,11 @@
 		background: var(--surface-1);
 		cursor: pointer;
 	}
-	.keuze input { grid-area: radio; margin: 2px 0 0; }
-	.keuze .titelklein { grid-area: titel; font-weight: 600; }
-	.keuze .uitleg { grid-area: uitleg; font-size: var(--text-xs); color: var(--text-2); }
-	.keuze.aan { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-	.keuze.gevaar.aan {
+	.choice input { grid-area: radio; margin: 2px 0 0; }
+	.choice .titelklein { grid-area: title; font-weight: 600; }
+	.choice .hint { grid-area: hint; font-size: var(--text-xs); color: var(--text-2); }
+	.choice.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+	.choice.danger.on {
 		border-color: var(--danger);
 		box-shadow: inset 0 0 0 1px var(--danger);
 		background: color-mix(in srgb, var(--danger) 8%, transparent);
@@ -2098,7 +2116,7 @@
 		position: relative;
 		font-size: var(--text-sm);
 	}
-	/* Erbij of ongewijzigd, in vorm en niet alleen in kleur. */
+	/* Added or unchanged, in shape and not only in colour. */
 	.gevolg li::before {
 		position: absolute;
 		left: 0;
@@ -2110,27 +2128,27 @@
 	.gevolg li.zelfde { color: var(--text-2); }
 	.gevolg .fijn { margin: 0; }
 
-	.blok {
+	.block {
 		margin-top: var(--space-3);
 		padding: var(--space-3);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.blok h3 {
+	.block h3 {
 		margin: 0 0 4px;
 		font-size: var(--text-sm);
 		font-weight: 600;
 	}
-	.blok.bots { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-	.blok.wis {
+	.block.clash { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+	.block.erase {
 		border-color: color-mix(in srgb, var(--danger) 50%, transparent);
 		background: color-mix(in srgb, var(--danger) 9%, transparent);
 	}
-	.blok.wis p { margin: 0 0 var(--space-2); }
-	/* Op aanraakbreedtes is een selectievakje 44px hoog (design system), dus
-	   uitlijnen op de bovenkant zet het glyphje een regel onder zijn eigen
-	   label. Centreren houdt het naast de tekst op elk apparaat. */
+	.block.erase p { margin: 0 0 var(--space-2); }
+	/* At touch widths a checkbox is 44px tall (design system), so aligning to the top
+	   puts the glyph a line below its own label. Centring keeps it beside the text on
+	   every device. */
 	.samenvoeg {
 		display: grid;
 		grid-template-columns: auto 1fr;
@@ -2140,10 +2158,10 @@
 		font-size: var(--text-xs);
 		cursor: pointer;
 	}
-	.wint { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
+	.wins { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
 	.botsingen { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-	/* Twee waarden vergelijken kan alleen als ze in een kolom staan. Elke regel
-	   deelt daarom hetzelfde raster: wat, van mij, van het bestand. */
+	/* Comparing two values only works when they are in a column. Every row therefore
+	   shares the same grid: what, mine, the file's. */
 	.botsingen li {
 		display: grid;
 		grid-template-columns: 1fr auto auto;
@@ -2157,23 +2175,23 @@
 	}
 	.botsingen .wat { font-weight: 500; }
 	.beter { grid-column: 1 / -1; color: var(--warn); }
-	.paar { display: contents; }
-	.kant {
+	.pair { display: contents; }
+	.side {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
 		gap: 2px;
 		color: var(--text-2);
 	}
-	/* Wie wint is af te lezen zonder de keuze erboven terug te lezen: de
-	   winnende kant staat vet en gemarkeerd, de andere blijft leesbaar — het
-	   zijn allebei getallen die je wilt kunnen zien. */
-	.kant.wint { color: var(--text-1); font-weight: 600; }
-	.kant.wint .k::after {
+	/* Which side wins can be read off without re-reading the choice above: the winning
+	   side is bold and marked, the other stays readable — they are both numbers you
+	   want to be able to see. */
+	.side.wins { color: var(--text-1); font-weight: 600; }
+	.side.wins .k::after {
 		content: ' ✓';
 		color: var(--ok);
 	}
-	.kant .k {
+	.side .k {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		font-weight: 400;
@@ -2182,7 +2200,7 @@
 	}
 	.pijl { display: none; }
 
-	.acties {
+	.actions {
 		display: flex;
 		gap: var(--space-2);
 		margin-top: var(--space-4);
@@ -2194,7 +2212,7 @@
 		border-color: var(--danger);
 		color: var(--on-color);
 	}
-	.klaar {
+	.ready {
 		display: flex;
 		align-items: baseline;
 		flex-wrap: wrap;
@@ -2206,7 +2224,7 @@
 		background: color-mix(in srgb, var(--ok) 12%, transparent);
 		font-size: var(--text-xs);
 	}
-	.klaar .mini { margin-left: auto; }
+	.ready .mini { margin-left: auto; }
 
 	@media (max-width: 640px) {
 		.keuzes { grid-template-columns: 1fr; }

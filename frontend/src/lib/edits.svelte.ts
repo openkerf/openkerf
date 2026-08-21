@@ -1,12 +1,14 @@
 /**
- * Bewerkingen op elementen: verplaatsen, schalen, ongedaan maken.
+ * Edits on elements: moving, scaling, undoing.
  *
- * Let op de undo-eigenaardigheid van de engine: undo herstelt een snapshot van
- * de boom, en de herstelde nodes komen terug zónder id. Hernummeren geeft
- * daarna *andere* id's dan ervoor. De API meldt dat met `ids_invalidated`, en
- * wij laten de selectie dan los — anders zou een bewaard id later een ander
- * element kunnen aanwijzen.
+ * Mind the engine's undo peculiarity: undo restores a snapshot of the tree, and the
+ * restored nodes come back *without* ids. Renumbering then gives *different* ids from
+ * before. The API reports that with `ids_invalidated`, and we let the selection go —
+ * otherwise a stored id would later point at a different
+ * point at an element.
  */
+
+import { apiError, t } from './i18n/core.ts';
 
 export type EditResult = { ok: boolean; idsInvalidated: boolean };
 
@@ -43,7 +45,7 @@ export class EditController {
 			const data = await response.json();
 			return { ok: true, idsInvalidated: Boolean(data?.ids_invalidated) };
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return { ok: false, idsInvalidated: false };
 		} finally {
 			this.busy = false;
@@ -65,12 +67,12 @@ export class EditController {
 	}
 
 	/**
-	 * Draaien om het midden van de selectie.
+	 * Rotating about the centre of the selection.
 	 *
-	 * Met `absolute` is de hoek een bestemming en geen stap: de server rekent
-	 * uit hoeveel er nog bij moet vanaf de stand die de vormen nú hebben. Dat
-	 * is wat een hoekveld bruikbaar maakt — hetzelfde getal intikken levert
-	 * hetzelfde beeld op, hoe vaak je ook geklikt hebt.
+	 * With `absolute` the angle is a destination and not a step: the server works out
+	 * how much still has to be added from the state the shapes are in *now*. That is
+	 * what makes an angle field usable — typing the same number gives the same picture,
+	 * however often you have clicked.
 	 */
 	rotate(ids: string[] | string, angleDeg: number, absolute = false) {
 		return this.#post('/api/design/rotate', {
@@ -88,7 +90,7 @@ export class EditController {
 		return this.#post('/api/design/unassign', { ids, operation_id: operationId });
 	}
 
-	/** Tekenen: de vorm komt op het bed en is meteen geselecteerd. */
+	/** Drawing: the shape lands on the bed and is selected at once. */
 	draw(shape: Record<string, unknown>) {
 		return this.#post('/api/design/elements', shape);
 	}
@@ -102,11 +104,11 @@ export class EditController {
 	}
 
 	/**
-	 * Eén klik op een paletvakje (besluit B2).
+	 * One click on a palette swatch (decision B2).
 	 *
-	 * Mét selectie verhuist die naar de laag van die kleur, die zo nodig wordt
-	 * aangemaakt op wat die kleur op deze machine eerder deed. Zonder selectie
-	 * zet hij de kleur voor nieuw werk.
+	 * With a selection it moves to the layer of that colour, which is created if need
+	 * be from what that colour did on this machine before. Without a selection it sets
+	 * the colour for new work.
 	 */
 	async paletteColor(color: string, ids: string[] = []) {
 		const result = await this.#post('/api/design/palette', {
@@ -129,7 +131,7 @@ export class EditController {
 		return this.#send(`/api/design/operations/${encodeURIComponent(id)}`, 'PATCH', fields);
 	}
 
-	/** Een laag omhoog of omlaag in de brandvolgorde — graveren vóór snijden. */
+	/** A layer up or down in the burn order — engrave before cut. */
 	async moveLayer(id: string, direction: 'up' | 'down') {
 		return this.#post(`/api/design/operations/${encodeURIComponent(id)}/move`, {
 			direction
@@ -137,27 +139,27 @@ export class EditController {
 	}
 
 	/**
-	 * Een laag naar een plek in de lijst slepen (gat L1).
+	 * Dragging a layer to a place in the list (gap L1).
 	 *
-	 * Een bestemming en geen aantal stappen: bij het slepen weet de lijst waar
-	 * de laag terecht moet, en dat omrekenen naar stapjes gaat mis zodra er een
-	 * testraster tussen staat.
+	 * A destination and not a number of steps: while dragging, the list knows where the
+	 * layer has to end up, and converting that into steps goes wrong as soon as a test
+	 * grid sits in between.
 	 */
 	async dropLayerAt(id: string, index: number) {
 		return this.#post(`/api/design/operations/${encodeURIComponent(id)}/move`, { index });
 	}
 
-	/** Graveren vóór snijden, in één handeling (gat L2). */
+	/** Engraving before cutting, in one action (gap L2). */
 	async sortLayers() {
 		return this.#post('/api/design/operations/sort');
 	}
 
 	/**
-	 * Het soort bewerking van een bestaande laag wijzigen (gat L3).
+	 * Changing the kind of operation of an existing layer (gap L3).
 	 *
-	 * De laag krijgt hierdoor een nieuw id — de engine kan het type van een
-	 * knoop niet wisselen, dus de server maakt er een nieuwe en verhuist de
-	 * vormen. Wie het oude id vasthoudt, wijst daarna nergens meer naar.
+	 * The layer gets a new id from this — the engine cannot change the type of a node,
+	 * so the server makes a new one and moves the shapes. Whoever holds the old id
+	 * points at nothing afterwards.
 	 */
 	async retypeLayer(id: string, type: string) {
 		return this.#post(`/api/design/operations/${encodeURIComponent(id)}/type`, { type });
@@ -168,10 +170,10 @@ export class EditController {
 	}
 
 	/**
-	 * Alle gewone lagen in één handeling (punt 4 uit de tweede testronde).
+	 * Every ordinary layer in one operation (point 4 from the second test round).
 	 *
-	 * De vormen blijven; ze zitten daarna in geen enkele laag. Cellen van een
-	 * testraster blijven staan — die gaan er als bord uit, niet als losse laag.
+	 * The shapes stay; they are in no layer afterwards. Cells of a test grid stay put —
+	 * those go out as a board, not as a single layer.
 	 */
 	async removeAllLayers() {
 		return this.#send('/api/design/operations', 'DELETE');
@@ -192,7 +194,7 @@ export class EditController {
 			}
 			return { ok: true, idsInvalidated: false };
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return { ok: false, idsInvalidated: false };
 		} finally {
 			this.busy = false;
@@ -207,8 +209,8 @@ export class EditController {
 		return this.#send(`/api/design/elements/${encodeURIComponent(id)}/line`, 'PATCH', fields);
 	}
 
-	/** Eén knooppunt verleggen. Geeft het id terug: een vorm wordt hierdoor een
-	 *  pad en krijgt dan een nieuw id. */
+	/** Moving one node. Returns the id: this turns a shape into a path, and it gets a
+	 *  new id then. */
 	async moveNode(
 		id: string,
 		index: number,
@@ -229,7 +231,7 @@ export class EditController {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -245,18 +247,18 @@ export class EditController {
 	}
 
 	/**
-	 * Hoeken afronden of afschuinen.
+	 * CornersDialog afronden of afschuinen.
 	 *
-	 * Geeft het antwoord zelf terug in plaats van alleen `ok`, want er staan twee
-	 * dingen in die de gebruiker moet zien: hoeveel hoeken zijn overgeslagen
-	 * (te korte zijden, of een boog die op de hoek uitkomt), en welke id's het
-	 * geworden zijn — afschuinen maakt er een pad van, en dat krijgt een nieuw id.
+	 * Returns the answer itself instead of only `ok`, because there are two things in
+	 * it the user has to see: how many corners were skipped (sides too short, or an arc
+	 * meeting at the corner), and which ids they have become — bevelling turns them into
+	 * a path, and that gets a new id.
 	 */
 	/**
-	 * Een vorm een vlak geven, of het weghalen.
+	 * Giving a shape an area, or taking it away.
 	 *
-	 * Nodig om iets te rasteren dat je zelf getekend hebt: de rasteraar vult wat
-	 * een vulling heeft en trekt anders alleen een lijn om de vorm.
+	 * Needed to grid something you drew yourself: the rasteriser fills what has a
+	 * fill and otherwise only draws a line around the shape.
 	 */
 	async fill(
 		ids: string[],
@@ -265,17 +267,17 @@ export class EditController {
 		return this.#postJson('/api/design/fill', { ids, filled });
 	}
 
-	/** Een pad opdelen in zijn losse stukken. */
+	/** Splitting a path into its loose pieces. */
 	async split(
 		ids: string[]
 	): Promise<{ ids: string[]; count: number; skipped: number } | null> {
 		return this.#postJson('/api/design/split', { ids });
 	}
 
-	/** De selectie in één laag zetten, en uit alle andere halen. */
+	/** Putting the selection in one layer, and out of all the others. */
 	async singleLayer(
 		ids: string[],
-		kind: 'cut' | 'engrave' | 'raster'
+		kind: 'cut' | 'engrave' | 'grid'
 	): Promise<{
 		operation_id: string;
 		type: string;
@@ -286,16 +288,16 @@ export class EditController {
 		return this.#postJson('/api/design/single-layer', { ids, type: kind });
 	}
 
-	/** Lege lagen weg. */
+	/** Lege layers gone. */
 	async prune(): Promise<{ removed: number; ids: string[] } | null> {
 		return this.#postJson('/api/design/operations/prune', {});
 	}
 
 	/**
-	 * POST waarvan het antwoord zelf nodig is.
+	 * A POST whose answer itself is needed.
 	 *
-	 * `#post` hierboven geeft alleen ok/idsInvalidated terug; deze handelingen
-	 * melden hoeveel ze gedaan hebben, en dat getal staat in het paneel.
+	 * `#post` above returns only ok/idsInvalidated; these operations report how much
+	 * they did, and that number appears in the panel.
 	 */
 	async #postJson<T>(pad: string, body: unknown): Promise<T | null> {
 		this.busy = true;
@@ -312,7 +314,7 @@ export class EditController {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -338,7 +340,7 @@ export class EditController {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -395,13 +397,13 @@ export class EditController {
 }
 
 async function describe(response: Response): Promise<string> {
-	if (response.status === 401) return 'Geen of onjuiste token — bewerken is geblokkeerd.';
+	if (response.status === 401) return t('error.noToken');
 	try {
 		const body = await response.json();
-		if (typeof body.detail === 'string') return body.detail;
+		if (typeof body.detail === 'string') return apiError(response, body.detail);
 		if (body.detail?.output?.length) return body.detail.output.join(' · ');
 	} catch {
-		/* val terug op de generieke tekst */
+		/* fall back to the generic sentence */
 	}
-	return `De engine weigerde de bewerking (${response.status}).`;
+	return t('error.editRefused', { status: response.status });
 }

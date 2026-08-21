@@ -18,13 +18,13 @@ from .edits import DesignError
 
 MAX_CELLS = 400  # A 20x20 sweep is already more than anyone reads off a photo.
 
-# De laag waar alle opschriften van alle borden in gaan. Eén naam op één plek,
-# want zowel de generator als het tekengedeelte moet hem herkennen: hij is een
-# láág van het bord en geen laag van de gebruiker, en mag dus nooit vers werk
-# opvangen (zie Drawing._single_layer).
+# The layer all the captions of all the boards go into. One name in one place, because
+# both the generator and the drawing part have to recognise it: it is a layer *of the
+# board* and not a layer of the user's, and so must never catch fresh work (see
+# Drawing._single_layer).
 LABEL_LAYER = "Raster-labels"
 
-# Hoe de groep heet die één bord bij elkaar houdt.
+# The name of the group that holds one board together.
 BOARD_LABEL = "Testraster"
 
 
@@ -32,9 +32,9 @@ def _positive(value, name: str) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError) as e:
-        raise DesignError(f"{name} moet een getal zijn.") from e
+        raise DesignError(f"{name} has to be a number.") from e
     if number <= 0:
-        raise DesignError(f"{name} moet groter dan nul zijn.")
+        raise DesignError(f"{name} has to be greater than zero.")
     return number
 
 
@@ -42,60 +42,60 @@ def _steps(value, name: str) -> int:
     try:
         number = int(value)
     except (TypeError, ValueError) as e:
-        raise DesignError(f"{name} moet een geheel getal zijn.") from e
+        raise DesignError(f"{name} has to be a whole number.") from e
     if number < 2:
-        raise DesignError(f"{name} moet minstens 2 zijn — anders varieer je niets.")
+        raise DesignError(f"{name} has to be at least 2 — otherwise you vary nothing.")
     return number
 
 
 def _passes(value) -> int:
     """
-    Hoe vaak de kop over elk vakje gaat, voor het hele bord tegelijk.
+    How many times the head goes over each square, for the whole board at once.
 
-    Streng op halve passes: `int(2.5)` is 2, en dat is precies het soort stille
-    afronding waar iemand op materiaal achter komt. Een leeg veld is wél goed —
-    het formulier stuurt "" voor "niet ingevuld".
+    Strict about half passes: `int(2.5)` is 2, and that is exactly the kind of silent
+    rounding somebody finds out about on material. An empty field is fine — the form sends
+    "" for "not filled in".
     """
     if value in (None, ""):
         return 1
     try:
-        getal = float(value)
+        number = float(value)
     except (TypeError, ValueError) as e:
-        raise DesignError("passes moet een heel getal van 1 of meer zijn.") from e
-    if getal != int(getal) or int(getal) < 1:
-        raise DesignError("passes moet een heel getal van 1 of meer zijn.")
-    return int(getal)
+        raise DesignError("passes has to be a whole number of 1 or more.") from e
+    if number != int(number) or int(number) < 1:
+        raise DesignError("passes has to be a whole number of 1 or more.")
+    return int(number)
 
 
-# De stappen waarop een mens werkt. Een raster dat rijen snijdt op 11,667 mm/s
-# is geen naslagwerk: die instelling type je nooit meer over.
-# De fijnste stappen zijn er voor het interval: dat loopt van 0,05 tot 0,3 mm,
-# en op een korrel van 0,1 zouden drie van de vier rijen hetzelfde getal krijgen.
-_NETTE_STAPPEN = (
+# The steps a human works in. A grid that cuts rows at 11.667 mm/s is not a reference
+# work: you will never type that setting again.
+# The finest steps are there for the interval: that runs from 0.05 to 0.3 mm, and on a
+# grain of 0.1 three of the four rows would get the same number.
+_TIDY_STEPS = (
     0.01, 0.02, 0.025, 0.05,
     0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 250, 500,
 )
 
 
-# ---------------------------------------------------------------- de drie assen
+# ---------------------------------------------------------------- de drie axes
 #
-# Besluit B12: het interval (de lijnafstand) is de derde grootheid die je kunt
-# aftasten. Je kiest zelf welke twee op de assen staan; de derde blijft vast.
-# Passes staat er bewust níét bij: dat vermenigvuldigt de brandtijd van het hele
-# bord, en dan test je je geduld in plaats van je materiaal.
+# Decision B12: the interval (the line spacing) is the third quantity you can sweep. You
+# choose which two sit on the axes yourself; the third stays fixed. Passes is deliberately
+# not among them: that multiplies the burn time of the whole board, and then you are
+# testing your patience instead of your material.
 
 AXES = {
     "speed": {
         "cell_key": "speed_mm_s",
         "fixed_key": "speed_mm_s",
         "unit": "mm/s",
-        "label": "snelheid",
+        "label": "speed",
     },
     "power": {
         "cell_key": "power_percent",
         "fixed_key": "power_percent",
         "unit": "%",
-        "label": "vermogen",
+        "label": "power",
     },
     "interval": {
         "cell_key": "interval_mm",
@@ -105,149 +105,143 @@ AXES = {
     },
 }
 
-# Waar het interval iets betekent. Bij snijden legt de kop één lijn en is er
-# geen lijnafstand; hem daar aanbieden zou een knop zijn die niets doet.
+# Where the interval means something. When cutting the head lays one line and there is no
+# line spacing; offering it there would be a button that does nothing.
 INTERVAL_OPERATIONS = ("graveren-raster",)
 
-# Waar het interval op uitkomt als je er niets over zegt: 0,1 mm ≈ 254 dpi, het
-# werkpunt waar de meeste CO2-graveringen op staan.
+# What the interval comes out at when you say nothing about it: 0.1 mm ≈ 254 dpi, the
+# working point most CO2 engravings sit at.
 DEFAULT_INTERVAL_MM = 0.1
 
-# ------------------------------------------------------- de letter op het bord
+# -------------------------------------------------- the typeface on the board
 #
-# Een testbord is een bewijsstuk: over twee weken moet je er nog aan kunnen
-# aflezen welk vakje 200 mm/s bij 40 % was. Welke letter daar staat, mag dus
-# niet afhangen van wat je toevallig het laatst in het tekstvenster koos.
+# A test board is a piece of evidence: in two weeks' time you still have to be able to read
+# off it which square was 200 mm/s at 40%. So which typeface is on it must not depend on
+# what you happened to choose last in the text dialog.
 #
-# En dat gebeurde wél. `linetext` valt zonder `-f` terug op `context.last_font`
-# (meerk40t/extra/hershey.py:895), een instelling die de engine bewaart en die
-# élke tekstplaatsing overschrijft — ook een die de gebruiker allang vergeten
-# is. Een bord met de opschriften in Apple Chancery is precies wat je niet wilt.
+# And that did happen. Without `-f`, `linetext` falls back on `context.last_font`
+# (meerk40t/extra/hershey.py:895), a setting the engine keeps and that *every* text
+# placement overwrites — including one the user has long forgotten. A board with the
+# captions in Apple Chancery is exactly what you do not want.
 #
-# `meerk40t.jhf` is de ingebouwde Hershey-letter van de engine: hij komt niet
-# van de schijf, staat er dus altijd, en is enkellijnig — precies wat een
-# gegraveerd opschrift wil (een TrueType-omtrek graveert de contour van de
-# letter, niet de letter). De rest is terugval voor het geval upstream hem ooit
-# hernoemt.
+# `meerk40t.jhf` is the engine's built-in Hershey typeface: it does not come from the disk,
+# so it is always there, and it is single-line — exactly what an engraved caption wants (a
+# TrueType outline engraves the contour of the letter, not the letter). The rest is a
+# fallback in case upstream ever renames it.
 LABEL_FONTS = ("meerk40t.jhf", "rowmans.jhf", "romant.shx", "arial.ttf")
 
-# Waarop we de letter laten renderen. De hoogte wordt daarna alsnog exact
-# gezet met `_scale_to_height`, maar een vaste startmaat houdt het resultaat
-# reproduceerbaar in plaats van afhankelijk van de console-standaard.
+# The size we have the typeface rendered at. The height is set exactly afterwards with
+# `_scale_to_height` anyway, but a fixed starting size keeps the result reproducible
+# instead of dependent on the console default.
 LABEL_FONT_SIZE_PX = 20
 
-# Hoe breed een teken van die letter is, als deel van de teksthoogte. Nagemeten
-# op de werkelijk getekende opschriften (0,53–0,66 afhankelijk van welke tekens
-# erin staan); we rekenen aan de ruime kant, want dit reserveert ruimte en een
-# tekort laat het opschrift buiten het bord steken.
+# How wide a character of that typeface is, as a fraction of the text height. Measured on
+# the captions as actually drawn (0.53–0.66 depending on which characters are in them); we
+# compute on the generous side, because this reserves room and a shortfall lets the caption
+# stick out beyond the board.
 CAPTION_CHAR_RATIO = 0.62
 
-# Waar een gegraveerd opschrift ophoudt leesbaar te zijn. Kleiner dan dit is
-# het geen opschrift meer maar een streep, dus krimpt het niet verder — het
-# breekt dan af naar een volgende regel.
+# Where an engraved caption stops being readable. Smaller than this it is no longer a
+# caption but a stripe, so it shrinks no further — it breaks onto a next line instead.
 MIN_CAPTION_MM = 2.0
 
-# Hoeveel hoger de ene opschriftregel boven de andere staat, als deel van de
-# teksthoogte. 1,4 is de gebruikelijke regelafstand; krapper gaan de stokken
-# en staarten van twee regels door elkaar lopen en is het gegraveerd niet meer
-# te lezen.
+# How much higher one caption line sits above the other, as a fraction of the text
+# height. 1.4 is the usual line spacing; tighter and the ascenders and descenders of two
+# lines run into each other and it is no longer readable once engraved.
 CAPTION_LINE_PITCH = 1.4
 
-# ------------------------------------------------- waar het bord komt te liggen
+# --------------------------------------------------- where the board will lie
 #
-# Gat T9: Start X/Y sloeg op de linkerbovenhoek van het raster. Een testbord leg
-# je op een reststuk, en dan weet je waar het mídden van dat stuk ligt — niet
-# waar de hoek van een raster moet komen dat je nog niet gezien hebt. LightBurn
-# vraagt X Center/Y Center; wij laten de keuze staan, want vanaf een hoek is bij
-# een verse plaat juist handiger.
+# Gap T9: Start X/Y referred to the top-left corner of the grid. You put a test board on
+# an offcut, and then you know where the *centre* of that piece is — not where the corner
+# of a grid you have not seen yet should go. LightBurn asks X Center/Y Center; we leave the
+# choice, because from a corner is actually handier on a fresh plate.
 #
-# Het midden slaat op het hele bord inclusief labels en opschrift. Het raster
-# centreren terwijl de rijlabels er links buiten steken, legt het bord scheef —
-# en juist die labels waren de aanleiding voor T11.
+# The centre refers to the whole board including labels and caption. Centring the grid
+# while the row labels stick out to the left of it lays the board askew — and those very
+# labels were the reason for T11.
 ANCHORS = ("corner", "center")
 
-# Hoe ver het randkader (T10) om het bord heen ligt. Ruim genoeg om niet tegen
-# de opschriften aan te lopen, krap genoeg om geen plaat te verspillen.
+# How far the border frame (T10) lies around the board. Generous enough not to run into
+# the captions, tight enough not to waste plate.
 BORDER_PAD_MM = 2.0
 
-# De labellaag brandt niet mee in de sweep: hij moet leesbaar zijn wat er ook
-# uit de proef komt. Deze twee waren hardgecodeerd; sinds T10 zijn ze in te
-# stellen, met dezelfde getallen als terugval.
+# The label layer does not join the sweep: it has to be readable whatever comes out of the
+# trial. These two were hardcoded; since T10 they can be set, with the same numbers as the
+# fallback.
 DEFAULT_LABEL_SPEED_MM_S = 80.0
 DEFAULT_LABEL_POWER_PERCENT = 30.0
 
 
-def _rond_af(waarde: float, ruwe_stap: float) -> float:
+def _tidy(value: float, raw_step: float) -> float:
     """
-    Een tussenwaarde naar het dichtstbijzijnde nette getal schuiven.
+    Nudging an intermediate value to the nearest tidy number.
 
-    De korrel volgt de stapgrootte: bij stappen van ~13 rond je op tientallen af,
-    bij stappen van ~0,4 op tienden. Zo blijft het raster herkenbaar oplopen in
-    plaats van vier keer hetzelfde getal te tonen.
+    The grain follows the step size: with steps of ~13 you round to tens, with steps of
+    ~0.4 to tenths. That way the grid keeps climbing recognisably instead of showing the
+    same number four times.
     """
-    # De grofste nette stap die hoogstens een halve stap groot is: dan schuift
-    # een waarde nooit verder dan een kwart stap op en blijft de reeks netjes
-    # oplopen.
-    grens = ruwe_stap / 2 if ruwe_stap else 1
-    passend = [k for k in _NETTE_STAPPEN if k <= grens]
-    korrel = passend[-1] if passend else _NETTE_STAPPEN[0]
-    afgerond = round(waarde / korrel) * korrel
-    # Drijvende komma laat 3 * 0.1 als 0.30000000000000004 achter.
-    return round(afgerond, 3)
+    # The coarsest tidy step that is at most half a step: then a value never moves further
+    # than a quarter of a step and the series keeps climbing tidily.
+    bound = raw_step / 2 if raw_step else 1
+    fitting = [k for k in _TIDY_STEPS if k <= bound]
+    grain = fitting[-1] if fitting else _TIDY_STEPS[0]
+    rounded = round(value / grain) * grain
+    # Floating point leaves 3 * 0.1 behind as 0.30000000000000004.
+    return round(rounded, 3)
 
 
 def _spread(low: float, high: float, steps: int) -> list[float]:
     """
-    De reeks waarden voor één as.
+    The series of values for one axis.
 
-    Begin en eind blijven exact wat er gevraagd is — dat is het bereik dat de
-    gebruiker wil aftasten. Alleen de tussenstappen schuiven naar een net getal,
-    en als twee daarvan op hetzelfde uitkomen blijft de rauwe waarde staan:
-    liever een lelijk getal dan twee identieke rijen.
+    The start and the end stay exactly what was asked for — that is the range the user
+    wants to sweep. Only the intermediate steps move to a tidy number, and when two of them
+    come out the same the raw value stays: better an ugly number than two identical rows.
     """
     if steps == 1:
         return [low]
     span = (high - low) / (steps - 1)
-    ruw = [low + span * i for i in range(steps)]
-    net = [ruw[0]] + [_rond_af(v, span) for v in ruw[1:-1]] + [ruw[-1]]
-    if len(set(net)) < len(net) or any(
-        net[i] >= net[i + 1] for i in range(len(net) - 1)
+    raw = [low + span * i for i in range(steps)]
+    tidy = [raw[0]] + [_tidy(v, span) for v in raw[1:-1]] + [raw[-1]]
+    if len(set(tidy)) < len(tidy) or any(
+        tidy[i] >= tidy[i + 1] for i in range(len(tidy) - 1)
     ):
-        return ruw
-    return net
+        return raw
+    return tidy
 
 
-def _bereik(naam: str, lo, hi, aantal) -> list[float]:
-    """De waarden op één as, gecontroleerd en afgerond op nette getallen."""
-    # De reden staat sinds punt 2 náást het voorbeeld in beeld in plaats van
-    # onder de vouw, dus hij is nu tekst voor een mens en geen veldnaam uit de
-    # API. "speed_max moet minstens speed_min zijn" is geen Nederlands.
-    label = AXES[naam]["label"]
-    laag = _positive(lo, f"De {label} bij 'van'")
-    hoog = _positive(hi, f"De {label} bij 'tot'")
-    if hoog < laag:
+def _range(name: str, lo, hi, count) -> list[float]:
+    """The values on one axis, checked and rounded to tidy numbers."""
+    # Since point 2 the reason is on screen *beside* the preview instead of below the
+    # fold, so it is now text for a human and not a field name from the API. "speed_max
+    # must be at least speed_min" is not a sentence.
+    label = AXES[name]["label"]
+    layer = _positive(lo, f"The {label} at 'from'")
+    high = _positive(hi, f"The {label} at 'to'")
+    if high < layer:
         raise DesignError(
-            f"De {label} bij 'tot' moet minstens de {label} bij 'van' zijn."
+            f"The {label} at 'to' has to be at least the {label} at 'from'."
         )
-    if naam == "power" and hoog > 100:
-        raise DesignError("Vermogen kan niet boven 100 procent.")
-    if naam == "interval" and hoog > 5:
-        raise DesignError("Een interval boven 5 mm is geen gravering meer.")
-    return _spread(laag, hoog, _steps(aantal, f"Het aantal stappen {label}"))
+    if name == "power" and high > 100:
+        raise DesignError("Power cannot go above 100 per cent.")
+    if name == "interval" and high > 5:
+        raise DesignError("An interval above 5 mm is no longer an engraving.")
+    return _spread(layer, high, _steps(count, f"The number of steps {label}"))
 
 
-def _vast(naam: str, waarde, terugval) -> float:
-    """De waarde van de grootheid die níét op een as staat."""
-    if waarde in (None, ""):
-        waarde = terugval
-    if waarde in (None, ""):
+def _fixed(name: str, value, fallback) -> float:
+    """The value of the quantity that is *not* on an axis."""
+    if value in (None, ""):
+        value = fallback
+    if value in (None, ""):
         raise DesignError(
-            f"Zet een vaste waarde voor {AXES[naam]['label']}; die staat niet op een as."
+            f"Set a fixed value for {AXES[name]['label']}; it is not on an axis."
         )
-    getal = _positive(waarde, AXES[naam]["fixed_key"])
-    if naam == "power" and getal > 100:
-        raise DesignError("Vermogen kan niet boven 100 procent.")
-    return getal
+    number = _positive(value, AXES[name]["fixed_key"])
+    if name == "power" and number > 100:
+        raise DesignError("Power cannot go above 100 per cent.")
+    return number
 
 
 def plan_grid(
@@ -266,10 +260,9 @@ def plan_grid(
     interval_mm=None,
     row_axis="speed",
     column_axis="power",
-    # Eén getal voor het hele bord. Als as zou het een bord opleveren dat
-    # niemand meer terugleest: passes vermenigvuldigt de brandtijd en verandert
-    # de uitkomst van elk vakje, dus twee kolommen met verschillende passes
-    # zijn twee proeven op één plank.
+    # One number for the whole board. As an axis it would produce a board nobody reads
+    # back: passes multiplies the burn time and changes the outcome of every square, so two
+    # columns with different passes are two trials on one plank.
     passes=1,
     cell_mm=8.0,
     gap_mm=2.0,
@@ -283,9 +276,9 @@ def plan_grid(
     material_id=None,
     machine_id=None,
     thickness_mm=None,
-    # Het opschrift hoort bij het bord en niet bij de sweep, maar het bepaalt
-    # wél hoe breed het bord wordt — dus moet de planner het kennen. Weglaten
-    # mag: dan rekent hij met het opschrift dat hij zelf al kan afleiden.
+    # The caption belongs to the board and not to the sweep, but it does decide how wide
+    # the board becomes — so the planner has to know it. Leaving it out is allowed: then it
+    # computes with the caption it can derive itself.
     caption=None,
     material_name=None,
     stamp=None,
@@ -293,25 +286,25 @@ def plan_grid(
     """
     Work out the cells without touching the engine, so it can be previewed.
 
-    Twee van de drie grootheden staan op een as (`row_axis` naar beneden,
-    `column_axis` naar rechts), de derde blijft vast. Standaard is dat wat het
-    altijd was: snelheid omlaag, vermogen naar rechts.
+    Two of the three quantities sit on an axis (`row_axis` downwards, `column_axis` to the
+    right), the third stays fixed. By default that is what it always was: speed down, power
+    to the right.
     """
     if row_axis not in AXES or column_axis not in AXES:
         raise DesignError(
-            f"Onbekende as: kies uit {', '.join(AXES)}."
+            f"Unknown axis: choose from {', '.join(AXES)}."
         )
     if row_axis == column_axis:
         raise DesignError(
-            "De twee assen moeten verschillende grootheden zijn — anders varieer "
-            "je één ding in twee richtingen."
+            "The two axes have to be different quantities — otherwise you vary "
+            "one thing in two directions."
         )
-    assen = (row_axis, column_axis)
+    axes = (row_axis, column_axis)
     interval_telt = operation in INTERVAL_OPERATIONS
-    if "interval" in assen and not interval_telt:
+    if "interval" in axes and not interval_telt:
         raise DesignError(
-            "Interval is alleen een as bij rasteren: bij snijden en vectorgraveren "
-            "legt de kop één lijn en is er geen lijnafstand."
+            "Interval is only an axis when rastering: with cutting and vector engraving "
+            "the head lays one line and there is no line spacing."
         )
 
     reeksen = {
@@ -319,17 +312,17 @@ def plan_grid(
         "power": (power_min, power_max, power_steps),
         "interval": (interval_min, interval_max, interval_steps),
     }
-    waarden = {
-        naam: _bereik(naam, *reeksen[naam]) if naam in assen else None
-        for naam in AXES
+    values = {
+        name: _range(name, *reeksen[name]) if name in axes else None
+        for name in AXES
     }
-    vaste = {
-        "speed": None if "speed" in assen else _vast("speed", speed_mm_s, speed_min),
-        "power": None if "power" in assen else _vast("power", power_percent, power_min),
+    fixed_values = {
+        "speed": None if "speed" in axes else _fixed("speed", speed_mm_s, speed_min),
+        "power": None if "power" in axes else _fixed("power", power_percent, power_min),
         "interval": (
             None
-            if "interval" in assen or not interval_telt
-            else _vast(
+            if "interval" in axes or not interval_telt
+            else _fixed(
                 "interval",
                 interval_mm,
                 interval_min if interval_min else DEFAULT_INTERVAL_MM,
@@ -337,24 +330,24 @@ def plan_grid(
         ),
     }
 
-    rows = len(waarden[row_axis])
-    columns = len(waarden[column_axis])
+    rows = len(values[row_axis])
+    columns = len(values[column_axis])
     if rows * columns > MAX_CELLS:
         raise DesignError(
-            f"{rows}×{columns} cellen is te veel; hou het onder {MAX_CELLS}."
+            f"{rows}×{columns} cells is too many; keep it under {MAX_CELLS}."
         )
 
-    aantal_passes = _passes(passes)
+    pass_count = _passes(passes)
     cell = _positive(cell_mm, "cell_mm")
     gap = float(gap_mm)
     if gap < 0:
-        raise DesignError("gap_mm kan niet negatief zijn.")
+        raise DesignError("gap_mm cannot be negative.")
     pitch = cell + gap
 
     if anchor not in ANCHORS:
-        raise DesignError("Kies 'corner' (vanaf de hoek) of 'center' (vanaf het midden).")
-    tekst = bool(text)
-    kader = bool(border)
+        raise DesignError("Choose 'corner' (from the corner) or 'center' (from the middle).")
+    text = bool(text)
+    frame = bool(border)
     label_speed = _positive(
         DEFAULT_LABEL_SPEED_MM_S if label_speed_mm_s in (None, "") else label_speed_mm_s,
         "label_speed_mm_s",
@@ -366,37 +359,35 @@ def plan_grid(
         "label_power_percent",
     )
     if label_power > 100:
-        raise DesignError("Het vermogen van de labellaag kan niet boven 100 procent.")
+        raise DesignError("The power of the label layer cannot go above 100 per cent.")
 
-    breedte = round(columns * pitch - gap, 3)
-    hoogte = round(rows * pitch - gap, 3)
+    width = round(columns * pitch - gap, 3)
+    height = round(rows * pitch - gap, 3)
 
-    # Wat er buiten de vakjes om nog gebrand wordt, en dus meetelt voor "past dit
-    # op mijn plaat". Hier vóór de plaatsing berekend, want bij `anchor="center"`
-    # bepaalt juist deze maat waar de linkerbovenhoek terechtkomt.
+    # What else gets burned around the squares, and therefore counts towards "does this fit
+    # on my plate". Computed here before the placement, because with `anchor="center"` it is
+    # precisely this measure that decides where the top-left corner lands.
     #
-    # Hoeveel ruimte de rijlabels links van het raster nodig hebben. Ze worden
-    # daar gegraveerd, en bij Start X 10 met driecijferige snelheden staan ze
-    # buiten het bed — dan brandt de machine ze niet en is het bord onleesbaar.
-    # Het vectorfont is ongeveer 0,62 × de teksthoogte per teken breed; dit is
-    # dus een schatting, en hij wordt als schatting gemeld.
-    tekst_hoogte = max(2.0, cell * 0.35)
-    opschrift_hoogte = max(2.5, cell * 0.4)
+    # How much room the row labels need to the left of the grid. They are engraved there,
+    # and at Start X 10 with three-digit speeds they are off the bed — then the machine does
+    # not burn them and the board is unreadable. The vector font is about 0.62 × the text
+    # height wide per character; so this is an estimate, and it is reported as one.
+    text_height = max(2.0, cell * 0.35)
+    caption_height = max(2.5, cell * 0.4)
     langste = max(
-        (len(toon(row_axis, waarde)) for waarde in waarden[row_axis]), default=0
+        (len(show(row_axis, value)) for value in values[row_axis]), default=0
     )
-    marge = round(2 + 0.62 * tekst_hoogte * langste, 1)
+    margin = round(2 + 0.62 * text_height * langste, 1)
 
-    # Het opschrift past zich aan het bord aan, niet andersom.
+    # The caption adapts to the board, not the other way round.
     #
-    # Het stond op één regel en het bord kreeg er rechts ruimte bij tot die
-    # regel paste: op een raster van 38 mm werd het bord 134 mm breed. Dat is
-    # geen bord meer maar een wapperende banier, en het maakt het testpaneel
-    # onbruikbaar breed op het scherm. Nu krimpt het opschrift eerst mee tot
-    # het binnen de bordbreedte valt, en breekt het pas af naar een tweede
-    # regel als het onder de leesbaarheidsgrens zou zakken. Het bord wordt dus
-    # nooit breder dan zijn eigen vakjes plus de rijlabels — alleen iets hoger.
-    opschrift_regels = (
+    # It was on one line and the board got room added on the right until that line fitted:
+    # on a grid of 38 mm the board became 134 mm wide. That is no longer a board but a
+    # flapping banner, and it makes the test panel unusably wide on screen. Now the caption
+    # shrinks first until it falls within the board width, and only breaks onto a second
+    # line when it would drop below the readability bound. So the board never becomes wider
+    # than its own squares plus the row labels — only slightly taller.
+    caption_rows = (
         caption_lines(
             {
                 "caption": caption,
@@ -404,71 +395,70 @@ def plan_grid(
                 "stamp": stamp,
                 "thickness_mm": thickness_mm,
                 "operation": operation,
-                "passes": aantal_passes,
+                "passes": pass_count,
                 "row_axis": row_axis,
                 "column_axis": column_axis,
-                # De vaste grootheid hoort erbij: zonder haar is het bord over
-                # twee weken niet terug te rekenen naar een instelling. Dit
-                # stond in `caption_text` al klaar, maar de sleutels werden
-                # nooit meegegeven — de tak vuurde dus nooit.
+                # The fixed quantity belongs with it: without it the board cannot be
+                # converted back into a setting in two weeks' time. This was already ready
+                # in `caption_text`, but the keys were never passed along — so the branch
+                # never fired.
                 **{
-                    f"{naam}_min": vaste[naam]
-                    for naam in AXES
-                    if vaste[naam] is not None
+                    f"{name}_min": fixed_values[name]
+                    for name in AXES
+                    if fixed_values[name] is not None
                 },
             }
         )
-        if tekst
+        if text
         else []
     )
-    if opschrift_regels:
-        beschikbaar = marge + breedte
-        # Eerst krimpen: de hoogte waarbij de langste regel nog net past.
-        krap = beschikbaar / (
-            CAPTION_CHAR_RATIO * max(len(r) for r in opschrift_regels)
+    if caption_rows:
+        available = margin + width
+        # Shrink first: the height at which the longest line just fits.
+        tight = available / (
+            CAPTION_CHAR_RATIO * max(len(r) for r in caption_rows)
         )
-        if krap < MIN_CAPTION_MM:
-            # Zelfs op de ondergrens past het niet — dan een regel erbij.
-            per_regel = max(8, int(beschikbaar / (CAPTION_CHAR_RATIO * MIN_CAPTION_MM)))
-            opschrift_regels = _breek(opschrift_regels, per_regel)
-            krap = beschikbaar / (
-                CAPTION_CHAR_RATIO * max(len(r) for r in opschrift_regels)
+        if tight < MIN_CAPTION_MM:
+            # Even at the floor it does not fit — so add a line.
+            per_line = max(8, int(available / (CAPTION_CHAR_RATIO * MIN_CAPTION_MM)))
+            caption_rows = _breek(caption_rows, per_line)
+            tight = available / (
+                CAPTION_CHAR_RATIO * max(len(r) for r in caption_rows)
             )
-        opschrift_hoogte = round(max(MIN_CAPTION_MM, min(opschrift_hoogte, krap)), 3)
+        caption_height = round(max(MIN_CAPTION_MM, min(caption_height, tight)), 3)
 
-    # Boven het raster: de kolomlabels 2 mm erboven, en daar weer boven het
-    # opschrift. `_caption` zet de ónderkant van de onderste opschriftregel op
-    # `origin_y - 4 - hoogte`, dus de bovenkant van de bovenste ligt daar nog
-    # een teksthoogte plus de regelafstanden boven. Nagemeten tegen de
-    # werkelijk getekende vormen (zie
+    # Above the grid: the column labels 2 mm above it, and above those the caption again.
+    # `_caption` puts the *bottom* of the lowest caption line at `origin_y - 4 - height`, so
+    # the top of the highest one lies a text height plus the line spacings above that.
+    # Measured against the shapes as actually drawn (see
     # `test_the_reported_size_covers_everything_that_is_drawn`).
-    boven = round(
+    above = round(
         max(
-            2 + tekst_hoogte,
+            2 + text_height,
             4
-            + 2 * opschrift_hoogte
-            + max(0, len(opschrift_regels) - 1) * CAPTION_LINE_PITCH * opschrift_hoogte,
+            + 2 * caption_height
+            + max(0, len(caption_rows) - 1) * CAPTION_LINE_PITCH * caption_height,
         ),
         1,
     )
 
-    links_pad = (marge if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
-    boven_pad = (boven if tekst else 0.0) + (BORDER_PAD_MM if kader else 0.0)
-    rechts_pad = onder_pad = BORDER_PAD_MM if kader else 0.0
+    pad_left = (margin if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
+    pad_above = (above if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
+    pad_right = pad_below = BORDER_PAD_MM if frame else 0.0
 
-    buiten_breedte = round(links_pad + breedte + rechts_pad, 3)
-    buiten_hoogte = round(boven_pad + hoogte + onder_pad, 3)
+    outer_width = round(pad_left + width + pad_right, 3)
+    outer_height = round(pad_above + height + pad_below, 3)
 
     if anchor == "center":
-        buiten_x = round(float(origin_x_mm) - buiten_breedte / 2, 3)
-        buiten_y = round(float(origin_y_mm) - buiten_hoogte / 2, 3)
-        origin_x_mm = round(buiten_x + links_pad, 3)
-        origin_y_mm = round(buiten_y + boven_pad, 3)
+        outer_x = round(float(origin_x_mm) - outer_width / 2, 3)
+        outer_y = round(float(origin_y_mm) - outer_height / 2, 3)
+        origin_x_mm = round(outer_x + pad_left, 3)
+        origin_y_mm = round(outer_y + pad_above, 3)
     else:
         origin_x_mm = float(origin_x_mm)
         origin_y_mm = float(origin_y_mm)
-        buiten_x = round(origin_x_mm - links_pad, 3)
-        buiten_y = round(origin_y_mm - boven_pad, 3)
+        outer_x = round(origin_x_mm - pad_left, 3)
+        outer_y = round(origin_y_mm - pad_above, 3)
 
     cells = []
     for row in range(rows):
@@ -481,14 +471,14 @@ def plan_grid(
                 "width_mm": cell,
                 "height_mm": cell,
             }
-            for naam, as_ in AXES.items():
-                if naam == row_axis:
-                    getal = waarden[naam][row]
-                elif naam == column_axis:
-                    getal = waarden[naam][column]
+            for name, as_ in AXES.items():
+                if name == row_axis:
+                    number = values[name][row]
+                elif name == column_axis:
+                    number = values[name][column]
                 else:
-                    getal = vaste[naam]
-                entry[as_["cell_key"]] = None if getal is None else round(getal, 4)
+                    number = fixed_values[name]
+                entry[as_["cell_key"]] = None if number is None else round(number, 4)
             cells.append(entry)
 
     plan = {
@@ -496,7 +486,7 @@ def plan_grid(
         "machine_id": machine_id,
         "thickness_mm": thickness_mm,
         "operation": operation,
-        "passes": aantal_passes,
+        "passes": pass_count,
         "row_axis": row_axis,
         "column_axis": column_axis,
         "rows": rows,
@@ -505,97 +495,96 @@ def plan_grid(
         "gap_mm": gap,
         "origin_x_mm": origin_x_mm,
         "origin_y_mm": origin_y_mm,
-        "width_mm": breedte,
-        "height_mm": hoogte,
-        # T9/T10: waar het bord ligt en hoe groot het écht is. `origin_*` is en
-        # blijft de linkerbovenhoek van de vákjes — daar rekent de foto-overlay
-        # mee — en `outer_*` is het hele bord inclusief opschriften en kader.
+        "width_mm": width,
+        "height_mm": height,
+        # T9/T10: where the board lies and how big it really is. `origin_*` is and stays
+        # the top-left corner of the *squares* — that is what the photo overlay computes
+        # with — and `outer_*` is the whole board including captions and frame.
         "anchor": anchor,
-        "text": tekst,
-        "border": kader,
+        "text": text,
+        "border": frame,
         "label_speed_mm_s": label_speed,
         "label_power_percent": label_power,
-        "outer_x_mm": buiten_x,
-        "outer_y_mm": buiten_y,
-        "outer_width_mm": buiten_breedte,
-        "outer_height_mm": buiten_hoogte,
-        "center_x_mm": round(buiten_x + buiten_breedte / 2, 3),
-        "center_y_mm": round(buiten_y + buiten_hoogte / 2, 3),
-        # Het opschrift hoort bij de planning omdat het de breedte bepaalt.
-        # `caption_text` staat hier al berekend zodat de tekenaar exact dezelfde
-        # regel zet als waar hier ruimte voor gereserveerd is.
+        "outer_x_mm": outer_x,
+        "outer_y_mm": outer_y,
+        "outer_width_mm": outer_width,
+        "outer_height_mm": outer_height,
+        "center_x_mm": round(outer_x + outer_width / 2, 3),
+        "center_y_mm": round(outer_y + outer_height / 2, 3),
+        # The caption belongs to the planning because it decides the width. `caption_text`
+        # is computed here already so that the drawer sets exactly the same line as the room
+        # reserved for it here.
         "caption": str(caption or "").strip(),
         "material_name": material_name,
         "stamp": stamp,
-        "caption_lines": opschrift_regels,
-        "caption_text": " · ".join(opschrift_regels),
-        # De maat waarop het opschrift past; de tekenaar hoeft hem dan niet
-        # opnieuw te raden en zet exact wat hier gemaat is.
-        "caption_height_mm": opschrift_hoogte if opschrift_regels else 0.0,
+        "caption_lines": caption_rows,
+        "caption_text": " · ".join(caption_rows),
+        # The size at which the caption fits; then the drawer does not have to guess it
+        # again and sets exactly what was measured here.
+        "caption_height_mm": caption_height if caption_rows else 0.0,
     }
-    # Wat dit bord gaat kosten aan tijd, vóórdat er iets getekend is.
+    # What this board is going to cost in time, before anything has been drawn.
     #
-    # Nodig omdat interval als as de brandtijd stil kan vermenigvuldigen: een
-    # rij op 0,05 mm legt zes keer zoveel regels als een rij op 0,3 mm, en dat
-    # zie je aan geen enkel getal in het formulier. Zelfde som als
-    # `DrawingService._geometry_estimate`: lengte gedeeld door snelheid, plus de
-    # sprong naar het volgende vakje. Het bord is nog niet getekend, dus dit kan
-    # niet uit de elementenboom komen.
+    # Needed because interval as an axis can silently multiply the burn time: a row at
+    # 0.05 mm lays six times as many lines as a row at 0.3 mm, and no number in the form
+    # shows that. The same sum as `DrawingService._geometry_estimate`: length divided by
+    # speed, plus the jump to the next square. The board has not been drawn yet, so this
+    # cannot come from the element tree.
     RAPID_MM_S = 100.0
-    seconden = 0.0
+    seconds = 0.0
     for entry in cells:
-        snelheid = entry["speed_mm_s"] or 0
-        if snelheid <= 0:
+        speed = entry["speed_mm_s"] or 0
+        if speed <= 0:
             continue
         interval = entry.get("interval_mm")
         if interval_telt and interval:
-            # Rasteren: regel na regel over het vlak, plus één regelsprong.
-            regels = cell / interval
-            brand_mm = regels * cell + cell
+            # Rasteren: line na line over het area, plus één regelsprong.
+            lines = cell / interval
+            burn_mm = lines * cell + cell
         else:
-            # Snijden of vectorgraveren: de omtrek van het vakje.
-            brand_mm = 4 * cell
-        # Elke pass brandt de hele weg opnieuw; de sprong naar het volgende
-        # vakje is er één keer. Zonder deze factor meldt een bord van twee
-        # passes de helft van zijn tijd, en dat getal gebruiken we ook om te
-        # zeggen of het binnen een dag past.
-        seconden += aantal_passes * brand_mm / snelheid + pitch / RAPID_MM_S
-    plan["seconds"] = round(seconden, 1)
+            # Cutting or vector engraving: the outline of the square.
+            burn_mm = 4 * cell
+        # Every pass burns the whole route again; the jump to the next square happens
+        # once. Without this factor a board of two
+        # passes reports half its time, and we also use that number to say whether it
+        # fits within a day.
+        seconds += pass_count * burn_mm / speed + pitch / RAPID_MM_S
+    plan["seconds"] = round(seconds, 1)
 
-    plan["label_margin_mm"] = marge if tekst else 0.0
-    # Staan de rijlabels nog op het bed? Zonder opschriften is die vraag weg.
-    plan["label_room"] = (not tekst) or origin_x_mm >= marge
-    # En het bord als geheel: sinds T9 kan het midden het ankerpunt zijn, en dan
-    # is "zet Start X hoger" geen antwoord meer dat de gebruiker kan geven.
-    plan["board_room"] = buiten_x >= 0 and buiten_y >= 0
+    plan["label_margin_mm"] = margin if text else 0.0
+    # Are the row labels still on the bed? Without captions that question is gone.
+    plan["label_room"] = (not text) or origin_x_mm >= margin
+    # And the board as a whole: since T9 the centre can be the anchor, and then "set Start
+    # X higher" is no longer an answer the user can give.
+    plan["board_room"] = outer_x >= 0 and outer_y >= 0
 
-    # Elke grootheid krijgt zijn min/max/steps, ook de vaste: dan blijft één
-    # rij in de database genoeg om het raster te herbouwen, en blijven de
-    # kolommen die er al waren betekenen wat ze betekenden.
-    for naam in AXES:
-        reeks = waarden[naam]
-        if reeks is None:
-            vast = vaste[naam]
-            plan[f"{naam}_min"] = vast
-            plan[f"{naam}_max"] = vast
-            plan[f"{naam}_steps"] = 1 if vast is not None else None
+    # Every quantity gets its min/max/steps, the fixed one as well: then one row in the
+    # database stays enough to rebuild the grid, and the columns that were already there
+    # keep meaning what they meant.
+    for name in AXES:
+        series = values[name]
+        if series is None:
+            fixed = fixed_values[name]
+            plan[f"{name}_min"] = fixed
+            plan[f"{name}_max"] = fixed
+            plan[f"{name}_steps"] = 1 if fixed is not None else None
         else:
-            plan[f"{naam}_min"] = reeks[0]
-            plan[f"{naam}_max"] = reeks[-1]
-            plan[f"{naam}_steps"] = len(reeks)
+            plan[f"{name}_min"] = series[0]
+            plan[f"{name}_max"] = series[-1]
+            plan[f"{name}_steps"] = len(series)
     return plan, cells
 
 
-# ------------------------------------------------------- het vakje aanwijzen
+# ----------------------------------------------------- marking out the cell
 #
-# M4: de herkomst zegt "rij 2, kolom 3", maar op de foto is niets gemarkeerd —
-# het bewijs is er, de aanwijzing niet. Met de uitlijning uit T4 in de database
-# kan dezelfde afbeelding hier gebruikt worden om het vakje op de foto zelf aan
-# te wijzen, zodat de markering meekomt in elk <img> dat de foto toont.
+# M4: the provenance says "row 2, column 3", but nothing is marked on the photo — the
+# evidence is there, the pointer is not. With the alignment from T4 in the database the
+# same image can be used here to point out the square on the photo itself, so that the
+# marker comes along in every <img> that shows the photo.
 
-# De hoeken waar de overlay op begint als er nog niets uitgelijnd is: dezelfde
-# 10%-marge die de frontend voorstelt.
-STANDAARD_HOEKEN = [
+# The corners the overlay starts at when nothing has been aligned yet: the same 10% margin
+# the frontend proposes.
+DEFAULT_CORNERS = [
     {"x": 0.1, "y": 0.1},
     {"x": 0.9, "y": 0.1},
     {"x": 0.9, "y": 0.9},
@@ -603,15 +592,14 @@ STANDAARD_HOEKEN = [
 ]
 
 
-def _homografie(hoeken: list[dict]):
+def _homography(corners: list[dict]):
     """
-    Projectieve afbeelding van het eenheidsvierkant naar de vier hoeken.
+    Projective mapping from the unit square to the four corners.
 
-    Dezelfde standaardhomografie als in TestGridResult.svelte: wie schuin boven
-    het bord staat fotografeert een trapezium, en een affiene transformatie
-    vangt dat niet.
+    The same standard homography as in TestGridResult.svelte: standing at an angle above
+    the board you photograph a trapezium, and an affine transform does not catch that.
     """
-    p0, p1, p2, p3 = hoeken
+    p0, p1, p2, p3 = corners
     dx1, dx2 = p1["x"] - p2["x"], p3["x"] - p2["x"]
     dx3 = p0["x"] - p1["x"] + p2["x"] - p3["x"]
     dy1, dy2 = p1["y"] - p2["y"], p3["y"] - p2["y"]
@@ -633,35 +621,34 @@ def _homografie(hoeken: list[dict]):
     )
 
 
-def cel_veelhoek(grid: dict, cell: dict) -> list[tuple[float, float]]:
-    """De vier hoeken van één vakje in fotocoördinaten (0–1)."""
+def cell_polygon(grid: dict, cell: dict) -> list[tuple[float, float]]:
+    """The four corners of one square in photo coordinates (0–1)."""
     pitch = grid["cell_mm"] + grid["gap_mm"]
-    kolommen = grid.get("columns") or grid["power_steps"]
-    rijen = grid.get("rows") or grid["speed_steps"]
-    breedte = kolommen * pitch - grid["gap_mm"]
-    hoogte = rijen * pitch - grid["gap_mm"]
-    a, b, c, d, e, f, g, h = _homografie(grid.get("alignment") or STANDAARD_HOEKEN)
+    columns = grid.get("columns") or grid["power_steps"]
+    rows = grid.get("rows") or grid["speed_steps"]
+    width = columns * pitch - grid["gap_mm"]
+    height = rows * pitch - grid["gap_mm"]
+    a, b, c, d, e, f, g, h = _homography(grid.get("alignment") or DEFAULT_CORNERS)
 
-    def naar_foto(u, v):
+    def to_photo(u, v):
         w = g * u + h * v + 1 or 1e-9
         return ((a * u + b * v + c) / w, (d * u + e * v + f) / w)
 
-    u0 = (cell["x_mm"] - grid["origin_x_mm"]) / breedte
-    v0 = (cell["y_mm"] - grid["origin_y_mm"]) / hoogte
-    u1 = u0 + cell["width_mm"] / breedte
-    v1 = v0 + cell["height_mm"] / hoogte
-    return [naar_foto(u0, v0), naar_foto(u1, v0), naar_foto(u1, v1), naar_foto(u0, v1)]
+    u0 = (cell["x_mm"] - grid["origin_x_mm"]) / width
+    v0 = (cell["y_mm"] - grid["origin_y_mm"]) / height
+    u1 = u0 + cell["width_mm"] / width
+    v1 = v0 + cell["height_mm"] / height
+    return [to_photo(u0, v0), to_photo(u1, v0), to_photo(u1, v1), to_photo(u0, v1)]
 
 
-# -------------------------------------------------- is dit knooppunt van ons?
+# ---------------------------------------------------- is this node ours?
 #
-# De koppeling raster → knooppunt staat in de database en overleeft een
-# herstart; id's worden per document uitgedeeld. `meerk40t:3` op vel 2 is dus
-# een ánder ding dan `meerk40t:3` op vel 1. Wie een raster van het canvas haalt
-# terwijl hij op een ander vel staat, wiste daar het werk — gemeten: dertien
-# lagen van een ander raster, zonder een woord. Daarom kijkt het weghalen niet
-# alleen naar het id maar ook of het gevonden knooppunt werkelijk deze cel is.
-# Dezelfde eis als `DesignReader._grid_for` stelt bij het markeren.
+# The link grid → node is in the database and survives a restart; ids are handed out per
+# document. So `meerk40t:3` on sheet 2 is a *different* thing from `meerk40t:3` on sheet 1.
+# Anybody removing a grid from the canvas while they are on another sheet erased the work
+# there — measured: thirteen layers of another grid, without a word. So the removal looks
+# not only at the id but also at whether the node found really is this cell. The same
+# requirement `DesignReader._grid_for` makes when marking.
 
 MAAT_SPELING_MM = 0.6  # de lijndikte telt mee in `bounds`
 
@@ -698,10 +685,10 @@ def is_cel_element(node, cell: dict) -> bool:
 
 def markeer_foto(grid: dict, path, row: int, column: int) -> bytes:
     """
-    De rasterfoto met één vakje omcirkeld, als JPEG-bytes.
+    The grid photo with one square circled, as JPEG bytes.
 
-    Server-side en niet in de browser, zodat de markering meekomt overal waar de
-    foto als plaatje getoond wordt — ook op de herkomstkaart in de bibliotheek.
+    Server-side and not in the browser, so that the marker comes along everywhere the photo
+    is shown as an image — including on the provenance card in the library.
     """
     from io import BytesIO
 
@@ -711,187 +698,185 @@ def markeer_foto(grid: dict, path, row: int, column: int) -> bytes:
         (c for c in grid["cells"] if c["row"] == row and c["column"] == column), None
     )
     if cell is None:
-        raise DesignError(f"Cel rij {row}, kolom {column} hoort niet bij dit raster.")
+        raise DesignError(f"Cell row {row}, column {column} does not belong to this grid.")
 
-    foto = Image.open(path).convert("RGB")
-    breedte, hoogte = foto.size
-    punten = [(x * breedte, y * hoogte) for x, y in cel_veelhoek(grid, cell)]
-    dik = max(3, round(min(breedte, hoogte) / 160))
-    teken = ImageDraw.Draw(foto)
-    # Wit eronder, accent erop: op donker verbrand hout verdwijnt één lijn.
-    teken.polygon(punten, outline=(255, 255, 255), width=dik * 2)
-    teken.polygon(punten, outline=(42, 166, 177), width=dik)
+    photo = Image.open(path).convert("RGB")
+    width, height = photo.size
+    points = [(x * width, y * height) for x, y in cell_polygon(grid, cell)]
+    thick = max(3, round(min(width, height) / 160))
+    draw = ImageDraw.Draw(photo)
+    # White underneath, accent on top: on dark scorched wood a single line vanishes.
+    draw.polygon(points, outline=(255, 255, 255), width=thick * 2)
+    draw.polygon(points, outline=(42, 166, 177), width=thick)
 
     buffer = BytesIO()
-    foto.save(buffer, format="JPEG", quality=88)
+    photo.save(buffer, format="JPEG", quality=88)
     return buffer.getvalue()
 
 
-def as_waarde(cell: dict, naam: str):
-    """De waarde van één grootheid in een cel, of None als hij niet meedoet."""
-    return cell.get(AXES[naam]["cell_key"])
+def axis_value(cell: dict, name: str):
+    """The value of one quantity in a cell, or None when it does not take part."""
+    return cell.get(AXES[name]["cell_key"])
 
 
-def toon(naam: str, waarde) -> str:
-    """Een aswaarde met zijn eenheid, zoals hij op het hout komt te staan."""
-    if waarde is None:
+def show(name: str, value) -> str:
+    """An axis value with its unit, as it ends up on the wood."""
+    if value is None:
         return ""
-    eenheid = AXES[naam]["unit"]
-    if naam == "interval":
-        return f"{waarde:g}{eenheid}"
-    return f"{waarde:g}{'' if eenheid == '%' else ' '}{eenheid}"
+    unit = AXES[name]["unit"]
+    if name == "interval":
+        return f"{value:g}{unit}"
+    return f"{value:g}{'' if unit == '%' else ' '}{unit}"
 
 
-def _woorden(tekst) -> list[str]:
-    """De losse woorden van een stuk tekst, klein en zonder accenten."""
-    plat = unicodedata.normalize("NFKD", str(tekst or "").lower())
-    plat = "".join(c for c in plat if not unicodedata.combining(c))
-    return [w for w in re.split(r"[^0-9a-z]+", plat) if w]
+def _words(text) -> list[str]:
+    """The separate words of a piece of text, lower case and without accents."""
+    flat = unicodedata.normalize("NFKD", str(text or "").lower())
+    flat = "".join(c for c in flat if not unicodedata.combining(c))
+    return [w for w in re.split(r"[^0-9a-z]+", flat) if w]
 
 
-def _al_gezegd(woord: str, gezegd: list[str]) -> bool:
+def _already_said(word: str, said: list[str]) -> bool:
     """
-    Staat dit woord al in het opschrift dat de gebruiker zelf typte?
+    Is this word already in the caption the user typed themselves?
 
-    Op stam en niet op letter: wie "3MM Acryl Graveren" intikt heeft het
-    materiaal "Acrylaat (geëxtrudeerd)" al benoemd, ook al staat er een andere
-    uitgang achter. Korte woorden doen niet mee — "mm" of "cm" komt overal in
-    voor en zou halve opschriften wegvagen.
+    On the stem and not on the letter: anybody typing "3MM Acryl Engrave" has already named
+    the material "Acrylic (extruded)", even with a different ending on it. Short words do
+    not take part — "mm" or "cm" occurs everywhere and would wipe out half the captions.
     """
-    if len(woord) < 4:
+    if len(word) < 4:
         return False
-    return any(w.startswith(woord) or woord.startswith(w) for w in gezegd if len(w) >= 4)
+    return any(w.startswith(word) or word.startswith(w) for w in said if len(w) >= 4)
 
 
-# Hoe een bewerking op het hout heet. `graveren-raster` is een sleutel uit onze
-# database, geen woord dat je op een plankje graveert.
+# What an operation is called on the wood. `graveren-raster` is a key from our database,
+# not a word you engrave on a plank.
 OPERATION_LABELS = {
-    "snijden": "snijden",
-    "graveren-vector": "graveren vector",
-    "graveren-raster": "graveren raster",
-    "markeren": "markeren",
+    "snijden": "cut",
+    "graveren-vector": "engrave vector",
+    "graveren-raster": "engrave raster",
+    "markeren": "mark",
 }
 
 
 def caption_lines(plan: dict) -> list[str]:
     """
-    Het opschrift zoals het op het hout komt, als losse regels.
+    The caption as it goes onto the wood, as separate lines.
 
-    Twee regels en geen banier. De eerste zegt wáár dit over gaat — het woord
-    dat de gebruiker zelf koos, of anders het materiaal — en de tweede hoe het
-    gebrand is. Ze staan onder elkaar omdat het bord een bord moet blijven: een
-    opschrift dat op één regel doorloopt was op een raster van 38 mm ruim
-    130 mm breed, en dan is het bord drie keer zo breed als de proef erop.
+    Two lines and not a banner. The first says what this is about — the word the user chose
+    themselves, or otherwise the material — and the second how it was burned. They sit
+    under each other because the board has to stay a board: a caption running on for one
+    line was a good 130 mm wide on a grid of 38 mm, and then the board is three times as
+    wide as the trial on it.
 
-    Wat de gebruiker zelf al zei, herhalen we niet. "3MM Acryl Graveren" naast
-    "Acrylaat (geëxtrudeerd) · 3 mm · graveren-raster" is dezelfde zin drie
-    keer; dat maakt het opschrift lang zonder er iets aan toe te voegen.
+    What the user has already said we do not repeat. "3MM Acryl Engrave" beside "Acrylic
+    (extruded) · 3 mm · engrave raster" is the same sentence three times; that makes the
+    caption long without adding anything to it.
 
-    Hier en niet in de tekenaar, want `plan_grid` moet er ruimte voor
-    reserveren — en wat wij als maat melden moet dekken wat er brandt.
+    Here and not in the drawer, because `plan_grid` has to reserve room for it — and what
+    we report as a measure has to cover what burns.
     """
-    eigen = str(plan.get("caption") or "").strip()
-    gezegd = _woorden(eigen)
+    own = str(plan.get("caption") or "").strip()
+    said = _words(own)
 
-    kop = [eigen] if eigen else []
-    materiaal = str(plan.get("material_name") or "").strip()
-    if materiaal:
-        stam = _woorden(materiaal)
-        if not (stam and _al_gezegd(stam[0], gezegd)):
-            kop.append(materiaal)
-    dikte = plan.get("thickness_mm")
-    if dikte and not re.search(rf"(?<![0-9]){dikte:g}\s*mm", " ".join(gezegd)):
-        kop.append(f"{dikte:g} mm")
+    head = [own] if own else []
+    material = str(plan.get("material_name") or "").strip()
+    if material:
+        stem = _words(material)
+        if not (stem and _already_said(stem[0], said)):
+            head.append(material)
+    thickness = plan.get("thickness_mm")
+    if thickness and not re.search(rf"(?<![0-9]){thickness:g}\s*mm", " ".join(said)):
+        head.append(f"{thickness:g} mm")
 
-    bewerking = plan.get("operation") or ""
-    naam = OPERATION_LABELS.get(bewerking, str(bewerking))
-    # Alleen het deel dat nog niet gezegd is: wie "Graveren" typte hoeft geen
-    # tweede "graveren" op zijn plank, maar "raster" tegenover "vector" is wél
-    # het verschil tussen twee heel andere proeven.
-    resterend = " ".join(w for w in naam.split() if not _al_gezegd(w, gezegd))
-    voet = [resterend] if resterend else []
+    operation = plan.get("operation") or ""
+    name = OPERATION_LABELS.get(operation, str(operation))
+    # Only the part that has not been said yet: anybody who typed "Engrave" does not need
+    # a second "engrave" on their plank, but "raster" against "vector" *is* the difference
+    # between two entirely different trials.
+    resterend = " ".join(w for w in name.split() if not _already_said(w, said))
+    foot = [resterend] if resterend else []
 
-    # Welke as welke grootheid draagt. Zonder dit is een bord met vrij gekozen
-    # assen niet te lezen: "0,05" links kan snelheid of interval zijn.
-    # LightBurn zet de asnamen naast de waarden; wij hebben ze harder nodig,
-    # want bij ons staat niet vast wát er op de as staat.
-    assen = (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
-    voet.append(f"{AXES[assen[0]]['label']} v / {AXES[assen[1]]['label']} >")
-    # De grootheid die níét op een as staat, hoort er ook op: zonder haar is
-    # een bord over twee weken niet terug te rekenen naar een instelling.
-    for as_naam in AXES:
-        if as_naam in assen or plan.get(f"{as_naam}_min") is None:
+    # Which axis carries which quantity. Without this a board with freely chosen axes
+    # cannot be read: "0.05" on the left could be speed or interval. LightBurn puts the axis
+    # names beside the values; we need them more badly, because with us what is on the axis
+    # is not fixed.
+    axes = (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
+    foot.append(f"{AXES[axes[0]]['label']} v / {AXES[axes[1]]['label']} >")
+    # The quantity that is *not* on an axis belongs on it too: without it a board cannot be
+    # converted back into a setting in two weeks' time.
+    for axis_name in AXES:
+        if axis_name in axes or plan.get(f"{axis_name}_min") is None:
             continue
-        voet.append(f"{AXES[as_naam]['label']} {toon(as_naam, plan[f'{as_naam}_min'])}")
-    # Het aantal passes hoort bij de uitkomst: hetzelfde vakje op 8 mm/s is een
-    # andere proef in één dan in twee passes. Bij één pass staat het er niet —
-    # dat is de normale gang van zaken, en het opschrift bepaalt de bordbreedte.
+        foot.append(f"{AXES[axis_name]['label']} {show(axis_name, plan[f'{axis_name}_min'])}")
+    # The number of passes belongs with the outcome: the same square at 8 mm/s is a
+    # different trial in one pass than in two. With one pass it is not there — that is the
+    # normal state of affairs, and the caption decides the board width.
     passes = int(plan.get("passes") or 1)
     if passes > 1:
-        voet.append(f"{passes} passes")
+        foot.append(f"{passes} passes")
     if plan.get("stamp"):
-        voet.append(str(plan["stamp"]))
+        foot.append(str(plan["stamp"]))
 
-    regels = [" · ".join(kop), " · ".join(voet)]
-    return [r for r in regels if r]
+    lines = [" · ".join(head), " · ".join(foot)]
+    return [r for r in lines if r]
 
 
 def caption_text(plan: dict) -> str:
-    """Dezelfde regels achter elkaar — voor waar één string genoeg is."""
+    """The same lines one after another — for where one string is enough."""
     return " · ".join(caption_lines(plan))
 
 
-def _breek(regels: list[str], tekens: int) -> list[str]:
+def _breek(lines: list[str], chars: int) -> list[str]:
     """
-    Regels die te lang zijn afbreken op de scheidingstekens die er al in staan.
+    Breaking lines that are too long at the separators already in them.
 
-    Alleen als het echt niet past: het opschrift krimpt eerst mee (zie
-    `plan_grid`), en pas onder de leesbaarheidsgrens gaat er een regel bij.
-    Een deel dat op zichzelf al te lang is blijft heel — afbreken middenin
-    "Acrylaat" levert geen leesbaarder bord op.
+    Only when it really does not fit: the caption shrinks first (see `plan_grid`), and only
+    below the readability bound does a line get added. A part that is too long on its own
+    stays whole — breaking in the middle of
+    "Acrylic" does not make the board any easier to read.
     """
-    uit: list[str] = []
-    for regel in regels:
-        lopend = ""
-        for deel in regel.split(" · "):
-            kandidaat = f"{lopend} · {deel}" if lopend else deel
-            if lopend and len(kandidaat) > tekens:
-                uit.append(lopend)
-                lopend = deel
+    out: list[str] = []
+    for line in lines:
+        running = ""
+        for part in line.split(" · "):
+            candidate = f"{running} · {part}" if running else part
+            if running and len(candidate) > chars:
+                out.append(running)
+                running = part
             else:
-                lopend = kandidaat
-        if lopend:
-            uit.append(lopend)
-    return uit
+                running = candidate
+        if running:
+            out.append(running)
+    return out
 
 
-def _cel_label(plan: dict, cell: dict) -> str:
+def _cell_label(plan: dict, cell: dict) -> str:
     """
-    Het laaglabel van één vakje: precies de grootheden die variëren.
+    One square's layer label: exactly the quantities that vary.
 
-    De vaste grootheid staat in het opschrift op het bord; hem in zestien
-    laagnamen herhalen maakt het lagenpaneel onleesbaar.
+    The fixed quantity is in the caption on the board; repeating it in sixteen layer names
+    makes the layers panel unreadable.
     """
     return " · ".join(
-        toon(naam, as_waarde(cell, naam))
-        for naam in (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
+        show(name, axis_value(cell, name))
+        for name in (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
     )
 
 
 def raster_supported(kernel) -> bool:
     """
-    Kan deze engine een rasterlaag daadwerkelijk branden?
+    Can this engine actually burn a raster layer?
 
-    Nee, als er geen rasteraar geregistreerd is. `op raster` zet zijn vormen
-    tijdens het plannen om in een bitmap via `render-op/make_raster`, en die
-    dienst wordt **alleen door de wxPython-GUI geregistreerd**
-    (`meerk40t/gui/plugin.py:79`, met als commentaar "used to do cut planning").
-    Ontbreekt hij, dan neemt `OpRasterNode.preprocess` de `strip_rasters`-tak:
-    de laag gooit zijn eigen kinderen weg en levert nul cutcode.
+    No, when no rasteriser is registered. During planning `op raster` turns its shapes into
+    a bitmap through `render-op/make_raster`, and that service is **only registered by the
+    wxPython GUI** (`meerk40t/gui/plugin.py:79`, with the comment "used to do cut
+    planning"). If it is absent, `OpRasterNode.preprocess` takes the `strip_rasters` branch:
+    the layer throws its own children away and produces no cutcode.
 
-    Gemeten op onze headless server: een ontwerp met alleen rasterlagen geeft
-    `/api/job/estimate?exact=1` → 0,0 s over 0 delen. Het bord komt blanco uit
-    de machine. Daarom wordt dit gemeld in plaats van gehoopt.
+    Measured on our headless server: a design with only raster layers gives
+    `/api/job/estimate?exact=1` → 0.0 s over 0 parts. The board comes out of the machine
+    blank. So this is reported rather than hoped for.
     """
     try:
         return kernel.root.lookup("render-op/make_raster") is not None
@@ -921,41 +906,39 @@ class TestGridGenerator:
         Draw the grid: one square per cell, each in its own operation.
 
         Returns the cells enriched with the element and operation ids, so a
-        photo overlay can later map a tap back to speed and power — plus het
-        id van de groep die het bord bij elkaar houdt.
+        photo overlay can later map a tap back to speed and power — plus the id of the
+        group that holds the board together.
 
-        Het groeperen gebeurt binnen dezelfde handeling als het tekenen. Een
-        bord is één ding, dus het maken ervan is één keer ongedaan maken; stond
-        het groeperen erbuiten, dan haalde de eerste `undo` alleen de groep weg
-        en bleven er negentien losse vormen op het bed liggen.
+        The grouping happens within the same action as the drawing. A board is one thing, so
+        making it is one undo; with the grouping outside it, the first `undo` would only
+        remove the group and nineteen loose shapes would be left lying on the bed.
         """
         op_type = OPERATION_TYPES.get(plan["operation"])
         if op_type is None:
-            raise DesignError(f"Onbekende bewerking: {plan['operation']}")
+            raise DesignError(f"Onbekende operation: {plan['operation']}")
 
-        # Het hele bord, niet alleen de vakjes: opschriften en randkader worden
-        # net zo goed gebrand, en juist die staken links en boven uit (T11).
-        buiten_x = plan.get("outer_x_mm", plan["origin_x_mm"])
-        buiten_y = plan.get("outer_y_mm", plan["origin_y_mm"])
-        buiten_b = plan.get("outer_width_mm", plan["width_mm"])
-        buiten_h = plan.get("outer_height_mm", plan["height_mm"])
+        # The whole board, not only the squares: captions and border frame get burned just
+        # the same, and those are exactly what stuck out on the left and top (T11).
+        outer_x = plan.get("outer_x_mm", plan["origin_x_mm"])
+        outer_y = plan.get("outer_y_mm", plan["origin_y_mm"])
+        outer_w = plan.get("outer_width_mm", plan["width_mm"])
+        outer_h = plan.get("outer_height_mm", plan["height_mm"])
         bed = self._bed_mm()
-        # Alleen rechts en onder is dit een weigering. Links en boven staken de
-        # opschriften al uit sinds T11, en daar is bewust voor melden gekozen in
-        # plaats van blokkeren: het rasterdeel brandt dan gewoon, alleen de
-        # labels niet. `label_room` en `board_room` zeggen het in het voorbeeld.
-        if bed and (buiten_x + buiten_b > bed[0] or buiten_y + buiten_h > bed[1]):
+        # Only to the right and below is this a refusal. On the left and top the captions
+        # were already sticking out since T11, and there reporting was deliberately chosen
+        # over blocking: the grid part then simply burns, only the labels do not.
+        # `label_room` and `board_room` say so in the preview.
+        if bed and (outer_x + outer_w > bed[0] or outer_y + outer_h > bed[1]):
             raise DesignError(
-                f"Het bord ({buiten_b:.0f}×{buiten_h:.0f} mm vanaf "
-                f"{buiten_x:.0f},{buiten_y:.0f}) valt buiten het bed "
-                f"van {bed[0]:.0f}×{bed[1]:.0f} mm."
+                f"Het board ({outer_w:.0f}×{outer_h:.0f} mm vanaf "
+                f"{outer_x:.0f},{outer_y:.0f}) falls outside the bed "
+                f"of {bed[0]:.0f}×{bed[1]:.0f} mm."
             )
 
-        # Zonder dit belandt elke cel óók in elke bestaande operatie waarvan de
-        # kleur matcht — de engine classificeert nieuwe elementen automatisch.
-        # Het raster zou dan dubbel gebrand worden: één keer op de instelling van
-        # de cel en één keer op die van de andere laag. Dat maakt de test
-        # waardeloos en verbrandt materiaal.
+        # Without this every cell *also* lands in every existing operation whose colour
+        # matches — the engine classifies new elements automatically. The grid would then be
+        # burned twice: once on the cell's setting and once on the other layer's. That makes
+        # the test worthless and burns material.
         classify = getattr(self.elements, "classify_new", None)
         if classify is not None:
             self.elements.classify_new = False
@@ -971,18 +954,17 @@ class TestGridGenerator:
 
     def _group_board(self, members: list):
         """
-        Vouw dít bord tot één groep — vakjes, aslabels, opschrift en kader.
+        Vouw dít board tot één groep — cells, aslabels, caption en frame.
 
-        Een raster is één ding: half verslepen slaat nergens op, en als losse
-        vierkanten vult het de selectie en het canvas met ruis. De cellen
-        houden wél elk hun eigen operatie — anders brandt de sweep niet.
+        A grid is one thing: half-dragging it makes no sense, and as loose squares it fills
+        the selection and the canvas with noise. The cells do each keep their own operation —
+        otherwise the sweep does not burn.
 
-        Wie erbij hoort is wat dit bord zelf getekend heeft, niet wat een
-        rondgang door het document oplevert. Die rondgang zocht de opschriften
-        op de labellaag — en die is gedeeld door álle borden, dus een tweede
-        bord trok de opschriften van het eerste zijn eigen groep in. Daarna
-        selecteerde één aslabel van bord 1 het hele bord 2, en verhuisde het
-        mee zodra je bord 2 versleepte.
+        Who belongs to it is what this board drew itself, not what a walk through the
+        document turns up. That walk looked for the captions on the label layer — and that is
+        shared by *all* the boards, so a second board pulled the first one's captions into
+        its own group. After that one axis label from board 1 selected the whole of board 2,
+        and it moved along as soon as you dragged board 2.
         """
         if len(members) < 2:
             return None
@@ -990,8 +972,8 @@ class TestGridGenerator:
         self.kernel.console("group\n")
         for node in self.elements.elem_branch.flat():
             if node.type == "group" and any(c in members for c in node.children):
-                # Een naam, zodat het paneel en de selectiebalk "Testraster"
-                # kunnen zeggen in plaats van "groep".
+                # A name, so that the panel and the selection bar can say "Test grid"
+                # instead of "group".
                 node.label = BOARD_LABEL
                 return node
         return None
@@ -999,48 +981,47 @@ class TestGridGenerator:
     def _draw_cells(self, plan: dict, cells: list[dict]) -> tuple[list[dict], object]:
         op_type = OPERATION_TYPES[plan["operation"]]
         drawn = []
-        # Alles wat níét een vakje is maar wel bij dit bord hoort.
+        # Everything that is *not* a square but does belong to this board.
         extras: list = []
-        with self.elements.undoscope("Testraster genereren"):
+        with self.elements.undoscope("Generate test grid"):
             for cell in cells:
-                node = self._square(cell, gevuld=op_type == "op raster")
-                instelling = {
+                node = self._square(cell, filled=op_type == "op raster")
+                settings = {
                     "type": op_type,
                     "speed": cell["speed_mm_s"],
                     # MeerK40t's power runs 0-1000, not 0-100.
                     "power": cell["power_percent"] * 10,
-                    "label": _cel_label(plan, cell),
-                    # Voor het hele bord gelijk; de sweep zit in snelheid,
-                    # vermogen en interval.
+                    "label": _cell_label(plan, cell),
+                    # The same for the whole board; the sweep is in speed, power and
+                    # interval.
                     #
-                    # Twee velden, en het tweede is niet optioneel: de planner
-                    # leest `implicit_passes`, en die geeft 1 zolang
-                    # `passes_custom` uit staat (`core/parameters.py:401`).
-                    # Alleen `passes` zetten gaf een bord dat "2 passes" op zijn
-                    # opschrift had en één keer brandde — op materiaal gevonden.
+                    # Two fields, and the second is not optional: the planner reads
+                    # `implicit_passes`, and that gives 1 as long as `passes_custom` is off
+                    # (`core/parameters.py:401`). Setting only `passes` gave a board that had
+                    # "2 passes" on its caption and burned once — found on material.
                     "passes": int(plan.get("passes") or 1),
                     "passes_custom": int(plan.get("passes") or 1) > 1,
                 }
-                # De lijnafstand heet bij de engine dpi. Alleen een rasterop
-                # kent hem; op de andere zou het een genegeerde sleutel zijn.
+                # The engine calls the line spacing dpi. Only a raster operation knows it;
+                # on the others it would be an ignored key.
                 if op_type == "op raster" and cell.get("interval_mm"):
-                    instelling["dpi"] = int(round(25.4 / cell["interval_mm"]))
-                operation = self.elements.op_branch.add(**instelling)
+                    settings["dpi"] = int(round(25.4 / cell["interval_mm"]))
+                operation = self.elements.op_branch.add(**settings)
                 operation.add_reference(node)
                 drawn.append({**cell, "element_id": None, "operation_id": None,
                               "_node": node, "_op": operation})
 
-            # T10: LightBurn heeft `Enable Text` en `Enable Border`. Voor een
-            # proefje op een restje is het opschrift verspilling; voor een bord
-            # dat in de kast gaat is het het halve bewijsstuk. Standaard aan.
+            # T10: LightBurn has `Enable Text` and `Enable Border`. For a quick trial on an
+            # offcut the caption is a waste; for a board that goes in the cupboard it is half
+            # the evidence. On by default.
             if plan.get("text", True):
                 self._label_axes(plan, cells, extras)
                 self._caption(plan, extras)
             if plan.get("border"):
                 self._border(plan, extras)
 
-            # Binnen dezelfde handeling: het bord is één ding, dus ook één stap
-            # in de geschiedenis.
+            # Within the same action: the board is one thing, so also one step in the
+            # history.
             group = self._group_board([entry["_node"] for entry in drawn] + extras)
 
         # Ids only exist once the engine has handed them out.
@@ -1061,21 +1042,21 @@ class TestGridGenerator:
         """
         rij_as = plan.get("row_axis", "speed")
         kolom_as = plan.get("column_axis", "power")
-        speeds = {c["row"]: as_waarde(c, rij_as) for c in cells}
-        powers = {c["column"]: as_waarde(c, kolom_as) for c in cells}
+        speeds = {c["row"]: axis_value(c, rij_as) for c in cells}
+        powers = {c["column"]: axis_value(c, kolom_as) for c in cells}
         pitch = plan["cell_mm"] + plan["gap_mm"]
-        # Schaal mee met het vakje. Op ware grootte is "25 mm/s" bijna 20 mm
-        # breed en steekt hij links van het bed uit.
+        # Scale with the square. At true size "25 mm/s" is nearly 20 mm wide and sticks out
+        # to the left of the bed.
         text_height = max(2.0, plan["cell_mm"] * 0.35)
 
-        # Pas aanmaken als er echt tekst getekend wordt: zonder vectorfont zou
-        # er anders een lege laag achterblijven.
+        # Only create it when text is really drawn: without a vector font an empty layer
+        # would otherwise be left behind.
         labels = None
 
         for row, speed in sorted(speeds.items()):
-            node = self._text(toon(rij_as, speed), text_height)
+            node = self._text(show(rij_as, speed), text_height)
             if node is None:
-                return  # Geen vectorfont beschikbaar; het raster blijft bruikbaar.
+                return  # Geen vectorfont available; het raster blijft bruikbaar.
             labels = labels or self._label_op(plan)
             self._place(
                 node,
@@ -1086,7 +1067,7 @@ class TestGridGenerator:
             extras.append(node)
 
         for column, power in sorted(powers.items()):
-            node = self._text(toon(kolom_as, power), text_height)
+            node = self._text(show(kolom_as, power), text_height)
             if node is None or labels is None:
                 return
             self._place(
@@ -1099,66 +1080,64 @@ class TestGridGenerator:
 
     def _caption(self, plan: dict, extras: list):
         """
-        Het opschrift op het bord: wat is dit, waarvan, wanneer.
+        The caption on the board: what is this, of what, when.
 
-        Een gebrand raster zonder opschrift is over twee weken een raadselachtig
-        stuk hout. Het staat in de labellaag, dus met een vaste, veilige
-        instelling — het opschrift moet leesbaar zijn ongeacht welke cel het
-        beste uitpakt.
+        A burned grid without a caption is a puzzling piece of wood in two weeks' time. It
+        is in the label layer, so with a fixed, safe setting — the caption has to be readable
+        regardless of which cell turns out best.
         """
-        # Wat `plan_grid` al uitrekende, zodat wat hier gebrand wordt dezelfde
-        # regels zijn als waar het bord op gemaat is — hoogte inbegrepen.
-        regels = plan.get("caption_lines")
-        if regels is None:
-            regels = caption_lines(plan)
-        regels = [r for r in regels if r]
-        if not regels:
+        # What `plan_grid` already worked out, so that what is burned here is the same
+        # lines as the board was measured for — height included.
+        lines = plan.get("caption_lines")
+        if lines is None:
+            lines = caption_lines(plan)
+        lines = [r for r in lines if r]
+        if not lines:
             return
 
-        hoogte = float(plan.get("caption_height_mm") or 0) or max(
+        height = float(plan.get("caption_height_mm") or 0) or max(
             2.5, plan["cell_mm"] * 0.4
         )
-        # Binnen de breedte van het bord blijven. Op ware grootte werd dit
-        # opschrift 70 mm breed op een bord van 46 mm — het stak er rechts
-        # uit, en dan klopt de maat die we melden (T9) niet met wat er brandt.
-        # `plan_grid` heeft de hoogte hierop al gekozen; deze meting is de
-        # vangnet voor de tekens waar de schatting van CAPTION_CHAR_RATIO
-        # naast zit. Het bord groeit er niet meer voor: liever een iets
-        # kleinere regel dan een bord dat breder is dan zijn eigen proef.
-        rand = BORDER_PAD_MM if plan.get("border") else 0.0
-        beschikbaar = plan.get("outer_width_mm", plan["width_mm"]) - 2 * rand
+        # Stay within the width of the board. At true size this caption became 70 mm wide
+        # on a board of 46 mm — it stuck out to the right, and then the measure we report
+        # (T9) does not agree with what burns.
+        # `plan_grid` has already chosen the height on this basis; this measurement is the
+        # safety tidy for the characters CAPTION_CHAR_RATIO's estimate is out on. The board
+        # no longer grows for it: better a slightly smaller line than a board that is wider
+        # than its own trial.
+        edge = BORDER_PAD_MM if plan.get("border") else 0.0
+        available = plan.get("outer_width_mm", plan["width_mm"]) - 2 * edge
         labels = None
-        for index, regel in enumerate(regels):
-            node = self._text(regel, hoogte)
+        for index, line in enumerate(lines):
+            node = self._text(line, height)
             if node is None:
                 return
-            breedte = self._breedte_mm(node)
-            if breedte > beschikbaar:
-                self._scale_to_height(node, hoogte * beschikbaar / breedte)
+            width = self._width_mm(node)
+            if width > available:
+                self._scale_to_height(node, height * available / width)
             labels = labels or self._label_op(plan)
             self._place(
                 node,
-                # Links uitgelijnd op het bord, niet op de vakjes: de rijlabels
-                # steken links uit, en een opschrift dat halverwege begint
-                # leest als een onderschrift bij de verkeerde kolom.
-                left=plan.get("outer_x_mm", plan["origin_x_mm"]) + rand,
-                # Bóven de kolomlabels, met dezelfde marge als die labels zelf
-                # — en op de plek die `plan_grid` ervoor reserveerde, dus met
-                # de volle opschrifthoogte en niet met de gekrompen maat.
-                # Anders zakt een gekrompen opschrift naar beneden en gaat het
-                # dwars door de kolomlabels heen; op een bord met grote vakjes
-                # was dat precies wat er gebeurde. De onderste regel houdt zijn
-                # oude plek; elke regel erboven schuift een regelafstand op.
+                # Aligned left on the board, not on the squares: the row labels stick out
+                # to the left, and a caption starting halfway reads as a caption to the
+                # wrong column.
+                left=plan.get("outer_x_mm", plan["origin_x_mm"]) + edge,
+                # *Above* the column labels, with the same margin as those labels
+                # themselves — and in the place `plan_grid` reserved for it, so with the
+                # full caption height and not the shrunken measure. Otherwise a shrunken
+                # caption drops down and runs straight through the column labels; on a
+                # board with large squares that is exactly what happened. The bottom line
+                # keeps its old place; every line above it moves up one line spacing.
                 bottom=plan["origin_y_mm"]
                 - 4
-                - hoogte
-                - (len(regels) - 1 - index) * CAPTION_LINE_PITCH * hoogte,
+                - height
+                - (len(lines) - 1 - index) * CAPTION_LINE_PITCH * height,
             )
             labels.add_reference(node)
             extras.append(node)
 
     @staticmethod
-    def _breedte_mm(node) -> float:
+    def _width_mm(node) -> float:
         from meerk40t.core.units import UNITS_PER_MM
 
         x0, _, x1, _ = node.bounds
@@ -1166,19 +1145,18 @@ class TestGridGenerator:
 
     def _border(self, plan: dict, extras: list):
         """
-        Het randkader om het hele bord (T10).
+        The border frame around the whole board (T10).
 
-        Om álles heen, opschriften inbegrepen — een kader dwars door de rijlabels
-        maakt het bord juist onleesbaar. Het staat in de labellaag, dus met
-        dezelfde veilige instelling als de opschriften: het kader hoort te
-        blijven staan wat er ook uit de sweep komt.
+        Around *everything*, captions included — a frame straight through the row labels
+        makes the board unreadable. It is in the label layer, so with the same safe setting
+        as the captions: the frame should stay whatever comes out of the sweep.
         """
         x = plan.get("outer_x_mm", plan["origin_x_mm"])
         y = plan.get("outer_y_mm", plan["origin_y_mm"])
-        breedte = plan.get("outer_width_mm", plan["width_mm"])
-        hoogte = plan.get("outer_height_mm", plan["height_mm"])
+        width = plan.get("outer_width_mm", plan["width_mm"])
+        height = plan.get("outer_height_mm", plan["height_mm"])
         before = {id(n) for n in self.elements.elems()}
-        self.kernel.console(f"rect {x}mm {y}mm {breedte}mm {hoogte}mm\n")
+        self.kernel.console(f"rect {x}mm {y}mm {width}mm {height}mm\n")
         node = next((n for n in self.elements.elems() if id(n) not in before), None)
         if node is None:
             return
@@ -1186,44 +1164,44 @@ class TestGridGenerator:
         extras.append(node)
 
     def _label_op(self, plan: dict | None = None):
-        """De laag waar alle opschriften in gaan; één voor alle rasters samen."""
-        # Sinds T10 in te stellen: hardgecodeerd 80 mm/s @ 30% werkt op berken en
-        # niet op acryl, en dan brandt je opschrift er dwars doorheen.
+        """The layer all the captions go into; one for every grid together."""
+        # Settable since T10: a hardcoded 80 mm/s @ 30% works on birch and not on acrylic,
+        # and then your caption burns straight through it.
         plan = plan or {}
-        snelheid = float(plan.get("label_speed_mm_s") or DEFAULT_LABEL_SPEED_MM_S)
-        vermogen = (
+        speed = float(plan.get("label_speed_mm_s") or DEFAULT_LABEL_SPEED_MM_S)
+        power = (
             float(plan.get("label_power_percent") or DEFAULT_LABEL_POWER_PERCENT) * 10
         )
         for node in self.elements.op_branch.children:
             if getattr(node, "label", None) == LABEL_LAYER:
-                # De laag is er al van een vorig bord. Wie nu een andere
-                # labelinstelling vraagt, krijgt hem ook: anders zet je iets in
-                # het formulier dat stilletjes niets doet.
-                node.speed = snelheid
-                node.power = vermogen
+                # The layer is already there from a previous board. Anybody asking for a
+                # different label setting now gets it too: otherwise you set something in
+                # the form that silently does nothing.
+                node.speed = speed
+                node.power = power
                 return node
         return self.elements.op_branch.add(
             type="op engrave",
-            speed=snelheid,
-            power=vermogen,
+            speed=speed,
+            power=power,
             label=LABEL_LAYER,
         )
 
     def _label_font(self) -> str | None:
         """
-        De letter waarin een opschrift op het bord komt.
+        The typeface a caption on the board goes in.
 
-        Altijd dezelfde, en altijd een die er is: we vragen het de engine in
-        plaats van een naam aan te nemen, want een lettertype dat hij niet kan
-        openen laat `linetext` terugvallen op — juist ja — `last_font`.
+        Always the same one, and always one that exists: we ask the engine instead of
+        assuming a name, because a typeface it cannot open makes `linetext` fall back on —
+        quite so — `last_font`.
         """
         registry = getattr(self.kernel.root, "fonts", None)
         if registry is None:
             return None
-        for naam in LABEL_FONTS:
+        for name in LABEL_FONTS:
             try:
-                if registry._validate_font(naam):
-                    return naam
+                if registry._validate_font(name):
+                    return name
             except Exception:
                 continue
         return None
@@ -1232,11 +1210,10 @@ class TestGridGenerator:
         """
         Vector text via the Hershey fonts; bitmap text has no geometry.
 
-        Lettertype en grootte staan hier vast en worden expliciet meegegeven.
-        Zonder `-f` pakt de engine `last_font` — de letter van de laatste tekst
-        die de gebruiker plaatste — en dan is het opschrift op het bord een
-        toevalstreffer. Wat we van die instelling aantreffen, zetten we erna
-        terug: het testraster is te gast in andermans document.
+        The typeface and the size are fixed here and passed explicitly. Without `-f` the
+        engine takes `last_font` — the typeface of the last text the user placed — and then
+        the caption on the board is a matter of luck. Whatever we find that setting on, we
+        put back afterwards: the test grid is a guest in somebody else's document.
         """
         before = {id(n) for n in self.elements.elems()}
         font = self._label_font()
@@ -1247,16 +1224,15 @@ class TestGridGenerator:
         opdracht.append(f'"{text}"')
         root = self.kernel.root
         root.setting(str, "last_font", "")
-        vorige = root.last_font
+        previous = root.last_font
         try:
             self.kernel.console(" ".join(opdracht) + "\n")
         except Exception:
             return None
         finally:
-            # `create_linetext_node` zet `last_font` op wat het net gebruikte.
-            # Dat is hier onze eigen keuze, en die hoort niet de voorkeur van
-            # de gebruiker te worden.
-            root.last_font = vorige
+            # `create_linetext_node` sets `last_font` to what it has just used. Here that
+            # is our own choice, and it should not become the user's preference.
+            root.last_font = previous
         node = next(
             (n for n in self.elements.elems() if id(n) not in before and n.bounds), None
         )
@@ -1298,16 +1274,16 @@ class TestGridGenerator:
         self.elements.set_emphasis([node])
         self.kernel.console(f"translate {dx:.4f}mm {dy:.4f}mm\n")
 
-    def _square(self, cell: dict, gevuld: bool = False):
+    def _square(self, cell: dict, filled: bool = False):
         """
-        Eén vakje van het bord.
+        One square of the board.
 
-        `gevuld` bij een rasterbord, en dat is geen opsmuk: de rasteraar brandt
-        alleen wat een vulling heeft. Zonder vulling zet hij de omtrek neer
-        (zie `test_an_unfilled_shape_burns_its_outline_and_not_its_middle`), en
-        dan komt er van een graveerproef een bord met negen lege kadertjes uit
-        de machine in plaats van negen vlakken in oplopende zwarting. Een
-        rasterproef gaat juist over hoe donker het vlák wordt.
+        `filled` for a raster board, and that is not decoration: the rasteriser only burns
+        what has a fill. Without a fill it lays down the outline (see
+        `test_an_unfilled_shape_burns_its_outline_and_not_its_middle`), and then an
+        engraving trial comes out of the machine as a board with nine empty little frames
+        instead of nine areas in increasing blackness. A raster trial is precisely about how
+        dark the *area* becomes.
         """
         before = set(id(n) for n in self.elements.elems())
         self.kernel.console(
@@ -1316,12 +1292,12 @@ class TestGridGenerator:
         )
         for node in self.elements.elems():
             if id(node) not in before:
-                if gevuld:
+                if filled:
                     from meerk40t.svgelements import Color
 
                     node.fill = Color("black")
                 return node
-        raise DesignError("De engine heeft geen vierkant aangemaakt.")
+        raise DesignError("The engine created no square.")
 
     def _bed_mm(self):
         device = getattr(self.kernel, "device", None)

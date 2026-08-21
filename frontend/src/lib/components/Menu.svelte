@@ -1,201 +1,201 @@
 <script lang="ts">
 	/**
-	 * Het rechterklikmenu — één component voor alle drie de plekken waar er een
-	 * hangt: op een vorm, op het canvas, en op een rij in een lijst.
+	 * The context menu — one component for all the places one hangs: on a shape,
+	 * on the canvas, and on a row in a list.
 	 *
-	 * Waarom één component en niet drie: de inhoud verschilt per plek, het
-	 * gedrág mag dat niet. Een menu dat op de ene plek met Escape sluit en op de
-	 * andere niet, of dat hier wel en daar niet met de pijltjes te bedienen is,
-	 * kost meer dan het oplevert. Wat hier één keer klopt, klopt overal.
+	 * Why one component and not three: the contents differ per place, the
+	 * behaviour must not. A menu that closes with Escape here but not there, or
+	 * that takes arrow keys in one spot and not the next, costs more than it
+	 * gives. What is right here once is right everywhere.
 	 *
-	 * Wat het doet, en waarom:
-	 * - **Opent bij de cursor**, en klapt om zodra hij tegen een rand komt. Een
-	 *   menu dat half buiten het venster valt is een menu waarvan je de onderste
-	 *   helft niet kunt kiezen.
-	 * - **Toetsenbord volledig**: pijltjes lopen langs de kiesbare regels (en
-	 *   slaan de uitgeschakelde over — een tabstop op iets dat niet kan is een
-	 *   omweg), Enter kiest, Escape sluit, Home/End springen. Submenu's openen
-	 *   met → en sluiten met ←.
-	 * - **Uitgeschakelde regels blijven staan** met de reden in de tooltip. Ze
-	 *   weghalen zou betekenen dat het menu van vorm verandert per selectie, en
-	 *   dan is er geen plek meer om te leren waar iets staat.
-	 * - **Sneltoets rechts uitgelijnd** in dezelfde kolom, want dat is waar je
-	 *   hem leert: niet uit een handleiding maar uit het menu.
+	 * What it does, and why:
+	 * - **Opens at the cursor**, and flips as soon as it meets an edge. A menu
+	 *   hanging half outside the window is a menu whose lower half you cannot
+	 *   choose.
+	 * - **Fully keyboard driven**: arrows walk the choosable rows and skip the
+	 *   disabled ones (a tab stop on something that cannot be done is a detour),
+	 *   Enter chooses, Escape closes, Home/End jump. Submenus open with → and
+	 *   close with ←.
+	 * - **Disabled rows stay put**, with the reason in the tooltip. Removing them
+	 *   would mean the menu changes shape per selection, and then there is no
+	 *   place left to learn where something is.
+	 * - **The shortcut is right-aligned** in its own column, because that is where
+	 *   you learn it: not from a manual but from the menu.
 	 */
 	import ArrangeIcon from './ArrangeIcon.svelte';
-	import type { Menu, MenuItem } from '$lib/acties';
+	import type { Menu, MenuItem } from '$lib/actions';
 
 	let {
 		menu,
 		x,
 		y,
-		omhoog = false,
-		onSluit
+		upward = false,
+		onClose
 	}: {
 		menu: Menu;
-		/** Positie in schermcoördinaten; het menu zoekt zelf een passende hoek. */
+		/** Position in screen coordinates; the menu finds its own fitting corner. */
 		x: number;
 		y: number;
-		/** Voor een menu dat aan een knop hangt die onderin staat: `y` is dan de
-		 *  ónderkant van het menu in plaats van de bovenkant. Een uitklap die over
-		 *  zijn eigen knop heen valt, dekt af wat je net aanwees. */
-		omhoog?: boolean;
-		onSluit: () => void;
+		/** For a menu hanging off a button near the bottom: `y` is then the
+		 *  *bottom* edge of the menu instead of the top. A flyout that lands on top
+		 *  of its own button covers what you just pointed at. */
+		upward?: boolean;
+		onClose: () => void;
 	} = $props();
 
-	let doos = $state<HTMLElement | null>(null);
-	let breedte = $state(240);
-	let hoogte = $state(320);
-	let venster = $state({ w: 1440, h: 900 });
+	let box = $state<HTMLElement | null>(null);
+	let width = $state(240);
+	let height = $state(320);
+	let viewport = $state({ w: 1440, h: 900 });
 
-	// Omklappen in plaats van afkappen. Gemeten met het canvasmenu rechtsonder:
-	// zonder dit viel er 180px buiten beeld en waren de onderste vier regels
-	// onbereikbaar.
-	let plek = $derived({
-		left: x + breedte + 8 > venster.w ? Math.max(4, x - breedte) : x,
-		top: omhoog
-			? Math.max(4, y - hoogte)
-			: y + hoogte + 8 > venster.h
-				? Math.max(4, venster.h - hoogte - 8)
+	// Flip rather than clip. Measured with the canvas menu at bottom right:
+	// without this, 180px fell outside the viewport and the bottom four rows were
+	// unreachable.
+	let place = $derived({
+		left: x + width + 8 > viewport.w ? Math.max(4, x - width) : x,
+		top: upward
+			? Math.max(4, y - height)
+			: y + height + 8 > viewport.h
+				? Math.max(4, viewport.h - height - 8)
 				: y
 	});
 
-	/** Alleen de regels waar je op kunt landen. */
-	let kiesbaar = $derived(
+	/** Only the rows you can land on. */
+	let choosable = $derived(
 		menu.flatMap((groep) =>
-			groep.items.filter((item): item is MenuItem => item !== 'scheiding' && !item.uit)
+			groep.items.filter((item): item is MenuItem => item !== 'separator' && !item.off)
 		)
 	);
 	let cursor = $state(-1);
 	let openSub = $state<string | null>(null);
 
-	function kies(item: MenuItem) {
-		if (item.uit) return;
+	function choose(item: MenuItem) {
+		if (item.off) return;
 		if ('items' in item) {
 			openSub = openSub === item.id ? null : item.id;
 			return;
 		}
-		onSluit();
-		item.doen();
+		onClose();
+		item.run();
 	}
 
-	function stap(richting: number) {
-		if (!kiesbaar.length) return;
-		cursor = (cursor + richting + kiesbaar.length) % kiesbaar.length;
+	function step(direction: number) {
+		if (!choosable.length) return;
+		cursor = (cursor + direction + choosable.length) % choosable.length;
 		openSub = null;
 	}
 
-	function toets(event: KeyboardEvent) {
-		const sleutels = ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' ', 'Escape', 'ArrowRight', 'ArrowLeft'];
-		if (!sleutels.includes(event.key)) return;
+	function onKey(event: KeyboardEvent) {
+		const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' ', 'Escape', 'ArrowRight', 'ArrowLeft'];
+		if (!keys.includes(event.key)) return;
 		event.preventDefault();
 		event.stopPropagation();
-		if (event.key === 'Escape') return onSluit();
-		if (event.key === 'ArrowDown') return stap(1);
-		if (event.key === 'ArrowUp') return stap(-1);
+		if (event.key === 'Escape') return onClose();
+		if (event.key === 'ArrowDown') return step(1);
+		if (event.key === 'ArrowUp') return step(-1);
 		if (event.key === 'Home') return (cursor = 0);
-		if (event.key === 'End') return (cursor = kiesbaar.length - 1);
-		const huidig = kiesbaar[cursor];
-		if (!huidig) return;
+		if (event.key === 'End') return (cursor = choosable.length - 1);
+		const current = choosable[cursor];
+		if (!current) return;
 		if (event.key === 'ArrowRight') {
-			if ('items' in huidig) openSub = huidig.id;
+			if ('items' in current) openSub = current.id;
 			return;
 		}
 		if (event.key === 'ArrowLeft') {
 			openSub = null;
 			return;
 		}
-		kies(huidig);
+		choose(current);
 	}
 
 	$effect(() => {
-		doos?.focus();
+		box?.focus();
 	});
 </script>
 
-<svelte:window bind:innerWidth={venster.w} bind:innerHeight={venster.h} />
+<svelte:window bind:innerWidth={viewport.w} bind:innerHeight={viewport.h} />
 
-<!-- Buiten het menu klikken sluit het. Een eigen laag eronder, want een
-     document-listener vangt óók de klik die het menu net opende. -->
-<div class="afdek" role="presentation" oncontextmenu={(e) => { e.preventDefault(); onSluit(); }} onpointerdown={onSluit}></div>
+<!-- Clicking outside closes it. Its own layer underneath, because a document
+     listener would also catch the very click that opened the menu. -->
+<div class="backdrop" role="presentation" oncontextmenu={(e) => { e.preventDefault(); onClose(); }} onpointerdown={onClose}></div>
 
 <div
 	class="menu"
 	role="menu"
 	tabindex="-1"
-	bind:this={doos}
-	bind:clientWidth={breedte}
-	bind:clientHeight={hoogte}
-	style="left: {plek.left}px; top: {plek.top}px"
-	onkeydown={toets}
+	bind:this={box}
+	bind:clientWidth={width}
+	bind:clientHeight={height}
+	style="left: {place.left}px; top: {place.top}px"
+	onkeydown={onKey}
 	oncontextmenu={(e) => e.preventDefault()}
 >
-	{#each menu as groep, groepIndex (groep.titel ?? groepIndex)}
-		{#if groepIndex > 0}<hr />{/if}
-		{#if groep.titel}<p class="kop">{groep.titel}</p>{/if}
-		{#each groep.items as item, i (item === 'scheiding' ? `s${i}` : item.id)}
-			{#if item === 'scheiding'}
+	{#each menu as group, groupIndex (group.title ?? groupIndex)}
+		{#if groupIndex > 0}<hr />{/if}
+		{#if group.title}<p class="head">{group.title}</p>{/if}
+		{#each group.items as item, i (item === 'separator' ? `s${i}` : item.id)}
+			{#if item === 'separator'}
 				<hr />
 			{:else}
-				{@const index = kiesbaar.indexOf(item)}
-				<div class="regelwrap" class:sub={'items' in item}>
+				{@const index = choosable.indexOf(item)}
+				<div class="rowwrap" class:sub={'items' in item}>
 					<button
-						class="regel"
-						class:hier={index >= 0 && index === cursor}
-						class:gevaar={item.gevaar}
-						role={'items' in item ? 'menuitem' : item.aan === undefined ? 'menuitem' : 'menuitemcheckbox'}
+						class="row"
+						class:here={index >= 0 && index === cursor}
+						class:danger={item.danger}
+						role={'items' in item ? 'menuitem' : item.on === undefined ? 'menuitem' : 'menuitemcheckbox'}
 						aria-haspopup={'items' in item ? 'menu' : undefined}
 						aria-expanded={'items' in item ? openSub === item.id : undefined}
-						aria-checked={item.aan === undefined ? undefined : item.aan}
-						disabled={Boolean(item.uit)}
-						title={item.uit || item.uitleg}
+						aria-checked={item.on === undefined ? undefined : item.on}
+						disabled={Boolean(item.off)}
+						title={item.off || item.explain}
 						onpointerenter={() => {
 							if (index >= 0) cursor = index;
 							openSub = 'items' in item ? item.id : null;
 						}}
-						onclick={() => kies(item)}
+						onclick={() => choose(item)}
 					>
-						<span class="vink" aria-hidden="true">
-							{#if item.aan}✓{/if}
+						<span class="check" aria-hidden="true">
+							{#if item.on}✓{/if}
 						</span>
-						<span class="tekst">{item.label}</span>
+						<span class="text">{item.label}</span>
 						{#if 'items' in item}
-							<span class="pijl" aria-hidden="true">›</span>
-						{:else if item.toets}
-							<span class="toets mono">{item.toets}</span>
+							<span class="arrow" aria-hidden="true">›</span>
+						{:else if item.key}
+							<span class="key mono">{item.key}</span>
 						{/if}
 					</button>
 
 					{#if 'items' in item && openSub === item.id}
-						<!-- Het submenu opent naar rechts, of naar links als daar geen
-						     ruimte is. `raster` is voor uitlijnen: acht pictogrammen in
-						     twee rijen van vier, precies zoals ze in het paneel stonden,
-						     zodat de spiergeheugen-volgorde overleeft. -->
+						<!-- The submenu opens to the right, or to the left when there is no
+						     room. `grid` is for aligning: eight icons in two rows of four,
+						     exactly as they stood in the panel, so the muscle-memory order
+						     survives. -->
 						<div
 							class="submenu"
-							class:raster={item.raster}
-							class:links={plek.left + breedte + 220 > venster.w}
+							class:grid={item.grid}
+							class:leftward={place.left + width + 220 > viewport.w}
 							role="menu"
 						>
-							{#each item.items as kind (kind.id)}
+							{#each item.items as child (child.id)}
 								<button
-									class="regel"
-									class:tegel={item.raster}
+									class="row"
+									class:tile={item.grid}
 									role="menuitem"
-									disabled={Boolean(kind.uit)}
-									title={kind.uit || kind.label}
-									aria-label={kind.label}
+									disabled={Boolean(child.off)}
+									title={child.off || child.label}
+									aria-label={child.label}
 									onclick={() => {
-										onSluit();
-										kind.doen();
+										onClose();
+										child.run();
 									}}
 								>
-									{#if item.raster && kind.icoon}
-										<ArrangeIcon name={kind.icoon} size={19} />
+									{#if item.grid && child.icon}
+										<ArrangeIcon name={child.icon} size={19} />
 									{:else}
-										<span class="vink" aria-hidden="true">{#if kind.aan}✓{/if}</span>
-										<span class="tekst">{kind.label}</span>
-										{#if kind.toets}<span class="toets mono">{kind.toets}</span>{/if}
+										<span class="check" aria-hidden="true">{#if child.on}✓{/if}</span>
+										<span class="text">{child.label}</span>
+										{#if child.key}<span class="key mono">{child.key}</span>{/if}
 									{/if}
 								</button>
 							{/each}
@@ -208,7 +208,7 @@
 </div>
 
 <style>
-	.afdek {
+	.backdrop {
 		position: fixed;
 		inset: 0;
 		z-index: 90;
@@ -228,7 +228,7 @@
 	.menu:focus-visible {
 		outline: none;
 	}
-	.kop {
+	.head {
 		margin: 4px 8px 2px;
 		font-size: var(--text-xs);
 		letter-spacing: 0.04em;
@@ -240,10 +240,10 @@
 		border: none;
 		border-top: 1px solid var(--line);
 	}
-	.regelwrap {
+	.rowwrap {
 		position: relative;
 	}
-	.regel {
+	.row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -255,41 +255,41 @@
 		background: none;
 		border: none;
 	}
-	/* Hover én toetsenbord krijgen dezelfde markering: er is één "hier ben je",
-	   niet een muis-versie en een toetsenbord-versie. */
-	.regel.hier:not(:disabled) {
+	/* Hover and keyboard get the same marking: there is one "you are here", not a
+	   mouse version and a keyboard version. */
+	.row.here:not(:disabled) {
 		background: var(--surface-2);
 	}
-	.regel:disabled {
+	.row:disabled {
 		color: var(--text-2);
 		opacity: 0.5;
 		cursor: default;
 	}
-	.regel.gevaar:not(:disabled) {
+	.row.danger:not(:disabled) {
 		color: var(--danger);
 	}
-	.regel.gevaar.hier:not(:disabled) {
+	.row.danger.here:not(:disabled) {
 		background: color-mix(in srgb, var(--danger) 10%, var(--surface-1));
 	}
-	.vink {
+	.check {
 		flex: none;
 		width: 12px;
 		font-size: 12px;
 		color: var(--accent);
 	}
-	.tekst {
+	.text {
 		flex: 1;
 		min-width: 0;
 	}
-	/* De sneltoets staat rechts in zijn eigen kolom en is grijs: hij is een
-	   aanwijzing, niet de naam van de regel. */
-	.toets {
+	/* The shortcut sits right, in its own column, and is grey: it is a hint, not
+	   the name of the row. */
+	.key {
 		flex: none;
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		letter-spacing: 0.02em;
 	}
-	.pijl {
+	.arrow {
 		flex: none;
 		color: var(--text-2);
 	}
@@ -305,17 +305,17 @@
 		box-shadow: var(--shadow-float);
 		z-index: 2;
 	}
-	.submenu.links {
+	.submenu.leftward {
 		left: auto;
 		right: 100%;
 	}
-	.submenu.raster {
+	.submenu.grid {
 		display: grid;
 		grid-template-columns: repeat(4, 34px);
 		gap: 2px;
 		min-width: 0;
 	}
-	.regel.tegel {
+	.row.tile {
 		display: grid;
 		place-items: center;
 		width: 34px;

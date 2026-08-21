@@ -46,8 +46,8 @@ def test_a_design_is_saved_and_can_come_back(client, server):
 
 def test_an_empty_design_never_overwrites_a_good_one(client, server):
     """
-    Anders wist "nieuw ontwerp" precies het bestand dat je nodig hebt zodra er
-    iets misgaat.
+    Otherwise "new design" erases precisely the file you need as soon as something goes
+    wrong.
     """
     a_rect(client)
     server.autosave.save()
@@ -58,7 +58,7 @@ def test_an_empty_design_never_overwrites_a_good_one(client, server):
 
 
 def test_saving_is_throttled(client, server):
-    """Eén vorm verslepen stuurt tientallen signalen; die gaan niet allemaal naar schijf."""
+    """Dragging one shape sends dozens of signals; they do not all go to disk."""
     a_rect(client)
 
     assert server.autosave.touch() is True
@@ -85,16 +85,15 @@ def test_it_can_be_thrown_away(client, server):
 
 def test_throwing_it_away_does_not_leave_you_without_a_net(client, server):
     """
-    "Beginnen met een leeg canvas" gooit het herstelbestand weg, en daarna werk
-    je gewoon door. De rem meet vanaf de laatste schrijfbeurt, dus zonder deze
-    reset zwijgt de autosave nog een hele interval — en als je in die tijd
-    ophoudt met tekenen, staat er helemaal niets. Gemeten op een draaiende
-    server: weggooien, vier vormen tekenen, dertig seconden wachten, geen
+    "Start with an empty canvas" throws the recovery file away, and after that you simply
+    work on. The brake measures from the last write, so without this reset the autosave keeps
+    quiet for a whole interval — and if you stop drawing in that time, there is nothing at all.
+    Measured on a running server: discard, draw four shapes, wait thirty seconds, no
     herstelbestand.
     """
     a_rect(client)
-    # Via touch(), niet save(): de rem gaat pas lopen als er langs de rem
-    # geschreven is, en dat is precies de toestand waar het misgaat.
+    # Through touch(), not save(): the brake only starts running once something has been
+    # written past it, and that is exactly the state where it goes wrong.
     assert server.autosave.touch() is True
 
     client.delete("/api/design/autosave")
@@ -106,11 +105,10 @@ def test_throwing_it_away_does_not_leave_you_without_a_net(client, server):
 
 def test_a_new_design_after_exporting_is_not_haunted(client, server):
     """
-    Tekenen, exporteren, aan iets nieuws beginnen — en de volgende laadbeurt
-    vroeg of je die pas geëxporteerde tekening wilde terugzetten. Er valt daar
-    niets te herstellen: het staat onder je eigen naam op schijf. Een venster
-    dat bij elk nieuw ontwerp langskomt, leer je wegklikken, en dan mis je het
-    op de dag dat het wél ergens over gaat.
+    Draw, export, start something new — and the next load asked whether you wanted to restore
+    that just-exported drawing. There is nothing to recover there: it is on disk under your own
+    name. A dialog that comes past on every new design you learn to click away, and then you
+    miss it on the day it *is* about something.
     """
     a_rect(client)
     server.autosave.save()
@@ -123,8 +121,8 @@ def test_a_new_design_after_exporting_is_not_haunted(client, server):
 
 def test_unsaved_work_keeps_its_net_even_when_you_clear_the_canvas(client, server):
     """
-    De keerzijde, en die weegt zwaarder: wie tekent zonder op te slaan en dan
-    het canvas leegt, moet het nog terug kunnen halen.
+    The other side, and it weighs more: anybody who draws without saving and then clears the
+    canvas has to be able to get it back.
     """
     a_rect(client)
     server.autosave.save()
@@ -136,47 +134,46 @@ def test_unsaved_work_keeps_its_net_even_when_you_clear_the_canvas(client, serve
 
 def test_the_last_change_before_you_walk_away_still_lands(client, server, monkeypatch):
     """
-    `touch` schrijft de eerste wijziging en remt daarna. Wie in die interval nog
-    twee vormen tekent en dan naar de machine loopt, kreeg voor die twee nooit
-    meer een schrijfbeurt: er komt geen signaal meer om er een op te hangen.
-    Gemeten op een draaiende server: drie vormen in drie seconden, proces
+    `touch` writes the first change and then brakes. Anybody who draws another two shapes in
+    that interval and then walks to the machine never got a write for those two: no further
+    signal comes to hang one on. Measured on a running server: three shapes in three seconds,
+    process
     afgeschoten, één vorm in het herstelbestand.
 
-    `flush` hangt als kerneljob aan de scheduler en haalt de staart op.
+    `flush` hangs off the scheduler as a kernel job and picks the tail up.
     """
     a_rect(client)
     assert server.autosave.touch() is True
 
     a_rect(client)
     a_rect(client)
-    assert server.autosave.touch() is False, "de rem hoort er nog op te staan"
-    # Niets meer te doen zonder de staart: er komt geen wijziging meer.
-    assert server.autosave.flush() is False, "binnen de interval blijft het wachten"
+    assert server.autosave.touch() is False, "the brake should still be on"
+    # Nothing left to do without the tail: no change is coming.
+    assert server.autosave.flush() is False, "inside the interval it keeps waiting"
 
-    # De interval loopt af terwijl er niemand meer tekent.
+    # The interval runs out while nobody is drawing any more.
     monkeypatch.setattr(
         "openkerf_api.autosave.time.monotonic",
         lambda: server.autosave._last + INTERVAL + 1,
     )
 
     assert server.autosave.flush() is True
-    assert server.autosave.flush() is False, "één keer is genoeg; niet blijven schrijven"
+    assert server.autosave.flush() is False, "once is enough; do not keep writing"
 
 
 def test_clearing_the_design_does_not_use_up_the_throttle(client, server):
     """
-    Leegmaken stuurt een boomsignaal, dus `touch()` komt langs — maar er is
-    niets te bewaren. Zonder deze regel zette dat wél de klok, en stond de
-    eerste twintig seconden van je volgende ontwerp buiten het vangnet.
-    Gemeten op een draaiende server: leegmaken, vier vormen tekenen, geen
-    herstelbestand.
+    Clearing sends a tree signal, so `touch()` comes past — but there is nothing
+    to save. Without this rule that *did* set the clock, and the first twenty
+    seconds of your next design sat outside the safety net. Measured on a running
+    server: clear, draw four shapes, no recovery file.
     """
     a_rect(client)
     assert server.autosave.touch() is True
 
     client.delete("/api/design/autosave")
     client.post("/api/design/clear")
-    assert server.autosave.touch() is False, "een leeg ontwerp schrijft niets"
+    assert server.autosave.touch() is False, "an empty design writes nothing"
 
     a_rect(client)
 
@@ -184,7 +181,7 @@ def test_clearing_the_design_does_not_use_up_the_throttle(client, server):
 
 
 def test_after_restoring_the_next_change_is_saved_again(client, server):
-    """Hetzelfde na herstellen: wat je ná het terugzetten doet, hoort beschermd."""
+    """The same after restoring: what you do after putting it back is protected."""
     a_rect(client)
     assert server.autosave.touch() is True
     client.post("/api/design/clear")
@@ -197,40 +194,39 @@ def test_after_restoring_the_next_change_is_saved_again(client, server):
 
 def test_autosaving_does_not_rename_your_document(kernel, client, tmp_path):
     """
-    Automatisch bewaren schrijft naar `herstel.svg`, en `save` zet die naam op
-    `elements.basename`. Die naam kwam daarna terug als jobnaam: elke job in de
-    wachtrij heette "herstel.svg", ook op een vers ontwerp waar niets hersteld
-    was. Twee jobs die hetzelfde heten zijn bij een laser niet uit elkaar te
-    houden.
+    Saving automatically writes to `recovery.svg`, and `save` puts that name on
+    `elements.basename`. That name then came back as the job name: every job in
+    the queue was called "recovery.svg", even on a fresh design where nothing had
+    been recovered. Two jobs with the same name cannot be told apart at a laser.
     """
 
     client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     )
-    kernel.elements._filename = "/ergens/mijn-ontwerp.svg"
+    kernel.elements._filename = "/somewhere/my-design.svg"
 
     _autosave(kernel, tmp_path).save()
 
-    assert kernel.elements.basename == "mijn-ontwerp.svg"
+    assert kernel.elements.basename == "my-design.svg"
 
 
 def test_autosaving_leaves_an_unnamed_document_unnamed(kernel, client, tmp_path):
-    """Zonder naam blijft het naamloos — dan verzint onze eigen jobnaam iets."""
+    """Without a name it stays nameless — then our own job name makes something up."""
 
     client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     )
-    voor = getattr(kernel.elements, "basename", None)
+    before = getattr(kernel.elements, "basename", None)
 
     _autosave(kernel, tmp_path).save()
 
-    assert getattr(kernel.elements, "basename", None) == voor
+    assert getattr(kernel.elements, "basename", None) == before
 
 
 def _autosave(kernel, tmp_path):
-    """De autosave zoals de server hem maakt, met een eigen pad voor de test."""
+    """The autosave the way the server makes it, with a path of its own for the test."""
     from openkerf_api.autosave import Autosave
     from openkerf_api.document import Document
     from openkerf_api.drawing import Drawing

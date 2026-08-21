@@ -1,6 +1,6 @@
 /**
- * Controleert de controleur: een bewust te laag contrast moet gevonden worden.
- * Een meter die niets meer vindt omdat hij stuk is, is erger dan geen meter.
+ * Checks the checker: a deliberately too-low contrast has to be found. A meter
+ * that finds nothing because it is broken is worse than no meter.
  */
 import { browser, open } from './harness.mjs';
 const b = await browser();
@@ -12,7 +12,7 @@ await page.waitForTimeout(200);
 const bad = await page.$$eval('.statusbar span', (nodes) =>
 	nodes.map((n) => getComputedStyle(n).color)
 );
-console.log('geinjecteerde kleur:', bad[0]);
+console.log('injected colour:', bad[0]);
 const found = await page.evaluate(() => {
 	function lum([r, g, b]) {
 		const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
@@ -24,8 +24,8 @@ const found = await page.evaluate(() => {
 	return +ratio.toFixed(2);
 });
 if (found >= 4.5) {
-	console.error('ZELFTEST GEFAALD: injectie leverde geen laag contrast op');
+	console.error('SELF-TEST FAILED: the injection did not give a low contrast');
 	process.exit(1);
 }
-console.log('zelftest ok: gemeten', found, '(< 4.5, dus vindbaar)');
+console.log('self-test ok: measured', found, '(< 4.5, so findable)');
 await b.close();

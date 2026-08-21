@@ -11,9 +11,10 @@
 	} from '$lib/api';
 
 	import type { Controller } from '$lib/control.svelte';
-	import { verbinding } from '$lib/verbinding.svelte';
-	import Verbinding from './Verbinding.svelte';
-	import Melding from './Melding.svelte';
+	import { connection } from '$lib/connection.svelte';
+	import { t } from '$lib/i18n/index.svelte';
+	import ConnectionCard from './ConnectionCard.svelte';
+	import Melding from './Message.svelte';
 
 	let {
 		device,
@@ -22,115 +23,115 @@
 		connected,
 		control,
 		pointerMm = null,
-		acties = true
+		actions = true
 	}: {
 		device: Device | null;
 		machineState: MachineState;
 		job: Job | null;
 		connected: boolean;
 		control: Controller;
-		/** Muispositie op het bed; staat naast de machinepositie. */
+		/** Pointer position on the bed; sits beside the machine position. */
 		pointerMm?: { x: number; y: number } | null;
-		/** Draagt deze balk de pauze- en stopknop? Op tablet niet: daar staat de
-		 *  machinebediening in de bovenbalk, en twee plekken voor dezelfde stop
-		 *  maakt op het beslissende moment onduidelijk welke de echte is. Op 768
-		 *  liep de balk bovendien over en viel de stopknop van het scherm. */
-		acties?: boolean;
+		/** Does this bar carry the pause and stop buttons? Not on a tablet: there
+		 *  the machine controls are in the top bar, and two places for the same stop
+		 *  makes it unclear at the deciding moment which one is the real one. At 768
+		 *  the bar also overflowed and the stop button fell off the screen. */
+		actions?: boolean;
 	} = $props();
 
-	// Stoppen hoorde alleen in het Job-tabblad. Wie tijdens het branden aan het
-	// ontwerpen was, had geen stop in beeld — en dat is precies het moment
-	// waarop je hem nodig hebt. Vandaar hier, altijd zichtbaar zodra er iets
-	// loopt of in de wachtrij staat.
-	// Ook een gepauzeerde job telt: die heeft bij Lihuiyu `running === false` en
-	// verdween daardoor uit deze balk — precies wanneer je de hervatknop zoekt.
+	// Stopping used to live only in the Job tab. Anybody designing while the
+	// machine was burning had no stop on screen — and that is exactly the moment
+	// you need it. Hence here, always visible as soon as something is running or in
+	// the queue.
+	// A paused job counts too: on Lihuiyu that has `running === false` and so
+	// disappeared from this bar — precisely when you are looking for resume.
 	let busy = $derived(Boolean(job) || (device?.spooler.queue_length ?? 0) > 0);
 
 	let mm = $derived(device?.position.mm ?? null);
 
-	// Pauzeren moest lukken vanaf élk tabblad. Stond hij alleen in het
-	// Job-paneel, dan kostte het een tabwissel plus een klik — precies op het
-	// moment dat je geen tweede handeling wil doen. Dus hier, naast de stop.
+	// Pausing had to work from *every* tab. Living only in the Job panel it cost a
+	// tab switch plus a click — exactly when you do not want a second action. So
+	// here, beside the stop.
 	let paused = $derived(isStalled(job));
 	let canPause = $derived(control.capabilities?.actions.pause ?? false);
 	let canResume = $derived(control.capabilities?.actions.resume ?? false);
 	let remaining = $derived(remainingSeconds(job));
-	// Uit dezelfde bron als `remaining` — dat is de hele fix van gat B1. Stond
-	// hier `job.estimate_seconds`, dan las de balk "nog 0:00 van 13:45:04":
-	// een restant van de klok naast een totaal van het brandmodel.
-	let totaal = $derived(totalSeconds(job));
+	// From the same source as `remaining` — that is the whole fix for gap B1. With
+	// `job.estimate_seconds` here the bar read "0:00 left of 13:45:04": a remainder
+	// from the clock beside a total from the burn model.
+	let total = $derived(totalSeconds(job));
 	let percent = $derived(job?.progress !== null && job?.progress !== undefined
 		? Math.round(job.progress * 100)
 		: null);
 
-	// Zonder verbinding is elk getal hieronder een herinnering, geen meting. Ze
-	// blijven staan — ze zeggen nog steeds waar de kop stond — maar ze mogen
-	// zich niet voordoen als actueel.
-	let vers = $derived(connected);
+	// Without a connection every number below is a memory, not a measurement. They
+	// stay — they still say where the head was — but they must not present
+	// themselves as current.
+	let fresh = $derived(connected);
 
 	/**
-	 * Wat er over de verbinding staat, in de juiste volgorde van slecht nieuws.
+	 * What the bar says about the connection, in the right order of bad news.
 	 *
-	 * Er stond één zin: "Verbonden met de laser" of niet. Die was driemaal
-	 * onwaar. Hij zei "verbonden" terwijl er geen kabel in zat, hij wees bij
-	 * een weggevallen server naar de laser terwijl het probleem de server was —
-	 * en dan sta je een USB-kabel te controleren die niets mankeert — en hij
-	 * zei het ook als niemand het kón weten.
+	 * There used to be one sentence: "Connected to the laser", or not. It was
+	 * untrue three ways over. It said "connected" while no cable was plugged in, on
+	 * a dropped server it pointed at the laser while the problem was the server —
+	 * and then you state there checking a USB cable that is perfectly fine — and it
+	 * said it even when nobody *could* know.
 	 *
-	 * Dat laatste was gat E3. Voor grbl, newly en het dummy-apparaat meldt de
-	 * engine `connection.state === "unknown"`: er is domweg geen bron. Onze
-	 * balk maakte daar "Verbonden met de laser" van, met een groene stip erbij,
-	 * ook meteen na de wizard — terwijl de wizard zélf zegt dat de verbinding
-	 * pas bij de eerste job gelegd wordt. Twee schermen die elkaar tegenspreken,
-	 * op de plek waar je het meest vertrouwt.
+	 * That last one was gap E3. For grbl, newly and the dummy device the engine
+	 * reports `connection.state === "unknown"`: there is simply no source. Our bar
+	 * turned that into "Connected to the laser", with a green dot beside it, even
+	 * straight after the wizard — while the wizard itself says the connection is
+	 * only made on the first job. Two screens contradicting each other, in the
+	 * place you trust most.
 	 *
-	 * Nu zegt de balk alleen "verbonden" als de driver dat zelf meldt. Weet
-	 * niemand het, dan staat dat er: "Verbinding onbekend". Dat is geen storing
-	 * en geen belofte, en het is het enige wat waar is.
+	 * Now the bar says "connected" only when the driver reports it itself. If
+	 * nobody knows, that is what it says: "Connection unknown". That is not a fault
+	 * and not a promise, and it is the only thing that is true.
 	 *
-	 * Verleidelijk maar fout: een lopende job als bewijs nemen. Gemeten op deze
-	 * eigen server — het Job-paneel toonde een job op 80 % terwijl de engine
-	 * eronder "USB connection did not exist" meldde. De spooler draait vrolijk
-	 * door zonder machine; hij is dus geen handshake.
+	 * Tempting but wrong: taking a running job as proof. Measured on this very
+	 * server — the Job panel showed a job at 80% while the engine underneath
+	 * reported "USB connection did not exist". The spooler runs happily on without
+	 * a machine; it is therefore not a handshake.
 	 */
-	let onbekend = $derived(
+	let unknown = $derived(
 		connected && machineState !== 'unplugged' && device?.connection?.state !== 'connected'
 	);
 	/**
 	 * Twee indicatoren, twee onderwerpen.
 	 *
-	 * De balk zei het twee keer: hier stond "Machine niet verbonden" en helemaal
-	 * rechts stond "Niet verbonden" — dezelfde mededeling, twee keer, 700 px van
-	 * elkaar. En het énige dat er níet stond was of de pagina zelf nog aan de
-	 * server hangt; dat zag je alleen doordat deze tekst rood werd.
+	 * The bar said it twice: here it read "Machine not connected" and at the far
+	 * right "Not connected" — the same message, twice, 700 px apart. And the one
+	 * thing it did *not* say was whether the page itself is still attached to the
+	 * server; you only saw that because this text went red.
 	 *
-	 * Dus: hier de machine (met de knop erbij, want dáár kun je iets aan doen),
-	 * en rechts de lijn naar OpenKerf. Twee dingen die los kunnen stukgaan
-	 * krijgen twee plekken die dat los kunnen zeggen.
+	 * So: the machine here (with the button beside it, because that is where you
+	 * can do something), and the line to OpenKerf on the right. Two things that can
+	 * break separately get two places that can say so separately.
 	 */
 	let verbindingstekst = $derived(
 		!connected
-			? 'Machine onbekend'
+			? t('status.machine.unknown')
 			: machineState === 'unplugged'
-				? 'Machine niet verbonden'
-				: onbekend
-					? 'Verbinding onbekend'
-					: 'Verbonden met de laser'
+				? t('status.machine.notConnected')
+				: unknown
+					? t('status.machine.connectionUnknown')
+					: t('status.machine.connected')
 	);
 	/**
-	 * De knop naast de toestand.
+	 * The button beside the state.
 	 *
-	 * De balk kon lezen dat er geen machine aan de lijn hing en er niets aan
-	 * doen — "niet verbonden" zonder knop. Alleen zichtbaar als de driver het
-	 * kent: grbl opent zelf zodra er werk naartoe gaat, en dan hoort er geen
-	 * knop te zijn die niets betekent.
+	 * The bar could read that no machine was on the line and do nothing about it —
+	 * "not connected" without a button. Only visible when the driver knows it: grbl
+	 * opens by itself as soon as work goes to it, and then there should be no button
+	 * that means nothing.
 	 *
-	 * Verbreken vraagt om bevestiging, verbinden niet. Gemeten op de echte
-	 * KH-5030 gaat opnieuw verbinden na een verbreken soms wél en soms niet: op
-	 * een server waar alleen curl tegen praat faalde het drie op drie, met de
-	 * app eraan stond de verbinding binnen ~6 s vanzelf weer open. Wat hem
-	 * heropent is niet gevonden. Zolang dat zo is, mag verbreken geen knop van
-	 * één klik zijn — en mag de tekst niet meer beloven dan we weten.
+	 * Disconnecting asks for confirmation, connecting does not. Measured on the real
+	 * KH-5030, reconnecting after a disconnect sometimes works and sometimes does
+	 * not: on a server with only curl talking to it, it failed three out of three;
+	 * with the app attached the connection was open again by itself within ~6 s.
+	 * What reopens it has not been found. As long as that is so, disconnecting must
+	 * not be a one-click button — and the text must not promise more than we know.
 	 */
 	let hangt = $derived(device?.connection?.state === 'connected');
 	let kanVerbinden = $derived(
@@ -144,51 +145,49 @@
 	let zekerVerbreken = $state(false);
 
 	let verbindingsuitleg = $derived(
-		onbekend
-			? 'De engine draait, maar deze driver meldt niet of er een machine aan hangt. ' +
-				'Bij de eerste job merk je het: die blijft in de wachtrij staan als er niets luistert.'
+		unknown
+			? t('status.machine.connectionUnknown.hint')
 			: undefined
 	);
 </script>
 
-<Verbinding brandt={Boolean(job?.running)} />
+<ConnectionCard burns={Boolean(job?.running)} />
 
-<!-- Gat E2. De socket is terug, de balk is weer groen, maar het is een andere
-     engine dan die deze pagina kent: de elementenboom aan de andere kant is
-     leeg. Niet vanzelf herladen — dat gooit werk weg zonder dat iemand erom
-     vroeg — maar het ook niet verzwijgen, want alles wat je hierna doet gaat
-     over een document dat daar niet meer bestaat. -->
-{#if verbinding.herstart}
-	<div class="herstart" role="alert">
-		<div class="tekst">
-			<strong>De server is opnieuw gestart</strong>
+<!-- Gap E2. The socket is back, the bar is green again, but it is a different
+     engine from the one this page knows: the element tree on the other side is
+     empty. Do not reload by ourselves — that throws work away without anybody
+     asking — but do not keep quiet about it either, because everything you do
+     after this is about a document that no longer exists over there. -->
+{#if connection.restarted}
+	<div class="restarted" role="alert">
+		<div class="text">
+			<strong>{t('status.restart.title')}</strong>
 			<p>
-				Deze pagina toont nog het ontwerp van vóór de herstart; de engine is
-				leeg begonnen. Herlaad om te zien wat er echt is.
+				{t('status.restart.body')}
 			</p>
 		</div>
-		<button onclick={() => location.reload()}>Herladen</button>
+		<button onclick={() => location.reload()}>{t('status.restart.reload')}</button>
 	</div>
 {/if}
-<!-- Fouten uit schrijfacties zijn hier niet thuis, maar dit is de enige
-     component die op elk tabblad meedraait. Zonder dit landde een mislukte
-     import in een paneel dat je op dat moment niet openhad. -->
+<!-- Errors from write actions are not really at home here, but this is the only
+     component that runs along on every tab. Without it a failed import landed in
+     a panel you did not have open at that moment. -->
 <Melding {control} />
 
 <footer class="statusbar mono">
-	<!-- Twee posities naast elkaar: waar de kop staat, en waar jouw muis staat.
-	     Zonder onderscheid leest de een als de ander. -->
-	<span class="wat">kop</span>
-	<span class:oud={!vers}>X <b>{formatMm(mm?.[0])}</b></span>
-	<span class:oud={!vers}>Y <b>{formatMm(mm?.[1])}</b> mm</span>
-	{#if !vers}
-		<!-- Eén woord, maar het is het verschil tussen "de kop staat daar" en
-		     "de kop stond daar toen we hem voor het laatst zagen". -->
-		<span class="wat">laatst gezien</span>
+	<!-- Two positions side by side: where the head is, and where your pointer is.
+	     Without the distinction one reads as the other. -->
+	<span class="what">{t('status.head')}</span>
+	<span class:stale={!fresh}>X <b>{formatMm(mm?.[0])}</b></span>
+	<span class:stale={!fresh}>Y <b>{formatMm(mm?.[1])}</b> mm</span>
+	{#if !fresh}
+		<!-- One word, but it is the difference between "the head is there" and "the
+		     head was there when we last saw it". -->
+		<span class="what">{t('status.lastSeen')}</span>
 	{/if}
-	<span class="sep muisdeel" aria-hidden="true"></span>
-	<span class="wat muisdeel">muis</span>
-	<span class="muis muisdeel">
+	<span class="sep pointerpart" aria-hidden="true"></span>
+	<span class="what pointerpart">{t('status.mouse')}</span>
+	<span class="pointer pointerpart">
 		{#if pointerMm}
 			<b>{pointerMm.x.toFixed(1)}</b>, <b>{pointerMm.y.toFixed(1)}</b> mm
 		{:else}
@@ -196,22 +195,25 @@
 		{/if}
 	</span>
 	<span class="sep" aria-hidden="true"></span>
-	<!-- Tijdens een job is "hoe lang nog" het enige getal dat telt; de totale
-	     schatting stond er, maar die moest je zelf van de klok aftrekken. -->
-	<span class="tijd">
+	<!-- During a job "how much longer" is the only number that counts; the total
+	     estimate was there, but you had to subtract it from the clock yourself. -->
+	<span class="time">
 		{#if job && remaining !== null}
 			{#if percent !== null}<b class="pct">{percent}%</b>{/if}
-			nog <b>{formatDuration(remaining)}</b>
-			<span class="van">van {formatDuration(totaal)}</span>
+			<!-- Two whole messages instead of one sentence with a styled tail: the
+			     emphasis survives (how long is left is the number that counts) and
+			     neither half is a fragment a translator cannot place. -->
+			{t('status.remaining', { remaining: formatDuration(remaining) })}
+			<span class="of">{t('status.total', { total: formatDuration(total) })}</span>
 		{:else if job}
-			~ {formatDuration(totaal)} geschat
+			{t('status.estimated', { total: formatDuration(total) })}
 		{:else}
-			geen job
+			{t('status.noJob')}
 		{/if}
 	</span>
 	<span class="sep" aria-hidden="true"></span>
-	<!-- Gebruikerstaal, geen protocoltaal: wie dit leest wil weten of de laser
-	     luistert, niet of er een socket openstaat. -->
+	<!-- The user's language, not the protocol's: whoever reads this wants to know
+	     whether the laser is listening, not whether a socket is open. -->
 	<span
 		class:offline={!connected}
 		class:onthecht={connected && machineState === 'unplugged'}
@@ -222,9 +224,8 @@
 	</span>
 	{#if kanVerbinden}
 		{#if zekerVerbreken}
-			<span class="verbreek-vraag">
-				Verbreken? Opnieuw verbinden lukt daarna niet altijd; soms helpt alleen een
-				herstart van de server.
+			<span class="verbreek-ask">
+				{t('status.disconnect.ask')}
 				<button
 					class="verbind"
 					disabled={control.busy === 'disconnect'}
@@ -232,52 +233,54 @@
 						zekerVerbreken = false;
 						control.disconnect();
 					}}
-				>Verbreken</button>
-				<button class="verbind" onclick={() => (zekerVerbreken = false)}>Laten hangen</button>
+				>{t('status.disconnect')}</button>
+				<button class="verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
 			</span>
 		{:else}
 			<button
 				class="verbind"
 				disabled={control.needsToken || control.busy === 'connect' || control.busy === 'disconnect'}
 				title={control.needsToken
-					? 'Eerst een token invullen'
+					? t('status.needsToken')
 					: hangt
-						? 'De verbinding met de machine vrijgeven'
-						: 'De verbinding met de machine opzetten. Dit beweegt niets.'}
+						? t('status.disconnect.title')
+						: t('status.connect.title')}
 				onclick={() => (hangt ? (zekerVerbreken = true) : control.connect())}
 			>
 				{control.busy === 'connect'
-					? 'Verbinden…'
+					? t('status.connect.busy')
 					: control.busy === 'disconnect'
-						? 'Verbreken…'
+						? t('status.disconnect.busy')
 						: hangt
-							? 'Verbreken…'
-							: 'Verbinden'}
+							? t('status.disconnect')
+							: t('status.connect')}
 			</button>
 		{/if}
 	{/if}
 	<!--
-		Hier stonden pauze en stop. Ze zijn naar de bovenbalk gegaan, waar starten
-		en stoppen al stonden: het transport hoort bij elkaar, en drie balken met
-		elk een deel ervan is precies de verspreiding waar de klacht over ging. Wat
-		de statusbalk houdt is de voortgang, en die hoort hier — hij geldt voor de
-		hele app, op elk tabblad.
+		Pause and stop used to be here. They have gone to the top bar, where start
+		and stop already were: the transport belongs together, and three bars each
+		holding a part of it is exactly the scattering the complaint was about. What
+		the status bar keeps is the progress, and that belongs here — it holds for the
+		whole app, on every tab.
 	-->
-	<!-- De lijn naar OpenKerf zelf. Hier stond de machinetoestand, en die staat
-	     al links in deze balk én in de bovenbalk. -->
-	<span class="right" class:offline={!connected} title={connected
-		? 'De pagina krijgt live gegevens van de OpenKerf-server'
-		: 'De pagina heeft geen verbinding met de OpenKerf-server; wat je ziet is de laatste stand'}>
+	<!-- The line to OpenKerf itself. The machine state used to be here, and that is
+	     already on the left of this bar *and* in the top bar. -->
+	<span
+		class="right"
+		class:offline={!connected}
+		title={connected ? t('status.openkerf.live.title') : t('status.openkerf.away.title')}
+	>
 		<span class="dot {connected ? 'ready' : 'offline'}" aria-hidden="true"></span>
-		OpenKerf {connected ? 'live' : 'weg'}
+		{connected ? t('status.openkerf.live') : t('status.openkerf.away')}
 	</span>
 </footer>
 
 <style>
-	/* Boven de statusbalk, over de volle breedte: dit gaat over de hele pagina
-	   en niet over één paneel. Niet gecentreerd bovenin — daar staat al de
-	   verbindingskaart, en twee kaarten over elkaar heen is geen bericht. */
-	.herstart {
+	/* Above the status bar, across the full width: this is about the whole page and
+	   not about one panel. Not centred at the top — the connection card is already
+	   there, and two cards on top of each other is not a message. */
+	.restarted {
 		position: fixed;
 		left: 0;
 		right: 0;
@@ -293,13 +296,13 @@
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
-	.herstart .tekst { min-width: 0; }
-	.herstart strong { display: block; font-size: var(--text-sm); }
-	.herstart p { margin: 0; color: var(--text-2); }
-	.herstart button {
+	.restarted .text { min-width: 0; }
+	.restarted strong { display: block; font-size: var(--text-sm); }
+	.restarted p { margin: 0; color: var(--text-2); }
+	.restarted button {
 		flex: none;
 		margin-left: auto;
-		/* 44px: dit wordt ook op een tablet naast de machine aangeraakt. */
+		/* 44px: this gets touched on a tablet beside the machine too. */
 		min-height: 44px;
 		padding: 0 var(--space-4);
 		font: inherit;
@@ -309,24 +312,24 @@
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
-	.wat {
+	.what {
 		font-family: var(--font-ui);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	/* Vaste breedte: anders springt de hele balk mee met elke muisbeweging. */
-	.muis { display: inline-block; min-width: 13ch; }
-	/* Op tablet teken je niet, dus is de muispositie geen informatie — en de
-	   ruimte hebben de bedieningsknoppen wél nodig: zonder dit brak de balk
-	   over twee regels zodra er een job liep. */
+	/* Fixed width: otherwise the whole bar jumps along with every pointer move. */
+	.pointer { display: inline-block; min-width: 13ch; }
+	/* On a tablet you do not draw, so the pointer position is not information — and
+	   the control buttons do need the room: without this the bar broke over two
+	   lines as soon as a job was running. */
 	@media (max-width: 1199px) {
-		.muisdeel { display: none; }
+		.pointerpart { display: none; }
 	}
 	.statusbar > span { white-space: nowrap; }
 
 	.statusbar {
-		/* Vaste hoogte op desktop; op touch groeien de knoppen naar 44px en dan
-		   moet de balk meegeven in plaats van ze eruit te laten steken. */
+		/* Fixed height on the desktop; on touch the buttons grow to 44px and then the
+		   bar has to give way instead of letting them stick out. */
 		min-height: var(--statusbar-height);
 		flex: none;
 		display: flex;
@@ -339,9 +342,9 @@
 		color: var(--text-2);
 	}
 	.offline { color: var(--danger); }
-	/* Niet rood: de server doet het, er hangt alleen geen machine aan. Rood zou
-	   dit gelijkstellen aan een storing, en dan gelooft niemand het rood meer
-	   dat er wél toe doet. */
+	/* Not red: the server is fine, there is simply no machine attached. Red would
+	   equate this with a fault, and then nobody believes the red that does
+	   matter. */
 	.onthecht { color: var(--warn); }
 	.verbind {
 		margin-left: var(--space-1);
@@ -355,7 +358,7 @@
 	}
 	.verbind:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 	.verbind:disabled { opacity: 0.5; cursor: default; }
-	.verbreek-vraag {
+	.verbreek-ask {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-1);
@@ -363,17 +366,17 @@
 		color: var(--text-1);
 	}
 
-	/* Nog niet verbonden is geen storing en geen belofte. Dezelfde gedempte
-	   tint als de rest van de balk, met een streepje eronder dat zegt dat er
-	   uitleg achter zit. Geel zou hier alarm slaan over iets wat volkomen
-	   normaal is vlak na de wizard. */
+	/* Not yet connected is neither a fault nor a promise. The same muted tone as
+	   the rest of the bar, with an underline saying there is an explanation behind
+	   it. Yellow would raise an alarm here about something entirely normal just
+	   after the wizard. */
 	.afwachtend {
 		color: var(--text-2);
 		text-decoration: underline dotted;
 		text-underline-offset: 3px;
 	}
-	/* Standen van vóór de stilte: leesbaar, maar niet meer als feit. */
-	.oud { opacity: 0.55; }
+	/* Positions from before the silence: readable, but no longer as fact. */
+	.stale { opacity: 0.55; }
 	b {
 		color: var(--text-1);
 		font-weight: 400;
@@ -383,11 +386,11 @@
 		height: 14px;
 		background: var(--line);
 	}
-	/* De voortgang in cijfers: percentage vet, resterend vet, totaal gedempt —
-	   drie getallen naast elkaar lezen anders als één brij. */
-	.tijd { white-space: nowrap; }
+	/* The progress in figures: percentage bold, remaining bold, total muted —
+	   three numbers side by side otherwise read as one mush. */
+	.time { white-space: nowrap; }
 	.pct { margin-right: var(--space-2); }
-	.van { color: var(--text-2); }
+	.of { color: var(--text-2); }
 
 	.right {
 		margin-left: auto;

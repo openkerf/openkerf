@@ -1,53 +1,59 @@
 /**
- * Het ontwerp zoals het canvas het tekent.
+ * The design as the canvas draws it.
  *
- * Geometrie komt in de interne eenheid van de engine (Tat, 65535 per inch) als
- * SVG-paddata. Omrekenen zou betekenen dat we padstrings moeten herschrijven;
- * in plaats daarvan schaalt het canvas één keer met `units_per_mm`.
+ * Geometry arrives in the engine's internal unit (Tat, 65535 per inch) as SVG
+ * path data. Converting it would mean rewriting path strings; instead the canvas
+ * scales once with `units_per_mm`.
  */
 
 /**
- * Hoe een vorm heet in de app.
+ * What a shape is called in the app.
  *
- * De engine geeft er een label bij als "Rect meerk40t:5 #0000ff": het type in
- * het Engels, het interne id en de streekkleur. Dat stond zo in het paneel, en
- * paste er niet in — je las "Rect meerk40t:5 #00…". Het zegt bovendien niets wat
- * je niet al ziet, en de twee dingen die het wél verklapt (een intern id, een
- * kleur die niet de laagkleur is) zijn precies de twee dingen die een gebruiker
- * niet hoeft te weten.
+ * The engine gives it a label like "Rect meerk40t:5 #0000ff": the type, the
+ * internal id and the stroke colour. That is how it appeared in the panel, and it
+ * did not fit — you read "Rect meerk40t:5 #00…". It also says nothing you cannot
+ * already see, and the two things it *does* give away (an internal id, a colour
+ * that is not the layer colour) are exactly the two things a user does not need to
+ * know.
  *
- * Wat een vorm hier heet: wat hij ís, en bij tekst wat er staat.
+ * What a shape is called here: what it *is*, and for text what it says.
  */
-const SOORT: Record<string, string> = {
-	'elem rect': 'Rechthoek',
-	'elem ellipse': 'Ellips',
-	'elem circle': 'Cirkel',
-	'elem line': 'Lijn',
-	'elem polyline': 'Gebroken lijn',
-	'elem path': 'Pad',
-	'elem point': 'Punt',
-	'elem text': 'Tekst',
-	'elem image': 'Afbeelding',
-	group: 'Groep'
+import { t, type MessageKey } from './i18n/core.ts';
+
+const KINDS: Record<string, MessageKey> = {
+	'elem rect': 'shape.rect',
+	'elem ellipse': 'shape.ellipse',
+	'elem circle': 'shape.circle',
+	'elem line': 'shape.line',
+	'elem polyline': 'shape.polyline',
+	'elem path': 'shape.path',
+	'elem point': 'shape.point',
+	'elem text': 'shape.text',
+	'elem image': 'shape.image',
+	group: 'shape.group'
 };
 
-export function elementNaam(element: {
+export function elementName(element: {
 	type: string;
 	text: { text: string } | null;
 	image?: unknown;
 	label?: string;
 }): string {
 	if (element.text?.text) {
-		const kort = element.text.text.trim();
-		return `Tekst “${kort.length > 22 ? kort.slice(0, 21) + '…' : kort}”`;
+		const short = element.text.text.trim();
+		return t('shape.textNamed', {
+			text: short.length > 22 ? short.slice(0, 21) + '…' : short
+		});
 	}
-	if (element.image) return 'Afbeelding';
-	const soort = SOORT[element.type];
-	if (soort) return soort;
-	// Onbekend type: het engine-label is dan beter dan niets, maar zonder het
-	// interne id en de kleurcode erachter.
-	const schoon = (element.label ?? element.type).replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '').trim();
-	return schoon || element.type;
+	if (element.image) return t('shape.image');
+	const kind = KINDS[element.type];
+	if (kind) return t(kind);
+	// Unknown type: the engine's label is better than nothing then, but without the
+	// internal id and the colour code behind it.
+	const clean = (element.label ?? element.type)
+		.replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '')
+		.trim();
+	return clean || element.type;
 }
 
 export type DesignElement = {
@@ -60,13 +66,13 @@ export type DesignElement = {
 	bounds: [number, number, number, number] | null;
 	path: string;
 	/**
-	 * Uit hoeveel losse stukken de vorm bestaat. Een CAD-export is vaak één pad
-	 * met tientallen panelen erin; meer dan 1 betekent dat splitsen iets doet.
+	 * How many loose pieces the shape consists of. A CAD export is often one path
+	 * with dozens of panels in it; more than 1 means splitting does something.
 	 */
 	subpaths: number;
-	/** Groep waar dit element in zit; een raster is één groep. */
+	/** The group this element is in; a grid is one group. */
 	group_id: string | null;
-	/** Gezet voor vector-tekst: de bron waaruit het pad gerenderd is. */
+	/** Set for vector text: the source the path was rendered from. */
 	text: {
 		text: string;
 		font: string;
@@ -74,9 +80,9 @@ export type DesignElement = {
 		spacing: number;
 		align: 'start' | 'middle' | 'end' | string;
 	} | null;
-	/** Gezet voor een lijn: de twee eindpunten, want een lijn is geen kader. */
+	/** Set for a line: the two end points, because a line is not a box. */
 	line: { x1_mm: number; y1_mm: number; x2_mm: number; y2_mm: number } | null;
-	/** Gezet voor een afbeelding: kader en resolutie. */
+	/** Set for an image: frame and resolution. */
 	image: {
 		x_mm: number;
 		y_mm: number;
@@ -85,13 +91,13 @@ export type DesignElement = {
 		pixels: [number, number] | null;
 		dpi: number | null;
 	} | null;
-	/** Hatch of wobble waar dit element in zit. */
+	/** The hatch or wobble this element is part of. */
 	effect: { id: string | null; type: string; label: string } | null;
 	/**
-	 * Hoe de vorm staat: de hoek in graden binnen [0, 360) en of hij
-	 * gespiegeld is. Komt uit de matrix van de engine, dus het is de stand van
-	 * het document en geen optelsom van wat het paneel toevallig gestuurd
-	 * heeft. Null als de matrix niets prijsgeeft.
+	 * How the shape sits: the angle in degrees within [0, 360) and whether it is
+	 * mirrored. It comes from the engine's matrix, so it is the state of the
+	 * document and not a running total of what the panel happened to send. Null when
+	 * the matrix gives nothing away.
 	 */
 	pose: { angle_deg: number; mirrored: boolean } | null;
 	operation_id: string | null;
@@ -106,17 +112,17 @@ export type DesignOperation = {
 	speed: number | null;
 	power: number | null;
 	passes: number | null;
-	/** Alleen zinvol bij raster- en afbeeldingslagen. */
+	/** Only meaningful on grid and image layers. */
 	dpi: number | null;
 	overscan: string | null;
 	bidirectional: boolean;
-	/** Air assist tijdens deze laag (besluit B11). */
+	/** Air assist during this layer (decision B11). */
 	air_assist: boolean;
-	/** Hoeveel de Z-as per pass zakt, in mm. `null` is uit. */
+	/** How far the Z axis drops per pass, in mm. `null` is off. */
 	z_step_mm: number | null;
 	output: boolean;
 	element_ids: string[];
-	/** Gezet als deze laag een cel van een testraster is. */
+	/** Set when this layer is a cell of a test grid. */
 	grid?: {
 		grid_id: number;
 		row: number;
@@ -128,19 +134,19 @@ export type DesignOperation = {
 
 export type Design = {
 	units_per_mm: number;
-	/** Zijn er wijzigingen sinds het laatst opslaan of openen? */
+	/** Are there changes since the last save or open? */
 	dirty: boolean;
 	elements: DesignElement[];
 	operations: DesignOperation[];
 };
 
 /**
- * Wat een paletkleur op deze machine het laatst deed (besluit B2).
+ * What a palette colour last did on this machine (decision B2).
  *
- * Let op het verschil met een preset: dit hangt aan machine + kleur en draagt
- * geen herkomst. Een preset hangt aan machine + materiaal + dikte en zegt dat
- * er ooit iets gebrand is. De UI moet dat uit elkaar houden, want gewoonte is
- * geen bewijs.
+ * Note the difference from a preset: this hangs on machine + colour and carries no
+ * provenance. A preset hangs on machine + material + thickness and says something
+ * was once burned. The UI has to keep those apart, because habit is not
+ * evidence.
  */
 export type PaletteMemory = {
 	speed_mm_s?: number;
@@ -156,17 +162,17 @@ export type PaletteInfo = {
 	colors: { color: string; memory: PaletteMemory | null }[];
 };
 
-/** Vaste laagkleuren uit DESIGN-SYSTEM.md, gebruikt als een operatie er geen heeft. */
+/** Fixed layer colours from DESIGN-SYSTEM.md, used when an operation has none. */
 export const LAYER_COLORS = readLayerColors();
 
 /**
- * De laagkleuren komen uit tokens.css, zodat canvas en paneel dezelfde bron
- * lezen — dat is wat het design system voorschrijft. Buiten de browser (bij
- * het bouwen) valt hij terug op de reeks zoals hij daar staat.
+ * The layer colours come from tokens.css, so that canvas and panel read the same
+ * source — which is what the design system prescribes. Outside the browser (during
+ * the build) it falls back to the series as it stands there.
  */
 function readLayerColors(): string[] {
-	// @tokens-mirror: exacte spiegel van --layer-1..10 in tokens.css. Alleen in
-	// gebruik tijdens het bouwen, wanneer er geen document is om uit te lezen.
+	// @tokens-mirror: an exact mirror of --layer-1..10 in tokens.css. Only in use
+	// during the build, when there is no document to read from.
 	const fallback = [
 		'#E5484D', '#F76B15', '#FFC53D', '#0F9B32', '#12A594',
 		'#0090FF', '#8E4EC6', '#E93D82', '#8D6E63', '#607D8B'
@@ -180,35 +186,35 @@ function readLayerColors(): string[] {
 }
 
 /**
- * Een laagkleur leesbaar houden op het bed waar hij op ligt.
+ * Keeping a layer colour readable on the bed it lies on.
  *
- * De meeste geïmporteerde tekeningen zijn zwart. Op het donkere bed is zwart op
- * zwart, en dan zie je de omtrek van je eigen werkstuk niet meer. Een andere
- * kleur kiezen mag niet — de laagkleur is van de gebruiker — dus schuiven we
- * dezelfde kleur op in helderheid tot hij loskomt van de achtergrond. Zwart
- * wordt grijs, donkerblauw wordt blauw; de laag blijft herkenbaar.
+ * Most imported drawings are black. On the dark bed that is black on black, and
+ * then you can no longer see the outline of your own workpiece. Choosing a
+ * different colour is not allowed — the layer colour belongs to the user — so we
+ * shift the same colour in luminance until it comes loose from the background.
+ * Black becomes grey, dark blue becomes blue; the layer stays recognisable.
  *
- * De drempel is 3,0 en niet lager: een lijn op het bed is een grafisch object,
- * en WCAG 1.4.11 vraagt daar 3:1 voor. Op 2,6 kwamen precies de kleuren
- * ongemoeid door die het probleem zijn — paars (--layer-7) haalt 2,78 op het
- * donkere bed en oranje 2,97 op het lichte, en die werden dus níet bijgesteld
- * terwijl ze onder de norm zitten.
+ * The threshold is 3.0 and no lower: a line on the bed is a graphical object, and
+ * WCAG 1.4.11 asks 3:1 for that. At 2.6 exactly the colours that are the problem
+ * came through untouched — purple (--layer-7) gets 2.78 on the dark bed and orange
+ * 2.97 on the light one, so those were *not* adjusted while sitting under the
+ * norm.
  */
-const DREMPEL = 3.0;
+const THRESHOLD = 3.0;
 
-function ontleed(kleur: string): [number, number, number] | null {
-	const hex = kleur.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+function parseColour(colour: string): [number, number, number] | null {
+	const hex = colour.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
 	if (hex) {
 		const h = hex[1];
-		const breed = h.length === 3 ? h.split('').map((c) => c + c) : h.match(/../g)!;
-		return breed.map((c) => parseInt(c, 16)) as [number, number, number];
+		const wide = h.length === 3 ? h.split('').map((c) => c + c) : h.match(/../g)!;
+		return wide.map((c) => parseInt(c, 16)) as [number, number, number];
 	}
-	const rgb = kleur.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+	const rgb = colour.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
 	if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
 	return null;
 }
 
-function helderheid([r, g, b]: [number, number, number]) {
+function luminance([r, g, b]: [number, number, number]) {
 	const k = [r, g, b].map((v) => {
 		const s = v / 255;
 		return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
@@ -216,96 +222,92 @@ function helderheid([r, g, b]: [number, number, number]) {
 	return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2];
 }
 
-function verschil(a: [number, number, number], b: [number, number, number]) {
-	const la = helderheid(a);
-	const lb = helderheid(b);
+function contrast(a: [number, number, number], b: [number, number, number]) {
+	const la = luminance(a);
+	const lb = luminance(b);
 	return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-/** De bedkleur van het actieve thema, opnieuw gelezen zodra dat wisselt. */
-let bedKleur: { thema: string; rgb: [number, number, number] } | null = null;
+/** The bed colour of the active theme, read again as soon as that switches. */
+let bedColour: { theme: string; rgb: [number, number, number] } | null = null;
 
 function bed(): [number, number, number] | null {
 	if (typeof window === 'undefined') return null;
-	const thema = document.documentElement.dataset.theme ?? '';
-	if (bedKleur?.thema === thema) return bedKleur.rgb;
-	const rgb = ontleed(getComputedStyle(document.documentElement).getPropertyValue('--bed'));
+	const theme = document.documentElement.dataset.theme ?? '';
+	if (bedColour?.theme === theme) return bedColour.rgb;
+	const rgb = parseColour(getComputedStyle(document.documentElement).getPropertyValue('--bed'));
 	if (!rgb) return null;
-	bedKleur = { thema, rgb };
+	bedColour = { theme, rgb };
 	return rgb;
 }
 
 /**
- * Uitkomsten onthouden per kleur en thema.
+ * Remember the outcome per colour and theme.
  *
- * Deze functie draait één keer per element per hertekening, en bij een
- * themawissel opnieuw voor álles. Op vijfduizend paden kostte dat 145 ms —
- * boven de grens van de stopwatch, en zichtbaar als een hapering. De uitkomst
- * hangt alleen af van de kleur en de bedkleur, en een ontwerp heeft hooguit
- * een handvol verschillende laagkleuren, dus onthouden scheelt bijna al het
- * werk. De sleutel draagt het thema, zodat een wissel niet de oude waarde
- * teruggeeft.
+ * This function runs once per element per redraw, and again for *everything* on a
+ * theme switch. On five thousand paths that cost 145 ms — over the stopwatch bound,
+ * and visible as a stutter. The outcome depends only on the colour and the bed
+ * colour, and a design has a handful of different layer colours at most, so
+ * remembering saves nearly all the work. The key carries the theme, so a switch
+ * does not hand back the old value.
  */
-const geheugen = new Map<string, string>();
+const remembered = new Map<string, string>();
 
-export function leesbaar(kleur: string): string {
-	const thema = typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? '');
-	const sleutel = `${thema}|${kleur}`;
-	const bekend = geheugen.get(sleutel);
-	if (bekend !== undefined) return bekend;
-	const uitkomst = bereken(kleur);
-	// Een ontwerp heeft een handvol kleuren; deze grens is er alleen zodat een
-	// pathologisch geval het geheugen niet opvreet.
-	if (geheugen.size < 512) geheugen.set(sleutel, uitkomst);
-	return uitkomst;
+export function readable(colour: string): string {
+	const theme = typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? '');
+	const key = `${theme}|${colour}`;
+	const known = remembered.get(key);
+	if (known !== undefined) return known;
+	const outcome = computeReadable(colour);
+	// A design has a handful of colours; this bound is only here so a pathological
+	// case does not eat the memory.
+	if (remembered.size < 512) remembered.set(key, outcome);
+	return outcome;
 }
 
-function bereken(kleur: string): string {
-	const ondergrond = bed();
-	const eigen = ontleed(kleur);
-	if (!ondergrond || !eigen) return kleur;
-	if (verschil(eigen, ondergrond) >= DREMPEL) return kleur;
-	// Weg van het bed: op een donker bed naar wit, op een licht bed naar zwart.
-	const pool = helderheid(ondergrond) < 0.2 ? 255 : 0;
-	for (let deel = 15; deel <= 75; deel += 5) {
-		const f = deel / 100;
-		const gemengd = eigen.map((c) => c + (pool - c) * f) as [number, number, number];
-		if (verschil(gemengd, ondergrond) >= DREMPEL) {
-			return `rgb(${gemengd.map((c) => Math.round(c)).join(' ')})`;
+function computeReadable(colour: string): string {
+	const background = bed();
+	const own = parseColour(colour);
+	if (!background || !own) return colour;
+	if (contrast(own, background) >= THRESHOLD) return colour;
+	// Away from the bed: towards white on a dark bed, towards black on a light one.
+	const pool = luminance(background) < 0.2 ? 255 : 0;
+	for (let part = 15; part <= 75; part += 5) {
+		const f = part / 100;
+		const mixed = own.map((c) => c + (pool - c) * f) as [number, number, number];
+		if (contrast(mixed, background) >= THRESHOLD) {
+			return `rgb(${mixed.map((c) => Math.round(c)).join(' ')})`;
 		}
 	}
 	return pool === 255 ? 'rgb(235 235 235)' : 'rgb(30 30 30)';
 }
 
 /**
- * De inkt die op een laagkleur past — zwart of wit, wat het verst weg staat.
+ * The ink that suits a layer colour — black or white, whichever is furthest away.
  *
- * Het nummer op een laagchip stond vast op --on-color, dus altijd wit. Op geel
- * (--layer-3) is dat 1,58:1 en dan lees je het cijfer domweg niet. Voor acht
- * van de tien laagkleuren wint zwart, voor paars en bruin wint wit; die keuze
- * hangt aan de kleur en niet aan het thema, want de chip toont de laagkleur in
- * beide thema's ongewijzigd.
+ * The number on a layer chip was fixed at --on-color, so always white. On yellow
+ * (--layer-3) that is 1.58:1 and then you simply cannot read the digit. For eight
+ * of the ten layer colours black wins, for purple and brown white does; that choice
+ * hangs on the colour and not on the theme, because the chip shows the layer colour
+ * unchanged in both themes.
  */
-export function inktOp(kleur: string): string {
-	const eigen = ontleed(kleur);
-	if (!eigen) return 'var(--on-color)';
-	const wit = verschil(eigen, [255, 255, 255]);
-	const zwart = verschil(eigen, [0, 0, 0]);
-	return wit >= zwart ? 'var(--on-color)' : 'var(--void)';
+export function inkOn(colour: string): string {
+	const own = parseColour(colour);
+	if (!own) return 'var(--on-color)';
+	const white = contrast(own, [255, 255, 255]);
+	const black = contrast(own, [0, 0, 0]);
+	return white >= black ? 'var(--on-color)' : 'var(--void)';
 }
 
 /**
- * Het laagnummer zoals het overal in de app staat (gat J7).
+ * The layer number as it appears everywhere in the app (gap J7).
  *
- * Eén bron, want dit getal komt op drie plekken voor: de chip in de
- * lagenlijst, het label bij de vorm op het canvas en de chip in de pre-flight.
- * Liepen die uiteen, dan wijst het vangnet voor kleurenblindheid naar de
- * verkeerde laag — erger dan geen nummer.
- *
- * Rastercellen tellen niet mee: die horen bij één testbord, staan in de lijst
- * als één regel en hebben geen eigen plek in de brandvolgorde.
+ * One source, because this number occurs in three places: the chip in the layer
+ * list, the label beside the shape on the canvas and the chip in the preflight. If
+ * those drifted, the safety net for colour blindness would point at the wrong layer
+ * — worse than no number.
  */
-export function laagNummer(
+export function layerNumber(
 	design: { operations?: DesignOperation[] } | null | undefined,
 	operationId: string | null | undefined
 ): number | null {
@@ -314,17 +316,17 @@ export function laagNummer(
 	return index < 0 ? null : index + 1;
 }
 
-/** Steekt deze omhullende (in mm) buiten een kader van `breedte × hoogte`? */
-export function buitenKader(
+/** Does this bounding box (in mm) stick out of a frame of `width × height`? */
+export function outsideFrame(
 	box: { x: number; y: number; width: number; height: number },
-	kader: { width: number; height: number },
-	speling = 0.5
+	frame: { width: number; height: number },
+	slack = 0.5
 ): boolean {
 	return (
-		box.x < -speling ||
-		box.y < -speling ||
-		box.x + box.width > kader.width + speling ||
-		box.y + box.height > kader.height + speling
+		box.x < -slack ||
+		box.y < -slack ||
+		box.x + box.width > frame.width + slack ||
+		box.y + box.height > frame.height + slack
 	);
 }
 
@@ -339,21 +341,21 @@ export class DesignStore {
 	loading = $state(false);
 	selectedIds = $state<string[]>([]);
 	/**
-	 * Voorvertoning tijdens het slepen, in mm. Het canvas schrijft hem, de
-	 * bovenbalk en statusbalk lezen hem — zo lopen de coördinaten mee terwijl
-	 * je sleept, zonder dat er per muisbeweging een opdracht naar de engine gaat.
+	 * A preview while dragging, in mm. The canvas writes it, the top bar and status
+	 * bar read it — that is how the coordinates keep up while you drag, without a
+	 * command going to the engine per mouse move.
 	 */
 	preview = $state<{ x: number; y: number; width: number; height: number } | null>(null);
-	/** Gezet door de pagina om de URL mee te laten lopen met de selectie. */
+	/** Set by the page to make the URL follow the selection. */
 	onSelect: ((ids: string[]) => void) | null = null;
 
 	/**
-	 * Het actieve thema, als reactieve waarde.
+	 * The active theme, as a reactive value.
 	 *
-	 * Lijnkleuren worden tegen de bedkleur afgewogen (zie `leesbaar`), en die
-	 * verandert bij het omschakelen. CSS-variabelen wisselen vanzelf mee, maar
-	 * een kleur die wij hebben uitgerekend staat als vaste waarde in de DOM —
-	 * zonder dit bleef het canvas na het omschakelen op de oude kleuren staan.
+	 * Stroke colours are weighed against the bed colour (see `readable`), and that
+	 * changes when the theme is switched. CSS variables switch along by themselves,
+	 * but a colour we have computed sits in the DOM as a fixed value — without this
+	 * the canvas kept the old colours after a switch.
 	 */
 	theme = $state(typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? ''));
 
@@ -365,14 +367,14 @@ export class DesignStore {
 	}
 
 	#pending = false;
-	/** Het herintredingsslot van `load()`; bewust geen `$state` — zie load(). */
+	/** The re-entry lock of `load()`; deliberately not `$state` — see load(). */
 	#busy = false;
 
 	get elements() {
 		return this.design?.elements ?? [];
 	}
 
-	/** Eerste selectie; voor panelen die één element tonen. */
+	/** Are there unsaved changes? */
 	get dirty() {
 		return this.design?.dirty ?? false;
 	}
@@ -398,8 +400,8 @@ export class DesignStore {
 	}
 
 	/**
-	 * Een groep is één ding. Klik je een lid aan, dan krijg je de hele groep —
-	 * anders sleep je een los vierkant uit een testraster.
+	 * A group is one thing. Click a member and you get the whole group — otherwise
+	 * you drag a single square out of a test grid.
 	 */
 	#expand(id: string): string[] {
 		const element = this.elements.find((e) => e.id === id);
@@ -415,11 +417,11 @@ export class DesignStore {
 	}
 
 	/**
-	 * Meerdere elementen in één keer, bijvoorbeeld uit een sleepkader.
+	 * Several elements at once, from a drag box for instance.
 	 *
-	 * Niet select() gevolgd door toggle(): die tweede zou een groep die de
-	 * eerste net toevoegde meteen weer weghalen, waardoor een sleepkader over
-	 * een groep niets leek te selecteren.
+	 * Not select() followed by toggle(): the second would immediately remove a group
+	 * the first had just added, which made a drag box over a group look as if it
+	 * selected nothing.
 	 */
 	selectMany(ids: string[]) {
 		const expanded = new Set<string>();
@@ -430,7 +432,7 @@ export class DesignStore {
 		this.onSelect?.(this.selectedIds);
 	}
 
-	/** Shift-klik: toevoegen of juist weghalen. */
+	/** Shift-click: add, or take away again. */
 	toggle(id: string) {
 		const members = this.#expand(id);
 		const inside = members.every((m) => this.selectedIds.includes(m));
@@ -440,14 +442,14 @@ export class DesignStore {
 		this.onSelect?.(this.selectedIds);
 	}
 
-	/** Wat de gebruiker nú ziet: de sleep-voorvertoning, anders de selectie. */
+	/** What the user sees right now: the drag preview, otherwise the selection. */
 	get liveBox() {
 		return this.preview ?? this.selectedSize;
 	}
 
 	/**
-	 * Omhullende van de hele selectie in mm. Bij meerdere elementen is dat het
-	 * gezamenlijke kader — precies waar de engine ook op werkt bij een resize.
+	 * The bounding box of the whole selection in mm. With several elements that is
+	 * the joint box — exactly what the engine works on during a resize too.
 	 */
 	get selectedSize(): { x: number; y: number; width: number; height: number } | null {
 		const perMm = this.design?.units_per_mm;
@@ -470,36 +472,35 @@ export class DesignStore {
 	}
 
 	/**
-	 * Kleur per operatie: eigen kleur, anders een vaste laagkleur op volgorde.
+	 * The colour per operation: its own, otherwise a fixed layer colour in order.
 	 *
-	 * De engine geeft soms een kleur met alfa mee (`#0000ff00`, volledig
-	 * doorzichtig) voor een operatie die nooit getekend werd. Die is als
-	 * laagkleur onbruikbaar — dan pakken we de palet-kleur op volgorde.
+	 * The engine sometimes hands over a colour with alpha (`#0000ff00`, fully
+	 * transparent) for an operation that was never drawn. That is unusable as a layer
+	 * colour — then we take the palette colour in order.
 	 */
 	colorFor(operationId: string | null): string {
-		// Aanraken zodat Svelte deze kleur opnieuw uitrekent bij een themawissel.
+		// Touched so Svelte recomputes this colour on a theme switch.
 		void this.theme;
 		const operations = this.operations;
 		const index = operations.findIndex((o) => o.id === operationId);
 		if (index < 0) return 'var(--text-2)';
-		const eigen = operations[index].color;
-		const bruikbaar =
-			eigen && !(/^#[0-9a-f]{6}0{2}$/i.test(eigen.trim()));
-		return leesbaar(bruikbaar ? eigen : LAYER_COLORS[index % LAYER_COLORS.length]);
+		const own = operations[index].color;
+		const usable = own && !/^#[0-9a-f]{6}0{2}$/i.test(own.trim());
+		return readable(usable ? own : LAYER_COLORS[index % LAYER_COLORS.length]);
 	}
 
 	/**
-	 * Lagen die je even niet wilt zien (besluit B4).
+	 * Layers you do not want to see for a moment (decision B4).
 	 *
-	 * "Zichtbaar" is iets anders dan "brandt mee". Een uitlijnkader dat je op
-	 * het canvas houdt zonder het te branden, is een standaardtruc; met één
-	 * schakelaar voor allebei kan dat niet. `output` staat in de engine en
-	 * overleeft dus alles — dit is een kijkstand en blijft hier.
+	 * "Visible" is something other than "burns along". Keeping an alignment box on
+	 * the canvas without burning it is a standard trick; with one switch for both
+	 * that is impossible. `output` lives in the engine and therefore survives
+	 * everything — this is a way of looking and stays here.
 	 *
-	 * Bewust niet bewaard in localStorage: laag-id's worden per document
-	 * uitgedeeld en hergebruikt, dus een bewaarde lijst kan bij het volgende
-	 * ontwerp de verkeerde laag onzichtbaar maken. Een verdwenen vorm zonder
-	 * aanwijsbare reden is een erger kwaad dan opnieuw op het oog klikken.
+	 * Deliberately not kept in localStorage: layer ids are handed out per document
+	 * and reused, so a stored list could make the wrong layer invisible in the next
+	 * design. A shape that has vanished for no visible reason is a worse evil than
+	 * clicking the eye again.
 	 */
 	hiddenLayers = $state<string[]>([]);
 
@@ -514,15 +515,15 @@ export class DesignStore {
 	}
 
 	/**
-	 * Hoe een element op het bed getekend wordt.
+	 * How an element is drawn on the bed.
 	 *
-	 * In MeerK40t kan één element in meerdere operaties zitten (de engine
-	 * classificeert automatisch op kleur). "De laag" bestaat dus strikt genomen
-	 * niet — daarom telt de bovenste, net als bij overlappende lagen in elk
-	 * ander tekenprogramma.
+	 * In MeerK40t one element can sit in more than one operation (the engine
+	 * classifies automatically by colour). So "the layer" strictly speaking does not
+	 * exist — which is why the topmost one counts, as with overlapping layers in any
+	 * other drawing program.
 	 *
-	 * Een element zonder laag wordt gestippeld grijs: dat is geen ontbrekende
-	 * kleur maar een waarschuwing. Zo'n vorm wordt niet gebrand.
+	 * An element without a layer is drawn dotted grey: that is not a missing colour
+	 * but a warning. Such a shape does not get burned.
 	 */
 	strokeFor(element: {
 		operation_ids?: string[];
@@ -531,26 +532,26 @@ export class DesignStore {
 	}): {
 		color: string;
 		dashed: boolean;
-		/** Laag staat op "brandt niet mee": wel te zien, niet te branden. */
+		/** The layer is set to "does not burn": visible, but not burned. */
 		dimmed: boolean;
-		/** Vals als élke laag van dit element op onzichtbaar staat. */
+		/** False when *every* layer of this element is set to hidden. */
 		visible: boolean;
 		/**
-		 * De vorm wordt als vlak gebrand, niet als lijn (gat R1).
+		 * The shape is burned as an area, not as a line (gap R1).
 		 *
-		 * Waar bij een snij- of graveerlaag de kop de contour volgt, veegt een
-		 * rasterlaag het vlák weg. Dat als omtrek tonen is niet zomaar minder
-		 * mooi — het is een ander resultaat dan er uit de machine komt.
+		 * Where on a cut or engrave layer the head follows the contour, a grid
+		 * layer sweeps the *area* away. Showing that as an outline is not merely less
+		 * pretty — it is a different result from what comes out of the machine.
 		 *
-		 * Twee voorwaarden, want beide bepalen wat er brandt: de laag moet een
-		 * rasterlaag zijn én de vorm moet een vulling hebben. Een vorm zonder
-		 * vulling brandt óók in een rasterlaag alleen zijn omtrek — nagemeten in
-		 * `test_an_unfilled_shape_burns_its_outline_and_not_its_middle` — dus
-		 * die blijft hier een lijn.
+		 * Two conditions, because both decide what burns: the layer has to be a grid
+		 * layer *and* the shape has to have a fill. A shape without a fill burns only
+		 * its outline in a grid layer too — measured in
+		 * `test_an_unfilled_shape_burns_its_outline_and_not_its_middle` — so that one
+		 * stays a line here.
 		 */
 		filled: boolean;
 	} {
-		const los = {
+		const loose = {
 			color: 'var(--text-2)',
 			dashed: true,
 			dimmed: false,
@@ -562,46 +563,45 @@ export class DesignStore {
 			: element.operation_id
 				? [element.operation_id]
 				: [];
-		if (!ids.length) return los;
-		const volgorde = this.operations;
-		// De bovenste laag is de eerste in de boom, niet de eerste in de lijst
-		// die het element toevallig meekreeg. Onzichtbare lagen tellen niet mee
-		// voor de kleur: anders bepaalt een laag die je niet ziet hoe het eruit
-		// ziet.
-		let beste = -1;
-		let bestaat = false;
+		if (!ids.length) return loose;
+		const order = this.operations;
+		// The topmost layer is the first in the tree, not the first in the list the
+		// element happened to be given. Hidden layers do not count towards the colour:
+		// otherwise a layer you cannot see decides how it looks.
+		let best = -1;
+		let exists = false;
 		for (const id of ids) {
-			const i = volgorde.findIndex((o) => o.id === id);
+			const i = order.findIndex((o) => o.id === id);
 			if (i < 0) continue;
-			bestaat = true;
+			exists = true;
 			if (this.isLayerHidden(id)) continue;
-			if (beste < 0 || i < beste) beste = i;
+			if (best < 0 || i < best) best = i;
 		}
-		if (!bestaat) return los;
-		// Wel in een laag, maar in geen enkele zichtbare: dan tekenen we hem niet.
-		if (beste < 0) return { ...los, dashed: false, visible: false };
+		if (!exists) return loose;
+		// In a layer, but in no visible one: then we do not draw it.
+		if (best < 0) return { ...loose, dashed: false, visible: false };
 		return {
-			color: this.colorFor(volgorde[beste].id),
+			color: this.colorFor(order[best].id),
 			dashed: false,
-			dimmed: !volgorde[beste].output,
+			dimmed: !order[best].output,
 			visible: true,
-			filled: volgorde[beste].type === 'op raster' && Boolean(element.fill)
+			filled: order[best].type === 'op raster' && Boolean(element.fill)
 		};
 	}
 
-	/** Loopt op bij elke herlaadslag; het canvas hangt hem aan afbeeldings-URL's
-	 *  zodat een bewerkte afbeelding niet uit de browsercache komt. */
+	/** Goes up on every reload; the canvas hangs it on image URLs so that an edited
+	 *  image does not come out of the browser cache. */
 	revision = $state(0);
 
-	/** Het palet met zijn geheugen; `null` zolang het nog niet geladen is. */
+	/** The palette with its memory; `null` as long as it has not loaded yet. */
 	palette = $state<PaletteInfo | null>(null);
 
 	/**
-	 * Wat een laag op déze machine kan (besluit B11).
+	 * What a layer can do on *this* machine (decision B11).
 	 *
-	 * Alleen wat de driver kent, komt op het scherm — dezelfde regel als bij de
-	 * Z-as. Standaard alles uit: liever een schakelaar die er even niet staat
-	 * dan een schakelaar die niets doet.
+	 * Only what the driver knows reaches the screen — the same rule as with the Z
+	 * axis. Everything off by default: better a switch that is briefly absent than a
+	 * switch that does nothing.
 	 */
 	layerCapabilities = $state<{ air_assist: boolean; z_step: boolean }>({
 		air_assist: false,
@@ -613,28 +613,28 @@ export class DesignStore {
 			const response = await fetch('/api/design/capabilities');
 			if (response.ok) this.layerCapabilities = await response.json();
 		} catch {
-			// Onbereikbaar is niet hetzelfde als "kan het niet", maar het scherm
-			// moet iets tonen — en dan liever niets dan een dode schakelaar.
+			// Unreachable is not the same as "cannot do it", but the screen has to show
+			// something — and then rather nothing than a dead switch.
 		}
 	}
 
-	/** Het laagnummer zoals de chip het toont; zie `laagNummer` (gat J7). */
+	/** The layer number as the chip shows it; see `layerNumber` (gap J7). */
 	numberFor(operationId: string | null): number | null {
-		return laagNummer(this.design, operationId);
+		return layerNumber(this.design, operationId);
 	}
 
-	/** Wat deze kleur eerder deed, of niets als hij nog nooit gebruikt is. */
+	/** What this colour did before, or nothing when it has never been used. */
 	memoryFor(color: string): PaletteMemory | null {
-		const gezocht = color.trim().toLowerCase();
-		return this.palette?.colors.find((c) => c.color === gezocht)?.memory ?? null;
+		const wanted = color.trim().toLowerCase();
+		return this.palette?.colors.find((c) => c.color === wanted)?.memory ?? null;
 	}
 
-	/** De laag die deze kleur nu draagt, als er een is. */
+	/** The layer that carries this colour now, if there is one. */
 	layerWithColor(color: string): DesignOperation | null {
-		const gezocht = color.trim().toLowerCase();
+		const wanted = color.trim().toLowerCase();
 		return (
 			this.operations.find(
-				(o) => !o.grid && (o.color ?? '').trim().toLowerCase() === gezocht
+				(o) => !o.grid && (o.color ?? '').trim().toLowerCase() === wanted
 			) ?? null
 		);
 	}
@@ -644,22 +644,21 @@ export class DesignStore {
 			const response = await fetch('/api/design/palette');
 			if (response.ok) this.palette = await response.json();
 		} catch {
-			// Geen geheugen is geen storing: de strook werkt ook zonder.
+			// No memory is not a fault: the strip works without it too.
 		}
 	}
 
 	async load() {
-		// Signalen komen in bursts binnen; één herlaadslag per burst is genoeg.
+		// Signals arrive in bursts; one reload per burst is enough.
 		//
-		// Het slot is met opzet géén `$state`. Er stond hier `this.loading`, en
-		// dat maakte van elke `$effect` die load() aanroept een lus: het effect
-		// leest `loading` mee als afhankelijkheid, load() zet hem op true, het
-		// effect wordt daarmee ongeldig en roept opnieuw aan — en zodra hij weer
-		// op false gaat, nog een keer. Eén getekende vorm was genoeg om het te
-		// starten, en daarna stopte het nooit meer: gemeten 300 tot 430
-		// verzoeken per seconde naar /api/design, ook nadat het werk weer
-		// weggegooid was. Een gewoon veld wordt niet gevolgd en breekt de kring.
-		// Meting: `node gauntlet/canvas-lus.mjs`.
+		// The lock is deliberately *not* `$state`. It used to be `this.loading`, and
+		// that turned every `$effect` calling load() into a loop: the effect reads
+		// `loading` as a dependency, load() sets it to true, the effect is thereby
+		// invalidated and calls again — and once it goes back to false, once more. One
+		// drawn shape was enough to start it, and after that it never stopped: measured
+		// 300 to 430 requests per second to /api/design, even after the work had been
+		// thrown away again. A plain field is not tracked and breaks the circle.
+		// Measurement: `node gauntlet/canvas-lus.mjs`.
 		if (this.#busy) {
 			this.#pending = true;
 			return;
@@ -671,20 +670,20 @@ export class DesignStore {
 			if (response.ok) {
 				this.design = await response.json();
 				this.revision += 1;
-				// Selecties die door een wijziging verdwenen zijn, laten we los;
-				// id's die er nog zijn blijven staan.
+				// Selections that a change made disappear are let go; ids that are still
+				// there stay.
 				const alive = new Set(this.elements.map((e) => e.id));
 				const kept = this.selectedIds.filter((id) => alive.has(id));
 				if (kept.length !== this.selectedIds.length) this.selectedIds = kept;
-				// Het geheugen loopt mee met de boom: een bijgestelde snelheid is
-				// meteen wat die kleur "nu doet", ook in de strook onder het canvas.
+				// The memory follows the tree: an adjusted speed is at once what that
+				// colour "does now", including in the strip under the canvas.
 				void this.loadPalette();
-				// En wat de machine kán: van machine wisselen verandert welke
-				// schakelaars er in een laagrij thuishoren (besluit B11).
+				// And what the machine can do: switching machines changes which switches
+				// belong in a layer row (decision B11).
 				void this.loadCapabilities();
 			}
 		} catch {
-			// Verbinding weg: de statusbalk meldt dat al, hier niets doen.
+			// No connection card: the status bar already reports that; do nothing here.
 		} finally {
 			this.#busy = false;
 			this.loading = false;

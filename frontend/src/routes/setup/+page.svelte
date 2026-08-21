@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import type { Machine } from '$lib/machines.svelte';
 
@@ -7,12 +8,11 @@
 
 	onMount(() => store.loadMachines());
 
-	// De engine maakt bij het opstarten zelf een lhystudios-apparaat aan, zodat
-	// de kernel altijd iets heeft om tegen te praten. Dat is geen machine van
-	// de gebruiker, en hem in deze lijst zetten als "In gebruik" leest als een
-	// apparaat dat je zelf hebt toegevoegd. We zetten hem apart met de reden
-	// erbij, in plaats van hem te verbergen: hij is wél actief, en dat moet je
-	// kunnen zien.
+	// The engine creates an lhystudios device itself at startup, so the kernel
+	// always has something to talk to. That is not a machine of the user's, and
+	// putting it in this list as "In use" reads as a device you added yourself. We
+	// set it apart with the reason, rather than hiding it: it *is* active, and that
+	// has to be visible.
 	let eigen = $derived(store.machines.filter((m) => m.configured !== false));
 	let placeholder = $derived(store.machines.find((m) => m.configured === false) ?? null);
 
@@ -24,13 +24,13 @@
 		if (await store.remove(machine.path)) await store.loadMachines();
 	}
 
-	// ------------------------------- machineprofiel uitwisselen (gat E5)
+	// ------------------------------- exchanging a machine profile (gap E5)
 	//
-	// LightBurn heeft `.lbdev`: een fabrikant levert een kant-en-klaar profiel
-	// mee, en wie een tweede computer inricht typt niets over. Zelfde vorm als
-	// de bibliotheek van B7 — eerst kijken wat erin zit, dan pas aanmaken. Een
-	// machineprofiel bepaalt waar de kop heen gaat; blind inladen wat iemand je
-	// mailde is één stap van een kop tegen zijn eindaanslag.
+	// LightBurn has `.lbdev`: a manufacturer ships a ready-made profile, and whoever
+	// sets up a second computer types nothing over. Same shape as the library of B7 —
+	// look at what is in it first, only then create. A machine profile decides where
+	// the head goes; loading what someone mailed you blind is one step away from a
+	// head against its end stop.
 
 	type Voorbeeld = {
 		profile: string;
@@ -45,19 +45,24 @@
 		exported_at: string | null;
 	};
 
-	/** De sleutels van de engine in woorden; "bedwidth" leest niemand als bed. */
-	const VELDNAAM: Record<string, string> = {
-		bedwidth: 'Bedbreedte',
-		bedheight: 'Bedhoogte',
-		interface: 'Verbinding',
-		address: 'Adres',
-		serial_port: 'Seriële poort',
-		port: 'Poort'
+	/** The engine's keys in words; nobody reads "bedwidth" as a bed. */
+	const VELDNAAM: Record<string, MessageKey> = {
+		bedwidth: 'setup.field.bedwidth',
+		bedheight: 'setup.field.bedheight',
+		interface: 'setup.field.interface',
+		address: 'setup.field.address',
+		serial_port: 'setup.field.serialPort',
+		port: 'setup.field.port'
 	};
 
-	let voorbeeld = $state<Voorbeeld | null>(null);
+	/** The name of a setting, or the engine's own key when we have no word for it. */
+	function veldnaam(key: string): string {
+		return key in VELDNAAM ? t(VELDNAAM[key]) : key;
+	}
+
+	let preview = $state<Voorbeeld | null>(null);
 	let profielFout = $state<string | null>(null);
-	let profielBezig = $state(false);
+	let profileBusy = $state(false);
 	let ingelezen = $state<string | null>(null);
 
 	function token(): Record<string, string> {
@@ -66,17 +71,17 @@
 	}
 
 	function exporteer(machine: Machine) {
-		const anker = document.createElement('a');
-		anker.href = `/api/machines/${encodeURIComponent(machine.path)}/export.openkerf-machine`;
-		anker.download = `${machine.label}.openkerf-machine`;
-		anker.click();
+		const anchor = document.createElement('a');
+		anchor.href = `/api/machines/${encodeURIComponent(machine.path)}/export.openkerf-machine`;
+		anchor.download = `${machine.label}.openkerf-machine`;
+		anchor.click();
 	}
 
 	async function kiesProfiel(bestand: File) {
-		voorbeeld = null;
+		preview = null;
 		ingelezen = null;
 		profielFout = null;
-		profielBezig = true;
+		profileBusy = true;
 		try {
 			const form = new FormData();
 			form.append('file', bestand);
@@ -88,61 +93,61 @@
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
 				profielFout =
-					typeof data?.detail === 'string' ? data.detail : `Inlezen mislukte (${response.status}).`;
+					typeof data?.detail === 'string'
+						? data.detail
+						: t('setup.import.failed', { status: response.status });
 				return;
 			}
-			voorbeeld = data;
+			preview = data;
 		} catch (e) {
-			profielFout = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			profielFout = t('error.network', { message: e instanceof Error ? e.message : e });
 		} finally {
-			profielBezig = false;
+			profileBusy = false;
 		}
 	}
 
 	async function neemProfiel() {
-		if (!voorbeeld) return;
-		profielBezig = true;
+		if (!preview) return;
+		profileBusy = true;
 		profielFout = null;
 		try {
 			const response = await fetch('/api/machines/import', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...token() },
-				body: JSON.stringify({ profile: voorbeeld.profile })
+				body: JSON.stringify({ profile: preview.profile })
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
 				profielFout =
 					typeof data?.detail === 'string'
 						? data.detail
-						: `Aanmaken mislukte (${response.status}).`;
+						: t('setup.create.failed', { status: response.status });
 				return;
 			}
-			ingelezen = `${data.label ?? voorbeeld.label} staat erbij${
-				data.skipped?.length
-					? ` — ${data.skipped.length} instelling${data.skipped.length === 1 ? '' : 'en'} kende deze versie niet en ${data.skipped.length === 1 ? 'is' : 'zijn'} overgeslagen`
-					: ''
-			}. Controleer het adres en de bedmaat voor je iets brandt.`;
-			voorbeeld = null;
+			ingelezen = data.skipped?.length
+				? t('setup.imported.skipped', {
+						label: data.label ?? preview.label,
+						n: data.skipped.length
+					})
+				: t('setup.imported', { label: data.label ?? preview.label });
+			preview = null;
 			await store.loadMachines();
 		} finally {
-			profielBezig = false;
+			profileBusy = false;
 		}
 	}
 </script>
 
-<svelte:head><title>OpenKerf — machines</title></svelte:head>
+<svelte:head><title>{t('setup.head.machines')}</title></svelte:head>
 
 <section class="setup">
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
-	<h1>Jouw machines</h1>
+	<h1>{t('setup.yourMachines')}</h1>
 	{#if eigen.length === 0}
-		<p class="leeg">
-			<strong>Nog geen machine ingesteld.</strong>
-			<span class="muted">
-				Voeg de laser toe die in je werkplaats staat. Dat bepaalt het bed op het canvas,
-				welke bediening je krijgt en hoe OpenKerf hem aanspreekt.
-			</span>
+		<p class="empty">
+			<strong>{t('setup.none.title')}</strong>
+			<span class="muted">{t('setup.none.body')}</span>
 		</p>
 	{:else}
 		<ul class="machines">
@@ -153,18 +158,22 @@
 						<div class="muted mono">{machine.path}</div>
 					</div>
 					{#if machine.active}
-						<span class="badge">In gebruik</span>
+						<span class="badge">{t('setup.inUse')}</span>
 					{:else}
-						<button class="btn" onclick={() => useMachine(machine)}>Gebruiken</button>
+						<button class="btn" onclick={() => useMachine(machine)}>{t('setup.use')}</button>
 					{/if}
-					<!-- Instellingen waren alleen tijdens het aanmaken te bereiken. -->
-					<a class="btn" href="/setup/instellen?machine={encodeURIComponent(machine.path)}">
-						Instellingen
+					<!-- Settings used to be reachable only while creating the machine. -->
+					<a class="btn" href="/setup/settings?machine={encodeURIComponent(machine.path)}">
+						{t('setup.settings')}
 					</a>
-					<!-- Gat E5: deze machine als bestand, voor een tweede computer. -->
-					<button class="btn subtle" onclick={() => exporteer(machine)}>Profiel exporteren</button>
+					<!-- Gap E5: this machine as a file, for a second computer. -->
+					<button class="btn subtle" onclick={() => exporteer(machine)}
+						>{t('setup.exportProfile')}</button
+					>
 					{#if !machine.active}
-						<button class="btn subtle" onclick={() => removeMachine(machine)}>Verwijderen</button>
+						<button class="btn subtle" onclick={() => removeMachine(machine)}
+							>{t('common.remove')}</button
+						>
 					{/if}
 				</li>
 			{/each}
@@ -172,11 +181,11 @@
 	{/if}
 
 	<div class="actions">
-		<a class="btn primary" href="/setup/soort">Machine toevoegen</a>
-		<!-- Gat E5: dezelfde weg als "Machine toevoegen", maar dan met een
-		     profiel dat iemand anders al heeft ingevuld. -->
+		<a class="btn primary" href="/setup/kind">{t('setup.addMachine')}</a>
+		<!-- Gap E5: the same route as "Add a machine", but with a profile someone else
+		     has already filled in. -->
 		<label class="btn file">
-			Profiel importeren…
+			{t('setup.importProfile')}
 			<input
 				type="file"
 				accept=".openkerf-machine,application/json"
@@ -190,61 +199,55 @@
 	</div>
 
 	{#if profielFout}<p class="error" role="alert">{profielFout}</p>{/if}
-	{#if ingelezen}<p class="gelukt" role="status">{ingelezen}</p>{/if}
+	{#if ingelezen}<p class="done" role="status">{ingelezen}</p>{/if}
 
-	{#if voorbeeld}
-		<!-- Eerst wat erin zit, dan pas aanmaken. Een profiel bepaalt de bedmaat,
-		     de verbinding en de spiegeling; dat hoort je niet te overkomen. -->
-		<aside class="voorbeeld">
-			<h2>Dit profiel: {voorbeeld.label}</h2>
-			{#if voorbeeld.known}
+	{#if preview}
+		<!-- What is in it first, only then create. A profile decides the bed size, the
+		     connection and the mirroring; that should not happen *to* you. -->
+		<aside class="preview">
+			<h2>{t('setup.profile.title', { label: preview.label })}</h2>
+			{#if preview.known}
 				<p class="muted">
-					{voorbeeld.friendly_name}{voorbeeld.family ? ` · ${voorbeeld.family}` : ''} —
-					{voorbeeld.settings} instellingen.
+					{t('setup.profile.known', {
+						name: `${preview.friendly_name}${preview.family ? ` · ${preview.family}` : ''}`,
+						n: preview.settings
+					})}
 				</p>
 			{:else}
-				<p class="muted">
-					Dit profiel is gemaakt voor machinetype <span class="mono">{voorbeeld.info}</span>, en
-					dat type kent deze installatie niet. Aanmaken zal mislukken; werk eerst MeerK40t bij.
-				</p>
+				<p class="muted">{t('setup.profile.unknown', { type: preview.info })}</p>
 			{/if}
-			<dl class="feiten">
-				{#each Object.entries(voorbeeld.essential) as [naam, waarde] (naam)}
-					<div><dt>{VELDNAAM[naam] ?? naam}</dt><dd class="mono">{waarde}</dd></div>
+			<dl class="facts">
+				{#each Object.entries(preview.essential) as [name, value] (name)}
+					<div><dt>{veldnaam(name)}</dt><dd class="mono">{value}</dd></div>
 				{/each}
 			</dl>
-			{#if Object.keys(voorbeeld.local).length}
+			{#if Object.keys(preview.local).length}
 				<p class="lokaal">
-					Hoort bij de opstelling waar dit profiel vandaan komt — controleer het hier:
-					{#each Object.entries(voorbeeld.local) as [naam, waarde], i (naam)}{i ? ', ' : ''}<span
-							class="mono">{VELDNAAM[naam] ?? naam} {waarde}</span
-						>{/each}.
+					{t('setup.profile.local', {
+						values: Object.entries(preview.local)
+							.map(([name, value]) => `${veldnaam(name)} ${value}`)
+							.join(', ')
+					})}
 				</p>
 			{/if}
 			<div class="uitknoppen">
-				<button class="btn primary" disabled={profielBezig || !voorbeeld.known} onclick={neemProfiel}>
-					{profielBezig ? 'Bezig…' : 'Machine aanmaken'}
+				<button class="btn primary" disabled={profileBusy || !preview.known} onclick={neemProfiel}>
+					{profileBusy ? t('common.busy') : t('setup.profile.create')}
 				</button>
-				<button class="btn subtle" onclick={() => (voorbeeld = null)}>Toch niet</button>
+				<button class="btn subtle" onclick={() => (preview = null)}
+					>{t('setup.profile.cancel')}</button
+				>
 			</div>
 		</aside>
 	{/if}
 
 	{#if placeholder}
 		<aside class="placeholder">
-			<h2>Standaardapparaat van de engine</h2>
-			<p class="muted">
-				MeerK40t maakt bij het opstarten zelf een apparaat aan
-				(<span class="mono">{placeholder.label}</span>) zodat er altijd iets actief is.
-				Niemand heeft het gekozen, en de bedmaten en verbinding zijn gokwerk — brand er niets
-				op zonder ze te controleren.
-			</p>
-			<p class="muted">
-				Heb je toevallig precies zo'n machine? Geef hem dan een naam en zijn echte bedmaat;
-				vanaf dan telt hij als jouw machine.
-			</p>
-			<a class="btn" href="/setup/instellen?machine={encodeURIComponent(placeholder.path)}">
-				Nakijken en overnemen
+			<h2>{t('setup.placeholder.title')}</h2>
+			<p class="muted">{t('setup.placeholder.body', { label: placeholder.label })}</p>
+			<p class="muted">{t('setup.placeholder.yours')}</p>
+			<a class="btn" href="/setup/settings?machine={encodeURIComponent(placeholder.path)}">
+				{t('setup.placeholder.adopt')}
 			</a>
 		</aside>
 	{/if}
@@ -277,18 +280,16 @@
 	}
 	.name {
 		font-weight: 500;
-		/* Een naam die de engine geeft ("lhystudios1") heeft geen afbreekpunt: hij
-		   duwde de badge weg of werd erdoor afgesneden. Afkappen met ellips is
-		   eerlijk — je ziet dat er meer staat. De volledige naam blijft in de
-		   title-tip. */
+		/* A name the engine gives ("lhystudios1") has no break point: it pushed the badge
+		   away or was cut off by it. Truncating with an ellipsis is honest — you see that
+		   there is more. The full name stays in the title tip. */
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* Onder ~420px is er naast de naam geen kolom meer over: op 390 hield de
-	   naam 74px van de 308 en botste "Ruida 5030" tegen de badge. De naam krijgt
-	   dan de hele regel, de acties de regel eronder — dat is ook de volgorde
-	   waarin je ze leest. */
+	/* Below ~420px there is no column left beside the name: at 390 the name kept 74px of
+	   the 308 and "Ruida 5030" collided with the badge. The name then gets the whole line,
+	   the actions the line below — which is also the order in which you read them. */
 	@media (max-width: 420px) {
 		.machines li {
 			flex-wrap: wrap;
@@ -296,8 +297,8 @@
 		.machines li > div:first-child {
 			flex: 1 0 100%;
 		}
-		/* De knoppen mogen dan de volle breedte delen; ze zijn hier het doel van
-		   een duim, niet van een muis. */
+		/* The buttons may then share the full width; here they are the target of a thumb,
+		   not of a mouse. */
 		.machines li .btn,
 		.machines li .badge {
 			min-height: 44px;
@@ -305,9 +306,9 @@
 			align-items: center;
 		}
 	}
-	/* Accent op een tint van 14% accent haalt geen AA (gemeten: 4,10 in licht,
-	   4,46 in donker). De tint blijft de accentkleur dragen, de tekst niet —
-	   dezelfde uitweg als in ToolRail, en zonder de merkkleur te verschuiven. */
+	/* Accent on a 14% accent tint does not make AA (measured: 4.10 in light, 4.46 in
+	   dark). The tint keeps carrying the accent colour, the text does not — the same way
+	   out as in ToolRail, and without shifting the brand colour. */
 	.badge {
 		font-size: var(--text-xs);
 		padding: 4px 8px;
@@ -315,7 +316,7 @@
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
 		color: var(--text-1);
 	}
-	.leeg {
+	.empty {
 		display: grid;
 		gap: var(--space-2);
 		margin: 0;
@@ -327,8 +328,8 @@
 		margin-top: var(--space-8);
 		padding: var(--space-4);
 		border-radius: var(--radius-card);
-		/* Een waarschuwingsvlak, geen fout: dit apparaat werkt, het is alleen
-		   niet het jouwe. Zie DESIGN-SYSTEM, "zekerheid is een zin". */
+		/* A warning surface, not an error: this device works, it is simply not yours. See
+		   DESIGN-SYSTEM, "certainty is a sentence". */
 		border-left: 3px solid var(--warn);
 		background: var(--surface-2);
 	}
@@ -344,9 +345,9 @@
 
 	/* ------------------------------- machineprofiel uitwisselen (gat E5) */
 
-	/* Een bestandskiezer die eruitziet als de knop ernaast: de input zelf is
-	   onzichtbaar maar blijft het raakvlak, dus toetsenbord en schermlezer
-	   krijgen gewoon een invoerveld met een naam. */
+	/* A file picker that looks like the button beside it: the input itself is invisible
+	   but stays the touch surface, so keyboard and screen reader simply get an input with
+	   a name. */
 	.btn.file {
 		position: relative;
 		overflow: hidden;
@@ -358,7 +359,7 @@
 		opacity: 0;
 		cursor: pointer;
 	}
-	.gelukt {
+	.done {
 		margin: var(--space-4) 0 0;
 		padding: var(--space-3);
 		border-radius: var(--radius-field);
@@ -366,30 +367,30 @@
 		background: color-mix(in srgb, var(--ok) 14%, transparent);
 		font-size: var(--text-xs);
 	}
-	.voorbeeld {
+	.preview {
 		margin-top: var(--space-4);
 		padding: var(--space-4);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.voorbeeld h2 {
+	.preview h2 {
 		font-size: var(--text-sm);
 		font-weight: 600;
 		margin: 0 0 var(--space-2);
 	}
-	.voorbeeld p { margin: 0 0 var(--space-2); font-size: var(--text-xs); }
-	.feiten {
+	.preview p { margin: 0 0 var(--space-2); font-size: var(--text-xs); }
+	.facts {
 		display: grid;
 		gap: var(--space-1);
 		margin: 0 0 var(--space-3);
 		font-size: var(--text-xs);
 	}
-	.feiten div { display: flex; justify-content: space-between; gap: var(--space-3); }
-	.feiten dt { color: var(--text-2); }
-	.feiten dd { margin: 0; }
-	/* Het adres van de andere werkbank is het eerste dat hier niet klopt. Geen
-	   fout, wel iets om te controleren voor je iets brandt. */
+	.facts div { display: flex; justify-content: space-between; gap: var(--space-3); }
+	.facts dt { color: var(--text-2); }
+	.facts dd { margin: 0; }
+	/* The address of the other workbench is the first thing here that does not hold. Not
+	   an error, but something to check before you burn anything. */
 	.lokaal {
 		padding: var(--space-2) var(--space-3);
 		border-left: 3px solid var(--warn-solid, var(--warn));

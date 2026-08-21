@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import FontPicker from './FontPicker.svelte';
 
@@ -8,7 +9,7 @@
 		onConfirm
 	}: {
 		open: boolean;
-		/** Gevuld bij bewerken van bestaande tekst. */
+		/** Filled in when editing existing text. */
 		initial?: {
 			text: string;
 			font: string;
@@ -32,7 +33,7 @@
 	let align = $state('start');
 	let filled = false;
 
-	// Bij bewerken beginnen met wat er staat, niet met lege velden.
+	// When editing, start with what is there, not with empty fields.
 	$effect(() => {
 		if (!open) {
 			filled = false;
@@ -61,15 +62,15 @@
 	}
 </script>
 
-<Dialog title="Tekst plaatsen" bind:open width="480px">
+<Dialog title={t('text.title')} bind:open width="480px">
 	<label class="field">
-		<span>Tekst</span>
+		<span>{t('text.label')}</span>
 		<!-- svelte-ignore a11y_autofocus -->
 		<input
 			type="text"
 			bind:value={text}
 			autofocus
-			placeholder="bijv. Stellendam"
+			placeholder={t('text.placeholder')}
 			onkeydown={(e) => {
 				if (e.key === 'Enter') confirm();
 			}}
@@ -78,30 +79,30 @@
 
 	<div class="row">
 		<label class="field">
-			<span>Hoogte (mm)</span>
+			<span>{t('text.height')}</span>
 			<input class="mono" type="number" step="0.5" min="0.5" bind:value={size} />
 		</label>
 		<label class="field">
-			<span>Letterspatiëring</span>
+			<span>{t('text.tracking')}</span>
 			<input class="mono" type="number" step="0.05" min="0.1" bind:value={spacing} />
 		</label>
 	</div>
 
 	<label class="field">
-		<span>Uitlijning</span>
+		<span>{t('text.alignment')}</span>
 		<select bind:value={align}>
-			<option value="start">Links</option>
-			<option value="middle">Gecentreerd</option>
-			<option value="end">Rechts</option>
+			<option value="start">{t('text.left')}</option>
+			<option value="middle">{t('text.centred')}</option>
+			<option value="end">{t('text.right')}</option>
 		</select>
 	</label>
 
 	<FontPicker bind:font sample={text} current={initial?.font ?? null} />
 
 	<div class="actions">
-		<button class="btn" onclick={() => (open = false)}>Annuleren</button>
+		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button class="btn primary" disabled={!text.trim()} onclick={confirm}>
-			{initial ? 'Bijwerken' : 'Plaatsen'}
+			{initial ? t('text.update') : t('text.place')}
 		</button>
 	</div>
 </Dialog>

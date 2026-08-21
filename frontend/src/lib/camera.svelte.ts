@@ -1,13 +1,15 @@
 /**
- * Het camerabeeld van het bed.
+ * The camera image of the bed.
  *
- * Het beeld zelf komt niet door deze code heen: de browser haalt een MJPEG-
- * stroom op in een gewone `<img>` en decodeert die zelf. Dat is de reden dat
- * het beeld niet hapert — er is geen JavaScript-lus die plaatjes ophaalt.
+ * The image itself does not pass through this code: the browser fetches an MJPEG
+ * stream in an ordinary `<img>` and decodes it itself. That is why the picture does
+ * not stutter — there is no JavaScript loop fetching frames.
  *
- * Wat hier wél staat is de toestand eromheen: draait hij, is hij geijkt, en
- * welke bron de `<img>` moet krijgen.
+ * What *is* here is the state around it: is it running, is it calibrated, and which
+ * source the `<img>` should be given.
  */
+
+import { apiError, t } from './i18n/core.ts';
 
 export type CameraState = {
 	available: boolean;
@@ -24,10 +26,10 @@ export class CameraStore {
 	state = $state<CameraState>({ available: false, running: false });
 	busy = $state(false);
 	error = $state<string | null>(null);
-	/** Aan/uit los van "draait de camera": je kunt hem even wegklikken. */
+	/** On/off apart from "is the camera running": you can click it away for a bit. */
 	shown = $state(false);
 	opacity = $state(0.6);
-	/** Loopt op om de browser een verse stroom te laten openen. */
+	/** Goes up to make the browser open a fresh stream. */
 	generation = $state(0);
 
 	#token: () => string;
@@ -65,14 +67,14 @@ export class CameraStore {
 			});
 			if (!response.ok) {
 				this.error =
-					(await response.json().catch(() => null))?.detail ?? 'Dat lukte niet.';
+					apiError(response, (await response.json().catch(() => null))?.detail);
 				return null;
 			}
 			const state = await response.json();
 			this.state = state;
 			return state;
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -83,8 +85,8 @@ export class CameraStore {
 		const state = await this.#post('/api/camera/start', uri ? { uri } : {});
 		if (state) {
 			this.shown = true;
-			// Nieuwe stroom: anders blijft de browser aan de oude verbinding
-			// hangen die de server net heeft afgesloten.
+			// A new stream: otherwise the browser hangs on to the old connection the
+			// server has just closed.
 			this.generation += 1;
 		}
 		return state;
@@ -103,7 +105,7 @@ export class CameraStore {
 		return this.#post('/api/camera/calibrate', undefined, 'DELETE');
 	}
 
-	/** Tijdens het ijken wil je juist het onbewerkte beeld zien. */
+	/** While calibrating you want to see the unprocessed image. */
 	async setCorrected(corrected: boolean) {
 		const state = await this.#post('/api/camera/corrected', { corrected });
 		if (state) this.generation += 1;

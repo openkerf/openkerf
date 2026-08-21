@@ -1,28 +1,26 @@
 /*
- * Design tokens — de enige plek waar kleuren en maten als waarde staan.
- * Componenten verwijzen uitsluitend naar deze variabelen (zie DESIGN-SYSTEM.md).
- * Licht thema is de default; donker via [data-theme="dark"] op <html>.
+ * Design tokens — the only place where colours and sizes appear as values.
+ * Components refer to these variables exclusively (see DESIGN-SYSTEM.md).
+ * The light theme is the default; dark through [data-theme="dark"] on <html>.
  */
 
 /*
- * v3.3 (D10): de letters horen bij de app, niet bij het internet.
+ * v3.3 (D10): the typefaces belong to the app, not to the internet.
  *
- * IBM Plex Sans en Mono kwamen van fonts.googleapis.com. Een werkplaats-pc
- * naast een laser heeft vaak geen netwerk, en dan viel twee derde van de
- * typografie terug op systeemletters — plus een 404 in de console die als
- * meetruis in c2 opdook. Nu komen ze uit de build.
+ * IBM Plex Sans and Mono came from fonts.googleapis.com. A workshop PC beside a laser
+ * often has no network, and then two thirds of the typography fell back on system fonts —
+ * plus a 404 in the console that showed up as measurement noise in c2. Now they come from
+ * the build.
  *
- * Via npm (`@fontsource/*`) en niet als bestanden in de repo: dan is de keuze
- * "binaire blobs in git" niet nodig en staat het gewicht in package.json.
- * Alleen latin, alleen de gewichten die de app echt zet — 400/500/600/700 voor
- * Sans (700 staat in MaterialLibrary en JobControls), 400/500 voor Mono. Zes
- * bestanden, samen 128 KB. IBM Plex staat onder de SIL OFL 1.1; zie
- * frontend/LICENSES-FONTS.md.
+ * Through npm (`@fontsource/*`) and not as files in the repository: that way the choice
+ * "binary blobs in git" is unnecessary and the weight is in package.json. Latin only, only
+ * the weights the app really sets — 400/500/600/700 for Sans (700 appears in
+ * MaterialLibrary and JobControls), 400/500 for Mono. Six files, 128 KB together. IBM Plex
+ * is under the SIL OFL 1.1; see frontend/LICENSES-FONTS.md.
  *
- * De @font-face-blokken staan hier uitgeschreven in plaats van dat we de
- * meegeleverde css importeren: die verwijst naast woff2 ook naar woff, en dan
- * legt de build zes bestanden neer die geen enkele browser van deze eeuw
- * ophaalt. Zo is het 128 KB in plaats van 256 KB.
+ * The @font-face blocks are written out here rather than importing the supplied css: that
+ * refers to woff as well as woff2, and then the build lays down six files no browser of
+ * this century fetches. This way it is 128 KB instead of 256 KB.
  */
 @font-face {
 	font-family: 'IBM Plex Sans';
@@ -74,119 +72,116 @@
 	--canvas-bg: #e9ebed;
 	--bed: #ffffff;
 	/*
-	 * v3.3: het bed had geen eigen familie, en dat maakte een hele soort
-	 * weergave onmogelijk.
+	 * v3.3: the bed had no family of its own, and that made a whole kind of rendering
+	 * impossible.
 	 *
-	 * Gemeld door de pre-flight: in v3.2 was `--bed` in donker exact dezelfde
-	 * kleur als `--surface-2` (1,00:1) en haalde geen enkel token meer dan
-	 * 1,23:1 tegenover het bed. Wie het materiaalvel met een vlak wilde
-	 * afbakenen, kon dat niet, en week uit naar arcering met een rand op
-	 * `--text-2`. Dat was niet alleen een omweg — het was de enige weg.
+	 * Reported by the pre-flight: in v3.2 `--bed` in dark was exactly the same colour as
+	 * `--surface-2` (1.00:1) and no token reached more than 1.23:1 against the bed. Anybody
+	 * wanting to mark out the material sheet with a surface could not, and resorted to
+	 * hatching with a border in `--text-2`. That was not only a detour — it was the only
+	 * route.
 	 *
-	 * Dit token is de bedvloer *buiten* het vel, en dat is met opzet die kant op.
-	 * Het vel zélf vullen kost laagkleuren hun 3:1: doorgerekend zakt het aantal
-	 * lagen dat op de vulling loskomt van 8 naar 5–6 in licht en van 9 naar 6–7
-	 * in donker, en juist ín het vel ligt het werk. Buiten het vel is het
-	 * omgekeerd: in donker gaat het van 9 naar **10 van de 10**, omdat het
-	 * donkere bed te dicht bij de middentonen van laag 7, 9 en 10 lag.
+	 * This token is the bed floor *outside* the sheet, and that direction is deliberate.
+	 * Filling the sheet *itself* costs layer colours their 3:1: worked out, the number of
+	 * layers that come free of the fill drops from 8 to 5–6 in light and from 9 to 6–7 in
+	 * dark, and the work is precisely *in* the sheet. Outside the sheet it is the other way
+	 * round: in dark it goes from 9 to **10 out of 10**, because the dark bed lay too close
+	 * to the mid-tones of layers 7, 9 and 10.
 	 *
-	 *     thema    bed       buiten het vel   L*-stap   lagen >=3:1
+	 *     theme    bed       outside the sheet  L* step   layers >=3:1
 	 *     licht    #ffffff   #f5f6f8          3,1       8 -> 7
 	 *     donker   #262a30   #1b1f24          5,3       9 -> 10
 	 *
-	 * De lichte stap is zwak, en de oorzaak staat in het token ernaast: `--bed`
-	 * is in licht zuiver wit, dus er is geen ruimte boven. Zie de open punten in
-	 * DESIGN-SYSTEM.md v3.3.
+	 * The light step is weak, and the cause is in the token beside it: in light `--bed` is
+	 * pure white, so there is no room above. See the open points in DESIGN-SYSTEM.md
+	 * v3.3.
 	 */
 	--bed-off: #f5f6f8;
 	--line: #d6dade;
-	/* v3.3 (D9): een vlak dat oplicht onder de muis is géén randkleur.
-	   --line werd op één plek als hover-vulling gebruikt (de machinechip in
-	   TopBar) en daar staat tekst op: --text-2 erop haalt 4,27 in licht en 3,91
-	   in donker (met de zwaardere v3.3-rand zelfs 3,79). Een doorschijnende
-	   sluier hoort bij deze rol, want die werkt op élk oppervlak: gemeten met
-	   --text-2 erop haalt hij 5,37 / 4,71 in licht en 5,68 / 4,68 in donker (op
+	/* v3.3 (D9): a surface that lights up under the pointer is *not* a border colour.
+	   --line was used as a hover fill in one place (the machine chip in TopBar) and there
+	   is text on it: --text-2 on it reaches 4.27 in light and 3.91 in dark (with the heavier
+	   v3.3 border even 3.79). A translucent veil suits this role, because it works on
+	   *every* surface: measured with --text-2 on it, it reaches 5.37 / 4.71 in light and
+	   5.68 / 4.68 in dark (on
 	   --surface-1 respectievelijk --surface-2). */
 	--hover: rgb(0 0 0 / 0.05);
 	--text-1: #1b1f24;
 	--text-2: #5b6470;
-	/* v3.3 (D7): de merkkleur is nu in élke rol veilig als tekst.
-	   v3.2 zette er een tweede token naast (--accent-text) omdat --accent op
-	   --surface-2 op 4,33 bleef steken. Dat verplaatste de fout naar de
-	   vraag "welk token pak ik?", en op 53 plekken werd die vraag niet
-	   gesteld. Nu is --accent zélf de diepe tint: 5,82 op wit, 5,42 op
-	   --surface-0, 5,09 op --surface-2. Als vulling wordt hij daarmee iets
-	   dieper, en wit erop gaat van 4,95 naar 5,82 — beide kanten winnen. */
+	/* v3.3 (D7): the brand colour is now safe as text in *every* role.
+	   v3.2 put a second token beside it (--accent-text) because --accent stuck at 4.33 on
+	   --surface-2. That moved the fault to the question "which token do I take?", and in 53
+	   places that question was not asked. Now --accent *is* the deep shade: 5.82 on white,
+	   5.42 on --surface-0, 5.09 on --surface-2. As a fill it becomes slightly deeper, and
+	   white on it goes from 4.95 to 5.82 — both sides win. */
 	--accent: #0c7079;
 	--accent-ink: #ffffff;
-	/* Blijft bestaan als naam voor de tekstrol, maar wijst nu naar dezelfde
-	   waarde: een component kan niet meer het verkeerde van de twee kiezen. */
+	/* Kept as a name for the text role, but now points at the same value: a component can
+	   no longer pick the wrong of the two. */
 	--accent-text: var(--accent);
-	/* Tekst op een gekleurd vlak, en de zwarte achtergrond van een camerabeeld. */
+	/* Text on a coloured surface, and the black background of a camera image. */
 	--on-color: #ffffff;
-	/* v3.2: de haarlijn die je om een wíllekeurig gekleurd vlak trekt — een
-	   laagvakje, een kleurstip. --line werkt daar niet: die is afgestemd op de
-	   oppervlakken, niet op een geel of blauw vlakje. Donker en licht draaien om,
-	   want de rand moet altijd de kant op die het meeste verschil maakt. */
+	/* v3.2: the hairline you draw around an *arbitrarily* coloured surface — a layer
+	   swatch, a colour dot. --line does not work there: it is tuned for the surfaces, not
+	   for a yellow or blue patch. Dark and light swap round, because the border always has
+	   to go the way that makes the most difference. */
 	--edge-on-color: rgb(0 0 0 / 0.22);
 	--void: #000000;
-	/* v3.2: #d3382c haalde op --surface-0 nog 4,48 en dat is te weinig voor de
-	   telefoonknop die de laser stopt. Eén tint dieper haalt 4,69.
-	   v3.3: en nóg een tint, om dezelfde reden als bij --accent — op
-	   --surface-2 bleef #cf3427 op 4,40 steken, precies waar een pil of chip
-	   staat. Nu 4,66 / 4,96 / 5,32 op de drie oppervlakken. */
+	/* v3.2: #d3382c still reached 4.48 on --surface-0 and that is too little for the phone
+	   button that stops the laser. One shade deeper reaches 4.69.
+	   v3.3: and another shade, for the same reason as with --accent — on --surface-2
+	   #cf3427 stuck at 4.40, exactly where a pill or a chip sits. Now 4.66 / 4.96 / 5.32 on
+	   the three surfaces. */
 	--danger: #c93124;
-	/* Vlak-rood is een andere rol dan tekst-rood: wit hierop haalt 5,6:1, en
-	   dat moet, want dit is de stopknop. */
+	/* Surface red is a different role from text red: white on this reaches 5.6:1, and it
+	   has to, because this is the stop button. */
 	--danger-solid: #c62a1e;
-	/* Als tékst moet oranje 4,5:1 halen; #b8860b kwam niet verder dan 3,25.
-	   Voor een vlak of een stip is de heldere versie juist beter zichtbaar.
-	   #8a6100 haalde het net niet (4,45) zodra de badge zijn eigen kleur als
-	   16%-waas eronder legt — de achtergrond telt mee, niet alleen het wit. */
+	/* As *text* orange has to reach 4.5:1; #b8860b got no further than 3.25. For a surface
+	   or a dot the brighter version is actually more visible. #8a6100 just missed it (4.45)
+	   as soon as the badge lays its own colour underneath as a 16% wash — the background
+	   counts, not only the white. */
 	--warn: #7f5900;
 	--warn-solid: #b8860b;
 	--ok: #2a733f;
 
-	/* Materiaal als beeld: de grondkleur van elke textuurstrook. Geen
-	   themakleuren maar materiaalkleuren — hout is hout, ook 's nachts. In het
-	   donkere thema staan ze een slag doffer, anders schreeuwen ze. */
-	--mat-hout: #c8a06a;
-	--mat-acryl: #7fb9c4;
-	--mat-leer: #8a5a3b;
-	--mat-karton: #cdb391;
-	--mat-metaal: #b6bcc2;
+	/* Material as image: the base colour of every texture band. Not theme colours but
+	   material colours — wood is wood, at night too. In the dark theme they are one notch
+	   duller, otherwise they shout. */
+	--mat-wood: #c8a06a;
+	--mat-acrylic: #7fb9c4;
+	--mat-leather: #8a5a3b;
+	--mat-cardboard: #cdb391;
+	--mat-metal: #b6bcc2;
 
-	/* Eén maat groter dan de schaal, voor het percentage op de telefoon: dat
-	   moet je van een meter afstand kunnen lezen. */
+	/* One size larger than the scale, for the percentage on the phone: you have to be able
+	   to read that from a metre away. */
 	--text-display: 40px;
 
-	/* Spacing op een 4px-grid. */
+	/* Spacing on a 4px grid. */
 	--space-1: 4px;
 	--space-2: 8px;
-	/* Halve stap. Kwam tien keer met de hand terug als `6px` — voor een chip of
-	   een pil is 4px te krap en 8px te los. Dan hoort hij in de schaal. */
+	/* Half a step. Came back ten times by hand as `6px` — for a chip or a pill 4px is too
+	   tight and 8px too loose. Then it belongs in the scale. */
 	--space-1h: 6px;
 	--space-3: 12px;
 	--space-4: 16px;
 	--space-6: 24px;
 	--space-8: 32px;
 
-	/* Laagkleuren: vaste reeks van tien, herkenbaar uit RDWorks en LightBurn.
-	   Ze staan hier en niet in JavaScript, zodat het canvas dezelfde bron
-	   leest als de rest van de app. Puur identificatie — ze zijn in beide
-	   thema's gelijk, want een rode laag hoort 's nachts nog steeds rood te
-	   zijn. Wat wél per thema verschilt is of ze loskomen van het bed; dat
-	   regelt `leesbaar()` in design.svelte.ts, en de inkt die erop past
-	   regelt `inktOp()` ernaast.
+	/* Layer colours: a fixed series of ten, recognisable from RDWorks and LightBurn. They
+	   live here and not in JavaScript, so that the canvas reads the same source as the rest
+	   of the app. Pure identification — they are the same in both themes, because a red
+	   layer should still be red at night. What does differ per theme is whether they come
+	   free of the bed; `readable()` in design.svelte.ts handles that, and `inkOn()` beside
+	   it handles the ink that suits them.
 
-	   v3.3 (D2/L6): laag 4 was #46A758, een lichte, halfverzadigde groen. Voor
-	   wie rood en groen niet scheidt, viel die precies tussen laag 9 (bruin) en
-	   laag 10 (blauwgrijs) in: gesimuleerde afstand 21,9 bij protanopie en 24,4
-	   bij deuteranopie, waar 28 de ondergrens is. Niet de gróéne rol is het
-	   probleem maar deze uitvoering ervan — te licht en te grijs. Een diepere,
-	   verzadigde groen lost het op zonder de reeks los te maken van de
-	   LightBurn/RDWorks-conventie. Gemeten over de tien kleuren, laagste
-	   afstand tussen twee lagen:
+	   v3.3 (D2/L6): layer 4 was #46A758, a light, half-saturated green. For anybody who
+	   does not separate red and green it fell exactly between layer 9 (brown) and layer 10
+	   (blue-grey): simulated distance 21.9 under protanopia and 24.4 under deuteranopia,
+	   where 28 is the floor. The *green* role is not the problem but this execution of it —
+	   too light and too grey. A deeper, saturated green solves it without cutting the series
+	   loose from the LightBurn/RDWorks convention. Measured across the ten colours, lowest
+	   afstand tussen twee layers:
 
 	       simulatie       was    is
 	       deuteranopie    24,4   33,8
@@ -194,7 +189,7 @@
 	       tritanopie      26,2   28,2
 
 	   en tegen het bed: 3,65 in licht (was 3,03), 3,32 in donker (was 3,84).
-	   Meetscript: gauntlet/g-thema-kleuren.mjs. */
+	   Meetscript: gauntlet/g-thema-colours.mjs. */
 	--layer-1: #E5484D;
 	--layer-2: #F76B15;
 	--layer-3: #FFC53D;
@@ -210,15 +205,15 @@
 	--lift-1: 0 1px 2px rgb(16 20 26 / 0.06);
 	--lift-2: 0 8px 24px rgb(16 20 26 / 0.12);
 	--scrim: rgb(16 20 26 / 0.40);
-	/* Het canvas is een podium, geen vlak.
-	   v3.3: de top van het verloop stond op L* 94,0 en het bed op 100. In die
-	   zes stappen moet nu ook `--bed-off` passen, en die klemde er tussenin.
-	   Het podium is decoratie — er wordt niets tegen gemeten — dus dat is de
-	   goedkoopste plek om ruimte te maken: top naar L* 92,2. Het bed blijft
-	   1,22:1 tegen het podium, dus de bedrand tekent zich nog even goed af. */
+	/* The canvas is a stage, not a surface.
+	   v3.3: the top of the gradient was at L* 94.0 and the bed at 100. `--bed-off` now has
+	   to fit in those six steps as well, and it was wedged in between. The stage is
+	   decoration — nothing is measured against it — so that is the cheapest place to make
+	   room: top to L* 92.2. The bed stays 1.22:1 against the stage, so the bed edge still
+	   stands out just as well. */
 	--stage: radial-gradient(120% 100% at 50% 0%, #e6e9ec 0%, #dde0e5 60%, #d5d9de 100%);
 
-	/* Scherper dan een veld: voor een streepje of een balkje dat geen knop is. */
+	/* Sharper than a field: for a stripe or a bar that is not a button. */
 	--radius-sharp: 2px;
 	--radius-field: 6px;
 	--radius-card: 10px;
@@ -236,29 +231,28 @@
 	--topbar-height: 48px;
 	--statusbar-height: 28px;
 	--rail-width: 56px;
-	/* De sleephoeken op een rasterfoto. Groot genoeg voor een vinger, en de
-	   helft ervan schuift ze terug zodat ze op hun punt staan. */
-	--greep: 44px;
+	/* The drag corners on a grid photo. Big enough for a finger, and half of it shifts
+	   them back so that they sit on their point. */
+	--grip: 44px;
 
 	--shadow-float: 0 8px 24px rgb(0 0 0 / 0.12);
 	/*
-	 * v3.3: duur en versnelling staan nu ook los, en `--transition` is uit die
-	 * twee opgebouwd — één bron, twee vormen.
+	 * v3.3: duration and easing are now separate as well, and `--transition` is built from
+	 * those two — one source, two forms.
 	 *
-	 * Waarom: `--transition` is een compleet transition-fragment, en in
-	 * `transition: background var(--transition)` werkt dat prima. In een
-	 * `animation`-shorthand niet: daar staat al een versnelling, dus
-	 * `animation: x var(--transition) ease-out 400ms forwards` expandeert naar
-	 * twee timingfuncties en gooit de browser de hele regel weg. Het gevolg is
-	 * een element dat op `opacity: 0` blijft staan — onzichtbaar, en op een
-	 * screenshot niet van "werkt" te onderscheiden. Dat is precies wat er in de
-	 * wachtregel van de eerste start gebeurde. Wie een duur nodig heeft en geen
-	 * versnelling, pakt `--duration`.
+	 * Why: `--transition` is a complete transition fragment, and in
+	 * `transition: background var(--transition)` that works fine. In an `animation`
+	 * shorthand it does not: there is already an easing there, so
+	 * `animation: x var(--transition) ease-out 400ms forwards` expands to
+	 * two timing functions and the browser throws the whole rule away. The result is an
+	 * element that stays at `opacity: 0` — invisible, and on a screenshot indistinguishable
+	 * from "works". That is exactly what happened in the waiting line of the first start.
+	 * Anybody who needs a duration and not an easing takes `--duration`.
 	 */
 	--duration: 150ms;
 	--ease: ease-out;
 	--transition: var(--duration) var(--ease);
-	/* Panelen en vensters mogen iets trager: stil is goed, doods niet. */
+	/* Panels and dialogs may be a little slower: quiet is good, dead is not. */
 	--duration-panel: 200ms;
 	--ease-panel: cubic-bezier(0.2, 0, 0, 1);
 	--transition-panel: var(--duration-panel) var(--ease-panel);
@@ -266,115 +260,112 @@
 
 [data-theme='dark'] {
 	/*
-	 * v3.3 (D1): de trap opnieuw gegradeerd, in één keer, niet per token.
+	 * v3.3 (D1): the staircase graded again, in one go, not per token.
 	 *
-	 * De belofte is drie diepteniveaus. In de praktijk stond --surface-1 op
-	 * 1,10 tegen de achtergrond en --surface-2 op 1,12 daarboven: twee stappen
-	 * die alleen op papier bestonden en in beeld door de haarlijn gedragen
-	 * werden. Op een screenshot van het lagenpaneel was de grens tussen paneel
-	 * en pagina niet te vinden zonder de rand.
+	 * The promise is three levels of depth. In practice --surface-1 stood at
+	 * 1.10 against the background and --surface-2 at 1.12 above it: two steps that existed
+	 * only on paper and on screen were carried by the hairline. On a screenshot of the
+	 * layers panel the boundary between panel and page could not be found without the
+	 * border.
 	 *
-	 * Contrastverhouding is bij deze donkerte een slechte maat — bij een
-	 * luminantie van 0,01 zegt "1,10" niets over wat je ziet. L* (CIE-
-	 * lichtheid) doet dat wel, en daarop is gegradeerd: gelijke stappen van
-	 * ~6,5 in plaats van 4,5 en 4,3.
+	 * At this darkness contrast ratio is a poor measure — at a luminance of 0.01 "1.10"
+	 * says nothing about what you see. L* (CIE lightness) does, and the grading is on that:
+	 * equal steps of ~6.5 instead of 4.5 and 4.3.
 	 *
 	 *     token        was       L*      is        L*
 	 *     --surface-0  #16181b    8,2    #141619    7,2
 	 *     --surface-1  #1e2126   12,6    #202329   13,6
 	 *     --surface-2  #262a30   16,9    #2c3138   20,1
-	 *     stap                4,5 / 4,3          6,5 / 6,5
+	 *     step                4,5 / 4,3          6,5 / 6,5
 	 *     s2 tegen s0        1,23                1,38
 	 *
-	 * Waarom niet de hele trap optillen naar LightBurn-grijs (~#3a3a3a), zoals
-	 * FEATURE-GAPS opperde: dat kost op élke inkt contrast op het bovenste
-	 * vlak. Doorgerekend zakte --danger daar naar 3,16 en was alleen te redden
-	 * door er zalmroze van te maken — de kleur die de machine stopt. De diepte
-	 * zit in de stáp, niet in de hoogte; dus de stap is verbreed en de basis is
-	 * gebleven waar hij stond. Elke inkt hieronder is meegegradeerd zodat geen
-	 * enkele meting slechter uitkomt dan v3.2.
+	 * Why not lift the whole staircase to LightBurn grey (~#3a3a3a), as FEATURE-GAPS
+	 * suggested: that costs *every* ink contrast on the top surface. Worked out, --danger
+	 * dropped to 3.16 there and could only be saved by turning it salmon pink — the colour
+	 * that stops the machine. The depth is in the *step*, not in the height; so the step has
+	 * been widened and the base has stayed where it was. Every ink below has been graded
+	 * along so that no measurement comes out worse than v3.2.
 	 */
 	--surface-0: #141619;
 	--surface-1: #202329;
 	--surface-2: #2c3138;
-	/* v3.2: --canvas-bg heeft één afnemer, de bedminiatuur op de telefoon, en
-	   #101214 maakte daar een gat van: net zo zwart als een dood camerabeeld,
-	   op een kaart die lichter is. Overal élders in de app is het bed juist het
-	   lichtste vlak (wit op grijs in licht, #262a30 op de stage in donker). Nu
-	   volgt de miniatuur diezelfde regel: het bed is een figuur, geen holte.
-	   v3.3: meegeschoven met de trap, anders krimpt de stap tussen kaart en
-	   miniatuurbed van 1,22 naar 1,10 — dan is de holte terug. Nu 1,37. */
+	/* v3.2: --canvas-bg has one consumer, the bed thumbnail on the phone, and #101214 made
+	   a hole of it: as black as a dead camera image, on a card that is lighter. Everywhere
+	   *else* in the app the bed is the lightest surface (white on grey in light, #262a30 on
+	   the stage in dark). Now the thumbnail follows that same rule: the bed is a figure, not
+	   a cavity.
+	   v3.3: moved along with the staircase, otherwise the step between card and thumbnail
+	   bed shrinks from 1.22 to 1.10 — and then the cavity is back. Now 1.37. */
 	--canvas-bg: #343a42;
-	/* Het bed blijft staan waar het stond. Het is het enige vlak waar tien
-	   laagkleuren op moeten loskomen, en dat is een tegengesteld belang aan de
-	   trap: doorgerekend zakt bij een lichter bed eerst laag 7 (paars) en
-	   daarna 9 en 10 onder 3:1. Op #262a30 halen negen van de tien het. */
+	/* The bed stays where it was. It is the only surface ten layer colours have to come
+	   free of, and that is an interest opposed to the staircase: worked out, with a lighter
+	   bed layer 7 (purple) drops below 3:1 first and then 9 and 10. On #262a30 nine out of
+	   ten make it. */
 	--bed: #262a30;
-	/* v3.3: 5,3 L* onder het bed, en hier is dat winst in twee richtingen — het
-	   vel tekent zich af (1,15:1, waar in v3.2 géén token boven 1,23 kwam en
-	   --surface-2 zelfs op 1,00 stond), en buiten het vel halen alle tien de
-	   laagkleuren 3:1 in plaats van negen: het bed lag te dicht bij de
-	   middentonen van laag 7, 9 en 10. --text-2 erop 7,36, --danger 5,02. */
+	/* v3.3: 5.3 L* below the bed, and here that is a gain in two directions — the sheet
+	   stands out (1.15:1, where in v3.2 *no* token got above 1.23 and --surface-2 was even
+	   at 1.00), and outside the sheet all ten layer colours make 3:1 instead of nine: the
+	   bed lay too close to the mid-tones of layers 7, 9 and 10. --text-2 on it 7.36,
+	   --danger 5.02. */
 	--bed-off: #1b1f24;
-	/* v3.2: #33383f haalde 1,51 tegen --surface-0. Op donker draagt de rand het
-	   hele knopsilhouet — er is geen witte vulling die het werk overneemt — dus
-	   die mag zwaarder: 1,78.
-	   v3.3: met de bredere trap moet de rand mee, anders verdwijnt hij op het
-	   bovenste vlak. Nu 2,12 / 1,84 / 1,53 op s0 / s1 / s2 (was 1,78 / 1,62 /
+	/* v3.2: #33383f reached 1.51 against --surface-0. On dark the border carries the whole
+	   button silhouette — there is no white fill taking the work over — so it may be
+	   heavier: 1.78.
+	   v3.3: with the wider staircase the border has to come along, otherwise it disappears
+	   on the top surface. Now 2.12 / 1.84 / 1.53 on s0 / s1 / s2 (was 1.78 / 1.62 /
 	   1,44). */
 	--line: #464d57;
-	/* v3.3 (D9): op donker licht een vlak op door wit erbij, niet zwart. */
+	/* v3.3 (D9): on dark a surface lights up by adding white, not black. */
 	--hover: rgb(255 255 255 / 0.07);
 	--text-1: #eaecef;
 	--text-2: #a4aeb9;
-	--mat-hout: #9c7845;
-	--mat-acryl: #4f8892;
-	--mat-leer: #63402a;
-	--mat-karton: #9c8564;
-	--mat-metaal: #7d848b;
-	/* v3.3: meegegradeerd met de trap. 7,19 / 6,25 / 5,20 op de drie
-	   oppervlakken, waar #2aa6b1 op 6,09 / 5,53 / 4,94 stond — de tekstrol is
-	   dus ook in donker met marge veilig (D7). */
+	--mat-wood: #9c7845;
+	--mat-acrylic: #4f8892;
+	--mat-leather: #63402a;
+	--mat-cardboard: #9c8564;
+	--mat-metal: #7d848b;
+	/* v3.3: graded along with the staircase. 7.19 / 6.25 / 5.20 on the three surfaces,
+	   where #2aa6b1 stood at 6.09 / 5.53 / 4.94 — so the text role is safe with margin in
+	   dark as well (D7). */
 	--accent: #33b3be;
 	--accent-ink: #0b1213;
-	/* Zelfde afspraak als in licht: één waarde, twee namen, zodat een component
-	   niet het verkeerde van de twee kan pakken. */
+	/* The same agreement as in light: one value, two names, so that a component cannot
+	   take the wrong of the two. */
 	--accent-text: var(--accent);
 	--edge-on-color: rgb(255 255 255 / 0.22);
-	/* v3.3: mee omhoog met de trap — 5,50 / 4,78 / 3,97 (was 4,83 / 4,38 /
-	   3,91). Dat rood is nog steeds rood; op het bovenste vlak haalt het geen
-	   4,5, en dat is een bewuste grens: alles wat wél 4,5 haalt op #2c3138 is
-	   zalmroze, en dat is de verkeerde kleur voor de melding dat er iets mis
-	   is. Danger-tekst op --surface-2 hoort niet voor te komen; c6 en de
-	   accentmeting hieronder bewaken dat. */
+	/* v3.3: up along with the staircase — 5.50 / 4.78 / 3.97 (was 4.83 / 4.38 / 3.91).
+	   That red is still red; on the top surface it does not make 4.5, and that is a
+	   deliberate bound: everything that *does* make 4.5 on #2c3138 is salmon pink, and that
+	   is the wrong colour for the message that something is wrong. Danger text on
+	   --surface-2 should not occur; c6 and the accent measurement below guard that. */
 	--danger: #ec6055;
-	/* v3.2: dit was in beide thema's dezelfde #c62a1e, en dat pakt averechts
-	   uit. Op wit springt die vulling 6,5× uit zijn achtergrond, op het donkere
-	   paneel nog maar 3,2× — de knop die de machine stopt was in donker juist
-	   de minst opvallende. Eén tint op geeft 3,8× en houdt wit erop op 4,67.
-	   v3.3: onveranderd gelaten, met opzet. Het paneel eronder werd lichter, dus
-	   deze vulling springt er nog 3,37× uit in plaats van 3,46×. Meeliften kan
-	   niet: elke tint lichter zakt wit erop onder 4,5 (#dc4232 geeft 4,31), en
-	   dit is de knop die de machine stopt — de letter erop weegt zwaarder dan
-	   die negen honderdsten silhouet. */
+	/* v3.2: this was the same #c62a1e in both themes, and that works out backwards. On
+	   white that fill stands 6.5× out from its background, on the dark panel only 3.2× — in
+	   dark the button that stops the machine was the least conspicuous of all. One shade up
+	   gives 3.8× and keeps white on it at 4.67.
+	   v3.3: left unchanged, deliberately. The panel below it became lighter, so this fill
+	   still stands 3.37× out instead of 3.46×. Riding along is impossible: every shade
+	   lighter drops white on it below 4.5 (#dc4232 gives 4.31), and this is the button that
+	   stops the machine — the letter on it weighs more than those nine hundredths of
+	   silhouette. */
 	--danger-solid: #d63a2b;
 	--warn: #e0ac33;
 	--warn-solid: #d9a62e;
-	/* v3.2: diepte werkt op donker niet met een zwarte schaduw — zwart op
-	   bijna-zwart is niets. Wat een vlak optilt is een líchte rand. Vandaar de
-	   ring van 1px naast de slagschaduw; die is meteen de bovengrens van het
-	   vlak, ook waar geen border staat. */
+	/* v3.2: on dark, depth does not work with a black shadow — black on near-black is
+	   nothing. What lifts a surface is a *light* border. Hence the 1px ring beside the drop
+	   shadow; that is at the same time the surface's upper boundary, even where there is no
+	   border. */
 	--lift-1: 0 1px 2px rgb(0 0 0 / 0.4);
 	--lift-2: 0 10px 28px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
 	--scrim: rgb(0 0 0 / 0.60);
-	/* Dit token had helemaal geen donkere variant en bleef dus op 12% zwart
-	   staan: de zwevende panelen (gereedschapsuitklap, zoompil, camerapil)
-	   hadden in donker letterlijk geen rand en geen schaduw. */
+	/* This token had no dark variant at all and so stayed at 12% black: in dark the
+	   floating panels (tool dropdown, zoom pill, camera pill) literally had no border and no
+	   shadow. */
 	--shadow-float: 0 8px 24px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
-	/* v3.3: top van L* 10,1 naar 8,6, om dezelfde reden als in licht — `--bed-off`
-	   moet tussen podium en bed passen. Bed tegen podium blijft 1,22:1. */
+	/* v3.3: top from L* 10.1 to 8.6, for the same reason as in light — `--bed-off` has to
+	   fit between stage and bed. Bed against stage stays 1.22:1. */
 	--stage: radial-gradient(120% 100% at 50% 0%, #16191d 0%, #111417 60%, #0d0f12 100%);
-	/* v3.3: mee met de trap — 7,56 / 6,57 / 5,46 (was 6,49 / 5,89 / 5,26). */
+	/* v3.3: along with the staircase — 7.56 / 6.57 / 5.46 (was 6.49 / 5.89 / 5.26). */
 	--ok: #55bb77;
 }
 
@@ -399,8 +390,8 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
-/* Elke numerieke waarde in mono met tabulaire cijfers — parameters zijn de
-   valuta van deze app en mogen nooit een leesfout opleveren. */
+/* Every numeric value in mono with tabular figures — parameters are this app's currency
+   and must never produce a misreading. */
 .mono {
 	font-family: var(--font-mono);
 	font-variant-numeric: tabular-nums;
@@ -423,19 +414,18 @@ button {
 }
 
 /*
- * v3.3 (D5): het vinkje is van ons, niet van het besturingssysteem.
+ * v3.3 (D5): the tick is ours, not the operating system's.
  *
- * `input[type=checkbox]` liet de browser zijn eigen vinkje tekenen, in het
- * OS-accent — op deze Mac helderblauw. Dat was de enige kleur in de app die
- * niet uit dit bestand kwam, en in het donkere thema sprong hij er hard uit
- * naast de petrol. Drie componenten repareerden dat met `accent-color`; vijf
- * andere niet, en `accent-color` verft alleen — de vórm blijft die van het OS.
+ * `input[type=checkbox]` let the browser draw its own tick, in the OS accent — bright blue
+ * on this Mac. That was the only colour in the app that did not come from this file, and in
+ * the dark theme it jumped out hard beside the teal. Three components fixed that with
+ * `accent-color`; five others did not, and `accent-color` only paints — the *shape* stays
+ * the OS's.
  *
- * Het vakje wordt hier met ::before getekend en het vinkje met ::after, allebei
- * in dezelfde rastercel. De input zelf is dus een doorzichtig raakvlak. Dat is
- * precies wat de aanraakregel verderop nodig heeft: die maakt hem 44px zonder
- * dat er een blauwe plaat van 44px verschijnt, want het zichtbare vakje blijft
- * 16px in het midden staan.
+ * The box is drawn here with ::before and the tick with ::after, both in the same grid
+ * cell. So the input itself is a transparent touch surface. That is exactly what the touch
+ * rule further down needs: it makes it 44px without a blue 44px plate appearing, because
+ * the visible box stays 16px in the middle.
  */
 input[type='checkbox'],
 input[type='radio'] {
@@ -470,8 +460,8 @@ input[type='radio']::before {
 	border-radius: var(--radius-dot);
 }
 
-/* Het vinkje zelf: een haak, geen letter — een glyph zou met het lettertype
-   mee veranderen en op 10px onleesbaar worden. */
+/* The tick itself: a hook, not a character — a glyph would change with the typeface and
+   become unreadable at 10px. */
 input[type='checkbox']::after {
 	content: '';
 	grid-area: 1 / 1;
@@ -505,7 +495,7 @@ input[type='checkbox']:checked::after,
 input[type='radio']:checked::after {
 	transform: scale(1);
 }
-/* Half aangevinkt: een streep, want een halve haak bestaat niet. */
+/* Half ticked: a dash, because half a hook does not exist. */
 input[type='checkbox']:indeterminate::after {
 	clip-path: polygon(0 38%, 100% 38%, 100% 62%, 0 62%);
 	transform: scale(1);
@@ -528,7 +518,7 @@ input[type='checkbox']:disabled::after,
 input[type='radio']:disabled::after {
 	background: var(--text-2);
 }
-/* De focusring hoort om het vákje, niet om het onzichtbare raakvlak van 44px. */
+/* The focus ring belongs around the *box*, not around the invisible 44px touch area. */
 input[type='checkbox']:focus-visible,
 input[type='radio']:focus-visible {
 	outline: none;
@@ -539,7 +529,7 @@ input[type='radio']:focus-visible::before {
 	outline-offset: 2px;
 }
 
-/* Signatuur: de kerflijn — traag en precies, nooit als versiering. */
+/* Signature: the kerf line — slow and precise, never as decoration. */
 @keyframes kerf {
 	to {
 		stroke-dashoffset: -20;
@@ -549,46 +539,45 @@ input[type='radio']:focus-visible::before {
 	animation: kerf 2s linear infinite;
 }
 
-/* Op een tablet of telefoon bedien je dit met een vinger, soms met een
-   handschoen aan. Het design system eist 40px; kleiner is niet te raken. */
-/* v2: op armlengte naast een machine is 13px te klein. Dezelfde schaal, één
-   stap opgeschoven — geen nieuwe maten, alleen andere toewijzing. */
+/* On a tablet or phone you operate this with a finger, sometimes with a glove on. The
+   design system demands 40px; smaller cannot be hit. */
+/* v2: at arm's length beside a machine 13px is too small. The same scale, shifted one
+   step — no new sizes, only a different assignment. */
 @media (max-width: 1199px) {
 	:root {
 		--text-xs: 13px;
 		--text-sm: 15px;
 		--text-md: 18px;
 		--text-lg: 24px;
-		/* v3.2: op een aanraakscherm bestaat hover niet, dus bestaat de tooltip
-		   niet, dus krijgen de railpictogrammen een woord eronder. Dat past niet
-		   in 56px. Het getal staat hier en niet in ToolRail, omdat de camerabalk
-		   in +page.svelte er ook mee rekent — twee componenten die dezelfde maat
-		   nodig hebben, dus één bron. */
+		/* v3.2: on a touch screen hover does not exist, so the tooltip does not exist, so
+		   the rail icons get a word below them. That does not fit in 56px. The number lives
+		   here and not in ToolRail, because the camera bar in +page.svelte reckons with it
+		   too — two components that need the same measure, so one source. */
 		--rail-width: 84px;
 	}
 }
 
-/* v2: 44px haalt een handschoen; 40 niet. */
+/* v2: 44px suits a glove; 40 does not. */
 /*
- * Vangnet: een gevulde knop blijft gevuld als je hem aanwijst.
+ * Safety net: a filled button stays filled when you point at it.
  *
- * Elk component definieert zijn eigen `.btn`, en bijna overal staat
- * `.btn:hover { background: var(--surface-2) }` ná `.btn.primary`. Beide wegen
- * even zwaar (0,3,0), dus de hover wint op volgorde: de knop wordt grijs terwijl
- * de tekst wit blijft. Gemeten op de hoofdknop: rgb(238,240,242) met witte
- * letters — onleesbaar, en juist op de knop die het meeste doet.
+ * Every component defines its own `.btn`, and almost everywhere
+ * `.btn:hover { background: var(--surface-2) }` comes *after* `.btn.primary`. Both weigh
+ * the same (0,3,0), so the hover wins on order: the button goes grey while the text stays
+ * white. Measured on the main button: rgb(238,240,242) with white letters — unreadable, and
+ * on the very button that does the most.
  *
- * `:root` ervoor maakt dit een tandje zwaarder (0,4,0) zonder !important. Dit is
- * een vangnet, geen oplossing: de échte fout is dat elf componenten dezelfde
- * knopstijl overschrijven. Dat staat als X1 in FEATURE-GAPS.md.
+ * `:root` in front makes this one notch heavier (0,4,0) without !important. This is a safety
+ * net, not a solution: the *real* fault is that eleven components override the same button
+ * style. That is recorded as X1 in FEATURE-GAPS.md.
  *
- * v3.3: geteld en genoteerd. Elf componenten definiëren een eigen `.btn`; tien
- * daarvan schrijven letterlijk dezelfde regel `.btn:hover:not(:disabled) {
- * background: var(--surface-2) }` en negen dezelfde `.btn:disabled { opacity:
- * .45 }`. Eén bron van de knop kan niet vanuit dit bestand: Svelte hangt een
- * eigen klasse aan elke component-selector, dus `.btn.svelte-x` (0,2,0) wint
- * altijd van een kale `.btn` (0,1,0) hier. Het vangnet blijft dus een vangnet;
- * de opruiming staat als lijst in het rapport bij deze ronde.
+ * v3.3: counted and noted. Eleven components define a `.btn` of their own; ten
+ * daarvan schrijven letterlijk dezelfde row `.btn:hover:not(:disabled) {
+ * background: var(--surface-2) }` and nine the same `.btn:disabled { opacity: .45 }`. One
+ * source for the button is impossible from this file: Svelte hangs a class of its own on
+ * every component selector, so `.btn.svelte-x` (0,2,0) always beats a bare `.btn` (0,1,0)
+ * here. So the safety net stays a safety net; the clean-up is listed in the report for this
+ * round.
  */
 :root .btn.primary:hover:not(:disabled),
 :root button.primary:hover:not(:disabled) {
@@ -602,19 +591,18 @@ input[type='radio']:focus-visible::before {
 }
 
 /*
- * v3.3 (X2): een uitgeschakelde knop is uit, niet gedempt aan.
+ * v3.3 (X2): a disabled button is off, not muted on.
  *
- * Negen componenten zetten `.btn:disabled { opacity: .45 }`. Op een gevulde
- * knop laat dat de merkkleur staan en maakt hem alleen bleker — in het donkere
- * thema leest 45% petrol op een donker paneel nog steeds als "klik mij", en
- * juist de hoofdknop is de knop die je dán niet moet indrukken. Twee
- * componenten hadden dit zelf al doorzien (TestGrid, TestGridResult) en zetten
- * `opacity: 1` terug; dit trekt die uitzondering recht voor alle knoppen.
+ * Nine components set `.btn:disabled { opacity: .45 }`. On a filled button that leaves the
+ * brand colour in place and only makes it paler — in the dark theme 45% teal on a dark panel
+ * still reads as "click me", and the main button is precisely the one you must *not* press
+ * then. Two components had already seen through this themselves (TestGrid, TestGridResult)
+ * and put `opacity: 1` back; this makes that exception the rule for all buttons.
  *
- * Ontkleuren in plaats van vervagen: het vlak wordt het bovenste grijs, de
- * letter de gedempte tekstkleur. Gemeten haalt die combinatie 5,25 in licht en
- * 5,12 in donker — leesbaar genoeg om te weten wát er uitstaat, en zonder een
- * spoor merkkleur die zegt dat je erop mag drukken.
+ * Draining the colour rather than fading: the surface becomes the top grey, the letter the
+ * muted text colour. Measured, that combination reaches 5.25 in light and 5.12 in dark —
+ * readable enough to know *what* is disabled, and without a trace of brand colour saying you
+ * may press it.
  */
 :root .btn.primary:disabled,
 :root button.primary:disabled,
@@ -630,17 +618,16 @@ input[type='radio']:focus-visible::before {
 }
 
 /*
- * En het tweede vangnet ernaast: vulling en letter moeten samen omslaan.
+ * And the second safety net beside it: fill and letter have to flip together.
  *
- * De sluimerende stopknop in de topbalk gaat bij hover van wit-met-donkere-
- * letter naar rood-met-witte-letter. `color` springt meteen, `background`
- * schuift in 150 ms — dus staat er 150 ms lang witte tekst op halfroze. Op
- * 80 ms na het aanwijzen gemeten: rgb(216 109 101) met wit, 3,31:1. Dat is
- * onder de grens, en uitgerekend op de knop die de laser stopt.
+ * On hover the dormant stop button in the top bar goes from white-with-dark-letter to
+ * red-with-white-letter. `color` jumps at once, `background` slides in 150 ms — so for
+ * 150 ms there is white text on half-pink. Measured 80 ms after pointing: rgb(216 109 101)
+ * with white, 3.31:1. That is below the bound, and on the very button that stops the laser.
  *
- * De transitie op background weghalen lost het aan beide kanten op; de
- * kleurwissel van een knop die van rol verandert hoort sowieso hard te zijn,
- * niet vloeiend. Randen en schaduw mogen wel blijven bewegen.
+ * Removing the transition on background solves it on both sides; the colour change of a
+ * button that changes role should be hard anyway, not smooth. Borders and shadow may keep
+ * moving.
  */
 :root .btn.danger,
 :root button.danger,
@@ -673,9 +660,9 @@ input[type='radio']:focus-visible::before {
 		transition-duration: 0.01ms !important;
 	}
 
-	/* Eén uitzondering, en het design system noemt hem met naam: de voortgang
-	   van een lopende job. Die beweging is geen versiering maar de melding dat
-	   de machine nog bezig is; wie beweging uitzet, wil dat nog steeds weten. */
+	/* One exception, and the design system names it: the progress of a running job. That
+	   movement is not decoration but the report that the machine is still working; anybody
+	   who switches motion off still wants to know that. */
 	.kerf-anim.job-progress {
 		animation-duration: 2s !important;
 		animation-iteration-count: infinite !important;

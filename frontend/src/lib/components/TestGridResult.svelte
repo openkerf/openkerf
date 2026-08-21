@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 
 	type Punt = { x: number; y: number };
@@ -29,13 +30,13 @@
 		gap_mm: number;
 		speed_steps: number;
 		power_steps: number;
-		/** Sinds B12 hoeven de assen geen snelheid × vermogen te zijn. */
+		/** Since B12 the axes need not be speed × power. */
 		row_axis: 'speed' | 'power' | 'interval';
 		column_axis: 'speed' | 'power' | 'interval';
 		rows: number | null;
 		columns: number | null;
 		photo_path: string | null;
-		/** De vier hoeken van het bord op de foto; staat in de database (T4). */
+		/** The four corners of the board on the photo; stored in the database (T4). */
 		alignment: Punt[] | null;
 		cells: Cell[];
 		created_at: string;
@@ -48,17 +49,17 @@
 		interval: 'interval_mm'
 	} as const;
 
-	/** "12 mm/s", "60%" — wat er in dit vakje anders was dan in het buurvakje. */
-	function aswaarde(cell: Cell, as: Grid['row_axis']) {
-		const waarde = cell[CEL_SLEUTEL[as]];
-		if (waarde === null || waarde === undefined) return '';
-		return as === 'power' ? `${waarde}%` : `${waarde} ${EENHEID[as]}`;
+	/** "12 mm/s", "60%" — what differed in this square from its neighbour. */
+	function axisValue(cell: Cell, as: Grid['row_axis']) {
+		const value = cell[CEL_SLEUTEL[as]];
+		if (value === null || value === undefined) return '';
+		return as === 'power' ? `${value}%` : `${value} ${EENHEID[as]}`;
 	}
 
-	/** De twee grootheden die dit vakje onderscheiden, achter elkaar. */
-	function celtekst(cell: Cell) {
+	/** The two quantities that distinguish this square, one after the other. */
+	function cellText(cell: Cell) {
 		if (!grid) return '';
-		return `${aswaarde(cell, grid.row_axis)} · ${aswaarde(cell, grid.column_axis)}`;
+		return `${axisValue(cell, grid.row_axis)} · ${axisValue(cell, grid.column_axis)}`;
 	}
 
 	let {
@@ -68,7 +69,7 @@
 	}: {
 		library: LibraryStore;
 		canEdit?: boolean;
-		/** Net gegenereerd raster: daar wil je meteen naartoe. */
+		/** Net gegenereerd grid: daar wil je meteen naartoe. */
 		focusGrid?: number | null;
 	} = $props();
 
@@ -78,15 +79,15 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let photoStamp = $state(0);
-	let uitlijnen = $state(false);
+	let aligning = $state(false);
 	let aangewezen = $state<Cell | null>(null);
 	let podium = $state<HTMLElement | null>(null);
 
 	let grid = $derived(grids.find((g) => g.id === openId) ?? null);
 
-	// Kader om alle cellen heen: de maat waarin een cel zijn plek uitdrukt.
-	// rows/columns in plaats van speed_steps/power_steps: welke grootheid op
-	// welke as staat, ligt sinds B12 niet meer vast.
+	// A frame around all the cells: the measure in which a cell expresses its place.
+	// rows/columns instead of speed_steps/power_steps: since B12 which quantity sits
+	// on which axis is no longer fixed.
 	let box = $derived.by(() => {
 		if (!grid) return null;
 		const pitch = grid.cell_mm + grid.gap_mm;
@@ -96,11 +97,11 @@
 		};
 	});
 
-	/** "11 aug 21:26" — genoeg om drie proeven van dezelfde week te scheiden. */
-	function datum(ruw: string) {
+	/** "11 Aug 21:26" — enough to separate three trials from the same week. */
+	function dateOf(ruw: string) {
 		const d = new Date(ruw.replace(' ', 'T'));
 		if (Number.isNaN(d.getTime())) return ruw;
-		return d.toLocaleString('nl-NL', {
+		return d.toLocaleString(i18n.locale, {
 			day: 'numeric',
 			month: 'short',
 			hour: '2-digit',
@@ -119,7 +120,7 @@
 
 	load();
 
-	// Vers gebrand raster: dat is waar je naartoe wilt, niet "kies een raster…".
+	// A freshly burned grid: that is where you want to go, not "choose a grid…".
 	$effect(() => {
 		if (focusGrid === null) return;
 		(async () => {
@@ -130,41 +131,45 @@
 
 	// ------------------------------------------------------------- uitlijning
 	//
-	// Een foto van een bord is nooit een strakke uitsnede: je staat er schuin
-	// boven, met het bord half in beeld. Zonder correctie ligt de overlay naast
-	// de gebrande vakjes en wijs je dus het verkeerde vakje aan — de enige stap
-	// die deze app onderscheidt, wordt daarmee waardeloos. Daarom vier
-	// sleepbare hoeken en een projectieve afbeelding, precies zoals de
-	// perspectiefcorrectie van de camera.
+	// A photo of a board is never a tidy crop: you state at an angle above it, with
+	// the board half in frame. Without correction the overlay lies beside the burned
+	// squares and you therefore point at the wrong square — which makes the one step
+	// that sets this app apart worthless. Hence four draggable corners and a
+	// projective mapping, exactly like the camera's perspective correction.
 
-	// De uitlijning hoort bij het bord, niet bij de browser (gat T4): je lijnt
-	// uit op de desktop en wijst het beste vakje aan op de tablet naast de
-	// machine. Stond dit in localStorage, dan was de tweede helft van die zin
-	// een leeg raster over een schuine foto. Nu is het een kolom op test_grid.
-	const STANDAARD: Punt[] = [
+	// The alignment belongs to the board, not to the browser (gap T4): you align on
+	// the desktop and point out the best square on the tablet beside the machine. Kept
+	// in localStorage, the second half of that sentence would be an empty grid over a
+	// skewed photo. Now it is a column on test_grid.
+	const DEFAULT_CORNERS: Punt[] = [
 		{ x: 0.1, y: 0.1 },
 		{ x: 0.9, y: 0.1 },
 		{ x: 0.9, y: 0.9 },
 		{ x: 0.1, y: 0.9 }
 	];
-	const HOEKNAAM = ['linksboven', 'rechtsboven', 'rechtsonder', 'linksonder'];
+	const HOEKNAAM = [
+		t('result.corner.topLeft'),
+		t('result.corner.topRight'),
+		t('result.corner.bottomRight'),
+		t('result.corner.bottomLeft')
+	];
 
-	let hoeken = $state<Punt[]>(STANDAARD.map((p) => ({ ...p })));
+	let corners = $state<Punt[]>(DEFAULT_CORNERS.map((p) => ({ ...p })));
 	let bewaarFout = $state<string | null>(null);
 
 	$effect(() => {
 		const id = openId;
 		if (id === null) return;
-		// Alleen op het wisselen van raster reageren. Zou dit ook op `grids`
-		// luisteren, dan sprong de uitlijnstand dicht zodra het bewaren zijn
-		// antwoord terugstuurde — middenin het slepen.
+		// React only to switching grids. If this also listened to `grids`, the
+		// alignment state would snap shut as soon as saving sent its answer back —
+		// in the middle of dragging.
 		const bewaard = untrack(() => grids.find((g) => g.id === id)?.alignment ?? null);
-		hoeken =
+		corners =
 			bewaard && bewaard.length === 4
 				? bewaard.map((p) => ({ x: p.x, y: p.y }))
-				: STANDAARD.map((p) => ({ ...p }));
-		// Nog nooit uitgelijnd? Dan is dát de eerste handeling.
-		uitlijnen = bewaard === null;
+				: DEFAULT_CORNERS.map((p) => ({ ...p }));
+		// Never aligned before? Then that is the first action.
+		aligning = bewaard === null;
 		aangewezen = null;
 		bewaarFout = null;
 	});
@@ -173,40 +178,40 @@
 
 	function bewaarUitlijning() {
 		if (openId === null) return;
-		// Slepen vuurt bij elke los-gelaten hoek; even wachten scheelt vier
-		// schrijfrondes naar de database bij één keer uitlijnen.
+		// Dragging fires on every released corner; waiting a moment saves four write
+		// rounds to the database for one alignment.
 		if (bewaartimer) clearTimeout(bewaartimer);
 		const id = openId;
-		const punten = hoeken.map((p) => ({ x: p.x, y: p.y }));
+		const points = corners.map((p) => ({ x: p.x, y: p.y }));
 		bewaartimer = setTimeout(async () => {
 			try {
 				const response = await fetch(`/api/library/testgrids/${id}/alignment`, {
 					method: 'PUT',
 					headers: headers(true),
-					body: JSON.stringify({ corners: punten })
+					body: JSON.stringify({ corners: points })
 				});
 				if (!response.ok) {
-					bewaarFout = 'De uitlijning kon niet bewaard worden.';
+					bewaarFout = t('result.align.failed');
 					return;
 				}
 				bewaarFout = null;
 				const bijgewerkt: Grid = await response.json();
 				grids = grids.map((g) => (g.id === id ? bijgewerkt : g));
 			} catch {
-				bewaarFout = 'De uitlijning kon niet bewaard worden — geen verbinding.';
+				bewaarFout = t('result.align.failedOffline');
 			}
 		}, 400);
 	}
 
 	/**
-	 * Projectieve afbeelding van het eenheidsvierkant naar de vier hoeken.
+	 * Projective mapping from the unit square to the four corners.
 	 *
-	 * Een affiene transformatie (schuiven, schalen, scheeftrekken) is niet
-	 * genoeg: wie schuin boven het bord staat, fotografeert een trapezium. De
-	 * standaardhomografie hieronder vangt dat wél.
+	 * An affine transform (translate, scale, shear) is not enough: standing at an
+	 * angle above the board you photograph a trapezium. The standard homography
+	 * below does catch that.
 	 */
 	let afbeelding = $derived.by(() => {
-		const [p0, p1, p2, p3] = hoeken;
+		const [p0, p1, p2, p3] = corners;
 		const dx1 = p1.x - p2.x;
 		const dx2 = p3.x - p2.x;
 		const dx3 = p0.x - p1.x + p2.x - p3.x;
@@ -232,13 +237,13 @@
 		};
 	});
 
-	function naarFoto(u: number, v: number) {
+	function toPhoto(u: number, v: number) {
 		const m = afbeelding;
 		const w = m.g * u + m.h * v + 1 || 1e-9;
 		return [(m.a * u + m.b * v + m.c) / w, (m.d * u + m.e * v + m.f) / w];
 	}
 
-	/** Een cel als vierhoek in fotocoördinaten (0–1), perspectief en al. */
+	/** A cell as a quadrilateral in photo coordinates (0–1), perspective and all. */
 	function veelhoek(cell: Cell) {
 		if (!grid || !box) return '';
 		const u0 = (cell.x_mm - grid.origin_x_mm) / box.width;
@@ -246,10 +251,10 @@
 		const u1 = u0 + cell.width_mm / box.width;
 		const v1 = v0 + cell.height_mm / box.height;
 		return [
-			naarFoto(u0, v0),
-			naarFoto(u1, v0),
-			naarFoto(u1, v1),
-			naarFoto(u0, v1)
+			toPhoto(u0, v0),
+			toPhoto(u1, v0),
+			toPhoto(u1, v1),
+			toPhoto(u0, v1)
 		]
 			.map(([x, y]) => `${x},${y}`)
 			.join(' ');
@@ -257,55 +262,55 @@
 
 	function sleep(index: number, event: PointerEvent) {
 		if (!podium) return;
-		const doel = event.currentTarget as HTMLElement;
-		doel.setPointerCapture(event.pointerId);
+		const target = event.currentTarget as HTMLElement;
+		target.setPointerCapture(event.pointerId);
 		const rect = podium.getBoundingClientRect();
 		const beweeg = (e: PointerEvent) => {
-			hoeken[index] = {
+			corners[index] = {
 				x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
 				y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
 			};
 		};
 		const stop = () => {
-			doel.removeEventListener('pointermove', beweeg);
-			doel.removeEventListener('pointerup', stop);
+			target.removeEventListener('pointermove', beweeg);
+			target.removeEventListener('pointerup', stop);
 			bewaarUitlijning();
 		};
-		doel.addEventListener('pointermove', beweeg);
-		doel.addEventListener('pointerup', stop);
+		target.addEventListener('pointermove', beweeg);
+		target.addEventListener('pointerup', stop);
 	}
 
 	function toets(index: number, event: KeyboardEvent) {
-		const stap = event.shiftKey ? 0.02 : 0.004;
+		const step = event.shiftKey ? 0.02 : 0.004;
 		const richting: Record<string, [number, number]> = {
-			ArrowLeft: [-stap, 0],
-			ArrowRight: [stap, 0],
-			ArrowUp: [0, -stap],
-			ArrowDown: [0, stap]
+			ArrowLeft: [-step, 0],
+			ArrowRight: [step, 0],
+			ArrowUp: [0, -step],
+			ArrowDown: [0, step]
 		};
 		const d = richting[event.key];
 		if (!d) return;
 		event.preventDefault();
-		hoeken[index] = {
-			x: Math.min(1, Math.max(0, hoeken[index].x + d[0])),
-			y: Math.min(1, Math.max(0, hoeken[index].y + d[1]))
+		corners[index] = {
+			x: Math.min(1, Math.max(0, corners[index].x + d[0])),
+			y: Math.min(1, Math.max(0, corners[index].y + d[1]))
 		};
 		bewaarUitlijning();
 	}
 
-	// ------------------------------------------------------------------ keuze
+	// ------------------------------------------------------------------ choice
 
 	function toggle(cell: Cell) {
-		if (!canEdit || uitlijnen) return;
+		if (!canEdit || aligning) return;
 		const id = key(cell);
 		picked = picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id];
 	}
 
-	let gekozenCellen = $derived(
+	let pickedCells = $derived(
 		grid ? grid.cells.filter((c) => picked.includes(key(c))) : []
 	);
-	/** De vakjes waar al een preset uit gehaald is — het bewijs onder de kaart. */
-	let gebruikteCellen = $derived(
+	/** The squares a preset has already been taken from — the evidence under the card. */
+	let usedCells = $derived(
 		grid ? grid.cells.filter((c) => c.preset_id !== undefined && c.preset_id !== null) : []
 	);
 
@@ -334,14 +339,14 @@
 				body: form
 			});
 			if (!response.ok) {
-				error = 'Foto opslaan mislukte.';
+				error = t('error.photoFailed');
 				return;
 			}
 			await load();
 			photoStamp = Date.now();
-			// Een verse foto ligt nog niet onder de overlay: dat is de eerste
-			// handeling, dus zet hem meteen klaar.
-			uitlijnen = true;
+			// A fresh photo is not yet under the overlay: that is the first action, so
+			// set it up straight away.
+			aligning = true;
 		} finally {
 			busy = false;
 		}
@@ -366,7 +371,7 @@
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				error = typeof data?.detail === 'string' ? data.detail : 'Preset maken mislukte.';
+				error = typeof data?.detail === 'string' ? data.detail : t('error.presetFailed');
 				return;
 			}
 			gemaakt = cells.length;
@@ -379,17 +384,17 @@
 </script>
 
 <div class="resultaat">
-	<div class="kop">
-		<h2 class="titel">Stap 3 en 4 — foto en preset</h2>
+	<div class="head">
+		<h2 class="title">{t('result.title')}</h2>
 		{#if grids.length}
-			<select class="picker" bind:value={openId} aria-label="Kies een testraster">
-				<option value={null}>Kies een raster…</option>
+			<select class="picker" bind:value={openId} aria-label={t('result.pickGrid')}>
+				<option value={null}>{t('result.pickGrid.option')}</option>
 				{#each grids as g (g.id)}
-					<!-- Datum erbij: wie drie proeven op hetzelfde materiaal heeft
-					     gedaan, ziet anders drie identieke regels. -->
+					<!-- The date with it: whoever has done three tests on the same material
+					     otherwise sees three identical lines. -->
 					<option value={g.id}>
-						{datum(g.created_at)} · {g.material_name ?? 'geen materiaal'} · {g.operation}
-						{g.photo_path ? '· met foto' : '· wacht op foto'}
+						{dateOf(g.created_at)} · {g.material_name ?? t('result.noMaterial')} · {g.operation}
+						{g.photo_path ? t('result.withPhoto') : t('result.waitingPhoto')}
 					</option>
 				{/each}
 			</select>
@@ -397,48 +402,44 @@
 	</div>
 
 	{#if grids.length === 0}
-		<p class="muted">
-			Nog geen testrasters. Zodra je er hierboven een tekent en brandt, kun je hem hier
-			fotograferen en het beste vakje aanwijzen.
-		</p>
+		<p class="muted">{t('result.noGrids')}</p>
 	{/if}
 
-	{#if error}<p class="melding fout" role="alert">{error}</p>{/if}
+	{#if error}<p class="notice failure" role="alert">{error}</p>{/if}
 	{#if gemaakt}
-		<p class="melding goed" role="status">
-			{gemaakt} preset{gemaakt === 1 ? '' : 's'} opgeslagen bij
-			{grid?.material_name ?? 'dit materiaal'}. Je vindt ze in de materiaalbibliotheek.
+		<p class="notice good" role="status">
+			{t('result.saved', {
+				n: gemaakt,
+				material: grid?.material_name ?? t('result.thisMaterial')
+			})}
 		</p>
 	{/if}
 
 	{#if grid && box}
 		{#if !grid.photo_path}
-			<!-- Geen foto: dan geen raster van lege vakjes over het niets. Zeg wat
-			     er moet gebeuren en hoe je het met de telefoon doet. -->
+			<!-- No photo: then no grid of empty squares over nothing. Say what has to
+			     happen and how you do it with a phone. -->
 			<div class="geenfoto">
-				<p class="waarom">
-					<strong>Brand dit raster en fotografeer het bord.</strong>
-					Recht van boven, het hele bord in beeld — de hoeken lijn je hierna zelf uit.
+				<p class="why">
+					<strong>{t('result.burnFirst')}</strong>
+					{t('result.burnFirst.how')}
 				</p>
 				{#if canEdit}
-					<label class="btn primary groot file">
-						Foto toevoegen
+					<label class="btn primary big file">
+						{t('library.addPhoto')}
 						<input type="file" accept="image/*" capture="environment" onchange={uploadPhoto} />
 					</label>
 				{/if}
-				<p class="muted">
-					Of pak je telefoon: open OpenKerf daarop en dit raster staat onder
-					“Testraster fotograferen”.
-				</p>
+				<p class="muted">{t('result.orPhone')}</p>
 			</div>
 		{:else}
 			<div class="podium" bind:this={podium}>
 				<img
 					src="/api/library/testgrids/{grid.id}/photo?v={photoStamp}"
-					alt="Foto van het gebrande raster"
+					alt={t('result.photoAlt')}
 				/>
 
-				<svg viewBox="0 0 1 1" preserveAspectRatio="none" class:uitlijnen>
+				<svg viewBox="0 0 1 1" preserveAspectRatio="none" class:aligning>
 					{#each grid.cells as cell (key(cell))}
 						<g
 							class="cell"
@@ -450,8 +451,8 @@
 						>
 							<polygon
 								role="button"
-								tabindex={uitlijnen ? -1 : 0}
-								aria-label="Rij {cell.row + 1}, kolom {cell.column + 1} — {celtekst(cell)}"
+								tabindex={aligning ? -1 : 0}
+								aria-label="Rij {cell.row + 1}, column {cell.column + 1} — {cellText(cell)}"
 								aria-pressed={picked.includes(key(cell))}
 								points={veelhoek(cell)}
 								onclick={() => toggle(cell)}
@@ -466,35 +467,39 @@
 							/>
 						</g>
 					{/each}
-					{#if uitlijnen}
+					{#if aligning}
 						<polygon
-							class="kader"
-							points={hoeken.map((p) => `${p.x},${p.y}`).join(' ')}
+							class="frame"
+							points={corners.map((p) => `${p.x},${p.y}`).join(' ')}
 						/>
 					{/if}
 				</svg>
 
-				{#if uitlijnen}
-					{#each hoeken as punt, i (i)}
+				{#if aligning}
+					{#each corners as point, i (i)}
 						<button
-							class="hoek"
-							style="left: {punt.x * 100}%; top: {punt.y * 100}%"
-							aria-label="Hoek {HOEKNAAM[i]} verslepen"
+							class="corner"
+							style="left: {point.x * 100}%; top: {point.y * 100}%"
+							aria-label={t('result.corner.drag', { corner: HOEKNAAM[i] })}
 							onpointerdown={(e) => sleep(i, e)}
 							onkeydown={(e) => toets(i, e)}
 						><span></span></button>
 					{/each}
 				{/if}
 
-				<!-- Welke instelling ligt er onder je vinger? Zonder dit wijs je een
-				     vakje aan zonder te weten wat je kiest. -->
+				<!-- Which setting is under your finger? Without this you point at a square
+				     without knowing what you are choosing. -->
 				<div class="aflezing mono" aria-live="polite">
-					{#if uitlijnen}
-						Sleep de vier hoeken naar de hoeken van het gebrande raster
+					{#if aligning}
+						{t('result.dragCorners')}
 					{:else if aangewezen}
-						rij {aangewezen.row + 1}, kolom {aangewezen.column + 1} · {celtekst(aangewezen)}
+						{t('result.rowColumn', {
+							row: aangewezen.row + 1,
+							column: aangewezen.column + 1,
+							values: cellText(aangewezen)
+						})}
 					{:else}
-						Tik het vakje aan dat het beste uitpakte
+						{t('result.tapBest')}
 					{/if}
 				</div>
 			</div>
@@ -502,31 +507,39 @@
 			<div class="onderbalk">
 				<button
 					class="btn"
-					aria-pressed={uitlijnen}
+					aria-pressed={aligning}
 					onclick={() => {
-						uitlijnen = !uitlijnen;
-						if (!uitlijnen) bewaarUitlijning();
+						aligning = !aligning;
+						if (!aligning) bewaarUitlijning();
 					}}
-				>{uitlijnen ? 'Uitlijnen klaar' : 'Overlay uitlijnen'}</button>
+				>{aligning ? t('result.alignDone') : t('result.align')}</button>
 
 				{#if canEdit}
 					<label class="btn file">
-						Andere foto
+						{t('result.otherPhoto')}
 						<input type="file" accept="image/*" capture="environment" onchange={uploadPhoto} />
 					</label>
 				{/if}
 
-				<div class="keuze">
-					{#if gekozenCellen.length}
-						{#each gekozenCellen as cell (key(cell))}
+				<div class="choice">
+					{#if pickedCells.length}
+						{#each pickedCells as cell (key(cell))}
 							<button
 								class="chip mono"
 								onclick={() => toggle(cell)}
-								aria-label="Rij {cell.row + 1}, kolom {cell.column + 1}, {celtekst(cell)}: keuze ongedaan maken"
-							>rij {cell.row + 1}, kol {cell.column + 1} · {celtekst(cell)} ×</button>
+								aria-label={t('result.undoChoice', {
+									row: cell.row + 1,
+									column: cell.column + 1,
+									values: cellText(cell)
+								})}
+							>{t('result.chip', {
+									row: cell.row + 1,
+									column: cell.column + 1,
+									values: cellText(cell)
+								})} ×</button>
 						{/each}
 					{:else}
-						<span class="muted">Nog geen vakje gekozen</span>
+						<span class="muted">{t('result.noneChosen')}</span>
 					{/if}
 				</div>
 
@@ -537,27 +550,26 @@
 						onclick={makePresets}
 					>
 						{#if busy}
-							Bezig…
+							{t('common.busy')}
 						{:else if picked.length}
-							Preset maken van {picked.length} vakje{picked.length === 1 ? '' : 's'}
+							{t('result.makePresets', { n: picked.length })}
 						{:else}
-							Preset maken
+							{t('result.makePreset')}
 						{/if}
 					</button>
 				{/if}
 			</div>
 
-			{#if bewaarFout}<p class="melding fout" role="alert">{bewaarFout}</p>{/if}
+			{#if bewaarFout}<p class="notice failure" role="alert">{bewaarFout}</p>{/if}
 
-			{#if gebruikteCellen.length}
-				<!-- Gat M4: de herkomst zei "rij 2, kolom 3" en op de foto was niets
-				     gemarkeerd. Nu de uitlijning bewaard is, kan dezelfde overlay
-				     het vakje aanwijzen — hier door het op te lichten, en in de
-				     bibliotheek doordat de foto met ?cell= de rand meegebrand
-				     krijgt. -->
+			{#if usedCells.length}
+				<!-- Gap M4: the provenance said "row 2, column 3" and nothing was marked on
+				     the photo. Now that the alignment is saved, the same overlay can point
+				     at the square — here by highlighting it, and in the library because the
+				     photo with ?cell= gets the outline drawn in. -->
 				<div class="herkomst">
-					<span class="muted">Werd een preset:</span>
-					{#each gebruikteCellen as cell (key(cell))}
+					<span class="muted">{t('result.becamePreset')}</span>
+					{#each usedCells as cell (key(cell))}
 						<button
 							class="chip bewijs mono"
 							onpointerenter={() => (aangewezen = cell)}
@@ -565,17 +577,18 @@
 							onfocus={() => (aangewezen = cell)}
 							onblur={() => (aangewezen = null)}
 							onclick={() => (aangewezen = cell)}
-						>rij {cell.row + 1}, kol {cell.column + 1} · {celtekst(cell)}</button>
+						>{t('result.chip', {
+								row: cell.row + 1,
+								column: cell.column + 1,
+								values: cellText(cell)
+							})}</button>
 					{/each}
-					<span class="muted">— aanwijzen licht het vakje op de foto op.</span>
+					<span class="muted">{t('result.pointHighlights')}</span>
 				</div>
 			{/if}
 
 			{#if grid.material_id === null}
-				<p class="melding waarschuwing">
-					Dit raster hoort bij geen materiaal, dus er kan geen preset uit. Koppel een
-					materiaal bij het genereren van het volgende raster.
-				</p>
+				<p class="notice waarschuwing">{t('result.gridNoMaterial')}</p>
 			{/if}
 		{/if}
 	{/if}
@@ -589,8 +602,8 @@
 		padding-top: var(--space-4);
 		border-top: 1px solid var(--line);
 	}
-	.kop { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
-	.titel {
+	.head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+	.title {
 		margin: 0;
 		font-size: var(--text-sm);
 		font-weight: 600;
@@ -620,34 +633,34 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.waarom { margin: 0; max-width: 44ch; font-size: var(--text-sm); color: var(--text-1); }
+	.why { margin: 0; max-width: 44ch; font-size: var(--text-sm); color: var(--text-1); }
 
 	.podium {
 		position: relative;
-		/* Krimpen tot de foto: anders liggen de hoeken deels in de grijze
+		/* Shrink to the photo: otherwise the corners lie partly in the grey
 		   letterbox naast het beeld. */
 		width: fit-content;
 		margin-inline: auto;
-		/* Slepen mag geen tekst selecteren: dat kleurt het halve venster blauw. */
+		/* Dragging must not select text: that turns half the dialog blue. */
 		user-select: none;
 		-webkit-user-select: none;
 		border-radius: var(--radius-card);
 		overflow: hidden;
 		background: var(--surface-2);
 		box-shadow: var(--lift-1);
-		/* De actiebalk moet in beeld blijven: een foto die het hele venster vult
-		   duwt "Preset maken" onder de vouw, en dan eindigt de flow nergens. */
+		/* The action bar has to stay on screen: a photo that fills the whole dialog
+		   pushes "Make preset" below the fold, and then the flow ends nowhere. */
 		max-height: 46vh;
 		display: grid;
 		place-items: center;
 	}
 	.podium img { display: block; max-width: 100%; max-height: 46vh; }
 	.podium svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-	.podium svg.uitlijnen { pointer-events: none; }
+	.podium svg.aligning { pointer-events: none; }
 
-	/* Deze SVG meet in eenheden van 0 tot 1 en wordt naar honderden pixels
-	   uitgerekt. Elke rand krijgt daarom non-scaling-stroke, en er staat geen
-	   tekst, straal of schaduw in. Zie DESIGN-SYSTEM, "SVG die in millimeters
+	/* This SVG measures in units from 0 to 1 and is stretched to hundreds of pixels.
+	   Every edge therefore gets non-scaling-stroke, and there is no text, radius or
+	   shadow in it. See DESIGN-SYSTEM, "SVG that measures in millimetres
 	   meet". */
 	.cell polygon {
 		fill: transparent;
@@ -667,8 +680,8 @@
 		stroke-dasharray: 3 2;
 		fill: color-mix(in srgb, var(--ok) 14%, transparent);
 	}
-	/* Aanwijzen in de herkomstregel licht het vakje op de foto op: dat is de
-	   hele belofte van "rij 2, kolom 3" — dat je hem terugvindt. */
+	/* Pointing at the provenance line lights up the square on the photo: that is the
+	   whole promise of "row 2, column 3" — that you find it again. */
 	.cell.aangewezen polygon {
 		stroke: var(--ok);
 		stroke-width: 4;
@@ -680,7 +693,7 @@
 		stroke: var(--accent);
 		stroke-width: 3;
 	}
-	.kader {
+	.frame {
 		fill: none;
 		stroke: var(--accent);
 		stroke-width: 2;
@@ -688,13 +701,13 @@
 		vector-effect: non-scaling-stroke;
 	}
 
-	/* 44px raakdoel met een kleine punt erin: je vinger moet erbij kunnen, je
-	   oog moet zien waar de hoek precies ligt. */
-	.hoek {
+	/* A 44px touch target with a small dot in it: your finger has to reach it, your
+	   eye has to see where the corner exactly lies. */
+	.corner {
 		position: absolute;
-		width: var(--greep);
-		height: var(--greep);
-		margin: calc(var(--greep) / -2) 0 0 calc(var(--greep) / -2);
+		width: var(--grip);
+		height: var(--grip);
+		margin: calc(var(--grip) / -2) 0 0 calc(var(--grip) / -2);
 		border-radius: var(--radius-dot);
 		background: color-mix(in srgb, var(--accent) 22%, transparent);
 		border: 1px solid var(--accent);
@@ -703,13 +716,13 @@
 		cursor: grab;
 		touch-action: none;
 	}
-	.hoek span {
+	.corner span {
 		width: 8px;
 		height: 8px;
 		border-radius: var(--radius-dot);
 		background: var(--accent);
 	}
-	.hoek:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	.corner:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 	.aflezing {
 		position: absolute;
@@ -731,7 +744,7 @@
 		gap: var(--space-2);
 		flex-wrap: wrap;
 	}
-	.keuze { display: flex; gap: var(--space-1); flex-wrap: wrap; flex: 1; min-width: 8rem; }
+	.choice { display: flex; gap: var(--space-1); flex-wrap: wrap; flex: 1; min-width: 8rem; }
 	.herkomst {
 		display: flex;
 		align-items: center;
@@ -767,14 +780,14 @@
 		color: var(--text-1);
 	}
 	.btn:hover:not(:disabled) { background: var(--surface-2); }
-	/* Zonder deze regel wint de algemene hover van .primary: de knop werd bij
-	   aanwijzen lichtgrijs met witte tekst. Zelfde specificiteit, later in de
-	   stylesheet — een klassieke. */
+	/* Without this rule the general hover beats .primary: on hover the button went
+	   light grey with white text. Same specificity, later in the stylesheet — a
+	   classic. */
 	.btn.primary:hover:not(:disabled) {
 		background: color-mix(in srgb, var(--accent) 88%, var(--text-1));
 	}
-	/* Een uitgeschakelde primaire knop mag er niet uitzien als een knop die het
-	   doet: 45% accent leest in het donkere thema nog steeds als "klik mij". */
+	/* A disabled primary button must not look like a button that works: 45% accent
+	   still reads as "click me" in the dark theme. */
 	.btn.primary:disabled {
 		background: var(--surface-2);
 		border-color: var(--line);
@@ -792,22 +805,22 @@
 		border-color: var(--accent);
 		color: var(--accent-ink);
 	}
-	.btn.groot { min-height: 48px; padding: 12px 20px; font-size: var(--text-md); }
+	.btn.big { min-height: 48px; padding: 12px 20px; font-size: var(--text-md); }
 	.btn.file { cursor: pointer; display: inline-grid; place-items: center; }
 	.btn.file input { position: absolute; width: 0; height: 0; opacity: 0; }
 
-	.melding {
+	.notice {
 		margin: 0;
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 	}
-	.melding.fout { background: color-mix(in srgb, var(--danger-solid) 14%, transparent); }
-	.melding.goed {
+	.notice.failure { background: color-mix(in srgb, var(--danger-solid) 14%, transparent); }
+	.notice.good {
 		background: color-mix(in srgb, var(--ok) 14%, transparent);
 		border-left: 3px solid var(--ok);
 	}
-	.melding.waarschuwing {
+	.notice.waarschuwing {
 		background: color-mix(in srgb, var(--warn-solid) 12%, transparent);
 		border-left: 3px solid var(--warn-solid);
 	}

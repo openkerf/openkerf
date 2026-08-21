@@ -12,19 +12,19 @@ WRITE_ROUTES = [
     ("/api/job/resume", {}),
     ("/api/job/stop", {}),
     ("/api/spooler/clear", {}),
-    # Besluit B7: een bibliotheek binnenhalen overschrijft mogelijk metingen.
-    # Dat mag van buiten de eigen computer nooit zonder token.
+    # Decision B7: taking a library in may overwrite measurements. From outside your own
+    # computer that must never happen without a token.
     ("/api/library/import", {"json": {}}),
     ("/api/library/import/preview", {"json": {}}),
-    # Gat T7: een benoemd recept opslaan schrijft in de bibliotheek.
+    # Gap T7: saving a named recipe writes in the library.
     ("/api/library/testgrids/recipes", {"json": {}}),
-    # Gat E5: een machineprofiel inlezen maakt een machine aan met een bed, een
-    # interface en een adres. Dat bepaalt waar de kop heen gaat.
+    # Gap E5: reading a machine profile in creates a machine with a bed, an interface and an
+    # address. That decides where the head goes.
     ("/api/machines/import", {"json": {}}),
 ]
 
-# Dezelfde eis voor de andere werkwoorden. De uitlijning van een rasterfoto is
-# een PUT en zou anders buiten de tokencontrole hierboven vallen.
+# The same requirement for the other verbs. A grid photo's alignment is a PUT and would
+# otherwise fall outside the token check above.
 WRITE_ROUTES_PUT = [
     ("/api/library/testgrids/1/alignment", {"json": {"corners": None}}),
 ]
@@ -32,9 +32,9 @@ WRITE_ROUTES_PUT = [
 
 @pytest.fixture
 def local_client(kernel, tmp_path):
-    # Een eigen bibliotheek, en dus een eigen vellenmap: zonder pad schrijft en
-    # leest deze test in de échte instellingenmap van de gebruiker, tot en met
-    # de vellen van zijn lopende project.
+    # A library of its own, and therefore a sheets directory of its own: without a path this
+    # test writes and reads in the user's *real* settings directory, down to their running
+    # project's sheets.
     with TestClient(ApiServer(kernel, library_path=tmp_path / "w.db").build_app()) as client:
         yield client
 
@@ -53,9 +53,8 @@ def lan_server(kernel, tmp_path):
 # test_preview_plans_without_drawing, which proves it for this one.
 READ_ONLY_POSTS = {
     "/api/library/testgrids/preview",
-    # Het voorbeeld van een generator: rekent de vorm uit en stuurt hem als
-    # paddata terug, zonder hem aan de tekening te hangen. Bewezen door
-    # test_the_preview_leaves_the_drawing_alone.
+    # A generator's preview: computes the shape and sends it back as path data, without
+    # hanging it on the drawing. Proved by test_the_preview_leaves_the_drawing_alone.
     "/api/design/generate/preview",
 }
 
@@ -76,10 +75,10 @@ def test_every_mutating_route_requires_the_write_guard(local_client):
 
 def test_machine_detection_is_not_a_write_route(local_client):
     """
-    Besluit B6: zoeken is lezen. De detectie is daarom een GET zonder guard —
-    en dat mag alleen zolang hij niets aanmaakt of verbindt. Wordt hij ooit een
-    POST, dan hoort hij in de lijst hierboven en achter het slot; deze test is
-    de plek waar dat opvalt.
+    Decision B6: searching is reading. So the detection is a GET without a guard — and that
+    is only allowed as long as it creates nothing and connects to nothing. If it ever becomes a
+    POST, it belongs in the list above and behind the lock; this test is the place where that
+    stands out.
     """
     scan = [r for r in local_client.app.routes if getattr(r, "path", "") == "/api/machines/scan"]
     assert scan and scan[0].methods == {"GET"}
@@ -167,21 +166,21 @@ def test_load_accepts_an_upload(kernel, local_client):
 
 def test_load_refuses_a_file_that_is_not_a_drawing(kernel, local_client):
     """
-    Een hernoemd of half gedownload bestand kwam er als HTTP 200 {"ok": true}
-    uit: de engine roept "File is Malformed" op het console-kanaal en geeft
-    daarna netjes terug. De gebruiker zag een leeg bed en geen enkele reden.
+    A renamed or half-downloaded file came out as HTTP 200 {"ok": true}: the engine shouts
+    "File is Malformed" on the console channel and then returns neatly. The user saw an empty
+    bed and no reason at all.
     """
     response = local_client.post(
         "/api/job/load",
-        files={"file": ("kapot.svg", b"dit is geen tekening", "image/svg+xml")},
+        files={"file": ("broken.svg", b"this is not a drawing", "image/svg+xml")},
     )
 
     assert response.status_code == 409
-    melding = " ".join(response.json()["detail"]["output"])
-    assert "kapot.svg" in melding
+    message = " ".join(response.json()["detail"]["output"])
+    assert "broken.svg" in message
     # Gebruikerstaal, geen protocoltaal: geen "Malformed", geen tijdelijk pad.
-    assert "Malformed" not in melding
-    assert "/var/" not in melding
+    assert "Malformed" not in message
+    assert "/var/" not in message
 
 
 def test_load_says_so_when_the_file_holds_no_shapes(kernel, local_client):
@@ -193,7 +192,7 @@ def test_load_says_so_when_the_file_holds_no_shapes(kernel, local_client):
     )
 
     assert response.status_code == 409
-    assert "geen tekening" in " ".join(response.json()["detail"]["output"])
+    assert "no shapes" in " ".join(response.json()["detail"]["output"])
 
 
 def test_upload_filename_cannot_escape_the_upload_directory(kernel):
@@ -249,24 +248,24 @@ def test_supports_matches_exactly(kernel):
 
 def test_starting_an_empty_design_is_refused(local_client):
     """
-    Dit meldde eerder "gelukt": je drukt op starten, de app zegt ja, en er
-    gebeurt niets bij de machine. Dan sta je ernaast te wachten.
+    This used to report "succeeded": you press start, the app says yes, and nothing
+    happens at the machine. Then you stand there waiting.
     """
     local_client.post("/api/design/clear")
 
     response = local_client.post("/api/job/start")
 
     assert response.status_code == 409
-    melding = " ".join(response.json()["detail"]["output"])
-    assert "niets klaar om te branden" in melding
-    # En het zegt wat je eraan doet.
-    assert "laag" in melding
+    message = " ".join(response.json()["detail"]["output"])
+    assert "nothing ready to burn" in message
+    # And it says what to do about it.
+    assert "layer" in message
 
 
 def test_layers_that_are_all_switched_off_count_as_empty(local_client):
     """
-    Een laag met 'meebranden' uit levert niets op. Staat álles uit, dan is de
-    job leeg — ook al staat er van alles op het canvas.
+    A layer with 'burn along' off gives nothing. If *everything* is off, the job is
+    empty — however much is on the canvas.
     """
     local_client.post("/api/design/clear")
     local_client.post(
@@ -275,8 +274,8 @@ def test_layers_that_are_all_switched_off_count_as_empty(local_client):
     )
     assert local_client.post("/api/job/start").status_code == 200
 
-    # Een element belandt door de classificatie in meerdere lagen tegelijk, dus
-    # ze moeten allemaal uit.
+    # Classification lands an element in several layers at once, so they all have
+    # to be switched off.
     for operation in local_client.get("/api/design").json()["operations"]:
         if operation["element_ids"]:
             local_client.patch(
@@ -294,28 +293,28 @@ class _Driver:
         self.paused = False
 
 
-class _KaputteLihuiyu:
+class _BrokenLihuiyu:
     """
-    Een lihuiyu-apparaat, met precies de fout die de echte engine heeft.
+    A lihuiyu device, with exactly the bug the real engine has.
 
-    `resume` staat er twee keer in (device.py:855 en device.py:1045); de tweede
-    registratie wint en start de controller in plaats van de driver. De vlag
-    blijft dus staan en de machine blijft stil. `pause` is een toggle.
+    `resume` is in there twice (device.py:855 and device.py:1045); the second
+    registration wins and starts the controller instead of the driver. So the flag
+    stays put and the machine stays quiet. `pause` is a toggle.
     """
 
     def __init__(self):
         self.driver = _Driver()
-        self.uitgevoerd = []
+        self.ran = []
 
-    def console(self, regel):
-        opdracht = regel.strip()
-        self.uitgevoerd.append(opdracht)
-        if opdracht == "pause":
+    def console(self, line):
+        command = line.strip()
+        self.ran.append(command)
+        if command == "pause":
             self.driver.paused = not self.driver.paused
-        # "resume" doet hier met opzet niets aan driver.paused.
+        # "resume" deliberately does nothing to driver.paused here.
 
-    def channel(self, _naam):
-        class Kanaal:
+    def channel(self, _name):
+        class Channel:
             @staticmethod
             def watch(_fn):
                 pass
@@ -324,7 +323,7 @@ class _KaputteLihuiyu:
             def unwatch(_fn):
                 pass
 
-        return Kanaal()
+        return Channel()
 
     @property
     def device(self):
@@ -333,27 +332,27 @@ class _KaputteLihuiyu:
 
 def test_resume_actually_resumes_on_a_lihuiyu():
     """
-    Hervatten moet de machine laten lopen, niet alleen een regel op het console
-    zetten. Zonder de controle achteraf bleef `driver.paused` True en kwam een
-    gepauzeerde job op een K40 nooit meer op gang.
+    Resuming has to make the machine run, not only put a line on the console.
+    Without the check afterwards `driver.paused` stayed True and a paused job on a
+    K40 never got going again.
     """
-    kernel = _KaputteLihuiyu()
+    kernel = _BrokenLihuiyu()
     runner = CommandRunner(kernel)
 
     runner.pause()
     assert kernel.driver.paused is True
 
     runner.resume()
-    assert kernel.driver.paused is False, "de hervatknop liet de machine staan"
-    assert kernel.uitgevoerd == ["pause", "resume", "pause"]
+    assert kernel.driver.paused is False, "the resume button left the machine standing"
+    assert kernel.ran == ["pause", "resume", "pause"]
 
 
 def test_pause_does_not_double_as_resume():
     """
-    `pause` is in de engine een toggle. Twee keer op Pauze drukken zette de
-    machine dus weer aan het branden, onder een knop waar "Pauze" op staat.
+    In the engine `pause` is a toggle. So pressing Pause twice set the machine
+    burning again, under a button that says "Pause".
     """
-    kernel = _KaputteLihuiyu()
+    kernel = _BrokenLihuiyu()
     runner = CommandRunner(kernel)
 
     runner.pause()
@@ -362,9 +361,9 @@ def test_pause_does_not_double_as_resume():
 
 
 def test_resume_is_a_no_op_when_nothing_is_paused():
-    kernel = _KaputteLihuiyu()
+    kernel = _BrokenLihuiyu()
     runner = CommandRunner(kernel)
 
     runner.resume()
-    assert kernel.uitgevoerd == []
+    assert kernel.ran == []
     assert kernel.driver.paused is False

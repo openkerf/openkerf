@@ -1,16 +1,19 @@
 /**
- * NumberField: hangt het label aan het invoerveld, of aan de min-knop?
+ * NumberField: does the label hang off the input, or off the minus button?
  *
- * Draaien: `node --test frontend/tests/numberfield.test.ts`.
+ * Run: `node --test frontend/tests/numberfield.test.ts`.
  *
- * De aanleiding: `<label>` omvatte de −-knop, het invoerveld én de +-knop. HTML
- * kiest dan de *eerste* labelbare afstammeling als bijbehorende control, en dat
- * is de −-knop. Twee gevolgen, beide gemeten in Chrome:
- *   - klikken op het woord "Breedte (mm)" verlaagde de breedte met één stap;
- *   - het invoerveld had geen toegankelijke naam ("textbox: 609.6").
+ * Why it exists: the `<label>` wrapped the − button, the input *and* the +
+ * button. HTML then picks the *first* labelable descendant as the associated
+ * control, and that is the − button. Two consequences, both measured in Chrome:
+ *   - clicking the words "Width (mm)" lowered the width by one step;
+ *   - the input had no accessible name at all ("textbox: 609.6").
  *
- * De component wordt server-side gerenderd, zodat de test geen browser en geen
- * draaiende engine nodig heeft.
+ * The component is rendered server-side, so the test needs no browser and no
+ * running engine. The one thing it does need is `t()`, and that lives behind the
+ * `$lib` alias which only the bundler resolves — so the import is swapped for a
+ * small stub over the real English catalogue. That keeps the aria labels in this
+ * test the same words a reader gets.
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,72 +23,82 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const hier = dirname(fileURLToPath(import.meta.url));
-const bron = join(hier, '..', 'src', 'lib', 'components', 'NumberField.svelte');
-// Binnen de frontend-boom compileren, anders vindt de gecompileerde module
-// `svelte` niet vanuit een tijdelijke map buiten node_modules.
-const werkmap = join(hier, '.tmp');
+const here = dirname(fileURLToPath(import.meta.url));
+const source = join(here, '..', 'src', 'lib', 'components', 'NumberField.svelte');
+// Compile inside the frontend tree, or the compiled module cannot find `svelte`
+// from a temporary directory outside node_modules.
+const work = join(here, '.tmp');
+
+const STUB = `
+import { en } from '../../src/lib/i18n/en.ts';
+export function t(key, vars = {}) {
+	const message = en[key] ?? key;
+	const text = typeof message === 'string' ? message : message.other;
+	return text.replace(/\\{(\\w+)\\}/g, (_, name) => String(vars[name] ?? ''));
+}
+`;
 
 let html = '';
 
 before(async () => {
-	const uit = compile(readFileSync(bron, 'utf8'), { generate: 'server', name: 'NumberField' });
-	mkdirSync(werkmap, { recursive: true });
-	const bestand = join(werkmap, 'NumberField.js');
-	writeFileSync(bestand, uit.js.code);
-	const mod = await import(bestand + '?t=' + Date.now());
-	html = render(mod.default, { props: { label: 'Breedte', unit: 'mm', value: '500' } }).body;
-	rmSync(werkmap, { recursive: true, force: true });
+	const out = compile(readFileSync(source, 'utf8'), { generate: 'server', name: 'NumberField' });
+	mkdirSync(work, { recursive: true });
+	writeFileSync(join(work, 'i18n-stub.js'), STUB);
+	const file = join(work, 'NumberField.js');
+	writeFileSync(file, out.js.code.replace(/'\$lib\/i18n\/index\.svelte'/g, "'./i18n-stub.js'"));
+	const mod = await import(file + '?t=' + Date.now());
+	html = render(mod.default, { props: { label: 'Width', unit: 'mm', value: '500' } }).body;
+	rmSync(work, { recursive: true, force: true });
 });
 
-test('het label wijst met for= naar het invoerveld, niet naar een knop', () => {
+test('the label points with for= at the input, not at a button', () => {
 	const labelFor = html.match(/<label[^>]*\bfor="([^"]+)"/)?.[1];
-	assert.ok(labelFor, `geen <label for=…> gevonden in:\n${html}`);
+	assert.ok(labelFor, `no <label for=…> found in:\n${html}`);
 	const inputId = html.match(/<input[^>]*\bid="([^"]+)"/)?.[1];
-	assert.equal(inputId, labelFor, 'het id van het invoerveld hoort gelijk te zijn aan label for=');
+	assert.equal(inputId, labelFor, 'the id of the input should equal label for=');
 });
 
-test('het label omvat de stapknoppen niet', () => {
+test('the label does not wrap the step buttons', () => {
 	const label = html.match(/<label\b[\s\S]*?<\/label>/)?.[0] ?? '';
-	assert.ok(label, 'geen <label> gevonden');
-	assert.ok(!/<button/.test(label), `een knop staat binnen het label:\n${label}`);
-	assert.ok(!/<input/.test(label), `het invoerveld staat binnen het label:\n${label}`);
+	assert.ok(label, 'no <label> found');
+	assert.ok(!/<button/.test(label), `a button sits inside the label:\n${label}`);
+	assert.ok(!/<input/.test(label), `the input sits inside the label:\n${label}`);
 });
 
-test('label en eenheid staan er nog steeds voor de lezer', () => {
-	assert.match(html, /Breedte/);
+test('label and unit are still there for the reader', () => {
+	assert.match(html, /Width/);
 	assert.match(html, /\(mm\)/);
 });
 
-test('de stapknoppen houden hun eigen naam', () => {
-	assert.match(html, /aria-label="Breedte verlagen"/);
-	assert.match(html, /aria-label="Breedte verhogen"/);
+test('the step buttons keep a name of their own', () => {
+	assert.match(html, /aria-label="Decrease Width"/);
+	assert.match(html, /aria-label="Increase Width"/);
 });
 
 /**
- * Tabben gaat van waarde naar waarde.
+ * Tabbing goes from value to value.
  *
- * Gemeten vóór deze fix, met Playwright vanaf het veld "Kolommen" in het
- * generatorvenster: input → "Kolommen verhogen" → "Rijen verlagen" → input →
- * "Rijen verhogen" → … Drie keer Tab per veld, en twee daarvan zijn knoppen
- * waar je niet heen wilde.
+ * Measured before this fix, with Playwright starting from the "Columns" field in
+ * the generator window: input → "Increase Columns" → "Decrease Rows" → input →
+ * "Increase Rows" → … Three tabs per field, and two of them are buttons you did
+ * not want to reach.
  *
- * De knoppen mogen alleen uit de tabvolgorde omdat hun werk op het veld zelf
- * kan: pijl omhoog en omlaag stappen, precies zoals bij een gewone
- * `<input type=number>`, waarvan de spinner ook niet focusbaar is. Ze houden
- * hun naam en blijven aanwijsbaar.
+ * The buttons may leave the tab order only because their work can be done on the
+ * field itself: arrow up and down step, exactly as on an ordinary
+ * `<input type=number>`, whose spinner is not focusable either. They keep their
+ * names and stay clickable.
  */
-test('de stapknoppen staan niet in de tabvolgorde', () => {
-	const knoppen = html.match(/<button[^>]*>/g) ?? [];
-	assert.equal(knoppen.length, 2, `verwachtte twee knoppen, kreeg:\n${html}`);
-	for (const knop of knoppen) {
-		assert.match(knop, /tabindex="-1"/, `deze knop vangt nog een Tab:\n${knop}`);
+test('the step buttons are not in the tab order', () => {
+	const buttons = html.match(/<button[^>]*>/g) ?? [];
+	assert.equal(buttons.length, 2, `expected two buttons, got:\n${html}`);
+	for (const button of buttons) {
+		assert.match(button, /tabindex="-1"/, `this button still catches a Tab:\n${button}`);
 	}
 });
 
-test('het invoerveld blijft wél gewoon een tabstop', () => {
-	const veld = html.match(/<input\b[^>]*>/)?.[0] ?? '';
-	assert.ok(veld, 'geen invoerveld gevonden');
-	assert.ok(!/tabindex/.test(veld), `het veld hoort in de tabvolgorde te staan:\n${veld}`);
-	assert.ok(!/\bdisabled\b/.test(veld), veld);
+test('the input does stay an ordinary tab stop', () => {
+	const field = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+	assert.ok(field, 'no input found');
+	assert.ok(!/tabindex/.test(field), `the field should be in the tab order:\n${field}`);
+	assert.ok(!/\bdisabled\b/.test(field), field);
 });

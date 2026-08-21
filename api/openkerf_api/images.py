@@ -1,31 +1,29 @@
 """
-Afbeeldingen: plaatsen, bewerken en zichtbaar maken.
+Images: placing, editing and making them visible.
 
-Een `elem image` heeft geen `as_geometry`, dus hij valt buiten de padgebaseerde
-snapshot en was daardoor onzichtbaar op ons canvas. Hier komen de gegevens
-vandaan die de frontend nodig heeft om hem te tekenen: het kader in millimeters
-plus een PNG-weergave van de huidige pixels.
+An `elem image` has no `as_geometry`, so it falls outside the path-based snapshot and was
+therefore invisible on our canvas. This is where the data the frontend needs to draw it
+comes from: the frame in millimetres plus a PNG rendering of the current pixels.
 
-Bewerkingen zijn **niet destructief**. Een `elem image` bewaart het origineel
-en een receptenlijst (`node.operations`); bij elke wijziging gaat dat hele
-recept opnieuw over het origineel heen. Dat is de reden dat je twee keer op
-dezelfde knop kunt drukken zonder de afbeelding weg te branden, en dat het
-paneel kan laten zien wát er aanstaat.
+Edits are **not destructive**. An `elem image` keeps the original and a list of operations
+(`node.operations`); on every change that whole recipe goes over the original again. That is
+the reason you can press the same button twice without burning the image away, and that the
+panel can show *what* is switched on.
 
-Eerder liep dit via de `image ...`-console­commando's. Die schrijven het
-resultaat terug in de afbeelding zelf, dus contrast twee keer verhogen deed dat
-ook echt twee keer, en na een paar klikken was er niets meer over. De engine had
-het goede model al; wij gebruikten het verkeerde.
+This used to go through the `image ...` console commands. Those write the result back into
+the image itself, so raising the contrast twice really did it twice, and after a few clicks
+there was nothing left. The engine already had the right model; we were using the wrong
+one.
 """
 
 from .commands import CommandRunner
 from .edits import DesignError
 
-# Bewerkingen die zonder argumenten werken; geverifieerd tegen de engine.
+# Edits that work without arguments; verified against the engine.
 ADJUSTMENTS = {
     "contrast": {
-        "label": "Contrast en helderheid",
-        # De engine rekent -128..127 om naar een factor rond 1.
+        "label": "Contrast and brightness",
+        # The engine converts -128..127 into a factor around 1.
         "defaults": {"contrast": 25, "brightness": 0},
         "ranges": {"contrast": (-127, 127), "brightness": (-127, 127)},
     },
@@ -56,10 +54,10 @@ ADJUSTMENTS = {
         "ranges": {},
     },
     "tone": {
-        "label": "Omkeren",
-        # Omkeren bestaat niet als eigen bewerking, maar een tooncurve van
-        # (0,255) naar (255,0) doet precies dat — en zit wél in het recept, dus
-        # blijft hij omkeerbaar.
+        "label": "Invert",
+        # Inverting does not exist as an operation of its own, but a tone curve from (0,255)
+        # to (255,0) does exactly that — and it *is* in the recipe, so it stays
+        # reversible.
         "defaults": {"type": "line", "values": [(0, 255), (255, 0)]},
         "ranges": {},
     },
@@ -81,8 +79,8 @@ DITHER_TYPES = (
     "Sierra-2-4a",
 )
 
-# Vectoriseren zit in aparte plugins die kunnen ontbreken (potrace heeft een
-# externe library nodig), dus we vragen de kernel wat er echt geregistreerd is.
+# Vectorising sits in separate plugins that may be absent (potrace needs an external
+# library), so we ask the kernel what is really registered.
 VECTORISERS = ("vectrace", "potrace")
 
 
@@ -98,17 +96,17 @@ class Images:
     def _node(self, element_id: str):
         node = self.elements.find_node(element_id)
         if node is None:
-            raise DesignError(f"Element {element_id} bestaat niet (meer).")
+            raise DesignError(f"Element {element_id} does not exist (any more).")
         if node.type != "elem image":
-            raise DesignError("Dit element is geen afbeelding.")
+            raise DesignError("This element is not an image.")
         return node
 
     def adjustments(self, element_id: str) -> dict:
         """
-        Wat er op deze afbeelding aanstaat, en met welke waarden.
+        What is switched on for this image, and with which values.
 
-        Zonder dit kon het paneel niet tonen wat er gekozen was — je zag alleen
-        knoppen en moest maar onthouden waar je op had gedrukt.
+        Without this the panel could not show what had been chosen — you only saw buttons and
+        had to remember what you had pressed.
         """
         node = self._node(element_id)
         recipe = {op.get("name"): op for op in getattr(node, "operations", []) or []}
@@ -128,24 +126,24 @@ class Images:
                     },
                 }
                 for name, spec in ADJUSTMENTS.items()
-                # Bijsnijden heeft een eigen weg (een kader op het canvas), dus
-                # het staat niet als knop tussen de rest.
+                # Cropping has a route of its own (a frame on the canvas), so it is not a
+                # button among the rest.
                 if name != "crop"
             ],
         }
 
     def set_adjustment(self, element_id: str, name: str, enabled=None, values=None) -> dict:
         """
-        Eén bewerking aan- of uitzetten, of zijn waarden bijstellen.
+        Eén operation aan- of uitzetten, of zijn values bijstellen.
 
-        Het recept gaat daarna in zijn geheel opnieuw over het **origineel**.
-        Twee keer dezelfde knop levert dus hetzelfde resultaat op, en uitzetten
-        brengt de afbeelding echt terug — dat was de fout in de vorige versie.
+        The recipe then goes over the **original** again in its entirety. So the same button
+        twice produces the same result, and switching it off really brings the image back —
+        that was the fault in the previous version.
         """
         spec = ADJUSTMENTS.get(name)
         if spec is None:
             usable = ", ".join(k for k in ADJUSTMENTS if k != "crop")
-            raise DesignError(f"Onbekende bewerking: {name}. Kies uit {usable}.")
+            raise DesignError(f"Unknown adjustment: {name}. Choose from {usable}.")
         node = self._node(element_id)
 
         operation = self._find(node, name)
@@ -158,22 +156,22 @@ class Images:
 
         for key, value in (values or {}).items():
             if key not in spec["defaults"]:
-                raise DesignError(f"'{key}' hoort niet bij {name}.")
+                raise DesignError(f"'{key}' does not belong to {name}.")
             operation[key] = self._checked(name, key, value, spec)
 
         if name == "dither" and operation.get("type") not in DITHER_TYPES:
             raise DesignError(
-                f"Onbekend dither-type. Kies uit {', '.join(DITHER_TYPES)}."
+                f"Unknown dither type. Choose from {', '.join(DITHER_TYPES)}."
             )
 
-        with self.elements.undoscope(f"Afbeelding: {spec['label']}"):
+        with self.elements.undoscope(f"Image: {spec['label']}"):
             self._reprocess(node)
         return self.adjustments(element_id)
 
     def clear_adjustments(self, element_id: str) -> dict:
-        """Alles eraf: terug naar de afbeelding zoals hij binnenkwam."""
+        """Everything off: back to the image as it came in."""
         node = self._node(element_id)
-        with self.elements.undoscope("Afbeelding: bewerkingen wissen"):
+        with self.elements.undoscope("Image: clear the adjustments"):
             node.operations = []
             self._reprocess(node)
         return self.adjustments(element_id)
@@ -191,34 +189,33 @@ class Images:
         try:
             number = float(value)
         except (TypeError, ValueError) as e:
-            raise DesignError(f"{key} moet een getal zijn.") from e
+            raise DesignError(f"{key} has to be a number.") from e
         low, high = bounds
         if not low <= number <= high:
-            raise DesignError(f"{key} moet tussen {low} en {high} liggen.")
+            raise DesignError(f"{key} has to be between {low} and {high}.")
         return number if isinstance(spec["defaults"][key], float) else int(number)
 
     def _reprocess(self, node):
-        """Het recept opnieuw over het origineel halen."""
+        """Run the recipe over the original again."""
         node._processed_image = None
         node.update(self.kernel.root)
-        # update() rekent in een eigen thread; active_image wacht daar netjes op.
+        # update() works in a thread of its own; active_image waits for it politely.
         node.active_image  # noqa: B018
         self.elements.signal("element_property_update", [node])
         self.elements.signal("refresh_scene", "Scene")
 
     def set_dpi(self, element_id: str, dpi) -> dict:
         """
-        DPI bepaalt hoe fijn de raster-gravure wordt afgetast — en daarmee de
-        brandtijd.
+        DPI decides how finely the raster engraving is scanned — and with it the burn time.
         """
         node = self._node(element_id)
         try:
             value = float(dpi)
         except (TypeError, ValueError) as e:
-            raise DesignError("dpi moet een getal zijn.") from e
+            raise DesignError("dpi has to be a number.") from e
         if not 10 <= value <= 2000:
-            raise DesignError("dpi moet tussen 10 en 2000 liggen.")
-        with self.elements.undoscope("Afbeelding-DPI"):
+            raise DesignError("dpi has to be between 10 and 2000.")
+        with self.elements.undoscope("Image DPI"):
             node.dpi = value
             node.altered()
         self.elements.signal("rebuild_tree", "all")
@@ -233,19 +230,18 @@ class Images:
 
     def vectorise(self, element_id: str, method: str = "vectrace") -> dict:
         """
-        Van pixels naar paden, zodat een gescande tekening gesneden kan worden in
-        plaats van gegraveerd.
+        From pixels to paths, so that a scanned drawing can be cut instead of engraved.
         """
         available = self.vectorisers()
         if method not in available:
             raise DesignError(
-                "Vectoriseren met "
-                f"{method} kan niet; beschikbaar: {', '.join(available) or 'geen'}."
+                "Tracing with "
+                f"{method} is not possible; available: {', '.join(available) or 'none'}."
             )
         node = self._node(element_id)
         before = {id(n) for n in self.elements.elems()}
         self.elements.set_emphasis([node])
-        with self.elements.undoscope(f"Vectoriseren ({method})"):
+        with self.elements.undoscope(f"Vectorise ({method})"):
             self.runner.run(f"image {method}")
         added = [n for n in self.elements.elems() if id(n) not in before]
         self.elements.validate_ids()
@@ -261,9 +257,9 @@ class Images:
         """
         Bijsnijden op een rechthoek in millimeters.
 
-        Ook dit gaat in het recept in plaats van in de pixels: bijsnijden is
-        daarmee terug te draaien, en een tweede keer snijden rekent vanaf het
-        origineel in plaats van vanaf de al bijgesneden afbeelding.
+        This too goes into the recipe rather than into the pixels: that makes cropping
+        reversible, and a second crop computes from the original instead of from the
+        already-cropped image.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -271,18 +267,18 @@ class Images:
         image = getattr(node, "image", None)
         bounds = getattr(node, "bounds", None)
         if image is None or not bounds:
-            raise DesignError("Deze afbeelding heeft geen pixels om te snijden.")
+            raise DesignError("This image has no pixels to crop.")
         try:
             rect = [float(v) for v in (x_mm, y_mm, width_mm, height_mm)]
         except (TypeError, ValueError) as e:
-            raise DesignError("Het snijkader moet uit getallen bestaan.") from e
+            raise DesignError("The crop box has to consist of numbers.") from e
         if rect[2] <= 0 or rect[3] <= 0:
-            raise DesignError("Het snijkader moet breedte en hoogte hebben.")
+            raise DesignError("The crop box needs a width and a height.")
 
         x0, y0, x1, y1 = (v / UNITS_PER_MM for v in bounds)
         width, height = image.size
         if x1 - x0 <= 0 or y1 - y0 <= 0:
-            raise DesignError("Deze afbeelding heeft geen kader.")
+            raise DesignError("This image has no box.")
 
         def to_pixels(value, low, high, count):
             return int(round((value - low) / (high - low) * count))
@@ -294,7 +290,7 @@ class Images:
         left, right = max(0, min(left, width)), max(0, min(right, width))
         upper, lower = max(0, min(upper, height)), max(0, min(lower, height))
         if right - left < 1 or lower - upper < 1:
-            raise DesignError("Het snijkader valt buiten de afbeelding.")
+            raise DesignError("The crop box falls outside the image.")
 
         operation = self._find(node, "crop")
         if operation is None:
@@ -303,30 +299,28 @@ class Images:
         operation["enable"] = True
         operation["bounds"] = [left, upper, right, lower]
 
-        with self.elements.undoscope("Afbeelding bijsnijden"):
+        with self.elements.undoscope("Crop image"):
             self._reprocess(node)
         return {"id": element_id, "pixels": [left, upper, right, lower]}
 
     def render_png(self, element_id: str) -> bytes:
         """
-        De huidige pixels als PNG, zodat het canvas de afbeelding kan tonen.
+        The current pixels as a PNG, so that the canvas can show the image.
 
-        Bytes, geen bestand. Dit liep eerst via één vast pad per element, en
-        dat brak zodra het canvas twee keer tegelijk om hetzelfde plaatje
-        vroeg — wat het doet, want elke verversing hangt er een nieuw
-        `?v=`-nummer aan terwijl de vorige aanvraag nog loopt. De ene aanvraag
-        schreef het bestand opnieuw terwijl de andere het aan het versturen
-        was: `Content-Length` van vóór het overschrijven, inhoud van erna, en
-        uvicorn viel om met `Too little data for declared Content-Length` in
-        het log van de gebruiker. Een antwoord uit het geheugen heeft altijd de
-        lengte die het meldt.
+        Bytes, not a file. This used to go through one fixed path per element, and that
+        broke as soon as the canvas asked for the same image twice at once — which it does,
+        because every refresh hangs a new `?v=` number on it while the previous request is
+        still running. One request rewrote the file while the other was sending it:
+        `Content-Length` from before the overwrite, content from after, and uvicorn fell over
+        with `Too little data for declared Content-Length` in the user's log. An answer from
+        memory always has the length it reports.
         """
         from io import BytesIO
 
         node = self._node(element_id)
         image = getattr(node, "active_image", None) or getattr(node, "image", None)
         if image is None:
-            raise DesignError("Deze afbeelding heeft geen pixels.")
+            raise DesignError("This image has no pixels.")
         buffer = BytesIO()
         image.convert("RGBA").save(buffer, "PNG")
         return buffer.getvalue()

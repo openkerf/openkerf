@@ -1,45 +1,46 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import Logo from '$components/Logo.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { children } = $props();
 
-	// Elke stap is een eigen route, zodat de browser-terugknop werkt en een
-	// verversing je niet terug naar stap 1 gooit.
-	// "Machines" stond hier als eerste stap, maar dat is een overzicht van álle
-	// machines — een bestemming, geen stap binnen één machine. Twee niveaus in
-	// één rij pillen leest als een fout, en dat was het ook.
+	// Every step is a route of its own, so the browser's back button works and a
+	// refresh does not throw you back to step 1.
+	// "Machines" used to be the first step here, but that is an overview of *all*
+	// machines — a destination, not a step within one machine. Two levels in one row
+	// of pills reads as a mistake, and it was one.
 	const STEPS = [
-		{ path: '/setup/soort', title: 'Soort' },
-		{ path: '/setup/type', title: 'Model' },
-		{ path: '/setup/naam', title: 'Naam' },
-		{ path: '/setup/instellen', title: 'Instellen' },
-		{ path: '/setup/klaar', title: 'Klaar' }
+		{ path: '/setup/kind', title: t('setup.step.kind') },
+		{ path: '/setup/type', title: t('setup.step.model') },
+		{ path: '/setup/name', title: t('setup.step.name') },
+		{ path: '/setup/settings', title: t('setup.step.settings') },
+		{ path: '/setup/done', title: t('setup.step.done') }
 	];
 
 	let current = $derived(STEPS.findIndex((s) => s.path === $page.url.pathname));
 
-	// Stappen met weinig op het scherm krijgen een smallere kaart. Anders staat
-	// een kolom van 460px links in een kaart van 900 en is de rechterhelft leeg
-	// — dat leest als een pagina waar iets van weggevallen is.
-	const SMAL = ['/setup/naam', '/setup/klaar'];
-	let smal = $derived(SMAL.includes($page.url.pathname));
+	// Steps with little on screen get a narrower card. Otherwise a 460px column sits
+	// on the left of a 900px card with the right half empty — which reads as a page
+	// something has fallen off.
+	const SMAL = ['/setup/name', '/setup/done'];
+	let narrow = $derived(SMAL.includes($page.url.pathname));
 </script>
 
 <header class="topbar">
 	<div class="brand"><Logo />OpenKerf</div>
-	<span class="crumb">Machine instellen</span>
+	<span class="crumb">{t('setup.crumb')}</span>
 	<div class="spacer"></div>
-	<a class="btn" href="/">Terug<span class="lang">naar werkgebied</span></a>
+	<a class="btn" href="/">{t('common.back')}<span class="lang">{t('setup.backToWorkArea')}</span></a>
 </header>
 
-<main class:smal>
+<main class:narrow>
 	{#if current >= 0}
-	<nav class="steps" aria-label="Voortgang">
-		<!-- Vijf pillen zonder telling zeggen niet hoe ver je bent; op een
-		     telefoon wikkelen ze bovendien, en dan is de gemarkeerde pil het
-		     enige houvast. De zin ervoor werkt altijd. -->
-		<p class="teller">Stap {current + 1} van {STEPS.length}</p>
+	<nav class="steps" aria-label={t('setup.progress')}>
+		<!-- Five pills without a count do not say how far you are; on a phone they
+		     wrap as well, and then the highlighted pill is the only foothold. The
+		     sentence before it always works. -->
+		<p class="stepper">{t('setup.stepOf', { n: current + 1, total: STEPS.length })}</p>
 		<ol>
 			{#each STEPS as step, index (step.path)}
 				<li class:current={index === current} class:done={current > index}>
@@ -54,19 +55,18 @@
 	</nav>
 	{/if}
 
-	<!-- De stappen stonden als kale tekst in een leeg venster: op 1440 bij 900
-	     was tweederde van het scherm niets. Een kaart maakt er een scherm van
-	     in plaats van een document. -->
-	<div class="blad">
+	<!-- The steps sat as bare text in an empty window: at 1440 by 900 two thirds of the
+	     screen was nothing. A card makes it a screen rather than a document. -->
+	<div class="sheetcard">
 		{@render children()}
 	</div>
 </main>
 
 <style>
-	/* Op 390 pixels breekt deze kop over drie regels en valt de knop van het
-	   scherm. Dan maar korter: de bestemming staat er nog. */
-	/* De ruimte tussen "Terug" en de rest komt van een marge: in een flexbox
-	   valt een geschreven spatie tussen twee items weg. */
+	/* At 390 pixels this heading breaks over three lines and the button falls off the
+	   screen. Shorter, then: the destination is still there. */
+	/* The space between "Back" and the rest comes from a margin: in a flexbox a written
+	   space between two items disappears. */
 	.lang { margin-left: 0.3em; }
 	@media (max-width: 560px) {
 		.crumb { display: none; }
@@ -104,10 +104,10 @@
 		width: 100%;
 		margin: 0 auto;
 	}
-	main.smal {
+	main.narrow {
 		max-width: 560px;
 	}
-	.blad {
+	.sheetcard {
 		background: var(--surface-1);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -115,11 +115,11 @@
 		padding: var(--space-6);
 	}
 	@media (max-width: 560px) {
-		.blad {
+		.sheetcard {
 			padding: var(--space-4);
 		}
 	}
-	.teller {
+	.stepper {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-xs);
 		color: var(--text-2);
@@ -142,17 +142,16 @@
 		color: var(--text-2);
 		text-decoration: none;
 	}
-	/* Een afgeronde stap staat op --surface-2, en daar blijft --accent op 4,33
-	   steken; --accent-text is dezelfde kleur één tint dieper en haalt 5,09.
-	   Ook bij hover, want die legt --line eronder. */
+	/* A completed step sits on --surface-2, and there --accent stays at 4.33
+	   short; --accent-text is the same colour one shade deeper and reaches 5.09. On hover
+	   as well, because that lays --line underneath. */
 	.steps li.done a {
 		color: var(--accent-text);
 	}
-	/* De hover zette --line als vulling, en dat is een randkleur, geen vlak: in
-	   licht zakt de pil daarmee naar 4,14 en in donker naar 3,42 — allebei
-	   onder de grens, en juist op het moment dat je de stap wílt aanklikken.
-	   Het vlak blijft nu staan; de aanwijzing is een streep, en die kan geen
-	   contrast kosten. */
+	/* The hover set --line as the fill, and that is a border colour, not a surface: in
+	   light the pill drops to 4.14 with it and in dark to 3.42 — both below the bound, and
+	   precisely at the moment you *want* to click the step. The surface now stays; the
+	   indication is a stripe, and that cannot cost contrast. */
 	.steps li.done a:hover {
 		text-decoration: underline;
 		text-underline-offset: 2px;
@@ -161,8 +160,8 @@
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
-	/* Een afgeronde stap is een link terug, dus een raakdoel. Gemeten op 27px
-	   hoog op tablet en telefoon; het design system eist er 44. */
+	/* A completed step is a link back, so a touch target. Measured at 27px tall on tablet
+	   and phone; the design system demands 44. */
 	@media (max-width: 1199px) {
 		.steps li span,
 		.steps li a {
@@ -172,8 +171,8 @@
 			padding: 4px 12px;
 		}
 	}
-	/* Gedeeld door alle stappen — die zijn losse routes, dus scoped styles
-	   per pagina zouden hetzelfde vijf keer herhalen. */
+	/* Shared by all the steps — those are separate routes, so scoped styles per page
+	   would repeat the same thing five times. */
 	:global(.setup h1) {
 		font-size: var(--text-lg);
 		font-weight: 600;
@@ -183,8 +182,8 @@
 	:global(.setup .muted) {
 		color: var(--text-2);
 	}
-	/* De breedte zit nu in de kaart (main.smal), niet in de inhoud: anders
-	   stond een kolom van 460px links in een kaart van 900. */
+	/* The width now lives on the card (main.narrow), not in the content: otherwise a 460px
+	   column sat on the left of a 900 card. */
 	:global(.setup.narrow) {
 		max-width: none;
 	}

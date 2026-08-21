@@ -1,33 +1,33 @@
 <script lang="ts">
 	/**
-	 * Wat er gebrand wordt, vlak voordat je op starten drukt (besluit B8).
+	 * What gets burned, right before you press start (decision B8).
 	 *
-	 * Het canvas staat er op tablet en telefoon niet naast, en op de desktop
-	 * kijk je er vlak vóór het starten toch niet meer naar. Dit is het laatste
-	 * moment waarop een verkeerde laag, een vergeten vorm of iets dat over de
-	 * rand van het vel hangt nog niets kost.
+	 * The canvas is not next to it on tablet and phone, and on the desktop you
+	 * stop looking at it just before starting anyway. This is the last moment at
+	 * which a wrong layer, a forgotten shape or something hanging over the edge of
+	 * the sheet still costs nothing.
 	 *
-	 * Bewust géén snijvolgorde: die vraagt het volledige snijplan, en juist dat
-	 * plan bouwen was de reden dat de pre-flight minuten stilstond (gat J1).
-	 * Zie BESLISSINGEN.md, B8.
+	 * Deliberately no cut order: that needs the full cut plan, and building that
+	 * plan is precisely why the preflight used to stall for minutes (gap J1).
+	 * See BESLISSINGEN.md, B8.
 	 */
 	import type { Design } from '$lib/design.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 
-	/** De tekening op ware grootte, in een eigen venster. */
-	let groot = $state(false);
+	/** The drawing at full size, in a window of its own. */
+	let large = $state(false);
 
-	// Een SVG-pattern heeft een id, en twee weergaven op één pagina mogen niet
-	// dezelfde dragen — dan pakt de tweede het patroon van de eerste.
-	const eigenId = $props.id();
+	// An SVG pattern has an id, and two views on one page must not carry the same
+	// one — the second would then pick up the first one's pattern.
+	const ownId = $props.id();
 
 	/**
-	 * Wat de server over de grenzen meldt (gat C2).
+	 * What the server reports about the limits (gap C2).
 	 *
-	 * De meting komt uit `/api/job/layers`, dezelfde die het canvas en de
-	 * telefoon gebruiken. Hem hier overdoen zou betekenen dat twee plekken
-	 * kunnen gaan verschillen over de vraag of iets nog net past — en dan is
-	 * geen van beide te vertrouwen.
+	 * The measurement comes from `/api/job/layers`, the same one the canvas and
+	 * the phone use. Redoing it here would mean two places could come to disagree
+	 * about whether something still just fits — and then neither can be trusted.
 	 */
 	type BoundsReport = {
 		bed: { width_mm: number; height_mm: number } | null;
@@ -46,49 +46,49 @@
 		colorFor
 	}: {
 		design: Design | null;
-		/** Het vel waarop gebrand wordt; zonder vel valt hij terug op het werk zelf. */
+		/** The sheet being burned on; without a sheet it falls back to the work itself. */
 		sheet: { name: string; width_mm: number; height_mm: number } | null;
 		bounds?: BoundsReport | null;
 		colorFor?: (operationId: string | null) => string;
 	} = $props();
 
-	const GRIJS = 'var(--text-2)';
+	const GREY = 'var(--text-2)';
 
-	/** Lagen die meebranden. Een laag met "meebranden" uit hoort hier niet in:
-	 *  dat is precies het verschil dat deze weergave zichtbaar moet maken. */
-	let brandende = $derived(
+	/** Layers that burn along. A layer with "burn along" off does not belong here:
+	 *  that is exactly the difference this view has to make visible. */
+	let burning = $derived(
 		new Set((design?.operations ?? []).filter((o) => o.output).map((o) => o.id))
 	);
 
-	type Vorm = {
+	type Shape = {
 		id: string;
 		path: string;
 		image: { x: number; y: number; w: number; h: number } | null;
-		kleur: string;
-		/** Zit in geen enkele meebrandende laag: wordt niet gebrand. */
-		stil: boolean;
-		/** Steekt buiten het vel uit: daar ligt geen materiaal. */
-		buiten: boolean;
-		/** Ligt buiten het bed: daar komt de kop niet eens. */
-		buitenBed: boolean;
+		colour: string;
+		/** Sits in no burning layer: will not be burned. */
+		silent: boolean;
+		/** Sticks out beyond the sheet: there is no material there. */
+		offSheet: boolean;
+		/** Lies outside the bed: the head does not even reach it. */
+		offBed: boolean;
 	};
 
 	let perMm = $derived(design?.units_per_mm ?? 1);
 
-	// De meting van de server, als hij er is. Zonder `bounds` (bijvoorbeeld
-	// terwijl het overzicht nog laadt) valt hij terug op de velrand die hij zelf
-	// kan zien; het bed kent hij dan niet en dat meldt hij dus ook niet.
+	// The server's measurement, when there is one. Without `bounds` (while the
+	// overview is still loading, say) it falls back to the sheet edge it can see
+	// for itself; it does not know the bed then, and so does not report it either.
 	let bedIds = $derived(new Set(bounds?.outside_bed_ids ?? []));
-	let velIds = $derived(new Set(bounds?.outside_sheet_ids ?? []));
+	let sheetIds = $derived(new Set(bounds?.outside_sheet_ids ?? []));
 
-	let vormen = $derived.by<Vorm[]>(() => {
+	let shapes = $derived.by<Shape[]>(() => {
 		if (!design) return [];
 		return design.elements
 			.filter((element) => !element.hidden)
 			.map((element) => {
-				const lagen = (element.operation_ids ?? []).filter((id) => brandende.has(id));
+				const layers = (element.operation_ids ?? []).filter((id) => burning.has(id));
 				const box = element.bounds;
-				const zelfBuiten = Boolean(
+				const seenOffSheet = Boolean(
 					sheet &&
 						box &&
 						(box[0] / perMm < -0.05 ||
@@ -96,7 +96,7 @@
 							box[2] / perMm > sheet.width_mm + 0.05 ||
 							box[3] / perMm > sheet.height_mm + 0.05)
 				);
-				const buitenBed = bounds ? bedIds.has(element.id) : false;
+				const offBed = bounds ? bedIds.has(element.id) : false;
 				return {
 					id: element.id,
 					path: element.path,
@@ -108,29 +108,30 @@
 								h: element.image.height_mm * perMm
 							}
 						: null,
-					kleur: lagen.length ? (colorFor?.(lagen[0]) ?? GRIJS) : GRIJS,
-					stil: lagen.length === 0,
-					// Buiten het bed is de zwaarste van de twee, dus die wint: een
-					// vorm die er allebei buiten valt, is er één die de machine niet
-					// kan bereiken. Twee merktekens over één vorm zeggen niets extra.
-					buiten: (bounds ? velIds.has(element.id) : zelfBuiten) && !buitenBed,
-					buitenBed
+					colour: layers.length ? (colorFor?.(layers[0]) ?? GREY) : GREY,
+					silent: layers.length === 0,
+					// Outside the bed is the heavier of the two, so it wins: a shape
+					// that falls outside both is one the machine cannot reach. Two
+					// marks over one shape say nothing extra.
+					offSheet: (bounds ? sheetIds.has(element.id) : seenOffSheet) && !offBed,
+					offBed
 				};
 			});
 	});
 
-	let buitenVel = $derived(vormen.filter((v) => v.buiten).length);
-	let buitenBed = $derived(vormen.filter((v) => v.buitenBed).length);
-	let stille = $derived(vormen.filter((v) => v.stil).length);
-	let brandt = $derived(vormen.filter((v) => !v.stil).length);
+	let offSheetCount = $derived(shapes.filter((s) => s.offSheet).length);
+	let offBedCount = $derived(shapes.filter((s) => s.offBed).length);
+	let silentCount = $derived(shapes.filter((s) => s.silent).length);
+	let burningCount = $derived(shapes.filter((s) => !s.silent).length);
 
 	/**
-	 * Het kader waar de weergave in kijkt, in millimeters.
+	 * The frame the view looks into, in millimetres.
 	 *
-	 * Het vel plus alles wat erbuiten valt: wie een vorm over de rand heeft
-	 * hangen, moet die vorm zien liggen en niet alleen zijn afwezigheid.
+	 * The sheet plus everything that falls outside it: someone with a shape
+	 * hanging over the edge has to see that shape lying there, not just its
+	 * absence.
 	 */
-	let kader = $derived.by(() => {
+	let frame = $derived.by(() => {
 		let x0 = 0;
 		let y0 = 0;
 		let x1 = sheet?.width_mm ?? 0;
@@ -144,24 +145,24 @@
 			y1 = Math.max(y1, d / perMm);
 		}
 		if (x1 <= x0 || y1 <= y0) return null;
-		// Iets lucht eromheen, zodat een vorm die precies op de rand ligt niet
-		// tegen de zijkant van het kader geplakt zit.
-		const marge = Math.max(x1 - x0, y1 - y0) * 0.04;
+		// A little air around it, so a shape lying exactly on the edge is not
+		// stuck against the side of the frame.
+		const margin = Math.max(x1 - x0, y1 - y0) * 0.04;
 		return {
-			x: x0 - marge,
-			y: y0 - marge,
-			w: x1 - x0 + 2 * marge,
-			h: y1 - y0 + 2 * marge
+			x: x0 - margin,
+			y: y0 - margin,
+			w: x1 - x0 + 2 * margin,
+			h: y1 - y0 + 2 * margin
 		};
 	});
 
 	/**
-	 * Hoe groot het werk zelf is, in millimeters.
+	 * How big the work itself is, in millimetres.
 	 *
-	 * Zonder maat is de weergave een plaatje: je ziet dát iets krap ligt, maar
-	 * niet of het past. Dit is het getal waarmee je het naast je restje legt.
+	 * Without a size the view is a picture: you see that something lies tight, but
+	 * not whether it fits. This is the number you hold up against your offcut.
 	 */
-	let werk = $derived.by(() => {
+	let work = $derived.by(() => {
 		let x0 = Infinity;
 		let y0 = Infinity;
 		let x1 = -Infinity;
@@ -178,74 +179,85 @@
 		return { w: (x1 - x0) / perMm, h: (y1 - y0) / perMm };
 	});
 
-	/** Eén zin die zegt wat je ziet, voor wie het beeld niet krijgt. */
-	let beschrijving = $derived.by(() => {
-		if (!kader) return 'Niets op het vel.';
-		const delen = [`${brandt} ${brandt === 1 ? 'vorm brandt' : 'vormen branden'}`];
-		if (sheet) delen.push(`op ${sheet.name}, ${maat(sheet.width_mm)} bij ${maat(sheet.height_mm)} millimeter`);
-		if (buitenBed) delen.push(`${buitenBed} liggen buiten het bed`);
-		if (buitenVel) delen.push(`${buitenVel} vallen buiten het vel`);
-		if (stille) delen.push(`${stille} zitten in geen laag`);
-		return delen.join('; ') + '.';
+	/** One sentence saying what you see, for whoever does not get the image. */
+	let description = $derived.by(() => {
+		if (!frame) return t('preview.nothingOnSheet');
+		const parts = [t('preview.shapesBurn', { n: burningCount })];
+		if (sheet)
+			parts.push(
+				t('preview.onSheet', {
+					name: sheet.name,
+					width: size(sheet.width_mm),
+					height: size(sheet.height_mm)
+				})
+			);
+		if (offBedCount) parts.push(t('preview.countOutsideBed', { n: offBedCount }));
+		if (offSheetCount) parts.push(t('preview.countOutsideSheet', { n: offSheetCount }));
+		if (silentCount) parts.push(t('preview.countNoLayer', { n: silentCount }));
+		return parts.join('; ') + '.';
 	});
 
-	function maat(value: number) {
-		return String(Math.round(value)).replace('.', ',');
+	// Whole millimetres, in the reader's own notation: 1.234 in English, 1.234 in
+	// Dutch too for a thousand, but 3,5 versus 3.5 the moment a decimal appears.
+	// `Intl` is the only place that knows which, so it does the writing.
+	function size(value: number) {
+		return i18n.number(Math.round(value), 0);
 	}
 
 	/**
-	 * Buiten het vel is gearceerd, niet anders gekleurd.
+	 * Outside the sheet is hatched, not coloured differently.
 	 *
-	 * Gemeten: `--bed` en `--surface-2` zijn in het donkere thema exact dezelfde
-	 * kleur (1,00:1) en in het lichte thema 1,14:1. Geen enkel bestaand token
-	 * haalt tegenover `--bed` meer dan 1,23:1, dus met een vlakkleur is "hier
-	 * ligt geen materiaal" in het donker domweg onzichtbaar. Arcering is ook de
-	 * gangbare taal ervoor in CAM-software, en werkt bij kleurenblindheid.
+	 * Measured: `--bed` and `--surface-2` are exactly the same colour in the dark
+	 * theme (1.00:1) and 1.14:1 in the light one. No existing token gets past
+	 * 1.23:1 against `--bed`, so with a flat colour "there is no material here" is
+	 * simply invisible in the dark. Hatching is also the common language for it in
+	 * CAM software, and it works for colour blindness.
 	 */
-	const arceringId = `ok-arcering-${eigenId}`;
-	// De arcering staat in millimeters, net als de rest van de weergave; de
-	// stap schaalt mee met het kader zodat hij op elk formaat even fijn oogt.
-	let stap = $derived(kader ? Math.max(kader.w, kader.h) / 45 : 1);
+	const hatchId = `ok-hatch-${ownId}`;
+	// The hatching is in millimetres, like the rest of the view; the step scales
+	// with the frame so it looks equally fine at any size.
+	let step = $derived(frame ? Math.max(frame.w, frame.h) / 45 : 1);
 </script>
 
-<!-- Tweemaal dezelfde tekening: klein in het paneel, groot in het venster. Het
-     patroon-id moet per exemplaar verschillen, anders wijst de tweede naar het
-     patroon van de eerste en verdwijnt de arcering zodra de eerste weg is. -->
-{#snippet tekening(sleutel: string)}
-	{@const patroon = `${arceringId}-${sleutel}`}
-	{#if kader}
+<!-- The same drawing twice: small in the panel, large in the window. The pattern
+     id has to differ per copy, or the second points at the first one's pattern
+     and the hatching disappears as soon as the first is gone. -->
+{#snippet drawing(key: string)}
+	{@const pattern = `${hatchId}-${key}`}
+	{#if frame}
 		<svg
-			viewBox="{kader.x} {kader.y} {kader.w} {kader.h}"
+			viewBox="{frame.x} {frame.y} {frame.w} {frame.h}"
 			preserveAspectRatio="xMidYMid meet"
 			role="img"
-			aria-label={beschrijving}
+			aria-label={description}
 		>
-			<!-- Het vel. De weergave meet in millimeters, dus elke lengte hier is
-			     er één; randen krijgen non-scaling-stroke, anders schaalt de lijn
-			     mee met het vel en is hij op een groot vel onzichtbaar. -->
+			<!-- The sheet. The view measures in millimetres, so every length here is
+			     one; edges get non-scaling-stroke, otherwise the line scales with
+			     the sheet and is invisible on a large one. -->
 			{#if sheet}
 				<defs>
 					<pattern
-						id={patroon}
+						id={pattern}
 						patternUnits="userSpaceOnUse"
-						width={stap}
-						height={stap}
+						width={step}
+						height={step}
 						patternTransform="rotate(45)"
 					>
-						<line class="arcering" x1={stap / 2} y1="0" x2={stap / 2} y2={stap} />
+						<line class="hatch" x1={step / 2} y1="0" x2={step / 2} y2={step} />
 					</pattern>
 				</defs>
-				<!-- Alles buiten het vel: gearceerd, want daar ligt geen materiaal. -->
+				<!-- Everything outside the sheet: hatched, because there is no
+				     material there. -->
 				<rect
-					x={kader.x}
-					y={kader.y}
-					width={kader.w}
-					height={kader.h}
-					fill="url(#{patroon})"
+					x={frame.x}
+					y={frame.y}
+					width={frame.w}
+					height={frame.h}
+					fill="url(#{pattern})"
 				/>
 				<rect
-					class="vel"
-					class:overhang={buitenVel > 0}
+					class="sheet"
+					class:overhang={offSheetCount > 0}
 					x="0"
 					y="0"
 					width={sheet.width_mm}
@@ -253,13 +265,13 @@
 				/>
 			{/if}
 
-			<!-- De bedrand, alleen als er iets buiten valt. Anders is het een grote
-			     doos om een klein vel: ruis. Ligt er wél iets buiten, dan is een
-			     rode vorm zonder zichtbare grens een raadsel — je ziet dát er iets
-			     mis is, niet waarmee. -->
-			{#if buitenBed && bounds?.bed}
+			<!-- The bed edge, only when something falls outside it. Otherwise it is a
+			     big box around a small sheet: noise. When something does fall
+			     outside, a red shape without a visible boundary is a riddle — you
+			     see that something is wrong, not what against. -->
+			{#if offBedCount && bounds?.bed}
 				<rect
-					class="bedrand"
+					class="bededge"
 					x="0"
 					y="0"
 					width={bounds.bed.width_mm}
@@ -267,32 +279,32 @@
 				/>
 			{/if}
 
-			<!-- Het werk zelf. Eén schaaltransform rekent Tats om naar mm, precies
-			     zoals het canvas het doet; de paddata blijft zoals de engine hem gaf. -->
+			<!-- The work itself. One scale transform converts Tats to mm, exactly as
+			     the canvas does it; the path data stays as the engine gave it. -->
 			<g transform="scale({1 / perMm})">
-				{#each vormen as vorm (vorm.id)}
-					{#if vorm.image}
+				{#each shapes as shape (shape.id)}
+					{#if shape.image}
 						<image
-							href="/api/design/elements/{encodeURIComponent(vorm.id)}/image.png"
-							x={vorm.image.x}
-							y={vorm.image.y}
-							width={vorm.image.w}
-							height={vorm.image.h}
+							href="/api/design/elements/{encodeURIComponent(shape.id)}/image.png"
+							x={shape.image.x}
+							y={shape.image.y}
+							width={shape.image.w}
+							height={shape.image.h}
 							preserveAspectRatio="none"
-							opacity={vorm.stil ? 0.35 : 1}
+							opacity={shape.silent ? 0.35 : 1}
 						/>
-					{:else if vorm.path}
+					{:else if shape.path}
 						<path
-							d={vorm.path}
-							class="vorm"
-							class:stil={vorm.stil}
-							class:buiten={vorm.buiten}
-							class:buitenbed={vorm.buitenBed}
-							style:stroke={vorm.buitenBed
+							d={shape.path}
+							class="shape"
+							class:silent={shape.silent}
+							class:offsheet={shape.offSheet}
+							class:offbed={shape.offBed}
+							style:stroke={shape.offBed
 								? 'var(--danger-solid)'
-								: vorm.buiten
+								: shape.offSheet
 									? 'var(--warn-solid)'
-									: vorm.kleur}
+									: shape.colour}
 						/>
 					{/if}
 				{/each}
@@ -301,73 +313,81 @@
 	{/if}
 {/snippet}
 
-{#if kader}
+{#if frame}
 	<div class="pf-beeld">
-		<!-- Klein in het paneel, groot op verzoek. LightBurn geeft zijn preview een
-		     heel venster; een strook van 220 px is te weinig voor een fout die je
-		     alleen hier nog kunt zien. -->
+		<!-- Small in the panel, large on request. LightBurn gives its preview a
+		     whole window; a 220 px strip is too little for a mistake you can only
+		     still catch here. -->
 		<button
-			class="vergroot"
-			onclick={() => (groot = true)}
-			aria-label="{beschrijving} Groter bekijken."
-			title="Groter bekijken"
+			class="enlarge"
+			onclick={() => (large = true)}
+			aria-label={t('preview.viewLargerAria', { description })}
+			title={t('preview.bigger')}
 		>
-			{@render tekening('klein')}
+			{@render drawing('small')}
 		</button>
 
-		<!-- De maten eronder, want de weergave zelf heeft geen schaal: je ziet dat
-		     iets krap ligt, niet of het past. Dit is ook het getal waarmee je het
-		     naast een restje legt. -->
-		<p class="maten">
+		<!-- The sizes underneath, because the view itself has no scale: you see
+		     that something lies tight, not whether it fits. This is also the number
+		     you hold up against an offcut. -->
+		<p class="sizes">
 			{#if sheet}<span
 					>{sheet.name}
-					<span class="mono">{maat(sheet.width_mm)} × {maat(sheet.height_mm)} mm</span></span
+					<span class="mono">{size(sheet.width_mm)} × {size(sheet.height_mm)} mm</span></span
 				>{/if}
-			{#if werk}<span>werk <span class="mono">{maat(werk.w)} × {maat(werk.h)} mm</span></span>{/if}
+			{#if work}<span
+					>{t('preview.work')}
+					<span class="mono">{size(work.w)} × {size(work.h)} mm</span></span
+				>{/if}
 		</p>
 
-		<!-- Wat het beeld zegt, in woorden. Een rode lijn die je over het hoofd
-		     ziet is geen waarschuwing; en wie op de telefoon in de zon staat,
-		     ziet kleurverschil als eerste niet meer. -->
-		<!-- Buiten het bed staat bovenaan en is rood; buiten het vel eronder en
-		     oranje. Dat is geen smaakkwestie maar de volgorde waarin het
-		     misgaat: buiten het vel kost je materiaal, buiten het bed komt de
-		     kop er niet eens — daar staat de machine stil of loopt hij tegen
-		     zijn eindaanslag. Twee even rode kaarten op rij (zoals het was)
-		     maken die twee even erg, en dan weegt geen van beide nog. -->
-		{#if buitenBed}
-			<p class="melding buitenbed" role="alert">
-				<strong>Buiten het bed.</strong>
-				{buitenBed === 1 ? 'Eén vorm ligt' : `${buitenBed} vormen liggen`} buiten
-				het bereik van de machine{bounds?.bed
-					? `, die tot ${maat(bounds.bed.width_mm)} × ${maat(bounds.bed.height_mm)} mm reikt`
-					: ''}. Daar komt de kop niet: verplaats het of maak het kleiner.
+		<!-- What the image says, in words. A red line you overlook is not a
+		     warning; and whoever is standing in the sun with a phone is the first
+		     to lose colour differences. -->
+		<!-- Outside the bed comes first and is red; outside the sheet below it and
+		     amber. That is not a matter of taste but the order in which it goes
+		     wrong: outside the sheet costs you material, outside the bed the head
+		     does not even get there — the machine stalls or runs into its end
+		     stop. Two equally red cards in a row (as it was) make those two
+		     equally bad, and then neither carries any weight. -->
+		{#if offBedCount}
+			<p class="notice offbed" role="alert">
+				<strong>{t('preview.outsideBed.title')}</strong>
+				{t('preview.outsideBed.body', {
+					n: offBedCount,
+					reach: bounds?.bed
+						? t('preview.reach', {
+								width: size(bounds.bed.width_mm),
+								height: size(bounds.bed.height_mm)
+							})
+						: ''
+				})}
 			</p>
 		{/if}
-		{#if buitenVel}
-			<p class="melding buiten">
-				{buitenVel === 1 ? 'Eén vorm valt' : `${buitenVel} vormen vallen`} buiten
-				{sheet ? sheet.name : 'het vel'}. Daar ligt geen materiaal — wat er
-				overheen steekt, brandt in je rooster of je werkblad.
+		{#if offSheetCount}
+			<p class="notice offsheet">
+				{t('preview.outsideSheet', {
+					n: offSheetCount,
+					sheet: sheet ? sheet.name : t('preview.sheetFallback')
+				})}
 			</p>
 		{/if}
-		{#if stille}
-			<p class="melding stil">
-				{stille === 1 ? 'Eén vorm zit' : `${stille} vormen zitten`} in geen enkele
-				laag die meebrandt — grijs gestippeld hierboven. De machine slaat ze over.
-			</p>
+		{#if silentCount}
+			<p class="notice silent">{t('preview.silent', { n: silentCount })}</p>
 		{/if}
 	</div>
 
-	<Dialog title="Wat er gebrand wordt" bind:open={groot} width="960px">
-		<div class="groot">
-			{@render tekening('groot')}
-			<p class="maten">
+	<Dialog title={t('preview.whatBurns')} bind:open={large} width="960px">
+		<div class="large">
+			{@render drawing('large')}
+			<p class="sizes">
 				{#if sheet}<span
 						>{sheet.name}
-						<span class="mono">{maat(sheet.width_mm)} × {maat(sheet.height_mm)} mm</span></span
+						<span class="mono">{size(sheet.width_mm)} × {size(sheet.height_mm)} mm</span></span
 					>{/if}
-				{#if werk}<span>werk <span class="mono">{maat(werk.w)} × {maat(werk.h)} mm</span></span
+				{#if work}<span
+						>{t('preview.work')}
+						<span class="mono">{size(work.w)} × {size(work.h)} mm</span></span
 					>{/if}
 			</p>
 		</div>
@@ -378,9 +398,9 @@
 	.pf-beeld {
 		margin: 0 0 var(--space-3);
 	}
-	/* De knop is de tekening zelf; hij mag er niet als knop uitzien, maar moet
-	   wel te focussen zijn en zeggen dat er iets gebeurt als je hem aanraakt. */
-	.vergroot {
+	/* The button is the drawing itself; it must not look like a button, but it
+	   does have to be focusable and say that something happens when you touch it. */
+	.enlarge {
 		display: block;
 		width: 100%;
 		padding: 0;
@@ -389,87 +409,87 @@
 		border-radius: var(--radius-field);
 		cursor: zoom-in;
 	}
-	.vergroot:focus-visible {
+	.enlarge:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
-	.groot :global(svg) {
+	.large :global(svg) {
 		max-height: 66vh;
 	}
 	svg {
 		display: block;
 		width: 100%;
-		/* Zonder plafond wordt een staand vel in een smal paneel een toren en
-		   valt de tijdschatting eronder van het scherm. `meet` zorgt dat het
-		   beeld daarbij nooit vervormt; er komt hooguit lucht naast. */
+		/* Without a ceiling an upright sheet in a narrow panel becomes a tower and
+		   the time estimate below it drops off the screen. `meet` makes sure the
+		   image never distorts doing so; at most there is air beside it. */
 		max-height: 30vh;
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
 	}
-	/* Fijn genoeg om achtergrond te blijven, sterk genoeg om op een weergave van
-	   221 px nog als arcering te lezen. Op `--line` haalde hij 1,41:1 (licht) en
-	   1,44:1 (donker) tegenover het vel — gemeten, en dat is te weinig. */
-	.arcering {
+	/* Fine enough to stay background, strong enough to still read as hatching on a
+	   221 px view. On `--line` it managed 1.41:1 (light) and 1.44:1 (dark) against
+	   the sheet — measured, and that is too little. */
+	.hatch {
 		stroke: color-mix(in srgb, var(--text-2) 45%, transparent);
 		stroke-width: 1;
 		vector-effect: non-scaling-stroke;
 	}
-	/* De rand van het vel is waar je materiaal ophoudt; dat is een grens en geen
-	   scheidingslijntje. `--line` haalde er 1,41:1 (licht) / 1,44:1 (donker),
-	   ruim onder de 3:1 die WCAG 1.4.11 voor een grafisch object vraagt;
-	   `--text-2` haalt 6,00:1 en 5,65:1. */
-	.vel {
+	/* The edge of the sheet is where your material stops; that is a boundary, not
+	   a divider. `--line` got 1.41:1 (light) / 1.44:1 (dark) there, well under the
+	   3:1 WCAG 1.4.11 asks of a graphical object; `--text-2` gets 6.00:1 and
+	   5.65:1. */
+	.sheet {
 		fill: var(--bed);
 		stroke: var(--text-2);
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
 	}
-	/* Steekt er iets over de rand, dan is de rand het onderwerp. Oranje en niet
-	   rood: het vel is een stuk materiaal dat op is, niet een grens die de
-	   machine niet haalt. Dat laatste is de bedrand hieronder. */
-	.vel.overhang {
+	/* If something sticks out over the edge, the edge is the subject. Amber and
+	   not red: the sheet is a piece of material that has run out, not a boundary
+	   the machine cannot reach. That last one is the bed edge below. */
+	.sheet.overhang {
 		stroke: var(--warn-solid);
 		stroke-width: 2;
 	}
-	/* Waar de machine ophoudt. Rood en gestreept: twee codes voor één grens,
-	   want op een klein beeld is hue alleen te weinig — en bij deuteranopie
-	   liggen rood en amber tegen elkaar aan. */
-	.bedrand {
+	/* Where the machine stops. Red and dashed: two codes for one boundary, because
+	   on a small image hue alone is too little — and with deuteranopia red and
+	   amber sit right next to each other. */
+	.bededge {
 		fill: none;
 		stroke: var(--danger-solid);
 		stroke-width: 2;
 		stroke-dasharray: 10 6;
 		vector-effect: non-scaling-stroke;
 	}
-	.vorm {
+	.shape {
 		fill: none;
 		stroke-width: 1.5;
 		vector-effect: non-scaling-stroke;
 		stroke-linejoin: round;
 	}
-	/* Zit in geen laag: wordt niet gebrand. Gestippeld grijs, dezelfde taal als
-	   op het canvas — daar betekent het al "deze vorm doet niet mee". */
-	.vorm.stil {
+	/* Sits in no layer: will not be burned. Dotted grey, the same language as on
+	   the canvas — there it already means "this shape does not take part". */
+	.shape.silent {
 		stroke: var(--text-2);
 		stroke-dasharray: 4 3;
 		stroke-width: 1;
 	}
-	/* Buiten het vel: oranje én onderbroken. Een langere streep dan die van
-	   `stil` (4 3), zodat "doet niet mee" en "ligt naast je materiaal" op één
-	   beeld niet hetzelfde patroon dragen. */
-	.vorm.buiten {
+	/* Outside the sheet: amber and broken. A longer dash than the one for
+	   `silent` (4 3), so that "does not take part" and "lies next to your
+	   material" do not carry the same pattern on one image. */
+	.shape.offsheet {
 		stroke-width: 2.5;
 		stroke-dasharray: 9 4;
 	}
-	/* Buiten het bed: rood en dicht. De zwaarste van de drie krijgt de rustigste
-	   lijn — die hoeft niets te suggereren, hij is gewoon fout. */
-	.vorm.buitenbed {
+	/* Outside the bed: red and solid. The heaviest of the three gets the calmest
+	   line — it does not need to suggest anything, it is simply wrong. */
+	.shape.offbed {
 		stroke-width: 3;
 	}
-	/* Twee maten naast elkaar als het past, onder elkaar als het niet past — in
-	   een paneel van 220px past het niet, en dan is links uitlijnen rustiger dan
-	   een tweede regel die tegen de rechterrand geplakt staat. */
-	.maten {
+	/* Two sizes side by side when they fit, stacked when they do not — in a 220px
+	   panel they do not, and then aligning left is calmer than a second line stuck
+	   against the right edge. */
+	.sizes {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
@@ -479,30 +499,30 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.maten .mono {
+	.sizes .mono {
 		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 	}
-	.melding {
+	.notice {
 		margin-top: var(--space-2);
 		font-size: var(--text-xs);
 		line-height: 1.45;
 	}
-	.melding.buiten,
-	.melding.buitenbed {
+	.notice.offsheet,
+	.notice.offbed {
 		color: var(--text-1);
 		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
 		border-radius: 0 var(--radius-field) var(--radius-field) 0;
 	}
-	.melding.buitenbed {
+	.notice.offbed {
 		border-left: 4px solid var(--danger-solid);
 		background: color-mix(in srgb, var(--danger) 18%, transparent);
 	}
-	.melding.buiten {
+	.notice.offsheet {
 		border-left: 4px solid var(--warn-solid);
 		background: color-mix(in srgb, var(--warn) 18%, transparent);
 	}
-	.melding.stil {
+	.notice.silent {
 		color: var(--text-2);
 	}
 </style>

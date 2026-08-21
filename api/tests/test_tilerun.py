@@ -1,8 +1,8 @@
 """
 De plan-bewerkers en de lopende tegelreeks.
 
-Het uitgangspunt van al deze tests: wat er ook in het plan gebeurt, de
-elementenboom van de gebruiker komt er onveranderd uit.
+The premise of all these tests: whatever happens in the plan, the user's element tree comes
+out unchanged.
 """
 
 import pytest
@@ -16,14 +16,14 @@ UNITS_PER_MM = 65535 / 25.4
 
 def test_a_plain_job_still_takes_the_single_line_route(kernel):
     """
-    Zonder bewerkers blijft het één regel. Dat pad wordt bij elke job gelopen
-    en verdient geen omweg voor een functie die de meeste mensen niet gebruiken.
+    Without mutators it stays one line. That path is walked on every job and deserves no
+    detour for a feature most people do not use.
 
-    Er wordt tegen de constante getoetst en niet tegen een uitgeschreven regel:
-    die regel bevat `clear`, en waaróm dat er staat is een dure les (zonder
-    clear stapelt elke start hetzelfde werk opnieuw op het plan). Een testliteral
-    die de constante nadoet, gaat vroeg of laat uit de pas lopen met het origineel
-    en dan is de test een val in plaats van een vangnet.
+    It is tested against the constant and not against a written-out line: that line contains
+    `clear`, and *why* that is there is an expensive lesson (without clear every start piles
+    the same work onto the plan again). A test literal imitating the constant will sooner or
+    later drift out of step with the original, and then the test is a trap instead of a safety
+    net.
     """
     runner = CommandRunner(kernel)
     gedraaid = []
@@ -51,17 +51,16 @@ def test_a_mutator_gets_the_plan_steps_and_can_replace_them(kernel):
 
 def _wide_sheet(server):
     """
-    Een plaat van 800 × 150 mm op het dummy-bed, met tegels aan.
+    A board of 800 × 150 mm on the dummy bed, with tiling on.
 
-    Die maat is niet willekeurig: het dummy-apparaat heeft een bed van
-    320 × 220 mm (gemeten, niet de 500 × 300 die je zou verwachten), dus het
-    bruikbare venster is 300 mm en deze plaat wordt precies drie tegels. Kies
-    je 900, dan worden het er vier en vallen de tests om op een reden die
-    niets met tegels te maken heeft.
+    That size is not arbitrary: the dummy device has a bed of 320 × 220 mm (measured, not the
+    500 × 300 you would expect), so the usable window is 300 mm and this board becomes exactly
+    three tiles. Choose 900 and it becomes four and the tests fall over for a reason that has
+    nothing to do with tiling.
     """
-    vel = server.sheets.state()["sheets"][0]
-    server.sheets.update(vel["id"], width_mm=800.0, height_mm=150.0)
-    server.sheets.update(vel["id"], tiling={"enabled": True})
+    sheet = server.sheets.state()["sheets"][0]
+    server.sheets.update(sheet["id"], width_mm=800.0, height_mm=150.0)
+    server.sheets.update(sheet["id"], tiling={"enabled": True})
     server.kernel.console("rect 10mm 10mm 30mm 30mm\n")
     server.kernel.console("rect 600mm 10mm 30mm 30mm\n")
     server.kernel.console("classify\n")
@@ -69,8 +68,8 @@ def _wide_sheet(server):
 
 def test_a_run_survives_a_restart_but_its_alignment_does_not(kernel, tmp_path):
     """
-    De reeks is uren werk en overleeft afsluiten. De uitlijning niet: die zegt
-    waar de plaat lag, en dat weet je na een pauze niet meer.
+    The series is hours of work and survives a shutdown. The alignment does not: it says
+    where the board lay, and after a break you no longer know that.
     """
     from openkerf_api.server import ApiServer
 
@@ -89,14 +88,13 @@ def test_a_run_survives_a_restart_but_its_alignment_does_not(kernel, tmp_path):
 
 def test_the_fingerprint_is_the_same_in_a_fresh_process(kernel, tmp_path):
     """
-    De vingerafdruk gaat naar schijf en wordt na een herstart vergeleken, dus
-    hij moet buiten dit proces dezelfde waarde hebben.
+    The fingerprint goes to disk and is compared after a restart, so it has to have the same
+    value outside this process.
 
-    Dat klinkt vanzelfsprekend en is het niet: Python zout de hash van strings
-    per proces, dus een vingerafdruk uit `hash()` komt na elke herstart anders
-    terug en verklaart iedere hervatte reeks ongeldig — precies het geval
-    waarvoor de reeks bewaard wordt. Een test die twee servers in hetzelfde
-    proces maakt ziet daar niets van; alleen een echt tweede proces wel.
+    That sounds obvious and is not: Python salts the hash of strings per process, so a
+    fingerprint from `hash()` comes back different after every restart and declares every
+    resumed series invalid — precisely the case the series is stored for. A test that makes two
+    servers in the same process sees nothing of it; only a genuinely second process does.
     """
     import subprocess
     import sys
@@ -115,39 +113,38 @@ def test_the_fingerprint_is_the_same_in_a_fresh_process(kernel, tmp_path):
 
 def test_the_fingerprint_is_a_digest_and_not_a_process_hash(kernel, tmp_path):
     """
-    Samen met de test hierboven sluit dit de keten: sha1 is over processen heen
-    stabiel, en de vingerafdruk ís een sha1-digest.
+    Together with the test above this closes the chain: sha1 is stable across processes, and
+    the fingerprint *is* a sha1 digest.
 
-    Veertig hexcijfers is het bewijs. `str(hash(...))` is een decimaal getal en
-    valt hier meteen door — en dat is precies de fout die dit moet vangen, want
-    zonder deze test kwam hij er pas na een herstart uit, als een reeks die
-    zichzelf zonder reden ongeldig verklaart.
+    Forty hex digits is the proof. `str(hash(...))` is a decimal number and fails here at once
+    — and that is exactly the fault this has to catch, because without this test it only came
+    out after a restart, as a series declaring itself invalid for no reason.
     """
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
     _wide_sheet(server)
-    vel = server.sheets.state()["sheets"][0]
+    sheet = server.sheets.state()["sheets"][0]
 
-    afdruk = server.tiles._fingerprint(vel)
+    afdruk = server.tiles._fingerprint(sheet)
 
     assert len(afdruk) == 40
     assert all(teken in "0123456789abcdef" for teken in afdruk)
-    assert afdruk == server.tiles._fingerprint(vel)
+    assert afdruk == server.tiles._fingerprint(sheet)
 
 
 def test_a_run_whose_sheet_is_deleted_expires_gracefully(kernel, tmp_path):
     """
-    Het vel weggooien terwijl er een reeks loopt.
+    Het sheet weggooien terwijl er een reeks loopt.
 
-    Wat er dan feitelijk gebeurt is niet "geen vel meer": `Sheets.remove`
-    activeert eerst een ander vel en gooit het oude daarna pas weg, en er is
-    altijd precies één actief vel. De reeks hoort bij een vel dat er niet meer
-    is, dus hij verloopt — en dat is precies goed.
+    What actually happens then is not "no sheet any more": `Sheets.remove` activates another
+    sheet first and only then throws the old one away, and there is always exactly one active
+    sheet. The series belongs to a sheet that no longer exists, so it lapses — and that is
+    exactly right.
 
-    Wat deze test vastpint is dat je dat als staat terugkrijgt, en dat zowel
-    branden als uitlijnen daarna netjes weigert met díe uitleg, niet met een
-    melding uit de diepte over vellen terwijl je een merk staat aan te tikken.
+    What this test pins down is that you get that back as a state, and that both burning and
+    aligning then refuse neatly with *that* explanation, not with a message from the depths
+    about sheets while you are tapping a mark.
     """
     from openkerf_api.edits import DesignError
     from openkerf_api.server import ApiServer
@@ -156,31 +153,31 @@ def test_a_run_whose_sheet_is_deleted_expires_gracefully(kernel, tmp_path):
     _wide_sheet(server)
     server.tiles.start()
 
-    vel = server.sheets.state()["sheets"][0]
-    server.sheets.add(name="Ander vel")
-    server.sheets.remove(vel["id"])
+    sheet = server.sheets.state()["sheets"][0]
+    server.sheets.add(name="Ander sheet")
+    server.sheets.remove(sheet["id"])
 
-    stand = server.tiles.state()
-    assert stand["stale"] is True
-    assert stand["message"]
+    state = server.tiles.state()
+    assert state["stale"] is True
+    assert state["message"]
 
-    for aanroep in (
+    for call in (
         lambda: server.tiles.burn(),
         lambda: server.tiles.align(
             [{"x_mm": 0.0, "y_mm": 0.0}], reference="plate_corner"
         ),
     ):
-        with pytest.raises(DesignError) as fout:
-            aanroep()
-        # De reeks legt uit dat hij verlopen is. Een kale "Er is geen actief
-        # vel." zou hier de verkeerde vraag beantwoorden.
-        assert str(fout.value) == stand["message"]
+        with pytest.raises(DesignError) as error:
+            call()
+        # The series explains that it has lapsed. A bare "There is no active sheet." would
+        # answer the wrong question here.
+        assert str(error.value) == state["message"]
 
 
 def test_changing_the_design_invalidates_a_running_series(kernel, tmp_path):
     """
-    Half het oude ontwerp en half het nieuwe branden is de duurste fout die dit
-    systeem kan maken. Dus: ongeldig, en zichtbaar.
+    Burning half the old design and half the new one is the most expensive mistake this
+    system can make. So: invalid, and visibly so.
     """
     from openkerf_api.server import ApiServer
 
@@ -191,9 +188,9 @@ def test_changing_the_design_invalidates_a_running_series(kernel, tmp_path):
     kernel.console("rect 500mm 100mm 20mm 20mm\n")
     kernel.console("classify\n")
 
-    stand = server.tiles.state()
-    assert stand["stale"] is True
-    assert "ontwerp" in stand["message"].lower()
+    state = server.tiles.state()
+    assert state["stale"] is True
+    assert "design" in state["message"].lower()
 
 
 def test_burning_without_alignment_is_refused(kernel, tmp_path):
@@ -204,19 +201,18 @@ def test_burning_without_alignment_is_refused(kernel, tmp_path):
     _wide_sheet(server)
     server.tiles.start()
 
-    with pytest.raises(DesignError) as fout:
+    with pytest.raises(DesignError) as error:
         server.tiles.burn()
 
-    # Op "uitgelijnd" en niet op "uitlijn": dat laatste zit er niet in — er
-    # staat "ge" tussen. En op "merken", want een weigering die niet zegt wat
-    # je eraan doet, is een weigering waar de gebruiker niets aan heeft.
-    melding = str(fout.value).lower()
-    assert "uitgelijnd" in melding
-    assert "merken" in melding
+    # On "aligned" and not on "align": and on "marks", because a refusal that does not say
+    # what to do about it is a refusal the user has no use for.
+    message = str(error.value).lower()
+    assert "aligned" in message
+    assert "marks" in message
 
 
 def _design(kernel):
-    """Twee vierkanten: één links op de plaat, één rechts."""
+    """Twee vierkanten: één left op de plaat, één right."""
     kernel.console("rect 10mm 10mm 30mm 30mm\n")
     kernel.console("rect 300mm 10mm 30mm 30mm\n")
     kernel.console("classify\n")
@@ -224,11 +220,10 @@ def _design(kernel):
 
 def _shapes(steps):
     """
-    De vormen in een bewerkt plan.
+    De shapes in een bewerkt plan.
 
-    Via `build_plan` en niet via een hele `plan`-regel: `blob` vervangt de
-    bewerkingen door één `CutCode`, en dan valt er over het klippen niets meer
-    vast te stellen.
+    Through `build_plan` and not through a whole `plan` line: `blob` replaces the operations
+    with one `CutCode`, and then nothing can be established about the clipping.
     """
     return [c for step in steps for c in getattr(step, "children", []) or []]
 
@@ -249,8 +244,8 @@ def test_only_what_lies_in_the_tile_survives(kernel):
 
 def test_the_users_tree_is_untouched_after_spooling(kernel):
     """
-    De belangrijkste test van dit ontwerp. Het plan mag verminkt worden, het
-    ontwerp niet — anders verliest de gebruiker werk aan een job.
+    The most important test of this design. The plan may be mangled, the design may not —
+    otherwise the user loses work to a job.
     """
     _design(kernel)
     voor = [
@@ -276,8 +271,8 @@ def test_the_users_tree_is_untouched_after_spooling(kernel):
 
 def test_the_alignment_shift_moves_the_tile_into_the_bed(kernel):
     """
-    Tegel 2 staat op de plaat op x=300, maar ligt na het verschuiven van de
-    plaat op x=100 onder de kop. Het plan moet dat laatste bevatten.
+    Tile 2 is at x=300 on the board, but after shifting the board it lies at x=100 under the
+    head. The plan has to contain that last one.
     """
     _design(kernel)
     runner = CommandRunner(kernel)
@@ -292,18 +287,17 @@ def test_the_alignment_shift_moves_the_tile_into_the_bed(kernel):
         ]
     )
 
-    vormen = _shapes(steps)
-    assert len(vormen) == 1
-    assert vormen[0].bounds[0] / UNITS_PER_MM == pytest.approx(100.0, abs=0.5)
+    shapes = _shapes(steps)
+    assert len(shapes) == 1
+    assert shapes[0].bounds[0] / UNITS_PER_MM == pytest.approx(100.0, abs=0.5)
 
 
 def test_the_mutator_counts_what_it_actually_burns(kernel):
     """
-    `burned_length_units` is het getal waarop de dekkingstest van taak 12 rust:
-    daar wordt het over alle tegels opgeteld en vergeleken met het hele ontwerp.
-    Als het meetelt wat er niet gebrand wordt, of dubbel telt, gaat die test
-    groen terwijl er van alles misgaat. Dus hier vastgepind tegen een vorm
-    waarvan we de omtrek met de hand kunnen uitrekenen.
+    `burned_length_units` is the number task 12's coverage test rests on: there it is summed
+    over all the tiles and compared with the whole design. If it counts what is not burned, or
+    counts twice, that test goes green while all sorts of things go wrong. So it is pinned down
+    here against a shape whose outline we can compute by hand.
     """
     kernel.console("rect 10mm 10mm 30mm 20mm\n")
     kernel.console("classify\n")
@@ -324,24 +318,24 @@ def test_the_mutator_counts_what_it_actually_burns(kernel):
 
 def test_a_picture_belongs_to_one_tile_and_is_not_repeated(kernel):
     """
-    Een afbeelding heeft geen geometrie om te klippen, dus hij gaat in zijn
-    geheel mee of niet. Zonder die toets kwam een foto in élke tegel terecht —
-    op de verkeerde plek, met de volle brandtijd, en dat per tegel opnieuw.
+    An image has no geometry to clip, so it comes along as a whole or not at all. Without
+    that test a photo ended up in *every* tile — in the wrong place, with the full burn time,
+    and that again per tile.
     """
     from meerk40t.core.node.elem_image import ImageNode
     from meerk40t.svgelements import Matrix
     from PIL import Image
 
-    plaatje = ImageNode(
+    picture = ImageNode(
         image=Image.new("L", (20, 20), 0),
         matrix=Matrix.translate(20 * UNITS_PER_MM, 20 * UNITS_PER_MM),
         dpi=500,
     )
-    kernel.elements.elem_branch.add_node(plaatje)
-    # `classify` als consolecommando classificeert alleen wat geëmphaseerd is;
-    # deze afbeelding is nooit geselecteerd geweest (in tegenstelling tot een
-    # vorm die via `rect` getekend wordt). Rechtstreeks aanroepen omzeilt dat.
-    kernel.elements.classify([plaatje])
+    kernel.elements.elem_branch.add_node(picture)
+    # As a console command `classify` only classifies what is emphasised; this image has
+    # never been selected (unlike a shape drawn through `rect`). Calling it directly gets
+    # around that.
+    kernel.elements.classify([picture])
     runner = CommandRunner(kernel)
 
     binnen = runner.build_plan(
@@ -368,7 +362,7 @@ def test_a_picture_belongs_to_one_tile_and_is_not_repeated(kernel):
 
 
 def test_an_operation_that_ends_up_empty_leaves_the_plan(kernel):
-    """Een laag die niets meer doet hoort niet in de job te staan."""
+    """A layer that no longer does anything does not belong in the job."""
     _design(kernel)
     runner = CommandRunner(kernel)
 
@@ -387,27 +381,26 @@ def test_an_operation_that_ends_up_empty_leaves_the_plan(kernel):
 
 def test_a_mark_is_a_circle_with_a_cross_in_it(kernel):
     """
-    De cirkel geeft een rand om de kop op te richten die een los kruis niet
-    heeft; het kruis geeft het middelpunt dat je aantikt.
+    The circle gives an edge to aim the head at that a bare cross does not have; the cross
+    gives the centre you tap.
 
-    Het rondje is precies de gevraagde maat. Het mérk is groter, want er staat
-    een cijfer naast — die maat zit in `mark_footprint`, want alleen de zoeker
-    hoeft hem te weten. Dwars op de lange as verandert er niets, en dat is met
-    opzet: de overlapbreedte is de krappe maat.
+    The circle is exactly the requested size. The *mark* is larger, because a digit sits beside
+    it — that size is in `mark_footprint`, because only the finder has to know it. Across the
+    long axis nothing changes, and that is deliberate: the overlap width is the tight measure.
     """
     geom = marker_geometry([Point(100.0, 50.0)], size_mm=8.0, units_per_mm=UNITS_PER_MM)
 
     x0, y0, x1, y1 = geom.bbox()
-    # Zonder zone staat het cijfer eronder (de gewone stand, een smalle zone),
-    # dus de breedte is die van het rondje en de hoogte niet.
+    # Without a zone the digit is below it (the ordinary state, a narrow zone), so the width
+    # is the circle's and the height is not.
     assert (x1 - x0) / UNITS_PER_MM == pytest.approx(8.0, abs=0.1)
     assert (y1 - y0) / UNITS_PER_MM > 8.0
 
 
 def test_the_marks_are_burned_last(kernel):
     """
-    Eerder branden betekent dat een latere snede er nog doorheen kan lopen, en
-    dan lijn je uit op een merk dat half weg is.
+    Burning earlier means a later cut can still run through it, and then you align on a mark
+    that is half gone.
     """
     _design(kernel)
     runner = CommandRunner(kernel)
@@ -423,16 +416,15 @@ def test_the_marks_are_burned_last(kernel):
     steps = runner.build_plan([mutator])
 
     laatste = [s for s in steps if getattr(s, "children", None)][-1]
-    assert laatste.label == "Uitlijnmerken"
+    assert laatste.label == "Alignment marks"
     assert len(laatste.children) == 1
 
 
 def test_a_tile_whose_marks_fall_off_the_bed_is_refused(kernel, tmp_path):
     """
-    De merken liggen in de overlapzone en dus buiten het brandgebied. Een
-    controle die alleen naar het brandgebied kijkt, laat een tegel door
-    waarvan de merken naast het bed gebrand zouden worden — de kop tegen zijn
-    eindaanslag, met materiaal in de machine.
+    The marks lie in the overlap zone and therefore outside the burn area. A check that only
+    looks at the burn area lets a tile through whose marks would be burned beside the bed — the
+    head against its end stop, with material in the machine.
     """
     from openkerf_api.edits import DesignError
     from openkerf_api.server import ApiServer
@@ -440,19 +432,19 @@ def test_a_tile_whose_marks_fall_off_the_bed_is_refused(kernel, tmp_path):
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
     _wide_sheet(server)
     server.tiles.start()
-    # Zo ver naar rechts dat het brandgebied nog past en de merken niet.
+    # So far to the right that the burn area still fits and the marks do not.
     server.tiles.align([{"x_mm": 30.0, "y_mm": 0.0}], reference="plate_corner")
 
-    with pytest.raises(DesignError) as fout:
+    with pytest.raises(DesignError) as error:
         server.tiles.burn()
 
-    assert "buiten het bed" in str(fout.value)
+    assert "outside the bed" in str(error.value)
 
 
 def test_burning_the_same_tile_twice_asks_first(kernel, tmp_path):
     """
-    Opnieuw branden mag — een afgebroken job moet je over kunnen doen — maar
-    niet per ongeluk. De tweede keer gaat de laser over werk dat er al ligt.
+    Burning again is allowed — you have to be able to redo an aborted job — but not by
+    accident. The second time the laser goes over work that is already there.
     """
     from openkerf_api.edits import DesignError
     from openkerf_api.server import ApiServer
@@ -463,16 +455,16 @@ def test_burning_the_same_tile_twice_asks_first(kernel, tmp_path):
     server.tiles.align([{"x_mm": 0.0, "y_mm": 0.0}], reference="plate_corner")
     server.tiles.burn()
 
-    with pytest.raises(DesignError) as fout:
+    with pytest.raises(DesignError) as error:
         server.tiles.burn()
-    assert "al gebrand" in str(fout.value)
+    assert "already been burned" in str(error.value)
 
-    # Met bevestiging mag het wel.
+    # With confirmation it is allowed.
     assert server.tiles.burn(confirm_reburn=True)["burned_length_mm"] > 0
 
 
 def test_the_last_tile_burns_no_marks(kernel):
-    """Geen volgende tegel, dus niets om op uit te lijnen — en dus geen merk."""
+    """No next tile, so nothing to align on — and so no mark."""
     _design(kernel)
     runner = CommandRunner(kernel)
 
@@ -487,171 +479,166 @@ def test_the_last_tile_burns_no_marks(kernel):
         ]
     )
 
-    assert not [s for s in steps if getattr(s, "label", None) == "Uitlijnmerken"]
+    assert not [s for s in steps if getattr(s, "label", None) == "Alignment marks"]
 
 
 def test_the_shift_puts_the_marks_on_the_bed(kernel, tmp_path):
     """
-    Na de opgegeven verschuiving moeten de merken op het bed liggen.
+    After the stated shift the marks have to lie on the bed.
 
-    Dit is de eigenschap, niet de rekensom — en hij is met een screenshot
-    gevonden, niet met een test. Het paneel rekende de verschuiving uit de
-    *brandgebieden*, en die staan een halve overlap verder uit elkaar dan de
-    vensters. Gemeten op een plaat van 500 mm met een bed van 235: met de
-    brandstap (178,75 mm) landen de merken op bed-x −31,5 en 28,5, dus het eerste
-    ligt buiten het bed en is niet aan te tikken. De instructie stuurde de
-    operator te ver en vroeg hem daarna een merk aan te wijzen dat er niet meer
-    was.
+    This is the property, not the sum — and it was found with a screenshot, not with a test.
+    The panel computed the shift from the *burn areas*, and those sit half an overlap further
+    apart than the windows. Measured on a board of 500 mm with a bed of 235: with the burn step
+    (178.75 mm) the marks land at bed-x −31.5 and 28.5, so the first lies off the bed and
+    cannot be tapped. The instruction sent the operator too far and then asked them to point
+    out a mark that was no longer there.
     """
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
     _wide_sheet(server)
-    opdeling = server.tiles.layout()
+    layout = server.tiles.layout()
     bed = server.drawing.bed_mm()
 
-    assert opdeling["tiles"][0]["shift_mm"] is None, "de eerste tegel schuift niet"
+    assert layout["tiles"][0]["shift_mm"] is None, "the first tile does not shift"
 
-    for grens, merk in enumerate(opdeling["marks"]):
-        verschuiving = opdeling["tiles"][grens + 1]["shift_mm"]
+    for grens, mark in enumerate(layout["marks"]):
+        verschuiving = layout["tiles"][grens + 1]["shift_mm"]
         assert verschuiving is not None
-        for punt in merk["points"]:
+        for punt in mark["points"]:
             x = punt["x_mm"] - verschuiving["x"]
             y = punt["y_mm"] - verschuiving["y"]
-            assert 0 <= x <= bed[0], f"merk op bed-x {x:.1f} valt buiten 0..{bed[0]}"
-            assert 0 <= y <= bed[1], f"merk op bed-y {y:.1f} valt buiten 0..{bed[1]}"
+            assert 0 <= x <= bed[0], f"mark op bed-x {x:.1f} valt buiten 0..{bed[0]}"
+            assert 0 <= y <= bed[1], f"mark op bed-y {y:.1f} valt buiten 0..{bed[1]}"
 
 
 def _hoog_vel(server):
     """
-    Een plaat die alleen te hóóg is: 200 × 500 mm op het dummy-bed.
+    A board that is only too *tall*: 200 × 500 mm on the dummy bed.
 
-    Dit is de richting die een machine zonder zij-invoer nodig heeft — je schuift
-    de plaat naar voren of naar achteren, niet zijwaarts. Geen enkele test
-    gebruikte hem, terwijl het de helft van de mogelijke opdelingen is.
+    This is the direction a machine without side feed needs — you push the board forwards or
+    backwards, not sideways. Not a single test used it, while it is half the possible
+    divisions.
     """
-    vel = server.sheets.state()["sheets"][0]
-    server.sheets.update(vel["id"], width_mm=200.0, height_mm=500.0)
-    server.sheets.update(vel["id"], tiling={"enabled": True})
-    # Een vorm die de héle overlapzone van de eerste naad bedekt (die loopt van
-    # 142,5 tot 215), zodat er geen kruisingsvrije stand is om naartoe te
-    # schuiven. Een vorm die de zone maar deels raakt, wordt door de naadschuiver
-    # juist netjes ontweken — dat is de bedoeling, maar dan telt hij nul en toets
-    # je niets.
+    sheet = server.sheets.state()["sheets"][0]
+    server.sheets.update(sheet["id"], width_mm=200.0, height_mm=500.0)
+    server.sheets.update(sheet["id"], tiling={"enabled": True})
+    # A shape covering the *whole* overlap zone of the first seam (which runs from 142.5 to
+    # 215), so that there is no crossing-free position to move to. A shape that only partly
+    # touches the zone is neatly avoided by the seam shifter — that is the intention, but then
+    # it counts zero and you are testing nothing.
     server.kernel.console("rect 40mm 120mm 100mm 120mm\n")
     server.kernel.console("classify\n")
 
 
 def test_a_plate_that_is_only_too_tall_splits_into_bands(kernel, tmp_path):
     """
-    De opdelingsrichting volgt het vel: te hoog geeft banden, geen kolommen.
+    The division direction follows the sheet: too tall gives bands, not columns.
 
-    Dat is geen detail voor wie een machine zonder zij-invoer heeft — dan is dit
-    de enige richting waarin hij een plaat kan verschuiven.
+    That is not a detail for anybody with a machine without side feed — then this is the only
+    direction in which they can shift a board.
     """
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
     _hoog_vel(server)
 
-    opdeling = server.tiles.layout()
+    layout = server.tiles.layout()
 
-    assert len(opdeling["tiles"]) > 1
-    assert {t["row"] for t in opdeling["tiles"]} == set(range(len(opdeling["tiles"])))
-    assert {t["column"] for t in opdeling["tiles"]} == {0}
-    # De brandgebieden liggen boven elkaar en raken elkaar, net als bij kolommen.
-    for boven, onder in zip(opdeling["tiles"], opdeling["tiles"][1:]):
-        assert boven["burn"]["y1_mm"] == pytest.approx(onder["burn"]["y0_mm"])
-        assert boven["burn"]["x0_mm"] == onder["burn"]["x0_mm"]
+    assert len(layout["tiles"]) > 1
+    assert {t["row"] for t in layout["tiles"]} == set(range(len(layout["tiles"])))
+    assert {t["column"] for t in layout["tiles"]} == {0}
+    # The burn areas lie above each other and touch, just as with columns.
+    for upper, lower in zip(layout["tiles"], layout["tiles"][1:]):
+        assert upper["burn"]["y1_mm"] == pytest.approx(lower["burn"]["y0_mm"])
+        assert upper["burn"]["x0_mm"] == lower["burn"]["x0_mm"]
 
 
 def test_a_band_shifts_along_its_own_axis(kernel, tmp_path):
-    """De verschuiving hoort in y te zitten, niet in x."""
+    """The shift should be in y, not in x."""
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
     _hoog_vel(server)
 
-    opdeling = server.tiles.layout()
+    layout = server.tiles.layout()
 
-    assert opdeling["tiles"][0]["shift_mm"] is None
-    stap = opdeling["tiles"][1]["shift_mm"]
+    assert layout["tiles"][0]["shift_mm"] is None
+    stap = layout["tiles"][1]["shift_mm"]
     assert stap["x"] == pytest.approx(0.0)
     assert stap["y"] > 0
 
 
 def test_the_marks_of_a_band_lie_side_by_side(kernel, tmp_path):
     """
-    Bij banden is de overlapzone breed en laag, dus de merken liggen náást
-    elkaar. Hoe verder uit elkaar, hoe nauwkeuriger de hoek — en dat betekent
-    hier: langs de breedte van de plaat.
+    With bands the overlap zone is wide and low, so the marks lie *beside* each other. The
+    further apart, the more accurate the angle — and here that means: along the width of the
+    board.
     """
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
     _hoog_vel(server)
 
-    merken = server.tiles.layout()["marks"][0]["points"]
+    marks = server.tiles.layout()["marks"][0]["points"]
 
-    breedte = abs(merken[1]["x_mm"] - merken[0]["x_mm"])
-    hoogte = abs(merken[1]["y_mm"] - merken[0]["y_mm"])
-    assert breedte > hoogte, "merken horen langs de lange as van de zone te liggen"
-    assert breedte > 100
+    width = abs(marks[1]["x_mm"] - marks[0]["x_mm"])
+    height = abs(marks[1]["y_mm"] - marks[0]["y_mm"])
+    assert width > height, "marks should lie along the zone's long axis"
+    assert width > 100
 
 
 def test_crossings_are_counted_on_the_axis_that_was_split(kernel, tmp_path):
     """
-    Het aantal doorgesneden vormen werd alleen op x geteld, dus bij banden kwam
-    er nul uit terwijl er wel degelijk iets doormidden ging. Dit ontwerp heeft
-    een vorm die over de eerste naad heen ligt, dus nul is hier het foute
-    antwoord.
+    The number of shapes cut through was counted only on x, so with bands zero came out while
+    something was indeed being cut in half. This design has a shape lying across the first
+    seam, so zero is the wrong answer here.
     """
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
     _hoog_vel(server)
 
-    opdeling = server.tiles.layout()
+    layout = server.tiles.layout()
 
-    naad = opdeling["tiles"][0]["burn"]["y1_mm"]
-    assert 120.0 < naad < 240.0, "de naad hoort door de vorm te lopen"
-    assert opdeling["crossings"] >= 1
+    seam = layout["tiles"][0]["burn"]["y1_mm"]
+    assert 120.0 < seam < 240.0, "the seam should run through the shape"
+    assert layout["crossings"] >= 1
 
 
 def test_burn_regions_stay_contiguous_after_a_seam_is_nudged(kernel, tmp_path):
     """
-    Ook in de kolomrichting mogen de brandgebieden na het verschuiven van een
-    naad geen gat laten.
+    In the column direction too the burn areas must leave no gap after a seam has moved.
 
-    Dit is dezelfde fout als bij de banden, van de andere kant benaderd: elke
-    naad raakt twee tegels, dus de middelste wordt tweemaal beschreven. Er ligt
-    hier één vorm die de eerste overlapzone maar déélt bedekt, zodat de naad
-    ernaartoe schuift en de tweede naad blijft liggen — precies de stand waarin
+    This is the same fault as with the bands, approached from the other side: every seam
+    touches two tiles, so the middle one is written twice. Here there is one shape that only
+    *partly* covers the first overlap zone, so that the seam moves to it and the second seam
+    stays put — precisely the state in which
     het gat zichtbaar werd.
     """
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
-    vel = server.sheets.state()["sheets"][0]
-    # 800 mm op het dummy-bed van 320 geeft drie tegels, en dus een middelste
-    # die tweemaal beschreven wordt — met twee tegels bestaat de fout niet.
-    server.sheets.update(vel["id"], width_mm=800.0, height_mm=150.0)
-    server.sheets.update(vel["id"], tiling={"enabled": True})
-    # Deze vorm ligt midden ín de eerste overlapzone (250-300), dus over het
-    # middelpunt 275 heen, met vrije ruimte aan weerszijden. Alleen dán verschuift
-    # de naad écht — een vorm die de zone volledig bedekt laat hem juist op het
-    # midden staan, en dan treedt de dubbel-schrijf-fout niet op en bewijst deze
-    # test niets. Dat is de valkuil waar de eerste versie in liep.
+    sheet = server.sheets.state()["sheets"][0]
+    # 800 mm on the 320 dummy bed gives three tiles, and therefore a middle one that is
+    # written twice — with two tiles the fault does not exist.
+    server.sheets.update(sheet["id"], width_mm=800.0, height_mm=150.0)
+    server.sheets.update(sheet["id"], tiling={"enabled": True})
+    # This shape lies in the middle *of* the first overlap zone (250-300), so across the
+    # midpoint 275, with free space on both sides. Only *then* does the seam really move — a
+    # shape that covers the zone entirely leaves it at the middle, and then the double-write
+    # fault does not occur and this test proves nothing. That is the trap the first version
+    # fell into.
     server.kernel.console("rect 265mm 20mm 20mm 60mm\n")
     server.kernel.console("classify\n")
 
-    tegels = server.tiles.layout()["tiles"]
+    tiles = server.tiles.layout()["tiles"]
 
-    assert len(tegels) == 3
-    assert tegels[0]["burn"]["x0_mm"] == pytest.approx(0.0)
-    assert tegels[-1]["burn"]["x1_mm"] == pytest.approx(800.0)
-    for links, rechts in zip(tegels, tegels[1:]):
-        assert links["burn"]["x1_mm"] == pytest.approx(rechts["burn"]["x0_mm"]), (
+    assert len(tiles) == 3
+    assert tiles[0]["burn"]["x0_mm"] == pytest.approx(0.0)
+    assert tiles[-1]["burn"]["x1_mm"] == pytest.approx(800.0)
+    for left, right in zip(tiles, tiles[1:]):
+        assert left["burn"]["x1_mm"] == pytest.approx(right["burn"]["x0_mm"]), (
             "een gat of overlap tussen twee brandgebieden: geometrie ertussen "
             "wordt nooit gebrand, of tweemaal"
         )
@@ -659,59 +646,58 @@ def test_burn_regions_stay_contiguous_after_a_seam_is_nudged(kernel, tmp_path):
 
 def test_bands_stay_contiguous_after_a_seam_is_nudged(kernel, tmp_path):
     """
-    Hetzelfde in de bandrichting, en dit is de test die het gat vond.
+    The same in the band direction, and this is the test that found the gap.
 
-    De vorm ligt midden in de eerste overlapzone, zodat de naad ernaartoe
-    schuift. Zonder die verschuiving blijft de fout onzichtbaar.
+    The shape lies in the middle of the first overlap zone, so that the seam moves to it.
+    Without that shift the fault stays invisible.
     """
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "v.db")
-    vel = server.sheets.state()["sheets"][0]
-    server.sheets.update(vel["id"], width_mm=200.0, height_mm=500.0)
-    server.sheets.update(vel["id"], tiling={"enabled": True})
+    sheet = server.sheets.state()["sheets"][0]
+    server.sheets.update(sheet["id"], width_mm=200.0, height_mm=500.0)
+    server.sheets.update(sheet["id"], tiling={"enabled": True})
     server.kernel.console("rect 40mm 168mm 100mm 14mm\n")
     server.kernel.console("classify\n")
 
-    tegels = server.tiles.layout()["tiles"]
+    tiles = server.tiles.layout()["tiles"]
 
-    assert len(tegels) == 3
-    assert tegels[0]["burn"]["y1_mm"] != pytest.approx(
+    assert len(tiles) == 3
+    assert tiles[0]["burn"]["y1_mm"] != pytest.approx(
         175.0
-    ), "de naad hoort verschoven te zijn; zonder verschuiving toetst deze test niets"
-    assert tegels[0]["burn"]["y0_mm"] == pytest.approx(0.0)
-    assert tegels[-1]["burn"]["y1_mm"] == pytest.approx(500.0)
-    for boven, onder in zip(tegels, tegels[1:]):
-        assert boven["burn"]["y1_mm"] == pytest.approx(onder["burn"]["y0_mm"]), (
+    ), "the seam should have moved; without a shift this test tests nothing"
+    assert tiles[0]["burn"]["y0_mm"] == pytest.approx(0.0)
+    assert tiles[-1]["burn"]["y1_mm"] == pytest.approx(500.0)
+    for upper, lower in zip(tiles, tiles[1:]):
+        assert upper["burn"]["y1_mm"] == pytest.approx(lower["burn"]["y0_mm"]), (
             "gat of overlap tussen twee banden: wat ertussen ligt wordt nooit "
             "gebrand, of tweemaal"
         )
 
 
-# ------------------------------------------------------- genummerde merken
+# ------------------------------------------------------- genummerde marks
 
 
 def test_a_digit_is_one_continuous_stroke_of_the_asked_size():
     """
-    De cijfers worden zelf getekend, niet via een font.
+    The digits are drawn ourselves, not through a font.
 
-    Twee glyphs is te weinig om er font-machinerie voor binnen te halen — en
-    `linetext` sleept bovendien de valstrik mee dat élke tekstplaatsing
-    `last_font` overschrijft (zie CLAUDE.md). Eén doorlopende streek per cijfer is
-    voor een laser ook het prettigst.
+    Two glyphs is too few to pull in font machinery for — and besides, `linetext` drags the
+    trap along that *every* text placement overwrites `last_font` (see CLAUDE.md). One
+    continuous stroke per digit is also the most comfortable for a laser.
     """
     from openkerf_api.tilerun import digit_geometry
 
-    for cijfer in (1, 2):
-        geom = digit_geometry(cijfer, 0.0, 0.0, 6.0)
-        assert geom.index >= 2, "een cijfer bestaat uit meer dan één streek"
+    for digit in (1, 2):
+        geom = digit_geometry(digit, 0.0, 0.0, 6.0)
+        assert geom.index >= 2, "a digit consists of more than one stroke"
         x0, y0, x1, y1 = geom.bbox()
         assert y1 - y0 == pytest.approx(6.0, rel=1e-6)
         assert 0 < x1 - x0 <= 6.0
 
 
 def test_the_two_digits_are_not_the_same_shape():
-    """Anders had het geen zin: het verschil is het hele punt."""
+    """Otherwise there would be no point: the difference is the whole point."""
     from openkerf_api.tilerun import digit_geometry
 
     een = digit_geometry(1, 0.0, 0.0, 6.0)
@@ -725,12 +711,11 @@ def test_the_two_digits_are_not_the_same_shape():
 
 def test_a_burned_mark_carries_its_number(kernel):
     """
-    Het nummer moet op de plaat staan, niet alleen op het scherm.
+    The number has to be on the board, not only on the screen.
 
-    Zonder gebrand cijfer is "jog naar merk 1" onbruikbaar: dan liggen er twee
-    identieke rondjes en is het positiewoord dat we juist wegdeden nog altijd het
-    enige houvast. Deze test meet dat de geometrie van twee merken méér is dan
-    tweemaal hetzelfde rondje.
+    Without a burned digit "jog to mark 1" is unusable: then there are two identical circles
+    and the word for a position we did away with is still the only thing to go by. This test
+    measures that the geometry of two marks is *more* than the same circle twice.
     """
     from openkerf_api.tilerun import marker_geometry
     from openkerf_api.tiling import Point
@@ -738,19 +723,19 @@ def test_a_burned_mark_carries_its_number(kernel):
     een = marker_geometry([Point(100.0, 20.0)], 8.0, UNITS_PER_MM)
     twee = marker_geometry([Point(100.0, 20.0), Point(100.0, 180.0)], 8.0, UNITS_PER_MM)
 
-    # Twee merken zijn meer dan tweemaal één merk: er komt per merk een cijfer bij.
+    # Two marks are more than one mark twice: a digit is added per mark.
     assert twee.index > 2 * een.index
 
 
 def test_a_mark_reserves_room_for_its_digit(kernel):
     """
-    De vrije-plek-zoeker moet het cijfer meerekenen, anders komt het op het werk
-    terecht — en dan is het merk zelf nog vrij maar zijn label niet.
+    The free-place finder has to count the digit, otherwise it lands on the work — and then
+    the mark itself is still free but its label is not.
     """
     from openkerf_api.tiling import Rect, marker_spots
 
-    # Een liggende zone met ruimte voor meerdere merken, zodat de zoeker echt
-    # kiest in plaats van te weigeren.
+    # A landscape zone with room for several marks, so that the finder really chooses instead
+    # of refusing.
     zone = Rect(0.0, 0.0, 60.0, 14.0)
     een, twee = marker_spots(zone, [], size_mm=8.0)
 
@@ -758,5 +743,5 @@ def test_a_mark_reserves_room_for_its_digit(kernel):
 
     for punt in (een, twee):
         vak = mark_footprint(punt, 8.0, zone)
-        assert zone.x0 <= vak.x0 and vak.x1 <= zone.x1, "cijfer valt buiten de zone"
+        assert zone.x0 <= vak.x0 and vak.x1 <= zone.x1, "digit valt buiten de zone"
         assert zone.y0 <= vak.y0 and vak.y1 <= zone.y1

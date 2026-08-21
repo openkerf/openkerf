@@ -1,15 +1,15 @@
 <script lang="ts">
 	/**
-	 * Waarin dit vel gebrand wordt.
+	 * What this sheet is burned into.
 	 *
-	 * Besluit B1: materiaal en dikte hangen aan het vel, niet aan een filter in
-	 * een venster dat je weer sluit. Alles stroomafwaarts leest het hier: de
-	 * bibliotheek filtert erop, het testraster begint ermee, en de pre-flight
-	 * kan er een instelling aan toetsen.
+	 * Decision B1: material and thickness hang off the sheet, not off a filter in a dialog
+	 * you close again. Everything downstream reads it here: the library filters on it, the
+	 * test grid starts with it, and the pre-flight can test a setting against it.
 	 *
-	 * Leeg blijven mag. Wie een restje van onbekende herkomst in de machine legt,
-	 * moet niet eerst een naam en een getal hoeven verzinnen om te kunnen werken.
+	 * Staying empty is allowed. Anybody putting an offcut of unknown origin in the machine
+	 * should not have to invent a name and a number first in order to work.
 	 */
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 	import type { Sheet, SheetStore } from '$lib/sheets.svelte';
 
@@ -25,60 +25,62 @@
 		onDone?: () => void;
 	} = $props();
 
-	let nieuw = $state('');
+	let fresh = $state('');
 	let toevoegen = $state(false);
 
-	// De diktes die op elke zaagtafel liggen. Eén tik in plaats van een getal
-	// typen — op een tablet naast de machine scheelt dat een toetsenbord.
+	// The thicknesses that lie on every saw table. One tap instead of typing a number —
+	// on a tablet beside the machine that saves a keyboard.
 	const GANGBAAR = [1, 2, 3, 4, 5, 6, 8, 10];
 
-	let dikte = $derived(sheet.thickness_mm);
+	let thickness = $derived(sheet.thickness_mm);
 
-	let instellingen = $derived(
+	let settings = $derived(
 		sheet.material_id === null
 			? []
 			: library.presets.filter(
 					(p) =>
 						p.material_id === sheet.material_id &&
-						(dikte === null ||
+						(thickness === null ||
 							p.thickness_mm === null ||
-							Math.abs(p.thickness_mm - dikte) < 0.51)
+							Math.abs(p.thickness_mm - thickness) < 0.51)
 				)
 	);
 
-	function kiesMateriaal(waarde: string) {
-		sheets.update(sheet.id, { material_id: waarde ? Number(waarde) : null });
+	function pickMaterial(value: string) {
+		sheets.update(sheet.id, { material_id: value ? Number(value) : null });
 	}
 
-	function kiesDikte(mm: number | null) {
+	function pickThickness(mm: number | null) {
 		sheets.update(sheet.id, { thickness_mm: mm });
 	}
 
-	async function maakMateriaal() {
-		if (!nieuw.trim()) return;
-		const created = await library.addMaterial(nieuw.trim());
+	async function makeMaterial() {
+		if (!fresh.trim()) return;
+		const created = await library.addMaterial(fresh.trim());
 		if (created) {
 			await sheets.update(sheet.id, { material_id: created.id });
-			nieuw = '';
+			fresh = '';
 			toevoegen = false;
 		}
 	}
 </script>
 
 <div class="wrap">
-	<p class="uitleg">
-		Geldt voor <strong>{sheet.name}</strong> — {sheet.width_mm} × {sheet.height_mm} mm.
-		Elk vel houdt zijn eigen materiaal, zodat dun en dik in één project kunnen.
+	<p class="hint">
+		{t('sheetMat.applies', {
+			sheet: sheet.name,
+			size: `${sheet.width_mm} × ${sheet.height_mm} mm`
+		})}
 	</p>
 
-	<label class="veld">
-		<span>Materiaal</span>
+	<label class="field">
+		<span>{t('library.material')}</span>
 		<select
 			value={sheet.material_id === null ? '' : String(sheet.material_id)}
 			disabled={sheets.busy}
-			onchange={(e) => kiesMateriaal(e.currentTarget.value)}
+			onchange={(e) => pickMaterial(e.currentTarget.value)}
 		>
-			<option value="">Niet ingevuld</option>
+			<option value="">{t('sheetMat.notFilled')}</option>
 			{#each library.materials as material (material.id)}
 				<option value={String(material.id)}>{material.name}</option>
 			{/each}
@@ -86,33 +88,33 @@
 	</label>
 
 	{#if toevoegen}
-		<div class="nieuw">
+		<div class="fresh">
 			<input
 				type="text"
-				bind:value={nieuw}
-				placeholder="bijv. Multiplex berken"
-				aria-label="Naam van het nieuwe materiaal"
+				bind:value={fresh}
+				placeholder={t('library.material.placeholder')}
+				aria-label={t('gen.text')}
 			/>
-			<button class="btn primary" disabled={!nieuw.trim() || library.busy} onclick={maakMateriaal}>
-				Toevoegen
+			<button class="btn primary" disabled={!fresh.trim() || library.busy} onclick={makeMaterial}>
+				{t('sheetMat.add')}
 			</button>
-			<button class="btn" onclick={() => (toevoegen = false)}>Annuleren</button>
+			<button class="btn" onclick={() => (toevoegen = false)}>{t('common.cancel')}</button>
 		</div>
 	{:else}
-		<button class="link" onclick={() => (toevoegen = true)}>Materiaal staat er niet bij</button>
+		<button class="link" onclick={() => (toevoegen = true)}>{t('sheetMat.notListed')}</button>
 	{/if}
 
-	<div class="veld">
-		<!-- De eenheid in het label, niet achter het invoerveld: anders staat er
-		     een rij kale getallen waarvan de maat pas rechts blijkt. -->
-		<span>Dikte in millimeter</span>
-		<div class="diktes">
+	<div class="field">
+		<!-- The unit in the label, not behind the input: otherwise there is a row of
+		     bare numbers whose measure only becomes clear on the right. -->
+		<span>{t('sheetMat.thickness')}</span>
+		<div class="thicknesses">
 			{#each GANGBAAR as mm (mm)}
 				<button
 					class="chip"
-					aria-pressed={dikte === mm}
+					aria-pressed={thickness === mm}
 					disabled={sheets.busy}
-					onclick={() => kiesDikte(dikte === mm ? null : mm)}
+					onclick={() => pickThickness(thickness === mm ? null : mm)}
 				>{mm}</button>
 			{/each}
 			<input
@@ -121,11 +123,11 @@
 				step="0.1"
 				min="0.1"
 				max="500"
-				placeholder="anders"
-				aria-label="Andere dikte in millimeter"
-				value={dikte !== null && !GANGBAAR.includes(dikte) ? dikte : ''}
+				placeholder={t('sheetMat.other')}
+				aria-label={t('sheetMat.otherAria')}
+				value={thickness !== null && !GANGBAAR.includes(thickness) ? thickness : ''}
 				onchange={(e) =>
-					kiesDikte(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
+					pickThickness(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
 			/>
 		</div>
 	</div>
@@ -134,24 +136,25 @@
 		<p class="error" role="alert">{sheets.error}</p>
 	{/if}
 
-	<!-- Wat dit oplevert, meteen zichtbaar: de bibliotheek filtert hier straks
-	     op, dus het aantal zegt of je er iets aan hebt. -->
+	<!-- What this yields, visible at once: the library filters on it later, so the
+	     count says whether it is any use to you. -->
 	<p class="opbrengst">
 		{#if sheet.material_id === null}
-			Zonder materiaal toont de bibliotheek alles en kan de pre-flight niet zien
-			of een instelling bij dit vel hoort.
-		{:else if instellingen.length === 0}
-			Nog geen instellingen in de bibliotheek voor dit materiaal. Een testraster
-			is de kortste weg ernaartoe.
+			{t('sheetMat.noMaterial')}
+		{:else if settings.length === 0}
+			{t('sheetMat.noPresets')}
 		{:else}
-			{instellingen.length}
-			{instellingen.length === 1 ? 'instelling' : 'instellingen'} in de bibliotheek
-			voor dit materiaal{dikte === null ? '' : ` rond ${String(dikte).replace('.', ',')} mm`}.
+			{thickness === null
+				? t('sheetMat.presets', { n: settings.length })
+				: t('sheetMat.presetsAround', {
+						n: settings.length,
+						thickness: i18n.number(thickness)
+					})}
 		{/if}
 	</p>
 
-	<div class="acties">
-		<button class="btn primary" onclick={() => onDone?.()}>Klaar</button>
+	<div class="actions">
+		<button class="btn primary" onclick={() => onDone?.()}>{t('common.done')}</button>
 	</div>
 </div>
 
@@ -160,16 +163,16 @@
 		display: grid;
 		gap: var(--space-3);
 	}
-	.uitleg {
+	.hint {
 		margin: 0;
 		color: var(--text-2);
 		font-size: var(--text-sm);
 	}
-	.veld {
+	.field {
 		display: grid;
 		gap: var(--space-1h);
 	}
-	.veld > span {
+	.field > span {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
@@ -183,11 +186,11 @@
 		background: var(--surface-1);
 		color: var(--text-1);
 	}
-	.nieuw {
+	.fresh {
 		display: flex;
 		gap: var(--space-2);
 	}
-	.nieuw input { flex: 1; min-width: 0; }
+	.fresh input { flex: 1; min-width: 0; }
 	.link {
 		justify-self: start;
 		color: var(--text-2);
@@ -196,7 +199,7 @@
 		text-underline-offset: 3px;
 	}
 	.link:hover { color: var(--text-1); }
-	.diktes {
+	.thicknesses {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -211,8 +214,8 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.chip:hover:not(:disabled) { background: var(--surface-2); }
-	/* Dezelfde dubbele codering als de vellenbalk: rand én tint én aria-pressed,
-	   nooit kleur alleen. */
+	/* The same double encoding as the sheet bar: border *and* tint *and* aria-pressed,
+	   never colour alone. */
 	.chip[aria-pressed='true'] {
 		border-color: var(--accent);
 		font-weight: 600;
@@ -225,7 +228,7 @@
 		color: var(--text-2);
 	}
 	.error { margin: 0; color: var(--danger); font-size: var(--text-sm); }
-	.acties {
+	.actions {
 		display: flex;
 		justify-content: flex-end;
 	}
