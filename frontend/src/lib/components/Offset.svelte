@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Offset — een pad to buiten of to binnen zetten.
+	 * Offset — putting a path outwards or inwards.
 	 *
 	 * This went through `window.prompt('Offset in mm (negative = inwards)', '2')`. That is
 	 * the only place in the app where a browser dialog asked the question, and everything

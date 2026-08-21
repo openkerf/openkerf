@@ -240,7 +240,7 @@
 	{/if}
 
 	{#if !compact}
-		<!-- Een afbeelding plaatsen voegt toe on het ontwerp; "Openen" vervángt het. -->
+		<!-- Placing an image adds to the design; "Open" *replaces* it. -->
 		<label class="tool file" class:off={!canEdit} title={t('rail.placeImage')}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
 			<input

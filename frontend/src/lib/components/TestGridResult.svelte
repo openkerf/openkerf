@@ -168,7 +168,7 @@
 			bewaard && bewaard.length === 4
 				? bewaard.map((p) => ({ x: p.x, y: p.y }))
 				: DEFAULT_CORNERS.map((p) => ({ ...p }));
-		// Nog nooit uitgelijnd? Dan is dát de eerste handeling.
+		// Never aligned before? Then that is the first action.
 		aligning = bewaard === null;
 		aangewezen = null;
 		bewaarFout = null;
@@ -243,7 +243,7 @@
 		return [(m.a * u + m.b * v + m.c) / w, (m.d * u + m.e * v + m.f) / w];
 	}
 
-	/** Een cel als vierhoek in fotocoördinaten (0–1), perspectief en al. */
+	/** A cell as a quadrilateral in photo coordinates (0–1), perspective and all. */
 	function veelhoek(cell: Cell) {
 		if (!grid || !box) return '';
 		const u0 = (cell.x_mm - grid.origin_x_mm) / box.width;
@@ -637,7 +637,7 @@
 
 	.podium {
 		position: relative;
-		/* Krimpen until de foto: anders liggen de corners deels in de grijze
+		/* Shrink to the photo: otherwise the corners lie partly in the grey
 		   letterbox naast het beeld. */
 		width: fit-content;
 		margin-inline: auto;

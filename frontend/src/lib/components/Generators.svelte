@@ -174,12 +174,12 @@
 		};
 	}
 
-	// ---------------------------------------------------------- het preview
+	// ----------------------------------------------------------- the preview
 
 	let preview = $state<Voorbeeld | null>(null);
 	let previewError = $state<string | null>(null);
 	/**
-	 * Valt er iets te tonen?
+	 * Is there anything to show?
 	 *
 	 * Two reasons not to. Repeat and circle need the chosen elements; without them
 	 * they fall back on the sketch rather than on something invented. And a QR code

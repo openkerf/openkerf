@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
 	/**
-	 * Overlayvenster voor bibliotheken en gereedschappen.
+	 * An overlay dialog for libraries and tools.
 	 *
 	 * By DESIGN-SYSTEM.md: the right-hand panel is for the here and now (selection,
 	 * layers, machine, job); things you search and compare in get the room of a dialog of

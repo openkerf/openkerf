@@ -44,7 +44,7 @@
 	let velVraag = $derived.by(() => {
 		const sheet = sheets.active;
 		if (!bed || !sheet || sheetAnswer) return null;
-		// Een tiende millimeter verschil is afronding, geen mismatch.
+		// A tenth of a millimetre difference is rounding, not a mismatch.
 		const afwijkt =
 			Math.abs(sheet.width_mm - bed.w) > 0.5 || Math.abs(sheet.height_mm - bed.h) > 0.5;
 		return afwijkt ? { sheet, bed } : null;

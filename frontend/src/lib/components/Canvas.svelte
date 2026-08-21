@@ -57,7 +57,7 @@
 		/** Source of the camera image, or null when the camera is off. */
 		cameraSrc?: string | null;
 		cameraOpacity?: number;
-		/** Het actieve sheet: het piece materiaal binnen het bed. */
+		/** The active sheet: the piece of material inside the bed. */
 		sheet?: { name: string; width: number; height: number } | null;
 		/** The active sheet's id — needed to switch tiling on. */
 		sheetId?: string | null;
@@ -71,7 +71,7 @@
 		 *  here", and then it has to know where "here" is. */
 		onContextCanvas?: (event: MouseEvent, point: { x: number; y: number }) => void;
 		/**
-		 * Het beeld from buitenaf bedienen.
+		 * Operating the view from outside.
 		 *
 		 * The zooming lives here — the scale, the pan and the measures of the work area
 		 * are here — but it also belongs in the canvas context menu and in the shortcuts,
@@ -180,13 +180,13 @@
 	/** The scale as a percentage of true size. */
 	let procent = $derived(Math.round((scale / PX_PER_MM) * 100));
 
-	/** Het hele bed in beeld — de openingsstand. */
+	/** The whole bed in view — the opening state. */
 	function bedPassend() {
 		zoom = 1;
 		pan = { x: 0, y: 0 };
 	}
 
-	/** Ware grootte: 1 mm op het bed is 1 mm op het scherm. */
+	/** True size: 1 mm on the bed is 1 mm on the screen. */
 	function honderd() {
 		naarProcent(100);
 	}
@@ -202,7 +202,7 @@
 	}
 
 	/**
-	 * Een rechthoek in millimeters vullend in beeld brengen.
+	 * Bringing a rectangle in millimetres into view, filling it.
 	 *
 	 * The bed is centred in the area; the pan shifts that. To centre a region we work
 	 * back which pan is needed for it at the new scale — otherwise the view jumps away as
@@ -317,7 +317,7 @@
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
 
-	// ── Voortgang op het canvas (gat J3) ───────────────────────────────────────
+	// ── Progress on the canvas (gap J3) ───────────────────────────────────────
 	//
 	// The promise from DESIGN-SYSTEM v2 was that the contour draws itself while the
 	// machine cuts it. What is needed for that — the order in which the engine works
@@ -677,12 +677,12 @@
 		outline ? { x: outline.x + outline.width / 2, y: outline.y + outline.height / 2 } : null
 	);
 
-	// Deel de voorvertoning zodat de bovenbalk de coördinaten live meetelt.
+	// Share the preview so that the top bar counts the coordinates live.
 	$effect(() => {
 		design.preview = preview;
 	});
 
-	/** Waar op het bed is geklikt, in millimeters. */
+	/** Where the bed was clicked, in millimetres. */
 	function pointerMm(event: MouseEvent, fromChild = false) {
 		const target = event.currentTarget as SVGElement;
 		const svg = fromChild ? target.ownerSVGElement : (target as SVGSVGElement);
@@ -999,7 +999,7 @@
 		)
 	);
 
-	// ── Buiten het bed of buiten het sheet ───────────────────────────────────────
+	// ── Off the bed or off the sheet ──────────────────────────────────────────
 	//
 	// Gap C2: a shape that crosses the bed or the sheet was reported nowhere. Two
 	// different errors, and the difference counts: off the bed the machine *cannot* go,
@@ -1138,7 +1138,7 @@
 	let snapGrid = $derived(subStep || rulerStep);
 
 	/**
-	 * De dozen from alle andere shapes, in mm.
+	 * The boxes of all the other shapes, in mm.
 	 *
 	 * What you are dragging yourself does not count: a shape does not snap to itself.
 	 * Hidden shapes do not either — you cannot see them, so a guide line on them is
@@ -1162,7 +1162,7 @@
 	let guides = $state<SnapGuide[]>([]);
 
 	/**
-	 * De hulplijnen als tekenbare lijnstukken.
+	 * The guide lines as drawable segments.
 	 *
 	 * A line that hangs off a shape runs from that shape past whatever snaps to it, so
 	 * that you see *which* two things are aligned — that is what Inkscape and Illustrator
@@ -1277,7 +1277,7 @@
 	/** Where the pointer is, as a tick on both rulers. */
 	let pointer = $state<{ x: number; y: number } | null>(null);
 
-	/** De uitklap achter het zoompercentage. */
+	/** The dropdown behind the zoom percentage. */
 	let zoomMenu = $state(false);
 	let zoomMenuAt = $state({ x: 0, y: 0 });
 	let zoomStanden = $derived<MenuList>([
@@ -1322,7 +1322,7 @@
 	});
 
 	/**
-	 * Het handvat to buiten.
+	 * The handle for the outside world.
 	 *
 	 * The page needs this for the canvas context menu and for the shortcuts; those are
 	 * handled there because there is one table of shortcuts. The alternative was lifting
@@ -1394,7 +1394,7 @@
 	}}
 />
 
-<!-- Wiel zoomt, alt of middelste button pant. Toetsenbord: de zoomknoppen
+<!-- The wheel zooms, alt or the middle button pans. Keyboard: the zoom buttons
      rechtsonder zijn gewone buttons. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
@@ -1812,7 +1812,7 @@
 											bandJustEnded = false;
 											return;
 										}
-										// Shift houdt de bestaande selectie vast.
+										// Shift keeps the existing selection.
 										if (e.shiftKey) design.toggle(element.id);
 										else design.select(element.id);
 									}}
@@ -1867,9 +1867,9 @@
 								width={frameBox.width}
 								height={frameBox.height}
 							/>
-							<!-- Sleepvlak: het hele selectiekader verplaatst het element. -->
+							<!-- Drag surface: the whole selection frame moves the element. -->
 							{#if canEdit}
-								<!-- Toetsenbord-equivalent: pijltjestoetsen verplaatsen de
+								<!-- Keyboard equivalent: the arrow keys move the
 								     selectie (0,1 mm, met shift 1 mm). -->
 								<rect
 									class="grab"

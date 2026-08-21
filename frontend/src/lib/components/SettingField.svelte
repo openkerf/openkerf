@@ -3,7 +3,7 @@
 
 	let { field, value = $bindable() }: { field: SettingField; value: unknown } = $props();
 
-	/** Eén step: hele getallen bij int, tienden bij float. */
+	/** One step: whole numbers for int, tenths for float. */
 	function step(richting: number) {
 		const grootte = field.type === 'int' ? 1 : 0.1;
 		const now = Number(value ?? 0);

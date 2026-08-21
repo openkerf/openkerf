@@ -119,7 +119,7 @@
 					: t('status.machine.connected')
 	);
 	/**
-	 * De button naast de toestand.
+	 * The button beside the state.
 	 *
 	 * The bar could read that no machine was on the line and do nothing about it —
 	 * "not connected" without a button. Only visible when the driver knows it: grbl

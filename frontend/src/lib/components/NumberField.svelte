@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Een number met − en +.
+	 * A number with − and +.
 	 *
 	 * The browser's own spinner is two pixels tall and unusable with gloves on; beside a
 	 * running laser you would rather not type. See DESIGN-SYSTEM, "Number input is a
@@ -42,7 +42,7 @@
 		let fresh = basis + richting * step;
 		if (min !== null) fresh = Math.max(min, fresh);
 		if (max !== null) fresh = Math.min(max, fresh);
-		// Drijvende komma laat 0.1 + 0.2 als 0.30000000000000004 achter.
+		// Floating point leaves 0.1 + 0.2 as 0.30000000000000004.
 		value = String(Math.round(fresh * 1000) / 1000);
 		onchange?.(value);
 	}

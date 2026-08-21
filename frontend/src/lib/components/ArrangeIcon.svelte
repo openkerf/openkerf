@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * De pictogrammen voor schikken: aligning, verdelen, spiegelen, groeperen
+	 * The icons for arranging: aligning, distributing, mirroring, grouping
 	 * en combineren.
 	 *
 	 * They are all deliberately drawn to the same grammar, because that is what makes an

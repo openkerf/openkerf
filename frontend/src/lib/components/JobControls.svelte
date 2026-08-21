@@ -44,11 +44,11 @@
 		onHome?: () => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
-		/** De head langs de omtrek sturen, zonder te branden. */
+		/** Sending the head around the outline, without burning. */
 		onFrame?: () => void;
 		/** The same layer colour the canvas and the layer list show. */
 		colorFor?: (operationId: string | null) => string;
-		/** Wat dit machineprofiel zegt te kunnen; bepaalt wat er verschijnt. */
+		/** What this machine profile says it can do; decides what appears. */
 		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
@@ -156,7 +156,7 @@
 	});
 
 	/**
-	 * Past het op het bed, en past het op het sheet? (gaten J5 en C2)
+	 * Does it fit on the bed, and does it fit on the sheet? (gaps J5 and C2)
 	 *
 	 * Both questions are answered by the server and not here: it measures them for the
 	 * canvas and the phone anyway, and three places computing it themselves can
@@ -170,7 +170,7 @@
 	let grenzen = $derived(overzicht?.bounds ?? null);
 
 	/**
-	 * Brandt deze engine rasterlagen?
+	 * Does this engine burn raster layers?
 	 *
 	 * No, headless: the converter from grid area to laser lines sits in the wxPython
 	 * GUI. During planning the layer throws its own shapes away and produces no
@@ -225,8 +225,8 @@
 	//
 	// Two requests, deliberately not one: the overview (layers, material, objections)
 	// arrives at once, the clock may come afterwards. The other way round the
-	// waarschuwing over verkeerd materiaal minutenlang achter een tijdschatting
-	// te waiting op een zwaar ontwerp.
+	// warning about the wrong material waiting minutes behind a time estimate on a
+	// heavy design.
 	async function loadEstimate() {
 		estimating = true;
 		estimateTraag = false;
@@ -356,7 +356,7 @@
 	}
 
 	/**
-	 * Valt er iets te branden?
+	 * Is there anything to burn?
 	 *
 	 * On an empty bed the pre-flight cheerfully showed "Estimated time 0:00", the full
 	 * safety checklist and a green "Start now". That is wrong twice over: you only
@@ -371,7 +371,7 @@
 	let empty = $derived(!estimating && estimate !== null && estimate.parts === 0);
 
 	/**
-	 * De phase, off één source (`jobPhase` in `$lib/api.ts`).
+	 * The phase, from one source (`jobPhase` in `$lib/api.ts`).
 	 *
 	 * Before this, this panel read `job.running` and the top bar read the machine
 	 * state, and for a job that had been spooled but not yet picked up (`status:
@@ -1497,7 +1497,7 @@
 	.now-actions .btn { min-height: 40px; padding: 0 var(--space-4); }
 	.wachtrij { align-self: flex-start; }
 
-	/* De machinebediening onder de voortgang, dicht zolang er werk onderweg is. */
+	/* The machine controls below the progress, closed while work is in flight. */
 	.machinevouw {
 		margin-top: var(--space-4);
 		border-top: 1px solid var(--line);
@@ -1637,7 +1637,7 @@
 		color: var(--text-1);
 		font-variant-numeric: tabular-nums;
 	}
-	/* ── Bijstellen tijdens de job (gat J11) ───────────────────────────────── */
+	/* ── Adjusting during the job (gap J11) ────────────────────────────────── */
 	.bijstellen { margin-top: var(--space-3); }
 	.stelrij { margin-top: var(--space-2); }
 	.stelnaam {

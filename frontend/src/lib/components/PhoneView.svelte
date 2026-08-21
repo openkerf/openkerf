@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * De telefoon: monitor en emergencystop.
+	 * The phone: monitor and emergency stop.
 	 *
 	 * No canvas, no tools, no layers. Whoever comes here wants to know how things
 	 * state and, if need be, intervene — with one thumb, while standing beside the
@@ -321,7 +321,7 @@
 	let head = $derived(device?.position.mm ?? null);
 
 	/**
-	 * Wat er op het bed ligt (gat J10).
+	 * What is on the bed (gap J10).
 	 *
 	 * This screen drew an empty frame, even with seven shapes on it — and then
 	 * "looking beside the machine" is precisely the one question you do not get

@@ -142,7 +142,7 @@
 		color: var(--text-2);
 		text-decoration: none;
 	}
-	/* Een afgeronde step staat op --surface-2, en daar stays --accent op 4,33
+	/* A completed step sits on --surface-2, and there --accent stays at 4.33
 	   short; --accent-text is the same colour one shade deeper and reaches 5.09. On hover
 	   as well, because that lays --line underneath. */
 	.steps li.done a {

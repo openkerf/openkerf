@@ -50,7 +50,7 @@
 		/** What the last corner operation has to report (skipped corners). In a fixed
 		 *  place in the panel, not in a browser popup. */
 		cornerNote?: string | null;
-		/** Lege layers gone. */
+		/** Empty layers removed. */
 		onPrune?: () => void;
 		/** What the last tidy-up action has to report. */
 		tidyNote?: string | null;
@@ -140,7 +140,7 @@
 	});
 	let selectedIds = $derived(design.selectedIds);
 
-	// ------------------------------------------------------------- de state
+	// -------------------------------------------------------------- the state
 	//
 	// Rotating and mirroring were blind actions until now: you could click but not see
 	// where you were, so every click stacked on the previous one and the only way back
@@ -365,7 +365,7 @@
 	);
 
 	let plainLayers = $derived(operations.filter((o) => !o.grid));
-	/** Lagen zonder werk: wat 'lege layers opruimen' weghaalt. */
+	/** Layers without work: what 'tidy up the empty layers' removes. */
 	const legeLagen = $derived(plainLayers.filter((op) => !op.element_ids.length));
 
 	let gridGroups = $derived.by(() => {
@@ -418,7 +418,7 @@
 		if (await edits.moveLayer(id, direction)) onLayerChange?.();
 	}
 
-	/** Graveren vóór snijden, in één klik (gat L2). */
+	/** Engraving before cutting, in one click (gap L2). */
 	async function sorteerLagen() {
 		const off = await edits.sortLayers();
 		if (off.ok) onLayerChange?.();
@@ -437,7 +437,7 @@
 		onLayerChange?.();
 	}
 
-	// ── Slepen om te herordenen (gat L1) ──────────────────────────────────────
+	// ── Dragging to reorder (gap L1) ──────────────────────────────────────────
 	//
 	// Not the HTML5 drag API: that does not work on a touch screen, and beside a laser a
 	// tablet is the usual device. Pointer events work on all three devices with the same
@@ -1870,7 +1870,7 @@
 	   expander. */
 	@media (max-width: 1199px), (pointer: coarse) {
 	}
-	/* ── Slepen om te herordenen (L1) ──────────────────────────────────────── */
+	/* ── Dragging to reorder (L1) ─────────────────────────────────────────── */
 	.grip {
 		flex: none;
 		width: 14px;

@@ -70,7 +70,7 @@
 	const GEVULD = new Set(['qrcode', 'barcode']);
 
 	/**
-	 * Het venster op de tekening, in mm.
+	 * The window onto the drawing, in mm.
 	 *
 	 * Zooming in on the work itself, not on the sheet: a 30 mm QR code on a 500 mm bed
 	 * would otherwise be four pixels across. The sheet edge *is* drawn, so as soon as you
@@ -262,7 +262,7 @@
 		opacity: 0.6;
 	}
 	.size { stroke: var(--text-2); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
-	/* @svg-space: deze terugvalschets rekent in viewBox-eenheden (100 wide op
+	/* @svg-space: this fallback sketch computes in viewBox units (100 wide on
 	   190 px), niet in CSS-pixels. */
 	.bij { font-size: 7.5px; fill: var(--text-2); font-family: var(--font-mono); }
 	figcaption { font-size: var(--text-xs); color: var(--text-2); text-align: center; }

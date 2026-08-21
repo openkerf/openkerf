@@ -203,8 +203,8 @@
 	/**
 	 * What you used yesterday is at the top today.
 	 *
-	 * Alfabetisch sorteren is eerlijk en onbruikbaar: wie elke dag hetzelfde
-	 * multiplex snijdt, scrollde langs acryl, karton en leer om er te komen.
+	 * Sorting alphabetically is fair and unusable: anybody cutting the same plywood
+	 * every day scrolled past acrylic, cardboard and leather to get to it.
 	 */
 	let recent = $derived(
 		visible
@@ -441,7 +441,7 @@
 	}
 
 	/**
-	 * Twee names voor dezelfde plank on elkaar knopen.
+	 * Tying two names for the same board together.
 	 *
 	 * The preview is fetched again afterwards: the number of new materials changes
 	 * because of it, and a tally that does not move with your choice is a tally you
@@ -873,7 +873,7 @@
 {/snippet}
 
 {#if preview}
-	<!-- Het importvoorbeeld neemt het hele venster over. Dit is het moment
+	<!-- The import preview takes over the whole dialog. This is the moment
 	     where the decision falls; going on browsing beside it through the library you
 	     are about to overwrite helps nobody. -->
 	{@const s = preview.samenvoegen}

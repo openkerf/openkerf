@@ -47,8 +47,8 @@
 		 *
 		 * Gap J9: this prop and the `@media (max-width: 1199px)` in JobControls were
 		 * two sources for one rule. Both components now read
-		 * `screen.controlsInBar`. De prop stays geaccepteerd zodat de
-		 * pagina niet in dezelfde step mee hoeft; hij mag daar gone.
+		 * `screen.controlsInBar`. The prop is still accepted so that the page does not
+		 * have to change in the same step; it may go there.
 		 */
 		tablet?: boolean;
 		/** Below ~950px the file buttons no longer fit; they then live in the tool
@@ -168,7 +168,7 @@
 	);
 
 	/**
-	 * Sneltoetsen voor pauzeren en stoppen (gat J4).
+	 * Shortcuts for pausing and stopping (gap J4).
 	 *
 	 * LightBurn has Pause and Ctrl+Break, and there they work even when the window is
 	 * not in front. That last part we cannot do: a web page gets no key strokes when it

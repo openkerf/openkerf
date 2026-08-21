@@ -5,7 +5,7 @@
  * restored nodes come back *without* ids. Renumbering then gives *different* ids from
  * before. The API reports that with `ids_invalidated`, and we let the selection go —
  * otherwise a stored id would later point at a different
- * element kunnen aanwijzen.
+ * point at an element.
  */
 
 import { apiError, t } from './i18n/core.ts';
@@ -149,7 +149,7 @@ export class EditController {
 		return this.#post(`/api/design/operations/${encodeURIComponent(id)}/move`, { index });
 	}
 
-	/** Graveren vóór snijden, in één handeling (gat L2). */
+	/** Engraving before cutting, in one action (gap L2). */
 	async sortLayers() {
 		return this.#post('/api/design/operations/sort');
 	}

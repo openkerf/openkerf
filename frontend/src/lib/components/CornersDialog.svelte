@@ -26,7 +26,7 @@
 		/** How many shapes it touches — that is on the button. */
 		count?: number;
 		busy?: boolean;
-		/** Wat de vorige poging te melden had (overgeslagen corners). */
+		/** What the previous attempt had to report (skipped corners). */
 		notice?: string | null;
 		onToepassen: (stijl: 'round' | 'chamfer', maatMm: number) => void;
 	} = $props();

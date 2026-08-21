@@ -60,7 +60,7 @@
 	// decides when there is something to say; it sends nothing to the machine.
 	const notifications = new Notifications();
 	const watchdog = new Watchdog(notifications);
-	/** Staat de instelkaart open? Bereikbaar naast de paneeltabs. */
+	/** Is the settings card open? Reachable beside the panel tabs. */
 	let notificationsOpen = $state(false);
 	/** The prompt card: only on screen just after a job has started. */
 	let promptOpen = $state(false);
@@ -234,8 +234,8 @@
 	 * but it is not what "opening" means, so we empty it first — and we ask first when
 	 * work would disappear because of it.
 	 *
-	 * De ask hing on `dirty`, en dat is één step te streng. Een net
-	 * geïmporteerde tekening staat op `dirty === false` (`/api/job/load` roept
+	 * The question hung off `dirty`, and that is one step too strict. A freshly
+	 * imported drawing sits at `dirty === false` (`/api/job/load` calls
 	 * `document.clean()` — rightly, it is identical to the file), and at that moment
 	 * there is no autosave either. Measured: import a drawing, import another, and the
 	 * first is gone — without a question, without a message, without anything to fall
@@ -410,7 +410,7 @@
 
 	/** What the last corner operation had to report; the panel shows it. */
 	let cornerNotice = $state<string | null>(null);
-	/** Wat de last indeel-handeling deed (splitsen, layer, opruimen). */
+	/** What the last tidy-up action did (split, layer, clean up). */
 	let indeelMelding = $state<string | null>(null);
 
 	async function corners(style: 'round' | 'chamfer', sizeMm: number) {
@@ -677,7 +677,7 @@
 		tiling.adopt(status.snapshot?.tiling ?? null);
 	});
 	/**
-	 * De opdeling ophalen, en again zodra iets eraan verandert.
+	 * Fetching the division, and again as soon as something about it changes.
 	 *
 	 * The division is computed on the server and never stored, so it has to be
 	 * requested here — and that happened nowhere. Consequence: `tiling.layout` stayed
@@ -705,7 +705,7 @@
 
 	// ─── Klembord, menu's en sneltoetsen ──────────────────────────────────────
 	//
-	// Alles hieronder hangt on één list: `$lib/actions.ts`. De actiebalk boven
+	// Everything below hangs off one list: `$lib/actions.ts`. The action bar above
 	// the canvas, the context menu and the keyboard read the same names, the same
 	// shortcuts and the same reasons-why-not out of it. That is the whole point: before
 	// this every action lived in exactly one place, and so there was no second place
@@ -913,7 +913,7 @@
 			return;
 		}
 
-		// Pijltjes verplaatsen 0,1 mm; met shift 1 mm (toegankelijkheidseis).
+		// The arrows move 0.1 mm; with shift 1 mm (an accessibility requirement).
 		const step = event.shiftKey ? 1 : 0.1;
 		const moves: Record<string, [number, number]> = {
 			ArrowLeft: [-step, 0],
@@ -942,7 +942,7 @@
 <svelte:window bind:innerWidth={width} onkeydown={sneltoets} />
 
 {#if telefoon}
-	<!-- De telefoon is een eigen app: monitor en emergencystop. Zie DESIGN-SYSTEM v2,
+	<!-- The phone is an app of its own: monitor and emergency stop. See DESIGN-SYSTEM v2,
 	     "Drie apparaten, drie apps". -->
 	<PhoneView
 		{device}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Stap 4: het werkgebied.
+	 * Step 4: the work area.
 	 *
 	 * This was a bare pass-through from the engine: "Width — Width of the laser
 	 * bed.", "Force Declared Home — Override native home location", "Flip X",

@@ -319,7 +319,7 @@
 		interval: 'interval_mm'
 	};
 
-	/** De values waarop echt gebrand wordt — na afronding, in rasterorde. */
+	/** The values that really get burned — after rounding, in grid order. */
 	function langsAs(richting: 'row' | 'column'): number[] {
 		if (!preview) return [];
 		const as: As =
@@ -434,7 +434,7 @@
 	let step = $derived(done ? 2 : 1);
 
 	/**
-	 * Waar het vorige board kwam te liggen.
+	 * Where the previous board came to lie.
 	 *
 	 * Needed because by default a second grid lands in exactly the same place: Start X
 	 * and Start Y are still what they were. Measured: two boards, both at 20, 20 mm,
@@ -486,7 +486,7 @@
 		error = null;
 	}
 
-	/** Zou het nieuwe board bovenop het vorige vallen? */
+	/** Would the new board land on top of the previous one? */
 	let botsing = $derived.by(() => {
 		if (!vorigBord || done || !preview) return false;
 		const plan = preview.plan;
@@ -521,7 +521,7 @@
 	] as const;
 
 	/**
-	 * Eén bewaarde instelling in het formulier zetten.
+	 * Putting one saved setting into the form.
 	 *
 	 * Works for a previous grid (T3) and for a named recipe (T7): the server supplies
 	 * them in the same shape, and that was the reason to build T7 *on* T3 rather than
