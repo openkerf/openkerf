@@ -1079,6 +1079,8 @@ export const en = {
 	'grid.recipe.save': 'Save this…',
 	'grid.recipe.namePlaceholder': 'Name, e.g. birch 3 mm cut',
 	'grid.recipe.nameAria': 'Name of this recipe',
+	'grid.recipe.saveFailed': 'Saving failed ({status}).',
+	'grid.recipe.deleteFailed': 'Deleting failed ({status}).',
 	'grid.recipe.hint': 'Saves everything on this form except the caption.',
 	'grid.recipe.hint.noMaterial': 'With no material chosen this becomes a recipe for all materials.',
 	'grid.recipe.hint.material': 'Belongs to the chosen material; a recipe of the same name is updated.',

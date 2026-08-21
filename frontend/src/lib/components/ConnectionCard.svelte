@@ -34,7 +34,7 @@
 		connection.since ? Math.round((Date.now() - connection.since) / 1000) : 0
 	);
 	// Only mentioned when it lasts long enough to worry about.
-	let duur = $derived(gone >= 60 ? t('connection.minutes', { n: Math.floor(gone / 60) }) : null);
+	let howLong = $derived(gone >= 60 ? t('connection.minutes', { n: Math.floor(gone / 60) }) : null);
 
 	/**
 	 * This card and the machine alarm form one column, and this is its measure.
@@ -86,7 +86,7 @@
 		<div class="text">
 			<strong>{t('connection.lost')}</strong>
 			<p>
-				{duur ? t('connection.lost.bodyFor', { duration: duur }) : t('connection.lost.body')}
+				{howLong ? t('connection.lost.bodyFor', { duration: howLong }) : t('connection.lost.body')}
 			</p>
 			{#if burns}
 				<p class="urgent">{t('connection.stillBurning')}</p>

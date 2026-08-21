@@ -39,7 +39,7 @@
 	let resultaat = $state<ScanResult | null>(null);
 	let verstreken = $state(0);
 	/** Past this bound "just a moment" has become an assumption. */
-	const TRAAG = 8;
+	const SLOW = 8;
 	let choice = $state<Record<string, string>>({});
 	let controller: AbortController | null = null;
 	let tikker: ReturnType<typeof setInterval> | null = null;
@@ -152,11 +152,11 @@
 				<div>
 					<div class="bezigkop">{t('setup.scan.running', { seconds: verstreken })}</div>
 					<p class="muted">{t('setup.scan.what')}</p>
-					{#if verstreken >= TRAAG}
+					{#if verstreken >= SLOW}
 						<!-- This ought to be done within three seconds. If it takes longer,
 						     something is going on and the user deserves a way forward instead of
 						     a spinning circle. -->
-						<p class="traag">{t('setup.scan.slow')}</p>
+						<p class="slow">{t('setup.scan.slow')}</p>
 					{/if}
 				</div>
 				<button class="btn subtle" onclick={afbreken}>{t('setup.scan.stop')}</button>
@@ -338,7 +338,7 @@
 		margin: 2px 0 0;
 		font-size: var(--text-xs);
 	}
-	.busy .traag {
+	.busy .slow {
 		color: var(--text-1);
 		border-left: 3px solid var(--warn);
 		padding-left: var(--space-2);
@@ -355,9 +355,9 @@
 		border-radius: 999px;
 		border: 2px solid var(--line);
 		border-top-color: var(--accent);
-		animation: draai 900ms linear infinite;
+		animation: turn 900ms linear infinite;
 	}
-	@keyframes draai {
+	@keyframes turn {
 		to {
 			transform: rotate(360deg);
 		}
@@ -544,7 +544,7 @@
 	.anders { margin-top: var(--space-4); font-size: var(--text-xs); color: var(--text-2); }
 	.anders a { color: var(--accent-text); }
 
-	/* Raakdoelen op tablet en telefoon. */
+	/* Touch targets on tablet and phone. */
 	@media (max-width: 1199px) {
 		.model select {
 			min-height: 44px;

@@ -55,7 +55,7 @@ export type SnapHit = { delta: number; guide: SnapGuide };
 export type Box = { x: number; y: number; width: number; height: number };
 
 /** A box normalised to min/max, even when it has been scaled negatively. */
-function grenzen(box: Box) {
+function edgesOf(box: Box) {
 	return {
 		x0: Math.min(box.x, box.x + box.width),
 		x1: Math.max(box.x, box.x + box.width),
@@ -100,7 +100,7 @@ export function surroundingTargets(options: {
 	}
 
 	for (const box of anderen) {
-		const g = grenzen(box);
+		const g = edgesOf(box);
 		const langsY: [number, number] = [g.y0, g.y1];
 		const langsX: [number, number] = [g.x0, g.x1];
 		x.push(
@@ -136,7 +136,7 @@ export function snapAxis(
 	trefafstand: number
 ): SnapHit | null {
 	let beste: SnapHit | null = null;
-	const beter = (afstand: number) => !beste || afstand < Math.abs(beste.delta) - 1e-9;
+	const beter = (distance: number) => !beste || distance < Math.abs(beste.delta) - 1e-9;
 
 	for (const candidate of candidates) {
 		for (const point of targets) {
@@ -171,7 +171,7 @@ export function snapBox(
 	rasterstap: number,
 	trefafstand: number
 ): { dx: number; dy: number; guides: SnapGuide[] } {
-	const g = grenzen(box);
+	const g = edgesOf(box);
 	const x = snapAxis(
 		'x',
 		[g.x0 + verplaatsing.dx, (g.x0 + g.x1) / 2 + verplaatsing.dx, g.x1 + verplaatsing.dx],

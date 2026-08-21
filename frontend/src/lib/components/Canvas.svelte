@@ -331,7 +331,7 @@
 	// Hence it is called a trail, it is one thin line and not in the layer colour, and
 	// the strip under the canvas says in words what you are seeing.
 	let job = $derived(currentJob(device));
-	let voortgang = $derived.by(() => {
+	let progressPart = $derived.by(() => {
 		if (!job) return null;
 		const part = job.progress;
 		if (part === null || part === undefined || !Number.isFinite(part)) return null;
@@ -511,7 +511,7 @@
 	let huidigeTegel = $derived(tiling?.run?.current ?? -1);
 	let klareTegels = $derived(new Set(tiling?.run?.done ?? []));
 
-	let tegelPositie = $derived.by(() => {
+	let tilePosition = $derived.by(() => {
 		const m = new Map<string, Tile>();
 		for (const t of tileLayout?.tiles ?? []) m.set(`${t.row},${t.column}`, t);
 		return m;
@@ -523,11 +523,11 @@
 	let tegelNaden = $derived.by(() => {
 		const lijnen: { x1: number; y1: number; x2: number; y2: number }[] = [];
 		for (const t of tileLayout?.tiles ?? []) {
-			const rechts = tegelPositie.get(`${t.row},${t.column + 1}`);
-			if (rechts)
+			const toTheRight = tilePosition.get(`${t.row},${t.column + 1}`);
+			if (toTheRight)
 				lijnen.push({ x1: t.burn.x1_mm, y1: t.burn.y0_mm, x2: t.burn.x1_mm, y2: t.burn.y1_mm });
-			const onder = tegelPositie.get(`${t.row + 1},${t.column}`);
-			if (onder)
+			const below = tilePosition.get(`${t.row + 1},${t.column}`);
+			if (below)
 				lijnen.push({ x1: t.burn.x0_mm, y1: t.burn.y1_mm, x2: t.burn.x1_mm, y2: t.burn.y1_mm });
 		}
 		return lijnen;
@@ -796,11 +796,11 @@
 		} else {
 			// Scaling: only the corner you are holding. The opposite corner stays put, so
 			// it has no business among the candidates.
-			const links = drag.corner % 2 === 0;
-			const boven = drag.corner < 2;
+			const toTheLeft = drag.corner % 2 === 0;
+			const fromTop = drag.corner < 2;
 			const corner = {
-				x: (links ? drag.origin.x : drag.origin.x + drag.origin.width) + dx,
-				y: (boven ? drag.origin.y : drag.origin.y + drag.origin.height) + dy
+				x: (toTheLeft ? drag.origin.x : drag.origin.x + drag.origin.width) + dx,
+				y: (fromTop ? drag.origin.y : drag.origin.y + drag.origin.height) + dy
 			};
 			const off = snapPoint(corner, targets, snapGrid, snapTolerance);
 			dx += off.x - corner.x;
@@ -956,15 +956,15 @@
 	 * arbitrarily.
 	 */
 	function ticks(fromMm: number, toMm: number, step: number, sub: number, lengthMm: number) {
-		const fijn = sub || step;
-		const perHoofd = Math.max(1, Math.round(step / fijn));
+		const fine = sub || step;
+		const perHoofd = Math.max(1, Math.round(step / fine));
 		const marks: { value: number; major: boolean; outside: boolean; label: string }[] = [];
-		const eerste = Math.ceil(fromMm / fijn - 0.001);
-		const last = Math.floor(toMm / fijn + 0.001);
+		const firstMark = Math.ceil(fromMm / fine - 0.001);
+		const last = Math.floor(toMm / fine + 0.001);
 		// At an absurd zoom level do not draw thousands of ticks.
-		if (last - eerste > 400) return marks;
-		for (let i = eerste; i <= last; i++) {
-			const value = i * fijn;
+		if (last - firstMark > 400) return marks;
+		for (let i = firstMark; i <= last; i++) {
+			const value = i * fine;
 			const major = ((i % perHoofd) + perHoofd) % perHoofd === 0;
 			marks.push({
 				value,
@@ -2254,7 +2254,7 @@
 						     only number the engine really gives, and it sits where you are
 						     looking during a job anyway. Starting at the top and running
 						     clockwise, because everybody reads that as "how far". -->
-						{#if voortgang !== null}
+						{#if progressPart !== null}
 							<circle
 								class="ring-baan"
 								cx={head[0]}
@@ -2268,7 +2268,7 @@
 								cy={head[1]}
 								r={ringR}
 								vector-effect="non-scaling-stroke"
-								stroke-dasharray="{ringOmtrek * voortgang} {ringOmtrek}"
+								stroke-dasharray="{ringOmtrek * progressPart} {ringOmtrek}"
 								transform="rotate(-90 {head[0]} {head[1]})"
 							/>
 						{/if}
@@ -2399,8 +2399,8 @@
 		     becomes a flex item of its own, and then "62%" sat in a column of its own
 		     next to a broken-off sentence on a tablet (measured at 1024). -->
 		<span
-			>{t('canvas.trace')}{#if voortgang !== null}{' '}{t('canvas.traceProgress', {
-					percent: Math.round(voortgang * 100)
+			>{t('canvas.trace')}{#if progressPart !== null}{' '}{t('canvas.traceProgress', {
+					percent: Math.round(progressPart * 100)
 				})}{/if}</span
 		>
 	</p>

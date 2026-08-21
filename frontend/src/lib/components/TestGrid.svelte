@@ -74,7 +74,7 @@
 		interval: { step: 0.01, max: 5 }
 	};
 	/** Where the line spacing means something; when cutting the head lays one line. */
-	const INTERVAL_BEWERKINGEN = ['graveren-raster'];
+	const INTERVAL_OPERATIONS = ['graveren-raster'];
 
 	let busy = $state(false);
 	// The preview refreshes every 250 ms; that must not disable the main button.
@@ -159,7 +159,7 @@
 		interval: 'interval_mm'
 	};
 
-	let intervalKan = $derived(INTERVAL_BEWERKINGEN.includes(form.operation));
+	let intervalKan = $derived(INTERVAL_OPERATIONS.includes(form.operation));
 	/** What the label layer is about: caption, border, or both (T10). */
 	let labelLayerName = $derived(
 		t(form.text ? 'grid.labelLayer.caption' : 'grid.labelLayer.border')
@@ -332,8 +332,8 @@
 		}
 		return [...found.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 	}
-	let rijwaarden = $derived(preview ? langsAs('row') : []);
-	let kolomwaarden = $derived(preview ? langsAs('column') : []);
+	let rowValues = $derived(preview ? langsAs('row') : []);
+	let columnValues = $derived(preview ? langsAs('column') : []);
 
 	/**
 	 * How heavily a square burns: much power, low speed and a small interval give the
@@ -377,14 +377,14 @@
 	 */
 	let deepestCorner = $derived.by(() => {
 		if (!preview || preview.cells.length === 0) return null;
-		const zwaarste = preview.cells.reduce((a, b) => (score(b) > score(a) ? b : a));
-		const onder = zwaarste.row === rijwaarden.length - 1;
-		const rechts = zwaarste.column === kolomwaarden.length - 1;
+		const heaviest = preview.cells.reduce((a, b) => (score(b) > score(a) ? b : a));
+		const atBottomEdge = heaviest.row === rowValues.length - 1;
+		const atRightEdge = heaviest.column === columnValues.length - 1;
 		// Word order differs per language: Dutch says "rechtsboven" as one word,
 		// English "top right" the other way round — so the catalogue joins them.
 		return t('grid.corner', {
-			horizontal: t(rechts ? 'grid.corner.right' : 'grid.corner.left'),
-			vertical: t(onder ? 'grid.corner.bottom' : 'grid.corner.top')
+			horizontal: t(atRightEdge ? 'grid.corner.right' : 'grid.corner.left'),
+			vertical: t(atBottomEdge ? 'grid.corner.bottom' : 'grid.corner.top')
 		});
 	});
 
@@ -409,18 +409,18 @@
 	// The preview is drawn in real pixels rather than in millimetres: an SVG with a
 	// mm viewBox turns every 11px label into a giant of 11mm.
 	const VOORBEELD_PX = 208;
-	let schaal = $derived(preview ? VOORBEELD_PX / Math.max(1, preview.plan.width_mm) : 1);
-	let celPx = $derived(preview ? preview.plan.cell_mm * schaal : 0);
-	let gatPx = $derived(preview ? preview.plan.gap_mm * schaal : 0);
+	let scale = $derived(preview ? VOORBEELD_PX / Math.max(1, preview.plan.width_mm) : 1);
+	let celPx = $derived(preview ? preview.plan.cell_mm * scale : 0);
+	let gatPx = $derived(preview ? preview.plan.gap_mm * scale : 0);
 	// With more than eight steps every label becomes unreadable; then only the
 	// edges. An eleven-pixel label does not fit in a twenty-pixel square; then only
 	// the two edge values, because those carry the range.
 	let toonAlleLabels = $derived(
-		rijwaarden.length <= 8 && kolomwaarden.length <= 8 && celPx >= 30
+		rowValues.length <= 8 && columnValues.length <= 8 && celPx >= 30
 	);
 
-	function labelbaar(reeks: number[], i: number) {
-		return toonAlleLabels || i === 0 || i === reeks.length - 1;
+	function labelbaar(series: number[], i: number) {
+		return toonAlleLabels || i === 0 || i === series.length - 1;
 	}
 
 	// "No material" is not the same as "the field is empty": an id that is not in the
@@ -509,7 +509,7 @@
 	// is needed for it.
 
 	let overgenomen = $state<{ dateOf: string; grid: number } | null>(null);
-	let geladenVoor = $state<number | null | undefined>(undefined);
+	let loadedFor = $state<number | null | undefined>(undefined);
 
 	const TO_CARRY_OVER = [
 		'operation', 'row_axis', 'column_axis',
@@ -554,8 +554,8 @@
 
 	$effect(() => {
 		const id = form.material_id;
-		if (id === geladenVoor) return;
-		geladenVoor = id;
+		if (id === loadedFor) return;
+		loadedFor = id;
 		overgenomen = null;
 		if (id === null) return;
 		(async () => {
@@ -578,7 +578,7 @@
 	// the same list, filled with the same keys as the previous grid, so there is one
 	// fill-in routine.
 
-	type Recept = {
+	type Recipe = {
 		id: number;
 		name: string;
 		material_id: number | null;
@@ -586,7 +586,7 @@
 		settings: Record<string, unknown>;
 	};
 
-	let recepten = $state<Recept[]>([]);
+	let recepten = $state<Recipe[]>([]);
 	let pickedRecipe = $state<number | null>(null);
 	let recipeName = $state('');
 	let recipeError = $state<string | null>(null);
@@ -614,13 +614,13 @@
 
 	function pickRecipe(id: number | null) {
 		pickedRecipe = id;
-		const recept = recepten.find((r) => r.id === id);
-		if (!recept) return;
+		const recipe = recepten.find((r) => r.id === id);
+		if (!recipe) return;
 		// A recipe overwrites the form; that is what you chose it for. The provenance
 		// line from T3 no longer holds after that, so it goes.
 		overgenomen = null;
-		neemOver(recept.settings);
-		recipeName = recept.name;
+		neemOver(recipe.settings);
+		recipeName = recipe.name;
 	}
 
 	async function saveRecipe() {
@@ -651,7 +651,7 @@
 				recipeError =
 					typeof data?.detail === 'string'
 						? data.detail
-						: `Opslaan mislukte (${response.status}).`;
+						: t('grid.recipe.saveFailed', { status: response.status });
 				return;
 			}
 			await fetchRecipes();
@@ -676,7 +676,7 @@
 				headers
 			});
 			if (!response.ok) {
-				recipeError = `Verwijderen mislukte (${response.status}).`;
+				recipeError = t('grid.recipe.deleteFailed', { status: response.status });
 				return;
 			}
 			pickedRecipe = null;
@@ -719,13 +719,13 @@
 		try {
 			const response = await fetch('/api/job/estimate');
 			if (!response.ok) return null; // No verdict is not a block.
-			const grenzen = (await response.json())?.bounds;
-			if (!grenzen) return null;
-			if (grenzen.outside_bed > 0) {
-				return t('grid.block.outsideBed', { n: grenzen.outside_bed });
+			const bounds = (await response.json())?.bounds;
+			if (!bounds) return null;
+			if (bounds.outside_bed > 0) {
+				return t('grid.block.outsideBed', { n: bounds.outside_bed });
 			}
-			if (grenzen.outside_sheet > 0) {
-				machineLet = t('grid.watch.outsideSheet', { n: grenzen.outside_sheet });
+			if (bounds.outside_sheet > 0) {
+				machineLet = t('grid.watch.outsideSheet', { n: bounds.outside_sheet });
 			}
 			return null;
 		} catch {
@@ -771,7 +771,7 @@
 		}
 	}
 
-	// ---------------------------------------------------- materiaal erbij (E4)
+	// ---------------------------------------------------- material erbij (E4)
 
 	let newMaterial = $state('');
 	let materialError = $state<string | null>(null);
@@ -780,13 +780,13 @@
 		const name = newMaterial.trim();
 		if (!name) return;
 		materialError = null;
-		const gemaakt = await library.addMaterial(name);
-		if (!gemaakt) {
+		const made = await library.addMaterial(name);
+		if (!made) {
 			materialError = library.error ?? t('error.materialFailed');
 			return;
 		}
 		newMaterial = '';
-		form.material_id = gemaakt.id;
+		form.material_id = made.id;
 	}
 </script>
 
@@ -826,9 +826,9 @@
 					<option value={null}
 						>{recepten.length === 0 ? t('grid.recipe.none') : t('grid.recipe.pick')}</option
 					>
-					{#each recepten as recept (recept.id)}
-						<option value={recept.id}
-							>{recept.name}{recept.material_name
+					{#each recepten as recipe (recipe.id)}
+						<option value={recipe.id}
+							>{recipe.name}{recipe.material_name
 								? ''
 								: ` · ${t('grid.recipe.allMaterials')}`}</option
 						>
@@ -1227,9 +1227,9 @@
 						{#if form.text}
 						<div class="corner"></div>
 						<div class="koplabels">
-							{#each kolomwaarden as v, i (i)}
+							{#each columnValues as v, i (i)}
 								<span class="as mono"
-									>{labelbaar(kolomwaarden, i)
+									>{labelbaar(columnValues, i)
 										? form.column_axis === 'power'
 											? `${v}%`
 											: v
@@ -1238,9 +1238,9 @@
 							{/each}
 						</div>
 						<div class="zijlabels">
-							{#each rijwaarden as v, i (i)}
+							{#each rowValues as v, i (i)}
 								<span class="as mono"
-									>{labelbaar(rijwaarden, i)
+									>{labelbaar(rowValues, i)
 										? form.row_axis === 'power'
 											? `${v}%`
 											: v
@@ -1251,7 +1251,7 @@
 						{/if}
 						<div
 							class="cells"
-							style="grid-template-columns: repeat({kolomwaarden.length}, var(--cel));"
+							style="grid-template-columns: repeat({columnValues.length}, var(--cel));"
 						>
 							{#each preview.cells as cell (`${cell.row}-${cell.column}`)}
 								<span

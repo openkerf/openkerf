@@ -28,8 +28,8 @@
 		onToepassen: (distanceMm: number) => void;
 	} = $props();
 
-	let afstand = $state('2');
-	let value = $derived(Number(afstand));
+	let distance = $state('2');
+	let value = $derived(Number(distance));
 	let geldig = $derived(Number.isFinite(value) && value !== 0);
 	let richting = $derived(t(value > 0 ? 'offset.outward' : 'offset.inward'));
 </script>
@@ -37,7 +37,7 @@
 <Dialog title={t('offset.title')} bind:open width="400px">
 	<div class="offset">
 		<div class="paar">
-			<NumberField label={t('offset.distance')} unit="mm" step={0.5} bind:value={afstand} />
+			<NumberField label={t('offset.distance')} unit="mm" step={0.5} bind:value={distance} />
 			<!-- The direction in words beside the number. A minus sign is the input,
 			     "inward" is the meaning — and those two are not the same as long as you
 			     still have to work out which side is negative. -->

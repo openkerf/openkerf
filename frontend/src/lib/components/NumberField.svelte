@@ -63,7 +63,7 @@
 	 * where there are any, and the buttons keep their names and stay operable with a screen
 	 * reader or pointer — just not with Tab any more.
 	 */
-	function toets(event: KeyboardEvent) {
+	function onKey(event: KeyboardEvent) {
 		if (disabled) return;
 		if (event.key === 'ArrowUp') set(1);
 		else if (event.key === 'ArrowDown') set(-1);
@@ -94,7 +94,7 @@
 			inputmode="decimal"
 			bind:value
 			{disabled}
-			onkeydown={toets}
+			onkeydown={onKey}
 			onchange={() => onchange?.(value)}
 		/>
 		<button

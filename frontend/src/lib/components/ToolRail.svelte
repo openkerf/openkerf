@@ -98,7 +98,7 @@
 	 * Saving through `saveFile`, not through a bare `<a download>`: after the
 	 * download the app has to know the design has been saved. See `$lib/saving`.
 	 */
-	async function bewaar(event: MouseEvent, url: string, name: string) {
+	async function save(event: MouseEvent, url: string, name: string) {
 		event.preventDefault();
 		moreOpen = false;
 		if (await saveFile(url, name)) onSaved?.();
@@ -226,12 +226,12 @@
 						<input type="file" aria-label={t('topbar.project.pick')} accept=".openkerf,.zip"
 							onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; moreOpen = false; if (f) onOpenProject?.(f); }} />
 					</label>
-					<a class="row" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={(e) => bewaar(e, '/api/project/export.openkerf', 'project.openkerf')}>
+					<a class="row" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={(e) => save(e, '/api/project/export.openkerf', 'project.openkerf')}>
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
 						<span>{t('topbar.project.save')}</span>
 					</a>
 				{/if}
-				<a class="row" role="menuitem" href="/api/design/export.svg" download="ontwerp.svg" onclick={(e) => bewaar(e, '/api/design/export.svg', 'ontwerp.svg')}>
+				<a class="row" role="menuitem" href="/api/design/export.svg" download="design.svg" onclick={(e) => save(e, '/api/design/export.svg', 'design.svg')}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
 					<span>{t('rail.sheetAsSvg')}</span>
 				</a>

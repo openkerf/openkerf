@@ -67,7 +67,7 @@
 
 	// The shapes you want to see as an *area*: a QR code of separate little outlines is
 	// no longer a QR code. The rest is a line, because that is what the laser follows.
-	const GEVULD = new Set(['qrcode', 'barcode']);
+	const FILLED = new Set(['qrcode', 'barcode']);
 
 	/**
 	 * The window onto the drawing, in mm.
@@ -76,7 +76,7 @@
 	 * would otherwise be four pixels across. The sheet edge *is* drawn, so as soon as you
 	 * come near it you see it lying there.
 	 */
-	let venster = $derived.by(() => {
+	let viewBox = $derived.by(() => {
 		if (!preview) return null;
 		const [x0, y0, x1, y1] = preview.bounds;
 		const margin = Math.max((x1 - x0) * 0.08, (y1 - y0) * 0.08, 1);
@@ -115,12 +115,12 @@
 		return null;
 	});
 
-	function polygonPoints(zijden: number, straal: number, binnen: number) {
+	function polygonPoints(sides: number, radius: number, innerRadius: number) {
 		const points: string[] = [];
-		const totaal = binnen ? zijden * 2 : zijden;
-		for (let i = 0; i < totaal; i++) {
-			const r = binnen && i % 2 ? binnen : straal;
-			const corner = (i / totaal) * Math.PI * 2 - Math.PI / 2;
+		const total = innerRadius ? sides * 2 : sides;
+		for (let i = 0; i < total; i++) {
+			const r = innerRadius && i % 2 ? innerRadius : radius;
+			const corner = (i / total) * Math.PI * 2 - Math.PI / 2;
 			points.push(`${(50 + Math.cos(corner) * r).toFixed(1)},${(50 + Math.sin(corner) * r).toFixed(1)}`);
 		}
 		return points.join(' ');
@@ -139,9 +139,9 @@
 		</p>
 	{/if}
 
-	{#if preview && venster}
+	{#if preview && viewBox}
 		<svg
-			viewBox="{venster.x} {venster.y} {venster.w} {venster.h}"
+			viewBox="{viewBox.x} {viewBox.y} {viewBox.w} {viewBox.h}"
 			role="img"
 			aria-label={t('genPreview.aria', { width: size(wide), height: size(high) })}
 		>
@@ -153,7 +153,7 @@
 				width={preview.sheet.width_mm}
 				height={preview.sheet.height_mm}
 			/>
-			<g class:area={GEVULD.has(preview.what)}>
+			<g class:area={FILLED.has(preview.what)}>
 				{#each preview.parts as part (part)}
 					<path
 						class="shape"

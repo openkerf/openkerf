@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Stap 5.
+	 * Step 5.
 	 *
 	 * This page only said "the machine has been created" and put you in an empty work
 	 * area. That is exactly where the whole task's first "now what?" fell: you have a
