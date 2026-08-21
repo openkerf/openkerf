@@ -75,9 +75,9 @@ SIGNALS = (
 
 HEARTBEAT_SECONDS = 2.0
 
-# Wie deze server is, in dit proces (gat E2). Nieuw bij elke start; de client
-# vergelijkt hem bij het herverbinden en weet zo of hij tegen dezelfde engine
-# praat als vóór de stilte.
+# Who this server is, in this process (gap E2). New at every start; the client compares it
+# on reconnecting and so knows whether it is talking to the same engine as before the
+# silence.
 INSTANCE_ID = uuid.uuid4().hex
 
 
@@ -144,12 +144,11 @@ def _spa_files(directory: str):
     assets (a stale .js hash) still need to 404, or the browser would try to
     execute HTML as JavaScript.
 
-    Een onbekend `/api`-pad valt hier **niet** onder. Dat gebeurde eerder wel,
-    met twee misleidende gevolgen: een GET kreeg de HTML-pagina terug (waar de
-    frontend JSON verwachtte) en een POST kreeg "405 Method Not Allowed", omdat
-    de fallback alleen GET kent. Wie een oudere server draait naast een nieuwere
-    frontend, zag dus een onbegrijpelijke foutmelding in plaats van "die route
-    ken ik niet".
+    An unknown `/api` path does **not** fall under this. It used to, with two misleading
+    consequences: a GET got the HTML page back (where the frontend expected JSON) and a
+    POST got "405 Method Not Allowed", because the fallback only knows GET. So anybody
+    running an older server beside a newer frontend saw an incomprehensible error message
+    instead of "I do not know that route".
     """
     from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
@@ -220,14 +219,14 @@ class ApiServer:
             self.commands,
             Path(self.library.path).with_name("openkerf-tegelreeks.json"),
         )
-        # Waar de instellingen van een laag vandaan komen. Naast de bibliotheek,
-        # want het gaat over presets; niet erín, want het gaat over dit project.
+        # Where a layer's settings come from. Beside the library, because it is about
+        # presets; not *in* it, because it is about this project.
         self.provenance = Provenance(
             Path(self.library.path).with_name("openkerf-herkomst.json")
         )
-        # Wat elke paletkleur op deze machine het laatst deed (besluit B2).
-        # Naast de herkomst en nadrukkelijk niet erin: dit is gewoonte, geen
-        # bewijs — zie de kop van palette.py.
+        # What every palette colour last did on this machine (decision B2). Beside the
+        # provenance and emphatically not in it: this is habit, not evidence — see the head
+        # of palette.py.
         self.palette = Palette(Path(self.library.path).with_name("openkerf-palet.json"))
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
@@ -246,14 +245,13 @@ class ApiServer:
             grid_operations=lambda: self.library.grid_operations(),
         )
         self.drawing.grid_operations = lambda: self.library.grid_operations()
-        # Besluit B2: een laag die tijdens het tekenen ontstaat, begint op wat
-        # die kleur op deze machine eerder deed.
-        self.drawing.color_memory = lambda kleur: self.palette.recall(
-            self._palette_machine()[0], kleur
+        # Decision B2: a layer that comes into being while drawing starts at what that
+        # colour did on this machine before.
+        self.drawing.color_memory = lambda colour: self.palette.recall(
+            self._palette_machine()[0], colour
         )
-        # Gat J12: het nulpunt woont op de machine (machine.py) en bepaalt waar
-        # het werk terechtkomt. Eén bron, twee lezers — de pre-flight en het
-        # spoolen.
+        # Gap J12: the zero point lives on the machine (machine.py) and decides where the
+        # work lands. One source, two readers — the pre-flight and the spooling.
         self.drawing.origin = self.motion.origin
         self.grids = TestGridGenerator(kernel)
         self.bridge = EventBridge()
@@ -273,22 +271,21 @@ class ApiServer:
 
     def _active_profile(self):
         """
-        Het bibliotheekprofiel van de machine die de engine nu gebruikt.
+        The library profile of the machine the engine is using now.
 
-        De engine kent devices, de bibliotheek kent profielen; dit is de knoop
-        ertussen. Geen actief device betekent geen profiel — dan tonen we alles.
+        The engine knows devices, the library knows profiles; this is the knot between
+        them. No active device means no profile — then we show everything.
 
-        Alleen voor een machine die iemand heeft ingesteld. MeerK40t start met
-        een lhystudios-apparaat zodat de kernel altijd iets heeft om tegen te
-        praten; niemand koos dat. Deze functie wordt op zes leesroutes
-        aangeroepen en maakt aan wat er niet is, dus zonder deze horde levert
-        het openen van de bibliotheek op een verse installatie meteen een
-        profiel op met de interne naam van dat apparaat — en zo staan er straks
-        namen in de lijst van machines die de gebruiker nooit heeft gehad.
+        Only for a machine somebody has set up. MeerK40t starts with an lhystudios device so
+        that the kernel always has something to talk to; nobody chose that. This function is
+        called on six read routes and creates what is not there, so without this hurdle
+        opening the library on a fresh installation immediately produces a profile with that
+        device's internal name — and that way names end up in the list of machines the user
+        never had.
         """
         device = getattr(self.kernel, "device", None)
-        pad = getattr(device, "path", None) if device is not None else None
-        if not pad:
+        path = getattr(device, "path", None) if device is not None else None
+        if not path:
             return None
         try:
             if not self.machines._configured(device):
@@ -297,32 +294,31 @@ class ApiServer:
             return None
         try:
             return self.library.profile_for_device(
-                str(pad), str(getattr(device, "label", "") or pad)
+                str(path), str(getattr(device, "label", "") or path)
             )
         except Exception:
             return None
 
     def _palette_machine(self):
         """
-        Onder welke machine het palet-geheugen valt, en hoe die heet.
+        Which machine the palette memory falls under, and what it is called.
 
-        Snelheid en vermogen zijn machine-eigenschappen: 12 mm/s op 80 watt is
-        een andere snede dan op 40. Een geheugen dat dat door elkaar haalt is
-        erger dan geen geheugen, dus het hangt aan de machine of aan niets.
+        Speed and power are machine properties: 12 mm/s at 80 watts is a different cut
+        from at 40. A memory that mixes those up is worse than no memory, so it hangs off
+        the machine or off nothing.
         """
         profile = self._active_profile()
-        naam = None
+        name = None
         if profile:
-            naam = profile.get("name") or profile.get("device_path")
-        return machine_key(profile), naam
+            name = profile.get("name") or profile.get("device_path")
+        return machine_key(profile), name
 
     def _remember_layer(self, operation_id: str) -> None:
         """
-        Leg vast wat de kleur van deze laag nu doet.
+        Record what this layer's colour does now.
 
-        Aangeroepen ná een geslaagde wijziging, want een geweigerde poging is
-        geen gewoonte. Faalt dit, dan is er hoogstens geen geheugen — het mag
-        nooit de wijziging zelf laten stranden.
+        Called *after* a successful change, because a refused attempt is not a habit. If
+        this fails, at worst there is no memory — it must never strand the change itself.
         """
         try:
             operation = self.drawing._operation(operation_id)
@@ -330,24 +326,24 @@ class ApiServer:
             if color is None:
                 return
             power = getattr(operation, "power", None)
-            key, naam = self._palette_machine()
+            key, name = self._palette_machine()
             self.palette.remember(
                 key,
                 color,
                 speed=getattr(operation, "speed", None),
                 power_percent=None if power is None else float(power) / 10,
                 kind=str(getattr(operation, "type", "") or ""),
-                machine_name=naam,
+                machine_name=name,
             )
         except Exception:
             return
 
     def _active_sheet(self):
         """
-        Het vel waarop nu gewerkt wordt, met de naam van zijn materiaal erbij.
+        The sheet being worked on now, with the name of its material.
 
-        Het vel bewaart alleen een id — de bibliotheek weet hoe het heet, en
-        zonder die naam kan de pre-flight niet zeggen wáárin je brandt.
+        The sheet keeps only an id — the library knows what it is called, and without that
+        name the pre-flight cannot say what you are burning *into*.
         """
         try:
             sheet = self.sheets.active()
@@ -355,10 +351,10 @@ class ApiServer:
             return None
         if sheet is None:
             return None
-        naam = None
+        name = None
         if sheet.get("material_id") is not None:
             try:
-                naam = next(
+                name = next(
                     (
                         m["name"]
                         for m in self.library.materials()
@@ -367,16 +363,15 @@ class ApiServer:
                     None,
                 )
             except Exception:
-                naam = None
-        return {**sheet, "material_name": naam}
+                name = None
+        return {**sheet, "material_name": name}
 
     def _tiling_state(self):
         """
-        De stand van de tegelreeks, of niets.
+        The state of the tile series, or nothing.
 
-        In de statuspayload en niet in een eigen route: bovenbalk, canvas en
-        telefoonweergave moeten dezelfde stand zien, en drie losse verzoeken
-        laten ze uit elkaar lopen.
+        In the status payload and not in a route of its own: top bar, canvas and phone view
+        have to see the same state, and three separate requests let them drift apart.
         """
         try:
             return self.tiles.state()
@@ -387,12 +382,12 @@ class ApiServer:
         """
         Eén snapshot, overal hetzelfde.
 
-        `reader.snapshot()` alleen was de kernel- en devicestatus; de
-        tegelreeks ontbrak op de WebSocket (`/api/ws`, gebruikt door de
-        lopende app) terwijl `/api/status` hem al meestuurde. Bovenbalk,
-        canvas en telefoonweergave lezen alle drie de live socket, dus zonder
-        dit veld hier kwam een lopende tegelreeks daar nooit aan — precies wat
-        de docstring van `_tiling_state` beloofde te voorkomen.
+        `reader.snapshot()` alone was the kernel and device status; the tile series was
+        missing on the WebSocket (`/api/ws`, used by the
+        running app) while `/api/status` already sent it along. Top bar, canvas and phone
+        view all three read the live socket, so without this field here a running tile
+        series never arrived there — exactly what `_tiling_state`'s docstring promised to
+        prevent.
         """
         payload = self.reader.snapshot()
         payload["tiling"] = self._tiling_state()
@@ -492,7 +487,7 @@ class ApiServer:
         def design():
             """Element outlines and the operations that claim them."""
             snapshot = self.design.snapshot()
-            # Zodat de frontend weet of openen werk zou weggooien.
+            # So that the frontend knows whether opening would throw work away.
             snapshot["dirty"] = self.document.dirty
             return snapshot
 
@@ -506,12 +501,13 @@ class ApiServer:
             return {
                 "actions": self.commands.capabilities(),
                 "motion": self.motion.capabilities(),
-                # Gat J11: bijstellen tijdens een lopende job kan alleen als de
-                # driver een realtime kanaal heeft. Op een Ruida staat hier
-                # false, en dan hoort er geen knop te zijn.
+                # Gap J11: adjusting during a running job is only possible when the driver
+                # has a realtime channel. On a Ruida this is false, and then there should be
+                # no button.
                 "adjust": self.motion.adjust_capabilities(),
-                # Verbinden en verbreken. Elke driverfamilie noemt het anders en
-                # grbl kent het niet; wat hier false is, hoort geen knop te zijn.
+                # Connecting and disconnecting. Every driver family calls it something
+                # different and grbl does not know it; what is false here should not be a
+                # button.
                 "connection": self.motion.connection_capabilities(),
                 "auth_required": not self.local_only,
             }
@@ -532,15 +528,15 @@ class ApiServer:
         @app.post("/api/job/start", dependencies=write)
         def start_job():
             """Plan the current operations and hand the job to the spooler."""
-            # De naam van het vel als jobnaam (gat P4): dat is wat er in de
-            # machine gaat, en het is het enige woord dat de gebruiker zelf
-            # heeft gekozen. Zonder dit heet een naamloze job "Spooler:3 items".
+            # The sheet's name as the job name (gap P4): that is what goes into the
+            # machine, and it is the only word the user chose themselves. Without this a
+            # nameless job is called "Spooler:3 items".
             sheet = self._active_sheet() or {}
 
             def run():
-                # Gat J12: staat er een nulpunt, dan gaat het werk daarvandaan
-                # de machine in. De verschuiving leeft alleen zolang het plan
-                # gebouwd wordt; daarna staat de tekening weer waar hij stond.
+                # Gap J12: when a zero point is set, the work goes into the machine from
+                # there. The shift lives only while the plan is being built; after that the
+                # drawing is back where it was.
                 with self.drawing.verschoven(self.motion.origin()):
                     return self.commands.start_job(sheet.get("name"))
 
@@ -563,7 +559,7 @@ class ApiServer:
         def clear_queue():
             return act(self.commands.clear_queue)
 
-        # ------------------------------------------------ tekenen en lagen
+        # ------------------------------------------------ tekenen en layers
 
         @app.post("/api/design/elements", dependencies=write, status_code=201)
         def create_element(body: dict):
@@ -575,10 +571,9 @@ class ApiServer:
         def clear_design():
             """Empty the design — what opening does before it reads a file."""
             def run():
-                # Vóór `clean()`, want die wist juist het antwoord: stond dit
-                # ontwerp al veilig op schijf, dan valt er na het leegmaken
-                # niets meer te herstellen en hoeft het herstelvenster er de
-                # volgende keer niet over te beginnen.
+                # Before `clean()`, because that erases the very answer: if this design was
+                # already safely on disk, there is nothing left to recover after the
+                # clearing and the recovery dialog need not bring it up next time.
                 self.autosave.forget_if_saved()
                 self.kernel.elements.clear_all()
                 self.drawing.user_operations.clear()
@@ -590,21 +585,20 @@ class ApiServer:
         @app.post("/api/project/new", dependencies=write)
         def new_project():
             """
-            Opnieuw beginnen: leeg ontwerp, één leeg vel.
+            Opnieuw beginnen: leeg ontwerp, één leeg sheet.
 
-            Opslaan en openen bestonden al, opnieuw beginnen niet — je kon een
-            nieuw project alleen maken door alles met de hand weg te halen, en
-            wie dat vergeet brandt de resten van gisteren mee.
+            Saving and opening already existed, starting over did not — the only way to
+            make a new project was to remove everything by hand, and anybody who forgets
+            that burns yesterday's remnants along.
 
-            De bibliotheek blijft staan. Materialen, presets en machineprofielen
-            zijn wat je over je laser weet; die horen niet bij dít project maar
-            bij deze werkplaats. Een projectbestand draagt ze wél mee, want daar
-            gaan ze naar iemand anders toe.
+            The library stays. Materials, presets and machine profiles are what you know
+            about your laser; they belong not to *this* project but to this workshop. A
+            project file does carry them along, because there they go to somebody else.
             """
 
             def run():
-                # Vóór `clean()`: die wist het antwoord op de vraag of er nog
-                # iets te herstellen valt. Zie `/api/design/clear`.
+                # Before `clean()`: that erases the answer to whether there is anything
+                # left to recover. See `/api/design/clear`.
                 self.autosave.forget_if_saved()
                 self.kernel.elements.clear_all()
                 self.drawing.user_operations.clear()
@@ -714,10 +708,10 @@ class ApiServer:
         @app.get("/api/design/fonts")
         def list_fonts(refresh: bool = False):
             """
-            De lettertypen die de engine kan gebruiken.
+            The typefaces the engine can use.
 
-            De engine houdt die lijst in een cachebestand, dus een net
-            geïnstalleerd lettertype verschijnt pas na `refresh=true`.
+            The engine keeps that list in a cache file, so a freshly installed typeface only
+            appears after `refresh=true`.
             """
             if refresh:
                 manage(self.fonts.refresh)
@@ -726,8 +720,8 @@ class ApiServer:
         @app.get("/api/design/fonts/file")
         def font_file(name: str):
             """
-            Het lettertypebestand zelf, zodat de keuzelijst elke naam in zijn
-            eigen letter kan tonen — kiezen op zicht in plaats van op naam.
+            The typeface file itself, so that the picker can show every name in its own
+            typeface — choosing by sight instead of by name.
             """
             from fastapi.responses import FileResponse
 
@@ -750,21 +744,19 @@ class ApiServer:
         @app.get("/api/job/layers")
         def job_layers():
             """
-            Wat er gebrand wordt en waar die instellingen vandaan komen —
-            zonder de klok.
+            What gets burned and where those settings came from — without the clock.
 
-            Bewust een eigen route naast `/api/job/estimate`: die bouwt voor de
-            tijdschatting het hele snijplan, en dat duurt op een zwaar ontwerp
-            minuten (gat J1). Een waarschuwing dat een laag een instelling van
-            ánder materiaal draagt, mag daar niet achteraan hoeven staan — dat
-            is nu juist wat je vóór het starten moet weten. Hier wordt niets
-            gepland: dit leest de elementenboom, de bibliotheek en de herkomst.
+            Deliberately a route of its own beside `/api/job/estimate`: that builds the
+            whole cut plan for the time estimate, and on a heavy design that takes minutes
+            (gap J1). A warning that a layer carries a setting for a *different* material
+            must not have to queue behind it — that is precisely what you have to know
+            before starting. Nothing is planned here: this reads the element tree, the
+            library and the provenance.
 
-            Om diezelfde reden dragen ook `bounds` en `engine` hier: dat een
-            vorm buiten het bed valt of dat deze engine geen rasters brandt, is
-            geen klokgegeven maar een blokkade. Stond het alleen in
-            `/api/job/estimate`, dan verscheen "falls outside the bed" pas als de
-            tijdschatting terug was.
+            For that same reason `bounds` and `engine` ride along here: that a shape falls
+            off the bed or that this engine does not burn rasters is not a clock fact but a
+            blockage. If it were only in `/api/job/estimate`, "falls outside the bed" would
+            only appear once the time estimate was back.
             """
             sheet = self._active_sheet()
             return manage(
@@ -781,12 +773,12 @@ class ApiServer:
         @app.get("/api/job/estimate")
         def estimate_job(exact: bool = False):
             """
-            Wat de machine gaat doen, vóór starten: tijd, onderdelen én per
-            laag de instellingen met hun herkomst.
+            What the machine is going to do, before starting: time, parts *and* per layer
+            the settings with their provenance.
 
-            `exact=1` rekent langs het volledige snijplan, zoals deze route
-            vroeger altijd deed. Dat kost op een zwaar ontwerp minuten en is
-            alleen bedoeld om de snelle schatting tegen te ijken.
+            `exact=1` computes along the full cut plan, as this route always used to. On a
+            heavy design that costs minutes and is only meant for calibrating the fast
+            estimate against.
             """
             return manage(
                 lambda: self.drawing.estimate(
@@ -822,8 +814,8 @@ class ApiServer:
             """
             Hoeken afronden of afschuinen.
 
-            Afronden van een rechthoek blijft een rechthoek (de engine tekent dat
-            met `rx`/`ry`); al het andere wordt een pad, en dat is eenrichting.
+            Rounding a rectangle stays a rectangle (the engine draws that with `rx`/`ry`);
+            everything else becomes a path, and that is one-way.
             """
             return manage(
                 self.drawing.corners,
@@ -876,7 +868,7 @@ class ApiServer:
         def machine_jog(body: dict):
             return manage(self.motion.jog, body.get("dx_mm"), body.get("dy_mm"))
 
-        # -- bewaarde posities (gat J6) — eigen blokje, zie machine.py ------
+        # -- bewaarde positions (gat J6) — eigen blokje, zie machine.py ------
         @app.get("/api/machine/positions")
         def machine_positions():
             """Positions this machine remembers: a jig, the zero of a fixture."""
@@ -896,7 +888,7 @@ class ApiServer:
         def delete_machine_position(name: str):
             return manage(self.motion.delete_position, name)
 
-        # -- einde blok posities --------------------------------------------
+        # -- einde blok positions --------------------------------------------
 
         # -- gebruikersoorsprong (gat J12) — zie machine.py -----------------
         @app.get("/api/machine/origin")
@@ -907,9 +899,9 @@ class ApiServer:
         @app.post("/api/machine/origin", dependencies=write)
         def set_machine_origin(body: dict | None = None):
             """Without x/y: where the head is now."""
-            velden = body or {}
+            fields = body or {}
             return manage(
-                self.motion.set_origin, velden.get("x_mm"), velden.get("y_mm")
+                self.motion.set_origin, fields.get("x_mm"), fields.get("y_mm")
             )
 
         @app.delete("/api/machine/origin", dependencies=write)
@@ -935,32 +927,31 @@ class ApiServer:
         @app.post("/api/machine/frame", dependencies=write)
         def frame_design(body: dict | None = None):
             """
-            De kop langs de omtrek van het werk sturen, zonder te branden.
+            Sending the head around the outline of the work, without burning.
 
-            Zonder maten in het verzoek pakt hij de omhullende rechthoek van wat
-            er nu op het bed ligt — dat is wat je wilt controleren.
+            Without measures in the request it takes the bounding rectangle of what is on
+            the bed now — that is what you want to check.
             """
             def run():
-                velden = body or {}
-                if velden.get("width_mm"):
+                fields = body or {}
+                if fields.get("width_mm"):
                     return self.motion.frame(
-                        velden.get("x_mm"), velden.get("y_mm"),
-                        velden.get("width_mm"), velden.get("height_mm"),
+                        fields.get("x_mm"), fields.get("y_mm"),
+                        fields.get("width_mm"), fields.get("height_mm"),
                     )
                 doos = self.design.bounds_mm()
                 if doos is None:
                     raise DesignError("There is nothing on the bed to frame.")
-                # Gat J12: kaderen moet laten zien waar het écht komt te
-                # liggen. Een kader op de tekencoördinaten terwijl het nulpunt
-                # het werk 100 mm opzij zet, is precies de controle die je
-                # dacht gedaan te hebben.
+                # Gap J12: framing has to show where it will *really* lie. A frame on the
+                # drawing coordinates while the zero point puts the work 100 mm aside is
+                # precisely the check you thought you had made.
                 nulpunt = self.motion.origin() or {}
-                x, y, breedte, hoogte = doos
+                x, y, width, height = doos
                 return self.motion.frame(
                     x + float(nulpunt.get("x_mm") or 0.0),
                     y + float(nulpunt.get("y_mm") or 0.0),
-                    breedte,
-                    hoogte,
+                    width,
+                    height,
                 )
 
             return manage(run)
@@ -970,10 +961,9 @@ class ApiServer:
             """
             De verbinding opzetten.
 
-            Beweegt niets. De engine meldt een mislukte poging alleen op het
-            console-kanaal en geeft daarna netjes terug, dus wij kijken naar de
-            toestand erna en geven de melding door — anders is dit een knop die
-            stil niets doet.
+            Moves nothing. The engine reports a failed attempt only on the console channel
+            and then returns neatly, so we look at the state afterwards and pass the message
+            on — otherwise this is a button that silently does nothing.
             """
             return manage(self.motion.connect)
 
@@ -1035,7 +1025,7 @@ class ApiServer:
         def update_operation(operation_id: str, body: dict):
             def run():
                 result = self.drawing.update_operation(operation_id, **body)
-                # Besluit B2: de kleur onthoudt wat je er het laatst mee deed.
+                # Decision B2: the colour remembers what you last did with it.
                 self._remember_layer(operation_id)
                 return result
 
@@ -1046,20 +1036,19 @@ class ApiServer:
         @app.get("/api/design/palette")
         def design_palette():
             """
-            De kleurenstrook onder het canvas: tien kleuren met hun geheugen.
+            The colour strip under the canvas: ten colours with their memory.
 
-            Alleen het geheugen komt hiervandaan. Wélke laag nu welke kleur
-            heeft, staat al in `/api/design` — dat twee keer sturen is twee
-            waarheden die uit elkaar kunnen lopen.
+            Only the memory comes from here. *Which* layer has which colour is already in
+            `/api/design` — sending that twice is two truths that can drift apart.
             """
-            key, naam = self._palette_machine()
-            onthouden = self.palette.all(key)
+            key, name = self._palette_machine()
+            remembered = self.palette.all(key)
             return {
-                "machine": {"key": key, "name": naam},
+                "machine": {"key": key, "name": name},
                 "default_color": self.drawing.default_color(),
                 "colors": [
-                    {"color": kleur.lower(), "memory": onthouden.get(kleur.lower())}
-                    for kleur in self.drawing.PALETTE
+                    {"color": colour.lower(), "memory": remembered.get(colour.lower())}
+                    for colour in self.drawing.PALETTE
                 ],
             }
 
@@ -1068,33 +1057,33 @@ class ApiServer:
             """
             Eén klik op een paletvakje.
 
-            Mét selectie: die verhuist naar de laag van die kleur, die zo nodig
-            wordt aangemaakt op wat die kleur eerder deed. Zonder selectie: de
-            kleur voor nieuw werk. Dat onderscheid komt van LightBurn en is de
-            reden dat toewijzen daar één handeling is en bij ons drie.
+            With a selection: it moves to the layer of that colour, which is created if
+            need be on what that colour did before. Without a selection: the colour for new
+            work. That distinction comes from LightBurn and is the reason assigning is one
+            action there and was three with us.
             """
-            kleur = body.get("color")
+            colour = body.get("color")
             ids = body.get("ids") or []
             key, _naam = self._palette_machine()
 
             def run():
-                memory = self.palette.recall(key, kleur)
+                memory = self.palette.recall(key, colour)
                 if ids:
-                    result = self.drawing.paint(ids, kleur, memory)
+                    result = self.drawing.paint(ids, colour, memory)
                     self._remember_layer(result["operation_id"])
                     return result
-                return {**self.drawing.set_default_color(kleur), "operation_id": None}
+                return {**self.drawing.set_default_color(colour), "operation_id": None}
 
             return manage(run)
 
         @app.get("/api/design/capabilities")
         def design_capabilities():
             """
-            Wat een laag op déze machine kan (besluit B11).
+            What a layer can do on *this* machine (decision B11).
 
-            Air assist staat als schakelaar in de rij, maar alleen als de
-            driver er een commando voor kent — dezelfde regel als bij de Z-as.
-            Wat de machine niet kan, hoort niet als knop op het scherm.
+            Air assist is a switch in the row, but only when the driver knows a command for
+            it — the same rule as with the Z axis. What the machine cannot do does not belong
+            on the screen as a button.
             """
             return {
                 "air_assist": self.drawing.air_assist_supported(),
@@ -1109,10 +1098,10 @@ class ApiServer:
         @app.post("/api/design/operations/{operation_id}/move", dependencies=write)
         def move_operation(operation_id: str, body: dict):
             """
-            Een laag verplaatsen in de brandvolgorde.
+            Een layer verplaatsen in de brandvolgorde.
 
-            `direction` is één stap (de knoppen), `index` is een bestemming
-            (slepen, gat L1).
+            `direction` is one step (the buttons), `index` is a destination (dragging, gap
+            L1).
             """
             return manage(
                 lambda: self.drawing.move_operation(
@@ -1123,12 +1112,11 @@ class ApiServer:
         @app.post("/api/design/operations/{operation_id}/type", dependencies=write)
         def retype_operation(operation_id: str, body: dict):
             """
-            Een snijlaag graveerlaag maken, met de vormen erin (gat L3).
+            Turning a cut layer into an engrave layer, with the shapes in it (gap L3).
 
-            Een eigen route en geen PATCH: de laag wordt vervangen en krijgt
-            een nieuw id. Dat stilzwijgend onder een PATCH doen zou betekenen
-            dat de aanroeper achteraf naar een laag verwijst die niet meer
-            bestaat.
+            A route of its own and not a PATCH: the layer is replaced and gets a new id.
+            Doing that silently under a PATCH would mean the caller afterwards refers to a
+            layer that no longer exists.
             """
             return manage(
                 lambda: self.drawing.change_operation_type(
@@ -1136,7 +1124,7 @@ class ApiServer:
                 )
             )
 
-        # Vóór de route met `{operation_id}`: anders vangt die dit pad af.
+        # Before the route with `{operation_id}`: otherwise that one catches this path.
         @app.delete("/api/design/operations", dependencies=write)
         def delete_all_operations():
             """Every ordinary layer gone; the shapes stay."""
@@ -1177,20 +1165,20 @@ class ApiServer:
         @app.post("/api/design/split", dependencies=write)
         def split_elements(body: dict):
             """
-            Een pad opdelen in zijn losse stukken.
+            Een path opdelen in zijn losse stukken.
 
-            Een CAD-export is vaak één pad met tientallen subpaden; daar valt
-            niets los aan te klikken. Hierna is elk stuk een eigen vorm.
+            A CAD export is often one path with dozens of subpaths; nothing in it can be
+            clicked separately. After this every piece is a shape of its own.
             """
             return manage(self.editor.split, body.get("ids"))
 
         @app.post("/api/design/fill", dependencies=write)
         def fill_elements(body: dict):
             """
-            Een vorm een vlak geven, of het weghalen.
+            Giving a shape a fill, or taking it off.
 
-            Nodig om iets te kunnen rasteren dat je zelf getekend hebt: de
-            rasteraar vult wat een vulling heeft en trekt anders alleen een lijn.
+            Needed to be able to grid something you drew yourself: the rasteriser fills
+            what has a fill and otherwise only draws a line.
             """
             return manage(
                 self.drawing.fill,
@@ -1252,29 +1240,28 @@ class ApiServer:
             all_machines: bool = False,
         ):
             """
-            De presets, standaard van de machine die nu actief is.
+            The presets, by default of the machine that is active now.
 
-            Een preset geldt voor één laser op één materiaal; alles door elkaar
-            tonen is de verwarring die dit oplost. `all_machines=true` toont de
-            rest erbij.
+            A preset holds for one laser on one material; showing everything mixed together
+            is the confusion this solves. `all_machines=true` shows the rest as well.
             """
-            profiel = None if all_machines else self._active_profile()
+            profile = None if all_machines else self._active_profile()
             return self.library.presets(
-                material_id, operation, profiel["id"] if profiel else None
+                material_id, operation, profile["id"] if profile else None
             )
 
         @app.get("/api/library/active-machine")
         def active_machine():
             """
-            Het profiel van de actieve machine, desnoods vers aangemaakt.
+            The active machine's profile, freshly created if need be.
 
-            De frontend heeft dit nodig om te zeggen wiens presets je ziet, en
-            om te weten of er een Z-as of autofocus is.
+            The frontend needs this to say whose presets you are looking at, and to know
+            whether there is a Z axis or autofocus.
             """
-            profiel = self._active_profile()
-            if profiel is None:
+            profile = self._active_profile()
+            if profile is None:
                 raise HTTPException(status_code=409, detail="There is no active machine.")
-            return profiel
+            return profile
 
         @app.patch("/api/library/machines/{machine_id}", dependencies=write)
         def update_machine(machine_id: int, body: dict):
@@ -1282,14 +1269,14 @@ class ApiServer:
 
         @app.post("/api/library/presets", dependencies=write, status_code=201)
         def add_preset(body: dict):
-            # Zonder profiel hangt een preset in de lucht; de actieve machine is
-            # het enige zinnige standaardantwoord.
-            velden = dict(body)
-            if not velden.get("machine_id"):
-                profiel = self._active_profile()
-                if profiel:
-                    velden["machine_id"] = profiel["id"]
-            return manage(lambda: self.library.add_preset(**velden))
+            # Without a profile a preset hangs in mid-air; the active machine is the only
+            # sensible default answer.
+            fields = dict(body)
+            if not fields.get("machine_id"):
+                profile = self._active_profile()
+                if profile:
+                    fields["machine_id"] = profile["id"]
+            return manage(lambda: self.library.add_preset(**fields))
 
         @app.patch("/api/library/presets/{preset_id}", dependencies=write)
         def update_preset(preset_id: int, body: dict):
@@ -1311,18 +1298,16 @@ class ApiServer:
         @app.get("/api/library/machines")
         def list_machine_profiles():
             """
-            De machineprofielen, met de vraag erbij of er nog een machine is.
+            The machine profiles, with the question of whether the machine still exists.
 
-            Een profiel overleeft zijn apparaat: de bibliotheek staat naast de
-            engine en gaat niet mee als iemand een machine weggooit of de
-            engine-instellingen wist. Zonder dit vlaggetje groeit de lijst met
-            namen waar niets meer achter zit, en dan zegt "for this machine"
-            niets meer.
+            A profile outlives its device: the library sits beside the engine and does not
+            follow along when somebody throws a machine away or wipes the engine's settings.
+            Without this flag the list fills up with names that have nothing behind them,
+            and then "for this machine" says nothing any more.
 
-            Alleen ingestelde machines tellen. Profielen die de oude versie voor
-            MeerK40t's lhystudios-plaatsvervanger aanmaakte, staan er anders bij
-            als levende machine terwijl niemand ze koos — precies de namen die
-            de lijst vervuilden.
+            Only configured machines count. Profiles the old version created for MeerK40t's
+            lhystudios stand-in otherwise sit there as a live machine while nobody chose
+            them — precisely the names that polluted the list.
             """
             levend = {
                 device.path: str(getattr(device, "label", "") or device.path)
@@ -1333,20 +1318,19 @@ class ApiServer:
             paden = set(levend)
             return [
                 {
-                    **profiel,
-                    "orphaned": bool(profiel["device_path"])
-                    and profiel["device_path"] not in paden,
-                    **self.library.machine_usage(profiel["id"]),
+                    **profile,
+                    "orphaned": bool(profile["device_path"])
+                    and profile["device_path"] not in paden,
+                    **self.library.machine_usage(profile["id"]),
                 }
-                for profiel in self.library.machines()
+                for profile in self.library.machines()
             ]
 
         @app.delete("/api/library/machines/{machine_id}", dependencies=write)
         def remove_machine_profile(machine_id: int):
-            # De machine waarop je nu werkt houdt zijn profiel. Weg is hij toch
-            # niet: de eerstvolgende leesroute maakt hem opnieuw aan, en dan is
-            # het verschil alleen dat alle presets die eraan hingen losgeraakt
-            # zijn.
+            # The machine you are working on now keeps its profile. It would not be gone
+            # anyway: the next read route creates it again, and then the only difference is
+            # that all the presets that hung off it have come loose.
             actief = self._active_profile()
             if actief and actief["id"] == machine_id:
                 raise HTTPException(
@@ -1374,10 +1358,10 @@ class ApiServer:
         @app.post("/api/library/import/upload", dependencies=write)
         async def upload_library(file: UploadFile):
             """
-            Het bestand aannemen en zeggen wat het zou doen — nog niets meer.
+            Accept the file and say what it would do — nothing more yet.
 
-            Het blijft onder zijn eigen naam in de uploadmap staan, zodat het
-            voorbeeld herrekend kan worden zonder opnieuw te uploaden.
+            It stays under its own name in the upload directory, so that the preview can be
+            recomputed without uploading again.
             """
             target = self._upload_path(file.filename or f"bibliotheek{BUNDLE_SUFFIX}")
             with target.open("wb") as handle:
@@ -1386,10 +1370,10 @@ class ApiServer:
             return {"bundle": target.name, **preview}
 
         def _bundle(body: dict) -> Path:
-            naam = Path(str(body.get("bundle") or "")).name
-            if not naam:
+            name = Path(str(body.get("bundle") or "")).name
+            if not name:
                 raise HTTPException(status_code=422, detail="Choose a file first.")
-            return self._upload_path(naam)
+            return self._upload_path(name)
 
         @app.post("/api/library/import/preview", dependencies=write)
         def preview_library(body: dict):
@@ -1403,11 +1387,11 @@ class ApiServer:
         @app.post("/api/library/import", dependencies=write)
         def import_library(body: dict):
             target = _bundle(body)
-            # Welk materiaal op welk vel lag, in namen: bij vervangen krijgen
-            # materialen nieuwe id's en zou het vel anders naar niets wijzen.
-            namen = {m["id"]: m["name"] for m in self.library.materials()}
+            # Which material lay on which sheet, by name: on a replace, materials get new
+            # ids and the sheet would otherwise point at nothing.
+            names = {m["id"]: m["name"] for m in self.library.materials()}
             vellen = {
-                s["id"]: namen.get(s.get("material_id"))
+                s["id"]: names.get(s.get("material_id"))
                 for s in self.sheets.state()["sheets"]
             }
             result = manage(
@@ -1418,9 +1402,9 @@ class ApiServer:
                 body.get("on_conflict") or "eigen",
             )
             opnieuw = {m["name"]: m["id"] for m in self.library.materials()}
-            for sheet_id, naam in vellen.items():
-                if naam and opnieuw.get(naam) is not None:
-                    self.sheets.update(sheet_id, material_id=opnieuw[naam])
+            for sheet_id, name in vellen.items():
+                if name and opnieuw.get(name) is not None:
+                    self.sheets.update(sheet_id, material_id=opnieuw[name])
             return result
 
         @app.post("/api/library/presets/{preset_id}/apply", dependencies=write)
@@ -1438,16 +1422,16 @@ class ApiServer:
                     power_percent=preset["power_percent"],
                     passes=preset["passes"],
                 )
-                # Pas ná een geslaagde toepassing: een mislukte poging is geen
-                # gebruik, en "onlangs gebruikt" moet waar blijven.
+                # Only after a successful application: a failed attempt is not use, and
+                # "recently used" has to stay true.
                 self.library.touch_preset(preset_id)
-                # En onthouden wáár deze getallen vandaan komen. Zonder dat
-                # briefje moet de pre-flight de herkomst raden aan de waarden,
-                # en dan is een instelling voor ander materiaal niet te zien.
+                # And remember *where* these numbers came from. Without that note the
+                # pre-flight has to guess the provenance from the values, and then a setting
+                # for another material cannot be seen.
                 self.provenance.record(self.sheets.active_id, operation_id, preset)
-                # En het palet onthoudt wat deze kleur nu doet. Dat is iets
-                # anders dan de herkomst hierboven: het geheugen draagt geen
-                # bewijs mee, alleen de gewoonte (zie palette.py).
+                # And the palette remembers what this colour does now. That is something
+                # other than the provenance above: the memory carries no evidence, only the
+                # habit (see palette.py).
                 self._remember_layer(operation_id)
                 return {**result, "preset": preset}
 
@@ -1480,21 +1464,21 @@ class ApiServer:
             return Response(
                 content=manage(self.camera.frame_png),
                 media_type="image/png",
-                # Elk verzoek moet vers beeld opleveren; een gecachet beeld van
-                # het bed is precies wat je niet wilt.
+                # Every request has to produce a fresh image; a cached image of the bed is
+                # exactly what you do not want.
                 headers={"Cache-Control": "no-store"},
             )
 
         @app.get("/api/camera/stream.mjpeg")
         async def camera_stream(request: Request):
             """
-            Doorlopend beeld. De browser zet dit in een gewone <img> en
-            decodeert zelf — geen JavaScript-lus, geen haperingen.
+            A continuous image. The browser puts this in an ordinary <img> and decodes it
+            itself — no JavaScript loop, no stuttering.
 
-            De lus vraagt bij elke ronde of de browser nog luistert. Zonder die
-            vraag merkt de server een weggeklikt tabblad niet en blijft de
-            camera draaien voor een kijker die er niet meer is; dat is precies
-            wat er gebeurde toen dit een gewone generator was.
+            The loop asks on every round whether the browser is still listening. Without
+            that question the server does not notice a closed tab and the camera keeps
+            running for a viewer who is no longer there; that is exactly what happened when
+            this was an ordinary generator.
             """
             import anyio
             from fastapi.responses import StreamingResponse
@@ -1558,8 +1542,8 @@ class ApiServer:
         @app.post("/api/sheets/{sheet_id}/activate", dependencies=write)
         def activate_sheet(sheet_id: str):
             """
-            Wisselen van vel: het huidige wordt opgeslagen, het andere geladen.
-            Wat je ziet is daarna precies wat er gebrand wordt.
+            Switching sheets: the current one is saved, the other loaded. What you see
+            afterwards is exactly what gets burned.
             """
             return manage(self.sheets.activate, sheet_id)
 
@@ -1571,8 +1555,8 @@ class ApiServer:
         def delete_sheet(sheet_id: str):
             def run():
                 state = self.sheets.remove(sheet_id)
-                # Vel-nummers worden hergebruikt; zonder dit erft een nieuw
-                # vel de herkomst van het vel dat hier net weg is.
+                # Sheet numbers are reused; without this a new sheet inherits the
+                # provenance of the sheet that has just gone.
                 self.provenance.forget_sheet(sheet_id)
                 return state
 
@@ -1587,11 +1571,10 @@ class ApiServer:
         @app.get("/api/tiling")
         def tiling_layout():
             """
-            De opdeling van het actieve vel: tegels, naden, merkposities.
+            The active sheet's division: tiles, seams, mark positions.
 
-            Berekend, niet opgeslagen — hij is een functie van de plaatmaat, de
-            bedmaat en het ontwerp, dus hij klopt vanzelf zodra daar iets
-            verandert.
+            Computed, not stored — it is a function of the board size, the bed size and the
+            design, so it holds by itself as soon as something there changes.
             """
             return manage(self.tiles.layout)
 
@@ -1602,12 +1585,12 @@ class ApiServer:
         @app.post("/api/tiling/align", dependencies=write)
         def tiling_align(body: dict):
             """
-            De aangetikte punten. `use_current: true` pakt de kopstand, zodat je
-            met de jogknoppen kunt richten en dan één keer op 'Hier' drukt.
+            The tapped points. `use_current: true` takes the head position, so that you can
+            aim with the jog buttons and then press 'Here' once.
             """
 
             def run():
-                punten = list(body.get("points") or [])
+                points = list(body.get("points") or [])
                 if body.get("use_current"):
                     huidig = self.motion._current_mm()
                     if huidig is None:
@@ -1615,8 +1598,8 @@ class ApiServer:
                             "This machine reports no position, so 'Here' does not know "
                             "where it is. Fill in the coordinates by hand."
                         )
-                    punten.append({"x_mm": huidig[0], "y_mm": huidig[1]})
-                return self.tiles.align(punten, body.get("reference") or "markers")
+                    points.append({"x_mm": huidig[0], "y_mm": huidig[1]})
+                return self.tiles.align(points, body.get("reference") or "markers")
 
             return manage(run)
 
@@ -1642,8 +1625,8 @@ class ApiServer:
             """
             Zoeken in openbare collecties, via onze server.
 
-            Een bron die niet antwoordt, houdt de rest niet op: hij komt terug
-            in 'unavailable' zodat de app het kan melden.
+            A source that does not answer does not hold the rest up: it comes back in
+            'unavailable' so that the app can report it.
             """
             chosen = [s.strip() for s in (sources or "").split(",") if s.strip()]
             return manage(self.clipart.search, q, chosen or None, limit, page)
@@ -1704,34 +1687,30 @@ class ApiServer:
         @app.post("/api/design/generate/preview")
         def preview_generator(body: dict):
             """
-            Wat een generator zou maken, zonder het te maken.
+            What a generator would make, without making it.
 
-            **Een POST zonder `write`, en dat is een bewuste uitzondering.**
-            POST omdat er een formulier in gaat dat niet in een querystring
-            past, niet omdat er iets verandert: `Generators.preview` rekent de
-            vorm uit met dezelfde `_plan_*`-functies als het echte werk en
-            geeft hem terug als paddata. Hij hangt niets aan de elementenboom,
-            maakt geen vel aan en zet niets op de ongedaan-stapel — ook niet
-            tijdelijk. Dat is de hele grond voor het ontbreken van de guard:
-            zou hij de boom aanraken en achteraf opruimen, dan wijzigde hij bij
-            elke toetsaanslag het werk van wie er verder meekijkt, en dat is
-            een schrijfactie hoe netjes het opruimen ook is.
+            **A POST without `write`, and that is a deliberate exception.** POST because a
+            form goes in that does not fit in a query string, not because anything changes:
+            `Generators.preview` computes the shape with the same `_plan_*` functions as the
+            real work and hands it back as path data. It hangs nothing on the element tree,
+            creates no sheet and puts nothing on the undo stack — not even temporarily. That
+            is the whole ground for the missing guard: if it touched the tree and cleaned up
+            afterwards, it would change the work of anybody else looking on with every key
+            stroke, and that is a write action however neat the cleaning up is.
 
-            Bewezen, niet beweerd: `test_the_preview_leaves_the_drawing_alone`
-            legt de hele momentopname van vóór en ná dertig voorbeelden naast
-            elkaar (inclusief de doos die over twee vellen gaat, waar de échte
-            generator wél een vel bijmaakt), en
-            `test_the_preview_adds_nothing_to_undo` doet hetzelfde voor de
-            ongedaan-stapel. De andere kant van de afspraak staat in
-            `test_write_actions.py`: de route staat daar in `READ_ONLY_POSTS`,
-            en elke andere POST móét de guard hebben.
+            Proven, not claimed: `test_the_preview_leaves_the_drawing_alone` lays the whole
+            snapshot from before and after thirty previews side by side (including the box
+            that spans two sheets, where the *real* generator does add a sheet), and
+            `test_the_preview_adds_nothing_to_undo` does the same for the undo stack. The
+            other side of the agreement is in `test_write_actions.py`: the route is in
+            `READ_ONLY_POSTS` there, and every other POST *must* have the guard.
 
-            Twee dingen die daaruit volgen en die je niet moet weghalen:
-            - De boogtekst haalt zijn letters op met `cfont.render()` in een
-              losse `FontPath` in plaats van via een tekstnode, juist omdat een
-              node in het document zou belanden.
-            - Diezelfde route zet `context.last_font` níét, terwijl de echte
-              tekstplaatsing dat wel doet (extra/hershey.py:492).
+            Two things that follow from it and that you should not remove:
+            - The arc text fetches its letters with `cfont.render()` into a loose `FontPath`
+              rather than through a text node, precisely because a node would end up in the
+              document.
+            - That same route does *not* set `context.last_font`, while the real text
+              placement does (extra/hershey.py:492).
             """
             what = str(body.get("what") or "")
             return manage(self.generators.preview, what, body)
@@ -1856,34 +1835,34 @@ class ApiServer:
 
         def grid_fields(body: dict) -> dict:
             """
-            Wat het bord aan het formulier toevoegt: machine, datum, materiaal.
+            Wat het bord aan het formulier toevoegt: machine, datum, material.
 
-            Voorbeeld en werkelijkheid gebruiken hier dezelfde regels. Dat moet
-            ook: het opschrift bepaalt hoe breed het bord wordt, dus een
-            voorbeeld zonder datum meldt een smaller bord dan er brandt.
+            Preview and reality use the same lines here. They have to: the caption decides
+            how wide the board becomes, so a preview without a date reports a narrower board
+            than the one that burns.
             """
             from datetime import date
 
-            velden = dict(body)
-            # Een raster is een proef op déze machine; zonder dat gegeven zijn
-            # de presets die eruit komen niet terug te plaatsen.
-            if not velden.get("machine_id"):
-                profiel = self._active_profile()
-                if profiel:
-                    velden["machine_id"] = profiel["id"]
-            velden["stamp"] = date.today().isoformat()
-            if velden.get("material_id"):
-                materiaal = next(
+            fields = dict(body)
+            # A grid is a trial on *this* machine; without that fact the presets that come
+            # out of it cannot be placed back.
+            if not fields.get("machine_id"):
+                profile = self._active_profile()
+                if profile:
+                    fields["machine_id"] = profile["id"]
+            fields["stamp"] = date.today().isoformat()
+            if fields.get("material_id"):
+                material = next(
                     (
                         m
                         for m in self.library.materials()
-                        if m["id"] == velden["material_id"]
+                        if m["id"] == fields["material_id"]
                     ),
                     None,
                 )
-                if materiaal:
-                    velden["material_name"] = materiaal["name"]
-            return velden
+                if material:
+                    fields["material_name"] = material["name"]
+            return fields
 
         @app.post("/api/library/testgrids/preview")
         def preview_test_grid(body: dict):
@@ -1893,9 +1872,9 @@ class ApiServer:
                 return {
                     "plan": plan,
                     "cells": cells,
-                    # Wat déze engine met dit soort laag kan. Zonder rasteraar
-                    # komt een rasterbord blanco uit de machine, en dat moet je
-                    # weten vóór het hout eraan gaat — zie raster_supported.
+                    # What *this* engine can do with this kind of layer. Without a
+                    # rasteriser a grid board comes out of the machine blank, and you have
+                    # to know that before the wood goes in — see raster_supported.
                     "engine": {"raster": raster_supported(self.kernel)},
                 }
 
@@ -1905,14 +1884,13 @@ class ApiServer:
         def create_test_grid(body: dict):
             """Plan the grid, draw it into the design, and remember it."""
             def run():
-                # Het opschrift gaat mee de planning in: het staat links
-                # uitgelijnd op het bord en loopt naar rechts door, dus het
-                # bepaalt mede hoe breed het bord wordt. Achteraf toevoegen gaf
-                # een gemelde maat die smaller was dan wat er brandt.
+                # The caption goes into the planning: it is aligned left on the board and
+                # runs to the right, so it helps decide how wide the board becomes. Adding it
+                # afterwards gave a reported measure narrower than what burns.
                 plan, cells = plan_grid(**grid_fields(body))
-                # Het raster is één object op het canvas — vakjes, aslabels,
-                # opschrift en kader in één groep, in één handeling. De cellen
-                # houden hun eigen operaties, want die zijn de sweep.
+                # Het grid is één object op het canvas — vakjes, aslabels,
+                # caption and frame in one group, in one action. The cells keep their own
+                # operations, because those *are* the sweep.
                 drawn, group_id = self.grids.draw(plan, cells)
                 grid = self.library.add_test_grid(plan, drawn)
                 if group_id:
@@ -1929,25 +1907,25 @@ class ApiServer:
         @app.get("/api/library/testgrids/defaults")
         def test_grid_defaults(material_id: int | None = None):
             """
-            De instellingen van het vorige raster voor dit materiaal (T3).
+            The settings of the previous grid for this material (T3).
 
-            Geen aparte voorkeurentabel: het vorige raster ís de instelling.
-            `null` als er nog geen raster voor dit materiaal is.
+            No separate preferences table: the previous grid *is* the setting. `null` when
+            there is no grid for this material yet.
             """
             return self.library.last_grid_settings(material_id)
 
         # ---------------------------------------- benoemde recepten (gat T7)
         #
-        # Vóór `/testgrids/{grid_id}`, anders vangt die route "recipes" op als
-        # een id. Dat is FastAPI's volgorde van declareren, niet van specificiteit.
+        # Before `/testgrids/{grid_id}`, otherwise that route catches "recipes" as an id.
+        # That is FastAPI's order of declaration, not of specificity.
 
         @app.get("/api/library/testgrids/recipes")
         def list_grid_recipes(material_id: int | None = None):
             """
-            Bewaarde generatorinstellingen onder een naam.
+            Bewaarde generatorinstellingen onder een name.
 
-            T3 onthoudt het vorige raster per materiaal; dit is hetzelfde in het
-            meervoud, zodat "berk snijden" en "berk graveren" naast elkaar
+            T3 remembers the previous grid per material; this is the same in the plural, so
+            that "cut birch" and "engrave birch" can sit beside
             kunnen bestaan. Dezelfde sleutels, zodat de wizard beide op
             dezelfde manier invult.
             """
@@ -1973,17 +1951,16 @@ class ApiServer:
         @app.post("/api/library/testgrids/{grid_id}/remove-from-design", dependencies=write)
         def remove_grid_from_design(grid_id: int):
             """
-            Haal het raster van het canvas: de groep én al zijn cel-operaties.
+            Take the grid off the canvas: the group *and* all its cell operations.
 
-            Het bewaarde raster blijft bestaan — daar hangen de foto en de
-            herkomst van de presets aan.
+            The stored grid stays — the photo and the presets' provenance hang off it.
             """
             def run():
                 grid = self.library.test_grid(grid_id)
                 removed = {"elements": 0, "operations": 0}
-                # Alleen wat werkelijk van dit raster is. Id's gelden per
-                # document, dus hetzelfde id staat op een ander vel voor iets
-                # anders — zie de toelichting bij `is_cel_operatie`.
+                # Only what really belongs to this grid. Ids hold per document, so the same
+                # id stands for something else on another sheet — see the explanation at
+                # `is_cel_operatie`.
                 if grid.get("group_id"):
                     node = self.kernel.elements.find_node(grid["group_id"])
                     if node is not None and is_raster_groep(node):
@@ -2023,10 +2000,10 @@ class ApiServer:
         @app.put("/api/library/testgrids/{grid_id}/alignment", dependencies=write)
         def set_grid_alignment(grid_id: int, body: dict):
             """
-            Waar het bord op de foto ligt (T4).
+            Where the board lies on the photo (T4).
 
-            Stond in localStorage: uitlijnen op de desktop en het vakje aanwijzen
-            op de tablet leverde dan twee verschillende overlays op.
+            This used to be in localStorage: aligning on the desktop and pointing out the
+            square on the tablet then produced two different overlays.
             """
             return manage(
                 self.library.set_grid_alignment, grid_id, body.get("corners")
@@ -2035,11 +2012,11 @@ class ApiServer:
         @app.get("/api/library/testgrids/{grid_id}/photo")
         def get_grid_photo(grid_id: int, cell: str | None = None):
             """
-            De foto van het gebrande bord.
+            The photo of the burned board.
 
-            Met `?cell=<rij>-<kolom>` komt het aangewezen vakje omcirkeld mee
-            (M4), volgens de uitlijning die bij dit raster bewaard is. Zonder
-            die parameter is het onbewerkt het bestand van de gebruiker.
+            With `?cell=<row>-<column>` the square pointed out comes along circled (M4),
+            according to the alignment stored with this grid. Without that parameter it is
+            the user's file, unprocessed.
             """
             from fastapi.responses import FileResponse, Response
 
@@ -2091,12 +2068,12 @@ class ApiServer:
                         operation=grid["operation"],
                         speed_mm_s=cell["speed_mm_s"],
                         power_percent=cell["power_percent"],
-                        # Het bord brandde met dit aantal passes; zonder dat
-                        # getal snijdt de preset later één keer waar het vakje
-                        # er twee nodig had, en dat merk je op materiaal.
+                        # The board burned with this number of passes; without that number
+                        # the preset later cuts once where the square needed two, and you
+                        # notice that on material.
                         passes=grid.get("passes") or 1,
-                        # Bij een rasterproef hoort de lijnafstand bij de
-                        # uitkomst; zonder haar is de preset niet na te branden.
+                        # On a grid trial the line spacing belongs with the outcome;
+                        # without it the preset cannot be burned again.
                         interval_mm=cell.get("interval_mm"),
                         source="testraster",
                         origin_id=f"testgrid:{grid_id}",
@@ -2140,7 +2117,7 @@ class ApiServer:
 
         # ------------------------------------- machineprofiel uitwisselen (E5)
         #
-        # Vóór `/machines/{path}`, anders leest die "import" als een pad.
+        # Before `/machines/{path}`, otherwise that one reads "import" as a path.
 
         @app.post("/api/machines/import/upload", dependencies=write)
         async def upload_machine_profile(file: UploadFile):
@@ -2155,34 +2132,34 @@ class ApiServer:
 
         @app.post("/api/machines/import", dependencies=write, status_code=201)
         def import_machine_profile(body: dict):
-            naam = Path(str(body.get("profile") or "")).name
-            if not naam:
+            name = Path(str(body.get("profile") or "")).name
+            if not name:
                 raise HTTPException(status_code=422, detail="Choose a file first.")
             return manage(
                 self.machines.import_profile,
-                self._upload_path(naam),
+                self._upload_path(name),
                 body.get("label"),
             )
 
         @app.get("/api/machines/{path}/export.openkerf-machine")
         def export_machine_profile(path: str):
             """
-            Eén machine als bestand, in dezelfde vorm als de bibliotheek (B7).
+            One machine as a file, in the same shape as the library (B7).
 
-            Gat E5: LightBurn levert `.lbdev`, zodat een fabrikant een profiel
-            kan meesturen en een tweede computer niets overtypt.
+            Gap E5: LightBurn supplies `.lbdev`, so that a manufacturer can send a profile
+            along and a second computer types nothing over.
             """
             from fastapi.responses import JSONResponse
 
             from .machines import PROFILE_SUFFIX
 
-            profiel = manage(self.machines.export_profile, path)
+            profile = manage(self.machines.export_profile, path)
             veilig = "".join(
                 c if c.isalnum() or c in "-_" else "-"
-                for c in str(profiel["machine"]["label"] or path)
+                for c in str(profile["machine"]["label"] or path)
             ).strip("-") or path
             return JSONResponse(
-                profiel,
+                profile,
                 headers={
                     "Content-Disposition": (
                         f'attachment; filename="{veilig}{PROFILE_SUFFIX}"'
@@ -2199,16 +2176,16 @@ class ApiServer:
             label = (body.get("label") or "").strip()
             if not label:
                 raise HTTPException(status_code=422, detail="'label' ontbreekt.")
-            resultaat = manage(self.machines.rename, path, label)
-            # De bibliotheek draagt een kopie van de naam. Hij loopt vanzelf bij
-            # zodra iemand het actieve profiel opvraagt, maar dan staat er tot
-            # dat moment een oude naam in de lijst — en juist na een hernoeming
-            # kijk je daarnaar. Hier is de gebeurtenis, dus hier gebeurt het.
+            result = manage(self.machines.rename, path, label)
+            # The library carries a copy of the name. It catches up by itself as soon as
+            # somebody asks for the active profile, but until that moment an old name is in
+            # the list — and right after a rename is exactly when you look at it. The event
+            # is here, so it happens here.
             try:
                 self.library.profile_for_device(path, label)
             except LibraryError:
                 pass
-            return resultaat
+            return result
 
         @app.delete("/api/machines/{path}", dependencies=write)
         def machine_remove(path: str):
@@ -2227,13 +2204,12 @@ class ApiServer:
             await websocket.accept()
             self.bridge.add_client(websocket)
             try:
-                # Wie ben ik, en sinds wanneer (gat E2). De WebSocket verbindt
-                # vanzelf terug, maar de pagina die dan nog openstaat kan van
-                # vóór een herstart zijn: de elementenboom is dan weg, het vel
-                # is weg, en de app blijft vrolijk het ontwerp tonen dat er niet
-                # meer is. Aan dit ene getal ziet de client het verschil tussen
-                # een netwerkhik (zelfde proces, niets aan de hand) en een
-                # herstart (alles opnieuw ophalen).
+                # Who am I, and since when (gap E2). The WebSocket reconnects by itself,
+                # but the page still open then may be from before a restart: the element tree
+                # is gone, the sheet is gone, and the app cheerfully goes on showing the
+                # design that no longer exists. By this one number the client sees the
+                # difference between a network hiccup (same process, nothing wrong) and a
+                # restart (fetch everything again).
                 await websocket.send_text(
                     json.dumps({"type": "hello", "instance": INSTANCE_ID})
                 )
@@ -2290,16 +2266,16 @@ class ApiServer:
         )
         self._thread.start()
         self._attach_signals()
-        # De camera sluiten zodra er niemand meer kijkt. Een leesthread die
-        # uren doorloopt kost stroom en houdt het apparaat bezet voor andere
-        # programma's; de rem zit in Camera.reap().
+        # Close the camera as soon as nobody is watching. A read thread that runs on for
+        # hours costs power and keeps the device busy for other programs; the brake is in
+        # Camera.reap().
         self._camera_job = self.kernel.add_job(
             self.camera.reap, name="openkerf-camera-reap", interval=5.0
         )
-        # De staart van het automatisch bewaren. `touch` hangt aan boomsignalen,
-        # dus de laatste wijziging vóór je wegloopt kreeg nooit een schrijfbeurt:
-        # er komt geen signaal meer om hem op te halen. Deze job doet dat wel, op
-        # de kernelthread, dus zonder een tweede thread in de elementenboom.
+        # The tail of the automatic saving. `touch` hangs off tree signals, so the last
+        # change before you walk away never got a write: no further signal comes to pick it
+        # up. This job does, on the kernel thread, so without a second thread in the element
+        # tree.
         self._autosave_job = self.kernel.add_job(
             self.autosave.flush, name="openkerf-autosave-flush", interval=5.0
         )
@@ -2325,8 +2301,8 @@ class ApiServer:
         if job is not None:
             self.kernel.unschedule(job)
             self._autosave_job = None
-        # Nog één keer, nu het nog kan: wat na de laatste schrijfbeurt getekend
-        # is, mag niet met het proces verdwijnen.
+        # Once more, while it still can: what was drawn after the last write must not
+        # disappear with the process.
         self.autosave.save()
         self.camera.stop()
         if self._server is not None:
@@ -2341,32 +2317,31 @@ class ApiServer:
         self._wait_for_the_machine_to_go_quiet()
         self.channel("OpenKerf API stopped.")
 
-    # Hoe lang we bij het afsluiten wachten tot de machine uitgepraat is. Lang
-    # genoeg voor het staartje van een verzending, kort genoeg om niet in de
-    # weg te lopen als er echt nog een job draait.
+    # How long we wait on shutdown for the machine to finish talking. Long enough for the
+    # tail of a transmission, short enough not to get in the way when a job really is still
+    # running.
     QUIET_TIMEOUT_S = 2.0
 
     def _wait_for_the_machine_to_go_quiet(self):
         """
-        De verzendthread van de driver zijn zin laten afmaken.
+        Letting the driver's send thread finish its sentence.
 
-        Bij het afsluiten kwam dit in het log van de gebruiker:
+        On shutdown this appeared in the user's log:
 
             Exception in thread Thread-3 (_data_sender):
               ruida/controller.py:128 in _data_sender -> self.write(data)
               ruida/ruidasession.py:186 in write -> ConnectionError(
                   'Not connected to the Ruida controller.')
 
-        Dat is een thread van MeerK40t zelf: `_data_sender` leegt zijn wachtrij
-        zonder te controleren of de verbinding er nog is, dus zodra de sessie
-        eronder wegvalt struikelt hij. Repareren hoort daar te gebeuren (zie de
-        upstream-lijst in CLAUDE.md) — wij raken `meerk40t/` niet aan.
+        That is a thread of MeerK40t's own: `_data_sender` empties its queue without
+        checking whether the connection is still there, so as soon as the session under it
+        drops out it trips. Fixing that belongs there (see the upstream list in CLAUDE.md) —
+        we do not touch `meerk40t/`.
 
-        Wat wij wél kunnen: niet de eersten zijn die de deur dichttrekken. Wij
-        starten de device-service, dus wachten we hier even tot hij is
-        uitgepraat voordat de rest van het afsluiten de verbinding weghaalt.
-        Alles achter `getattr`: een dummy-device heeft geen van deze dingen, en
-        het afsluiten mag hier nooit op stukgaan.
+        What we *can* do: not be the first to pull the door shut. We start the device
+        service, so we wait here for a moment until it has finished talking before the rest
+        of the shutdown removes the connection. Everything behind `getattr`: a dummy device
+        has none of these things, and the shutdown must never break on this.
         """
         import time
 
@@ -2404,8 +2379,8 @@ class ApiServer:
 
     def _make_handler(self, code):
         def handler(origin, *args):
-            # Boomwijzigingen zijn ook het sein om automatisch te bewaren; de
-            # rem zit in Autosave, want slepen levert tientallen signalen op.
+            # Tree changes are also the signal to save automatically; the brake is in
+            # Autosave, because dragging produces dozens of signals.
             if code in ("tree_changed", "rebuild_tree", "element_property_update"):
                 self.autosave.touch()
             self.bridge.publish_threadsafe(
