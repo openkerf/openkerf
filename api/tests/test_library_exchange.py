@@ -137,7 +137,7 @@ def test_preview_says_what_is_new_before_anything_happens(mine, empty):
     }
     assert sorted(preview["merge"]["materials"]["new"]) == ["Acrylic", "Birch plywood"]
     assert preview["merge"]["presets"]["new"] == 2
-    # En kijken heeft niets veranderd.
+    # And looking changed nothing.
     assert empty.materials() == []
 
 
@@ -262,8 +262,8 @@ def test_importing_twice_does_not_duplicate(mine, empty):
 
 def test_a_full_round_trip_keeps_provenance_and_photos(mine, empty):
     """
-    Exporteren, wissen, terugzetten. Wat terugkomt moet nog steeds kunnen
-    aanwijzen wáár het vandaan komt — anders is het een lijst getallen.
+    Export, wipe, put back. What comes back has to be able to point at *where* it
+    came from — otherwise it is a list of numbers.
     """
     fill(mine)
     bundle = mine.export_bundle()
@@ -280,9 +280,9 @@ def test_a_full_round_trip_keeps_provenance_and_photos(mine, empty):
     grid = mine.test_grids()[0]
     assert measured["origin_id"] == f"testgrid:{grid['id']}"
     assert measured["grid_id"] == grid["id"]
-    # …het vakje wijst terug naar deze preset…
+    # …the square points back at this preset…
     assert measured["grid_cell"] == {"row": 1, "column": 2}
-    # …en de foto staat er echt, met dezelfde bytes.
+    # …and the photo is really there, with the same bytes.
     assert Path(grid["photo_path"]).read_bytes() == PHOTO
     # The alignment belongs to that photo: without it the evidence is still there
     # but no longer points at anything (T4).
@@ -305,9 +305,9 @@ def test_the_burn_date_of_the_evidence_survives(mine, empty):
 
 def test_the_source_is_not_downgraded_on_your_own_backup(mine, empty):
     """
-    Presetariat importeert als "geimporteerd" — daar komt het van een vreemde
-    machine. Je mine back-up terugzetten is iets anders: dan is "testraster"
-    de waarheid, en die weggooien is het bewijs weggooien.
+    Presetariat imports as "geimporteerd" — there it comes off a stranger's
+    machine. Restoring your own backup is something else: then "testraster" is the
+    truth, and throwing that away is throwing the evidence away.
     """
     fill(mine)
     bundle = mine.export_bundle()

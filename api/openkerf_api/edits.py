@@ -331,13 +331,13 @@ class DesignEditor:
     # -------------------------------------------------------------- history
 
     def undo(self) -> dict:
-        self._stel_de_stapel_bij()
+        self._adjust_the_stack()
         return self._history("undo", self.runner.run("undo"))
 
     def redo(self) -> dict:
         return self._history("redo", self.runner.run("redo"))
 
-    def _stel_de_stapel_bij(self) -> None:
+    def _adjust_the_stack(self) -> None:
         """
         One undo has to reverse one change (upstream #3258).
 
