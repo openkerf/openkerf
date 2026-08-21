@@ -341,7 +341,7 @@ def test_absolute_rotation_refuses_a_selection_at_mixed_angles(kernel, editor):
     ids = [e["id"] for e in DesignReader(kernel).snapshot()["elements"]]
     editor.rotate(ids[0], 25)
 
-    with pytest.raises(DesignError, match="verschillende hoeken"):
+    with pytest.raises(DesignError, match="different angles"):
         editor.rotate(ids, 90, absolute=True)
 
 

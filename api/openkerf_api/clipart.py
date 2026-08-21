@@ -303,7 +303,7 @@ class Clipart:
             )
         width = float(width_mm)
         if not 1 <= width <= 2000:
-            raise DesignError("De breedte moet tussen 1 en 2000 mm liggen.")
+            raise DesignError("The width has to be between 1 and 2000 mm.")
 
         try:
             body = self.fetch(address, timeout=DOWNLOAD_TIMEOUT)

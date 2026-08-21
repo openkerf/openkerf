@@ -277,7 +277,7 @@ class Images:
         except (TypeError, ValueError) as e:
             raise DesignError("The crop box has to consist of numbers.") from e
         if rect[2] <= 0 or rect[3] <= 0:
-            raise DesignError("Het snijkader moet breedte en hoogte hebben.")
+            raise DesignError("The crop box needs a width and a height.")
 
         x0, y0, x1, y1 = (v / UNITS_PER_MM for v in bounds)
         width, height = image.size

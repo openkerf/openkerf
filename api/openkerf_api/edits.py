@@ -154,7 +154,7 @@ class DesignEditor:
             spread = max(known) - min(known)
             if spread > 0.01:
                 raise DesignError(
-                    "Deze vormen staan onder verschillende hoeken. "
+                    "These shapes sit at different angles. "
                     "Turn them with the steps, or make them equal first."
                 )
             angle -= known[0]

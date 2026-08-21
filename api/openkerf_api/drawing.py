@@ -45,8 +45,8 @@ OPERATIONS = {
     "dots": "dots",
 }
 
-# Het knooptype dat bij elk laagtype hoort — nodig om een bestaande laag van
-# het gevraagde soort terug te vinden in plaats van er nog een aan te maken.
+# The node type that belongs to each layer kind — needed to find an existing layer of
+# the requested kind again instead of creating another one.
 _OPERATION_TYPES = {
     "cut": "op cut",
     "engrave": "op engrave",
@@ -62,13 +62,13 @@ def _mm(value: float) -> str:
 
 def _passes_of(node) -> int:
     """
-    Hoe vaak de machine deze laag werkelijk gaat doen.
+    How many times the machine is really going to do this layer.
 
-    Niet het veld `passes`, maar `implicit_passes`: de engine negeert het veld
-    zolang `passes_custom` uit staat (`core/parameters.py:401`), dus een laag
-    met `passes = 3` en die vlag uit brandt één keer. Gemeten op een testbord
-    dat "2 passes" op zijn opschrift had en er één deed — en de pre-flight en
-    het paneel meldden allebei 2, want die lazen het veld.
+    Not the `passes` field but `implicit_passes`: the engine ignores the field as long as
+    `passes_custom` is off (`core/parameters.py:401`), so a layer with `passes = 3` and
+    that flag off burns once. Measured on a test board that had "2 passes" on its caption
+    and did one — and the pre-flight and the panel both reported 2, because they read the
+    field.
     """
     getal = getattr(node, "implicit_passes", None)
     if getal is None:
@@ -103,19 +103,19 @@ class Drawing:
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
         self.runner = runner or CommandRunner(kernel)
-        # Zelfgemaakte lagen, zodat ze zichtbaar blijven zolang ze leeg zijn.
+        # Layers made by hand, so that they stay visible while they are empty.
         self.user_operations: set[str] = set()
-        # Callable die de operaties van testrasters teruggeeft; die staan op
-        # slot omdat hun waarden de sweep zijn.
+        # A callable that hands back the operations of test grids; those are locked
+        # because their values *are* the sweep.
         self.grid_operations = lambda: {}
-        # Wat een paletkleur op deze machine eerder deed (besluit B2). De
-        # server hangt hier het echte geheugen in; los getest is er niets.
+        # What a palette colour did on this machine before (decision B2). The server
+        # hangs the real memory in here; tested in isolation there is nothing.
         self.color_memory = lambda color: None
-        # Het nulpunt van de gebruiker (gat J12). De server hangt hier
-        # `MachineControl.origin` in; zonder dat is er geen nulpunt en
-        # verandert er niets aan de plek van het werk.
+        # The user's zero point (gap J12). The server hangs `MachineControl.origin` in
+        # here; without it there is no zero point and nothing changes about where the work
+        # goes.
         self.origin = lambda: None
-        # Lag er een hele groep op het klembord? Zie `clipboard_paste`.
+        # Was there a whole group on the clipboard? See `clipboard_paste`.
         self._klembord_groep = False
 
     @property
@@ -126,16 +126,15 @@ class Drawing:
 
     def create_path(self, points, closed: bool = False, label=None) -> dict:
         """
-        Een vrij pad uit losse punten — de pen.
+        A free path from separate points — the pen.
 
-        Elk punt mag een bocht dragen: `[x, y]` is een rechte hoek, en
-        `[x, y, cx, cy]` trekt de lijn ernaartoe krom via dat controlepunt. Zo
-        kan de pen met één klik een hoek zetten en met slepen een bocht, zoals
-        elk tekenprogramma dat doet.
+        Every point may carry a curve: `[x, y]` is a straight corner, and
+        `[x, y, cx, cy]` bends the line towards it through that control point. That way
+        the pen can set a corner with one click and a curve by dragging, as every drawing
+        program does.
 
-        De geometrie gaat rechtstreeks naar de elementenboom. De `path`-opdracht
-        van de engine schaalt zijn d-string, en dan tekent een pad van 10 cm
-        zichzelf tientallen meters groot.
+        The geometry goes straight into the element tree. The engine's `path` command
+        scales its d-string, and then a path of 10 cm draws itself tens of metres wide.
         """
         from meerk40t.core.geomstr import Geomstr
         from meerk40t.core.units import UNITS_PER_MM
@@ -193,10 +192,9 @@ class Drawing:
 
         before = {id(n) for n in self.elements.elems()}
         before_ops = {id(o) for o in self.elements.ops()}
-        # Tekenen én in een laag zetten binnen dezelfde handeling: een vorm
-        # neerzetten is één stap, dus één keer ongedaan maken. Zou het opzoeken
-        # van de laag erbuiten vallen, dan haalde de eerste `undo` alleen die
-        # laag weg en bleef de vorm staan.
+        # Drawing *and* putting it in a layer within the same action: laying down a
+        # shape is one step, so one undo. If finding the layer fell outside it, the first
+        # `undo` would only remove that layer and the shape would stay.
         with self.elements.undoscope(f"Draw {kind}"):
             self.runner.run(self._command(kind, values, fields))
             created = [n for n in self.elements.elems() if id(n) not in before]
@@ -206,7 +204,7 @@ class Drawing:
                     self._single_layer(node)
                 self._seed_from_memory(before_ops)
         if not created:
-            raise DesignError("De engine heeft niets getekend.")
+            raise DesignError("The engine drew nothing.")
 
         self.elements.set_emphasis(created)
         self._refresh()
@@ -214,23 +212,21 @@ class Drawing:
 
     def _single_layer(self, node) -> None:
         """
-        Een verse vorm hoort in één laag te vallen, niet in twee — en nooit in
-        een laag van een testbord.
+        A fresh shape should land in one layer, not in two — and never in a test board's
+        layer.
 
-        De classificatie van de engine kijkt naar de lijnkleur, en meerdere
-        operaties kunnen dezelfde kleur claimen. Dan zit dezelfde rechthoek in
-        een snij- én een graveerlaag, en brandt hij twee keer — de tweede keer
-        vaak op 100%. Precies de val die eerder bij het testraster toesloeg.
-        Een element in meerdere lagen zetten blijft kunnen, maar dan omdat
-        iemand daarvoor kiest.
+        The engine's classification looks at the stroke colour, and several operations can
+        claim the same colour. Then the same rectangle is in a cut *and* an engrave layer,
+        and burns twice — the second time often at 100%. Exactly the trap that caught the
+        test grid earlier. Putting an element in several layers stays possible, but then
+        because somebody chooses it.
 
-        De lagen van een testbord tellen niet mee als kandidaat. De labellaag
-        draagt de standaardkleur van de engine (#0000ff) en staat níét in de
-        paletstrook onder het canvas, dus een vorm die daarin belandt is werk
-        dat verdwijnt: onzichtbaar in de balk, en gebrand op 80 mm/s @ 30 %
-        omdat dat de instelling van een opschrift is. Gemeten: in een document
-        waar de gebruiker zijn eigen lagen had weggegooid, viel élke nieuwe
-        vorm in "Raster-labels".
+        A test board's layers do not count as candidates. The label layer carries the
+        engine's default colour (#0000ff) and is *not* in the palette strip under the
+        canvas, so a shape that lands in it is work that disappears: invisible in the
+        strip, and burned at 80 mm/s @ 30% because that is a caption's setting. Measured:
+        in a document where the user had thrown their own layers away, *every* new shape
+        fell into "Grid labels".
         """
         references = [
             reference
@@ -238,9 +234,9 @@ class Drawing:
             if reference.parent is not None
         ]
         eigen = [r for r in references if not self._is_board_layer(r.parent)]
-        # Alleen bordlagen? Dan hoort deze vorm daar sowieso niet, en is er ook
-        # geen alternatief onder de referenties: alles eraf, en de vorm krijgt
-        # via zijn eigen lijnkleur een echte laag.
+        # Only board layers? Then this shape does not belong there anyway, and there is
+        # no alternative among the references either: strip them all, and through its own
+        # stroke colour the shape gets a real layer.
         houden = eigen[:1]
         for extra in references:
             if extra not in houden:
@@ -254,8 +250,8 @@ class Drawing:
         if kleur is None:
             return
         try:
-            # Hetzelfde geheugen als bij het paletvakje (besluit B2): een verse
-            # laag begint op wat deze kleur op deze machine eerder deed.
+            # The same memory as with the palette swatch (decision B2): a fresh layer
+            # starts at what this colour did on this machine before.
             onthouden = None
             try:
                 onthouden = self.color_memory(kleur)
@@ -268,10 +264,10 @@ class Drawing:
 
     def _is_board_layer(self, operation) -> bool:
         """
-        Een laag die bij een testbord hoort in plaats van bij de gebruiker.
+        A layer that belongs to a test board rather than to the user.
 
-        Twee soorten: de cellen (elk hun eigen sweep-instelling) en de gedeelde
-        labellaag waar de opschriften van alle borden in gaan.
+        Two kinds: the cells (each with its own sweep setting) and the shared label layer
+        that all the boards' captions go into.
         """
         if operation is None:
             return False
@@ -285,10 +281,9 @@ class Drawing:
                 f"rect {_mm(v['x_mm'])} {_mm(v['y_mm'])} "
                 f"{_mm(v['width_mm'])} {_mm(v['height_mm'])}"
             )
-            # Afgeronde hoeken meteen bij het tekenen: het commando heeft er
-            # `-x`/`-y` voor, en de engine doet de rest. Eén getal, want een
-            # hoek met twee verschillende radii is een vormgeversding waar aan
-            # een machine niemand om vraagt.
+            # Rounded corners while drawing: the command has `-x`/`-y` for it, and the
+            # engine does the rest. One number, because a corner with two different radii
+            # is a designer's thing nobody asks for at a machine.
             radius = fields.get("corner_radius_mm")
             if radius not in (None, ""):
                 maat = _positive(radius, "corner_radius_mm")
@@ -316,8 +311,8 @@ class Drawing:
                 "Quotation marks in text are not supported yet.",
                 code="draw.quotesInText",
             )
-        # linetext, niet text: bitmaptekst heeft geen geometrie en is dus
-        # onzichtbaar op het canvas en niet te positioneren.
+        # linetext, not text: bitmap text has no geometry and is therefore invisible on
+        # the canvas and cannot be positioned.
         parts = ["linetext", _mm(v["x_mm"]), _mm(v["y_mm"])]
         font = str(fields.get("font") or "").strip()
         if font:
@@ -340,8 +335,8 @@ class Drawing:
         Bestaande vector-tekst bijwerken: inhoud, lettertype, hoogte,
         spatiëring of uitlijning.
 
-        De engine bewaart de bron op de node en rendert opnieuw, dus tekst
-        hoeft niet verwijderd en opnieuw geplaatst te worden.
+        The engine keeps the source on the node and re-renders, so text does not have to
+        be deleted and placed again.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -387,9 +382,9 @@ class Drawing:
         if node.type != "elem line":
             raise DesignError("This element is not a line.", code="draw.notALine")
 
-        # De client geeft punten zoals ze op het bed liggen; de node bewaart ze
-        # vóór zijn matrix. Zonder terugrekenen zou een gedraaide lijn
-        # verspringen zodra je een eindpunt verzet.
+        # The client gives points as they lie on the bed; the node keeps them *before*
+        # its matrix. Without converting back, a rotated line would jump as soon as you
+        # move an end point.
         matrix = getattr(node, "matrix", None)
         inverse = ~matrix if matrix is not None else None
 
@@ -459,7 +454,7 @@ class Drawing:
 
     def ungroup(self, element_ids) -> dict:
         """
-        Groep opheffen. De elementen blijven; alleen het omhulsel verdwijnt.
+        Ungroup. The elements stay; only the wrapper disappears.
         """
         nodes = self._nodes(element_ids)
         groups = []
@@ -486,8 +481,8 @@ class Drawing:
         """
         Spiegelen om het midden van de selectie.
 
-        Er is geen `mirror`-commando; de engine doet dit met een negatieve
-        schaalfactor.
+        There is no `mirror` command; the engine does this with a negative scale
+        factor.
         """
         if axis not in ("horizontal", "vertical"):
             raise DesignError("The mirror axis has to be 'horizontal' or 'vertical'.")
@@ -503,8 +498,8 @@ class Drawing:
         """
         Vormen samenvoegen, aftrekken, snijden of uitsluiten.
 
-        De commando's komen uit `extra/cag.py` en werken op een keten, niet los:
-        `element union` pakt de nadruk-selectie. Het resultaat is één nieuw pad;
+        The commands come from `extra/cag.py` and work on a chain, not on their own:
+        `element union` takes the emphasis selection. The result is one new path;
         de oorspronkelijke vormen verdwijnen.
         """
         if operation not in self.BOOLEAN:
@@ -513,7 +508,7 @@ class Drawing:
             )
         nodes = self._nodes(element_ids)
         if len(nodes) < 2:
-            raise DesignError(f"{operation} heeft minstens twee vormen nodig.")
+            raise DesignError(f"{operation} needs at least two shapes.")
         before = {id(n) for n in self.elements.elems()}
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope(operation):
@@ -553,16 +548,15 @@ class Drawing:
         """
         Hoeken afronden of afschuinen.
 
-        Twee wegen, en welke het is bepaalt de engine, niet wij:
+        Two routes, and which one it is the engine decides, not us:
 
-        - **Afronden van een rechthoek** zet `rx`/`ry` op de knoop. Hij blíjft
-          een rechthoek: breedte en hoogte blijven werken, de radius is later te
-          wijzigen, en de SVG-rondgang klopt. De engine tekent dat al.
-        - **Afschuinen, of afronden van iets anders**, wordt geometrie die wij
-          maken, en het resultaat is een pad. Dat is eenrichting: een pad heeft
-          geen breedte- en hoogteveld meer. De engine bepaalt dat een `elem rect`
-          altijd rónd afloopt, dus een afgeschuinde rechthoek kán daar niet
-          blijven — zie de kop van `corners.py`.
+        - **Rounding a rectangle** sets `rx`/`ry` on the node. It *stays* a rectangle:
+          width and height keep working, the radius can be changed later, and the SVG
+          round-trip holds. The engine already draws that.
+        - **Chamfering, or rounding anything else**, becomes geometry we make, and the
+          result is a path. That is one-way: a path no longer has a width and height
+          field. The engine decides that an `elem rect` always ends *round*, so a
+          chamfered rectangle *cannot* stay there — see the head of `corners.py`.
         """
         from meerk40t.core.geomstr import Geomstr
         from meerk40t.svgelements import Matrix
@@ -582,9 +576,9 @@ class Drawing:
             for node in nodes:
                 if style == "round" and str(getattr(node, "type", "")) == "elem rect":
                     node.rx = node.ry = maat * units
-                    # Een rauwe toekenning meldt niets aan de knoop, dus hij
-                    # draagt anders zijn oude omhullende — dezelfde valkuil als
-                    # bij `grid`/`radial` (zie CLAUDE.md).
+                    # A raw assignment reports nothing to the node, so it would
+                    # otherwise carry its old bounding box — the same pitfall as with
+                    # `grid`/`radial` (see CLAUDE.md).
                     vergeet = getattr(node, "set_dirty_bounds", None)
                     if vergeet is not None:
                         vergeet()
@@ -599,8 +593,8 @@ class Drawing:
                 except CornerError as e:
                     raise DesignError(str(e), code=getattr(e, "code", None)) from e
                 overgeslagen += gemist
-                # `replace_node` geeft de níeuwe knoop terug; de oude is daarna
-                # losgekoppeld en zijn id zegt niets meer.
+                # `replace_node` hands back the *new* node; the old one is disconnected
+                # after that and its id says nothing any more.
                 paden.append(
                     node.replace_node(
                         type="elem path",
@@ -634,9 +628,8 @@ class Drawing:
         """
         Vulling (hatch) of wobble op de selectie.
 
-        Een effect is in MeerK40t geen elementeigenschap maar een knoop in de
-        operatieboom die naar de elementen verwijst, dus het verschijnt als een
-        eigen laag.
+        In MeerK40t an effect is not an element property but a node in the operation tree
+        that refers to the elements, so it appears as a layer of its own.
         """
         command = self.EFFECTS.get(effect)
         if command is None:
@@ -655,8 +648,8 @@ class Drawing:
         nodes = self._nodes(element_ids)
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope("Delete"):
-            # `delete` alleen bestaat niet op de basiscontext; `element delete`
-            # werkt op de nadruk-selectie.
+            # `delete` on its own does not exist on the base context; `element delete`
+            # works on the emphasis selection.
             self.runner.run("element delete")
         self._refresh()
         return {"removed": [n.id for n in nodes]}
@@ -669,7 +662,7 @@ class Drawing:
             self.runner.run("copy")
         created = [n for n in self.elements.elems() if id(n) not in before]
         if not created:
-            raise DesignError("De engine heeft niets gedupliceerd.")
+            raise DesignError("The engine duplicated nothing.")
         self.elements.validate_ids()
         self.elements.set_emphasis(created)
         self._refresh()
@@ -677,17 +670,16 @@ class Drawing:
 
     # ----------------------------------------------------------------- klembord
     #
-    # De engine heeft een compleet klembord (`core/elements/clipboard.py`:
-    # `clipboard copy | cut | paste | clear`). Wij zetten alleen de nadruk en
-    # lezen de stand terug, zodat het klembord van de engine de enige waarheid
-    # blijft — ook als iemand er tegelijk via de console aan zit.
+    # The engine has a complete clipboard (`core/elements/clipboard.py`:
+    # `clipboard copy | cut | paste | clear`). We only set the emphasis and read the state
+    # back, so that the engine's clipboard stays the only truth — even when somebody is at
+    # it through the console at the same time.
     #
-    # Eén ding vangen we wél af: `clipboard paste` stopt méér dan één vorm in
-    # een nieuwe groep ("Group", id "Copy"). Plakken dat stilzwijgend groepeert
-    # is een verrassing die je pas merkt als je één vorm wil verslepen en er
-    # drie meekomen. Hebben we zelf om die groep gevraagd, dan halen we hem er
-    # weer af. Wie een échte groep kopieerde, plakt één knoop en houdt zijn
-    # groep — de engine wikkelt alleen bij meer dan één.
+    # One thing we do catch: `clipboard paste` puts more than one shape into a new group
+    # ("Group", id "Copy"). A paste that silently groups is a surprise you only notice
+    # when you want to drag one shape and three come along. If we asked for that group
+    # ourselves, we take it off again. Anybody who copied a *real* group pastes one node
+    # and keeps their group — the engine only wraps for more than one.
 
     def _clipboard_nodes(self) -> list:
         buffer = getattr(self.elements, "_clipboard", None) or {}
@@ -718,9 +710,9 @@ class Drawing:
         """
         Is dit precies één volledige groep?
 
-        Dat bepaalt of het omhulsel dat de engine bij het plakken maakt mag
-        blijven staan. Wie een groep kopieert, verwacht een groep terug; wie
-        drie losse vormen kopieert, verwacht drie losse vormen.
+        That decides whether the wrapper the engine makes on pasting may stay. Whoever
+        copies a group expects a group back; whoever copies three separate shapes expects
+        three separate shapes.
         """
         ouders = {getattr(n, "parent", None) for n in nodes}
         if len(ouders) != 1:
@@ -741,7 +733,7 @@ class Drawing:
         nodes = self._nodes(element_ids)
         self._klembord_groep = self._hele_groep(nodes)
         self.elements.set_emphasis(nodes)
-        # De engine zet zelf een undoscope om het verwijderen.
+        # The engine puts an undo scope around the deletion itself.
         self.runner.run("clipboard cut")
         self._refresh()
         return self.clipboard_state()
@@ -751,10 +743,10 @@ class Drawing:
         Plakken, met of zonder doelplek.
 
         Zonder `x_mm`/`y_mm` komt het werk `offset_mm` naast het origineel te
-        liggen: precies op elkaar plakken ziet eruit als "nothing happened", en
-        dan sleep je per ongeluk het origineel weg. Mét een doelplek is dat de
-        linkerbovenhoek van wat er geplakt wordt — dat is wat "plakken hier" in
-        een rechterklikmenu belooft.
+        lie: pasting exactly on top looks like "nothing happened", and then you
+        accidentally drag the original away. With a target place that is the top-left
+        corner of what gets pasted — which is what "paste here" in a context menu
+        promises.
         """
         aantal = len(self._clipboard_nodes())
         if not aantal:
@@ -771,24 +763,22 @@ class Drawing:
         self.runner.run(f"clipboard paste -x {_mm(dx)} -y {_mm(dy)}")
         geplakt = [n for n in self.elements.elems() if id(n) not in before]
         if not geplakt:
-            raise DesignError("De engine heeft niets geplakt.")
+            raise DesignError("The engine pasted nothing.")
 
-        # Dezelfde valstrik als bij `grid`/`radial`: `clipboard paste` schuift
-        # zijn kopieën met een rauwe `node.matrix *= matrix`, en die toekenning
-        # meldt niets aan de node. De omhullende bleef dus op de plek van het
-        # origineel staan terwijl de vorm elders getekend werd — je klikt de
-        # kopie aan en de handvatten verschijnen om het origineel. Zie de
-        # upstream-lijst in CLAUDE.md.
+        # The same trap as with `grid`/`radial`: `clipboard paste` shifts its copies with
+        # a raw `node.matrix *= matrix`, and that assignment reports nothing to the node.
+        # So the bounding box stayed in the original's place while the shape was drawn
+        # elsewhere — you click the copy and the handles appear around the original. See
+        # the upstream list in CLAUDE.md.
         for node in geplakt:
             marker = getattr(node, "set_dirty_bounds", None)
             if marker is not None:
                 marker()
 
-        # De omhullende groep die de engine er zelf om zette, weer weghalen —
-        # met de eigen `ungroup` van de engine, zodat de boom op dezelfde manier
-        # herbouwd wordt als wanneer de gebruiker het zelf doet. Tenzij er een
-        # hele groep gekopieerd werd: dan is dat omhulsel precies wat je terug
-        # wilde hebben.
+        # Remove the wrapping group the engine put around it — with the engine's own
+        # `ungroup`, so that the tree is rebuilt the same way as when the user does it
+        # themselves. Unless a whole group was copied: then that wrapper is exactly what
+        # you wanted back.
         if aantal > 1 and not getattr(self, "_klembord_groep", False):
             wikkels = [
                 n
@@ -820,9 +810,9 @@ class Drawing:
 
     # ------------------------------------------------------------- operations
 
-    # Een laag zonder naam kreeg van de engine een label als
-    # "Cut defaultmm/s @default #ff0000" — machinetaal op de plek waar je je
-    # eigen werk moet herkennen.
+    # A layer without a name got a label from the engine like
+    # "Cut defaultmm/s @default #ff0000" — machine language in the place where you have to
+    # recognise your own work.
     LAYER_NAMES = {
         "cut": "Cut",
         "engrave": "Engrave",
@@ -843,8 +833,8 @@ class Drawing:
         if power_percent is not None:
             percent = _finite(power_percent, "power_percent")
             if not 0 < percent <= 100:
-                raise DesignError("power_percent moet tussen 0 en 100 liggen.")
-            # De console verwacht de 0-1000 schaal van de engine.
+                raise DesignError("power_percent has to be between 0 and 100.")
+            # The console expects the engine's 0-1000 scale.
             parts += ["-p", f"{percent * 10:g}"]
 
         before = {id(o) for o in self.elements.ops()}
@@ -855,14 +845,14 @@ class Drawing:
         if not created:
             raise DesignError("The engine created no layer.", code="draw.noLayer")
         operation = created[0]
-        # Een naam die je herkent, in plaats van "Cut defaultmm/s @default".
+        # A name you recognise, instead of "Cut defaultmm/s @default".
         operation.label = str(label) if label else self.LAYER_NAMES.get(kind, kind)
-        # Een eigen kleur vanaf het begin. De engine geeft rasterlagen zwart en
-        # puntlagen doorzichtig mee; als laagkleur zijn dat allebei niets — je
-        # ziet op het canvas én in de lijst niet welke laag je voor je hebt.
+        # A colour of its own from the start. The engine gives raster layers black and
+        # dot layers transparent; as a layer colour those are both nothing — on the canvas
+        # *and* in the list you cannot see which layer you are looking at.
         self._set_color(operation, self._next_color())
-        # De engine zet passes op 0 voor "niet ingesteld". Dat leest als "nul
-        # keer snijden", en dat is het getal waar een laseraar naar kijkt.
+        # The engine sets passes to 0 for "not set". That reads as "cut zero times", and
+        # that is the number a laser operator looks at.
         if not getattr(operation, "passes", 0):
             operation.passes = 1
         self.elements.validate_ids()
@@ -870,22 +860,22 @@ class Drawing:
         self._refresh()
         return {"id": operation.id, "type": operation.type}
 
-    # Wat je aan een rasterlaag nog wél mag veranderen.
+    # What you may still change about a grid layer.
     GRID_EDITABLE = {"output"}
 
     def move_operation(self, operation_id: str, direction=None, index=None) -> dict:
         """
-        Verschuif een laag in de brandvolgorde.
+        Move a layer in the burn order.
 
-        De volgorde van de kinderen onder `branch ops` ís de volgorde waarin de
-        machine brandt — graveren vóór snijden, anders val je het werkstuk uit
-        het vel voordat het opschrift erop staat. Rastercellen slaan we over:
-        die horen bij één testbord en hebben onderling geen eigen volgorde.
+        The order of the children under `branch ops` *is* the order in which the machine
+        burns — engrave before cut, otherwise you drop the workpiece out of the sheet
+        before the caption is on it. Grid cells are skipped: they belong to one test board
+        and have no order of their own among themselves.
 
-        Twee manieren, één weg: `direction` is één stap (de knoppen ↑/↓),
-        `index` is een bestemming (slepen, gat L1). Bij slepen weet de lijst
-        precies waar de laag heen moet en niet hoeveel stappen dat zijn — dat
-        omrekenen naar stapjes zou bij elke tussenliggende rastercel misgaan.
+        Two ways, one route: `direction` is one step (the ↑/↓ buttons), `index` is a
+        destination (dragging, gap L1). When dragging, the list knows exactly where the
+        layer has to go and not how many steps that is — converting that into steps would
+        go wrong at every intervening grid cell.
         """
         if (direction is None) == (index is None):
             raise DesignError("Give one of the two: 'direction' or 'index'.")
@@ -899,24 +889,24 @@ class Drawing:
         siblings = list(parent.children)
         try:
             here = siblings.index(operation)
-        except ValueError:  # pragma: no cover - de boom is dan al inconsistent
+        except ValueError:  # pragma: no cover - the tree is already inconsistent then
             raise DesignError("This layer is not in its own branch.")
 
-        # De lijst telt in lagen, wij tellen in kinderen van `branch ops`. Voor
-        # de gebruiker is "plek 3" de derde láág, niet de derde knoop; met een
-        # testraster of een lege standaardlaag ertussen is dat niet hetzelfde
-        # getal. Beide manieren rekenen daarom in deze lijst.
+        # The list counts in layers, we count in children of `branch ops`. To the user
+        # "place 3" is the third *layer*, not the third node; with a test grid or an empty
+        # default layer in between that is not the same number. Both ways therefore
+        # compute in this list.
         plain = [node for node in siblings if self._plain_layer(node)]
 
         if direction is not None:
             step = -1 if direction == "up" else 1
-            # Eén stap is één zichtbare laag verder, niet één knoop. Stapte dit
-            # over knopen, dan schoof de laag langs een onzichtbare buur en
-            # bleef het scherm hetzelfde — de fout die deze reparatie oplost.
+            # One step is one visible layer further, not one node. If this stepped over
+            # nodes, the layer would move past an invisible neighbour and the screen would
+            # stay the same — the fault this repair fixes.
             try:
                 spot = plain.index(operation)
             except ValueError:
-                # Geen zichtbare laag (een rastercel): dan telt de oude weg.
+                # Not a visible layer (a grid cell): then the old route counts.
                 spot = None
             if spot is None:
                 target = here + step
@@ -939,25 +929,25 @@ class Drawing:
             if anchor is operation:
                 return {"id": operation_id, "moved": False, "index": here}
             target = siblings.index(anchor)
-            # Naar beneden schuiven betekent: ónder de laag komen die daar nu
-            # staat. Naar boven: erboven. Anders landt de laag er steeds één
-            # naast en loopt de lijst bij het slepen een plek achter.
+            # Moving down means: come *below* the layer that is there now. Up: above it.
+            # Otherwise the layer keeps landing one place beside it and while dragging the
+            # list runs a place behind.
             below = target > here
         if not 0 <= target < len(siblings):
             return {"id": operation_id, "moved": False, "index": here}
 
         with self.elements.undoscope("Reorder layers"):
-            # `swap_node` lijkt hier de juiste zet maar wisselt óók de kinderen
-            # van beide knopen om, dus de referenties naar de vormen verhuizen
-            # mee en er verandert per saldo niets. `insert_sibling` verplaatst
-            # alleen de knoop zelf — dat is wat "een laag opschuiven" betekent.
+            # `swap_node` looks like the right move here but *also* swaps both nodes'
+            # children, so the references to the shapes move along and on balance nothing
+            # changes. `insert_sibling` moves only the node itself — which is what "move a
+            # layer up" means.
             siblings[target].insert_sibling(operation, below=below)
         self._refresh()
         return {"id": operation_id, "moved": True, "index": target}
 
-    # Hoe de machine hoort te werken: eerst wat het oppervlak raakt, dan wat
-    # erdoorheen gaat. Snijden als laatste, want een uitgesneden werkstuk ligt
-    # los in het bed en verschuift onder de volgende bewerking — of valt eruit.
+    # How the machine should work: first what touches the surface, then what goes
+    # through it. Cutting last, because a cut-out workpiece lies loose in the bed and
+    # shifts under the next operation — or falls out.
     BURN_ORDER = {
         "op image": 0,
         "op raster": 1,
@@ -968,30 +958,28 @@ class Drawing:
 
     def _plain_layer(self, node) -> bool:
         """
-        Een laag zoals de gebruiker hem ziet staan.
+        A layer as the user sees it.
 
-        Drie eisen, en de derde is degene die ontbrak. Het moet een bewerking
-        zijn, het mag geen cel van een testraster zijn, én hij moet in beeld
-        staan: **een verse boom bevat ruim tweehonderd lege standaardlagen** die
-        de engine achter de hand houdt, en `DesignReader` laat die weg — een
-        bewerking zonder vormen is geen laag, tenzij de gebruiker hem net zelf
-        aanmaakte (`user_operations`).
+        Three requirements, and the third is the one that was missing. It has to be an
+        operation, it must not be a cell of a test grid, *and* it has to be on screen: **a
+        fresh tree contains well over two hundred empty default layers** the engine keeps
+        in reserve, and `DesignReader` leaves those out — an operation without shapes is
+        not a layer, unless the user has just created it themselves (`user_operations`).
 
-        Zonder die derde eis rekende het verschuiven in een lijst van
-        tweehonderd terwijl het paneel er twee toonde. Wat je dan ziet: op
-        "later branden" drukken verplaatst de laag netjes één plek — langs een
-        onzichtbare standaardlaag. De API meldt `moved: true`, de volgorde op
-        het scherm verandert niet, en slepen landt op een plek die niet bestaat
-        in de lijst waaruit je sleepte. Gemeten met twee lagen: tien lege
-        `op cut`-lagen ertussen, elke druk op de knop een schijnbeweging.
+        Without that third requirement the moving computed in a list of two hundred while
+        the panel showed two. What you see then: pressing "burn later" moves the layer
+        neatly one place — past an invisible default layer. The API reports `moved: true`,
+        the order on screen does not change, and dragging lands on a place that does not
+        exist in the list you dragged from. Measured with two layers: ten empty `op cut`
+        layers in between, every press of the button a feint.
         """
         if not str(getattr(node, "type", "")).startswith("op "):
             return False
         if self._is_grid_cell(node, getattr(node, "id", "") or ""):
             return False
-        # Dezelfde regel als in `DesignReader.snapshot`: vormen erin, of door
-        # de gebruiker net aangemaakt. Blijven die twee uit elkaar lopen, dan
-        # loopt het verschuiven weer mis op lagen die niemand ziet.
+        # The same rule as in `DesignReader.snapshot`: shapes in it, or just created by
+        # the user. If those two drift apart, the moving goes wrong again on layers nobody
+        # sees.
         if getattr(node, "children", None):
             return True
         return (getattr(node, "id", "") or "") in self.user_operations
@@ -1000,19 +988,19 @@ class Drawing:
         """
         Graveren vóór snijden, in één handeling (gat L2).
 
-        LightBurn heeft hier `Sort Cuts Last` voor, en dat is één klik voor de
-        duurste fout die er is: het werkstuk valt uit het vel voordat het
-        opschrift erop staat. Stabiel sorteren, zodat twee snijlagen hun
-        onderlinge volgorde houden — die heeft de gebruiker zelf gekozen.
+        LightBurn has `Sort Cuts Last` for this, and that is one click for the most
+        expensive mistake there is: the workpiece falls out of the sheet before the caption
+        is on it. A stable sort, so that two cut layers keep their order relative to each
+        other — the user chose that themselves.
 
-        Binnen dezelfde soort telt de sterkte mee (gat L7). Twee snijlagen zijn
-        niet uitwisselbaar: een lichte scoreerlijn op 5 % en een doorsnede op
-        80 % horen in die volgorde, want zodra het werkstuk los is, ligt het
-        niet meer stil voor de rest. LightBurn sorteert daar ook op, alleen
-        andersom om — hun sterkste gaat vooraan en daarna de Line-lagen naar
-        achteren; wij houden één regel aan die op elke soort hetzelfde doet.
+        Within the same kind the strength counts too (gap L7). Two cut layers are not
+        interchangeable: a light score line at 5% and a through-cut at 80% belong in that
+        order, because as soon as the workpiece is loose it no longer lies still for the
+        rest. LightBurn sorts on that too, only the other way round — their strongest goes
+        first and then the Line layers to the back; we keep one rule that does the same
+        thing for every kind.
 
-        Rastercellen blijven staan waar ze staan: hun volgorde is de sweep.
+        Grid cells stay where they are: their order *is* the sweep.
         """
         parent = self.elements.op_branch
         children = list(parent.children)
@@ -1031,10 +1019,9 @@ class Drawing:
             return {"sorted": False, "order": [node.id for node in wanted]}
 
         with self.elements.undoscope("Engrave before cut"):
-            # De eerste laag blijft liggen waar de eerste laag lag; de rest
-            # schuift er in volgorde achteraan. Zo blijft een testraster dat
-            # ertussen staat op zijn eigen plek en verhuist alleen wat wij
-            # sorteren.
+            # The first layer stays where the first layer was; the rest queues up behind
+            # it in order. That way a test grid in between keeps its own place and only
+            # what we sort moves.
             vorige = wanted[0]
             for node in wanted[1:]:
                 vorige.insert_sibling(node, below=True)
@@ -1231,7 +1218,7 @@ class Drawing:
             if fields.get("power_percent") is not None:
                 percent = _finite(fields["power_percent"], "power_percent")
                 if not 0 < percent <= 100:
-                    raise DesignError("power_percent moet tussen 0 en 100 liggen.")
+                    raise DesignError("power_percent has to be between 0 and 100.")
                 operation.power = percent * 10
                 applied["power"] = operation.power
             if fields.get("passes") is not None:

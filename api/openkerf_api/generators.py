@@ -96,7 +96,7 @@ class Generators:
         """
         count = self._count(corners, "hoeken")
         if count < 3:
-            raise DesignError("Een veelhoek heeft minstens drie hoeken.")
+            raise DesignError("A polygon needs at least three corners.")
         radius = _positive(radius_mm, "radius_mm")
         cx = _finite(cx_mm, "cx_mm")
         cy = _finite(cy_mm, "cy_mm")
@@ -829,7 +829,7 @@ class Generators:
         """
         count = self._count(corners, "hoeken")
         if count < 3:
-            raise DesignError("Een veelhoek heeft minstens drie hoeken.")
+            raise DesignError("A polygon needs at least three corners.")
         radius = _positive(radius_mm, "radius_mm")
         cx = _finite(cx_mm, "cx_mm")
         cy = _finite(cy_mm, "cy_mm")

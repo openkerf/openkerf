@@ -206,7 +206,7 @@ class MachineControl:
         bed = self._bed_mm()
         if bed and (x < 0 or y < 0 or x + breedte > bed[0] or y + hoogte > bed[1]):
             raise DesignError(
-                f"Het kader ({breedte:.0f}x{hoogte:.0f} mm vanaf {x:.0f},{y:.0f}) "
+                f"The frame ({breedte:.0f}x{hoogte:.0f} mm from {x:.0f},{y:.0f}) "
                 f"falls outside the bed of {bed[0]:.0f}x{bed[1]:.0f} mm."
             )
 
