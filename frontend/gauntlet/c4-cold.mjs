@@ -90,7 +90,7 @@ for (const [naam, url, init] of cases) {
 		return { status: r.status, detail: String(body.detail ?? '') };
 	}, [url, init]);
 	if (out.status < 400) continue;
-	const remedy = /kies|probeer|start|controleer|zet |installeer|maak |gebruik|herstart|vraag|eerst|laat |snijd|geef/i.test(out.detail);
+	const remedy = /kies|probeer|start|controleer|set |installeer|maak |gebruik|herstart|ask|eerst|laat |snijd|geef/i.test(out.detail);
 	if (!remedy) {
 		findings.push({ severity: 'major', what: `Melding "${naam}" zegt niet wat je eraan doet`,
 			evidence: `${out.status}: ${out.detail.slice(0, 150)}` });
@@ -127,7 +127,7 @@ if (dev.length) {
 		evidence: dev.join(' | ') });
 }
 
-// --- de tekst bij verlies van verbinding: protocoltaal of mensentaal?
+// --- de tekst bij verlies van connection: protocoltaal of mensentaal?
 const offline = await page.evaluate(() => {
 	const bar = document.querySelector('.statusbar');
 	return bar ? bar.textContent.replace(/\s+/g, ' ').trim() : '';

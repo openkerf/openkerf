@@ -1,7 +1,7 @@
 <script lang="ts">
 	export type Tool = 'select' | 'nodes' | 'measure' | 'pen' | 'rect' | 'circle' | 'line' | 'text';
 
-	import { bewaarBestand } from '$lib/opslaan';
+	import { bewaarBestand } from '$lib/saving';
 	import { t } from '$lib/i18n/index.svelte';
 
 	let {
@@ -32,7 +32,7 @@
 		/** Onder 850px past de projectknop niet meer in de bovenbalk naast het
 		 *  materiaal; dan woont het project hier, mét zijn woord. Daarboven staat
 		 *  het in de balk en hoort het hier niet — twee plekken voor dezelfde
-		 *  handeling levert alleen de vraag op welke de echte is. */
+		 *  handeling levert alleen de ask op welke de echte is. */
 		projectInRail?: boolean;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
@@ -97,7 +97,7 @@
 
 	/**
 	 * Opslaan via `bewaarBestand`, niet via een kale `<a download>`: de app moet
-	 * ná de download weten dat het ontwerp opgeslagen is. Zie `$lib/opslaan`.
+	 * ná de download weten dat het ontwerp opgeslagen is. Zie `$lib/saving`.
 	 */
 	async function bewaar(event: MouseEvent, url: string, naam: string) {
 		event.preventDefault();

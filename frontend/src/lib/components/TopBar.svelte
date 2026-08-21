@@ -2,9 +2,9 @@
 	import { machineStateLabel, STOP_KEY, type Device, type MachineState } from '$lib/api';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import LanguagePicker from './LanguagePicker.svelte';
-	import { apparaat } from '$lib/apparaat.svelte';
-	import { bewaarBestand } from '$lib/opslaan';
-	import { verbinding } from '$lib/verbinding.svelte';
+	import { screen } from '$lib/screen.svelte';
+	import { bewaarBestand } from '$lib/saving';
+	import { connection } from '$lib/connection.svelte';
 	import Logo from './Logo.svelte';
 
 	let {
@@ -43,11 +43,11 @@
 		stopArmed?: boolean;
 		canEdit?: boolean;
 		/**
-		 * @deprecated Wordt genegeerd; de afspraak staat in `$lib/apparaat.svelte`.
+		 * @deprecated Wordt genegeerd; de afspraak staat in `$lib/screen.svelte`.
 		 *
 		 * Gat J9: deze prop en de `@media (max-width: 1199px)` in JobControls
 		 * waren twee bronnen voor één regel. Beide componenten lezen nu
-		 * `apparaat.bedieningInBalk`. De prop blijft geaccepteerd zodat de
+		 * `screen.controlsInBar`. De prop blijft geaccepteerd zodat de
 		 * pagina niet in dezelfde stap mee hoeft; hij mag daar weg.
 		 */
 		tablet?: boolean;
@@ -86,7 +86,7 @@
 	 * De link werkt op zichzelf prima, maar de app hoort erna te weten dat het
 	 * ontwerp opgeslagen is — anders blijft `dirty` op de client staan en
 	 * beweert het volgende venster dat er niet-opgeslagen werk is. Zie
-	 * `$lib/opslaan`. De `href` blijft staan, zodat de knop ook zonder
+	 * `$lib/saving`. De `href` blijft staan, zodat de knop ook zonder
 	 * JavaScript een echte link is.
 	 */
 	async function bewaar(event: MouseEvent, url: string, naam: string) {
@@ -122,8 +122,8 @@
 
 	// De bovenbalk staat altijd; hier hangt het meeluisteren naar de
 	// schermbreedte, zodat de rest van de app het niet nog eens hoeft te doen.
-	$effect(() => apparaat.volg());
-	let balkdraagt = $derived(apparaat.bedieningInBalk);
+	$effect(() => screen.follow());
+	let balkdraagt = $derived(screen.controlsInBar);
 
 	/**
 	 * Zonder server is dit geen bediening meer, en dat moet je zien.
@@ -137,10 +137,10 @@
 	 *
 	 * Een knop die niet aankomt hoort niet te doen alsof. Hij gaat uit, en de
 	 * tooltip zegt wat er aan de hand is én wat je dán moet doen: de knop op de
-	 * machine. Dat laatste is het halve antwoord; zonder die zin heb je alleen
+	 * machine. Dat last is het halve antwoord; zonder die zin heb je alleen
 	 * een dode knop.
 	 */
-	let weg = $derived(!verbinding.online);
+	let weg = $derived(!connection.online);
 	let stopTitel = $derived(
 		weg
 			? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
@@ -172,7 +172,7 @@
 	 * Sneltoetsen voor pauzeren en stoppen (gat J4).
 	 *
 	 * LightBurn heeft Pause en Ctrl+Break, en die werken daar zelfs als het
-	 * venster niet vooraan staat. Dat laatste kunnen wij niet: een webpagina
+	 * venster niet vooraan staat. Dat last kunnen wij niet: een webpagina
 	 * krijgt geen toetsaanslagen als hij geen focus heeft, en er is geen browser
 	 * die daar een uitzondering voor maakt. Wat wél kan is dit — overal in de
 	 * app, op elk tabblad, zonder eerst een paneel te moeten zoeken. Wie de
@@ -244,10 +244,10 @@
 
 	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
 	     leidt naar de setup — ook de route als er nog géén machine is. -->
-	<!-- Gat B3: xTool toont het apparaat op een tablet als object, met een
+	<!-- Gat B3: xTool toont het device op een tablet als object, met een
 	     modelafbeelding. Wij niet, en bewust — zie het rapport bij deze ronde:
 	     wij hebben geen artwork per bordfamilie en een verkeerd plaatje boven een
-	     Ruida is een bewering over welke machine je aanraakt. Wat de vraag eronder
+	     Ruida is een bewering over welke machine je aanraakt. Wat de ask eronder
 	     wél verdient — "wélke machine en hoe groot" — staat hier in de tooltip en
 	     bij het bed op het canvas, zonder de balk breder te maken (B6 mat dat de
 	     ruimte op is). -->
@@ -289,7 +289,7 @@
 
 	<div class="spacer"></div>
 
-	<!-- Openen en opslaan van het project: één knop, op elke breedte.
+	<!-- Openen en saving van het project: één knop, op elke breedte.
 	     Twee losse knoppen mét woord kostten 310px, en die waren er onder 1600
 	     niet — dan stonden ze alleen nog in het menu van de gereedschapsrail, en
 	     daar vond de gebruiker ze twee ronden lang niet ("ik zie alleen
@@ -401,7 +401,7 @@
 		<span class="btn-label">{t('topbar.export')}</span>
 	</a>
 
-	<!-- De laatste controle vóór je brandt: past het, ligt het recht, zit de
+	<!-- De last controle vóór je brandt: past het, ligt het recht, zit de
 	     klem in de weg. De laser blijft uit. -->
 	<button
 		class="btn kader"
@@ -575,7 +575,7 @@
 		   enige buigzame ding in deze balk, dus het betaalde die 60px met zijn
 		   naam: er stond "B  3mm" en dat is geen chip maar een restant.
 		   Dan liever expliciet weg. Op het moment dat de server eruit ligt is het
-		   materiaal onveranderlijk en niet waar je naar kijkt; de enige vraag is
+		   materiaal onveranderlijk en niet waar je naar kijkt; de enige ask is
 		   waar de stop zit, en dat antwoord mag de hele breedte hebben. Boven
 		   850px blijft de chip staan — daar is de ruimte er (gemeten). */
 		.topbar.weg .materiaal { display: none; }
@@ -604,27 +604,27 @@
 	   18,5mm", de langste namen die deze balk kan krijgen: op 850 en hoger past
 	   het met 56px over, en op 768 vangt het `flex: 0 1 auto` hieronder het
 	   verschil op — de chip krimpt naar 137px en de naam naar 64px, interne
-	   overloop 0, laatste knop op 756 van 768. Een extra mediaquery voor het
+	   overloop 0, last knop op 756 van 768. Een extra mediaquery voor het
 	   smalste geval was daarmee overbodig: het vangnet dóet zijn werk. */
 	.topbar.smal .materiaal .naam { max-width: 10ch; }
 	/* Kaderen blíjft op tablet in beeld.
 	   Hij stond hier op `display: none` onder 950px, met het argument dat hij ook
-	   in de pre-flight woont. Dat argument klopt niet voor dít apparaat: de tablet
-	   is het scherm dat naast de machine ligt, en kaderen is de laatste controle
+	   in de pre-flight woont. Dat argument klopt niet voor dít device: de tablet
+	   is het scherm dat naast de machine ligt, en kaderen is de last controle
 	   die je dáár uitvoert — met je hand op het werkstuk, niet vanaf een
 	   bureaustoel. Een actie die je uitsluitend naast de machine doet hoort op het
-	   apparaat dat daar ligt, niet in een paneel dat dichtgeklapt kan zijn.
+	   device dat daar ligt, niet in een paneel dat dichtgeklapt kan zijn.
 	   De ruimte komt van het merk (zie de tabletregel hierboven). */
 	/* Vangnet voor wat hierna nog in deze balk komt: de machinebediening staat
-	   vast (`flex: none` hierboven), maar het materiaal mag als laatste redmiddel
+	   vast (`flex: none` hierboven), maar het materiaal mag als last redmiddel
 	   krimpen in plaats van de startknop van het scherm te duwen. */
 	/* Vangnet voor wat hierna nog in deze balk komt: de machinebediening staat
-	   vast (`flex: none` hierboven), maar het materiaal mag als laatste redmiddel
+	   vast (`flex: none` hierboven), maar het materiaal mag als last redmiddel
 	   krimpen in plaats van de startknop van het scherm te duwen. Gemeten op 768
 	   met de langste namen die mogelijk zijn: de chip zakt naar 137px en de naam
 	   naar 64px — afgekapt maar leesbaar, en de balk loopt niet over.
 	   Ik heb hier een ondergrens van 9rem geprobeerd en weer weggehaald: hij deed
-	   niets, want tokens.css zet in zijn coarse-pointerblok `min-width: 44px` op
+	   niets, want tokens.css set in zijn coarse-pointerblok `min-width: 44px` op
 	   elke knop met een selector die deze verslaat. Een regel die niets doet maar
 	   wel iets belooft, is erger dan geen regel. */
 	.materiaal { flex: 0 1 auto; min-width: 0; }
@@ -670,7 +670,7 @@
 		text-decoration: none;
 		cursor: pointer;
 		transition: background var(--transition);
-		/* De rij is een label, een link én een knop; die laatste brengt zijn
+		/* De rij is een label, een link én een knop; die last brengt zijn
 		   eigen achtergrond, rand en lettertype mee. */
 		background: none;
 		border: 0;
@@ -733,7 +733,7 @@
 		border-radius: var(--radius-field);
 		/* Onzichtbaar, maar aanwezig: de lege materiaalknop krijgt een streepjes-
 		   rand, en zonder deze regel verspringt de balk 2px zodra je er een
-		   materiaal in zet. */
+		   materiaal in set. */
 		border: 1px solid transparent;
 		background: var(--surface-2);
 		color: inherit;
@@ -750,7 +750,7 @@
 	.muted {
 		color: var(--text-2);
 	}
-	/* Nog niets gekozen is geen fout, dus geen rood en geen uitroepteken. Een
+	/* Nog niets gekozen is geen failure, dus geen rood en geen uitroepteken. Een
 	   onderbroken rand zegt "hier hoort nog iets in te vullen" en verder niets;
 	   zodra er een materiaal staat, wordt het een gewone chip. */
 	.materiaal.leeg {

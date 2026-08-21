@@ -2,7 +2,7 @@
  * Screenshots + metingen voor het oppervlak "telefoon".
  *
  * Argument = naam van de staat (rust | job | ronde2 ...). De inhoud van de
- * server zet je zelf klaar; dit script kijkt alleen.
+ * server set je zelf klaar; dit script kijkt alleen.
  */
 import { browser, open, BASE } from './harness.mjs';
 import { mkdirSync } from 'node:fs';

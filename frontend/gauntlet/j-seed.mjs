@@ -58,7 +58,7 @@ const ontwerp = await (await fetch(BASE + '/api/design')).json();
 const elementen = ontwerp.elements.map((e) => e.id);
 const ops = ontwerp.operations.filter((o) => !o.grid).map((o) => o.id);
 
-async function zet(elementIndex, opIndex) {
+async function set(elementIndex, opIndex) {
 	const id = elementen[elementIndex];
 	if (!id || !ops[opIndex]) return;
 	// Eerst uit alle lagen, dan in de bedoelde: de engine classificeert nieuwe
@@ -69,7 +69,7 @@ async function zet(elementIndex, opIndex) {
 }
 // Ruwe verdeling: rand naar snijden, tekst naar opschrift, kleine vlakken naar
 // fijne lijnen, de QR naar het rastervlak.
-for (const [el, op] of [[0, 0], [1, 0], [2, 2], [3, 2], [4, 1], [5, 3]]) await zet(el, op);
+for (const [el, op] of [[0, 0], [1, 0], [2, 2], [3, 2], [4, 1], [5, 3]]) await set(el, op);
 
 // Een laag die niet meebrandt en een laag met passes: twee toestanden die de
 // lijst moet kunnen tonen.

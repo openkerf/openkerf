@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Het alarm: wat de engine over de verbinding meldt, luid in beeld.
+	 * Het alarm: wat de engine over de connection meldt, luid in beeld.
 	 *
 	 * Vast bovenaan, boven alles, niet weg te scrollen — dat is het hele punt.
 	 * Op de telefoon staat hij tegen de bovenrand; op de desktop onder de
@@ -12,7 +12,7 @@
 	 * machine niet (besluit B3).
 	 */
 	import { t } from '$lib/i18n/index.svelte';
-	import type { Bewaker } from '$lib/meldingen.svelte';
+	import type { Bewaker } from '$lib/notifications.svelte';
 
 	let { bewaker, groot = false }: { bewaker: Bewaker; groot?: boolean } = $props();
 </script>
@@ -46,14 +46,14 @@
 		/*
 		 * Eén kolom met de verbindingskaart, en die staat erboven.
 		 *
-		 * Dit stond gecentreerd op 50% terwijl `Verbinding.svelte` tegen de rail
+		 * Dit stond gecentreerd op 50% terwijl `ConnectionCard.svelte` tegen de rail
 		 * aan hangt, op dezelfde hoogte. Op 1440 begon dit alarm daardoor op
 		 * x≈360, midden over die kaart, en kapte het twee zinnen af — niet
 		 * volledig bedekt maar half, en dat is erger: een afgebroken zin ziet
 		 * eruit als een hele zin, dus je weet niet dát je de helft mist.
 		 *
 		 * Nu dezelfde linkerrand en dezelfde breedte, met `--melding-kolom` als
-		 * verschuiving: die zet de verbindingskaart op `:root` met zijn eigen
+		 * verschuiving: die set de verbindingskaart op `:root` met zijn eigen
 		 * gemeten hoogte, en is er niet zodra die kaart weg is. Waarom die kaart
 		 * bóven dit alarm hoort: zonder onze server is elke melding over de
 		 * machine per definitie oud nieuws — het is dezelfde engine die niet meer
@@ -135,7 +135,7 @@
 	/* Tablet: op 1024 begint het rechterpaneel op x≈700, dus 620 px vanaf de rail
 	   zou de tabs "Bewerken" en "Lagen" weer afdekken — precies wat je op dat
 	   moment wilde bedienen. 560 houdt de kaart volledig boven het canvas.
-	   Dezelfde 560 staat in `Verbinding.svelte`; die twee horen gelijk te blijven,
+	   Dezelfde 560 staat in `ConnectionCard.svelte`; die twee horen gelijk te blijven,
 	   want samen zijn ze één kolom. Zonder wrapper-element (dat zou `+page.svelte`
 	   raken, waar deze twee op verschillende plekken gerenderd worden) is dit de
 	   prijs: één maat op twee plekken, met deze verwijzing als verband. */

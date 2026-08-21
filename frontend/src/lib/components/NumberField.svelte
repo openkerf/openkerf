@@ -36,7 +36,7 @@
 	// helemaal geen toegankelijke naam ("textbox: 609.6").
 	const id = $props.id();
 
-	function zet(richting: number) {
+	function set(richting: number) {
 		const nu = Number(value);
 		const basis = Number.isFinite(nu) ? nu : 0;
 		let nieuw = basis + richting * step;
@@ -65,8 +65,8 @@
 	 */
 	function toets(event: KeyboardEvent) {
 		if (disabled) return;
-		if (event.key === 'ArrowUp') zet(1);
-		else if (event.key === 'ArrowDown') zet(-1);
+		if (event.key === 'ArrowUp') set(1);
+		else if (event.key === 'ArrowDown') set(-1);
 		else if (event.key === 'Home' && min !== null) value = String(min);
 		else if (event.key === 'End' && max !== null) value = String(max);
 		else return;
@@ -85,7 +85,7 @@
 			tabindex="-1"
 			{disabled}
 			aria-label="{label} verlagen"
-			onclick={() => zet(-1)}>−</button
+			onclick={() => set(-1)}>−</button
 		>
 		<input
 			{id}
@@ -102,7 +102,7 @@
 			tabindex="-1"
 			{disabled}
 			aria-label="{label} verhogen"
-			onclick={() => zet(1)}>+</button
+			onclick={() => set(1)}>+</button
 		>
 	</span>
 </div>

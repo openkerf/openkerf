@@ -2,7 +2,7 @@
  * Metingen voor het oppervlak "canvas en lagen" (g-canvas).
  *
  * Screenshots zijn het archief, dit is het argument: hoeveel gloedjes er
- * liggen, of de meldingen ergens achter vallen, hoe hoog een laagrij is en of
+ * liggen, of de notifications ergens achter vallen, hoe hoog een laagrij is en of
  * de liniaal buiten het bed doorloopt.
  */
 import { browser, open, reset, BASE } from './harness.mjs';
@@ -74,7 +74,7 @@ const meet = async (page) =>
 		return {
 			gloed: document.querySelectorAll('.buiten-gloed').length,
 			gloedVel: document.querySelectorAll('.buiten-gloed.velrand').length,
-			meldingen: teksten('.buiten-strook .regel'),
+			notifications: teksten('.buiten-strook .regel'),
 			meldingDoos: doos('.buiten-strook'),
 			cameraDoos: doos('.camstrip'),
 			zoomDoos: doos('.zoom'),
@@ -111,7 +111,7 @@ for (const breedte of [1440, 1024]) {
 		let m = await meet(page);
 		console.log(`\n== ${breedte} ${thema} canvas`);
 		console.log('  gloed:', m.gloed, 'waarvan vel:', m.gloedVel);
-		console.log('  meldingen:', JSON.stringify(m.meldingen));
+		console.log('  notifications:', JSON.stringify(m.notifications));
 		console.log('  melding achter zoombalk?', overlapt(m.meldingDoos, m.zoomDoos));
 		console.log('  melding achter camerapil?', overlapt(m.meldingDoos, m.cameraDoos), m.cameraDoos);
 		console.log('  laagnummers:', JSON.stringify(m.nummers), 'oorsprong:', m.oorsprong);

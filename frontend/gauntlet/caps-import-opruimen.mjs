@@ -10,7 +10,7 @@
  *
  * De stapel lege lagen is hier nagemaakt met de API. Bij Jelle komt hij uit de
  * vorige sessie: de engine bewaart de lagenlijst in een gedeelde
- * `operations.cfg` en zet die bij het opstarten terug.
+ * `operations.cfg` en set die bij het opstarten terug.
  */
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -66,9 +66,9 @@ async function pagina(width, theme, pad) {
 	const page = await ctx.newPage();
 	if (theme === 'dark') {
 		await page.addInitScript(() => {
-			const zet = () => document.documentElement?.setAttribute('data-theme', 'dark');
-			zet();
-			document.addEventListener('DOMContentLoaded', zet);
+			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
+			set();
+			document.addEventListener('DOMContentLoaded', set);
 		});
 	}
 	const fouten = [];

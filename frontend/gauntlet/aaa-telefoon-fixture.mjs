@@ -1,5 +1,5 @@
 /**
- * Eén staat die het mock-apparaat niet kan leveren: een job halverwege.
+ * Eén staat die het mock-device niet kan leveren: een job halverwege.
  *
  * De Lihuiyu-mock springt binnen twee seconden naar 99,97% en blijft daar
  * hangen, dus een ring op 37% krijg je nooit te zien. Hier verbouwen we de
@@ -23,9 +23,9 @@ for (const theme of ['light', 'dark']) {
 	});
 	const page = await context.newPage();
 	await page.addInitScript((t) => {
-		const zet = () => document.documentElement?.setAttribute('data-theme', t);
-		zet();
-		document.addEventListener('DOMContentLoaded', zet);
+		const set = () => document.documentElement?.setAttribute('data-theme', t);
+		set();
+		document.addEventListener('DOMContentLoaded', set);
 
 		const Origineel = window.WebSocket;
 		function verbouw(tekst) {

@@ -20,7 +20,7 @@ mkdirSync(UIT, { recursive: true });
 async function staat() {
 	const alle = await (await fetch(BASE + '/api/devices')).json();
 	const d = alle.find((x) => x.active);
-	return { label: d?.label, verbinding: d?.connection?.state, kop: d?.position?.mm };
+	return { label: d?.label, connection: d?.connection?.state, kop: d?.position?.mm };
 }
 
 const b = await chromium.launch();
@@ -35,9 +35,9 @@ async function pagina(theme) {
 	const page = await ctx.newPage();
 	if (theme === 'dark') {
 		await page.addInitScript(() => {
-			const zet = () => document.documentElement?.setAttribute('data-theme', 'dark');
-			zet();
-			document.addEventListener('DOMContentLoaded', zet);
+			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
+			set();
+			document.addEventListener('DOMContentLoaded', set);
 		});
 	}
 	page.fouten = [];
@@ -83,7 +83,7 @@ for (const theme of ['light', 'dark']) {
 	metingen.push({ staat: 'verbonden', theme, ...(await lees(page)), machine: await staat(), fouten: page.fouten.length });
 	await knip(page, `verbonden-${theme}`);
 
-	// De bevestiging: één klik op "Verbreken…" en de vraag staat er, met de prijs.
+	// De bevestiging: één klik op "Verbreken…" en de ask staat er, met de prijs.
 	const knop = page.locator('.statusbar button.verbind').first();
 	if ((await knop.count()) && (await knop.innerText()).includes('Verbreken')) {
 		await knop.click();
@@ -91,19 +91,19 @@ for (const theme of ['light', 'dark']) {
 		metingen.push({
 			staat: 'bevestiging',
 			theme,
-			vraag: (await page.locator('.verbreek-vraag').innerText()).replace(/\s+/g, ' '),
+			ask: (await page.locator('.verbreek-ask').innerText()).replace(/\s+/g, ' '),
 			machine: await staat(),
 			fouten: page.fouten.length
 		});
 		await knip(page, `bevestiging-${theme}`);
-		await page.locator('.verbreek-vraag button', { hasText: /Laten hangen/ }).click();
+		await page.locator('.verbreek-ask button', { hasText: /Laten hangen/ }).click();
 		await page.waitForTimeout(400);
 
 		// De losse stand. Verbreken via de API en meteen kijken: gemeten staat de
-		// verbinding er binnen ~6 s vanzelf weer, dus dit is een kort venster —
+		// connection er binnen ~6 s vanzelf weer, dus dit is een kort venster —
 		// en met de app eraan lukte het zes pogingen op rij niet. `los-light.png`
 		// is daarom in een aparte ronde gemaakt; kom je hem niet te pakken, dan
-		// is dat geen fout in de knop maar de engine die zelf heropent.
+		// is dat geen failure in de knop maar de engine die zelf heropent.
 		if (theme === 'light') {
 			await fetch(BASE + '/api/machine/disconnect', {
 				method: 'POST',

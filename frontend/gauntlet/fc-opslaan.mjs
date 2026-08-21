@@ -1,23 +1,23 @@
 /**
- * Punt 2: na opslaan mag geen enkel venster nog beweren dat het ontwerp
+ * Punt 2: na saving mag geen enkel venster nog beweren dat het ontwerp
  * gewijzigd is.
  *
- * De server zet bij `/api/project/export.openkerf` en `/api/design/export.svg`
+ * De server set bij `/api/project/export.openkerf` en `/api/design/export.svg`
  * `document.clean()`, maar de client haalde die vlag nooit opnieuw op: een
  * download via `<a href download>` verandert niets in de elementenboom, dus er
  * komt geen signaal en dus geen `design.load()`. Gemeten op de oude code:
- * tekenen → project opslaan → "Nieuw project" gaf *"Dit ontwerp is gewijzigd
- * sinds de laatste keer opslaan"* terwijl `/api/design` `dirty: false` zei.
+ * tekenen → project saving → "Nieuw project" gaf *"Dit ontwerp is gewijzigd
+ * since de last keer saving"* terwijl `/api/design` `dirty: false` zei.
  *
  * Een waarschuwing die ook komt als er niets aan de hand is, leer je
  * wegklikken. Dát is de schade — niet de zin zelf.
  *
- * Gebruik: node gauntlet/fc-opslaan.mjs
+ * Gebruik: node gauntlet/fc-saving.mjs
  */
 import { browser, open, BASE } from './harness.mjs';
 
 const H = { 'Content-Type': 'application/json' };
-const LEUGEN = 'gewijzigd sinds de laatste keer opslaan';
+const LEUGEN = 'gewijzigd since de last keer saving';
 
 await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE', headers: H }).catch(() => {});
 await fetch(`${BASE}/api/project/new`, { method: 'POST', headers: H, body: '{}' });
@@ -25,7 +25,7 @@ await fetch(`${BASE}/api/project/new`, { method: 'POST', headers: H, body: '{}' 
 const b = await browser();
 const fouten = [];
 
-async function ronde(naam, opslaan) {
+async function ronde(naam, saving) {
 	// 1600px: daaronder verhuist het projectpaar naar het railmenu.
 	const page = await open(b, { width: 1600 });
 	await fetch(`${BASE}/api/design/elements`, {
@@ -36,7 +36,7 @@ async function ronde(naam, opslaan) {
 	await page.waitForTimeout(1200);
 
 	const download = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
-	await opslaan(page);
+	await saving(page);
 	const bestand = await download;
 	await page.waitForTimeout(1200);
 
@@ -64,10 +64,10 @@ async function ronde(naam, opslaan) {
 	await fetch(`${BASE}/api/project/new`, { method: 'POST', headers: H, body: '{}' });
 }
 
-await ronde('project opslaan', async (page) => {
+await ronde('project saving', async (page) => {
 	await page.locator('button:has-text("Project")').first().click();
 	await page.waitForTimeout(250);
-	await page.locator('a:has-text("Project opslaan")').first().click();
+	await page.locator('a:has-text("Project saving")').first().click();
 });
 
 await ronde('dit vel exporteren', async (page) => {
@@ -80,4 +80,4 @@ if (fouten.length) {
 	for (const f of fouten) console.log(' -', f);
 	process.exit(1);
 }
-console.log('\nGOED — na opslaan beweert niets meer dat er niet-opgeslagen werk is.');
+console.log('\nGOED — na saving beweert niets meer dat er niet-opgeslagen werk is.');

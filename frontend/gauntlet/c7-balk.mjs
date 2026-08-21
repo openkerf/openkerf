@@ -9,10 +9,10 @@
  *
  * En dit is niet zomaar een balk. Het is het enige oppervlak waar de noodrem
  * altijd hoort te staan, en tegelijk de plek waar iedere nieuwe functie zijn
- * knop bij zet. Daarom drie eisen, waarvan de laatste de zwaarste is:
+ * knop bij set. Daarom drie eisen, waarvan de last de zwaarste is:
  *
  *   1. de balk verbergt niets achter interne scroll;
- *   2. de laatste zichtbare knop eindigt binnen het venster;
+ *   2. de last zichtbare knop eindigt binnen het venster;
  *   3. Stop staat in beeld en is volledig aanklikbaar — op elke breedte.
  *
  * Voorstel voor deze meting kwam van de tablet-agent, die zijn eigen reparatie
@@ -60,7 +60,7 @@ for (const theme of ['light', 'dark']) {
 			const zichtbaar = [...balk.querySelectorAll('button, a.btn, label.btn')].filter(
 				(n) => n.offsetParent !== null && n.getBoundingClientRect().width > 0
 			);
-			const laatste = zichtbaar[zichtbaar.length - 1];
+			const last = zichtbaar[zichtbaar.length - 1];
 			const stop = zichtbaar.find((n) => /^stop/i.test((n.textContent || '').trim()));
 			const doos = (n) => {
 				const r = n.getBoundingClientRect();
@@ -69,8 +69,8 @@ for (const theme of ['light', 'dark']) {
 			return {
 				verborgen: balk.scrollWidth - balk.clientWidth,
 				venster: vensterBreedte,
-				laatste: laatste
-					? { naam: (laatste.textContent || '').trim().slice(0, 16) || '(icoon)', ...doos(laatste) }
+				last: last
+					? { naam: (last.textContent || '').trim().slice(0, 16) || '(icoon)', ...doos(last) }
 					: null,
 				stop: stop ? doos(stop) : null,
 				aantal: zichtbaar.length,
@@ -95,7 +95,7 @@ for (const theme of ['light', 'dark']) {
 
 		console.log(
 			`${width}/${theme}: ${meting.aantal} knoppen, verborgen ${meting.verborgen}px, ` +
-				`laatste "${meting.laatste?.naam}" eindigt op ${meting.laatste?.rechts}`
+				`last "${meting.last?.naam}" eindigt op ${meting.last?.rechts}`
 		);
 
 		if (meting.verborgen > 0) {
@@ -105,11 +105,11 @@ for (const theme of ['light', 'dark']) {
 				evidence: `${meting.verborgen}px buiten beeld op ${width}px/${theme} — het document loopt niet over, dus geen andere meting ziet dit`
 			});
 		}
-		if (meting.laatste && meting.laatste.rechts > width + 1) {
+		if (meting.last && meting.last.rechts > width + 1) {
 			findings.push({
 				severity: 'major',
-				what: 'De laatste knop in de bovenbalk valt buiten het venster',
-				evidence: `"${meting.laatste.naam}" eindigt op ${meting.laatste.rechts} bij een venster van ${width} (${theme})`
+				what: 'De last knop in de bovenbalk valt buiten het venster',
+				evidence: `"${meting.last.naam}" eindigt op ${meting.last.rechts} bij een venster van ${width} (${theme})`
 			});
 		}
 		// Uitholling: de balk past, maar het materiaal is onleesbaar geworden.

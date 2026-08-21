@@ -6,7 +6,7 @@
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
-	import { bewaarBestand } from '$lib/opslaan';
+	import { bewaarBestand } from '$lib/saving';
 	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
@@ -35,7 +35,7 @@
 	import TopBar from '$components/TopBar.svelte';
 	import ActionBar from '$components/ActionBar.svelte';
 	import Menu from '$components/Menu.svelte';
-	import Hoeken from '$components/Hoeken.svelte';
+	import CornersDialog from '$components/CornersDialog.svelte';
 	import Offset from '$components/Offset.svelte';
 	import {
 		KEYS,
@@ -50,16 +50,16 @@
 		type Menu as MenuList
 	} from '$lib/actions';
 	import { i18n, t } from '$lib/i18n/index.svelte';
-	import MeldingAlarm from '$components/MeldingAlarm.svelte';
-	import MeldingKaart from '$components/MeldingKaart.svelte';
-	import { Bewaker, Meldingen } from '$lib/meldingen.svelte';
+	import AlarmCard from '$components/AlarmCard.svelte';
+	import NotificationCard from '$components/NotificationCard.svelte';
+	import { Bewaker, Meldingen } from '$lib/notifications.svelte';
 
 	const status = new StatusConnection();
 	const control = new Controller();
 	// Besluit B3: melden ja, zelf ingrijpen nee. De bewaker leest de status en
 	// besluit wanneer er iets te zeggen valt; hij stuurt niets naar de machine.
-	const meldingen = new Meldingen();
-	const bewaker = new Bewaker(meldingen);
+	const notifications = new Meldingen();
+	const bewaker = new Bewaker(notifications);
 	/** Staat de instelkaart open? Bereikbaar naast de paneeltabs. */
 	let meldingenOpen = $state(false);
 	/** De aanleidingkaart: alleen in beeld vlak nadat er een job begon. */
@@ -132,8 +132,8 @@
 		setTimeout(() => (wauw = false), 900);
 		// Het enige moment waarop de toestemmingsvraag ergens op slaat: er brandt
 		// nu iets, dus er valt straks iets te melden. Bij het laden van de app zou
-		// dezelfde vraag zonder aanleiding komen — en die weigering is definitief.
-		if (meldingen.vragen) vraagOpen = true;
+		// dezelfde ask zonder aanleiding komen — en die weigering is definitief.
+		if (notifications.shouldAsk) vraagOpen = true;
 		bewaker.gestart();
 	}
 	control.onStarted = vier;
@@ -182,7 +182,7 @@
 	let pending = $state<Vervanging | null>(null);
 	/** Tijdstip van het herstelbestand dat deze handeling zou overleven. */
 	let herstelbaar = $state<string | null>(null);
-	/** Welke vraag er nu staat; een laat antwoord op een oudere telt niet mee. */
+	/** Welke ask er nu staat; een laat antwoord op een oudere telt niet mee. */
 	let vraagTeller = 0;
 	// Werk van een vorige sessie. Nooit stilzwijgend terugladen: wie met een
 	// leeg canvas wil beginnen, moet dat kunnen.
@@ -233,15 +233,15 @@
 	 *
 	 * De engine laadt een bestand bovenop wat er al staat. Dat is soms handig
 	 * maar het is niet wat "openen" betekent, dus maken we eerst leeg — en
-	 * vragen we het eerst als daarmee werk zou verdwijnen.
+	 * shouldAsk we het eerst als daarmee werk zou verdwijnen.
 	 *
-	 * De vraag hing aan `dirty`, en dat is één stap te streng. Een net
+	 * De ask hing aan `dirty`, en dat is één stap te streng. Een net
 	 * geïmporteerde tekening staat op `dirty === false` (`/api/job/load` roept
 	 * `document.clean()` aan — terecht, hij is gelijk aan het bestand), en er is
 	 * op dat moment ook geen autosave. Gemeten: importeer een tekening, importeer
-	 * er nog een, en de eerste is weg — zonder vraag, zonder melding, zonder iets
+	 * er nog een, en de eerste is weg — zonder ask, zonder melding, zonder iets
 	 * om op terug te vallen. Wat op het bed ligt is werk, of het nu getypt of
-	 * geopend is; vragen doen we dus zodra er iets ligt.
+	 * geopend is; shouldAsk doen we dus zodra er iets ligt.
 	 */
 	async function openFile(file: File) {
 		if (!canEdit) return;
@@ -249,7 +249,7 @@
 	}
 
 	/**
-	 * Elke handeling die het huidige werk vervangt, stelt dezelfde vraag.
+	 * Elke handeling die het huidige werk vervangt, stelt dezelfde ask.
 	 *
 	 * Openen van een bestand deed dat al; een projectbestand openen ging er
 	 * zonder één woord overheen — inclusief de vellen, want die komen uit het
@@ -270,7 +270,7 @@
 		herstelbaar = null;
 		pending = actie;
 		// Wat er ná deze handeling nog terug te halen is, verandert wat je
-		// kiest — dus staat het in de vraag. Alleen bij een gewijzigd ontwerp:
+		// kiest — dus staat het in de ask. Alleen bij een gewijzigd ontwerp:
 		// een ontwerp dat gelijk is aan een bestand op schijf laat het
 		// herstelbestand juist opruimen (`autosave.forget_if_saved`), dus dan
 		// zou de belofte niet kloppen.
@@ -367,14 +367,14 @@
 		const actie = pending;
 		pending = null;
 		if (!actie) return;
-		// Downloaden telt als opslaan: de API markeert het ontwerp schoon.
+		// Downloaden telt als saving: de API markeert het ontwerp schoon.
 		// Wat er weg zou gaan bepaalt wat je bewaart: bij een bestand is dat
 		// dit vel, bij een project en bij opnieuw beginnen gaan álle vellen
 		// weg — dan is een SVG van het actieve vel geen redding maar een
 		// halve.
 		//
 		// Wachten tot het bestand er werkelijk is, en niet 800 ms hopen: het
-		// volgende dat gebeurt, gooit het bed leeg. Mislukt het opslaan, dan
+		// volgende dat gebeurt, gooit het bed leeg. Mislukt het saving, dan
 		// gaat het leegmaken niet door en staat het venster er nog.
 		const opgeslagen =
 			actie.soort === 'bestand'
@@ -412,9 +412,9 @@
 		if (await edits.duplicate(design.selectedIds)) await design.load();
 	}
 
-	/** Wat de laatste hoekbewerking te melden had; het paneel toont het. */
+	/** Wat de last hoekbewerking te melden had; het paneel toont het. */
 	let hoekMelding = $state<string | null>(null);
-	/** Wat de laatste indeel-handeling deed (splitsen, laag, opruimen). */
+	/** Wat de last indeel-handeling deed (splitsen, laag, opruimen). */
 	let indeelMelding = $state<string | null>(null);
 
 	async function hoeken(style: 'round' | 'chamfer', sizeMm: number) {
@@ -509,7 +509,7 @@
 		if (!canEdit || (!hasSelection && action !== 'rescue')) return;
 		const ids = design.selectedIds;
 		if (action === 'offset') {
-			// De vraag staat in een eigen venster (`Offset.svelte`); hier stond een
+			// De ask staat in een eigen venster (`Offset.svelte`); hier stond een
 			// `window.prompt`, en die viel buiten het thema én valideerde niets.
 			offsetOpen = true;
 			return;
@@ -602,7 +602,7 @@
 	 *
 	 * De bovenbalk las hiervóór de machinetoestand (`machine === 'busy'`) en het
 	 * paneel `job.running`. Bij een job die gespoold is maar nog niet opgepakt zijn
-	 * die twee het oneens, en dan zet de ene knop uit wat de andere aanbiedt —
+	 * die twee het oneens, en dan set de ene knop uit wat de andere aanbiedt —
 	 * gemeten met een niet-antwoordende machine: de balk zette starten uit, het
 	 * paneel liet het aan staan. Eén functie, één antwoord.
 	 */
@@ -645,9 +645,9 @@
 		// De beschikbare acties hangen af van het actieve device, dus opnieuw
 		// ophalen zodra de gebruiker in MeerK40t van machine wisselt.
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
-		// De toestemming kan buiten ons om wijzigen: wie hem in de site-instellingen
+		// De permission kan buiten ons om wijzigen: wie hem in de site-instellingen
 		// van de browser terugzet, verwacht niet dat hij daarna moet verversen.
-		const herlees = () => meldingen.lees();
+		const herlees = () => notifications.lees();
 		window.addEventListener('focus', herlees);
 		document.addEventListener('visibilitychange', herlees);
 		return () => {
@@ -952,7 +952,7 @@
 		job={status.activeJob}
 		{control}
 		{camera}
-		{meldingen}
+		{notifications}
 		{bewaker}
 		connected={status.connected}
 		position={telefoonPositie}
@@ -966,7 +966,7 @@
 			: null}
 	/>
 {:else}
-<MeldingAlarm {bewaker} />
+<AlarmCard {bewaker} />
 <TopBar
 	{device}
 	state={machine}
@@ -1024,9 +1024,9 @@
 	     ook de plek waar je ziet welk stuk materiaal je nu bewerkt. -->
 	<div class="stage">
 		<!-- Alles tussen de bovenbalk en het canvas meet zichzelf op.
-		     De alarmkaart hangt onder de bovenbalk en dekte sinds de vorige ronde de
+		     De alarmkaart hangt onder de bovenbalk en dekte since de vorige ronde de
 		     actiebalk en de vellenbalk af — precies de twee dingen die je nodig hebt
-		     terwijl er een melding staat. Gemeten met een USB-fout: de kaart lag over
+		     terwijl er een melding staat. Gemeten met een USB-failure: de kaart lag over
 		     de uitlijnknoppen en over de plus van de vellenbalk, en Playwright kon er
 		     niet doorheen klikken. Dezelfde aanpak als `--palet-hoogte` onder het
 		     canvas: opmeten, niet uitrekenen. -->
@@ -1171,23 +1171,23 @@
 				{/if}
 			</button>
 		</div>
-			<!-- De vaste plek voor meldingen. Naast de tabs en niet zwevend boven het
+			<!-- De vaste plek voor notifications. Naast de tabs en niet zwevend boven het
 			     canvas: dit paneel gaat over déze machine, en dat is precies waar een
 			     melding over gaat. Het belletje draagt zijn eigen toestand — uit of
 			     geblokkeerd is iets wat je moet kunnen zien zonder te klikken. -->
 			<button
 				class="bel"
-				class:stil={!meldingen.actief}
+				class:stil={!notifications.active}
 				aria-haspopup="dialog"
-				title={meldingen.actief ? t('tabs.notifications.on') : t('tabs.notifications.off')}
-				aria-label={meldingen.actief ? t('tabs.notifications.onAria') : t('tabs.notifications.offAria')}
+				title={notifications.active ? t('tabs.notifications.on') : t('tabs.notifications.off')}
+				aria-label={notifications.active ? t('tabs.notifications.onAria') : t('tabs.notifications.offAria')}
 				onclick={() => (meldingenOpen = true)}
 			>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
 					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
 					<path d="M13.7 21a2 2 0 0 1-3.4 0" />
-					{#if !meldingen.actief}
+					{#if !notifications.active}
 						<line x1="3" y1="3" x2="21" y2="21" />
 					{/if}
 				</svg>
@@ -1412,21 +1412,21 @@
 
 <!-- The prompt card floats and does not block: a job has just started, and that
      must not disappear behind a modal window. -->
-{#if !telefoon && vraagOpen && meldingen.vragen}
+{#if !telefoon && vraagOpen && notifications.shouldAsk}
 	<div class="vraagkaart">
-		<MeldingKaart {meldingen} variant="aanleiding" onKlaar={() => (vraagOpen = false)} />
+		<NotificationCard {notifications} variant="aanleiding" onKlaar={() => (vraagOpen = false)} />
 	</div>
 {/if}
 
 <Dialog title={t('notifications.title')} bind:open={meldingenOpen} width="460px">
-	<MeldingKaart {meldingen} />
+	<NotificationCard {notifications} />
 </Dialog>
 
 {#if menu}
 	<Menu menu={menu.lijst} x={menu.x} y={menu.y} onClose={() => (menu = null)} />
 {/if}
 
-<Hoeken
+<CornersDialog
 	bind:open={hoekenOpen}
 	aantal={design.selectedIds.length}
 	bezig={edits.busy}
@@ -1507,7 +1507,7 @@
 		onApplied={() => design.load()}
 		token={token()}
 		onMakeGrid={(id) => {
-			// Vanuit het materiaal naar het raster: dat is waar de vraag ontstaat.
+			// Vanuit het materiaal naar het raster: dat is waar de ask ontstaat.
 			libraryOpen = false;
 			gridMateriaal = id;
 			gridOpen = true;
@@ -1627,7 +1627,7 @@
 
 	/* Rechtsonder, maar náást het paneel en niet erover: precies daar staat de
 	   spoolerkaart met de voortgang van de job die net begon, en die afdekken met
-	   de vraag "zal ik het melden als hij klaar is" is het verkeerde van het
+	   de ask "zal ik het melden als hij klaar is" is het verkeerde van het
 	   verkeerde. Dezelfde breedtes als `.panel` hieronder — twee regels die
 	   samen horen, dus ze staan naast elkaar. */
 	.vraagkaart {
@@ -1753,7 +1753,7 @@
 		color: var(--text-1);
 		background: var(--surface-2);
 	}
-	/* Uit is een toestand, geen fout: het doorgestreepte belletje zegt het al.
+	/* Uit is een toestand, geen failure: het doorgestreepte belletje zegt het al.
 	   Geen rood, want er is niets stuk. */
 	.bel.stil {
 		color: var(--text-2);

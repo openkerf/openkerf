@@ -85,7 +85,7 @@ export class CameraStore {
 		const state = await this.#post('/api/camera/start', uri ? { uri } : {});
 		if (state) {
 			this.shown = true;
-			// Nieuwe stroom: anders blijft de browser aan de oude verbinding
+			// Nieuwe stroom: anders blijft de browser aan de oude connection
 			// hangen die de server net heeft afgesloten.
 			this.generation += 1;
 		}

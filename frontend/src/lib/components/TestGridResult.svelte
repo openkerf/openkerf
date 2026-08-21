@@ -87,7 +87,7 @@
 
 	// Kader om alle cellen heen: de maat waarin een cel zijn plek uitdrukt.
 	// rows/columns in plaats van speed_steps/power_steps: welke grootheid op
-	// welke as staat, ligt sinds B12 niet meer vast.
+	// welke as staat, ligt since B12 niet meer vast.
 	let box = $derived.by(() => {
 		if (!grid) return null;
 		const pitch = grid.cell_mm + grid.gap_mm;
@@ -346,7 +346,7 @@
 			await load();
 			photoStamp = Date.now();
 			// Een verse foto ligt nog niet onder de overlay: dat is de eerste
-			// handeling, dus zet hem meteen klaar.
+			// handeling, dus set hem meteen klaar.
 			uitlijnen = true;
 		} finally {
 			busy = false;
@@ -406,7 +406,7 @@
 		<p class="muted">{t('result.noGrids')}</p>
 	{/if}
 
-	{#if error}<p class="melding fout" role="alert">{error}</p>{/if}
+	{#if error}<p class="melding failure" role="alert">{error}</p>{/if}
 	{#if gemaakt}
 		<p class="melding goed" role="status">
 			{t('result.saved', {
@@ -561,7 +561,7 @@
 				{/if}
 			</div>
 
-			{#if bewaarFout}<p class="melding fout" role="alert">{bewaarFout}</p>{/if}
+			{#if bewaarFout}<p class="melding failure" role="alert">{bewaarFout}</p>{/if}
 
 			{#if gebruikteCellen.length}
 				<!-- Gap M4: the provenance said "row 2, column 3" and nothing was marked on
@@ -816,7 +816,7 @@
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 	}
-	.melding.fout { background: color-mix(in srgb, var(--danger-solid) 14%, transparent); }
+	.melding.failure { background: color-mix(in srgb, var(--danger-solid) 14%, transparent); }
 	.melding.goed {
 		background: color-mix(in srgb, var(--ok) 14%, transparent);
 		border-left: 3px solid var(--ok);

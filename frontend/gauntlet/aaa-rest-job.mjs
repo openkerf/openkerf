@@ -2,7 +2,7 @@
  * Pre-flight en jobcontrole: de rondes van agent rest-job.
  *
  * Opent het Job-tabblad, klapt de pre-flight open en fotografeert hem op alle
- * drie de breedtes in beide thema's. Meet daarnaast waar de meldingen staan en
+ * drie de breedtes in beide thema's. Meet daarnaast waar de notifications staan en
  * welke kleur hun linkerbalk heeft — dat is het verschil tussen "buiten het
  * bed" (rood) en "buiten het vel" (oranje) dat je op een screenshot van 390px
  * anders op je blauwe oog moet geloven.
@@ -106,7 +106,7 @@ for (const [naam, width] of Object.entries(WIDTHS)) {
 				};
 			});
 			return {
-				meldingen: [
+				notifications: [
 					...lees('.pf-buitenbed'),
 					...lees('.melding.buiten'),
 					...lees('.melding.buitenbed'),

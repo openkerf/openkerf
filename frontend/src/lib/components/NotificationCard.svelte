@@ -14,14 +14,14 @@
 	 *   where you turn that back.
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';
-	import { toestemmingTekst, type Meldingen } from '$lib/meldingen.svelte';
+	import { permissionText, type Meldingen } from '$lib/notifications.svelte';
 
 	let {
-		meldingen,
+		notifications,
 		variant = 'instellingen',
 		onKlaar
 	}: {
-		meldingen: Meldingen;
+		notifications: Meldingen;
 		variant?: 'aanleiding' | 'instellingen';
 		onKlaar?: () => void;
 	} = $props();
@@ -31,11 +31,11 @@
 	async function aanzetten() {
 		bezig = true;
 		try {
-			await meldingen.vraag();
+			await notifications.ask();
 		} finally {
 			bezig = false;
 		}
-		if (meldingen.toestemming === 'granted') onKlaar?.();
+		if (notifications.permission === 'granted') onKlaar?.();
 	}
 
 	// The clock in the reader's own notation: 14:05 here, 2:05 pm elsewhere.
@@ -44,12 +44,12 @@
 	}
 </script>
 
-<div class="kaart" class:vraag={variant === 'aanleiding'}>
+<div class="kaart" class:ask={variant === 'aanleiding'}>
 	{#if variant === 'aanleiding'}
 		<h3>{t('notify.ask.title')}</h3>
 		<p>{t('notify.ask.body')}</p>
 		<div class="acties">
-			<button class="btn" onclick={() => { meldingen.nietNu(); onKlaar?.(); }}
+			<button class="btn" onclick={() => { notifications.notNow(); onKlaar?.(); }}
 				>{t('notify.ask.notNow')}</button
 			>
 			<button class="btn primary" disabled={bezig} onclick={aanzetten}>
@@ -65,12 +65,12 @@
 			arrive. The preference is kept, though — it springs back the moment the
 			permission is there.
 		-->
-		<label class="schakel" class:machteloos={meldingen.toestemming !== 'granted'}>
+		<label class="schakel" class:machteloos={notifications.permission !== 'granted'}>
 			<input
 				type="checkbox"
-				checked={meldingen.aan && meldingen.toestemming === 'granted'}
-				disabled={meldingen.toestemming !== 'granted'}
-				onchange={(e) => meldingen.zet(e.currentTarget.checked)}
+				checked={notifications.aan && notifications.permission === 'granted'}
+				disabled={notifications.permission !== 'granted'}
+				onchange={(e) => notifications.set(e.currentTarget.checked)}
 			/>
 			<span class="spoor" aria-hidden="true"><span class="knikker"></span></span>
 			<span class="tekst">
@@ -81,34 +81,34 @@
 
 		<p
 			class="stand"
-			class:mis={meldingen.toestemming === 'denied'}
-			class:goed={meldingen.toestemming === 'granted'}
+			class:mis={notifications.permission === 'denied'}
+			class:goed={notifications.permission === 'granted'}
 		>
 			<span class="stip" aria-hidden="true"></span>
-			{toestemmingTekst(meldingen.toestemming)}
+			{permissionText(notifications.permission)}
 		</p>
 
-		{#if meldingen.toestemming === 'default'}
+		{#if notifications.permission === 'default'}
 			<button class="btn primary" disabled={bezig} onclick={aanzetten}>
 				{bezig ? t('common.busy') : t('notify.askPermission')}
 			</button>
-		{:else if meldingen.toestemming === 'denied'}
+		{:else if notifications.permission === 'denied'}
 			<p class="herstel">{t('notify.blocked.howto')}</p>
-		{:else if meldingen.toestemming === 'granted'}
-			<button class="btn" onclick={() => meldingen.test()}>{t('notify.sendTest')}</button>
+		{:else if notifications.permission === 'granted'}
+			<button class="btn" onclick={() => notifications.test()}>{t('notify.sendTest')}</button>
 		{/if}
 
-		{#if meldingen.fout}
-			<p class="fout" role="alert">{meldingen.fout}</p>
+		{#if notifications.failure}
+			<p class="failure" role="alert">{notifications.failure}</p>
 		{/if}
 
-		{#if meldingen.laatste}
-			<p class="laatste">
+		{#if notifications.last}
+			<p class="last">
 				{t('notify.last', {
-					time: tijdstip(meldingen.laatste.tijd),
-					title: meldingen.laatste.titel
+					time: tijdstip(notifications.last.tijd),
+					title: notifications.last.titel
 				})}
-				{#if !meldingen.laatste.getoond}
+				{#if !notifications.last.getoond}
 					<span class="klein">{t('notify.last.notShown')}</span>
 				{/if}
 			</p>
@@ -123,7 +123,7 @@
 		display: grid;
 		gap: var(--space-3);
 	}
-	.kaart.vraag {
+	.kaart.ask {
 		padding: var(--space-4);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -270,11 +270,11 @@
 		border-radius: var(--radius-sharp);
 		background: var(--surface-2);
 	}
-	.fout {
+	.failure {
 		font-size: var(--text-xs);
 		color: var(--danger);
 	}
-	.laatste {
+	.last {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}

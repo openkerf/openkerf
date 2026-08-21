@@ -13,7 +13,7 @@
 	 * stoppen. Dat mag je op zo'n moment niet zelf hoeven bedenken.
 	 */
 	import { t } from '$lib/i18n/index.svelte';
-	import { verbinding } from '$lib/verbinding.svelte';
+	import { connection } from '$lib/connection.svelte';
 
 	let { brandt = false }: { brandt?: boolean } = $props();
 
@@ -22,7 +22,7 @@
 	const GEDULD = 2000;
 	let laat = $state(false);
 	$effect(() => {
-		if (verbinding.online) {
+		if (connection.online) {
 			laat = false;
 			return;
 		}
@@ -31,7 +31,7 @@
 	});
 
 	let weg = $derived(
-		verbinding.sinds ? Math.round((Date.now() - verbinding.sinds) / 1000) : 0
+		connection.since ? Math.round((Date.now() - connection.since) / 1000) : 0
 	);
 	// Only mentioned when it lasts long enough to worry about.
 	let duur = $derived(weg >= 60 ? t('connection.minutes', { n: Math.floor(weg / 60) }) : null);
@@ -80,7 +80,7 @@
 	});
 </script>
 
-{#if !verbinding.online && laat}
+{#if !connection.online && laat}
 	<div class="verbroken" role="alert" bind:this={kaart}>
 		<span class="stip" aria-hidden="true"></span>
 		<div class="tekst">
@@ -93,10 +93,10 @@
 			{/if}
 		</div>
 		<div class="actie">
-			<button onclick={() => verbinding.nuProberen()}>{t('connection.retryNow')}</button>
+			<button onclick={() => connection.retryNow()}>{t('connection.retryNow')}</button>
 			<span class="klok">
-				{#if verbinding.overSeconden > 0}
-					{t('connection.autoIn', { seconds: verbinding.overSeconden })}
+				{#if connection.inSeconds > 0}
+					{t('connection.autoIn', { seconds: connection.inSeconds })}
 				{:else}
 					{t('connection.connecting')}
 				{/if}
@@ -120,7 +120,7 @@
 		gap: var(--space-3);
 		/* Zelfde breedte als het alarm eronder, want samen zijn ze één kolom.
 		   Stond op 560 tegenover 720 van het alarm, en dan lezen twee kaarten met
-		   dezelfde linkerrand als een fout in plaats van als een stapel. */
+		   dezelfde linkerrand als een failure in plaats van als een stapel. */
 		width: min(620px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		padding: var(--space-3) var(--space-4);
 		border: 1px solid var(--danger-solid);
@@ -177,7 +177,7 @@
 	 */
 	/* Tablet: zelfde 560 als het alarm eronder — op 1024 begint het rechterpaneel
 	   op x≈700 en zou 620 px de paneeltabs afdekken. Deze maat hoort gelijk te
-	   blijven met die in `MeldingAlarm.svelte`; zie de toelichting daar. */
+	   blijven met die in `AlarmCard.svelte`; zie de toelichting daar. */
 	@media (min-width: 768px) and (max-width: 1199px) {
 		.verbroken {
 			width: min(560px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));

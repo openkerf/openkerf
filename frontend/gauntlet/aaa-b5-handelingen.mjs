@@ -3,7 +3,7 @@
  * zetten — met vastklikken en zonder?
  *
  * "Zonder" is niet verzonnen: het is de weg die er vóór B5 was, namelijk slepen
- * en daarna X en Y in het selectiepaneel intypen. Alt ingedrukt houden zet het
+ * en daarna X en Y in het selectiepaneel intypen. Alt ingedrukt houden set het
  * vastklikken uit en geeft precies die oude situatie terug.
  */
 import { browser, open, BASE } from './harness.mjs';

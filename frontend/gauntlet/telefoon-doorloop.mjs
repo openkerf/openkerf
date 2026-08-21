@@ -89,7 +89,7 @@ if (!(await pz.count())) {
 	await hv.click({ timeout: 8000 }).catch((e) => log('   klik mislukte:', String(e).slice(0, 70)));
 	await desk.waitForTimeout(4000);
 	const h = await stand();
-	// Hier zat de tweede fout: `resume` meldde op een lihuiyu "Resumed" en liet
+	// Hier zat de tweede failure: `resume` meldde op een lihuiyu "Resumed" en liet
 	// de driver staan. Deze regel is de enige die dat aantoont.
 	eis(h.bron === false, 'hervatten laat de machine ook echt lopen', `paused=${h.bron}`);
 	eis(/Pauze/.test(h.desktop), 'de desktop staat weer op pauzeren', h.desktop);
@@ -99,6 +99,6 @@ await api('/api/job/stop', { method: 'POST' });
 await api('/api/spooler/clear', { method: 'POST' });
 await api(`/api/library/testgrids/${grid.id}`, { method: 'DELETE' });
 
-log(fouten.length ? `\n${fouten.length} fout(en)` : '\nalles goed');
+log(fouten.length ? `\n${fouten.length} failure(en)` : '\nalles goed');
 await b.close();
 process.exit(fouten.length ? 1 : 0);

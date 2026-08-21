@@ -33,7 +33,7 @@ const SOORT: Record<string, MessageKey> = {
 	group: 'shape.group'
 };
 
-export function elementNaam(element: {
+export function elementName(element: {
 	type: string;
 	text: { text: string } | null;
 	image?: unknown;
@@ -132,7 +132,7 @@ export type DesignOperation = {
 
 export type Design = {
 	units_per_mm: number;
-	/** Zijn er wijzigingen sinds het laatst opslaan of openen? */
+	/** Zijn er wijzigingen since het laatst saving of openen? */
 	dirty: boolean;
 	elements: DesignElement[];
 	operations: DesignOperation[];
@@ -290,7 +290,7 @@ function bereken(kleur: string): string {
  * hangt aan de kleur en niet aan het thema, want de chip toont de laagkleur in
  * beide thema's ongewijzigd.
  */
-export function inktOp(kleur: string): string {
+export function inkOn(kleur: string): string {
 	const eigen = ontleed(kleur);
 	if (!eigen) return 'var(--on-color)';
 	const wit = verschil(eigen, [255, 255, 255]);
@@ -309,7 +309,7 @@ export function inktOp(kleur: string): string {
  * Rastercellen tellen niet mee: die horen bij één testbord, staan in de lijst
  * als één regel en hebben geen eigen plek in de brandvolgorde.
  */
-export function laagNummer(
+export function layerNumber(
 	design: { operations?: DesignOperation[] } | null | undefined,
 	operationId: string | null | undefined
 ): number | null {
@@ -622,9 +622,9 @@ export class DesignStore {
 		}
 	}
 
-	/** Het laagnummer zoals de chip het toont; zie `laagNummer` (gat J7). */
+	/** Het laagnummer zoals de chip het toont; zie `layerNumber` (gat J7). */
 	numberFor(operationId: string | null): number | null {
-		return laagNummer(this.design, operationId);
+		return layerNumber(this.design, operationId);
 	}
 
 	/** Wat deze kleur eerder deed, of niets als hij nog nooit gebruikt is. */
@@ -657,7 +657,7 @@ export class DesignStore {
 		//
 		// Het slot is met opzet géén `$state`. Er stond hier `this.loading`, en
 		// dat maakte van elke `$effect` die load() aanroept een lus: het effect
-		// leest `loading` mee als afhankelijkheid, load() zet hem op true, het
+		// leest `loading` mee als afhankelijkheid, load() set hem op true, het
 		// effect wordt daarmee ongeldig en roept opnieuw aan — en zodra hij weer
 		// op false gaat, nog een keer. Eén getekende vorm was genoeg om het te
 		// starten, en daarna stopte het nooit meer: gemeten 300 tot 430
@@ -688,7 +688,7 @@ export class DesignStore {
 				void this.loadCapabilities();
 			}
 		} catch {
-			// Verbinding weg: de statusbalk meldt dat al, hier niets doen.
+			// ConnectionCard weg: de statusbalk meldt dat al, hier niets doen.
 		} finally {
 			this.#busy = false;
 			this.loading = false;

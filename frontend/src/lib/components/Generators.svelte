@@ -135,7 +135,7 @@
 
 	/**
 	 * Wat er naar de server gaat — één plek, zodat de knop en het voorbeeld
-	 * gegarandeerd hetzelfde vragen. Stonden ze los, dan kon het voorbeeld
+	 * gegarandeerd hetzelfde shouldAsk. Stonden ze los, dan kon het voorbeeld
 	 * iets anders laten zien dan de knop maakt, en dat is precies het soort
 	 * verschil dat niemand opmerkt tot er hout in de machine ligt.
 	 */
@@ -197,7 +197,7 @@
 	/**
 	 * Welke velden een getal moeten bevatten voordat er iets te tekenen valt.
 	 *
-	 * Een veld waar je het getal net uit gewist hebt, is niet fout maar nog
+	 * Een veld waar je het getal net uit gewist hebt, is niet failure maar nog
 	 * niet af. Stuurden we het toch op, dan leest `Number('')` als nul en komt
 	 * er "finger_mm moet groter dan nul zijn" terug — de naam van een
 	 * variabele, niet van een veld dat op het scherm "Vinger (mm)" heet. Zelf
@@ -227,7 +227,7 @@
 	);
 
 	// Antwoorden kunnen elkaar inhalen: je typt door terwijl de vorige ronde
-	// nog onderweg is. Alleen de laatste vraag mag het beeld nog zetten.
+	// nog onderweg is. Alleen de last ask mag het beeld nog zetten.
 	let ronde = 0;
 
 	async function haalVoorbeeld(mijn: number, what: string, body: Record<string, unknown>) {
@@ -520,7 +520,7 @@
 	</div>
 
 	<!-- The shape beside the form that makes it. -->
-	<GeneratorPreview soort={tab} waarden={huidig} {voorbeeld} fout={voorbeeldFout}>
+	<GeneratorPreview soort={tab} waarden={huidig} {voorbeeld} failure={voorbeeldFout}>
 		{#if current.needsSelection}
 			{t('gen.preview.sketch')}
 		{:else if !voorbeeldbaar}

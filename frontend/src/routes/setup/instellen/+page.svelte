@@ -5,7 +5,7 @@
 	 * Dit was een kale doorgifte van de engine: "Width — Width of the laser
 	 * bed.", "Force Declared Home — Override native home location", "Flip X",
 	 * en twee velden die allebei "Swap XY" heten. Engels, ontwikkelaarstaal, en
-	 * de bedmaat — het enige wat op deze pagina echt fout kán gaan — had exact
+	 * de bedmaat — het enige wat op deze pagina echt failure kán gaan — had exact
 	 * hetzelfde gewicht als "Flip Y".
 	 *
 	 * Nu: bedmaat en oorsprong zijn een eigen blok met eigen woorden en een
@@ -34,11 +34,11 @@
 	 * Wat de zoekknop van stap 1 gevonden heeft (besluit B6).
 	 *
 	 * De poort of het IP-adres komt als parameter mee en wordt hier ingevuld —
-	 * zichtbaar, en pas vastgelegd als je op opslaan drukt. Niets van dit alles
-	 * legt verbinding; dat gebeurt bij de eerste job.
+	 * zichtbaar, en pas vastgelegd als je op saving drukt. Niets van dit alles
+	 * legt connection; dat gebeurt bij de eerste job.
 	 */
-	let verbinding = $derived.by(() => {
-		const rauw = $page.url.searchParams.get('verbinding');
+	let connection = $derived.by(() => {
+		const rauw = $page.url.searchParams.get('connection');
 		if (!rauw) return null;
 		try {
 			const uit = JSON.parse(rauw);
@@ -71,9 +71,9 @@
 			sheets.flatMap((sheet) => sheet.fields.map((field) => [field.attr, field.value]))
 		);
 		// Alleen invullen wat deze machine ook echt kent: een `serial_port` op
-		// een apparaat dat er geen heeft, wordt door de API afgewezen.
-		if (verbinding) {
-			for (const [attr, waarde] of Object.entries(verbinding)) {
+		// een device dat er geen heeft, wordt door de API afgewezen.
+		if (connection) {
+			for (const [attr, waarde] of Object.entries(connection)) {
 				if (attr in values) values[attr] = waarde;
 			}
 		}
@@ -188,7 +188,7 @@
 		await goto(`/setup/klaar?machine=${encodeURIComponent(machinePath)}`);
 	}
 
-	// Het bibliotheekprofiel hoort bij dit apparaat; de vinkjes hieronder leven
+	// Het bibliotheekprofiel hoort bij dit device; de vinkjes hieronder leven
 	// daar, niet in de engine.
 	let heeftZ = $state(false);
 	let heeftAutofocus = $state(false);
@@ -231,9 +231,9 @@
 		<p class="muted">{t('setup.noMachine.body')}</p>
 		<div class="actions"><a class="btn primary" href="/setup">{t('setup.toOverview')}</a></div>
 	{:else}
-		{#if verbinding}
-			{@const ingevuld = Object.entries(verbinding).filter(([attr]) => attr in values)}
-			<p class="verbinding">
+		{#if connection}
+			{@const ingevuld = Object.entries(connection).filter(([attr]) => attr in values)}
+			<p class="connection">
 				<strong>{t('setup.connection.filled')}</strong>
 				{#if ingevuld.length}
 					<span class="mono">
@@ -359,7 +359,7 @@
 </section>
 
 <style>
-	.verbinding {
+	.connection {
 		display: grid;
 		gap: 4px;
 		margin: 0 0 var(--space-4);
@@ -369,7 +369,7 @@
 		background: var(--surface-2);
 		border-radius: var(--radius-field);
 	}
-	.verbinding .muted {
+	.connection .muted {
 		color: var(--text-2);
 	}
 	.werkgebied {
@@ -383,7 +383,7 @@
 		display: grid;
 		gap: var(--space-3);
 		min-width: 0;
-		/* Een stepper van 520px voor een getal van drie cijfers zet − en + zo ver
+		/* Een stepper van 520px voor een getal van drie cijfers set − en + zo ver
 		   uit elkaar dat je ze niet meer als één bediening leest. */
 		max-width: 320px;
 	}

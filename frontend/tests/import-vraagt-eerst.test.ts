@@ -9,11 +9,11 @@
  * Zonder bereikbare server slaat de test zichzelf over — hij hoort bij een
  * draaiende engine, niet bij een bundelstap.
  *
- * Aanleiding: de vraag hing aan `design.dirty`. Een net geïmporteerde tekening
+ * Aanleiding: de ask hing aan `design.dirty`. Een net geïmporteerde tekening
  * staat op `dirty === false` (`/api/job/load` roept `document.clean()` aan) en
  * heeft op dat moment ook geen autosave. Gemeten gedrag vóór de fix: importeer
  * proef.svg (5 vormen), importeer daarna logo.svg (1 vorm), en er staat 1 vorm
- * op het bed — geen vraag, geen melding, geen weg terug.
+ * op het bed — geen ask, geen melding, geen weg terug.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -102,12 +102,12 @@ test('een tweede import vraagt eerst, ook als het eerste bestand niet bewerkt is
 
 	await importeer('een.svg');
 	const gevraagd = await dialogen();
-	assert.equal(gevraagd.length, 1, `er hoort één vraag te staan, gezien: ${JSON.stringify(gevraagd)}`);
-	assert.match(gevraagd[0], /vervangt/i, `de vraag moet zeggen dat er iets verdwijnt: ${gevraagd[0]}`);
+	assert.equal(gevraagd.length, 1, `er hoort één ask te staan, gezien: ${JSON.stringify(gevraagd)}`);
+	assert.match(gevraagd[0], /vervangt/i, `de ask moet zeggen dat er iets verdwijnt: ${gevraagd[0]}`);
 
 	// En zolang er niet geantwoord is, staat het werk er nog.
 	const tussenin = await design();
-	assert.equal(tussenin.elements.length, 5, 'niets vervangen voordat de vraag beantwoord is');
+	assert.equal(tussenin.elements.length, 5, 'niets vervangen voordat de ask beantwoord is');
 });
 
 test('annuleren laat het bestaande werk staan', async (t) => {
@@ -121,18 +121,18 @@ test('annuleren laat het bestaande werk staan', async (t) => {
 test('doorzetten vervangt wél, want dat is wat openen doet', async (t) => {
 	if (!bereikbaar) return t.skip(`geen server op ${BASE}`);
 	await importeer('een.svg');
-	// De knop heet "Niet opslaan" — het drieluik annuleren / niet opslaan /
-	// opslaan-en-openen dat elk besturingssysteem bij deze vraag gebruikt. Deze
-	// test wachtte nog op "Zonder opslaan openen", de naam van vóór die wijziging,
+	// De knop heet "Niet saving" — het drieluik annuleren / niet saving /
+	// saving-en-openen dat elk besturingssysteem bij deze ask gebruikt. Deze
+	// test wachtte nog op "Zonder saving openen", de naam van vóór die wijziging,
 	// en liep dus dertig seconden in een timeout.
-	await page.getByRole('button', { name: 'Niet opslaan' }).click();
+	await page.getByRole('button', { name: 'Niet saving' }).click();
 	await page.waitForTimeout(3000);
 	const na = await design();
 	assert.equal(na.elements.length, 1);
 	assert.equal(na.elements[0].stroke, '#ff00ff');
 });
 
-test('op een leeg bed komt er geen vraag tussen', async (t) => {
+test('op een leeg bed komt er geen ask tussen', async (t) => {
 	if (!bereikbaar) return t.skip(`geen server op ${BASE}`);
 	await schoonBeginnen();
 	await importeer('vijf.svg');

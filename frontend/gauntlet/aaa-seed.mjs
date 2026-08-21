@@ -14,8 +14,8 @@ for (const theme of ['light','dark']) {
   await page.addInitScript(([h, t]) => {
     localStorage.setItem('openkerf.raster.uitlijning.1', JSON.stringify(h));
     if (t === 'dark') {
-      const zet = () => document.documentElement?.setAttribute('data-theme','dark');
-      zet(); document.addEventListener('DOMContentLoaded', zet);
+      const set = () => document.documentElement?.setAttribute('data-theme','dark');
+      set(); document.addEventListener('DOMContentLoaded', set);
     }
   }, [hoeken, theme]);
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });

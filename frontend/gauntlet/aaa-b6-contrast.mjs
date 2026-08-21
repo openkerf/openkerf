@@ -22,7 +22,7 @@ const VONDSTEN = {
 		{
 			id: 'udp:192.168.1.55', transport: 'netwerk', title: 'Ruida-besturing op het netwerk',
 			where: '192.168.1.55', detail: 'antwoordde op poort 50200', kind: 'co2-ruida',
-			confidence: 'zeker', why: 'Dit adres antwoordde op de vraag die de Ruida-driver ook stelt.',
+			confidence: 'zeker', why: 'Dit adres antwoordde op de ask die de Ruida-driver ook stelt.',
 			suggestions: [{ key: 'ruida-beta', label: 'Ruida', family: 'K-Series CO2-Laser' }],
 			settings: { interface: 'udp', address: '192.168.1.55' }
 		},

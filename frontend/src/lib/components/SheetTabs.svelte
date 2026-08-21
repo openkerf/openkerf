@@ -29,19 +29,19 @@
 	/**
 	 * Bevestiging vóór het weggooien van werk.
 	 *
-	 * Een vel verwijderen nam het ontwerp erop mee zonder één vraag — precies het
+	 * Een vel verwijderen nam het ontwerp erop mee zonder één ask — precies het
 	 * soort verlies waar je pas achter komt als het al gebeurd is. Op een leeg vel
-	 * blijft het één klik: dan valt er niets te verliezen, en een vraag stellen
+	 * blijft het één klik: dan valt er niets te verliezen, en een ask stellen
 	 * over niets leert je alleen ze weg te klikken.
 	 */
 	let bevestigen = $state<string | null>(null);
 	$effect(() => {
-		// Sluit de editor of wissel van vel, dan is de vraag van de baan.
+		// Sluit de editor of wissel van vel, dan is de ask van de baan.
 		void editing;
 		bevestigen = null;
 	});
 
-	/** Hoeveel er weggaat, vastgelegd op het moment van vragen. */
+	/** Hoeveel er weggaat, vastgelegd op het moment van shouldAsk. */
 	let teVerwijderen = $state(0);
 
 	function telling(n: number) {
@@ -53,7 +53,7 @@
 	 *
 	 * `elementen` komt uit het ontwerp in beeld en loopt een paar honderd ms
 	 * achter op een velwissel. Dat is precies lang genoeg om een vel mét werk
-	 * voor leeg aan te zien en het zonder vraag weg te gooien — de fout die deze
+	 * voor leeg aan te zien en het zonder ask weg te gooien — de failure die deze
 	 * reparatie moet voorkomen. Valt de server weg, dan is de prop het beste wat
 	 * er is.
 	 */
@@ -70,7 +70,7 @@
 
 	async function vraagOfWeg(id: string) {
 		const aantal = await tellen();
-		// Leeg vel: geen vraag. Er is niets te verliezen, en een vraag over niets
+		// Leeg vel: geen ask. Er is niets te verliezen, en een ask over niets
 		// leert je alleen ze weg te klikken.
 		if (aantal === 0) {
 			await verwijder(id);
@@ -306,7 +306,7 @@
 		background: var(--surface-1);
 	}
 	.drop { color: var(--danger); }
-	/* De vraag hoort onder de knop die hem stelt, niet in een venster midden op
+	/* De ask hoort onder de knop die hem stelt, niet in een venster midden op
 	   het scherm: je blijft in dezelfde strook kijken. */
 	.bevestig {
 		flex: none;

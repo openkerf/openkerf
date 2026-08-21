@@ -7,7 +7,7 @@
  * niet — die sturen twee punten in één keer — en de captures kwamen er niet,
  * want tegel 1 lijnt uit op de plaathoek.
  *
- * Om het te kunnen lopen zet dit script de kop op de plek van elk merk. Het
+ * Om het te kunnen lopen set dit script de kop op de plek van elk merk. Het
  * tweede merk wordt 2° om het eerste gedraaid: dan blijft de onderlinge afstand
  * gelijk (de afstandscontrole is dus tevreden) en moet het paneel 2,00° scheef
  * melden. Dat getal is de hele proef — als de wiskunde ergens onderweg kantelt,
@@ -15,7 +15,7 @@
  *
  * **Let op, een upstream-eigenaardigheid:** met de grbl-mock wordt élke tweede
  * bewegingsopdracht ingeslikt en klapt de positie terug naar home. Gemeten:
- * move → (60,30), move → (0,235), move → (30,200). Daarom zet dit script de kop
+ * move → (60,30), move → (0,235), move → (30,200). Daarom set dit script de kop
  * en controleert daarna waar hij écht staat, tot hij er is. Dat is een
  * kunstgreep in het harnas, niet in het product.
  */
@@ -36,8 +36,8 @@ async function api(pad, body, method = 'POST') {
 }
 
 async function kop() {
-	// Het ACTIEVE apparaat, niet het eerste in de lijst: naast de grbl-mock staat
-	// het lihuiyu-apparaat dat de engine zelf aanmaakt, en die leest anders.
+	// Het ACTIEVE device, niet het eerste in de lijst: naast de grbl-mock staat
+	// het lihuiyu-device dat de engine zelf aanmaakt, en die leest anders.
 	const alle = (await api('/api/devices', undefined, 'GET')).body ?? [];
 	const d = alle.find((x) => x.active) ?? alle[0];
 	return d?.position?.mm ?? null;

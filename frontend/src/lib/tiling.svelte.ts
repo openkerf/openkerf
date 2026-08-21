@@ -73,7 +73,7 @@ export class TilingStore {
 	 * aantikken van een merk is dat het verschil tussen "waar de kop staat" en
 	 * "waar hij stond". Gemeten met de grbl-mock: het paneel dacht (5,5) terwijl
 	 * de server (0,235) las — 230 mm ernaast, en de tweede tik gebruikt wél de
-	 * live stand van de server. Twee bronnen voor één meting is precies de fout
+	 * live stand van de server. Twee bronnen voor één meting is precies de failure
 	 * die dit hele onderdeel moet uitsluiten, dus lezen beide tikken nu hetzelfde.
 	 */
 	async liveHead(): Promise<{ x_mm: number; y_mm: number } | null> {
@@ -81,8 +81,8 @@ export class TilingStore {
 			const response = await fetch('/api/devices');
 			if (!response.ok) return null;
 			const alle = await response.json();
-			const actief = alle.find((d: { active?: boolean }) => d.active) ?? alle[0];
-			const mm = actief?.position?.mm;
+			const active = alle.find((d: { active?: boolean }) => d.active) ?? alle[0];
+			const mm = active?.position?.mm;
 			return Array.isArray(mm) ? { x_mm: mm[0], y_mm: mm[1] } : null;
 		} catch {
 			return null;
@@ -114,8 +114,8 @@ export class TilingStore {
 			this.run = this.#normaliseer(await response.json());
 			return true;
 		} catch {
-			// Zonder dit valt er bij een wegvallende verbinding niets te zien:
-			// de fout vliegt ongevangen naar buiten, `error` blijft leeg en de
+			// Zonder dit valt er bij een wegvallende connection niets te zien:
+			// de failure vliegt ongevangen naar buiten, `error` blijft leeg en de
 			// gebruiker staat aan de machine naar een knop te kijken die niets
 			// deed. In een werkplaats is dat geen randgeval.
 			this.error = t('error.noMachine');
@@ -151,7 +151,7 @@ export class TilingStore {
 	 *
 	 * In twee stappen omdat het twee dingen zijn — een instelling op het vel, en
 	 * een reeks die loopt — maar voor de gebruiker is het één antwoord op één
-	 * vraag. Hem eerst naar een instelling sturen die nergens op het scherm
+	 * ask. Hem eerst naar een instelling sturen die nergens op het scherm
 	 * staat, is precies wat deze knop moet voorkomen.
 	 */
 	async enableAndStart(sheetId: string) {

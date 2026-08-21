@@ -15,7 +15,7 @@
 		 *  waar je vandaan komt. */
 		materialId?: number | null;
 		/** De dikte van dat vel. Een raster gaat over één plaat, en die ligt al
-		 *  in de machine — dan is dit getal geen vraag meer. */
+		 *  in de machine — dan is dit getal geen ask meer. */
 		thicknessMm?: number | null;
 		library: LibraryStore;
 		canEdit?: boolean;
@@ -88,7 +88,7 @@
 	 * duurt precies zolang als het kost om het tweede veld ook aan te passen.
 	 * Vóór deze scheiding viel het hele voorbeeldblok dan weg: het formulier
 	 * sprong van 506 naar 810 pixels breed en de reden stond onder de vouw.
-	 * Nu blijft het laatste geldige beeld staan met deze melding erboven.
+	 * Nu blijft het last geldige beeld staan met deze melding erboven.
 	 */
 	let voorbeeldFout = $state<string | null>(null);
 	let gelukt = $state<{ id: number; cellen: number } | null>(null);
@@ -304,7 +304,7 @@
 		if (timer) clearTimeout(timer);
 		timer = setTimeout(async () => {
 			const verse = await send('/api/library/testgrids/preview', false, true);
-			// Alleen vervangen als er een geldig bord uitkwam. Het laatste
+			// Alleen vervangen als er een geldig bord uitkwam. Het last
 			// geldige beeld laten staan is rustiger dan een gat laten vallen —
 			// en het is ook eerlijker: dát is nog steeds wat je zou branden als
 			// je nu ophield met typen.
@@ -476,7 +476,7 @@
 	 * Dit was één knop met `generate()`: "Nog een raster tekenen" tékende
 	 * meteen, zonder je de kans te geven iets te veranderen — en liet daarbij
 	 * de melding van het vórige bord staan ("De job staat in de wachtrij"),
-	 * onder het nummer van het nieuwe. Nu doet de knop wat hij zegt: hij zet je
+	 * onder het nummer van het nieuwe. Nu doet de knop wat hij zegt: hij set je
 	 * terug bij de instellingen, met de plek van het vorige bord in beeld zodat
 	 * je het nieuwe ernaast legt in plaats van erop.
 	 */
@@ -577,7 +577,7 @@
 	// T3 onthoudt één instelling per materiaal: het vorige raster. Dat dekt de
 	// wekelijkse proef, niet twee recepten die je afwisselt — "berk snijden"
 	// naast "berk graveren". LightBurn heeft daar een Presets-lijst voor met
-	// opslaan en verwijderen; dit is dezelfde lijst, gevuld met dezelfde
+	// saving en verwijderen; dit is dezelfde lijst, gevuld met dezelfde
 	// sleutels als het vorige raster, zodat er één invulroutine is.
 
 	type Recept = {
@@ -597,11 +597,11 @@
 	let bewaren = $state(false);
 
 	async function haalRecepten() {
-		const vraag =
+		const ask =
 			form.material_id === null
 				? '/api/library/testgrids/recipes'
 				: `/api/library/testgrids/recipes?material_id=${form.material_id}`;
-		const response = await fetch(vraag);
+		const response = await fetch(ask);
 		if (!response.ok) return;
 		recepten = await response.json();
 		if (gekozenRecept !== null && !recepten.some((r) => r.id === gekozenRecept)) {
@@ -875,7 +875,7 @@
 						: t('grid.recipe.hint.material')}
 				</p>
 			{/if}
-			{#if receptFout}<p class="fout" role="alert">{receptFout}</p>{/if}
+			{#if receptFout}<p class="failure" role="alert">{receptFout}</p>{/if}
 		</div>
 
 		<div class="werkbank">
@@ -931,7 +931,7 @@
 								onclick={maakMateriaal}>{t('grid.newMaterial.create')}</button
 							>
 						</div>
-						{#if materiaalFout}<p class="fout">{materiaalFout}</p>{/if}
+						{#if materiaalFout}<p class="failure">{materiaalFout}</p>{/if}
 					</div>
 				{/if}
 
@@ -1350,7 +1350,7 @@
 					<p class="nagekomen">{t('grid.startDone')}</p>
 				{/if}
 				{#if machineLet}<p class="nagekomen">{t('grid.watchOut', { what: machineLet })}</p>{/if}
-				{#if machineFout}<p class="fout" role="alert">{machineFout}</p>{/if}
+				{#if machineFout}<p class="failure" role="alert">{machineFout}</p>{/if}
 			</div>
 		{/if}
 
@@ -1448,7 +1448,7 @@
 	   raster van twee kolommen. In dat raster viel elk veld op de eerstvolgende
 	   vrije plek, en dus stond "Snelheid van" naast "Kolommen, naar rechts" met
 	   "tot" op de regel eronder — twee velden die één waarde zijn, diagonaal uit
-	   elkaar getrokken. Nu bepaalt de opmaak wat bij elkaar hoort: `.paar` zet
+	   elkaar getrokken. Nu bepaalt de opmaak wat bij elkaar hoort: `.paar` set
 	   precies twee velden naast elkaar, al het andere staat op zijn eigen regel.
 	   Zie DESIGN-SYSTEM v4, "Formulieren". */
 	.grid {
@@ -1516,7 +1516,7 @@
 	   zonder de bibliotheek te openen en dit venster kwijt te raken. */
 	.erbij { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 	.erbij input { flex: 1; min-width: 12rem; }
-	.fout { color: var(--danger-solid, var(--danger)); }
+	.failure { color: var(--danger-solid, var(--danger)); }
 
 	/* Wat de vorige keer werkte, komt terug — maar wel zichtbaar, want anders
 	   verandert het formulier onder je handen zonder dat je weet waarom. */
@@ -1532,7 +1532,7 @@
 	}
 
 	/* De receptenbalk: één regel bovenaan, zoals in LightBurn. Kiezen is de
-	   hoofdactie, opslaan staat ernaast en klapt pas open als je het vraagt —
+	   hoofdactie, saving staat ernaast en klapt pas open als je het vraagt —
 	   anders is het eerste wat je ziet een leeg naamveld. */
 	.recepten {
 		display: grid;
@@ -1546,7 +1546,7 @@
 	}
 	.recepten .erbij,
 	.recepten .hint,
-	.recepten .fout { grid-column: 1 / -1; }
+	.recepten .failure { grid-column: 1 / -1; }
 	.receptknoppen { display: flex; gap: var(--space-2); }
 	.receptknoppen .btn { min-height: 38px; padding: var(--space-1h) var(--space-3); }
 	/* Verwijderen is stil: het staat er voor als je het nodig hebt, niet als
@@ -1555,7 +1555,7 @@
 	.btn.stil:hover:not(:disabled) { background: var(--surface-1); color: var(--text-1); }
 
 	/* Twee schakelaars die bij elkaar horen: een fieldset, want ze delen één
-	   vraag ("wat komt er verder op het bord"). */
+	   ask ("wat komt er verder op het bord"). */
 	.schakelaars {
 		grid-column: 1 / -1;
 		display: grid;
@@ -1607,7 +1607,7 @@
 		box-shadow: var(--lift-1);
 	}
 	/* De reden dat het voorbeeld even niet meeloopt. Een rustige melding en
-	   geen alarm: dit is een tussenstand tijdens het typen, geen fout. */
+	   geen alarm: dit is een tussenstand tijdens het typen, geen failure. */
 	.onaf {
 		margin: 0 0 var(--space-2);
 		padding: var(--space-1h) var(--space-2);

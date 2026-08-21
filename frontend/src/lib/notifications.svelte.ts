@@ -7,7 +7,7 @@
  *    is er juist voor het moment dat je níet kijkt: ander tabblad, telefoon in
  *    je zak. Zolang je moet blijven kijken is een monitor een halve monitor.
  * 2. Een **alarm** in de app zelf, voor wat de engine ons doorgeeft over de
- *    verbinding met de machine.
+ *    connection met de machine.
  *
  * Wat hier nadrukkelijk niet gebeurt: iets afleiden dat we niet meten. Wij
  * zien geen vlam, geen rook en geen temperatuur — de camera hangt aan de
@@ -22,50 +22,50 @@ import { t, type MessageKey } from './i18n/core.ts';
 
 export type Toestemming = 'unsupported' | 'default' | 'granted' | 'denied';
 
-const AAN_KEY = 'openkerf.meldingen';
-const GEVRAAGD_KEY = 'openkerf.meldingen.gevraagd';
+const AAN_KEY = 'openkerf.notifications';
+const GEVRAAGD_KEY = 'openkerf.notifications.gevraagd';
 
 /** Wat de browser ervan vindt, in mensentaal. Wordt getoond, niet gelogd. */
-export function toestemmingTekst(toestemming: Toestemming): string {
-	return t(`notify.permission.${toestemming}` as never);
+export function permissionText(permission: Toestemming): string {
+	return t(`notify.permission.${permission}` as never);
 };
 
 export class Meldingen {
-	toestemming = $state<Toestemming>('unsupported');
+	permission = $state<Toestemming>('unsupported');
 	/**
 	 * De voorkeur van de gebruiker, los van wat de browser vindt.
 	 *
 	 * Twee aparte dingen: "ik wil dit niet" is iets anders dan "de browser laat
-	 * het niet toe", en ze vragen om een ander antwoord op het scherm.
+	 * het niet toe", en ze shouldAsk om een ander antwoord op het scherm.
 	 */
 	aan = $state(true);
-	/** Is de vraag ooit gesteld? Zo niet, dan mag de aanleidingkaart komen. */
+	/** Is de ask ooit gesteld? Zo niet, dan mag de aanleidingkaart komen. */
 	gevraagd = $state(false);
-	/** De laatste melding die we verstuurd hebben — bewijs op de instelkaart. */
-	laatste = $state<{ titel: string; tekst: string; tijd: number; getoond: boolean } | null>(null);
-	fout = $state<string | null>(null);
+	/** De last melding die we verstuurd hebben — bewijs op de instelkaart. */
+	last = $state<{ titel: string; tekst: string; tijd: number; getoond: boolean } | null>(null);
+	failure = $state<string | null>(null);
 
 	constructor() {
 		if (typeof window === 'undefined') return;
 		this.lees();
 		this.aan = localStorage.getItem(AAN_KEY) !== 'uit';
-		// Als de browser al een antwoord heeft, is de vraag gesteld — ook als dat
+		// Als de browser al een antwoord heeft, is de ask gesteld — ook als dat
 		// in een vorige sessie of door een ander tabblad gebeurde.
-		this.gevraagd = localStorage.getItem(GEVRAAGD_KEY) === 'ja' || this.toestemming !== 'default';
+		this.gevraagd = localStorage.getItem(GEVRAAGD_KEY) === 'ja' || this.permission !== 'default';
 	}
 
 	/** De browser kan buiten ons om wijzigen (site-instellingen); opnieuw lezen. */
 	lees() {
 		if (typeof window === 'undefined' || !('Notification' in window)) {
-			this.toestemming = 'unsupported';
+			this.permission = 'unsupported';
 			return;
 		}
-		this.toestemming = Notification.permission as Toestemming;
+		this.permission = Notification.permission as Toestemming;
 	}
 
 	/** Sturen we ook echt iets? Beide moeten ja zeggen. */
-	get actief() {
-		return this.aan && this.toestemming === 'granted';
+	get active() {
+		return this.aan && this.permission === 'granted';
 	}
 
 	/**
@@ -73,43 +73,43 @@ export class Meldingen {
 	 *
 	 * Alleen als de browser nog niets weet én we het nog niet gevraagd hebben.
 	 * Een toestemmingsvraag zonder aanleiding wordt geweigerd, en een geweigerde
-	 * toestemming krijg je niet meer terug — dus vragen we hem op het moment dat
+	 * permission krijg je niet meer terug — dus shouldAsk we hem op het moment dat
 	 * er iets te melden valt, niet bij het laden van de app.
 	 */
-	get vragen() {
-		return this.toestemming === 'default' && !this.gevraagd;
+	get shouldAsk() {
+		return this.permission === 'default' && !this.gevraagd;
 	}
 
-	/** "Niet nu." Geen tweede kans vragen; de instelkaart blijft de weg terug. */
-	nietNu() {
+	/** "Niet nu." Geen tweede kans shouldAsk; de instelkaart blijft de weg terug. */
+	notNow() {
 		this.gevraagd = true;
 		if (typeof localStorage !== 'undefined') localStorage.setItem(GEVRAAGD_KEY, 'ja');
 	}
 
-	zet(aan: boolean) {
+	set(aan: boolean) {
 		this.aan = aan;
 		if (typeof localStorage !== 'undefined') localStorage.setItem(AAN_KEY, aan ? 'aan' : 'uit');
 	}
 
 	/**
 	 * De toestemmingsvraag stellen. Alleen aanroepen vanuit een echte klik:
-	 * Safari eist een verse gebruikershandeling en weigert de vraag anders.
+	 * Safari eist een verse gebruikershandeling en weigert de ask anders.
 	 */
-	async vraag(): Promise<Toestemming> {
-		this.nietNu();
-		this.fout = null;
+	async ask(): Promise<Toestemming> {
+		this.notNow();
+		this.failure = null;
 		if (typeof window === 'undefined' || !('Notification' in window)) {
-			this.toestemming = 'unsupported';
-			return this.toestemming;
+			this.permission = 'unsupported';
+			return this.permission;
 		}
 		try {
-			this.toestemming = (await Notification.requestPermission()) as Toestemming;
+			this.permission = (await Notification.requestPermission()) as Toestemming;
 		} catch {
 			// Oudere Safari kent alleen de callback-vorm en gooit hier.
 			this.lees();
 		}
-		if (this.toestemming === 'granted') this.zet(true);
-		return this.toestemming;
+		if (this.permission === 'granted') this.set(true);
+		return this.permission;
 	}
 
 	/**
@@ -119,15 +119,15 @@ export class Meldingen {
 	 * het tabblad in beeld is — daar staat het al op het scherm, en een pop-up
 	 * over iets wat je aankijkt is ruis. Een storing gaat wel altijd door.
 	 */
-	async meld(
+	async notify(
 		titel: string,
 		tekst: string,
 		tag: string,
 		opties: { altijd?: boolean } = {}
 	): Promise<boolean> {
 		const zichtbaar = typeof document !== 'undefined' && document.visibilityState === 'visible';
-		const stuur = this.actief && (opties.altijd || !zichtbaar);
-		this.laatste = { titel, tekst, tijd: Date.now(), getoond: stuur };
+		const stuur = this.active && (opties.altijd || !zichtbaar);
+		this.last = { titel, tekst, tijd: Date.now(), getoond: stuur };
 		if (!stuur) return false;
 		const inhoud: NotificationOptions = {
 			body: tekst,
@@ -152,7 +152,7 @@ export class Meldingen {
 			new Notification(titel, inhoud);
 			return true;
 		} catch {
-			this.fout =
+			this.failure =
 				t('notify.refused');
 			return false;
 		}
@@ -160,7 +160,7 @@ export class Meldingen {
 
 	/** Zelf controleren of het werkt, zonder op een job te wachten. */
 	test() {
-		return this.meld(
+		return this.notify(
 			t('notify.test.title'),
 			t('notify.test.body'),
 			'openkerf-test',
@@ -178,14 +178,14 @@ export type Alarm = {
 	raad: string;
 	/** De regel van de engine zelf, woordelijk. Bewijs, geen versiering. */
 	bron?: string;
-	sinds: number;
+	since: number;
 };
 
 /**
  * Wat de USB-log van de engine zegt als de machine niet bereikbaar is.
  *
  * Bewust een lijst en géén zoektocht naar woorden als "fail": diezelfde log
- * meldt bij elke normale verbinding op macOS "Kernel detach: Failed." zonder
+ * meldt bij elke normale connection op macOS "Kernel detach: Failed." zonder
  * dat er iets aan de hand is. Een vals alarm op een scherm dat een laser
  * bewaakt is erger dan een late melding — na twee loze alarmen kijkt niemand
  * er nog naar. Daarom alleen de regels die écht betekenen dat er niet gebrand
@@ -194,7 +194,7 @@ export type Alarm = {
  *
  * Bron: `meerk40t/lihuiyu/controller.py` en `meerk40t/ch341/` (gelezen, niet
  * geraden). Komt er upstream een regel bij, dan zwijgt deze lijst — dat is de
- * veilige kant van de fout.
+ * veilige kant van de failure.
  */
 const STORINGEN: { patroon: RegExp; zin: MessageKey; raad: MessageKey }[] = [
 	{
@@ -244,7 +244,7 @@ const STIL_MS = 120_000;
  * De bewaker leest de status en besluit wanneer er iets te melden valt.
  *
  * Alles hier is afgeleid van wat de engine doorgeeft: de spooler, de
- * verbindingsstatus van het apparaat en het signaal `pipe;usb_status`. Er komt
+ * verbindingsstatus van het device en het signaal `pipe;usb_status`. Er komt
  * geen enkele eigen waarneming bij kijken, en er gaat geen enkele opdracht uit.
  */
 export class Bewaker {
@@ -259,10 +259,10 @@ export class Bewaker {
 	#standSinds = 0;
 	#stilGemeld = false;
 
-	#meldingen: Meldingen;
+	#notifications: Meldingen;
 
-	constructor(meldingen: Meldingen) {
-		this.#meldingen = meldingen;
+	constructor(notifications: Meldingen) {
+		this.#notifications = notifications;
 	}
 
 	get toon() {
@@ -273,16 +273,16 @@ export class Bewaker {
 		this.gezien = true;
 	}
 
-	#zet(alarm: Omit<Alarm, 'sinds'>) {
+	#set(alarm: Omit<Alarm, 'since'>) {
 		// Een storing overrulet een "klaar" die nog op de rol staat.
 		if (this.#klaarTimer) {
 			clearTimeout(this.#klaarTimer);
 			this.#klaarTimer = null;
 		}
 		if (this.alarm?.code === alarm.code) return;
-		this.alarm = { ...alarm, sinds: Date.now() };
+		this.alarm = { ...alarm, since: Date.now() };
 		this.gezien = false;
-		this.#meldingen.meld(alarm.titel, `${alarm.tekst} ${alarm.raad}`, 'openkerf-alarm', {
+		this.#notifications.notify(alarm.titel, `${alarm.tekst} ${alarm.raad}`, 'openkerf-alarm', {
 			altijd: true
 		});
 	}
@@ -320,7 +320,7 @@ export class Bewaker {
 		}
 		const storing = STORINGEN.find((s) => s.patroon.test(tekst));
 		if (!storing) return;
-		this.#zet({
+		this.#set({
 			code: `usb:${storing.zin}`,
 			titel: t('fault.noConnection'),
 			tekst: t(storing.zin),
@@ -334,8 +334,8 @@ export class Bewaker {
 	 *
 	 * Met een korte pauze erop, en dat is geen traagheid maar volgorde. Bij een
 	 * machine die niet aan de USB hangt meldt de engine éérst `spooler;completed`
-	 * en pás daarna dat de verbinding er nooit was. Zonder deze pauze krijg je
-	 * "Job klaar" en een seconde later "Geen verbinding" — precies de verkeerde
+	 * en pás daarna dat de connection er nooit was. Zonder deze pauze krijg je
+	 * "Job klaar" en een seconde later "Geen connection" — precies de verkeerde
 	 * volgorde om op je telefoon te lezen. Een storing haalt de "klaar" nu in.
 	 */
 	#klaar() {
@@ -353,7 +353,7 @@ export class Bewaker {
 	#klaarTimer: ReturnType<typeof setTimeout> | null = null;
 
 	#stuurKlaar() {
-		this.#meldingen.meld(
+		this.#notifications.notify(
 			t('notify.job.done'),
 			this.#duur > 0
 				? t('notify.job.doneBody', { name: this.#naam, time: formatDuration(this.#duur) })
@@ -366,7 +366,7 @@ export class Bewaker {
 	 * De snapshot, elke twee seconden.
 	 *
 	 * Hier zit de detectie van "klaar" en van "komt niet vooruit". De grens voor
-	 * dat laatste ligt bewust ruim: een raster met veel kleine bewerkingen mag
+	 * dat last ligt bewust ruim: een raster met veel kleine bewerkingen mag
 	 * even niets lijken te doen, en een vals alarm op een machine die brandt is
 	 * erger dan een late melding.
 	 */
@@ -376,7 +376,7 @@ export class Bewaker {
 				this.#liep = false;
 				// Geen alarmkaart (gat B9). Dit alarm gaat niet over de machine maar
 				// over ónze server, en dat is exact het onderwerp van de
-				// verbindingskaart die op elk apparaat al bovenaan staat — inclusief
+				// verbindingskaart die op elk device al bovenaan staat — inclusief
 				// de zin "stoppen kan alleen op de machine zelf" én een knop om het
 				// opnieuw te proberen. Twee kaarten die hetzelfde zeggen, waarvan de
 				// onderste er drie regels over doet, maken de bovenste niet
@@ -384,7 +384,7 @@ export class Bewaker {
 				//
 				// De systeemmelding blijft wél: die bereikt je met de tab op de
 				// achtergrond of het scherm op zwart, en dáár staat geen kaart.
-				this.#meldingen.meld(t('notify.lost.title'), t('notify.lost.body'), 'openkerf-alarm', {
+				this.#notifications.notify(t('notify.lost.title'), t('notify.lost.body'), 'openkerf-alarm', {
 					altijd: true
 				});
 			}
@@ -399,7 +399,7 @@ export class Bewaker {
 			return;
 		}
 
-		this.#naam = jobNaam(job.label);
+		this.#naam = jobName(job.label);
 		this.#duur = job.elapsed_seconds ?? 0;
 		// Pas vanaf het moment dat er echt iets gebeurd is telt hij als "liep";
 		// anders meldt een job die alleen maar in de wachtrij stond ook "klaar".
@@ -417,7 +417,7 @@ export class Bewaker {
 		if (!this.#standSinds) this.#standSinds = nu;
 		if (!this.#stilGemeld && job.running && nu - this.#standSinds > STIL_MS) {
 			this.#stilGemeld = true;
-			this.#zet({
+			this.#set({
 				code: 'stil',
 				titel: t('notify.stalled.title'),
 				tekst: t('notify.stalled.body', {
@@ -436,7 +436,7 @@ export class Bewaker {
  * Dat is de interne opsomming van de wachtrij, geen titel — en op een melding
  * die je op je telefoon leest al helemaal niet (FEATURE-GAPS P4).
  */
-export function jobNaam(label: string | null | undefined): string {
+export function jobName(label: string | null | undefined): string {
 	const tekst = label ?? '';
 	const m = tekst.match(/^Spooler:\s*(\d+)\s*items?$/i);
 	if (!m) return tekst || t('notify.job.unnamed');

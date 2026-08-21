@@ -14,7 +14,7 @@ import { browser, open, BASE } from './harness.mjs';
 const CATALOGUS = 'g3v8-amc';
 
 /**
- * Het pad dat de engine teruggeeft na het aanmaken. Het script zet hem zelf
+ * Het pad dat de engine teruggeeft na het aanmaken. Het script set hem zelf
  * neer: zonder machine opent OpenKerf op het welkomstscherm en meet je overal
  * de vangnetpagina in plaats van de wizard.
  */

@@ -1,5 +1,5 @@
 /**
- * Twee staten die het mock-apparaat niet levert, en die precies de grens van
+ * Twee staten die het mock-device niet levert, en die precies de grens van
  * gat J8 aftasten:
  *
  * - `vers`: een job die net gespoold is (loopt niet, nul voortgang). Hoort

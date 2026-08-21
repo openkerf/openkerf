@@ -197,7 +197,7 @@ export type MachineProfile = {
 	power_watt: number | null;
 	device_path: string | null;
 	/**
-	 * Het apparaat waar dit profiel bij hoort, bestaat niet meer in de engine.
+	 * Het device waar dit profiel bij hoort, bestaat niet meer in de engine.
 	 *
 	 * De bibliotheek staat naast de engine en gaat niet mee als je een machine
 	 * weggooit of de instellingen wist. Zonder dit onderscheid groeit de lijst
@@ -222,7 +222,7 @@ export class LibraryStore {
 	materials = $state<Material[]>([]);
 	presets = $state<Preset[]>([]);
 	machines = $state<MachineProfile[]>([]);
-	/** Het profiel van de machine die nu actief is; bepaalt wat je hier ziet. */
+	/** Het profiel van de machine die nu active is; bepaalt wat je hier ziet. */
 	activeMachine = $state<ActiveMachine | null>(null);
 	/** Uit: ook presets van andere machines tonen. */
 	onlyThisMachine = $state(true);
@@ -267,7 +267,7 @@ export class LibraryStore {
 			this.#request('/api/library/materials'),
 			this.#request(`/api/library/presets${alles}`),
 			this.#request('/api/library/machines'),
-			// 409 als er geen machine actief is; dan blijft het veld leeg en
+			// 409 als er geen machine active is; dan blijft het veld leeg en
 			// toont de bibliotheek zich zonder machinekop.
 			this.#request('/api/library/active-machine')
 		]);

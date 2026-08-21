@@ -26,7 +26,7 @@
 	 * Het vel volgt de machine niet vanzelf (gat E2).
 	 *
 	 * Een vel is een stuk materiaal, geen kopie van het bed — dus meeschalen
-	 * zónder te vragen zou het restje van 200 × 300 dat je net hebt ingesteld
+	 * zónder te shouldAsk zou het restje van 200 × 300 dat je net hebt ingesteld
 	 * stilletjes oprekken tot bedmaat. Maar het omgekeerde is wat er nu gebeurt:
 	 * je stelt een bed van 610 × 406 in en begint je eerste ontwerp in een kader
 	 * van 310 × 210 dat van de vórige machine kwam en nergens op slaat.
@@ -38,7 +38,7 @@
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '')
 	);
 	let bed = $state<{ w: number; h: number } | null>(null);
-	/** Beantwoord (aangepast of laten staan): dan is de vraag weg. */
+	/** Beantwoord (aangepast of laten staan): dan is de ask weg. */
 	let velAntwoord = $state<'aangepast' | 'gelaten' | null>(null);
 
 	let velVraag = $derived.by(() => {
@@ -55,9 +55,9 @@
 	}
 
 	async function velNaarBed() {
-		const vraag = velVraag;
-		if (!vraag) return;
-		if (await sheets.update(vraag.vel.id, { width_mm: bed!.w, height_mm: bed!.h }))
+		const ask = velVraag;
+		if (!ask) return;
+		if (await sheets.update(ask.vel.id, { width_mm: bed!.w, height_mm: bed!.h }))
 			velAntwoord = 'aangepast';
 	}
 
@@ -130,7 +130,7 @@
 						{t('setup.sheetLeave')}
 					</button>
 				</div>
-				{#if sheets.error}<p class="fout" role="alert">{sheets.error}</p>{/if}
+				{#if sheets.error}<p class="failure" role="alert">{sheets.error}</p>{/if}
 			</div>
 		{:else if velAntwoord === 'aangepast' && sheets.active}
 			<p class="velgoed" role="status">
@@ -201,7 +201,7 @@
 		font-size: var(--text-xs);
 	}
 
-	/* Een vraag, geen waarschuwing: er is niets stuk, er valt iets te kiezen.
+	/* Een ask, geen waarschuwing: er is niets stuk, er valt iets te kiezen.
 	   Daarom het accent in de rand en niet amber. */
 	.velvraag {
 		margin-top: var(--space-6);
@@ -238,7 +238,7 @@
 		font-size: var(--text-xs);
 		color: var(--ok);
 	}
-	.fout {
+	.failure {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);
 		color: var(--danger);

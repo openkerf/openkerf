@@ -110,7 +110,7 @@ for (const [naam, maak] of Object.entries(staten)) {
 			await page.getByRole('button', { name: /Later/ }).click({ timeout: 1200 }).catch(() => {});
 			// Op desktop staat de knop in het paneel ("Job starten"), op tablet in
 			// de bovenbalk — daar heet hij onder 1200px alleen nog "Start", want
-			// het woord "job" is dan weggeknipt. Die knop zet zelf het tabblad om.
+			// het woord "job" is dan weggeknipt. Die knop set zelf het tabblad om.
 			const start = page
 				.getByRole('button', { name: /^(Job starten|Start(\s*job)?)$/i })
 				.filter({ hasNot: page.locator('[disabled]') });
@@ -124,7 +124,7 @@ for (const [naam, maak] of Object.entries(staten)) {
 			}
 			await page.waitForTimeout(900);
 			await page.screenshot({ path: `${UIT}${naam}-${label}-${theme}.png` });
-			// En dezelfde staat vergroot: dat is het venster waarin je een fout
+			// En dezelfde staat vergroot: dat is het venster waarin je een failure
 			// écht nog kunt zien.
 			if (geopend) {
 				await page.locator('.vergroot').click({ timeout: 2000 }).catch(() => {});

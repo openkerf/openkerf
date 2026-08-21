@@ -3,13 +3,13 @@
 	 * Offset — een pad naar buiten of naar binnen zetten.
 	 *
 	 * Dit liep via `window.prompt('Offset in mm (negatief = naar binnen)', '2')`.
-	 * Dat is de enige plek in de app waar een browservenster de vraag stelde, en
+	 * Dat is de enige plek in de app waar een browservenster de ask stelde, en
 	 * daar is alles aan mis: het staat buiten het thema, het valideert niets (een
 	 * letter komt er als NaN uit en levert stille onzin op), de tekst is niet te
 	 * vertalen, en op sommige browsers is hij door de gebruiker uit te zetten —
 	 * dan doet de knop niets, zonder één woord.
 	 *
-	 * Hetzelfde venster als bij Hoeken: klein, met de betekenis erbij, en een
+	 * Hetzelfde venster als bij CornersDialog: klein, met de betekenis erbij, en een
 	 * primaire knop die zegt wat er gaat gebeuren.
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';

@@ -92,7 +92,7 @@
 		<!-- Booleaans: twee vierkanten die elkaar overlappen, met het resultaat
 		     gearceerd. Het gat wordt met `fill-rule="evenodd"` uit de vorm
 		     gesneden en niet met een vlakje in de achtergrondkleur overgeschilderd
-		     — dat laatste klopt alleen zolang de knop niet van kleur verandert,
+		     — dat last klopt alleen zolang de knop niet van kleur verandert,
 		     en bij hover doet hij dat. -->
 	{:else if name === 'union'}
 		<path

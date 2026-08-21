@@ -24,9 +24,9 @@ for (const theme of ['light', 'dark']) {
 	const page = await ctx.newPage();
 	if (theme === 'dark')
 		await page.addInitScript(() => {
-			const zet = () => document.documentElement?.setAttribute('data-theme', 'dark');
-			zet();
-			document.addEventListener('DOMContentLoaded', zet);
+			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
+			set();
+			document.addEventListener('DOMContentLoaded', set);
 		});
 	await page.goto(`${BASE}/?tab=design&select=${ids.slice(0, 3).join(',')}`, {
 		waitUntil: 'domcontentloaded'

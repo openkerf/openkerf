@@ -4,7 +4,7 @@
 	 *
 	 * Twee dingen op één rij vakjes, precies zoals LightBurn het doet:
 	 * mét selectie verplaatst een klik die naar de laag van die kleur (die zo
-	 * nodig wordt aangemaakt), zonder selectie zet hij de kleur voor nieuw werk.
+	 * nodig wordt aangemaakt), zonder selectie set hij de kleur voor nieuw werk.
 	 * Dat is één handeling waar het via het lagenpaneel er drie waren.
 	 *
 	 * Rechts staat wat die kleur onthoudt. Een geheugen dat je niet ziet is geen
@@ -12,7 +12,7 @@
 	 * preset: het palet weet wat jij het laatst deed, een preset weet wat er
 	 * gebrand is. Daarom staat er "onthouden", nooit "geverifieerd".
 	 */
-	import { inktOp, LAYER_COLORS, type DesignStore } from '$lib/design.svelte';
+	import { inkOn, LAYER_COLORS, type DesignStore } from '$lib/design.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 
@@ -34,8 +34,8 @@
 	let kleuren = $derived(
 		(design.palette?.colors.map((c) => c.color) ?? LAYER_COLORS).map((c) => c.toLowerCase())
 	);
-	let actief = $derived((design.palette?.default_color ?? '').toLowerCase());
-	let getoond = $derived(aangewezen ?? actief ?? null);
+	let active = $derived((design.palette?.default_color ?? '').toLowerCase());
+	let getoond = $derived(aangewezen ?? active ?? null);
 	let selectie = $derived(design.selectedIds.length);
 
 	/** De laag die deze kleur nu draagt, plus zijn plek in de brandvolgorde. */
@@ -101,10 +101,10 @@
 			<button
 				class="vak"
 				class:gebruikt={!!gevonden}
-				class:nu={kleur === actief}
-				style="background: {kleur}; color: {inktOp(kleur)}"
+				class:nu={kleur === active}
+				style="background: {kleur}; color: {inkOn(kleur)}"
 				disabled={!canEdit || edits.busy}
-				aria-pressed={kleur === actief}
+				aria-pressed={kleur === active}
 				aria-label={t('palette.colourAria', { n: index + 1, description: omschrijving(kleur) })}
 				title={omschrijving(kleur)}
 				onpointerenter={() => (aangewezen = kleur)}
@@ -135,7 +135,7 @@
 			<span class="wie">
 				{#if gevonden}
 					{t('palette.layerNamed', { n: gevonden.nummer, label: gevonden.op.label })}
-				{:else if getoond === actief}
+				{:else if getoond === active}
 					{t('palette.newWork')}
 				{:else}
 					{t('palette.noLayerYet')}
@@ -173,7 +173,7 @@
 		min-height: 40px;
 		flex-wrap: wrap;
 		/* Op 768px liep deze strook 91px buiten beeld, en met `visible` betekent
-		   dat afgekapt in plaats van scrollbaar. De swatches zijn sinds besluit
+		   dat afgekapt in plaats van scrollbaar. De swatches zijn since besluit
 		   B2 een besturingselement: een vakje dat je niet kunt raken is een
 		   verdwenen functie, geen verdwenen versiering. */
 		min-width: 0;
@@ -193,7 +193,7 @@
 	/* De swatches blijven altijd heel — ze zijn het enige hier dat je aanraakt —
 	   maar op tablet zijn ze 44px, en tien daarvan is 476px. Naast de kop en de
 	   stand past dat niet in 768. Dus wrappen: liever twee rijen vakjes dan één
-	   rij waarvan de laatste drie buiten beeld vallen. */
+	   rij waarvan de last drie buiten beeld vallen. */
 	.strook {
 		display: flex;
 		flex-wrap: wrap;

@@ -82,7 +82,7 @@
 					{
 						id: 'toepassen',
 						label: chosenOperation
-							? t('library.menu.applyTo', { n: laagNummer })
+							? t('library.menu.applyTo', { n: layerNumber })
 							: t('library.menu.apply'),
 						off: chosenOperation ? undefined : t('library.menu.needsLayer'),
 						run: () => apply(preset)
@@ -155,7 +155,7 @@
 	let chosenOperation = $derived(
 		operations.find((o) => o.id === targetOperation) ?? operations[0] ?? null
 	);
-	let laagNummer = $derived(
+	let layerNumber = $derived(
 		chosenOperation ? operations.findIndex((o) => o.id === chosenOperation.id) + 1 : 0
 	);
 	$effect(() => {
@@ -190,7 +190,7 @@
 	 * Alle instellingen die aan het zoekwoord en het machinefilter voldoen —
 	 * bewust **niet** aan het gekozen materiaal.
 	 *
-	 * Het materiaal is sinds v4 de lijst links, en die lijst moet alle materialen
+	 * Het materiaal is since v4 de lijst links, en die lijst moet alle materialen
 	 * blijven tonen: filterde hij zichzelf, dan bleef er na één klik één regel
 	 * over en was er geen weg meer naar het volgende materiaal. Het inperken op
 	 * materiaal gebeurt in `zichtbarePresets`, aan de rechterkant.
@@ -216,7 +216,7 @@
 
 	/** Op welke dikte er gefilterd wordt binnen het gekozen materiaal. */
 	let dikte = $state<number | null>(null);
-	// Van materiaal wisselen zet het diktefilter terug: een dikte die dit
+	// Van materiaal wisselen set het diktefilter terug: een dikte die dit
 	// materiaal niet heeft, geeft een leeg paneel zonder dat je ziet waarom.
 	$effect(() => {
 		void materialId;
@@ -507,7 +507,7 @@
 	 *
 	 * De server tekent de markering in het beeld (`?cell=<rij>-<kolom>`), dus een
 	 * gewone `<img>` volstaat en er is hier geen overlay-wiskunde nodig. Zonder
-	 * bekend vakje vragen we de foto onbewerkt op — dat is de veilige val-terug.
+	 * bekend vakje shouldAsk we de foto onbewerkt op — dat is de veilige val-terug.
 	 */
 	function fotoUrl(preset: Preset) {
 		const basis = `/api/library/testgrids/${preset.grid_id}/photo`;
@@ -595,7 +595,7 @@
 							class="mismatch"
 							title={t('library.mismatch.title', {
 								operation: operationLabel(preset.operation).toLowerCase(),
-								n: laagNummer,
+								n: layerNumber,
 								layerKind: chosenOperation?.label.toLowerCase()
 							})}
 						>
@@ -651,10 +651,10 @@
 					disabled={library.busy || !chosenOperation}
 					title={chosenOperation
 						? past
-							? t('library.apply.title', { n: laagNummer })
+							? t('library.apply.title', { n: layerNumber })
 							: t('library.apply.mismatch', {
 									operation: operationLabel(preset.operation).toLowerCase(),
-									n: laagNummer
+									n: layerNumber
 								})
 						: t('library.menu.needsLayer')}
 					onclick={() => apply(preset)}
@@ -1442,7 +1442,7 @@
 			<ul class="profiles">
 				{#each library.machines as machine (machine.id)}
 					{@const leeg = machine.presets + machine.test_grids === 0}
-					{@const actief = machine.id === library.activeMachine?.id}
+					{@const active = machine.id === library.activeMachine?.id}
 					<li class:verweesd={machine.orphaned}>
 						<span>{machine.name}</span>
 						<span class="mono">{machine.power_watt ? `${machine.power_watt} W` : ''}</span>
@@ -1458,7 +1458,7 @@
 							     Only naming what is there — "0 settings" next to a profile that
 							     does carry a test grid is a half truth. -->
 							<span class="fijn">{bewijs(machine)}</span>
-						{:else if canEdit && !actief}
+						{:else if canEdit && !active}
 							<button
 								class="mini"
 								disabled={library.busy}
@@ -1980,7 +1980,7 @@
 	/* De naam duwt de rest naar rechts; zo staan het vermogen en het merkje
 	   op één lijn, ook als het ene profiel wel een merkje heeft en het andere niet. */
 	.profiles li > span:first-child { flex: 1; min-width: 0; }
-	/* Verweesd is geen fout maar wel iets om te weten: gedempt, niet rood. */
+	/* Verweesd is geen failure maar wel iets om te weten: gedempt, niet rood. */
 	.profiles li.verweesd { border-style: dashed; }
 	.profiles li.verweesd > span:first-child { color: var(--text-2); }
 	.profiles .merk {
@@ -2147,8 +2147,8 @@
 	}
 	.blok.wis p { margin: 0 0 var(--space-2); }
 	/* Op aanraakbreedtes is een selectievakje 44px hoog (design system), dus
-	   uitlijnen op de bovenkant zet het glyphje een regel onder zijn eigen
-	   label. Centreren houdt het naast de tekst op elk apparaat. */
+	   uitlijnen op de bovenkant set het glyphje een regel onder zijn eigen
+	   label. Centreren houdt het naast de tekst op elk device. */
 	.samenvoeg {
 		display: grid;
 		grid-template-columns: auto 1fr;

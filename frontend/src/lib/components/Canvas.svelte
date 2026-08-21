@@ -3,11 +3,11 @@
 	import type { Device } from '$lib/api';
 	import { kopspoor } from '$lib/status.svelte';
 	import { nulpunt } from '$lib/control.svelte';
-	import { elementNaam, type DesignStore } from '$lib/design.svelte';
+	import { elementName, type DesignStore } from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import type { TilingStore, Tile } from '$lib/tiling.svelte';
-	import LagenPalet from './LagenPalet.svelte';
+	import LayerPalette from './LayerPalette.svelte';
 	import Menu from './Menu.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
 	import {
@@ -135,11 +135,11 @@
 	let grofAanwijzen = $state(false);
 	$effect(() => {
 		if (typeof window === 'undefined' || !window.matchMedia) return;
-		const vraag = window.matchMedia('(pointer: coarse)');
-		grofAanwijzen = vraag.matches;
-		const luister = () => (grofAanwijzen = vraag.matches);
-		vraag.addEventListener('change', luister);
-		return () => vraag.removeEventListener('change', luister);
+		const ask = window.matchMedia('(pointer: coarse)');
+		grofAanwijzen = ask.matches;
+		const luister = () => (grofAanwijzen = ask.matches);
+		ask.addEventListener('change', luister);
+		return () => ask.removeEventListener('change', luister);
 	});
 
 	let handleR = $derived(5 * mmPerPx);
@@ -354,7 +354,7 @@
 	});
 
 	/**
-	 * De laatste meter van het spoor, vol aangezet: daar gebeurt het nu.
+	 * De last meter van het spoor, vol aangezet: daar gebeurt het nu.
 	 *
 	 * Kort houden. Met zestig punten kleurde bij een rechthoek de hele omtrek
 	 * op — gemeten op de proefjob — en dan is er geen verschil meer tussen
@@ -487,7 +487,7 @@
 	// ── Tegels: plaat groter dan bed (Task 15) ─────────────────────────────────
 	//
 	// 'Valt buiten het bed' is bij een plaat die zélf groter is dan het bed geen
-	// fout maar een werkwijze — dat is precies waarvoor tegelen bestaat. Dezelfde
+	// failure maar een werkwijze — dat is precies waarvoor tegelen bestaat. Dezelfde
 	// vergelijking als `buitenstaanders` hieronder, maar dan op het vel zelf in
 	// plaats van op een vorm erin.
 	/**
@@ -537,7 +537,7 @@
 		return lijnen;
 	});
 
-	// De pen: klikken zet een punt, Enter of een klik op het beginpunt sluit af.
+	// De pen: klikken set een punt, Enter of een klik op het beginpunt sluit af.
 	// Escape gooit weg wat er staat — halverwege stoppen moet zonder rommel.
 	let penPoints = $state<{ x: number; y: number }[]>([]);
 
@@ -729,7 +729,7 @@
 		} else if (tool === 'circle') {
 			onDrawn?.({ type: 'circle', cx_mm: at.x, cy_mm: at.y, r_mm: half });
 		} else if (tool === 'line') {
-			// Een lijn heeft twee punten: eerste klik zet het begin, tweede het
+			// Een lijn heeft twee punten: eerste klik set het begin, tweede het
 			// eind. Een vaste horizontale lijn plaatsen was onzin.
 			if (!lineStart) {
 				lineStart = at;
@@ -964,10 +964,10 @@
 		const perHoofd = Math.max(1, Math.round(step / fijn));
 		const marks: { value: number; major: boolean; buiten: boolean; label: string }[] = [];
 		const eerste = Math.ceil(fromMm / fijn - 0.001);
-		const laatste = Math.floor(toMm / fijn + 0.001);
+		const last = Math.floor(toMm / fijn + 0.001);
 		// Bij een absurde zoomstand niet duizenden knopen tekenen.
-		if (laatste - eerste > 400) return marks;
-		for (let i = eerste; i <= laatste; i++) {
+		if (last - eerste > 400) return marks;
+		for (let i = eerste; i <= last; i++) {
 			const value = i * fijn;
 			const major = ((i % perHoofd) + perHoofd) % perHoofd === 0;
 			marks.push({
@@ -1111,7 +1111,7 @@
 			// Gat C8: een vorm die op het scherm kleiner is dan het cijfer, krijgt
 			// er geen — bij vijftig kleine vormen wordt het bed anders een wolk
 			// getallen die niets meer aanwijst. Maar wat je zelf hebt aangeklikt is
-			// nooit ruis: één cijfer bij één vorm is precies de vraag die je stelde
+			// nooit ruis: één cijfer bij één vorm is precies de ask die je stelde
 			// toen je hem selecteerde. Dus de maatgrens geldt niet voor de selectie,
 			// en daarmee is de dubbele codering van C6 op elke zoomstand bereikbaar
 			// zonder in te zoomen.
@@ -1229,7 +1229,7 @@
 	});
 
 	/**
-	 * Staat het vastklikken aan? De knop naast de zoomregeling zet het uit voor
+	 * Staat het vastklikken aan? De knop naast de zoomregeling set het uit voor
 	 * langer dan één beweging, en die keuze blijft staan tussen sessies —
 	 * LightBurn en xTool hebben er allebei een schakelaar voor, en wie zonder
 	 * wil werken moet niet elke keer een toets vast hoeven houden.
@@ -1248,7 +1248,7 @@
 
 	/**
 	 * Alt keert de stand om voor die ene beweging: aan het vastklikken tegen,
-	 * uit het juist even aan. Dat laatste is hoe LightBurn het ook doet — een
+	 * uit het juist even aan. Dat last is hoe LightBurn het ook doet — een
 	 * modifier die niets doet zodra je de functie hebt uitgezet, is een dode toets.
 	 */
 	function snapUit(event: { altKey?: boolean } | null | undefined) {
@@ -1317,7 +1317,7 @@
 	 * onderkant en leest deze maat. Er staat inmiddels meer dan één strook
 	 * onder het bed — de kleurenstrook (B2) en de waarschuwing over werk buiten
 	 * het bed (C2) — dus meten we het blok als geheel. Opmeten en niet
-	 * uitrekenen: de hoogte verschilt per apparaat, want op aanraakschermen zijn
+	 * uitrekenen: de hoogte verschilt per device, want op aanraakschermen zijn
 	 * de knoppen groter en breekt de regel.
 	 */
 	let onderrandHoogte = $state(0);
@@ -1363,7 +1363,7 @@
 	}
 </script>
 
-<!-- De zoomsneltoetsen stonden hier en zijn verhuisd naar de pagina: sinds er
+<!-- De zoomsneltoetsen stonden hier en zijn verhuisd naar de pagina: since er
      één tabel met sneltoetsen is (`$lib/acties.ts`) hoort er ook één plek te
      zijn die ze afhandelt. Wat hier blijft is wat alleen hier bestaat: de pen
      afmaken, en de spatiebalk waarmee je pant. -->
@@ -1653,7 +1653,7 @@
 								     vóór de huidige tegel — die heeft de vorige tegel gebrand. -->
 								<g
 									class="tegel-merk"
-									class:actief={actieveGrens === null || merk.boundary === actieveGrens}
+									class:active={actieveGrens === null || merk.boundary === actieveGrens}
 								>
 									<circle cx={punt.x_mm} cy={punt.y_mm} r={4 * mmPerPx} />
 									<line
@@ -1812,7 +1812,7 @@
 									vector-effect="non-scaling-stroke"
 									role="button"
 									tabindex="0"
-									aria-label={t('canvas.selectShape', { name: elementNaam(element) })}
+									aria-label={t('canvas.selectShape', { name: elementName(element) })}
 									aria-pressed={design.isSelected(element.id)}
 									onclick={(e) => {
 										e.stopPropagation();
@@ -2136,7 +2136,7 @@
 					/>
 				{/if}
 
-				<!-- De oorsprong (gat C5). LightBurn zet er een vast hoekmerk met
+				<!-- De oorsprong (gat C5). LightBurn set er een vast hoekmerk met
 				     asletters neer, en met reden: bij ons viel 0,0 samen met de
 				     kopmarkering, dus zodra de kop bewoog was er niets meer dat zei
 				     waar de machine vandaan telt. Dit merk beweegt nooit.
@@ -2460,7 +2460,7 @@
      There it belongs to the shape you are holding, and not to a tab you have to
      look up first. A row of its own, no floating bar across the bed: it must never
      cover something you are aligning. -->
-<LagenPalet {design} {edits} {canEdit} onChanged={() => onEdited?.()} />
+<LayerPalette {design} {edits} {canEdit} onChanged={() => onEdited?.()} />
 </div>
 
 <style>
@@ -2771,7 +2771,7 @@
 		background: var(--warn-solid);
 		color: var(--void);
 	}
-	/* Task 15: dit is geen fout maar een aanbod, dus het accent in plaats van
+	/* Task 15: dit is geen failure maar een aanbod, dus het accent in plaats van
 	   het gevaar- of waarschuwingsrood, en een knop erbij in plaats van alleen
 	   een zin. */
 	.buiten-strook .regel.aanbod {
@@ -2838,7 +2838,7 @@
 		   er ook geen "nu" en staan ze allemaal even hard — dan is dit een plan. */
 		opacity: 0.35;
 	}
-	.tegel-merk.actief {
+	.tegel-merk.active {
 		opacity: 1;
 	}
 	.tegel-merk circle {

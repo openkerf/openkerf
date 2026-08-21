@@ -34,9 +34,9 @@ async function pagina(width, theme, pad) {
 	const page = await ctx.newPage();
 	if (theme === 'dark') {
 		await page.addInitScript(() => {
-			const zet = () => document.documentElement?.setAttribute('data-theme', 'dark');
-			zet();
-			document.addEventListener('DOMContentLoaded', zet);
+			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
+			set();
+			document.addEventListener('DOMContentLoaded', set);
 		});
 	}
 	const fouten = [];

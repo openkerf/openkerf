@@ -1,5 +1,5 @@
 /**
- * Live verbinding met de OpenKerf API.
+ * Live connection met de OpenKerf API.
  *
  * De WebSocket stuurt een snapshot bij connect, daarna kernel-signalen en elke
  * 2 s opnieuw een volledige snapshot. Read-only: we sturen niets terug.
@@ -7,7 +7,7 @@
 
 import { currentJob } from './api';
 import type { ApiEvent, Device, SignalEvent, Snapshot } from './api';
-import { verbinding } from './verbinding.svelte';
+import { connection } from './connection.svelte';
 
 const RECONNECT_MIN = 500;
 const RECONNECT_MAX = 10_000;
@@ -31,7 +31,7 @@ const MAX_EVENTS = 25;
  * Twee eerlijkheidsgrenzen die de weergave moet dragen:
  * 1. Het signaal zegt niet of de laser aan stond. Snijden en de sprong ernaartoe
  *    zien er in dit spoor hetzelfde uit, dus het heet "spoor" en geen "kerf".
- * 2. Tussen twee meldingen trekken we een rechte lijn. Bij een boog is dat de
+ * 2. Tussen twee notifications trekken we een rechte lijn. Bij een boog is dat de
  *    koorde, niet de boog.
  *
  * Het spoor hangt hier en niet in het canvas omdat de signalen hier binnenkomen;
@@ -40,7 +40,7 @@ const MAX_EVENTS = 25;
  */
 const SPOOR_MAX = 6000;
 /** Hoe vaak het spoor opnieuw getekend wordt. Tijdens een raster komen er
- *  honderden meldingen per seconde binnen; elke melding een hertekening is een
+ *  honderden notifications per seconde binnen; elke melding een hertekening is een
  *  onbruikbaar canvas. */
 const SPOOR_HERTEKEN_MS = 120;
 
@@ -122,7 +122,7 @@ export class StatusConnection {
 	 * Dit filterde op `running`, en dat vlaggetje gaat bij Lihuiyu op `false`
 	 * zodra je pauzeert. Gevolg: de job verdween uit de statusbalk, uit het
 	 * Job-paneel en van de telefoon, er was geen knop om te hervatten, en
-	 * "Job starten" werd weer actief bovenop werk dat alleen maar stilstond.
+	 * "Job starten" werd weer active bovenop werk dat alleen maar stilstond.
 	 */
 	get activeJob() {
 		return currentJob(this.device);
@@ -147,7 +147,7 @@ export class StatusConnection {
 
 	connect() {
 		this.#stopped = false;
-		verbinding.nuProberen = () => this.#nu();
+		connection.retryNow = () => this.#nu();
 		this.#open();
 	}
 
@@ -185,8 +185,8 @@ export class StatusConnection {
 
 		socket.onopen = () => {
 			this.connected = true;
-			verbinding.online = true;
-			verbinding.sinds = null;
+			connection.online = true;
+			connection.since = null;
 			this.#tellen(0);
 			this.#retryDelay = RECONNECT_MIN;
 		};
@@ -218,8 +218,8 @@ export class StatusConnection {
 
 		socket.onclose = () => {
 			this.connected = false;
-			verbinding.online = false;
-			verbinding.sinds ??= Date.now();
+			connection.online = false;
+			connection.since ??= Date.now();
 			this.#socket = null;
 			this.#scheduleReconnect();
 		};
@@ -230,7 +230,7 @@ export class StatusConnection {
 	/**
 	 * De server stelt zich voor (gat E2).
 	 *
-	 * Hier zat een stille fout: de WebSocket verbond na een herstart keurig
+	 * Hier zat een stille failure: de WebSocket verbond na een herstart keurig
 	 * terug, de statusbalk werd weer groen, en de pagina toonde daarna
 	 * onverstoorbaar het ontwerp van vóór de herstart — dat aan de andere kant
 	 * niet meer bestaat. Je tekent verder in een document dat weg is.
@@ -250,7 +250,7 @@ export class StatusConnection {
 		}
 		if (this.instance !== instance) {
 			this.instance = instance;
-			verbinding.herstart = true;
+			connection.herstart = true;
 		}
 	}
 
@@ -274,11 +274,11 @@ export class StatusConnection {
 	#tellen(ms: number) {
 		if (this.#tikker) clearInterval(this.#tikker);
 		this.#tikker = null;
-		verbinding.overSeconden = Math.ceil(ms / 1000);
+		connection.inSeconds = Math.ceil(ms / 1000);
 		if (ms <= 0) return;
 		this.#tikker = setInterval(() => {
-			verbinding.overSeconden = Math.max(0, verbinding.overSeconden - 1);
-			if (verbinding.overSeconden === 0 && this.#tikker) {
+			connection.inSeconds = Math.max(0, connection.inSeconds - 1);
+			if (connection.inSeconds === 0 && this.#tikker) {
 				clearInterval(this.#tikker);
 				this.#tikker = null;
 			}

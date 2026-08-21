@@ -5,7 +5,7 @@
  *
  * De lopende job is het lastige beeld: hij is er alleen als er werkelijk iets in
  * de spooler staat. Op deze machine (KH-5030, niet verbonden) blijft een job op
- * 0,998 hangen — dat is de gedocumenteerde upstream-fout waarbij `calc_steps` één
+ * 0,998 hangen — dat is de gedocumenteerde upstream-failure waarbij `calc_steps` één
  * stap meer telt dan `execute` uitvoert. Onhandig voor de engine, handig hier: het
  * geeft een stabiel "loopt"-beeld om naar te kijken.
  */
@@ -107,7 +107,7 @@ await new Promise((r) => setTimeout(r, 800));
 // ── Lagen ──
 await schiet('l1-lagen', '/?tab=layers');
 await schiet('l2-lagen-open', '/?tab=layers', async (page) => {
-	// De chip klapt de laag open; de ⋯ opent sinds v5 het rijmenu.
+	// De chip klapt de laag open; de ⋯ opent since v5 het rijmenu.
 	await page.locator('.layer .chip').first().click().catch(() => {});
 	await page.waitForTimeout(800);
 });

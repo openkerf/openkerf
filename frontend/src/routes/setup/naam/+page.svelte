@@ -16,7 +16,7 @@
 	// If this type came from the search button in step 1, the connection details
 	// found travel along as a parameter to the settings step. They are only applied
 	// *there*, and only when you save there: until then nothing is connected.
-	let verbinding = $derived($page.url.searchParams.get('verbinding') ?? '');
+	let connection = $derived($page.url.searchParams.get('connection') ?? '');
 	let gevonden = $derived($page.url.searchParams.get('gevonden') ?? '');
 
 	onMount(async () => {
@@ -56,7 +56,7 @@
 		const result = await store.create(typeKey, label.trim());
 		if (result) {
 			const params = new URLSearchParams({ machine: result.path });
-			if (verbinding) params.set('verbinding', verbinding);
+			if (connection) params.set('connection', connection);
 			await goto(`/setup/instellen?${params}`);
 		}
 	}

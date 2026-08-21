@@ -35,8 +35,8 @@ await eisScherm(page, '.topbar, .setup, .welkom', 'offline hoofdscherm');
 const uit = await page.evaluate(async () => {
 	const s = getComputedStyle(document.documentElement);
 	const mono = document.querySelector('.mono');
-	// `check()` meldt "nee" voor een gewicht dat nog niemand op het scherm zet,
-	// ook als het bestand er prima is. Dus eerst laten laden en dan pas vragen —
+	// `check()` meldt "nee" voor een gewicht dat nog niemand op het scherm set,
+	// ook als het bestand er prima is. Dus eerst laten laden en dan pas shouldAsk —
 	// anders meet je welke gewichten dit scherm gebruikt in plaats van welke de
 	// build meelevert.
 	for (const w of [400, 500, 600, 700]) {
@@ -72,7 +72,7 @@ if (uit.gewichten.some((g) => !g)) {
 		evidence: `400/500/600/700 = ${uit.gewichten.join('/')}` });
 }
 // De enige externe herkomst die nog over is, is de `<link>` naar
-// fonts.googleapis.com in routes/+layout.svelte. Die is sinds v3.3 overbodig, en
+// fonts.googleapis.com in routes/+layout.svelte. Die is since v3.3 overbodig, en
 // hij is de bron van de intermitterende c2-major "fouten in de browserconsole".
 // Daarom apart gemeld: het is geen fontprobleem meer, het is één regel HTML.
 const google = buiten.filter((u) => /googleapis|gstatic/.test(u));
@@ -80,7 +80,7 @@ if (google.length) {
 	findings.push({
 		severity: 'minor',
 		what: 'Er staat nog een externe fontverwijzing in de <head>',
-		evidence: `${google.join(' | ')} — overbodig sinds v3.3; hij levert offline ${fouten.length} consolefout(en) op`
+		evidence: `${google.join(' | ')} — overbodig since v3.3; hij levert offline ${fouten.length} consolefout(en) op`
 	});
 } else if (fouten.length) {
 	findings.push({ severity: 'minor', what: 'Fouten in de browserconsole zonder netwerk', evidence: fouten.join(' | ') });

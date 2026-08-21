@@ -38,7 +38,7 @@ for (const [naam, sel] of [
 			// Overloop van kínderen, niet van de kaart zelf. Een grid-item
 			// krimpt niet onder zijn inhoud en steekt dan buiten de kaart uit
 			// terwijl de kaart netjes binnen het paneel blijft — de kaart meten
-			// mist dat volledig, en precies die fout stond op de screenshot.
+			// mist dat volledig, en precies die failure stond op de screenshot.
 			const cs = getComputedStyle(kaart);
 			const binnenRechts =
 				kr.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);

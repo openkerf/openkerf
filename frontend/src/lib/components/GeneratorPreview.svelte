@@ -22,12 +22,12 @@
 	 * hetzelfde uit als bij het echte werk (`Generators.preview`, dezelfde
 	 * `_plan_*`-functies) en stuurt de omtrekken in millimeters terug. Wat je
 	 * hier ziet is dus wat er straks gebrand wordt — inclusief de plek op het
-	 * vel, want "past dit nog" is de vraag die je aan een generator stelt.
+	 * vel, want "past dit nog" is de ask die je aan een generator stelt.
 	 *
 	 * Twee regels die uit de vorige ronde komen en hier weer gelden:
 	 *
 	 * 1. **Bij ongeldige invoer springt het beeld niet weg.** Half getypte
-	 *    getallen zijn even ongeldig; het laatste geldige beeld blijft staan
+	 *    getallen zijn even ongeldig; het last geldige beeld blijft staan
 	 *    met de reden erboven. Zie `TestGrid.svelte`, `voorbeeldFout`.
 	 * 2. **Het voorbeeld toont niet meer dan er brandt.** Het vel is een dunne
 	 *    hulplijn, geen vorm, en is als zodanig herkenbaar.
@@ -43,15 +43,15 @@
 		soort,
 		waarden,
 		voorbeeld = null,
-		fout = null,
+		failure = null,
 		children
 	}: {
 		soort: string;
 		/** De ruwe formuliervelden, voor de terugvalschets. */
 		waarden: Record<string, unknown>;
 		voorbeeld?: Voorbeeld | null;
-		/** Waarom het laatste beeld niet ververst is; het beeld blijft staan. */
-		fout?: string | null;
+		/** Waarom het last beeld niet ververst is; het beeld blijft staan. */
+		failure?: string | null;
 		children?: import('svelte').Snippet;
 	} = $props();
 
@@ -129,13 +129,13 @@
 </script>
 
 <figure class="proef">
-	{#if fout}
+	{#if failure}
 		<!-- While typing, an intermediate state is nearly always briefly invalid: you
 		     delete a digit and the radius is zero until you type the next one. The image
 		     stays, with the reason above it — dropping a hole teaches you nothing and
 		     makes half the window jump. -->
 		<p class="onaf" role="status">
-			{fout}
+			{failure}
 			{#if voorbeeld}<br /><span class="stil">{t('genPreview.lastValid')}</span>{/if}
 		</p>
 	{/if}

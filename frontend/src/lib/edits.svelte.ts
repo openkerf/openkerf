@@ -108,7 +108,7 @@ export class EditController {
 	 *
 	 * Mét selectie verhuist die naar de laag van die kleur, die zo nodig wordt
 	 * aangemaakt op wat die kleur op deze machine eerder deed. Zonder selectie
-	 * zet hij de kleur voor nieuw werk.
+	 * set hij de kleur voor nieuw werk.
 	 */
 	async paletteColor(color: string, ids: string[] = []) {
 		const result = await this.#post('/api/design/palette', {
@@ -247,7 +247,7 @@ export class EditController {
 	}
 
 	/**
-	 * Hoeken afronden of afschuinen.
+	 * CornersDialog afronden of afschuinen.
 	 *
 	 * Geeft het antwoord zelf terug in plaats van alleen `ok`, want er staan twee
 	 * dingen in die de gebruiker moet zien: hoeveel hoeken zijn overgeslagen

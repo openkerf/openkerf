@@ -42,7 +42,7 @@ after(async () => {
 	await browser?.close();
 	if (!bereikbaar) return;
 	// Eerst weg van de proefmachine: de actieve machine laat zich niet
-	// verwijderen (409), en de laatste aangemaakte is nu de actieve.
+	// verwijderen (409), en de last aangemaakte is nu de actieve.
 	const alles = await machines();
 	const anders = alles.find((m) => !m.label.startsWith(NAAM));
 	if (anders) {

@@ -237,7 +237,7 @@ for (const theme of ['light', 'dark']) {
 	await page.waitForTimeout(500);
 	// Niet de omhullende doos meten: die is voor cijfers ongeveer 0,6 em, dus
 	// een correcte 11px-liniaal komt eruit als 6,6 en dan "vindt" de meter een
-	// fout die er niet is. Wat telt is de gerenderde lettergrootte: de
+	// failure die er niet is. Wat telt is de gerenderde lettergrootte: de
 	// opgegeven font-size maal de schaal waarmee de SVG op het scherm staat.
 	const klein = await page.$$eval('svg text', (ns) =>
 		ns

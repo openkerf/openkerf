@@ -11,10 +11,10 @@
 	} from '$lib/api';
 
 	import type { Controller } from '$lib/control.svelte';
-	import { verbinding } from '$lib/verbinding.svelte';
+	import { connection } from '$lib/connection.svelte';
 	import { t } from '$lib/i18n/index.svelte';
-	import Verbinding from './Verbinding.svelte';
-	import Melding from './Melding.svelte';
+	import ConnectionCard from './ConnectionCard.svelte';
+	import Melding from './Message.svelte';
 
 	let {
 		device,
@@ -64,13 +64,13 @@
 		? Math.round(job.progress * 100)
 		: null);
 
-	// Zonder verbinding is elk getal hieronder een herinnering, geen meting. Ze
+	// Zonder connection is elk getal hieronder een herinnering, geen meting. Ze
 	// blijven staan — ze zeggen nog steeds waar de kop stond — maar ze mogen
 	// zich niet voordoen als actueel.
 	let vers = $derived(connected);
 
 	/**
-	 * Wat er over de verbinding staat, in de juiste volgorde van slecht nieuws.
+	 * Wat er over de connection staat, in de juiste volgorde van slecht nieuws.
 	 *
 	 * Er stond één zin: "Verbonden met de laser" of niet. Die was driemaal
 	 * onwaar. Hij zei "verbonden" terwijl er geen kabel in zat, hij wees bij
@@ -78,18 +78,18 @@
 	 * en dan sta je een USB-kabel te controleren die niets mankeert — en hij
 	 * zei het ook als niemand het kón weten.
 	 *
-	 * Dat laatste was gat E3. Voor grbl, newly en het dummy-apparaat meldt de
+	 * Dat last was gat E3. Voor grbl, newly en het dummy-device meldt de
 	 * engine `connection.state === "unknown"`: er is domweg geen bron. Onze
 	 * balk maakte daar "Verbonden met de laser" van, met een groene stip erbij,
-	 * ook meteen na de wizard — terwijl de wizard zélf zegt dat de verbinding
+	 * ook meteen na de wizard — terwijl de wizard zélf zegt dat de connection
 	 * pas bij de eerste job gelegd wordt. Twee schermen die elkaar tegenspreken,
 	 * op de plek waar je het meest vertrouwt.
 	 *
 	 * Nu zegt de balk alleen "verbonden" als de driver dat zelf meldt. Weet
-	 * niemand het, dan staat dat er: "Verbinding onbekend". Dat is geen storing
+	 * niemand het, dan staat dat er: "ConnectionCard onbekend". Dat is geen storing
 	 * en geen belofte, en het is het enige wat waar is.
 	 *
-	 * Verleidelijk maar fout: een lopende job als bewijs nemen. Gemeten op deze
+	 * Verleidelijk maar failure: een lopende job als bewijs nemen. Gemeten op deze
 	 * eigen server — het Job-paneel toonde een job op 80 % terwijl de engine
 	 * eronder "USB connection did not exist" meldde. De spooler draait vrolijk
 	 * door zonder machine; hij is dus geen handshake.
@@ -129,7 +129,7 @@
 	 * Verbreken vraagt om bevestiging, verbinden niet. Gemeten op de echte
 	 * KH-5030 gaat opnieuw verbinden na een verbreken soms wél en soms niet: op
 	 * een server waar alleen curl tegen praat faalde het drie op drie, met de
-	 * app eraan stond de verbinding binnen ~6 s vanzelf weer open. Wat hem
+	 * app eraan stond de connection binnen ~6 s vanzelf weer open. Wat hem
 	 * heropent is niet gevonden. Zolang dat zo is, mag verbreken geen knop van
 	 * één klik zijn — en mag de tekst niet meer beloven dan we weten.
 	 */
@@ -151,14 +151,14 @@
 	);
 </script>
 
-<Verbinding brandt={Boolean(job?.running)} />
+<ConnectionCard brandt={Boolean(job?.running)} />
 
 <!-- Gat E2. De socket is terug, de balk is weer groen, maar het is een andere
      engine dan die deze pagina kent: de elementenboom aan de andere kant is
      leeg. Niet vanzelf herladen — dat gooit werk weg zonder dat iemand erom
      vroeg — maar het ook niet verzwijgen, want alles wat je hierna doet gaat
      over een document dat daar niet meer bestaat. -->
-{#if verbinding.herstart}
+{#if connection.herstart}
 	<div class="herstart" role="alert">
 		<div class="tekst">
 			<strong>{t('status.restart.title')}</strong>
@@ -224,7 +224,7 @@
 	</span>
 	{#if kanVerbinden}
 		{#if zekerVerbreken}
-			<span class="verbreek-vraag">
+			<span class="verbreek-ask">
 				{t('status.disconnect.ask')}
 				<button
 					class="verbind"
@@ -358,7 +358,7 @@
 	}
 	.verbind:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 	.verbind:disabled { opacity: 0.5; cursor: default; }
-	.verbreek-vraag {
+	.verbreek-ask {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-1);

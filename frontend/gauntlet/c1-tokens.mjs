@@ -34,7 +34,7 @@ for (const file of files) {
 		if (lines.slice(Math.max(0, index - 4), index).join(' ').includes('@tokens-mirror')) continue;
 		// Een kleurcode die je in een commentaarregel noemt, is uitleg en geen
 		// stijl. Deze meter sloeg aan op de zin die uitlegt waarom #0000ff00
-		// onbruikbaar is — dat is de meter die de fout in gaat, niet de code.
+		// onbruikbaar is — dat is de meter die de failure in gaat, niet de code.
 		const kaal = line.trim();
 		if (kaal.startsWith('//') || kaal.startsWith('*') || kaal.startsWith('/*')) continue;
 		// Een HTML-entiteit is geen kleurcode. `&#8239;` — de smalle vaste ruimte
@@ -136,8 +136,8 @@ if (sizes.length) {
 // respectievelijk 3,49. Toegestaan is dus `border`, `outline`, `stroke` en
 // `box-shadow` — plus een haarlijn die als blokje getekend wordt, en die
 // herken je aan een breedte of hoogte van een paar pixels in hetzelfde blok.
-// Wat overblijft is de echte fout: --line als tekstkleur, of als vlak dat
-// oplicht onder de muis. Daarvoor bestaat sinds v3.3 --hover.
+// Wat overblijft is de echte failure: --line als tekstkleur, of als vlak dat
+// oplicht onder de muis. Daarvoor bestaat since v3.3 --hover.
 const lijnmisbruik = [];
 for (const file of files) {
 	if (file.endsWith('tokens.css')) continue;

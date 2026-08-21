@@ -1,5 +1,5 @@
 /**
- * B3 — meldingen en alarm. Schermafdrukken én metingen.
+ * B3 — notifications en alarm. Schermafdrukken én metingen.
  *
  * Wat hier écht gebeurt en wat gezet is:
  *
@@ -9,7 +9,7 @@
  * - De **toestemmingstoestanden** zijn browsertoestanden: "toegestaan" zetten we
  *   met grantPermissions (dat is wat de browser ook doet), "geweigerd" met een
  *   override van `Notification.permission`, omdat Playwright geen weigering kent.
- * - De **lopende job** is gezet: het mock-apparaat springt binnen twee seconden
+ * - De **lopende job** is gezet: het mock-device springt binnen twee seconden
  *   naar 99,97% en blijft daar hangen, dus een job halverwege bestaat niet. We
  *   verbouwen de binnenkomende snapshot in de browser, zoals eerdere rondes ook
  *   deden. Alle UI eromheen is echte code.
@@ -28,24 +28,24 @@ const BREEDTES = [
 	['390', 390, 844]
 ];
 
-// 'chromium' = de nieuwe headless-modus. In de oude staat de toestemming voor
-// meldingen altijd op 'denied', ook na grantPermissions — dan meet je niets.
+// 'chromium' = de nieuwe headless-modus. In de oude staat de permission voor
+// notifications altijd op 'denied', ook na grantPermissions — dan meet je niets.
 const browser = await chromium.launch({ channel: 'chromium' });
 const bevindingen = [];
 
-async function maak({ width, height, theme, toestemming = 'default', job = false }) {
+async function maak({ width, height, theme, permission = 'default', job = false }) {
 	const context = await browser.newContext({
 		viewport: { width, height },
 		deviceScaleFactor: 1,
 		colorScheme: theme
 	});
-	if (toestemming === 'granted') await context.grantPermissions(['notifications'], { origin: BASE });
+	if (permission === 'granted') await context.grantPermissions(['notifications'], { origin: BASE });
 	const page = await context.newPage();
 	await page.addInitScript(
 		([t, perm, metJob]) => {
-			const zet = () => document.documentElement?.setAttribute('data-theme', t);
-			zet();
-			document.addEventListener('DOMContentLoaded', zet);
+			const set = () => document.documentElement?.setAttribute('data-theme', t);
+			set();
+			document.addEventListener('DOMContentLoaded', set);
 
 			if (perm === 'denied') {
 				Object.defineProperty(Notification, 'permission', {
@@ -115,7 +115,7 @@ async function maak({ width, height, theme, toestemming = 'default', job = false
 				};
 			}
 		},
-		[theme, toestemming, job]
+		[theme, permission, job]
 	);
 	await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 30000 });
 	await page.waitForSelector('.statusbar, .telefoon', { timeout: 20000 }).catch(() => {});
@@ -142,7 +142,7 @@ async function openInstellingen(page, width) {
 
 for (const [naam, width, height] of BREEDTES) {
 	for (const theme of ['light', 'dark']) {
-		// 1. Rust: niets aan de hand, toestemming nog niet gevraagd.
+		// 1. Rust: niets aan de hand, permission nog niet gevraagd.
 		{
 			const { context, page } = await maak({ width, height, theme });
 			await schiet(page, `rust-${naam}-${theme}`);
@@ -153,7 +153,7 @@ for (const [naam, width, height] of BREEDTES) {
 
 		// 2. Toestemming geweigerd: de toestand die je moet kunnen herstellen.
 		{
-			const { context, page } = await maak({ width, height, theme, toestemming: 'denied' });
+			const { context, page } = await maak({ width, height, theme, permission: 'denied' });
 			await openInstellingen(page, width);
 			await schiet(page, `instellingen-geweigerd-${naam}-${theme}`);
 			await context.close();
@@ -161,7 +161,7 @@ for (const [naam, width, height] of BREEDTES) {
 
 		// 3. Toestemming gegeven, en een melding daadwerkelijk verstuurd.
 		{
-			const { context, page } = await maak({ width, height, theme, toestemming: 'granted' });
+			const { context, page } = await maak({ width, height, theme, permission: 'granted' });
 			await openInstellingen(page, width);
 			await page.getByRole('button', { name: /testmelding/i }).click();
 			await page.waitForTimeout(600);
@@ -189,7 +189,7 @@ for (const [naam, width, height] of BREEDTES) {
 // eerst de server.
 for (const [naam, width, height] of BREEDTES) {
 	for (const theme of ['light', 'dark']) {
-		const { context, page } = await maak({ width, height, theme, toestemming: 'granted' });
+		const { context, page } = await maak({ width, height, theme, permission: 'granted' });
 		await page.evaluate(() => fetch('/api/job/start', { method: 'POST' }));
 		await page.waitForSelector('.alarm', { timeout: 20000 }).catch(() => {});
 		await page.waitForTimeout(3500);

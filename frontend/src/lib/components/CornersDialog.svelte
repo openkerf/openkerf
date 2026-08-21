@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Hoeken afronden of afschuinen.
+	 * CornersDialog afronden of afschuinen.
 	 *
 	 * Stond als dichtgeklapte vouw in het rechterpaneel. Het is een werkwoord met
 	 * twee instellingen, en daarmee valt het tussen de twee wal: te veel voor een

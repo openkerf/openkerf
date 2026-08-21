@@ -1,9 +1,9 @@
 /**
  * Draait het ontwerp zichzelf op hol na één wijziging?
  *
- * `design.load()` zet `loading` (een $state) op true en leest die waarde ook
+ * `design.load()` set `loading` (een $state) op true en leest die waarde ook
  * als herintredingsslot. Een $effect dat load() aanroept, neemt daarmee
- * `loading` als afhankelijkheid over: laden zet hem, dat maakt het effect
+ * `loading` als afhankelijkheid over: laden set hem, dat maakt het effect
  * ongeldig, dat roept opnieuw aan. Eén echte wijziging is genoeg om die lus te
  * starten, en hij stopt daarna nooit meer — ook niet als je het werk weggooit.
  *

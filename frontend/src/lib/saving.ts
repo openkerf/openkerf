@@ -2,13 +2,13 @@
  * Een bestand ophalen en aanbieden als download — en pas terugkomen als het er is.
  *
  * Opslaan was een gewone `<a href download>`. Dat werkt (het bestand komt),
- * maar de app leert er niets van: de server zet bij die route
+ * maar de app leert er niets van: de server set bij die route
  * `document.clean()`, terwijl de client zijn eigen `dirty` alleen bijwerkt als
  * `/api/design` opnieuw langskomt — en dat gebeurt bij een download niet, want
  * er verandert niets in de elementenboom en er komt dus geen signaal.
  *
- * Gemeten: iets tekenen, project opslaan, "Nieuw project" → *"Dit ontwerp is
- * gewijzigd sinds de laatste keer opslaan"*, terwijl `/api/design` op dat
+ * Gemeten: iets tekenen, project saving, "Nieuw project" → *"Dit ontwerp is
+ * gewijzigd since de last keer saving"*, terwijl `/api/design` op dat
  * moment `dirty: false` gaf. Een waarschuwing die ook komt als er niets aan de
  * hand is, leer je wegklikken; dat is de schade, niet de zin zelf.
  *

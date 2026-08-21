@@ -11,7 +11,7 @@
 	 * 1. De noodrem staat vást onderin en scrollt nooit weg — anders haal je de
 	 *    twee seconden niet zodra de fotolijst langer wordt dan het scherm.
 	 * 2. Elk blok verdient zijn hoogte. Een leeg podium van 130 px dat "geen job
-	 *    actief" zegt terwijl de kop dat al zei, is verspilde ruimte.
+	 *    active" zegt terwijl de kop dat al zei, is verspilde ruimte.
 	 * 3. Wat je meet, toon je één keer. Voortgang stond hier drie keer en de
 	 *    resterende tijd — het enige getal waar je op wacht — nul keer.
 	 */
@@ -30,11 +30,11 @@
 	} from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import type { CameraStore } from '$lib/camera.svelte';
-	import Verbinding from './Verbinding.svelte';
-	import { verbinding } from '$lib/verbinding.svelte';
-	import MeldingAlarm from './MeldingAlarm.svelte';
-	import MeldingKaart from './MeldingKaart.svelte';
-	import type { Bewaker, Meldingen } from '$lib/meldingen.svelte';
+	import ConnectionCard from './ConnectionCard.svelte';
+	import { connection } from '$lib/connection.svelte';
+	import AlarmCard from './AlarmCard.svelte';
+	import NotificationCard from './NotificationCard.svelte';
+	import type { Bewaker, Meldingen } from '$lib/notifications.svelte';
 	import type { DesignStore } from '$lib/design.svelte';
 
 	let {
@@ -43,7 +43,7 @@
 		job,
 		control,
 		camera,
-		meldingen,
+		notifications,
 		bewaker,
 		connected,
 		position,
@@ -57,7 +57,7 @@
 		job: Job | null;
 		control: Controller;
 		camera: CameraStore;
-		meldingen: Meldingen;
+		notifications: Meldingen;
 		bewaker: Bewaker;
 		connected: boolean;
 		position: string;
@@ -69,7 +69,7 @@
 
 	// `job` is alleen de lópende job. Een gepauzeerde job valt daar buiten, en
 	// die verdween daardoor compleet van dit scherm: je pauzeerde en het scherm
-	// meldde "geen job actief", zonder knop om te hervatten. `currentJob` is de
+	// meldde "geen job active", zonder knop om te hervatten. `currentJob` is de
 	// gedeelde definitie van "de job waar de bediening over gaat".
 	let huidig = $derived<Job | null>(currentJob(device));
 	let running = $derived(Boolean(huidig?.running));
@@ -278,18 +278,18 @@
 	 * De toestemmingsvraag krijgt hier zijn aanleiding van de machine zelf.
 	 *
 	 * Op de telefoon start je geen job (dat doet de desktop), dus is "er brandt
-	 * nu iets" het moment waarop de vraag ergens op slaat. Bij een leeg bed
-	 * vragen we niets; dan staat de instelling gewoon onderaan te wachten.
+	 * nu iets" het moment waarop de ask ergens op slaat. Bij een leeg bed
+	 * shouldAsk we niets; dan staat de instelling gewoon onderaan te wachten.
 	 */
 	let vraagWeg = $state(false);
-	let vraagNu = $derived(meldingen.vragen && !vraagWeg && Boolean(huidig));
+	let vraagNu = $derived(notifications.shouldAsk && !vraagWeg && Boolean(huidig));
 	/** De instelkaart uitgeklapt? Ingeklapt kost hij één regel. */
 	let instellingenOpen = $state(false);
 
 	/**
 	 * De rangorde van dit scherm (besluit B13).
 	 *
-	 * Loopt er een job, dan is "hoe ver" de vraag en blijft de ring boven. Staat
+	 * Loopt er een job, dan is "hoe ver" de ask en blijft de ring boven. Staat
 	 * de machine stil terwijl er een gebrand bord op een foto wacht, dan is dát
 	 * het werk — en het is het enige werk in deze hele app waarvoor je fysiek
 	 * een telefoon in je hand moet hebben.
@@ -307,9 +307,9 @@
 	/** De bedtekening onder die ene regel. Dicht, want je kwam voor de foto. */
 	let bedOpen = $state(false);
 	let meldStand = $derived(
-		meldingen.toestemming === 'denied'
+		notifications.permission === 'denied'
 			? 'geblokkeerd'
-			: meldingen.actief
+			: notifications.active
 				? 'aan'
 				: 'uit'
 	);
@@ -322,10 +322,10 @@
 	 * Wat er op het bed ligt (gat J10).
 	 *
 	 * Dit scherm tekende een leeg kader, ook met zeven vormen erop — en dan is
-	 * "kijken naast de machine" precies de ene vraag die je niet beantwoord
+	 * "kijken naast de machine" precies de ene ask die je niet beantwoord
 	 * krijgt: wát gaat er zo meteen gebrand worden.
 	 *
-	 * De paddata staat in Tats, net als op het canvas; één schaaltransform zet
+	 * De paddata staat in Tats, net als op het canvas; één schaaltransform set
 	 * hem om naar de millimeters waarin deze tekening meet. En omdat het in
 	 * millimeters meet, krijgt elke lijn `non-scaling-stroke` — anders is een
 	 * streek van 1 op een bed van 610 mm een haar van niks (of op een klein bed
@@ -396,7 +396,7 @@
 	/**
 	 * Werk dat buiten het bed of buiten het vel valt (gat P8).
 	 *
-	 * Het canvas meldt dit sinds C2 in twee zinnen onder de tekening; hier stond
+	 * Het canvas meldt dit since C2 in twee zinnen onder de tekening; hier stond
 	 * de vorm wél buiten het velkader getekend, maar zonder een woord erbij. Wie
 	 * naast de machine in de zon staat, leest kleurverschil als eerste niet meer.
 	 *
@@ -469,7 +469,7 @@
 	});
 </script>
 
-<Verbinding brandt={running} />
+<ConnectionCard brandt={running} />
 
 <div class="telefoon">
 	<!--
@@ -480,7 +480,7 @@
 		status — precisely the first thing you want to see with a connection alarm —
 		was permanently out of reach.
 	-->
-	<MeldingAlarm {bewaker} groot />
+	<AlarmCard {bewaker} groot />
 	<header>
 		<span class="dot {machineState}" aria-hidden="true"></span>
 		<span class="staat"
@@ -645,7 +645,7 @@
 			<p class="uitleg">{camera.state.reason ?? t('phone.noCamera')}</p>
 		{/if}
 		{#if camera.error}
-			<p class="fout">{camera.error}</p>
+			<p class="failure">{camera.error}</p>
 		{/if}
 	{/snippet}
 
@@ -781,7 +781,7 @@
 
 			{#if vraagNu}
 				<!-- The occasion is here now: there is work in the machine. -->
-				<MeldingKaart {meldingen} variant="aanleiding" onKlaar={() => (vraagWeg = true)} />
+				<NotificationCard {notifications} variant="aanleiding" onKlaar={() => (vraagWeg = true)} />
 			{/if}
 
 			{@render camerablok()}
@@ -803,7 +803,7 @@
 			</button>
 			{#if instellingenOpen}
 				<div class="meldbody">
-					<MeldingKaart {meldingen} />
+					<NotificationCard {notifications} />
 				</div>
 			{/if}
 		</section>
@@ -817,17 +817,17 @@
 		{#if !connected}
 			<!-- The only brake that still works is not on this screen. You should not
 			     have to conclude that yourself from two grey buttons. -->
-			<p class="fout" role="alert">
+			<p class="failure" role="alert">
 				{t('phone.stopOnMachine')}
-				<button class="opnieuw" onclick={() => verbinding.nuProberen()}>
-					{verbinding.overSeconden > 0
-						? t('phone.retry.auto', { seconds: verbinding.overSeconden })
+				<button class="opnieuw" onclick={() => connection.retryNow()}>
+					{connection.inSeconds > 0
+						? t('phone.retry.auto', { seconds: connection.inSeconds })
 						: t('phone.retry')}
 				</button>
 			</p>
 		{/if}
 		{#if control.error}
-			<p class="fout" role="alert">{control.error}</p>
+			<p class="failure" role="alert">{control.error}</p>
 		{/if}
 		<div class="knoppen">
 			{#if stil}
@@ -1049,7 +1049,7 @@
 	}
 	.camknop:disabled { opacity: 0.5; }
 	.uitleg { flex: none; margin: 0; color: var(--text-2); font-size: var(--text-xs); }
-	.fout { margin: 0; color: var(--danger); font-size: var(--text-xs); }
+	.failure { margin: 0; color: var(--danger); font-size: var(--text-xs); }
 
 	/* 12px tussen de rijen: elke rij is zelf een doel, en 8px was te dicht om
 	   met een duim zonder te kijken de goede te raken. */
@@ -1148,7 +1148,7 @@
 		color: var(--text-2);
 	}
 	.meldrij .stand.aan { color: var(--ok); }
-	/* Geblokkeerd is geen fout van de gebruiker maar wel iets wat je moet zien:
+	/* Geblokkeerd is geen failure van de gebruiker maar wel iets wat je moet zien:
 	   amber, want er valt iets te herstellen. */
 	.meldrij .stand.geblokkeerd { color: var(--warn); }
 	.meldrij .pijl { flex: none; color: var(--text-2); }

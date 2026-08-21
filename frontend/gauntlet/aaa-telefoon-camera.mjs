@@ -1,7 +1,7 @@
 /**
  * De twee camerastaten die deze machine niet kan leveren.
  *
- * 1. geen camera beschikbaar (de plugin ontbreekt of het apparaat heeft er geen)
+ * 1. geen camera beschikbaar (de plugin ontbreekt of het device heeft er geen)
  * 2. camera "aan", maar de stroom komt niet — de eerlijke uitkomst van een
  *    losgetrokken USB-kabel, en precies wat je op een telefoon te zien krijgt.
  */
@@ -27,9 +27,9 @@ for (const [naam, staat] of Object.entries(staten)) {
 		});
 		const page = await context.newPage();
 		await page.addInitScript((t) => {
-			const zet = () => document.documentElement?.setAttribute('data-theme', t);
-			zet();
-			document.addEventListener('DOMContentLoaded', zet);
+			const set = () => document.documentElement?.setAttribute('data-theme', t);
+			set();
+			document.addEventListener('DOMContentLoaded', set);
 		}, theme);
 		await page.route('**/api/camera', (r) =>
 			r.fulfill({ contentType: 'application/json', body: JSON.stringify(staat) })

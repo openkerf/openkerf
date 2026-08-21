@@ -40,9 +40,9 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 		await page.addInitScript(() => {
 			// Een initscript draait al vóórdat <html> bestaat; dan is
 			// documentElement nog null en gooit setAttribute.
-			const zet = () => document.documentElement?.setAttribute('data-theme', 'dark');
-			zet();
-			document.addEventListener('DOMContentLoaded', zet);
+			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
+			set();
+			document.addEventListener('DOMContentLoaded', set);
 		});
 	}
 	const problems = [];

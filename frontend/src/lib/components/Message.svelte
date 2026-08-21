@@ -5,7 +5,7 @@
 	 * De foutmelding van een import stond in het Job-tabblad, en importeren doe
 	 * je vanuit de bovenbalk terwijl je in Bewerken staat. Gevolg: een kapot
 	 * bestand leverde een keurig geformuleerde melding op die niemand ooit zag —
-	 * je zag alleen een bed dat leeg bleef. Een fout hoort te verschijnen waar je
+	 * je zag alleen een bed dat leeg bleef. Een failure hoort te verschijnen waar je
 	 * kijkt, niet waar hij vandaan komt.
 	 *
 	 * Blijft staan tot je hem wegklikt. Een melding die vanzelf verdwijnt, mis je

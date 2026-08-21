@@ -12,11 +12,11 @@
 		type Device,
 		type Job
 	} from '$lib/api';
-	import { apparaat } from '$lib/apparaat.svelte';
+	import { screen } from '$lib/screen.svelte';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import type { Controller, Position } from '$lib/control.svelte';
-	import { verbinding } from '$lib/verbinding.svelte';
-	import { inktOp, laagNummer, type Design } from '$lib/design.svelte';
+	import { connection } from '$lib/connection.svelte';
+	import { inkOn, layerNumber, type Design } from '$lib/design.svelte';
 	import JobPreview from './JobPreview.svelte';
 	import Segmented from './Segmented.svelte';
 
@@ -52,11 +52,11 @@
 		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
 
-	// Gat J9: één bron voor "waar woont deze actie". Zie apparaat.svelte.ts.
-	let balkdraagt = $derived(apparaat.bedieningInBalk);
+	// Gat J9: één bron voor "waar woont deze actie". Zie device.svelte.ts.
+	let balkdraagt = $derived(screen.controlsInBar);
 	let actions = $derived(control.capabilities?.actions ?? null);
 	let running = $derived(Boolean(job?.running));
-	// Stilstaand, niet alleen "gepauzeerd volgens het statusveld": pauzeren zet
+	// Stilstaand, niet alleen "gepauzeerd volgens het statusveld": pauzeren set
 	// bij Lihuiyu `running` op false en meldt verder niets. Zonder dit stond hier
 	// "Pauze" (uitgeschakeld) op een job die juist hervat moest worden.
 	let paused = $derived(isStalled(job));
@@ -125,7 +125,7 @@
 	 */
 	let ontwerp = $state<Design | null>(null);
 
-	// Wat de laag draagt tegenover waarin gebrand wordt. Dit is het laatste
+	// Wat de laag draagt tegenover waarin gebrand wordt. Dit is het last
 	// moment waarop dat verschil nog iets kost dat je kunt terugdraaien.
 	//
 	// Eén regel per laag: twee bezwaren over dezelfde laag lazen als twee lagen,
@@ -159,7 +159,7 @@
 	/**
 	 * Past het op het bed, en past het op het vel? (gaten J5 en C2)
 	 *
-	 * Beide vragen worden door de server beantwoord en niet hier: die meet ze
+	 * Beide shouldAsk worden door de server beantwoord en niet hier: die meet ze
 	 * toch al voor het canvas en de telefoon, en drie plekken die het zelf
 	 * uitrekenen kunnen het over de rand oneens worden. `bounds` hoort daarom
 	 * in `/api/job/layers` en niet alleen in `/api/job/estimate` — anders
@@ -267,7 +267,7 @@
 	 * al vervangen hebt.
 	 *
 	 * Met een rem erop: elke vorm die je tekent geeft een signaal, en `plan` is
-	 * niet gratis. 400 ms na de laatste wijziging is snel genoeg om vers te
+	 * niet gratis. 400 ms na de last wijziging is snel genoeg om vers te
 	 * voelen en langzaam genoeg om niet mee te typen.
 	 */
 	let schatKlok: ReturnType<typeof setTimeout> | null = null;
@@ -293,10 +293,10 @@
 	// same goes for a server that has dropped out: nothing arrives then, and a
 	// button that looks operable promises something that will not happen.
 	let blocked = $derived(
-		control.tokenProbleem || control.busy !== null || !verbinding.online
+		control.tokenProbleem || control.busy !== null || !connection.online
 	);
 	let blockedReason = $derived(
-		!verbinding.online
+		!connection.online
 			? t('job.blocked.noServer')
 			: control.tokenProbleem
 				? t('job.blocked.token')
@@ -305,13 +305,13 @@
 
 	// Moving the head while burning ruins the job at best.
 	let movingBlocked = $derived(
-		!verbinding.online
+		!connection.online
 			? t('job.blocked.noServerMove')
 			: running
 				? t('job.blocked.duringJob')
 				: undefined
 	);
-	let bewegenUit = $derived(running || !verbinding.online);
+	let bewegenUit = $derived(running || !connection.online);
 
 	// ------------------------------------------- bewaarde posities (gat J6)
 
@@ -363,7 +363,7 @@
 	 *
 	 * De pre-flight toonde bij een leeg bed opgewekt "Geschatte tijd 0:00", de
 	 * volledige veiligheidschecklist en een groene "Nu starten". Dat is twee
-	 * keer fout: je krijgt pas na het starten te horen dat er niets was, en je
+	 * keer failure: je krijgt pas na het starten te horen dat er niets was, en je
 	 * leert intussen om een veiligheidslijst weg te klikken die nergens over
 	 * gaat. Een checklist die je went af te vinken, beschermt niemand meer.
 	 *
@@ -541,11 +541,11 @@
 										     Gap J7: with the layer number in it. The design system forbids
 										     information that lives in colour alone, and of ten layer
 										     colours two collide under deuteranopia. The number comes from
-										     `laagNummer()` — the same source as the chip in the layer panel
+										     `layerNumber()` — the same source as the chip in the layer panel
 										     and the digit beside the shape on the canvas, so they cannot
 										     drift apart. -->
 										{#if colorFor}
-											{@const nummer = laagNummer(ontwerp, layer.id)}
+											{@const nummer = layerNumber(ontwerp, layer.id)}
 											<!-- Without `aria-hidden` a screen reader would otherwise hear a
 											     bare digit in front of the layer name: "1 Cut". `role="img"`
 											     with a name turns it into "Layer 1, Cut"; without a role most
@@ -559,7 +559,7 @@
 												<span
 													class="chip mono genummerd"
 													style:background={colorFor(layer.id)}
-													style:color={inktOp(colorFor(layer.id))}
+													style:color={inkOn(colorFor(layer.id))}
 													role="img"
 													aria-label={t('job.layerAria', { n: nummer })}
 												>{nummer}</span>
@@ -655,8 +655,8 @@
 					<button
 						class="btn primary groot"
 						onclick={confirmStart}
-						disabled={control.busy !== null || !verbinding.online}
-						title={verbinding.online ? undefined : blockedReason}
+						disabled={control.busy !== null || !connection.online}
+						title={connection.online ? undefined : blockedReason}
 					>
 						{control.busy === 'start' ? t('job.starting') : t('job.startNow')}
 					</button>
@@ -762,14 +762,14 @@
 				     input". -->
 				<button
 					class="btn danger stop"
-					class:dood={!verbinding.online}
-					disabled={!actions?.stop || control.tokenProbleem || !verbinding.online}
-					title={!verbinding.online
+					class:dood={!connection.online}
+					disabled={!actions?.stop || control.tokenProbleem || !connection.online}
+					title={!connection.online
 						? t('job.stop.noServer')
 						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}`}
 					onclick={() => control.stop()}
 				>
-					{#if verbinding.online}{t('job.stop')}{:else}{t('job.stop')}
+					{#if connection.online}{t('job.stop')}{:else}{t('job.stop')}
 						<strong>{t('job.stop.onMachine')}</strong>{/if}
 				</button>
 			</div>
@@ -1028,7 +1028,7 @@
 									{#each [-0.1, -0.01, 0.01, 0.1] as stap (stap)}
 										<button
 											class="rot stel"
-											disabled={!verbinding.online}
+											disabled={!connection.online}
 											title={t(stap > 0 ? 'job.adjust.more' : 'job.adjust.less', {
 												what: t(axis.key).toLowerCase()
 											})}
@@ -1038,7 +1038,7 @@
 									{/each}
 									<button
 										class="rot stel terug"
-										disabled={!verbinding.online || level === 1}
+										disabled={!connection.online || level === 1}
 										title={t('job.adjust.resetTitle')}
 										onclick={() => control.setAdjustment(axis.what, 1)}
 										>{t('job.adjust.reset')}</button
@@ -1133,7 +1133,7 @@
 	/* Gat J9. Hier stond `@media (max-width: 1199px)` en in TopBar een JS-prop:
 	   twee bronnen voor één afspraak, die uit de pas kunnen lopen met als
 	   slechtste uitkomst dat de pauzeknop nergens of twee keer staat. Beide
-	   lezen nu `apparaat.bedieningInBalk`; de klasse hieronder is het gevolg,
+	   lezen nu `screen.controlsInBar`; de klasse hieronder is het gevolg,
 	   niet de regel. */
 	.preflight {
 		border: 1px solid var(--line);
@@ -1165,7 +1165,7 @@
 	}
 	/* Met een nummer erin is de chip geen stip meer maar een klein vlak (gat J7).
 	   Even breed als hoog en met tabulaire cijfers, zodat een 1 en een 10 de
-	   kolom niet laten verspringen. De inkt (zwart of wit) komt uit `inktOp`:
+	   kolom niet laten verspringen. De inkt (zwart of wit) komt uit `inkOn`:
 	   op geel is wit 1,58:1 en dan lees je het cijfer domweg niet. */
 	.chip.genummerd {
 		width: 15px;

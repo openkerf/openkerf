@@ -330,7 +330,7 @@
 		margin-top: var(--space-8);
 		padding: var(--space-4);
 		border-radius: var(--radius-card);
-		/* Een waarschuwingsvlak, geen fout: dit apparaat werkt, het is alleen
+		/* Een waarschuwingsvlak, geen failure: dit device werkt, het is alleen
 		   niet het jouwe. Zie DESIGN-SYSTEM, "zekerheid is een zin". */
 		border-left: 3px solid var(--warn);
 		background: var(--surface-2);
@@ -392,7 +392,7 @@
 	.feiten dt { color: var(--text-2); }
 	.feiten dd { margin: 0; }
 	/* Het adres van de andere werkbank is het eerste dat hier niet klopt. Geen
-	   fout, wel iets om te controleren voor je iets brandt. */
+	   failure, wel iets om te controleren voor je iets brandt. */
 	.lokaal {
 		padding: var(--space-2) var(--space-3);
 		border-left: 3px solid var(--warn-solid, var(--warn));

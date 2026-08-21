@@ -90,7 +90,7 @@
 		if (Object.keys(vondst.settings).length) {
 			// The connection travels along as a parameter, so the back button and a
 			// refresh keep working — the same rule as for the rest of the wizard.
-			params.set('verbinding', JSON.stringify(vondst.settings));
+			params.set('connection', JSON.stringify(vondst.settings));
 			params.set('gevonden', `${vondst.title} · ${vondst.where}`);
 		}
 		goto(`/setup/naam?${params}`);

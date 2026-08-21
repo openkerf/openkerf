@@ -73,7 +73,7 @@ export type Capabilities = {
 		clear_queue: boolean;
 		load: boolean;
 	};
-	/** Wat dít apparaat kan bewegen. Verschilt per machine: een Ruida kent
+	/** Wat dít device kan bewegen. Verschilt per machine: een Ruida kent
 	 *  scherpstellen, een K40-bord niet. */
 	motion?: {
 		home: boolean;
@@ -92,7 +92,7 @@ export type Capabilities = {
 		speed: boolean;
 	};
 	/** Kan deze machine verbinden en verbreken? Ruida en de USB-families wel,
-	 *  grbl niet — die opent zijn verbinding zelf zodra er werk naartoe gaat. */
+	 *  grbl niet — die opent zijn connection zelf zodra er werk naartoe gaat. */
 	connection?: {
 		connect: boolean;
 		disconnect: boolean;
@@ -129,11 +129,11 @@ export type ApiEvent = SignalEvent | SnapshotEvent | HelloEvent;
 /**
  * Machine state as the UI shows it — dubbel gecodeerd, nooit alleen kleur.
  *
- * `offline` en `unplugged` zijn twee verschillende rampen en vragen om twee
+ * `offline` en `unplugged` zijn twee verschillende rampen en shouldAsk om twee
  * verschillende handelingen. `offline`: de app kan de OpenKerf-server niet
  * bereiken — herstart de server, of je zit op het verkeerde adres. `unplugged`:
  * de server draait prima, maar er hangt geen machine aan — controleer de kabel
- * of zet hem aan. Eén woord voor allebei stuurt de helft van de mensen naar de
+ * of set hem aan. Eén woord voor allebei stuurt de helft van de mensen naar de
  * verkeerde kabel.
  */
 export type MachineState = 'offline' | 'unplugged' | 'ready' | 'busy' | 'paused' | 'alarm';
@@ -142,9 +142,9 @@ export type MachineState = 'offline' | 'unplugged' | 'ready' | 'busy' | 'paused'
  * Wat de machine aan het doen is.
  *
  * `laser_status` alléén is geen betrouwbare bron: de Ruida-driver van MeerK40t
- * zet dat veld nergens (geverifieerd met een grep over `meerk40t/ruida/`), dus
+ * set dat veld nergens (geverifieerd met een grep over `meerk40t/ruida/`), dus
  * op onze doelmachine blijft het eeuwig "idle". Een groene "Gereed" boven een
- * brandende laser is precies de fout die je hier niet mag maken, daarom telt
+ * brandende laser is precies de failure die je hier niet mag maken, daarom telt
  * een lopende job in de spooler net zo hard mee.
  */
 export function machineState(device: Device | null, connected: boolean): MachineState {
@@ -164,7 +164,7 @@ export function machineState(device: Device | null, connected: boolean): Machine
 	if (device.laser_status === 'active') return 'busy';
 	if (job || device.spooler.idle === false) return 'busy';
 	// Pas hier, en niet eerder: een machine die brandt is per definitie
-	// verbonden, en een driver die zijn verbinding niet meldt mag een lopende
+	// verbonden, en een driver die zijn connection niet meldt mag een lopende
 	// job niet als "niet verbonden" wegzetten. Maar een stille machine zonder
 	// kabel is géén "Gereed" — dat was een groene stip boven een dode poort.
 	if (device.connection?.state === 'disconnected') return 'unplugged';
@@ -194,9 +194,9 @@ export function isPaused(job: Job | null): boolean {
 /**
  * De job waar de bediening over gaat.
  *
- * `running` alleen is te smal: Lihuiyu zet dat vlaggetje bij pauzeren op
+ * `running` alleen is te smal: Lihuiyu set dat vlaggetje bij pauzeren op
  * `false`, waarna de job uit beeld verdween — inclusief de knop om hem te
- * hervatten, en met "Job starten" weer actief bovenop een job die alleen maar
+ * hervatten, en met "Job starten" weer active bovenop een job die alleen maar
  * stilstond. Een gepauzeerde job is nog steeds jouw job, dus die telt hier mee.
  *
  * Drie bronnen, in aflopende zekerheid: hij loopt / hij zegt zelf gepauzeerd te
@@ -216,7 +216,7 @@ export function currentJob(device: Device | null): Job | null {
  * Ligt er werk dat niet vooruitkomt? Dat is iets anders dan "geen job": het
  * verschil tussen hervatten en opnieuw starten hangt eraan.
  *
- * Niet alleen op het statusveld kijken: pauzeren zet bij Lihuiyu `running` op
+ * Niet alleen op het statusveld kijken: pauzeren set bij Lihuiyu `running` op
  * `false` zonder verder iets te melden, en de drivers seinen een pauze sowieso
  * niet terug (FEATURE-GAPS P3). Een job die er wel is maar niet loopt, staat
  * stil — dat is wat je op het scherm wil zien.

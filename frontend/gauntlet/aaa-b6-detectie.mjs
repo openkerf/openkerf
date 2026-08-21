@@ -27,7 +27,7 @@ const VONDSTEN = {
 			detail: 'antwoordde op poort 50200',
 			kind: 'co2-ruida',
 			confidence: 'zeker',
-			why: 'Dit adres antwoordde op de vraag die de Ruida-driver ook stelt bij het verbinden.',
+			why: 'Dit adres antwoordde op de ask die de Ruida-driver ook stelt bij het verbinden.',
 			suggestions: [{ key: 'ruida-beta', label: 'Ruida', family: 'K-Series CO2-Laser' }],
 			settings: { interface: 'udp', address: '192.168.1.55' }
 		},
@@ -76,7 +76,7 @@ async function shoot(page, naam, breedte, thema) {
 
 const b = await browser();
 
-for (const [apparaat, breedte] of Object.entries(WIDTHS)) {
+for (const [device, breedte] of Object.entries(WIDTHS)) {
 	for (const thema of ['light', 'dark']) {
 		// --- rust ------------------------------------------------------------
 		let page = await open(b, { width: breedte, theme: thema, path: '/setup/soort' });

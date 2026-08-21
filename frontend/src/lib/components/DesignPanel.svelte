@@ -1,8 +1,8 @@
 <script lang="ts">
 	import {
 		LAYER_COLORS,
-		elementNaam,
-		inktOp,
+		elementName,
+		inkOn,
 		type DesignOperation,
 		type DesignStore
 	} from '$lib/design.svelte';
@@ -45,14 +45,14 @@
 		onAssign?: (operationId: string, assigned: boolean) => void;
 		onLayerChange?: () => void;
 		/** Alleen nog voor "alles op het bed leggen": de rest van het schikken
-		 *  woont sinds v4 in de actiebalk en het rechterklikmenu. */
+		 *  woont since v4 in de actiebalk en het rechterklikmenu. */
 		onArrange?: (action: string) => void;
-		/** Wat er van de laatste hoekbewerking te melden valt (overgeslagen
+		/** Wat er van de last hoekbewerking te melden valt (overgeslagen
 		 *  hoeken). Op een vaste plek in het paneel, niet in een browserpopup. */
 		cornerNote?: string | null;
 		/** Lege lagen weg. */
 		onPrune?: () => void;
-		/** Wat er van de laatste indeel-handeling te melden valt. */
+		/** Wat er van de last indeel-handeling te melden valt. */
 		tidyNote?: string | null;
 		onImage?: (adjustment: string) => void;
 		onImageDpi?: (dpi: number) => void;
@@ -171,7 +171,7 @@
 	/**
 	 * Waar de selectie stond toen je hem pakte.
 	 *
-	 * Dit is het anker voor "Terugzetten": zolang een selectie actief is, kun
+	 * Dit is het anker voor "Terugzetten": zolang een selectie active is, kun
 	 * je in één tik terug naar precies de stand van vóór het schikken — niet
 	 * naar de vorige klik, maar naar het origineel. Bewust géén schaduwkopie
 	 * van het document: elke tik blijft een gewone, ongedaan te maken bewerking
@@ -196,7 +196,7 @@
 			}
 			// Alleen bij een níeuwe selectie opnieuw ankeren. Zou het anker
 			// meelopen met elke bewerking, dan was het geen anker maar een
-			// spiegel van de laatste klik.
+			// spiegel van de last klik.
 			if (anchor?.key === key) return;
 			anchor = { key, angle: stand.angle, mirrored: stand.mirrored, box: { ...start } };
 		});
@@ -270,7 +270,7 @@
 		if (!anchor || !selectedIds.length) return;
 		const ids = selectedIds;
 		// Volgorde telt: spiegelen kantelt het teken van de hoek, dus de hoek
-		// gaat er daarna overheen, en het kader als laatste — dat zet ook de
+		// gaat er daarna overheen, en het kader als last — dat set ook de
 		// verschuiving terug die draaien om het midden achterlaat.
 		if (pose.mirrored !== anchor.mirrored) await edits.mirror(ids, 'horizontal');
 		if (anchor.angle !== null) await edits.rotate(ids, anchor.angle, true);
@@ -291,7 +291,7 @@
 	const hoekLabel = $derived.by(() => {
 		const maat = Number(hoekmaat);
 		const wat = hoekstijl === 'round' ? 'afronden' : 'afschuinen';
-		if (!chosen.length) return `Hoeken ${wat}`;
+		if (!chosen.length) return `CornersDialog ${wat}`;
 		const aantal = chosen.length === 1 ? '1 vorm' : `${chosen.length} vormen`;
 		if (!Number.isFinite(maat) || maat <= 0) return `${aantal} ${wat}`;
 		// De primaire knop zegt wát er komt, niet dát er iets komt (DESIGN-SYSTEM).
@@ -468,7 +468,7 @@
 	// ── Slepen om te herordenen (gat L1) ──────────────────────────────────────
 	//
 	// Niet de HTML5-sleep-API: die werkt niet op een aanraakscherm, en naast een
-	// laser is een tablet het gebruikelijke apparaat. Pointer-events werken op
+	// laser is een tablet het gebruikelijke device. Pointer-events werken op
 	// alle drie de apparaten met dezelfde code.
 	//
 	// De knoppen ↑/↓ in de uitklap blijven staan, en de greep zelf doet met de
@@ -519,7 +519,7 @@
 	 *
 	 * Gemeten: onze rij is 76 px op de desktop en 111 px op een aanraakscherm;
 	 * LightBurn doet 23–26 px. Boven de acht lagen is onze lijst daarmee een
-	 * scrollpartij. Compact zet identiteit en waarden op één regel in plaats van
+	 * scrollpartij. Compact set identiteit en waarden op één regel in plaats van
 	 * twee — de velden blijven staan, want bijstellen naast een draaiende machine
 	 * mag geen submenu kosten. Dat is precies waarom dit paneel bestaat.
 	 *
@@ -531,7 +531,7 @@
 	);
 
 	// Dezelfde volgorde als de server (`Drawing.BURN_ORDER`): eerst wat het
-	// oppervlak raakt, snijden als laatste. Hier alleen om te weten of de knop
+	// oppervlak raakt, snijden als last. Hier alleen om te weten of de knop
 	// nog iets te doen heeft — sorteren zelf gebeurt in de engine.
 	const BRAND_ORDER: Record<string, number> = {
 		'op image': 0,
@@ -690,7 +690,7 @@
 		<div class="selected">
 			<div class="head">
 				<span class="name" title={chosen.length > 1 ? undefined : selected.label}>
-					{chosen.length > 1 ? t('panel.shapes', { n: chosen.length }) : elementNaam(selected)}
+					{chosen.length > 1 ? t('panel.shapes', { n: chosen.length }) : elementName(selected)}
 				</span>
 				<!-- How many layers the selection is in used to be a paragraph of its own
 				     at the bottom of the panel, out of sight. It belongs to the identity
@@ -1174,7 +1174,7 @@
 						Hier stond een kolom van drie: een pijl omhoog, de sleepgreep, een
 						pijl omlaag. Die pijlen kwamen er voor gat L9 — slepen en de
 						pijltjestoetsen waren onzichtbare grepen, en er moest iets zijn dat
-						zichzelf uitlegt. Dat argument is vervallen: sinds de vorige ronde
+						zichzelf uitlegt. Dat argument is vervallen: since de vorige ronde
 						heeft elke laagrij een rechterklikmenu met de woorden "Eerder
 						branden" en "Later branden" erin, en dát legt zichzelf uit beter dan
 						een pijl van 11 px. Wat overblijft is de greep, met dezelfde
@@ -1213,7 +1213,7 @@
 					     layer, so the colour is also the way to its settings. -->
 					<button
 						class="chip mono"
-						style="background: {design.colorFor(op.id)}; color: {inktOp(
+						style="background: {design.colorFor(op.id)}; color: {inkOn(
 							design.colorFor(op.id)
 						)}"
 						disabled={!canEdit}
@@ -1560,7 +1560,7 @@
 						     doen. De engine kent dit niet uit zichzelf — een pass is bij haar
 						     een teller op één cutcode-object — dus wij bouwen het op in het
 						     plan, met een `z_move` tussen de passes en een beweging terug
-						     naar de begin­hoogte na de laatste. -->
+						     naar de begin­hoogte na de last. -->
 						<div class="zstep wide">
 							<NumberField
 								label={t('panel.zStep')}
@@ -2028,7 +2028,7 @@
 		place-items: center;
 		font-size: var(--text-xs);
 		font-weight: 600;
-		/* De inkt komt van inktOp() als inline stijl; dit is alleen de val voor
+		/* De inkt komt van inkOn() als inline stijl; dit is alleen de val voor
 		   een kleur die niet te ontleden is. */
 		color: var(--on-color);
 		border: 0;
@@ -2493,7 +2493,7 @@
 	/* Tien vaste kleuren, want een vrije kleurkiezer levert tinten op die op
 	   het canvas niet meer uit elkaar te houden zijn. */
 	/* Vijf per regel, ook op de desktop: tien op een rij past net niet in een
-	   paneel van 280 px en de laatste valt er dan buiten. */
+	   paneel van 280 px en de last valt er dan buiten. */
 	.swatches {
 		grid-column: 1 / -1;
 		display: grid;
@@ -2633,7 +2633,7 @@
 		border-radius: 50%;
 		border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
 	}
-	/* Geen laag betekent: deze vorm gaat de machine niet in. Dat is geen fout,
+	/* Geen laag betekent: deze vorm gaat de machine niet in. Dat is geen failure,
 	   maar het is wel het enige geval hier waar je iets moet doen. */
 	.geenlaag { color: var(--warn); }
 	.in-layers {

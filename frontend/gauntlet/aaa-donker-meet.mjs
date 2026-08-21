@@ -1,7 +1,7 @@
 /**
  * Meten in plaats van kijken: hoe verhouden de themawaarden zich echt?
  *
- * Drie vragen. (1) Halen tekst en rand hun contrast in beide thema's?
+ * Drie shouldAsk. (1) Halen tekst en rand hun contrast in beide thema's?
  * (2) Zijn aangrenzende vlakken (bed/canvas, kaart/paneel) in donker even goed
  * te onderscheiden als in licht? (3) Blijven de tien laagkleuren los van elkaar
  * én los van het bed?

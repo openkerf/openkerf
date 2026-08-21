@@ -15,7 +15,7 @@
 	import type { Controller } from '$lib/control.svelte';
 	import type { TilingStore } from '$lib/tiling.svelte';
 	import { t } from '$lib/i18n/index.svelte';
-	import { verbinding } from '$lib/verbinding.svelte';
+	import { connection } from '$lib/connection.svelte';
 	import JobControls from './JobControls.svelte';
 	import TileRun from './TileRun.svelte';
 
@@ -70,7 +70,7 @@
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->
-{#if !verbinding.online || !spooler?.present || wachtenden.length}
+{#if !connection.online || !spooler?.present || wachtenden.length}
 <div class="section">
 	<!-- "Spooler" is what the engine calls it. What it is to the user is the
 	     queue. -->
@@ -79,7 +79,7 @@
 	     know (no connection), the machine has no queue (protocol problem), or
 	     nothing is lined up. One line "the queue is empty" for all three
 	     reassured the user at moments when it should not have. -->
-	{#if !verbinding.online}
+	{#if !connection.online}
 		<p class="empty">{t('queue.unknown')}</p>
 	{:else if !spooler?.present}
 		<p class="empty">{t('queue.noQueue')}</p>

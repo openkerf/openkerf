@@ -92,12 +92,12 @@ async function pagina(b, width, theme) {
 
 const b = await browser();
 const bevindingen = [];
-const meld = (r) => {
+const notify = (r) => {
 	bevindingen.push(r);
 	console.log(r);
 };
 
-// ── 1. De hoofdmeting: twee rechthoeken exact naast elkaar, per apparaat/thema.
+// ── 1. De hoofdmeting: twee rechthoeken exact naast elkaar, per device/thema.
 for (const [naam, width] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 390]]) {
 	for (const theme of ['light', 'dark']) {
 		await verseVormen();
@@ -109,7 +109,7 @@ for (const [naam, width] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 3
 			// Op de telefoon bestaat het canvas niet; toch vastleggen wat er dán
 			// staat, want de kijkplicht vraagt alle drie de breedtes.
 			await page.screenshot({ path: `${OUT}/${ronde}-${naam}-${theme}-0-geen-canvas.png` });
-			meld(`${naam}/${theme}: geen canvas op dit apparaat, niets te snappen`);
+			notify(`${naam}/${theme}: geen canvas op dit device, niets te snappen`);
 			await page.context().close();
 			continue;
 		}
@@ -130,7 +130,7 @@ for (const [naam, width] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 3
 		const [A, B] = (await dozen()).sort((p, q) => p.x0 - q.x0);
 		const gat = B.x0 - A.x1;
 		const scheef = B.y0 - A.y0;
-		meld(
+		notify(
 			`${naam}/${theme}: hulplijnen ${lijnen}, gat ${gat.toFixed(3)} mm, hoogteverschil ${scheef.toFixed(3)} mm`
 		);
 		if (page.problems.length) bevindingen.push(`  console: ${page.problems.slice(0, 2)}`);
@@ -149,7 +149,7 @@ for (const [naam, width] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 3
 		{ alt: true, shot: `${OUT}/${ronde}-desktop-light-4-alt.png` }
 	);
 	const [A, B] = (await dozen()).sort((p, q) => p.x0 - q.x0);
-	meld(
+	notify(
 		`alt ingedrukt: hulplijnen ${lijnen}, gat ${(B.x0 - A.x1).toFixed(3)} mm (hoort ≠ 0)`
 	);
 	await page.context().close();
@@ -191,7 +191,7 @@ for (const [label, tikken, mis] of [
 		{ shot: `${OUT}/${ronde}-desktop-light-5-zoom${label}.png` }
 	);
 	const [A, B] = (await dozen()).sort((p, q) => p.x0 - q.x0);
-	meld(
+	notify(
 		`zoom ${zoom} (1 px = ${mmPerPx.toFixed(3)} mm, trefafstand ${(9 * mmPerPx).toFixed(2)} mm): ` +
 			`hulplijnen ${lijnen}, gat ${(B.x0 - A.x1).toFixed(3)} mm bij ${mis} mm ernaast`
 	);
@@ -209,7 +209,7 @@ for (const theme of ['light', 'dark']) {
 		{ shot: `${OUT}/${ronde}-desktop-${theme}-6-bedrand.png` }
 	);
 	const doos = (await dozen()).sort((p, q) => p.x0 - q.x0)[0];
-	meld(
+	notify(
 		`bedrand ${theme}: hulplijnen ${lijnen}, linkerboven op ${doos.x0.toFixed(3)}, ${doos.y0.toFixed(3)} mm`
 	);
 	await page.context().close();
@@ -236,7 +236,7 @@ for (const theme of ['light', 'dark']) {
 	await page.mouse.up();
 	await page.waitForTimeout(600);
 	const [A, B] = (await dozen()).sort((p, q) => p.x0 - q.x0);
-	meld(
+	notify(
 		`schalen: hulplijnen ${lijnen}, hoek B op ${B.x0.toFixed(3)}, ${B.y0.toFixed(3)} mm ` +
 			`(hoek A: ${A.x1.toFixed(3)}, ${A.y1.toFixed(3)})`
 	);
@@ -253,7 +253,7 @@ for (const theme of ['light', 'dark']) {
 	await page.screenshot({ path: `${OUT}/${ronde}-desktop-light-8-schakelaar-uit.png` });
 	let lijnen = await sleep(page, { x: 103.1 + 20, y: 62.7 + 15 }, { x: 121.4, y: 76.1 });
 	let s = (await dozen()).sort((p, q) => p.x0 - q.x0);
-	meld(
+	notify(
 		`schakelaar uit: hulplijnen ${lijnen}, gat ${(s[1].x0 - s[0].x1).toFixed(3)} mm (hoort ≠ 0), ` +
 			`aria-pressed=${await knop.getAttribute('aria-pressed')}`
 	);
@@ -272,7 +272,7 @@ for (const theme of ['light', 'dark']) {
 		{ alt: true, shot: `${OUT}/${ronde}-desktop-light-9-uit-plus-alt.png` }
 	);
 	s = (await dozen()).sort((p, q) => p.x0 - q.x0);
-	meld(
+	notify(
 		`schakelaar uit + alt: hulplijnen ${lijnen}, gat ${(s[1].x0 - s[0].x1).toFixed(3)} mm (hoort 0), ` +
 			`stand onthouden = ${(await knop.getAttribute('aria-pressed')) === 'false'}`
 	);

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '$lib/tokens.css';
 	import { page } from '$app/stores';
-	import Welkom from '$components/Welkom.svelte';
+	import Welcome from '$components/Welcome.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 
 	let { children } = $props();
@@ -37,13 +37,13 @@
 
 	let stand = $state<'onbekend' | 'nodig' | 'klaar'>('onbekend');
 	// Rondkijken is een keuze voor deze sessie, niet voor altijd: een volgende
-	// keer opstarten hoort weer bij de vraag te beginnen.
+	// keer opstarten hoort weer bij de ask te beginnen.
 	let rondkijken = $state(false);
 
 	let inWizard = $derived($page.url.pathname.startsWith('/setup'));
 
 	/**
-	 * De wizard verandert het antwoord, dus na de wizard opnieuw vragen.
+	 * De wizard verandert het antwoord, dus na de wizard opnieuw shouldAsk.
 	 *
 	 * Dit was de bug die Jelle vond: wie op het werkgebied begint krijgt hier
 	 * `stand = 'nodig'`, gaat de wizard in, maakt zijn machine aan en klikt op
@@ -82,7 +82,7 @@
 	});
 </script>
 
-<!-- De fonts komen sinds v3.3 uit de build zelf (@font-face in tokens.css, zes
+<!-- De fonts komen since v3.3 uit de build zelf (@font-face in tokens.css, zes
      woff2 van samen 128 KB). De link naar fonts.googleapis.com die hier stond
      voegde daar niets aan toe en was het énige externe verzoek van de app;
      zonder netwerk leverde hij ERR_FAILED in de console op. -->
@@ -90,7 +90,7 @@
 {#if inWizard || rondkijken || stand === 'klaar'}
 	{@render children()}
 {:else if stand === 'nodig'}
-	<Welkom onrondkijken={() => (rondkijken = true)} />
+	<Welcome onrondkijken={() => (rondkijken = true)} />
 {:else}
 	<!-- Zolang `stand` onbekend is tekenen we het werkgebied niet: dat zou
 	     opflitsen met de melding dat de laser klaarstaat. Maar een volstrekt

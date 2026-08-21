@@ -8,7 +8,7 @@
 
 import { apiError, t } from './i18n/core.ts';
 import type { Capabilities } from './api';
-import { verbinding } from './verbinding.svelte';
+import { connection } from './connection.svelte';
 
 const TOKEN_KEY = 'openkerf.token';
 
@@ -18,7 +18,7 @@ export type Position = { name: string; x_mm: number; y_mm: number };
 /**
  * Het nulpunt van de gebruiker (gat J12), als losse module-toestand.
  *
- * Twee schermen hebben hem nodig: het Job-paneel, dat hem zet, en het canvas,
+ * Twee schermen hebben hem nodig: het Job-paneel, dat hem set, en het canvas,
  * dat laat zien waar het werk terechtkomt. Die twee zitten niet in elkaar en de
  * pagina ertussen is niet van deze ronde, dus in plaats van een prop door drie
  * lagen te rijgen staat hij hier — één waarde, twee lezers.
@@ -176,7 +176,7 @@ export class Controller {
 		return this.#post('/api/job/stop', 'stop');
 	}
 	/**
-	 * De verbinding met de machine opzetten of verbreken.
+	 * De connection met de machine opzetten of verbreken.
 	 *
 	 * Niet elke driver kent het: Ruida heeft `ruida_connect`, de USB-families
 	 * `usb_connect`, en grbl opent zelf zodra er werk naartoe gaat. Wat de
@@ -347,8 +347,8 @@ function onbereikbaar(e: unknown): string {
 	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
 		return t('error.noNetwork');
 	}
-	verbinding.online = false;
-	verbinding.sinds ??= Date.now();
+	connection.online = false;
+	connection.since ??= Date.now();
 	return t('error.serverGone');
 }
 
