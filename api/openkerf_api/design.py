@@ -319,6 +319,17 @@ class DesignReader:
             (y1 - y0) / UNITS_PER_MM,
         )
 
+    def element_ids(self) -> list[str]:
+        """
+        The ids of the shapes on the bed, in tree order.
+
+        Cheaper than a whole snapshot, and it exists for one thing: the import route
+        compares before with after to see what came in. `validate_ids()` first, or a
+        freshly loaded shape has no id yet and would look like nothing at all.
+        """
+        self.elements.validate_ids()
+        return [node.id for node in self.elements.elems() if node.id]
+
     def snapshot(self) -> dict:
         # Give every node a stable identifier. The engine's own mechanism:
         # existing ids are kept, missing ones get "meerk40t:N", duplicates are

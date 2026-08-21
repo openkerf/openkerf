@@ -174,11 +174,8 @@
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const tiling = new TilingStore(token);
 	/** An action that replaces the current work, awaiting a yes. */
-	type Vervanging =
-		| { kind: 'file'; file: File }
-		| { kind: 'project'; file: File }
-		| { kind: 'fresh' };
-	let pending = $state<Vervanging | null>(null);
+	type Replacement = { kind: 'project'; file: File } | { kind: 'fresh' };
+	let pending = $state<Replacement | null>(null);
 	/** Timestamp of the recovery file that would survive this action. */
 	let recoverable = $state<string | null>(null);
 	/** Which question is up now; a late answer to an older one does not count. */
@@ -244,23 +241,47 @@
 	 */
 	async function openFile(file: File) {
 		if (!canEdit) return;
-		await maybeAskFirst({ kind: 'file', file });
+		await importInto(file);
 	}
 
 	/**
-	 * Every action that replaces the current work asks the same question.
+	 * Importing adds to the sheet.
 	 *
-	 * Opening a file already did that; opening a project file went straight over it
-	 * without a word — including the sheets, because those come along from the file.
-	 * That is the worst form: throwing work away silently.
+	 * It used to empty the bed first, and then ask whether that was allowed. That is
+	 * what *opening* means, not what importing means: a sheet is a plate, and a plate
+	 * holds more than one part — the second import threw away the first. There is
+	 * nothing to ask any more, because nothing goes away.
 	 *
-	 * What counts as "work" differs per action. A file comes onto *this* sheet, so only
-	 * this sheet counts there. A project and starting over replace *all* the sheets, so
-	 * then yesterday's box counts too, even when the sheet you see now is empty.
+	 * What did come in is selected, so it can be dragged into place straight away. On
+	 * a sheet that already has work the new shapes land at the coordinates the file
+	 * gives them, and that is often right on top of something; without a selection you
+	 * would first be looking for what just arrived.
 	 */
-	async function maybeAskFirst(action: Vervanging) {
-		const touchesEverySheet = action.kind !== 'file';
-		const thereIsWork = !design.isEmpty || (touchesEverySheet && sheets.sheets.length > 1);
+	async function importInto(file: File) {
+		const added = await control.load(file);
+		if (added === null) return;
+		await design.load();
+		// The API refuses a file without shapes, so an empty import does not get here;
+		// the guard is there so a future route that does allow it says nothing rather
+		// than "0 shapes imported".
+		if (!added.length) return;
+		design.selectMany(added);
+		layoutNotice = t('notice.import.added', { n: added.length });
+	}
+
+	/**
+	 * Both actions that replace the current work ask the same question.
+	 *
+	 * Opening a project file went straight over it without a word — including the
+	 * sheets, because those come along from the file. That is the worst form: throwing
+	 * work away silently. Importing is no longer among these: it adds, so there is
+	 * nothing to lose.
+	 *
+	 * Both of them replace *all* the sheets, so yesterday's box counts too, even when
+	 * the sheet you see now is empty.
+	 */
+	async function maybeAskFirst(action: Replacement) {
+		const thereIsWork = !design.isEmpty || sheets.sheets.length > 1;
 		if (!thereIsWork) {
 			await runIt(action);
 			return;
@@ -289,10 +310,8 @@
 		await maybeAskFirst({ kind: 'fresh' });
 	}
 
-	async function runIt(action: Vervanging) {
-		if (action.kind === 'file') {
-			await replaceWith(action.file);
-		} else if (action.kind === 'project') {
+	async function runIt(action: Replacement) {
+		if (action.kind === 'project') {
 			await laadProject(action.file);
 		} else {
 			const response = await fetch('/api/project/new', {
@@ -344,39 +363,25 @@
 		}
 	}
 
-	async function replaceWith(file: File) {
-		if (!design.isEmpty) {
-			if (!(await edits.clear()).ok) return;
-		}
-		if (await control.load(file)) {
-			design.select(null);
-			await design.load();
-		}
-	}
-
-	/** Placing adds: the engine loads on top of what is already there. */
+	/** Placing adds too, and here that was always the case. */
 	async function placeImage(file: File) {
 		if (!canEdit) return;
-		if (await control.load(file)) await design.load();
+		if ((await control.load(file)) !== null) await design.load();
 	}
 
 	async function saveThenOpen() {
 		const action = pending;
 		pending = null;
 		if (!action) return;
-		// Downloading counts as saving: the API marks the design clean. What would go
-		// away decides what you keep: for a file that is this sheet, for a project and
-		// for starting over *all* the sheets go — and then an SVG of the active sheet is
-		// not a rescue but half of one.
+		// Downloading counts as saving: the API marks the design clean. Both actions
+		// that get here replace *all* the sheets, so what is kept is the whole project
+		// and not an SVG of the active sheet — that would be half a rescue.
 		//
 		// Wait until the file really is there, and do not hope for 800 ms: the next
 		// thing that happens empties the bed. If the save fails, the emptying does not
 		// go ahead and the dialog is still up.
-		const opgeslagen =
-			action.kind === 'file'
-				? await saveFile('/api/design/export.svg', 'design.svg')
-				: await saveFile('/api/project/export.openkerf', 'project.openkerf');
-		if (!opgeslagen) {
+		const saved = await saveFile('/api/project/export.openkerf', 'project.openkerf');
+		if (!saved) {
 			pending = action;
 			return;
 		}
@@ -1347,16 +1352,14 @@
 	</div>
 </Dialog>
 
-<!-- Opening, opening a project and starting over all three throw work away: ask
-     first, with the same words and the same way out. -->
+<!-- Opening a project and starting over both throw work away: ask first, with the
+     same words and the same way out. Importing is not among them — that adds. -->
 <Dialog
 	title={pending?.kind === 'fresh'
 		? t('replace.title.new')
 		: design.dirty
 			? t('replace.title.unsaved')
-			: pending?.kind === 'project'
-				? t('replace.title.project')
-				: t('replace.title.sheet')}
+			: t('replace.title.project')}
 	open={pending !== null}
 	width="510px"
 >
@@ -1366,14 +1369,10 @@
 	<p class="ask">
 		{#if design.dirty}
 			{t('replace.changed')}
-		{:else if pending?.kind === 'file'}
-			{t('replace.workOnSheet', { n: design.elements.length })}
 		{:else}
 			{t('replace.workInProject')}
 		{/if}
-		{#if pending?.kind === 'file'}
-			{t('replace.opensSheet')}
-		{:else if pending?.kind === 'project'}
+		{#if pending?.kind === 'project'}
 			{t('replace.opensProject', { n: sheets.sheets.length })}
 		{:else if sheets.sheets.length === 1}
 			{t('replace.emptiesBed')}

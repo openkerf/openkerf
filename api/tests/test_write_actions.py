@@ -164,6 +164,62 @@ def test_load_accepts_an_upload(kernel, local_client):
     assert len(list(kernel.elements.elems())) > before
 
 
+def test_importing_a_second_drawing_adds_to_the_first(kernel, local_client):
+    """
+    Importing adds. Emptying the bed first is what *opening* means.
+
+    A sheet is a plate, and a plate holds more than one part: whoever imports a
+    second drawing is laying a second part on it. It used to be gone — the
+    interface emptied the bed before every import, so the first drawing
+    disappeared. Measured then: five shapes, import one more, one shape on the bed.
+    """
+    def a_square(x: int) -> bytes:
+        return (
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="200mm">'
+            b'<rect x="%d" y="10" width="20" height="10"/></svg>' % x
+        )
+
+    first = local_client.post(
+        "/api/job/load", files={"file": ("one.svg", a_square(10), "image/svg+xml")}
+    )
+    assert first.status_code == 200, first.text
+    after_one = len(list(kernel.elements.elems()))
+
+    second = local_client.post(
+        "/api/job/load", files={"file": ("two.svg", a_square(60), "image/svg+xml")}
+    )
+
+    assert second.status_code == 200, second.text
+    assert len(list(kernel.elements.elems())) == after_one + 1
+    # And it says what came in, so the interface can select exactly that.
+    body = second.json()
+    assert body["count"] == 1
+    assert len(body["added"]) == 1
+    assert kernel.elements.find_node(body["added"][0]) is not None
+
+
+def test_an_import_onto_work_leaves_the_design_unsaved(kernel, local_client):
+    """
+    An empty bed plus a file *is* that file; a mixture exists nowhere on disk.
+
+    The route marked the design clean after every load, which was right while
+    importing replaced everything. Now that it adds, that would tell the recovery
+    file there is nothing to keep — and the work you imported onto would be the
+    thing that gets lost.
+    """
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="80mm">'
+        b'<rect x="1" y="1" width="20" height="10"/></svg>'
+    )
+
+    local_client.post("/api/job/load", files={"file": ("one.svg", svg, "image/svg+xml")})
+    assert local_client.get("/api/design").json()["dirty"] is False
+
+    local_client.post("/api/job/load", files={"file": ("two.svg", svg, "image/svg+xml")})
+
+    assert local_client.get("/api/design").json()["dirty"] is True
+
+
 def test_load_refuses_a_file_that_is_not_a_drawing(kernel, local_client):
     """
     A renamed or half-downloaded file came out as HTTP 200 {"ok": true}: the engine shouts
@@ -178,17 +234,17 @@ def test_load_refuses_a_file_that_is_not_a_drawing(kernel, local_client):
     assert response.status_code == 409
     message = " ".join(response.json()["detail"]["output"])
     assert "broken.svg" in message
-    # Gebruikerstaal, geen protocoltaal: geen "Malformed", geen tijdelijk pad.
+    # The user's language, not the protocol's: no "Malformed", no temp path.
     assert "Malformed" not in message
     assert "/var/" not in message
 
 
 def test_load_says_so_when_the_file_holds_no_shapes(kernel, local_client):
-    """Een SVG zonder vormen laadt zonder klacht en levert een leeg bed op."""
+    """An SVG without shapes loads without complaint and gives an empty bed."""
     svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="50mm"></svg>'
 
     response = local_client.post(
-        "/api/job/load", files={"file": ("leeg.svg", svg, "image/svg+xml")}
+        "/api/job/load", files={"file": ("empty.svg", svg, "image/svg+xml")}
     )
 
     assert response.status_code == 409

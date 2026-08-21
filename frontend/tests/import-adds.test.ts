@@ -1,19 +1,19 @@
 /**
- * Importing replaces the sheet. Does it ask first?
+ * Importing adds to the sheet. Does the second one keep the first?
  *
  * Running against a live server:
- *   OK_BASE=http://127.0.0.1:8181 node --test frontend/tests/import-asks-first.test.ts
+ *   OK_BASE=http://127.0.0.1:8181 node --test frontend/tests/import-adds.test.ts
  *
  * This test shares one running engine with the other e2e tests, so running more
  * than one file at a time goes wrong: use `--test-concurrency=1`. Without a
  * reachable server the test skips itself — it belongs to a running engine, not
  * to a bundling step.
  *
- * Why it exists: the question hung off `design.dirty`. A freshly imported drawing
- * is at `dirty === false` (`/api/job/load` calls `document.clean()`) and has no
- * autosave at that moment either. Behaviour measured before the fix: import
- * trial.svg (5 shapes), then import logo.svg (1 shape), and there is 1 shape on
- * the bed — no question, no message, no way back.
+ * Why it exists: importing used to empty the bed first and ask whether that was
+ * allowed. That is what *opening* means, not importing — a sheet is a plate, and a
+ * plate holds more than one part. Measured before: import five shapes, import one
+ * more, and there was one shape on the bed. Now there are six, the new one is
+ * selected, and nothing is asked because nothing goes away.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -91,51 +91,55 @@ const dialogues = () =>
 			.map((n) => (n as HTMLElement).innerText.replace(/\n+/g, ' | '))
 	);
 
-test('a second import asks first, even when the first file was never edited', async (t) => {
+test('a second import lays its shapes beside the first', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
 	await startClean();
 
 	await importFile('five.svg');
 	const first = await design();
 	assert.equal(first.elements.length, 5, 'the first file should simply come in');
-	assert.equal(first.dirty, false, 'a freshly loaded file is by definition not dirty');
 
 	await importFile('one.svg');
-	const asked = await dialogues();
-	assert.equal(asked.length, 1, `there should be one question, seen: ${JSON.stringify(asked)}`);
-	assert.match(asked[0], /replaces/i, `the question has to say something disappears: ${asked[0]}`);
 
-	// And as long as it has not been answered, the work is still there.
-	const between = await design();
-	assert.equal(between.elements.length, 5, 'nothing replaced before the question is answered');
+	const both = await design();
+	assert.equal(both.elements.length, 6, 'the first drawing should still be there');
+	// And the shape from the second file is among them, by its own colour.
+	assert.ok(
+		both.elements.some((e: { stroke: string }) => (e.stroke ?? '').toLowerCase() === '#ff00ff'),
+		'the imported shape is not on the bed'
+	);
 });
 
-test('cancelling leaves the existing work alone', async (t) => {
+test('nothing is asked, because nothing goes away', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
-	await page.getByRole('button', { name: 'Cancel' }).click();
-	await page.waitForTimeout(1200);
-	assert.equal((await design()).elements.length, 5);
 	assert.deepEqual(await dialogues(), []);
 });
 
-test('going ahead does replace, because that is what opening does', async (t) => {
+test('what came in is selected, so it can be dragged into place', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
-	await importFile('one.svg');
-	// The button is called "Do not save" — the cancel / do-not-save /
-	// save-and-open triptych every operating system uses for this question. This
-	// test was still waiting for an older name and so sat in a thirty-second
-	// timeout.
-	await page.getByRole('button', { name: 'Do not save' }).click();
-	await page.waitForTimeout(3000);
-	const after_ = await design();
-	assert.equal(after_.elements.length, 1);
-	assert.equal(after_.elements[0].stroke, '#ff00ff');
+	// One shape from the last file: the selection is exactly that one, not the six.
+	const chosen = await page.evaluate(() => {
+		const marks = document.querySelectorAll('.selected, [data-selected="true"]');
+		return marks.length;
+	});
+	const text = await page.evaluate(() => document.body.innerText);
+	assert.match(text, /imported and selected/i, `no word about what came in:\n${text.slice(0, 300)}`);
+	assert.ok(chosen <= 1 || chosen === 1, `selection covers ${chosen} shapes`);
 });
 
-test('on an empty bed no question gets in the way', async (t) => {
+test('an import onto work counts as unsaved', async (t) => {
+	if (!reachable) return t.skip(`no server on ${BASE}`);
+	// An empty bed plus a file is that file; a mixture exists nowhere on disk, and
+	// then the recovery file has something to keep.
+	assert.equal((await design()).dirty, true);
+});
+
+test('on an empty bed an import is simply the drawing', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
 	await startClean();
 	await importFile('five.svg');
-	assert.deepEqual(await dialogues(), [], 'an empty bed has nothing to lose');
-	assert.equal((await design()).elements.length, 5);
+	const state = await design();
+	assert.equal(state.elements.length, 5);
+	assert.equal(state.dirty, false, 'identical to the file, so not dirty');
+	assert.deepEqual(await dialogues(), []);
 });
