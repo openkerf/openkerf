@@ -727,7 +727,7 @@ class Generators:
         size = _positive(size_mm, "size_mm")
         quiet = int(_finite(border, "border"))
         if not 0 <= quiet <= 8:
-            raise DesignError("De rand moet tussen 0 en 8 modules liggen.")
+            raise DesignError("The quiet zone has to be between 0 and 8 modules.")
 
         try:
             import segno
@@ -932,7 +932,7 @@ class Generators:
         except (TypeError, ValueError) as e:
             raise DesignError(f"The number of {what} has to be a whole number.") from e
         if not 1 <= count <= 500:
-            raise DesignError(f"Het aantal {what} moet tussen 1 en 500 liggen.")
+            raise DesignError(f"The number of {what} has to be between 1 and 500.")
         return count
 
     def _selection(self, ids):

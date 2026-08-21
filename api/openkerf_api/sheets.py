@@ -241,7 +241,7 @@ class Sheets:
             return fallback
         size = _positive(value, label)
         if not 5 <= size <= 5000:
-            raise DesignError(f"{label} moet tussen 5 en 5000 mm liggen.")
+            raise DesignError(f"{label} has to be between 5 and 5000 mm.")
         return round(size, 1)
 
     def _tiling(self, huidig, gevraagd) -> dict:

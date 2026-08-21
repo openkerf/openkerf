@@ -124,4 +124,4 @@ def test_pasting_an_empty_clipboard_says_so(client):
     response = client.post("/api/design/clipboard/paste", json={})
 
     assert response.status_code == 409
-    assert "leeg" in response.json()["detail"].lower()
+    assert "empty" in response.json()["detail"].lower()

@@ -87,7 +87,7 @@ class Clipart:
         except (TypeError, ValueError) as e:
             raise DesignError("The page has to be a whole number.") from e
         if not 1 <= number <= 50:
-            raise DesignError("De pagina moet tussen 1 en 50 liggen.")
+            raise DesignError("The page has to be between 1 and 50.")
         per_source = max(4, int(limit) // len(wanted))
         offset = (number - 1) * per_source
 

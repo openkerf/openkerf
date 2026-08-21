@@ -282,7 +282,7 @@ class DesignEditor:
             if power_percent is not None:
                 percent = _finite(power_percent, "power_percent")
                 if not 0 < percent <= 100:
-                    raise DesignError("power_percent moet tussen 0 en 100 liggen.")
+                    raise DesignError("power_percent has to be between 0 and 100.")
                 operation.power = percent * 10
                 applied["power"] = operation.power
             if passes is not None:
@@ -295,13 +295,13 @@ class DesignEditor:
                 # uren, te laag geeft strepen.
                 value = _positive(dpi, "dpi")
                 if not 10 <= value <= 2000:
-                    raise DesignError("dpi moet tussen 10 en 2000 liggen.")
+                    raise DesignError("dpi has to be between 10 and 2000.")
                 operation.dpi = value
                 applied["dpi"] = value
             if overscan_mm is not None:
                 distance = _finite(overscan_mm, "overscan_mm")
                 if not 0 <= distance <= 50:
-                    raise DesignError("overscan_mm moet tussen 0 en 50 liggen.")
+                    raise DesignError("overscan_mm has to be between 0 and 50.")
                 # Overscan is een lengte-met-eenheid in de engine, geen getal.
                 operation.overscan = f"{distance}mm"
                 applied["overscan"] = operation.overscan

@@ -1027,7 +1027,7 @@ class Library:
             try:
                 data = json.loads(bundel.read(BUNDLE_INDEX))
             except ValueError as e:
-                raise LibraryError("De bibliotheek in dit bestand is beschadigd.") from e
+                raise LibraryError("The library in this file is damaged.") from e
         if not isinstance(data, dict) or data.get("format") != BUNDLE_FORMAT:
             raise LibraryError("This file did not come from an OpenKerf library.")
         if int(data.get("version") or 0) > BUNDLE_VERSION:

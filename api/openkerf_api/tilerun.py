@@ -490,7 +490,7 @@ class TileRun:
                 een, twee = marker_spots(zone, blokkade, settings.marker_size_mm)
             except TilingError as e:
                 raise DesignError(
-                    f"Tussen tegel {links.index + 1} en {rechts.index + 1}: {e}"
+                    f"Tussen tegel {links.index + 1} and {rechts.index + 1}: {e}"
                 ) from e
             merken.append(
                 {

@@ -194,7 +194,7 @@ class Images:
             raise DesignError(f"{key} has to be a number.") from e
         low, high = bounds
         if not low <= number <= high:
-            raise DesignError(f"{key} moet tussen {low} en {high} liggen.")
+            raise DesignError(f"{key} has to be between {low} and {high}.")
         return number if isinstance(spec["defaults"][key], float) else int(number)
 
     def _reprocess(self, node):
@@ -217,7 +217,7 @@ class Images:
         except (TypeError, ValueError) as e:
             raise DesignError("dpi has to be a number.") from e
         if not 10 <= value <= 2000:
-            raise DesignError("dpi moet tussen 10 en 2000 liggen.")
+            raise DesignError("dpi has to be between 10 and 2000.")
         with self.elements.undoscope("Image DPI"):
             node.dpi = value
             node.altered()
