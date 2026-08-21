@@ -2,18 +2,19 @@
 	/**
 	 * De telefoon: monitor en noodrem.
 	 *
-	 * Geen canvas, geen gereedschappen, geen lagen. Wie hier komt wil weten hoe
-	 * het ervoor staat en desnoods ingrijpen — met één duim, terwijl hij naast
-	 * de machine staat. Ontwerpen gebeurt op de desktop, en dat zegt dit scherm
-	 * ook met zoveel woorden in plaats van een canvas erbij te proppen.
+	 * No canvas, no tools, no layers. Whoever comes here wants to know how things
+	 * stand and, if need be, intervene — with one thumb, while standing beside the
+	 * machine. Designing happens on the desktop, and this screen says so in as many
+	 * words instead of cramming a canvas in as well.
 	 *
-	 * Drie regels die de vorm bepalen:
-	 * 1. De noodrem staat vást onderin en scrollt nooit weg — anders haal je de
-	 *    twee seconden niet zodra de fotolijst langer wordt dan het scherm.
-	 * 2. Elk blok verdient zijn hoogte. Een leeg podium van 130 px dat "geen job
-	 *    active" zegt terwijl de kop dat al zei, is verspilde ruimte.
-	 * 3. Wat je meet, toon je één keer. Voortgang stond hier drie keer en de
-	 *    resterende tijd — het enige getal waar je op wacht — nul keer.
+	 * Three rules that decide the shape:
+	 * 1. The emergency stop is *fixed* at the bottom and never scrolls away —
+	 *    otherwise you will not make the two seconds once the photo list grows longer
+	 *    than the screen.
+	 * 2. Every block earns its height. An empty 130 px stage saying "no active job"
+	 *    while the header already said so is wasted room.
+	 * 3. What you measure, you show once. Progress was here three times and the
+	 *    remaining time — the one number you are waiting for — not at all.
 	 */
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import {
@@ -52,8 +53,8 @@
 	}: {
 		device: Device | null;
 		state: MachineState;
-		/** Alleen de lópende job, en daarom hier ongebruikt: dit scherm leest
-		 *  `currentJob(device)`, want een gepauzeerde job hoort er ook bij (J8). */
+		/** Only the *running* job, and therefore unused here: this screen reads
+		 *  `currentJob(device)`, because a paused job belongs with it too (J8). */
 		job: Job | null;
 		control: Controller;
 		camera: CameraStore;
@@ -61,35 +62,37 @@
 		watchdog: Watchdog;
 		connected: boolean;
 		position: string;
-		/** Wat er op het bed ligt (gat J10). Zonder dit tekende de telefoon een
-		 *  leeg kader, ook met zeven vormen erop. */
+		/** What is on the bed (gap J10). Without this the phone drew an empty frame,
+		 *  even with seven shapes on it. */
 		design?: DesignStore | null;
 		sheet?: { name: string; width_mm: number; height_mm: number } | null;
 	} = $props();
 
-	// `job` is alleen de lópende job. Een gepauzeerde job valt daar buiten, en
-	// die verdween daardoor compleet van dit scherm: je pauzeerde en het scherm
-	// meldde "geen job active", zonder knop om te hervatten. `currentJob` is de
-	// gedeelde definitie van "de job waar de bediening over gaat".
+	// `job` is only the *running* job. A paused job falls outside it, and so
+	// disappeared from this screen entirely: you paused and the screen reported "no
+	// active job", without a button to resume. `currentJob` is the shared definition
+	// of "the job the controls are about".
 	let huidig = $derived<Job | null>(currentJob(device));
 	let running = $derived(Boolean(huidig?.running));
 	/**
-	 * Staat er werk stil? Eén bron: `machineState()`, die `isStalled()` al
-	 * aanroept en ook de device-kant (`laser_status === "pause"`) meeneemt.
+	 * Is work standing still? One source: `machineState()`, which already calls
+	 * `isStalled()` and takes the device side (`laser_status === "pause"`) into
+	 * account as well.
 	 *
-	 * Hier stond een eigen variant die de eis "er was al voortgang" liet vallen
-	 * (gat J8). Gevolg: een vers gespoolde job loopt nog niet en heette op de
-	 * telefoon één pollronde lang "Pauze", terwijl de rest van de app hem in de
-	 * wachtrij zag staan. Twee schermen die iets anders zeggen over één job.
+	 * There used to be a variant of its own here that dropped the requirement "there
+	 * was progress already" (gap J8). Consequence: a freshly spooled job is not
+	 * running yet and on the phone was called "Paused" for one polling round, while
+	 * the rest of the app saw it sitting in the queue. Two screens saying different
+	 * things about one job.
 	 */
 	let stil = $derived(machineState === 'paused');
 
 	/**
-	 * De pauzeknop moet iets doen dat je ziet.
+	 * The pause button has to do something you can see.
 	 *
-	 * De Lihuiyu-driver meldt een pauze niet terug in zijn status, dus zonder
-	 * dit blijft het scherm na de druk exact hetzelfde en druk je nog eens.
-	 * Dit is geen bewering dat hij stilstaat — het label zegt "gevraagd".
+	 * The Lihuiyu driver does not report a pause back in its status, so without this
+	 * the screen stays exactly the same after the press and you press again. This is
+	 * not a claim that it has stopped — the label says "requested".
 	 */
 	let pauzeGevraagd = $state(false);
 	$effect(() => {
@@ -102,11 +105,11 @@
 	}
 
 	/**
-	 * Een camera die "aan" staat maar geen beeld levert.
+	 * A camera that is "on" but delivers no image.
 	 *
-	 * Zonder dit toont de browser zijn eigen kapotte-plaatje-icoon met de
-	 * alt-tekst ernaast, en verdwijnt tegelijk alles wat wél te melden viel.
-	 * Een losgetrokken USB-kabel hoort geen half scherm te kosten.
+	 * Without this the browser shows its own broken-image icon with the alt text
+	 * beside it, and at the same time everything that *was* worth reporting
+	 * disappears. An unplugged USB cable should not cost half a screen.
 	 */
 	let beeldStuk = $state(false);
 	$effect(() => {
@@ -121,31 +124,31 @@
 	let percent = $derived(Math.round(progress * 100));
 
 	/**
-	 * Resterende tijd, niet de totale schatting.
+	 * Remaining time, not the total estimate.
 	 *
-	 * Uit `remainingSeconds()`: hier stond dezelfde berekening met een eigen
-	 * drempel (5 % voortgang tegen de 10 % van de gedeelde versie), dus telefoon
-	 * en statusbalk sprongen op een ander moment van schatten naar meten en
-	 * toonden even twee verschillende resttijden voor dezelfde job.
+	 * From `remainingSeconds()`: there used to be the same computation here with a
+	 * threshold of its own (5% progress against the shared version's 10%), so phone
+	 * and status bar switched from estimating to measuring at different moments and
+	 * briefly showed two different remaining times for the same job.
 	 */
 	let resterend = $derived(remainingSeconds(huidig));
 
-	// Een aftelklok zegt hoe lang je moet wachten; een kloktijd zegt of je nog
-	// koffie kunt halen. Naast elkaar kosten ze één regel.
+	// A countdown says how long you have to wait; a clock time says whether you can
+	// still fetch coffee. Side by side they cost one line.
 	let klaarOm = $derived.by(() => {
 		if (resterend === null) return null;
 		const eind = new Date(Date.now() + resterend * 1000);
 		return eind.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
 	});
 
-	// De ring: één omtrek die de voortgang draagt, in plaats van hetzelfde
-	// percentage in drie vormen naast elkaar.
+	// The ring: one outline that carries the progress, instead of the same percentage
+	// in three shapes side by side.
 	const STRAAL = 78;
 	const OMTREK = 2 * Math.PI * STRAAL;
 
-	// Rasters die nog op een foto wachten: dat is de reden dat je met een
-	// telefoon naast de machine staat. De bibliotheek houdt ze niet vast, dus
-	// halen we ze hier op.
+	// Grids still waiting for a photo: that is the reason you are standing beside the
+	// machine with a phone. The library does not hold on to them, so we fetch them
+	// here.
 	type Raster = {
 		id: number;
 		material_name: string | null;
@@ -158,34 +161,34 @@
 		power_max: number;
 		speed_steps: number;
 		power_steps: number;
-		// Sinds B12 kiest de gebruiker de assen zelf; welke grootheid waar staat
-		// bepaalt wat de samenvattingsregel mag beweren.
+		// Since B12 the user chooses the axes; which quantity sits where decides what
+		// the summary line may claim.
 		row_axis: GridAxis | null;
 		column_axis: GridAxis | null;
 		rows: number | null;
 		columns: number | null;
 		interval_min: number | null;
 		interval_max: number | null;
-		/** Waar het bord op de foto ligt. Null = foto binnen, nog niet uitgelijnd. */
+		/** Where the board lies on the photo. Null = photo in, not yet aligned. */
 		alignment: unknown;
 		created_at: string;
 	};
 	let rasters = $state<Raster[]>([]);
 	let bezig = $state<number | null>(null);
-	/** Een rij die verdwijnt is te stil; dit vertelt wat er nu gebeurd is. */
+	/** A row that disappears is too quiet; this says what has just happened. */
 	let gelukt = $state<string | null>(null);
 
-	/** Veel materiaalnamen dragen de dikte al ("Berkentriplex 4 mm"); dan niet
-	    nog eens "4 mm" erachter plakken. */
+	/** Many material names already carry the thickness ("Birch plywood 4 mm"); then do
+	    not stick another "4 mm" on the end. */
 	function rasterNaam(g: Raster): string {
-		// Zonder materiaal stond hier "raster · graveren-raster": tweemaal
-		// hetzelfde woord, en van de twee is er één een interne sleutel.
+		// Without a material this read "grid · engrave-raster": the same word twice,
+		// and one of the two is an internal key.
 		const naam = g.material_name ?? 'Testraster';
 		if (!g.thickness_mm || /\bmm\b/i.test(naam)) return naam;
 		return `${naam} ${g.thickness_mm} mm`;
 	}
 
-	/** De sleutels van de generator zijn geen woorden voor op het scherm. */
+	/** The generator's keys are not words for the screen. */
 	const BEWERKING: Record<string, MessageKey> = {
 		snijden: 'phone.operation.cut',
 		'graveren-vector': 'phone.operation.engrave',
@@ -219,7 +222,7 @@
 	 */
 	let wachtend = $derived(rasters.filter((g) => !g.photo_path));
 	let uitlijnen = $derived(rasters.filter((g) => g.photo_path && !g.alignment));
-	/** Eerst waar de telefoon voor nodig is, dan wat op de desktop wacht. */
+	/** First what the phone is needed for, then what is waiting for the desktop. */
 	let lijst = $derived([...wachtend, ...uitlijnen]);
 
 	async function haalRasters() {
@@ -228,20 +231,19 @@
 		rasters = await r.json();
 	}
 	/**
-	 * De rasterlijst bijhouden, want dit scherm is de tweede in de kamer.
+	 * Keeping the grid list up to date, because this screen is the second one in the
+	 * room.
 	 *
-	 * Dit haalde één keer op, bij het opbouwen van de pagina, en daarna nooit
-	 * meer. Gemeten met twee vensters op dezelfde server: de desktop maakt een
-	 * raster, je pakt de telefoon die al aanstond, en er staat niets — het
-	 * raster verscheen pas na handmatig verversen. Precies de volgorde waarin
-	 * je hem gebruikt: eerst instellen op de desktop, dan met de telefoon naar
-	 * de machine.
+	 * This fetched once, while building the page, and never again. Measured with two
+	 * windows on the same server: the desktop makes a grid, you pick up the phone that
+	 * was already on, and there is nothing there — the grid only appeared after a
+	 * manual refresh. Exactly the order in which you use it: set up on the desktop
+	 * first, then over to the machine with the phone.
 	 *
-	 * Geen WebSocket: die draagt machinestatus, en de bibliotheek zit in een
-	 * andere database die geen signalen geeft. Tien seconden is ruim genoeg
-	 * voor iets wat op een gebrand bord wacht, en het is één klein verzoek.
-	 * Terugkomen op het tabblad haalt meteen op — dat is het moment waarop je
-	 * kijkt.
+	 * No WebSocket: that carries machine status, and the library sits in another
+	 * database that gives no signals. Ten seconds is ample for something waiting on a
+	 * burned board, and it is one small request. Coming back to the tab fetches
+	 * straight away — that is the moment you are looking.
 	 */
 	$effect(() => {
 		haalRasters();
@@ -275,11 +277,11 @@
 	}
 
 	/**
-	 * De toestemmingsvraag krijgt hier zijn aanleiding van de machine zelf.
+	 * Here the permission question gets its occasion from the machine itself.
 	 *
-	 * Op de telefoon start je geen job (dat doet de desktop), dus is "er brandt
-	 * nu iets" het moment waarop de ask ergens op slaat. Bij een leeg bed
-	 * shouldAsk we niets; dan staat de instelling gewoon onderaan te wachten.
+	 * On the phone you do not start a job (the desktop does), so "something is burning
+	 * now" is the moment the question means anything. On an empty bed we ask nothing;
+	 * then the setting simply sits waiting at the bottom.
 	 */
 	let vraagWeg = $state(false);
 	let vraagNu = $derived(notifications.shouldAsk && !vraagWeg && Boolean(huidig));
@@ -287,24 +289,24 @@
 	let instellingenOpen = $state(false);
 
 	/**
-	 * De rangorde van dit scherm (besluit B13).
+	 * This screen's order of precedence (decision B13).
 	 *
-	 * Loopt er een job, dan is "hoe ver" de ask en blijft de ring boven. Staat
-	 * de machine stil terwijl er een gebrand bord op een foto wacht, dan is dát
-	 * het werk — en het is het enige werk in deze hele app waarvoor je fysiek
-	 * een telefoon in je hand moet hebben.
+	 * If a job is running, "how far" is the question and the ring stays on top. If the
+	 * machine is idle while a burned board is waiting for a photo, *that* is the work
+	 * — and it is the only work in this whole app for which you physically have to
+	 * hold a phone.
 	 *
-	 * Uitlijnen telt hier niet mee: dat doe je op een groot scherm, dus het
-	 * verandert niets aan waarom je hier staat.
+	 * Aligning does not count here: you do that on a big screen, so it changes nothing
+	 * about why you are standing here.
 	 */
 	let fotoEerst = $derived(!huidig && wachtend.length > 0);
 	/**
-	 * De machinestand mag pas inkrimpen tot één regel als er niets aan de hand
-	 * is. Een losgetrokken kabel of een alarm is geen bijzin; dan komt de hele
-	 * kaart terug, mét de zin die uitlegt waarom het stil is.
+	 * The machine state may only shrink to one line when nothing is wrong. An
+	 * unplugged cable or an alarm is not a subordinate clause; then the whole card
+	 * comes back, *with* the sentence explaining why it is quiet.
 	 */
 	let standInEenRegel = $derived(fotoEerst && connected && machineState === 'ready');
-	/** De bedtekening onder die ene regel. Dicht, want je kwam voor de foto. */
+	/** The bed drawing under that one line. Closed, because you came for the photo. */
 	let bedOpen = $state(false);
 	let meldStand = $derived(
 		notifications.permission === 'denied'
@@ -321,46 +323,46 @@
 	/**
 	 * Wat er op het bed ligt (gat J10).
 	 *
-	 * Dit scherm tekende een leeg kader, ook met zeven vormen erop — en dan is
-	 * "kijken naast de machine" precies de ene ask die je niet beantwoord
-	 * krijgt: wát gaat er zo meteen gebrand worden.
+	 * This screen drew an empty frame, even with seven shapes on it — and then
+	 * "looking beside the machine" is precisely the one question you do not get
+	 * answered: *what* is about to be burned.
 	 *
-	 * De paddata staat in Tats, net als op het canvas; één schaaltransform set
-	 * hem om naar de millimeters waarin deze tekening meet. En omdat het in
-	 * millimeters meet, krijgt elke lijn `non-scaling-stroke` — anders is een
-	 * streek van 1 op een bed van 610 mm een haar van niks (of op een klein bed
-	 * een balk van een halve centimeter).
+	 * The path data is in Tats, just as on the canvas; one scale transform converts it
+	 * to the millimetres this drawing measures in. And because it measures in
+	 * millimetres, every line gets `non-scaling-stroke` — otherwise a stroke of 1 on a
+	 * 610 mm bed is a hair of nothing (or on a small bed a bar half a centimetre
+	 * wide).
 	 */
 	let perMm = $derived(design?.design?.units_per_mm ?? 1);
 	/**
-	 * Hoe breed deze tekening werkelijk staat, in pixels.
+	 * How wide this drawing really is, in pixels.
 	 *
-	 * De SVG meet in millimeters (viewBox = het bed), dus zonder dit getal weet
-	 * niets in dit bestand hoe groot een millimeter op het scherm is. Dat is wel
-	 * nodig: zie `TEKST_MINIMUM`.
+	 * The SVG measures in millimetres (viewBox = the bed), so without this number
+	 * nothing in this file knows how big a millimetre is on screen. And that is needed:
+	 * see `TEXT_MINIMUM`.
 	 */
 	let bedBreedtePx = $state(0);
 	/**
-	 * Onder deze weergavehoogte laten we vectortekst weg.
+	 * Below this displayed height we leave vector text out.
 	 *
-	 * De generator tekent opschriften in millimeters, want in millimeters wordt
-	 * het gebrand — daar is niets mis mee. Maar 4 mm letterhoogte is op een bed
-	 * van 610 mm in een tekening van 340 px ruim 2 px, en een contour van 2 px
-	 * hoog met een streek van 1,5 px is geen letter meer: het is een balkje.
-	 * Zichtbaar als twee massieve blauwe strepen linksboven het testraster.
+	 * The generator draws captions in millimetres, because it is burned in millimetres
+	 * — nothing wrong with that. But 4 mm of letter height on a 610 mm bed in a 340 px
+	 * drawing is a good 2 px, and a 2 px tall outline with a 1.5 px stroke is no longer
+	 * a letter: it is a little bar. Visible as two solid blue streaks above the left of
+	 * the test grid.
 	 *
-	 * Weglaten is eerlijker dan vullen. Wat je overhoudt is het raster zelf, en
-	 * dát is waar je op je telefoon naar kijkt. 12 px is de hoogte waaronder de
-	 * binnenruimte van een `e` of een `a` bij deze streekdikte dichtloopt.
+	 * Leaving it out is more honest than filling it in. What you are left with is the
+	 * grid itself, and *that* is what you are looking at on your phone. 12 px is the
+	 * height below which the counter of an `e` or an `a` closes up at this stroke
+	 * weight.
 	 */
-	const TEKST_MINIMUM = 12;
+	const TEXT_MINIMUM = 12;
 	/**
-	 * Kleur en stand komen uit `strokeFor` — dezelfde helper die het canvas
-	 * gebruikt. Zelf de laag uitzoeken leverde een ander antwoord op dan het
-	 * canvas: bij een vorm in twee lagen pakte ik de eerste uit de lijst en het
-	 * canvas de bovenste in de boom. Twee schermen die hetzelfde werk in een
-	 * andere kleur tekenen is precies het soort verschil waardoor je op je
-	 * telefoon niet meer durft te vertrouwen.
+	 * Colour and state come from `strokeFor` — the same helper the canvas uses. Working
+	 * out the layer myself gave a different answer from the canvas: for a shape in two
+	 * layers I took the first from the list and the canvas took the topmost in the
+	 * tree. Two screens drawing the same work in a different colour is exactly the kind
+	 * of difference that stops you trusting your phone.
 	 */
 	let vormen = $derived.by(() => {
 		const store = design;
@@ -373,18 +375,18 @@
 					id: element.id,
 					path: element.path,
 					image: element.image,
-					// De hoogte in mm van een tekstelement; null voor al het andere.
-					// `font_size_mm` is wat de generator bedoelde; ontbreekt dat, dan
-					// is het kader van de vorm de beste benadering.
+					// The height in mm of a text element; null for everything else.
+					// `font_size_mm` is what the generator meant; without it the shape's
+					// bounding box is the best approximation.
 					tekstMm: element.text
 						? (element.text.font_size_mm ??
 							(element.bounds ? (element.bounds[3] - element.bounds[1]) / perMm : 0))
 						: null,
 					kleur: streek.color,
 					zichtbaar: streek.visible,
-					// "Brandt niet" dekt twee gevallen: in geen enkele laag, of in een
-					// laag die op "brandt niet mee" staat. Voor wie naast de machine
-					// staat is dat dezelfde mededeling.
+					// "Does not burn" covers two cases: in no layer at all, or in a layer
+					// set to "does not burn". To somebody standing beside the machine that
+					// is the same message.
 					stil: streek.dashed || streek.dimmed
 				};
 			})
@@ -394,17 +396,18 @@
 	let stille = $derived(vormen.filter((v) => v.stil).length);
 
 	/**
-	 * Werk dat buiten het bed of buiten het vel valt (gat P8).
+	 * Work that falls off the bed or off the sheet (gap P8).
 	 *
-	 * Het canvas meldt dit since C2 in twee zinnen onder de tekening; hier stond
-	 * de vorm wél buiten het velkader getekend, maar zonder een woord erbij. Wie
-	 * naast de machine in de zon staat, leest kleurverschil als eerste niet meer.
+	 * Since C2 the canvas reports this in two sentences under the drawing; here the
+	 * shape *was* drawn outside the sheet frame, but without a word beside it. Standing
+	 * beside the machine in the sun, a difference in colour is the first thing you stop
+	 * reading.
 	 *
-	 * Dezelfde som als op het canvas, met dezelfde speling en dezelfde regel dat
-	 * alleen werk dat écht brandt meetelt: een vorm in geen laag kost geen
-	 * materiaal, en valse alarmbellen leren mensen alarmbellen te negeren. De
-	 * berekening is bewust hier en niet uit `/api/job/estimate`: dit scherm
-	 * ververst op signalen, en een tweede bron zou een tweede antwoord geven.
+	 * The same sum as on the canvas, with the same tolerance and the same rule that
+	 * only work that really burns counts: a shape in no layer costs no material, and
+	 * false alarms teach people to ignore alarms. The computation is deliberately here
+	 * and not from `/api/job/estimate`: this screen refreshes on signals, and a second
+	 * source would give a second answer.
 	 */
 	const RAND_SPELING = 0.5;
 
@@ -443,18 +446,18 @@
 	});
 
 	/**
-	 * Wat er getékend wordt. Dat is niet hetzelfde als wat er brandt: te kleine
-	 * opschriften vallen hier weg (`TEKST_MINIMUM`), maar ze branden wel, dus de
-	 * telling erboven blijft ongemoeid. Een tekening mag iets weglaten; een
-	 * getal dat zegt wat de machine gaat doen mag dat niet.
+	 * What gets *drawn*. That is not the same as what burns: captions that are too
+	 * small drop out here (`TEXT_MINIMUM`), but they do burn, so the count above is
+	 * left alone. A drawing may leave something out; a number that says what the
+	 * machine is going to do may not.
 	 */
 	let getekend = $derived.by(() => {
 		const perPx = bedW > 0 && bedBreedtePx > 0 ? bedBreedtePx / bedW : 0;
 		if (perPx === 0) return vormen;
-		return vormen.filter((v) => v.tekstMm === null || v.tekstMm * perPx >= TEKST_MINIMUM);
+		return vormen.filter((v) => v.tekstMm === null || v.tekstMm * perPx >= TEXT_MINIMUM);
 	});
 
-	/** Eén zin voor wie het beeld niet krijgt; hij staat ook onder de tekening. */
+	/** One sentence for anybody who does not get the image; it is under the drawing too. */
 	let bedUitleg = $derived.by(() => {
 		const delen = [`Bed ${Math.round(bedW)} bij ${Math.round(bedH)} millimeter`];
 		if (vormen.length === 0) delen.push('leeg');
@@ -536,8 +539,8 @@
 							vector-effect="non-scaling-stroke"
 						/>
 					{/if}
-					<!-- Het werk zelf, in laagkleur. Eén schaal van Tats naar mm,
-					     precies zoals het canvas het doet. -->
+					<!-- The work itself, in the layer colour. One scale from Tats to mm,
+					     exactly as the canvas does it. -->
 					{#if getekend.length}
 						<g transform="scale({1 / perMm})">
 							{#each getekend as vorm (vorm.id)}
@@ -895,9 +898,9 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
 	}
-	/* Gat P8: dezelfde twee regels als onder het canvas, met dezelfde kleur én
-	   hetzelfde teken. Kleur alleen mag het nooit dragen — deze telefoon ligt
-	   naast de machine, vaak met de zon erop. */
+	/* Gap P8: the same two lines as under the canvas, with the same colour *and* the
+	   same sign. Colour alone must never carry it — this phone lies beside the
+	   machine, often with the sun on it. */
 	.buiten {
 		display: grid;
 		gap: var(--space-2);
@@ -937,7 +940,7 @@
 		text-align: center;
 	}
 
-	/* Alleen dit deel scrollt; de kop en de noodrem staan stil. */
+	/* Only this part scrolls; the header and the emergency stop stay put. */
 	.rol {
 		flex: 1;
 		min-height: 0;
@@ -990,8 +993,8 @@
 	.jobregel .titel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.muted { margin-left: auto; color: var(--text-2); font-size: var(--text-xs); }
 
-	/* Rusttoestand: het bed op schaal met een kruis op de kop. Kost dezelfde
-	   ruimte als het lege grijze vlak dat hier stond, en zegt iets. */
+	/* Resting state: the bed to scale with a cross on the head. Costs the same room as
+	   the empty grey rectangle that used to be here, and says something. */
 	.rust {
 		flex: none;
 		display: grid;
@@ -1002,17 +1005,17 @@
 		background: var(--surface-1);
 		box-shadow: var(--lift-1);
 	}
-	/* Krap houden: de wachtende rasters zijn de reden dat je de telefoon pakt,
-	   en die staan hieronder. Het bed hoeft alleen herkenbaar te zijn. */
+	/* Keep it tight: the waiting grids are the reason you pick up the phone, and they
+	   are below. The bed only has to be recognisable. */
 	.bedje { width: 100%; height: auto; max-height: 30vh; display: block; }
-	/* --bed is wit en de kaart is dat ook: in het lichte thema was het bed dan
-	   onzichtbaar. --canvas-bg staat in beide thema's los van de kaart. */
+	/* --bed is white and so is the card: in the light theme the bed was therefore
+	   invisible. --canvas-bg is separate from the card in both themes. */
 	.bedje .vlak { fill: var(--canvas-bg); stroke: var(--line); stroke-width: 1; }
 	.bedje .kop line { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.7; }
 	.bedje .kop circle { fill: var(--accent); }
-	/* De rand van het vel is de grens van je materiaal. `--line` haalt daar
-	   tegen `--canvas-bg` te weinig om als grens te lezen; `--text-2` is
-	   dezelfde keuze als in de pre-flight. */
+	/* The edge of the sheet is the boundary of your material. Against `--canvas-bg`,
+	   `--line` reaches too little to read as a boundary; `--text-2` is the same choice
+	   as in the pre-flight. */
 	.bedje .vel {
 		fill: var(--bed);
 		stroke: var(--text-2);
@@ -1025,8 +1028,8 @@
 		vector-effect: non-scaling-stroke;
 		stroke-linejoin: round;
 	}
-	/* Zit in geen meebrandende laag: dezelfde taal als op het canvas en in de
-	   pre-flight — grijs gestippeld betekent "de machine slaat dit over". */
+	/* In no burning layer: the same language as on the canvas and in the pre-flight —
+	   grey dashed means "the machine skips this". */
 	.bedje .vorm.stil {
 		stroke: var(--text-2);
 		stroke-width: 1;
@@ -1051,8 +1054,8 @@
 	.uitleg { flex: none; margin: 0; color: var(--text-2); font-size: var(--text-xs); }
 	.failure { margin: 0; color: var(--danger); font-size: var(--text-xs); }
 
-	/* 12px tussen de rijen: elke rij is zelf een doel, en 8px was te dicht om
-	   met een duim zonder te kijken de goede te raken. */
+	/* 12px between the rows: every row is a target in itself, and 8px was too close to
+	   hit the right one with a thumb without looking. */
 	.rasters { flex: none; display: grid; gap: var(--space-3); }
 	.rasters h2 {
 		margin: var(--space-2) 0 0;
@@ -1073,12 +1076,12 @@
 	}
 	.raster .naam { min-width: 0; display: grid; gap: var(--space-1); }
 	.raster .kop { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	/* Liever twee regels dan een afgekapte sweep: dit is precies het gegeven
-	   waarmee je twee rasters van hetzelfde materiaal uit elkaar houdt. */
+	/* Two lines rather than a truncated sweep: this is exactly the fact by which you
+	   tell two grids of the same material apart. */
 	.raster .detail { color: var(--text-2); font-size: var(--text-xs); line-height: 1.3; }
 	.goed { flex: none; margin: 0; color: var(--ok); font-size: var(--text-xs); }
-	/* Zag eruit als een tekstlink terwijl de hele rij het doel is. Nu een knop
-	   in vorm, zodat de duim weet waar hij aan toe is. */
+	/* It looked like a text link while the whole row is the target. Now a button in
+	   shape, so the thumb knows where it stands. */
 	.raster .knop {
 		margin-left: auto;
 		flex: none;
@@ -1093,9 +1096,9 @@
 		font-weight: 600;
 	}
 	.raster input { position: absolute; width: 0; height: 0; opacity: 0; }
-	/* Foto binnen, nog niet uitgelijnd (gat P9). Blijft in de lijst staan omdat
-	   de stap half af is, maar draagt niet de nadruk van een rij die nog iets
-	   van jou wil: de rand is dezelfde, de knop is stil. */
+	/* Photo in, not yet aligned (gap P9). Stays in the list because the step is half
+	   done, but does not carry the emphasis of a row that still wants something from
+	   you: the border is the same, the button is quiet. */
 	.raster.gedaan { background: var(--surface-0); }
 	.raster .detail.rest { color: var(--text-2); font-size: var(--text-xs); line-height: 1.3; }
 	.raster .knop.zacht {
@@ -1104,9 +1107,8 @@
 		font-weight: 500;
 	}
 
-	/* De machinestand als één regel (besluit B13): dezelfde vorm als de
-	   meldingenrij eronder, zodat "regel die opengaat" één ding betekent op dit
-	   scherm. */
+	/* The machine state as one line (decision B13): the same shape as the notices row
+	   below it, so that "a row that opens" means one thing on this screen. */
 	.standsectie { flex: none; display: grid; gap: var(--space-2); }
 	.standrij {
 		display: flex;
@@ -1148,8 +1150,8 @@
 		color: var(--text-2);
 	}
 	.meldrij .stand.aan { color: var(--ok); }
-	/* Geblokkeerd is geen failure van de gebruiker maar wel iets wat je moet zien:
-	   amber, want er valt iets te herstellen. */
+	/* Blocked is not the user's mistake but is something you have to see: amber,
+	   because there is something to put right. */
 	.meldrij .stand.geblokkeerd { color: var(--warn); }
 	.meldrij .pijl { flex: none; color: var(--text-2); }
 	.meldbody {
@@ -1161,10 +1163,10 @@
 
 	.elders {
 		flex: none;
-		/* `auto` boven: staat er weinig op het scherm — twee rasters en een
-		   ingeklapte machinestand — dan zakt deze regel naar de onderrand van het
-		   scrolgebied in plaats van een gat van 200 px achter te laten. Loopt de
-		   inhoud vol, dan valt de auto-marge terug op nul en verandert er niets. */
+		/* `auto` on top: when there is little on the screen — two grids and a collapsed
+		   machine state — this line drops to the bottom edge of the scroll area instead
+		   of leaving a 200 px hole behind. When the content fills up, the auto margin
+		   falls back to zero and nothing changes. */
 		margin: auto 0 0;
 		padding-top: var(--space-2);
 		font-size: var(--text-xs);
@@ -1172,8 +1174,8 @@
 		text-align: center;
 	}
 
-	/* 24 px tussen de twee knoppen: tegengestelde gevolgen mogen niet naast
-	   elkaar liggen als je met een duim mikt. */
+	/* 24 px between the two buttons: opposite consequences must not sit beside each
+	   other when you are aiming with a thumb. */
 	.noodrem {
 		flex: none;
 		display: grid;
@@ -1197,14 +1199,14 @@
 	}
 	.rem:disabled { opacity: 0.4; }
 	.rem.hervat { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-	/* Rustend is stop een omtrek, niet een rood vlak: een knalrode knop op een
-	   scherm waar niets draait trekt de duim naar de enige actie die niets
-	   oplost. Zodra er iets te stoppen valt, vult hij zich. */
+	/* At rest, stop is an outline and not a red block: a bright red button on a screen
+	   where nothing is running pulls the thumb towards the one action that solves
+	   nothing. As soon as there is something to stop, it fills in. */
 	.rem.stop { background: transparent; border-color: var(--danger); color: var(--danger); }
 	.rem.stop.scherp { background: var(--danger-solid); border-color: var(--danger-solid); color: var(--on-color); }
 
-	/* De ring is een melding, geen versiering: de stand blijft, het naar de
-	   stand toe glijden gaat eruit. */
+	/* The ring is a report, not decoration: the position stays, the sliding towards
+	   the position goes. */
 	@media (prefers-reduced-motion: reduce) {
 		.ring .voor,
 		.strook .vol {
