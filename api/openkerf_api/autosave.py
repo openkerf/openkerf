@@ -143,12 +143,11 @@ class Autosave:
         Releasing the brake, so that the very next change is saved straight away.
 
         The brake measures from the last write, and that holds as long as a recovery file is
-        there. After discarding or restoring, something else is there
-        op schijf dan wat de rem denkt, en dan is wachten fout. Gemeten vóór
-        deze line: herstelbestand weggooien, daarna vier shapes tekenen en
-        dertig seconden wachten — en er stond nog steeds geen herstelbestand.
-        Wie in het openingsvenster voor "leeg beginnen" kiest, werkte dus een
-        hele sessie zonder vangnet.
+        there. After discarding or restoring, something else is on disk from what the brake
+        thinks, and then waiting is wrong. Measured before this line: discard the recovery
+        file, then draw four shapes and wait thirty seconds — and there was still no recovery
+        file. So anybody choosing "start empty" in the opening dialog worked a whole session
+        without a safety net.
         """
         self._last = 0.0
         self._wachtend = False
@@ -162,8 +161,8 @@ class Autosave:
         self.drawing.runner.run(f'load "{self.path}"')
         self.kernel.elements.validate_ids()
         self.kernel.elements.signal("rebuild_tree", "all")
-        # Herstellen is geen opslaan: het werk staat nog steeds nergens waar de
-        # gebruiker het zelf kan terugvinden.
+        # Restoring is not saving: the work is still nowhere the user can find it
+        # themselves.
         self.document.touch()
         self._open_de_rem()
         return {"restored": True, **self.state()}

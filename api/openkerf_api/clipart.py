@@ -356,12 +356,12 @@ class Clipart:
         notes = []
         if found:
             notes.append(
-                "Deze tekening bevat " + ", ".join(found) + "; dat komt niet mee."
+                "This drawing contains " + ", ".join(found) + "; that does not come along."
             )
         paths = text.count("<path")
         if paths > 400:
-            # Een tekening uit een encyclopedie heeft er zo duizend. Dat brandt
-            # niet fout, maar het duurt uren en dat weet je liever vooraf.
+            # A drawing from an encyclopedia has a thousand of them in no time. That does
+            # not burn wrongly, but it takes hours and you would rather know beforehand.
             notes.append(
                 f"This drawing consists of {paths} loose paths; that makes a "
                 "long job. Consider a simpler image."

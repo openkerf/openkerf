@@ -282,12 +282,11 @@ def _fill(canvas, draw, vlakken) -> None:
     gave a zero that was open on the screen and on
     het hout helemaal dichtgebrand was.
 
-    Even-oddregel, door de maskers op elkaar te XOR-en. SVG rekent standaard met
-    nonzero, en die twee verschillen alleen bij contouren die elkaar overlappen
-    én dezelfde kant op lopen — bij letters en CAD-shapes loopt een gat juist
-    andersom, dus daar komen ze op hetzelfde uit. Het masker beslaat alleen de
-    omhullende van de shape, zodat een groot bed niet per deelpad een volledig
-    beeld kost.
+    The even-odd rule, by XOR-ing the masks together. SVG computes with nonzero by default,
+    and those two only differ for contours that overlap *and* run the same way — in letters
+    and CAD shapes a hole runs the other way, so there they come out the same. The mask covers
+    only the shape's bounding box, so that a large bed does not cost a full image per
+    subpath.
     """
     if not vlakken:
         return
@@ -317,8 +316,8 @@ def _polylines(geometry):
     """
     De geometrie als polylijnen in scene-eenheden.
 
-    `as_interpolated_points` levert de points van de hele geomstr achter elkaar,
-    met een `None` op elke breuk tussen deelpaden.
+    `as_interpolated_points` supplies the points of the whole geomstr in sequence, with a
+    `None` at every break between subpaths.
     """
     current = []
     try:
@@ -356,11 +355,11 @@ def _paint(color) -> bool:
 
 def _draw_image(canvas, node, transform):
     """
-    Een afbeeldingsknoop met zijn eigen matrix inplakken.
+    Pasting an image node in with its own matrix.
 
-    De knoop draagt zijn plaatsing in `active_matrix`; die vermenigvuldigen we
-    met onze scene→pixel-afbeelding en voeren we omgekeerd aan Pillow, want
-    `Image.transform` vraagt de afbeelding van doel naar source.
+    The node carries its placement in `active_matrix`; we multiply that with our scene→pixel
+    mapping and hand it to Pillow inverted, because `Image.transform` asks for the mapping
+    from target to source.
     """
     try:
         image = node.active_image
@@ -374,7 +373,7 @@ def _draw_image(canvas, node, transform):
     if image is None:
         return
 
-    # De volledige afbeelding van beeldpixel naar canvaspixel.
+    # The full mapping from image pixel to canvas pixel.
     a = matrix.a * transform.scale_x
     b = matrix.b * transform.scale_y
     c = matrix.c * transform.scale_x

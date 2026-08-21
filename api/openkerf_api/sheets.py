@@ -48,7 +48,7 @@ class Sheets:
         self._active: str | None = None
         # Whether the active sheet has actually been put on the table this run.
         # Zie `_materialiseer`.
-        self._geladen = False
+        self._loaded = False
 
     # ------------------------------------------------------------- opslag
 
@@ -142,9 +142,9 @@ class Sheets:
         Only when the tree is empty: if there is work in it already (recovery after
         a crash, or something drawn before the first question), that wins.
         """
-        if self._geladen:
+        if self._loaded:
             return
-        self._geladen = True
+        self._loaded = True
         if any(True for _ in self.kernel.elements.elems()):
             return
         if self._active and self._file(self._active).is_file():
@@ -327,7 +327,7 @@ class Sheets:
         self._active = None
         # There is nothing to load and the tree has just been emptied; without this
         # `_ensure` would still want to fetch the sheet we just threw away.
-        self._geladen = True
+        self._loaded = True
         return self.state()
 
     # ------------------------------------------------------------ wisselen
@@ -364,10 +364,10 @@ class Sheets:
         if source.is_file():
             self.drawing.runner.run(f'load "{source}"')
             self.kernel.elements.validate_ids()
-            # Mark the layers of this sheet as "the user's" again. A fresh
-            # boom heeft ruim tweehonderd lege standaardoperaties; zonder deze
-            # markering zijn de layers die je zelf gemaakt hebt niet van die
-            # ruis te onderscheiden en verdwijnen ze uit de lijst.
+            # Mark the layers of this sheet as "the user's" again. A fresh tree has well
+            # over two hundred empty default operations; without this marking the layers you
+            # made yourself cannot be told apart from that noise and they disappear from the
+            # list.
             for operation in self.kernel.elements.ops():
                 if getattr(operation, "id", None):
                     self.drawing.user_operations.add(operation.id)

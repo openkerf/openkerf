@@ -15,10 +15,10 @@ def plugin(kernel, lifecycle=None):
     if lifecycle == "register":
         _ = kernel.translation
 
-        # Zonder rasteraar gooit `op raster` tijdens het plannen zijn eigen
-        # kinderen weg en komt elke rasterbewerking blanco uit de machine. De
-        # wxPython-GUI registreert er een; headless staat er niets. Wij vullen
-        # dat gat, en alleen dat gat: staat de wx-rasteraar er al, dan wint die.
+        # Without a rasteriser `op raster` throws its own children away while planning and
+        # every raster operation comes out of the machine blank. The wxPython GUI registers
+        # one; headless there is nothing. We fill that gap, and only that gap: if the wx
+        # rasteriser is already there, it wins.
         from .rasterizer import register as register_rasterizer
 
         register_rasterizer(kernel)
@@ -102,8 +102,8 @@ def plugin(kernel, lifecycle=None):
                 bind=bind,
                 frontend=frontend,
                 token=token,
-                # Een eigen database is wat een test nodig heeft: anders lopen
-                # proefmaterialen en -vellen door de bibliotheek van de gebruiker.
+                # A database of its own is what a test needs: otherwise trial materials and
+                # sheets run through the user's library.
                 library_path=library,
             )
             try:
