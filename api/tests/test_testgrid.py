@@ -679,7 +679,7 @@ def test_the_caption_still_names_everything_when_the_user_says_nothing():
 
     assert "Berkentriplex" in tekst
     assert "3 mm" in tekst
-    assert "snijden" in tekst
+    assert "cut" in tekst
     assert "2026-08-13" in tekst
 
 
