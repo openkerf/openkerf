@@ -23,8 +23,8 @@
 		author: string | null;
 	};
 
-	// Iconify eerst: iconen zijn voor een laser het meest bruikbare materiaal —
-	// gesloten paden, geen kleurverlopen, geen tekst.
+	// Iconify first: for a laser, icons are the most usable material — closed paths, no
+	// gradients, no text.
 	const SOURCES = [
 		{ id: 'iconify', label: 'Iconify (iconen)' },
 		{ id: 'wikimedia', label: 'Wikimedia Commons' },
@@ -64,9 +64,9 @@
 				return;
 			}
 			const data = await response.json();
-			// Bij "meer" aanvullen in plaats van vervangen, zodat je niet
-			// kwijtraakt wat je al bekeken had. Op id ontdubbelen: de bronnen
-			// leveren soms hetzelfde op een volgende pagina opnieuw.
+			// On "more", append rather than replace, so that you do not lose what you had
+			// already looked at. Deduplicate on id: the sources sometimes deliver the same
+			// thing again on a following page.
 			const seen = new Set(next ? results.map((r) => r.id) : []);
 			const fresh = (data.results as Result[]).filter((r) => !seen.has(r.id));
 			results = next ? [...results, ...fresh] : data.results;
@@ -102,7 +102,7 @@
 			}
 			notes = (await response.json()).notes ?? [];
 			onInserted?.();
-			// Blijft open als er iets te melden viel; anders is het klaar.
+			// Stays open when there was something to report; otherwise it is done.
 			if (!notes.length) open = false;
 		} finally {
 			placing = null;
@@ -220,8 +220,8 @@
 
 <style>
 	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
-	/* Onderlangs uitlijnen, niet in het midden: de velden hebben nu een label
-	   erboven en het zoekveld niet, dus "midden" zou de zoekknop scheef zetten. */
+	/* Align along the bottom, not in the middle: the fields now have a label above them
+	   and the search field does not, so "middle" would set the search button askew. */
 	.bar { display: flex; gap: var(--space-2); align-items: flex-end; }
 	.bar input[type='search'] { flex: 1; }
 	.w { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }

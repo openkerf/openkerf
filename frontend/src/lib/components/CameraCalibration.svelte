@@ -8,9 +8,9 @@
 		camera
 	}: { open: boolean; camera: CameraStore } = $props();
 
-	// Vier hoeken in beeldpixels, linksboven met de klok mee. Die volgorde is
-	// niet vrij: de engine trekt ze in precies deze volgorde naar een rechthoek,
-	// dus door elkaar gooien geeft een gespiegeld of gedraaid beeld.
+	// Four corners in image pixels, top left clockwise. That order is not free: the engine
+	// pulls them into a rectangle in exactly this order, so shuffling them gives a
+	// mirrored or rotated image.
 	const NAMES = [
 		t('result.corner.topLeft'),
 		t('result.corner.topRight'),
@@ -24,8 +24,8 @@
 	let frame = $state<HTMLImageElement | null>(null);
 	let ready = false;
 
-	// Bij openen het onbewerkte beeld tonen: hoeken aanwijzen doe je in het
-	// beeld zoals de camera het ziet, niet in het al rechtgetrokken beeld.
+	// Show the unprocessed image on opening: you point out corners in the image as the
+	// camera sees it, not in the already straightened one.
 	$effect(() => {
 		if (!open) {
 			ready = false;
@@ -166,9 +166,9 @@
 		height: 100%;
 	}
 	polygon {
-		/* Bewust géén kerflijn (6/4): die is voorbehouden aan de selectie op het
-		   canvas, de jobvoortgang en de actieve tab. Dit is een ijkkader, geen
-		   snede. */
+		/* Deliberately not a kerf line (6/4): that is reserved for the selection on the
+		   canvas, the job progress and the active tab. This is a calibration frame, not a
+		   cut. */
 		stroke: var(--accent);
 		stroke-width: 2;
 		vector-effect: non-scaling-stroke;

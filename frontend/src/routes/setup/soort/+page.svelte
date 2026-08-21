@@ -310,9 +310,8 @@
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
-	/* De belofte uit het besluit staat op het scherm, niet alleen in een
-	   document: wie op een knop drukt die een laser kan raken, hoort te weten
-	   dat deze dat niet doet. */
+	/* The promise from the decision is on the screen, not only in a document: anybody
+	   pressing a button that could touch a laser should know that this one does not. */
 	.belofte {
 		display: flex;
 		align-items: flex-start;
@@ -388,8 +387,8 @@
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-1);
-		/* Randstreep in de kleur van de zekerheid: zichtbaar tijdens scrollen,
-		   ook zonder te lezen (DESIGN-SYSTEM v3.1, "zekerheid is een zin"). */
+		/* An edge stripe in the colour of the certainty: visible while scrolling, without
+		   reading as well (DESIGN-SYSTEM v3.1, "certainty is a sentence"). */
 		border-left: 3px solid var(--ok);
 		box-shadow: var(--lift-1);
 	}
@@ -452,10 +451,10 @@
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);
 	}
-	/* Segmented geeft elk vak `flex: 1` — en dat is `1 1 0%`, dus alle vakken
-	   worden even breed en het langste label wordt afgekapt ("GRBL (generie").
-	   Elders staan er alleen labels van gelijke lengte in, dus dit repareren we
-	   hier in plaats van in het gedeelde component. */
+	/* Segmented gives every box `flex: 1` — and that is `1 1 0%`, so all the boxes become
+	   equally wide and the longest label is truncated ("GRBL (generi"). Elsewhere there
+	   are only labels of equal length in it, so we fix this here rather than in the shared
+	   component. */
 	.model :global(.segmented button) {
 		flex: 0 1 auto;
 	}
@@ -516,16 +515,16 @@
 		margin: var(--space-4) 0 0;
 		padding: 0;
 		display: grid;
-		/* Vier kaarten in drie kolommen laten een gat van twee kolommen op de
-		   tweede rij; op 320 wordt het 2×2 en staat het raster vol. */
+		/* Four cards in three columns leave a two-column hole on the second row; at 320 it
+		   becomes 2×2 and the grid is full. */
 		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 		gap: var(--space-3);
 	}
 	.soort {
 		display: grid;
 		gap: var(--space-2);
-		/* Gelijke hoogte, wat de tekst ook doet: een rafelig raster van kaarten
-		   leest als een lijst met fouten erin. */
+		/* Equal height, whatever the text does: a ragged grid of cards reads as a list
+		   with mistakes in it. */
 		height: 100%;
 		align-content: start;
 		padding: var(--space-4);
@@ -554,8 +553,8 @@
 			min-height: 44px;
 		}
 	}
-	/* Op 390 px brak "Laat OpenKerf zoeken" over drie regels naast de knop, en
-	   stond die knop scheef in het overgebleven gat. Dan maar onder elkaar. */
+	/* At 390 px "Let OpenKerf search" broke over three lines beside the button, and that
+	   button sat askew in the remaining hole. Better stacked, then. */
 	@media (max-width: 560px) {
 		.kop {
 			display: grid;
@@ -567,8 +566,8 @@
 			display: grid;
 			gap: var(--space-2);
 			grid-template-columns: auto 1fr;
-			/* Naast een blok van vier regels hangt een gecentreerde ring in de
-			   lucht; hij hoort bij de kop "Zoeken…". */
+			/* Beside a block of four lines a centred ring hangs in mid-air; it belongs with
+			   the heading "Searching…". */
 			align-items: start;
 		}
 		.ring {

@@ -21,46 +21,46 @@
 	});
 
 	/**
-	 * De koude start heeft een eigen scherm.
+	 * The cold start has a screen of its own.
 	 *
-	 * MeerK40t boot met een verzonnen standaardapparaat, zodat de kernel altijd
-	 * iets heeft om tegen te praten. Zonder poort hieronder opende OpenKerf op
-	 * een werkgebied dat "lihuiyu-device — Gereed — Verbonden met de laser"
-	 * meldde tegen iemand die nog nooit een machine had ingesteld, en er stond
-	 * nergens een weg naar /setup. Wie de wizard niet in de adresbalk typt,
-	 * vindt hem niet. Daarom: geen ingestelde machine, dan eerst dit scherm.
+	 * MeerK40t boots with an invented default device, so that the kernel always has
+	 * something to talk to. Without the gate below, OpenKerf opened on a work area that
+	 * reported "lihuiyu-device — Ready — Connected to the laser" to somebody who had never
+	 * set up a machine, and there was no route to /setup anywhere. Anybody who does not
+	 * type the wizard into the address bar does not find it. Hence: no configured machine,
+	 * then this screen first.
 	 *
-	 * De poort staat in de wortel-layout en niet op de werkgebiedpagina, omdat
-	 * hij over álle routes gaat behalve de wizard zelf.
+	 * The gate lives in the root layout and not on the work area page, because it covers
+	 * *all* routes except the wizard itself.
 	 */
 	type Machine = { path: string; label: string; configured?: boolean };
 
 	let stand = $state<'onbekend' | 'nodig' | 'klaar'>('onbekend');
-	// Rondkijken is een keuze voor deze sessie, niet voor altijd: een volgende
-	// keer opstarten hoort weer bij de ask te beginnen.
+	// Looking around is a choice for this session, not for good: starting up next time
+	// should begin at the question again.
 	let rondkijken = $state(false);
 
 	let inWizard = $derived($page.url.pathname.startsWith('/setup'));
 
 	/**
-	 * De wizard verandert het antwoord, dus na de wizard opnieuw shouldAsk.
+	 * The wizard changes the answer, so ask again after the wizard.
 	 *
-	 * Dit was de bug die Jelle vond: wie op het werkgebied begint krijgt hier
-	 * `stand = 'nodig'`, gaat de wizard in, maakt zijn machine aan en klikt op
-	 * "Naar het werkgebied" — en belandt weer op de welkomstpoort, want die
-	 * `stand` van vóór de wizard stond er nog. Alleen een handmatige verversing
-	 * hielp, en dat is precies de handeling die deze poort zou moeten besparen.
+	 * This was the bug Jelle found: anybody starting on the work area gets `stand =
+	 * 'nodig'` here, goes into the wizard, creates their machine and clicks "To the work
+	 * area" — and lands on the welcome gate again, because that `stand` from before the
+	 * wizard was still there. Only a manual refresh helped, and that is precisely the
+	 * action this gate is supposed to save.
 	 *
-	 * Geen `$state`: deze vlag mag de effect niet zelf opnieuw aan de gang
-	 * krijgen. Hij verandert alleen mee met de route, en dáár hangt de effect al
-	 * aan via `inWizard`.
+	 * Not a `$state`: this flag must not set the effect going again by itself. It only
+	 * changes along with the route, and the effect already hangs off that through
+	 * `inWizard`.
 	 */
 	let opnieuwVragen = false;
 
 	$effect(() => {
 		if (inWizard) {
-			// Wat hier ook gebeurt — aanmaken, verwijderen, hernoemen — bij
-			// terugkomst is het antwoord van daarnet niets meer waard.
+			// Whatever happens here — creating, deleting, renaming — on return the answer
+			// from a moment ago is worth nothing.
 			opnieuwVragen = true;
 			return;
 		}
@@ -71,8 +71,8 @@
 				const response = await fetch('/api/machines');
 				if (!response.ok) return (stand = 'klaar');
 				const machines: Machine[] = await response.json();
-				// Een oudere server kent `configured` niet. Dan liever doorlaten
-				// dan iedereen op een welkomstscherm vastzetten.
+				// An older server does not know `configured`. Then better to let everybody
+				// through than to strand them on a welcome screen.
 				const kent = machines.some((m) => 'configured' in m);
 				stand = kent && !machines.some((m) => m.configured) ? 'nodig' : 'klaar';
 			} catch {
@@ -82,22 +82,22 @@
 	});
 </script>
 
-<!-- De fonts komen since v3.3 uit de build zelf (@font-face in tokens.css, zes
-     woff2 van samen 128 KB). De link naar fonts.googleapis.com die hier stond
-     voegde daar niets aan toe en was het énige externe verzoek van de app;
-     zonder netwerk leverde hij ERR_FAILED in de console op. -->
+<!-- Since v3.3 the fonts come from the build itself (@font-face in tokens.css, six woff2
+     files totalling 128 KB). The link to fonts.googleapis.com that used to be here added
+     nothing to that and was the app's *only* external request; without a network it
+     produced ERR_FAILED in the console. -->
 
 {#if inWizard || rondkijken || stand === 'klaar'}
 	{@render children()}
 {:else if stand === 'nodig'}
 	<Welcome onrondkijken={() => (rondkijken = true)} />
 {:else}
-	<!-- Zolang `stand` onbekend is tekenen we het werkgebied niet: dat zou
-	     opflitsen met de melding dat de laser klaarstaat. Maar een volstrekt
-	     blanco pagina is niet te onderscheiden van een stuk scherm, en op een
-	     langzame server duurde "één tel" merkbaar langer dan een tel. Deze regel
-	     verschijnt daarom pas ná 400 ms: is de server snel, dan zie je hem
-	     nooit; is hij traag, dan staat er waar we op wachten. -->
+	<!-- As long as `stand` is unknown we do not draw the work area: that would flash up
+	     with the message that the laser is ready. But an entirely blank page cannot be
+	     told apart from a broken screen, and on a slow server "one moment" took
+	     noticeably longer than a moment. So this line only appears after 400 ms: if the
+	     server is fast you never see it; if it is slow, it says what we are waiting
+	     for. -->
 	<p class="wachten" role="status">{t('layout.lookingForMachine')}</p>
 {/if}
 
@@ -114,12 +114,12 @@
 		margin: 0;
 		color: var(--text-2);
 		background: var(--surface-0);
-		/* Vertraagd in beeld: een snelle server hoort hier geen tekst te laten
-		   opflitsen, een langzame moet zich verantwoorden. */
+		/* Delayed on screen: a fast server should not flash text up here, a slow one has
+		   to account for itself. */
 		opacity: 0;
-		/* Duur en timing los uitschrijven: --transition is "150ms ease-out", dus
-		   in een animation-shorthand levert het een tweede timingfunctie op en
-		   valt de hele regel als ongeldig weg. Gemeten: opacity bleef 0. */
+		/* Duration and timing written out separately: --transition is "150ms ease-out",
+		   so in an animation shorthand it produces a second timing function and the whole
+		   rule is dropped as invalid. Measured: opacity stayed 0. */
 		animation: opdoemen 150ms ease-out 400ms forwards;
 	}
 	@keyframes opdoemen {
@@ -127,8 +127,8 @@
 			opacity: 1;
 		}
 	}
-	/* Wie beweging uitzet, krijgt de regel meteen: hij is een melding, geen
-	   versiering, en mag niet helemaal wegvallen. */
+	/* Anybody who switches motion off gets the line at once: it is a message, not
+	   decoration, and must not disappear entirely. */
 	@media (prefers-reduced-motion: reduce) {
 		.wachten {
 			opacity: 1;

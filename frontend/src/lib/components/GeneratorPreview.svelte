@@ -1,5 +1,5 @@
 <script module lang="ts">
-	/** Wat de server terugstuurt: omtrekken in mm, en waar ze komen te liggen. */
+	/** What the server sends back: outlines in mm, and where they will lie. */
 	export type Voorbeeld = {
 		what: string;
 		shapes: string[];
@@ -16,26 +16,25 @@
 
 <script lang="ts">
 	/**
-	 * De vorm naast het formulier dat hem maakt.
+	 * The shape beside the form that makes it.
 	 *
-	 * Dit is geen schets meer maar het werkelijke resultaat: de engine rekent
-	 * hetzelfde uit als bij het echte werk (`Generators.preview`, dezelfde
-	 * `_plan_*`-functies) en stuurt de omtrekken in millimeters terug. Wat je
-	 * hier ziet is dus wat er straks gebrand wordt — inclusief de plek op het
-	 * vel, want "past dit nog" is de ask die je aan een generator stelt.
+	 * This is no longer a sketch but the real result: the engine computes the same thing
+	 * as for the real work (`Generators.preview`, the same `_plan_*` functions) and sends
+	 * the outlines back in millimetres. So what you see here is what will be burned —
+	 * including the place on the sheet, because "does this still fit" is the question you
+	 * put to a generator.
 	 *
-	 * Twee regels die uit de vorige ronde komen en hier weer gelden:
+	 * Two rules that come from the previous round and hold here again:
 	 *
-	 * 1. **Bij ongeldige invoer springt het beeld niet weg.** Half getypte
-	 *    getallen zijn even ongeldig; het last geldige beeld blijft staan
-	 *    met de reden erboven. Zie `TestGrid.svelte`, `voorbeeldFout`.
-	 * 2. **Het voorbeeld toont niet meer dan er brandt.** Het vel is een dunne
-	 *    hulplijn, geen vorm, en is als zodanig herkenbaar.
+	 * 1. **On invalid input the image does not jump away.** Half-typed numbers are just
+	 *    as invalid; the last valid image stays up with the reason above it. See
+	 *    `TestGrid.svelte`, `voorbeeldFout`.
+	 * 2. **The preview shows no more than what burns.** The sheet is a thin guide line,
+	 *    not a shape, and is recognisable as such.
 	 *
-	 * Voor herhalen en cirkel is er een terugval: die twee hebben de gekozen
-	 * elementen nodig, en zolang het venster die niet krijgt, blijft daar de
-	 * oude schets staan. Een verzonnen vorm herhalen zou een voorbeeld zijn
-	 * dat er wel uitziet als het jouwe en het niet is.
+	 * For repeat and circle there is a fallback: those two need the chosen elements, and
+	 * as long as the dialog does not get them the old sketch stays there. Repeating an
+	 * invented shape would be a preview that looks like yours and is not.
 	 */
 
 	import { t } from '$lib/i18n/index.svelte';
@@ -47,10 +46,10 @@
 		children
 	}: {
 		soort: string;
-		/** De ruwe formuliervelden, voor de terugvalschets. */
+		/** The raw form fields, for the fallback sketch. */
 		waarden: Record<string, unknown>;
 		voorbeeld?: Voorbeeld | null;
-		/** Waarom het last beeld niet ververst is; het beeld blijft staan. */
+		/** Why the last image was not refreshed; the image stays up. */
 		failure?: string | null;
 		children?: import('svelte').Snippet;
 	} = $props();
@@ -66,16 +65,16 @@
 	let herhalingen = $derived(Math.min(16, Math.max(2, Math.round(n('repeats', 8)))));
 	let draait = $derived(waarden.rotate !== false);
 
-	// De vlakken die je als vlák wilt zien: een QR-code van losse omtrekjes is
-	// geen QR-code meer. De rest is een lijn, want dat is wat de laser volgt.
+	// The shapes you want to see as an *area*: a QR code of separate little outlines is
+	// no longer a QR code. The rest is a line, because that is what the laser follows.
 	const GEVULD = new Set(['qrcode', 'barcode']);
 
 	/**
 	 * Het venster op de tekening, in mm.
 	 *
-	 * Inzoomen op het werk zelf, niet op het vel: een QR-code van 30 mm op een
-	 * bed van 500 mm zou anders vier pixels groot zijn. De velrand wordt wél
-	 * getekend, dus zodra je er in de buurt komt, zie je hem liggen.
+	 * Zooming in on the work itself, not on the sheet: a 30 mm QR code on a 500 mm bed
+	 * would otherwise be four pixels across. The sheet edge *is* drawn, so as soon as you
+	 * come near it you see it lying there.
 	 */
 	let venster = $derived.by(() => {
 		if (!voorbeeld) return null;
@@ -92,7 +91,7 @@
 	let breed = $derived(voorbeeld ? voorbeeld.bounds[2] - voorbeeld.bounds[0] : 0);
 	let hoog = $derived(voorbeeld ? voorbeeld.bounds[3] - voorbeeld.bounds[1] : 0);
 
-	/** Steekt er iets buiten het vel uit? Dat is geen detail op een laser. */
+	/** Does something stick out beyond the sheet? On a laser that is not a detail. */
 	let buitenVel = $derived.by(() => {
 		if (!voorbeeld) return false;
 		const [x0, y0, x1, y1] = voorbeeld.bounds;
@@ -242,8 +241,8 @@
 		background: var(--surface-2);
 	}
 	svg { width: 190px; height: 150px; display: block; margin: 0 auto; }
-	/* Alle maten hierin staan in millimeters, niet in pixels — daarom
-	   non-scaling-stroke, anders verandert de lijndikte met de zoom. */
+	/* All the measures in here are in millimetres, not in pixels — hence
+	   non-scaling-stroke, otherwise the line weight changes with the zoom. */
 	.vorm, .hulp {
 		fill: none;
 		stroke: var(--accent);
@@ -252,7 +251,7 @@
 		stroke-linejoin: round;
 	}
 	.hulp { stroke: var(--text-2); stroke-dasharray: 3 2; }
-	/* Een QR-code van losse omtrekjes leest niemand; die hoort dicht te zijn. */
+	/* Nobody reads a QR code of separate little outlines; it should be solid. */
 	.vlak .vorm { fill: var(--accent); stroke: none; }
 	.vel {
 		fill: none;

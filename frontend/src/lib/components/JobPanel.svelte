@@ -212,8 +212,8 @@
 	.job + .job {
 		margin-top: var(--space-2);
 	}
-	/* De lopende job hoort er niet uit te zien als de drie eronder in de rij:
-	   een randje in accentkleur viel op een schermvullend paneel weg. */
+	/* The running job should not look like the three below it in the queue: a border in
+	   the accent colour was lost on a full-screen panel. */
 	.job.running {
 		border-color: var(--accent);
 		box-shadow: inset 3px 0 0 var(--accent);

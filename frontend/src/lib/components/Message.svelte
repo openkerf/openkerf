@@ -1,15 +1,14 @@
 <script lang="ts">
 	/**
-	 * Eén plek waar een mislukte opdracht zichtbaar wordt.
+	 * One place where a failed command becomes visible.
 	 *
-	 * De foutmelding van een import stond in het Job-tabblad, en importeren doe
-	 * je vanuit de bovenbalk terwijl je in Bewerken staat. Gevolg: een kapot
-	 * bestand leverde een keurig geformuleerde melding op die niemand ooit zag —
-	 * je zag alleen een bed dat leeg bleef. Een failure hoort te verschijnen waar je
-	 * kijkt, niet waar hij vandaan komt.
+	 * An import's error message lived in the Job tab, and you import from the top bar
+	 * while you are in Design. Consequence: a broken file produced a neatly worded message
+	 * nobody ever saw — all you saw was a bed that stayed empty. An error should appear
+	 * where you are looking, not where it came from.
 	 *
-	 * Blijft staan tot je hem wegklikt. Een melding die vanzelf verdwijnt, mis je
-	 * precies wanneer je even naar de machine keek.
+	 * It stays up until you click it away. A message that disappears by itself is one you
+	 * miss precisely when you glanced at the machine.
 	 */
 	import { t } from '$lib/i18n/index.svelte';
 	import type { Controller } from '$lib/control.svelte';
@@ -28,10 +27,9 @@
 <style>
 	.melding {
 		position: fixed;
-		/* Rechtsboven, onder de bovenbalk. Eerst stond hij rechtsonder en dekte
-		   hij de zoomknoppen af; bovendien komen de meeste van deze fouten uit de
-		   bovenbalk (openen, importeren, exporteren) en daar hoort het antwoord
-		   dan ook te verschijnen. */
+		/* Top right, below the top bar. At first it was in the bottom right and covered
+		   the zoom buttons; besides, most of these errors come from the top bar (open,
+		   import, export) and that is where the answer should appear. */
 		right: var(--space-4);
 		top: calc(var(--topbar-height) + var(--space-3));
 		z-index: 60;

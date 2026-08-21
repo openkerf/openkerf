@@ -2,13 +2,13 @@
 	/**
 	 * Stap 5.
 	 *
-	 * Deze pagina zei alleen "de machine is aangemaakt" en zette je in een leeg
-	 * werkgebied. Precies daar viel het eerste "wat nu?" van de hele taak: je
-	 * hebt een machine, en niets vertelt je hoe je van niets naar een eerste
-	 * snede komt. Nu staat die weg er, in de volgorde waarin je hem loopt.
+	 * This page only said "the machine has been created" and put you in an empty work
+	 * area. That is exactly where the whole task's first "now what?" fell: you have a
+	 * machine, and nothing tells you how to get from nothing to a first cut. Now that
+	 * route is there, in the order in which you walk it.
 	 *
-	 * Bovendien beweerde hij succes zonder te controleren of er iets was: wie
-	 * hier binnenkwam zonder `machine` in de URL las "De machine is aangemaakt".
+	 * It also claimed success without checking whether there was anything: anybody
+	 * arriving here without `machine` in the URL read "The machine has been created".
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
@@ -23,22 +23,22 @@
 	let geladen = $state(false);
 
 	/**
-	 * Het vel volgt de machine niet vanzelf (gat E2).
+	 * The sheet does not follow the machine by itself (gap E2).
 	 *
-	 * Een vel is een stuk materiaal, geen kopie van het bed — dus meeschalen
-	 * zónder te shouldAsk zou het restje van 200 × 300 dat je net hebt ingesteld
-	 * stilletjes oprekken tot bedmaat. Maar het omgekeerde is wat er nu gebeurt:
-	 * je stelt een bed van 610 × 406 in en begint je eerste ontwerp in een kader
-	 * van 310 × 210 dat van de vórige machine kwam en nergens op slaat.
+	 * A sheet is a piece of material, not a copy of the bed — so scaling along *without*
+	 * asking would silently stretch the 200 × 300 offcut you have just set up to bed size.
+	 * But the opposite is what happens now: you set up a 610 × 406 bed and start your
+	 * first design in a 310 × 210 frame that came from the *previous* machine and means
+	 * nothing.
 	 *
-	 * Vandaar dat het hier gevraagd wordt, op de enige plek waar de bedmaat net
-	 * veranderd is: één regel, twee knoppen, en het antwoord is definitief.
+	 * Hence it is asked here, in the one place where the bed size has just changed: one
+	 * line, two buttons, and the answer is final.
 	 */
 	const sheets = new SheetStore(() =>
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '')
 	);
 	let bed = $state<{ w: number; h: number } | null>(null);
-	/** Beantwoord (aangepast of laten staan): dan is de ask weg. */
+	/** Answered (adjusted or left as it was): then the question is gone. */
 	let velAntwoord = $state<'aangepast' | 'gelaten' | null>(null);
 
 	let velVraag = $derived.by(() => {
@@ -64,9 +64,8 @@
 	onMount(async () => {
 		await store.loadMachines();
 		geladen = true;
-		// De bedmaat in millimeters komt uit de status: de instellingen van de
-		// engine geven "24.0in" terug, en dat is hier de verkeerde eenheid om
-		// mee te rekenen.
+		// The bed size in millimetres comes from the status: the engine's settings hand
+		// back "24.0in", and that is the wrong unit to compute with here.
 		await sheets.load();
 		try {
 			const response = await fetch('/api/status');
@@ -187,8 +186,8 @@
 		place-items: center;
 		border-radius: var(--radius-dot);
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		/* Gelijk aan de stapbolletjes op het welkomstscherm: accent op een
-		   accenttint haalt geen AA. */
+		/* The same as the step dots on the welcome screen: accent on an accent tint does
+		   not make AA. */
 		color: var(--text-1);
 		font-size: var(--text-xs);
 	}
@@ -201,8 +200,8 @@
 		font-size: var(--text-xs);
 	}
 
-	/* Een ask, geen waarschuwing: er is niets stuk, er valt iets te kiezen.
-	   Daarom het accent in de rand en niet amber. */
+	/* A question, not a warning: nothing is broken, there is something to choose. Hence
+	   the accent in the border and not amber. */
 	.velvraag {
 		margin-top: var(--space-6);
 		padding: var(--space-4);
@@ -221,13 +220,13 @@
 	.velknoppen {
 		display: flex;
 		flex-wrap: wrap;
-		/* Twee uitkomsten die elkaar uitsluiten: ver genoeg uit elkaar om er met
-		   een duim niet naast te mikken. */
+		/* Two outcomes that exclude each other: far enough apart not to mis-aim with a
+		   thumb. */
 		gap: var(--space-6);
 		margin-top: var(--space-3);
 	}
-	/* Met een handschoen aan is 37px te weinig; de knoppen in de setup zijn
-	   verder muisknoppen, dus dit staat hier en niet in de layout. */
+	/* With a glove on, 37px is too little; the buttons in the setup are otherwise mouse
+	   buttons, so this lives here and not in the layout. */
 	@media (max-width: 1199px), (pointer: coarse) {
 		.velknoppen :global(.btn) {
 			min-height: 44px;

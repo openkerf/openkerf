@@ -1,12 +1,12 @@
 <script lang="ts">
 	/**
-	 * Een lettertype kiezen, met voorbeeld in de letter zelf.
+	 * Choosing a typeface, with a preview in the typeface itself.
 	 *
-	 * Stond in `TextDialog`. De boogtekstgenerator maakt dezelfde tekst met
-	 * dezelfde engine en kon er géén letter bij kiezen — hij kreeg altijd de
-	 * standaard. Een tweede keuzemechanisme bouwen zou betekenen dat dezelfde
-	 * lijst op twee plekken uiteen kan gaan lopen (en de importknop maar op één
-	 * ervan zit), dus is dit één component die beide vensters gebruiken.
+	 * This lived in `TextDialog`. The arc text generator makes the same text with the same
+	 * engine and could *not* choose a typeface for it — it always got the default.
+	 * Building a second choice mechanism would mean the same list can drift apart in two
+	 * places (and the import button only sits on one of them), so this is one component
+	 * both dialogs use.
 	 */
 
 	import { t } from '$lib/i18n/index.svelte';
@@ -16,14 +16,14 @@
 	let {
 		font = $bindable(''),
 		/**
-		 * De leesbare naam van de gekozen letter. `font` is het bestand, en dat
-		 * is bij systeemlettertypen een heel pad — "/System/Library/Fonts/Apple
-		 * Braille" is geen antwoord op "welke letter staat er nu".
+		 * The readable name of the chosen typeface. `font` is the file, and for system
+		 * fonts that is a whole path — "/System/Library/Fonts/Apple Braille" is no answer
+		 * to "which typeface is set now".
 		 */
 		fontName = $bindable(''),
-		/** Waarmee de proefregel gevuld wordt: liever je eigen tekst. */
+		/** What the sample line is filled with: preferably your own text. */
 		sample = '',
-		/** Bij bewerken: de letter die er nu op staat. */
+		/** When editing: the typeface it currently carries. */
 		current = null
 	}: {
 		font?: string;
@@ -39,8 +39,8 @@
 
 	let fonts = $state<Font[]>([]);
 	let filter = $state('');
-	// Eigen lettertypen: de engine leest alleen .ttf en houdt zijn lijst in een
-	// cache, dus een net geïnstalleerde .otf is onzichtbaar tot je hem importeert.
+	// Your own typefaces: the engine only reads .ttf and keeps its list in a cache, so a
+	// freshly installed .otf is invisible until you import it.
 	let importing = $state(false);
 	let importable = $state<Font[]>([]);
 	let importFilter = $state('');
@@ -103,8 +103,8 @@
 			: fonts
 	);
 
-	// Alleen wat in beeld staat krijgt een voorbeeld: 200 webfonts laden om een
-	// lijst te tonen is niet nodig, en .shx/.jhf kan een browser toch niet.
+	// Only what is on screen gets a preview: loading 200 web fonts to show a list is
+	// unnecessary, and a browser cannot handle .shx/.jhf anyway.
 	const PREVIEWABLE = /\.(ttf|otf|woff2?)$/i;
 	let familie = $derived(
 		new Map(
@@ -235,12 +235,12 @@
 		color: var(--text-1);
 		text-align: left;
 	}
-	/* Nadrukkelijk het interfacelettertype: de naam is de sleutel waarmee je
-	   een letter terugvindt en moet dus altijd leesbaar zijn. */
+	/* Emphatically the interface typeface: the name is the key by which you find a
+	   typeface again and therefore has to stay readable. */
 	.font .naam {
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
-		/* Een lange naam mag het voorbeeld niet van de rij duwen. */
+		/* A long name must not push the preview off the row. */
 		flex: 0 1 auto;
 		min-width: 0;
 		white-space: nowrap;

@@ -280,18 +280,16 @@
 	}
 	.name {
 		font-weight: 500;
-		/* Een naam die de engine geeft ("lhystudios1") heeft geen afbreekpunt: hij
-		   duwde de badge weg of werd erdoor afgesneden. Afkappen met ellips is
-		   eerlijk — je ziet dat er meer staat. De volledige naam blijft in de
-		   title-tip. */
+		/* A name the engine gives ("lhystudios1") has no break point: it pushed the badge
+		   away or was cut off by it. Truncating with an ellipsis is honest — you see that
+		   there is more. The full name stays in the title tip. */
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* Onder ~420px is er naast de naam geen kolom meer over: op 390 hield de
-	   naam 74px van de 308 en botste "Ruida 5030" tegen de badge. De naam krijgt
-	   dan de hele regel, de acties de regel eronder — dat is ook de volgorde
-	   waarin je ze leest. */
+	/* Below ~420px there is no column left beside the name: at 390 the name kept 74px of
+	   the 308 and "Ruida 5030" collided with the badge. The name then gets the whole line,
+	   the actions the line below — which is also the order in which you read them. */
 	@media (max-width: 420px) {
 		.machines li {
 			flex-wrap: wrap;
@@ -299,8 +297,8 @@
 		.machines li > div:first-child {
 			flex: 1 0 100%;
 		}
-		/* De knoppen mogen dan de volle breedte delen; ze zijn hier het doel van
-		   een duim, niet van een muis. */
+		/* The buttons may then share the full width; here they are the target of a thumb,
+		   not of a mouse. */
 		.machines li .btn,
 		.machines li .badge {
 			min-height: 44px;
@@ -308,9 +306,9 @@
 			align-items: center;
 		}
 	}
-	/* Accent op een tint van 14% accent haalt geen AA (gemeten: 4,10 in licht,
-	   4,46 in donker). De tint blijft de accentkleur dragen, de tekst niet —
-	   dezelfde uitweg als in ToolRail, en zonder de merkkleur te verschuiven. */
+	/* Accent on a 14% accent tint does not make AA (measured: 4.10 in light, 4.46 in
+	   dark). The tint keeps carrying the accent colour, the text does not — the same way
+	   out as in ToolRail, and without shifting the brand colour. */
 	.badge {
 		font-size: var(--text-xs);
 		padding: 4px 8px;
@@ -330,8 +328,8 @@
 		margin-top: var(--space-8);
 		padding: var(--space-4);
 		border-radius: var(--radius-card);
-		/* Een waarschuwingsvlak, geen failure: dit device werkt, het is alleen
-		   niet het jouwe. Zie DESIGN-SYSTEM, "zekerheid is een zin". */
+		/* A warning surface, not an error: this device works, it is simply not yours. See
+		   DESIGN-SYSTEM, "certainty is a sentence". */
 		border-left: 3px solid var(--warn);
 		background: var(--surface-2);
 	}
@@ -347,9 +345,9 @@
 
 	/* ------------------------------- machineprofiel uitwisselen (gat E5) */
 
-	/* Een bestandskiezer die eruitziet als de knop ernaast: de input zelf is
-	   onzichtbaar maar blijft het raakvlak, dus toetsenbord en schermlezer
-	   krijgen gewoon een invoerveld met een naam. */
+	/* A file picker that looks like the button beside it: the input itself is invisible
+	   but stays the touch surface, so keyboard and screen reader simply get an input with
+	   a name. */
 	.btn.file {
 		position: relative;
 		overflow: hidden;
@@ -391,8 +389,8 @@
 	.feiten div { display: flex; justify-content: space-between; gap: var(--space-3); }
 	.feiten dt { color: var(--text-2); }
 	.feiten dd { margin: 0; }
-	/* Het adres van de andere werkbank is het eerste dat hier niet klopt. Geen
-	   failure, wel iets om te controleren voor je iets brandt. */
+	/* The address of the other workbench is the first thing here that does not hold. Not
+	   an error, but something to check before you burn anything. */
 	.lokaal {
 		padding: var(--space-2) var(--space-3);
 		border-left: 3px solid var(--warn-solid, var(--warn));

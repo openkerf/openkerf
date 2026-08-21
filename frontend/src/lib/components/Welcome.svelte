@@ -88,17 +88,16 @@
 		box-shadow: var(--lift-2);
 		padding: var(--space-6);
 	}
-	/* De kerflijn als snede over de bovenrand van de kaart. Statisch: de
-	   geanimeerde variant is in DESIGN-SYSTEM voorbehouden aan selectie,
-	   jobvoortgang en de actieve tab, en een welkomstscherm hoort stil te zijn. */
+	/* The kerf line as a cut across the top edge of the card. Static: in DESIGN-SYSTEM the
+	   animated variant is reserved for selection, job progress and the active tab, and a
+	   welcome screen should be quiet. */
 	.kaart::before {
 		content: '';
 		position: absolute;
 		left: var(--space-6);
 		right: var(--space-6);
-		/* Op de rand zelf, niet erboven: op -1px zweefde de lijn los van de
-		   kaart en las hij in het donkere thema als een streep die er per
-		   ongeluk stond. */
+		/* On the edge itself, not above it: at -1px the line floated free of the card and
+		   in the dark theme read as a stripe that was there by accident. */
 		top: 0;
 		height: 1px;
 		background: repeating-linear-gradient(
@@ -145,8 +144,8 @@
 		place-items: center;
 		border-radius: var(--radius-dot);
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		/* Zie de badge op /setup: accent op een accenttint haalt geen AA, en een
-		   volgnummer van 11px is gewone tekst. De tint blijft, de cijfers niet. */
+		/* See the badge on /setup: accent on an accent tint does not make AA, and an 11px
+		   sequence number is ordinary text. The tint stays, the figures do not. */
 		color: var(--text-1);
 		font-size: var(--text-xs);
 	}
@@ -171,8 +170,8 @@
 		text-decoration: none;
 		transition: filter var(--transition);
 	}
-	/* Geen kleurwissel bij hover: een generieke .btn:hover maakte de hoofdknop
-	   elders wit-op-lichtgrijs (X1 in FEATURE-GAPS). Donkerder is genoeg. */
+	/* No colour change on hover: a generic .btn:hover made the main button white on light
+	   grey elsewhere (X1 in FEATURE-GAPS). Darker is enough. */
 	.knop.primair:hover {
 		filter: brightness(0.92);
 	}
@@ -210,8 +209,8 @@
 		text-underline-offset: 3px;
 		cursor: pointer;
 	}
-	/* De tekstschaal schuift al mee in tokens.css; hier alleen de raakdoelen,
-	   want 44px haalt een handschoen en 40 niet. */
+	/* The type scale already shifts along in tokens.css; here only the touch targets,
+	   because 44px suits a glove and 40 does not. */
 	@media (max-width: 1199px) {
 		.knop,
 		.tekstknop {

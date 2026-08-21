@@ -1,14 +1,13 @@
 <script lang="ts">
 	/**
-	 * Waarin dit vel gebrand wordt.
+	 * What this sheet is burned into.
 	 *
-	 * Besluit B1: materiaal en dikte hangen aan het vel, niet aan een filter in
-	 * een venster dat je weer sluit. Alles stroomafwaarts leest het hier: de
-	 * bibliotheek filtert erop, het testraster begint ermee, en de pre-flight
-	 * kan er een instelling aan toetsen.
+	 * Decision B1: material and thickness hang off the sheet, not off a filter in a dialog
+	 * you close again. Everything downstream reads it here: the library filters on it, the
+	 * test grid starts with it, and the pre-flight can test a setting against it.
 	 *
-	 * Leeg blijven mag. Wie een restje van onbekende herkomst in de machine legt,
-	 * moet niet eerst een naam en een getal hoeven verzinnen om te kunnen werken.
+	 * Staying empty is allowed. Anybody putting an offcut of unknown origin in the machine
+	 * should not have to invent a name and a number first in order to work.
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
@@ -29,8 +28,8 @@
 	let nieuw = $state('');
 	let toevoegen = $state(false);
 
-	// De diktes die op elke zaagtafel liggen. Eén tik in plaats van een getal
-	// typen — op een tablet naast de machine scheelt dat een toetsenbord.
+	// The thicknesses that lie on every saw table. One tap instead of typing a number —
+	// on a tablet beside the machine that saves a keyboard.
 	const GANGBAAR = [1, 2, 3, 4, 5, 6, 8, 10];
 
 	let dikte = $derived(sheet.thickness_mm);
@@ -215,8 +214,8 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.chip:hover:not(:disabled) { background: var(--surface-2); }
-	/* Dezelfde dubbele codering als de vellenbalk: rand én tint én aria-pressed,
-	   nooit kleur alleen. */
+	/* The same double encoding as the sheet bar: border *and* tint *and* aria-pressed,
+	   never colour alone. */
 	.chip[aria-pressed='true'] {
 		border-color: var(--accent);
 		font-weight: 600;

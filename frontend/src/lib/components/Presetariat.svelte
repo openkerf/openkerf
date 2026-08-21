@@ -24,7 +24,7 @@
 	let loaded = false;
 	let result = $state<{ imported: number; skipped: number } | null>(null);
 
-	// Pas ophalen als het venster opengaat: de catalogus staat op internet.
+	// Only fetch when the dialog opens: the catalogue lives on the internet.
 	$effect(() => {
 		if (!open || loaded) return;
 		loaded = true;
@@ -51,7 +51,7 @@
 	}
 
 	/**
-	 * Wat de hele lijst gemeen heeft, zeggen we één keer.
+	 * What the whole list has in common we say once.
 	 *
 	 * Twenty-six rows with exactly the same amber "Starting value" pill inform
 	 * nobody; they turn a warning into wallpaper. If there is variation in it, every

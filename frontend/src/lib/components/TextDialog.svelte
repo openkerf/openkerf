@@ -9,7 +9,7 @@
 		onConfirm
 	}: {
 		open: boolean;
-		/** Gevuld bij bewerken van bestaande tekst. */
+		/** Filled in when editing existing text. */
 		initial?: {
 			text: string;
 			font: string;
@@ -33,7 +33,7 @@
 	let align = $state('start');
 	let filled = false;
 
-	// Bij bewerken beginnen met wat er staat, niet met lege velden.
+	// When editing, start with what is there, not with empty fields.
 	$effect(() => {
 		if (!open) {
 			filled = false;

@@ -55,19 +55,18 @@
 	</nav>
 	{/if}
 
-	<!-- De stappen stonden als kale tekst in een leeg venster: op 1440 bij 900
-	     was tweederde van het scherm niets. Een kaart maakt er een scherm van
-	     in plaats van een document. -->
+	<!-- The steps sat as bare text in an empty window: at 1440 by 900 two thirds of the
+	     screen was nothing. A card makes it a screen rather than a document. -->
 	<div class="blad">
 		{@render children()}
 	</div>
 </main>
 
 <style>
-	/* Op 390 pixels breekt deze kop over drie regels en valt de knop van het
-	   scherm. Dan maar korter: de bestemming staat er nog. */
-	/* De ruimte tussen "Terug" en de rest komt van een marge: in een flexbox
-	   valt een geschreven spatie tussen twee items weg. */
+	/* At 390 pixels this heading breaks over three lines and the button falls off the
+	   screen. Shorter, then: the destination is still there. */
+	/* The space between "Back" and the rest comes from a margin: in a flexbox a written
+	   space between two items disappears. */
 	.lang { margin-left: 0.3em; }
 	@media (max-width: 560px) {
 		.crumb { display: none; }
@@ -144,16 +143,15 @@
 		text-decoration: none;
 	}
 	/* Een afgeronde stap staat op --surface-2, en daar blijft --accent op 4,33
-	   steken; --accent-text is dezelfde kleur één tint dieper en haalt 5,09.
-	   Ook bij hover, want die legt --line eronder. */
+	   short; --accent-text is the same colour one shade deeper and reaches 5.09. On hover
+	   as well, because that lays --line underneath. */
 	.steps li.done a {
 		color: var(--accent-text);
 	}
-	/* De hover zette --line als vulling, en dat is een randkleur, geen vlak: in
-	   licht zakt de pil daarmee naar 4,14 en in donker naar 3,42 — allebei
-	   onder de grens, en juist op het moment dat je de stap wílt aanklikken.
-	   Het vlak blijft nu staan; de aanwijzing is een streep, en die kan geen
-	   contrast kosten. */
+	/* The hover set --line as the fill, and that is a border colour, not a surface: in
+	   light the pill drops to 4.14 with it and in dark to 3.42 — both below the bound, and
+	   precisely at the moment you *want* to click the step. The surface now stays; the
+	   indication is a stripe, and that cannot cost contrast. */
 	.steps li.done a:hover {
 		text-decoration: underline;
 		text-underline-offset: 2px;
@@ -162,8 +160,8 @@
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
-	/* Een afgeronde stap is een link terug, dus een raakdoel. Gemeten op 27px
-	   hoog op tablet en telefoon; het design system eist er 44. */
+	/* A completed step is a link back, so a touch target. Measured at 27px tall on tablet
+	   and phone; the design system demands 44. */
 	@media (max-width: 1199px) {
 		.steps li span,
 		.steps li a {
@@ -173,8 +171,8 @@
 			padding: 4px 12px;
 		}
 	}
-	/* Gedeeld door alle stappen — die zijn losse routes, dus scoped styles
-	   per pagina zouden hetzelfde vijf keer herhalen. */
+	/* Shared by all the steps — those are separate routes, so scoped styles per page
+	   would repeat the same thing five times. */
 	:global(.setup h1) {
 		font-size: var(--text-lg);
 		font-weight: 600;
@@ -184,8 +182,8 @@
 	:global(.setup .muted) {
 		color: var(--text-2);
 	}
-	/* De breedte zit nu in de kaart (main.smal), niet in de inhoud: anders
-	   stond een kolom van 460px links in een kaart van 900. */
+	/* The width now lives on the card (main.smal), not in the content: otherwise a 460px
+	   column sat on the left of a 900 card. */
 	:global(.setup.narrow) {
 		max-width: none;
 	}

@@ -8,7 +8,7 @@
 		const grootte = field.type === 'int' ? 1 : 0.1;
 		const nu = Number(value ?? 0);
 		const nieuw = nu + richting * grootte;
-		// Drijvende komma maakt van 0.1 + 0.2 iets met zeventien cijfers.
+		// Floating point turns 0.1 + 0.2 into something with seventeen digits.
 		value = field.type === 'int' ? String(Math.round(nieuw)) : String(Math.round(nieuw * 1000) / 1000);
 	}
 </script>
@@ -25,8 +25,8 @@
 			{/each}
 		</select>
 	{:else if field.type === 'int' || field.type === 'float'}
-		<!-- Getal met knoppen: op een aanraakscherm is de eigen spinner van de
-		     browser twee pixels hoog, en met handschoenen aan onbruikbaar. -->
+		<!-- A number with buttons: on a touch screen the browser's own spinner is two
+		     pixels tall, and unusable with gloves on. -->
 		<div class="teller">
 			<button type="button" aria-label="{field.label} verlagen" onclick={() => stap(-1)}>−</button>
 			<input
@@ -71,7 +71,7 @@
 		color: var(--text-1);
 		width: 100%;
 	}
-	/* De spinner van de browser weg: hij zit náást onze knoppen en verwart. */
+	/* The browser's spinner gone: it sits *beside* our buttons and confuses. */
 	.teller { display: flex; }
 	.teller input {
 		border-radius: 0;

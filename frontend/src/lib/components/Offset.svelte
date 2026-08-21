@@ -2,15 +2,15 @@
 	/**
 	 * Offset — een pad naar buiten of naar binnen zetten.
 	 *
-	 * Dit liep via `window.prompt('Offset in mm (negatief = naar binnen)', '2')`.
-	 * Dat is de enige plek in de app waar een browservenster de ask stelde, en
-	 * daar is alles aan mis: het staat buiten het thema, het valideert niets (een
-	 * letter komt er als NaN uit en levert stille onzin op), de tekst is niet te
-	 * vertalen, en op sommige browsers is hij door de gebruiker uit te zetten —
-	 * dan doet de knop niets, zonder één woord.
+	 * This went through `window.prompt('Offset in mm (negative = inwards)', '2')`. That is
+	 * the only place in the app where a browser dialog asked the question, and everything
+	 * about it is wrong: it sits outside the theme, it validates nothing (a letter comes
+	 * out as NaN and produces silent nonsense), the text cannot be translated, and in some
+	 * browsers the user can switch it off — and then the button does nothing, without a
+	 * word.
 	 *
-	 * Hetzelfde venster als bij CornersDialog: klein, met de betekenis erbij, en een
-	 * primaire knop die zegt wat er gaat gebeuren.
+	 * The same dialog as with CornersDialog: small, with the meaning beside it, and a
+	 * primary button that says what is going to happen.
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';

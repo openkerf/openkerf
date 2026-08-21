@@ -71,7 +71,7 @@
 		100% { opacity: 0; }
 	}
 
-	/* Wie beweging heeft uitgezet, krijgt de mededeling zonder de show. */
+	/* Anybody who has switched motion off gets the message without the show. */
 	@media (prefers-reduced-motion: reduce) {
 		.veeg { display: none; }
 		.flits, .woord { animation-duration: 900ms; animation-name: stil; }

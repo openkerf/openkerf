@@ -2,15 +2,14 @@
 	/**
 	 * CornersDialog afronden of afschuinen.
 	 *
-	 * Stond als dichtgeklapte vouw in het rechterpaneel. Het is een werkwoord met
-	 * twee instellingen, en daarmee valt het tussen de twee wal: te veel voor een
-	 * menuregel, te weinig voor een paneelsectie die je altijd voorbij scrollt.
-	 * Volgens de plaatsingsregel (DESIGN-SYSTEM v4) is dit een handeling met
-	 * parameters, en die hoort in een klein venster dat het menu opent — één plek,
-	 * met het voorbeeld erbij, en weg zodra je klaar bent.
+	 * This sat as a collapsed fold in the right-hand panel. It is a verb with two
+	 * settings, which puts it between two stools: too much for a menu entry, too little
+	 * for a panel section you always scroll past. By the placement rule (DESIGN-SYSTEM v4)
+	 * this is an action with parameters, and that belongs in a small dialog the menu opens
+	 * — one place, with the preview beside it, and gone as soon as you are done.
 	 *
-	 * De tekening is niet decoratie: "5 mm" zegt niets over hoe rond die hoek
-	 * wordt. Zie DESIGN-SYSTEM, "Een formulier dat vorm maakt, toont die vorm".
+	 * The drawing is not decoration: "5 mm" says nothing about how round that corner
+	 * becomes. See DESIGN-SYSTEM, "A form that makes shape shows that shape".
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
@@ -24,7 +23,7 @@
 		onToepassen
 	}: {
 		open?: boolean;
-		/** Hoeveel vormen het raakt — dat staat op de knop. */
+		/** How many shapes it touches — that is on the button. */
 		aantal?: number;
 		bezig?: boolean;
 		/** Wat de vorige poging te melden had (overgeslagen hoeken). */

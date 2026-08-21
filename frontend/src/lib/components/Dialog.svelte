@@ -3,9 +3,9 @@
 	/**
 	 * Overlayvenster voor bibliotheken en gereedschappen.
 	 *
-	 * Volgens DESIGN-SYSTEM.md: het rechterpaneel is voor het hier-en-nu
-	 * (selectie, lagen, machine, job); dingen waarin je zoekt en vergelijkt
-	 * krijgen de ruimte van een eigen venster.
+	 * By DESIGN-SYSTEM.md: the right-hand panel is for the here and now (selection,
+	 * layers, machine, job); things you search and compare in get the room of a dialog of
+	 * their own.
 	 */
 	let {
 		title,
@@ -70,7 +70,7 @@
 		display: grid;
 		place-items: center;
 		padding: var(--space-6);
-		/* v2: een venster ligt vóór de app, niet erin. */
+		/* v2: a dialog lies *in front of* the app, not in it. */
 		background: var(--scrim);
 	}
 	.panel {
