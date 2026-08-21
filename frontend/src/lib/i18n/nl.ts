@@ -1425,6 +1425,8 @@ export const nl: Catalogue = {
 	'phone.noMachine': 'geen machine',
 	'phone.cameraAlt': 'Camerabeeld van het bed',
 	'phone.bed': 'Bed',
+	'field.decrease': '{label} verlagen',
+	'field.increase': '{label} verhogen',
 	'phone.bedAria.size': 'Bed {width} bij {height} millimeter',
 	'phone.bedAria.empty': 'leeg',
 	'phone.bedAria.noLayer': '{n} in geen laag',

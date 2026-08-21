@@ -1430,6 +1430,9 @@ export const en = {
 	'phone.noMachine': 'no machine',
 	'phone.cameraAlt': 'Camera image of the bed',
 	'phone.bed': 'Bed',
+	// The − and + of a number field, named after the field itself.
+	'field.decrease': 'Decrease {label}',
+	'field.increase': 'Increase {label}',
 	'phone.bedAria.size': 'Bed {width} by {height} millimetres',
 	'phone.bedAria.empty': 'empty',
 	'phone.bedAria.noLayer': '{n} in no layer',

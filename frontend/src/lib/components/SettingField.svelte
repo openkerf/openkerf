@@ -1,13 +1,14 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
 	import type { SettingField } from '$lib/machines.svelte';
 
 	let { field, value = $bindable() }: { field: SettingField; value: unknown } = $props();
 
 	/** One step: whole numbers for int, tenths for float. */
-	function step(richting: number) {
+	function step(direction: number) {
 		const grootte = field.type === 'int' ? 1 : 0.1;
 		const now = Number(value ?? 0);
-		const fresh = now + richting * grootte;
+		const fresh = now + direction * grootte;
 		// Floating point turns 0.1 + 0.2 into something with seventeen digits.
 		value = field.type === 'int' ? String(Math.round(fresh)) : String(Math.round(fresh * 1000) / 1000);
 	}
@@ -28,7 +29,7 @@
 		<!-- A number with buttons: on a touch screen the browser's own spinner is two
 		     pixels tall, and unusable with gloves on. -->
 		<div class="teller">
-			<button type="button" aria-label="{field.label} verlagen" onclick={() => step(-1)}>−</button>
+			<button type="button" aria-label={t('field.decrease', { label: field.label })} onclick={() => step(-1)}>−</button>
 			<input
 				class="mono"
 				type="number"
@@ -36,7 +37,7 @@
 				value={Number(value ?? 0)}
 				onchange={(e) => (value = e.currentTarget.value)}
 			/>
-			<button type="button" aria-label="{field.label} verhogen" onclick={() => step(1)}>+</button>
+			<button type="button" aria-label={t('field.increase', { label: field.label })} onclick={() => step(1)}>+</button>
 		</div>
 	{:else}
 		<input class="mono" type="text" value={String(value ?? '')} onchange={(e) => (value = e.currentTarget.value)} />

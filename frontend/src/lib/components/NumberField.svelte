@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
+
 	/**
 	 * A number with − and +.
 	 *
@@ -36,10 +38,10 @@
 	// 609.6").
 	const id = $props.id();
 
-	function set(richting: number) {
+	function set(direction: number) {
 		const now = Number(value);
 		const basis = Number.isFinite(now) ? now : 0;
-		let fresh = basis + richting * step;
+		let fresh = basis + direction * step;
 		if (min !== null) fresh = Math.max(min, fresh);
 		if (max !== null) fresh = Math.min(max, fresh);
 		// Floating point leaves 0.1 + 0.2 as 0.30000000000000004.
@@ -82,7 +84,7 @@
 			type="button"
 			tabindex="-1"
 			{disabled}
-			aria-label="{label} verlagen"
+			aria-label={t('field.decrease', { label })}
 			onclick={() => set(-1)}>−</button
 		>
 		<input
@@ -99,7 +101,7 @@
 			type="button"
 			tabindex="-1"
 			{disabled}
-			aria-label="{label} verhogen"
+			aria-label={t('field.increase', { label })}
 			onclick={() => set(1)}>+</button
 		>
 	</span>
