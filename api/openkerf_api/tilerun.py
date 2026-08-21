@@ -94,11 +94,11 @@ def marker_geometry(points, size_mm: float, units_per_mm: float, along_y: bool =
     """
     from meerk40t.core.geomstr import Geomstr
 
-    from .tiling import CIJFER_FRACTIE, CIJFER_GAT_MM
+    from .tiling import DIGIT_FRACTION, DIGIT_GAP_MM
 
     straal = size_mm / 2 * units_per_mm
-    height = size_mm * CIJFER_FRACTIE * units_per_mm
-    gat = CIJFER_GAT_MM * units_per_mm
+    height = size_mm * DIGIT_FRACTION * units_per_mm
+    gat = DIGIT_GAP_MM * units_per_mm
     geom = Geomstr()
     for nummer, punt in enumerate(points, 1):
         cx = punt.x_mm * units_per_mm
