@@ -49,8 +49,8 @@ def test_a_project_carries_design_and_library(client):
 
     assert response.status_code == 200
     bundle = zipfile.ZipFile(io.BytesIO(response.content))
-    # design.svg is het actieve vel en blijft apart staan, zodat een oudere
-    # versie van OpenKerf het project nog kan openen.
+    # design.svg is the active sheet and stays separate, so that an older version
+    # of OpenKerf can still open the project.
     assert {"design.svg", "library.json", "sheets.json"} <= set(bundle.namelist())
     assert bundle.read("design.svg").startswith(b"<svg")
     context = json.loads(bundle.read("library.json"))
@@ -129,11 +129,11 @@ def test_a_zip_without_a_design_is_refused(client):
     assert response.status_code == 409
 
 
-# ------------------------------------------------------------ nieuw project
+# ------------------------------------------------------------- new project
 
 
 def test_a_new_project_empties_the_bed(client, kernel):
-    """Opnieuw beginnen bestond niet: alleen opslaan en openen."""
+    """Starting over did not exist: only saving and opening."""
     stocked(client)
     assert len(list(kernel.elements.elems())) == 1
 
@@ -146,8 +146,8 @@ def test_a_new_project_empties_the_bed(client, kernel):
 
 def test_a_new_project_keeps_the_library(client):
     """
-    Materialen en presets zijn wat je over je laser weet, niet wat er op het
-    bed ligt. Ze horen bij de werkplaats en niet bij dit project.
+    Materials and presets are what you know about your laser, not what is lying on
+    the bed. They belong to the workshop and not to this project.
     """
     stocked(client)
 
@@ -158,7 +158,7 @@ def test_a_new_project_keeps_the_library(client):
 
 
 def test_a_new_project_leaves_one_empty_sheet(client, kernel):
-    client.post("/api/sheets", json={"name": "Doos"})
+    client.post("/api/sheets", json={"name": "Box"})
     client.post("/api/design/elements",
                 json={"type": "rect", "x_mm": 5, "y_mm": 5, "width_mm": 10, "height_mm": 10})
 
@@ -171,13 +171,13 @@ def test_a_new_project_leaves_one_empty_sheet(client, kernel):
 
 def test_the_sheets_of_the_old_project_are_gone(server, client, kernel):
     """
-    Een vel leeft als bestand naast de database en overleeft anders het nieuwe
-    project: je begint schoon en vindt in de vellenbalk de doos van gisteren.
+    A sheet lives as a file beside the database and otherwise survives the new
+    project: you start clean and find yesterday's box in the sheet bar.
     """
     client.post("/api/design/elements",
                 json={"type": "rect", "x_mm": 5, "y_mm": 5, "width_mm": 10, "height_mm": 10})
-    client.post("/api/sheets", json={"name": "Doos"})
-    client.post("/api/sheets/sheet-2/activate")  # schrijft sheet-1 weg naar schijf
+    client.post("/api/sheets", json={"name": "Box"})
+    client.post("/api/sheets/sheet-2/activate")  # writes sheet-1 out to disk
     assert list(server.sheets.directory.glob("*.svg"))
 
     client.post("/api/project/new")
@@ -188,9 +188,9 @@ def test_the_sheets_of_the_old_project_are_gone(server, client, kernel):
 
 def test_a_new_project_does_not_inherit_yesterdays_provenance(server, client):
     """
-    Vel-nummers worden hergebruikt, dus een briefje op "sheet-1" plakt zonder dit
-    aan het eerste vel van het volgende project — en dan staat er "uit een
-    testraster" onder een instelling die niemand heeft toegepast.
+    Sheet numbers are reused, so without this a note on "sheet-1" sticks to the
+    first sheet of the next project — and then it says "from a test grid" under a
+    setting nobody applied.
     """
     server.provenance.record(
         "sheet-1", "op-1", {"id": 1, "source": "testraster", "speed_mm_s": 12, "power_percent": 65}

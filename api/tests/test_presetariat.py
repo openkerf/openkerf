@@ -87,8 +87,8 @@ def test_browsing_returns_everything_without_a_machine(shop):
 
 def test_a_diode_preset_is_hidden_from_a_co2_machine(shop, co2):
     """
-    Instellingen van een 10 W-diode op een 80 W-CO2 loslaten levert onzin op,
-    dus filteren is geen kosmetiek.
+    Letting the settings of a 10 W diode loose on an 80 W CO2 gives nonsense, so
+    filtering is not cosmetic.
     """
     ids = [p["id"] for p in shop.browse(machine_id=co2)["presets"]]
 
@@ -114,7 +114,7 @@ def test_importing_creates_a_preset_and_its_material(shop, co2):
     assert len(result["imported"]) == 1
     preset = shop.library.presets()[0]
     assert preset["material_name"] == "MDF"
-    # Nooit als testraster: op deze machine is er niets gemeten.
+    # Never as a test grid: nothing was measured on this machine.
     assert preset["source"] == "geimporteerd"
     assert preset["origin_id"] == "mdf-3mm-snijden-co2-80w"
     assert "testraster" in preset["note"]
@@ -184,15 +184,15 @@ def test_sharing_produces_a_catalogue_entry(shop, co2):
     assert shared["preset"]["id"] == "berkentriplex-3mm-snijden-co2-80w"
     assert shared["preset"]["machine"]["power_watt"] == 80
     assert shared["preset"]["source"]["kind"] == "testraster"
-    # Aandragen is geen verifiëren; dat doet een tweede persoon.
+    # Contributing is not verifying; a second person does that.
     assert shared["preset"]["verified"] is False
     assert shared["filename"] == "berkentriplex-3mm-snijden-co2-80w.json"
     assert shared["issue_url"].startswith("https://github.com/openkerf/presetariat/issues/new?")
 
 
 def test_sharing_without_a_machine_profile_is_refused(shop):
-    """Zonder te weten op wat voor machine het gemeten is, is het onbruikbaar."""
-    material = shop.library.add_material("Karton")["id"]
+    """Without knowing what machine it was measured on, it is useless."""
+    material = shop.library.add_material("Cardboard")["id"]
     preset = shop.library.add_preset(
         material_id=material,
         operation="snijden",

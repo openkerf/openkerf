@@ -56,14 +56,14 @@ def test_a_gui_rasteriser_wins_from_ours(kernel):
     If somebody runs *with* wxPython, that version draws with the real fonts and the real pen
     strokes. We are the fallback, not the preference.
     """
-    van_de_gui = object()
-    kernel.root.register("render-op/make_raster", van_de_gui)
+    from_the_gui = object()
+    kernel.root.register("render-op/make_raster", from_the_gui)
 
     assert rasterizer.register(kernel) is False
-    assert kernel.root.lookup("render-op/make_raster") is van_de_gui
+    assert kernel.root.lookup("render-op/make_raster") is from_the_gui
 
 
-# ------------------------------------------------------- maat en contract
+# ------------------------------------------------------ size and contract
 
 
 def test_without_bounds_there_is_nothing_to_render(make_raster):
@@ -72,10 +72,10 @@ def test_without_bounds_there_is_nothing_to_render(make_raster):
 
 def test_an_empty_node_list_does_not_fall_over(make_raster):
     """A layer without drawable children produces an empty sheet, not an error."""
-    beeld = make_raster([], bounds=(0, 0, 10 * MM, 10 * MM), step_x=100, step_y=100)
+    image = make_raster([], bounds=(0, 0, 10 * MM, 10 * MM), step_x=100, step_y=100)
 
-    assert beeld.mode == "RGB"
-    assert _grijs(beeld).min() == 255
+    assert image.mode == "RGB"
+    assert _grijs(image).min() == 255
 
 
 def test_the_size_follows_the_step_rate(kernel, make_raster):
@@ -86,25 +86,25 @@ def test_the_size_follows_the_step_rate(kernel, make_raster):
     step_x, step_y = kernel.device.view.dpi_to_steps(250)
     bounds = (0, 0, 30 * MM, 20 * MM)
 
-    beeld = make_raster([], bounds=bounds, step_x=step_x, step_y=step_y)
+    image = make_raster([], bounds=bounds, step_x=step_x, step_y=step_y)
 
-    assert beeld.size == (
+    assert image.size == (
         int(np.ceil(30 * MM / step_x)),
         int(np.ceil(20 * MM / step_y)),
     )
 
 
 def test_an_explicit_size_wins_from_the_step_rate(make_raster):
-    beeld = make_raster([], bounds=(0, 0, 30 * MM, 20 * MM), width=64, height=32)
+    image = make_raster([], bounds=(0, 0, 30 * MM, 20 * MM), width=64, height=32)
 
-    assert beeld.size == (64, 32)
+    assert image.size == (64, 32)
 
 
 def test_a_zero_step_is_treated_as_one(make_raster):
     """A step of zero is not a step but a division by zero."""
-    beeld = make_raster([], bounds=(0, 0, 100, 50), step_x=0, step_y=0)
+    image = make_raster([], bounds=(0, 0, 100, 50), step_x=0, step_y=0)
 
-    assert beeld.size == (100, 50)
+    assert image.size == (100, 50)
 
 
 def test_keep_ratio_uses_the_smallest_of_both_scales(kernel, make_raster):
@@ -152,7 +152,7 @@ def test_an_unfilled_shape_burns_its_outline_and_not_its_middle(kernel, make_ras
     grijs = _grijs(make_raster([node], bounds=bounds, step_x=200, step_y=200))
 
     hoogte, breedte = grijs.shape
-    assert grijs[hoogte // 2, breedte // 2] > 200, "het midden blijft onaangeroerd"
+    assert grijs[hoogte // 2, breedte // 2] > 200, "het centre blijft onaangeroerd"
     assert grijs[hoogte // 2, 1] < 128, "the left edge is the outline"
     assert grijs[1, breedte // 2] < 128, "the top edge as well"
 
@@ -186,9 +186,9 @@ def test_a_text_node_does_not_bring_the_raster_down(kernel, make_raster):
     tekst = [n for n in kernel.elements.elems() if n.type == "elem text"]
     vlak = _rect(kernel, 0, 0, 10, 10, fill="black")
 
-    beeld = make_raster(tekst + [vlak], bounds=(0, 0, 20 * MM, 20 * MM), step_x=400, step_y=400)
+    image = make_raster(tekst + [vlak], bounds=(0, 0, 20 * MM, 20 * MM), step_x=400, step_y=400)
 
-    assert beeld.size[0] > 0
+    assert image.size[0] > 0
 
 
 def test_an_image_node_is_pasted_with_its_own_matrix(kernel, make_raster):
@@ -225,7 +225,7 @@ def test_an_image_node_is_pasted_with_its_own_matrix(kernel, make_raster):
 def test_a_raster_layer_now_produces_cutcode(kernel):
     """
     The point of all this: `op raster` produces work headless instead of a
-    lege laag. Voorheen gaf ditzelfde ontwerp nul stukken en nul seconden.
+    lege laag. Voorheen gaf ditzelfde ontwerp nul pieces en nul seconden.
     """
     node = _rect(kernel, 10, 10, 20, 20, fill="black")
     operatie = kernel.elements.op_branch.add(
@@ -236,29 +236,29 @@ def test_a_raster_layer_now_produces_cutcode(kernel):
     kernel.console("plan copy preprocess validate blob preopt optimize\n")
     plan = kernel.planner.default_plan
 
-    stukken = [item for item in plan.plan if hasattr(item, "duration_cut")]
-    assert stukken, "het plan is niet leeg"
-    assert sum(item.duration_cut() for item in stukken) > 0
+    pieces = [item for item in plan.plan if hasattr(item, "duration_cut")]
+    assert pieces, "the plan is not empty"
+    assert sum(item.duration_cut() for item in pieces) > 0
 
 
-# ------------------------------------------------- gaten in een vorm (de "0")
+# --------------------------------------------- holes in a shape (the "0")
 
 
-def ring(kernel, buiten_mm=20.0, binnen_mm=10.0):
+def ring(kernel, outer_mm=20.0, inner_mm=10.0):
     """
-    Een ring als één pad met twee deelpaden: de vorm van een "0".
+    A ring as one path with two subpaths: the shape of a "0".
 
-    Precies het geval waar het op stukliep: op het canvas stond het midden open
-    en op het hout was de nul helemaal dichtgebrand.
+    Exactly the case it broke on: on the canvas the middle was open and on the wood
+    the zero was burned solid.
     """
     from meerk40t.core.units import UNITS_PER_MM
     from meerk40t.svgelements import Color
     from meerk40t.core.geomstr import Geomstr
 
-    midden = 30.0 * UNITS_PER_MM
+    centre = 30.0 * UNITS_PER_MM
     geometry = Geomstr()
-    geometry.append(Geomstr.circle(buiten_mm * UNITS_PER_MM, midden, midden))
-    geometry.append(Geomstr.circle(binnen_mm * UNITS_PER_MM, midden, midden))
+    geometry.append(Geomstr.circle(outer_mm * UNITS_PER_MM, centre, centre))
+    geometry.append(Geomstr.circle(inner_mm * UNITS_PER_MM, centre, centre))
     node = kernel.elements.elem_branch.add(
         geometry=geometry,
         type="elem path",
@@ -269,37 +269,37 @@ def ring(kernel, buiten_mm=20.0, binnen_mm=10.0):
     return node
 
 
-def zwart_op(beeld, x: int, y: int) -> bool:
-    """Is deze pixel gebrand? Het beeld is wit met het werk in zwart."""
-    return beeld.convert("L").getpixel((x, y)) < 128
+def black_at(image, x: int, y: int) -> bool:
+    """Is this pixel burned? The image is white with the work in black."""
+    return image.convert("L").getpixel((x, y)) < 128
 
 
 def test_a_hole_in_a_shape_stays_unburned(kernel, make_raster):
     """
-    Het midden van een nul hoort wit te blijven.
+    The middle of a zero should stay white.
 
-    Onze rasteraar vulde elk deelpad apart, dus de binnencontour werd net zo
-    zwart als de buitenkant. Op het scherm klopte het wel — het canvas tekent
-    het pad in één keer met `fill-rule="nonzero"` — en dat maakte het verschil
-    pas op het hout zichtbaar.
+    Our rasteriser filled every subpath separately, so the inner contour became
+    just as black as the outside. On screen it was right — the canvas draws the path
+    in one go with `fill-rule="nonzero"` — and that made the difference visible only
+    on the wood.
     """
     node = ring(kernel)
-    beeld = make_raster([node], node.bounds, 200, 200, None, 1, 1, True)
+    image = make_raster([node], node.bounds, 200, 200, None, 1, 1, True)
 
-    assert zwart_op(beeld, 100, 8), "de rand van de ring hoort gebrand te worden"
-    assert not zwart_op(beeld, 100, 100), "het gat in het midden hoort wit te blijven"
+    assert black_at(image, 100, 8), "the edge of the ring should be burned"
+    assert not black_at(image, 100, 100), "the hole in the middle should stay white"
 
 
 def test_the_ring_is_not_simply_left_out(kernel, make_raster):
-    """Tegenproef: er moet wél een ring staan, en niet niets."""
+    """The counter-check: there really has to be a ring, and not nothing."""
     node = ring(kernel)
-    beeld = make_raster([node], node.bounds, 200, 200, None, 1, 1, True).convert("L")
+    image = make_raster([node], node.bounds, 200, 200, None, 1, 1, True).convert("L")
 
-    donker = sum(1 for pixel in beeld.getdata() if pixel < 128)
-    # Een ring van 20 mm buiten en 10 mm binnen: driekwart van het vlak van de
-    # cirkel, en de cirkel vult π/4 van het vierkante beeld.
-    verwacht = 200 * 200 * (3.1416 / 4) * 0.75
-    assert donker == pytest.approx(verwacht, rel=0.15)
+    dark = sum(1 for pixel in image.getdata() if pixel < 128)
+    # A ring of 20 mm outside and 10 mm inside: three quarters of the area of the
+    # circle, and the circle fills π/4 of the square image.
+    expected = 200 * 200 * (3.1416 / 4) * 0.75
+    assert dark == pytest.approx(expected, rel=0.15)
 
 
 def test_a_shape_without_holes_is_still_solid(kernel, make_raster):
@@ -308,13 +308,13 @@ def test_a_shape_without_holes_is_still_solid(kernel, make_raster):
     from meerk40t.svgelements import Color
     from meerk40t.core.geomstr import Geomstr
 
-    midden = 30.0 * UNITS_PER_MM
+    centre = 30.0 * UNITS_PER_MM
     node = kernel.elements.elem_branch.add(
-        geometry=Geomstr.circle(20.0 * UNITS_PER_MM, midden, midden),
+        geometry=Geomstr.circle(20.0 * UNITS_PER_MM, centre, centre),
         type="elem path",
         stroke=Color("#000000"),
         fill=Color("#000000"),
     )
-    beeld = make_raster([node], node.bounds, 200, 200, None, 1, 1, True)
+    image = make_raster([node], node.bounds, 200, 200, None, 1, 1, True)
 
-    assert zwart_op(beeld, 100, 100)
+    assert black_at(image, 100, 100)

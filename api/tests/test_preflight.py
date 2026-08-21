@@ -282,13 +282,13 @@ def test_what_will_be_burned_can_be_read_without_building_the_plan(client):
         f"/api/library/presets/{preset['id']}/apply", json={"operation_id": layer["id"]}
     )
 
-    overzicht = client.get("/api/job/layers").json()
+    overview = client.get("/api/job/layers").json()
 
-    assert overzicht["sheet"]["material_name"] == "Berken"
-    gevonden = next(l for l in overzicht["layers"] if l["label"] == "Cut")
+    assert overview["sheet"]["material_name"] == "Berken"
+    gevonden = next(l for l in overview["layers"] if l["label"] == "Cut")
     assert gevonden["preset_id"] == preset["id"]
     # The same layers as the pre-flight, only without the clock.
-    assert "seconds" not in overzicht
+    assert "seconds" not in overview
 
 
 def test_bounds_travel_with_the_layers_not_only_with_the_clock(client):
@@ -302,17 +302,17 @@ def test_bounds_travel_with_the_layers_not_only_with_the_clock(client):
     """
     a_job(client)
 
-    overzicht = client.get("/api/job/layers").json()
+    overview = client.get("/api/job/layers").json()
 
     vel = client.get("/api/sheets").json()["sheets"][0]
-    assert overzicht["bounds"]["sheet"] == {
+    assert overview["bounds"]["sheet"] == {
         "width_mm": vel["width_mm"],
         "height_mm": vel["height_mm"],
     }
-    assert overzicht["bounds"]["outside_bed"] == 0
+    assert overview["bounds"]["outside_bed"] == 0
     # The same measurement the clock route gives; two sources could disagree about the
     # edge.
-    assert overzicht["bounds"] == client.get("/api/job/estimate").json()["bounds"]
+    assert overview["bounds"] == client.get("/api/job/estimate").json()["bounds"]
 
 
 def test_shapes_outside_the_bed_are_named_with_the_ids_the_design_uses(client):
@@ -364,40 +364,39 @@ def test_a_raster_layer_promises_no_time_on_an_engine_that_cannot_burn_it(client
     client.post(
         "/api/design/assign", json={"ids": made["ids"], "operation_id": layer["id"]}
     )
-    # De engine classificeert een nieuwe vorm ook zelf in een standaardlaag; die
-    # zou hier tijd blijven leveren en dan meet deze test twee dingen tegelijk.
-    for andere in client.get("/api/design").json()["operations"]:
-        if andere["id"] != layer["id"]:
+    # The engine also classifies a new shape into a default layer itself; that
+    # would keep delivering time here and then this test measures two things at once.
+    for other in client.get("/api/design").json()["operations"]:
+        if other["id"] != layer["id"]:
             client.post(
                 "/api/design/unassign",
-                json={"ids": made["ids"], "operation_id": andere["id"]},
+                json={"ids": made["ids"], "operation_id": other["id"]},
             )
     assert client.get("/api/job/estimate").json()["seconds"] > 0
 
-    # De rasteraar weghalen: dit is de engine zoals hij was, en zoals hij bij
-    # een mislukte registratie weer wordt. Daarna terugzetten — de kernel is
-    # gedeeld binnen deze test, en de suite draait in willekeurige volgorde:
-    # laat je hem weg, dan valt een andere test om die er niets mee te maken
-    # heeft. Dat kostte een halve zoektocht.
-    terug = kernel.root.lookup("render-op/make_raster")
+    # Taking the rasteriser away: this is the engine as it was, and as it becomes
+    # again on a failed registration. Putting it back afterwards — the kernel is
+    # shared within this test, and the suite runs in random order: leave it out and
+    # another test that has nothing to do with it falls over. That cost half a hunt.
+    previous = kernel.root.lookup("render-op/make_raster")
     kernel.root.register("render-op/make_raster", None)
     try:
-        overzicht = client.get("/api/job/layers").json()
-        schatting = client.get("/api/job/estimate").json()
+        overview = client.get("/api/job/layers").json()
+        estimate = client.get("/api/job/estimate").json()
     finally:
-        kernel.root.register("render-op/make_raster", terug)
+        kernel.root.register("render-op/make_raster", previous)
 
-    assert overzicht["engine"]["raster"] is False
-    raster = next(l for l in overzicht["layers"] if l["type"] == "op raster")
+    assert overview["engine"]["raster"] is False
+    raster = next(l for l in overview["layers"] if l["type"] == "op raster")
     assert raster["burns"] is False
-    assert schatting["seconds"] == 0
-    # De vorm ligt er wel: de pre-flight moet erover kunnen praten in plaats van
-    # "er is niets om te branden" te tonen.
-    assert schatting["parts"] == 1
+    assert estimate["seconds"] == 0
+    # The shape *is* there: the pre-flight has to be able to talk about it instead
+    # of showing "there is nothing to burn".
+    assert estimate["parts"] == 1
 
 
 def test_a_raster_layer_keeps_its_time_now_that_we_have_a_rasteriser(client):
-    """De gewone situatie: onze plugin levert de rasteraar, dus er brandt iets."""
+    """The ordinary situation: our plugin provides the rasteriser, so something burns."""
     made = client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 20, "y_mm": 20, "width_mm": 60, "height_mm": 40},
@@ -410,42 +409,42 @@ def test_a_raster_layer_keeps_its_time_now_that_we_have_a_rasteriser(client):
         "/api/design/assign", json={"ids": made["ids"], "operation_id": layer["id"]}
     )
 
-    overzicht = client.get("/api/job/layers").json()
+    overview = client.get("/api/job/layers").json()
 
-    assert overzicht["engine"]["raster"] is True
-    assert next(l for l in overzicht["layers"] if l["type"] == "op raster")["burns"]
+    assert overview["engine"]["raster"] is True
+    assert next(l for l in overview["layers"] if l["type"] == "op raster")["burns"]
 
 
 def test_a_layer_that_does_burn_keeps_its_estimate(client):
     """Het vangnet mag geen gewone laag raken."""
     a_job(client)
 
-    schatting = client.get("/api/job/estimate").json()
+    estimate = client.get("/api/job/estimate").json()
 
-    assert schatting["seconds"] > 0
-    assert all(l["burns"] for l in schatting["layers"])
+    assert estimate["seconds"] > 0
+    assert all(l["burns"] for l in estimate["layers"])
 
 
 def test_a_shape_whose_length_the_engine_cannot_compute_still_counts(kernel):
     """
-    Gevonden in een echt project: tekst in Chalkduster, 474 contouren en
-    10 026 segmenten, waarop `Geomstr.length()` van de engine omvalt met
-    "expected a positive input, got -inf". Wij vingen dat op met een 0 — de
-    `except` stond er voor afbeeldingen, die geen pad hebben — en dus rekende de
-    schatting nul seconden voor precies de vorm die het langst duurt.
+    Found in a real project: text in Chalkduster, 474 contours and 10,026
+    segments, on which the engine's `Geomstr.length()` falls over with "expected a
+    positive input, got -inf". We caught that with a 0 — the `except` was there for
+    images, which have no path — and so the estimate counted zero seconds for
+    exactly the shape that takes longest.
 
-    Gemeten met de terugval over de punten: 0,68 m lijn.
+    Measured with the fallback over the points: 0.68 m of line.
     """
     from openkerf_api.drawing import Drawing
 
-    class KapotteGeometrie:
-        """Zoals de engine zich gedraagt op die tekst."""
+    class BrokenGeometry:
+        """The way the engine behaves on that text."""
 
         def length(self):
             raise ValueError("expected a positive input, got -inf")
 
         def as_interpolated_points(self, interpolate=20):
-            # Een vierkant van 10 mm: 40 mm lijn.
+            # A square of 10 mm: 40 mm of line.
             from meerk40t.core.units import UNITS_PER_MM
 
             mm = UNITS_PER_MM
@@ -457,20 +456,20 @@ def test_a_shape_whose_length_the_engine_cannot_compute_still_counts(kernel):
                 complex(0, 0),
             ]
 
-    class NepKnoop:
+    class FakeNode:
         type = "elem path"
 
         def as_geometry(self):
-            return KapotteGeometrie()
+            return BrokenGeometry()
 
-    assert Drawing._length_mm(NepKnoop()) == pytest.approx(40.0, rel=0.01)
+    assert Drawing._length_mm(FakeNode()) == pytest.approx(40.0, rel=0.01)
 
 
 def test_something_without_geometry_is_still_zero(kernel):
-    """Een afbeelding heeft geen pad; die hoort onder de rasterrekensom."""
+    """An image has no path; that falls under the raster calculation."""
     from openkerf_api.drawing import Drawing
 
-    class Beeld:
+    class AnImage:
         type = "elem image"
 
-    assert Drawing._length_mm(Beeld()) == 0.0
+    assert Drawing._length_mm(AnImage()) == 0.0
