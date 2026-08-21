@@ -74,7 +74,7 @@ def make_raster(
 
     @param nodes: the element nodes (the engine has already resolved references).
     @param bounds: (x0, y0, x1, y1) in native units; None → None.
-    @param width: gewenste breedte in pixels; None → `raster_width / step_x`.
+    @param width: gewenste width in pixels; None → `raster_width / step_x`.
     @param height: the wanted height in pixels; None → `raster_height / step_y`.
     @param bitmap: for the wx version only; without meaning here.
     @param step_x: the raster step, also the image's scale.
@@ -284,9 +284,9 @@ def _fill(canvas, draw, vlakken) -> None:
 
     Even-oddregel, door de maskers op elkaar te XOR-en. SVG rekent standaard met
     nonzero, en die twee verschillen alleen bij contouren die elkaar overlappen
-    én dezelfde kant op lopen — bij letters en CAD-vormen loopt een gat juist
+    én dezelfde kant op lopen — bij letters en CAD-shapes loopt een gat juist
     andersom, dus daar komen ze op hetzelfde uit. Het masker beslaat alleen de
-    omhullende van de vorm, zodat een groot bed niet per deelpad een volledig
+    omhullende van de shape, zodat een groot bed niet per deelpad een volledig
     beeld kost.
     """
     if not vlakken:
@@ -295,21 +295,21 @@ def _fill(canvas, draw, vlakken) -> None:
         draw.polygon(vlakken[0], fill="black")
         return
 
-    punten = [p for vlak in vlakken for p in vlak]
-    x0 = max(int(min(x for x, _ in punten)) - 1, 0)
-    y0 = max(int(min(y for _, y in punten)) - 1, 0)
-    x1 = min(int(max(x for x, _ in punten)) + 2, canvas.width)
-    y1 = min(int(max(y for _, y in punten)) + 2, canvas.height)
+    points = [p for vlak in vlakken for p in vlak]
+    x0 = max(int(min(x for x, _ in points)) - 1, 0)
+    y0 = max(int(min(y for _, y in points)) - 1, 0)
+    x1 = min(int(max(x for x, _ in points)) + 2, canvas.width)
+    y1 = min(int(max(y for _, y in points)) + 2, canvas.height)
     if x1 <= x0 or y1 <= y0:
         return
 
     masker = Image.new("1", (x1 - x0, y1 - y0), 0)
     for vlak in vlakken:
-        laag = Image.new("1", masker.size, 0)
-        ImageDraw.Draw(laag).polygon(
+        layer = Image.new("1", masker.size, 0)
+        ImageDraw.Draw(layer).polygon(
             [(x - x0, y - y0) for x, y in vlak], fill=1
         )
-        masker = ImageChops.logical_xor(masker, laag)
+        masker = ImageChops.logical_xor(masker, layer)
     canvas.paste("black", (x0, y0), masker)
 
 
@@ -317,7 +317,7 @@ def _polylines(geometry):
     """
     De geometrie als polylijnen in scene-eenheden.
 
-    `as_interpolated_points` levert de punten van de hele geomstr achter elkaar,
+    `as_interpolated_points` levert de points van de hele geomstr achter elkaar,
     met een `None` op elke breuk tussen deelpaden.
     """
     current = []
@@ -360,7 +360,7 @@ def _draw_image(canvas, node, transform):
 
     De knoop draagt zijn plaatsing in `active_matrix`; die vermenigvuldigen we
     met onze scene→pixel-afbeelding en voeren we omgekeerd aan Pillow, want
-    `Image.transform` vraagt de afbeelding van doel naar bron.
+    `Image.transform` vraagt de afbeelding van doel naar source.
     """
     try:
         image = node.active_image

@@ -521,7 +521,7 @@ def test_removing_a_grid_never_touches_another_sheets_work(kernel, client):
     groep = grid["group_id"]
 
     client.post("/api/sheets", json={"name": "Tweede"})
-    client.post("/api/sheets/vel-2/activate")
+    client.post("/api/sheets/sheet-2/activate")
     laag = client.post(
         "/api/design/operations", json={"type": "cut", "speed": 99, "power_percent": 33}
     ).json()["id"]

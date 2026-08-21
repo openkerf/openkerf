@@ -75,7 +75,7 @@ class Generators:
             self.runner.run(command)
         return self._added("radial", count)
 
-    # -------------------------------------------------------------- vormen
+    # -------------------------------------------------------------- shapes
 
     def polygon(
         self,
@@ -872,7 +872,7 @@ class Generators:
         self, points, label: str, subpaths: bool = False, intent: str = "cut"
     ):
         """
-        Een gesloten vorm rechtstreeks als geometrie toevoegen.
+        Een gesloten shape rechtstreeks als geometrie toevoegen.
 
         *Not* through the `path` command: that reads its d-string as SVG user units and
         then scales it again, which made a box of 100 mm come out as 72 metres. Geomstr
@@ -955,7 +955,7 @@ class Generators:
 
     def _recalculate_bounds(self):
         """
-        De omhullende opnieuw laten uitrekenen na een herhaling.
+        De omhullende again laten uitrekenen na een herhaling.
 
         `grid` and `radial` make their copies with `copy(node)` and then shift them with a
         raw `e.matrix *= ...` (core/elements/grid.py:240,360). That assignment reports

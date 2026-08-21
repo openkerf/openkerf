@@ -272,16 +272,16 @@ class CommandRunner:
         and without this question a design made on a diode laser would send a `z_move` on the
         Ruida that does not exist there — in the middle of the job, with the head on the work.
         """
-        gevonden = []
+        found = []
         device = getattr(self.kernel, "device", None)
         if device is None or not getattr(device, "supports_z_axis", False):
-            return gevonden
+            return found
         if not self.kernel.find("command", "None", "z_move$"):
-            return gevonden
+            return found
         try:
             operations = list(self.kernel.elements.ops())
         except Exception:  # pragma: no cover - een boom zonder ops-tak
-            return gevonden
+            return found
         for operation in operations:
             if not str(getattr(operation, "type", "")).startswith("op "):
                 continue
@@ -291,8 +291,8 @@ class CommandRunner:
                 continue
             if int(getattr(operation, "passes", 1) or 1) < 2:
                 continue
-            gevonden.append(operation)
-        return gevonden
+            found.append(operation)
+        return found
 
     @staticmethod
     def _share_pass_settings(steps) -> list:
@@ -317,16 +317,16 @@ class CommandRunner:
             if not hasattr(step, "__iter__"):
                 continue
             for item in step:
-                instellingen = getattr(item, "settings", None)
-                if not isinstance(instellingen, dict):
+                settings = getattr(item, "settings", None)
+                if not isinstance(settings, dict):
                     continue
-                if instellingen.get("z_step_mm"):
+                if settings.get("z_step_mm"):
                     continue
-                sleutel = instellingen.get("id")
+                sleutel = settings.get("id")
                 if sleutel is None:
                     continue
-                gedeeld = eerste.setdefault(sleutel, instellingen)
-                if gedeeld is not instellingen:
+                gedeeld = eerste.setdefault(sleutel, settings)
+                if gedeeld is not settings:
                     item.settings = gedeeld
         return list(steps)
 
@@ -352,11 +352,11 @@ class CommandRunner:
         `passes=N`, but the Ruida driver does not look at that number (not a single reference
         to `passes` in `ruida/driver.py`) — then the layer would silently burn once.
         """
-        gevonden = []
+        found = []
         try:
             operations = list(self.kernel.elements.ops())
         except Exception:  # pragma: no cover - een boom zonder ops-tak
-            return gevonden
+            return found
         for operation in operations:
             if not str(getattr(operation, "type", "")).startswith("op "):
                 continue
@@ -364,8 +364,8 @@ class CommandRunner:
                 continue
             if int(getattr(operation, "implicit_passes", 1) or 1) < 2:
                 continue
-            gevonden.append(operation)
-        return gevonden
+            found.append(operation)
+        return found
 
     @staticmethod
     def _with_passes(steps, console_operation) -> list:
@@ -434,7 +434,7 @@ class CommandRunner:
         """
         title = (name or "").strip()
         if not title:
-            title = f"{burnable} bewerking" + ("" if burnable == 1 else "en")
+            title = f"{burnable} operation" + ("" if burnable == 1 else "en")
         try:
             queue = list(self.kernel.device.spooler.queue)
         except Exception:

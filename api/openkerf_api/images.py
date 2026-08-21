@@ -134,7 +134,7 @@ class Images:
 
     def set_adjustment(self, element_id: str, name: str, enabled=None, values=None) -> dict:
         """
-        Eén bewerking aan- of uitzetten, of zijn waarden bijstellen.
+        Eén operation aan- of uitzetten, of zijn values bijstellen.
 
         The recipe then goes over the **original** again in its entirety. So the same button
         twice produces the same result, and switching it off really brings the image back —

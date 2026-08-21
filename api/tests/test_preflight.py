@@ -134,7 +134,7 @@ def test_the_preflight_warns_when_a_layer_carries_another_materials_setting(clie
     berken = a_material(client, "Berken")
     acryl = a_material(client, "Acryl")
     preset = a_preset(client, berken, thickness_mm=3)
-    client.patch("/api/sheets/vel-1", json={"material_id": acryl["id"], "thickness_mm": 3})
+    client.patch("/api/sheets/sheet-1", json={"material_id": acryl["id"], "thickness_mm": 3})
     layer = a_job(client, speed=1, power=1)
     client.post(
         f"/api/library/presets/{preset['id']}/apply", json={"operation_id": layer["id"]}
@@ -148,7 +148,7 @@ def test_the_preflight_warns_when_a_layer_carries_another_materials_setting(clie
 def test_the_same_material_in_another_thickness_is_also_worth_a_word(client):
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3)
-    client.patch("/api/sheets/vel-1", json={"material_id": berken["id"], "thickness_mm": 6})
+    client.patch("/api/sheets/sheet-1", json={"material_id": berken["id"], "thickness_mm": 6})
     layer = a_job(client, speed=1, power=1)
     client.post(
         f"/api/library/presets/{preset['id']}/apply", json={"operation_id": layer["id"]}
@@ -167,7 +167,7 @@ def test_an_extrapolated_setting_says_it_was_never_burned(client):
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="geextrapoleerd")
-    client.patch("/api/sheets/vel-1", json={"material_id": berken["id"], "thickness_mm": 3})
+    client.patch("/api/sheets/sheet-1", json={"material_id": berken["id"], "thickness_mm": 3})
     layer = a_job(client, speed=1, power=1)
     client.post(
         f"/api/library/presets/{preset['id']}/apply", json={"operation_id": layer["id"]}
@@ -183,7 +183,7 @@ def test_a_matching_material_and_thickness_says_nothing(client):
     """Wie niets te melden heeft, zwijgt: anders leert de gebruiker wegkijken."""
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
-    client.patch("/api/sheets/vel-1", json={"material_id": berken["id"], "thickness_mm": 3})
+    client.patch("/api/sheets/sheet-1", json={"material_id": berken["id"], "thickness_mm": 3})
     layer = a_job(client, speed=1, power=1)
     client.post(
         f"/api/library/presets/{preset['id']}/apply", json={"operation_id": layer["id"]}
@@ -213,7 +213,7 @@ def test_hand_edited_values_lose_their_claimed_provenance(client):
 
 def test_the_estimate_names_the_sheet_it_burns_on(client):
     berken = a_material(client, "Berken")
-    client.patch("/api/sheets/vel-1", json={"material_id": berken["id"], "thickness_mm": 3})
+    client.patch("/api/sheets/sheet-1", json={"material_id": berken["id"], "thickness_mm": 3})
     a_job(client)
 
     sheet = client.get("/api/job/estimate").json()["sheet"]
@@ -224,23 +224,23 @@ def test_the_estimate_names_the_sheet_it_burns_on(client):
 
 def test_a_removed_sheet_does_not_bequeath_its_provenance(client):
     """
-    Vel-nummers worden hergebruikt: verwijder vel-2 en het volgende nieuwe vel
-    heet weer vel-2. Zonder opruimen erft dat vel de herkomst van zijn
+    Vel-nummers worden hergebruikt: verwijder sheet-2 en het volgende nieuwe vel
+    heet weer sheet-2. Zonder opruimen erft dat vel de herkomst van zijn
     voorganger, en dan staat er een materiaal bij een laag die het nooit zag.
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
     client.post("/api/sheets", json={"name": "Tweede"})
-    client.post("/api/sheets/vel-2/activate")
+    client.post("/api/sheets/sheet-2/activate")
     layer = a_job(client, speed=1, power=1)
     client.post(
         f"/api/library/presets/{preset['id']}/apply", json={"operation_id": layer["id"]}
     )
     assert layer_of(client)["preset_id"] == preset["id"]
 
-    client.delete("/api/sheets/vel-2")
+    client.delete("/api/sheets/sheet-2")
     client.post("/api/sheets", json={"name": "Derde"})
-    client.post("/api/sheets/vel-2/activate")
+    client.post("/api/sheets/sheet-2/activate")
     opnieuw = a_job(client, speed=1, power=1)
 
     hergebruikt = [l for l in client.get("/api/job/estimate").json()["layers"] if l["id"] == opnieuw["id"]]
@@ -256,7 +256,7 @@ def test_the_heaviest_objection_comes_first(client):
     """
     berken = a_material(client, "Berken")
     zacht = a_preset(client, berken, thickness_mm=6, source="geextrapoleerd")
-    client.patch("/api/sheets/vel-1", json={"material_id": berken["id"], "thickness_mm": 3})
+    client.patch("/api/sheets/sheet-1", json={"material_id": berken["id"], "thickness_mm": 3})
     layer = a_job(client, speed=1, power=1)
     client.post(
         f"/api/library/presets/{zacht['id']}/apply", json={"operation_id": layer["id"]}
@@ -278,7 +278,7 @@ def test_what_will_be_burned_can_be_read_without_building_the_plan(client):
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
-    client.patch("/api/sheets/vel-1", json={"material_id": berken["id"], "thickness_mm": 3})
+    client.patch("/api/sheets/sheet-1", json={"material_id": berken["id"], "thickness_mm": 3})
     layer = a_job(client, speed=1, power=1)
     client.post(
         f"/api/library/presets/{preset['id']}/apply", json={"operation_id": layer["id"]}

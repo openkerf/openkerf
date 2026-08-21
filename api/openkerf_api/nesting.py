@@ -43,7 +43,7 @@ class Nesting:
         origin_x = _finite(origin_x_mm, "origin_x_mm")
         origin_y = _finite(origin_y_mm, "origin_y_mm")
 
-        # Eerst de losse vormen tot eenheden samenvouwen: alles wat in dezelfde
+        # Eerst de losse shapes tot eenheden samenvouwen: alles wat in dezelfde
         # buitenste groep zit is één blok met één omhullende rechthoek.
         eenheden: dict[int, dict] = {}
         volgorde: list[int] = []

@@ -98,7 +98,7 @@ def corner_geometry(geom, size_units: float, style: str):
                 skipped += 1
                 continue
             if abs(a[4] - b[0]) > 1e-9:
-                # Geen aansluitende hoek maar twee losse stukken.
+                # Geen aansluitende corner maar twee losse stukken.
                 continue
             len_a, len_b = abs(a[4] - a[0]), abs(b[4] - b[0])
             bound = FRACTION_PER_SIDE * min(len_a, len_b)

@@ -271,7 +271,7 @@ class Clipart:
 
     def insert(self, url: str, width_mm=60.0, x_mm=10.0, y_mm=10.0) -> dict:
         """
-        Een gevonden tekening in het ontwerp zetten, op ware grootte.
+        Een found tekening in het ontwerp zetten, op ware grootte.
 
         The check is here and not at the search: only when you really want to use it is it
         worth knowing what is left of it on a laser.

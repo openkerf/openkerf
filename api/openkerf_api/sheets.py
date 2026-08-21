@@ -72,7 +72,7 @@ class Sheets:
     def _file(self, sheet_id: str) -> Path:
         return self.directory / f"{sheet_id}.svg"
 
-    # ------------------------------------------------------------ toestand
+    # ------------------------------------------------------------ state
 
     def state(self) -> dict:
         sheets = self._ensure()
@@ -108,7 +108,7 @@ class Sheets:
             width, height = self._bed()
             sheets = [
                 {
-                    "id": "vel-1",
+                    "id": "sheet-1",
                     "name": DEFAULT_SHEET_NAME,
                     "width_mm": width,
                     "height_mm": height,
@@ -136,7 +136,7 @@ class Sheets:
         Without this the sheet bar said "Sheet 1" after a restart while the canvas
         was empty: the file was there, but nobody had loaded it. Worse than the
         empty look was what happened next — switching away sees an empty tree, reads
-        that as "the user emptied this sheet", and throws `vel-1.svg` away. One
+        that as "the user emptied this sheet", and throws `sheet-1.svg` away. One
         click, everything gone.
 
         Only when the tree is empty: if there is work in it already (recovery after
@@ -205,7 +205,7 @@ class Sheets:
             suffix += 1
 
         sheet = {
-            "id": f"vel-{number + 1}",
+            "id": f"sheet-{number + 1}",
             "name": unique,
             "width_mm": self._side(width_mm, bed_width, "width_mm"),
             "height_mm": self._side(height_mm, bed_height, "height_mm"),
@@ -228,13 +228,13 @@ class Sheets:
         """
         if value is None or value == "":
             return None
-        dikte = _positive(value, "thickness_mm")
-        if dikte > 500:
+        thickness = _positive(value, "thickness_mm")
+        if thickness > 500:
             raise DesignError(
                 "A sheet more than 500 mm thick does not go in.",
                 code="sheet.tooThick",
             )
-        return round(dikte, 2)
+        return round(thickness, 2)
 
     def _side(self, value, fallback, label):
         if value is None:
@@ -366,13 +366,13 @@ class Sheets:
             self.kernel.elements.validate_ids()
             # Mark the layers of this sheet as "the user's" again. A fresh
             # boom heeft ruim tweehonderd lege standaardoperaties; zonder deze
-            # markering zijn de lagen die je zelf gemaakt hebt niet van die
+            # markering zijn de layers die je zelf gemaakt hebt niet van die
             # ruis te onderscheiden en verdwijnen ze uit de lijst.
             for operation in self.kernel.elements.ops():
                 if getattr(operation, "id", None):
                     self.drawing.user_operations.add(operation.id)
             # `load` puts the file name on the document, and that name comes back as
-            # the job name in the spooler: every job was called `vel-2.svg` while the
+            # the job name in the spooler: every job was called `sheet-2.svg` while the
             # user sees "Test piece" on their tab — the same mistake as `herstel.svg`
             # in autosave.py. This file is our storage, not a document the user gave a
             # name, so the document stays nameless and the sheet bar decides the name.
@@ -429,7 +429,7 @@ class Sheets:
         for sheet in sheets:
             source = self._file(sheet["id"])
             if source.is_file():
-                bundle.write(source, f"vellen/{sheet['id']}.svg")
+                bundle.write(source, f"sheets/{sheet['id']}.svg")
         return sheets
 
     def import_from(self, bundle, sheets: list[dict], active: str | None = None) -> None:
@@ -439,9 +439,13 @@ class Sheets:
         self.directory.mkdir(parents=True, exist_ok=True)
         for old in self.directory.glob("*.svg"):
             old.unlink(missing_ok=True)
+        names = set(bundle.namelist())
         for sheet in sheets:
-            name = f"vellen/{sheet['id']}.svg"
-            if name in bundle.namelist():
-                self._file(sheet["id"]).write_bytes(bundle.read(name))
+            # `vellen/` is where these lived before the interface became English; a project
+            # from that version still opens.
+            for name in (f"sheets/{sheet['id']}.svg", f"vellen/{sheet['id']}.svg"):
+                if name in names:
+                    self._file(sheet["id"]).write_bytes(bundle.read(name))
+                    break
         self._write(sheets)
         self._active = active if any(s["id"] == active for s in sheets) else sheets[0]["id"]

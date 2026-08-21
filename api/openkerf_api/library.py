@@ -427,23 +427,23 @@ class Library:
             "name", "laser_type", "power_watt", "lens_mm",
             "bed_width_mm", "bed_height_mm", "has_z", "has_autofocus",
         )
-        stukken, waarden = [], []
+        stukken, values = [], []
         for key in toegestaan:
             if key not in fields:
                 continue
             stukken.append(f"{key} = ?")
             if key in ("has_z", "has_autofocus"):
-                waarden.append(1 if fields[key] else 0)
+                values.append(1 if fields[key] else 0)
             elif key in ("name", "laser_type"):
-                waarden.append(str(fields[key]))
+                values.append(str(fields[key]))
             else:
-                waarden.append(_number(fields[key], key, optional=True))
+                values.append(_number(fields[key], key, optional=True))
         if not stukken:
             raise LibraryError("Nothing to update.")
         with self._connect() as db:
             db.execute(
                 f"UPDATE machine_profile SET {', '.join(stukken)} WHERE id = ?",
-                (*waarden, machine_id),
+                (*values, machine_id),
             )
             return self._one(db, "machine_profile", machine_id)
 
@@ -526,7 +526,7 @@ class Library:
             raise LibraryError(f"Onbekende operation: {operation or '(leeg)'}")
         source = str(fields.get("source") or "handmatig")
         if source not in SOURCES:
-            raise LibraryError(f"Onbekende bron: {source}")
+            raise LibraryError(f"Onbekende source: {source}")
 
         speed = _number(fields.get("speed_mm_s"), "speed_mm_s", positive=True)
         power = _number(fields.get("power_percent"), "power_percent", positive=True)
@@ -710,8 +710,8 @@ class Library:
                 raise LibraryError(
                     "An alignment consists of four points with an x and a y."
                 )
-            for punt in schoon:
-                if not (0 <= punt["x"] <= 1 and 0 <= punt["y"] <= 1):
+            for point in schoon:
+                if not (0 <= point["x"] <= 1 and 0 <= point["y"] <= 1):
                     raise LibraryError("A corner lies outside the photo.")
         with self._connect() as db:
             db.execute(
@@ -1006,15 +1006,15 @@ class Library:
         """Read it and refuse at once what is not a library."""
         import zipfile
 
-        bron = Path(path)
-        if not bron.exists():
+        source = Path(path)
+        if not source.exists():
             raise LibraryError("That file is not there (any more).")
-        if not zipfile.is_zipfile(bron):
+        if not zipfile.is_zipfile(source):
             raise LibraryError(
                 "This is not an OpenKerf library. A library file ends "
                 f"in {BUNDLE_SUFFIX}."
             )
-        with zipfile.ZipFile(bron) as bundle:
+        with zipfile.ZipFile(source) as bundle:
             if BUNDLE_INDEX not in bundle.namelist():
                 raise LibraryError("This file holds no library.")
             try:
@@ -1264,11 +1264,11 @@ class Library:
             target = material_id.get(recipe.get("material_id"))
             if (name.casefold(), target) in eigen_recepten:
                 continue
-            instellingen = recipe.get("settings")
-            if isinstance(instellingen, str):
-                instellingen = json.loads(instellingen)
+            settings = recipe.get("settings")
+            if isinstance(settings, str):
+                settings = json.loads(settings)
             try:
-                self.save_grid_recipe(name, instellingen or {}, target)
+                self.save_grid_recipe(name, settings or {}, target)
             except LibraryError:
                 continue
             recipes += 1
@@ -1366,7 +1366,7 @@ class Library:
             oud = herkomst.split(":", 1)[1]
             nieuw = grid_id.get(int(oud)) if oud.isdigit() else None
             herkomst = f"testgrid:{nieuw}" if nieuw else None
-        bron = preset.get("source")
+        source = preset.get("source")
         with self._connect() as db:
             cursor = db.execute(
                 """INSERT INTO preset (material_id, machine_id, thickness_mm, operation,
@@ -1384,7 +1384,7 @@ class Library:
                     preset.get("interval_mm"),
                     1 if preset.get("air_assist", True) else 0,
                     preset.get("focus_offset_mm") or 0,
-                    bron if bron in SOURCES else "geimporteerd",
+                    source if source in SOURCES else "geimporteerd",
                     herkomst,
                     str(preset.get("note") or ""),
                     preset.get("last_used_at"),
@@ -1450,14 +1450,14 @@ def _recept_instellingen(ruw: dict) -> dict:
     for key in tuple(Library.GRID_DEFAULTS) + _VASTE_VELDEN:
         if key not in ruw or ruw[key] is None:
             continue
-        waarde = ruw[key]
+        value = ruw[key]
         if key in ("text_enabled", "border_enabled"):
-            uit[key] = bool(waarde)
+            uit[key] = bool(value)
         elif key in ("operation", "row_axis", "column_axis", "anchor"):
-            uit[key] = str(waarde)
+            uit[key] = str(value)
         else:
             try:
-                uit[key] = float(waarde)
+                uit[key] = float(value)
             except (TypeError, ValueError):
                 continue
     return uit
@@ -1506,15 +1506,15 @@ def _alignment(ruw):
     if not ruw:
         return None
     try:
-        punten = json.loads(ruw) if isinstance(ruw, str) else ruw
+        points = json.loads(ruw) if isinstance(ruw, str) else ruw
     except ValueError:
         return None
-    if not isinstance(punten, list) or len(punten) != 4:
+    if not isinstance(points, list) or len(points) != 4:
         return None
     try:
         return [
             {"x": float(p["x"]), "y": float(p["y"])}
-            for p in punten
+            for p in points
         ]
     except (TypeError, KeyError, ValueError):
         return None
@@ -1603,9 +1603,9 @@ def _looks_like(name: str, eigen: list[dict]) -> tuple[dict, str] | None:
     return None
 
 
-def _rond(waarde):
+def _rond(value):
     """3 and 3.0 are the same thickness; None stays None."""
-    return None if waarde in (None, "") else round(float(waarde), 2)
+    return None if value in (None, "") else round(float(value), 2)
 
 
 def _preset_key(material_naam, preset: dict) -> tuple:

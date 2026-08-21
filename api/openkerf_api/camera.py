@@ -57,7 +57,7 @@ class Camera:
         self._idle_since = None
         self._lock = threading.Lock()
 
-    # ------------------------------------------------------------ toestand
+    # ------------------------------------------------------------ state
 
     @property
     def available(self) -> bool:

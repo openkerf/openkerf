@@ -73,10 +73,10 @@ class Provenance:
 
     def forget_sheet(self, sheet_id: str) -> None:
         """
-        Een verwijderd vel neemt zijn briefjes mee.
+        Een verwijderd sheet neemt zijn briefjes mee.
 
         Necessary, not housekeeping: sheet numbers are reused, so without this a new
-        "vel-3" inherits the old one's provenance.
+        "sheet-3" inherits the old one's provenance.
         """
         data = self._read()
         if data.pop(sheet_id, None) is not None:
@@ -86,7 +86,7 @@ class Provenance:
         """
         All the notes gone — on a new project.
 
-        For the same reason as `forget_sheet`: a new project starts at "vel-1" again, and
+        For the same reason as `forget_sheet`: a new project starts at "sheet-1" again, and
         without this its first layer carries yesterday's work's provenance. A setting saying
         it comes from a test grid while nobody applied that preset is worse than no
         provenance.

@@ -209,7 +209,7 @@ DIGIT_FRACTION = 0.7
 DIGIT_GAP_MM = 1.5
 
 
-def mark_footprint(punt: Point, size_mm: float, zone: Rect) -> Rect:
+def mark_footprint(point: Point, size_mm: float, zone: Rect) -> Rect:
     """
     What a mark takes up: the circle *and* its digit.
 
@@ -223,13 +223,13 @@ def mark_footprint(punt: Point, size_mm: float, zone: Rect) -> Rect:
     extra = size_mm * DIGIT_FRACTION + DIGIT_GAP_MM
     if zone.height >= zone.width:
         return Rect(
-            punt.x_mm - half,
-            punt.y_mm - half,
-            punt.x_mm + half,
-            punt.y_mm + half + extra,
+            point.x_mm - half,
+            point.y_mm - half,
+            point.x_mm + half,
+            point.y_mm + half + extra,
         )
     return Rect(
-        punt.x_mm - half, punt.y_mm - half, punt.x_mm + half + extra, punt.y_mm + half
+        point.x_mm - half, point.y_mm - half, point.x_mm + half + extra, point.y_mm + half
     )
 
 
@@ -256,8 +256,8 @@ def marker_spots(
     while y <= zone.y1 - half + 1e-9:
         x = zone.x0 + half
         while x <= zone.x1 - half + 1e-9:
-            punt = Point(x, y)
-            vak = mark_footprint(punt, size_mm, zone)
+            point = Point(x, y)
+            vak = mark_footprint(point, size_mm, zone)
             binnen = (
                 zone.x0 <= vak.x0
                 and vak.x1 <= zone.x1
@@ -265,7 +265,7 @@ def marker_spots(
                 and vak.y1 <= zone.y1
             )
             if binnen and not any(_overlaps(vak, b) for b in blocked):
-                vrij.append(punt)
+                vrij.append(point)
             x += step_x
         y += step_y
 
@@ -309,11 +309,11 @@ def alignment(
     the scale, one 2 mm tapping error would compute the whole tile apart.
     """
     board = complex(p2.x_mm - p1.x_mm, p2.y_mm - p1.y_mm)
-    gemeten = complex(m2.x_mm - m1.x_mm, m2.y_mm - m1.y_mm)
-    if abs(board) < 1e-6 or abs(gemeten) < 1e-6:
+    measured = complex(m2.x_mm - m1.x_mm, m2.y_mm - m1.y_mm)
+    if abs(board) < 1e-6 or abs(measured) < 1e-6:
         raise TilingError("The two tapped points lie on top of each other.")
 
-    afwijking = abs(gemeten) - abs(board)
+    afwijking = abs(measured) - abs(board)
     if abs(afwijking) > tolerance_mm:
         raise TilingError(
             f"These two points lie {abs(afwijking):.1f} mm "
@@ -321,7 +321,7 @@ def alignment(
             "apart than the marks I burned. Did you tap the right mark?"
         )
 
-    angle = math.atan2(gemeten.imag, gemeten.real) - math.atan2(board.imag, board.real)
+    angle = math.atan2(measured.imag, measured.real) - math.atan2(board.imag, board.real)
     angle = math.atan2(math.sin(angle), math.cos(angle))
     graden = math.degrees(angle)
     if abs(graden) > max_angle_deg:

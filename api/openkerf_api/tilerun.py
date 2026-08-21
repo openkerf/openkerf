@@ -100,9 +100,9 @@ def marker_geometry(points, size_mm: float, units_per_mm: float, along_y: bool =
     height = size_mm * DIGIT_FRACTION * units_per_mm
     gat = DIGIT_GAP_MM * units_per_mm
     geom = Geomstr()
-    for nummer, punt in enumerate(points, 1):
-        cx = punt.x_mm * units_per_mm
-        cy = punt.y_mm * units_per_mm
+    for nummer, point in enumerate(points, 1):
+        cx = point.x_mm * units_per_mm
+        cy = point.y_mm * units_per_mm
         geom.append(Geomstr.circle(straal, cx, cy))
         geom.line(complex(cx - straal, cy), complex(cx + straal, cy))
         geom.end()
@@ -498,7 +498,7 @@ class TileRun:
     @staticmethod
     def _crossings(tiles, spans) -> int:
         """
-        Hoeveel vormen door een seam gaan.
+        Hoeveel shapes door een seam gaan.
 
         On the axis the division runs along, and that is not always x: a board that is only
         too *tall* is divided into bands and then has no x seam at all. Counting on x alone
@@ -586,7 +586,7 @@ class TileRun:
         try:
             sheet = self._sheet()
         except DesignError:
-            # Vangnet, geen pad: `Sheets` houdt er altijd precies één actief
+            # Vangnet, geen path: `Sheets` houdt er altijd precies één actief
             # (`remove` activates another one first, `_ensure` repairs a broken reference),
             # so nobody comes here along the normal route. It is here because `state()` is
             # read from the status payload: if this ever does throw, it is not this series
@@ -664,18 +664,18 @@ class TileRun:
         if state["stale"]:
             raise DesignError(state["message"])
         data = self._read()
-        gemeten = [Point(float(p["x_mm"]), float(p["y_mm"])) for p in points]
+        measured = [Point(float(p["x_mm"]), float(p["y_mm"])) for p in points]
         try:
             if reference == "plate_corner":
-                if not gemeten:
+                if not measured:
                     raise DesignError("Tap the corner of the plate first.")
-                self._alignment = alignment_from_corner(Point(0.0, 0.0), gemeten[0])
+                self._alignment = alignment_from_corner(Point(0.0, 0.0), measured[0])
             else:
-                if len(gemeten) != 2:
+                if len(measured) != 2:
                     raise DesignError("Uitlijnen vraagt twee aangetikte marks.")
                 marks = self._marks_for(data["current"] - 1)
                 self._alignment = alignment(
-                    marks[0], marks[1], gemeten[0], gemeten[1]
+                    marks[0], marks[1], measured[0], measured[1]
                 )
         except TilingError as e:
             self._alignment = None
@@ -808,9 +808,9 @@ class TileRun:
         # much.
         outside = 0.0
         for x, y in corners:
-            punt = complex(x, y) * rotation
-            mx = punt.real + mutator.alignment.dx_mm
-            my = punt.imag + mutator.alignment.dy_mm
+            point = complex(x, y) * rotation
+            mx = point.real + mutator.alignment.dx_mm
+            my = point.imag + mutator.alignment.dy_mm
             outside = max(outside, -mx, -my, mx - bed[0], my - bed[1])
         if outside > 0:
             raise DesignError(

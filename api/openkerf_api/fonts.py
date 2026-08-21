@@ -56,7 +56,7 @@ class Fonts:
 
     def refresh(self) -> None:
         """
-        De engine opnieuw laten kijken.
+        De engine again laten kijken.
 
         Without this a freshly installed typeface stays invisible until MeerK40t restarts —
         the list comes from a cache file.

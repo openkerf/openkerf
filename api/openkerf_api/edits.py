@@ -339,41 +339,40 @@ class DesignEditor:
 
     def _stel_de_stapel_bij(self) -> None:
         """
-        Eén keer ongedaan maken moet één wijziging terugdraaien (upstream #3258).
+        One undo has to reverse one change (upstream #3258).
 
-        De stapel bewaart per wijziging de toestand **vóór** die wijziging:
-        `undoscope` roept `mark()` aan voordat er iets gebeurt. `Undo.undo()`
-        berekent zijn doel als `_undo_index - 1` — en doet dat **vóór** hij
-        `validate()` aanroept. Dat is de fout, want `validate()` verzet
-        `_undo_index` precies in het geval dat het misgaat:
+        The stack keeps, per change, the state **before** that change: `undoscope` calls
+        `mark()` before anything happens. `Undo.undo()` computes its target as
+        `_undo_index - 1` — and does that **before** it calls `validate()`. That is the
+        fault, because `validate()` moves `_undo_index` in precisely the case where it goes
+        wrong:
 
-        1. Het legt een "Last status"-vangnet bovenop de stapel en verhóogt
-           `_undo_index` als die al bovenaan stond. Dat is exact de stand na een
-           wijziging, dus bij de eerste stap terug rekent `undo()` met een index
-           van vóór die verhoging: één stap te ver.
-        2. Loopt de stapel daarmee over de twintig toestanden die hij vasthoudt
-           (`Undo.levels`), dan gooit hij de oudste eruit en schuiven **alle**
-           indexen één op. Het al berekende doel schuift niet mee, dus wijst het
-           dan naar de tóestand ná die je bedoelde — en ongedaan maken doet
-           helemaal niets. Gemeten: na 25 wijzigingen een vorm weghalen en
-           ongedaan maken, en de vorm bleef weg.
+        1. It puts a "Last status" safety net on top of the stack and *raises* `_undo_index`
+           when it was already at the top. That is exactly the state after a change, so on the
+           first step back `undo()` computes with an index from before that rise: one step too
+           far.
+        2. If the stack thereby exceeds the twenty states it holds (`Undo.levels`), it throws
+           the oldest out and **all** the indexes shift by one. The already computed target
+           does not shift along, so it then points at the state *after* the one you meant —
+           and undoing does nothing at all. Measured: after 25 changes, remove a shape and
+           undo, and the shape stayed gone.
 
-        Punt 2 was het gat in onze eigen omweg. Die rekende zelf een index uit
-        en gaf die mee als `undo <index>`, maar liep tegen precies dezelfde
-        verschuiving aan: bij een volle stapel wees ook die index verkeerd.
+        Point 2 was the hole in our own detour. That computed an index itself and passed it as
+        `undo <index>`, but ran into exactly the same shift: on a full stack that index pointed
+        wrongly as well.
 
-        De oplossing is een stap eerder: zélf `validate()` aanroepen vóórdat het
-        commando uitgaat. Daarna staat het vangnet er al, verzet `validate()`
-        binnen `undo()` niets meer, en is `_undo_index - 1` wél de toestand van
-        vóór de laatste wijziging — bij een volle stapel net zo goed als bij een
-        lege. We rekenen dus niets meer zelf uit; we zorgen alleen dat de engine
-        rekent met een stapel die niet meer onder zijn handen vandaan schuift.
+        The solution is one step earlier: call `validate()` ourselves *before* the command goes
+        out. After that the safety net is already there, `validate()` inside `undo()` moves
+        nothing any more, and `_undo_index - 1` *is* the state from before the last change — on
+        a full stack just as much as on an empty one. So we no longer compute anything
+        ourselves; we only make sure the engine computes with a stack that no longer shifts out
+        from under its hands.
         """
         try:
             self.elements.undo.validate()
         except AttributeError:
-            # Verandert de engine zijn stapel, dan doen we het weer zoals hij
-            # het zelf doet: liever een stap te ver dan geen undo.
+            # If the engine changes its stack, we go back to doing it the way it does
+            # itself: better one step too far than no undo.
             pass
 
     def _history(self, action: str, output: list[str]) -> dict:

@@ -945,11 +945,11 @@ class ApiServer:
                 # Gap J12: framing has to show where it will *really* lie. A frame on the
                 # drawing coordinates while the zero point puts the work 100 mm aside is
                 # precisely the check you thought you had made.
-                nulpunt = self.motion.origin() or {}
+                origin = self.motion.origin() or {}
                 x, y, width, height = doos
                 return self.motion.frame(
-                    x + float(nulpunt.get("x_mm") or 0.0),
-                    y + float(nulpunt.get("y_mm") or 0.0),
+                    x + float(origin.get("x_mm") or 0.0),
+                    y + float(origin.get("y_mm") or 0.0),
                     width,
                     height,
                 )
@@ -1315,12 +1315,12 @@ class ApiServer:
                 if self.machines._configured(device)
             }
             self.library.refresh_names(levend)
-            paden = set(levend)
+            paths = set(levend)
             return [
                 {
                     **profile,
                     "orphaned": bool(profile["device_path"])
-                    and profile["device_path"] not in paden,
+                    and profile["device_path"] not in paths,
                     **self.library.machine_usage(profile["id"]),
                 }
                 for profile in self.library.machines()
@@ -1401,10 +1401,10 @@ class ApiServer:
                 body.get("merge_materials"),
                 body.get("on_conflict") or "eigen",
             )
-            opnieuw = {m["name"]: m["id"] for m in self.library.materials()}
+            again = {m["name"]: m["id"] for m in self.library.materials()}
             for sheet_id, name in vellen.items():
-                if name and opnieuw.get(name) is not None:
-                    self.sheets.update(sheet_id, material_id=opnieuw[name])
+                if name and again.get(name) is not None:
+                    self.sheets.update(sheet_id, material_id=again[name])
             return result
 
         @app.post("/api/library/presets/{preset_id}/apply", dependencies=write)
@@ -1566,7 +1566,7 @@ class ApiServer:
         def move_to_sheet(sheet_id: str, body: dict):
             return manage(self.sheets.move_selection, body.get("ids") or [], sheet_id)
 
-        # ----------------------------------------------------------------- tegels
+        # ----------------------------------------------------------------- tiles
 
         @app.get("/api/tiling")
         def tiling_layout():
@@ -1835,7 +1835,7 @@ class ApiServer:
 
         def grid_fields(body: dict) -> dict:
             """
-            Wat het bord aan het formulier toevoegt: machine, datum, material.
+            Wat het board aan het formulier toevoegt: machine, datum, material.
 
             Preview and reality use the same lines here. They have to: the caption decides
             how wide the board becomes, so a preview without a date reports a narrower board

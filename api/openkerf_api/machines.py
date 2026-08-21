@@ -445,7 +445,7 @@ class MachineManager:
         """Persist settings so a machine survives a restart of the engine."""
         self.runner.run("flush")
 
-    # --------------------------------------------- profiel uitwisselen (E5)
+    # --------------------------------------------- profile uitwisselen (E5)
 
     def _info_key(self, device) -> str | None:
         """
@@ -473,7 +473,7 @@ class MachineManager:
         from datetime import datetime, timezone
 
         device = self._find(path)
-        waarden = {}
+        values = {}
         for sheet in self.settings(path):
             for field in sheet["fields"]:
                 # On some drivers the name is *also* in a settings sheet. It should be in
@@ -481,7 +481,7 @@ class MachineManager:
                 # own.
                 if field["attr"] == "label":
                     continue
-                waarden[field["attr"]] = field["value"]
+                values[field["attr"]] = field["value"]
         sleutel = self._info_key(device)
         if sleutel is None:
             raise MachineError(
@@ -496,7 +496,7 @@ class MachineManager:
                 "info": sleutel,
                 "provider": getattr(device, "registered_path", None),
                 "label": getattr(device, "label", device.path),
-                "settings": waarden,
+                "settings": values,
             },
         }
 
@@ -506,11 +506,11 @@ class MachineManager:
         from pathlib import Path
 
         if isinstance(data, (str, Path)):
-            bron = Path(data)
-            if not bron.exists():
+            source = Path(data)
+            if not source.exists():
                 raise MachineError("That file is not there (any more).")
             try:
-                data = json.loads(bron.read_text())
+                data = json.loads(source.read_text())
             except ValueError as e:
                 raise MachineError("This file is not a readable profile.") from e
         if not isinstance(data, dict) or data.get("format") != PROFILE_FORMAT:
@@ -542,28 +542,28 @@ class MachineManager:
             for familie in self.catalog()
             for entry in familie["machines"]
         }
-        regel = bekend.get(machine["info"])
-        waarden = machine.get("settings") or {}
+        line = bekend.get(machine["info"])
+        values = machine.get("settings") or {}
         # Only what is really filled in. The engine sets unused fields to "UNCONFIGURED";
         # showing those as "check this" on a USB machine is a warning about nothing, and that
         # teaches you to ignore warnings.
         local = {
             k: v
-            for k, v in waarden.items()
+            for k, v in values.items()
             if k in LOCAL_ATTRS and str(v).strip() not in ("", "UNCONFIGURED", "None")
         }
         core = {
-            k: waarden[k]
+            k: values[k]
             for k in ("bedwidth", "bedheight", "interface")
-            if k in waarden
+            if k in values
         }
         return {
             "label": machine.get("label") or machine["info"],
             "info": machine["info"],
-            "known": regel is not None,
-            "friendly_name": regel["friendly_name"] if regel else None,
-            "family": regel["family"] if regel else None,
-            "settings": len(waarden),
+            "known": line is not None,
+            "friendly_name": line["friendly_name"] if line else None,
+            "family": line["family"] if line else None,
+            "settings": len(values),
             "essential": core,
             # What does not hold elsewhere first: *this* controller's address.
             "local": local,
@@ -577,7 +577,7 @@ class MachineManager:
         name = (label or machine.get("label") or "").strip() or None
         created = self.create(machine["info"], name)
 
-        waarden = machine.get("settings") or {}
+        values = machine.get("settings") or {}
         types = self._setting_types(self._find(created["path"]))
         # What this engine does not know we leave alone rather than rejecting the profile: a
         # profile from a newer MeerK40t should not block your whole set-up over one setting
@@ -586,9 +586,9 @@ class MachineManager:
         # immediately overwrite the name you chose on import with the source's — two machines
         # with the same name, and that is exactly what you do not want on a second profile.
         usable = {
-            k: v for k, v in waarden.items() if k in types and k != "label"
+            k: v for k, v in values.items() if k in types and k != "label"
         }
-        overgeslagen = sorted(set(waarden) - set(usable))
+        overgeslagen = sorted(set(values) - set(usable))
         if usable:
             self.update_settings(created["path"], usable)
         return {
@@ -632,7 +632,7 @@ USB_SIGNATURES = (
     {
         "vid": 0x1A86,
         "pid": 0x5512,
-        "title": "K40-bord (CH341)",
+        "title": "K40-board (CH341)",
         "kind": "co2-k40",
         "keys": ("m2-nano", "m3-nano"),
         "confidence": "waarschijnlijk",
@@ -718,7 +718,7 @@ SERIAL_SIGNATURES = (
     {
         "vid": 0x2341,
         "pid": None,
-        "title": "Arduino-bord",
+        "title": "Arduino-board",
         "kind": "diode",
         "keys": ("grbl-generic",),
         "confidence": "onzeker",

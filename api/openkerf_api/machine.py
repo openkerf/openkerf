@@ -59,12 +59,12 @@ def _zonder_echo(output, command: str) -> str:
     all, so the only thing left was "[11:51:29] ruida_connect". Serving that up as a reason
     is worse than saying there is no reason.
     """
-    regels = [
+    lines = [
         line
         for line in output
         if line.strip() and not line.strip().endswith(command)
     ]
-    return " ".join(regels).strip()
+    return " ".join(lines).strip()
 
 
 class MachineControl:
@@ -392,12 +392,12 @@ class MachineControl:
             ruw = getattr(device, OORSPRONG_KEY, "") or ""
             if not ruw:
                 return None
-            waarde = json.loads(ruw)
+            value = json.loads(ruw)
         except Exception:
             return None
-        if not isinstance(waarde, dict):
+        if not isinstance(value, dict):
             return None
-        x, y = waarde.get("x_mm"), waarde.get("y_mm")
+        x, y = value.get("x_mm"), value.get("y_mm")
         if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
             return None
         return {"x_mm": float(x), "y_mm": float(y)}
@@ -506,8 +506,8 @@ class MachineControl:
         if driver is None:
             raise DesignError("There is no active machine.")
         gedaan = {}
-        for name, waarde in (("power", power), ("speed", speed)):
-            if waarde is None:
+        for name, value in (("power", power), ("speed", speed)):
+            if value is None:
                 continue
             if not self._kan(name):
                 raise DesignError(
@@ -515,7 +515,7 @@ class MachineControl:
                     "The driver has no realtime channel for it; "
                     "stop the job, change the layer and start again."
                 )
-            factor = _finite(waarde, name)
+            factor = _finite(value, name)
             if not self.ADJUST_MIN <= factor <= self.ADJUST_MAX:
                 raise DesignError(
                     f"A factor of {factor:.2f} falls outside what the machine "

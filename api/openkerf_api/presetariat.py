@@ -273,7 +273,7 @@ class Presetariat:
 
 
 def _confidence(preset: dict) -> tuple:
-    """Nagebrand vóór gemeten, gemeten vóór gegokt."""
+    """Nagebrand vóór measured, measured vóór gegokt."""
     kind = (preset.get("source") or {}).get("kind")
     return (
         bool(preset.get("verified")),

@@ -51,7 +51,7 @@ def test_a_project_carries_design_and_library(client):
     bundle = zipfile.ZipFile(io.BytesIO(response.content))
     # design.svg is het actieve vel en blijft apart staan, zodat een oudere
     # versie van OpenKerf het project nog kan openen.
-    assert {"design.svg", "library.json", "vellen.json"} <= set(bundle.namelist())
+    assert {"design.svg", "library.json", "sheets.json"} <= set(bundle.namelist())
     assert bundle.read("design.svg").startswith(b"<svg")
     context = json.loads(bundle.read("library.json"))
     assert [m["name"] for m in context["materials"]] == ["Multiplex"]
@@ -165,7 +165,7 @@ def test_a_new_project_leaves_one_empty_sheet(client, kernel):
     state = client.post("/api/project/new").json()
 
     assert [s["name"] for s in state["sheets"]] == ["Sheet 1"]
-    assert state["active"] == "vel-1"
+    assert state["active"] == "sheet-1"
     assert list(kernel.elements.elems()) == []
 
 
@@ -177,7 +177,7 @@ def test_the_sheets_of_the_old_project_are_gone(server, client, kernel):
     client.post("/api/design/elements",
                 json={"type": "rect", "x_mm": 5, "y_mm": 5, "width_mm": 10, "height_mm": 10})
     client.post("/api/sheets", json={"name": "Doos"})
-    client.post("/api/sheets/vel-2/activate")  # schrijft vel-1 weg naar schijf
+    client.post("/api/sheets/sheet-2/activate")  # schrijft sheet-1 weg naar schijf
     assert list(server.sheets.directory.glob("*.svg"))
 
     client.post("/api/project/new")
@@ -188,15 +188,15 @@ def test_the_sheets_of_the_old_project_are_gone(server, client, kernel):
 
 def test_a_new_project_does_not_inherit_yesterdays_provenance(server, client):
     """
-    Vel-nummers worden hergebruikt, dus een briefje op "vel-1" plakt zonder dit
+    Vel-nummers worden hergebruikt, dus een briefje op "sheet-1" plakt zonder dit
     aan het eerste vel van het volgende project — en dan staat er "uit een
     testraster" onder een instelling die niemand heeft toegepast.
     """
     server.provenance.record(
-        "vel-1", "op-1", {"id": 1, "source": "testraster", "speed_mm_s": 12, "power_percent": 65}
+        "sheet-1", "op-1", {"id": 1, "source": "testraster", "speed_mm_s": 12, "power_percent": 65}
     )
-    assert server.provenance.lookup("vel-1", "op-1", 12, 65) is not None
+    assert server.provenance.lookup("sheet-1", "op-1", 12, 65) is not None
 
     client.post("/api/project/new")
 
-    assert server.provenance.lookup("vel-1", "op-1", 12, 65) is None
+    assert server.provenance.lookup("sheet-1", "op-1", 12, 65) is None

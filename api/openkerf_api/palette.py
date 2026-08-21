@@ -90,17 +90,17 @@ class Palette:
         machine_name: str | None = None,
     ) -> dict | None:
         """
-        Onthoud wat deze kleur op deze machine nu doet.
+        Onthoud wat deze colour op deze machine nu doet.
 
         Half values are not thrown away but filled in: adjusting only the speed does not
         lose the power that was there.
         """
-        kleur = normalise(color)
-        if kleur is None:
+        colour = normalise(color)
+        if colour is None:
             return None
         data = self._read()
         machine = data.setdefault(str(key or NO_MACHINE), {})
-        entry = dict(machine.get(kleur) or {})
+        entry = dict(machine.get(colour) or {})
         if speed is not None:
             try:
                 entry["speed_mm_s"] = round(float(speed), 3)
@@ -118,26 +118,26 @@ class Palette:
         if not entry:
             return None
         entry["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        machine[kleur] = entry
+        machine[colour] = entry
         self._write(data)
         return entry
 
     def forget(self, key: str, color) -> None:
-        kleur = normalise(color)
-        if kleur is None:
+        colour = normalise(color)
+        if colour is None:
             return
         data = self._read()
         machine = data.get(str(key or NO_MACHINE)) or {}
-        if machine.pop(kleur, None) is not None:
+        if machine.pop(colour, None) is not None:
             self._write(data)
 
     # ------------------------------------------------------------ opzoeken
 
     def recall(self, key: str, color) -> dict | None:
-        kleur = normalise(color)
-        if kleur is None:
+        colour = normalise(color)
+        if colour is None:
             return None
-        return (self._read().get(str(key or NO_MACHINE)) or {}).get(kleur)
+        return (self._read().get(str(key or NO_MACHINE)) or {}).get(colour)
 
     def all(self, key: str) -> dict:
         """Everything this machine has remembered, by colour."""

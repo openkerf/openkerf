@@ -2362,7 +2362,7 @@ class Drawing:
             if sheets is not None:
                 index = sheets.export_into(bundle)
                 bundle.writestr(
-                    "vellen.json",
+                    "sheets.json",
                     json.dumps(
                         {"active": sheets.state()["active"], "sheets": index},
                         indent=1,
@@ -2373,8 +2373,7 @@ class Drawing:
 
     def import_project(self, path, library, sheets=None) -> dict:
         """
-        Een project openen: het ontwerp vervangen en ontbrekende
-        bibliotheekgegevens aanvullen.
+        Opening a project: replacing the design and filling in missing library data.
 
         Existing materials and presets stay; we only fill in what is not there, so that
         opening a project does not overwrite somebody else's work.
@@ -2394,8 +2393,13 @@ class Drawing:
             context = (
                 json.loads(bundle.read("library.json")) if "library.json" in names else {}
             )
-            if sheets is not None and "vellen.json" in names:
-                index = json.loads(bundle.read("vellen.json"))
+            # `vellen.json` is what this index was called before the interface became
+            # English; a project from that version still opens.
+            index_name = next(
+                (n for n in ("sheets.json", "vellen.json") if n in names), None
+            )
+            if sheets is not None and index_name:
+                index = json.loads(bundle.read(index_name))
                 sheets.import_from(
                     bundle, index.get("sheets") or [], index.get("active")
                 )

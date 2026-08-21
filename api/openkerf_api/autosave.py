@@ -96,7 +96,7 @@ class Autosave:
             self.path.write_bytes(written.read_bytes())
             return True
         except Exception:
-            # Automatisch bewaren mag nooit een bewerking laten mislukken.
+            # Automatisch bewaren mag nooit een operation laten mislukken.
             return False
         finally:
             try:
@@ -145,7 +145,7 @@ class Autosave:
         The brake measures from the last write, and that holds as long as a recovery file is
         there. After discarding or restoring, something else is there
         op schijf dan wat de rem denkt, en dan is wachten fout. Gemeten vóór
-        deze regel: herstelbestand weggooien, daarna vier vormen tekenen en
+        deze line: herstelbestand weggooien, daarna vier shapes tekenen en
         dertig seconden wachten — en er stond nog steeds geen herstelbestand.
         Wie in het openingsvenster voor "leeg beginnen" kiest, werkte dus een
         hele sessie zonder vangnet.
