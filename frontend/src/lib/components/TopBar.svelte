@@ -37,22 +37,22 @@
 		state: MachineState;
 		canStart: boolean;
 		canStop: boolean;
-		/** Er is iets om te stoppen. De knop blijft altijd bruikbaar — als onze
-		 *  statusdetectie ernaast zit mag je de noodrem niet kwijt zijn — maar hij
-		 *  schreeuwt alleen wanneer het ertoe doet. */
+		/** There is something to stop. The button always stays usable — if our state
+		 *  detection is wrong you must not lose the emergency stop — but it only shouts
+		 *  when it matters. */
 		stopArmed?: boolean;
 		canEdit?: boolean;
 		/**
-		 * @deprecated Wordt genegeerd; de afspraak staat in `$lib/screen.svelte`.
+		 * @deprecated Ignored; the agreement lives in `$lib/screen.svelte`.
 		 *
-		 * Gat J9: deze prop en de `@media (max-width: 1199px)` in JobControls
-		 * waren twee bronnen voor één regel. Beide componenten lezen nu
+		 * Gap J9: this prop and the `@media (max-width: 1199px)` in JobControls were
+		 * two sources for one rule. Both components now read
 		 * `screen.controlsInBar`. De prop blijft geaccepteerd zodat de
 		 * pagina niet in dezelfde stap mee hoeft; hij mag daar weg.
 		 */
 		tablet?: boolean;
-		/** Onder ~950px passen de bestandsknoppen er niet meer bij; ze staan dan
-		 *  in het menu van de gereedschapsrail. */
+		/** Below ~950px the file buttons no longer fit; they then live in the tool
+		 *  rail's menu. */
 		smal?: boolean;
 		canPause?: boolean;
 		canResume?: boolean;
@@ -62,32 +62,31 @@
 		onStart: () => void;
 		onStop: () => void;
 		onFrame?: () => void;
-		/** Er ligt iets op het bed én deze machine kan bewegen. */
+		/** There is something on the bed *and* this machine can move. */
 		canFrame?: boolean;
-		/** Het materiaal van het huidige vel — waarín gebrand wordt. Hoort naast
-		 *  de machine: die twee samen bepalen elke instelling stroomafwaarts.
-		 *  Leeg is een geldige staat en zegt dat ook. */
+		/** The current sheet's material — what is being burned *into*. Belongs beside
+		 *  the machine: together those two decide every setting downstream. Empty is a
+		 *  valid state and says so. */
 		material?: string | null;
 		thicknessMm?: number | null;
 		onOpenMaterial?: () => void;
 		onOpenFile?: (file: File) => void;
 		onOpenProject?: (file: File) => void;
-		/** Opnieuw beginnen. Vraagt zelf om bevestiging als er werk ligt. */
+		/** Start over. Asks for confirmation itself when there is work. */
 		onNewProject?: () => void;
-		/** Na een geslaagde download: de pagina moet zijn "gewijzigd"-vlag opnieuw
-		 *  ophalen, want de server heeft het ontwerp dan schoon verklaard. */
+		/** After a successful download: the page has to fetch its "changed" flag again,
+		 *  because the server has declared the design clean. */
 		onSaved?: () => void;
 		onToggleTheme: () => void;
 	} = $props();
 
 	/**
-	 * Opslaan gaat door `saveFile` en niet door een kale `<a download>`.
+	 * Saving goes through `saveFile` and not through a bare `<a download>`.
 	 *
-	 * De link werkt op zichzelf prima, maar de app hoort erna te weten dat het
-	 * ontwerp opgeslagen is — anders blijft `dirty` op de client staan en
-	 * beweert het volgende venster dat er niet-opgeslagen werk is. Zie
-	 * `$lib/saving`. De `href` blijft staan, zodat de knop ook zonder
-	 * JavaScript een echte link is.
+	 * The link works perfectly well on its own, but afterwards the app should know the
+	 * design has been saved — otherwise `dirty` stays set on the client and the next
+	 * dialog claims there is unsaved work. See `$lib/saving`. The `href` stays, so that
+	 * the button is a real link without JavaScript as well.
 	 */
 	async function bewaar(event: MouseEvent, url: string, naam: string) {
 		event.preventDefault();
@@ -98,9 +97,9 @@
 	/**
 	 * Het projectmenu.
 	 *
-	 * Vast gepositioneerd en met de knoppositie mee: de balk scrollt intern
-	 * (`overflow-x: auto`), dus een absoluut geplaatst menu wordt afgeknipt op de
-	 * balkhoogte en is dan onbruikbaar.
+	 * Fixed positioning, following the button's position: the bar scrolls internally
+	 * (`overflow-x: auto`), so an absolutely placed menu is clipped at the bar's height
+	 * and is then unusable.
 	 */
 	let projectOpen = $state(false);
 	let projectPos = $state({ x: 0, y: 0 });
@@ -111,7 +110,7 @@
 			return;
 		}
 		const doos = knop.getBoundingClientRect();
-		// Uitlijnen op de rechterrand van de knop, maar nooit buiten het scherm.
+		// Aligned to the button's right edge, but never off screen.
 		const breedte = 250;
 		projectPos = {
 			x: Math.max(8, Math.min(doos.right - breedte, window.innerWidth - breedte - 8)),
@@ -120,25 +119,25 @@
 		projectOpen = true;
 	}
 
-	// De bovenbalk staat altijd; hier hangt het meeluisteren naar de
-	// schermbreedte, zodat de rest van de app het niet nog eens hoeft te doen.
+	// The top bar is always there; the listening to the screen width hangs here, so
+	// the rest of the app does not have to do it again.
 	$effect(() => screen.follow());
 	let balkdraagt = $derived(screen.controlsInBar);
 
 	/**
-	 * Zonder server is dit geen bediening meer, en dat moet je zien.
+	 * Without a server this is no longer a control, and you have to see that.
 	 *
-	 * Dit was gat E1, en het was het gevaarlijkste dat de ronde vond. De Stop in
-	 * deze balk bleef klikbaar nadat de server was weggevallen (gemeten op 1440
-	 * én 1024: `disabled` bleef `false`), terwijl de Stop ín het Job-paneel wél
-	 * uitging. Op tablet draagt deze balk als enige de bediening — daar was dit
-	 * dus de énige stopknop, en die deed niets. Je drukt, er gebeurt niets
-	 * zichtbaars, en je gelooft dat de machine stopt.
+	 * This was gap E1, and it was the most dangerous thing the round found. The Stop in
+	 * this bar stayed clickable after the server had dropped out (measured at 1440 *and*
+	 * 1024: `disabled` stayed `false`), while the Stop *in* the Job panel did go dead.
+	 * On a tablet this bar is the only one carrying the controls — so there this was the
+	 * *only* stop button, and it did nothing. You press, nothing visible happens, and
+	 * you believe the machine is stopping.
 	 *
-	 * Een knop die niet aankomt hoort niet te doen alsof. Hij gaat uit, en de
-	 * tooltip zegt wat er aan de hand is én wat je dán moet doen: de knop op de
-	 * machine. Dat last is het halve antwoord; zonder die zin heb je alleen
-	 * een dode knop.
+	 * A button that does not arrive should not pretend. It goes dead, and the tooltip
+	 * says what is going on *and* what to do instead: the button on the machine. That
+	 * last part is half the answer; without that sentence you only have a dead
+	 * button.
 	 */
 	let weg = $derived(!connection.online);
 	let stopTitel = $derived(
@@ -171,26 +170,25 @@
 	/**
 	 * Sneltoetsen voor pauzeren en stoppen (gat J4).
 	 *
-	 * LightBurn heeft Pause en Ctrl+Break, en die werken daar zelfs als het
-	 * venster niet vooraan staat. Dat last kunnen wij niet: een webpagina
-	 * krijgt geen toetsaanslagen als hij geen focus heeft, en er is geen browser
-	 * die daar een uitzondering voor maakt. Wat wél kan is dit — overal in de
-	 * app, op elk tabblad, zonder eerst een paneel te moeten zoeken. Wie de
-	 * machine wil kunnen stoppen zónder naar het scherm te kijken, gebruikt de
-	 * knop op de machine; dat is ook waar de tooltip naartoe wijst zodra de
-	 * server weg is.
+	 * LightBurn has Pause and Ctrl+Break, and there they work even when the window is
+	 * not in front. That last part we cannot do: a web page gets no key strokes when it
+	 * does not have focus, and there is no browser that makes an exception for it. What
+	 * we *can* do is this — anywhere in the app, on any tab, without having to find a
+	 * panel first. Anybody who wants to stop the machine *without* looking at the screen
+	 * uses the button on the machine; that is also where the tooltip points as soon as
+	 * the server is gone.
 	 *
-	 * Pause staat niet op elk toetsenbord (Apple levert hem al jaren niet meer),
-	 * daarom is er een tweede weg die overal bestaat.
+	 * Pause is not on every keyboard (Apple has not shipped it for years), which is why
+	 * there is a second route that exists everywhere.
 	 */
 	function sneltoets(e: KeyboardEvent) {
-		// Een open menu sluit met Escape, ook midden in het typen van een naam.
+		// An open menu closes with Escape, even in the middle of typing a name.
 		if (e.key === 'Escape' && projectOpen) {
 			projectOpen = false;
 			return;
 		}
-		// Niet ingrijpen terwijl iemand een maat of een naam intypt: daar is
-		// Ctrl+. een teken en geen noodrem.
+		// Do not intervene while somebody is typing a measure or a name: there Ctrl+.
+		// is a character and not an emergency stop.
 		const doel = e.target as HTMLElement | null;
 		if (
 			doel?.isContentEditable ||
@@ -199,14 +197,14 @@
 			return;
 		}
 		const meta = e.ctrlKey || e.metaKey;
-		// Stop: Ctrl/⌘ + point. Eén hand, geen modus, en vrij in elke browser.
+		// Stop: Ctrl/⌘ + full stop. One hand, no mode, and free in every browser.
 		if (meta && (e.key === '.' || e.code === 'Period')) {
 			e.preventDefault();
 			if (canStop && !weg) onStop();
 			return;
 		}
-		// Pauze/hervat: de Pause-toets, met of zonder Ctrl (Ctrl+Break stuurt
-		// dezelfde `key`). Toggle, want je drukt hem twee keer.
+		// Pause/resume: the Pause key, with or without Ctrl (Ctrl+Break sends the same
+		// `key`). A toggle, because you press it twice.
 		if (e.key === 'Pause') {
 			e.preventDefault();
 			if (weg) return;
@@ -215,11 +213,10 @@
 		}
 	}
 
-	// Tijdens het slepen leest `box` de voorvertoning, dus de velden lopen mee.
-	// Ze zijn dan niet te bewerken: je bent al aan het slepen.
+	// While dragging, `box` reads the preview, so the fields follow along. They cannot
+	// be edited then: you are already dragging.
 
-	// "3 mm", niet "3.0 mm" — en 0,8 mm blijft 0,8 mm.
-	// "3mm" aan elkaar: in de balk telt elke pixel, en het leest als één maat.
+	// "3mm" run together: in the bar every pixel counts, and it reads as one measure.
 	// "3 mm", not "3.0 mm" — and in the reader's notation: 3,5 in Dutch, 3.5 in
 	// English. Glued to the unit, because every pixel counts in the bar and it
 	// reads as one measurement.
@@ -242,15 +239,14 @@
 <header class="topbar" class:smal class:weg>
 	<div class="brand" title={t('app.name')}><Logo /><span class="woord">OpenKerf</span></div>
 
-	<!-- Machine-eerst: de gebruiker weet altijd of de laser "er is". Klikken
-	     leidt naar de setup — ook de route als er nog géén machine is. -->
-	<!-- Gat B3: xTool toont het device op een tablet als object, met een
-	     modelafbeelding. Wij niet, en bewust — zie het rapport bij deze ronde:
-	     wij hebben geen artwork per bordfamilie en een verkeerd plaatje boven een
-	     Ruida is een bewering over welke machine je aanraakt. Wat de ask eronder
-	     wél verdient — "wélke machine en hoe groot" — staat hier in de tooltip en
-	     bij het bed op het canvas, zonder de balk breder te maken (B6 mat dat de
-	     ruimte op is). -->
+	<!-- Machine first: the user always knows whether the laser "is there". Clicking
+	     leads to the setup — which is also the route when there is no machine yet. -->
+	<!-- Gap B3: on a tablet xTool shows the device as an object, with a picture of the
+	     model. We do not, and deliberately — see the report for this round: we have no
+	     artwork per board family and a wrong picture above a Ruida is a claim about
+	     which machine you are touching. What the question underneath *does* deserve —
+	     "which machine and how big" — is here in the tooltip and beside the bed on the
+	     canvas, without making the bar wider (B6 measured that the room is gone). -->
 	<a
 		class="machine"
 		href="/setup"
@@ -261,17 +257,17 @@
 	>
 		<span class="dot {machineState}" aria-hidden="true"></span>
 		<span class="naam">{device?.label ?? t('topbar.machine.setup')}</span>
-		<!-- Het woord bij de toestand stond hier een derde keer: de statusbalk
-		     rechtsonder zegt het voluit, en de gekleurde stip zegt het hier al.
-		     Die 55px zijn de ruimte waarin het materiaal past — en zonder die
-		     ruimte schuift de startknop van het scherm af. Op tablet was dit om
-		     dezelfde reden al verborgen. -->
+		<!-- The word beside the state was here for a third time: the status bar in the
+		     bottom right says it in full, and the coloured dot already says it here.
+		     Those 55px are the room the material fits in — and without that room the
+		     start button slides off the screen. On a tablet this was already hidden for
+		     the same reason. -->
 		<span class="muted toestand">{machineStateLabel(machineState)}</span>
 	</a>
 
-	<!-- Waarmee (machine) en waarín (materiaal) horen naast elkaar: samen
-	     bepalen ze elke instelling die hierna volgt. Het materiaal hing tot nu
-	     toe in een filter in een venster dat je weer sluit — zie besluit B1. -->
+	<!-- What with (machine) and what into (material) belong beside each other: together
+	     they decide every setting that follows. Until now the material hung in a filter
+	     in a dialog that you close again — see decision B1. -->
 	<button
 		class="machine materiaal"
 		class:leeg={!material}
@@ -280,25 +276,24 @@
 		onclick={onOpenMaterial}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 12 4l9 4.5-9 4.5z"/><path d="M3 8.5V15l9 4.5 9-4.5V8.5"/></svg>
-		<!-- Op een smalle tablet is "Materiaal kiezen" 49px die de startknop van
-		     het scherm duwen. Eén woord naast een streepjesrand en een plankje
-		     nodigt net zo goed uit, en de hele zin staat in de tooltip. -->
+		<!-- On a narrow tablet "Choose material" is 49px that push the start button off
+		     the screen. One word beside a dashed border and a little plank invites just
+		     as well, and the whole sentence is in the tooltip. -->
 		<span class="naam">{material ?? (smal ? t('topbar.material.short') : t('topbar.material.choose'))}</span>
 		{#if dikte}<span class="dikte mono">{dikte}</span>{/if}
 	</button>
 
 	<div class="spacer"></div>
 
-	<!-- Openen en saving van het project: één knop, op elke breedte.
-	     Twee losse knoppen mét woord kostten 310px, en die waren er onder 1600
-	     niet — dan stonden ze alleen nog in het menu van de gereedschapsrail, en
-	     daar vond de gebruiker ze twee ronden lang niet ("ik zie alleen
-	     exporteren en importeren"). Besluit "project is leidend" staat; alleen de
-	     uitvoering deugde niet.
-	     Deze knop kost 106px met woord en 44px zonder, dus hij past ook op 768
-	     naast de noodrem (gemeten met c7-balk). Het woord "Project" staat er in
-	     beeld bij: dát is wat er ontbrak — niet de handeling, maar het bestaan
-	     van het begrip in de balk. -->
+	<!-- Opening and saving the project: one button, at every width.
+	     Two separate buttons *with* their word cost 310px, and below 1600 they were not
+	     there — they only lived in the tool rail's menu, and the user did not find them
+	     there for two rounds ("all I see is export and import"). The decision "the
+	     project leads" stands; only the execution was no good.
+	     This button costs 106px with its word and 44px without, so it fits at 768 beside
+	     the emergency stop as well (measured with c7-balk). The word "Project" is on
+	     screen with it: *that* is what was missing — not the action, but the existence
+	     of the concept in the bar. -->
 	<button
 		class="btn project-knop"
 		aria-haspopup="menu"
@@ -308,24 +303,24 @@
 		onclick={(e) => openProjectMenu(e.currentTarget as HTMLElement)}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
-		<!-- Zonder `blijft`: onder 1200px valt het woord weg, net als bij de andere
-		     bestandsknoppen. Gemeten met c7-balk: mét woord loopt de balk op 768
-		     44px over de rand en dan schuift de startknop van het scherm. Een map
-		     met een pijltje omlaag is op die breedte het menu-idioom, en de
-		     tooltip en het aria-label dragen het woord. -->
+		<!-- Without `blijft`: below 1200px the word drops away, as with the other file
+		     buttons. Measured with c7-balk: *with* the word the bar runs 44px over the
+		     edge at 768 and then the start button slides off the screen. A folder with a
+		     downward arrow is the menu idiom at that width, and the tooltip and the
+		     aria-label carry the word. -->
 		<span class="btn-label">{t('topbar.project')}</span>
 		<svg class="pijl" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
 	</button>
 
 	{#if projectOpen}
-		<!-- `position: fixed`, want de balk zelf scrollt intern (`overflow-x`) en
-		     zou een absoluut menu afknippen. -->
+		<!-- `position: fixed`, because the bar itself scrolls internally (`overflow-x`)
+		     and would clip an absolute menu. -->
 		<div class="afdek" role="presentation" onclick={() => (projectOpen = false)}></div>
 		<div class="projectmenu" role="menu" style="left: {projectPos.x}px; top: {projectPos.y}px">
-			<!-- Opslaan en openen stonden hier al, opnieuw beginnen niet: je kon
-			     alleen aan iets nieuws beginnen door alles met de hand weg te
-			     halen. Boven het paar, want het is de eerste handeling van een
-			     sessie — en het vraagt eerst, net als openen. -->
+			<!-- Save and open were already here, starting over was not: the only way to
+			     begin something new was to remove everything by hand. Above the pair,
+			     because it is the first action of a session — and it asks first, just
+			     like opening. -->
 			<button
 				class="regel"
 				role="menuitem"
@@ -339,8 +334,8 @@
 				<span>{t('topbar.project.new')}</span>
 			</button>
 			<span class="menuscheiding" role="separator"></span>
-			<!-- Een label met een verborgen bestandsveld erin: geen `menuitem`-rol,
-			     want het invoerveld is al het bedienbare element. -->
+			<!-- A label with a hidden file field in it: no `menuitem` role, because the
+			     input is already the operable element. -->
 			<label class="regel">
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
 				<span>{t('topbar.project.open')}</span>
@@ -388,8 +383,8 @@
 		/>
 	</label>
 
-	<!-- Opslaan als SVG: MeerK40t's eigen schrijver, dus operaties komen bij
-	     terugladen weer mee. -->
+	<!-- Save as SVG: MeerK40t's own writer, so operations come back along on
+	     reload. -->
 	<a
 		class="btn docs"
 		href="/api/design/export.svg"
@@ -401,8 +396,8 @@
 		<span class="btn-label">{t('topbar.export')}</span>
 	</a>
 
-	<!-- De last controle vóór je brandt: past het, ligt het recht, zit de
-	     klem in de weg. De laser blijft uit. -->
+	<!-- The last check before you burn: does it fit, is it straight, is the clamp in
+	     the way. The laser stays off. -->
 	<button
 		class="btn kader"
 		disabled={!canFrame || weg}
@@ -423,17 +418,17 @@
 		<span class="btn-label blijft kort">{t('topbar.frame.short')}</span>
 	</button>
 	<!--
-		Pauzeren hoort naast starten en stoppen, op elke breedte.
+		Pausing belongs beside starting and stopping, at every width.
 
-		Dit stond achter `balkdraagt`, dus op de desktop droeg de bovenbalk wél
-		start en stop maar níet pauze — die stond in de statusbalk, onderaan het
-		scherm. Twee van de drie transportknoppen bij elkaar en de derde ergens
-		anders is de soort inconsistentie waar je pas achter komt op het moment dat
-		je hem nodig hebt. De statusbalk houdt de voortgang (die hoort daar: hij
-		geldt voor de hele app) en is zijn knoppen kwijt.
+		This sat behind `balkdraagt`, so on the desktop the top bar carried start and
+		stop but *not* pause — that lived in the status bar, at the bottom of the screen.
+		Two of the three transport buttons together and the third somewhere else is the
+		kind of inconsistency you only discover at the moment you need it. The status bar
+		keeps the progress (which belongs there: it holds for the whole app) and has lost
+		its buttons.
 
-		Hij houdt zijn plek ook als er niets loopt: een knop die verspringt zodra de
-		job start is precies op dat moment onvindbaar.
+		It keeps its place when nothing is running too: a button that jumps as soon as
+		the job starts is unfindable at exactly that moment.
 	-->
 		{#if paused}
 			<button
@@ -456,12 +451,12 @@
 				<span class="btn-label blijft">{t('transport.pause')}</span>
 			</button>
 		{/if}
-	<!-- Stoppen kan altijd, overal, in één tik. Vol rood alleen als er ook echt
-	     iets loopt: een knop die uren per dag alarm staat te slaan zonder reden
-	     leert de gebruiker hem te negeren, en dan mist hij hem als het telt. -->
-	<!-- Weggevallen server: geen rood, geen vulling, en het woord zegt waar de
-	     stop dán zit. Een tooltip is hier geen antwoord — op de tablet, waar dit
-	     de enige stopknop is, bestaat hover niet. -->
+	<!-- Stopping is always possible, anywhere, in one tap. Full red only when something
+	     is really running: a button raising an alarm for hours a day without a reason
+	     teaches the user to ignore it, and then they miss it when it counts. -->
+	<!-- Server dropped out: no red, no fill, and the word says where the stop is
+	     *then*. A tooltip is no answer here — on a tablet, where this is the only stop
+	     button, hover does not exist. -->
 	<button
 		class="btn danger"
 		class:sluimer={!stopArmed && !weg}
@@ -475,7 +470,7 @@
 			>{weg ? t('transport.stop.onMachine') : t('transport.stop')}</span
 		>
 	</button>
-	<!-- Opent geen dialoog maar de pre-flight in het rechterpaneel. -->
+	<!-- Opens no dialog but the pre-flight in the right-hand panel. -->
 	<button
 		class="btn primary"
 		disabled={!canStart || weg}
@@ -506,140 +501,132 @@
 		padding: 0 var(--space-3);
 		background: var(--surface-1);
 		border-bottom: 1px solid var(--line);
-		/* Zonder deze twee duwt de knoppenrij de héle pagina breder dan het
-		   scherm — op een tablet scroll je dan horizontaal langs je eigen app. */
+		/* Without these two the row of buttons pushes the *whole* page wider than the
+		   screen — on a tablet you then scroll horizontally past your own app. */
 		min-width: 0;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
 	.topbar::-webkit-scrollbar { display: none; }
-	/* Een knop die je weg kunt scrollen is geen knop. De balk mag daarom niets
-	   uitdelen wat er niet in past: alles krijgt `flex: none`, en wat er op 768
-	   niet bij kan verhuist naar het menu van de rail (klasse `docs`). */
+	/* A button you can scroll away is not a button. So the bar must not hand out
+	   anything that does not fit in it: everything gets `flex: none`, and what cannot
+	   come along at 768 moves to the rail's menu (class `docs`). */
 	.topbar > :global(*) { flex: none; }
 
-	/* Smal scherm: knoppen tonen alleen hun icoon. De titel staat in de
-	   tooltip en het aria-label, dus er gaat geen betekenis verloren.
-	   De grens ligt op 1200px, niet op 900: op een tablet van 1024 breken de
-	   labels anders over twee regels en groeit de balk mee. */
+	/* Narrow screen: buttons show only their icon. The title is in the tooltip and the
+	   aria-label, so no meaning is lost. The bound is at 1200px, not at 900: on a 1024
+	   tablet the labels otherwise break over two lines and the bar grows with them. */
 	@media (max-width: 1199px) {
 		.kader .kort { display: inline; }
-		/* De knoppen die de machine aansturen houden hun woord: een rood
-		   vierkantje zonder tekst is geen noodstop. */
+		/* The buttons that drive the machine keep their word: a little red square
+		   without text is not an emergency stop. */
 		.topbar :global(.btn-label:not(.blijft)) { display: none; }
 		/* The frame keeps its word — on a tablet this is a first-class action and a
 		   thin dashed square says nothing — but only the short form: "Frame" next to
 		   that square is unambiguous. */
 		.kader .lang { display: none; }
-		/* Het hele merk gaat weg, woord én beeld.
-		   Het woordmerk kostte al 100px; het beeldmerk kost er nog 108 met zijn
-		   gap (gemeten), en die zijn hier meer waard dan een logo. Op een tablet
-		   weet je welke app je open hebt — je hebt hem net aangetikt — en de
-		   gereedschapsrail links draagt de identiteit al. Deze balk draagt op
-		   tablet als enige de noodrem én het kader; dat weegt zwaarder dan een
-		   merkteken. Dít is de ruimte waaruit het kader terugkomt. */
+		/* The whole brand goes, word *and* image.
+		   The wordmark already cost 100px; the logo costs another 108 with its gap
+		   (measured), and those are worth more here than a logo. On a tablet you know
+		   which app you have open — you have just tapped it — and the tool rail on the
+		   left already carries the identity. On a tablet this bar is the only one
+		   carrying the emergency stop *and* the frame; that weighs more than a mark.
+		   *This* is the room the frame comes back out of. */
 		.topbar .brand { display: none; }
-		/* 44px: dit is de route naar de setup en was met 38px het enige doel in
-		   de balk dat de handschoenmaat niet haalde. Alleen op tablet: op de
-		   desktop staat hij naast knoppen van 37px en zou hij uitsteken. */
+		/* 44px: this is the route to the setup and at 38px was the only target in the
+		   bar that did not make the glove size. Tablet only: on the desktop it sits
+		   beside 37px buttons and would stick out. */
 		.machine {
 			min-height: 44px;
 			padding: 0 var(--space-2);
 		}
-		/* Een machinenaam kan willekeurig lang zijn en duwde op 768 de startknop
-		   van het scherm. Alleen de machinelink: `a.machine`, niet `.machine` —
-		   de materiaalchip draagt dezelfde klasse en heeft zijn eigen maat. */
+		/* A machine name can be arbitrarily long and at 768 pushed the start button off
+		   the screen. Only the machine link: `a.machine`, not `.machine` — the material
+		   chip carries the same class and has a size of its own. */
 		a.machine .naam {
 			max-width: 10ch;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
 		}
-		/* De dikte blijft staan — 3 mm berken snijdt anders dan 6 mm — en de naam
-		   krijgt de ruimte die overblijft. Het icoontje levert die ruimte in: de
-		   naam van je materiaal zegt meer dan een plankje van 16px. */
+		/* The thickness stays — 3 mm birch cuts differently from 6 mm — and the name
+		   gets the room that is left. The icon gives up that room: the name of your
+		   material says more than a 16px plank. */
 		.materiaal svg { display: none; }
 	}
-	/* Onder 850px verliest het kader zijn woord alsnog.
-	   Gemeten met de langste namen die deze balk kan krijgen ("Thunder Nova 51
-	   werkplaats" en "Multiplex berken transparant 18,5mm"): die 40px persen de
-	   materiaalnaam op 768 samen tot 15px — één letter en een puntje. Dat is de
-	   verkeerde ruil. Waarín je brandt bepaalt samen met de machine élke
-	   instelling die daarna volgt (besluit B1) en heeft geen vervanging; het
-	   kader heeft zijn gestippelde vierkantje, zijn vaste plek naast de
-	   bediening en zijn tooltip. Zonder dat woord houdt de naam 64px. */
+	/* Below 850px the frame loses its word after all.
+	   Measured with the longest names this bar can get ("Thunder Nova 51 workshop" and
+	   "Birch plywood transparent 18.5mm"): those 40px squeeze the material name down to
+	   15px at 768 — one letter and an ellipsis. That is the wrong trade. What you burn
+	   into decides, together with the machine, *every* setting that follows (decision
+	   B1) and has no substitute; the frame has its dotted square, its fixed place beside
+	   the controls and its tooltip. Without that word the name keeps 64px. */
 	@media (max-width: 849px) {
 		.topbar .kader .btn-label { display: none; }
-		/* En zonder server valt op 768 ook de materiaalnaam weg.
-		   "Stop op de machine" is 60px breder dan "Stop", en het materiaal is het
-		   enige buigzame ding in deze balk, dus het betaalde die 60px met zijn
-		   naam: er stond "B  3mm" en dat is geen chip maar een restant.
-		   Dan liever expliciet weg. Op het moment dat de server eruit ligt is het
-		   materiaal onveranderlijk en niet waar je naar kijkt; de enige ask is
-		   waar de stop zit, en dat antwoord mag de hele breedte hebben. Boven
-		   850px blijft de chip staan — daar is de ruimte er (gemeten). */
+		/* And without a server the material name drops away at 768 as well.
+		   "Stop on the machine" is 60px wider than "Stop", and the material is the only
+		   flexible thing in this bar, so it paid those 60px with its name: it read
+		   "B  3mm" and that is not a chip but a remnant. Better gone explicitly. At the
+		   moment the server is down the material is unchangeable and not what you are
+		   looking at; the only question is where the stop is, and that answer may have
+		   the whole width. Above 850px the chip stays — the room is there (measured). */
 		.topbar.weg .materiaal { display: none; }
 	}
-	/* Daar houdt de projectknop op.
-	   Hij is de enige knop in deze balk die geen machinehandeling is, en het
-	   materiaal is het enige buigzame ding ernaast: gemeten kromp de
-	   materiaalnaam van 63px naar 40px op 850 en naar 7px op 768 zodra deze knop
-	   erbij stond — "M…", en dat is geen chip meer. Vanaf 880 is er ruimte voor
-	   allebei (gemeten: 63px, geen krimp). Waarín je brandt weegt zwaarder
-	   (besluit B1) dan iets wat je aan het begin en eind van een sessie doet.
-	   Onder deze breedte staat het project in het menu van de gereedschapsrail,
-	   mét zijn woord — zie `projectInRail` in +page.svelte. Daarboven staat het
-	   in de balk, en dát is de verbetering: de grens lag op 1600, en daar vond de
-	   gebruiker het twee ronden lang niet. */
+	/* That is where the project button stops.
+	   It is the only button in this bar that is not a machine action, and the material
+	   is the only flexible thing beside it: measured, the material name shrank from 63px
+	   to 40px at 850 and to 7px at 768 once this button was there too — "M…", and that
+	   is no longer a chip. From 880 there is room for both (measured: 63px, no shrink).
+	   What you burn into weighs more (decision B1) than something you do at the start
+	   and end of a session. Below this width the project lives in the tool rail's menu,
+	   *with* its word — see `projectInRail` in +page.svelte. Above it, it is in the bar,
+	   and *that* is the improvement: the bound was at 1600, and there the user did not
+	   find it for two rounds. */
 	@media (max-width: 879px) {
 		.topbar .project-knop { display: none; }
 	}
-	/* Onder ~950px verdwijnen de bestandsknoppen; het materiaal blijft, want het
-	   hoort bij wat er straks gebeurt. Alleen krapper. */
-	/* Was 8ch op de hele tabletbreedte, toen het merk nog 120px kostte. Dat merk
-	   is weg, en die ruimte gaat naar de twee chips die samen elke instelling
-	   bepalen (besluit B1): achter "Multiple…" kun je niet zien of je in
-	   multiplex brandt of in multiplex met een folie erop.
-	   Gemeten met "Thunder Nova 51 werkplaats" én "Multiplex berken transparant
-	   18,5mm", de langste namen die deze balk kan krijgen: op 850 en hoger past
-	   het met 56px over, en op 768 vangt het `flex: 0 1 auto` hieronder het
-	   verschil op — de chip krimpt naar 137px en de naam naar 64px, interne
-	   overloop 0, last knop op 756 van 768. Een extra mediaquery voor het
-	   smalste geval was daarmee overbodig: het vangnet dóet zijn werk. */
+	/* Below ~950px the file buttons disappear; the material stays, because it belongs
+	   with what is about to happen. Only tighter. */
+	/* Was 8ch across the whole tablet width, back when the brand still cost 120px. That
+	   brand is gone, and that room goes to the two chips that together decide every
+	   setting (decision B1): behind "Multiple…" you cannot see whether you are burning
+	   plywood or plywood with a film on it.
+	   Measured with "Thunder Nova 51 workshop" *and* "Birch plywood transparent
+	   18.5mm", the longest names this bar can get: at 850 and above it fits with 56px to
+	   spare, and at 768 the `flex: 0 1 auto` below catches the difference — the chip
+	   shrinks to 137px and the name to 64px, internal overflow 0, last button at 756 of
+	   768. An extra media query for the narrowest case was therefore unnecessary: the
+	   safety net *does* its work. */
 	.topbar.smal .materiaal .naam { max-width: 10ch; }
-	/* Kaderen blíjft op tablet in beeld.
-	   Hij stond hier op `display: none` onder 950px, met het argument dat hij ook
-	   in de pre-flight woont. Dat argument klopt niet voor dít device: de tablet
-	   is het scherm dat naast de machine ligt, en kaderen is de last controle
-	   die je dáár uitvoert — met je hand op het werkstuk, niet vanaf een
-	   bureaustoel. Een actie die je uitsluitend naast de machine doet hoort op het
-	   device dat daar ligt, niet in een paneel dat dichtgeklapt kan zijn.
-	   De ruimte komt van het merk (zie de tabletregel hierboven). */
-	/* Vangnet voor wat hierna nog in deze balk komt: de machinebediening staat
-	   vast (`flex: none` hierboven), maar het materiaal mag als last redmiddel
-	   krimpen in plaats van de startknop van het scherm te duwen. */
-	/* Vangnet voor wat hierna nog in deze balk komt: de machinebediening staat
-	   vast (`flex: none` hierboven), maar het materiaal mag als last redmiddel
-	   krimpen in plaats van de startknop van het scherm te duwen. Gemeten op 768
-	   met de langste namen die mogelijk zijn: de chip zakt naar 137px en de naam
-	   naar 64px — afgekapt maar leesbaar, en de balk loopt niet over.
-	   Ik heb hier een ondergrens van 9rem geprobeerd en weer weggehaald: hij deed
-	   niets, want tokens.css set in zijn coarse-pointerblok `min-width: 44px` op
-	   elke knop met een selector die deze verslaat. Een regel die niets doet maar
-	   wel iets belooft, is erger dan geen regel. */
+	/* Framing *stays* on screen on a tablet.
+	   It was on `display: none` below 950px here, with the argument that it also lives
+	   in the pre-flight. That argument does not hold for *this* device: the tablet is
+	   the screen that lies beside the machine, and framing is the last check you carry
+	   out *there* — with your hand on the workpiece, not from an office chair. An action
+	   you only do beside the machine belongs on the device that lies there, not in a
+	   panel that may be collapsed.
+	   The room comes from the brand (see the tablet rule above). */
+	/* Safety net for whatever else ends up in this bar: the machine controls are fixed
+	   (`flex: none` above), but as a last resort the material may shrink instead of
+	   pushing the start button off the screen. Measured at 768 with the longest names
+	   possible: the chip drops to 137px and the name to 64px — truncated but readable,
+	   and the bar does not overflow.
+	   I tried a 9rem floor here and took it out again: it did nothing, because in its
+	   coarse-pointer block tokens.css sets `min-width: 44px` on every button with a
+	   selector that beats this one. A rule that does nothing but promises something is
+	   worse than no rule. */
 	.materiaal { flex: 0 1 auto; min-width: 0; }
 	.materiaal .naam { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	/* Een afgekapte materiaalnaam is jammer maar leesbaar via de tooltip; een
-	   afgekapte uitnodiging ("Materiaa…") is onbegrijpelijk. Deze selector moet
-	   de regel hierboven verslaan, dus staat de hele keten erin. */
+	/* A truncated material name is a shame but readable through the tooltip; a
+	   truncated invitation ("Materia…") is incomprehensible. This selector has to beat
+	   the rule above, so the whole chain is in it. */
 	.topbar.smal .materiaal.leeg .naam { max-width: none; }
-	/* Het projectpaar is één knop met een menu geworden.
-	   Vier bestandsknoppen mét label kosten 560px en pasten op 1440 niet naast
-	   machine, materiaal en bediening; het projectpaar week toen uit naar het
-	   railmenu. Dat was te ver weg — de gebruiker vond ze twee ronden lang niet.
-	   Eén knop "Project" kost 106px, past overal, en houdt het woord in beeld.
-	   Importeren en exporteren blijven losse knoppen: dát is wat je tijdens het
-	   werken doet. */
+	/* The project pair has become one button with a menu.
+	   Four file buttons *with* labels cost 560px and at 1440 did not fit beside machine,
+	   material and controls; the project pair then moved out to the rail menu. That was
+	   too far away — the user did not find them for two rounds. One "Project" button
+	   costs 106px, fits everywhere, and keeps the word on screen. Import and export stay
+	   separate buttons: *that* is what you do while working. */
 	.project-knop .pijl { color: var(--text-2); margin-left: -2px; }
 	.afdek {
 		position: fixed;
@@ -661,7 +648,7 @@
 		align-items: center;
 		gap: var(--space-3);
 		width: 100%;
-		/* Ook met een handschoen aan te raken. */
+		/* Reachable with a glove on as well. */
 		min-height: 44px;
 		padding: 0 var(--space-2);
 		border-radius: var(--radius-field);
@@ -670,8 +657,8 @@
 		text-decoration: none;
 		cursor: pointer;
 		transition: background var(--transition);
-		/* De rij is een label, een link én een knop; die last brengt zijn
-		   eigen achtergrond, rand en lettertype mee. */
+		/* The row is a label, a link *and* a button; that last one brings its own
+		   background, border and font with it. */
 		background: none;
 		border: 0;
 		font: inherit;
@@ -691,25 +678,25 @@
 		height: 0;
 		opacity: 0;
 	}
-	/* Wat er in dat bestand zit, één keer, hier — niet in een tooltip die op een
-	   aanraakscherm niet bestaat. */
+	/* What is in that file, once, here — not in a tooltip that does not exist on a
+	   touch screen. */
 	.projectmenu .uitleg {
 		margin: var(--space-2) 0 0;
 		padding: 0 var(--space-2);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	/* Onder ~950px is er geen ruimte meer voor bestandsacties náást de
-	   machinebediening. De machine wint; de bestanden staan dan in het menu van
-	   de gereedschapsrail, één tik verderop. */
+	/* Below ~950px there is no room left for file actions *beside* the machine
+	   controls. The machine wins; the files then live in the tool rail's menu, one tap
+	   away. */
 	.topbar.smal .docs { display: none; }
 	/* Narrow bar: the short label, wide bar: the long one. Two whole labels, so a
 	   translation is never half a sentence. */
 	.btn-label.kort { display: none; }
 	.topbar.smal .btn.primary .lang { display: none; }
 	.topbar.smal .btn.primary .kort { display: inline; }
-	/* Het project en de losse bestanden zijn twee soorten handelingen; een
-	   haarlijn zegt dat zonder woorden. */
+	/* The project and the separate files are two kinds of action; a hairline says so
+	   without words. */
 	.scheiding {
 		width: 1px;
 		align-self: stretch;
@@ -731,17 +718,16 @@
 		gap: var(--space-2);
 		padding: 8px var(--space-2);
 		border-radius: var(--radius-field);
-		/* Onzichtbaar, maar aanwezig: de lege materiaalknop krijgt een streepjes-
-		   rand, en zonder deze regel verspringt de balk 2px zodra je er een
-		   materiaal in set. */
+		/* Invisible, but present: the empty material button gets a dashed border, and
+		   without this rule the bar jumps 2px as soon as you put a material in it. */
 		border: 1px solid transparent;
 		background: var(--surface-2);
 		color: inherit;
 		text-decoration: none;
 		transition: background var(--transition);
 	}
-	/* --line is een randkleur, afgestemd op oppervlakken die tegen elkaar aan
-	   liggen; als vulling onder tekst haalt --text-2 erop 4,05 in licht en 3,49
+	/* --line is a border colour, tuned for surfaces that lie against each other; as a
+	   fill under text, --text-2 on it reaches 4.05 in light and 3.49
 	   in donker. --hover is een doorschijnende sluier en werkt op élk oppervlak.
 	   Gat D9, gemeld door de thema-agent. */
 	.machine:hover {
@@ -750,19 +736,19 @@
 	.muted {
 		color: var(--text-2);
 	}
-	/* Nog niets gekozen is geen failure, dus geen rood en geen uitroepteken. Een
-	   onderbroken rand zegt "hier hoort nog iets in te vullen" en verder niets;
-	   zodra er een materiaal staat, wordt het een gewone chip. */
+	/* Nothing chosen yet is not an error, so no red and no exclamation mark. A dashed
+	   border says "something still belongs here" and nothing else; as soon as there is a
+	   material it becomes an ordinary chip. */
 	.materiaal.leeg {
 		background: transparent;
-		/* --line is afgestemd op vlakken die tegen elkaar aan liggen; als losse
-		   streepjesrand op de balk verdwijnt hij. Dezelfde secundaire tekstkleur,
+		/* --line is tuned for surfaces that lie against each other; as a loose dashed
+		   border on the bar it disappears. The same secondary text colour,
 		   verdund, houdt hem zichtbaar zonder alarm te slaan. */
 		border: 1px dashed color-mix(in srgb, var(--text-2) 45%, transparent);
 		color: var(--text-2);
 	}
-	/* "Materiaal kiezen" is korter dan een materiaalnaam en mag heel blijven:
-	   afgekapt tot "Materiaal…" is het geen uitnodiging meer. */
+	/* "Choose material" is shorter than a material name and may stay whole: truncated
+	   to "Material…" it is no longer an invitation. */
 	.materiaal.leeg .naam { max-width: none; }
 	.materiaal.leeg:hover:not(:disabled) { color: var(--text-1); }
 	.materiaal:disabled { cursor: not-allowed; }
@@ -773,8 +759,8 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* De dikte is het halve antwoord en mag niet wegvallen, maar hij hoeft ook
-	   niet even zwaar te wegen als de naam. */
+	/* The thickness is half the answer and must not drop away, but it does not have to
+	   weigh as much as the name. */
 	.dikte { color: var(--text-2); font-size: var(--text-xs); }
 	.toestand { display: none; }
 	.dot {
@@ -814,15 +800,14 @@
 		background: var(--danger-solid);
 		border-color: var(--danger-solid);
 		color: var(--on-color);
-		/* Stop en Start job zijn de twee tegengestelde acties van deze balk en
-		   stonden 12px uit elkaar. De balk-gap is 12, dus deze marge maakt er 24
-		   van — het minimum uit DESIGN-SYSTEM v2 voor doelen met tegengestelde
-		   gevolgen. */
+		/* Stop and Start job are this bar's two opposing actions and sat 12px apart. The
+		   bar gap is 12, so this margin makes it 24 — the minimum from DESIGN-SYSTEM v2
+		   for targets with opposing consequences. */
 		margin-right: var(--space-3);
 	}
 	.btn.danger:hover:not(:disabled) { background: var(--danger-solid); filter: brightness(1.06); }
-	/* Pauze en stop hebben tegengestelde gevolgen — de een bewaart je werkstuk,
-	   de ander gooit het weg. Dus ook hier 24px, net als in de statusbalk. */
+	/* Pause and stop have opposing consequences — one saves your workpiece, the other
+	   throws it away. So 24px here too, as in the status bar. */
 	.btn.hervat,
 	.btn.pauze { margin-right: var(--space-3); }
 	.btn.hervat {
@@ -830,14 +815,14 @@
 		border-color: var(--accent);
 		color: var(--accent-ink);
 	}
-	/* Sluimerend: herkenbaar als de stopknop (rode rand, rood vierkant), maar
-	   niet als alarm. Bij een lopende job wint de gevulde variant hierboven. */
+	/* Dormant: recognisable as the stop button (red border, red square), but not as an
+	   alarm. With a running job the filled variant above wins. */
 	.btn.danger.sluimer {
 		background: var(--surface-1);
 		border-color: var(--danger-solid);
-		/* Het woord in gewone tekstkleur, het icoon in rood: --danger op
-		   --surface-1 haalt in het donkere thema 4,4:1 en dat is te weinig voor
-		   tekst. De rode rand plus het rode vierkantje dragen de betekenis. */
+		/* The word in ordinary text colour, the icon in red: --danger on --surface-1
+		   reaches 4.4:1 in the dark theme and that is too little for text. The red border
+		   plus the little red square carry the meaning. */
 		color: var(--text-1);
 	}
 	.btn.danger.sluimer svg { color: var(--danger); }
@@ -847,13 +832,12 @@
 		filter: none;
 	}
 	.btn.danger.sluimer:hover:not(:disabled) svg { color: inherit; }
-	/* De knop die niet aankomt.
-	   Niet "rood maar vaag": een vervaagde noodstop leest nog steeds als een
-	   noodstop, en dat is precies de belofte die hier niet waargemaakt kan
-	   worden. Dus geen rood meer, een onderbroken rand — hetzelfde teken dat de
-	   lege materiaalknop draagt voor "hier staat nog niets" — en het woord dat
-	   zegt waar de stop wél zit. `opacity` blijft weg: de tekst moet leesbaar
-	   zijn, want hij is nu het bericht. */
+	/* The button that does not arrive.
+	   Not "red but faded": a faded emergency stop still reads as an emergency stop, and
+	   that is precisely the promise that cannot be kept here. So no more red, a dashed
+	   border — the same sign the empty material button carries for "nothing here yet" —
+	   and the word that says where the stop *is*. `opacity` stays away: the text has to
+	   be readable, because it is now the message. */
 	.btn.danger.dood {
 		background: transparent;
 		border: 1px dashed color-mix(in srgb, var(--text-2) 55%, transparent);
@@ -863,8 +847,8 @@
 	.btn.danger.dood svg { color: var(--text-2); }
 
 	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-	/* Deze knop dráágt zijn eigen uitleg; de standaard-vervaging maakt hem
-	   onleesbaar en die uitleg is nu het enige wat de knop nog doet. */
+	/* This button *carries* its own explanation; the default fading makes it unreadable
+	   and that explanation is now the only thing the button still does. */
 	.btn.danger.dood:disabled { opacity: 1; }
 
 	.iconbtn {
