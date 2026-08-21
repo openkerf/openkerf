@@ -262,8 +262,8 @@ def test_all_layers_go_in_one_action_and_the_shapes_stay(kernel, client):
     """
     Punt 4 van Jelle: alle lagen weggooien moest per laag, drie klikken elk.
 
-    De belofte is dezelfde als bij één laag: een laag weggooien is geen werk
-    weggooien. De vormen staan er na afloop nog, in geen enkele laag.
+    The promise is the same as with one layer: throwing a layer away is not throwing work
+    away. Afterwards the shapes are still there, in no layer.
     """
     client.post(
         "/api/design/elements",
@@ -404,14 +404,13 @@ def test_fonts_are_listed(kernel, drawing):
 
 def test_a_font_whose_file_is_gone_is_not_offered(kernel, drawing, tmp_path):
     """
-    De engine houdt zijn fontlijst in een cache die een verwijderd bestand niet
-    opmerkt. Zo'n regel kan alleen maar mislukken: de kiezer toont hem, haalt
-    het bestand op voor het voorbeeld en krijgt een 409 terug — zonder dat er
-    iets op het scherm staat over wat er aan de hand is.
+    The engine keeps its font list in a cache that does not notice a deleted file. Such a row
+    can only fail: the picker shows it, fetches the file for the preview and gets a 409 back —
+    without anything on the screen about what is going on.
     """
     weg = tmp_path / "Weggegooid.ttf"
-    er_nog = tmp_path / "Aanwezig.ttf"
-    er_nog.write_bytes(b"niet echt een font, maar het bestaat")
+    er_nog = tmp_path / "Present.ttf"
+    er_nog.write_bytes(b"not really a font, but it exists")
 
     registry = kernel.root.fonts
 
@@ -421,9 +420,9 @@ def test_a_font_whose_file_is_gone_is_not_offered(kernel, drawing, tmp_path):
             return [
                 (str(weg), "Weggegooid"),
                 (str(er_nog), "Aanwezig"),
-                # Zoals de engine zijn eigen Hershey-fonts opgeeft: een kale
-                # naam, geen pad. Dat font bestaat wél en moet blijven staan —
-                # wij zetten er de opschriften van elk testbord mee.
+                # As the engine states its own Hershey fonts: a bare name, not a path. That
+                # font does exist and has to stay — we set every test board's captions in
+                # it.
                 ("meerk40t.jhf", "MeerK40t Simple"),
             ]
 
@@ -475,12 +474,12 @@ def test_estimating_leaves_no_plan_behind(kernel, drawing, client):
 
 def test_estimating_never_builds_the_plan(kernel, drawing, client, monkeypatch):
     """
-    De reden dat deze route op een zwaar ontwerp minuten kostte (gat J1).
+    The reason this route cost minutes on a heavy design (gap J1).
 
     `plan copy` kopieert de cutcode één keer per pass en de optimalisatie erna
-    schaalt kwadratisch; gemeten: 960 vormen × 60 passes duurde 169 s. De
-    schatting rekent nu op de geometrie, dus de planpijplijn mag niet meer
-    aangeroepen worden — vandaar dat we hem hier laten ontploffen.
+    scales quadratically; measured: 960 shapes × 60 passes took 169 s. The estimate now
+    computes on the geometry, so the plan pipeline must no longer be called — hence we make it
+    explode here.
     """
     kernel.console("rect 20mm 15mm 60mm 40mm\n")
     kernel.console("element* cut -s 12 -p 650\n")
@@ -488,7 +487,7 @@ def test_estimating_never_builds_the_plan(kernel, drawing, client, monkeypatch):
 
     def run(command, *args, **kwargs):
         if command.startswith("plan"):
-            raise AssertionError(f"de schatting bouwde alsnog een plan: {command}")
+            raise AssertionError(f"the estimate built a plan after all: {command}")
         return origineel(command, *args, **kwargs)
 
     monkeypatch.setattr(drawing.runner, "run", run)
@@ -501,12 +500,11 @@ def test_estimating_never_builds_the_plan(kernel, drawing, client, monkeypatch):
 
 def test_the_fast_estimate_matches_the_plan(kernel, drawing, client):
     """
-    Snel mag niet ten koste van klopt.
+    Fast must not come at the cost of right.
 
-    Dezelfde som als `duration_cut` + `duration_travel`, alleen zonder eerst
-    het plan te bouwen: brandlengte gedeeld door de laagsnelheid, plus de
-    sprongen ertussen. De reisvolgorde die de optimalisatie kiest zit er niet
-    in, dus een paar procent verschil hoort erbij.
+    The same sum as `duration_cut` + `duration_travel`, only without building the plan first:
+    burn length divided by the layer's speed, plus the jumps in between. The travel order the
+    optimisation chooses is not in it, so a few per cent of difference belongs with it.
     """
     for index in range(8):
         kernel.console(f"circle {10 + index * 20}mm 30mm 8mm\n")

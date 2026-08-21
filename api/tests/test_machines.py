@@ -222,8 +222,8 @@ def test_bed_change_is_visible_in_the_status_snapshot(kernel, client):
 
 # ===================================================== detectie (besluit B6) ==
 #
-# De belofte van B6 is niet "hij vindt machines" maar "zoeken is lezen". Die
-# belofte is een gedragsafspraak, en gedragsafspraken die niemand test slijten.
+# B6's promise is not "it finds machines" but "searching is reading". That promise is an
+# agreement about behaviour, and agreements about behaviour nobody tests wear away.
 
 
 class FakeSerialPort:
@@ -262,7 +262,7 @@ def _no_network(monkeypatch, scanner):
 # ------------------------------------------------------- zoeken is lezen
 
 def test_scanning_creates_no_machine(kernel, client):
-    """De harde randvoorwaarde uit B6, en de reden dat dit een GET is."""
+    """The hard precondition from B6, and the reason this is a GET."""
     before = {device.path for device in kernel.services("device")}
     active = kernel.device.path
 
@@ -271,15 +271,15 @@ def test_scanning_creates_no_machine(kernel, client):
     assert response.status_code == 200
     assert {device.path for device in kernel.services("device")} == before
     assert kernel.device.path == active
-    # En niets is stiekem als "door een mens ingesteld" gestempeld.
+    # And nothing has been sneakily stamped as "set up by a human".
     assert not any(m["configured"] for m in client.get("/api/machines").json())
 
 
 def test_scan_route_carries_no_write_guard_because_it_only_reads(client):
     """
-    Een scan die zou kunnen schrijven, hoort achter het slot. Deze test legt
-    de andere kant vast: hij staat er niet achter, dus hij mag ook nooit iets
-    veranderen. Verandert dat, dan verandert deze test mee — bewust.
+    A scan that could write belongs behind the lock. This test records the other side: it is
+    not behind it, so it must never change anything. If that changes, this test changes with
+    it — deliberately.
     """
     routes = [r for r in client.app.routes if getattr(r, "path", "") == "/api/machines/scan"]
     assert routes, "de scanroute bestaat"
@@ -291,9 +291,8 @@ def test_scan_route_carries_no_write_guard_because_it_only_reads(client):
 
 def test_scanner_does_not_need_a_kernel_at_all(manager):
     """
-    De scanner krijgt de catalogus als data mee en heeft geen kernel. Daarmee
-    is 'hij kan niets aanmaken' geen belofte in een comment maar een feit van
-    de constructie.
+    The scanner is handed the catalogue as data and has no kernel. That makes 'it cannot
+    create anything' not a promise in a comment but a fact of the construction.
     """
     scanner = MachineScanner(manager.catalog())
     assert not hasattr(scanner, "kernel")
@@ -317,12 +316,12 @@ def test_serial_signature_becomes_a_candidate_with_its_port(monkeypatch, scanner
     assert found["where"] == "/dev/cu.usbserial-1420"
     assert found["settings"]["serial_port"] == "/dev/cu.usbserial-1420"
     assert "ruida-beta" in [s["key"] for s in found["suggestions"]]
-    # Een FTDI-chip is geen bewijs van een Ruida; dat moet het scherm ook zeggen.
+    # An FTDI chip is no proof of a Ruida; the screen has to say so too.
     assert found["confidence"] == "onzeker"
 
 
 def test_unknown_serial_adapter_is_not_proposed(monkeypatch, scanner):
-    """Een bluetoothpoort is geen laser. Raden waar we niets weten is erger dan zwijgen."""
+    """A bluetooth port is not a laser. Guessing where we know nothing is worse than keeping quiet."""
     _no_usb(monkeypatch, scanner)
     _no_network(monkeypatch, scanner)
     monkeypatch.setattr(
@@ -347,8 +346,8 @@ def test_usb_signature_is_recognised(monkeypatch, scanner):
 
 def test_a_suggestion_for_a_missing_plugin_is_dropped(monkeypatch):
     """
-    De testkernel laadt geen GRBL. Een voorstel voor `grbl-generic` zou dan een
-    knop opleveren die met een 409 eindigt; die filteren we eruit.
+    The test kernel does not load GRBL. A proposal for `grbl-generic` would then produce a
+    button that ends in a 409; we filter those out.
     """
     scanner = MachineScanner([])  # lege catalogus: niets is bekend
     _no_usb(monkeypatch, scanner)
@@ -383,9 +382,8 @@ def test_usb_without_permission_is_a_note_not_a_crash(monkeypatch, scanner):
 
 def test_the_ruida_probe_is_the_engines_own_enquiry():
     """
-    We verzinnen geen eigen pakket voor een machine die kan bewegen. Dit is
-    ENQ met de swizzle en checksum van de engine: dezelfde vraag die de driver
-    bij elk verbinden stelt.
+    We do not invent a packet of our own for a machine that can move. This is ENQ with the
+    engine's swizzle and checksum: the same question the driver asks on every connect.
     """
     from meerk40t.ruida.rdjob import ENQ, encode_bytes
 
@@ -398,7 +396,7 @@ def test_the_ruida_probe_is_the_engines_own_enquiry():
 
 
 def test_network_scan_reports_a_host_that_answers(monkeypatch, scanner):
-    """Een antwoordend adres komt terug als voorstel, met adres en interface ingevuld."""
+    """An address that answers comes back as a proposal, with the address and interface filled in."""
     import ipaddress
 
     monkeypatch.setattr(

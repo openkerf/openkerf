@@ -1,11 +1,10 @@
 """
 Het nulpunt (gat J12) en bijstellen tijdens een lopende job (gat J11).
 
-Twee dingen die LightBurn wel heeft en de engine niet — het eerste bestaat
-nergens in MeerK40t, het tweede alleen bij één driver. Deze tests pinnen vast
-wat wij eromheen bouwden: dat het werk écht verschuift op weg naar de machine,
-dat de tekening daar niets van merkt, en dat een machine die iets niet kan er
-geen knop voor krijgt.
+Two things LightBurn has and the engine does not — the first exists nowhere in MeerK40t, the
+second only on one driver. These tests pin down what we built around them: that the work
+really shifts on its way to the machine, that the drawing notices nothing of it, and that a
+machine that cannot do something gets no button for it.
 """
 
 import pytest
@@ -51,7 +50,7 @@ def test_origin_starts_empty_and_survives_a_round_trip(client):
 
 
 def test_origin_outside_the_bed_is_refused(client):
-    """Een nulpunt waar de kop niet komt, is geen nulpunt maar een fout."""
+    """A zero point the head does not reach is not a zero point but a mistake."""
     response = client.post("/api/machine/origin", json={"x_mm": 5000, "y_mm": 5})
     assert response.status_code == 409
     assert "outside the bed" in response.json()["detail"]
@@ -59,11 +58,11 @@ def test_origin_outside_the_bed_is_refused(client):
 
 def test_shifting_moves_the_work_and_puts_it_back(kernel, client):
     """
-    De kern van J12: het werk gaat verschoven de machine in, en de tekening
-    staat daarna weer precies waar hij stond.
+    The core of J12: the work goes into the machine shifted, and afterwards the drawing is
+    back exactly where it was.
 
-    Als dat laatste niet klopt, verplaatst één druk op starten je ontwerp — en
-    de tweede druk nog een keer.
+    If that last part does not hold, one press of start moves your design — and the second
+    press moves it again.
     """
     from openkerf_api.drawing import Drawing
 
@@ -88,7 +87,7 @@ def test_shifting_moves_the_work_and_puts_it_back(kernel, client):
 
 
 def test_shift_is_undone_even_when_the_body_raises(kernel, client):
-    """Gaat het plannen stuk, dan mag het ontwerp niet verschoven blijven staan."""
+    """If the planning breaks, the design must not be left shifted."""
     from openkerf_api.drawing import Drawing
 
     _rect(client)
@@ -106,9 +105,8 @@ def test_shift_is_undone_even_when_the_body_raises(kernel, client):
 
 def test_shift_does_not_touch_the_undo_history(kernel, client):
     """
-    Bewust niet via het console-commando `translate`: dat werkt in een eigen
-    undoscope, en dan levert elke start twee stappen op die de gebruiker nooit
-    heeft gemaakt.
+    Deliberately not through the console command `translate`: that works in an undo scope of
+    its own, and then every start produces two steps the user never made.
     """
     from openkerf_api.drawing import Drawing
 
@@ -124,11 +122,11 @@ def test_shift_does_not_touch_the_undo_history(kernel, client):
 
 def test_bounds_report_measures_the_bed_from_the_origin(client):
     """
-    Het nulpunt telt voor het bed en niet voor het vel.
+    The zero point counts for the bed and not for the sheet.
 
-    Een vel is een tekening en het bed is de machine (J5): het nulpunt
-    verplaatst het werk op de máchine, dus dáár kan het buiten vallen, maar
-    binnen de tekening blijft alles staan waar je het neerzette.
+    A sheet is a drawing and the bed is the machine (J5): the zero point moves the work on the
+    *machine*, so it can fall outside *there*, but within the drawing everything stays where
+    you put it.
     """
     _rect(client, x_mm=10, y_mm=10, width_mm=60, height_mm=40)
 
@@ -144,9 +142,9 @@ def test_bounds_report_measures_the_bed_from_the_origin(client):
     )
     buiten = client.get("/api/job/layers").json()["bounds"]
 
-    assert buiten["outside_bed"] == 1, "verschoven valt de rechthoek van het bed"
-    assert buiten["outside_sheet"] == binnen["outside_sheet"], "het vel beweegt niet mee"
-    assert buiten["work"] == binnen["work"], "de tekening zelf verschuift niet"
+    assert buiten["outside_bed"] == 1, "shifted, the rectangle falls off the bed"
+    assert buiten["outside_sheet"] == binnen["outside_sheet"], "the sheet does not move along"
+    assert buiten["work"] == binnen["work"], "the drawing itself does not shift"
     assert buiten["burns_at"]["x_mm"] == pytest.approx(
         binnen["work"]["x_mm"] + bed["width_mm"] - 20
     )

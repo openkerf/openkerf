@@ -12,19 +12,19 @@ WRITE_ROUTES = [
     ("/api/job/resume", {}),
     ("/api/job/stop", {}),
     ("/api/spooler/clear", {}),
-    # Besluit B7: een bibliotheek binnenhalen overschrijft mogelijk metingen.
-    # Dat mag van buiten de eigen computer nooit zonder token.
+    # Decision B7: taking a library in may overwrite measurements. From outside your own
+    # computer that must never happen without a token.
     ("/api/library/import", {"json": {}}),
     ("/api/library/import/preview", {"json": {}}),
-    # Gat T7: een benoemd recept opslaan schrijft in de bibliotheek.
+    # Gap T7: saving a named recipe writes in the library.
     ("/api/library/testgrids/recipes", {"json": {}}),
-    # Gat E5: een machineprofiel inlezen maakt een machine aan met een bed, een
-    # interface en een adres. Dat bepaalt waar de kop heen gaat.
+    # Gap E5: reading a machine profile in creates a machine with a bed, an interface and an
+    # address. That decides where the head goes.
     ("/api/machines/import", {"json": {}}),
 ]
 
-# Dezelfde eis voor de andere werkwoorden. De uitlijning van een rasterfoto is
-# een PUT en zou anders buiten de tokencontrole hierboven vallen.
+# The same requirement for the other verbs. A grid photo's alignment is a PUT and would
+# otherwise fall outside the token check above.
 WRITE_ROUTES_PUT = [
     ("/api/library/testgrids/1/alignment", {"json": {"corners": None}}),
 ]
@@ -32,9 +32,9 @@ WRITE_ROUTES_PUT = [
 
 @pytest.fixture
 def local_client(kernel, tmp_path):
-    # Een eigen bibliotheek, en dus een eigen vellenmap: zonder pad schrijft en
-    # leest deze test in de échte instellingenmap van de gebruiker, tot en met
-    # de vellen van zijn lopende project.
+    # A library of its own, and therefore a sheets directory of its own: without a path this
+    # test writes and reads in the user's *real* settings directory, down to their running
+    # project's sheets.
     with TestClient(ApiServer(kernel, library_path=tmp_path / "w.db").build_app()) as client:
         yield client
 
@@ -53,9 +53,8 @@ def lan_server(kernel, tmp_path):
 # test_preview_plans_without_drawing, which proves it for this one.
 READ_ONLY_POSTS = {
     "/api/library/testgrids/preview",
-    # Het voorbeeld van een generator: rekent de vorm uit en stuurt hem als
-    # paddata terug, zonder hem aan de tekening te hangen. Bewezen door
-    # test_the_preview_leaves_the_drawing_alone.
+    # A generator's preview: computes the shape and sends it back as path data, without
+    # hanging it on the drawing. Proved by test_the_preview_leaves_the_drawing_alone.
     "/api/design/generate/preview",
 }
 
@@ -76,10 +75,10 @@ def test_every_mutating_route_requires_the_write_guard(local_client):
 
 def test_machine_detection_is_not_a_write_route(local_client):
     """
-    Besluit B6: zoeken is lezen. De detectie is daarom een GET zonder guard —
-    en dat mag alleen zolang hij niets aanmaakt of verbindt. Wordt hij ooit een
-    POST, dan hoort hij in de lijst hierboven en achter het slot; deze test is
-    de plek waar dat opvalt.
+    Decision B6: searching is reading. So the detection is a GET without a guard — and that
+    is only allowed as long as it creates nothing and connects to nothing. If it ever becomes a
+    POST, it belongs in the list above and behind the lock; this test is the place where that
+    stands out.
     """
     scan = [r for r in local_client.app.routes if getattr(r, "path", "") == "/api/machines/scan"]
     assert scan and scan[0].methods == {"GET"}
@@ -167,18 +166,18 @@ def test_load_accepts_an_upload(kernel, local_client):
 
 def test_load_refuses_a_file_that_is_not_a_drawing(kernel, local_client):
     """
-    Een hernoemd of half gedownload bestand kwam er als HTTP 200 {"ok": true}
-    uit: de engine roept "File is Malformed" op het console-kanaal en geeft
-    daarna netjes terug. De gebruiker zag een leeg bed en geen enkele reden.
+    A renamed or half-downloaded file came out as HTTP 200 {"ok": true}: the engine shouts
+    "File is Malformed" on the console channel and then returns neatly. The user saw an empty
+    bed and no reason at all.
     """
     response = local_client.post(
         "/api/job/load",
-        files={"file": ("kapot.svg", b"dit is geen tekening", "image/svg+xml")},
+        files={"file": ("broken.svg", b"this is not a drawing", "image/svg+xml")},
     )
 
     assert response.status_code == 409
     melding = " ".join(response.json()["detail"]["output"])
-    assert "kapot.svg" in melding
+    assert "broken.svg" in melding
     # Gebruikerstaal, geen protocoltaal: geen "Malformed", geen tijdelijk pad.
     assert "Malformed" not in melding
     assert "/var/" not in melding
@@ -249,7 +248,7 @@ def test_supports_matches_exactly(kernel):
 
 def test_starting_an_empty_design_is_refused(local_client):
     """
-    Dit meldde eerder "gelukt": je drukt op starten, de app zegt ja, en er
+    This used to report "succeeded": you press start, the app says yes, and
     gebeurt niets bij de machine. Dan sta je ernaast te wachten.
     """
     local_client.post("/api/design/clear")
