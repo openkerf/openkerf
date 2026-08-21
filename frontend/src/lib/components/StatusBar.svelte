@@ -14,7 +14,7 @@
 	import { connection } from '$lib/connection.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import ConnectionCard from './ConnectionCard.svelte';
-	import Melding from './Message.svelte';
+	import Notice from './Message.svelte';
 
 	let {
 		device,
@@ -172,7 +172,7 @@
 <!-- Errors from write actions are not really at home here, but this is the only
      component that runs along on every tab. Without it a failed import landed in
      a panel you did not have open at that moment. -->
-<Melding {control} />
+<Notice {control} />
 
 <footer class="statusbar mono">
 	<!-- Two positions side by side: where the head is, and where your pointer is.

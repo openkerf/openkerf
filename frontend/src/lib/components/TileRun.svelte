@@ -130,7 +130,7 @@
 			<!-- Where you are in the run, in one line. The canvas ticks off the tiles
 			     that are done, but someone working in the panel should be able to
 			     read it there as well. -->
-			<ol class="voortgang" aria-label={t('tiles.progressAria')}>
+			<ol class="progressPart" aria-label={t('tiles.progressAria')}>
 				{#each Array(run.tiles) as _, i (i)}
 					<li class:ready={run.done.includes(i)} class:now={i === run.current}>
 						{i + 1}{#if run.done.includes(i)}&nbsp;✓{/if}
@@ -220,7 +220,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.voortgang {
+	.progressPart {
 		display: flex;
 		gap: var(--space-2);
 		list-style: none;
@@ -229,10 +229,10 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.voortgang .ready {
+	.progressPart .ready {
 		color: var(--text-1);
 	}
-	.voortgang .now {
+	.progressPart .now {
 		color: var(--accent);
 		font-weight: 600;
 	}

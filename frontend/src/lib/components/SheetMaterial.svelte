@@ -26,7 +26,7 @@
 	} = $props();
 
 	let fresh = $state('');
-	let toevoegen = $state(false);
+	let adding = $state(false);
 
 	// The thicknesses that lie on every saw table. One tap instead of typing a number —
 	// on a tablet beside the machine that saves a keyboard.
@@ -60,7 +60,7 @@
 		if (created) {
 			await sheets.update(sheet.id, { material_id: created.id });
 			fresh = '';
-			toevoegen = false;
+			adding = false;
 		}
 	}
 </script>
@@ -87,7 +87,7 @@
 		</select>
 	</label>
 
-	{#if toevoegen}
+	{#if adding}
 		<div class="fresh">
 			<input
 				type="text"
@@ -98,10 +98,10 @@
 			<button class="btn primary" disabled={!fresh.trim() || library.busy} onclick={makeMaterial}>
 				{t('sheetMat.add')}
 			</button>
-			<button class="btn" onclick={() => (toevoegen = false)}>{t('common.cancel')}</button>
+			<button class="btn" onclick={() => (adding = false)}>{t('common.cancel')}</button>
 		</div>
 	{:else}
-		<button class="link" onclick={() => (toevoegen = true)}>{t('sheetMat.notListed')}</button>
+		<button class="link" onclick={() => (adding = true)}>{t('sheetMat.notListed')}</button>
 	{/if}
 
 	<div class="field">

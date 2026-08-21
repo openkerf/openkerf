@@ -81,7 +81,7 @@
 	// Three devices, three apps (DESIGN-SYSTEM v2). Not a shrunken desktop but a
 	// shape of its own: below 768px this is a monitor with an emergency stop.
 	let width = $state(1440);
-	let telefoon = $derived(width < 768);
+	let onPhone = $derived(width < 768);
 	let tablet = $derived(width >= 768 && width < 1200);
 	// Below this width the file buttons no longer fit *beside* the machine controls in
 	// the top bar; they move to the rail menu then. Since the sheet's material is in
@@ -175,7 +175,7 @@
 	const tiling = new TilingStore(token);
 	/** An action that replaces the current work, awaiting a yes. */
 	type Vervanging =
-		| { kind: 'bestand'; file: File }
+		| { kind: 'file'; file: File }
 		| { kind: 'project'; file: File }
 		| { kind: 'fresh' };
 	let pending = $state<Vervanging | null>(null);
@@ -244,7 +244,7 @@
 	 */
 	async function openFile(file: File) {
 		if (!canEdit) return;
-		await misschienEerstVragen({ kind: 'bestand', file });
+		await maybeAskFirst({ kind: 'file', file });
 	}
 
 	/**
@@ -258,8 +258,8 @@
 	 * this sheet counts there. A project and starting over replace *all* the sheets, so
 	 * then yesterday's box counts too, even when the sheet you see now is empty.
 	 */
-	async function misschienEerstVragen(action: Vervanging) {
-		const touchesEverySheet = action.kind !== 'bestand';
+	async function maybeAskFirst(action: Vervanging) {
+		const touchesEverySheet = action.kind !== 'file';
 		const thereIsWork = !design.isEmpty || (touchesEverySheet && sheets.sheets.length > 1);
 		if (!thereIsWork) {
 			await runIt(action);
@@ -286,11 +286,11 @@
 	/** Starting over. See `/api/project/new`: the library stays. */
 	async function newProject() {
 		if (!canEdit) return;
-		await misschienEerstVragen({ kind: 'fresh' });
+		await maybeAskFirst({ kind: 'fresh' });
 	}
 
 	async function runIt(action: Vervanging) {
-		if (action.kind === 'bestand') {
+		if (action.kind === 'file') {
 			await replaceWith(action.file);
 		} else if (action.kind === 'project') {
 			await laadProject(action.file);
@@ -325,7 +325,7 @@
 
 	async function openProject(file: File) {
 		if (!canEdit) return;
-		await misschienEerstVragen({ kind: 'project', file });
+		await maybeAskFirst({ kind: 'project', file });
 	}
 
 	/** A project also carries the library context, so it has a route of its own. */
@@ -373,8 +373,8 @@
 		// thing that happens empties the bed. If the save fails, the emptying does not
 		// go ahead and the dialog is still up.
 		const opgeslagen =
-			action.kind === 'bestand'
-				? await saveFile('/api/design/export.svg', 'ontwerp.svg')
+			action.kind === 'file'
+				? await saveFile('/api/design/export.svg', 'design.svg')
 				: await saveFile('/api/project/export.openkerf', 'project.openkerf');
 		if (!opgeslagen) {
 			pending = action;
@@ -429,7 +429,7 @@
 		}
 	}
 
-	async function splitsen() {
+	async function splitSelection() {
 		if (!canEdit || !hasSelection) return;
 		layoutNotice = null;
 		const uitkomst = await edits.split(design.selectedIds);
@@ -453,7 +453,7 @@
 	 * black instead of over 90 %. Hence this is a button of its own and not a side
 	 * effect of "into the grid layer".
 	 */
-	async function vullen(filled: boolean) {
+	async function setFill(filled: boolean) {
 		if (!canEdit || !hasSelection) return;
 		layoutNotice = null;
 		const uitkomst = await edits.fill(design.selectedIds, filled);
@@ -770,8 +770,8 @@
 		clearSelection: () => design.select(null),
 		arrange: (mode) => arrange(mode),
 		rotate: (degrees) => rotate(degrees),
-		split: splitsen,
-		fill: (on) => vullen(on),
+		split: splitSelection,
+		fill: (on) => setFill(on),
 		corners: () => (cornersOpen = true),
 		onlyLayer: (kind) => toALayer(kind),
 		assignLayer: (id, inside) => assign(id, inside),
@@ -941,7 +941,7 @@
 
 <svelte:window bind:innerWidth={width} onkeydown={sneltoets} />
 
-{#if telefoon}
+{#if onPhone}
 	<!-- The phone is an app of its own: monitor and emergency stop. See DESIGN-SYSTEM v2,
 	     "Drie apparaten, drie apps". -->
 	<PhoneView
@@ -1229,7 +1229,7 @@
 					events={status.events}
 					{control}
 					activeJob={status.activeJob}
-					revisie={design.revision}
+					revision={design.revision}
 					bind:preflight
 					onJog={async (dx, dy) => {
 						await edits.jog(dx, dy);
@@ -1366,12 +1366,12 @@
 	<p class="ask">
 		{#if design.dirty}
 			{t('replace.changed')}
-		{:else if pending?.kind === 'bestand'}
+		{:else if pending?.kind === 'file'}
 			{t('replace.workOnSheet', { n: design.elements.length })}
 		{:else}
 			{t('replace.workInProject')}
 		{/if}
-		{#if pending?.kind === 'bestand'}
+		{#if pending?.kind === 'file'}
 			{t('replace.opensSheet')}
 		{:else if pending?.kind === 'project'}
 			{t('replace.opensProject', { n: sheets.sheets.length })}
@@ -1410,7 +1410,7 @@
 
 <!-- The prompt card floats and does not block: a job has just started, and that
      must not disappear behind a modal window. -->
-{#if !telefoon && promptOpen && notifications.shouldAsk}
+{#if !onPhone && promptOpen && notifications.shouldAsk}
 	<div class="vraagkaart">
 		<NotificationCard {notifications} variant="prompt" onDone={() => (promptOpen = false)} />
 	</div>
@@ -1439,9 +1439,9 @@
 	bind:open={offsetOpen}
 	count={design.selectedIds.length}
 	busy={edits.busy}
-	onToepassen={async (afstand) => {
+	onToepassen={async (distance) => {
 		offsetOpen = false;
-		if ((await edits.offset(design.selectedIds, afstand)).ok) await design.load();
+		if ((await edits.offset(design.selectedIds, distance)).ok) await design.load();
 	}}
 />
 

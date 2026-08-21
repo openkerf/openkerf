@@ -24,7 +24,7 @@
 		control,
 		device,
 		job,
-		revisie = 0,
+		revision = 0,
 		preflight = $bindable(),
 		onJog,
 		onHome,
@@ -38,7 +38,7 @@
 		device: Device | null;
 		job: Job | null;
 		/** Increases on every change in the design; the estimate follows it. */
-		revisie?: number;
+		revision?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
 		onHome?: () => void;
@@ -66,7 +66,7 @@
 	let taken = $derived(running || paused);
 	let tokenDraft = $state('');
 	let step = $state(10);
-	type Warning = { code: string; text: string; ernst?: number };
+	type Warning = { code: string; text: string; weight?: number };
 	type Layer = {
 		id: string | null;
 		label: string;
@@ -108,13 +108,13 @@
 	 * carries a setting for a *different* material is exactly what you have to see
 	 * before starting; it should not be queued behind a time estimate.
 	 */
-	let overzicht = $state<{
+	let overview = $state<{
 		sheet?: SheetInfo | null;
 		layers?: Layer[];
 		bounds?: Bounds | null;
 		engine?: { grid: boolean } | null;
 	} | null>(null);
-	let layers = $derived(overzicht?.layers ?? []);
+	let layers = $derived(overview?.layers ?? []);
 	/**
 	 * The design for the drawing above (decision B8).
 	 *
@@ -122,7 +122,7 @@
 	 * just before starting you want to see what is on the bed *now* anyway, not what
 	 * was there when the canvas last refreshed.
 	 */
-	let ontwerp = $state<Design | null>(null);
+	let design = $state<Design | null>(null);
 
 	// What the layer carries against what is being burned. This is the last moment at
 	// which that difference still costs something you can undo.
@@ -136,18 +136,18 @@
 			.filter((l) => l.burns !== false && l.warnings?.length)
 			.map((l) => ({
 				layer: l.label,
-				ernst: Math.max(...(l.warnings ?? []).map((w) => w.ernst ?? 1)),
+				weight: Math.max(...(l.warnings ?? []).map((w) => w.weight ?? 1)),
 				text: (l.warnings ?? []).map((w) => w.text).join(' ')
 			}))
-			.sort((a, b) => b.ernst - a.ernst)
+			.sort((a, b) => b.weight - a.weight)
 	);
 	// Only point when there is something to choose: between objections of equal weight
 	// "this first" is an arbitrary instruction and therefore noise.
 	let firstWeighsMore = $derived(
-		mismatch.length > 1 && mismatch[0].ernst > mismatch[mismatch.length - 1].ernst
+		mismatch.length > 1 && mismatch[0].weight > mismatch[mismatch.length - 1].weight
 	);
 	let sheetText = $derived.by(() => {
-		const sheet = overzicht?.sheet;
+		const sheet = overview?.sheet;
 		if (!sheet?.material_name) return null;
 		const thickness = sheet.thickness_mm;
 		return thickness === null || thickness === undefined
@@ -167,7 +167,7 @@
 	 * The message itself lives in `JobPreview`, directly under the drawing where the
 	 * shape it is about can be seen.
 	 */
-	let grenzen = $derived(overzicht?.bounds ?? null);
+	let bounds = $derived(overview?.bounds ?? null);
 
 	/**
 	 * Does this engine burn raster layers?
@@ -177,7 +177,7 @@
 	 * cutcode. That must not be a surprise *after* burning, and the time estimate must
 	 * not promise seconds for it.
 	 */
-	let gridOff = $derived(overzicht?.engine?.grid === false);
+	let gridOff = $derived(overview?.engine?.grid === false);
 	let blindLayers = $derived(layers.filter((l) => l.burns === false));
 	// Whole millimetres where it can be; 0.5 mm stays 0.5 mm. Written in the
 	// reader's own notation, because these numbers get typed into a machine.
@@ -212,7 +212,9 @@
 		return t(UNMEASURED[layer.source ?? ''] ?? 'preset.source.unmeasured');
 	}
 	let estimating = $state(false);
-	let estimateTraag = $state(false);
+	let estimateSlow = $state(false);
+	/** Has an estimate ever come in? Before that neither verdict is honest. */
+	let estimated = $state(false);
 
 	// The engine builds the whole cut plan for this estimate. On a heavy design that
 	// took more than three minutes here, and meanwhile the pre-flight sat on a dot. An
@@ -229,7 +231,7 @@
 	// heavy design.
 	async function loadEstimate() {
 		estimating = true;
-		estimateTraag = false;
+		estimateSlow = false;
 		try {
 			// Side by side: the drawing and the layer table should appear on screen
 			// together, not one half a second after the other.
@@ -237,22 +239,23 @@
 				fetch('/api/job/layers'),
 				fetch('/api/design')
 			]);
-			overzicht = layers.ok ? await layers.json() : null;
-			ontwerp = snapshot.ok ? await snapshot.json() : null;
+			overview = layers.ok ? await layers.json() : null;
+			design = snapshot.ok ? await snapshot.json() : null;
 		} catch {
-			overzicht = null;
-			ontwerp = null;
+			overview = null;
+			design = null;
 		}
-		const traag = setTimeout(() => (estimateTraag = true), ESTIMATE_PATIENCE);
+		const slow = setTimeout(() => (estimateSlow = true), ESTIMATE_PATIENCE);
 		try {
 			const response = await fetch('/api/job/estimate');
 			estimate = response.ok ? await response.json() : null;
 		} catch {
 			estimate = null;
 		} finally {
-			clearTimeout(traag);
+			clearTimeout(slow);
+			estimated = true;
 			estimating = false;
-			estimateTraag = false;
+			estimateSlow = false;
 		}
 	}
 
@@ -268,12 +271,27 @@
 	 * type along.
 	 */
 	let schatKlok: ReturnType<typeof setTimeout> | null = null;
+	/**
+	 * Is the preparation on screen at all — as a boolean, and that matters.
+	 *
+	 * Reading `device.spooler.queue_length` inside the effect below re-ran it on
+	 * every snapshot, and the engine pushes a full snapshot every two seconds
+	 * (`HEARTBEAT_SECONDS`). So the estimate was refetched twice a minute on a
+	 * design nobody had touched, and `estimating` flipped along with it: on an empty
+	 * bed the whole block swapped between "nothing to burn" and the full checklist,
+	 * and with work on it the time on the start button blinked in and out. Measured:
+	 * twelve requests in twelve seconds on an idle page.
+	 *
+	 * A `$derived` only wakes its readers when its *value* changes, so a heartbeat
+	 * that says the same thing as the last one now changes nothing.
+	 */
+	let idle = $derived((device?.spooler?.queue_length ?? 0) === 0);
 	$effect(() => {
 		// Deliberately *not* looking at `busyWithWork`: that hangs off the estimate via
 		// `empty`, and then this effect would be its own trigger. The queue length says
 		// the same thing without the loop.
-		const visible = (device?.spooler?.queue_length ?? 0) === 0;
-		void revisie;
+		const visible = idle;
+		void revision;
 		if (!visible) {
 			if (schatKlok) clearTimeout(schatKlok);
 			return;
@@ -337,7 +355,7 @@
 		{ what: 'speed' as const, key: 'job.adjust.speed' as MessageKey }
 	];
 
-	async function bewaar() {
+	async function save() {
 		const name = newName.trim();
 		if (!name) return;
 		if (await control.savePosition(name)) {
@@ -365,10 +383,15 @@
 	 * protects nobody any more.
 	 *
 	 * `parts` is the number of parts in the built cut plan; zero means the machine
-	 * would do nothing. As long as the estimate is still running we do not know, and
-	 * then we keep quiet.
+	 * would do nothing. Until the first estimate has come in we do not know, and then
+	 * we keep quiet.
+	 *
+	 * Deliberately *not* "and no estimate is running": a recalculation would then
+	 * undo the verdict for as long as it lasted, and on an empty bed the block
+	 * swapped to the full checklist and back on every recalculation. What we knew a
+	 * moment ago stays on screen until the new answer replaces it.
 	 */
-	let empty = $derived(!estimating && estimate !== null && estimate.parts === 0);
+	let empty = $derived(estimated && estimate !== null && estimate.parts === 0);
 
 	/**
 	 * The phase, from one source (`jobPhase` in `$lib/api.ts`).
@@ -381,14 +404,14 @@
 	 */
 	let phase = $derived(jobPhase(device, job, empty));
 	let busyWithWork = $derived(jobBusy(phase));
-	let voortgang = $derived.by(() => {
+	let progressPart = $derived.by(() => {
 		const part = job?.progress;
 		if (part === null || part === undefined || !Number.isFinite(part)) return null;
 		// A job that is finished but not signed off by the engine sits at 0.998; we show
 		// that as full, because that is what has happened.
 		return phase === 'done' ? 1 : Math.min(1, Math.max(0, part));
 	});
-	let resterend = $derived(phase === 'done' ? 0 : remainingSeconds(job));
+	let remaining = $derived(phase === 'done' ? 0 : remainingSeconds(job));
 </script>
 
 <div class="section">
@@ -447,9 +470,9 @@
 				     "there is no material there" as serious as "the head does not get
 				     there", and then neither carries any weight. -->
 				<JobPreview
-					design={ontwerp}
-					sheet={overzicht?.sheet ?? null}
-					bounds={grenzen}
+					design={design}
+					sheet={overview?.sheet ?? null}
+					bounds={bounds}
 					{colorFor}
 				/>
 				<!-- The converter that turns a grid area into laser lines lives in
@@ -459,7 +482,7 @@
 				     wizard: whoever read them there recognises them here — and the
 				     other way round. -->
 				{#if gridOff && blindLayers.length}
-					<p class="pf-geenraster" role="alert">
+					<p class="pf-no-raster" role="alert">
 						<strong>{t('job.noRaster.title')}</strong>
 						{blindLayers.length === 1
 							? t('job.noRaster.one', { label: blindLayers[0].label })
@@ -507,7 +530,7 @@
 				     that and not to the job. -->
 				<p class="pf-warn strong">{t('job.notResponding')}</p>
 			{/if}
-			{#if estimateTraag}
+			{#if estimateSlow}
 				<p class="pf-row">{t('job.estimateSlow')}</p>
 			{/if}
 			<!-- Only shown when there is something in it: "In queue: 0" just before
@@ -542,7 +565,7 @@
 										     and the digit beside the shape on the canvas, so they cannot
 										     drift apart. -->
 										{#if colorFor}
-											{@const number = layerNumber(ontwerp, layer.id)}
+											{@const number = layerNumber(design, layer.id)}
 											<!-- Without `aria-hidden` a screen reader would otherwise hear a
 											     bare digit in front of the layer name: "1 Cut". `role="img"`
 											     with a name turns it into "Layer 1, Cut"; without a role most
@@ -554,7 +577,7 @@
 												></span>
 											{:else}
 												<span
-													class="chip mono genummerd"
+													class="chip mono numbered"
 													style:background={colorFor(layer.id)}
 													style:color={inkOn(colorFor(layer.id))}
 													role="img"
@@ -596,9 +619,9 @@
 				{#if mismatch.length}
 					<ul class="pf-mismatch" role="alert">
 						{#each mismatch as notice, i (i)}
-							<li class:licht={notice.ernst < 2}>
+							<li class:lighter={notice.weight < 2}>
 								{#if i === 0 && firstWeighsMore}
-									<span class="eerst">{t('job.first')}</span>
+									<span class="first">{t('job.first')}</span>
 								{/if}<strong>{notice.layer}</strong> — {notice.text}
 							</li>
 						{/each}
@@ -643,7 +666,7 @@
 				Showing the frame is on the same line: it is the last check before that
 				same button, so it belongs beside it and not three blocks higher.
 			-->
-			<div class="pf-plak">
+			<div class="pf-stick">
 				{#if preflight}
 					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
 					     no single click burns. The first arms, the second fires — and unlike
@@ -674,8 +697,11 @@
 						title={blockedReason}
 						onclick={() => (preflight = true)}
 					>
-						{t('job.startJob')}{#if !estimating && (estimate?.seconds ?? job?.estimate_seconds)}
-							<span class="pf-startmaat"
+						<!-- The last known time stays while a new one is being worked out.
+						     Hiding it during the recalculation made the button change width
+						     on every edit — a button that jumps under your cursor. -->
+						{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
+							<span class="pf-start-time"
 								>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
 							>{/if}
 					</button>
@@ -706,14 +732,14 @@
 				{/if}
 			</div>
 
-			{#if voortgang !== null}
+			{#if progressPart !== null}
 				<!-- The bar and the percentage belong together and so sit on one line;
 				     the times below in the same columns as always. -->
-				<div class="now-bar" role="progressbar" aria-valuenow={Math.round(voortgang * 100)} aria-valuemin="0" aria-valuemax="100" aria-label={t('job.progressAria')}>
-					<span class="now-vol" style="width: {Math.round(voortgang * 1000) / 10}%"></span>
+				<div class="now-bar" role="progressbar" aria-valuenow={Math.round(progressPart * 100)} aria-valuemin="0" aria-valuemax="100" aria-label={t('job.progressAria')}>
+					<span class="now-vol" style="width: {Math.round(progressPart * 1000) / 10}%"></span>
 				</div>
 				<div class="now-figures mono">
-					<span class="now-pct">{Math.round(voortgang * 100)}%</span>
+					<span class="now-pct">{Math.round(progressPart * 100)}%</span>
 					{#if job?.steps_total}
 						<span class="now-step">{t('job.steps', { done: job.steps_done ?? 0, total: job.steps_total })}</span>
 					{/if}
@@ -723,8 +749,8 @@
 				</div>
 				<div class="now-time">
 					<span>{t('job.elapsed', { time: formatDuration(job?.elapsed_seconds ?? null) })}</span>
-					{#if resterend !== null}<span class="now-rest"
-							>{t('status.remaining', { remaining: formatDuration(resterend) })}</span
+					{#if remaining !== null}<span class="now-rest"
+							>{t('status.remaining', { remaining: formatDuration(remaining) })}</span
 						>{/if}
 				</div>
 			{/if}
@@ -908,11 +934,11 @@
 								autofocus
 								bind:value={newName}
 								onkeydown={(e) => {
-									if (e.key === 'Enter') bewaar();
+									if (e.key === 'Enter') save();
 									if (e.key === 'Escape') saving = false;
 								}}
 							/>
-							<button class="rot" onclick={bewaar} disabled={!newName.trim()}>
+							<button class="rot" onclick={save} disabled={!newName.trim()}>
 								{t('job.keep')}
 							</button>
 							<button class="rot" onclick={() => (saving = false)}>{t('common.cancel')}</button>
@@ -1162,7 +1188,7 @@
 	   wide as it is tall and with tabular figures, so that a 1 and a 10 do not make the
 	   column jump. The ink (black or white) comes from `inkOn`: on yellow, white is
 	   1.58:1 and then you simply cannot read the figure. */
-	.chip.genummerd {
+	.chip.numbered {
 		width: 15px;
 		height: 15px;
 		line-height: 15px;
@@ -1195,7 +1221,7 @@
 	   says "this does not work" as against "watch out for this"; the text itself keeps
 	   the ordinary colour, because --danger on this wash does not make the contrast
 	   (the same measurement as at .pf-mismatch below). */
-	.pf-geenraster {
+	.pf-no-raster {
 		margin: var(--space-2) 0;
 		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
 		border-left: 4px solid var(--danger-solid);
@@ -1248,13 +1274,13 @@
 	}
 	/* The mildest objection — calculated but on the right material — belongs there but
 	   must not shout as loudly as the wrong plate. */
-	.pf-mismatch .licht { color: var(--text-2); }
-	.pf-mismatch .licht strong { color: var(--text-1); font-weight: 500; }
+	.pf-mismatch .lighter { color: var(--text-2); }
+	.pf-mismatch .lighter strong { color: var(--text-1); font-weight: 500; }
 	/* Not a filled pill: according to tokens.css --warn-solid is a surface colour and
 	   with white on it only reaches 3.25:1 (measured ourselves: 2.22 in dark). --warn
 	   as text also stuck at 3.73 on this wash. So the border carries the colour and the
 	   word the ordinary text colour — measured 9.79:1 light, 14.5:1 dark. */
-	.eerst {
+	.first {
 		display: inline-block;
 		margin-right: var(--space-1h);
 		padding: 0 var(--space-1h);
@@ -1531,7 +1557,7 @@
 	   panel and the primary action must never sit below the fold. Negative margins
 	   around `.panel-scroll`'s padding, so the bar runs edge to edge and nothing shows
 	   underneath it. */
-	.pf-plak {
+	.pf-stick {
 		position: sticky;
 		bottom: calc(-1 * var(--space-4));
 		z-index: 2;
@@ -1545,12 +1571,12 @@
 	/* The secondary button keeps its word on one line; the primary gets the rest. With
 	   `flex: 1` on both, "Show frame" broke over two lines and the row became
 	   twee keer zo high. */
-	.pf-plak .btn { flex: none; white-space: nowrap; }
-	.pf-plak .btn.primary { flex: 1; }
+	.pf-stick .btn { flex: none; white-space: nowrap; }
+	.pf-stick .btn.primary { flex: 1; }
 
 	/* The start button says what it is going to do, with the time in it. */
 	.btn.big { min-height: 44px; font-size: var(--text-md); }
-	.pf-startmaat {
+	.pf-start-time {
 		margin-left: 6px;
 		font-size: var(--text-xs);
 		font-weight: 400;

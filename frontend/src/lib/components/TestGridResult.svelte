@@ -3,7 +3,7 @@
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 
-	type Punt = { x: number; y: number };
+	type Point = { x: number; y: number };
 
 	type Cell = {
 		row: number;
@@ -37,7 +37,7 @@
 		columns: number | null;
 		photo_path: string | null;
 		/** The four corners of the board on the photo; stored in the database (T4). */
-		alignment: Punt[] | null;
+		alignment: Point[] | null;
 		cells: Cell[];
 		created_at: string;
 	};
@@ -141,7 +141,7 @@
 	// the desktop and point out the best square on the tablet beside the machine. Kept
 	// in localStorage, the second half of that sentence would be an empty grid over a
 	// skewed photo. Now it is a column on test_grid.
-	const DEFAULT_CORNERS: Punt[] = [
+	const DEFAULT_CORNERS: Point[] = [
 		{ x: 0.1, y: 0.1 },
 		{ x: 0.9, y: 0.1 },
 		{ x: 0.9, y: 0.9 },
@@ -154,8 +154,8 @@
 		t('result.corner.bottomLeft')
 	];
 
-	let corners = $state<Punt[]>(DEFAULT_CORNERS.map((p) => ({ ...p })));
-	let bewaarFout = $state<string | null>(null);
+	let corners = $state<Point[]>(DEFAULT_CORNERS.map((p) => ({ ...p })));
+	let saveError = $state<string | null>(null);
 
 	$effect(() => {
 		const id = openId;
@@ -163,20 +163,20 @@
 		// React only to switching grids. If this also listened to `grids`, the
 		// alignment state would snap shut as soon as saving sent its answer back —
 		// in the middle of dragging.
-		const bewaard = untrack(() => grids.find((g) => g.id === id)?.alignment ?? null);
+		const saved = untrack(() => grids.find((g) => g.id === id)?.alignment ?? null);
 		corners =
-			bewaard && bewaard.length === 4
-				? bewaard.map((p) => ({ x: p.x, y: p.y }))
+			saved && saved.length === 4
+				? saved.map((p) => ({ x: p.x, y: p.y }))
 				: DEFAULT_CORNERS.map((p) => ({ ...p }));
 		// Never aligned before? Then that is the first action.
-		aligning = bewaard === null;
+		aligning = saved === null;
 		aangewezen = null;
-		bewaarFout = null;
+		saveError = null;
 	});
 
 	let bewaartimer: ReturnType<typeof setTimeout> | null = null;
 
-	function bewaarUitlijning() {
+	function saveAlignment() {
 		if (openId === null) return;
 		// Dragging fires on every released corner; waiting a moment saves four write
 		// rounds to the database for one alignment.
@@ -191,14 +191,14 @@
 					body: JSON.stringify({ corners: points })
 				});
 				if (!response.ok) {
-					bewaarFout = t('result.align.failed');
+					saveError = t('result.align.failed');
 					return;
 				}
-				bewaarFout = null;
+				saveError = null;
 				const bijgewerkt: Grid = await response.json();
 				grids = grids.map((g) => (g.id === id ? bijgewerkt : g));
 			} catch {
-				bewaarFout = t('result.align.failedOffline');
+				saveError = t('result.align.failedOffline');
 			}
 		}, 400);
 	}
@@ -274,13 +274,13 @@
 		const stop = () => {
 			target.removeEventListener('pointermove', beweeg);
 			target.removeEventListener('pointerup', stop);
-			bewaarUitlijning();
+			saveAlignment();
 		};
 		target.addEventListener('pointermove', beweeg);
 		target.addEventListener('pointerup', stop);
 	}
 
-	function toets(index: number, event: KeyboardEvent) {
+	function onKey(index: number, event: KeyboardEvent) {
 		const step = event.shiftKey ? 0.02 : 0.004;
 		const richting: Record<string, [number, number]> = {
 			ArrowLeft: [-step, 0],
@@ -295,7 +295,7 @@
 			x: Math.min(1, Math.max(0, corners[index].x + d[0])),
 			y: Math.min(1, Math.max(0, corners[index].y + d[1]))
 		};
-		bewaarUitlijning();
+		saveAlignment();
 	}
 
 	// ------------------------------------------------------------------ choice
@@ -352,13 +352,13 @@
 		}
 	}
 
-	let gemaakt = $state<number | null>(null);
+	let made = $state<number | null>(null);
 
 	async function makePresets() {
 		if (!grid || picked.length === 0) return;
 		busy = true;
 		error = null;
-		gemaakt = null;
+		made = null;
 		try {
 			const cells = picked.map((id) => {
 				const [row, column] = id.split('-').map(Number);
@@ -374,7 +374,7 @@
 				error = typeof data?.detail === 'string' ? data.detail : t('error.presetFailed');
 				return;
 			}
-			gemaakt = cells.length;
+			made = cells.length;
 			picked = [];
 			await Promise.all([load(), library.load()]);
 		} finally {
@@ -406,10 +406,10 @@
 	{/if}
 
 	{#if error}<p class="notice failure" role="alert">{error}</p>{/if}
-	{#if gemaakt}
+	{#if made}
 		<p class="notice good" role="status">
 			{t('result.saved', {
-				n: gemaakt,
+				n: made,
 				material: grid?.material_name ?? t('result.thisMaterial')
 			})}
 		</p>
@@ -452,7 +452,7 @@
 							<polygon
 								role="button"
 								tabindex={aligning ? -1 : 0}
-								aria-label="Rij {cell.row + 1}, column {cell.column + 1} — {cellText(cell)}"
+								aria-label="Row {cell.row + 1}, column {cell.column + 1} — {cellText(cell)}"
 								aria-pressed={picked.includes(key(cell))}
 								points={veelhoek(cell)}
 								onclick={() => toggle(cell)}
@@ -482,7 +482,7 @@
 							style="left: {point.x * 100}%; top: {point.y * 100}%"
 							aria-label={t('result.corner.drag', { corner: HOEKNAAM[i] })}
 							onpointerdown={(e) => sleep(i, e)}
-							onkeydown={(e) => toets(i, e)}
+							onkeydown={(e) => onKey(i, e)}
 						><span></span></button>
 					{/each}
 				{/if}
@@ -510,7 +510,7 @@
 					aria-pressed={aligning}
 					onclick={() => {
 						aligning = !aligning;
-						if (!aligning) bewaarUitlijning();
+						if (!aligning) saveAlignment();
 					}}
 				>{aligning ? t('result.alignDone') : t('result.align')}</button>
 
@@ -560,7 +560,7 @@
 				{/if}
 			</div>
 
-			{#if bewaarFout}<p class="notice failure" role="alert">{bewaarFout}</p>{/if}
+			{#if saveError}<p class="notice failure" role="alert">{saveError}</p>{/if}
 
 			{#if usedCells.length}
 				<!-- Gap M4: the provenance said "row 2, column 3" and nothing was marked on

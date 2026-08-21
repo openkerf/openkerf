@@ -266,13 +266,13 @@
 		}
 		// Materials without presets belong here too: without that group there is
 		// nowhere that "make a test grid" sits logically.
-		for (const materiaal of library.materials) {
-			if (card.has(materiaal.id)) continue;
-			if (zoek.trim() && !materiaal.name.toLowerCase().includes(zoek.trim().toLowerCase()))
+		for (const material of library.materials) {
+			if (card.has(material.id)) continue;
+			if (zoek.trim() && !material.name.toLowerCase().includes(zoek.trim().toLowerCase()))
 				continue;
-			card.set(materiaal.id, {
-				name: materiaal.name,
-				materialId: materiaal.id,
+			card.set(material.id, {
+				name: material.name,
+				materialId: material.id,
 				presets: [],
 				laatst: 0
 			});
@@ -392,7 +392,7 @@
 	let mode = $state<'merge' | 'replace'>('merge');
 	let clashWinner = $state<'mine' | 'file'>('mine');
 	/** Which material from the file is laid onto which of your own materials. */
-	let links = $state<Record<string, number>>({});
+	let laidOnto = $state<Record<string, number>>({});
 	let wipeConfirmed = $state(false);
 	let ready = $state<ImportResult | null>(null);
 	/**
@@ -405,7 +405,7 @@
 	let seen = $state<Record<string, Suggestion>>({});
 	let voorstellen = $derived.by(() => {
 		const list = [...(preview?.merge.materials.similar ?? [])];
-		for (const name of Object.keys(links)) {
+		for (const name of Object.keys(laidOnto)) {
 			if (seen[name] && !list.some((p) => p.name === name)) list.push(seen[name]);
 		}
 		return list.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
@@ -432,7 +432,7 @@
 		ready = null;
 		mode = 'merge';
 		clashWinner = 'mine';
-		links = {};
+		laidOnto = {};
 		seen = {};
 		wipeConfirmed = false;
 		fileName = file.name;
@@ -451,11 +451,11 @@
 		// Remember it before recomputing: after that the server knows this material and
 		// no longer offers the proposal.
 		seen = { ...seen, [pair.name]: pair };
-		links = on
-			? { ...links, [pair.name]: pair.material_id }
-			: Object.fromEntries(Object.entries(links).filter(([k]) => k !== pair.name));
+		laidOnto = on
+			? { ...laidOnto, [pair.name]: pair.material_id }
+			: Object.fromEntries(Object.entries(laidOnto).filter(([k]) => k !== pair.name));
 		if (preview) {
-			const again = await library.previewBundle(preview.bundle, links);
+			const again = await library.previewBundle(preview.bundle, laidOnto);
 			if (again) preview = again;
 		}
 	}
@@ -463,7 +463,7 @@
 	async function importeren() {
 		if (!preview) return;
 		const visibleFor = library.presets.length;
-		const outcome = await library.importBundle(preview.bundle, mode, links, clashWinner);
+		const outcome = await library.importBundle(preview.bundle, mode, laidOnto, clashWinner);
 		if (outcome) {
 			// "4 settings added" while the screen does not change is not reassurance but
 			// a riddle: they belong to another machine then and fall outside the filter.
@@ -927,7 +927,7 @@
 				{#if s.materials.new.length}
 					<li class="erbij">
 						<strong>{t('import.newMaterials', { n: s.materials.new.length })}</strong>
-						<span class="fijn">{s.materials.new.join(', ')}</span>
+						<span class="fine">{s.materials.new.join(', ')}</span>
 					</li>
 				{/if}
 				{#if s.materials.existing.length}
@@ -948,13 +948,13 @@
 				{#if s.test_grids.new}
 					<li class="erbij">
 						<strong>{t('import.addedGrids', { n: s.test_grids.new })}</strong>
-						<span class="fijn">{t('import.withPhotos')}</span>
+						<span class="fine">{t('import.withPhotos')}</span>
 					</li>
 				{/if}
 				{#if s.machines.new.length}
 					<li class="erbij">
 						<strong>{t('import.addedMachines', { n: s.machines.new.length })}</strong>
-						<span class="fijn">{s.machines.new.join(', ')}</span>
+						<span class="fine">{s.machines.new.join(', ')}</span>
 					</li>
 				{/if}
 				{#if !s.materials.new.length && !s.presets.new && !s.test_grids.new && !s.presets.conflicts.length}
@@ -968,17 +968,17 @@
 				     your material; pointing it out is something the user may do. -->
 				<div class="block">
 					<h3>{t('import.sameBoard')}</h3>
-					<p class="fijn">{t('import.sameBoard.body')}</p>
+					<p class="fine">{t('import.sameBoard.body')}</p>
 					{#each voorstellen as pair (pair.name)}
 						<label class="samenvoeg">
 							<input
 								type="checkbox"
-								checked={links[pair.name] === pair.material_id}
+								checked={laidOnto[pair.name] === pair.material_id}
 								onchange={(e) => linkTo(pair, e.currentTarget.checked)}
 							/>
 							<span>
 								{t('import.mergeWith', { name: pair.name, match: pair.match })}
-								<span class="fijn">— {pair.why}</span>
+								<span class="fine">— {pair.why}</span>
 							</span>
 						</label>
 					{/each}
@@ -988,7 +988,7 @@
 			{#if s.presets.conflicts.length}
 				<div class="block clash">
 					<h3>{t('import.conflicts', { n: s.presets.conflicts.length })}</h3>
-					<p class="fijn">{t('import.conflicts.body')}</p>
+					<p class="fine">{t('import.conflicts.body')}</p>
 					<div class="wins">
 						<label class="bereik">
 							<input type="radio" name="clash" value="mine" bind:group={clashWinner} />
@@ -1049,7 +1049,7 @@
 				<!-- The advice has to be actionable here. Otherwise it says "make a backup
 				     first" on a screen you have to leave in order to make one, and then
 				     nobody does it. -->
-				<p class="fijn">
+				<p class="fine">
 					{t('import.wipe.backup')}
 					<button class="mini" onclick={() => library.exportBundle()}>
 						{t('import.wipe.export')}
@@ -1094,7 +1094,7 @@
 				: ''} · {count(ready.test_grids, 'testGrids')}.
 		</span>
 		{#if hidden && library.activeMachine}
-			<span class="fijn">{t('import.done.hidden', { machine: library.activeMachine.name })}</span>
+			<span class="fine">{t('import.done.hidden', { machine: library.activeMachine.name })}</span>
 		{/if}
 		<button class="mini" onclick={() => (ready = null)}>{t('common.close')}</button>
 	</div>
@@ -1219,7 +1219,7 @@
 					{t('library.welcome.first')}
 				</button>
 			{/if}
-			<p class="fijn">{t('library.welcome.presetariat')}</p>
+			<p class="fine">{t('library.welcome.presetariat')}</p>
 		</div>
 	</div>
 {:else if groepen.length === 0}
@@ -1313,7 +1313,7 @@
 					{#each recent as preset (preset.id)}
 						{@render card(preset, true)}
 					{/each}
-					<p class="fijn">{t('library.pickMaterial')}</p>
+					<p class="fine">{t('library.pickMaterial')}</p>
 				{:else}
 					{#each groepen as group (group.materialId)}
 						{#each group.presets as preset (preset.id)}
@@ -1421,7 +1421,7 @@
 				bind:value={draft.power_percent}
 			/>
 		</div>
-		<p class="fijn">{t('library.manual.note')}</p>
+		<p class="fine">{t('library.manual.note')}</p>
 		<button
 			class="btn"
 			disabled={library.busy ||
@@ -1436,7 +1436,7 @@
 
 	<details class="vouw">
 		<summary>{t('library.profiles', { n: library.machines.length })}</summary>
-		<p class="fijn">{t('library.profiles.why')}</p>
+		<p class="fine">{t('library.profiles.why')}</p>
 		{#if library.machines.length}
 			<ul class="profiles">
 				{#each library.machines as machine (machine.id)}
@@ -1456,7 +1456,7 @@
 							     with settings or grids is evidence, a profile without is clutter.
 							     Only naming what is there — "0 settings" next to a profile that
 							     does carry a test grid is a half truth. -->
-							<span class="fijn">{bewijs(machine)}</span>
+							<span class="fine">{bewijs(machine)}</span>
 						{:else if canEdit && !active}
 							<button
 								class="mini"
@@ -1507,7 +1507,7 @@
      is precisely the ordinary reason to be here: a new computer. -->
 <section class="uitwissel">
 	<h3>{t('library.exchange')}</h3>
-	<p class="fijn">{t('library.exchange.body')}</p>
+	<p class="fine">{t('library.exchange.body')}</p>
 	<div class="uitknoppen">
 		<button
 			class="btn"
@@ -1613,8 +1613,8 @@
 	}
 	.welcome p { margin: 0 0 var(--space-3); color: var(--text-2); }
 	.wegen { display: grid; justify-items: start; gap: var(--space-3); }
-	.wegen .fijn { margin: 0; max-width: 42ch; }
-	.fijn { color: var(--text-2); font-size: var(--text-xs); margin: 0 0 var(--space-2); }
+	.wegen .fine { margin: 0; max-width: 42ch; }
+	.fine { color: var(--text-2); font-size: var(--text-xs); margin: 0 0 var(--space-2); }
 	.mini {
 		font-size: var(--text-xs);
 		color: var(--accent);
@@ -2038,7 +2038,7 @@
 		color: var(--text-2);
 		margin: 0 0 var(--space-2);
 	}
-	.uitwissel .fijn { max-width: 52ch; }
+	.uitwissel .fine { max-width: 52ch; }
 	.uitknoppen { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
 	/* The preview is a screen of its own, not a strip below the list: this is where
@@ -2081,7 +2081,7 @@
 	.choice {
 		display: grid;
 		grid-template-columns: auto 1fr;
-		grid-template-areas: 'radio titel' '. hint';
+		grid-template-areas: 'radio title' '. hint';
 		gap: 2px var(--space-2);
 		align-items: start;
 		padding: var(--space-2) var(--space-3);
@@ -2126,7 +2126,7 @@
 	.gevolg li.erbij::before { content: '+'; color: var(--ok); }
 	.gevolg li.zelfde::before { content: '='; color: var(--text-2); }
 	.gevolg li.zelfde { color: var(--text-2); }
-	.gevolg .fijn { margin: 0; }
+	.gevolg .fine { margin: 0; }
 
 	.block {
 		margin-top: var(--space-3);

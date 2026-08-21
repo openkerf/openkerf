@@ -1074,6 +1074,8 @@ export const nl: Catalogue = {
 	'grid.recipe.save': 'Dit saving…',
 	'grid.recipe.namePlaceholder': 'Naam, bijv. Berk 3 mm snijden',
 	'grid.recipe.nameAria': 'Naam van dit recept',
+	'grid.recipe.saveFailed': 'Opslaan is mislukt ({status}).',
+	'grid.recipe.deleteFailed': 'Verwijderen is mislukt ({status}).',
 	'grid.recipe.hint': 'Bewaart alles op dit formulier behalve het opschrift.',
 	'grid.recipe.hint.noMaterial': 'Zonder materiaal gekozen wordt dit een recept voor alle materialen.',
 	'grid.recipe.hint.material': 'Hoort bij het gekozen materiaal; een gelijknamig recept wordt bijgewerkt.',

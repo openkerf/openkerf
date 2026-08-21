@@ -131,20 +131,20 @@
 	 * and status bar switched from estimating to measuring at different moments and
 	 * briefly showed two different remaining times for the same job.
 	 */
-	let resterend = $derived(remainingSeconds(current));
+	let remaining = $derived(remainingSeconds(current));
 
 	// A countdown says how long you have to wait; a clock time says whether you can
 	// still fetch coffee. Side by side they cost one line.
 	let readyTo = $derived.by(() => {
-		if (resterend === null) return null;
-		const end = new Date(Date.now() + resterend * 1000);
+		if (remaining === null) return null;
+		const end = new Date(Date.now() + remaining * 1000);
 		return end.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
 	});
 
 	// The ring: one outline that carries the progress, instead of the same percentage
 	// in three shapes side by side.
-	const STRAAL = 78;
-	const OMTREK = 2 * Math.PI * STRAAL;
+	const RADIUS = 78;
+	const OMTREK = 2 * Math.PI * RADIUS;
 
 	// Grids still waiting for a photo: that is the reason you are standing beside the
 	// machine with a phone. The library does not hold on to them, so we fetch them
@@ -258,11 +258,11 @@
 		};
 	});
 
-	async function foto(gridId: number, bestand: File) {
+	async function uploadPhoto(gridId: number, file: File) {
 		busy = gridId;
 		try {
 			const form = new FormData();
-			form.append('file', bestand);
+			form.append('file', file);
 			const token = localStorage.getItem('openkerf.token') ?? '';
 			await fetch(`/api/library/testgrids/${gridId}/photo`, {
 				method: 'POST',
@@ -308,7 +308,7 @@
 	let stateInOneLine = $derived(photoFirst && connected && machineState === 'ready');
 	/** The bed drawing under that one line. Closed, because you came for the photo. */
 	let bedOpen = $state(false);
-	let meldStand = $derived(
+	let noticeState = $derived(
 		notifications.permission === 'denied'
 			? 'geblokkeerd'
 			: notifications.active
@@ -700,7 +700,7 @@
 							onchange={(e) => {
 								const f = e.currentTarget.files?.[0];
 								e.currentTarget.value = '';
-								if (f) foto(grid.id, f);
+								if (f) uploadPhoto(grid.id, f);
 							}}
 						/>
 					</label>
@@ -753,11 +753,11 @@
 					<svg class="ring" viewBox="0 0 200 200" role="progressbar"
 						aria-valuenow={percent} aria-valuemin="0" aria-valuemax="100"
 						aria-label={t('job.progressAria')}>
-						<circle class="baan" cx="100" cy="100" r={STRAAL} />
+						<circle class="baan" cx="100" cy="100" r={RADIUS} />
 						<circle
 							class="before"
 							class:pause={quiet}
-							cx="100" cy="100" r={STRAAL}
+							cx="100" cy="100" r={RADIUS}
 							stroke-dasharray="{OMTREK}"
 							stroke-dashoffset={OMTREK * (1 - progress)}
 						/>
@@ -768,8 +768,8 @@
 							<span class="below">{t('phone.paused')}</span>
 						{:else if pauzeGevraagd}
 							<span class="below">{t('phone.pauseAsked')}</span>
-						{:else if resterend !== null}
-							<span class="below">{t('phone.remaining', { time: formatDuration(resterend) })}</span>
+						{:else if remaining !== null}
+							<span class="below">{t('phone.remaining', { time: formatDuration(remaining) })}</span>
 							<span class="ready">{t('phone.doneAt', { time: readyTo })}</span>
 						{:else}
 							<span class="below">{t('phone.burning')}</span>
@@ -803,7 +803,7 @@
 				onclick={() => (settingsOpen = !settingsOpen)}
 			>
 				<span class="name">{t('notifications.title')}</span>
-				<span class="state {meldStand}">{meldStand}</span>
+				<span class="state {noticeState}">{noticeState}</span>
 				<span class="pijl" aria-hidden="true">{settingsOpen ? '▴' : '▾'}</span>
 			</button>
 			{#if settingsOpen}

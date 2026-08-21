@@ -67,7 +67,7 @@
 		}
 	}
 
-	async function vraagOfWeg(id: string) {
+	async function askOrGo(id: string) {
 		const count = await countOnServer();
 		// Empty sheet: no question. There is nothing to lose, and a question about
 		// nothing only teaches you to click them away.
@@ -97,9 +97,9 @@
 	 * engine. So we simply check whether the active sheet has changed.
 	 */
 	async function voegToe() {
-		const voor = sheets.active?.id ?? null;
+		const was = sheets.active?.id ?? null;
 		if (await sheets.add()) {
-			if ((sheets.active?.id ?? null) !== voor) onSwitched?.();
+			if ((sheets.active?.id ?? null) !== was) onSwitched?.();
 		}
 	}
 
@@ -199,7 +199,7 @@
 			class="drop"
 			disabled={sheets.sheets.length < 2 || sheets.busy}
 			title={sheets.sheets.length < 2 ? t('sheets.needsOne') : undefined}
-			onclick={() => vraagOfWeg(sheet.id)}
+			onclick={() => askOrGo(sheet.id)}
 		>{t('sheets.removeSheet')}</button>
 		<button class="close" onclick={() => (editing = null)}>{t('common.done')}</button>
 	</div>

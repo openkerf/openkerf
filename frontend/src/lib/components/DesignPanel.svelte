@@ -1122,12 +1122,12 @@
 				class="layer"
 				class:compact
 				class:off={!op.output}
-				class:onzichtbaar={design.isLayerHidden(op.id)}
+				class:is-hidden={design.isLayerHidden(op.id)}
 				class:open
 				class:sleept={dragging?.id === op.id}
 				class:sleep-modus={dragging != null}
-				class:target-boven={dragging != null && dragging.id !== op.id && dragging.to === index && index < dragging.from}
-				class:target-onder={dragging != null && dragging.id !== op.id && dragging.to === index && index > dragging.from}
+				class:target-above={dragging != null && dragging.id !== op.id && dragging.to === index && index < dragging.from}
+				class:target-below={dragging != null && dragging.id !== op.id && dragging.to === index && index > dragging.from}
 				bind:this={rowElements[index]}
 				role="presentation"
 				oncontextmenu={(e) => {
@@ -1899,10 +1899,10 @@
 	}
 	/* The destination, as a line against the row. A line and not an opened gap: the list
 	   must not slide under your finger, or you will bad-aim. */
-	.layer.target-boven {
+	.layer.target-above {
 		box-shadow: inset 0 3px 0 0 var(--accent);
 	}
-	.layer.target-onder {
+	.layer.target-below {
 		box-shadow: inset 0 -3px 0 0 var(--accent);
 	}
 	.list-bar {
@@ -2026,8 +2026,8 @@
 	   green — colour is reserved here for what the laser is going to do. */
 	/* A hidden layer may still be read — it is not switched off, it is just not on the
 	   bed for the moment. The name fades, the buttons do not. */
-	.layer.onzichtbaar .layer-name,
-	.layer.onzichtbaar .count {
+	.layer.is-hidden .layer-name,
+	.layer.is-hidden .count {
 		opacity: 0.55;
 	}
 	.tag.zicht {

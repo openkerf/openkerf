@@ -25,7 +25,7 @@
 		events,
 		control,
 		activeJob,
-		revisie = 0,
+		revision = 0,
 		preflight = $bindable(),
 		onJog,
 		onHome,
@@ -41,7 +41,7 @@
 		control: Controller;
 		activeJob: Job | null;
 		/** Revision of the drawing; the time estimate in the preflight follows it. */
-		revisie?: number;
+		revision?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
 		onHome?: () => void;
@@ -62,15 +62,15 @@
 	 * the same number twice on one screen — and then the question is which of the
 	 * two to believe as soon as they drift a poll apart.
 	 */
-	let wachtenden = $derived(jobs.filter((job) => job !== activeJob));
+	let waiting = $derived(jobs.filter((job) => job !== activeJob));
 </script>
 
 <TileRun {tiling} />
-<JobControls {control} {device} job={activeJob} {revisie} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
+<JobControls {control} {device} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->
-{#if !connection.online || !spooler?.present || wachtenden.length}
+{#if !connection.online || !spooler?.present || waiting.length}
 <div class="section">
 	<!-- "Spooler" is what the engine calls it. What it is to the user is the
 	     queue. -->
@@ -84,8 +84,8 @@
 	{:else if !spooler?.present}
 		<p class="empty">{t('queue.noQueue')}</p>
 	{:else}
-		<p class="empty small">{t('queue.after', { n: wachtenden.length })}</p>
-		{#each wachtenden as job, i (i)}
+		<p class="empty small">{t('queue.after', { n: waiting.length })}</p>
+		{#each waiting as job, i (i)}
 			<!-- Only the job the controls are about can stall; the rest are simply
 			     waiting their turn. Without that distinction every waiting job got
 			     the paused look. -->
@@ -108,7 +108,7 @@
 					<!-- "How much longer" is the only number someone standing next to
 					     the machine wants; elapsed and total sit below it so the sum can
 					     be checked. -->
-					<p class="resterend">
+					<p class="remaining">
 						<span class="mono big">{formatDuration(remainingSeconds(job))}</span>
 						<span class="rest-label">{t('queue.remaining')}</span>
 					</p>
@@ -222,7 +222,7 @@
 		border-color: var(--warn-solid);
 		box-shadow: inset 3px 0 0 var(--warn-solid);
 	}
-	.resterend {
+	.remaining {
 		display: flex;
 		align-items: baseline;
 		gap: var(--space-2);

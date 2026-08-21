@@ -47,9 +47,9 @@ self.addEventListener('notificationclick', (event) => {
 	const notice = (event as NotificationEvent).notification;
 	notice.close();
 	event.waitUntil(
-		worker.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((vensters) => {
-			for (const venster of vensters) {
-				if ('focus' in venster) return venster.focus();
+		worker.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+			for (const client of clients) {
+				if ('focus' in client) return client.focus();
 			}
 			return worker.clients.openWindow('/');
 		})
