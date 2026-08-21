@@ -30,21 +30,21 @@
 		library: LibraryStore;
 		operations: DesignOperation[];
 		canEdit?: boolean;
-		/** Het materiaal van het vel waarop je werkt (besluit B1). De bibliotheek
-		 *  opent daarop gefilterd: je zoekt instellingen voor wat er ín de
-		 *  machine ligt, niet voor alles wat je ooit gebrand hebt. */
+		/** The material of the sheet you are working on (decision B1). The library
+		 *  opens filtered on it: you are looking for settings for what is *in* the
+		 *  machine, not for everything you have ever burned. */
 		sheetMaterialId?: number | null;
 		sheetMaterialName?: string | null;
 		onApplied?: () => void;
-		/** Opent het testrastervenster voor dit materiaal. */
+		/** Opens the test grid dialog for this material. */
 		onMakeGrid?: (materialId: number | null) => void;
 		token?: string;
 	} = $props();
 
-	// Het venster wordt bij elke opening opnieuw opgebouwd, dus dit is ook echt
-	// de stand waarin je hem elke keer aantreft. Bewust alleen de beginwaarde:
-	// wisselt het vel terwijl dit openstaat, dan hoort het filter niet onder je
-	// handen vandaan te schuiven — vandaar untrack.
+	// The dialog is rebuilt on every opening, so this really is the state you find it
+	// in every time. Deliberately only the initial value: if the sheet changes while
+	// this is open, the filter should not slide out from under your hands — hence
+	// untrack.
 	let materialId = $state<number | null>(untrack(() => sheetMaterialId));
 	let zoek = $state('');
 	let adding = $state(false);
@@ -144,8 +144,8 @@
 		const doos = doel?.getBoundingClientRect();
 		rijMenu = {
 			lijst: presetMenu(preset),
-			// Een klik op de ⋯-knop hangt het menu onder die knop; een rechterklik
-			// op de regel hangt het bij de cursor.
+			// A click on the ⋯ button hangs the menu below that button; a right-click on
+			// the row hangs it at the cursor.
 			x: event.type === 'contextmenu' || !doos ? event.clientX : doos.left - 180,
 			y: event.type === 'contextmenu' || !doos ? event.clientY : doos.bottom + 4
 		};
@@ -164,7 +164,7 @@
 
 	const operationLabel = operationName;
 
-	/** Zoeken over alles wat op de kaart staat: naam, dikte, bewerking, notitie. */
+	/** Searching everything on the card: name, thickness, operation, note. */
 	function raakt(preset: Preset, term: string) {
 		if (!term) return true;
 		const hooiberg = [
@@ -186,13 +186,13 @@
 	}
 
 	/**
-	 * Alle instellingen die aan het zoekwoord en het machinefilter voldoen —
-	 * bewust **niet** aan het gekozen materiaal.
+	 * Every setting that matches the search term and the machine filter —
+	 * deliberately **not** the chosen material.
 	 *
-	 * Het materiaal is since v4 de lijst links, en die lijst moet alle materialen
-	 * blijven tonen: filterde hij zichzelf, dan bleef er na één klik één regel
-	 * over en was er geen weg meer naar het volgende materiaal. Het inperken op
-	 * materiaal gebeurt in `zichtbarePresets`, aan de rechterkant.
+	 * Since v4 the material is the list on the left, and that list has to keep showing
+	 * every material: filtering itself, one click would leave one row and there would
+	 * be no way on to the next material. Narrowing by material happens in
+	 * `zichtbarePresets`, on the right-hand side.
 	 */
 	let zichtbaar = $derived(library.presetsFor(null).filter((p) => raakt(p, zoek.trim())));
 
@@ -201,7 +201,7 @@
 	}
 
 	/**
-	 * Wat je gisteren gebruikte, staat vandaag bovenaan.
+	 * What you used yesterday is at the top today.
 	 *
 	 * Alfabetisch sorteren is eerlijk en onbruikbaar: wie elke dag hetzelfde
 	 * multiplex snijdt, scrollde langs acryl, karton en leer om er te komen.
@@ -213,16 +213,16 @@
 			.slice(0, 3)
 	);
 
-	/** Op welke dikte er gefilterd wordt binnen het gekozen materiaal. */
+	/** Which thickness is being filtered on within the chosen material. */
 	let dikte = $state<number | null>(null);
-	// Van materiaal wisselen set het diktefilter terug: een dikte die dit
-	// materiaal niet heeft, geeft een leeg paneel zonder dat je ziet waarom.
+	// Switching material resets the thickness filter: a thickness this material does
+	// not have gives an empty panel without you seeing why.
 	$effect(() => {
 		void materialId;
 		untrack(() => (dikte = null));
 	});
 
-	/** De diktes die dit materiaal werkelijk heeft, dun naar dik. */
+	/** The thicknesses this material really has, thin to thick. */
 	let diktes = $derived.by(() => {
 		const groep = groepen.find((g) => g.materialId === materialId);
 		const waarden = new Set<number | null>();
@@ -231,9 +231,9 @@
 	});
 
 	/**
-	 * Wat er rechts staat, op leesvolgorde: dun naar dik, en binnen een dikte de
-	 * gemeten instellingen eerst. Een gemeten waarde is meer waard dan een
-	 * geschatte, dus die hoort bovenaan te staan en niet op alfabet.
+	 * What is on the right, in reading order: thin to thick, and within a thickness
+	 * the measured settings first. A measured value is worth more than an estimated
+	 * one, so it belongs at the top and not in alphabetical order.
 	 */
 	const BRON_ORDE: Record<string, number> = { testraster: 0, presetariat: 1, geextrapoleerd: 2, handmatig: 3 };
 	let zichtbarePresets = $derived.by(() => {
@@ -264,8 +264,8 @@
 			groep.presets.push(preset);
 			groep.laatst = Math.max(groep.laatst, gebruikt(preset));
 		}
-		// Materialen zonder presets horen er ook bij: zonder die groep is er
-		// geen plek waar "testraster maken" logisch staat.
+		// Materials without presets belong here too: without that group there is
+		// nowhere that "make a test grid" sits logically.
 		for (const materiaal of library.materials) {
 			if (kaart.has(materiaal.id)) continue;
 			if (zoek.trim() && !materiaal.name.toLowerCase().includes(zoek.trim().toLowerCase()))
@@ -306,10 +306,10 @@
 	}
 
 	/**
-	 * Een eigen preset aandragen bij de gedeelde catalogus.
+	 * Offering one of your own presets to the shared catalogue.
 	 *
-	 * De API maakt er een catalogusregel van en levert een voorgevuld voorstel
-	 * op GitHub; wij openen dat, zodat de gebruiker zelf ziet wat hij deelt.
+	 * The API turns it into a catalogue entry and produces a pre-filled proposal on
+	 * GitHub; we open that, so the user sees for themselves what they are sharing.
 	 */
 	async function share(preset: Preset) {
 		shareError = null;
@@ -346,11 +346,11 @@
 	}
 
 	/**
-	 * Welke textuur bij een materiaal hoort.
+	 * Which texture belongs to a material.
 	 *
-	 * Op naam raden is grof, maar het alternatief is een veld dat niemand
-	 * invult. Onbekend materiaal krijgt een neutrale strook — dat is eerlijker
-	 * dan hout suggereren.
+	 * Guessing on the name is crude, but the alternative is a field nobody fills in.
+	 * An unknown material gets a neutral band — that is more honest than suggesting
+	 * wood.
 	 */
 	function textuur(naam: string | null): string {
 		const n = (naam ?? '').toLowerCase();
@@ -391,16 +391,16 @@
 	let bestandsnaam = $state('');
 	let modus = $state<'samenvoegen' | 'vervangen'>('samenvoegen');
 	let botsWint = $state<'eigen' | 'bestand'>('eigen');
-	/** Welk materiaal uit het bestand op welk eigen materiaal gelegd wordt. */
+	/** Which material from the file is laid onto which of your own materials. */
 	let koppel = $state<Record<string, number>>({});
 	let wisZeker = $state(false);
 	let klaar = $state<ImportResult | null>(null);
 	/**
-	 * Elk voorstel dat we ooit toonden, ook nadat het aangevinkt is.
+	 * Every proposal we ever showed, including after it has been ticked.
 	 *
-	 * Zodra je koppelt, telt het materiaal als bekend en verdwijnt het uit de
-	 * voorstellen van de server — en daarmee zou het vinkje verdwijnen dat je
-	 * net zette. Dan is de keuze niet meer terug te draaien zonder afbreken.
+	 * As soon as you link them, the material counts as known and disappears from the
+	 * server's proposals — and with it the tick you just made would disappear. Then
+	 * the choice can no longer be undone without cancelling.
 	 */
 	let gezien = $state<Record<string, Voorstel>>({});
 	let voorstellen = $derived.by(() => {
@@ -411,17 +411,17 @@
 		return lijst.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
 	});
 
-	/** Kwam er iets binnen dat het huidige filter niet laat zien? */
+	/** Did something come in that the current filter does not show? */
 	let verborgen = $state(false);
 	let wisselEl = $state<HTMLElement | null>(null);
 	let klaarEl = $state<HTMLElement | null>(null);
 
 	/**
-	 * Het venster is de scrollbak, en je drukte op een knop onderaan.
+	 * The dialog is the scroll container, and you pressed a button at the bottom.
 	 *
-	 * Zonder dit verschijnt het voorbeeld met zijn kop en zijn tellingen bóven
-	 * beeld: je landt midden in een beslissing en moet eerst omhoog om te zien
-	 * waar hij over gaat.
+	 * Without this the preview appears with its heading and its tallies *above* the
+	 * viewport: you land in the middle of a decision and have to go up first to see
+	 * what it is about.
 	 */
 	async function naarBoven(welke: 'voorbeeld' | 'klaar') {
 		await tick();
@@ -443,13 +443,13 @@
 	/**
 	 * Twee namen voor dezelfde plank aan elkaar knopen.
 	 *
-	 * Het voorbeeld wordt daarna opnieuw opgehaald: het aantal nieuwe materialen
-	 * verandert erdoor, en een telling die niet meebeweegt met je keuze is een
-	 * telling die je niet kunt vertrouwen.
+	 * The preview is fetched again afterwards: the number of new materials changes
+	 * because of it, and a tally that does not move with your choice is a tally you
+	 * cannot trust.
 	 */
 	async function koppelen(paar: Voorstel, on: boolean) {
-		// Onthouden vóór het herrekenen: daarna kent de server dit materiaal en
-		// draagt hij het voorstel niet meer aan.
+		// Remember it before recomputing: after that the server knows this material and
+		// no longer offers the proposal.
 		gezien = { ...gezien, [paar.name]: paar };
 		koppel = on
 			? { ...koppel, [paar.name]: paar.material_id }
@@ -465,9 +465,9 @@
 		const zichtbaarVoor = library.presets.length;
 		const uitkomst = await library.importBundle(voorbeeld.bundle, modus, koppel, botsWint);
 		if (uitkomst) {
-			// "4 instellingen erbij" terwijl het scherm niet verandert, is geen
-			// geruststelling maar een raadsel: ze horen dan bij een andere machine
-			// en vallen buiten het filter. Gemeten in plaats van geraden.
+			// "4 settings added" while the screen does not change is not reassurance but
+			// a riddle: they belong to another machine then and fall outside the filter.
+			// Measured rather than guessed.
 			verborgen =
 				uitkomst.presets.added > 0 &&
 				library.presets.length - zichtbaarVoor < uitkomst.presets.added;
@@ -478,11 +478,11 @@
 	}
 
 	/**
-	 * Draagt de kant uit het bestand het betere bewijs?
+	 * Does the side from the file carry the better evidence?
 	 *
-	 * "Mijn waarden houden" is de veilige regel, maar niet als jouw waarde
-	 * uitgerekend is en die uit het bestand op een raster gebrand. Dan wint de
-	 * regel het van de meting, en dat hoort iemand te zien vóór hij kiest.
+	 * "Keep my values" is the safe rule, but not when your value is calculated and the
+	 * one from the file was burned on a grid. Then the rule beats the measurement, and
+	 * somebody should see that before they choose.
 	 */
 	function sterkerBewijs(botsing: PresetConflict) {
 		return botsing.theirs.source === 'testraster' && botsing.mine.source !== 'testraster';
@@ -502,11 +502,11 @@
 	}
 
 	/**
-	 * De rasterfoto, met het gekozen vakje omcirkeld als we weten welk vakje het was.
+	 * The grid photo, with the chosen square circled when we know which square it was.
 	 *
-	 * De server tekent de markering in het beeld (`?cell=<rij>-<kolom>`), dus een
-	 * gewone `<img>` volstaat en er is hier geen overlay-wiskunde nodig. Zonder
-	 * bekend vakje shouldAsk we de foto onbewerkt op — dat is de veilige val-terug.
+	 * The server draws the marker into the image (`?cell=<row>-<column>`), so a plain
+	 * `<img>` suffices and no overlay maths is needed here. Without a known square we
+	 * ask for the photo unprocessed — that is the safe fallback.
 	 */
 	function fotoUrl(preset: Preset) {
 		const basis = `/api/library/testgrids/${preset.grid_id}/photo`;
@@ -515,7 +515,7 @@
 			: basis;
 	}
 
-	/** Past deze preset bij het laagtype waar hij op gezet wordt? */
+	/** Does this preset suit the layer type it is being put on? */
 	function pastBij(preset: Preset, laag: DesignOperation | null) {
 		if (!laag) return true;
 		const toegestaan = OPERATION_LAYER[preset.operation];
@@ -874,8 +874,8 @@
 
 {#if voorbeeld}
 	<!-- Het importvoorbeeld neemt het hele venster over. Dit is het moment
-	     waarop de beslissing valt; ernaast blijven bladeren door de bibliotheek
-	     die je op het point staat te overschrijven, helpt niemand. -->
+	     where the decision falls; going on browsing beside it through the library you
+	     are about to overwrite helps nobody. -->
 	{@const s = voorbeeld.samenvoegen}
 	<section class="wissel" bind:this={wisselEl}>
 		<header class="wisselkop">
@@ -1586,8 +1586,8 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	/* Waaróm dit filter aanstaat, in de schakelaar zelf: anders lijkt het een
-	   voorkeur die iemand ooit heeft aangezet. */
+	/* *Why* this filter is on, in the toggle itself: otherwise it looks like a
+	   preference somebody once switched on. */
 	.waarom { color: var(--text-2); }
 	.kop {
 		font-size: var(--text-xs);
@@ -1598,8 +1598,8 @@
 		margin: var(--space-4) 0 var(--space-2);
 	}
 	.leeg { color: var(--text-2); margin: 0 0 var(--space-2); }
-	/* Een lege staat mag ruimte innemen: hij is hier het scherm, niet een
-	   voetnoot eronder. */
+	/* An empty state may take up room: here it *is* the screen, not a footnote
+	   under it. */
 	.onthaal {
 		padding: var(--space-6) 0 var(--space-4);
 		max-width: 46ch;
@@ -1651,18 +1651,18 @@
 		color: var(--accent-ink);
 	}
 
-	/* Materiaal als beeld — maar één keer per materiaal. Tien keer dezelfde
-	   houtstrook onder elkaar is behang; één band boven de groep is identiteit. */
-	/* Nerf: twee lagen strepen onder een lichte hoek, met een warme ondergrond. */
-	/* Acryl: glad, met één schuine glans. */
+	/* Material as image — but once per material. The same wood band ten times over is
+	   wallpaper; one band above the group is identity. */
+	/* Grain: two layers of stripes at a slight angle, on a warm ground. */
+	/* Acrylic: smooth, with one diagonal highlight. */
 	/* Leer: onregelmatige korrel uit gestapelde radiale vlekken. */
-	/* Karton: golfprofiel, van opzij gezien. */
-	/* Metaal: geborsteld, met een lopende glans. */
+	/* Cardboard: corrugated profile, seen from the side. */
+	/* Metal: brushed, with a running highlight. */
 
-	/* ── Het tweeluik ────────────────────────────────────────────────────────
-	   Links wat je hebt, rechts wat erbij hoort. De linkerkolom is vast: hij
-	   moet niet meebewegen zodra je een materiaal met een lange naam aanwijst,
-	   want dan schuift de lijst onder je cursor vandaan. */
+	/* ── The diptych ─────────────────────────────────────────────────────────
+	   On the left what you have, on the right what belongs with it. The left column is
+	   fixed: it must not move as soon as you point at a material with a long name,
+	   because then the list slides out from under your cursor. */
 	.tweeluik {
 		display: grid;
 		grid-template-columns: 232px minmax(0, 1fr);
@@ -1700,7 +1700,7 @@
 	.matnaam { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.mataantal { flex: none; font-size: var(--text-xs); color: var(--text-2); }
 	.matrij.aan .mataantal { color: inherit; }
-	/* Wat er in de machine ligt: één woord, niet een tweede kleur. */
+	/* What is in the machine: one word, not a second colour. */
 	.ligt {
 		flex: none;
 		font-size: 10px;
@@ -1751,8 +1751,8 @@
 		padding: 0 var(--space-2) 0 calc(var(--space-2) + 4px);
 	}
 	.preset:first-of-type { margin-top: 0; }
-	/* De bron zit ook in de rand: bij het scrollen zie je aan de linkerkant
-	   welke instellingen gemeten zijn en welke gegokt. */
+	/* The source is in the border too: while scrolling you see on the left which
+	   settings are measured and which are guessed. */
 	.preset::before {
 		content: '';
 		position: absolute;
@@ -1777,8 +1777,9 @@
 		min-height: 40px;
 	}
 	.wat { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-2); }
-	/* De dikte in een eigen kolom van vaste breedte: dat is waar het oog langs
-	   loopt als je "3 mm" zoekt, en dan moeten de getallen onder elkaar staan. */
+	/* The thickness in a column of its own with a fixed width: that is what the eye
+	   runs along when you are looking for "3 mm", and then the numbers have to line
+	   up under each other. */
 	.maat {
 		flex: none;
 		width: 4.4em;
@@ -1860,9 +1861,9 @@
 		font-weight: 500;
 	}
 	.doe:disabled { opacity: 0.4; cursor: not-allowed; }
-	/* Een instelling voor een ander soort bewerking mag je toepassen, maar niet
-	   zonder dat je het weet. Eén teken bij de bewerking, met de hele uitleg in
-	   de tooltip. */
+	/* A setting for a different kind of operation may be applied, but not without you
+	   knowing. One sign beside the operation, with the whole explanation in the
+	   tooltip. */
 	.mismatch {
 		display: inline-flex;
 		align-items: center;
@@ -1918,9 +1919,9 @@
 	}
 	.herkomst dt { color: var(--text-2); }
 	.herkomst dd { margin: 0; }
-	/* Zonder opgeslagen uitlijning valt de server terug op het hele beeld; bij een
-	   schuine foto met veel rand ligt de omtrek dan een halve cel mis. Dat zeggen
-	   is beter dan een markering die exact lijkt en het niet is. */
+	/* Without a stored alignment the server falls back on the whole image; on a skewed
+	   photo with a lot of margin the outline is then half a cell out. Saying so is
+	   better than a marker that looks exact and is not. */
 	.benadering { display: block; margin-top: 2px; color: var(--warn); }
 	.bewijsvak {
 		display: grid;
@@ -1976,10 +1977,10 @@
 		margin-bottom: 4px;
 		font-size: var(--text-xs);
 	}
-	/* De naam duwt de rest naar rechts; zo staan het vermogen en het merkje
-	   op één lijn, ook als het ene profiel wel een merkje heeft en het andere niet. */
+	/* The name pushes the rest to the right; that way the power and the badge line up,
+	   even when one profile has a badge and the other does not. */
 	.profiles li > span:first-child { flex: 1; min-width: 0; }
-	/* Verweesd is geen failure maar wel iets om te weten: gedempt, niet rood. */
+	/* Orphaned is not an error but is worth knowing: muted, not red. */
 	.profiles li.verweesd { border-style: dashed; }
 	.profiles li.verweesd > span:first-child { color: var(--text-2); }
 	.profiles .merk {
@@ -2040,8 +2041,8 @@
 	.uitwissel .fijn { max-width: 52ch; }
 	.uitknoppen { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
-	/* Het voorbeeld is een eigen scherm, geen strook onder de lijst: hier valt
-	   de beslissing, dus krijgt het de ruimte en de leesbreedte ervoor. */
+	/* The preview is a screen of its own, not a strip below the list: this is where
+	   the decision falls, so it gets the room and the reading width for it. */
 	.wisselkop { margin-bottom: var(--space-4); }
 	.wisselkop h2 {
 		font-size: var(--text-lg);
@@ -2068,7 +2069,7 @@
 		background: var(--surface-2);
 		color: var(--text-2);
 	}
-	/* Nul foto's is geen detail: dan komt het bewijs niet mee. */
+	/* Zero photos is not a detail: then the evidence does not come along. */
 	.inhoud li.mist { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
 	.nu { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-2); }
 
@@ -2115,7 +2116,7 @@
 		position: relative;
 		font-size: var(--text-sm);
 	}
-	/* Erbij of ongewijzigd, in vorm en niet alleen in kleur. */
+	/* Added or unchanged, in shape and not only in colour. */
 	.gevolg li::before {
 		position: absolute;
 		left: 0;
@@ -2145,9 +2146,9 @@
 		background: color-mix(in srgb, var(--danger) 9%, transparent);
 	}
 	.blok.wis p { margin: 0 0 var(--space-2); }
-	/* Op aanraakbreedtes is een selectievakje 44px hoog (design system), dus
-	   uitlijnen op de bovenkant set het glyphje een regel onder zijn eigen
-	   label. Centreren houdt het naast de tekst op elk device. */
+	/* At touch widths a checkbox is 44px tall (design system), so aligning to the top
+	   puts the glyph a line below its own label. Centring keeps it beside the text on
+	   every device. */
 	.samenvoeg {
 		display: grid;
 		grid-template-columns: auto 1fr;
@@ -2159,8 +2160,8 @@
 	}
 	.wint { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
 	.botsingen { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-	/* Twee waarden vergelijken kan alleen als ze in een kolom staan. Elke regel
-	   deelt daarom hetzelfde grid: wat, van mij, van het bestand. */
+	/* Comparing two values only works when they are in a column. Every row therefore
+	   shares the same grid: what, mine, the file's. */
 	.botsingen li {
 		display: grid;
 		grid-template-columns: 1fr auto auto;
@@ -2182,9 +2183,9 @@
 		gap: 2px;
 		color: var(--text-2);
 	}
-	/* Wie wint is af te lezen zonder de keuze erboven terug te lezen: de
-	   winnende kant staat vet en gemarkeerd, de andere blijft leesbaar — het
-	   zijn allebei getallen die je wilt kunnen zien. */
+	/* Which side wins can be read off without re-reading the choice above: the winning
+	   side is bold and marked, the other stays readable — they are both numbers you
+	   want to be able to see. */
 	.kant.wint { color: var(--text-1); font-weight: 600; }
 	.kant.wint .k::after {
 		content: ' ✓';
