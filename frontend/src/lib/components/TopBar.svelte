@@ -199,7 +199,7 @@
 			return;
 		}
 		const meta = e.ctrlKey || e.metaKey;
-		// Stop: Ctrl/⌘ + punt. Eén hand, geen modus, en vrij in elke browser.
+		// Stop: Ctrl/⌘ + point. Eén hand, geen modus, en vrij in elke browser.
 		if (meta && (e.key === '.' || e.code === 'Period')) {
 			e.preventDefault();
 			if (canStop && !weg) onStop();

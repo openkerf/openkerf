@@ -1568,6 +1568,7 @@ export const en = {
 	'sheets.removeConfirm': 'Remove the sheet and {what}',
 
 	// ── Presetariat ───────────────────────────────────────────────────────────────
+	'presetariat.fromCopy': 'From the local copy: {error}',
 	'presetariat.title': 'Presetariat',
 	'presetariat.lead': 'Settings other people shared. They come from someone else\'s machine: take them as a starting point, not as truth. What was measured with a test grid is at the top.',
 	'presetariat.allMachines': 'All machines',

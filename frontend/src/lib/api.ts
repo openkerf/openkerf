@@ -16,10 +16,10 @@ export type Job = {
 	priority: number | null;
 	running: boolean | null;
 	/**
-	 * Staat deze job stil omdat er op Pauze gedrukt is?
+	 * Is this job standing still because Pause was pressed?
 	 *
-	 * Komt van `driver.paused` en niet uit `status`: dat veld kent maar vier
-	 * waarden en "pause" zit er niet bij (meerk40t/core/laserjob.py:66). Zie
+	 * It comes from `driver.paused` and not from `status`: that field knows only four
+	 * values and "pause" is not among them (meerk40t/core/laserjob.py:66). See
 	 * `StatusReader.paused` in api/openkerf_api/status.py.
 	 */
 	paused?: boolean | null;
@@ -42,8 +42,8 @@ export type Spooler = {
 export type Bed = { width_mm: number | null; height_mm: number | null };
 
 /**
- * Hangt er echt een machine aan? "unknown" is een eerlijk antwoord voor
- * families waar de engine er geen bron voor heeft; het is géén reden om
+ * Is a machine really attached? "unknown" is an honest answer for families where
+ * the engine has no source for it; it is *not* a reason to
  * "verbonden" te tonen.
  */
 export type Connection = {
@@ -56,7 +56,7 @@ export type Device = {
 	path: string | null;
 	active: boolean;
 	laser_status: string | null;
-	/** Pauzeknop ingedrukt? `null` als deze driver het niet vertelt. */
+	/** Pause pressed? `null` when this driver does not say. */
 	paused?: boolean | null;
 	connection?: Connection;
 	bed: Bed;
@@ -73,8 +73,8 @@ export type Capabilities = {
 		clear_queue: boolean;
 		load: boolean;
 	};
-	/** Wat dít device kan bewegen. Verschilt per machine: een Ruida kent
-	 *  scherpstellen, een K40-bord niet. */
+	/** What *this* device can move. It differs per machine: a Ruida knows focusing,
+	 *  a K40 board does not. */
 	motion?: {
 		home: boolean;
 		physical_home: boolean;
@@ -84,15 +84,15 @@ export type Capabilities = {
 		jog: boolean;
 		focus: boolean;
 	};
-	/** Kan deze driver snelheid en vermogen bijstellen terwijl een job loopt
-	 *  (gat J11)? Alleen grbl heeft daar realtime overrides voor; op een Ruida
-	 *  staat dit op false en horen die knoppen er niet te zijn. */
+	/** Can this driver adjust speed and power while a job is running (gap J11)? Only
+	 *  grbl has realtime overrides for it; on a Ruida this is false and those buttons
+	 *  should not be there. */
 	adjust?: {
 		power: boolean;
 		speed: boolean;
 	};
-	/** Kan deze machine verbinden en verbreken? Ruida en de USB-families wel,
-	 *  grbl niet — die opent zijn connection zelf zodra er werk naartoe gaat. */
+	/** Can this machine connect and disconnect? Ruida and the USB families can, grbl
+	 *  cannot — it opens its connection itself as soon as work goes to it. */
 	connection?: {
 		connect: boolean;
 		disconnect: boolean;
@@ -103,7 +103,7 @@ export type Capabilities = {
 export type Snapshot = {
 	kernel: { name: string | null; version: string | null };
 	devices: Device[];
-	/** De lopende tegelreeks, of niets. Zie `$lib/tiling.svelte` (`TileRun`). */
+	/** The running tile run, or nothing. See `$lib/tiling.svelte` (`TileRun`). */
 	tiling?: TileRun | null;
 };
 
@@ -117,11 +117,11 @@ export type SignalEvent = {
 
 export type SnapshotEvent = { type: 'snapshot'; data: Snapshot };
 /**
- * Het eerste bericht op elke verse socket: wie de server is.
+ * The first message on every fresh socket: who the server is.
  *
- * `instance` is nieuw bij elke start van het serverproces. Verandert hij
- * tussen twee verbindingen, dan is de engine herstart en is alles wat de
- * pagina vasthoudt van een ander leven (gat E2).
+ * `instance` is new on every start of the server process. If it changes between two
+ * connections, the engine has restarted and everything the page is holding belongs
+ * to a different life (gap E2).
  */
 export type HelloEvent = { type: 'hello'; instance: string };
 export type ApiEvent = SignalEvent | SnapshotEvent | HelloEvent;
@@ -129,44 +129,44 @@ export type ApiEvent = SignalEvent | SnapshotEvent | HelloEvent;
 /**
  * Machine state as the UI shows it — dubbel gecodeerd, nooit alleen kleur.
  *
- * `offline` en `unplugged` zijn twee verschillende rampen en shouldAsk om twee
- * verschillende handelingen. `offline`: de app kan de OpenKerf-server niet
- * bereiken — herstart de server, of je zit op het verkeerde adres. `unplugged`:
- * de server draait prima, maar er hangt geen machine aan — controleer de kabel
- * of set hem aan. Eén woord voor allebei stuurt de helft van de mensen naar de
+ * `offline` and `unplugged` are two different disasters and ask for two different
+ * actions. `offline`: the app cannot reach the OpenKerf server — restart the server,
+ * or you are on the wrong address. `unplugged`: the server is running fine, but no
+ * machine is attached — check the cable or switch it on. One word for both sends
+ * half the people to the
  * verkeerde kabel.
  */
 export type MachineState = 'offline' | 'unplugged' | 'ready' | 'busy' | 'paused' | 'alarm';
 
 /**
- * Wat de machine aan het doen is.
+ * What the machine is doing.
  *
- * `laser_status` alléén is geen betrouwbare bron: de Ruida-driver van MeerK40t
- * set dat veld nergens (geverifieerd met een grep over `meerk40t/ruida/`), dus
- * op onze doelmachine blijft het eeuwig "idle". Een groene "Gereed" boven een
- * brandende laser is precies de failure die je hier niet mag maken, daarom telt
- * een lopende job in de spooler net zo hard mee.
+ * `laser_status` on its own is not a trustworthy source: MeerK40t's Ruida driver sets
+ * that field nowhere (verified with a grep over `meerk40t/ruida/`), so on our target
+ * machine it stays "idle" forever. A green "Ready" above a burning laser is exactly
+ * the failure you must not make here, which is why a running job in the spooler
+ * counts just as heavily.
  */
 export function machineState(device: Device | null, connected: boolean): MachineState {
 	if (!connected || !device) return 'offline';
-	// currentJob en niet runningJob: een gepauzeerde Lihuiyu-job heeft
-	// `running === false` en viel daardoor buiten beeld — inclusief zijn pauze.
+	// currentJob and not runningJob: a paused Lihuiyu job has `running === false` and
+	// therefore fell out of sight — pause and all.
 	const job = currentJob(device);
 	if (device.laser_status === 'pause' || device.laser_status === 'paused') return 'paused';
-	// De driver zelf, en dat is de enige harde bron (zie `StatusReader.paused`).
-	// Ook zonder job telt hij: een machine die op pauze staat begint niet aan
-	// het volgende werk, en dan is "Gereed" een belofte die niet uitkomt.
+	// The driver itself, and that is the only hard source (see `StatusReader.paused`).
+	// It counts without a job too: a machine that is paused does not start the next
+	// piece of work, and then "Ready" is a promise that does not come true.
 	if (device.paused === true) return 'paused';
-	// De drivers seinen een pauze niet terug (FEATURE-GAPS P3), dus een job die
-	// al gelopen heeft en nu stilstaat is het enige bewijs dat we krijgen.
-	// Zonder dit zei de balk "Bezig" naast een knop met "Hervatten" erop.
+	// The drivers do not signal a pause back (FEATURE-GAPS P3), so a job that has run
+	// and now stands still is the only evidence we get. Without this the bar said
+	// "Busy" next to a button labelled "Resume".
 	if (isStalled(job)) return 'paused';
 	if (device.laser_status === 'active') return 'busy';
 	if (job || device.spooler.idle === false) return 'busy';
-	// Pas hier, en niet eerder: een machine die brandt is per definitie
-	// verbonden, en een driver die zijn connection niet meldt mag een lopende
-	// job niet als "niet verbonden" wegzetten. Maar een stille machine zonder
-	// kabel is géén "Gereed" — dat was een groene stip boven een dode poort.
+	// Only here, and not earlier: a machine that is burning is connected by
+	// definition, and a driver that does not report its connection must not write off a
+	// running job as "not connected". But a quiet machine without a cable is *not*
+	// "Ready" — that was a green dot above a dead port.
 	if (device.connection?.state === 'disconnected') return 'unplugged';
 	return 'ready';
 }
@@ -176,15 +176,15 @@ export function runningJob(device: Device | null): Job | null {
 }
 
 /**
- * Is deze job gepauzeerd?
+ * Is this job paused?
  *
- * `status` stond hier als enige bron, en dat kón nooit werken: `LaserJob.status`
- * geeft Running, Queued, Waiting of Disabled terug en nooit iets met "pause"
- * erin (meerk40t/core/laserjob.py:66). Gemeten gevolg op een lopende job: na
- * een druk op Pauze bleef alles staan zoals het stond — dezelfde pauzeknop,
- * geen hervatknop, een groen "Bezig" — terwijl de driver wel degelijk
- * gepauzeerd was. De API levert die vlag nu mee als `paused`; het statusveld
- * blijft staan voor het geval een driver het ooit wél schrijft.
+ * `status` used to be the only source here, and that could never work:
+ * `LaserJob.status` returns Running, Queued, Waiting or Disabled and never anything
+ * with "pause" in it (meerk40t/core/laserjob.py:66). Measured consequence on a
+ * running job: after a press on Pause everything stayed as it was — the same pause
+ * button, no resume button, a green "Busy" — while the driver was very much paused.
+ * The API now sends that flag along as `paused`; the status field stays for the case
+ * where a driver does eventually write it.
  */
 export function isPaused(job: Job | null): boolean {
 	if (job?.paused === true) return true;
@@ -192,16 +192,16 @@ export function isPaused(job: Job | null): boolean {
 }
 
 /**
- * De job waar de bediening over gaat.
+ * The job the controls are about.
  *
- * `running` alleen is te smal: Lihuiyu set dat vlaggetje bij pauzeren op
- * `false`, waarna de job uit beeld verdween — inclusief de knop om hem te
- * hervatten, en met "Job starten" weer active bovenop een job die alleen maar
- * stilstond. Een gepauzeerde job is nog steeds jouw job, dus die telt hier mee.
+ * `running` on its own is too narrow: Lihuiyu sets that flag to `false` on pause,
+ * after which the job disappeared from sight — including the button to resume it,
+ * and with "Start job" active again on top of a job that was merely standing still. A
+ * paused job is still your job, so it counts here.
  *
- * Drie bronnen, in aflopende zekerheid: hij loopt / hij zegt zelf gepauzeerd te
- * zijn / de spooler meldt dat hij niet leeg is (sommige drivers melden een
- * pauze helemaal niet terug — zie FEATURE-GAPS P3).
+ * Three sources, in descending certainty: it is running / it says itself that it is
+ * paused / the spooler reports it is not empty (some drivers do not report a pause
+ * back at all — see FEATURE-GAPS P3).
  */
 export function currentJob(device: Device | null): Job | null {
 	const jobs = device?.spooler.jobs ?? [];
@@ -213,58 +213,59 @@ export function currentJob(device: Device | null): Job | null {
 }
 
 /**
- * Ligt er werk dat niet vooruitkomt? Dat is iets anders dan "geen job": het
+ * Is there work that is not making progress? That is something other than "no
+ * job": the
  * verschil tussen hervatten en opnieuw starten hangt eraan.
  *
- * Niet alleen op het statusveld kijken: pauzeren set bij Lihuiyu `running` op
- * `false` zonder verder iets te melden, en de drivers seinen een pauze sowieso
- * niet terug (FEATURE-GAPS P3). Een job die er wel is maar niet loopt, staat
- * stil — dat is wat je op het scherm wil zien.
+ * Not just looking at the status field: pausing sets `running` to `false` on
+ * Lihuiyu without reporting anything else, and the drivers do not signal a pause back
+ * anyway (FEATURE-GAPS P3). A job that exists but is not running is standing still —
+ * which is what you want to see on screen.
  *
- * **Dit is de enige definitie** (gat J8). PhoneView had een eigen variant —
- * `Boolean(job) && (!running || machineState === 'paused')` — die de eis "er
- * was al voortgang" liet vallen. Gevolg: een vers gespoolde job loopt nog niet
- * en werd daar één pollronde lang als "Pauze" getoond, terwijl de rest van de
- * app hem gewoon in de wachtrij zag staan. Twee schermen naast elkaar die iets
+ * **This is the only definition** (gap J8). PhoneView had a variant of its own —
+ * `Boolean(job) && (!running || machineState === 'paused')` — that dropped the
+ * requirement "there was progress already". Consequence: a freshly spooled job is not
+ * running yet and was shown there as "Paused" for one poll round, while the rest of
+ * the app simply saw it in the queue. Two screens side by side saying something
  * anders zeggen over dezelfde job.
  *
- * Wie ook de device-kant wil meenemen (`laser_status === "pause"`, dus een
- * machine die zelf pauzeert zonder dat de job iets meldt) neemt niet deze
- * functie maar `machineState(device, connected) === 'paused'`. Die roept dit
- * hieronder al aan, dus dat blijft één bron.
+ * Whoever also wants the device side (`laser_status === "pause"`, so a machine that
+ * pauses itself without the job reporting anything) does not take this function but
+ * `machineState(device, connected) === 'paused'`. That one already calls this below,
+ * so it stays one source.
  */
 export function isStalled(job: Job | null): boolean {
 	if (!job) return false;
 	if (isPaused(job)) return true;
 	if (job.running) return false;
-	// Begonnen maar staat stil = pauze. Nog niets gedaan = hij wacht nog op zijn
-	// beurt. Zonder dat onderscheid sprong de bovenbalk vlak na het starten één
-	// pollronde lang op "Pauze", omdat een net gespoolde job ook niet loopt.
+	// Started but standing still = paused. Nothing done yet = waiting its turn.
+	// Without that distinction the top bar jumped to "Paused" for one poll round just
+	// after starting, because a freshly spooled job is not running either.
 	return (job.elapsed_seconds ?? 0) > 0 || (job.progress ?? 0) > 0;
 }
 
 /**
- * Vanaf hoeveel voortgang we de gemeten snelheid boven het model geloven.
+ * From what progress we believe the measured speed over the model.
  *
- * Onder deze grens is de projectie ruis — één trage eerste beweging maakt er
- * dan uren van. Erboven weet de klok het beter dan welk model ook.
+ * Below this bound the projection is noise — one slow first movement turns it into
+ * hours. Above it the clock knows better than any model.
  */
 const GEMETEN_VANAF = 0.1;
 
 /**
- * Hoe lang deze job in totaal duurt, uit één bron.
+ * How long this job takes in total, from one source.
  *
- * Hier zat gat B1. De statusbalk zette "nog 0:00" naast "van 13:45:04" en die
- * twee kwamen uit verschillende werelden: het resterende was de klok
- * (verstreken ÷ voortgang), het totaal was het brandmodel van de engine
- * (`LaserJob._estimate`, opgeteld uit de cutcode). Zolang die twee ver uit
- * elkaar liggen leest het paar als onzin — 100 % klaar, nog dertien uur te
+ * This was gap B1. The status bar put "0:00 left" next to "of 13:45:04" and those two
+ * came from different worlds: the remaining time was the clock (elapsed ÷ progress),
+ * the total was the engine's burn model (`LaserJob._estimate`, added up from the
+ * cutcode). As long as those two are far apart the pair reads as nonsense — 100 %
+ * done, thirteen hours
  * gaan.
  *
- * Dus: zodra er genoeg voortgang is om te meten, is de gemeten projectie het
- * totaal én de bron van het restant. Daarvóór is het model dat allebei. Er zit
- * één sprong in, op het moment dat we van gokken naar meten gaan; dat is de
- * eerlijke plek voor een sprong.
+ * So: as soon as there is enough progress to measure, the measured projection is the
+ * total *and* the source of the remainder. Before that the model is both. There is one
+ * jump in it, at the moment we go from guessing to measuring; that is the honest place
+ * for a jump.
  */
 export function totalSeconds(job: Job | null): number | null {
 	if (!job) return null;
@@ -350,10 +351,10 @@ export function jobStatusLabel(job: Job): string {
 	const raw = (job.status ?? '').toLowerCase();
 	if (raw.includes('pause')) return t('job.status.paused');
 	if (raw.includes('run')) return t('job.status.running');
-	// "Waiting" is wat de engine een gespoolde job noemt die de machine nog niet
-	// heeft opgepakt. Die viel door alle takken heen en kwam ongefilterd op het
-	// scherm — het enige Engelse woord in de Job-tab, precies op de plek waar je
-	// wil weten of er iets stuk is.
+	// "Waiting" is what the engine calls a spooled job the machine has not picked up
+	// yet. It fell through every branch and reached the screen unfiltered — the one
+	// word in the Job tab that was not in the catalogue, exactly where you want to
+	// know whether something is broken.
 	if (raw.includes('queue') || raw.includes('wait')) return t('job.status.queued');
 	if (raw.includes('complete') || raw.includes('done')) return t('job.status.done');
 	if (job.running) return t('job.status.running');

@@ -376,7 +376,7 @@
 	/**
 	 * Kan deze selectie een vlak dragen, en heeft ze dat al?
 	 *
-	 * Een lijn en een punt hebben geen binnenkant; de knop hoort er dan niet te
+	 * Een lijn en een point hebben geen binnenkant; de knop hoort er dan niet te
 	 * staan. Zonder vulling rastert een vorm alleen zijn omtrek, en dat is de
 	 * hele reden dat deze knop bestaat.
 	 */

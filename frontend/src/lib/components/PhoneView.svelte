@@ -34,7 +34,7 @@
 	import { connection } from '$lib/connection.svelte';
 	import AlarmCard from './AlarmCard.svelte';
 	import NotificationCard from './NotificationCard.svelte';
-	import type { Bewaker, Meldingen } from '$lib/notifications.svelte';
+	import type { Notifications, Watchdog } from '$lib/notifications.svelte';
 	import type { DesignStore } from '$lib/design.svelte';
 
 	let {
@@ -44,7 +44,7 @@
 		control,
 		camera,
 		notifications,
-		bewaker,
+		watchdog,
 		connected,
 		position,
 		design = null,
@@ -57,8 +57,8 @@
 		job: Job | null;
 		control: Controller;
 		camera: CameraStore;
-		notifications: Meldingen;
-		bewaker: Bewaker;
+		notifications: Notifications;
+		watchdog: Watchdog;
 		connected: boolean;
 		position: string;
 		/** Wat er op het bed ligt (gat J10). Zonder dit tekende de telefoon een
@@ -480,7 +480,7 @@
 		status — precisely the first thing you want to see with a connection alarm —
 		was permanently out of reach.
 	-->
-	<AlarmCard {bewaker} groot />
+	<AlarmCard {watchdog} large />
 	<header>
 		<span class="dot {machineState}" aria-hidden="true"></span>
 		<span class="staat"
@@ -781,7 +781,7 @@
 
 			{#if vraagNu}
 				<!-- The occasion is here now: there is work in the machine. -->
-				<NotificationCard {notifications} variant="aanleiding" onKlaar={() => (vraagWeg = true)} />
+				<NotificationCard {notifications} variant="prompt" onDone={() => (vraagWeg = true)} />
 			{/if}
 
 			{@render camerablok()}

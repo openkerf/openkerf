@@ -1,9 +1,9 @@
 /**
- * Schrijfacties richting de API.
+ * Write actions towards the API.
  *
- * De API laat schrijven vrij zolang hij op localhost luistert; zodra hij breder
- * bindt (telefoon/tablet) is een token verplicht. We bewaren die token in
- * localStorage zodat de PWA hem niet elke sessie opnieuw vraagt.
+ * The API leaves writing open as long as it listens on localhost; as soon as it binds
+ * wider (phone/tablet) a token is required. We keep that token in localStorage so the
+ * PWA does not ask for it again every session.
  */
 
 import { apiError, t } from './i18n/core.ts';
@@ -12,32 +12,32 @@ import { connection } from './connection.svelte';
 
 const TOKEN_KEY = 'openkerf.token';
 
-/** Een plek op het bed die deze machine onthoudt (gat J6). */
+/** A place on the bed this machine remembers (gap J6). */
 export type Position = { name: string; x_mm: number; y_mm: number };
 
 /**
- * Het nulpunt van de gebruiker (gat J12), als losse module-toestand.
+ * The user's zero point (gap J12), as loose module state.
  *
- * Twee schermen hebben hem nodig: het Job-paneel, dat hem set, en het canvas,
- * dat laat zien waar het werk terechtkomt. Die twee zitten niet in elkaar en de
- * pagina ertussen is niet van deze ronde, dus in plaats van een prop door drie
- * lagen te rijgen staat hij hier — één waarde, twee lezers.
+ * Two screens need it: the Job panel, which sets it, and the canvas, which shows
+ * where the work lands. Those two are not inside each other and the page between them
+ * does not belong to this round, so rather than threading a prop through three layers
+ * it lives here — one value, two readers.
  */
 class Nulpunt {
-	punt = $state<{ x_mm: number; y_mm: number } | null>(null);
+	point = $state<{ x_mm: number; y_mm: number } | null>(null);
 	#geladen = false;
 
-	/** Eén keer per pagina ophalen; wie het opnieuw wil, geeft `opnieuw` mee. */
+	/** Fetched once per page; whoever wants it again passes `again`. */
 	async laad(opnieuw = false) {
 		if (this.#geladen && !opnieuw) return;
 		this.#geladen = true;
 		try {
 			const response = await fetch('/api/machine/origin');
 			if (!response.ok) return;
-			this.punt = (await response.json()).origin ?? null;
+			this.point = (await response.json()).origin ?? null;
 		} catch {
-			// Zwijgen: zonder server valt er sowieso niets te sturen, en de
-			// verbindingskaart zegt dat al.
+			// Keep quiet: without a server there is nothing to send anyway, and the
+			// connection card already says so.
 		}
 	}
 }
@@ -50,11 +50,11 @@ export class Controller {
 	busy = $state<string | null>(null);
 	error = $state<string | null>(null);
 	/**
-	 * De server heeft onze token geweigerd.
+	 * The server has refused our token.
 	 *
-	 * Zonder dit zat je klem: `needsToken` is alleen waar als er géén token is,
-	 * dus met een verkeerde token verdween het invoerveld en faalde elke actie
-	 * met 401 zonder enige weg terug. Nu komt het veld terug zodra de server
+	 * Without this you were stuck: `needsToken` is only true when there is *no* token,
+	 * so with a wrong token the input field disappeared and every action failed with a
+	 * 401 with no way back. Now the field returns as soon as the server
 	 * nee zegt.
 	 */
 	rejected = $state(false);
@@ -73,7 +73,7 @@ export class Controller {
 		return this.authRequired && !this.token;
 	}
 
-	/** Moet het tokenveld in beeld? Ook als er wél een token is, maar een foute. */
+	/** Should the token field be on screen? Also when there *is* a token, a wrong one. */
 	get tokenProbleem() {
 		return this.needsToken || this.rejected;
 	}
@@ -125,10 +125,10 @@ export class Controller {
 	}
 
 	/**
-	 * De kop langs de omtrek van het werk sturen. Geen laser, alleen beweging.
+	 * Sending the head around the outline of the work. No laser, only movement.
 	 *
-	 * De machine kan melden dat hij nog bezig is; dat komt hier in `error`
-	 * terecht, want anders denk je het kader gezien te hebben terwijl er een
+	 * The machine can report that it is still busy; that lands in `error` here, because
+	 * otherwise you think you have seen the frame while a
 	 * hoek ontbrak.
 	 */
 	async frame() {
@@ -156,13 +156,13 @@ export class Controller {
 		}
 	}
 
-	/** Wordt bij een geslaagde start aangeroepen — het wauw-moment hangt hieraan. */
+	/** Called on a successful start — the wow moment hangs off this. */
 	onStarted: (() => void) | null = null;
 
 	async start() {
 		const ok = await this.#post('/api/job/start', 'start');
-		// Aan de druk op de knop, niet aan de polling: een korte job is voorbij
-		// voordat de status hem ooit als "running" laat zien.
+		// On the press of the button, not on the polling: a short job is over before
+		// the status ever shows it as "running".
 		if (ok !== false) this.onStarted?.();
 		return ok;
 	}
@@ -176,11 +176,11 @@ export class Controller {
 		return this.#post('/api/job/stop', 'stop');
 	}
 	/**
-	 * De connection met de machine opzetten of verbreken.
+	 * Opening or closing the connection to the machine.
 	 *
-	 * Niet elke driver kent het: Ruida heeft `ruida_connect`, de USB-families
-	 * `usb_connect`, en grbl opent zelf zodra er werk naartoe gaat. Wat de
-	 * capabilities op false zetten, hoort geen knop te zijn.
+	 * Not every driver knows it: Ruida has `ruida_connect`, the USB families
+	 * `usb_connect`, and grbl opens by itself as soon as work goes to it. What the
+	 * capabilities set to false should not be a button.
 	 */
 	connect() {
 		return this.#post('/api/machine/connect', 'connect');
@@ -192,7 +192,7 @@ export class Controller {
 		return this.#post('/api/spooler/clear', 'clear');
 	}
 
-	// ------------------------------------------------- bewegen naar een punt
+	// -------------------------------------------------- moving to a point
 
 	async #json(path: string, action: string, method = 'POST', body?: unknown) {
 		this.busy = action;
@@ -219,21 +219,21 @@ export class Controller {
 	}
 
 	/**
-	 * De kop naar een absolute plek op het bed sturen (gat J6).
+	 * Sending the head to an absolute place on the bed (gap J6).
 	 *
-	 * Draagt zowel "naar de oorsprong" als de bewaarde posities. De jogknoppen
-	 * gaan via de pagina omdat die het canvas moet bijwerken; dit is een sprong
-	 * naar een punt en heeft dat niet nodig.
+	 * Carries both "to the origin" and the saved positions. The jog buttons go through
+	 * the page because that has to update the canvas; this is a jump to a point and does
+	 * not need it.
 	 */
 	moveTo(xMm: number, yMm: number) {
 		return this.#json('/api/machine/move', 'move', 'POST', { x_mm: xMm, y_mm: yMm });
 	}
 
 	/**
-	 * Posities die deze machine onthoudt.
+	 * Positions this machine remembers.
 	 *
-	 * Ze staan op de device-service in de engine, niet in de browser: een
-	 * positie hoort bij de machine met de mal erop, niet bij de laptop waar je
+	 * They live on the device service in the engine, not in the browser: a position
+	 * belongs to the machine with the jig on it, not to the laptop you
 	 * toevallig achter zit.
 	 */
 	async listPositions(): Promise<Position[]> {
@@ -246,7 +246,7 @@ export class Controller {
 		}
 	}
 
-	/** Zonder coördinaten: waar de kop nu staat. */
+	/** Without coordinates: where the head is now. */
 	savePosition(name: string) {
 		return this.#json('/api/machine/positions', 'save-position', 'POST', { name });
 	}
@@ -259,43 +259,43 @@ export class Controller {
 		);
 	}
 
-	// ------------------------------------------------- het nulpunt (gat J12)
+	// -------------------------------------------------- the zero point (gap J12)
 	//
-	// LightBurn's Set Origin: je legt een nulpunt op je werkstuk en het werk
-	// brandt daarvandaan. Dat is de handeling bij het uitlijnen op een restplank
-	// — de plank ligt waar hij ligt, en je wil je tekening niet verslepen om hem
+	// LightBurn's Set Origin: you put a zero point on your workpiece and the work
+	// burns from there. That is the operation when aligning on an offcut — the board
+	// lies where it lies, and you do not want to drag your drawing to
 	// erop te krijgen.
 	//
-	// Het nulpunt leeft op de machine (zoals de bewaarde posities), niet in de
-	// browser: het hoort bij déze laser met dít stuk hout erin.
+	// The zero point lives on the machine (like the saved positions), not in the
+	// browser: it belongs to *this* laser with *this* piece of wood in it.
 
 	get origin() {
-		return nulpunt.punt;
+		return nulpunt.point;
 	}
 
 	loadOrigin() {
 		return nulpunt.laad(true);
 	}
 
-	/** Zonder coördinaten: waar de kop nu staat. */
+	/** Without coordinates: where the head is now. */
 	async setOrigin(xMm?: number, yMm?: number) {
 		const body = xMm === undefined || yMm === undefined ? {} : { x_mm: xMm, y_mm: yMm };
 		const uitslag = await this.#json('/api/machine/origin', 'set-origin', 'POST', body);
-		if (uitslag) nulpunt.punt = { x_mm: uitslag.x_mm, y_mm: uitslag.y_mm };
+		if (uitslag) nulpunt.point = { x_mm: uitslag.x_mm, y_mm: uitslag.y_mm };
 		return uitslag;
 	}
 
 	async clearOrigin() {
 		const uitslag = await this.#json('/api/machine/origin', 'clear-origin', 'DELETE');
-		if (uitslag) nulpunt.punt = null;
+		if (uitslag) nulpunt.point = null;
 		return uitslag;
 	}
 
-	// --------------------------- bijstellen tijdens een lopende job (gat J11)
+	// ---------------------------- adjusting during a running job (gap J11)
 	//
-	// Alleen als de driver een realtime kanaal heeft. Op een Ruida staat
-	// `capabilities.adjust` op false en bestaan deze knoppen niet — zie
-	// machine.py voor waarom dat geen tekortkoming van ons is.
+	// Only when the driver has a realtime channel. On a Ruida `capabilities.adjust` is
+	// false and these buttons do not exist — see machine.py for why that is not a
+	// shortcoming of ours.
 
 	adjust = $state<{ power: number | null; speed: number | null }>({
 		power: null,
@@ -303,8 +303,8 @@ export class Controller {
 	});
 
 	get canAdjust() {
-		const kan = this.capabilities?.adjust;
-		return Boolean(kan?.power || kan?.speed);
+		const may = this.capabilities?.adjust;
+		return Boolean(may?.power || may?.speed);
 	}
 
 	async loadAdjustment() {
@@ -314,11 +314,11 @@ export class Controller {
 			const data = await response.json();
 			this.adjust = { power: data.power ?? null, speed: data.speed ?? null };
 		} catch {
-			// Zie loadOrigin.
+			// See loadOrigin.
 		}
 	}
 
-	/** `factor` is een vermenigvuldiging op wat de laag zegt; 1 is "zoals ontworpen". */
+	/** `factor` multiplies what the layer says; 1 is "as designed". */
 	async setAdjustment(wat: 'power' | 'speed', factor: number) {
 		const geknipt = Math.min(2, Math.max(0.1, Math.round(factor * 100) / 100));
 		const uitslag = await this.#json('/api/job/adjust', `adjust-${wat}`, 'POST', {
@@ -336,7 +336,7 @@ export class Controller {
 }
 
 /**
- * Een mislukte fetch is bijna nooit "een netwerkfout".
+ * A failed fetch is almost never "a network error".
  *
  * The browser throws `TypeError: Failed to fetch` here, and putting that on the
  * screen is protocol language: it says neither what is broken nor what you do

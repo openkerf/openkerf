@@ -1,42 +1,42 @@
 <script lang="ts">
 	/**
-	 * Het alarm: wat de engine over de connection meldt, luid in beeld.
+	 * The alarm: what the engine reports about the connection, loudly on screen.
 	 *
-	 * Vast bovenaan, boven alles, niet weg te scrollen — dat is het hele punt.
-	 * Op de telefoon staat hij tegen de bovenrand; op de desktop onder de
-	 * bovenbalk, zodat de knoppen die de machine stoppen bereikbaar blijven. Een
-	 * alarm dat de noodrem afdekt is geen alarm maar een obstakel.
+	 * Pinned at the top, above everything, impossible to scroll away — that is the
+	 * whole point. On the phone it sits against the top edge; on the desktop below
+	 * the top bar, so the buttons that stop the machine stay reachable. An alarm
+	 * that covers the emergency stop is not an alarm but an obstacle.
 	 *
-	 * Wat er níet staat: een oordeel dat wij niet kunnen onderbouwen. De tekst
-	 * citeert de engine en zegt erbij wat je zélf moet controleren — wij zien de
-	 * machine niet (besluit B3).
+	 * What is *not* there: a judgement we cannot back up. The text quotes the
+	 * engine and says beside it what you have to check yourself — we cannot see the
+	 * machine (decision B3).
 	 */
 	import { t } from '$lib/i18n/index.svelte';
-	import type { Bewaker } from '$lib/notifications.svelte';
+	import type { Watchdog } from '$lib/notifications.svelte';
 
-	let { bewaker, groot = false }: { bewaker: Bewaker; groot?: boolean } = $props();
+	let { watchdog, large = false }: { watchdog: Watchdog; large?: boolean } = $props();
 </script>
 
-{#if bewaker.toon && bewaker.alarm}
-	<div class="alarm" class:groot role="alert" aria-live="assertive">
-		<svg class="teken" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+{#if watchdog.show && watchdog.alarm}
+	<div class="alarm" class:large role="alert" aria-live="assertive">
+		<svg class="sign" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
 			stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 			<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
 			<path d="M12 9v4" />
 			<path d="M12 17h.01" />
 		</svg>
-		<div class="woord">
-			<strong>{bewaker.alarm.titel}</strong>
-			<p>{bewaker.alarm.tekst}</p>
-			<p>{bewaker.alarm.raad}</p>
-			{#if bewaker.alarm.bron}
-				<!-- Woordelijk wat de engine zei. Wij vertalen, maar verbergen niet
-				     waar het vandaan komt — dat is het verschil tussen een melding
-				     en een bewering. -->
-				<p class="bron mono">{bewaker.alarm.bron.trim()}</p>
+		<div class="words">
+			<strong>{watchdog.alarm.title}</strong>
+			<p>{watchdog.alarm.body}</p>
+			<p>{watchdog.alarm.advice}</p>
+			{#if watchdog.alarm.source}
+				<!-- Verbatim what the engine said. We translate, but we do not hide
+				     where it came from — that is the difference between a report and
+				     an assertion. -->
+				<p class="source mono">{watchdog.alarm.source.trim()}</p>
 			{/if}
 		</div>
-		<button class="gezien" onclick={() => bewaker.sluit()}>{t('alarm.seen')}</button>
+		<button class="seen" onclick={() => watchdog.dismiss()}>{t('alarm.seen')}</button>
 	</div>
 {/if}
 
@@ -44,38 +44,38 @@
 	.alarm {
 		position: fixed;
 		/*
-		 * Eén kolom met de verbindingskaart, en die staat erboven.
+		 * One column with the connection card, and that one sits above it.
 		 *
-		 * Dit stond gecentreerd op 50% terwijl `ConnectionCard.svelte` tegen de rail
-		 * aan hangt, op dezelfde hoogte. Op 1440 begon dit alarm daardoor op
-		 * x≈360, midden over die kaart, en kapte het twee zinnen af — niet
-		 * volledig bedekt maar half, en dat is erger: een afgebroken zin ziet
-		 * eruit als een hele zin, dus je weet niet dát je de helft mist.
+		 * This was centred on 50% while `ConnectionCard.svelte` hangs against the
+		 * rail, at the same height. At 1440 this alarm therefore started at x≈360,
+		 * straight across that card, and cut off two sentences — not fully covered
+		 * but half, and that is worse: a truncated sentence looks like a whole
+		 * sentence, so you do not know you are missing half of it.
 		 *
-		 * Nu dezelfde linkerrand en dezelfde breedte, met `--melding-kolom` als
-		 * verschuiving: die set de verbindingskaart op `:root` met zijn eigen
-		 * gemeten hoogte, en is er niet zodra die kaart weg is. Waarom die kaart
-		 * bóven dit alarm hoort: zonder onze server is elke melding over de
-		 * machine per definitie oud nieuws — het is dezelfde engine die niet meer
-		 * antwoordt.
+		 * Now the same left edge and the same width, with `--notice-column` as the
+		 * offset: the connection card sets that on `:root` with its own measured
+		 * height, and it is absent as soon as that card is gone. Why that card
+		 * belongs *above* this alarm: without our server every report about the
+		 * machine is old news by definition — it is the same engine that has stopped
+		 * answering.
 		 *
-		 * Het oorspronkelijke bezwaar tegen links uitlijnen was de foutmelding van
-		 * de bediening rechtsboven (Melding.svelte, z-index 60). Die staat er nog,
-		 * en links uitlijnen helpt daar juist: zo raken die twee elkaar niet.
+		 * The original objection to left alignment was the control error message in
+		 * the top right (Notice.svelte, z-index 60). That is still there, and left
+		 * alignment actually helps: this way those two do not touch.
 		 */
-		/* Onder de balken die boven het canvas staan (actiebalk + vellenbalk), niet
-		   erover: die dekte hij af, en dat zijn juist de knoppen die je nodig hebt
-		   terwijl er een melding staat. `--bovenrand-hoogte` wordt opgemeten in
-		   `+page.svelte`; nul zolang er geen balken zijn (telefoon). */
+		/* Below the bars that sit above the canvas (action bar + sheet bar), not
+		   over them: it used to cover those, and those are exactly the buttons you
+		   need while a notice is up. `--topedge-height` is measured in
+		   `+page.svelte`; zero as long as there are no bars (phone). */
 		top: calc(
-			var(--topbar-height) + var(--bovenrand-hoogte, 0px) + var(--space-3) +
-				var(--melding-kolom, 0px)
+			var(--topbar-height) + var(--topedge-height, 0px) + var(--space-3) +
+				var(--notice-column, 0px)
 		);
 		left: calc(var(--rail-width) + var(--space-3));
 		width: min(620px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		border-radius: var(--radius-card);
-		/* Boven alles: vensters zitten op 60, de scrim op 50. Een alarm hoort
-		   nergens achter. */
+		/* Above everything: dialogs sit at 60, the scrim at 50. An alarm belongs
+		   behind nothing. */
 		z-index: 200;
 		display: flex;
 		align-items: flex-start;
@@ -85,13 +85,13 @@
 		color: var(--on-color);
 		box-shadow: var(--lift-2);
 	}
-	.teken {
+	.sign {
 		flex: none;
 		width: 22px;
 		height: 22px;
 		margin-top: 1px;
 	}
-	.woord {
+	.words {
 		flex: 1;
 		min-width: 0;
 	}
@@ -104,22 +104,22 @@
 	p {
 		margin: var(--space-1) 0 0;
 		font-size: var(--text-sm);
-		/* Wit op rood mag niet vervagen: dit is de tekst die het feit draagt. */
+		/* White on red must not fade: this is the text that carries the fact. */
 		color: var(--on-color);
 	}
 	/*
-	 * Geen doorzichtigheid als rangorde op dit vlak.
+	 * No transparency as hierarchy on this surface.
 	 *
-	 * Gemeten op 390 px: wit op `--danger-solid` haalt 5,60 in licht en 4,67 in
-	 * donker, maar met opacity 0,9 zakt de raadgeving naar 4,05 in donker en met
-	 * 0,75 zakt de bronregel naar 3,23 — allebei onder AA, en uitgerekend op de
-	 * regel die zegt wat je moet doen. De rangorde komt hier van maat en font
-	 * (24 px vet / 15 px / 13 px mono), niet van vervagen.
+	 * Measured at 390 px: white on `--danger-solid` reaches 5.60 in light and 4.67
+	 * in dark, but at opacity 0.9 the advice drops to 4.05 in dark and at 0.75 the
+	 * source line drops to 3.23 — both below AA, and on the very line that says
+	 * what to do. The hierarchy here comes from size and font (24 px bold / 15 px /
+	 * 13 px mono), not from fading.
 	 */
-	.bron {
+	.source {
 		font-size: var(--text-xs);
 	}
-	.gezien {
+	.seen {
 		flex: none;
 		min-height: 36px;
 		padding: 0 var(--space-3);
@@ -128,34 +128,34 @@
 		color: var(--on-color);
 		font-weight: 600;
 	}
-	.gezien:hover {
+	.seen:hover {
 		background: rgb(255 255 255 / 0.15);
 	}
 
-	/* Tablet: op 1024 begint het rechterpaneel op x≈700, dus 620 px vanaf de rail
-	   zou de tabs "Bewerken" en "Lagen" weer afdekken — precies wat je op dat
-	   moment wilde bedienen. 560 houdt de kaart volledig boven het canvas.
-	   Dezelfde 560 staat in `ConnectionCard.svelte`; die twee horen gelijk te blijven,
-	   want samen zijn ze één kolom. Zonder wrapper-element (dat zou `+page.svelte`
-	   raken, waar deze twee op verschillende plekken gerenderd worden) is dit de
-	   prijs: één maat op twee plekken, met deze verwijzing als verband. */
+	/* Tablet: at 1024 the right-hand panel starts at x≈700, so 620 px from the rail
+	   would cover the "Design" and "Layers" tabs again — exactly what you wanted to
+	   operate at that moment. 560 keeps the card entirely above the canvas. The same
+	   560 sits in `ConnectionCard.svelte`; those two should stay equal, because
+	   together they are one column. Without a wrapper element (which would touch
+	   `+page.svelte`, where these two are rendered in different places) this is the
+	   price: one measure in two places, with this reference as the link. */
 	@media (min-width: 768px) and (max-width: 1199px) {
-		.alarm:not(.groot) {
+		.alarm:not(.large) {
 			width: min(560px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		}
 	}
 
-	/* Telefoon: geen overlay maar een blok bovenin dat de rest omlaag duwt. Het
-	   staat buiten het scrolgebied, dus wegscrollen kan niet — en tegelijk snijdt
-	   het niets af. Groter, en de knop onder de tekst in plaats van ernaast: met
-	   een duim mik je niet op een knop van 36 px in een hoek. */
-	.alarm.groot {
+	/* Phone: not an overlay but a block at the top that pushes the rest down. It
+	   sits outside the scroll area, so it cannot be scrolled away — and at the same
+	   time it cuts nothing off. Bigger, and the button below the text instead of
+	   beside it: with a thumb you do not aim at a 36 px button in a corner. */
+	.alarm.large {
 		position: static;
-		/* De zwevende variant hangt aan de rail en heeft geen transform meer, maar
-		   deze regels blijven staan als slot op de deur: `transform` en `left`
-		   werken óók op een statisch element, en toen de zwevende variant nog
-		   `translateX(-50%)` droeg schoof dit blok daarmee een halve schermbreedte
-		   het beeld uit. */
+		/* The floating variant hangs off the rail and no longer has a transform, but
+		   these rules stay as a lock on the door: `transform` and `left` work on a
+		   static element too, and when the floating variant still carried
+		   `translateX(-50%)` this block slid half a screen width out of view with
+		   it. */
 		transform: none;
 		left: auto;
 		right: auto;
@@ -166,14 +166,14 @@
 		flex-wrap: wrap;
 		padding: max(var(--space-3), env(safe-area-inset-top)) var(--space-3) var(--space-3);
 	}
-	.alarm.groot .teken {
+	.alarm.large .sign {
 		width: 28px;
 		height: 28px;
 	}
-	.alarm.groot strong {
+	.alarm.large strong {
 		font-size: var(--text-lg);
 	}
-	.alarm.groot .gezien {
+	.alarm.large .seen {
 		width: 100%;
 		min-height: 48px;
 		margin-top: var(--space-2);

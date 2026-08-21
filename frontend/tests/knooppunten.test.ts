@@ -24,8 +24,8 @@ let browser: Browser | null = null;
 let page: Page;
 let bed: { x: number; y: number; w: number; h: number };
 
-/** Een punt op het bed in millimeters omrekenen naar het scherm. */
-const punt = (xmm: number, ymm: number, breed: number, hoog: number) => ({
+/** Een point op het bed in millimeters omrekenen naar het scherm. */
+const point = (xmm: number, ymm: number, breed: number, hoog: number) => ({
 	x: bed.x + (bed.w * xmm) / breed,
 	y: bed.y + (bed.h * ymm) / hoog
 });
@@ -76,7 +76,7 @@ test('zonder selectie zegt het gereedschap wat het nodig heeft', async (t) => {
 	] as const) {
 		await page.getByRole('button', { name: gereedschap, exact: true }).click();
 		await page.waitForTimeout(300);
-		const p = punt(x, y, maat.width_mm, maat.height_mm);
+		const p = point(x, y, maat.width_mm, maat.height_mm);
 		await page.mouse.click(p.x, p.y);
 		await page.waitForTimeout(1000);
 	}
@@ -84,7 +84,7 @@ test('zonder selectie zegt het gereedschap wat het nodig heeft', async (t) => {
 	// Deselecteren en het knooppuntgereedschap pakken.
 	await page.getByRole('button', { name: 'Selecteren', exact: true }).click();
 	await page.waitForTimeout(250);
-	const leeg = punt(maat.width_mm - 20, maat.height_mm - 20, maat.width_mm, maat.height_mm);
+	const leeg = point(maat.width_mm - 20, maat.height_mm - 20, maat.width_mm, maat.height_mm);
 	await page.mouse.click(leeg.x, leeg.y);
 	await page.waitForTimeout(600);
 	await page.getByRole('button', { name: /Knooppunten/ }).click();
@@ -101,8 +101,8 @@ test('met twee vormen gekozen zegt het hoeveel er te veel staan', async (t) => {
 	).bed;
 	await page.getByRole('button', { name: 'Selecteren', exact: true }).click();
 	await page.waitForTimeout(250);
-	const a = punt(80, 60, maat.width_mm, maat.height_mm);
-	const b = punt(200, 60, maat.width_mm, maat.height_mm);
+	const a = point(80, 60, maat.width_mm, maat.height_mm);
+	const b = point(200, 60, maat.width_mm, maat.height_mm);
 	await page.mouse.click(a.x, a.y);
 	await page.waitForTimeout(600);
 	await page.keyboard.down('Shift');
@@ -124,10 +124,10 @@ test('met precies één vorm zwijgt de uitleg en staan de punten er', async (t) 
 	// Eerst helemaal los van de vorige selectie: shift-klikken stapelt.
 	await page.getByRole('button', { name: 'Selecteren', exact: true }).click();
 	await page.waitForTimeout(250);
-	const leeg = punt(maat.width_mm - 20, maat.height_mm - 20, maat.width_mm, maat.height_mm);
+	const leeg = point(maat.width_mm - 20, maat.height_mm - 20, maat.width_mm, maat.height_mm);
 	await page.mouse.click(leeg.x, leeg.y);
 	await page.waitForTimeout(600);
-	const a = punt(80, 60, maat.width_mm, maat.height_mm);
+	const a = point(80, 60, maat.width_mm, maat.height_mm);
 	await page.mouse.click(a.x, a.y);
 	await page.waitForTimeout(900);
 	await page.getByRole('button', { name: /Knooppunten/ }).click();

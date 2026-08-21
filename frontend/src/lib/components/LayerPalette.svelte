@@ -114,12 +114,12 @@
 				onclick={() => kies(kleur)}
 			>
 				<!-- Nooit alleen kleur: het laagnummer staat in het vakje, zoals bij de
-				     chips in het lagenpaneel. Een kleur zonder laag krijgt een punt —
+				     chips in het lagenpaneel. Een kleur zonder laag krijgt een point —
 				     dan is het vakje leeg maar niet dood. -->
 				{#if gevonden?.nummer}
 					<span class="mono">{gevonden.nummer}</span>
 				{:else}
-					<span class="punt" aria-hidden="true"></span>
+					<span class="point" aria-hidden="true"></span>
 				{/if}
 			</button>
 		{/each}
@@ -243,7 +243,7 @@
 	.vak.nu {
 		box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--text-1);
 	}
-	.punt {
+	.point {
 		width: 4px;
 		height: 4px;
 		border-radius: var(--radius-dot);

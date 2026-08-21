@@ -59,14 +59,14 @@
 	$effect(() => {
 		const wortel = document.documentElement;
 		if (!kaart) {
-			wortel.style.removeProperty('--melding-kolom');
+			wortel.style.removeProperty('--notice-column');
 			return;
 		}
 		// Hoogte plus de tussenruimte in één getal: dan hoeft het alarm er niets
 		// bij te rekenen en kan er ook geen halve variabele overblijven.
 		const meet = () =>
 			wortel.style.setProperty(
-				'--melding-kolom',
+				'--notice-column',
 				`calc(${Math.ceil(kaart!.offsetHeight)}px + var(--space-2))`
 			);
 		meet();
@@ -75,7 +75,7 @@
 		wacht.observe(kaart);
 		return () => {
 			wacht.disconnect();
-			wortel.style.removeProperty('--melding-kolom');
+			wortel.style.removeProperty('--notice-column');
 		};
 	});
 </script>

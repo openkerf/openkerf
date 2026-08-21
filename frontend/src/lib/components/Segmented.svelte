@@ -4,7 +4,7 @@
 	 *
 	 * Losse knoppen laten open of er ook twee aan kunnen staan, en welke groep
 	 * bij elkaar hoort. Een aaneengesloten balk zegt allebei zonder woorden. Voor
-	 * meer dan vijf opties hoort een `<select>` (zie DESIGN-SYSTEM, Patroonkeuzewijzer).
+	 * meer dan vijf options hoort een `<select>` (zie DESIGN-SYSTEM, Patroonkeuzewijzer).
 	 */
 	let {
 		options,

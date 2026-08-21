@@ -542,7 +542,7 @@
 				form[VAST_VELD[as]] = String(vorige[`${as}_min`]);
 			}
 		}
-		// Waar het bord lag en wat er verder op stond (T9, T10). Het punt dat je
+		// Waar het bord lag en wat er verder op stond (T9, T10). Het point dat je
 		// intikte komt terug, niet de hoek die eruit gerekend is.
 		if (vorige.anchor === 'center' || vorige.anchor === 'corner') form.anchor = vorige.anchor;
 		if (typeof vorige.text_enabled === 'boolean') form.text = vorige.text_enabled;

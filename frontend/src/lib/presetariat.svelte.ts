@@ -1,9 +1,9 @@
 /**
- * De gedeelde presetcatalogus.
+ * The shared preset catalogue.
  *
- * Alles hier komt van andermans machine. Daarom draagt elke regel zijn herkomst
- * zichtbaar mee, en importeren we naar de eigen bibliotheek als "geïmporteerd" —
- * nooit als iets wat op jouw machine gemeten is.
+ * Everything here comes from somebody else's machine. That is why every row carries
+ * its provenance visibly, and why we import into the local library as "imported" —
+ * never as something measured on your machine.
  */
 
 import { t } from './i18n/core.ts';
@@ -71,7 +71,7 @@ export class PresetariatStore {
 			this.version = data.version;
 			this.total = data.total;
 			this.stale = data.stale;
-			if (data.error) this.error = `Uit de lokale kopie: ${data.error}`;
+			if (data.error) this.error = t('presetariat.fromCopy', { error: data.error });
 		} catch (e) {
 			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
 		} finally {

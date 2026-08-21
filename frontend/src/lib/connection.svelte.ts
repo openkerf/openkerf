@@ -1,35 +1,34 @@
 /**
- * Eén waarheid over "doet de server het nog".
+ * One truth about "is the server still there".
  *
- * De statusverbinding weet het (haar WebSocket valt weg), maar de knoppen die
- * erop moeten reageren zitten in componenten die die connection niet krijgen
- * doorgegeven — en het doorlussen van een vlaggetje langs vijf componenten
- * raakt bestanden die van andere mensen zijn. Vandaar één module die iedereen
- * mag lezen: wie iets naar de server stuurt kijkt hier eerst.
+ * The status connection knows it (its WebSocket drops), but the buttons that have
+ * to react are in components that are not handed that connection — and threading a
+ * flag through five components touches files that belong to other people. Hence one
+ * module everybody may read: whoever sends something to the server looks here
+ * first.
  *
- * Waarom dit ertoe doet: zonder dit bleven Stop, Pauze en Home er volledig
- * bedienbaar uitzien nadat de server was weggevallen. Iemand naast de machine
- * drukt op Stop, ziet geen enkele reactie, en gelooft dat de machine stopt.
+ * Why this matters: without it Stop, Pause and Home kept looking entirely operable
+ * after the server had dropped out. Somebody standing next to the machine presses
+ * Stop, sees no reaction at all, and believes the machine is stopping.
  */
 
 export const connection = $state({
-	/** Is de OpenKerf-server bereikbaar? */
+	/** Is the OpenKerf server reachable? */
 	online: true,
-	/** Sinds wanneer niet meer (ms since epoch), voor "al 2 minuten weg". */
+	/** Since when it has not been (ms since epoch), for "gone for 2 minutes". */
 	since: null as number | null,
-	/** Seconden tot de volgende poging; 0 = we proberen nu. */
+	/** Seconds until the next attempt; 0 = trying right now. */
 	inSeconds: 0,
-	/** Nu opnieuw proberen, in plaats van de backoff af te wachten. */
+	/** Try again now, instead of waiting out the backoff. */
 	retryNow: (() => {}) as () => void,
 	/**
-	 * De server is herstart since deze pagina geladen werd (gat E2).
+	 * The server has restarted since this page was loaded (gap E2).
 	 *
-	 * De socket verbindt vanzelf terug en de balk wordt weer groen, maar de
-	 * engine erachter heeft een lege elementenboom: het ontwerp dat je op het
-	 * scherm ziet bestaat aan de andere kant niet meer. Alles wat je daarna
-	 * doet gaat over niets. Dat mag niet stil gebeuren, en het mag ook niet
-	 * vanzelf herladen — dat gooit werk weg zonder dat iemand erom vroeg. Dus
-	 * één vlag, één zin, één knop.
+	 * The socket reconnects by itself and the bar goes green again, but the engine
+	 * behind it has an empty element tree: the design you see on screen no longer
+	 * exists on the other side. Everything you do after that is about nothing. That
+	 * must not happen silently, and it must not reload by itself either — that throws
+	 * work away without anybody asking. So: one flag, one sentence, one button.
 	 */
-	herstart: false
+	restarted: false
 });

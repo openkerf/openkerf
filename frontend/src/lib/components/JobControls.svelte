@@ -1578,7 +1578,7 @@
 	@media (pointer: coarse) {
 		.toetsen { display: none; }
 	}
-	/* Naar een punt springen, naast de richtingsknoppen erboven. */
+	/* Naar een point springen, naast de richtingsknoppen erboven. */
 	.punten { margin-top: var(--space-3); }
 	.puntrij {
 		display: flex;

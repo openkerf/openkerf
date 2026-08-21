@@ -66,7 +66,7 @@ export class Kopspoor {
 		const x1 = getal(args[2]);
 		const y1 = getal(args[3]);
 		if (x1 === null || y1 === null) return;
-		// Het eerste punt van een verse job krijgt ook zijn vertrekpunt mee;
+		// Het eerste point van een verse job krijgt ook zijn vertrekpunt mee;
 		// daarna is het vertrekpunt het vorige eindpunt en zou het dubbel staan.
 		if (!this.#buffer.length && x0 !== null && y0 !== null) this.#buffer.push(x0, y0);
 		this.#buffer.push(x1, y1);
@@ -103,7 +103,7 @@ export class StatusConnection {
 	events = $state<SignalEvent[]>([]);
 	connected = $state(false);
 	lastUpdate = $state<number | null>(null);
-	/** Welk serverproces we aan de lijn hebben; verandert alleen bij een herstart. */
+	/** Welk serverproces we aan de lijn hebben; verandert alleen bij een restarted. */
 	instance = $state<string | null>(null);
 
 	#socket: WebSocket | null = null;
@@ -155,9 +155,9 @@ export class StatusConnection {
 	 * Meteen opnieuw proberen in plaats van de backoff uitzitten.
 	 *
 	 * Na een halve minuut wachten we tien seconden tussen pogingen. Wie net de
-	 * server heeft herstart wil niet tien seconden naar een dood scherm kijken,
+	 * server heeft restarted wil niet tien seconden naar een dood scherm kijken,
 	 * en heeft bovendien informatie die wij niet hebben: hij weet dát hij hem
-	 * herstart heeft.
+	 * restarted heeft.
 	 */
 	#nu() {
 		if (this.#retryTimer) clearTimeout(this.#retryTimer);
@@ -230,9 +230,9 @@ export class StatusConnection {
 	/**
 	 * De server stelt zich voor (gat E2).
 	 *
-	 * Hier zat een stille failure: de WebSocket verbond na een herstart keurig
+	 * Hier zat een stille failure: de WebSocket verbond na een restarted keurig
 	 * terug, de statusbalk werd weer groen, en de pagina toonde daarna
-	 * onverstoorbaar het ontwerp van vóór de herstart — dat aan de andere kant
+	 * onverstoorbaar het ontwerp van vóór de restarted — dat aan de andere kant
 	 * niet meer bestaat. Je tekent verder in een document dat weg is.
 	 *
 	 * Zelfde `instance` = hetzelfde proces, dus een netwerkhik: de snapshot die
@@ -250,7 +250,7 @@ export class StatusConnection {
 		}
 		if (this.instance !== instance) {
 			this.instance = instance;
-			connection.herstart = true;
+			connection.restarted = true;
 		}
 	}
 

@@ -11,9 +11,9 @@
 	import Menu from './Menu.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
 	import {
-		omgevingstrefpunten,
-		klikDoosVast,
-		klikPuntVast,
+		surroundingTargets,
+		snapBox,
+		snapPoint,
 		SNAP_LABEL,
 		type SnapGuide
 	} from '$lib/snapping';
@@ -41,7 +41,7 @@
 		control = $bindable(null)
 	}: {
 		/** Waar de muis staat, in mm op het bed. `null` als hij weg is. */
-		onPointerMm?: (punt: { x: number; y: number } | null) => void;
+		onPointerMm?: (point: { x: number; y: number } | null) => void;
 		device: Device | null;
 		design: DesignStore;
 		edits: EditController;
@@ -69,7 +69,7 @@
 		onContextObject?: (event: MouseEvent) => void;
 		/** Rechterklik op het bed zelf, met de plek in mm erbij: het menu belooft
 		 *  "plakken hier", en dan moet het weten waar "hier" is. */
-		onContextCanvas?: (event: MouseEvent, punt: { x: number; y: number }) => void;
+		onContextCanvas?: (event: MouseEvent, point: { x: number; y: number }) => void;
 		/**
 		 * Het beeld van buitenaf bedienen.
 		 *
@@ -150,12 +150,12 @@
 		const next = Math.min(20, Math.max(0.2, zoom * factor));
 		if (next === zoom) return;
 		if (clientX !== undefined && clientY !== undefined && frame) {
-			// Houd het punt onder de cursor op zijn plek. Dat vraagt de afstand tot
+			// Houd het point onder de cursor op zijn plek. Dat vraagt de afstand tot
 			// het *midden van het bed*, want daaromheen groeit alles. Er stond de
 			// afstand tot de hoek van het canvasvlak, en dat scheelt een halve
-			// canvasbreedte: het punt onder de muis liep bij elke tik zo'n 15 px weg.
+			// canvasbreedte: het point onder de muis liep bij elke tik zo'n 15 px weg.
 			// Het midden uitrekenen en niet opmeten: bij een reeks wieltikken loopt
-			// de DOM een tik achter, en dan zoomt elke tik naar een punt dat de
+			// de DOM een tik achter, en dan zoomt elke tik naar een point dat de
 			// vorige tik al verschoven had.
 			const vlak = frame.getBoundingClientRect();
 			const ratio = next / zoom;
@@ -385,12 +385,12 @@
 	// Het nulpunt verplaatst het werk op weg naar de machine. Dat mág niet
 	// alleen in een paneel staan: dan teken je op de ene plek en brandt het op de
 	// andere, en dat is precies het soort verrassing waar deze functie tegen
-	// bedoeld is. Op het bed staat daarom het punt zelf én een gestippeld kader
+	// bedoeld is. Op het bed staat daarom het point zelf én een gestippeld kader
 	// waar het werk terechtkomt.
 	$effect(() => {
 		nulpunt.laad();
 	});
-	let nulstand = $derived(nulpunt.punt);
+	let nulstand = $derived(nulpunt.point);
 	/** Waar het werk komt te liggen: de omhullende, verschoven met het nulpunt. */
 	let brandtHier = $derived.by(() => {
 		if (!nulstand || (!nulstand.x_mm && !nulstand.y_mm)) return null;
@@ -453,7 +453,7 @@
 	 * Waarom er geen knooppunten staan.
 	 *
 	 * Het gereedschap heeft drie stille standen — niets gekozen, meer dan één
-	 * ding gekozen, en een vorm die de engine niet per punt bewerkt — en in alle
+	 * ding gekozen, en een vorm die de engine niet per point bewerkt — en in alle
 	 * drie gebeurde er zichtbaar niets. Het gereedschap stond wel ingedrukt.
 	 * Gemeten met twee vormen geselecteerd: het paneel toont de gewone
 	 * meervoudsselectie en het woord "knooppunt" komt nergens in beeld voor.
@@ -537,7 +537,7 @@
 		return lijnen;
 	});
 
-	// De pen: klikken set een punt, Enter of een klik op het beginpunt sluit af.
+	// De pen: klikken set een point, Enter of een klik op het beginpunt sluit af.
 	// Escape gooit weg wat er staat — halverwege stoppen moet zonder rommel.
 	let penPoints = $state<{ x: number; y: number }[]>([]);
 
@@ -649,7 +649,7 @@
 		if (drag.mode === 'move') return `translate(${drag.dx * per} ${drag.dy * per})`;
 		if (drag.mode !== 'scale') return undefined;
 		// Schalen gebeurt vanaf de tegenoverliggende hoek; die blijft dus liggen en
-		// is het vaste punt van de vergroting.
+		// is het vaste point van de vergroting.
 		const o = drag.origin;
 		if (!o.width || !o.height) return undefined;
 		const vastX = (drag.corner % 2 === 0 ? o.x + o.width : o.x) * per;
@@ -701,7 +701,7 @@
 	// Slepen om te tekenen komt samen met de sleepselectie.
 	const DEFAULT_MM = 20;
 
-	// Eerste punt van een lijn in aanbouw, plus waar de muis nu is voor de
+	// Eerste point van een lijn in aanbouw, plus waar de muis nu is voor de
 	// voorvertoning.
 	let lineStart = $state<{ x: number; y: number } | null>(null);
 	let hover = $state<{ x: number; y: number } | null>(null);
@@ -739,7 +739,7 @@
 			lineStart = null;
 			onDrawn?.({ type: 'line', x1_mm: from.x, y1_mm: from.y, x2_mm: at.x, y2_mm: at.y });
 		} else if (tool === 'text') {
-			// De opties (lettertype, hoogte, spatiëring) komen uit een eigen
+			// De options (lettertype, hoogte, spatiëring) komen uit een eigen
 			// venster; een browserprompt kan alleen een kale regel tekst.
 			onTextAt?.({ x: at.x, y: at.y });
 		}
@@ -793,20 +793,20 @@
 			guides = [];
 		} else if (drag.mode === 'move') {
 			// Verplaatsen: randen én hartlijnen mogen vastklikken, per as apart.
-			const uit = klikDoosVast(drag.origin, { dx, dy }, trefpunten, snapRaster, snapTolerantie);
+			const uit = snapBox(drag.origin, { dx, dy }, targets, snapGrid, snapTolerance);
 			dx = uit.dx;
 			dy = uit.dy;
 			guides = uit.guides;
 		} else {
 			// Schalen: alleen de hoek die je vasthebt. De tegenoverliggende hoek
-			// blijft liggen, dus die heeft niets te zoeken tussen de kandidaten.
+			// blijft liggen, dus die heeft niets te zoeken tussen de candidates.
 			const links = drag.corner % 2 === 0;
 			const boven = drag.corner < 2;
 			const hoek = {
 				x: (links ? drag.origin.x : drag.origin.x + drag.origin.width) + dx,
 				y: (boven ? drag.origin.y : drag.origin.y + drag.origin.height) + dy
 			};
-			const uit = klikPuntVast(hoek, trefpunten, snapRaster, snapTolerantie);
+			const uit = snapPoint(hoek, targets, snapGrid, snapTolerance);
 			dx += uit.x - hoek.x;
 			dy += uit.y - hoek.y;
 			guides = uit.guides;
@@ -1136,12 +1136,12 @@
 	// maat die klopt: op 400% is een pixel een kwart millimeter, dus wordt het
 	// vastklikken vanzelf vier keer preciezer in plaats van vier keer grover.
 	const SNAP_PX = 9;
-	let snapTolerantie = $derived(SNAP_PX * mmPerPx);
+	let snapTolerance = $derived(SNAP_PX * mmPerPx);
 
 	// Op de fijnste rasterlijn die je op dat moment ook echt ziet. Staat de fijne
 	// verdeling uit omdat hij te dicht op elkaar valt, dan is de hoofdstap de
 	// enige lijn die er is — vastklikken op iets onzichtbaars is een raadsel.
-	let snapRaster = $derived(subStep || rulerStep);
+	let snapGrid = $derived(subStep || rulerStep);
 
 	/**
 	 * De dozen van alle andere vormen, in mm.
@@ -1160,8 +1160,8 @@
 			});
 	});
 
-	let trefpunten = $derived(
-		omgevingstrefpunten({ bed, vel: sheet, anderen: andereDozen })
+	let targets = $derived(
+		surroundingTargets({ bed, vel: sheet, anderen: andereDozen })
 	);
 
 	/** De hulplijnen die nú zichtbaar zijn. Leeg zodra je loslaat. */
@@ -1234,15 +1234,15 @@
 	 * LightBurn en xTool hebben er allebei een schakelaar voor, en wie zonder
 	 * wil werken moet niet elke keer een toets vast hoeven houden.
 	 */
-	let snapAan = $state(
+	let snapOn = $state(
 		typeof window === 'undefined' || localStorage.getItem('openkerf.snap') !== 'uit'
 	);
 
 	function snapSchakel() {
-		snapAan = !snapAan;
+		snapOn = !snapOn;
 		guides = [];
 		if (typeof window !== 'undefined') {
-			localStorage.setItem('openkerf.snap', snapAan ? 'aan' : 'uit');
+			localStorage.setItem('openkerf.snap', snapOn ? 'aan' : 'uit');
 		}
 	}
 
@@ -1252,16 +1252,16 @@
 	 * modifier die niets doet zodra je de functie hebt uitgezet, is een dode toets.
 	 */
 	function snapUit(event: { altKey?: boolean } | null | undefined) {
-		return snapAan === (event?.altKey === true);
+		return snapOn === (event?.altKey === true);
 	}
 
-	/** Een los punt vastklikken en meteen de hulplijnen zetten. */
+	/** Een los point vastklikken en meteen de hulplijnen zetten. */
 	function snapPunt(at: { x: number; y: number }, event?: { altKey?: boolean } | null) {
 		if (snapUit(event)) {
 			guides = [];
 			return at;
 		}
-		const uit = klikPuntVast(at, trefpunten, snapRaster, snapTolerantie);
+		const uit = snapPoint(at, targets, snapGrid, snapTolerance);
 		guides = uit.guides;
 		return { x: uit.x, y: uit.y };
 	}
@@ -1346,7 +1346,7 @@
 			step: (factor: number) => zoomAt(factor),
 			snap: snapSchakel,
 			layerNumbers: nummersSchakel,
-			state: () => ({ snap: snapAan, layerNumbers: nummersAan })
+			state: () => ({ snap: snapOn, layerNumbers: nummersAan })
 		};
 		return () => (control = null);
 	});
@@ -1645,7 +1645,7 @@
 							/>
 						{/each}
 						{#each tegelLayout.marks as merk (merk.boundary)}
-							{#each merk.points as punt, i (i)}
+							{#each merk.points as point, i (i)}
 								<!-- De merken van de naad die je nú aantikt staan vol; de rest
 								     dimt. Zonder dat verschil staan er bij drie tegels vier merken
 								     die 1, 2, 1, 2 heten, en dan is een nummer net zo verwarrend
@@ -1655,18 +1655,18 @@
 									class="tegel-merk"
 									class:active={actieveGrens === null || merk.boundary === actieveGrens}
 								>
-									<circle cx={punt.x_mm} cy={punt.y_mm} r={4 * mmPerPx} />
+									<circle cx={point.x_mm} cy={point.y_mm} r={4 * mmPerPx} />
 									<line
-										x1={punt.x_mm - 4 * mmPerPx}
-										y1={punt.y_mm}
-										x2={punt.x_mm + 4 * mmPerPx}
-										y2={punt.y_mm}
+										x1={point.x_mm - 4 * mmPerPx}
+										y1={point.y_mm}
+										x2={point.x_mm + 4 * mmPerPx}
+										y2={point.y_mm}
 									/>
 									<line
-										x1={punt.x_mm}
-										y1={punt.y_mm - 4 * mmPerPx}
-										x2={punt.x_mm}
-										y2={punt.y_mm + 4 * mmPerPx}
+										x1={point.x_mm}
+										y1={point.y_mm - 4 * mmPerPx}
+										x2={point.x_mm}
+										y2={point.y_mm + 4 * mmPerPx}
 									/>
 									<!-- Hetzelfde nummer dat naast het rondje gebrand wordt, aan
 									     dezelfde kant. Op schermgrootte, net als het symbool zelf:
@@ -1674,8 +1674,8 @@
 									     SVG die in millimeters meet moet tegengeschaald worden,
 									     vandaar `mmPerPx` in de fontgrootte. -->
 									<text
-										x={merk.along_y ? punt.x_mm : punt.x_mm + 7 * mmPerPx}
-										y={merk.along_y ? punt.y_mm + 13 * mmPerPx : punt.y_mm + 4 * mmPerPx}
+										x={merk.along_y ? point.x_mm : point.x_mm + 7 * mmPerPx}
+										y={merk.along_y ? point.y_mm + 13 * mmPerPx : point.y_mm + 4 * mmPerPx}
 										font-size={11 * mmPerPx}
 										text-anchor={merk.along_y ? 'middle' : 'start'}
 									>{i + 1}</text>
@@ -2151,9 +2151,9 @@
 					     richting waarin de machine telt, en die staat er dus in. -->
 					<line x1="0" y1="0" x2={14 * mmPerPx} y2="0" />
 					<line x1="0" y1="0" x2="0" y2={14 * mmPerPx} />
-					<path class="punt" d="M{14 * mmPerPx} 0 L{10 * mmPerPx} {-2.4 * mmPerPx} L{10 * mmPerPx} {2.4 * mmPerPx} Z" />
-					<path class="punt" d="M0 {14 * mmPerPx} L{-2.4 * mmPerPx} {10 * mmPerPx} L{2.4 * mmPerPx} {10 * mmPerPx} Z" />
-					<!-- Een vierkantje op het punt zelf, geen ring: de kopmarkering is
+					<path class="point" d="M{14 * mmPerPx} 0 L{10 * mmPerPx} {-2.4 * mmPerPx} L{10 * mmPerPx} {2.4 * mmPerPx} Z" />
+					<path class="point" d="M0 {14 * mmPerPx} L{-2.4 * mmPerPx} {10 * mmPerPx} L{2.4 * mmPerPx} {10 * mmPerPx} Z" />
+					<!-- Een vierkantje op het point zelf, geen ring: de kopmarkering is
 					     al een ring in het accent, en die twee vlak op elkaar (de kop
 					     staat na homen precies hier) waren niet uit elkaar te houden. -->
 					<rect
@@ -2170,7 +2170,7 @@
 				<!-- Het nulpunt van de gebruiker (gat J12).
 				     Een kruis met een open midden, in --text-1 en niet in het accent:
 				     het accent is de kop en het merk op 0,0 (C5) is óók al een vast
-				     teken, dus dit derde punt moet van allebei te onderscheiden zijn.
+				     teken, dus dit derde point moet van allebei te onderscheiden zijn.
 				     Alle maten teruggerekend naar schermpixels — anders groeit het
 				     kruis met de zoom mee. -->
 				{#if nulstand}
@@ -2312,9 +2312,9 @@
 		     titel, want een icoon alleen zegt niet of het aan- of uitstaat. -->
 		<button
 			class="snap"
-			class:aan={snapAan}
-			aria-pressed={snapAan}
-			title={snapAan ? t('canvas.snap.on') : t('canvas.snap.off')}
+			class:aan={snapOn}
+			aria-pressed={snapOn}
+			title={snapOn ? t('canvas.snap.on') : t('canvas.snap.off')}
 			aria-label={t('action.snap')}
 			onclick={snapSchakel}
 		>
@@ -2641,7 +2641,7 @@
 	}
 	/* De oorsprong (C5). Bewust níet in het accent en niet in rood: het accent
 	   is de kopmarkering — dat was juist de verwarring — en rood betekent in dit
-	   systeem gevaar. Dit is een vast punt op de machine, dus de tekstkleur van
+	   systeem gevaar. Dit is een vast point op de machine, dus de tekstkleur van
 	   de app, half doorzichtig zodat hij nooit boven het werk uit schreeuwt. */
 	.oorsprong {
 		pointer-events: none;
@@ -2652,7 +2652,7 @@
 		vector-effect: non-scaling-stroke;
 		opacity: 0.55;
 	}
-	.oorsprong .punt {
+	.oorsprong .point {
 		fill: var(--text-1);
 		opacity: 0.55;
 	}
@@ -3097,7 +3097,7 @@
 		outline: none;
 	}
 	/* Toetsenbordfocus blijft wel zichtbaar: zonder muis moet je kunnen zien
-	   welk element je op het punt staat te selecteren. */
+	   welk element je op het point staat te selecteren. */
 	.hit:focus-visible {
 		stroke: color-mix(in srgb, var(--accent) 30%, transparent);
 		stroke-width: 4;

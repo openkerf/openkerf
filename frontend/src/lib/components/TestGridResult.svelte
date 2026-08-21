@@ -477,10 +477,10 @@
 				</svg>
 
 				{#if uitlijnen}
-					{#each hoeken as punt, i (i)}
+					{#each hoeken as point, i (i)}
 						<button
 							class="hoek"
-							style="left: {punt.x * 100}%; top: {punt.y * 100}%"
+							style="left: {point.x * 100}%; top: {point.y * 100}%"
 							aria-label={t('result.corner.drag', { corner: HOEKNAAM[i] })}
 							onpointerdown={(e) => sleep(i, e)}
 							onkeydown={(e) => toets(i, e)}
@@ -702,7 +702,7 @@
 		vector-effect: non-scaling-stroke;
 	}
 
-	/* 44px raakdoel met een kleine punt erin: je vinger moet erbij kunnen, je
+	/* 44px raakdoel met een kleine point erin: je vinger moet erbij kunnen, je
 	   oog moet zien waar de hoek precies ligt. */
 	.hoek {
 		position: absolute;

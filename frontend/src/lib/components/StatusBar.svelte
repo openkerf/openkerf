@@ -158,8 +158,8 @@
      leeg. Niet vanzelf herladen — dat gooit werk weg zonder dat iemand erom
      vroeg — maar het ook niet verzwijgen, want alles wat je hierna doet gaat
      over een document dat daar niet meer bestaat. -->
-{#if connection.herstart}
-	<div class="herstart" role="alert">
+{#if connection.restarted}
+	<div class="restarted" role="alert">
 		<div class="tekst">
 			<strong>{t('status.restart.title')}</strong>
 			<p>
@@ -280,7 +280,7 @@
 	/* Boven de statusbalk, over de volle breedte: dit gaat over de hele pagina
 	   en niet over één paneel. Niet gecentreerd bovenin — daar staat al de
 	   verbindingskaart, en twee kaarten over elkaar heen is geen bericht. */
-	.herstart {
+	.restarted {
 		position: fixed;
 		left: 0;
 		right: 0;
@@ -296,10 +296,10 @@
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
-	.herstart .tekst { min-width: 0; }
-	.herstart strong { display: block; font-size: var(--text-sm); }
-	.herstart p { margin: 0; color: var(--text-2); }
-	.herstart button {
+	.restarted .tekst { min-width: 0; }
+	.restarted strong { display: block; font-size: var(--text-sm); }
+	.restarted p { margin: 0; color: var(--text-2); }
+	.restarted button {
 		flex: none;
 		margin-left: auto;
 		/* 44px: dit wordt ook op een tablet naast de machine aangeraakt. */

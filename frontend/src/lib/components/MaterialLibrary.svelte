@@ -876,7 +876,7 @@
 {#if voorbeeld}
 	<!-- Het importvoorbeeld neemt het hele venster over. Dit is het moment
 	     waarop de beslissing valt; ernaast blijven bladeren door de bibliotheek
-	     die je op het punt staat te overschrijven, helpt niemand. -->
+	     die je op het point staat te overschrijven, helpt niemand. -->
 	{@const s = voorbeeld.samenvoegen}
 	<section class="wissel" bind:this={wisselEl}>
 		<header class="wisselkop">

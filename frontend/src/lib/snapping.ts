@@ -1,25 +1,25 @@
 /**
  * Vastklikken op raster, vormen en randen.
  *
- * Alles hier rekent in millimeters, want dat is de eenheid van het bed. De
- * *trefafstand* is de enige uitzondering: die komt binnen als millimeters die
- * het canvas heeft teruggerekend uit schermpixels. Zo werkt het bij LightBurn
- * (Snap Distance staat in pixels, Edit → Settings → Units and Grids) en bij
- * Inkscape ("The snap distance is in units of screen pixels"). Dat is ook de
- * enige juiste maat: bij 400% inzoomen wil je preciezer kunnen mikken, niet
- * grover, en een vaste marge in mm doet precies het omgekeerde.
+ * Everything here reckons in millimetres, because that is the unit of the bed. The
+ * *snap distance* is the one exception: it arrives as millimetres the canvas has
+ * converted back from screen pixels. That is how it works in LightBurn (Snap
+ * Distance is in pixels, Edit → Settings → Units and Grids) and in Inkscape ("The
+ * snap distance is in units of screen pixels"). It is also the only right measure:
+ * zoomed in at 400% you want to aim more precisely, not more coarsely, and a fixed
+ * margin in mm does exactly the opposite.
  *
- * De module is bewust vrij van Svelte en van de DOM: de rekenkern is te
- * controleren met losse waarden, en het canvas doet alleen de omrekening en het
+ * The module is deliberately free of Svelte and of the DOM: the arithmetic can be
+ * checked with loose values, and the canvas only does the conversion and the
  * tekenen.
  */
 
 /**
- * Het woordje dat bij de hulplijn komt te staan.
+ * The little word that goes with the guide line.
  *
- * Specifieker dan alleen de herkomst: "rand" en "midden" zijn twee heel
- * verschillende uitlijningen, en juist bij het midden is het antwoord op
- * "waarom springt hij daarheen?" anders niet te geven.
+ * More specific than the source alone: "edge" and "centre" are two very different
+ * alignments, and with the centre in particular the answer to "why did it jump
+ * there?" cannot otherwise be given.
  */
 export type SnapKind =
 	| 'raster'
@@ -31,14 +31,14 @@ export type SnapKind =
 	| 'velmidden';
 
 export type SnapTarget = {
-	/** De coördinaat op de as waarop wordt vastgeklikt, in mm. */
+	/** The coordinate on the axis being snapped to, in mm. */
 	pos: number;
 	kind: SnapKind;
 	/**
-	 * Waar de hulplijn zich loodrecht op deze as toe uitstrekt, in mm. Bij een
-	 * vorm loopt de lijn van de vorm naar wat eraan vastklikt, zoals in Inkscape;
-	 * bij raster- en bedlijnen is er niets om tussen te spannen en trekt het
-	 * canvas hem over het hele bed door.
+	 * How far the guide line stretches perpendicular to this axis, in mm. With a
+	 * shape the line runs from the shape to whatever it snaps to, as in Inkscape; with
+	 * grid and bed lines there is nothing to span between and the canvas draws it
+	 * across the whole bed.
 	 */
 	span?: [number, number];
 };
@@ -54,7 +54,7 @@ export type SnapHit = { delta: number; guide: SnapGuide };
 
 export type Box = { x: number; y: number; width: number; height: number };
 
-/** Een doos genormaliseerd naar min/max, ook als hij negatief geschaald is. */
+/** A box normalised to min/max, even when it has been scaled negatively. */
 function grenzen(box: Box) {
 	return {
 		x0: Math.min(box.x, box.x + box.width),
@@ -65,18 +65,18 @@ function grenzen(box: Box) {
 }
 
 /**
- * Trefpunten van de omgeving: bed, vel en de dozen van alle andere vormen.
+ * Snap points of the surroundings: bed, sheet and the boxes of every other shape.
  *
- * Van een vorm tellen de randen én het midden, net als bij Inkscape (hoeken,
+ * Of a shape both the edges *and* the centre count, as in Inkscape (corners,
  * zijmiddens, middelpunt). Alleen randen is te weinig: twee vormen op één
- * hartlijn zetten is precies wat je met de hand niet voor elkaar krijgt.
+ * centre line is exactly what you cannot manage by hand.
  */
-export function omgevingstrefpunten(opties: {
+export function surroundingTargets(options: {
 	bed: { width: number; height: number };
 	vel?: { width: number; height: number } | null;
 	anderen: Box[];
 }): { x: SnapTarget[]; y: SnapTarget[] } {
-	const { bed, vel, anderen } = opties;
+	const { bed, vel, anderen } = options;
 	const x: SnapTarget[] = [
 		{ pos: 0, kind: 'bedrand' },
 		{ pos: bed.width / 2, kind: 'bedmidden' },
@@ -88,8 +88,8 @@ export function omgevingstrefpunten(opties: {
 		{ pos: bed.height, kind: 'bedrand' }
 	];
 
-	// Het vel ligt in de linkerbovenhoek van het bed; zijn linkerrand valt dus
-	// samen met die van het bed en voegt niets toe.
+	// The sheet sits in the top-left corner of the bed; its left edge therefore
+	// coincides with the bed's and adds nothing.
 	if (vel) {
 		if (vel.width < bed.width - 0.01) {
 			x.push({ pos: vel.width / 2, kind: 'velmidden' }, { pos: vel.width, kind: 'velrand' });
@@ -118,39 +118,39 @@ export function omgevingstrefpunten(opties: {
 }
 
 /**
- * De beste treffer voor één as.
+ * The best hit for one axis.
  *
- * `kandidaten` zijn de punten van het bewegende ding die mogen vastklikken —
- * bij een verplaatsing de linkerrand, het midden en de rechterrand; bij een
- * hoekgreep alleen die hoek. De teruggegeven `delta` telt op bij de beweging.
+ * `candidates` are the points of the moving thing that may snap — on a move the left
+ * edge, the centre and the right edge; on a corner handle only that corner. The
+ * `delta` returned is added to the movement.
  *
- * Een vorm-, vel- of bedrand wint van een rasterlijn op gelijke afstand: het
- * raster ligt overal, dus zonder die voorkeur klik je nooit op een vorm vast
- * zodra die toevallig naast een rasterlijn ligt.
+ * A shape, sheet or bed edge beats a grid line at the same distance: the grid is
+ * everywhere, so without that preference you would never snap to a shape as soon as
+ * it happens to lie beside a grid line.
  */
-export function klikVast(
+export function snapAxis(
 	as: 'x' | 'y',
-	kandidaten: number[],
-	trefpunten: SnapTarget[],
+	candidates: number[],
+	targets: SnapTarget[],
 	rasterstap: number,
 	trefafstand: number
 ): SnapHit | null {
 	let beste: SnapHit | null = null;
 	const beter = (afstand: number) => !beste || afstand < Math.abs(beste.delta) - 1e-9;
 
-	for (const kandidaat of kandidaten) {
-		for (const punt of trefpunten) {
-			const delta = punt.pos - kandidaat;
+	for (const candidate of candidates) {
+		for (const point of targets) {
+			const delta = point.pos - candidate;
 			if (Math.abs(delta) > trefafstand) continue;
 			if (!beter(Math.abs(delta))) continue;
-			beste = { delta, guide: { axis: as, pos: punt.pos, kind: punt.kind, span: punt.span } };
+			beste = { delta, guide: { axis: as, pos: point.pos, kind: point.kind, span: point.span } };
 		}
 	}
 
 	if (rasterstap > 0) {
-		for (const kandidaat of kandidaten) {
-			const lijn = Math.round(kandidaat / rasterstap) * rasterstap;
-			const delta = lijn - kandidaat;
+		for (const candidate of candidates) {
+			const lijn = Math.round(candidate / rasterstap) * rasterstap;
+			const delta = lijn - candidate;
 			if (Math.abs(delta) > trefafstand) continue;
 			if (!beter(Math.abs(delta))) continue;
 			beste = { delta, guide: { axis: as, pos: lijn, kind: 'raster' } };
@@ -160,29 +160,29 @@ export function klikVast(
 }
 
 /**
- * Een hele doos verplaatsen: rand, midden en rand mogen elk vastklikken, per
- * as onafhankelijk. Zo kan een vorm links uitlijnen op de ene buur en boven op
- * de andere — dat is het gedrag dat je van een tekenprogramma verwacht.
+ * Moving a whole box: edge, centre and edge may each snap, independently per axis.
+ * That lets a shape align on the left to one neighbour and on the top to another —
+ * the behaviour you expect from a drawing program.
  */
-export function klikDoosVast(
+export function snapBox(
 	doos: Box,
 	verplaatsing: { dx: number; dy: number },
-	trefpunten: { x: SnapTarget[]; y: SnapTarget[] },
+	targets: { x: SnapTarget[]; y: SnapTarget[] },
 	rasterstap: number,
 	trefafstand: number
 ): { dx: number; dy: number; guides: SnapGuide[] } {
 	const g = grenzen(doos);
-	const x = klikVast(
+	const x = snapAxis(
 		'x',
 		[g.x0 + verplaatsing.dx, (g.x0 + g.x1) / 2 + verplaatsing.dx, g.x1 + verplaatsing.dx],
-		trefpunten.x,
+		targets.x,
 		rasterstap,
 		trefafstand
 	);
-	const y = klikVast(
+	const y = snapAxis(
 		'y',
 		[g.y0 + verplaatsing.dy, (g.y0 + g.y1) / 2 + verplaatsing.dy, g.y1 + verplaatsing.dy],
-		trefpunten.y,
+		targets.y,
 		rasterstap,
 		trefafstand
 	);
@@ -197,24 +197,24 @@ export function klikDoosVast(
 }
 
 /**
- * Eén punt vastklikken: een hoekgreep tijdens het schalen, een knooppunt, een
- * eindpunt van een lijn, of de plek waar een nieuwe vorm komt.
+ * Snapping one point: a corner handle while scaling, a node, the end of a line, or
+ * the place a new shape goes.
  */
-export function klikPuntVast(
-	punt: { x: number; y: number },
-	trefpunten: { x: SnapTarget[]; y: SnapTarget[] },
+export function snapPoint(
+	point: { x: number; y: number },
+	targets: { x: SnapTarget[]; y: SnapTarget[] },
 	rasterstap: number,
 	trefafstand: number
 ): { x: number; y: number; guides: SnapGuide[] } {
-	const x = klikVast('x', [punt.x], trefpunten.x, rasterstap, trefafstand);
-	const y = klikVast('y', [punt.y], trefpunten.y, rasterstap, trefafstand);
+	const x = snapAxis('x', [point.x], targets.x, rasterstap, trefafstand);
+	const y = snapAxis('y', [point.y], targets.y, rasterstap, trefafstand);
 	const guides: SnapGuide[] = [];
 	if (x) guides.push(x.guide);
 	if (y) guides.push(y.guide);
-	return { x: punt.x + (x?.delta ?? 0), y: punt.y + (y?.delta ?? 0), guides };
+	return { x: point.x + (x?.delta ?? 0), y: point.y + (y?.delta ?? 0), guides };
 }
 
-/** Het woordje bij een hulplijn. Kort, want het staat op het werkstuk. */
+/** The word beside a guide line. Short, because it sits on the workpiece. */
 export const SNAP_LABEL: Record<SnapKind, string> = {
 	raster: 'raster',
 	rand: 'rand',

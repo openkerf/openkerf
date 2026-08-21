@@ -52,14 +52,14 @@
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import AlarmCard from '$components/AlarmCard.svelte';
 	import NotificationCard from '$components/NotificationCard.svelte';
-	import { Bewaker, Meldingen } from '$lib/notifications.svelte';
+	import { Notifications, Watchdog } from '$lib/notifications.svelte';
 
 	const status = new StatusConnection();
 	const control = new Controller();
 	// Besluit B3: melden ja, zelf ingrijpen nee. De bewaker leest de status en
 	// besluit wanneer er iets te zeggen valt; hij stuurt niets naar de machine.
-	const notifications = new Meldingen();
-	const bewaker = new Bewaker(notifications);
+	const notifications = new Notifications();
+	const watchdog = new Watchdog(notifications);
 	/** Staat de instelkaart open? Bereikbaar naast de paneeltabs. */
 	let meldingenOpen = $state(false);
 	/** De aanleidingkaart: alleen in beeld vlak nadat er een job begon. */
@@ -116,8 +116,8 @@
 	let bovenrandHoogte = $state(0);
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		document.documentElement.style.setProperty('--bovenrand-hoogte', `${bovenrandHoogte}px`);
-		return () => document.documentElement.style.removeProperty('--bovenrand-hoogte');
+		document.documentElement.style.setProperty('--topedge-height', `${bovenrandHoogte}px`);
+		return () => document.documentElement.style.removeProperty('--topedge-height');
 	});
 	/** Materiaal waarmee het testrastervenster opent, als je er vanuit de
 	    bibliotheek naartoe springt. */
@@ -134,7 +134,7 @@
 		// nu iets, dus er valt straks iets te melden. Bij het laden van de app zou
 		// dezelfde ask zonder aanleiding komen — en die weigering is definitief.
 		if (notifications.shouldAsk) vraagOpen = true;
-		bewaker.gestart();
+		watchdog.started();
 	}
 	control.onStarted = vier;
 	$effect(() => {
@@ -647,13 +647,13 @@
 		const poll = setInterval(() => control.refreshCapabilities(), 10_000);
 		// De permission kan buiten ons om wijzigen: wie hem in de site-instellingen
 		// van de browser terugzet, verwacht niet dat hij daarna moet verversen.
-		const herlees = () => notifications.lees();
-		window.addEventListener('focus', herlees);
-		document.addEventListener('visibilitychange', herlees);
+		const reread = () => notifications.read();
+		window.addEventListener('focus', reread);
+		document.addEventListener('visibilitychange', reread);
 		return () => {
 			clearInterval(poll);
-			window.removeEventListener('focus', herlees);
-			document.removeEventListener('visibilitychange', herlees);
+			window.removeEventListener('focus', reread);
+			document.removeEventListener('visibilitychange', reread);
 			status.close();
 		};
 	});
@@ -669,10 +669,10 @@
 	// twee losse bronnen, dus twee losse effecten.
 	$effect(() => {
 		const latest = status.events[0];
-		if (latest) bewaker.signaal(latest);
+		if (latest) watchdog.signal(latest);
 	});
 	$effect(() => {
-		bewaker.status(status.device, status.connected);
+		watchdog.status(status.device, status.connected);
 	});
 	// Dezelfde socket draagt de stand van een lopende tegelreeks; de bovenbalk,
 	// het canvas en de telefoon lezen straks allemaal deze ene bron.
@@ -711,7 +711,7 @@
 	// Alles hieronder hangt aan één lijst: `$lib/acties.ts`. De actiebalk boven
 	// het canvas, het rechterklikmenu en het toetsenbord lezen daar dezelfde
 	// namen, dezelfde sneltoetsen en dezelfde redenen-waarom-niet uit. Dat is
-	// het hele punt: hiervóór stond elke handeling op precies één plek, en dus
+	// het hele point: hiervóór stond elke handeling op precies één plek, en dus
 	// was er geen tweede plek waar hij hetzelfde kon heten.
 
 	/** Hoeveel vormen op het klembord staan; het menu moet weten of plakken kan. */
@@ -732,11 +732,11 @@
 		}
 	}
 
-	async function plakken(punt?: { x: number; y: number }) {
+	async function plakken(point?: { x: number; y: number }) {
 		if (!canEdit || !klembord) return;
 		const response = await post('/api/design/clipboard/paste', {
-			x_mm: punt?.x ?? null,
-			y_mm: punt?.y ?? null
+			x_mm: point?.x ?? null,
+			y_mm: point?.y ?? null
 		});
 		if (!response.ok) return;
 		const uitkomst = await response.json().catch(() => null);
@@ -854,10 +854,10 @@
 		menu = { lijst: objectMenu(actionContext, handlers), x: event.clientX, y: event.clientY };
 	}
 
-	function openCanvasMenu(event: MouseEvent, punt: { x: number; y: number }) {
-		menuPunt = punt;
+	function openCanvasMenu(event: MouseEvent, point: { x: number; y: number }) {
+		menuPunt = point;
 		menu = {
-			lijst: canvasMenu(actionContext, handlers, punt),
+			lijst: canvasMenu(actionContext, handlers, point),
 			x: event.clientX,
 			y: event.clientY
 		};
@@ -953,7 +953,7 @@
 		{control}
 		{camera}
 		{notifications}
-		{bewaker}
+		{watchdog}
 		connected={status.connected}
 		position={telefoonPositie}
 		{design}
@@ -966,7 +966,7 @@
 			: null}
 	/>
 {:else}
-<AlarmCard {bewaker} />
+<AlarmCard watchdog={watchdog} />
 <TopBar
 	{device}
 	state={machine}
@@ -1062,7 +1062,7 @@
 		/>
 		</div>
 		<Canvas
-			onPointerMm={(punt) => (muisMm = punt)}
+			onPointerMm={(point) => (muisMm = point)}
 			onContextObject={openObjectMenu}
 			onContextCanvas={openCanvasMenu}
 			bind:control={canvasControl}
@@ -1176,8 +1176,8 @@
 			     melding over gaat. Het belletje draagt zijn eigen toestand — uit of
 			     geblokkeerd is iets wat je moet kunnen zien zonder te klikken. -->
 			<button
-				class="bel"
-				class:stil={!notifications.active}
+				class="bell"
+				class:quiet={!notifications.active}
 				aria-haspopup="dialog"
 				title={notifications.active ? t('tabs.notifications.on') : t('tabs.notifications.off')}
 				aria-label={notifications.active ? t('tabs.notifications.onAria') : t('tabs.notifications.offAria')}
@@ -1414,7 +1414,7 @@
      must not disappear behind a modal window. -->
 {#if !telefoon && vraagOpen && notifications.shouldAsk}
 	<div class="vraagkaart">
-		<NotificationCard {notifications} variant="aanleiding" onKlaar={() => (vraagOpen = false)} />
+		<NotificationCard {notifications} variant="prompt" onDone={() => (vraagOpen = false)} />
 	</div>
 {/if}
 
@@ -1738,24 +1738,24 @@
 		width: calc(100% - var(--space-8));
 		height: 2px;
 	}
-	.bel {
+	.bell {
 		flex: none;
 		width: 36px;
 		display: grid;
 		place-items: center;
 		color: var(--text-2);
 	}
-	.bel svg {
+	.bell svg {
 		width: 17px;
 		height: 17px;
 	}
-	.bel:hover {
+	.bell:hover {
 		color: var(--text-1);
 		background: var(--surface-2);
 	}
 	/* Uit is een toestand, geen failure: het doorgestreepte belletje zegt het al.
 	   Geen rood, want er is niets stuk. */
-	.bel.stil {
+	.bell.quiet {
 		color: var(--text-2);
 	}
 	:global(.ask) { margin: 0 0 var(--space-4); }

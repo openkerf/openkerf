@@ -183,7 +183,7 @@ export class TilingStore {
 	}
 
 	/**
-	 * "Hier": de huidige kopstand als aangetikt punt.
+	 * "Hier": de huidige kopstand als aangetikt point.
 	 *
 	 * Voor de eerste tegel is dat de hoek van de plaat, daarna een merk. Twee
 	 * merken betekent twee keer aantikken; de server houdt bij hoeveel er zijn.
