@@ -18,32 +18,30 @@ ERROR_MARKERS = (
     "Syntax Error",
     "Bad provider",
     "did not exist",
-    # De engine meldt een onleesbaar bestand alleen op het console-kanaal en
-    # geeft daarna netjes terug. Zonder deze marker kwam er HTTP 200 {"ok":true}
-    # uit een bestand dat nooit is ingelezen — de gebruiker ziet een leeg bed en
-    # geen enkele reden waarom.
+    # The engine reports an unreadable file only on the console channel and then returns
+    # neatly. Without this marker HTTP 200 {"ok":true} came out of a file that was never
+    # read — the user sees an empty bed and no reason at all why.
     "File is Malformed",
 )
 
 # The full job pipeline in one line: console commands chain through their
 # input/output types only within a single line (verified against the engine).
 #
-# `clear` staat er niet voor de sier. `plan copy` *voegt toe* aan het plan dat er
-# al ligt (planner.py:593, `data.append`), en het plan is kernel-globaal en
-# blijft na het spoolen staan. Zonder clear droeg de tweede start dus twee keer
-# hetzelfde werk, de derde drie keer, en groeide de tijdschatting met een factor
-# per druk op de knop — gemeten: 1701 s, 3364 s, 5027 s voor hetzelfde ontwerp.
-# Dat is de bron van "150:40:23 voor hetzelfde werk" uit gat B1: niet één foute
-# formule maar elf keer dezelfde job in één plan. Erger dan het getal is wat er
-# gebrand zou zijn: de machine snijdt elke vorm net zo vaak over.
+# `clear` is not there for decoration. `plan copy` *adds* to the plan that is already there
+# (planner.py:593, `data.append`), and the plan is kernel-global and stays after spooling.
+# So without clear the second start carried the same work twice, the third three times, and
+# the time estimate grew by a factor per press of the button — measured: 1701 s, 3364 s,
+# 5027 s for the same design. That is the source of "150:40:23 for the same work" from gap
+# B1: not one wrong formula but eleven copies of the same job in one plan. Worse than the
+# number is what would have been burned: the machine cuts over every shape just as often.
 PLAN_AND_SPOOL = "plan clear copy preprocess validate blob preopt optimize spool"
 
-# Dezelfde pijplijn, maar in tweeën geknipt zodat er tussen `copy` en de rest
-# iets in het plan gezet kan worden. Alleen gebruikt als een laag een Z-stap
-# draagt; zonder dat blijft de regel hierboven letterlijk wat hij was.
+# The same pipeline, but cut in two so that something can be put in the plan between
+# `copy` and the rest. Only used when a layer carries a Z step; without that the line above
+# stays literally what it was.
 PLAN_COPY = "plan clear copy"
 PLAN_REST = "plan preprocess validate blob preopt optimize spool"
-# Dezelfde weg in twee stukken, voor bewerkers die de cutcode nodig hebben.
+# The same route in two pieces, for mutators that need the cutcode.
 PLAN_BLOB = "plan preprocess validate blob preopt optimize"
 PLAN_SPOOL = "plan spool"
 
@@ -59,7 +57,7 @@ class CommandRunner:
     def __init__(self, kernel, document=None):
         self.kernel = kernel
         self._lock = threading.Lock()
-        # Gezet door de server; elke schrijvende opdracht maakt het ontwerp vuil.
+        # Set by the server; every write command makes the design dirty.
         self.document = document
 
     def run(self, command: str) -> list[str]:
@@ -109,17 +107,16 @@ class CommandRunner:
 
     def load_file(self, path: str) -> list[str]:
         """
-        Een bestand inlezen, en eerlijk zijn als dat niet lukt.
+        Reading a file in, and being honest when that does not work.
 
-        De console meldt een mislukking als tekst op het kanaal en geeft daarna
-        gewoon terug, dus zonder deze controle kwam er "gelukt" uit een bestand
-        dat nooit is ingelezen. Twee dingen kunnen misgaan: het bestand is
-        onleesbaar (de engine roept "File is Malformed"), of het is leesbaar
-        maar leeg — een SVG zonder vormen laadt zonder klacht en levert een
-        leeg bed op. Allebei krijgen ze hier hun eigen zin, in de taal van
-        iemand die een tekening wilde openen.
+        The console reports a failure as text on the channel and then simply returns, so
+        without this check "succeeded" came out of a file that was never read. Two things can
+        go wrong: the file is unreadable (the engine shouts "File is Malformed"), or it is
+        readable but empty — an SVG without shapes loads without complaint and produces an
+        empty bed. Both get their own sentence here, in the language of somebody who wanted to
+        open a drawing.
         """
-        naam = path.rsplit("/", 1)[-1]
+        name = path.rsplit("/", 1)[-1]
         voor = self._element_count()
         try:
             output = self.run(f'load "{path}"')
@@ -127,7 +124,7 @@ class CommandRunner:
             raise CommandError(
                 "load",
                 [
-                    f"“{naam}” cannot be read. The file is damaged or it is not a "
+                    f"“{name}” cannot be read. The file is damaged or it is not a "
                     "drawing — check that you have the right export (SVG, DXF, PNG "
                     "or an RD file).",
                 ],
@@ -136,7 +133,7 @@ class CommandRunner:
             raise CommandError(
                 "load",
                 [
-                    f"There is no drawing in “{naam}”. The file was read but holds "
+                    f"There is no drawing in “{name}”. The file was read but holds "
                     "no shapes — with an SVG from a drawing program that is usually "
                     "because everything is on a hidden layer.",
                 ],
@@ -152,15 +149,14 @@ class CommandRunner:
 
     def start_job(self, name: str | None = None, mutators=()) -> list[str]:
         """
-        Het plan bouwen en naar de spooler sturen.
+        Building the plan and sending it to the spooler.
 
-        Eerst kijken óf er iets te branden valt. Een leeg ontwerp liep hier
-        vrolijk doorheen en meldde "gelukt": de gebruiker drukt op starten, de
-        app zegt ja, en er gebeurt niets bij de machine. Dat is de vervelendste
-        soort fout — je gaat ernaast staan wachten.
+        First look at *whether* there is anything to burn. An empty design ran cheerfully
+        through here and reported "succeeded": the user presses start, the app says yes, and
+        nothing happens at the machine. That is the most annoying kind of mistake — you go and
+        state beside it waiting.
 
-        `mutators` zijn bewerkingen op het gekopieerde plan (tegels, Z-stappen).
-        Zie `_plan_and_spool`.
+        `mutators` are operations on the copied plan (tiles, Z steps). See `_plan_and_spool`.
         """
         elements = self.kernel.elements
         burnable = 0
@@ -187,42 +183,40 @@ class CommandRunner:
 
     def _plan_and_spool(self, mutators=()) -> list[str]:
         """
-        Het plan bouwen. Met bewerkers in twee stappen, anders in één.
+        Het plan bouwen. Met mutators in twee steps, anders in één.
 
-        Een bewerker is een callable die de planstappen krijgt en teruggeeft.
-        De volgorde telt: tegels eerst (klippen en verplaatsen), Z-stappen
-        daarna (de passes uitvouwen) — andersom klip je hetzelfde werk zes keer.
+        A mutator is a callable that gets the plan steps and hands them back. The order
+        counts: tiles first (clipping and moving), Z steps afterwards (unfolding the passes) —
+        the other way round you clip the same work six times.
 
-        De gewone weg blijft letterlijk één regel: dat pad wordt bij elke job
-        gelopen en verdient geen extra bochten.
+        The ordinary route stays literally one line: that path is walked on every job and
+        deserves no extra bends.
         """
-        alle = list(mutators)
-        na = []
+        all_mutators = list(mutators)
+        after = []
         if self._multi_pass_layers():
             from meerk40t.core.node.util_console import ConsoleOperation
 
-            alle.append(lambda steps: self._with_passes(steps, ConsoleOperation))
-            # Ná het blobben: de passes van één laag horen in één RD-laag.
-            na.append(self._share_pass_settings)
-        if not alle and not na:
+            all_mutators.append(lambda steps: self._with_passes(steps, ConsoleOperation))
+            # After the blobbing: one layer's passes belong in one RD layer.
+            after.append(self._share_pass_settings)
+        if not all_mutators and not after:
             return self.run(PLAN_AND_SPOOL)
-        return self._plan_with_mutators(alle, na)
+        return self._plan_with_mutators(all_mutators, after)
 
     def _plan_with_mutators(self, mutators, post=()) -> list[str]:
         """
         Het plan opbouwen, bewerken, en dan pas afmaken.
 
-        `opt_merge_ops`/`opt_merge_passes` gaan uit zolang wij aan het plan
-        zitten. Met die vlaggen aan plakt de optimalisatie stukken tot één
-        cutcode en schuift consolestappen naar achteren — dan zakt een Z pas
-        als er al gebrand is, en dat merk je aan het werkstuk in plaats van aan
-        het scherm. Het zijn instellingen van de gebruiker, dus ze gaan in een
-        `finally` terug.
+        `opt_merge_ops`/`opt_merge_passes` go off while we are working on the plan. With
+        those flags on, the optimisation glues pieces into one cutcode and pushes console
+        steps to the back — then a Z only drops once burning has already happened, and you
+        notice that on the workpiece instead of on the screen. They are the user's settings,
+        so they go back in a `finally`.
 
-        Het plan is een kopie van de boom: `plan copy` roept
-        `copy_children_as_real` aan, dat de ReferenceNodes dereferentieert en de
-        vormen zelf kopieert. Wat hier bewerkt wordt, raakt het ontwerp van de
-        gebruiker dus niet.
+        The plan is a copy of the tree: `plan copy` calls `copy_children_as_real`, which
+        dereferences the ReferenceNodes and copies the shapes themselves. So what is mutated
+        here does not touch the user's design.
         """
         root = self.kernel.root
         root.setting(bool, "opt_merge_ops", True)
@@ -236,8 +230,8 @@ class CommandRunner:
             if not post:
                 output += self.run(PLAN_REST)
                 return output
-            # In twee happen, want een bewerker die de cutcode aanraakt kan pas
-            # ná `blob` iets zien. `spool` blijft de laatste stap.
+            # In two bites, because a mutator that touches the cutcode can only see
+            # anything *after* `blob`. `spool` stays the last step.
             output += self.run(PLAN_BLOB)
             self._apply_mutators(post)
             output += self.run(PLAN_SPOOL)
@@ -256,29 +250,27 @@ class CommandRunner:
 
     def build_plan(self, mutators=()) -> list:
         """
-        Het gekopieerde en bewerkte plan, zonder het af te maken.
+        The copied and mutated plan, without finishing it.
 
-        Bestaat omdat je er anders niet naar kunt kijken: `blob` vervangt de
-        bewerkingen door één `CutCode`, dus na een volledige `plan`-regel is er
-        geen laag met kinderen meer om iets over vast te stellen. Wat de
-        bewerkers doen is precies wat hier getest hoort te worden, en dit is de
-        enige plek waar dat nog zichtbaar is.
+        Exists because you cannot look at it otherwise: `blob` replaces the operations with
+        one `CutCode`, so after a full `plan` line there is no layer with children left to
+        establish anything about. What the mutators do is exactly what should be tested here,
+        and this is the only place where that is still visible.
 
-        Draait bewust niet de spooler: dit is de haak voor tests, niet een
-        tweede manier om een job te starten.
+        Deliberately does not run the spooler: this is the hook for tests, not a second way
+        to start a job.
         """
         self.run(PLAN_COPY)
         return self._apply_mutators(mutators)
 
     def _z_stepped_layers(self) -> list:
         """
-        Lagen die meebranden, meer dan één pass doen én een Z-stap dragen.
+        Layers that burn, do more than one pass *and* carry a Z step.
 
-        De machine wordt eerst gevraagd of ze een Z-as heeft. Dat is niet
-        dubbelop met de weigering bij het instellen: een laag houdt zijn stap
-        als je naar een andere machine wisselt, en zonder deze vraag zou een
-        ontwerp dat op een diode-laser gemaakt is op de Ruida een `z_move`
-        sturen die daar niet bestaat — middenin de job, met de kop op het werk.
+        The machine is asked first whether it has a Z axis. That is not doubling up on the
+        refusal when setting it: a layer keeps its step when you switch to another machine,
+        and without this question a design made on a diode laser would send a `z_move` on the
+        Ruida that does not exist there — in the middle of the job, with the head on the work.
         """
         gevonden = []
         device = getattr(self.kernel, "device", None)
@@ -305,23 +297,20 @@ class CommandRunner:
     @staticmethod
     def _share_pass_settings(steps) -> list:
         """
-        De passes van één laag in één RD-laag houden.
+        De passes van één layer in één RD-layer houden.
 
-        Loopt ná `blob`, want vóór die tijd bestaan de kopieën niet. `blob`
-        geeft elke pass een eigen settings-dict (`core/cutplan.py`
-        `_blob_convert` kopieert de dict zodra `passes` en `implicit_passes`
-        verschillen) en de Ruida-driver groepeert zijn lagen op de identiteit
-        van die dict (`ruida/rdjob.py:1434`). Elke pass werd dus een extra laag
-        in het bestand. Gemeten op de echte RD-stroom van een bord met vier
-        vakjes: 4 lagen bij één pass, **8** bij twee, en 4 weer zodra de
-        kopieën hun dict delen. Een bord van zestien vakjes komt bij twee
-        passes op 33 lagen, en dan zegt de controller "file invalid" en staat de
-        laser stil.
+        Runs *after* `blob`, because before then the copies do not exist. `blob` gives every
+        pass its own settings dict (`core/cutplan.py` `_blob_convert` copies the dict as soon
+        as `passes` and `implicit_passes` differ) and the Ruida driver groups its layers on
+        the identity of that dict (`ruida/rdjob.py:1434`). So every pass became an extra layer
+        in the file. Measured on the real RD stream of a board with four squares: 4 layers at
+        one pass, **8** at two, and 4 again as soon as the copies share their dict. A board of
+        sixteen squares comes to 33 layers at two passes, and then the controller says "file
+        invalid" and the laser stands still.
 
-        De sleutel is de `id` uit de settings-dict: kopieën van dezelfde
-        bewerking dragen dezelfde. Lagen met een Z-stap blijven met opzet
-        buiten: daar hoort tussen de passes een `z_move`, en die reeks is
-        gemeten met een eigen laag per pass.
+        The key is the `id` from the settings dict: copies of the same operation carry the
+        same one. Layers with a Z step are deliberately left out: there a `z_move` belongs
+        between the passes, and that sequence was measured with a layer of its own per pass.
         """
         eerste: dict = {}
         for step in steps:
@@ -343,28 +332,25 @@ class CommandRunner:
 
     def _multi_pass_layers(self) -> list:
         """
-        Lagen die meebranden en meer dan één pass doen.
+        Layers that burn and do more than one pass.
 
-        Waarom dit een eigen weg door het plan verdient: `blob` maakt van elke
-        pass een eigen stuk cutcode **met een eigen settings-dict**
-        (`core/cutplan.py:_blob_convert` kopieert de dict zodra `passes` en
-        `implicit_passes` verschillen). De Ruida-driver groepeert zijn RD-lagen
-        op de identiteit van die dict (`ruida/rdjob.py:1434`), dus elke pass
-        werd een éxtra laag in het bestand. Gemeten op een testbord van vier
-        vakjes: 4 RD-lagen bij één pass, 8 bij twee. Een bord van zestien
-        vakjes komt dan boven wat de controller aanneemt, en die zegt niets
-        beters dan "file invalid" — met een laser die stilstaat.
+        Why this deserves a route of its own through the plan: `blob` makes every pass a
+        piece of cutcode of its own **with a settings dict of its own**
+        (`core/cutplan.py:_blob_convert` copies the dict as soon as `passes` and
+        `implicit_passes` differ). The Ruida driver groups its RD layers on the identity of
+        that dict (`ruida/rdjob.py:1434`), so every pass became an *extra* layer in the file.
+        Measured on a test board of four squares: 4 RD layers at one pass, 8 at two. A board
+        of sixteen squares then goes above what the controller accepts, and it says nothing
+        better than "file invalid" — with a laser standing still.
 
-        Wat wél werkt is dezelfde knoop meerdere keren in de planlijst zetten:
-        `blob` maakt per plek verse cutcode en de settings-dict blijft één
-        object, dus het aantal lagen blijft gelijk aan het aantal bewerkingen.
-        Dat is precies wat de Z-stap al deed; dit is die weg voor élke laag met
-        meer dan één pass.
+        What *does* work is putting the same node in the plan list several times: `blob`
+        makes fresh cutcode per place and the settings dict stays one object, so the number of
+        layers stays equal to the number of operations. That is exactly what the Z step
+        already did; this is that route for *every* layer with more than one pass.
 
-        Terzijde: `opt_merge_passes` zou hetzelfde oplossen door één kopie met
-        `passes=N` te maken, maar de Ruida-driver kijkt niet naar dat getal
-        (geen enkele verwijzing naar `passes` in `ruida/driver.py`) — dan zou de
-        laag stil één keer branden.
+        Aside: `opt_merge_passes` would solve the same thing by making one copy with
+        `passes=N`, but the Ruida driver does not look at that number (not a single reference
+        to `passes` in `ruida/driver.py`) — then the layer would silently burn once.
         """
         gevonden = []
         try:
@@ -384,11 +370,11 @@ class CommandRunner:
     @staticmethod
     def _with_passes(steps, console_operation) -> list:
         """
-        De passes uitvouwen: elke laag komt zo vaak in het plan als hij brandt.
+        Unfolding the passes: every layer appears in the plan as often as it burns.
 
-        Met een Z-stap komt er een `z_move` tussen de passes en één terug aan
-        het eind; zonder Z-stap is het alleen het herhalen. Puur rekenwerk op de
-        stappenlijst, dus testbaar zonder machine.
+        With a Z step a `z_move` comes between the passes and one back at the end; without a Z
+        step it is only the repeating. Pure arithmetic on the step list, so testable without a
+        machine.
         """
         uitgebreid = []
         for step in steps:
@@ -397,7 +383,7 @@ class CommandRunner:
             if passes < 2:
                 uitgebreid.append(step)
                 continue
-            # De teller op de bewerking gaat naar één: het herhalen doen wij nu.
+            # The counter on the operation goes to one: we do the repeating now.
             step.passes = 1
             step.passes_custom = True
             for index in range(passes):
@@ -422,7 +408,7 @@ class CommandRunner:
             if not z_step or passes < 2:
                 uitgebreid.append(step)
                 continue
-            # De teller op de bewerking gaat naar één: het herhalen doen wij nu.
+            # The counter on the operation goes to one: we do the repeating now.
             step.passes = 1
             step.passes_custom = True
             for index in range(passes):
@@ -438,18 +424,17 @@ class CommandRunner:
 
     def _name_job(self, name, burnable: int) -> None:
         """
-        De verse job een naam geven die een mens herkent (gat P4).
+        Giving the fresh job a name a human recognises (gap P4).
 
-        De engine noemt hem `Spooler:3 items` zodra er geen bestandsnaam is:
-        de klassenaam plus de lengte van de opdrachtenlijst (spoolers.py:612).
-        Het `spool`-commando haalt zijn label uit `elements.basename` en kent
-        geen optie om er iets anders in te zetten, dus we hernoemen de job
-        nadat hij in de wachtrij staat. Alleen als de engine zelf niets wist:
-        heb je een bestand geladen, dan is die naam beter dan de onze.
+        The engine calls it `Spooler:3 items` as soon as there is no file name: the class name
+        plus the length of the command list (spoolers.py:612). The `spool` command takes its
+        label from `elements.basename` and knows no option to put something else in it, so we
+        rename the job after it is in the queue. Only when the engine knew nothing itself: if
+        you have loaded a file, that name is better than ours.
         """
-        titel = (name or "").strip()
-        if not titel:
-            titel = f"{burnable} bewerking" + ("" if burnable == 1 else "en")
+        title = (name or "").strip()
+        if not title:
+            title = f"{burnable} bewerking" + ("" if burnable == 1 else "en")
         try:
             queue = list(self.kernel.device.spooler.queue)
         except Exception:
@@ -461,8 +446,8 @@ class CommandRunner:
         if huidig and not re.fullmatch(r"\w+:\d+ items?", huidig):
             return
         try:
-            job.label = titel
-        except Exception:  # pragma: no cover - de engine mag ons niet breken
+            job.label = title
+        except Exception:  # pragma: no cover - the engine must not break us
             pass
 
     def _driver_paused(self):
@@ -475,13 +460,12 @@ class CommandRunner:
 
     def pause(self) -> list[str]:
         """
-        Pauzeren, en niet iets anders.
+        Pausing, and nothing else.
 
-        `pause` is bij lihuiyu, ruida én grbl een *toggle*: staat de driver al
-        op pauze, dan hervat hetzelfde commando (lihuiyu/device.py:844,
-        ruida/device.py:425, grbl/device.py:982). Twee keer op Pauze drukken
-        zet de machine dus weer aan het branden, en dat is precies het
-        tegenovergestelde van wat er op de knop staat.
+        On lihuiyu, ruida *and* grbl `pause` is a *toggle*: if the driver is already paused,
+        the same command resumes (lihuiyu/device.py:844,
+        ruida/device.py:425, grbl/device.py:982). So pressing Pause twice sets the machine
+        burning again, and that is exactly the opposite of what is on the button.
         """
         if self._driver_paused() is True:
             return ["already paused"]
@@ -489,21 +473,19 @@ class CommandRunner:
 
     def resume(self) -> list[str]:
         """
-        Hervatten, en controleren dat het ook gebeurd is.
+        Resuming, and checking that it has actually happened.
 
-        Gemeten op een lihuiyu-apparaat: `resume` meldt "Lihuiyu Channel
-        Resumed." en de machine blijft staan. Oorzaak zit in de engine — het
-        apparaat registreert `resume` twee keer, eerst als realtime-hervat
-        (device.py:855) en later nog eens als "Resume Controller"
-        (device.py:1045). De tweede wint, en die start de controller in plaats
-        van de driver: `driver.paused` blijft True en `hold_work()` houdt het
-        werk vast. Op een K40 kwam een gepauzeerde job daardoor nooit meer op
-        gang — de hervatknop deed niets, elke keer opnieuw.
+        Measured on a lihuiyu device: `resume` reports "Lihuiyu Channel Resumed." and the
+        machine stays put. The cause is in the engine — the device registers `resume` twice,
+        first as a realtime resume (device.py:855) and later again as "Resume Controller"
+        (device.py:1045). The second wins, and that starts the controller instead of the
+        driver: `driver.paused` stays True and `hold_work()` holds the work back. On a K40 a
+        paused job therefore never got going again — the resume button did nothing, every
+        time.
 
-        Wij kunnen dat niet in `meerk40t/` repareren, dus controleren we het
-        resultaat: staat de driver na afloop nog op pauze, dan halen we hem er
-        met de toggle af. Voor ruida en grbl verandert er niets; daar is de
-        vlag na de eerste poging al weg.
+        We cannot fix that in `meerk40t/`, so we check the result: if the driver is still
+        paused afterwards, we take it off with the toggle. For ruida and grbl nothing changes;
+        there the flag is already gone after the first attempt.
         """
         if self._driver_paused() is False:
             return ["not paused"]
