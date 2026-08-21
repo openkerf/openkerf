@@ -67,7 +67,7 @@ def client_for(kernel, tmp_path):
     return TestClient(ApiServer(kernel, library_path=tmp_path / "z.db").build_app())
 
 
-def een_laag(client, passes=4):
+def a_layer(client, passes=4):
     """A rectangle in a cut layer with several passes."""
     element = client.post(
         "/api/design/elements",
@@ -101,7 +101,7 @@ def test_a_ruida_does_not_offer_the_step(kernel, tmp_path):
 def test_the_step_is_refused_without_a_z_axis(grbl_zonder_z, tmp_path):
     """Better no field than a field that does nothing — the same rule as B11."""
     with client_for(grbl_zonder_z, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
 
         response = client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
@@ -111,7 +111,7 @@ def test_the_step_is_refused_without_a_z_axis(grbl_zonder_z, tmp_path):
 
 def test_an_absurd_step_is_refused(grbl, tmp_path):
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
 
         assert client.patch(
             f"/api/design/operations/{layer}", json={"z_step_mm": 50}
@@ -120,7 +120,7 @@ def test_an_absurd_step_is_refused(grbl, tmp_path):
 
 def test_the_step_is_stored_and_shown(grbl, tmp_path):
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
 
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
@@ -131,7 +131,7 @@ def test_the_step_is_stored_and_shown(grbl, tmp_path):
 def test_zero_turns_the_step_off(grbl, tmp_path):
     """0 is off, not "drop zero millimetres" — otherwise the plan splits anyway."""
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client)
+        layer = a_layer(client)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0})
@@ -234,7 +234,7 @@ def test_the_engine_turns_it_into_alternating_cutcode_and_moves(grbl, tmp_path):
     spooling makes a GRBL device look for a connection.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
     runner = CommandRunner(grbl)
@@ -278,7 +278,7 @@ def test_a_layer_without_a_step_does_not_split_the_pipeline(grbl, tmp_path):
     and with `ignore_settings=True` as well, so a fresh kernel rarely starts clean.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         runner = CommandRunner(grbl)
         assert layer not in [op.id for op in runner._z_stepped_layers()]
 
@@ -296,21 +296,21 @@ def test_a_stored_step_is_ignored_on_a_machine_without_a_z_axis(grbl, tmp_path):
     a screenshot, what happens if you put the same design on the Ruida.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
         assert layer in [op.id for op in CommandRunner(grbl)._z_stepped_layers()]
 
         grbl.device.supports_z_axis = False
 
         assert CommandRunner(grbl)._z_stepped_layers() == []
-        # De instelling zelf blijft staan: terugwisselen moet hem teruggeven.
+        # The setting itself stays: switching back has to give it again.
         assert grbl.elements.find_node(layer).z_step_mm == 0.5
 
 
 def test_a_layer_that_does_not_burn_is_left_out(grbl, tmp_path):
-    """Meebranden uit betekent ook geen Z-beweging voor die laag."""
+    """Burn along off means no Z movement for that layer either."""
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
+        layer = a_layer(client, passes=3)
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.5})
 
         client.patch(f"/api/design/operations/{layer}", json={"output": False})
@@ -320,16 +320,16 @@ def test_a_layer_that_does_not_burn_is_left_out(grbl, tmp_path):
 
 def test_the_step_survives_being_written_out_and_read_back(grbl, tmp_path):
     """
-    Zonder dit zou de Z-stap na een herstart weg zijn terwijl de passes bleven
-    staan — en dan snijd je vier keer op dezelfde hoogte zonder dat iets het
-    zegt. De engine schrijft elke gewone eigenschap van een bewerking mee naar
-    de opslag (`svg_io.py:456`, de generieke tak), dus onze eigen `z_step_mm`
-    gaat vanzelf mee. Hier bewezen met de opslagroutine van de engine zelf.
+    Without this the Z step would be gone after a restart while the passes stayed —
+    and then you cut four times at the same height with nothing saying so. The
+    engine writes every ordinary property of an operation out to storage
+    (`svg_io.py:456`, the generic branch), so our own `z_step_mm` comes along by
+    itself. Proved here with the engine's own save routine.
     """
     with client_for(grbl, tmp_path) as client:
-        layer = een_laag(client, passes=3)
-        # Een eigen waarde: de engine bewaart de lagenstapel in één gedeelde
-        # `operations.cfg`, dus er kunnen lagen van een andere test tussen staan.
+        layer = a_layer(client, passes=3)
+        # A value of its own: the engine keeps the layer stack in one shared
+        # `operations.cfg`, so layers from another test can be in among them.
         client.patch(f"/api/design/operations/{layer}", json={"z_step_mm": 0.37})
 
     elements = grbl.elements

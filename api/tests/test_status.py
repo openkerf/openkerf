@@ -36,9 +36,9 @@ def test_device_snapshot_shape(kernel):
 
 def test_connection_never_guesses_connected(kernel):
     """
-    Het dummy-apparaat heeft geen enkele verbindingsbron. Dan is "unknown" het
-    enige eerlijke antwoord — een gok naar "connected" zou precies de groene
-    stip boven een dode poort terugbrengen die deze laag moest wegnemen.
+    The dummy device has no connection source at all. Then "unknown" is the only
+    honest answer — a guess at "connected" would bring back exactly the green dot
+    over a dead port that this layer was meant to take away.
     """
     device = next(iter(kernel.services("device")))
     link = StatusReader(kernel).connection(device)
@@ -120,11 +120,11 @@ def test_progress_fraction():
     assert StatusReader._progress(20, 10) == 1.0
 
 
-# ---------------------------------------------------------------- pauze
+# ---------------------------------------------------------------- pause
 
 
 class _Job:
-    """Een LaserJob zoals de spooler hem teruggeeft: pauze staat er níet in."""
+    """A LaserJob as the spooler hands it back: the pause is *not* in it."""
 
     label = "Sheet 1"
     priority = 0
@@ -138,8 +138,8 @@ class _Job:
 
     @property
     def status(self):
-        # Exact de vier waarden uit meerk40t/core/laserjob.py:66 — geen ervan
-        # bevat "pause".
+        # Exactly the four values from meerk40t/core/laserjob.py:66 — not one of
+        # them holds "pause".
         return "Running" if self._running else "Waiting"
 
     def is_running(self):
@@ -172,37 +172,37 @@ class _Device:
 
 def test_pause_is_read_from_the_driver_not_from_the_job_status():
     """
-    De job zegt "Running" of hij nu stilstaat of niet — daar is geen pauze uit
-    te lezen. Zonder deze vlag toonde de app een gepauzeerde machine als
-    "Bezig", zonder hervatknop.
+    The job says "Running" whether it is standing still or not — there is no pause
+    to be read from it. Without this flag the app showed a paused machine as "Busy",
+    with no resume button.
     """
     reader = StatusReader(None)
 
-    stil = reader.device_snapshot(_Device(True))
-    assert stil["paused"] is True
-    assert stil["spooler"]["jobs"][0]["paused"] is True
-    # De job zelf blijft "Running" melden; dat is precies waarom dit veld moest.
-    assert stil["spooler"]["jobs"][0]["status"] == "Running"
+    still = reader.device_snapshot(_Device(True))
+    assert still["paused"] is True
+    assert still["spooler"]["jobs"][0]["paused"] is True
+    # The job itself keeps reporting "Running"; that is exactly why this field was needed.
+    assert still["spooler"]["jobs"][0]["status"] == "Running"
 
-    loopt = reader.device_snapshot(_Device(False))
-    assert loopt["paused"] is False
-    assert loopt["spooler"]["jobs"][0]["paused"] is False
+    running_now = reader.device_snapshot(_Device(False))
+    assert running_now["paused"] is False
+    assert running_now["spooler"]["jobs"][0]["paused"] is False
 
 
 def test_pause_is_unknown_when_the_driver_does_not_say():
-    """Niet gokken: geen vlag is `None`, net als bij de verbinding."""
+    """No guessing: no flag is `None`, just as with the connection."""
 
-    class Zonder:
+    class Without:
         path = "dummy"
         label = "Dummy"
         driver = object()
 
-    assert StatusReader(None).paused(Zonder()) is None
+    assert StatusReader(None).paused(Without()) is None
     assert StatusReader(None).paused(object()) is None
 
 
 def test_a_queued_job_behind_a_paused_one_is_not_itself_paused():
-    """Wat achteraan in de rij staat, wacht op zijn beurt — dat is geen pauze."""
+    """What is at the back of the queue is waiting its turn — that is not a pause."""
     device = _Device(True)
     device.spooler = _Spooler([_Job(running=True), _Job(running=False)])
 
@@ -212,10 +212,10 @@ def test_a_queued_job_behind_a_paused_one_is_not_itself_paused():
 
 def test_a_job_that_has_not_started_yet_still_shows_the_pause():
     """
-    Gemeten met twee vensters open: de driver stond op pauze, de job vooraan
-    was nog niet begonnen (`running is False`, `steps_done == 0`), en zowel de
-    desktop als de telefoon meldde "Bezig" met een pauzeknop erbij. De pauze
-    hing aan `running`, en dat is precies het geval waarin die vlag niets zegt.
+    Measured with two windows open: the driver was paused, the job at the front had
+    not started yet (`running is False`, `steps_done == 0`), and both the desktop
+    and the phone reported "Busy" with a pause button beside it. The pause hung off
+    `running`, and that is exactly the case in which that flag says nothing.
     """
     device = _Device(True)
     device.spooler = _Spooler([_Job(running=False)])

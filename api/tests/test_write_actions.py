@@ -176,11 +176,11 @@ def test_load_refuses_a_file_that_is_not_a_drawing(kernel, local_client):
     )
 
     assert response.status_code == 409
-    melding = " ".join(response.json()["detail"]["output"])
-    assert "broken.svg" in melding
+    message = " ".join(response.json()["detail"]["output"])
+    assert "broken.svg" in message
     # Gebruikerstaal, geen protocoltaal: geen "Malformed", geen tijdelijk pad.
-    assert "Malformed" not in melding
-    assert "/var/" not in melding
+    assert "Malformed" not in message
+    assert "/var/" not in message
 
 
 def test_load_says_so_when_the_file_holds_no_shapes(kernel, local_client):
@@ -248,24 +248,24 @@ def test_supports_matches_exactly(kernel):
 
 def test_starting_an_empty_design_is_refused(local_client):
     """
-    This used to report "succeeded": you press start, the app says yes, and
-    gebeurt niets bij de machine. Dan sta je ernaast te wachten.
+    This used to report "succeeded": you press start, the app says yes, and nothing
+    happens at the machine. Then you stand there waiting.
     """
     local_client.post("/api/design/clear")
 
     response = local_client.post("/api/job/start")
 
     assert response.status_code == 409
-    melding = " ".join(response.json()["detail"]["output"])
-    assert "nothing ready to burn" in melding
-    # En het zegt wat je eraan doet.
-    assert "layer" in melding
+    message = " ".join(response.json()["detail"]["output"])
+    assert "nothing ready to burn" in message
+    # And it says what to do about it.
+    assert "layer" in message
 
 
 def test_layers_that_are_all_switched_off_count_as_empty(local_client):
     """
-    Een laag met 'meebranden' uit levert niets op. Staat álles uit, dan is de
-    job leeg — ook al staat er van alles op het canvas.
+    A layer with 'burn along' off gives nothing. If *everything* is off, the job is
+    empty — however much is on the canvas.
     """
     local_client.post("/api/design/clear")
     local_client.post(
@@ -274,8 +274,8 @@ def test_layers_that_are_all_switched_off_count_as_empty(local_client):
     )
     assert local_client.post("/api/job/start").status_code == 200
 
-    # Een element belandt door de classificatie in meerdere lagen tegelijk, dus
-    # ze moeten allemaal uit.
+    # Classification lands an element in several layers at once, so they all have
+    # to be switched off.
     for operation in local_client.get("/api/design").json()["operations"]:
         if operation["element_ids"]:
             local_client.patch(
@@ -293,28 +293,28 @@ class _Driver:
         self.paused = False
 
 
-class _KaputteLihuiyu:
+class _BrokenLihuiyu:
     """
-    Een lihuiyu-apparaat, met precies de fout die de echte engine heeft.
+    A lihuiyu device, with exactly the bug the real engine has.
 
-    `resume` staat er twee keer in (device.py:855 en device.py:1045); de tweede
-    registratie wint en start de controller in plaats van de driver. De vlag
-    blijft dus staan en de machine blijft stil. `pause` is een toggle.
+    `resume` is in there twice (device.py:855 and device.py:1045); the second
+    registration wins and starts the controller instead of the driver. So the flag
+    stays put and the machine stays quiet. `pause` is a toggle.
     """
 
     def __init__(self):
         self.driver = _Driver()
-        self.uitgevoerd = []
+        self.ran = []
 
-    def console(self, regel):
-        opdracht = regel.strip()
-        self.uitgevoerd.append(opdracht)
-        if opdracht == "pause":
+    def console(self, line):
+        command = line.strip()
+        self.ran.append(command)
+        if command == "pause":
             self.driver.paused = not self.driver.paused
-        # "resume" doet hier met opzet niets aan driver.paused.
+        # "resume" deliberately does nothing to driver.paused here.
 
-    def channel(self, _naam):
-        class Kanaal:
+    def channel(self, _name):
+        class Channel:
             @staticmethod
             def watch(_fn):
                 pass
@@ -323,7 +323,7 @@ class _KaputteLihuiyu:
             def unwatch(_fn):
                 pass
 
-        return Kanaal()
+        return Channel()
 
     @property
     def device(self):
@@ -332,27 +332,27 @@ class _KaputteLihuiyu:
 
 def test_resume_actually_resumes_on_a_lihuiyu():
     """
-    Hervatten moet de machine laten lopen, niet alleen een regel op het console
-    zetten. Zonder de controle achteraf bleef `driver.paused` True en kwam een
-    gepauzeerde job op een K40 nooit meer op gang.
+    Resuming has to make the machine run, not only put a line on the console.
+    Without the check afterwards `driver.paused` stayed True and a paused job on a
+    K40 never got going again.
     """
-    kernel = _KaputteLihuiyu()
+    kernel = _BrokenLihuiyu()
     runner = CommandRunner(kernel)
 
     runner.pause()
     assert kernel.driver.paused is True
 
     runner.resume()
-    assert kernel.driver.paused is False, "de hervatknop liet de machine staan"
-    assert kernel.uitgevoerd == ["pause", "resume", "pause"]
+    assert kernel.driver.paused is False, "the resume button left the machine standing"
+    assert kernel.ran == ["pause", "resume", "pause"]
 
 
 def test_pause_does_not_double_as_resume():
     """
-    `pause` is in de engine een toggle. Twee keer op Pauze drukken zette de
-    machine dus weer aan het branden, onder een knop waar "Pauze" op staat.
+    In the engine `pause` is a toggle. So pressing Pause twice set the machine
+    burning again, under a button that says "Pause".
     """
-    kernel = _KaputteLihuiyu()
+    kernel = _BrokenLihuiyu()
     runner = CommandRunner(kernel)
 
     runner.pause()
@@ -361,9 +361,9 @@ def test_pause_does_not_double_as_resume():
 
 
 def test_resume_is_a_no_op_when_nothing_is_paused():
-    kernel = _KaputteLihuiyu()
+    kernel = _BrokenLihuiyu()
     runner = CommandRunner(kernel)
 
     runner.resume()
-    assert kernel.uitgevoerd == []
+    assert kernel.ran == []
     assert kernel.driver.paused is False
