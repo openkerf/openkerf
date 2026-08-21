@@ -147,34 +147,33 @@ def test_the_last_change_before_you_walk_away_still_lands(client, server, monkey
 
     a_rect(client)
     a_rect(client)
-    assert server.autosave.touch() is False, "de rem hoort er nog op te staan"
-    # Niets meer te doen zonder de staart: er komt geen wijziging meer.
-    assert server.autosave.flush() is False, "binnen de interval blijft het wachten"
+    assert server.autosave.touch() is False, "the brake should still be on"
+    # Nothing left to do without the tail: no change is coming.
+    assert server.autosave.flush() is False, "inside the interval it keeps waiting"
 
-    # De interval loopt af terwijl er niemand meer tekent.
+    # The interval runs out while nobody is drawing any more.
     monkeypatch.setattr(
         "openkerf_api.autosave.time.monotonic",
         lambda: server.autosave._last + INTERVAL + 1,
     )
 
     assert server.autosave.flush() is True
-    assert server.autosave.flush() is False, "één keer is genoeg; niet blijven schrijven"
+    assert server.autosave.flush() is False, "once is enough; do not keep writing"
 
 
 def test_clearing_the_design_does_not_use_up_the_throttle(client, server):
     """
-    Leegmaken stuurt een boomsignaal, dus `touch()` komt langs — maar er is
-    niets te bewaren. Zonder deze regel zette dat wél de klok, en stond de
-    eerste twintig seconden van je volgende ontwerp buiten het vangnet.
-    Gemeten op een draaiende server: leegmaken, vier vormen tekenen, geen
-    herstelbestand.
+    Clearing sends a tree signal, so `touch()` comes past — but there is nothing
+    to save. Without this rule that *did* set the clock, and the first twenty
+    seconds of your next design sat outside the safety net. Measured on a running
+    server: clear, draw four shapes, no recovery file.
     """
     a_rect(client)
     assert server.autosave.touch() is True
 
     client.delete("/api/design/autosave")
     client.post("/api/design/clear")
-    assert server.autosave.touch() is False, "een leeg ontwerp schrijft niets"
+    assert server.autosave.touch() is False, "an empty design writes nothing"
 
     a_rect(client)
 
@@ -182,7 +181,7 @@ def test_clearing_the_design_does_not_use_up_the_throttle(client, server):
 
 
 def test_after_restoring_the_next_change_is_saved_again(client, server):
-    """Hetzelfde na herstellen: wat je ná het terugzetten doet, hoort beschermd."""
+    """The same after restoring: what you do after putting it back is protected."""
     a_rect(client)
     assert server.autosave.touch() is True
     client.post("/api/design/clear")
@@ -195,40 +194,39 @@ def test_after_restoring_the_next_change_is_saved_again(client, server):
 
 def test_autosaving_does_not_rename_your_document(kernel, client, tmp_path):
     """
-    Automatisch bewaren schrijft naar `herstel.svg`, en `save` zet die naam op
-    `elements.basename`. Die naam kwam daarna terug als jobnaam: elke job in de
-    wachtrij heette "herstel.svg", ook op een vers ontwerp waar niets hersteld
-    was. Twee jobs die hetzelfde heten zijn bij een laser niet uit elkaar te
-    houden.
+    Saving automatically writes to `recovery.svg`, and `save` puts that name on
+    `elements.basename`. That name then came back as the job name: every job in
+    the queue was called "recovery.svg", even on a fresh design where nothing had
+    been recovered. Two jobs with the same name cannot be told apart at a laser.
     """
 
     client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     )
-    kernel.elements._filename = "/ergens/mijn-ontwerp.svg"
+    kernel.elements._filename = "/somewhere/my-design.svg"
 
     _autosave(kernel, tmp_path).save()
 
-    assert kernel.elements.basename == "mijn-ontwerp.svg"
+    assert kernel.elements.basename == "my-design.svg"
 
 
 def test_autosaving_leaves_an_unnamed_document_unnamed(kernel, client, tmp_path):
-    """Zonder naam blijft het naamloos — dan verzint onze eigen jobnaam iets."""
+    """Without a name it stays nameless — then our own job name makes something up."""
 
     client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     )
-    voor = getattr(kernel.elements, "basename", None)
+    before = getattr(kernel.elements, "basename", None)
 
     _autosave(kernel, tmp_path).save()
 
-    assert getattr(kernel.elements, "basename", None) == voor
+    assert getattr(kernel.elements, "basename", None) == before
 
 
 def _autosave(kernel, tmp_path):
-    """De autosave zoals de server hem maakt, met een eigen pad voor de test."""
+    """The autosave the way the server makes it, with a path of its own for the test."""
     from openkerf_api.autosave import Autosave
     from openkerf_api.document import Document
     from openkerf_api.drawing import Drawing

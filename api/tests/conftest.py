@@ -39,7 +39,7 @@ def _bootstrap(profile="OpenKerf_TEST"):
         fills,
         cag,  # union/difference/intersection/xor
         coolant,
-        hershey,  # levert `linetext`: vector-tekst voor de rasterlabels
+        hershey,  # provides `linetext`: vector text for the grid labels
         svg_io,
         ruidadevice,
     ):
