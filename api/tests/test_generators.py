@@ -435,52 +435,52 @@ def test_a_lid_used_to_be_a_bottom_with_nowhere_to_go():
 
 def test_the_walls_grow_teeth_on_top_only_when_there_is_a_lid():
     """
-    Zonder deksel blijft de bovenrand recht.
+    Without a lid the top edge stays straight.
 
-    Anders staan er tanden op een doos die open blijft: dan snijd je een rand
-    vol uitsteeksels waar niets op komt.
+    Otherwise there are teeth on a box that stays open: you would be cutting an
+    edge full of tabs with nothing to go on them.
     """
-    met = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=True))
-    zonder = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=False))
+    with_lid = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=True))
+    without = dict(box_panels(80, 60, 40, thickness=3, finger=10, kerf=0.1, lid=False))
 
-    assert "lid" not in zonder
-    assert len(met["front"]) > len(zonder["front"]), "met deksel horen er tanden bij"
-    assert len(zonder["front"]) == 28  # zoals het altijd was: recht van boven
+    assert "lid" not in without
+    assert len(with_lid["front"]) > len(without["front"]), "with a lid there should be teeth"
+    assert len(without["front"]) == 28  # the way it always was: straight on top
 
 
 def test_the_lid_seam_is_the_same_construction_as_the_bottom_seam():
     """
-    De sterkste proef die er zonder hout is.
+    The strongest trial there is without wood.
 
-    De bodemnaad past — dat is op materiaal vastgesteld. Als de dekselnaad
-    punt voor punt dezelfde vorm heeft (zelfde aantal tanden, zelfde
-    x-posities, zelfde kerfcompensatie, tegengestelde fase), dan past die dus
-    ook. Een test op `teeth_count(80, 10) == teeth_count(80, 10)` bewijst
-    daarentegen niets: dat is dezelfde aanroep twee keer.
+    The bottom seam fits — that was established on material. If the lid seam has
+    the same shape point for point (the same number of teeth, the same x
+    positions, the same kerf compensation, the opposite phase), then it fits too.
+    A test on `teeth_count(80, 10) == teeth_count(80, 10)`, on the other hand,
+    proves nothing: that is the same call twice.
     """
     from openkerf_api.generators import edge_points
 
-    breedte, dikte, vinger, kerf = 80.0, 3.0, 10.0, 0.1
-    heen = ((0.0, 0.0), (breedte, 0.0))
+    width, thickness, finger, kerf = 80.0, 3.0, 10.0, 0.1
+    along = ((0.0, 0.0), (width, 0.0))
 
-    wand_onder = edge_points(*heen, dikte, vinger, kerf, PHASE[("front", "under")])
-    bodem_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("bottom", "front")])
-    wand_boven = edge_points(*heen, dikte, vinger, kerf, PHASE[("front", "over")])
-    deksel_rand = edge_points(*heen, dikte, vinger, kerf, PHASE[("lid", "front")])
+    wall_below = edge_points(*along, thickness, finger, kerf, PHASE[("front", "under")])
+    bottom_edge = edge_points(*along, thickness, finger, kerf, PHASE[("bottom", "front")])
+    wall_above = edge_points(*along, thickness, finger, kerf, PHASE[("front", "over")])
+    lid_edge = edge_points(*along, thickness, finger, kerf, PHASE[("lid", "front")])
 
-    assert wand_boven == wand_onder
-    assert deksel_rand == bodem_rand
-    # En de naad zelf: tegengestelde fase, en de tanden vallen op dezelfde
-    # plekken op ±kerf na — precies zoals bij de bodem.
+    assert wall_above == wall_below
+    assert lid_edge == bottom_edge
+    # And the seam itself: the opposite phase, and the teeth land in the same
+    # places to within ±kerf — exactly as at the bottom.
     assert PHASE[("front", "over")] != PHASE[("lid", "front")]
-    boven = sorted({round(a[0] - b[0], 4) for a, b in zip(wand_boven, deksel_rand)})
-    onder = sorted({round(a[0] - b[0], 4) for a, b in zip(wand_onder, bodem_rand)})
-    assert boven == onder == [-kerf, kerf]
+    above = sorted({round(a[0] - b[0], 4) for a, b in zip(wall_above, lid_edge)})
+    below = sorted({round(a[0] - b[0], 4) for a, b in zip(wall_below, bottom_edge)})
+    assert above == below == [-kerf, kerf]
 
 
 def test_a_box_with_a_lid_still_fits_on_the_sheet(client):
-    """De wanden worden hoger van hun tanden; dat mag het vel niet breken."""
-    antwoord = client.post(
+    """The walls grow taller from their teeth; that must not break the sheet."""
+    answer = client.post(
         "/api/design/generate/box",
         json={
             "width_mm": 80,
@@ -492,8 +492,8 @@ def test_a_box_with_a_lid_still_fits_on_the_sheet(client):
         },
     )
 
-    assert antwoord.status_code == 201, antwoord.text
-    assert antwoord.json()["panels"] == [
+    assert answer.status_code == 201, answer.text
+    assert answer.json()["panels"] == [
         "bottom",
         "front",
         "back",

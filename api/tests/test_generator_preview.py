@@ -387,15 +387,15 @@ def test_the_preview_adds_nothing_to_undo(client):
 
 def test_the_arc_text_preview_does_not_change_the_chosen_font(client, kernel):
     """
-    `create_linetext_node` schrijft het gekozen lettertype naar
-    `context.last_font` (extra/hershey.py:492), en alles wat daarna zonder
-    lettertype geplaatst wordt, erft dat stilletjes — dat is de bug die de
-    opschriften op een testbord ooit in Apple Chancery zette. Een voorbeeld
-    hoort daar helemáál buiten te blijven: je hebt nog niets gekozen.
+    `create_linetext_node` writes the chosen font to `context.last_font`
+    (extra/hershey.py:492), and everything placed after that without a font
+    inherits it quietly — that is the bug that once put the captions on a test
+    board in Apple Chancery. A preview should stay well out of it: you have not
+    chosen anything yet.
     """
     registry = kernel.root.fonts
     registry.context.setting(str, "last_font", "")
-    registry.context.last_font = "iets-van-de-gebruiker"
+    registry.context.last_font = "something-the-user-picked"
 
     preview(
         client,
@@ -404,4 +404,4 @@ def test_the_arc_text_preview_does_not_change_the_chosen_font(client, kernel):
          "font_size_mm": 10},
     )
 
-    assert registry.context.last_font == "iets-van-de-gebruiker"
+    assert registry.context.last_font == "something-the-user-picked"

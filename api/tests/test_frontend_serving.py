@@ -44,11 +44,10 @@ def test_missing_frontend_directory_falls_back(kernel, tmp_path):
 
 def test_an_unknown_api_path_is_a_404_not_the_html_page(tmp_path, kernel):
     """
-    Dit was verwarrend: een onbekend /api-pad viel in de SPA-fallback. Een GET
-    kreeg de HTML-pagina terug waar de frontend JSON verwachtte, en een POST
-    kreeg "405 Method Not Allowed" omdat de fallback alleen GET kent. Wie een
-    oudere server naast een nieuwere frontend draaide, zag dus een melding die
-    nergens op sloeg.
+    This was confusing: an unknown /api path fell into the SPA fallback. A GET got
+    the HTML page back where the frontend expected JSON, and a POST got "405 Method
+    Not Allowed" because the fallback only knows GET. So anybody running an older
+    server beside a newer frontend saw a message that made no sense at all.
     """
     build = tmp_path / "build"
     build.mkdir()
