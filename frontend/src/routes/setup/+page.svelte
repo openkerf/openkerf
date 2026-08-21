@@ -62,7 +62,7 @@
 
 	let preview = $state<Voorbeeld | null>(null);
 	let profielFout = $state<string | null>(null);
-	let profielBezig = $state(false);
+	let profileBusy = $state(false);
 	let ingelezen = $state<string | null>(null);
 
 	function token(): Record<string, string> {
@@ -81,7 +81,7 @@
 		preview = null;
 		ingelezen = null;
 		profielFout = null;
-		profielBezig = true;
+		profileBusy = true;
 		try {
 			const form = new FormData();
 			form.append('file', bestand);
@@ -102,13 +102,13 @@
 		} catch (e) {
 			profielFout = t('error.network', { message: e instanceof Error ? e.message : e });
 		} finally {
-			profielBezig = false;
+			profileBusy = false;
 		}
 	}
 
 	async function neemProfiel() {
 		if (!preview) return;
-		profielBezig = true;
+		profileBusy = true;
 		profielFout = null;
 		try {
 			const response = await fetch('/api/machines/import', {
@@ -133,7 +133,7 @@
 			preview = null;
 			await store.loadMachines();
 		} finally {
-			profielBezig = false;
+			profileBusy = false;
 		}
 	}
 </script>
@@ -231,8 +231,8 @@
 				</p>
 			{/if}
 			<div class="uitknoppen">
-				<button class="btn primary" disabled={profielBezig || !preview.known} onclick={neemProfiel}>
-					{profielBezig ? t('common.busy') : t('setup.profile.create')}
+				<button class="btn primary" disabled={profileBusy || !preview.known} onclick={neemProfiel}>
+					{profileBusy ? t('common.busy') : t('setup.profile.create')}
 				</button>
 				<button class="btn subtle" onclick={() => (preview = null)}
 					>{t('setup.profile.cancel')}</button

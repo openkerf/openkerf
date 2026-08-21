@@ -92,7 +92,7 @@
 	 */
 	const NAAR_MM: Record<string, number> = { mm: 1, cm: 10, in: 25.4, mil: 0.0254 };
 
-	function alsGetal(value: unknown): string {
+	function asNumber(value: unknown): string {
 		const text = String(value ?? '').trim();
 		const found = text.match(/^\s*(-?\d+(?:\.\d+)?)\s*([a-zA-Z]*)/);
 		if (!found) return '0';
@@ -108,8 +108,8 @@
 
 	$effect(() => {
 		if (loaded || !('bedwidth' in values)) return;
-		width = alsGetal(values.bedwidth);
-		height = alsGetal(values.bedheight);
+		width = asNumber(values.bedwidth);
+		height = asNumber(values.bedheight);
 		loaded = true;
 	});
 
@@ -124,7 +124,7 @@
 		{ id: 'bottom-right', label: t('setup.corner.bottomRight') },
 		{ id: 'center', label: t('setup.corner.centre') }
 	];
-	let heeftHoek = $derived('home_corner' in values);
+	let hasCorner = $derived('home_corner' in values);
 	let corner = $derived(String(values.home_corner ?? 'auto'));
 
 	/** Position of the origin dot in the drawing, in per cent. */
@@ -147,7 +147,7 @@
 	let verhouding = $derived(
 		Math.max(0.2, Math.min(4, (Number(width) || 1) / (Number(height) || 1)))
 	);
-	let bedDoos = $derived(
+	let bedBox = $derived(
 		verhouding >= ROOM.w / ROOM.h
 			? { w: ROOM.w, h: ROOM.w / verhouding }
 			: { w: ROOM.h * verhouding, h: ROOM.h }
@@ -262,7 +262,7 @@
 					<p class="muted">{t('setup.noBedSize')}</p>
 				{/if}
 
-				{#if heeftHoek}
+				{#if hasCorner}
 					<label class="choice">
 						<span>{t('setup.whereIsZero')}</span>
 						<select
@@ -287,14 +287,14 @@
 						</pattern>
 					</defs>
 					<rect width={DRAWING.w} height={DRAWING.h} class="plate" />
-					<g transform="translate({(DRAWING.w - bedDoos.w) / 2} {(DRAWING.h - bedDoos.h) / 2})">
-							<rect width={bedDoos.w} height={bedDoos.h} class="bed" />
-							<rect width={bedDoos.w} height={bedDoos.h} fill="url(#bedgrid)" />
-							<rect width={bedDoos.w} height={bedDoos.h} class="edge" />
+					<g transform="translate({(DRAWING.w - bedBox.w) / 2} {(DRAWING.h - bedBox.h) / 2})">
+							<rect width={bedBox.w} height={bedBox.h} class="bed" />
+							<rect width={bedBox.w} height={bedBox.h} fill="url(#bedgrid)" />
+							<rect width={bedBox.w} height={bedBox.h} class="edge" />
 							{#if stip}
 								<circle
-									cx={(bedDoos.w * stip.x) / 100}
-									cy={(bedDoos.h * stip.y) / 100}
+									cx={(bedBox.w * stip.x) / 100}
+									cy={(bedBox.h * stip.y) / 100}
 									r="3.5"
 									class="originMark"
 								/>

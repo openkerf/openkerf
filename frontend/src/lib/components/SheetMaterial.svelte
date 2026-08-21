@@ -46,15 +46,15 @@
 				)
 	);
 
-	function kiesMateriaal(value: string) {
+	function pickMaterial(value: string) {
 		sheets.update(sheet.id, { material_id: value ? Number(value) : null });
 	}
 
-	function kiesDikte(mm: number | null) {
+	function pickThickness(mm: number | null) {
 		sheets.update(sheet.id, { thickness_mm: mm });
 	}
 
-	async function maakMateriaal() {
+	async function makeMaterial() {
 		if (!fresh.trim()) return;
 		const created = await library.addMaterial(fresh.trim());
 		if (created) {
@@ -78,7 +78,7 @@
 		<select
 			value={sheet.material_id === null ? '' : String(sheet.material_id)}
 			disabled={sheets.busy}
-			onchange={(e) => kiesMateriaal(e.currentTarget.value)}
+			onchange={(e) => pickMaterial(e.currentTarget.value)}
 		>
 			<option value="">{t('sheetMat.notFilled')}</option>
 			{#each library.materials as material (material.id)}
@@ -95,7 +95,7 @@
 				placeholder={t('library.material.placeholder')}
 				aria-label={t('gen.text')}
 			/>
-			<button class="btn primary" disabled={!fresh.trim() || library.busy} onclick={maakMateriaal}>
+			<button class="btn primary" disabled={!fresh.trim() || library.busy} onclick={makeMaterial}>
 				{t('sheetMat.add')}
 			</button>
 			<button class="btn" onclick={() => (toevoegen = false)}>{t('common.cancel')}</button>
@@ -114,7 +114,7 @@
 					class="chip"
 					aria-pressed={thickness === mm}
 					disabled={sheets.busy}
-					onclick={() => kiesDikte(thickness === mm ? null : mm)}
+					onclick={() => pickThickness(thickness === mm ? null : mm)}
 				>{mm}</button>
 			{/each}
 			<input
@@ -127,7 +127,7 @@
 				aria-label={t('sheetMat.otherAria')}
 				value={thickness !== null && !GANGBAAR.includes(thickness) ? thickness : ''}
 				onchange={(e) =>
-					kiesDikte(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
+					pickThickness(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
 			/>
 		</div>
 	</div>

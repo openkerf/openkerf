@@ -28,7 +28,7 @@
 	{:else if field.type === 'int' || field.type === 'float'}
 		<!-- A number with buttons: on a touch screen the browser's own spinner is two
 		     pixels tall, and unusable with gloves on. -->
-		<div class="teller">
+		<div class="stepper">
 			<button type="button" aria-label={t('field.decrease', { label: field.label })} onclick={() => step(-1)}>−</button>
 			<input
 				class="mono"
@@ -73,8 +73,8 @@
 		width: 100%;
 	}
 	/* The browser's spinner gone: it sits *beside* our buttons and confuses. */
-	.teller { display: flex; }
-	.teller input {
+	.stepper { display: flex; }
+	.stepper input {
 		border-radius: 0;
 		border-left: 0;
 		border-right: 0;
@@ -82,9 +82,9 @@
 		-moz-appearance: textfield;
 		appearance: textfield;
 	}
-	.teller input::-webkit-outer-spin-button,
-	.teller input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-	.teller button {
+	.stepper input::-webkit-outer-spin-button,
+	.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+	.stepper button {
 		flex: none;
 		width: 40px;
 		font: inherit;
@@ -93,9 +93,9 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.teller button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
-	.teller button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
-	.teller button:hover { background: var(--surface-1); }
+	.stepper button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	.stepper button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
+	.stepper button:hover { background: var(--surface-1); }
 
 	input[type='checkbox'] {
 		width: 18px;

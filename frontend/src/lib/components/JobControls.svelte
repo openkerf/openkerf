@@ -80,7 +80,7 @@
 		material_name?: string | null;
 		thickness_mm?: number | null;
 		warnings?: Warning[];
-		/** Does this engine actually execute the layer? See `rasterUit`. */
+		/** Does this engine actually execute the layer? See `gridOff`. */
 		burns?: boolean;
 	};
 	type Bounds = {
@@ -143,10 +143,10 @@
 	);
 	// Only point when there is something to choose: between objections of equal weight
 	// "this first" is an arbitrary instruction and therefore noise.
-	let eersteWeegtZwaarder = $derived(
+	let firstWeighsMore = $derived(
 		mismatch.length > 1 && mismatch[0].ernst > mismatch[mismatch.length - 1].ernst
 	);
-	let velTekst = $derived.by(() => {
+	let sheetText = $derived.by(() => {
 		const sheet = overzicht?.sheet;
 		if (!sheet?.material_name) return null;
 		const thickness = sheet.thickness_mm;
@@ -177,8 +177,8 @@
 	 * cutcode. That must not be a surprise *after* burning, and the time estimate must
 	 * not promise seconds for it.
 	 */
-	let rasterUit = $derived(overzicht?.engine?.grid === false);
-	let blindeLagen = $derived(layers.filter((l) => l.burns === false));
+	let gridOff = $derived(overzicht?.engine?.grid === false);
+	let blindLayers = $derived(layers.filter((l) => l.burns === false));
 	// Whole millimetres where it can be; 0.5 mm stays 0.5 mm. Written in the
 	// reader's own notation, because these numbers get typed into a machine.
 	function size(value: number): string {
@@ -314,7 +314,7 @@
 
 	let posities = $state<Position[]>([]);
 	let saving = $state(false);
-	let nieuweNaam = $state('');
+	let newName = $state('');
 	let currentMm = $derived(device?.position.mm ?? null);
 
 	async function ophalenPosities() {
@@ -338,11 +338,11 @@
 	];
 
 	async function bewaar() {
-		const name = nieuweNaam.trim();
+		const name = newName.trim();
 		if (!name) return;
 		if (await control.savePosition(name)) {
 			saving = false;
-			nieuweNaam = '';
+			newName = '';
 			await ophalenPosities();
 		}
 	}
@@ -458,12 +458,12 @@
 				     of the machine. The same words as the block in the test-grid
 				     wizard: whoever read them there recognises them here — and the
 				     other way round. -->
-				{#if rasterUit && blindeLagen.length}
+				{#if gridOff && blindLayers.length}
 					<p class="pf-geenraster" role="alert">
 						<strong>{t('job.noRaster.title')}</strong>
-						{blindeLagen.length === 1
-							? t('job.noRaster.one', { label: blindeLagen[0].label })
-							: t('job.noRaster.many', { n: blindeLagen.length })}
+						{blindLayers.length === 1
+							? t('job.noRaster.one', { label: blindLayers[0].label })
+							: t('job.noRaster.many', { n: blindLayers.length })}
 					</p>
 				{/if}
 				<div class="pf-time">
@@ -478,9 +478,9 @@
 				     with. Without it there is a table of numbers with no subject. -->
 				<!-- Always a line, even without material. Saying nothing reads as
 				     "not needed"; and then you run a birch preset on acrylic. -->
-				<div class="pf-time sheet" class:unknown={!velTekst}>
+				<div class="pf-time sheet" class:unknown={!sheetText}>
 					<span class="muted">{t('job.material')}</span>
-					<span class="v">{velTekst ?? t('job.material.none')}</span>
+					<span class="v">{sheetText ?? t('job.material.none')}</span>
 				</div>
 					{#if control.origin}
 						<!-- Gap J12: a zero point moves the work on the bed, and the
@@ -597,7 +597,7 @@
 					<ul class="pf-mismatch" role="alert">
 						{#each mismatch as notice, i (i)}
 							<li class:licht={notice.ernst < 2}>
-								{#if i === 0 && eersteWeegtZwaarder}
+								{#if i === 0 && firstWeighsMore}
 									<span class="eerst">{t('job.first')}</span>
 								{/if}<strong>{notice.layer}</strong> — {notice.text}
 							</li>
@@ -650,7 +650,7 @@
 					     before, that first tap does not make anything disappear. -->
 					<button class="btn" onclick={() => (preflight = false)}>{t('common.cancel')}</button>
 					<button
-						class="btn primary groot"
+						class="btn primary big"
 						onclick={confirmStart}
 						disabled={control.busy !== null || !connection.online}
 						title={connection.online ? undefined : blockedReason}
@@ -669,7 +669,7 @@
 						</button>
 					{/if}
 					<button
-						class="btn primary groot"
+						class="btn primary big"
 						disabled={!actions?.start || blocked}
 						title={blockedReason}
 						onclick={() => (preflight = true)}
@@ -702,7 +702,7 @@
 			<div class="now-head">
 				<span class="now-phase">{phaseTitle(phase)}</span>
 				{#if job}
-					<span class="now-job mono" title={job.label}>{job.label}</span>
+					<span class="current-job mono" title={job.label}>{job.label}</span>
 				{/if}
 			</div>
 
@@ -906,13 +906,13 @@
 								placeholder={t('job.spotName.placeholder')}
 								maxlength="40"
 								autofocus
-								bind:value={nieuweNaam}
+								bind:value={newName}
 								onkeydown={(e) => {
 									if (e.key === 'Enter') bewaar();
 									if (e.key === 'Escape') saving = false;
 								}}
 							/>
-							<button class="rot" onclick={bewaar} disabled={!nieuweNaam.trim()}>
+							<button class="rot" onclick={bewaar} disabled={!newName.trim()}>
 								{t('job.keep')}
 							</button>
 							<button class="rot" onclick={() => (saving = false)}>{t('common.cancel')}</button>
@@ -925,7 +925,7 @@
 								? t('job.noPosition.keep')
 								: t('job.keepSpot.title', { x: size(currentMm[0]), y: size(currentMm[1]) })}
 							onclick={() => {
-								nieuweNaam = '';
+								newName = '';
 								saving = true;
 							}}
 						>
@@ -1432,7 +1432,7 @@
 	}
 	.now.burns .now-phase { color: var(--accent); }
 	.now.pause .now-phase { color: var(--warn); }
-	.now-job {
+	.current-job {
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
@@ -1549,7 +1549,7 @@
 	.pf-plak .btn.primary { flex: 1; }
 
 	/* The start button says what it is going to do, with the time in it. */
-	.btn.groot { min-height: 44px; font-size: var(--text-md); }
+	.btn.big { min-height: 44px; font-size: var(--text-md); }
 	.pf-startmaat {
 		margin-left: 6px;
 		font-size: var(--text-xs);

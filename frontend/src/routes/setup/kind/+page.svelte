@@ -190,7 +190,7 @@
 									{t(zeker.woord)}
 								</span>
 							</div>
-							<div class="titel">{vondst.title}</div>
+							<div class="title">{vondst.title}</div>
 							<div class="waar mono">
 								{vondst.where}{vondst.detail ? ` · ${vondst.detail}` : ''}
 							</div>
@@ -402,7 +402,7 @@
 		gap: var(--space-2);
 		margin-bottom: var(--space-2);
 	}
-	.titel {
+	.title {
 		font-weight: 600;
 	}
 	.waar {

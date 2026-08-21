@@ -25,7 +25,7 @@
 		open?: boolean;
 		count?: number;
 		busy?: boolean;
-		onToepassen: (afstandMm: number) => void;
+		onToepassen: (distanceMm: number) => void;
 	} = $props();
 
 	let afstand = $state('2');

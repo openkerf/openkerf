@@ -58,7 +58,7 @@
 		// arc text came out in the default typeface. The same picker as the text
 		// dialog — with a preview in the typeface itself.
 		font: '',
-		fontNaam: ''
+		fontName: ''
 	});
 
 	// The types python-barcode can handle that make sense on a laser.
@@ -310,7 +310,7 @@
 	 * The dash is punctuation and lives here; both halves are whole messages, so a
 	 * translation can put the words in its own order within each of them.
 	 */
-	let knopStaart = $derived.by(() => {
+	let buttonTail = $derived.by(() => {
 		if (!preview || previewError) return '';
 		if (preview.what === 'box')
 			return ` — ${
@@ -361,7 +361,7 @@
 			</div>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}>
-			{t('gen.grid.go', { n: n(grid.columns) * n(grid.rows), tail: knopStaart })}
+			{t('gen.grid.go', { n: n(grid.columns) * n(grid.rows), tail: buttonTail })}
 		</button>
 	{:else if tab === 'radial'}
 		<p class="lead">{t('gen.radial.lead')}</p>
@@ -376,7 +376,7 @@
 			>
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}
-			>{t('gen.radial.go', { tail: knopStaart })}</button
+			>{t('gen.radial.go', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'polygon'}
 		<p class="lead">{t('gen.polygon.lead')}</p>
@@ -394,7 +394,7 @@
 			</div>
 		</div>
 		<button class="go" disabled={busy} onclick={() => run(opdracht())}
-			>{t('gen.draw', { tail: knopStaart })}</button
+			>{t('gen.draw', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'box'}
 		<p class="lead">{t('gen.box.lead')}</p>
@@ -427,7 +427,7 @@
 			</label>
 		</div>
 		<button class="go" disabled={busy} onclick={() => run(opdracht())}
-			>{t('gen.makePanels', { tail: knopStaart })}</button
+			>{t('gen.makePanels', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'qrcode'}
 		<p class="lead">{t('gen.qr.lead')}</p>
@@ -444,7 +444,7 @@
 			</div>
 		</div>
 		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run(opdracht())}
-			>{t('gen.place', { tail: knopStaart })}</button
+			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'barcode'}
 		<p class="lead">{t('gen.barcode.lead')}</p>
@@ -470,7 +470,7 @@
 			</div>
 		</div>
 		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
-			>{t('gen.place', { tail: knopStaart })}</button
+			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else}
 		<p class="lead">{t('gen.arc.lead')}</p>
@@ -506,15 +506,15 @@
 		<div class="fontchoice">
 			<button class="letterregel" aria-expanded={fontOpen} onclick={() => (fontOpen = !fontOpen)}>
 				<span>{t('gen.font')}</span>
-				<strong>{arc.font ? arc.fontNaam || arc.font : t('gen.font.default')}</strong>
+				<strong>{arc.font ? arc.fontName || arc.font : t('gen.font.default')}</strong>
 				<span class="pijl" aria-hidden="true">{fontOpen ? '▴' : '▾'}</span>
 			</button>
 			{#if fontOpen}
-				<FontPicker bind:font={arc.font} bind:fontName={arc.fontNaam} sample={arc.text} />
+				<FontPicker bind:font={arc.font} bind:fontName={arc.fontName} sample={arc.text} />
 			{/if}
 		</div>
 		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
-			>{t('gen.place', { tail: knopStaart })}</button
+			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{/if}
 	</div>

@@ -84,7 +84,7 @@
 	{:else if !spooler?.present}
 		<p class="empty">{t('queue.noQueue')}</p>
 	{:else}
-		<p class="empty klein">{t('queue.after', { n: wachtenden.length })}</p>
+		<p class="empty small">{t('queue.after', { n: wachtenden.length })}</p>
 		{#each wachtenden as job, i (i)}
 			<!-- Only the job the controls are about can stall; the rest are simply
 			     waiting their turn. Without that distinction every waiting job got
@@ -109,7 +109,7 @@
 					     the machine wants; elapsed and total sit below it so the sum can
 					     be checked. -->
 					<p class="resterend">
-						<span class="mono groot">{formatDuration(remainingSeconds(job))}</span>
+						<span class="mono big">{formatDuration(remainingSeconds(job))}</span>
 						<span class="rest-label">{t('queue.remaining')}</span>
 					</p>
 				{/if}
@@ -228,7 +228,7 @@
 		gap: var(--space-2);
 		margin: var(--space-2) 0 0;
 	}
-	.groot {
+	.big {
 		font-size: var(--text-xl);
 		line-height: 1.1;
 		color: var(--text-1);

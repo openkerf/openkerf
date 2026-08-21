@@ -40,7 +40,7 @@
 		<!-- Five pills without a count do not say how far you are; on a phone they
 		     wrap as well, and then the highlighted pill is the only foothold. The
 		     sentence before it always works. -->
-		<p class="teller">{t('setup.stepOf', { n: current + 1, total: STEPS.length })}</p>
+		<p class="stepper">{t('setup.stepOf', { n: current + 1, total: STEPS.length })}</p>
 		<ol>
 			{#each STEPS as step, index (step.path)}
 				<li class:current={index === current} class:done={current > index}>
@@ -119,7 +119,7 @@
 			padding: var(--space-4);
 		}
 	}
-	.teller {
+	.stepper {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-xs);
 		color: var(--text-2);

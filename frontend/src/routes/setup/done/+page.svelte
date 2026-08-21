@@ -41,7 +41,7 @@
 	/** Answered (adjusted or left as it was): then the question is gone. */
 	let sheetAnswer = $state<'aangepast' | 'gelaten' | null>(null);
 
-	let velVraag = $derived.by(() => {
+	let sheetQuestion = $derived.by(() => {
 		const sheet = sheets.active;
 		if (!bed || !sheet || sheetAnswer) return null;
 		// A tenth of a millimetre difference is rounding, not a mismatch.
@@ -54,8 +54,8 @@
 		return String(Math.round(value * 10) / 10).replace('.', ',');
 	}
 
-	async function velNaarBed() {
-		const ask = velVraag;
+	async function useBedSize() {
+		const ask = sheetQuestion;
 		if (!ask) return;
 		if (await sheets.update(ask.sheet.id, { width_mm: bed!.w, height_mm: bed!.h }))
 			sheetAnswer = 'aangepast';
@@ -106,23 +106,23 @@
 		<h1>{machine ? t('setup.ready', { machine: machine.label }) : t('setup.ready.plain')}</h1>
 		<p class="muted">{t('setup.firstJob')}</p>
 
-		{#if velVraag}
+		{#if sheetQuestion}
 			<div class="velvraag">
 				<h2 class="head">{t('setup.sheetFits')}</h2>
 				<p>
 					{t('setup.sheetFits.body', {
-						sheet: `${velVraag.sheet.name} — ${size(velVraag.sheet.width_mm)} × ${size(
-							velVraag.sheet.height_mm
+						sheet: `${sheetQuestion.sheet.name} — ${size(sheetQuestion.sheet.width_mm)} × ${size(
+							sheetQuestion.sheet.height_mm
 						)} mm`,
 						machine: machine?.label ?? t('setup.sheetFits.thisMachine'),
-						bed: `${size(velVraag.bed.w)} × ${size(velVraag.bed.h)} mm`
+						bed: `${size(sheetQuestion.bed.w)} × ${size(sheetQuestion.bed.h)} mm`
 					})}
 				</p>
 				<p class="muted">
-					{t('setup.sheetFits.offcut', { width: size(velVraag.sheet.width_mm) })}
+					{t('setup.sheetFits.offcut', { width: size(sheetQuestion.sheet.width_mm) })}
 				</p>
 				<div class="velknoppen">
-					<button class="btn primary" disabled={sheets.busy} onclick={velNaarBed}>
+					<button class="btn primary" disabled={sheets.busy} onclick={useBedSize}>
 						{t('setup.sheetToBed')}
 					</button>
 					<button class="btn subtle" onclick={() => (sheetAnswer = 'gelaten')}>

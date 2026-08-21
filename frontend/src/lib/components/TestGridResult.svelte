@@ -237,7 +237,7 @@
 		};
 	});
 
-	function naarFoto(u: number, v: number) {
+	function toPhoto(u: number, v: number) {
 		const m = afbeelding;
 		const w = m.g * u + m.h * v + 1 || 1e-9;
 		return [(m.a * u + m.b * v + m.c) / w, (m.d * u + m.e * v + m.f) / w];
@@ -251,10 +251,10 @@
 		const u1 = u0 + cell.width_mm / box.width;
 		const v1 = v0 + cell.height_mm / box.height;
 		return [
-			naarFoto(u0, v0),
-			naarFoto(u1, v0),
-			naarFoto(u1, v1),
-			naarFoto(u0, v1)
+			toPhoto(u0, v0),
+			toPhoto(u1, v0),
+			toPhoto(u1, v1),
+			toPhoto(u0, v1)
 		]
 			.map(([x, y]) => `${x},${y}`)
 			.join(' ');
@@ -306,7 +306,7 @@
 		picked = picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id];
 	}
 
-	let gekozenCellen = $derived(
+	let pickedCells = $derived(
 		grid ? grid.cells.filter((c) => picked.includes(key(c))) : []
 	);
 	/** The squares a preset has already been taken from — the evidence under the card. */
@@ -385,7 +385,7 @@
 
 <div class="resultaat">
 	<div class="head">
-		<h2 class="titel">{t('result.title')}</h2>
+		<h2 class="title">{t('result.title')}</h2>
 		{#if grids.length}
 			<select class="picker" bind:value={openId} aria-label={t('result.pickGrid')}>
 				<option value={null}>{t('result.pickGrid.option')}</option>
@@ -425,7 +425,7 @@
 					{t('result.burnFirst.how')}
 				</p>
 				{#if canEdit}
-					<label class="btn primary groot file">
+					<label class="btn primary big file">
 						{t('library.addPhoto')}
 						<input type="file" accept="image/*" capture="environment" onchange={uploadPhoto} />
 					</label>
@@ -522,8 +522,8 @@
 				{/if}
 
 				<div class="choice">
-					{#if gekozenCellen.length}
-						{#each gekozenCellen as cell (key(cell))}
+					{#if pickedCells.length}
+						{#each pickedCells as cell (key(cell))}
 							<button
 								class="chip mono"
 								onclick={() => toggle(cell)}
@@ -603,7 +603,7 @@
 		border-top: 1px solid var(--line);
 	}
 	.head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
-	.titel {
+	.title {
 		margin: 0;
 		font-size: var(--text-sm);
 		font-weight: 600;
@@ -805,7 +805,7 @@
 		border-color: var(--accent);
 		color: var(--accent-ink);
 	}
-	.btn.groot { min-height: 48px; padding: 12px 20px; font-size: var(--text-md); }
+	.btn.big { min-height: 48px; padding: 12px 20px; font-size: var(--text-md); }
 	.btn.file { cursor: pointer; display: inline-grid; place-items: center; }
 	.btn.file input { position: absolute; width: 0; height: 0; opacity: 0; }
 

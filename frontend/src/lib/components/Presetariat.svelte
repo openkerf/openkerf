@@ -58,7 +58,7 @@
 	 * row deserves its own pill.
 	 */
 	let soorten = $derived(new Set(catalogue.presets.map((p) => p.source.kind)));
-	let eenSoort = $derived(soorten.size === 1 ? [...soorten][0] : null);
+	let oneKind = $derived(soorten.size === 1 ? [...soorten][0] : null);
 </script>
 
 <Dialog title={t('presetariat.title')} bind:open width="720px">
@@ -114,13 +114,13 @@
 		</p>
 	{/if}
 
-	{#if eenSoort}
-		{@const gedeeld = CONFIDENCE[eenSoort] ?? CONFIDENCE.handmatig}
+	{#if oneKind}
+		{@const gedeeld = CONFIDENCE[oneKind] ?? CONFIDENCE.handmatig}
 		<p class="gedeeld {gedeeld.tone}">
 			{t(
-				eenSoort === 'handmatig'
+				oneKind === 'handmatig'
 					? 'presetariat.allOf.manual'
-					: eenSoort === 'testraster'
+					: oneKind === 'testraster'
 						? 'presetariat.allOf.grid'
 						: 'presetariat.allOf.maker',
 				{ kind: gedeeld.text.toLowerCase() }
@@ -150,7 +150,7 @@
 						? ` · ${preset.passes}×`
 						: ''}
 				</div>
-				{#if !eenSoort}
+				{#if !oneKind}
 					<span class="badge {badge.tone}">{badge.text}</span>
 				{/if}
 				{#if preset.verified}

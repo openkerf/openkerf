@@ -140,26 +140,26 @@
 	 * button.
 	 */
 	let gone = $derived(!connection.online);
-	let stopTitel = $derived(
+	let stopTitle = $derived(
 		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
 			: stopArmed
 				? t('transport.stop.now', { key: STOP_KEY })
 				: t('transport.stop.armed', { key: STOP_KEY })
 	);
-	let pauzeTitel = $derived(
+	let pauseTitle = $derived(
 		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.pause')}`
 			: canPause
 				? t('transport.pause.title')
 				: t('transport.pause.unsupported')
 	);
-	let hervatTitel = $derived(
+	let resumeTitle = $derived(
 		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.resume')}`
 			: t('transport.resume.title')
 	);
-	let startTitel = $derived(
+	let startTitle = $derived(
 		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.start')}`
 			: stopArmed
@@ -225,7 +225,7 @@
 			? null
 			: `${i18n.number(thicknessMm)}mm`
 	);
-	let materiaalTitel = $derived(
+	let materialTitle = $derived(
 		material
 			? thickness
 				? t('topbar.material.isThickness', { material, thickness: thickness })
@@ -269,10 +269,10 @@
 	     they decide every setting that follows. Until now the material hung in a filter
 	     in a dialog that you close again — see decision B1. -->
 	<button
-		class="machine materiaal"
+		class="machine material"
 		class:empty={!material}
 		disabled={!canEdit}
-		title={materiaalTitel}
+		title={materialTitle}
 		onclick={onOpenMaterial}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 12 4l9 4.5-9 4.5z"/><path d="M3 8.5V15l9 4.5 9-4.5V8.5"/></svg>
@@ -434,7 +434,7 @@
 			<button
 				class="btn resume"
 				disabled={!canResume || gone}
-				title={hervatTitel}
+				title={resumeTitle}
 				onclick={onResume}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
@@ -444,7 +444,7 @@
 			<button
 				class="btn pause"
 				disabled={!canPause || !stopArmed || gone}
-				title={pauzeTitel}
+				title={pauseTitle}
 				onclick={onPause}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/></svg>
@@ -463,7 +463,7 @@
 		class:dood={gone}
 		disabled={!canStop || gone}
 		onclick={onStop}
-		title={stopTitel}
+		title={stopTitle}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
 		<span class="btn-label stays"
@@ -474,7 +474,7 @@
 	<button
 		class="btn primary"
 		disabled={!canStart || gone}
-		title={startTitel}
+		title={startTitle}
 		onclick={onStart}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
@@ -552,7 +552,7 @@
 		/* The thickness stays — 3 mm birch cuts differently from 6 mm — and the name
 		   gets the room that is left. The icon gives up that room: the name of your
 		   material says more than a 16px plank. */
-		.materiaal svg { display: none; }
+		.material svg { display: none; }
 	}
 	/* Below 850px the frame loses its word after all.
 	   Measured with the longest names this bar can get ("Thunder Nova 51 workshop" and
@@ -570,7 +570,7 @@
 		   moment the server is down the material is unchangeable and not what you are
 		   looking at; the only question is where the stop is, and that answer may have
 		   the whole width. Above 850px the chip stays — the room is there (measured). */
-		.topbar.gone .materiaal { display: none; }
+		.topbar.gone .material { display: none; }
 	}
 	/* That is where the project button stops.
 	   It is the only button in this bar that is not a machine action, and the material
@@ -597,7 +597,7 @@
 	   shrinks to 137px and the name to 64px, internal overflow 0, last button at 756 of
 	   768. An extra media query for the narrowest case was therefore unnecessary: the
 	   safety net *does* its work. */
-	.topbar.narrow .materiaal .name { max-width: 10ch; }
+	.topbar.narrow .material .name { max-width: 10ch; }
 	/* Framing *stays* on screen on a tablet.
 	   It was on `display: none` below 950px here, with the argument that it also lives
 	   in the pre-flight. That argument does not hold for *this* device: the tablet is
@@ -615,12 +615,12 @@
 	   coarse-pointer block tokens.css sets `min-width: 44px` on every button with a
 	   selector that beats this one. A rule that does nothing but promises something is
 	   worse than no rule. */
-	.materiaal { flex: 0 1 auto; min-width: 0; }
-	.materiaal .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.material { flex: 0 1 auto; min-width: 0; }
+	.material .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	/* A truncated material name is a shame but readable through the tooltip; a
 	   truncated invitation ("Materia…") is incomprehensible. This selector has to beat
 	   the rule above, so the whole chain is in it. */
-	.topbar.narrow .materiaal.empty .name { max-width: none; }
+	.topbar.narrow .material.empty .name { max-width: none; }
 	/* The project pair has become one button with a menu.
 	   Four file buttons *with* labels cost 560px and at 1440 did not fit beside machine,
 	   material and controls; the project pair then moved out to the rail menu. That was
@@ -739,7 +739,7 @@
 	/* Nothing chosen yet is not an error, so no red and no exclamation mark. A dashed
 	   border says "something still belongs here" and nothing else; as soon as there is a
 	   material it becomes an ordinary chip. */
-	.materiaal.empty {
+	.material.empty {
 		background: transparent;
 		/* --line is tuned for surfaces that lie against each other; as a loose dashed
 		   border on the bar it disappears. The same secondary text colour,
@@ -749,11 +749,11 @@
 	}
 	/* "Choose material" is shorter than a material name and may stay whole: truncated
 	   to "Material…" it is no longer an invitation. */
-	.materiaal.empty .name { max-width: none; }
-	.materiaal.empty:hover:not(:disabled) { color: var(--text-1); }
-	.materiaal:disabled { cursor: not-allowed; }
-	.materiaal svg { color: var(--text-2); flex: none; }
-	.materiaal .name {
+	.material.empty .name { max-width: none; }
+	.material.empty:hover:not(:disabled) { color: var(--text-1); }
+	.material:disabled { cursor: not-allowed; }
+	.material svg { color: var(--text-2); flex: none; }
+	.material .name {
 		max-width: 14ch;
 		overflow: hidden;
 		text-overflow: ellipsis;

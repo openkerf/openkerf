@@ -115,7 +115,7 @@
 		return null;
 	});
 
-	function veelhoekPunten(zijden: number, straal: number, binnen: number) {
+	function polygonPoints(zijden: number, straal: number, binnen: number) {
 		const points: string[] = [];
 		const totaal = binnen ? zijden * 2 : zijden;
 		for (let i = 0; i < totaal; i++) {
@@ -206,7 +206,7 @@
 		<!-- Only until the first answer is in; after that the real image takes its
 		     place. An empty box would make the window jump. -->
 		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
-			<polygon class="hulp" points={veelhoekPunten(6, 34, 0)} />
+			<polygon class="hulp" points={polygonPoints(6, 34, 0)} />
 		</svg>
 	{:else}
 		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.calculatingAria')}>

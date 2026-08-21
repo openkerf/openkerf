@@ -13,7 +13,7 @@
 	// The chosen kind is in the URL: this step has to survive a refresh and the
 	// back button.
 	let kind = $derived($page.url.searchParams.get('kind'));
-	let gekozenSoort = $derived(KINDS.find((k) => k.id === kind) ?? null);
+	let pickedKind = $derived(KINDS.find((k) => k.id === kind) ?? null);
 
 	let families = $derived(
 		store.catalog
@@ -39,11 +39,11 @@
 	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
 
 	<h1>
-		{gekozenSoort ? t('setup.whichKind', { kind: gekozenSoort.label }) : t('setup.whichModel')}
+		{pickedKind ? t('setup.whichKind', { kind: pickedKind.label }) : t('setup.whichModel')}
 	</h1>
 	<p class="muted">
 		{t('setup.catalogue.from')}
-		{#if gekozenSoort}
+		{#if pickedKind}
 			{t('setup.catalogue.filtered')}
 			<a href="/setup/type">{t('setup.catalogue.showAllLink')}</a>
 		{:else}

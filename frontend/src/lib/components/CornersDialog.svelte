@@ -28,7 +28,7 @@
 		busy?: boolean;
 		/** What the previous attempt had to report (skipped corners). */
 		notice?: string | null;
-		onToepassen: (stijl: 'round' | 'chamfer', maatMm: number) => void;
+		onToepassen: (stijl: 'round' | 'chamfer', sizeMm: number) => void;
 	} = $props();
 
 	let stijl = $state<'round' | 'chamfer'>('round');
@@ -57,7 +57,7 @@
 
 <Dialog title={t('corners.title')} bind:open width="420px">
 	<div class="corners">
-		<div class="rij">
+		<div class="row">
 			<div class="stijl" role="radiogroup" aria-label={t('corners.styleAria')}>
 				<button
 					class="choice"
@@ -108,7 +108,7 @@
 		gap: var(--space-3);
 		margin-bottom: var(--space-4);
 	}
-	.rij {
+	.row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);

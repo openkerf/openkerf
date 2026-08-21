@@ -181,7 +181,7 @@
 	let procent = $derived(Math.round((scale / PX_PER_MM) * 100));
 
 	/** The whole bed in view — the opening state. */
-	function bedPassend() {
+	function bedFit() {
 		zoom = 1;
 		pan = { x: 0, y: 0 };
 	}
@@ -358,13 +358,13 @@
 	 * the trial job — and then there is no difference left between "it has been here" and
 	 * "it is here now", while that is precisely the only thing this piece adds.
 	 */
-	const VERS_PUNTEN = 14;
+	const FRESH_POINTS = 14;
 	let spoorKop = $derived.by(() => {
 		if (!job) return '';
 		const points = headTrail.points;
 		if (points.length < 4) return '';
 		const perMm = design.design?.units_per_mm ?? 1;
-		const from = Math.max(0, points.length - 2 * VERS_PUNTEN);
+		const from = Math.max(0, points.length - 2 * FRESH_POINTS);
 		const stukken = [];
 		for (let i = from; i < points.length; i += 2) {
 			stukken.push(`${(points[i] / perMm).toFixed(2)},${(points[i + 1] / perMm).toFixed(2)}`);
@@ -494,8 +494,8 @@
 	 */
 	let actieveGrens = $derived(tiling?.run ? tiling.run.current - 1 : null);
 
-	let plaatTeGroot = $derived(
-		Boolean(sheet && buitenKader({ x: 0, y: 0, width: sheet.width, height: sheet.height }, bed))
+	let plateTooBig = $derived(
+		Boolean(sheet && outsideFrame({ x: 0, y: 0, width: sheet.width, height: sheet.height }, bed))
 	);
 
 	// The division is a function of the board size, the bed size and the design (the seam
@@ -958,7 +958,7 @@
 	function ticks(fromMm: number, toMm: number, step: number, sub: number, lengthMm: number) {
 		const fijn = sub || step;
 		const perHoofd = Math.max(1, Math.round(step / fijn));
-		const marks: { value: number; major: boolean; buiten: boolean; label: string }[] = [];
+		const marks: { value: number; major: boolean; outside: boolean; label: string }[] = [];
 		const eerste = Math.ceil(fromMm / fijn - 0.001);
 		const last = Math.floor(toMm / fijn + 0.001);
 		// At an absurd zoom level do not draw thousands of ticks.
@@ -971,7 +971,7 @@
 				major,
 				// Off the bed: a tick and a figure, but lighter — that way you see at a
 				// glance where the work area stops.
-				buiten: value < -0.001 || value > lengthMm + 0.001,
+				outside: value < -0.001 || value > lengthMm + 0.001,
 				label: major ? String(Math.round(value)) : ''
 			});
 		}
@@ -1005,17 +1005,17 @@
 	// different errors, and the difference counts: off the bed the machine *cannot* go,
 	// off the sheet it can — but there is no material there. Hence two colours and two
 	// sentences, and not one "watch out".
-	const RAND_SPELING = 0.5;
+	const EDGE_SLACK = 0.5;
 
-	function buitenKader(
+	function outsideFrame(
 		box: { x: number; y: number; width: number; height: number },
 		frame: { width: number; height: number }
 	) {
 		return (
-			box.x < -RAND_SPELING ||
-			box.y < -RAND_SPELING ||
-			box.x + box.width > frame.width + RAND_SPELING ||
-			box.y + box.height > frame.height + RAND_SPELING
+			box.x < -EDGE_SLACK ||
+			box.y < -EDGE_SLACK ||
+			box.x + box.width > frame.width + EDGE_SLACK ||
+			box.y + box.height > frame.height + EDGE_SLACK
 		);
 	}
 
@@ -1035,13 +1035,13 @@
 			if (streek.dashed || streek.dimmed || !streek.visible) continue;
 			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
 			const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
-			if (buitenKader(box, bed)) off.set(element.id, 'bed');
-			else if (sheet && buitenKader(box, sheet)) off.set(element.id, 'sheet');
+			if (outsideFrame(box, bed)) off.set(element.id, 'bed');
+			else if (sheet && outsideFrame(box, sheet)) off.set(element.id, 'sheet');
 		}
 		return off;
 	});
 
-	let buitenBed = $derived([...outsiders.values()].filter((v) => v === 'bed').length);
+	let shapesOffBed = $derived([...outsiders.values()].filter((v) => v === 'bed').length);
 	let offSheet = $derived([...outsiders.values()].filter((v) => v === 'sheet').length);
 
 	// ── Layer numbers beside the shape (gap C6) ───────────────────────────────
@@ -1291,7 +1291,7 @@
 					off: design.selectedIds.length ? undefined : t('reason.nothingSelected'),
 					run: naarSelectie
 				},
-				{ id: 'z-bed', label: t('action.zoomBed'), key: '0', run: bedPassend },
+				{ id: 'z-bed', label: t('action.zoomBed'), key: '0', run: bedFit },
 				{ id: 'z-100', label: t('action.zoomHundred'), key: '1', run: honderd }
 			]
 		},
@@ -1334,7 +1334,7 @@
 			zoom: (what) => {
 				if (what === 'all') passend();
 				else if (what === 'selection') naarSelectie();
-				else if (what === 'bed') bedPassend();
+				else if (what === 'bed') bedFit();
 				else honderd();
 			},
 			step: (factor: number) => zoomAt(factor),
@@ -1448,9 +1448,9 @@
 				<!-- Ticks below the figure band, not through it: with ticks running to y=8
 				     there was always one cutting through "100" and you read "109". Figures
 				     live above, ticks below. -->
-				<line class:buiten={tick.buiten} x1={at} x2={at} y1={tick.major ? 11 : 15} y2="20" />
+				<line class:outside={tick.outside} x1={at} x2={at} y1={tick.major ? 11 : 15} y2="20" />
 				{#if tick.label}
-					<text class:buiten={tick.buiten} x={at + 3} y="1">{tick.label}</text>
+					<text class:outside={tick.outside} x={at + 3} y="1">{tick.label}</text>
 				{/if}
 			{/if}
 		{/each}
@@ -1469,9 +1469,9 @@
 		{#each ticksY as tick (tick.value)}
 			{@const at = bedOrigin.y + tick.value * scale}
 			{#if at >= -40 && at <= canvasHeight + 40}
-				<line class:buiten={tick.buiten} y1={at} y2={at} x1={tick.major ? 11 : 15} x2="20" />
+				<line class:outside={tick.outside} y1={at} y2={at} x1={tick.major ? 11 : 15} x2="20" />
 				{#if tick.label}
-					<text class:buiten={tick.buiten} x="1" y={at - 3} transform="rotate(-90 1 {at - 3})">{tick.label}</text>
+					<text class:outside={tick.outside} x="1" y={at - 3} transform="rotate(-90 1 {at - 3})">{tick.label}</text>
 				{/if}
 			{/if}
 		{/each}
@@ -1690,7 +1690,7 @@
 									<!-- The same message as for a path, but an image has no contour to
 									     make glow: then the frame is the subject. -->
 									<rect
-										class="buiten-gloed"
+										class="outside-glow"
 										class:sheetedge={outsiders.get(element.id) === 'sheet'}
 										x={element.image.x_mm * (design.design?.units_per_mm ?? 1)}
 										y={element.image.y_mm * (design.design?.units_per_mm ?? 1)}
@@ -1756,16 +1756,16 @@
 								     there but never mistake it for work that is going into the
 								     machine. -->
 								{@const streek = design.strokeFor(element)}
-								{@const buiten = outsiders.get(element.id)}
-								{#if buiten}
+								{@const outside = outsiders.get(element.id)}
+								{#if outside}
 									<!-- Gap C2: a glow in the colour of the objection, running under
 									     the shape. So the layer colour stays visible — you still have
 									     to be able to see which layer the thing is in — but the shape
 									     itself now carries the warning, and not only a line of text in
 									     a panel you can collapse. -->
 									<path
-										class="buiten-gloed"
-										class:sheetedge={buiten === 'sheet'}
+										class="outside-glow"
+										class:sheetedge={outside === 'sheet'}
 										d={element.path}
 										fill="none"
 										vector-effect="non-scaling-stroke"
@@ -1843,7 +1843,7 @@
 						     converted-back screen size of --text-xs. -->
 						<text
 							style="font-size: {labelSize}px; fill: {label.colour}; fill-opacity: {label.dim ? 0.5 : 1}"
-							class="laagnummer mono"
+							class="layer-number mono"
 							x={label.x + 2 * mmPerPx}
 							y={label.y - 3 * mmPerPx}
 						>{label.number}</text>
@@ -2233,7 +2233,7 @@
 				{/if}
 
 				<!-- The fresh piece, on top: where the head is *now*. Kept short (see
-				     VERS_PUNTEN) so that the difference stays between "it has been here"
+				     FRESH_POINTS) so that the difference stays between "it has been here"
 				     en "hier is hij now". -->
 				{#if spoorKop}
 					<g class="trail" aria-hidden="true">
@@ -2405,9 +2405,9 @@
 		>
 	</p>
 {/if}
-{#if plaatTeGroot || buitenBed || offSheet}
-	<div class="buiten-strip" role="status">
-		{#if plaatTeGroot}
+{#if plateTooBig || shapesOffBed || offSheet}
+	<div class="outside-strip" role="status">
+		{#if plateTooBig}
 			<!-- Task 15: with a plate that is itself larger than the bed this is not a
 			     mistake but a way of working — the message becomes the offer to burn in
 			     tiles, instead of the ordinary "falls outside the bed" line (which
@@ -2424,10 +2424,10 @@
 					{t('canvas.burnInTiles')}
 				</button>
 			</span>
-		{:else if buitenBed}
+		{:else if shapesOffBed}
 			<span class="row bededge">
 				<span class="sign" aria-hidden="true">!</span>
-				<span>{t('canvas.outsideBed', { n: buitenBed })}</span>
+				<span>{t('canvas.outsideBed', { n: shapesOffBed })}</span>
 			</span>
 		{/if}
 		{#if offSheet}
@@ -2507,12 +2507,12 @@
 	}
 	/* Off the bed the scale runs on, but more softly: the number is there when you need
 	   it and does not impose itself when you are working inside the bed (C4). */
-	.ruler-x line.buiten,
-	.ruler-y line.buiten {
+	.ruler-x line.outside,
+	.ruler-y line.outside {
 		stroke: color-mix(in srgb, var(--line-strong, var(--line)) 55%, transparent);
 	}
-	.ruler-x text.buiten,
-	.ruler-y text.buiten {
+	.ruler-x text.outside,
+	.ruler-y text.outside {
 		fill: color-mix(in srgb, var(--text-2) 60%, transparent);
 	}
 	/* The band that says how far the bed reaches. No border: that would be a fourth kind
@@ -2687,7 +2687,7 @@
 
 	/* The layer number beside the shape (C6). The same colour as the line, with a border
 	   in the bed colour around it — otherwise an 8 on a grid line reads as a 3. */
-	.laagnummer {
+	.layer-number {
 		pointer-events: none;
 		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
@@ -2700,7 +2700,7 @@
 	/* Off the bed or off the sheet (C2): a glow *under* the shape, so that the layer
 	   colour itself stays readable. Two colours, two meanings — red for "the head does
 	   not go there", amber for "there is no material there". */
-	.buiten-gloed {
+	.outside-glow {
 		stroke: var(--danger-solid);
 		stroke-width: 6;
 		stroke-opacity: 0.32;
@@ -2712,12 +2712,12 @@
 	   workshop light. Dashed also suits what it says: the material under this shape
 	   stops. The shape itself stays solid — on this canvas dashed lines mean "is in no
 	   layer". */
-	.buiten-gloed.sheetedge {
+	.outside-glow.sheetedge {
 		stroke: var(--warn-solid);
 		stroke-dasharray: 3 3;
 		stroke-opacity: 0.55;
 	}
-	.buiten-strip {
+	.outside-strip {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2) var(--space-3);
@@ -2725,7 +2725,7 @@
 		border-top: 1px solid var(--line);
 		background: var(--surface-1);
 	}
-	.buiten-strip .row {
+	.outside-strip .row {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-2);
@@ -2735,12 +2735,12 @@
 		color: var(--text-1);
 		border-left: 4px solid var(--danger-solid);
 	}
-	.buiten-strip .row.sheetedge {
+	.outside-strip .row.sheetedge {
 		border-left-color: var(--warn-solid);
 	}
 	/* The sign is the second encoding *beside* the colour: printed in black and white it
 	   is still an exclamation mark in a circle. */
-	.buiten-strip .sign {
+	.outside-strip .sign {
 		flex: none;
 		width: 16px;
 		height: 16px;
@@ -2753,17 +2753,17 @@
 		color: var(--on-color);
 		background: var(--danger-solid);
 	}
-	.buiten-strip .row.sheetedge .sign {
+	.outside-strip .row.sheetedge .sign {
 		background: var(--warn-solid);
 		color: var(--void);
 	}
 	/* Task 15: this is not an error but an offer, so the accent instead of the danger or
 	   warning red, and a button with it instead of a sentence alone. */
-	.buiten-strip .row.aanbod {
+	.outside-strip .row.aanbod {
 		align-items: center;
 		border-left-color: var(--accent);
 	}
-	.buiten-strip .row.aanbod .sign {
+	.outside-strip .row.aanbod .sign {
 		background: var(--accent);
 		color: var(--on-color);
 	}

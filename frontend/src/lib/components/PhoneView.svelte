@@ -111,14 +111,14 @@
 	 * beside it, and at the same time everything that *was* worth reporting
 	 * disappears. An unplugged USB cable should not cost half a screen.
 	 */
-	let beeldStuk = $state(false);
+	let imagePiece = $state(false);
 	$effect(() => {
 		camera.generation;
-		beeldStuk = false;
+		imagePiece = false;
 	});
 
-	let camAan = $derived(
-		camera.state.available && camera.shown && camera.state.running && !beeldStuk
+	let camOn = $derived(
+		camera.state.available && camera.shown && camera.state.running && !imagePiece
 	);
 	let progress = $derived(current?.progress ?? 0);
 	let percent = $derived(Math.round(progress * 100));
@@ -135,7 +135,7 @@
 
 	// A countdown says how long you have to wait; a clock time says whether you can
 	// still fetch coffee. Side by side they cost one line.
-	let klaarOm = $derived.by(() => {
+	let readyTo = $derived.by(() => {
 		if (resterend === null) return null;
 		const end = new Date(Date.now() + resterend * 1000);
 		return end.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
@@ -180,7 +180,7 @@
 
 	/** Many material names already carry the thickness ("Birch plywood 4 mm"); then do
 	    not stick another "4 mm" on the end. */
-	function rasterNaam(g: Raster): string {
+	function gridName(g: Raster): string {
 		// Without a material this read "grid · engrave-grid": the same word twice,
 		// and one of the two is an internal key.
 		const name = g.material_name ?? 'Testraster';
@@ -286,7 +286,7 @@
 	let promptGone = $state(false);
 	let promptNow = $derived(notifications.shouldAsk && !promptGone && Boolean(current));
 	/** De instelkaart uitgeklapt? Ingeklapt kost hij één row. */
-	let instellingenOpen = $state(false);
+	let settingsOpen = $state(false);
 
 	/**
 	 * This screen's order of precedence (decision B13).
@@ -299,13 +299,13 @@
 	 * Aligning does not count here: you do that on a big screen, so it changes nothing
 	 * about why you are standing here.
 	 */
-	let fotoEerst = $derived(!current && wachtend.length > 0);
+	let photoFirst = $derived(!current && wachtend.length > 0);
 	/**
 	 * The machine state may only shrink to one line when nothing is wrong. An
 	 * unplugged cable or an alarm is not a subordinate clause; then the whole card
 	 * comes back, *with* the sentence explaining why it is quiet.
 	 */
-	let standInEenRegel = $derived(fotoEerst && connected && machineState === 'ready');
+	let stateInOneLine = $derived(photoFirst && connected && machineState === 'ready');
 	/** The bed drawing under that one line. Closed, because you came for the photo. */
 	let bedOpen = $state(false);
 	let meldStand = $derived(
@@ -378,7 +378,7 @@
 					// The height in mm of a text element; null for everything else.
 					// `font_size_mm` is what the generator meant; without it the shape's
 					// bounding box is the best approximation.
-					tekstMm: element.text
+					textMm: element.text
 						? (element.text.font_size_mm ??
 							(element.bounds ? (element.bounds[3] - element.bounds[1]) / perMm : 0))
 						: null,
@@ -409,17 +409,17 @@
 	 * and not from `/api/job/estimate`: this screen refreshes on signals, and a second
 	 * source would give a second answer.
 	 */
-	const RAND_SPELING = 0.5;
+	const EDGE_SLACK = 0.5;
 
-	function buitenKader(
+	function outsideFrame(
 		box: { x: number; y: number; width: number; height: number },
 		frame: { width: number; height: number }
 	) {
 		return (
-			box.x < -RAND_SPELING ||
-			box.y < -RAND_SPELING ||
-			box.x + box.width > frame.width + RAND_SPELING ||
-			box.y + box.height > frame.height + RAND_SPELING
+			box.x < -EDGE_SLACK ||
+			box.y < -EDGE_SLACK ||
+			box.x + box.width > frame.width + EDGE_SLACK ||
+			box.y + box.height > frame.height + EDGE_SLACK
 		);
 	}
 
@@ -432,12 +432,12 @@
 			if (streek.dashed || streek.dimmed || !streek.visible) continue;
 			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
 			const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
-			if (buitenKader(box, { width: bedW, height: bedH })) off.bed += 1;
+			if (outsideFrame(box, { width: bedW, height: bedH })) off.bed += 1;
 			else if (
 				sheet &&
 				sheet.width_mm > 0 &&
 				sheet.height_mm > 0 &&
-				buitenKader(box, { width: sheet.width_mm, height: sheet.height_mm })
+				outsideFrame(box, { width: sheet.width_mm, height: sheet.height_mm })
 			) {
 				off.sheet += 1;
 			}
@@ -454,7 +454,7 @@
 	let drawn = $derived.by(() => {
 		const perPx = bedW > 0 && bedWidthPx > 0 ? bedWidthPx / bedW : 0;
 		if (perPx === 0) return shapes;
-		return shapes.filter((v) => v.tekstMm === null || v.tekstMm * perPx >= TEXT_MINIMUM);
+		return shapes.filter((v) => v.textMm === null || v.textMm * perPx >= TEXT_MINIMUM);
 	});
 
 	/** One sentence for anybody who does not get the image; it is under the drawing too. */
@@ -476,7 +476,7 @@
 
 <ConnectionCard burns={running} />
 
-<div class="telefoon">
+<div class="phone">
 	<!--
 		At the top and outside the scroll area: an alarm you can scroll away is not an
 		alarm (decision B3). Deliberately not an overlay: as a fixed block it pushes
@@ -511,7 +511,7 @@
 	{#snippet beeld()}
 		<!-- Camera: if you can look, you look. -->
 		<div class="podium">
-			<img src={camera.src} alt={t('phone.cameraAlt')} onerror={() => (beeldStuk = true)} />
+			<img src={camera.src} alt={t('phone.cameraAlt')} onerror={() => (imagePiece = true)} />
 		</div>
 	{/snippet}
 
@@ -601,7 +601,7 @@
 			     does, but there is no material. That difference decides whether you move
 			     the work or replace your board, so it is two lines and not one "careful". -->
 			{#if outsiders.bed || outsiders.sheet}
-				<div class="buiten" role="status">
+				<div class="outside" role="status">
 					{#if outsiders.bed}
 						<p class="bededge">
 							<span class="sign" aria-hidden="true">!</span>
@@ -635,14 +635,14 @@
 	{/snippet}
 
 	{#snippet camerablok()}
-		{#if beeldStuk}
+		{#if imagePiece}
 			<p class="hint">{t('phone.cameraNoImage')}</p>
 		{/if}
-		{#if camera.state.available && !camAan}
+		{#if camera.state.available && !camOn}
 			<button class="camknop" onclick={() => camera.start()} disabled={camera.busy}>
 				{camera.busy
 					? t('phone.cameraStarting')
-					: beeldStuk
+					: imagePiece
 						? t('phone.cameraRetry')
 						: t('phone.cameraOn')}
 			</button>
@@ -670,7 +670,7 @@
 				{#each list as grid (grid.id)}
 					<label class="grid" class:gedaan={Boolean(grid.photo_path)}>
 						<span class="name">
-							<span class="head">{rasterNaam(grid)} · {operation(grid.operation)}</span>
+							<span class="head">{gridName(grid)} · {operation(grid.operation)}</span>
 							{#if grid.photo_path}
 								<!-- Halfway, and that may be visible. The next step is not yours:
 								     aligning is done on a big screen. -->
@@ -710,11 +710,11 @@
 	{/snippet}
 
 	<div class="rol">
-		{#if fotoEerst}
+		{#if photoFirst}
 			<!-- There is a burned board on the bed and the machine is idle: this is what
 			     you have the phone in your hand for. -->
 			{@render fotolijst()}
-			{#if standInEenRegel}
+			{#if stateInOneLine}
 				<section class="standsectie">
 					<button
 						class="standrij"
@@ -734,12 +734,12 @@
 				<!-- Not simply idle: then the machine state is no longer a subclause. -->
 				{@render bedkaart()}
 			{/if}
-			{#if camAan}
+			{#if camOn}
 				{@render beeld()}
 			{/if}
 			{@render camerablok()}
 		{:else}
-			{#if camAan}
+			{#if camOn}
 				{@render beeld()}
 				{#if current}
 					<div class="strip" role="progressbar" aria-valuenow={percent} aria-valuemin="0" aria-valuemax="100">
@@ -755,29 +755,29 @@
 						aria-label={t('job.progressAria')}>
 						<circle class="baan" cx="100" cy="100" r={STRAAL} />
 						<circle
-							class="voor"
+							class="before"
 							class:pause={quiet}
 							cx="100" cy="100" r={STRAAL}
 							stroke-dasharray="{OMTREK}"
 							stroke-dashoffset={OMTREK * (1 - progress)}
 						/>
 					</svg>
-					<div class="binnen">
-						<span class="groot mono">{percent}<span class="pct">%</span></span>
+					<div class="inside">
+						<span class="big mono">{percent}<span class="pct">%</span></span>
 						{#if quiet}
-							<span class="onder">{t('phone.paused')}</span>
+							<span class="below">{t('phone.paused')}</span>
 						{:else if pauzeGevraagd}
-							<span class="onder">{t('phone.pauseAsked')}</span>
+							<span class="below">{t('phone.pauseAsked')}</span>
 						{:else if resterend !== null}
-							<span class="onder">{t('phone.remaining', { time: formatDuration(resterend) })}</span>
-							<span class="ready">{t('phone.doneAt', { time: klaarOm })}</span>
+							<span class="below">{t('phone.remaining', { time: formatDuration(resterend) })}</span>
+							<span class="ready">{t('phone.doneAt', { time: readyTo })}</span>
 						{:else}
-							<span class="onder">{t('phone.burning')}</span>
+							<span class="below">{t('phone.burning')}</span>
 						{/if}
 					</div>
 				</div>
 				<div class="jobregel">
-					<span class="titel">{jobLabel(current)}</span>
+					<span class="title">{jobLabel(current)}</span>
 					<span class="mono muted">{current.steps_done} / {current.steps_total}</span>
 				</div>
 			{:else}
@@ -799,14 +799,14 @@
 		<section class="meldsectie">
 			<button
 				class="noticerow"
-				aria-expanded={instellingenOpen}
-				onclick={() => (instellingenOpen = !instellingenOpen)}
+				aria-expanded={settingsOpen}
+				onclick={() => (settingsOpen = !settingsOpen)}
 			>
 				<span class="name">{t('notifications.title')}</span>
 				<span class="state {meldStand}">{meldStand}</span>
-				<span class="pijl" aria-hidden="true">{instellingenOpen ? '▴' : '▾'}</span>
+				<span class="pijl" aria-hidden="true">{settingsOpen ? '▴' : '▾'}</span>
 			</button>
-			{#if instellingenOpen}
+			{#if settingsOpen}
 				<div class="meldbody">
 					<NotificationCard {notifications} />
 				</div>
@@ -860,7 +860,7 @@
 </div>
 
 <style>
-	.telefoon {
+	.phone {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
@@ -903,12 +903,12 @@
 	/* Gap P8: the same two lines as under the canvas, with the same colour *and* the
 	   same sign. Colour alone must never carry it — this phone lies beside the
 	   machine, often with the sun on it. */
-	.buiten {
+	.outside {
 		display: grid;
 		gap: var(--space-2);
 		margin-top: var(--space-3);
 	}
-	.buiten p {
+	.outside p {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-2);
@@ -919,8 +919,8 @@
 		color: var(--text-1);
 		border-left: 4px solid var(--danger-solid);
 	}
-	.buiten p.sheetedge { border-left-color: var(--warn-solid); }
-	.buiten .sign {
+	.outside p.sheetedge { border-left-color: var(--warn-solid); }
+	.outside .sign {
 		flex: none;
 		width: 18px;
 		height: 18px;
@@ -933,7 +933,7 @@
 		color: var(--on-color);
 		background: var(--danger-solid);
 	}
-	.buiten p.sheetedge .sign { background: var(--warn-solid); color: var(--void); }
+	.outside p.sheetedge .sign { background: var(--warn-solid); color: var(--void); }
 
 	.why {
 		margin: var(--space-3) 0 0;
@@ -968,31 +968,31 @@
 	.podium img { width: 100%; height: 100%; object-fit: contain; }
 	.ring { width: min(72vw, 240px); height: auto; transform: rotate(-90deg); }
 	.ring .baan { fill: none; stroke: var(--surface-2); stroke-width: 10; }
-	.ring .voor {
+	.ring .before {
 		fill: none;
 		stroke: var(--accent);
 		stroke-width: 10;
 		stroke-linecap: round;
 		transition: stroke-dashoffset var(--transition-panel);
 	}
-	.ring .voor.pause { stroke: var(--warn-solid); }
-	.binnen {
+	.ring .before.pause { stroke: var(--warn-solid); }
+	.inside {
 		position: absolute;
 		display: grid;
 		gap: var(--space-1);
 		justify-items: center;
 		text-align: center;
 	}
-	.groot { font-size: var(--text-display); line-height: 1; color: var(--text-1); font-variant-numeric: tabular-nums; }
+	.big { font-size: var(--text-display); line-height: 1; color: var(--text-1); font-variant-numeric: tabular-nums; }
 	.pct { font-size: var(--text-lg); color: var(--text-2); }
-	.binnen .onder { color: var(--text-1); font-size: var(--text-md); }
-	.binnen .ready { color: var(--text-2); font-size: var(--text-xs); }
+	.inside .below { color: var(--text-1); font-size: var(--text-md); }
+	.inside .ready { color: var(--text-2); font-size: var(--text-xs); }
 
 	.strip { flex: none; height: 8px; border-radius: var(--radius-dot); background: var(--surface-2); overflow: hidden; }
 	.strip .vol { height: 100%; background: var(--accent); transition: width var(--transition-panel); }
 
 	.jobregel { flex: none; display: flex; align-items: baseline; gap: var(--space-2); }
-	.jobregel .titel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.jobregel .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.muted { margin-left: auto; color: var(--text-2); font-size: var(--text-xs); }
 
 	/* Resting state: the bed to scale with a cross on the head. Costs the same room as
@@ -1210,7 +1210,7 @@
 	/* The ring is a report, not decoration: the position stays, the sliding towards
 	   the position goes. */
 	@media (prefers-reduced-motion: reduce) {
-		.ring .voor,
+		.ring .before,
 		.strip .vol {
 			transition: none;
 		}

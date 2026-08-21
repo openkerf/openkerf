@@ -7,7 +7,7 @@
  * Why both and not just the new one: English is usually shorter than Dutch, but
  * not always ("Show frame" is longer than "Kader"), and a label that fits in one
  * language and clips in the other is exactly the failure this round has to catch.
- * The overflow measurement in `i-overloop.mjs` does the counting; these are for
+ * The overflow measurement in `i-overflow.mjs` does the counting; these are for
  * looking.
  */
 import { chromium } from 'playwright';

@@ -188,7 +188,7 @@
 		     only raises the question which is the real one. -->
 		<label class="wide">
 			<span>{t('library.material')}</span>
-			<button class="materiaal" onclick={() => onEditMaterial?.()}>
+			<button class="material" onclick={() => onEditMaterial?.()}>
 				{materialName(sheet.material_id) ?? t('sheets.materialNotFilled')}{sheet.thickness_mm ===
 				null
 					? ''
@@ -281,7 +281,7 @@
 		background: var(--surface-1);
 		color: var(--text-1);
 	}
-	.editor .materiaal {
+	.editor .material {
 		font-size: var(--text-xs);
 		padding: 4px 8px;
 		border: 1px solid var(--line);
@@ -293,7 +293,7 @@
 		color: var(--accent-text);
 		text-align: left;
 	}
-	.editor .materiaal:hover { background: var(--surface-2); }
+	.editor .material:hover { background: var(--surface-2); }
 	.editor input[type='text'] { width: 9em; }
 	.editor input[type='number'] { width: 5em; }
 	.drop,

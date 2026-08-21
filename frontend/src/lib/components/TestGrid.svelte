@@ -78,7 +78,7 @@
 
 	let busy = $state(false);
 	// The preview refreshes every 250 ms; that must not disable the main button.
-	let bezigVoorbeeld = $state(false);
+	let busyPreview = $state(false);
 	let error = $state<string | null>(null);
 	/**
 	 * Why the current input does not yet produce a board.
@@ -161,7 +161,7 @@
 
 	let intervalKan = $derived(INTERVAL_BEWERKINGEN.includes(form.operation));
 	/** What the label layer is about: caption, border, or both (T10). */
-	let labellaagNaam = $derived(
+	let labelLayerName = $derived(
 		t(form.text ? 'grid.labelLayer.caption' : 'grid.labelLayer.border')
 	);
 	/** Raster chosen on an engine that cannot convert it into laser lines. */
@@ -227,7 +227,7 @@
 	}
 
 	async function send(path: string, metOpschrift = false, quiet = false) {
-		if (quiet) bezigVoorbeeld = true;
+		if (quiet) busyPreview = true;
 		else busy = true;
 		// A quiet preview round does not touch `error`: that block sits at the bottom
 		// of the form and belongs to a failed action, not to a half-typed number.
@@ -260,7 +260,7 @@
 			else error = notice;
 			return null;
 		} finally {
-			if (quiet) bezigVoorbeeld = false;
+			if (quiet) busyPreview = false;
 			else busy = false;
 		}
 	}
@@ -375,7 +375,7 @@
 	 * right. With freely chosen axes it can be any corner — and a legend naming the
 	 * wrong corner is worse than no legend.
 	 */
-	let diepsteHoek = $derived.by(() => {
+	let deepestCorner = $derived.by(() => {
 		if (!preview || preview.cells.length === 0) return null;
 		const zwaarste = preview.cells.reduce((a, b) => (score(b) > score(a) ? b : a));
 		const onder = zwaarste.row === rijwaarden.length - 1;
@@ -511,7 +511,7 @@
 	let overgenomen = $state<{ dateOf: string; grid: number } | null>(null);
 	let geladenVoor = $state<number | null | undefined>(undefined);
 
-	const OVER_TE_NEMEN = [
+	const TO_CARRY_OVER = [
 		'operation', 'row_axis', 'column_axis',
 		'speed_min', 'speed_max', 'speed_steps',
 		'power_min', 'power_max', 'power_steps',
@@ -528,7 +528,7 @@
 	 * beside it.
 	 */
 	function neemOver(vorige: Record<string, unknown>) {
-		for (const key of OVER_TE_NEMEN) {
+		for (const key of TO_CARRY_OVER) {
 			const value = vorige[key];
 			if (value === null || value === undefined) continue;
 			(form as Record<string, unknown>)[key] =
@@ -587,14 +587,14 @@
 	};
 
 	let recepten = $state<Recept[]>([]);
-	let gekozenRecept = $state<number | null>(null);
-	let receptNaam = $state('');
-	let receptFout = $state<string | null>(null);
-	let receptBezig = $state(false);
+	let pickedRecipe = $state<number | null>(null);
+	let recipeName = $state('');
+	let recipeError = $state<string | null>(null);
+	let recipeBusy = $state(false);
 	/** The save field is closed until you open it: it is not the main route. */
 	let saving = $state(false);
 
-	async function haalRecepten() {
+	async function fetchRecipes() {
 		const ask =
 			form.material_id === null
 				? '/api/library/testgrids/recipes'
@@ -602,32 +602,32 @@
 		const response = await fetch(ask);
 		if (!response.ok) return;
 		recepten = await response.json();
-		if (gekozenRecept !== null && !recepten.some((r) => r.id === gekozenRecept)) {
-			gekozenRecept = null;
+		if (pickedRecipe !== null && !recepten.some((r) => r.id === pickedRecipe)) {
+			pickedRecipe = null;
 		}
 	}
 
 	$effect(() => {
 		void form.material_id;
-		haalRecepten();
+		fetchRecipes();
 	});
 
-	function kiesRecept(id: number | null) {
-		gekozenRecept = id;
+	function pickRecipe(id: number | null) {
+		pickedRecipe = id;
 		const recept = recepten.find((r) => r.id === id);
 		if (!recept) return;
 		// A recipe overwrites the form; that is what you chose it for. The provenance
 		// line from T3 no longer holds after that, so it goes.
 		overgenomen = null;
 		neemOver(recept.settings);
-		receptNaam = recept.name;
+		recipeName = recept.name;
 	}
 
-	async function bewaarRecept() {
-		const name = receptNaam.trim();
+	async function saveRecipe() {
+		const name = recipeName.trim();
 		if (!name) return;
-		receptBezig = true;
-		receptFout = null;
+		recipeBusy = true;
+		recipeError = null;
 		try {
 			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 			const token =
@@ -648,42 +648,42 @@
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				receptFout =
+				recipeError =
 					typeof data?.detail === 'string'
 						? data.detail
 						: `Opslaan mislukte (${response.status}).`;
 				return;
 			}
-			await haalRecepten();
-			gekozenRecept = data?.id ?? null;
+			await fetchRecipes();
+			pickedRecipe = data?.id ?? null;
 			saving = false;
 		} finally {
-			receptBezig = false;
+			recipeBusy = false;
 		}
 	}
 
-	async function wisRecept() {
-		if (gekozenRecept === null) return;
-		receptBezig = true;
-		receptFout = null;
+	async function wipeRecipe() {
+		if (pickedRecipe === null) return;
+		recipeBusy = true;
+		recipeError = null;
 		try {
 			const headers: Record<string, string> = {};
 			const token =
 				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
 			if (token) headers.Authorization = `Bearer ${token}`;
-			const response = await fetch(`/api/library/testgrids/recipes/${gekozenRecept}`, {
+			const response = await fetch(`/api/library/testgrids/recipes/${pickedRecipe}`, {
 				method: 'DELETE',
 				headers
 			});
 			if (!response.ok) {
-				receptFout = `Verwijderen mislukte (${response.status}).`;
+				recipeError = `Verwijderen mislukte (${response.status}).`;
 				return;
 			}
-			gekozenRecept = null;
-			receptNaam = '';
-			await haalRecepten();
+			pickedRecipe = null;
+			recipeName = '';
+			await fetchRecipes();
 		} finally {
-			receptBezig = false;
+			recipeBusy = false;
 		}
 	}
 
@@ -773,19 +773,19 @@
 
 	// ---------------------------------------------------- materiaal erbij (E4)
 
-	let nieuwMateriaal = $state('');
-	let materiaalFout = $state<string | null>(null);
+	let newMaterial = $state('');
+	let materialError = $state<string | null>(null);
 
-	async function maakMateriaal() {
-		const name = nieuwMateriaal.trim();
+	async function makeMaterial() {
+		const name = newMaterial.trim();
 		if (!name) return;
-		materiaalFout = null;
+		materialError = null;
 		const gemaakt = await library.addMaterial(name);
 		if (!gemaakt) {
-			materiaalFout = library.error ?? t('error.materialFailed');
+			materialError = library.error ?? t('error.materialFailed');
 			return;
 		}
-		nieuwMateriaal = '';
+		newMaterial = '';
 		form.material_id = gemaakt.id;
 	}
 </script>
@@ -818,10 +818,10 @@
 			<label class="field">
 				<span class="name">{t('grid.recipe')}</span>
 				<select
-					value={gekozenRecept}
+					value={pickedRecipe}
 					disabled={recepten.length === 0}
 					onchange={(e) =>
-						kiesRecept(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
+						pickRecipe(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
 				>
 					<option value={null}
 						>{recepten.length === 0 ? t('grid.recipe.none') : t('grid.recipe.pick')}</option
@@ -839,8 +839,8 @@
 				<button class="btn" onclick={() => (saving = !saving)} aria-expanded={saving}>
 					{saving ? t('grid.recipe.dontSave') : t('grid.recipe.save')}
 				</button>
-				{#if gekozenRecept !== null}
-					<button class="btn quiet" disabled={receptBezig} onclick={wisRecept}
+				{#if pickedRecipe !== null}
+					<button class="btn quiet" disabled={recipeBusy} onclick={wipeRecipe}
 						>{t('common.remove')}</button
 					>
 				{/if}
@@ -849,21 +849,21 @@
 				<div class="erbij">
 					<input
 						type="text"
-						bind:value={receptNaam}
+						bind:value={recipeName}
 						maxlength="60"
 						placeholder={t('grid.recipe.namePlaceholder')}
 						aria-label={t('grid.recipe.nameAria')}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault();
-								bewaarRecept();
+								saveRecipe();
 							}
 						}}
 					/>
 					<button
 						class="btn"
-						disabled={receptBezig || receptNaam.trim() === ''}
-						onclick={bewaarRecept}>{t('common.save')}</button
+						disabled={recipeBusy || recipeName.trim() === ''}
+						onclick={saveRecipe}>{t('common.save')}</button
 					>
 				</div>
 				<p class="hint">
@@ -873,7 +873,7 @@
 						: t('grid.recipe.hint.material')}
 				</p>
 			{/if}
-			{#if receptFout}<p class="failure" role="alert">{receptFout}</p>{/if}
+			{#if recipeError}<p class="failure" role="alert">{recipeError}</p>{/if}
 		</div>
 
 		<div class="werkbank">
@@ -912,24 +912,24 @@
 						<div class="erbij">
 							<input
 								type="text"
-								bind:value={nieuwMateriaal}
+								bind:value={newMaterial}
 								maxlength="60"
 								placeholder={t('grid.newMaterial.placeholder')}
 								aria-label={t('grid.newMaterial.aria')}
 								onkeydown={(e) => {
 									if (e.key === 'Enter') {
 										e.preventDefault();
-										maakMateriaal();
+										makeMaterial();
 									}
 								}}
 							/>
 							<button
 								class="btn"
-								disabled={library.busy || nieuwMateriaal.trim() === ''}
-								onclick={maakMateriaal}>{t('grid.newMaterial.create')}</button
+								disabled={library.busy || newMaterial.trim() === ''}
+								onclick={makeMaterial}>{t('grid.newMaterial.create')}</button
 							>
 						</div>
-						{#if materiaalFout}<p class="failure">{materiaalFout}</p>{/if}
+						{#if materialError}<p class="failure">{materialError}</p>{/if}
 					</div>
 				{/if}
 
@@ -1126,14 +1126,14 @@
 					     not on acrylic, and then the caption burns straight through your
 					     board. -->
 					<NumberField
-						label={t('grid.label.speed', { layer: labellaagNaam })}
+						label={t('grid.label.speed', { layer: labelLayerName })}
 						unit="mm/s"
 						step={5}
 						min={1}
 						bind:value={form.label_speed_mm_s}
 					/>
 					<NumberField
-						label={t('grid.label.power', { layer: labellaagNaam })}
+						label={t('grid.label.power', { layer: labelLayerName })}
 						unit="%"
 						step={5}
 						min={1}
@@ -1299,8 +1299,8 @@
 								value: show(as, Number(form[VAST_VELD[as]]))
 							})}
 						{/each}
-						{diepsteHoek
-							? t('grid.legend.deepest', { corner: diepsteHoek })
+						{deepestCorner
+							? t('grid.legend.deepest', { corner: deepestCorner })
 							: t('grid.legend.darker')}
 					</p>
 				</aside>

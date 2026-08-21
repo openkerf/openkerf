@@ -79,7 +79,7 @@
 
 <div class="field">
 	<label class="name" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
-	<span class="teller">
+	<span class="stepper">
 		<button
 			type="button"
 			tabindex="-1"
@@ -114,8 +114,8 @@
 	.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
 	.name { font-size: var(--text-xs); color: var(--text-2); }
 	.eenheid { color: var(--text-2); }
-	.teller { display: flex; min-width: 0; }
-	.teller input {
+	.stepper { display: flex; min-width: 0; }
+	.stepper input {
 		flex: 1;
 		min-width: 0;
 		text-align: center;
@@ -129,7 +129,7 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.teller button {
+	.stepper button {
 		flex: none;
 		width: 38px;
 		font: inherit;
@@ -139,8 +139,8 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.teller button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
-	.teller button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
-	.teller button:hover:not(:disabled) { background: var(--surface-1); }
-	.teller button:disabled, .teller input:disabled { opacity: 0.5; }
+	.stepper button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	.stepper button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
+	.stepper button:hover:not(:disabled) { background: var(--surface-1); }
+	.stepper button:disabled, .stepper input:disabled { opacity: 0.5; }
 </style>

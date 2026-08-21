@@ -72,7 +72,7 @@
 	 * do, so they sit behind one ⋯ — and behind the right-click, as everywhere else
 	 * in the app.
 	 */
-	let rijMenu = $state<{ list: MenuList; x: number; y: number } | null>(null);
+	let rowMenu = $state<{ list: MenuList; x: number; y: number } | null>(null);
 
 	function presetMenu(preset: Preset): MenuList {
 		return [
@@ -142,7 +142,7 @@
 		event.preventDefault();
 		const target = event.currentTarget as HTMLElement | null;
 		const box = target?.getBoundingClientRect();
-		rijMenu = {
+		rowMenu = {
 			list: presetMenu(preset),
 			// A click on the ⋯ button hangs the menu below that button; a right-click on
 			// the row hangs it at the cursor.
@@ -224,9 +224,9 @@
 
 	/** The thicknesses this material really has, thin to thick. */
 	let thicknesses = $derived.by(() => {
-		const groep = groepen.find((g) => g.materialId === materialId);
+		const group = groepen.find((g) => g.materialId === materialId);
 		const values = new Set<number | null>();
-		for (const preset of groep?.presets ?? []) values.add(preset.thickness_mm);
+		for (const preset of group?.presets ?? []) values.add(preset.thickness_mm);
 		return [...values].sort((a, b) => (a ?? -1) - (b ?? -1));
 	});
 
@@ -235,14 +235,14 @@
 	 * the measured settings first. A measured value is worth more than an estimated
 	 * one, so it belongs at the top and not in alphabetical order.
 	 */
-	const BRON_ORDE: Record<string, number> = { testraster: 0, presetariat: 1, geextrapoleerd: 2, handmatig: 3 };
+	const SOURCE_ORDER: Record<string, number> = { testraster: 0, presetariat: 1, geextrapoleerd: 2, handmatig: 3 };
 	let zichtbarePresets = $derived.by(() => {
-		const groep = groepen.find((g) => g.materialId === materialId);
-		const list = (groep?.presets ?? []).filter((p) => thickness === null || p.thickness_mm === thickness);
+		const group = groepen.find((g) => g.materialId === materialId);
+		const list = (group?.presets ?? []).filter((p) => thickness === null || p.thickness_mm === thickness);
 		return [...list].sort(
 			(a, b) =>
 				(a.thickness_mm ?? -1) - (b.thickness_mm ?? -1) ||
-				(BRON_ORDE[a.source] ?? 9) - (BRON_ORDE[b.source] ?? 9) ||
+				(SOURCE_ORDER[a.source] ?? 9) - (SOURCE_ORDER[b.source] ?? 9) ||
 				a.operation.localeCompare(b.operation, 'nl')
 		);
 	});
@@ -251,18 +251,18 @@
 	let groepen = $derived.by<Groep[]>(() => {
 		const card = new Map<number, Groep>();
 		for (const preset of visible) {
-			let groep = card.get(preset.material_id);
-			if (!groep) {
-				groep = {
+			let group = card.get(preset.material_id);
+			if (!group) {
+				group = {
 					name: preset.material_name,
 					materialId: preset.material_id,
 					presets: [],
 					laatst: 0
 				};
-				card.set(preset.material_id, groep);
+				card.set(preset.material_id, group);
 			}
-			groep.presets.push(preset);
-			groep.laatst = Math.max(groep.laatst, gebruikt(preset));
+			group.presets.push(preset);
+			group.laatst = Math.max(group.laatst, gebruikt(preset));
 		}
 		// Materials without presets belong here too: without that group there is
 		// nowhere that "make a test grid" sits logically.
@@ -365,10 +365,10 @@
 		return 'unknown';
 	}
 
-	let bezigFoto = $state<number | null>(null);
+	let busyPhoto = $state<number | null>(null);
 
 	async function photoFor(gridId: number, file: File) {
-		bezigFoto = gridId;
+		busyPhoto = gridId;
 		try {
 			const form = new FormData();
 			form.append('file', file);
@@ -379,7 +379,7 @@
 			});
 			if (response.ok) await library.load();
 		} finally {
-			bezigFoto = null;
+			busyPhoto = null;
 		}
 	}
 
@@ -414,7 +414,7 @@
 	/** Did something come in that the current filter does not show? */
 	let hidden = $state(false);
 	let wisselEl = $state<HTMLElement | null>(null);
-	let klaarEl = $state<HTMLElement | null>(null);
+	let readyEl = $state<HTMLElement | null>(null);
 
 	/**
 	 * The dialog is the scroll container, and you pressed a button at the bottom.
@@ -423,9 +423,9 @@
 	 * viewport: you land in the middle of a decision and have to go up first to see
 	 * what it is about.
 	 */
-	async function naarBoven(welke: 'preview' | 'ready') {
+	async function toTop(welke: 'preview' | 'ready') {
 		await tick();
-		(welke === 'ready' ? klaarEl : wisselEl)?.scrollIntoView({ block: 'start' });
+		(welke === 'ready' ? readyEl : wisselEl)?.scrollIntoView({ block: 'start' });
 	}
 
 	async function pickFile(file: File) {
@@ -437,7 +437,7 @@
 		wipeConfirmed = false;
 		fileName = file.name;
 		preview = await library.uploadBundle(file);
-		if (preview) naarBoven('preview');
+		if (preview) toTop('preview');
 	}
 
 	/**
@@ -462,7 +462,7 @@
 
 	async function importeren() {
 		if (!preview) return;
-		const zichtbaarVoor = library.presets.length;
+		const visibleFor = library.presets.length;
 		const outcome = await library.importBundle(preview.bundle, mode, links, clashWinner);
 		if (outcome) {
 			// "4 settings added" while the screen does not change is not reassurance but
@@ -470,10 +470,10 @@
 			// Measured rather than guessed.
 			hidden =
 				outcome.presets.added > 0 &&
-				library.presets.length - zichtbaarVoor < outcome.presets.added;
+				library.presets.length - visibleFor < outcome.presets.added;
 			ready = outcome;
 			preview = null;
-			naarBoven('ready');
+			toTop('ready');
 		}
 	}
 
@@ -508,7 +508,7 @@
 	 * `<img>` suffices and no overlay maths is needed here. Without a known square we
 	 * ask for the photo unprocessed — that is the safe fallback.
 	 */
-	function fotoUrl(preset: Preset) {
+	function photoUrl(preset: Preset) {
 		const basis = `/api/library/testgrids/${preset.grid_id}/photo`;
 		return preset.grid_cell
 			? `${basis}?cell=${preset.grid_cell.row}-${preset.grid_cell.column}`
@@ -523,7 +523,7 @@
 	}
 </script>
 
-{#snippet bronIcoon(kind: string)}
+{#snippet sourceIcon(kind: string)}
 	<svg
 		class="ico"
 		width="13"
@@ -554,7 +554,7 @@
 	</svg>
 {/snippet}
 
-{#snippet card(preset: Preset, toonMateriaal: boolean)}
+{#snippet card(preset: Preset, showMaterial: boolean)}
 	{@const source = SOURCE_LABEL[preset.source]}
 	{@const past = !canEdit || pastBij(preset, chosenOperation)}
 	{@const off = herkomst === preset.id || editing === preset.id}
@@ -575,13 +575,13 @@
 			old layout: thirteen settings was 2,600 px of scrolling. Whatever else
 			there is to know about a setting is still there, but only when you ask.
 		-->
-		<div class="rij">
+		<div class="row">
 			<div class="wat">
 				<span class="size mono">
 					{#if preset.thickness_mm !== null}{preset.thickness_mm} mm{:else}—{/if}
 				</span>
 				<span class="operation">
-					{#if toonMateriaal}<span class="mat">{preset.material_name}</span> · {/if}
+					{#if showMaterial}<span class="mat">{preset.material_name}</span> · {/if}
 					{operationLabel(preset.operation)}
 				</span>
 				{#if !past}
@@ -619,7 +619,7 @@
 			     the provenance. The paragraph that spelled this out on every card was
 			     useful on one card and noise on thirteen. -->
 			<span class="badge {source.tone}" title="{source.means}{source.advice ? ' ' + source.advice : ''}">
-				{@render bronIcoon(source.icon)}
+				{@render sourceIcon(source.icon)}
 				{source.text}
 			</span>
 
@@ -635,7 +635,7 @@
 							})
 						: t('library.photo.title')}
 				>
-					<img src={fotoUrl(preset)} alt="" />
+					<img src={photoUrl(preset)} alt="" />
 				</button>
 			{:else}
 				<span class="geenfoto" aria-hidden="true"></span>
@@ -729,7 +729,7 @@
 				<div class="bewijsvak">
 					{#if preset.grid_photo}
 						<img
-							src={fotoUrl(preset)}
+							src={photoUrl(preset)}
 							alt={preset.grid_cell
 								? t('library.photo.altCircled', {
 										id: preset.grid_id,
@@ -738,7 +738,7 @@
 									})
 								: t('library.photo.alt', { id: preset.grid_id })}
 						/>
-						<p class="onder">
+						<p class="below">
 							{#if preset.grid_cell}
 								<!-- The mark follows the alignment of the grid; when that has not
 								     been set the server falls back to the whole image and the
@@ -756,10 +756,10 @@
 							{/if}
 						</p>
 					{:else if preset.grid_id}
-						<p class="onder">{t('library.caption.noPhoto')}</p>
+						<p class="below">{t('library.caption.noPhoto')}</p>
 						{#if canEdit}
 							<label class="mini file">
-								{bezigFoto === preset.grid_id ? t('common.busy') : t('library.addPhoto')}
+								{busyPhoto === preset.grid_id ? t('common.busy') : t('library.addPhoto')}
 								<input
 									type="file"
 									accept="image/*"
@@ -777,7 +777,7 @@
 						     source says "measured" but no grid hangs off it, *that* is the
 						     message — not "not measured", because that contradicts the badge on
 						     the same line. -->
-						<p class="onder">
+						<p class="below">
 							{#if preset.source === 'testraster'}
 								{t('library.evidence.lost')}
 							{:else}
@@ -1082,7 +1082,7 @@
 
 {#if ready}
 	<!-- What actually happened, in the same words as the preview. -->
-	<div class="ready" role="status" bind:this={klaarEl}>
+	<div class="ready" role="status" bind:this={readyEl}>
 		<strong>
 			{ready.mode === 'replace' ? t('import.done.replaced') : t('import.done.merged')}
 		</strong>
@@ -1242,7 +1242,7 @@
 		shape that fits the question.
 	-->
 	<div class="tweeluik">
-		<nav class="materialen" aria-label={t('library.materials')}>
+		<nav class="materials" aria-label={t('library.materials')}>
 			<ul>
 				<!-- Recently used is the first row and not a separate section with
 				     duplicate cards: it is a *choice* in the same list. -->
@@ -1256,20 +1256,20 @@
 								zoek = '';
 							}}
 						>
-							<span class="matnaam">{t('library.recent')}</span>
+							<span class="matname">{t('library.recent')}</span>
 							<span class="mataantal mono">{recent.length}</span>
 						</button>
 					</li>
 				{/if}
-				{#each groepen as groep (groep.materialId)}
+				{#each groepen as group (group.materialId)}
 					<li>
 						<button
 							class="matrij"
-							class:on={materialId === groep.materialId}
-							onclick={() => (materialId = groep.materialId)}
+							class:on={materialId === group.materialId}
+							onclick={() => (materialId = group.materialId)}
 							oncontextmenu={(e) => {
 								e.preventDefault();
-								rijMenu = {
+								rowMenu = {
 									x: e.clientX,
 									y: e.clientY,
 									list: [
@@ -1278,14 +1278,14 @@
 												{
 													id: 'alleen',
 													label: t('library.onlyThis'),
-													on: materialId === groep.materialId,
-													run: () => (materialId = groep.materialId)
+													on: materialId === group.materialId,
+													run: () => (materialId = group.materialId)
 												},
 												{
 													id: 'grid',
 													label: t('library.makeGrid'),
 													off: canEdit ? undefined : t('reason.needsToken'),
-													run: () => onMakeGrid?.(groep.materialId)
+													run: () => onMakeGrid?.(group.materialId)
 												}
 											]
 										}
@@ -1293,13 +1293,13 @@
 								};
 							}}
 						>
-							<span class="matnaam">{groep.name}</span>
-							{#if groep.materialId === sheetMaterialId}
+							<span class="matname">{group.name}</span>
+							{#if group.materialId === sheetMaterialId}
 								<!-- What is in the machine is the reason you are here; that belongs in
 								     the list and not only in a filter checkbox. -->
 								<span class="ligt" title={t('library.onSheet.title')}>{t('library.onSheet')}</span>
 							{/if}
-							<span class="mataantal mono">{groep.presets.length}</span>
+							<span class="mataantal mono">{group.presets.length}</span>
 						</button>
 					</li>
 				{/each}
@@ -1315,19 +1315,19 @@
 					{/each}
 					<p class="fijn">{t('library.pickMaterial')}</p>
 				{:else}
-					{#each groepen as groep (groep.materialId)}
-						{#each groep.presets as preset (preset.id)}
+					{#each groepen as group (group.materialId)}
+						{#each group.presets as preset (preset.id)}
 							{@render card(preset, true)}
 						{/each}
 					{/each}
 				{/if}
 			{:else}
-				{@const groep = groepen.find((g) => g.materialId === materialId)}
-				{#if groep}
+				{@const group = groepen.find((g) => g.materialId === materialId)}
+				{#if group}
 					<div class="materiaalkop">
-						<h2 class="head">{groep.name}</h2>
+						<h2 class="head">{group.name}</h2>
 						{#if canEdit}
-							<button class="mini" onclick={() => onMakeGrid?.(groep.materialId)}>
+							<button class="mini" onclick={() => onMakeGrid?.(group.materialId)}>
 								{t('library.makeGrid')}
 							</button>
 						{/if}
@@ -1351,14 +1351,14 @@
 
 					{#if zichtbarePresets.length === 0}
 						<p class="empty">
-							{#if groep.presets.length === 0}
-								{t('library.noPresets', { material: groep.name })}
+							{#if group.presets.length === 0}
+								{t('library.noPresets', { material: group.name })}
 							{:else}
 								{t('library.noneForThickness', { thickness: thickness })}
 							{/if}
 						</p>
 						{#if canEdit}
-							<button class="btn primary" onclick={() => onMakeGrid?.(groep.materialId)}>
+							<button class="btn primary" onclick={() => onMakeGrid?.(group.materialId)}>
 								{t('library.makeGrid')}
 							</button>
 						{/if}
@@ -1535,8 +1535,8 @@
 </section>
 {/if}
 
-{#if rijMenu}
-	<Menu menu={rijMenu.list} x={rijMenu.x} y={rijMenu.y} onClose={() => (rijMenu = null)} />
+{#if rowMenu}
+	<Menu menu={rowMenu.list} x={rowMenu.x} y={rowMenu.y} onClose={() => (rowMenu = null)} />
 {/if}
 
 <style>
@@ -1669,7 +1669,7 @@
 		gap: var(--space-4);
 		align-items: start;
 	}
-	.materialen ul {
+	.materials ul {
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -1697,7 +1697,7 @@
 		color: var(--accent);
 		font-weight: 500;
 	}
-	.matnaam { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.matname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.mataantal { flex: none; font-size: var(--text-xs); color: var(--text-2); }
 	.matrij.on .mataantal { color: inherit; }
 	/* What is in the machine: one word, not a second colour. */
@@ -1770,7 +1770,7 @@
 		box-shadow: var(--lift-1);
 	}
 
-	.rij {
+	.row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
@@ -1935,7 +1935,7 @@
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
 	}
-	.bewijsvak .onder { margin: 0; font-size: var(--text-xs); color: var(--text-2); }
+	.bewijsvak .below { margin: 0; font-size: var(--text-xs); color: var(--text-2); }
 	.file { position: relative; overflow: hidden; }
 	.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
@@ -2091,7 +2091,7 @@
 		cursor: pointer;
 	}
 	.choice input { grid-area: radio; margin: 2px 0 0; }
-	.choice .titelklein { grid-area: titel; font-weight: 600; }
+	.choice .titelklein { grid-area: title; font-weight: 600; }
 	.choice .hint { grid-area: hint; font-size: var(--text-xs); color: var(--text-2); }
 	.choice.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 	.choice.danger.on {

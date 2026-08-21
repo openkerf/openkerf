@@ -15,8 +15,8 @@
 <div class="flits" aria-hidden="true">
 	<div class="veeg"></div>
 	<div class="woord">
-		<span class="groot">{t('jobStart.title')}</span>
-		{#if label}<span class="klein">{label}</span>{/if}
+		<span class="big">{t('jobStart.title')}</span>
+		{#if label}<span class="small">{label}</span>{/if}
 	</div>
 </div>
 
@@ -53,8 +53,8 @@
 		box-shadow: var(--lift-2);
 		animation: op 900ms cubic-bezier(0.2, 0, 0, 1) forwards;
 	}
-	.groot { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; }
-	.klein { font-size: var(--text-xs); color: var(--text-2); }
+	.big { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; }
+	.small { font-size: var(--text-xs); color: var(--text-2); }
 
 	@keyframes trek {
 		from { transform: translateX(-60%); }

@@ -131,7 +131,7 @@
 	let chosen = $derived(design.selectedElements);
 
 	/** The layers the selection is in, with their colour and burn number. */
-	let inLagen = $derived.by(() => {
+	let inLayers = $derived.by(() => {
 		const ids = new Set(chosen.flatMap((e) => e.operation_ids ?? []));
 		const gewoon = design.operations.filter((op) => !op.grid);
 		return gewoon
@@ -292,8 +292,8 @@
 	 * two calls in the markup, and then it is a matter of time before one has an entry
 	 * the other is missing.
 	 */
-	function opendLaagMenu(op: DesignOperation, index: number, x: number, y: number) {
-		rijMenu = {
+	function openedLayerMenu(op: DesignOperation, index: number, x: number, y: number) {
+		rowMenu = {
 			x,
 			y,
 			list: layerMenu(
@@ -323,7 +323,7 @@
 		};
 	}
 
-	let rijMenu = $state<{
+	let rowMenu = $state<{
 		list: MenuList;
 		x: number;
 		y: number;
@@ -338,7 +338,7 @@
 	 * What splitting would produce. An imported path holds all its panels in one shape;
 	 * the number here is the number of shapes the button promises.
 	 */
-	const teSplitsen = $derived.by(() => {
+	const toSplit = $derived.by(() => {
 		const samengesteld = chosen.filter((e) => (e.subpaths ?? 1) > 1);
 		return {
 			shapes: samengesteld.length,
@@ -355,18 +355,18 @@
 	 */
 	const VULBAAR = ['elem rect', 'elem ellipse', 'elem path', 'elem polyline'];
 	const vulbaar = $derived(chosen.filter((e) => VULBAAR.includes(e.type)));
-	const alGevuld = $derived(
+	const alreadyFilled = $derived(
 		vulbaar.length > 0 && vulbaar.every((e) => Boolean(e.fill))
 	);
 
 	/** How many layers the selection is in now — the number 'only in' cancels. */
-	const nuInLagen = $derived(
+	const nowInLayers = $derived(
 		new Set(chosen.flatMap((e) => e.operation_ids ?? [])).size
 	);
 
 	let plainLayers = $derived(operations.filter((o) => !o.grid));
 	/** Layers without work: what 'tidy up the empty layers' removes. */
-	const legeLagen = $derived(plainLayers.filter((op) => !op.element_ids.length));
+	const emptyLayers = $derived(plainLayers.filter((op) => !op.element_ids.length));
 
 	let gridGroups = $derived.by(() => {
 		const byGrid = new Map<number, typeof operations>();
@@ -419,7 +419,7 @@
 	}
 
 	/** Engraving before cutting, in one click (gap L2). */
-	async function sorteerLagen() {
+	async function sortLayers() {
 		const off = await edits.sortLayers();
 		if (off.ok) onLayerChange?.();
 	}
@@ -446,8 +446,8 @@
 	// The ↑/↓ buttons in the expander stay, and the grip itself does the same with the
 	// arrow keys — dragging is an extra route, not a replacement.
 	let dragging = $state<{ id: string; from: number; to: number } | null>(null);
-	let rijElementen: (HTMLElement | null)[] = [];
-	let rijGrenzen: { top: number; centre: number }[] = [];
+	let rowElements: (HTMLElement | null)[] = [];
+	let rowBounds: { top: number; centre: number }[] = [];
 
 	function startSleep(event: PointerEvent, id: string, index: number) {
 		if (!canEdit || edits.busy) return;
@@ -455,7 +455,7 @@
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 		// Measure the sizes once, at the start: the list itself does not move while
 		// dragging, and measuring again per movement costs a layout per pointer move.
-		rijGrenzen = rijElementen
+		rowBounds = rowElements
 			.filter((el): el is HTMLElement => !!el)
 			.map((el) => {
 				const box = el.getBoundingClientRect();
@@ -467,13 +467,13 @@
 	function beweegSleep(event: PointerEvent) {
 		if (!dragging) return;
 		let to = 0;
-		for (let i = 0; i < rijGrenzen.length; i++) {
-			if (event.clientY > rijGrenzen[i].centre) to = i + 1;
+		for (let i = 0; i < rowBounds.length; i++) {
+			if (event.clientY > rowBounds[i].centre) to = i + 1;
 		}
 		// Landing above your own row means: in that place. Below your own row everything
 		// in between shifts up one, so the destination is one lower.
 		if (to > dragging.from) to -= 1;
-		to = Math.min(Math.max(to, 0), rijGrenzen.length - 1);
+		to = Math.min(Math.max(to, 0), rowBounds.length - 1);
 		if (to !== dragging.to) dragging = { ...dragging, to };
 	}
 
@@ -671,10 +671,10 @@
 				     And this is exactly what you check before starting — with the layer
 				     colour, so it matches what you see on the canvas. -->
 				<span class="in-layers">
-					{#if inLagen.length === 0}
+					{#if inLayers.length === 0}
 						<span class="geenlaag" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
 					{:else}
-						{#each inLagen as layer (layer.id)}
+						{#each inLayers as layer (layer.id)}
 							<span class="laagchip" title={t('panel.layerChip', { n: layer.number, label: layer.label })}>
 								<span class="stip" style="background: {layer.color}"></span>
 								{layer.label}
@@ -840,14 +840,14 @@
 				<p class="hint">{t('panel.inEffect', { label: selected.effect.label })}</p>
 			{/if}
 
-			{#if teSplitsen.shapes}
+			{#if toSplit.shapes}
 				<!-- This is a diagnosis, not an operation: it says what you are holding.
 				     The button that went with it ("Split into n shapes") moved to the
 				     right-click menu, under "Edit path", with the same number. Without
 				     this line the menu would promise a count you could not check
 				     anywhere. -->
 				<p class="tip">
-					{t('panel.splittable', { n: teSplitsen.shapes, pieces: teSplitsen.stukken })}
+					{t('panel.splittable', { n: toSplit.shapes, pieces: toSplit.stukken })}
 				</p>
 			{/if}
 			{#if tidyNote}
@@ -1016,7 +1016,7 @@
 						title={t('panel.list.title')}
 						onclick={(e) => {
 							const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-							rijMenu = {
+							rowMenu = {
 								x: box.left,
 								y: box.bottom + 4,
 								list: [
@@ -1027,15 +1027,15 @@
 												label: t('panel.list.sort'),
 												explain: t('panel.list.sort.explain'),
 												off: gesorteerd.kanSorteren ? undefined : t('panel.list.sort.already'),
-												run: sorteerLagen
+												run: sortLayers
 											},
 											{
 												id: 'ruim',
-												label: legeLagen.length
-													? t('panel.list.pruneCount', { n: legeLagen.length })
+												label: emptyLayers.length
+													? t('panel.list.pruneCount', { n: emptyLayers.length })
 													: t('panel.list.prune'),
 												explain: t('panel.list.prune.explain'),
-												off: legeLagen.length ? undefined : t('panel.list.prune.none'),
+												off: emptyLayers.length ? undefined : t('panel.list.prune.none'),
 												run: () => onPrune?.()
 											}
 										]
@@ -1076,12 +1076,12 @@
 					{compact ? t('panel.density.compactLabel') : t('panel.density.roomyLabel')}
 				</button>
 			</div>
-			{#if canEdit && legeLagen.length}
+			{#if canEdit && emptyLayers.length}
 				<!-- A state with its way out in the same line. As a button in the bar it
 				     was there even when there was nothing to clear out; as a line it is
 				     only there when it means something, and then it says how many. -->
 				<p class="tidyrow">
-					{t('panel.empties', { n: legeLagen.length })}
+					{t('panel.empties', { n: emptyLayers.length })}
 					<button class="alsLink" disabled={edits.busy} onclick={() => onPrune?.()}
 						>{t('panel.tidyUp')}</button
 					>
@@ -1128,11 +1128,11 @@
 				class:sleep-modus={dragging != null}
 				class:target-boven={dragging != null && dragging.id !== op.id && dragging.to === index && index < dragging.from}
 				class:target-onder={dragging != null && dragging.id !== op.id && dragging.to === index && index > dragging.from}
-				bind:this={rijElementen[index]}
+				bind:this={rowElements[index]}
 				role="presentation"
 				oncontextmenu={(e) => {
 					e.preventDefault();
-					opendLaagMenu(op, index, e.clientX, e.clientY);
+					openedLayerMenu(op, index, e.clientX, e.clientY);
 				}}
 			>
 				<div class="ident">
@@ -1252,7 +1252,7 @@
 							aria-label={t('panel.layer.moreAria', { label: op.label })}
 							onclick={(e) => {
 								const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-								opendLaagMenu(op, index, box.right - 200, box.bottom + 4);
+								openedLayerMenu(op, index, box.right - 200, box.bottom + 4);
 							}}
 						>⋯</button>
 					{/if}
@@ -1689,7 +1689,7 @@
 				disabled={edits.busy}
 				onclick={(e) => {
 					const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-					rijMenu = {
+					rowMenu = {
 						x: box.left,
 						y: box.top - 8,
 						upward: true,
@@ -1722,13 +1722,13 @@
 	</div>
 {/if}
 
-{#if rijMenu}
+{#if rowMenu}
 	<Menu
-		menu={rijMenu.list}
-		x={rijMenu.x}
-		y={rijMenu.y}
-		upward={rijMenu.upward ?? false}
-		onClose={() => (rijMenu = null)}
+		menu={rowMenu.list}
+		x={rowMenu.x}
+		y={rowMenu.y}
+		upward={rowMenu.upward ?? false}
+		onClose={() => (rowMenu = null)}
 	/>
 {/if}
 

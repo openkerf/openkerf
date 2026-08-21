@@ -31,11 +31,10 @@ const SLACK = 2;
 /** Selectors that clip on purpose, because the content has no known length. */
 const BY_DESIGN = [
 	'.layer-name',
-	'.nu-job',
+	'.current-job',
 	'.name',
-	'.matnaam',
+	'.matname',
 	'.title',
-	'.titel',
 	'.machine',
 	'.mat'
 ];

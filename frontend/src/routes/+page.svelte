@@ -120,7 +120,7 @@
 	});
 	/** The material the test grid dialog opens with, when you jump there from the
 	    library. */
-	let gridMateriaal = $state<number | null>(null);
+	let gridMaterial = $state<number | null>(null);
 
 	// The wow moment. Only on the edge from not-running to running, and gone again
 	// afterwards — otherwise it is decoration rather than a message.
@@ -194,7 +194,7 @@
 	let freshGrid = $state<number | null>(null);
 	/** Changing the current sheet's material (decision B1). */
 	let materialOpen = $state(false);
-	let velMateriaal = $derived(
+	let sheetMaterial = $derived(
 		library.materials.find((m) => m.id === sheets.active?.material_id)?.name ?? null
 	);
 
@@ -259,10 +259,10 @@
 	 * then yesterday's box counts too, even when the sheet you see now is empty.
 	 */
 	async function misschienEerstVragen(action: Vervanging) {
-		const raaktAlleVellen = action.kind !== 'bestand';
-		const erLigtWerk = !design.isEmpty || (raaktAlleVellen && sheets.sheets.length > 1);
-		if (!erLigtWerk) {
-			await voerUit(action);
+		const touchesEverySheet = action.kind !== 'bestand';
+		const thereIsWork = !design.isEmpty || (touchesEverySheet && sheets.sheets.length > 1);
+		if (!thereIsWork) {
+			await runIt(action);
 			return;
 		}
 		recoverable = null;
@@ -289,7 +289,7 @@
 		await misschienEerstVragen({ kind: 'fresh' });
 	}
 
-	async function voerUit(action: Vervanging) {
+	async function runIt(action: Vervanging) {
 		if (action.kind === 'bestand') {
 			await replaceWith(action.file);
 		} else if (action.kind === 'project') {
@@ -381,7 +381,7 @@
 			return;
 		}
 		await design.load();
-		await voerUit(action);
+		await runIt(action);
 	}
 
 	async function draw(shape: Record<string, unknown>) {
@@ -411,7 +411,7 @@
 	/** What the last corner operation had to report; the panel shows it. */
 	let cornerNotice = $state<string | null>(null);
 	/** What the last tidy-up action did (split, layer, clean up). */
-	let indeelMelding = $state<string | null>(null);
+	let layoutNotice = $state<string | null>(null);
 
 	async function corners(style: 'round' | 'chamfer', sizeMm: number) {
 		if (!canEdit || !hasSelection) return;
@@ -431,7 +431,7 @@
 
 	async function splitsen() {
 		if (!canEdit || !hasSelection) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.split(design.selectedIds);
 		if (!uitkomst) return;
 		// The pieces are new elements; the old selection points at a path that has
@@ -440,9 +440,9 @@
 		await design.load();
 		if (uitkomst.count) {
 			design.selectMany(uitkomst.ids);
-			indeelMelding = t('notice.split.done', { n: uitkomst.count });
+			layoutNotice = t('notice.split.done', { n: uitkomst.count });
 		} else {
-			indeelMelding = t('notice.split.nothing');
+			layoutNotice = t('notice.split.nothing');
 		}
 	}
 
@@ -455,19 +455,19 @@
 	 */
 	async function vullen(filled: boolean) {
 		if (!canEdit || !hasSelection) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.fill(design.selectedIds, filled);
 		if (!uitkomst) return;
 		await design.load();
 		const count = filled ? uitkomst.filled : uitkomst.cleared;
-		indeelMelding =
+		layoutNotice =
 			t(filled ? 'notice.fill.filled' : 'notice.fill.cleared', { n: count }) +
 			(uitkomst.skipped ? ` ${t('notice.fill.skipped', { n: uitkomst.skipped })}` : '');
 	}
 
-	async function naarEenLaag(kind: 'cut' | 'engrave' | 'grid') {
+	async function toALayer(kind: 'cut' | 'engrave' | 'grid') {
 		if (!canEdit || !hasSelection) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.singleLayer(design.selectedIds, kind);
 		if (!uitkomst) return;
 		await design.load();
@@ -482,7 +482,7 @@
 				} as const)[kind]
 			);
 		const hoeveel = uitkomst.assigned || design.selectedIds.length;
-		indeelMelding = t('notice.layer.assigned', {
+		layoutNotice = t('notice.layer.assigned', {
 			n: hoeveel,
 			layer: t(uitkomst.created ? 'notice.layer.newLayer' : 'notice.layer.existing', { name: name }),
 			removed: uitkomst.removed ? t('notice.layer.removedFrom', { n: uitkomst.removed }) : ''
@@ -491,11 +491,11 @@
 
 	async function opruimen() {
 		if (!canEdit) return;
-		indeelMelding = null;
+		layoutNotice = null;
 		const uitkomst = await edits.prune();
 		if (!uitkomst) return;
 		await design.load();
-		indeelMelding = uitkomst.removed
+		layoutNotice = uitkomst.removed
 			? t('notice.prune.done', { n: uitkomst.removed })
 			: t('notice.prune.none');
 	}
@@ -587,7 +587,7 @@
 	let preflight = $state(false);
 
 	let device = $derived(status.device);
-	let telefoonPositie = $derived(
+	let phonePosition = $derived(
 		device?.position.mm
 			? `${device.position.mm[0].toFixed(1)}, ${device.position.mm[1].toFixed(1)} mm`
 			: '—'
@@ -697,10 +697,10 @@
 		// change in the design that almost always 409s.
 		const sheet = sheets.active;
 		const bed = device?.bed;
-		const teGroot =
+		const tooBig =
 			Boolean(sheet && bed) &&
 			(sheet!.width_mm > (bed!.width_mm ?? 0) || sheet!.height_mm > (bed!.height_mm ?? 0));
-		if (teGroot || tiling.run) tiling.load();
+		if (tooBig || tiling.run) tiling.load();
 	});
 
 	// ─── Klembord, menu's en sneltoetsen ──────────────────────────────────────
@@ -751,7 +751,7 @@
 		state: () => { snap: boolean; layerNumbers: boolean };
 	} | null>(null);
 
-	let hoekenOpen = $state(false);
+	let cornersOpen = $state(false);
 	let offsetOpen = $state(false);
 
 	/** Which menu is open, and where. */
@@ -772,8 +772,8 @@
 		rotate: (degrees) => rotate(degrees),
 		split: splitsen,
 		fill: (on) => vullen(on),
-		corners: () => (hoekenOpen = true),
-		onlyLayer: (kind) => naarEenLaag(kind),
+		corners: () => (cornersOpen = true),
+		onlyLayer: (kind) => toALayer(kind),
 		assignLayer: (id, inside) => assign(id, inside),
 		toSheet: async (id) => {
 			if (await sheets.move(design.selectedIds, id)) {
@@ -953,7 +953,7 @@
 		{notifications}
 		{watchdog}
 		connected={status.connected}
-		position={telefoonPositie}
+		position={phonePosition}
 		{design}
 		sheet={sheets.active
 			? {
@@ -986,7 +986,7 @@
 	onOpenProject={openProject}
 	onNewProject={newProject}
 	onSaved={() => design.load()}
-	material={velMateriaal}
+	material={sheetMaterial}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
 	onOpenMaterial={() => (materialOpen = true)}
 	canFrame={(design.elements?.length ?? 0) > 0 &&
@@ -1210,7 +1210,7 @@
 					onArrange={arrange}
 					cornerNote={cornerNotice}
 					onPrune={opruimen}
-					tidyNote={indeelMelding}
+					tidyNote={layoutNotice}
 					image={imageState as never}
 					onImageSet={(name, enabled, values) =>
 						setImage({ adjustment: name, enabled, values })}
@@ -1394,7 +1394,7 @@
 			onclick={() => {
 				const action = pending;
 				pending = null;
-				if (action) voerUit(action);
+				if (action) runIt(action);
 			}}
 		>{t('replace.dontSave')}</button>
 		<!-- Cancel / Do not save / Save: the triptych every operating system uses for
@@ -1425,13 +1425,13 @@
 {/if}
 
 <CornersDialog
-	bind:open={hoekenOpen}
+	bind:open={cornersOpen}
 	count={design.selectedIds.length}
 	busy={edits.busy}
 	notice={cornerNotice}
 	onToepassen={async (stijl, size) => {
 		await corners(stijl, size);
-		if (!cornerNotice) hoekenOpen = false;
+		if (!cornerNotice) cornersOpen = false;
 	}}
 />
 
@@ -1500,14 +1500,14 @@
 		{library}
 		operations={design.operations}
 		sheetMaterialId={sheets.active?.material_id ?? null}
-		sheetMaterialName={velMateriaal}
+		sheetMaterialName={sheetMaterial}
 		{canEdit}
 		onApplied={() => design.load()}
 		token={token()}
 		onMakeGrid={(id) => {
 			// From the material to the grid: that is where the question arises.
 			libraryOpen = false;
-			gridMateriaal = id;
+			gridMaterial = id;
 			gridOpen = true;
 		}}
 	/>
@@ -1517,7 +1517,7 @@
 	<TestGrid
 		{library}
 		{canEdit}
-		materialId={gridMateriaal ?? sheets.active?.material_id ?? null}
+		materialId={gridMaterial ?? sheets.active?.material_id ?? null}
 		thicknessMm={sheets.active?.thickness_mm ?? null}
 		onGenerated={(id) => {
 			// A freshly burned grid: step 3 should be on it straight away instead of
