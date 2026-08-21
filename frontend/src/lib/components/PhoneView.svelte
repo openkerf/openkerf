@@ -459,16 +459,18 @@
 
 	/** One sentence for anybody who does not get the image; it is under the drawing too. */
 	let bedUitleg = $derived.by(() => {
-		const delen = [`Bed ${Math.round(bedW)} bij ${Math.round(bedH)} millimeter`];
-		if (vormen.length === 0) delen.push('leeg');
+		const parts = [
+			t('phone.bedAria.size', { width: Math.round(bedW), height: Math.round(bedH) })
+		];
+		if (vormen.length === 0) parts.push(t('phone.bedAria.empty'));
 		else {
-			delen.push(`${brandt} ${brandt === 1 ? 'vorm brandt' : 'vormen branden'}`);
-			if (stille) delen.push(`${stille} in geen laag`);
+			parts.push(t('preview.shapesBurn', { n: brandt }));
+			if (stille) parts.push(t('phone.bedAria.noLayer', { n: stille }));
 		}
-		if (buitenstaanders.bed) delen.push(`${buitenstaanders.bed} buiten het bed`);
-		if (buitenstaanders.vel) delen.push(`${buitenstaanders.vel} buiten het vel`);
-		delen.push(`kop op ${position}`);
-		return delen.join(', ') + '.';
+		if (buitenstaanders.bed) parts.push(t('phone.bedAria.offBed', { n: buitenstaanders.bed }));
+		if (buitenstaanders.vel) parts.push(t('phone.bedAria.offSheet', { n: buitenstaanders.vel }));
+		parts.push(t('phone.bedAria.head', { position }));
+		return parts.join(', ') + '.';
 	});
 </script>
 

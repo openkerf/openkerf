@@ -281,35 +281,10 @@
 	// selection: whoever uses booleans uses them all afternoon.
 	let openGroups = $state<Record<string, boolean>>({});
 
-	// Corner operation: the style and the size stay between two edits, because whoever
-	// rounds one corner usually rounds more of them with the same size.
-	let hoekstijl = $state<'round' | 'chamfer'>('round');
-	let hoekmaat = $state('3');
-
-	const hoekLabel = $derived.by(() => {
-		const maat = Number(hoekmaat);
-		const wat = hoekstijl === 'round' ? 'afronden' : 'afschuinen';
-		if (!chosen.length) return `CornersDialog ${wat}`;
-		const aantal = chosen.length === 1 ? '1 vorm' : `${chosen.length} vormen`;
-		if (!Number.isFinite(maat) || maat <= 0) return `${aantal} ${wat}`;
-		// The primary button says *what* is coming, not that something is (DESIGN-SYSTEM).
-		return `${aantal} ${wat} — ${maat} mm`;
-	});
-
-	/** One 30 mm corner with the chosen size taken off it, as a sample drawing. */
-	const hoekVoorbeeld = $derived.by(() => {
-		const zijde = 30;
-		const maat = Math.min(Math.max(Number(hoekmaat) || 0, 0), zijde / 2);
-		const p = 2; // marge in de viewBox
-		if (maat <= 0) return `M ${p} ${p + zijde} L ${p} ${p} L ${p + zijde} ${p}`;
-		const start = `M ${p} ${p + zijde} L ${p} ${p + maat}`;
-		const eind = `L ${p + zijde} ${p}`;
-		if (hoekstijl === 'chamfer') return `${start} L ${p + maat} ${p} ${eind}`;
-		return `${start} A ${maat} ${maat} 0 0 1 ${p + maat} ${p} ${eind}`;
-	});
+	// The corner operation lives in `CornersDialog.svelte`; the style, the size and the
+	// sample drawing moved along with it.
 
 	let editingLayer = $state<string | null>(null);
-	/** Het rechterklikmenu op een laagrij. */
 	/**
 	 * The menu on a layer row, from one place.
 	 *
