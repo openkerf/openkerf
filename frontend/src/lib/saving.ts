@@ -17,31 +17,31 @@
  * keeps deciding it.
  */
 
-export async function bewaarBestand(url: string, standaardnaam: string): Promise<boolean> {
+export async function saveFile(url: string, defaultName: string): Promise<boolean> {
 	try {
 		const response = await fetch(url);
 		if (!response.ok) return false;
 		const blob = await response.blob();
-		const naam = naamUit(response.headers.get('content-disposition')) ?? standaardnaam;
-		const adres = URL.createObjectURL(blob);
-		const anker = document.createElement('a');
-		anker.href = adres;
-		anker.download = naam;
-		document.body.appendChild(anker);
-		anker.click();
-		anker.remove();
+		const name = nameFrom(response.headers.get('content-disposition')) ?? defaultName;
+		const address = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+		anchor.href = address;
+		anchor.download = name;
+		document.body.appendChild(anchor);
+		anchor.click();
+		anchor.remove();
 		// Do not revoke it at once: Safari only starts the download *after* the click.
-		setTimeout(() => URL.revokeObjectURL(adres), 60_000);
+		setTimeout(() => URL.revokeObjectURL(address), 60_000);
 		return true;
 	} catch {
 		return false;
 	}
 }
 
-function naamUit(header: string | null): string | null {
+function nameFrom(header: string | null): string | null {
 	if (!header) return null;
-	const ster = /filename\*=UTF-8''([^;]+)/i.exec(header);
-	if (ster) return decodeURIComponent(ster[1].trim());
-	const gewoon = /filename="?([^";]+)"?/i.exec(header);
-	return gewoon ? gewoon[1].trim() : null;
+	const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+	if (star) return decodeURIComponent(star[1].trim());
+	const plain = /filename="?([^";]+)"?/i.exec(header);
+	return plain ? plain[1].trim() : null;
 }

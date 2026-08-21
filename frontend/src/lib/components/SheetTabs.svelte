@@ -7,42 +7,42 @@
 		sheets,
 		library,
 		canEdit = false,
-		elementen = 0,
+		elements = 0,
 		onSwitched,
 		onEditMaterial
 	}: {
 		sheets: SheetStore;
 		library: LibraryStore;
 		canEdit?: boolean;
-		/** Hoeveel er op het actieve vel staat — het ontwerp in beeld. Alleen dat
-		 *  vel is te verwijderen (de editor opent nergens anders). Dient hier als
-		 *  terugval: op het moment van verwijderen telt `tellen()` bij de server,
-		 *  want deze waarde loopt na een velwissel even achter. */
-		elementen?: number;
+		/** How much is on the active sheet — the design on screen. Only that sheet
+		 *  can be deleted (the editor opens nowhere else). Serves as a fallback here:
+		 *  at the moment of deleting, `count()` asks the server, because this value
+		 *  lags briefly after a sheet switch. */
+		elements?: number;
 		onSwitched?: () => void;
-		/** Opent het materiaalvenster van de bovenbalk — dezelfde plek, want daar
-		 *  hoort deze keuze thuis (besluit B1). */
+		/** Opens the top bar's material dialog — the same place, because that is where
+		 *  this choice belongs (decision B1). */
 		onEditMaterial?: () => void;
 	} = $props();
 
 	let editing = $state<string | null>(null);
 	/**
-	 * Bevestiging vóór het weggooien van werk.
+	 * Confirmation before throwing work away.
 	 *
-	 * Een vel verwijderen nam het ontwerp erop mee zonder één ask — precies het
-	 * soort verlies waar je pas achter komt als het al gebeurd is. Op een leeg vel
-	 * blijft het één klik: dan valt er niets te verliezen, en een ask stellen
-	 * over niets leert je alleen ze weg te klikken.
+	 * Deleting a sheet took the design on it along without a single question —
+	 * exactly the kind of loss you only find out about once it has happened. On an
+	 * empty sheet it stays one click: there is nothing to lose then, and asking a
+	 * question about nothing only teaches you to click them away.
 	 */
 	let bevestigen = $state<string | null>(null);
 	$effect(() => {
-		// Sluit de editor of wissel van vel, dan is de ask van de baan.
+		// Close the editor or switch sheets and the question is off the table.
 		void editing;
 		bevestigen = null;
 	});
 
-	/** Hoeveel er weggaat, vastgelegd op het moment van shouldAsk. */
-	let teVerwijderen = $state(0);
+	/** How much goes away, recorded at the moment of asking. */
+	let toRemove = $state(0);
 
 	function telling(n: number) {
 		return t('sheets.elements', { n });
@@ -51,32 +51,31 @@
 	/**
 	 * Counting at the source, not in the shop window.
 	 *
-	 * `elementen` komt uit het ontwerp in beeld en loopt een paar honderd ms
-	 * achter op een velwissel. Dat is precies lang genoeg om een vel mét werk
-	 * voor leeg aan te zien en het zonder ask weg te gooien — de failure die deze
-	 * reparatie moet voorkomen. Valt de server weg, dan is de prop het beste wat
-	 * er is.
+	 * `elements` comes from the design on screen and lags a few hundred ms behind a
+	 * sheet switch. That is exactly long enough to mistake a sheet *with* work for an
+	 * empty one and throw it away without asking — the failure this repair has to
+	 * prevent. If the server drops out, the prop is the best there is.
 	 */
-	async function tellen() {
+	async function countOnServer() {
 		try {
 			const response = await fetch('/api/design');
-			if (!response.ok) return elementen;
+			if (!response.ok) return elements;
 			const data = await response.json();
-			return Array.isArray(data.elements) ? data.elements.length : elementen;
+			return Array.isArray(data.elements) ? data.elements.length : elements;
 		} catch {
-			return elementen;
+			return elements;
 		}
 	}
 
 	async function vraagOfWeg(id: string) {
-		const aantal = await tellen();
-		// Leeg vel: geen ask. Er is niets te verliezen, en een ask over niets
-		// leert je alleen ze weg te klikken.
-		if (aantal === 0) {
+		const count = await countOnServer();
+		// Empty sheet: no question. There is nothing to lose, and a question about
+		// nothing only teaches you to click them away.
+		if (count === 0) {
 			await verwijder(id);
 			return;
 		}
-		teVerwijderen = aantal;
+		toRemove = count;
 		bevestigen = id;
 	}
 
@@ -89,13 +88,13 @@
 	}
 
 	/**
-	 * Een vel toevoegen laat je op het huidige vel staan — vandaag.
+	 * Adding a sheet leaves you on the current sheet — today.
 	 *
-	 * Daarom stond hier geen `onSwitched`. Maar dat is een aanname over de API,
-	 * niet iets wat deze component ziet: gaat `/api/sheets` het nieuwe vel ooit
-	 * wél activeren, dan toont het canvas de inhoud van het vórige vel terwijl
-	 * de tab het nieuwe aanwijst — een scherm dat met zichzelf klopt en niet met
-	 * de engine. Dus kijken we gewoon of het actieve vel veranderd is.
+	 * That is why there was no `onSwitched` here. But that is an assumption about the
+	 * API, not something this component sees: if `/api/sheets` ever does activate the
+	 * new sheet, the canvas shows the contents of the *previous* sheet while the tab
+	 * points at the new one — a screen that agrees with itself and not with the
+	 * engine. So we simply check whether the active sheet has changed.
 	 */
 	async function voegToe() {
 		const voor = sheets.active?.id ?? null;
@@ -118,8 +117,8 @@
 </script>
 
 <div class="sheets">
-	<!-- Eén rij vellen, zoals de platen van een slicer. Elk vel is een eigen
-	     document: wat je ziet is precies wat er gebrand wordt. -->
+	<!-- One row of sheets, like a slicer's plates. Every sheet is a document of its
+	     own: what you see is exactly what gets burned. -->
 	{#each sheets.sheets as sheet (sheet.id)}
 		<button
 			class="sheet"
@@ -208,14 +207,14 @@
 	{#if bevestigen === sheet.id}
 		<!-- The question stands where the button stands, with the count in it: "7
 		     elements" is the difference between a formality and a warning. -->
-		<div class="bevestig" role="alertdialog" aria-label={t('sheets.removeSheet')}>
-			<p>{t('sheets.removeAsk', { sheet: sheet.name, what: telling(teVerwijderen) })}</p>
+		<div class="confirm" role="alertdialog" aria-label={t('sheets.removeSheet')}>
+			<p>{t('sheets.removeAsk', { sheet: sheet.name, what: telling(toRemove) })}</p>
 			<div class="knoppen">
 				<button class="annuleer" onclick={() => (bevestigen = null)}>{t('common.cancel')}</button>
 				<button class="weg" disabled={sheets.busy} onclick={() => verwijder(sheet.id)}>
 					{sheets.busy
 						? t('common.busy')
-						: t('sheets.removeConfirm', { what: telling(teVerwijderen) })}
+						: t('sheets.removeConfirm', { what: telling(toRemove) })}
 				</button>
 			</div>
 		</div>
@@ -247,19 +246,19 @@
 	}
 	.sheet:hover:not(:disabled) { background: var(--surface-2); color: var(--text-1); }
 	.sheet[aria-pressed='true'] {
-		/* Het accent zit in de rand en de tint, niet in de tekst: accentkleur op
-		   een accenttint haalt maar 4,24:1 en dit zijn de kleinste letters in
-		   beeld. De actieve staat is nog steeds dubbel gecodeerd (rand + tint +
+		/* The accent sits in the border and the tint, not in the text: accent colour
+		   on an accent tint only reaches 4.24:1 and these are the smallest letters on
+		   screen. The active state is still doubly encoded (border + tint +
 		   aria-pressed). */
 		border-color: var(--accent);
 		color: var(--text-1);
 		font-weight: 600;
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
-	/* Geen opacity op tekst: dat verlaagt het contrast onvoorspelbaar. De maat
-	   is secundair, maar moet leesbaar blijven. */
+	/* No opacity on text: that lowers the contrast unpredictably. The size is
+	   secondary, but it has to stay readable. */
 	.sheet .size { font-size: var(--text-xs); color: var(--text-2); }
-	/* Met een vinger te raken, ook met een handschoen aan. */
+	/* Reachable with a finger, gloved as well. */
 	.sheet.add { padding: 4px 12px; font-weight: 600; min-width: 44px; }
 	.error { font-size: var(--text-xs); color: var(--danger); }
 	.editor {
@@ -288,9 +287,9 @@
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
-		/* Tussen twee invoervelden ziet een knop met gewone tekstkleur eruit als
-		   een veld dat niet meedoet. De accentkleur zegt dat er iets gebeurt als
-		   je erop drukt. */
+		/* Between two input fields a button in ordinary text colour looks like a field
+		   that is not taking part. The accent colour says something happens when you
+		   press it. */
 		color: var(--accent-text);
 		text-align: left;
 	}
@@ -306,9 +305,9 @@
 		background: var(--surface-1);
 	}
 	.drop { color: var(--danger); }
-	/* De ask hoort onder de knop die hem stelt, niet in een venster midden op
-	   het scherm: je blijft in dezelfde strook kijken. */
-	.bevestig {
+	/* The question belongs below the button that asks it, not in a dialog in the
+	   middle of the screen: you keep looking at the same strip. */
+	.confirm {
 		flex: none;
 		display: flex;
 		flex-wrap: wrap;
@@ -319,11 +318,11 @@
 		border-bottom: 1px solid var(--line);
 		border-left: 3px solid var(--danger-solid);
 	}
-	.bevestig p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
+	.confirm p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
 	.knoppen {
 		display: flex;
-		/* Twee uitkomsten die elkaar uitsluiten, en één ervan is onomkeerbaar:
-		   ver genoeg uit elkaar om er niet naast te mikken. */
+		/* Two outcomes that exclude each other, and one of them is irreversible: far
+		   enough apart not to mis-aim. */
 		gap: var(--space-6);
 		margin-left: auto;
 	}

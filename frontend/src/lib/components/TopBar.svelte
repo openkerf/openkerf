@@ -3,7 +3,7 @@
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import LanguagePicker from './LanguagePicker.svelte';
 	import { screen } from '$lib/screen.svelte';
-	import { bewaarBestand } from '$lib/saving';
+	import { saveFile } from '$lib/saving';
 	import { connection } from '$lib/connection.svelte';
 	import Logo from './Logo.svelte';
 
@@ -81,7 +81,7 @@
 	} = $props();
 
 	/**
-	 * Opslaan gaat door `bewaarBestand` en niet door een kale `<a download>`.
+	 * Opslaan gaat door `saveFile` en niet door een kale `<a download>`.
 	 *
 	 * De link werkt op zichzelf prima, maar de app hoort erna te weten dat het
 	 * ontwerp opgeslagen is — anders blijft `dirty` op de client staan en
@@ -92,7 +92,7 @@
 	async function bewaar(event: MouseEvent, url: string, naam: string) {
 		event.preventDefault();
 		projectOpen = false;
-		if (await bewaarBestand(url, naam)) onSaved?.();
+		if (await saveFile(url, naam)) onSaved?.();
 	}
 
 	/**

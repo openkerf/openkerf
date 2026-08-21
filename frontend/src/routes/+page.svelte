@@ -6,7 +6,7 @@
 	import { Controller } from '$lib/control.svelte';
 	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
-	import { bewaarBestand } from '$lib/saving';
+	import { saveFile } from '$lib/saving';
 	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
@@ -378,8 +378,8 @@
 		// gaat het leegmaken niet door en staat het venster er nog.
 		const opgeslagen =
 			actie.soort === 'bestand'
-				? await bewaarBestand('/api/design/export.svg', 'ontwerp.svg')
-				: await bewaarBestand('/api/project/export.openkerf', 'project.openkerf');
+				? await saveFile('/api/design/export.svg', 'ontwerp.svg')
+				: await saveFile('/api/project/export.openkerf', 'project.openkerf');
 		if (!opgeslagen) {
 			pending = actie;
 			return;
@@ -1005,7 +1005,7 @@
 <div class="main">
 	<ToolRail
 		compact={tablet}
-		bestanden={smal}
+		files={smal}
 		{projectInRail}
 		bind:tool
 		{canEdit}
@@ -1053,7 +1053,7 @@
 			{sheets}
 			{library}
 			{canEdit}
-			elementen={design.elements?.length ?? 0}
+			elements={design.elements?.length ?? 0}
 			onEditMaterial={() => (materiaalOpen = true)}
 			onSwitched={async () => {
 				design.select(null);
