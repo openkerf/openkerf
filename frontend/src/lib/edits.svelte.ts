@@ -277,7 +277,7 @@ export class EditController {
 	/** Putting the selection in one layer, and out of all the others. */
 	async singleLayer(
 		ids: string[],
-		kind: 'cut' | 'engrave' | 'grid'
+		kind: 'cut' | 'engrave' | 'raster'
 	): Promise<{
 		operation_id: string;
 		type: string;

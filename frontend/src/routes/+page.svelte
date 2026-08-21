@@ -416,31 +416,31 @@
 	async function corners(style: 'round' | 'chamfer', sizeMm: number) {
 		if (!canEdit || !hasSelection) return;
 		cornerNotice = null;
-		const uitkomst = await edits.corners(design.selectedIds, style, sizeMm);
-		if (!uitkomst) return;
-		if (uitkomst.paths.length) {
+		const outcome = await edits.corners(design.selectedIds, style, sizeMm);
+		if (!outcome) return;
+		if (outcome.paths.length) {
 			// Chamfered shapes have become paths and have a new id; the old selection
 			// points at something that no longer exists.
 			design.select(null);
 		}
 		await design.load();
-		if (uitkomst.skipped) {
-			cornerNotice = t('notice.corners.skipped', { n: uitkomst.skipped });
+		if (outcome.skipped) {
+			cornerNotice = t('notice.corners.skipped', { n: outcome.skipped });
 		}
 	}
 
 	async function splitSelection() {
 		if (!canEdit || !hasSelection) return;
 		layoutNotice = null;
-		const uitkomst = await edits.split(design.selectedIds);
-		if (!uitkomst) return;
+		const outcome = await edits.split(design.selectedIds);
+		if (!outcome) return;
 		// The pieces are new elements; the old selection points at a path that has
 		// been replaced by a group.
 		design.select(null);
 		await design.load();
-		if (uitkomst.count) {
-			design.selectMany(uitkomst.ids);
-			layoutNotice = t('notice.split.done', { n: uitkomst.count });
+		if (outcome.count) {
+			design.selectMany(outcome.ids);
+			layoutNotice = t('notice.split.done', { n: outcome.count });
 		} else {
 			layoutNotice = t('notice.split.nothing');
 		}
@@ -456,47 +456,47 @@
 	async function setFill(filled: boolean) {
 		if (!canEdit || !hasSelection) return;
 		layoutNotice = null;
-		const uitkomst = await edits.fill(design.selectedIds, filled);
-		if (!uitkomst) return;
+		const outcome = await edits.fill(design.selectedIds, filled);
+		if (!outcome) return;
 		await design.load();
-		const count = filled ? uitkomst.filled : uitkomst.cleared;
+		const count = filled ? outcome.filled : outcome.cleared;
 		layoutNotice =
 			t(filled ? 'notice.fill.filled' : 'notice.fill.cleared', { n: count }) +
-			(uitkomst.skipped ? ` ${t('notice.fill.skipped', { n: uitkomst.skipped })}` : '');
+			(outcome.skipped ? ` ${t('notice.fill.skipped', { n: outcome.skipped })}` : '');
 	}
 
-	async function toALayer(kind: 'cut' | 'engrave' | 'grid') {
+	async function toALayer(kind: 'cut' | 'engrave' | 'raster') {
 		if (!canEdit || !hasSelection) return;
 		layoutNotice = null;
-		const uitkomst = await edits.singleLayer(design.selectedIds, kind);
-		if (!uitkomst) return;
+		const outcome = await edits.singleLayer(design.selectedIds, kind);
+		if (!outcome) return;
 		await design.load();
-		const layer = design.operations.find((o) => o.id === uitkomst.operation_id);
+		const layer = design.operations.find((o) => o.id === outcome.operation_id);
 		const name =
 			layer?.label ??
 			t(
 				({
 					cut: 'panel.kind.cut',
 					engrave: 'panel.kind.engrave',
-					grid: 'panel.kind.raster'
+					raster: 'panel.kind.raster'
 				} as const)[kind]
 			);
-		const hoeveel = uitkomst.assigned || design.selectedIds.length;
+		const howMany = outcome.assigned || design.selectedIds.length;
 		layoutNotice = t('notice.layer.assigned', {
-			n: hoeveel,
-			layer: t(uitkomst.created ? 'notice.layer.newLayer' : 'notice.layer.existing', { name: name }),
-			removed: uitkomst.removed ? t('notice.layer.removedFrom', { n: uitkomst.removed }) : ''
+			n: howMany,
+			layer: t(outcome.created ? 'notice.layer.newLayer' : 'notice.layer.existing', { name: name }),
+			removed: outcome.removed ? t('notice.layer.removedFrom', { n: outcome.removed }) : ''
 		});
 	}
 
-	async function opruimen() {
+	async function tidyUp() {
 		if (!canEdit) return;
 		layoutNotice = null;
-		const uitkomst = await edits.prune();
-		if (!uitkomst) return;
+		const outcome = await edits.prune();
+		if (!outcome) return;
 		await design.load();
-		layoutNotice = uitkomst.removed
-			? t('notice.prune.done', { n: uitkomst.removed })
+		layoutNotice = outcome.removed
+			? t('notice.prune.done', { n: outcome.removed })
 			: t('notice.prune.none');
 	}
 
@@ -737,9 +737,9 @@
 			y_mm: point?.y ?? null
 		});
 		if (!response.ok) return;
-		const uitkomst = await response.json().catch(() => null);
+		const outcome = await response.json().catch(() => null);
 		await design.load();
-		if (uitkomst?.ids?.length) design.selectMany(uitkomst.ids);
+		if (outcome?.ids?.length) design.selectMany(outcome.ids);
 	}
 
 	/** The handle through which the canvas's zoom states can be operated from here. */
@@ -1209,7 +1209,7 @@
 					onSetSize={setSize}
 					onArrange={arrange}
 					cornerNote={cornerNotice}
-					onPrune={opruimen}
+					onPrune={tidyUp}
 					tidyNote={layoutNotice}
 					image={imageState as never}
 					onImageSet={(name, enabled, values) =>
