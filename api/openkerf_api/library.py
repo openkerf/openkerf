@@ -26,11 +26,11 @@ CREATE TABLE IF NOT EXISTS machine_profile (
     lens_mm      REAL,
     bed_width_mm REAL,
     bed_height_mm REAL,
-    -- Het pad van de device-service in de engine ("lhystudios"). Hiermee weet
-    -- de bibliotheek welk profiel bij de machine hoort die nú actief is; zonder
-    -- die koppeling is een preset een uitspraak over niets.
+    -- The path of the device service in the engine ("lhystudios"). With this the library
+    -- knows which profile belongs to the machine that is active *now*; without that link a
+    -- preset is a statement about nothing.
     device_path  TEXT,
-    -- Wat deze machine kán. Bepaalt wat er in de jog verschijnt.
+    -- What this machine *can* do. Decides what appears in the jog.
     has_z        INTEGER NOT NULL DEFAULT 0,
     has_autofocus INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
@@ -52,8 +52,8 @@ CREATE TABLE IF NOT EXISTS preset (
     speed_mm_s    REAL NOT NULL,
     power_percent REAL NOT NULL,
     passes        INTEGER NOT NULL DEFAULT 1,
-    -- Lijnafstand bij rasteren. Sinds B12 kan een testraster hierop sweepen,
-    -- dus komt hij ook uit het winnende vakje mee; leeg bij snijden.
+    -- Line spacing when rastering. Since B12 a test grid can sweep on it, so it comes
+    -- along from the winning square as well; empty when cutting.
     interval_mm   REAL,
     air_assist    INTEGER NOT NULL DEFAULT 1,
     focus_offset_mm REAL NOT NULL DEFAULT 0,
@@ -61,22 +61,22 @@ CREATE TABLE IF NOT EXISTS preset (
     source        TEXT NOT NULL DEFAULT 'handmatig',
     origin_id     TEXT,
     note          TEXT NOT NULL DEFAULT '',
-    -- Wanneer deze instelling voor het laatst op een laag gezet is. Wie
-    -- gisteren 3 mm berken sneed, zoekt vandaag niet alfabetisch; hij zoekt
+    -- When this setting was last put on a layer. Anybody who cut 3 mm birch yesterday is
+    -- not searching alphabetically today; they are looking for
     -- wat hij gisteren gebruikte.
     last_used_at  TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Nieuwe kolommen op `test_grid` horen ook in `_migrate` te staan: bestaande
--- databases krijgen ze daar, verse hier.
+-- New columns on `test_grid` belong in `_migrate` as well: existing databases get them
+-- there, fresh ones here.
 CREATE TABLE IF NOT EXISTS test_grid (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     material_id   INTEGER REFERENCES material(id) ON DELETE SET NULL,
     machine_id    INTEGER REFERENCES machine_profile(id) ON DELETE SET NULL,
     thickness_mm  REAL,
     operation     TEXT NOT NULL,
-    -- Voor het hele bord gelijk: hoe vaak de kop over elk vakje gaat.
+    -- The same for the whole board: how many times the head goes over each square.
     passes        INTEGER NOT NULL DEFAULT 1,
     speed_min     REAL NOT NULL,
     speed_max     REAL NOT NULL,
@@ -84,8 +84,8 @@ CREATE TABLE IF NOT EXISTS test_grid (
     power_min     REAL NOT NULL,
     power_max     REAL NOT NULL,
     power_steps   INTEGER NOT NULL,
-    -- Besluit B12: interval is de derde grootheid. Twee ervan staan op de
-    -- assen, de derde ligt vast — dan zijn min en max gelijk en steps 1.
+    -- Decision B12: interval is the third quantity. Two of them sit on the axes, the third
+    -- is fixed — then min and max are equal and steps is 1.
     interval_min  REAL,
     interval_max  REAL,
     interval_steps INTEGER,
@@ -97,13 +97,13 @@ CREATE TABLE IF NOT EXISTS test_grid (
     gap_mm        REAL NOT NULL,
     origin_x_mm   REAL NOT NULL,
     origin_y_mm   REAL NOT NULL,
-    -- Elke cel met haar positie en instellingen, zodat de foto-overlay later
-    -- weet welk vakje bij welke snelheid en vermogen hoort.
+    -- Every cell with its position and settings, so that the photo overlay later knows
+    -- which square belongs to which speed and power.
     cells         TEXT NOT NULL,
     photo_path    TEXT,
-    -- De vier hoeken van het gebrande bord op de foto (0–1). Hoort hier en
-    -- niet in localStorage: je lijnt uit op de desktop en wijst het vakje aan
-    -- op de tablet, en dan moet de overlay dezelfde zijn.
+    -- The four corners of the burned board on the photo (0–1). Belongs here and not in
+    -- localStorage: you align on the desktop and point out the square on the tablet, and
+    -- then the overlay has to be the same.
     alignment     TEXT,
     group_id      TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
@@ -111,12 +111,12 @@ CREATE TABLE IF NOT EXISTS test_grid (
 
 -- Benoemde generatorinstellingen (gat T7).
 --
--- T3 onthoudt één instelling per materiaal: het vórige raster. Dat dekt "ik
+-- T3 onthoudt één setting per material: het vórige grid. Dat dekt "ik
 -- test elke week 3 mm berk" but not "berk snijden" náást "berk graveren" —
--- twee recepten voor hetzelfde materiaal kunnen daar niet naast elkaar staan.
--- Dit is dezelfde inhoud onder een naam, en bewust in dezelfde vorm: één rij
--- met precies de sleutels die `Library.GRID_DEFAULTS` beschrijft, zodat een
--- recept en een vorig raster onderling verwisselbaar zijn voor de wizard.
+-- two recipes for the same material cannot sit side by side there. This is the same
+-- content under a name, and deliberately in the same shape: one row with exactly the keys
+-- `Library.GRID_DEFAULTS` describes, so that a recipe and a previous grid are
+-- interchangeable to the wizard.
 CREATE TABLE IF NOT EXISTS grid_recipe (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL,
@@ -132,19 +132,18 @@ CREATE INDEX IF NOT EXISTS preset_material ON preset(material_id);
 OPERATIONS = ("snijden", "graveren-vector", "graveren-raster", "markeren")
 SOURCES = ("handmatig", "geextrapoleerd", "testraster", "geimporteerd")
 
-# Besluit B7: de bibliotheek is uitwisselbaar. Eén bestand, want een
-# bibliotheek zonder de rasterfoto's is de helft — die foto's zíjn het bewijs.
-# Daarom een zip: de JSON met de gegevens, de foto's ernaast.
+# Decision B7: the library is exchangeable. One file, because a library without the grid
+# photos is half of one — those photos *are* the evidence. Hence a zip: the JSON with the
+# data, the photos beside it.
 BUNDLE_FORMAT = "openkerf-library"
 BUNDLE_VERSION = 1
 BUNDLE_SUFFIX = ".openkerf-lib"
 BUNDLE_INDEX = "bibliotheek.json"
 BUNDLE_PHOTOS = "fotos"
 
-# Wanneer twee namen over hetzelfde materiaal gaan. De catalogus schrijft
-# "Berkentriplex" waar de bibliotheek "Multiplex berken" heeft — dat is één
-# plank, geen twee. We voegen het nooit vanzelf samen (een verkeerde gok kost
-# je je eigen metingen), maar we wijzen het wel aan.
+# When two names are about the same material. The catalogue writes "Birch plywood" where
+# the library has "Plywood birch" — that is one board, not two. We never merge it by
+# ourselves (a wrong guess costs you your own measurements), but we do point it out.
 MATERIAL_FAMILIES = {
     "multiplex": ("multiplex", "triplex", "plywood", "ply"),
     "berken": ("berken", "berk", "birch"),
@@ -188,8 +187,8 @@ class Library:
     def __init__(self, path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # Foto's als bestand naast de database: dat houdt de database klein en
-        # de foto's gewoon te bekijken met een verkenner.
+        # Photos as files beside the database: that keeps the database small and the
+        # photos simply viewable in a file browser.
         self.photos = self.path.parent / "openkerf-photos"
         self.photos.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
@@ -200,7 +199,7 @@ class Library:
     def _migrate(db):
         """Columns that came later, for databases from before that version."""
         existing = {row["name"] for row in db.execute("PRAGMA table_info(test_grid)")}
-        for kolom, definitie in (
+        for column, definition in (
             ("group_id", "TEXT"),
             ("alignment", "TEXT"),
             ("interval_min", "REAL"),
@@ -210,20 +209,20 @@ class Library:
             ("column_axis", "TEXT NOT NULL DEFAULT 'power'"),
             ("rows", "INTEGER"),
             ("columns", "INTEGER"),
-            # T9/T10: waar het bord aan hangt en wat er verder op gebrand wordt.
-            # Rasters van vóór deze versie stonden altijd vanaf de hoek, met
-            # opschriften en zonder kader — dat zijn precies deze standaarden.
+            # T9/T10: what the board hangs off and what else gets burned on it. Grids from
+            # before this version always started from the corner, with captions and without
+            # a frame — which is exactly these defaults.
             ("anchor", "TEXT NOT NULL DEFAULT 'corner'"),
             ("text_enabled", "INTEGER NOT NULL DEFAULT 1"),
             ("border_enabled", "INTEGER NOT NULL DEFAULT 0"),
             ("label_speed_mm_s", "REAL"),
             ("label_power_percent", "REAL"),
-            # Borden van vóór deze versie brandden één keer over elk vakje.
+            # Boards from before this version burned over each square once.
             ("passes", "INTEGER NOT NULL DEFAULT 1"),
         ):
-            if kolom not in existing:
-                db.execute(f"ALTER TABLE test_grid ADD COLUMN {kolom} {definitie}")
-        # Rasters van vóór B12 hadden altijd snelheid × vermogen.
+            if column not in existing:
+                db.execute(f"ALTER TABLE test_grid ADD COLUMN {column} {definition}")
+        # Rasters van vóór B12 hadden altijd speed × power.
         db.execute(
             "UPDATE test_grid SET rows = speed_steps WHERE rows IS NULL"
         )
@@ -237,31 +236,30 @@ class Library:
         if "interval_mm" not in presets:
             db.execute("ALTER TABLE preset ADD COLUMN interval_mm REAL")
 
-        profiel = {row["name"] for row in db.execute("PRAGMA table_info(machine_profile)")}
-        for kolom, definitie in (
+        profile = {row["name"] for row in db.execute("PRAGMA table_info(machine_profile)")}
+        for column, definition in (
             ("device_path", "TEXT"),
             ("has_z", "INTEGER NOT NULL DEFAULT 0"),
             ("has_autofocus", "INTEGER NOT NULL DEFAULT 0"),
         ):
-            if kolom not in profiel:
-                db.execute(f"ALTER TABLE machine_profile ADD COLUMN {kolom} {definitie}")
+            if column not in profile:
+                db.execute(f"ALTER TABLE machine_profile ADD COLUMN {column} {definition}")
         Library._dedupe_machines(db)
 
     @staticmethod
     def _dedupe_machines(db):
         """
-        Eén profiel per apparaat, en daarna een slot op die regel.
+        One profile per device, and after that a lock on that rule.
 
         `profile_for_device` deed eerst een SELECT en daarna een INSERT. De
         bibliotheek laadt `/api/library/presets`, `/api/library/machines` en
-        `/api/library/active-machine` gelijktijdig, en meerdere daarvan vragen
-        om het actieve profiel — dus reden er drie verzoeken door dat gat en
-        stonden er drie profielen voor dezelfde laser in de lijst. Gemeten met
-        acht gelijktijdige aanroepen: acht profielen. In de bibliotheek van
-        Jelle staan twee regels `lihuiyu-device` met dezelfde seconde erop.
+        `/api/library/active-machine` at the same time, and several of those ask for the
+        active profile — so three requests drove through that gap and three profiles for the
+        same laser stood in the list. Measured with eight simultaneous calls: eight profiles.
+        Jelle's library has two `lihuiyu-device` rows with the same second on them.
 
-        Wat blijft is het oudste profiel; presets, rasters en instellingen van
-        de dubbelen verhuizen ernaartoe, want ze gaan over dezelfde machine.
+        What stays is the oldest profile; presets, grids and settings from the duplicates
+        move to it, because they are about the same machine.
         """
         rijen = db.execute(
             "SELECT id, device_path FROM machine_profile "
@@ -269,19 +267,19 @@ class Library:
         ).fetchall()
         houden: dict[str, int] = {}
         for rij in rijen:
-            pad = rij["device_path"]
-            if pad in houden:
+            path = rij["device_path"]
+            if path in houden:
                 db.execute(
                     "UPDATE preset SET machine_id = ? WHERE machine_id = ?",
-                    (houden[pad], rij["id"]),
+                    (houden[path], rij["id"]),
                 )
                 db.execute(
                     "UPDATE test_grid SET machine_id = ? WHERE machine_id = ?",
-                    (houden[pad], rij["id"]),
+                    (houden[path], rij["id"]),
                 )
                 db.execute("DELETE FROM machine_profile WHERE id = ?", (rij["id"],))
             else:
-                houden[pad] = rij["id"]
+                houden[path] = rij["id"]
         db.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS machine_profile_device "
             "ON machine_profile(device_path) WHERE device_path IS NOT NULL"
@@ -325,68 +323,66 @@ class Library:
 
     def profile_for_device(self, device_path: str, label: str | None = None) -> dict:
         """
-        Het profiel van de machine die nu actief is, desnoods vers aangemaakt.
+        The profile of the machine that is active now, freshly created if need be.
 
-        Een preset is een uitspraak over *deze laser op dit materiaal*. Zonder
-        een profiel om aan te hangen zou elke preset "for all machines" zijn,
-        en dat is precies de verwarring die dit oplost.
+        A preset is a statement about *this laser on this material*. Without a profile to
+        hang off, every preset would be "for all machines", and that is exactly the confusion
+        this solves.
 
-        De naam is een kopie van hoe de machine in de engine heet, en die kopie
-        blijft vers. Anders staat er in de bibliotheek nog de naam van het
-        moment waarop het profiel ontstond: bij Jelle heet het apparaat
-        "KH-5030 50W" en het profiel nog altijd "K50 CO2", en op een verse
-        installatie is dat de interne naam van MeerK40t's standaardapparaat
-        ("lihuiyu-device"). Niemand kan zijn machines dan uit elkaar houden.
-        Hernoemen gebeurt bij de machine zelf; hier wordt het alleen nagelopen.
+        The name is a copy of what the machine is called in the engine, and that copy stays
+        fresh. Otherwise the library still holds the name from the moment the profile came
+        into being: at Jelle's the device is called "KH-5030 50W" and the profile still "K50
+        CO2", and on a fresh installation that is the internal name of MeerK40t's default
+        device ("lihuiyu-device"). Then nobody can tell their machines apart. Renaming
+        happens at the machine itself; here it is only followed up.
         """
-        pad = str(device_path or "").strip()
-        if not pad:
+        path = str(device_path or "").strip()
+        if not path:
             raise LibraryError("There is no active machine to attach to.")
-        naam = str(label or "").strip() or pad
+        name = str(label or "").strip() or path
         with self._connect() as db:
             row = db.execute(
-                "SELECT * FROM machine_profile WHERE device_path = ?", (pad,)
+                "SELECT * FROM machine_profile WHERE device_path = ?", (path,)
             ).fetchone()
             if row is not None:
-                if row["name"] != naam:
+                if row["name"] != name:
                     db.execute(
                         "UPDATE machine_profile SET name = ? WHERE id = ?",
-                        (naam, row["id"]),
+                        (name, row["id"]),
                     )
                     return self._one(db, "machine_profile", row["id"])
                 return dict(row)
         try:
-            return self.add_machine(name=naam, device_path=pad)
+            return self.add_machine(name=name, device_path=path)
         except sqlite3.IntegrityError:
-            # Een gelijktijdig verzoek was ons voor; het slot op device_path
-            # doet zijn werk en wij pakken wat er nu staat.
+            # A simultaneous request beat us to it; the lock on device_path does its work
+            # and we take what is there now.
             with self._connect() as db:
                 row = db.execute(
-                    "SELECT * FROM machine_profile WHERE device_path = ?", (pad,)
+                    "SELECT * FROM machine_profile WHERE device_path = ?", (path,)
                 ).fetchone()
-            if row is None:  # pragma: no cover - alleen bij een ander slot
+            if row is None:  # pragma: no cover - only on a different lock
                 raise
             return dict(row)
 
     def refresh_names(self, labels: dict) -> None:
         """
-        De namen van bestaande profielen gelijktrekken met de machines.
+        Bringing existing profiles' names into line with the machines.
 
-        `profile_for_device` doet dit voor de machine waarop je werkt, maar de
-        lijst toont ze allemaal — en dan staat er bij de machines waar je nu
-        even niet op werkt nog de naam van het moment waarop hun profiel
-        ontstond. Maakt niets aan: een machine zonder instellingen heeft nog
-        geen profiel nodig.
+        `profile_for_device` does this for the machine you are working on, but the list shows
+        them all — and then the machines you are not working on right now still carry the
+        name from the moment their profile came into being. Creates nothing: a machine
+        without settings does not need a profile yet.
         """
         if not labels:
             return
         with self._connect() as db:
-            for pad, naam in labels.items():
-                naam = str(naam or "").strip() or pad
+            for path, name in labels.items():
+                name = str(name or "").strip() or path
                 db.execute(
                     "UPDATE machine_profile SET name = ? "
                     "WHERE device_path = ? AND name <> ?",
-                    (naam, pad, naam),
+                    (name, path, name),
                 )
 
     def machine_usage(self, machine_id: int) -> dict:
@@ -403,12 +399,12 @@ class Library:
 
     def remove_machine(self, machine_id: int) -> dict:
         """
-        Een profiel opruimen.
+        Een profile opruimen.
 
-        Alleen als er niets aan hangt. Een preset zonder machine is een
-        snelheid zonder laser erbij, en dat is precies de uitspraak-over-niets
-        die deze tabel moet voorkomen — dus liever een weigering met een reden
-        dan een lijst die stilletjes onbetrouwbaar wordt.
+        Only when nothing hangs off it. A preset without a machine is a speed without a
+        laser beside it, and that is precisely the statement-about-nothing this table is
+        meant to prevent — so better a refusal with a reason than a list that quietly becomes
+        untrustworthy.
         """
         with self._connect() as db:
             row = db.execute(
@@ -432,16 +428,16 @@ class Library:
             "bed_width_mm", "bed_height_mm", "has_z", "has_autofocus",
         )
         stukken, waarden = [], []
-        for sleutel in toegestaan:
-            if sleutel not in fields:
+        for key in toegestaan:
+            if key not in fields:
                 continue
-            stukken.append(f"{sleutel} = ?")
-            if sleutel in ("has_z", "has_autofocus"):
-                waarden.append(1 if fields[sleutel] else 0)
-            elif sleutel in ("name", "laser_type"):
-                waarden.append(str(fields[sleutel]))
+            stukken.append(f"{key} = ?")
+            if key in ("has_z", "has_autofocus"):
+                waarden.append(1 if fields[key] else 0)
+            elif key in ("name", "laser_type"):
+                waarden.append(str(fields[key]))
             else:
-                waarden.append(_number(fields[sleutel], sleutel, optional=True))
+                waarden.append(_number(fields[key], key, optional=True))
         if not stukken:
             raise LibraryError("Nothing to update.")
         with self._connect() as db:
@@ -486,18 +482,17 @@ class Library:
     # ---------------------------------------------------------------- presets
 
     def presets(self, material_id=None, operation=None, machine_id=None) -> list[dict]:
-        # De foto van het raster erbij: een preset die uit een testraster komt
-        # heeft bewijs, en dat bewijs hoort op de kaart en niet drie schermen
-        # verderop. origin_id is "testgrid:<id>".
+        # The grid's photo with it: a preset that comes from a test grid has evidence, and
+        # that evidence belongs on the card and not three screens further on. origin_id is
+        # "testgrid:<id>".
         query = """
             SELECT p.*, m.name AS material_name, mp.name AS machine_name,
                    g.id AS grid_id, g.photo_path AS grid_photo,
                    g.created_at AS grid_date, g.cells AS grid_cells,
-                   -- Is de foto van dat raster uitgelijnd? Zo niet, dan valt de
-                   -- markering op de foto terug op vier standaardhoeken en ligt
-                   -- de omtrek er ongeveer, niet precies. De bibliotheek hoort
-                   -- dat te kunnen zeggen in plaats van een precisie te
-                   -- suggereren die er niet is.
+                   -- Is that grid's photo aligned? If not, the marker on the photo falls
+                   -- back on four default corners and the outline is approximate, not
+                   -- exact. The library should be able to say so rather than suggest a
+                   -- precision that is not there.
                    (g.alignment IS NOT NULL) AS grid_aligned
             FROM preset p
             JOIN material m ON m.id = p.material_id
@@ -512,9 +507,8 @@ class Library:
             clauses.append("p.operation = ?")
             params.append(operation)
         if machine_id is not None:
-            # Presets zonder profiel horen bij niemand in het bijzonder en
-            # blijven dus zichtbaar: ze zijn met de hand gemaakt vóór er
-            # profielen waren.
+            # Presets without a profile belong to nobody in particular and so stay
+            # visible: they were made by hand before there were profiles.
             clauses.append("(p.machine_id = ? OR p.machine_id IS NULL)")
             params.append(machine_id)
         if clauses:
@@ -529,7 +523,7 @@ class Library:
             raise LibraryError("A preset belongs to a material.")
         operation = str(fields.get("operation") or "").strip()
         if operation not in OPERATIONS:
-            raise LibraryError(f"Onbekende bewerking: {operation or '(leeg)'}")
+            raise LibraryError(f"Onbekende operation: {operation or '(leeg)'}")
         source = str(fields.get("source") or "handmatig")
         if source not in SOURCES:
             raise LibraryError(f"Onbekende bron: {source}")
@@ -581,7 +575,7 @@ class Library:
             raise LibraryError(f"Preset {preset_id} does not exist.")
         return _preset_row(row)
 
-    # Wat je aan een bestaande preset mag bijstellen.
+    # What you may adjust on an existing preset.
     PRESET_FIELDS = {
         "thickness_mm": lambda v: _number(v, "thickness_mm", optional=True),
         "speed_mm_s": lambda v: _number(v, "speed_mm_s", positive=True),
@@ -596,11 +590,10 @@ class Library:
 
     def update_preset(self, preset_id: int, **fields) -> dict:
         """
-        Bijstellen van een bestaande preset.
+        Adjusting an existing preset.
 
-        Materiaal en bewerking liggen vast: dat is een andere preset. Bron ook —
-        die zegt hoe de waarden tot stand kwamen, en dat verandert niet doordat
-        je een getal bijwerkt.
+        Material and operation are fixed: that is a different preset. The source too — it
+        says how the values came about, and that does not change because you update a number.
         """
         self.preset(preset_id)
         updates = {k: v for k, v in fields.items() if k in self.PRESET_FIELDS and v is not None}
@@ -620,11 +613,11 @@ class Library:
 
     def suggest_range(self, material_id=None, operation=None, thickness_mm=None) -> dict:
         """
-        Een rasterbereik rond wat je al weet.
+        A grid range around what you already know.
 
-        ARCHITECTUUR.md: de app stelt het bereik voor op basis van bestaande
-        (vaak geëxtrapoleerde) presets rond het verwachte werkpunt. Zonder
-        presets vallen we terug op iets breeds maar redelijks.
+        ARCHITECTUUR.md: the app proposes the range on the basis of existing (often
+        extrapolated) presets around the expected working point. Without presets we fall
+        back on something wide but reasonable.
         """
         presets = self.presets(material_id, operation)
         if thickness_mm is not None:
@@ -647,7 +640,7 @@ class Library:
         powers = [p["power_percent"] for p in presets]
         return {
             "based_on": len(presets),
-            # Een halve slag eromheen: genoeg om het werkpunt te omsluiten.
+            # Half a turn around it: enough to enclose the working point.
             "speed_min": max(0.1, round(min(speeds) * 0.5, 1)),
             "speed_max": round(max(speeds) * 1.5, 1),
             "power_min": max(1.0, round(min(powers) * 0.7, 1)),
@@ -702,17 +695,17 @@ class Library:
 
     def set_grid_alignment(self, grid_id: int, corners) -> dict:
         """
-        Waar het gebrande bord op de foto ligt: vier hoeken, elk 0–1.
+        Where the burned board lies on the photo: four corners, each 0–1.
 
-        In de database en niet in de browser: je lijnt uit op de desktop en
-        wijst het vakje aan op de tablet, en dan hoort dezelfde overlay er te
-        liggen. `None` wist de uitlijning en zet hem terug op het voorstel.
+        In the database and not in the browser: you align on the desktop and point out the
+        square on the tablet, and then the same overlay should be there. `None` erases the
+        alignment and puts it back on the proposal.
         """
         self.test_grid(grid_id)
         if corners is None:
             schoon = None
         else:
-            schoon = _uitlijning(corners)
+            schoon = _alignment(corners)
             if schoon is None:
                 raise LibraryError(
                     "An alignment consists of four points with an x and a y."
@@ -727,9 +720,9 @@ class Library:
             )
         return self.test_grid(grid_id)
 
-    # De instellingen die het volgende raster van hetzelfde materiaal overneemt.
-    # Dezelfde lijst draagt de benoemde recepten van T7: één vorm, zodat de
-    # wizard niet hoeft te weten of hij een vorig raster of een recept invult.
+    # The settings the next grid of the same material adopts. The same list carries T7's
+    # named recipes: one shape, so that the wizard does not have to know whether it is
+    # filling in a previous grid or a recipe.
     GRID_DEFAULTS = (
         "operation", "thickness_mm", "passes", "row_axis", "column_axis",
         "speed_min", "speed_max", "speed_steps",
@@ -742,35 +735,35 @@ class Library:
 
     def last_grid_settings(self, material_id=None) -> dict | None:
         """
-        Wat je de vorige keer voor dit materiaal instelde.
+        What you set up last time for this material.
 
-        Wie wekelijks 3 mm berk test, vult elke week hetzelfde formulier in.
-        Er is geen aparte tabel voor nodig: het vorige raster ís de instelling,
-        en die overleeft daarmee ook een export en import.
+        Anybody testing 3 mm birch weekly fills in the same form every week. No separate
+        table is needed for it: the previous grid *is* the setting, and so it survives an
+        export and import as well.
         """
-        rasters = self.test_grids()
+        grids = self.test_grids()
         if material_id is not None:
-            rasters = [g for g in rasters if g["material_id"] == material_id]
-        if not rasters:
+            grids = [g for g in grids if g["material_id"] == material_id]
+        if not grids:
             return None
-        vorige = rasters[0]  # test_grids() staat nieuwste eerst
-        instelling = {
-            sleutel: vorige.get(sleutel) for sleutel in self.GRID_DEFAULTS
+        vorige = grids[0]  # test_grids() staat nieuwste eerst
+        setting = {
+            key: vorige.get(key) for key in self.GRID_DEFAULTS
         }
-        _met_ankerpunt(instelling)
-        instelling["from_grid"] = vorige["id"]
-        instelling["from_date"] = vorige["created_at"]
-        return instelling
+        _met_ankerpunt(setting)
+        setting["from_grid"] = vorige["id"]
+        setting["from_date"] = vorige["created_at"]
+        return setting
 
-    # ------------------------------------------- benoemde recepten (gat T7)
+    # ------------------------------------------- benoemde recipes (gat T7)
 
     def grid_recipes(self, material_id=None) -> list[dict]:
         """
         De bewaarde generatorinstellingen.
 
-        Zonder materiaal krijg je alles; met een materiaal de recepten van dát
-        materiaal plus de materiaalloze — die laatste zijn de algemene ("snelle
-        4×4"), en die wil je juist zien als je aan iets nieuws begint.
+        Without a material you get everything; with a material the recipes of *that*
+        material plus the material-less ones — those last are the general ones ("quick
+        4×4"), and those are exactly what you want to see when you start something new.
         """
         with self._connect() as db:
             rijen = [
@@ -793,16 +786,16 @@ class Library:
 
     def save_grid_recipe(self, name: str, settings: dict, material_id=None) -> dict:
         """
-        Een recept opslaan, of het gelijknamige overschrijven.
+        Een recipe opslaan, of het gelijknamige overschrijven.
 
-        Overschrijven en niet weigeren: "berk snijden" opslaan terwijl er al een
-        "berk snijden" staat betekent dat je hem hebt bijgesteld. Een tweede met
-        dezelfde naam zou een lijst opleveren waarin je niet meer kunt kiezen.
+        Overwriting and not refusing: saving "cut birch" while a "cut birch" already exists
+        means you have adjusted it. A second one with the same name would produce a list you
+        can no longer choose from.
         """
-        naam = str(name or "").strip()
-        if not naam:
+        name = str(name or "").strip()
+        if not name:
             raise LibraryError("A recipe needs a name.")
-        if len(naam) > 60:
+        if len(name) > 60:
             raise LibraryError("Keep the name under 60 characters.")
         if not isinstance(settings, dict):
             raise LibraryError("A recipe consists of settings.")
@@ -814,30 +807,30 @@ class Library:
         ):
             raise LibraryError(f"Material {material_id} does not exist.")
         with self._connect() as db:
-            bestaand = db.execute(
+            existing = db.execute(
                 """SELECT id FROM grid_recipe
                    WHERE name = ? COLLATE NOCASE AND material_id IS ?""",
-                (naam, material_id),
+                (name, material_id),
             ).fetchone()
-            if bestaand is None:
+            if existing is None:
                 cursor = db.execute(
                     "INSERT INTO grid_recipe (name, material_id, settings) VALUES (?, ?, ?)",
-                    (naam, material_id, json.dumps(schoon)),
+                    (name, material_id, json.dumps(schoon)),
                 )
                 recept_id = cursor.lastrowid
             else:
-                recept_id = bestaand["id"]
+                recept_id = existing["id"]
                 db.execute(
                     """UPDATE grid_recipe SET name = ?, settings = ?, updated_at = ?
                        WHERE id = ?""",
-                    (naam, json.dumps(schoon), _now(), recept_id),
+                    (name, json.dumps(schoon), _now(), recept_id),
                 )
         return self.grid_recipe(recept_id)
 
     def grid_recipe(self, recipe_id: int) -> dict:
-        for recept in self.grid_recipes():
-            if recept["id"] == recipe_id:
-                return recept
+        for recipe in self.grid_recipes():
+            if recipe["id"] == recipe_id:
+                return recipe
         raise LibraryError(f"Recipe {recipe_id} does not exist.")
 
     def remove_grid_recipe(self, recipe_id: int) -> dict:
@@ -850,9 +843,9 @@ class Library:
     def grid_operations(self) -> dict:
         """Which operation belongs to which grid — for the layer panel."""
         mapping = {}
-        # test_grids() staat nieuwste eerst; setdefault laat de nieuwste winnen.
-        # Element-id's worden per document uitgedeeld, dus een oud raster kan
-        # dezelfde operatie-id's dragen als het huidige.
+        # test_grids() is newest first; setdefault lets the newest win. Element ids are
+        # handed out per document, so an old grid can carry the same operation ids as the
+        # current one.
         for grid in self.test_grids():
             for cell in grid["cells"]:
                 op = cell.get("operation_id")
@@ -958,9 +951,9 @@ class Library:
         """
         De hele bibliotheek als één bestand: gegevens plus bewijs.
 
-        Materialen, presets met hun herkomst, machineprofielen, testrasters en
-        de foto's van die rasters. De foto's moeten mee: een preset met bron
-        "testraster" en geen foto is een bewering waar niets meer onder ligt.
+        Materials, presets with their provenance, machine profiles, test grids and those
+        grids' photos. The photos have to come along: a preset with source "testgrid" and no
+        photo is a claim with nothing left under it.
         """
         import tempfile
         import zipfile
@@ -969,28 +962,28 @@ class Library:
         veilig = Path(str(filename)).name or "bibliotheek"
         if not veilig.lower().endswith(BUNDLE_SUFFIX):
             veilig += BUNDLE_SUFFIX
-        doel = Path(tempfile.mkdtemp(prefix="openkerf-lib-")) / veilig
+        target = Path(tempfile.mkdtemp(prefix="openkerf-lib-")) / veilig
 
-        rasters = self.test_grids()
+        grids = self.test_grids()
         presets = []
         for preset in self.presets():
-            # De koppelvelden uit de weergave horen niet in het bestand: ze
-            # worden bij het inlezen opnieuw afgeleid. De namen blijven wél,
-            # want die zijn waar het samenvoegen op werkt.
-            for sleutel in (
+            # The join fields from the view do not belong in the file: they are derived
+            # again on reading. The names do stay, because they are what the merging works
+            # on.
+            for key in (
                 "grid_photo", "grid_date", "grid_id", "grid_cell", "grid_aligned"
             ):
-                preset.pop(sleutel, None)
+                preset.pop(key, None)
             presets.append(preset)
 
-        with zipfile.ZipFile(doel, "w", zipfile.ZIP_DEFLATED) as bundel:
-            for raster in rasters:
-                pad = raster.pop("photo_path", None)
-                raster["photo_file"] = None
-                if pad and Path(pad).exists():
-                    naam = f"{BUNDLE_PHOTOS}/grid-{raster['id']}{Path(pad).suffix.lower()}"
-                    bundel.write(pad, naam)
-                    raster["photo_file"] = naam
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as bundle:
+            for grid in grids:
+                path = grid.pop("photo_path", None)
+                grid["photo_file"] = None
+                if path and Path(path).exists():
+                    name = f"{BUNDLE_PHOTOS}/grid-{grid['id']}{Path(path).suffix.lower()}"
+                    bundle.write(path, name)
+                    grid["photo_file"] = name
             payload = {
                 "format": BUNDLE_FORMAT,
                 "version": BUNDLE_VERSION,
@@ -998,16 +991,16 @@ class Library:
                 "machines": self.machines(),
                 "materials": self.materials(),
                 "presets": presets,
-                "test_grids": rasters,
-                # T7: een benoemd recept is werk dat je zelf hebt uitgezocht,
-                # dus het hoort in dezelfde back-up als de rest.
+                "test_grids": grids,
+                # T7: a named recipe is work you sorted out yourself, so it belongs in the
+                # same backup as the rest.
                 "grid_recipes": self.grid_recipes(),
             }
-            bundel.writestr(
+            bundle.writestr(
                 BUNDLE_INDEX,
                 json.dumps(payload, indent=1, ensure_ascii=False, default=str),
             )
-        return doel
+        return target
 
     def read_bundle(self, path) -> dict:
         """Read it and refuse at once what is not a library."""
@@ -1021,11 +1014,11 @@ class Library:
                 "This is not an OpenKerf library. A library file ends "
                 f"in {BUNDLE_SUFFIX}."
             )
-        with zipfile.ZipFile(bron) as bundel:
-            if BUNDLE_INDEX not in bundel.namelist():
+        with zipfile.ZipFile(bron) as bundle:
+            if BUNDLE_INDEX not in bundle.namelist():
                 raise LibraryError("This file holds no library.")
             try:
-                data = json.loads(bundel.read(BUNDLE_INDEX))
+                data = json.loads(bundle.read(BUNDLE_INDEX))
             except ValueError as e:
                 raise LibraryError("The library in this file is damaged.") from e
         if not isinstance(data, dict) or data.get("format") != BUNDLE_FORMAT:
@@ -1040,66 +1033,66 @@ class Library:
         """
         Wat er gaat gebeuren, vóórdat het gebeurt.
 
-        Niemand wil ontdekken dat hij zijn eigen metingen heeft overschreven.
-        Daarom rekent dit beide keuzes door — samenvoegen én vervangen — zodat
-        het verschil op het scherm staat op het moment dat je kiest.
+        Nobody wants to discover they have overwritten their own measurements. So this
+        works out both choices — merging *and* replacing — so that the difference is on the
+        screen at the moment you choose.
         """
         data = self.read_bundle(path)
         koppeling = _merge_map(merge_materials)
 
         materialen = [m for m in (data.get("materials") or []) if m.get("name")]
         eigen = self.materials()
-        nieuw, bestaand, lijkt_op = [], [], []
-        namen = {}
-        for materiaal in materialen:
-            naam = str(materiaal["name"]).strip()
-            gekoppeld = koppeling.get(_norm(naam))
-            treffer = next((m for m in eigen if m["id"] == gekoppeld), None) if gekoppeld else None
-            treffer = treffer or _same_material(naam, materiaal.get("synonyms"), eigen)
-            if treffer is not None:
-                bestaand.append({"name": naam, "as": treffer["name"], "material_id": treffer["id"]})
-                namen[materiaal.get("id")] = treffer["name"]
+        nieuw, existing, lijkt_op = [], [], []
+        names = {}
+        for material in materialen:
+            name = str(material["name"]).strip()
+            gekoppeld = koppeling.get(_norm(name))
+            match = next((m for m in eigen if m["id"] == gekoppeld), None) if gekoppeld else None
+            match = match or _same_material(name, material.get("synonyms"), eigen)
+            if match is not None:
+                existing.append({"name": name, "as": match["name"], "material_id": match["id"]})
+                names[material.get("id")] = match["name"]
                 continue
-            namen[materiaal.get("id")] = naam
-            nieuw.append(naam)
-            gelijkend = _looks_like(naam, eigen)
+            names[material.get("id")] = name
+            nieuw.append(name)
+            gelijkend = _looks_like(name, eigen)
             if gelijkend:
                 buur, waarom = gelijkend
                 lijkt_op.append(
                     {
-                        "name": naam,
+                        "name": name,
                         "match": buur["name"],
                         "material_id": buur["id"],
                         "why": waarom,
                     }
                 )
 
-        van_mij = {}
+        mine_by_key = {}
         for preset in self.presets():
-            van_mij.setdefault(_preset_key(preset["material_name"], preset), preset)
+            mine_by_key.setdefault(_preset_key(preset["material_name"], preset), preset)
         nieuwe_presets, gelijk, botsingen = 0, 0, []
         for preset in data.get("presets") or []:
-            naam = namen.get(preset.get("material_id")) or preset.get("material_name")
-            mijne = van_mij.get(_preset_key(naam, preset))
-            if mijne is None:
+            name = names.get(preset.get("material_id")) or preset.get("material_name")
+            mine = mine_by_key.get(_preset_key(name, preset))
+            if mine is None:
                 nieuwe_presets += 1
-            elif _same_values(mijne, preset):
+            elif _same_values(mine, preset):
                 gelijk += 1
             else:
                 botsingen.append(
                     {
-                        "material": naam,
+                        "material": name,
                         "thickness_mm": preset.get("thickness_mm"),
                         "operation": preset.get("operation"),
                         "machine": preset.get("machine_name"),
-                        "mine": _values(mijne),
+                        "mine": _values(mine),
                         "theirs": _values(preset),
                     }
                 )
 
         eigen_rasters = {_grid_key(g) for g in self.test_grids()}
-        rasters = data.get("test_grids") or []
-        nieuwe_rasters = sum(1 for g in rasters if _grid_key(g) not in eigen_rasters)
+        grids = data.get("test_grids") or []
+        nieuwe_rasters = sum(1 for g in grids if _grid_key(g) not in eigen_rasters)
         eigen_machines = {_norm(m["name"]) for m in self.machines()}
         machines = [m for m in (data.get("machines") or []) if m.get("name")]
 
@@ -1110,12 +1103,12 @@ class Library:
                 "materials": len(materialen),
                 "presets": len(data.get("presets") or []),
                 "machines": len(machines),
-                "test_grids": len(rasters),
-                "photos": sum(1 for g in rasters if g.get("photo_file")),
+                "test_grids": len(grids),
+                "photos": sum(1 for g in grids if g.get("photo_file")),
             },
             "huidig": huidig,
             "samenvoegen": {
-                "materials": {"new": nieuw, "existing": bestaand, "similar": lijkt_op},
+                "materials": {"new": nieuw, "existing": existing, "similar": lijkt_op},
                 "machines": {
                     "new": [m["name"] for m in machines if _norm(m["name"]) not in eigen_machines],
                     "existing": [m["name"] for m in machines if _norm(m["name"]) in eigen_machines],
@@ -1125,7 +1118,7 @@ class Library:
                     "identical": gelijk,
                     "conflicts": botsingen,
                 },
-                "test_grids": {"new": nieuwe_rasters, "existing": len(rasters) - nieuwe_rasters},
+                "test_grids": {"new": nieuwe_rasters, "existing": len(grids) - nieuwe_rasters},
             },
             "vervangen": {"removes": huidig},
         }
@@ -1140,15 +1133,14 @@ class Library:
         """
         Het bestand daadwerkelijk inlezen.
 
-        `mode` is een expliciete keuze: samenvoegen laat staan wat je hebt,
-        vervangen gooit het weg. `on_conflict` bepaalt wie wint als dezelfde
-        preset aan beide kanten andere getallen draagt; standaard je eigen, want
-        die heb je zelf gemeten.
+        `mode` is an explicit choice: merging leaves what you have, replacing throws it
+        away. `on_conflict` decides who wins when the same preset carries different numbers on
+        both sides; your own by default, because you measured those yourself.
 
-        De bron blijft staan zoals hij was. Dit is je eigen bibliotheek die
-        terugkomt van een back-up of een andere computer — "testraster"
-        omschrijven naar "geïmporteerd" zou precies het bewijs weggooien dat
-        deze functie moet bewaren. De foto's komen om dezelfde reden mee.
+        The source stays as it was. This is your own library coming back from a backup or
+        another computer — rewriting "testgrid" to "imported" would throw away exactly the
+        evidence this function is meant to preserve. The photos come along for the same
+        reason.
         """
         import zipfile
 
@@ -1162,62 +1154,62 @@ class Library:
         if mode == "vervangen":
             self.clear()
 
-        # 1. Materialen. Alles hangt hieraan, dus dit gaat eerst.
-        materiaal_id = {}
-        for materiaal in data.get("materials") or []:
-            naam = str(materiaal.get("name") or "").strip()
-            if not naam:
+        # 1. Materials. Everything hangs off them, so this goes first.
+        material_id = {}
+        for material in data.get("materials") or []:
+            name = str(material.get("name") or "").strip()
+            if not name:
                 continue
             eigen = self.materials()
-            gekoppeld = koppeling.get(_norm(naam))
-            treffer = next((m for m in eigen if m["id"] == gekoppeld), None) if gekoppeld else None
-            treffer = treffer or _same_material(naam, materiaal.get("synonyms"), eigen)
-            if treffer is None:
-                treffer = self.add_material(naam, materiaal.get("synonyms"))
-            materiaal_id[materiaal.get("id")] = treffer["id"]
+            gekoppeld = koppeling.get(_norm(name))
+            match = next((m for m in eigen if m["id"] == gekoppeld), None) if gekoppeld else None
+            match = match or _same_material(name, material.get("synonyms"), eigen)
+            if match is None:
+                match = self.add_material(name, material.get("synonyms"))
+            material_id[material.get("id")] = match["id"]
 
-        # 2. Machineprofielen, op naam.
+        # 2. Machineprofielen, op name.
         machine_id = {}
         for machine in data.get("machines") or []:
-            naam = str(machine.get("name") or "").strip()
-            if not naam:
+            name = str(machine.get("name") or "").strip()
+            if not name:
                 continue
             eigen = self.machines()
-            treffer = next((m for m in eigen if _norm(m["name"]) == _norm(naam)), None)
-            if treffer is None and machine.get("device_path"):
-                # Eén profiel per apparaat is een harde regel in het schema.
-                # Draagt het bestand een ander wóórd voor dezelfde laser, dan
-                # is dat dezelfde laser en niet een tweede.
-                treffer = next(
+            match = next((m for m in eigen if _norm(m["name"]) == _norm(name)), None)
+            if match is None and machine.get("device_path"):
+                # One profile per device is a hard rule in the schema. If the file carries
+                # a different *word* for the same laser, that is the same laser and not a
+                # second one.
+                match = next(
                     (m for m in eigen if m["device_path"] == machine["device_path"]),
                     None,
                 )
-            if treffer is None:
-                treffer = self.add_machine(**{k: v for k, v in machine.items() if k != "id"})
-            machine_id[machine.get("id")] = treffer["id"]
+            if match is None:
+                match = self.add_machine(**{k: v for k, v in machine.items() if k != "id"})
+            machine_id[machine.get("id")] = match["id"]
 
-        with zipfile.ZipFile(Path(path)) as bundel:
-            namen = set(bundel.namelist())
+        with zipfile.ZipFile(Path(path)) as bundle:
+            names = set(bundle.namelist())
 
-            # 3. Testrasters, met hun foto. Vóór de presets, want een preset
-            #    wijst met origin_id naar het raster waar hij uit komt.
-            raster_id = {}
+            # 3. Test grids, with their photo. Before the presets, because a preset points
+            #    with origin_id at the grid it came from.
+            grid_id = {}
             eigen_rasters = {_grid_key(g): g["id"] for g in self.test_grids()}
-            for raster in data.get("test_grids") or []:
-                bestaat = eigen_rasters.get(_grid_key(raster))
+            for grid in data.get("test_grids") or []:
+                bestaat = eigen_rasters.get(_grid_key(grid))
                 if bestaat is not None:
-                    raster_id[raster.get("id")] = bestaat
+                    grid_id[grid.get("id")] = bestaat
                     continue
-                nieuw = self._insert_grid(raster, materiaal_id, machine_id)
-                raster_id[raster.get("id")] = nieuw
-                foto = raster.get("photo_file")
-                if foto and foto in namen:
-                    self.set_grid_photo(nieuw, Path(foto).suffix.lower(), bundel.read(foto))
+                nieuw = self._insert_grid(grid, material_id, machine_id)
+                grid_id[grid.get("id")] = nieuw
+                foto = grid.get("photo_file")
+                if foto and foto in names:
+                    self.set_grid_photo(nieuw, Path(foto).suffix.lower(), bundle.read(foto))
 
-        # 4. Presets, met hun herkomst omgenummerd naar de nieuwe raster-id's.
-        van_mij = {}
+        # 4. Presets, with their provenance renumbered to the new grid ids.
+        mine_by_key = {}
         for preset in self.presets():
-            van_mij.setdefault(_preset_key(preset["material_name"], preset), preset)
+            mine_by_key.setdefault(_preset_key(preset["material_name"], preset), preset)
         bron_naam = {
             m.get("id"): str(m.get("name") or "").strip()
             for m in data.get("materials") or []
@@ -1225,69 +1217,69 @@ class Library:
         preset_id = {}
         toegevoegd = bijgewerkt = overgeslagen = 0
         for preset in data.get("presets") or []:
-            doel = materiaal_id.get(preset.get("material_id"))
-            if doel is None:
+            target = material_id.get(preset.get("material_id"))
+            if target is None:
                 overgeslagen += 1
                 continue
-            naam = next(
-                (m["name"] for m in self.materials() if m["id"] == doel),
+            name = next(
+                (m["name"] for m in self.materials() if m["id"] == target),
                 bron_naam.get(preset.get("material_id"), ""),
             )
-            mijne = van_mij.get(_preset_key(naam, preset))
-            if mijne is not None:
-                if _same_values(mijne, preset) or on_conflict == "eigen":
-                    preset_id[preset.get("id")] = mijne["id"]
+            mine = mine_by_key.get(_preset_key(name, preset))
+            if mine is not None:
+                if _same_values(mine, preset) or on_conflict == "eigen":
+                    preset_id[preset.get("id")] = mine["id"]
                     overgeslagen += 1
                     continue
                 self.update_preset(
-                    mijne["id"],
+                    mine["id"],
                     speed_mm_s=preset.get("speed_mm_s"),
                     power_percent=preset.get("power_percent"),
                     passes=preset.get("passes") or 1,
                     interval_mm=preset.get("interval_mm"),
                 )
-                preset_id[preset.get("id")] = mijne["id"]
+                preset_id[preset.get("id")] = mine["id"]
                 bijgewerkt += 1
                 continue
             preset_id[preset.get("id")] = self._insert_preset(
-                preset, doel, machine_id, raster_id
+                preset, target, machine_id, grid_id
             )
             toegevoegd += 1
 
-        # 5. En terug: welk vakje van welk raster werd welke preset. Zonder deze
-        #    stap staat de foto er nog, maar wijst niets meer aan.
-        self._relink_cells(raster_id, preset_id)
+        # 5. And back: which square of which grid became which preset. Without this step
+        #    the photo is still there but points at nothing.
+        self._relink_cells(grid_id, preset_id)
 
-        # 6. De benoemde recepten (T7), met hun materiaal omgenummerd. Een
-        #    gelijknamig recept van jezelf blijft staan: net als bij presets is
-        #    je eigen instelling de instelling die je gemeten hebt.
-        recepten = 0
+        # 6. The named recipes (T7), with their material renumbered. A recipe of your own
+        #    with the same name stays: as with presets, your own setting is the setting you
+        #    measured.
+        recipes = 0
         eigen_recepten = {
             (r["name"].casefold(), r["material_id"]) for r in self.grid_recipes()
         }
-        for recept in data.get("grid_recipes") or []:
-            naam = str(recept.get("name") or "").strip()
-            if not naam:
+        for recipe in data.get("grid_recipes") or []:
+            name = str(recipe.get("name") or "").strip()
+            if not name:
                 continue
-            doel = materiaal_id.get(recept.get("material_id"))
-            if (naam.casefold(), doel) in eigen_recepten:
+            target = material_id.get(recipe.get("material_id"))
+            if (name.casefold(), target) in eigen_recepten:
                 continue
-            instellingen = recept.get("settings")
+            instellingen = recipe.get("settings")
             if isinstance(instellingen, str):
                 instellingen = json.loads(instellingen)
             try:
-                self.save_grid_recipe(naam, instellingen or {}, doel)
+                self.save_grid_recipe(name, instellingen or {}, target)
             except LibraryError:
                 continue
-            recepten += 1
+            recipes += 1
 
         return {
             "mode": mode,
             "removed": verwijderd,
-            "materials": len(materiaal_id),
+            "materials": len(material_id),
             "machines": len(machine_id),
-            "test_grids": len({v for v in raster_id.values()}),
-            "grid_recipes": recepten,
+            "test_grids": len({v for v in grid_id.values()}),
+            "grid_recipes": recipes,
             "presets": {
                 "added": toegevoegd,
                 "updated": bijgewerkt,
@@ -1319,11 +1311,11 @@ class Library:
                 "test_grids": tellen("test_grid"),
             }
 
-    def _insert_grid(self, raster: dict, materiaal_id: dict, machine_id: dict) -> int:
+    def _insert_grid(self, grid: dict, material_id: dict, machine_id: dict) -> int:
         """Take over a grid with its date: that date is the evidence."""
-        cellen = raster.get("cells")
-        if isinstance(cellen, str):
-            cellen = json.loads(cellen)
+        cells = grid.get("cells")
+        if isinstance(cells, str):
+            cells = json.loads(cells)
         with self._connect() as db:
             cursor = db.execute(
                 """INSERT INTO test_grid (material_id, machine_id, thickness_mm, operation,
@@ -1337,42 +1329,42 @@ class Library:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?, ?, ?)""",
                 (
-                    materiaal_id.get(raster.get("material_id")),
-                    machine_id.get(raster.get("machine_id")),
-                    raster.get("thickness_mm"),
-                    raster.get("operation") or "snijden",
-                    raster.get("speed_min"), raster.get("speed_max"), raster.get("speed_steps"),
-                    raster.get("power_min"), raster.get("power_max"), raster.get("power_steps"),
-                    raster.get("interval_min"), raster.get("interval_max"),
-                    raster.get("interval_steps"),
-                    raster.get("row_axis") or "speed",
-                    raster.get("column_axis") or "power",
-                    raster.get("rows") or raster.get("speed_steps"),
-                    raster.get("columns") or raster.get("power_steps"),
-                    raster.get("cell_mm"), raster.get("gap_mm"),
-                    raster.get("origin_x_mm"), raster.get("origin_y_mm"),
-                    json.dumps(cellen or []),
-                    # De uitlijning is met de hand gedaan; die hoort bij de foto
-                    # en gaat dus mee terug uit een back-up.
-                    json.dumps(_uitlijning(raster.get("alignment")))
-                    if _uitlijning(raster.get("alignment"))
+                    material_id.get(grid.get("material_id")),
+                    machine_id.get(grid.get("machine_id")),
+                    grid.get("thickness_mm"),
+                    grid.get("operation") or "snijden",
+                    grid.get("speed_min"), grid.get("speed_max"), grid.get("speed_steps"),
+                    grid.get("power_min"), grid.get("power_max"), grid.get("power_steps"),
+                    grid.get("interval_min"), grid.get("interval_max"),
+                    grid.get("interval_steps"),
+                    grid.get("row_axis") or "speed",
+                    grid.get("column_axis") or "power",
+                    grid.get("rows") or grid.get("speed_steps"),
+                    grid.get("columns") or grid.get("power_steps"),
+                    grid.get("cell_mm"), grid.get("gap_mm"),
+                    grid.get("origin_x_mm"), grid.get("origin_y_mm"),
+                    json.dumps(cells or []),
+                    # The alignment was done by hand; it belongs with the photo and so
+                    # comes back from a backup with it.
+                    json.dumps(_alignment(grid.get("alignment")))
+                    if _alignment(grid.get("alignment"))
                     else None,
-                    raster.get("group_id"),
-                    raster.get("created_at") or _now(),
-                    raster.get("anchor") or "corner",
-                    0 if raster.get("text_enabled") is False else 1,
-                    1 if raster.get("border_enabled") else 0,
-                    raster.get("label_speed_mm_s"),
-                    raster.get("label_power_percent"),
+                    grid.get("group_id"),
+                    grid.get("created_at") or _now(),
+                    grid.get("anchor") or "corner",
+                    0 if grid.get("text_enabled") is False else 1,
+                    1 if grid.get("border_enabled") else 0,
+                    grid.get("label_speed_mm_s"),
+                    grid.get("label_power_percent"),
                 ),
             )
             return cursor.lastrowid
 
-    def _insert_preset(self, preset: dict, material_id: int, machine_id: dict, raster_id: dict) -> int:
+    def _insert_preset(self, preset: dict, material_id: int, machine_id: dict, grid_id: dict) -> int:
         herkomst = preset.get("origin_id")
         if isinstance(herkomst, str) and herkomst.startswith("testgrid:"):
             oud = herkomst.split(":", 1)[1]
-            nieuw = raster_id.get(int(oud)) if oud.isdigit() else None
+            nieuw = grid_id.get(int(oud)) if oud.isdigit() else None
             herkomst = f"testgrid:{nieuw}" if nieuw else None
         bron = preset.get("source")
         with self._connect() as db:
@@ -1401,25 +1393,25 @@ class Library:
             )
             return cursor.lastrowid
 
-    def _relink_cells(self, raster_id: dict, preset_id: dict) -> None:
-        if not raster_id or not preset_id:
+    def _relink_cells(self, grid_id: dict, preset_id: dict) -> None:
+        if not grid_id or not preset_id:
             return
-        for oud, nieuw in raster_id.items():
+        for oud, nieuw in grid_id.items():
             try:
-                raster = self.test_grid(nieuw)
+                grid = self.test_grid(nieuw)
             except LibraryError:
                 continue
             veranderd = False
-            for cel in raster["cells"]:
-                doel = preset_id.get(cel.get("preset_id"))
-                if doel is not None and doel != cel.get("preset_id"):
-                    cel["preset_id"] = doel
+            for cel in grid["cells"]:
+                target = preset_id.get(cel.get("preset_id"))
+                if target is not None and target != cel.get("preset_id"):
+                    cel["preset_id"] = target
                     veranderd = True
             if veranderd:
                 with self._connect() as db:
                     db.execute(
                         "UPDATE test_grid SET cells = ? WHERE id = ?",
-                        (json.dumps(raster["cells"]), nieuw),
+                        (json.dumps(grid["cells"]), nieuw),
                     )
 
     # ---------------------------------------------------------------- helpers
@@ -1433,84 +1425,83 @@ class Library:
 def _grid_row(row) -> dict:
     data = dict(row)
     data["cells"] = json.loads(data["cells"])
-    data["alignment"] = _uitlijning(data.get("alignment"))
-    # SQLite kent geen booleans; de wizard zet er wel vinkjes mee.
-    for sleutel in ("text_enabled", "border_enabled"):
-        if sleutel in data:
-            data[sleutel] = bool(data[sleutel])
+    data["alignment"] = _alignment(data.get("alignment"))
+    # SQLite has no booleans; the wizard does set ticks with them.
+    for key in ("text_enabled", "border_enabled"):
+        if key in data:
+            data[key] = bool(data[key])
     return data
 
 
-# De waarden van de grootheden die níét op een as staan. Ze horen bij een
-# recept — "berk graveren op 40%" is anders geen recept maar een half recept —
-# maar niet bij GRID_DEFAULTS, want daar staan ze als min == max in de reeks.
+# The values of the quantities that are *not* on an axis. They belong to a recipe —
+# otherwise "engrave birch at 40%" is not a recipe but half a recipe — but not to
+# GRID_DEFAULTS, because there they appear as min == max in the series.
 _VASTE_VELDEN = ("speed_mm_s", "power_percent", "interval_mm")
 
 
 def _recept_instellingen(ruw: dict) -> dict:
     """
-    Alleen de sleutels die een raster beschrijven, in het juiste soort.
+    Only the keys that describe a grid, in the right type.
 
-    Een recept is een JSON-blob in de database, en dat is precies waar rommel
-    binnenkomt. Hier gaat eruit wat er niet in hoort, zodat de wizard er blind
-    op kan vertrouwen.
+    A recipe is a JSON blob in the database, and that is exactly where rubbish gets in. Here
+    what does not belong goes out, so that the wizard can trust it blindly.
     """
     uit = {}
-    for sleutel in tuple(Library.GRID_DEFAULTS) + _VASTE_VELDEN:
-        if sleutel not in ruw or ruw[sleutel] is None:
+    for key in tuple(Library.GRID_DEFAULTS) + _VASTE_VELDEN:
+        if key not in ruw or ruw[key] is None:
             continue
-        waarde = ruw[sleutel]
-        if sleutel in ("text_enabled", "border_enabled"):
-            uit[sleutel] = bool(waarde)
-        elif sleutel in ("operation", "row_axis", "column_axis", "anchor"):
-            uit[sleutel] = str(waarde)
+        waarde = ruw[key]
+        if key in ("text_enabled", "border_enabled"):
+            uit[key] = bool(waarde)
+        elif key in ("operation", "row_axis", "column_axis", "anchor"):
+            uit[key] = str(waarde)
         else:
             try:
-                uit[sleutel] = float(waarde)
+                uit[key] = float(waarde)
             except (TypeError, ValueError):
                 continue
     return uit
 
 
-def _met_ankerpunt(instelling: dict) -> dict:
+def _met_ankerpunt(setting: dict) -> dict:
     """
-    Het punt zoals de gebruiker het intikte: een hoek, of een midden (T9).
+    The point as the user typed it: a corner, or a centre (T9).
 
-    In de database staat altijd de linkerbovenhoek van de vakjes — daar rekent
-    de foto-overlay mee. Wie het bord op het midden gelegd heeft, moet dat
-    midden terugzien in het formulier en niet een hoek die hij nooit getypt
-    heeft. Het midden komt uit dezelfde `plan_grid` die het ook uitrekende;
-    hem hier nabouwen zou twee sommen geven die uit elkaar kunnen lopen.
+    The database always holds the top-left corner of the squares — that is what the photo
+    overlay computes with. Anybody who laid the board out on its centre has to see that
+    centre back in the form and not a corner they never typed. The centre comes from the same
+    `plan_grid` that worked it out; rebuilding it here would give two sums that can drift
+    apart.
     """
-    hoek_x = instelling.get("origin_x_mm")
-    hoek_y = instelling.get("origin_y_mm")
-    instelling["anchor_x_mm"] = hoek_x
-    instelling["anchor_y_mm"] = hoek_y
-    if instelling.get("anchor") != "center":
-        return instelling
+    hoek_x = setting.get("origin_x_mm")
+    hoek_y = setting.get("origin_y_mm")
+    setting["anchor_x_mm"] = hoek_x
+    setting["anchor_y_mm"] = hoek_y
+    if setting.get("anchor") != "center":
+        return setting
     from .testgrid import plan_grid
 
-    velden = {k: v for k, v in instelling.items() if v is not None}
-    velden["text"] = velden.pop("text_enabled", True)
-    velden["border"] = velden.pop("border_enabled", False)
-    velden.pop("anchor", None)
-    velden.pop("anchor_x_mm", None)
-    velden.pop("anchor_y_mm", None)
-    velden.pop("thickness_mm", None)
+    fields = {k: v for k, v in setting.items() if v is not None}
+    fields["text"] = fields.pop("text_enabled", True)
+    fields["border"] = fields.pop("border_enabled", False)
+    fields.pop("anchor", None)
+    fields.pop("anchor_x_mm", None)
+    fields.pop("anchor_y_mm", None)
+    fields.pop("thickness_mm", None)
     for as_ in ("speed", "power", "interval"):
-        if velden.get(f"{as_}_steps") == 1:
-            velden.pop(f"{as_}_steps", None)
-            velden.pop(f"{as_}_max", None)
+        if fields.get(f"{as_}_steps") == 1:
+            fields.pop(f"{as_}_steps", None)
+            fields.pop(f"{as_}_max", None)
     try:
-        plan = plan_grid(**velden)[0]
+        plan = plan_grid(**fields)[0]
     except Exception:
-        return instelling
-    instelling["anchor_x_mm"] = plan["center_x_mm"]
-    instelling["anchor_y_mm"] = plan["center_y_mm"]
-    return instelling
+        return setting
+    setting["anchor_x_mm"] = plan["center_x_mm"]
+    setting["anchor_y_mm"] = plan["center_y_mm"]
+    return setting
 
 
-def _uitlijning(ruw):
+def _alignment(ruw):
     """The four corners as a list of points, or None when nothing is stored."""
     if not ruw:
         return None
@@ -1532,16 +1523,16 @@ def _uitlijning(ruw):
 def _preset_row(row) -> dict:
     data = dict(row)
     data["air_assist"] = bool(data["air_assist"])
-    # SQLite geeft 0/1 terug voor een booleaanse uitdrukking; de kaart die dit
-    # toont moet er "ja of nee" van kunnen maken zonder erover te hoeven denken.
+    # SQLite hands back 0/1 for a boolean expression; the card that shows this has to be
+    # able to make "yes or no" of it without having to think about it.
     if "grid_aligned" in data:
         data["grid_aligned"] = bool(data["grid_aligned"])
-    # Uit welk vakje van het raster deze preset komt. Dat is de herkomst in één
-    # regel: "rij 2, kolom 3" is aanwijsbaar op de foto, "testraster" niet.
-    cellen = data.pop("grid_cells", None)
+    # Which square of the grid this preset comes from. That is the provenance in one line:
+    # "row 2, column 3" can be pointed at on the photo, "testgrid" cannot.
+    cells = data.pop("grid_cells", None)
     data["grid_cell"] = None
-    if cellen:
-        for cel in json.loads(cellen):
+    if cells:
+        for cel in json.loads(cells):
             if cel.get("preset_id") == data["id"]:
                 data["grid_cell"] = {"row": cel["row"], "column": cel["column"]}
                 break
@@ -1560,55 +1551,55 @@ def _norm(text) -> str:
     return re.sub(r"\s+", " ", plat.decode().lower()).strip()
 
 
-def _merge_map(keuzes: dict | None) -> dict:
-    """{"Berkentriplex": 3} → {"berkentriplex": 3}, zodat de naam ertoe doet en de vorm niet."""
-    return {_norm(k): int(v) for k, v in (keuzes or {}).items() if v is not None}
+def _merge_map(choices: dict | None) -> dict:
+    """{"Birch plywood": 3} → {"birch plywood": 3}, so that the name matters and the form does not."""
+    return {_norm(k): int(v) for k, v in (choices or {}).items() if v is not None}
 
 
-def _same_material(naam: str, synonyms, eigen: list[dict]) -> dict | None:
+def _same_material(name: str, synonyms, eigen: list[dict]) -> dict | None:
     """Exactly the same name, or a name already known as a synonym."""
-    doel = _norm(naam)
+    target = _norm(name)
     binnen = {_norm(s) for s in (synonyms or [])}
-    for materiaal in eigen:
-        if _norm(materiaal["name"]) == doel:
-            return materiaal
-        mijne = {_norm(s) for s in materiaal.get("synonyms") or []}
-        if doel in mijne or _norm(materiaal["name"]) in binnen or (mijne & binnen):
-            return materiaal
+    for material in eigen:
+        if _norm(material["name"]) == target:
+            return material
+        mine = {_norm(s) for s in material.get("synonyms") or []}
+        if target in mine or _norm(material["name"]) in binnen or (mine & binnen):
+            return material
     return None
 
 
-def _families(naam: str) -> set[str]:
+def _families(name: str) -> set[str]:
     """
-    Welke materiaalfamilies er in een naam zitten.
+    Welke materiaalfamilies er in een name zitten.
 
-    Op losse woorden splitsen is niet genoeg: "Berkentriplex" is één woord dat
-    twee dingen zegt. Daarom zoeken we de familiewoorden ín de tekst.
+    Splitting on separate words is not enough: "Berkentriplex" is one word that says two
+    things. So we look for the family words *inside* the text.
     """
-    plat = _norm(naam)
-    gevonden = set()
+    plat = _norm(name)
+    found = set()
     for familie, woorden in MATERIAL_FAMILIES.items():
         if any(woord in plat for woord in woorden):
-            gevonden.add(familie)
-    return gevonden
+            found.add(familie)
+    return found
 
 
-def _looks_like(naam: str, eigen: list[dict]) -> tuple[dict, str] | None:
+def _looks_like(name: str, eigen: list[dict]) -> tuple[dict, str] | None:
     """
-    Een materiaal dat waarschijnlijk hetzelfde is, met de reden erbij.
+    A material that is probably the same, with the reason beside it.
 
-    Twee gedeelde families is de drempel: alleen "berken" gedeeld kan berken
-    multiplex naast massief berken zijn, en dat zijn twee heel verschillende
-    sneden. Berken én multiplex samen is één plank.
+    Two shared families is the threshold: "birch" shared alone could be birch plywood beside
+    solid birch, and those are two very different cuts. Birch *and* plywood together is one
+    board.
     """
-    mijn = _families(naam)
+    mijn = _families(name)
     if len(mijn) < 2:
         return None
-    for materiaal in eigen:
-        gedeeld = mijn & _families(materiaal["name"])
-        if len(gedeeld) >= 2:
-            woorden = sorted(gedeeld)
-            return materiaal, f"beide gaan over {' en '.join(woorden)}"
+    for material in eigen:
+        shared = mijn & _families(material["name"])
+        if len(shared) >= 2:
+            woorden = sorted(shared)
+            return material, f"beide gaan over {' en '.join(woorden)}"
     return None
 
 
@@ -1637,23 +1628,23 @@ def _values(preset: dict) -> dict:
     }
 
 
-def _same_values(mijne: dict, hunne: dict) -> bool:
-    if _rond(mijne.get("interval_mm")) != _rond(hunne.get("interval_mm")):
+def _same_values(mine: dict, hunne: dict) -> bool:
+    if _rond(mine.get("interval_mm")) != _rond(hunne.get("interval_mm")):
         return False
-    for sleutel in ("speed_mm_s", "power_percent"):
-        if _rond(mijne.get(sleutel)) != _rond(hunne.get(sleutel)):
+    for key in ("speed_mm_s", "power_percent"):
+        if _rond(mine.get(key)) != _rond(hunne.get(key)):
             return False
-    return int(mijne.get("passes") or 1) == int(hunne.get("passes") or 1)
+    return int(mine.get("passes") or 1) == int(hunne.get("passes") or 1)
 
 
-def _grid_key(raster: dict) -> tuple:
+def _grid_key(grid: dict) -> tuple:
     """A grid is the same grid when it was burned at the same moment."""
     return (
-        str(raster.get("created_at") or ""),
-        str(raster.get("operation") or ""),
-        _rond(raster.get("speed_min")),
-        _rond(raster.get("power_min")),
-        _rond(raster.get("cell_mm")),
+        str(grid.get("created_at") or ""),
+        str(grid.get("operation") or ""),
+        _rond(grid.get("speed_min")),
+        _rond(grid.get("power_min")),
+        _rond(grid.get("cell_mm")),
     )
 
 
