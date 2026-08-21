@@ -11,33 +11,33 @@
 		canEdit = false,
 		onGenerated
 	}: {
-		/** Voorgekozen materiaal: van het vel waarop je werkt, of van de kaart
-		 *  waar je vandaan komt. */
+		/** Pre-chosen material: from the sheet you are working on, or from the card
+		 *  you came from. */
 		materialId?: number | null;
-		/** De dikte van dat vel. Een raster gaat over één plaat, en die ligt al
-		 *  in de machine — dan is dit getal geen ask meer. */
+		/** The thickness of that sheet. A grid is about one board, and that is already
+		 *  in the machine — then this number is no longer a question. */
 		thicknessMm?: number | null;
 		library: LibraryStore;
 		canEdit?: boolean;
 		onGenerated?: (gridId: number) => void;
 	} = $props();
 
-	// Kom je vanuit een materiaal, dan staat dat materiaal al ingevuld.
+	// Coming in from a material, that material is already filled in.
 	$effect(() => {
 		if (materialId === null) return;
 		form.material_id = materialId;
 	});
-	// Een vel kan een materiaal-id dragen dat niet meer bestaat, bijvoorbeeld
-	// omdat het materiaal uit de bibliotheek verwijderd is. Zonder deze
-	// terugval staat er een leeg keuzevak — geen "geen" — en bleef de
-	// waarschuwing hieronder weg, want er stond wél iets in het veld. Alleen
-	// controleren zodra de lijst binnen is: leeg betekent "nog niet geladen".
+	// A sheet can carry a material id that no longer exists, for instance because the
+	// material has been removed from the library. Without this fallback there is an
+	// empty select — not "none" — and the warning below stayed away, because there
+	// *was* something in the field. Only check once the list is in: empty means "not
+	// loaded yet".
 	$effect(() => {
 		if (form.material_id === null || library.materials.length === 0) return;
 		if (!library.materials.some((m) => m.id === form.material_id)) form.material_id = null;
 	});
-	// En de dikte van het vel erbij: het raster gaat over de plaat die in de
-	// machine ligt, dus die twee velden hoeven niet opnieuw ingevuld.
+	// And the sheet's thickness with it: the grid is about the board that is in the
+	// machine, so those two fields do not have to be filled in again.
 	$effect(() => {
 		if (thicknessMm === null) return;
 		form.thickness_mm = String(thicknessMm);
@@ -56,15 +56,15 @@
 	};
 
 	/**
-	 * De drie grootheden die je kunt aftasten (besluit B12).
+	 * The three quantities you can sweep (decision B12).
 	 *
-	 * Twee ervan staan op de assen, de derde blijft vast. Passes staat er
-	 * bewust niet bij: dat vermenigvuldigt de brandtijd van het hele bord.
+	 * Two of them sit on the axes, the third stays fixed. Passes is deliberately not
+	 * among them: that multiplies the burn time of the whole board.
 	 *
-	 * Naam en eenheid komen uit `$lib/api`, want de fotolijst op de telefoon
-	 * vat dezelfde rasters samen; twee kopieën van "mm/s" zijn twee kansen om
-	 * te gaan afwijken. Wat hier blijft, is invoergedrag van de wizard: de
-	 * stapgrootte van de plus-en-min en de bovengrens van het veld.
+	 * Name and unit come from `$lib/api`, because the photo list on the phone
+	 * summarises the same grids; two copies of "mm/s" are two chances to drift apart.
+	 * What stays here is the wizard's input behaviour: the step size of the plus and
+	 * minus and the field's upper bound.
 	 */
 	type As = GridAxis;
 	const AS_ORDE: As[] = ['speed', 'power', 'interval'];
@@ -73,33 +73,33 @@
 		power: { stap: 5, max: 100 },
 		interval: { stap: 0.01, max: 5 }
 	};
-	/** Waar de lijnafstand iets betekent; bij snijden legt de kop één lijn. */
+	/** Where the line spacing means something; when cutting the head lays one line. */
 	const INTERVAL_BEWERKINGEN = ['graveren-raster'];
 
 	let busy = $state(false);
-	// Het voorbeeld ververst elke 250 ms; dat mag de hoofdknop niet uitzetten.
+	// The preview refreshes every 250 ms; that must not disable the main button.
 	let bezigVoorbeeld = $state(false);
 	let error = $state<string | null>(null);
 	/**
-	 * Waarom de huidige invoer nog geen bord oplevert.
+	 * Why the current input does not yet produce a board.
 	 *
-	 * Apart van `error`, want dit is geen mislukking maar een tussenstand.
-	 * Tijdens het typen van "5" naar "30" is "van" even hoger dan "tot", en dat
-	 * duurt precies zolang als het kost om het tweede veld ook aan te passen.
-	 * Vóór deze scheiding viel het hele voorbeeldblok dan weg: het formulier
-	 * sprong van 506 naar 810 pixels breed en de reden stond onder de vouw.
-	 * Nu blijft het last geldige beeld staan met deze melding erboven.
+	 * Separate from `error`, because this is not a failure but an intermediate state.
+	 * While typing from "5" to "30", "from" is briefly higher than "to", and that
+	 * lasts exactly as long as it takes to adjust the second field too. Before this
+	 * separation the whole preview block fell away then: the form jumped from 506 to
+	 * 810 pixels wide and the reason sat below the fold. Now the last valid image
+	 * stays up with this notice above it.
 	 */
 	let voorbeeldFout = $state<string | null>(null);
 	let gelukt = $state<{ id: number; cellen: number } | null>(null);
-	// De maten in het plan zijn getallen, row_axis/column_axis zijn woorden.
+	// The measures in the plan are numbers, row_axis/column_axis are words.
 	type Plan = Record<string, number> & {
 		row_axis?: As;
 		column_axis?: As;
-		/** Of de rijlabels links van het raster nog op het bed vallen. */
+		/** Whether the row labels left of the grid still land on the bed. */
 		label_room?: boolean;
 		label_margin_mm?: number;
-		/** Of het hele bord — opschrift en kader erbij — nog op het bed begint. */
+		/** Whether the whole board — caption and border included — still starts on the bed. */
 		board_room?: boolean;
 		anchor?: 'corner' | 'center';
 	};
@@ -125,27 +125,27 @@
 		interval_min: '0.05',
 		interval_max: '0.3',
 		interval_steps: '4',
-		// De waarden van de grootheid die niet op een as staat.
+		// The values of the quantity that is not on an axis.
 		speed_mm_s: '15',
 		power_percent: '60',
 		interval_mm: '0.1',
 		cell_mm: '8',
 		gap_mm: '2',
-		// Voor het hele bord gelijk. Het geval: een materiaal dat op 5 mm/s
-		// bijna doorsnijdt en dat je op 8 mm/s in twee passes wilt proberen.
+		// The same for the whole board. The case: a material that almost cuts through
+		// at 5 mm/s and that you want to try at 8 mm/s in two passes.
 		passes: '1',
-		// 20 en niet 10: de rijlabels worden links van het raster gegraveerd en
-		// zijn bij driecijferige snelheden ruim 17 mm breed. Vanaf 10 begon het
-		// bord dus buiten het bed, en dan opent de wizard met een waarschuwing
-		// over zijn eigen standaardwaarden.
+		// 20 and not 10: the row labels are engraved to the left of the grid and at
+		// three-digit speeds are a good 17 mm wide. From 10 on, the board therefore
+		// started off the bed, and then the wizard opens with a warning about its own
+		// default values.
 		origin_x_mm: '20',
 		origin_y_mm: '20',
-		// Gat T9: vanaf de hoek of vanaf het midden. Een testbord leg je op een
-		// reststuk, en dan weet je waar het mídden van dat stuk ligt.
+		// Gap T9: from the corner or from the centre. You put a test board on an
+		// offcut, and then you know where the *centre* of that piece is.
 		anchor: 'corner' as 'corner' | 'center',
-		// Gat T10: LightBurn heeft Enable Text en Enable Border. Tekst staat aan
-		// — het bord is een bewijsstuk — en het kader is er voor wie de foto
-		// makkelijker wil uitlijnen.
+		// Gap T10: LightBurn has Enable Text and Enable Border. Text is on — the board
+		// is a piece of evidence — and the border is there for anybody who wants to
+		// align the photo more easily.
 		text: true,
 		border: false,
 		label_speed_mm_s: '80',
@@ -221,7 +221,7 @@
 				uit[VAST_VELD[as]] = Number(form[VAST_VELD[as]]);
 			}
 		}
-		// De planningsroute kent "caption" niet; alleen het bord krijgt hem mee.
+		// The planning route does not know "caption"; only the board carries it.
 		if (metOpschrift) uit.caption = form.caption.trim();
 		return uit;
 	}
@@ -229,9 +229,8 @@
 	async function send(path: string, metOpschrift = false, stil = false) {
 		if (stil) bezigVoorbeeld = true;
 		else busy = true;
-		// Een stille voorbeeldronde raakt `error` niet aan: dat blok staat
-		// onderaan het formulier en hoort bij een mislukte handeling, niet bij
-		// een half getypt getal.
+		// A quiet preview round does not touch `error`: that block sits at the bottom
+		// of the form and belongs to a failed action, not to a half-typed number.
 		if (stil) voorbeeldFout = null;
 		else error = null;
 		try {
@@ -267,10 +266,10 @@
 	}
 
 	/**
-	 * Bereik voorstellen rond wat de bibliotheek al weet.
+	 * Proposing a range around what the library already knows.
 	 *
-	 * ARCHITECTUUR.md: de app stelt het bereik voor rond het verwachte
-	 * werkpunt. Zonder presets komt er een breed maar redelijk startpunt.
+	 * ARCHITECTUUR.md: the app proposes the range around the expected working point.
+	 * Without presets a wide but reasonable starting point comes out.
 	 */
 	async function suggest() {
 		const thickness = form.thickness_mm === '' ? null : Number(form.thickness_mm);
@@ -288,8 +287,8 @@
 
 	let suggestedFrom = $state<number | null>(null);
 
-	// Live meekijken. Een voorbeeld achter een knop is geen voorbeeld: je ziet
-	// pas wat je instelt nadat je besloten hebt dat je het wilt zien.
+	// Watching along live. A preview behind a button is not a preview: you only see
+	// what you are setting after you have decided you want to see it.
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
 		void [
@@ -304,10 +303,9 @@
 		if (timer) clearTimeout(timer);
 		timer = setTimeout(async () => {
 			const verse = await send('/api/library/testgrids/preview', false, true);
-			// Alleen vervangen als er een geldig bord uitkwam. Het last
-			// geldige beeld laten staan is rustiger dan een gat laten vallen —
-			// en het is ook eerlijker: dát is nog steeds wat je zou branden als
-			// je nu ophield met typen.
+			// Only replace it when a valid board came out. Leaving the last valid image
+			// up is calmer than dropping a hole — and it is more honest too: *that* is
+			// still what you would burn if you stopped typing now.
 			if (verse) preview = verse;
 		}, 250);
 		return () => {
@@ -338,18 +336,18 @@
 	let kolomwaarden = $derived(preview ? langsAs('column') : []);
 
 	/**
-	 * Hoe zwaar een vakje verbrandt: veel vermogen, weinig snelheid en een klein
-	 * interval geven de diepste inbranding. Dat is geen natuurkunde maar een
-	 * leesbaar verloop — het voorbeeld moet je léren hoe je het bord straks
-	 * leest, met de zwaarste hoek rechtsboven.
+	 * How heavily a square burns: much power, low speed and a small interval give the
+	 * deepest burn. That is not physics but a readable gradient — the preview has to
+	 * teach you how to read the board later on, with the heaviest corner at the top
+	 * right.
 	 *
-	 * Logaritmisch en daarna uitgerekt over het hele bereik: de verhouding loopt
-	 * over een raster al snel een factor tien uiteen, en lineair blijft dan
-	 * alleen de bovenste rij zichtbaar donker.
+	 * Logarithmic and then stretched over the whole range: across a grid the ratio
+	 * quickly spans a factor of ten, and linearly only the top row then stays visibly
+	 * dark.
 	 */
 	function score(cell: Cell) {
-		// Een leeg interval telt als 1: dan valt de factor weg in plaats van de
-		// hele schaal naar nul te trekken.
+		// An empty interval counts as 1: then the factor drops out instead of pulling
+		// the whole scale to zero.
 		const interval = cell.interval_mm ?? 1;
 		return Math.log(
 			cell.power_percent / Math.max(0.001, cell.speed_mm_s * Math.max(0.001, interval))
@@ -366,16 +364,16 @@
 
 	function brand(cell: Cell) {
 		const t = (score(cell) - brandschaal.laag) / (brandschaal.hoog - brandschaal.laag);
-		// Niet helemaal tot nul: ook het lichtste vakje is een snede in hout.
+		// Not all the way to zero: even the lightest square is a cut in wood.
 		return Math.max(0, Math.min(1, 0.12 + 0.88 * t));
 	}
 
 	/**
-	 * Welke hoek het diepst gaat, uitgerekend in plaats van aangenomen.
+	 * Which corner goes deepest, worked out rather than assumed.
 	 *
-	 * Zolang snelheid omlaag en vermogen naar rechts stonden was dat altijd
-	 * rechtsboven. Met vrij te kiezen assen kan het elke hoek zijn — en een
-	 * legenda die de verkeerde hoek noemt is erger dan geen legenda.
+	 * As long as speed went down and power to the right, that was always the top
+	 * right. With freely chosen axes it can be any corner — and a legend naming the
+	 * wrong corner is worse than no legend.
 	 */
 	let diepsteHoek = $derived.by(() => {
 		if (!preview || preview.cells.length === 0) return null;
@@ -425,9 +423,9 @@
 		return toonAlleLabels || i === 0 || i === reeks.length - 1;
 	}
 
-	// "Geen materiaal" is niet hetzelfde als "het veld is leeg": een id dat niet
-	// in de bibliotheek staat, levert straks net zo goed geen preset op. De
-	// waarschuwing hoort dus ook dán te staan, en niet één frame later.
+	// "No material" is not the same as "the field is empty": an id that is not in the
+	// library produces no preset later on just the same. So the warning belongs there
+	// in that case too, and not one frame later.
 	let geenMateriaal = $derived(
 		form.material_id === null ||
 			(library.materials.length > 0 &&
@@ -438,10 +436,10 @@
 	/**
 	 * Waar het vorige bord kwam te liggen.
 	 *
-	 * Nodig omdat een tweede raster standaard op precies dezelfde plek valt:
-	 * Start X en Start Y staan nog op wat ze stonden. Gemeten: twee borden,
-	 * allebei op 20, 20 mm, exact over elkaar heen — op het canvas niet te zien
-	 * en in de machine een dubbele brand.
+	 * Needed because by default a second grid lands in exactly the same place: Start X
+	 * and Start Y are still what they were. Measured: two boards, both at 20, 20 mm,
+	 * exactly on top of each other — invisible on the canvas and a double burn in the
+	 * machine.
 	 */
 	let vorigBord = $state<{
 		id: number;
@@ -471,14 +469,14 @@
 	}
 
 	/**
-	 * Terug naar stap 1 voor een volgend bord.
+	 * Back to step 1 for a next board.
 	 *
-	 * Dit was één knop met `generate()`: "Nog een raster tekenen" tékende
-	 * meteen, zonder je de kans te geven iets te veranderen — en liet daarbij
-	 * de melding van het vórige bord staan ("De job staat in de wachtrij"),
-	 * onder het nummer van het nieuwe. Nu doet de knop wat hij zegt: hij set je
-	 * terug bij de instellingen, met de plek van het vorige bord in beeld zodat
-	 * je het nieuwe ernaast legt in plaats van erop.
+	 * This was one button with `generate()`: "Draw another grid" *drew* straight
+	 * away, without giving you the chance to change anything — and left the previous
+	 * board's message up ("The job is in the queue") under the new one's number. Now
+	 * the button does what it says: it puts you back at the settings, with the place
+	 * of the previous board on screen so you lay the new one beside it instead of on
+	 * top of it.
 	 */
 	function opnieuw() {
 		gelukt = null;
@@ -506,9 +504,9 @@
 
 	// ------------------------------------------------- vorige keer (gat T3)
 	//
-	// Wie wekelijks 3 mm berk test, stelt elke week hetzelfde in. Het vorige
-	// raster voor dit materiaal ís die instelling; er is geen aparte
-	// voorkeurentabel voor nodig.
+	// Anybody testing 3 mm birch every week sets the same thing up every week. The
+	// previous grid for this material *is* that setting; no separate preferences table
+	// is needed for it.
 
 	let overgenomen = $state<{ datum: string; raster: number } | null>(null);
 	let geladenVoor = $state<number | null | undefined>(undefined);
@@ -525,9 +523,9 @@
 	/**
 	 * Eén bewaarde instelling in het formulier zetten.
 	 *
-	 * Werkt voor een vorig raster (T3) en voor een benoemd recept (T7): de
-	 * server levert ze in dezelfde vorm, en dat was de reden om T7 óp T3 te
-	 * bouwen in plaats van ernaast.
+	 * Works for a previous grid (T3) and for a named recipe (T7): the server supplies
+	 * them in the same shape, and that was the reason to build T7 *on* T3 rather than
+	 * beside it.
 	 */
 	function neemOver(vorige: Record<string, unknown>) {
 		for (const sleutel of OVER_TE_NEMEN) {
@@ -536,14 +534,14 @@
 			(form as Record<string, unknown>)[sleutel] =
 				typeof waarde === 'number' ? String(waarde) : waarde;
 		}
-		// Een vaste grootheid staat in de vorige rij als min == max.
+		// A fixed quantity sits in the previous row as min == max.
 		for (const as of AS_ORDE) {
 			if (vorige[`${as}_steps`] === 1 && vorige[`${as}_min`] != null) {
 				form[VAST_VELD[as]] = String(vorige[`${as}_min`]);
 			}
 		}
-		// Waar het bord lag en wat er verder op stond (T9, T10). Het point dat je
-		// intikte komt terug, niet de hoek die eruit gerekend is.
+		// Where the board lay and what else was on it (T9, T10). The point you tapped
+		// comes back, not the corner computed from it.
 		if (vorige.anchor === 'center' || vorige.anchor === 'corner') form.anchor = vorige.anchor;
 		if (typeof vorige.text_enabled === 'boolean') form.text = vorige.text_enabled;
 		if (typeof vorige.border_enabled === 'boolean') form.border = vorige.border_enabled;
@@ -564,8 +562,8 @@
 			const response = await fetch(`/api/library/testgrids/defaults?material_id=${id}`);
 			if (!response.ok) return;
 			const vorige = await response.json();
-			// Alleen overnemen zolang je nog niets gegenereerd hebt: anders
-			// overschrijf je het formulier waar je net mee bezig was.
+			// Only adopt it as long as you have generated nothing yet: otherwise you
+			// overwrite the form you were just working in.
 			if (!vorige || gelukt || form.material_id !== id) return;
 			neemOver(vorige);
 			overgenomen = { datum: vorige.from_date, raster: vorige.from_grid };
@@ -574,11 +572,11 @@
 
 	// ------------------------------------------ benoemde recepten (gat T7)
 	//
-	// T3 onthoudt één instelling per materiaal: het vorige raster. Dat dekt de
-	// wekelijkse proef, niet twee recepten die je afwisselt — "berk snijden"
-	// naast "berk graveren". LightBurn heeft daar een Presets-lijst voor met
-	// saving en verwijderen; dit is dezelfde lijst, gevuld met dezelfde
-	// sleutels als het vorige raster, zodat er één invulroutine is.
+	// T3 remembers one setting per material: the previous grid. That covers the weekly
+	// trial, not two recipes you alternate between — "cut birch" beside "engrave
+	// birch". LightBurn has a Presets list for that with saving and deleting; this is
+	// the same list, filled with the same keys as the previous grid, so there is one
+	// fill-in routine.
 
 	type Recept = {
 		id: number;
@@ -593,7 +591,7 @@
 	let receptNaam = $state('');
 	let receptFout = $state<string | null>(null);
 	let receptBezig = $state(false);
-	/** Het opslaanveld staat dicht tot je het opent: het is niet de hoofdweg. */
+	/** The save field is closed until you open it: it is not the main route. */
 	let bewaren = $state(false);
 
 	async function haalRecepten() {
@@ -618,8 +616,8 @@
 		gekozenRecept = id;
 		const recept = recepten.find((r) => r.id === id);
 		if (!recept) return;
-		// Een recept overschrijft het formulier; dat is waarvoor je hem koos.
-		// De herkomstregel van T3 klopt daarna niet meer, dus die gaat weg.
+		// A recipe overwrites the form; that is what you chose it for. The provenance
+		// line from T3 no longer holds after that, so it goes.
 		overgenomen = null;
 		neemOver(recept.settings);
 		receptNaam = recept.name;
@@ -635,8 +633,8 @@
 			const token =
 				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
 			if (token) headers.Authorization = `Bearer ${token}`;
-			// Precies wat er straks gebrand wordt, min het opschrift: dat hoort
-			// bij één bord en niet bij het recept.
+			// Exactly what gets burned later on, minus the caption: that belongs to one
+			// board and not to the recipe.
 			const instellingen = { ...body(false) };
 			delete (instellingen as Record<string, unknown>).material_id;
 			const response = await fetch('/api/library/testgrids/recipes', {
@@ -739,9 +737,9 @@
 		naarMachine = bezig;
 		machineFout = null;
 		try {
-			// Alleen vóór het branden. Een kader laten lopen is juist de manier om
-			// te zien dat iets buiten het bed valt; dat tegenhouden zou de
-			// controle blokkeren die je wilde doen.
+			// Only before burning. Running a frame is precisely the way to see that
+			// something falls off the bed; blocking that would block the very check you
+			// wanted to make.
 			if (pad.includes('/job/start')) {
 				const bezwaar = await tegenhouder();
 				if (bezwaar) {
@@ -1444,13 +1442,12 @@
 	.lead { margin: 0; font-size: var(--text-sm); color: var(--text-1); max-width: 62ch; }
 	.muted { color: var(--text-2); margin: 0; font-size: var(--text-xs); }
 
-	/* Formulierregel v4: het formulier is een stapel regels, geen doorlopend
-	   raster van twee kolommen. In dat raster viel elk veld op de eerstvolgende
-	   vrije plek, en dus stond "Snelheid van" naast "Kolommen, naar rechts" met
-	   "tot" op de regel eronder — twee velden die één waarde zijn, diagonaal uit
-	   elkaar getrokken. Nu bepaalt de opmaak wat bij elkaar hoort: `.paar` set
-	   precies twee velden naast elkaar, al het andere staat op zijn eigen regel.
-	   Zie DESIGN-SYSTEM v4, "Formulieren". */
+	/* Form rule v4: the form is a stack of rows, not a continuous two-column grid. In
+	   that grid every field fell into the next free slot, and so "Speed from" sat
+	   beside "Columns, to the right" with "to" on the row below — two fields that are
+	   one value, pulled apart diagonally. Now the markup decides what belongs
+	   together: `.pair` puts exactly two fields side by side, everything else is on a
+	   row of its own. See DESIGN-SYSTEM v4, "Forms". */
 	.grid {
 		display: flex;
 		flex-direction: column;
@@ -1465,8 +1462,8 @@
 	}
 	.veld { display: grid; gap: 4px; }
 	.naam { font-size: var(--text-xs); color: var(--text-2); }
-	/* Een as is één uitspraak: van, tot en het aantal stappen horen in één
-	   omlijnd blok, want los in de stroom lazen ze als drie losse getallen. */
+	/* An axis is one statement: from, to and the number of steps belong in one framed
+	   block, because loose in the flow they read as three separate numbers. */
 	.asblok {
 		display: flex;
 		flex-direction: column;
@@ -1503,23 +1500,23 @@
 		color: var(--text-1);
 	}
 	.waarschuwing p { margin: 0; }
-	/* Een bord dat blanco uit de machine komt is geen aandachtspunt maar een
-	   verspilde plaat: die melding krijgt de gevaarkleur. */
+	/* A board that comes out of the machine blank is not a point of attention but a
+	   wasted plate: that message gets the danger colour. */
 	.waarschuwing.ernstig {
-		/* Terug naar één tekstblok: het gedeelde kader is een grid, en dan wordt
-		   elk woord tussen twee <strong>'s een eigen rij. */
+		/* Back to one text block: the shared frame is a grid, and then every word
+		   between two <strong>s becomes a row of its own. */
 		display: block;
 		border-left-color: var(--danger-solid, var(--danger));
 		background: color-mix(in srgb, var(--danger-solid, var(--danger)) 12%, transparent);
 	}
-	/* De uitweg staat in de waarschuwing zelf: één regel typen en je bent eruit,
-	   zonder de bibliotheek te openen en dit venster kwijt te raken. */
+	/* The way out is in the warning itself: type one line and you are out, without
+	   opening the library and losing this dialog. */
 	.erbij { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 	.erbij input { flex: 1; min-width: 12rem; }
 	.failure { color: var(--danger-solid, var(--danger)); }
 
-	/* Wat de vorige keer werkte, komt terug — maar wel zichtbaar, want anders
-	   verandert het formulier onder je handen zonder dat je weet waarom. */
+	/* What worked last time comes back — but visibly, because otherwise the form
+	   changes under your hands without you knowing why. */
 	.overgenomen {
 		grid-column: 1 / -1;
 		margin: 0;
@@ -1531,9 +1528,9 @@
 		color: var(--text-1);
 	}
 
-	/* De receptenbalk: één regel bovenaan, zoals in LightBurn. Kiezen is de
-	   hoofdactie, saving staat ernaast en klapt pas open als je het vraagt —
-	   anders is het eerste wat je ziet een leeg naamveld. */
+	/* The recipe bar: one row at the top, as in LightBurn. Choosing is the main
+	   action, saving sits beside it and only opens when you ask for it — otherwise the
+	   first thing you see is an empty name field. */
 	.recepten {
 		display: grid;
 		grid-template-columns: 1fr auto;
@@ -1549,13 +1546,13 @@
 	.recepten .failure { grid-column: 1 / -1; }
 	.receptknoppen { display: flex; gap: var(--space-2); }
 	.receptknoppen .btn { min-height: 38px; padding: var(--space-1h) var(--space-3); }
-	/* Verwijderen is stil: het staat er voor als je het nodig hebt, niet als
-	   suggestie naast de knop die je wél moet gebruiken. */
+	/* Deleting is quiet: it is there in case you need it, not as a suggestion beside
+	   the button you actually have to use. */
 	.btn.stil { border-color: transparent; background: transparent; color: var(--text-2); }
 	.btn.stil:hover:not(:disabled) { background: var(--surface-1); color: var(--text-1); }
 
-	/* Twee schakelaars die bij elkaar horen: een fieldset, want ze delen één
-	   ask ("wat komt er verder op het bord"). */
+	/* Two switches that belong together: a fieldset, because they share one question
+	   ("what else goes on the board"). */
 	.schakelaars {
 		grid-column: 1 / -1;
 		display: grid;
@@ -1575,11 +1572,11 @@
 	}
 	.schakelaars .hint { margin: 0; max-width: 52ch; }
 
-	/* Instellen en zien wat je instelt, naast elkaar. Onder 720px stapelt het.
-	   De voorbeeldkolom heeft een vaste breedte in plaats van `auto`: met
-	   `auto` volgde hij de breedte van het bord, dus veranderde hij mee met de
-	   labels ("5" tegenover "12.5 mm/s") en schoof het formulier ernaast heen
-	   en weer tijdens het typen. Gemeten: 274 → 304 px bij één cijfer erbij. */
+	/* Setting up and seeing what you set, side by side. Below 720px it stacks. The
+	   preview column has a fixed width instead of `auto`: with `auto` it followed the
+	   width of the board, so it changed along with the labels ("5" against "12.5
+	   mm/s") and the form beside it slid back and forth while typing. Measured:
+	   274 → 304 px for one extra digit. */
 	.werkbank {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 292px;
@@ -1593,11 +1590,11 @@
 	}
 
 	.preview {
-		/* Meekijken terwijl je sleutelt. Het formulier is met de positiekeuze en
-		   de schakelaars langer geworden dan het venster: wie onderin "vanaf het
-		   midden" koos, zag het voorbeeld niet meer waarin dat verschil zichtbaar
-		   is. Boven 720px, want daaronder staat het voorbeeld ónder het formulier
-		   en zou plakken betekenen dat het de velden afdekt. */
+		/* Watching along while you fiddle. With the position choice and the switches
+		   the form has become longer than the dialog: anybody choosing "from the
+		   centre" at the bottom no longer saw the preview in which that difference is
+		   visible. Above 720px, because below that the preview sits *below* the form
+		   and sticking would mean it covers the fields. */
 		position: sticky;
 		top: 0;
 		border: 1px solid var(--line);
@@ -1606,8 +1603,8 @@
 		background: var(--surface-1);
 		box-shadow: var(--lift-1);
 	}
-	/* De reden dat het voorbeeld even niet meeloopt. Een rustige melding en
-	   geen alarm: dit is een tussenstand tijdens het typen, geen failure. */
+	/* The reason the preview is briefly not keeping up. A calm notice and not an
+	   alarm: this is an intermediate state while typing, not a failure. */
 	.onaf {
 		margin: 0 0 var(--space-2);
 		padding: var(--space-1h) var(--space-2);
@@ -1628,19 +1625,19 @@
 		margin-bottom: var(--space-2);
 	}
 
-	/* Het voorbeeld staat in pixels, niet in millimeters: labels binnen een
-	   mm-viewBox worden factor tien te groot. Zie DESIGN-SYSTEM v3. */
+	/* The preview is in pixels, not in millimetres: labels inside a mm viewBox come
+	   out a factor of ten too large. See DESIGN-SYSTEM v3. */
 	.bord {
 		display: grid;
 		grid-template-columns: auto auto;
 		grid-template-rows: auto auto;
 		gap: 4px;
 	}
-	/* Zonder opschrift is er ook geen labelkolom: dan is het bord precies de
-	   vakjes, en dat hoort het voorbeeld te laten zien. */
+	/* Without a caption there is no label column either: then the board is exactly the
+	   squares, and that is what the preview should show. */
 	.bord.kaal { grid-template-columns: auto; grid-template-rows: auto; }
-	/* Het randkader zoals het brandt: om alles heen, met de tussenruimte ertussen
-	   die de generator ook aanhoudt. */
+	/* The border as it burns: around everything, with the same gap in between that the
+	   generator keeps. */
 	.bord.kader {
 		padding: var(--space-2);
 		border: 1px solid var(--text-2);
@@ -1658,9 +1655,9 @@
 	}
 	.zijlabels .as { justify-items: end; padding-right: 2px; }
 	.vakjes { display: grid; gap: var(--gat); }
-	/* Het bord is hout en de snede is roet: dezelfde tinten die de
-	   materiaalkaart gebruikt, zodat het voorbeeld léést als het bord dat
-	   straks op tafel ligt in plaats van als een staafdiagram. */
+	/* The board is wood and the cut is soot: the same tones the material card uses, so
+	   that the preview *reads* as the board that will be on the table rather than as a
+	   bar chart. */
 	.vakje {
 		width: var(--cel);
 		height: var(--cel);
@@ -1693,9 +1690,9 @@
 		color: var(--text-2);
 	}
 
-	/* De knop van stap 1 hoort in beeld te blijven. In een venster van 80vh met
-	   twaalf velden erboven verdween hij onder de vouw, en dan lijkt de wizard
-	   doodlopend. */
+	/* The button from step 1 has to stay on screen. In an 80vh dialog with twelve
+	   fields above it, it disappeared below the fold, and then the wizard looks like a
+	   dead end. */
 	.actions .rek { flex: 1; }
 	.actions {
 		position: sticky;
@@ -1721,14 +1718,14 @@
 		color: var(--text-1);
 	}
 	.btn:hover:not(:disabled) { background: var(--surface-2); }
-	/* Zonder deze regel wint de algemene hover van .primary: de knop werd bij
-	   aanwijzen lichtgrijs met witte tekst. Zelfde specificiteit, later in de
-	   stylesheet — een klassieke. */
+	/* Without this rule the general hover beats .primary: on hover the button went
+	   light grey with white text. Same specificity, later in the stylesheet — a
+	   classic. */
 	.btn.primary:hover:not(:disabled) {
 		background: color-mix(in srgb, var(--accent) 88%, var(--text-1));
 	}
-	/* Een uitgeschakelde primaire knop mag er niet uitzien als een knop die het
-	   doet: 45% accent leest in het donkere thema nog steeds als "klik mij". */
+	/* A disabled primary button must not look like a button that works: 45% accent
+	   still reads as "click me" in the dark theme. */
 	.btn.primary:disabled {
 		background: var(--surface-2);
 		border-color: var(--line);
@@ -1758,8 +1755,8 @@
 	}
 	.gelukt p { margin: 0; }
 	.branden { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-	/* De startknop hoort de grootste te zijn in dit blok, maar niet zo groot dat
-	   hij de sticky hoofdknop eronder gaat imiteren. */
+	/* The start button should be the largest in this block, but not so large that it
+	   starts imitating the sticky main button below it. */
 	.branden .btn { flex: 1; min-width: 10rem; }
 	.nagekomen { color: var(--text-2); }
 </style>
