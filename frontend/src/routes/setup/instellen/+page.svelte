@@ -2,15 +2,15 @@
 	/**
 	 * Stap 4: het werkgebied.
 	 *
-	 * Dit was een kale doorgifte van de engine: "Width — Width of the laser
+	 * This was a bare pass-through from the engine: "Width — Width of the laser
 	 * bed.", "Force Declared Home — Override native home location", "Flip X",
-	 * en twee velden die allebei "Swap XY" heten. Engels, ontwikkelaarstaal, en
-	 * de bedmaat — het enige wat op deze pagina echt failure kán gaan — had exact
-	 * hetzelfde gewicht als "Flip Y".
+	 * and two fields both called "Swap XY". Developer language, and the bed size —
+	 * the only thing on this page that can really go wrong — carried exactly the same
+	 * weight as "Flip Y".
 	 *
-	 * Nu: bedmaat en oorsprong zijn een eigen blok met eigen woorden en een
-	 * tekening die meebeweegt. De rest van de engine-velden blijft bestaan,
-	 * maar staat onder "Meer van deze machine" en achter "Alle instellingen".
+	 * Now: bed size and origin are a block of their own with words of their own and a
+	 * drawing that moves along. The rest of the engine's fields still exist, but sit
+	 * under "More about this machine" and behind "All settings".
 	 */
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -27,15 +27,15 @@
 	let values = $state<Record<string, unknown>>({});
 	let essentialOnly = $state(true);
 
-	/** Wat wij zelf in beeld brengen; de engine mag het niet nóg een keer tonen. */
-	const EIGEN = ['bedwidth', 'bedheight', 'home_corner'];
+	/** What we put on screen ourselves; the engine must not show it a second time. */
+	const OURS = ['bedwidth', 'bedheight', 'home_corner'];
 
 	/**
-	 * Wat de zoekknop van stap 1 gevonden heeft (besluit B6).
+	 * What the search button in step 1 found (decision B6).
 	 *
-	 * De poort of het IP-adres komt als parameter mee en wordt hier ingevuld —
-	 * zichtbaar, en pas vastgelegd als je op saving drukt. Niets van dit alles
-	 * legt connection; dat gebeurt bij de eerste job.
+	 * The port or the IP address comes along as a parameter and is filled in here —
+	 * visibly, and only recorded when you press save. None of this makes a
+	 * connection; that happens on the first job.
 	 */
 	let connection = $derived.by(() => {
 		const rauw = $page.url.searchParams.get('connection');
@@ -70,8 +70,8 @@
 		values = Object.fromEntries(
 			sheets.flatMap((sheet) => sheet.fields.map((field) => [field.attr, field.value]))
 		);
-		// Alleen invullen wat deze machine ook echt kent: een `serial_port` op
-		// een device dat er geen heeft, wordt door de API afgewezen.
+		// Only fill in what this machine really knows: a `serial_port` on a device
+		// that has none is refused by the API.
 		if (connection) {
 			for (const [attr, waarde] of Object.entries(connection)) {
 				if (attr in values) values[attr] = waarde;
@@ -82,13 +82,13 @@
 	onMount(reload);
 
 	/**
-	 * De engine registreert bedwidth als Length en geeft een string met eenheid
-	 * terug. De stepper rekent in millimeters, dus de eenheid moet meegerekend
-	 * worden — niet weggegooid.
+	 * The engine registers bedwidth as a Length and hands back a string with a unit.
+	 * The stepper works in millimetres, so the unit has to be taken into account —
+	 * not thrown away.
 	 *
-	 * Ruida staat standaard op "24.0in". Alleen de cijfers pakken maakte daar een
-	 * bed van 24 bij 16 millimeter van: een canvas ter grootte van een postzegel,
-	 * en niemand die kon zien waarom.
+	 * Ruida defaults to "24.0in". Taking only the digits turned that into a bed of 24
+	 * by 16 millimetres: a canvas the size of a postage stamp, and nobody able to see
+	 * why.
 	 */
 	const NAAR_MM: Record<string, number> = { mm: 1, cm: 10, in: 25.4, mil: 0.0254 };
 
@@ -98,7 +98,7 @@
 		if (!gevonden) return '0';
 		const factor = NAAR_MM[gevonden[2].toLowerCase()] ?? 1;
 		const mm = Number(gevonden[1]) * factor;
-		// Geen sleep van drijvende-komma-cijfers achter een maat in millimeters.
+		// No trail of floating-point digits behind a measure in millimetres.
 		return String(Math.round(mm * 100) / 100);
 	}
 
@@ -138,32 +138,31 @@
 		}[hoek] ?? null
 	);
 
-	// De tekening is een gewone SVG in pixels, niet in millimeters: de val uit
-	// DESIGN-SYSTEM ("elke CSS-lengte is dan een millimeter") wordt zo nooit
-	// gezet. Alleen de vórm van het bed volgt de verhouding.
-	const TEKENING = { w: 200, h: 130 };
-	/** Marge rondom, zodat het bed als vlak ín een werkruimte leest. */
-	const RUIMTE = { w: 176, h: 108 };
+	// The drawing is an ordinary SVG in pixels, not in millimetres: the trap from
+	// DESIGN-SYSTEM ("every CSS length is then a millimetre") is never stepped into.
+	// Only the *shape* of the bed follows the ratio.
+	const DRAWING = { w: 200, h: 130 };
+	/** Margin around it, so the bed reads as a surface *inside* a workspace. */
+	const ROOM = { w: 176, h: 108 };
 	let verhouding = $derived(
 		Math.max(0.2, Math.min(4, (Number(breedte) || 1) / (Number(hoogte) || 1)))
 	);
 	let bedDoos = $derived(
-		verhouding >= RUIMTE.w / RUIMTE.h
-			? { w: RUIMTE.w, h: RUIMTE.w / verhouding }
-			: { w: RUIMTE.h * verhouding, h: RUIMTE.h }
+		verhouding >= ROOM.w / ROOM.h
+			? { w: ROOM.w, h: ROOM.w / verhouding }
+			: { w: ROOM.h * verhouding, h: ROOM.h }
 	);
 
 	/**
-	 * Alles wat de engine kent behalve wat we hierboven zelf tonen.
+	 * Everything the engine knows except what we show ourselves above.
 	 *
-	 * Ontdubbelen op attribuut: `swap_xy` staat bij Newly in twee bladen, met
-	 * twee verschillende omschrijvingen van hetzelfde vinkje. Dat leverde niet
-	 * alleen twee identieke rijen "Swap XY" op, maar met één lijst ook een
-	 * dubbele sleutel — waarop Svelte het hele blok liet vallen en er dus
-	 * niets meer te zien was.
+	 * Deduplicated on the attribute: on Newly `swap_xy` sits in two sheets, with two
+	 * different descriptions of the same checkbox. That produced not only two
+	 * identical "Swap XY" rows but, in one list, a duplicate key as well — at which
+	 * Svelte dropped the whole block and there was nothing left to see.
 	 */
 	let restVelden = $derived.by(() => {
-		const gezien = new Set(EIGEN);
+		const gezien = new Set(OURS);
 		const velden: SettingField[] = [];
 		for (const sheet of store.settings) {
 			for (const field of sheet.fields) {
@@ -188,8 +187,8 @@
 		await goto(`/setup/klaar?machine=${encodeURIComponent(machinePath)}`);
 	}
 
-	// Het bibliotheekprofiel hoort bij dit device; de vinkjes hieronder leven
-	// daar, niet in de engine.
+	// The library profile belongs to this device; the checkboxes below live there,
+	// not in the engine.
 	let heeftZ = $state(false);
 	let heeftAutofocus = $state(false);
 	let profielId = $state<number | null>(null);
@@ -279,16 +278,16 @@
 				{/if}
 			</div>
 
-			<figure class="tekening">
-				<svg viewBox="0 0 {TEKENING.w} {TEKENING.h}" role="img"
+			<figure class="drawing">
+				<svg viewBox="0 0 {DRAWING.w} {DRAWING.h}" role="img"
 					aria-label={t('setup.bedAria', { width: breedte, height: hoogte })}>
 					<defs>
 						<pattern id="bedgrid" width="10" height="10" patternUnits="userSpaceOnUse">
 							<path d="M10 0 L0 0 0 10" fill="none" stroke="var(--line)" stroke-width="0.5" />
 						</pattern>
 					</defs>
-					<rect width={TEKENING.w} height={TEKENING.h} class="plaat" />
-					<g transform="translate({(TEKENING.w - bedDoos.w) / 2} {(TEKENING.h - bedDoos.h) / 2})">
+					<rect width={DRAWING.w} height={DRAWING.h} class="plate" />
+					<g transform="translate({(DRAWING.w - bedDoos.w) / 2} {(DRAWING.h - bedDoos.h) / 2})">
 							<rect width={bedDoos.w} height={bedDoos.h} class="bed" />
 							<rect width={bedDoos.w} height={bedDoos.h} fill="url(#bedgrid)" />
 							<rect width={bedDoos.w} height={bedDoos.h} class="rand" />
@@ -383,8 +382,8 @@
 		display: grid;
 		gap: var(--space-3);
 		min-width: 0;
-		/* Een stepper van 520px voor een getal van drie cijfers set − en + zo ver
-		   uit elkaar dat je ze niet meer als één bediening leest. */
+		/* A 520px stepper for a three-digit number puts − and + so far apart that you
+		   no longer read them as one control. */
 		max-width: 320px;
 	}
 	.keuze {
@@ -409,35 +408,35 @@
 		color: var(--text-2);
 	}
 
-	.tekening {
+	.drawing {
 		margin: 0;
 		width: 240px;
 	}
-	.tekening svg {
+	.drawing svg {
 		width: 100%;
 		height: auto;
 		display: block;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 	}
-	/* Het bed lag als wit vlak op een witte kaart en las als een lege doos. Nu
-	   staat het op dezelfde ondergrond als op het canvas, mét mm-raster: dan
-	   herken je waar je naar kijkt zonder onderschrift. */
-	.tekening .plaat {
+	/* The bed lay as a white surface on a white card and read as an empty box. Now it
+	   sits on the same ground as on the canvas, *with* the mm grid: then you recognise
+	   what you are looking at without a caption. */
+	.drawing .plate {
 		fill: var(--canvas-bg);
 	}
-	.tekening .bed {
+	.drawing .bed {
 		fill: var(--bed);
 	}
-	.tekening .rand {
+	.drawing .rand {
 		fill: none;
 		stroke: var(--text-2);
 		stroke-width: 1;
 	}
-	.tekening .oorsprong {
+	.drawing .oorsprong {
 		fill: var(--accent);
 	}
-	.tekening figcaption {
+	.drawing figcaption {
 		display: grid;
 		gap: 2px;
 		font-size: var(--text-xs);
@@ -445,7 +444,7 @@
 		text-align: center;
 		margin-top: var(--space-2);
 	}
-	.tekening .maat {
+	.drawing .maat {
 		color: var(--text-1);
 	}
 
@@ -467,7 +466,7 @@
 	.rest summary {
 		cursor: pointer;
 		font-weight: 500;
-		/* Een samenvouwrij is een raakdoel, ook met een handschoen aan. */
+		/* A collapse row is a touch target, gloved as well. */
 		min-height: 32px;
 		display: flex;
 		align-items: center;
@@ -489,10 +488,10 @@
 	}
 	.toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
 
-	/* Op een tablet en telefoon staat de tekening ónder de velden: naast elkaar
-	   wordt de stepper daar zo smal dat de knoppen elkaar raken. */
-	/* Raakdoelen gelden op tablet én telefoon; dit stond op 767px en liet de
-	   tablet dus op 40px staan (gemeten: select 40, uitklaprij 32). */
+	/* On a tablet and a phone the drawing sits *below* the fields: side by side the
+	   stepper gets so narrow there that the buttons touch each other. */
+	/* Touch targets hold on tablet *and* phone; this was at 767px and so left the
+	   tablet at 40px (measured: select 40, expander row 32). */
 	@media (max-width: 1199px) {
 		.rest summary,
 		.keuze select {
@@ -504,7 +503,7 @@
 		.werkgebied {
 			grid-template-columns: minmax(0, 1fr);
 		}
-		.tekening {
+		.drawing {
 			width: 100%;
 			max-width: 260px;
 		}

@@ -30,13 +30,13 @@
 		gap_mm: number;
 		speed_steps: number;
 		power_steps: number;
-		/** Sinds B12 hoeven de assen geen snelheid × vermogen te zijn. */
+		/** Since B12 the axes need not be speed × power. */
 		row_axis: 'speed' | 'power' | 'interval';
 		column_axis: 'speed' | 'power' | 'interval';
 		rows: number | null;
 		columns: number | null;
 		photo_path: string | null;
-		/** De vier hoeken van het bord op de foto; staat in de database (T4). */
+		/** The four corners of the board on the photo; stored in the database (T4). */
 		alignment: Punt[] | null;
 		cells: Cell[];
 		created_at: string;
@@ -49,14 +49,14 @@
 		interval: 'interval_mm'
 	} as const;
 
-	/** "12 mm/s", "60%" — wat er in dit vakje anders was dan in het buurvakje. */
+	/** "12 mm/s", "60%" — what differed in this square from its neighbour. */
 	function aswaarde(cell: Cell, as: Grid['row_axis']) {
 		const waarde = cell[CEL_SLEUTEL[as]];
 		if (waarde === null || waarde === undefined) return '';
 		return as === 'power' ? `${waarde}%` : `${waarde} ${EENHEID[as]}`;
 	}
 
-	/** De twee grootheden die dit vakje onderscheiden, achter elkaar. */
+	/** The two quantities that distinguish this square, one after the other. */
 	function celtekst(cell: Cell) {
 		if (!grid) return '';
 		return `${aswaarde(cell, grid.row_axis)} · ${aswaarde(cell, grid.column_axis)}`;
@@ -85,9 +85,9 @@
 
 	let grid = $derived(grids.find((g) => g.id === openId) ?? null);
 
-	// Kader om alle cellen heen: de maat waarin een cel zijn plek uitdrukt.
-	// rows/columns in plaats van speed_steps/power_steps: welke grootheid op
-	// welke as staat, ligt since B12 niet meer vast.
+	// A frame around all the cells: the measure in which a cell expresses its place.
+	// rows/columns instead of speed_steps/power_steps: since B12 which quantity sits
+	// on which axis is no longer fixed.
 	let box = $derived.by(() => {
 		if (!grid) return null;
 		const pitch = grid.cell_mm + grid.gap_mm;
@@ -97,7 +97,7 @@
 		};
 	});
 
-	/** "11 aug 21:26" — genoeg om drie proeven van dezelfde week te scheiden. */
+	/** "11 Aug 21:26" — enough to separate three trials from the same week. */
 	function datum(ruw: string) {
 		const d = new Date(ruw.replace(' ', 'T'));
 		if (Number.isNaN(d.getTime())) return ruw;
@@ -120,7 +120,7 @@
 
 	load();
 
-	// Vers gebrand raster: dat is waar je naartoe wilt, niet "kies een raster…".
+	// A freshly burned grid: that is where you want to go, not "choose a grid…".
 	$effect(() => {
 		if (focusGrid === null) return;
 		(async () => {
@@ -131,18 +131,17 @@
 
 	// ------------------------------------------------------------- uitlijning
 	//
-	// Een foto van een bord is nooit een strakke uitsnede: je staat er schuin
-	// boven, met het bord half in beeld. Zonder correctie ligt de overlay naast
-	// de gebrande vakjes en wijs je dus het verkeerde vakje aan — de enige stap
-	// die deze app onderscheidt, wordt daarmee waardeloos. Daarom vier
-	// sleepbare hoeken en een projectieve afbeelding, precies zoals de
-	// perspectiefcorrectie van de camera.
+	// A photo of a board is never a tidy crop: you stand at an angle above it, with
+	// the board half in frame. Without correction the overlay lies beside the burned
+	// squares and you therefore point at the wrong square — which makes the one step
+	// that sets this app apart worthless. Hence four draggable corners and a
+	// projective mapping, exactly like the camera's perspective correction.
 
-	// De uitlijning hoort bij het bord, niet bij de browser (gat T4): je lijnt
-	// uit op de desktop en wijst het beste vakje aan op de tablet naast de
-	// machine. Stond dit in localStorage, dan was de tweede helft van die zin
-	// een leeg raster over een schuine foto. Nu is het een kolom op test_grid.
-	const STANDAARD: Punt[] = [
+	// The alignment belongs to the board, not to the browser (gap T4): you align on
+	// the desktop and point out the best square on the tablet beside the machine. Kept
+	// in localStorage, the second half of that sentence would be an empty grid over a
+	// skewed photo. Now it is a column on test_grid.
+	const DEFAULT_CORNERS: Punt[] = [
 		{ x: 0.1, y: 0.1 },
 		{ x: 0.9, y: 0.1 },
 		{ x: 0.9, y: 0.9 },
@@ -155,20 +154,20 @@
 		t('result.corner.bottomLeft')
 	];
 
-	let hoeken = $state<Punt[]>(STANDAARD.map((p) => ({ ...p })));
+	let hoeken = $state<Punt[]>(DEFAULT_CORNERS.map((p) => ({ ...p })));
 	let bewaarFout = $state<string | null>(null);
 
 	$effect(() => {
 		const id = openId;
 		if (id === null) return;
-		// Alleen op het wisselen van raster reageren. Zou dit ook op `grids`
-		// luisteren, dan sprong de uitlijnstand dicht zodra het bewaren zijn
-		// antwoord terugstuurde — middenin het slepen.
+		// React only to switching grids. If this also listened to `grids`, the
+		// alignment state would snap shut as soon as saving sent its answer back —
+		// in the middle of dragging.
 		const bewaard = untrack(() => grids.find((g) => g.id === id)?.alignment ?? null);
 		hoeken =
 			bewaard && bewaard.length === 4
 				? bewaard.map((p) => ({ x: p.x, y: p.y }))
-				: STANDAARD.map((p) => ({ ...p }));
+				: DEFAULT_CORNERS.map((p) => ({ ...p }));
 		// Nog nooit uitgelijnd? Dan is dát de eerste handeling.
 		uitlijnen = bewaard === null;
 		aangewezen = null;
@@ -179,8 +178,8 @@
 
 	function bewaarUitlijning() {
 		if (openId === null) return;
-		// Slepen vuurt bij elke los-gelaten hoek; even wachten scheelt vier
-		// schrijfrondes naar de database bij één keer uitlijnen.
+		// Dragging fires on every released corner; waiting a moment saves four write
+		// rounds to the database for one alignment.
 		if (bewaartimer) clearTimeout(bewaartimer);
 		const id = openId;
 		const punten = hoeken.map((p) => ({ x: p.x, y: p.y }));
@@ -205,11 +204,11 @@
 	}
 
 	/**
-	 * Projectieve afbeelding van het eenheidsvierkant naar de vier hoeken.
+	 * Projective mapping from the unit square to the four corners.
 	 *
-	 * Een affiene transformatie (schuiven, schalen, scheeftrekken) is niet
-	 * genoeg: wie schuin boven het bord staat, fotografeert een trapezium. De
-	 * standaardhomografie hieronder vangt dat wél.
+	 * An affine transform (translate, scale, shear) is not enough: standing at an
+	 * angle above the board you photograph a trapezium. The standard homography
+	 * below does catch that.
 	 */
 	let afbeelding = $derived.by(() => {
 		const [p0, p1, p2, p3] = hoeken;
@@ -310,7 +309,7 @@
 	let gekozenCellen = $derived(
 		grid ? grid.cells.filter((c) => picked.includes(key(c))) : []
 	);
-	/** De vakjes waar al een preset uit gehaald is — het bewijs onder de kaart. */
+	/** The squares a preset has already been taken from — the evidence under the card. */
 	let gebruikteCellen = $derived(
 		grid ? grid.cells.filter((c) => c.preset_id !== undefined && c.preset_id !== null) : []
 	);
@@ -345,8 +344,8 @@
 			}
 			await load();
 			photoStamp = Date.now();
-			// Een verse foto ligt nog niet onder de overlay: dat is de eerste
-			// handeling, dus set hem meteen klaar.
+			// A fresh photo is not yet under the overlay: that is the first action, so
+			// set it up straight away.
 			uitlijnen = true;
 		} finally {
 			busy = false;
@@ -642,15 +641,15 @@
 		   letterbox naast het beeld. */
 		width: fit-content;
 		margin-inline: auto;
-		/* Slepen mag geen tekst selecteren: dat kleurt het halve venster blauw. */
+		/* Dragging must not select text: that turns half the dialog blue. */
 		user-select: none;
 		-webkit-user-select: none;
 		border-radius: var(--radius-card);
 		overflow: hidden;
 		background: var(--surface-2);
 		box-shadow: var(--lift-1);
-		/* De actiebalk moet in beeld blijven: een foto die het hele venster vult
-		   duwt "Preset maken" onder de vouw, en dan eindigt de flow nergens. */
+		/* The action bar has to stay on screen: a photo that fills the whole dialog
+		   pushes "Make preset" below the fold, and then the flow ends nowhere. */
 		max-height: 46vh;
 		display: grid;
 		place-items: center;
@@ -659,9 +658,9 @@
 	.podium svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 	.podium svg.uitlijnen { pointer-events: none; }
 
-	/* Deze SVG meet in eenheden van 0 tot 1 en wordt naar honderden pixels
-	   uitgerekt. Elke rand krijgt daarom non-scaling-stroke, en er staat geen
-	   tekst, straal of schaduw in. Zie DESIGN-SYSTEM, "SVG die in millimeters
+	/* This SVG measures in units from 0 to 1 and is stretched to hundreds of pixels.
+	   Every edge therefore gets non-scaling-stroke, and there is no text, radius or
+	   shadow in it. See DESIGN-SYSTEM, "SVG that measures in millimetres
 	   meet". */
 	.cell polygon {
 		fill: transparent;
@@ -681,8 +680,8 @@
 		stroke-dasharray: 3 2;
 		fill: color-mix(in srgb, var(--ok) 14%, transparent);
 	}
-	/* Aanwijzen in de herkomstregel licht het vakje op de foto op: dat is de
-	   hele belofte van "rij 2, kolom 3" — dat je hem terugvindt. */
+	/* Pointing at the provenance line lights up the square on the photo: that is the
+	   whole promise of "row 2, column 3" — that you find it again. */
 	.cell.aangewezen polygon {
 		stroke: var(--ok);
 		stroke-width: 4;
@@ -702,8 +701,8 @@
 		vector-effect: non-scaling-stroke;
 	}
 
-	/* 44px raakdoel met een kleine point erin: je vinger moet erbij kunnen, je
-	   oog moet zien waar de hoek precies ligt. */
+	/* A 44px touch target with a small dot in it: your finger has to reach it, your
+	   eye has to see where the corner exactly lies. */
 	.hoek {
 		position: absolute;
 		width: var(--greep);
@@ -781,14 +780,14 @@
 		color: var(--text-1);
 	}
 	.btn:hover:not(:disabled) { background: var(--surface-2); }
-	/* Zonder deze regel wint de algemene hover van .primary: de knop werd bij
-	   aanwijzen lichtgrijs met witte tekst. Zelfde specificiteit, later in de
-	   stylesheet — een klassieke. */
+	/* Without this rule the general hover beats .primary: on hover the button went
+	   light grey with white text. Same specificity, later in the stylesheet — a
+	   classic. */
 	.btn.primary:hover:not(:disabled) {
 		background: color-mix(in srgb, var(--accent) 88%, var(--text-1));
 	}
-	/* Een uitgeschakelde primaire knop mag er niet uitzien als een knop die het
-	   doet: 45% accent leest in het donkere thema nog steeds als "klik mij". */
+	/* A disabled primary button must not look like a button that works: 45% accent
+	   still reads as "click me" in the dark theme. */
 	.btn.primary:disabled {
 		background: var(--surface-2);
 		border-color: var(--line);
