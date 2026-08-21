@@ -1323,8 +1323,8 @@
 	let onderrandHoogte = $state(0);
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		document.documentElement.style.setProperty('--palet-hoogte', `${onderrandHoogte}px`);
-		return () => document.documentElement.style.removeProperty('--palet-hoogte');
+		document.documentElement.style.setProperty('--palette-height', `${onderrandHoogte}px`);
+		return () => document.documentElement.style.removeProperty('--palette-height');
 	});
 
 	/**
@@ -2378,7 +2378,7 @@
      disappears again as soon as the work is inside the edges. -->
 <!-- Everything hanging below the bed in one block, and that block measures
      itself. The camera pill floats above the canvas at a fixed distance from the
-     bottom and reckons with `--palet-hoogte`; with only the colour strip in that
+     bottom and reckons with `--palette-height`; with only the colour strip in that
      measurement the pill lay over this warning the moment it appeared (measured at
      1440: 34 px of overlap). One measurement for the whole bottom edge is the only
      one that holds, because there can be more than one strip. -->

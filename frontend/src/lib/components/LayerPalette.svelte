@@ -1,16 +1,16 @@
 <script lang="ts">
 	/**
-	 * De kleurenstrook onder het canvas — besluit B2.
+	 * The colour strip under the canvas — decision B2.
 	 *
-	 * Twee dingen op één rij vakjes, precies zoals LightBurn het doet:
-	 * mét selectie verplaatst een klik die naar de laag van die kleur (die zo
-	 * nodig wordt aangemaakt), zonder selectie set hij de kleur voor nieuw werk.
-	 * Dat is één handeling waar het via het lagenpaneel er drie waren.
+	 * Two things on one row of swatches, exactly as LightBurn does it: with a
+	 * selection a click moves it to the layer of that colour (creating it if
+	 * needed), without a selection it sets the colour for new work. That is one
+	 * action where it took three through the layers panel.
 	 *
-	 * Rechts staat wat die kleur onthoudt. Een geheugen dat je niet ziet is geen
-	 * geheugen — en het moet er ook staan omdat het níet hetzelfde is als een
-	 * preset: het palet weet wat jij het laatst deed, een preset weet wat er
-	 * gebrand is. Daarom staat er "onthouden", nooit "geverifieerd".
+	 * On the right is what that colour remembers. A memory you cannot see is not a
+	 * memory — and it has to be there because it is *not* the same as a preset: the
+	 * palette knows what you last did, a preset knows what has been burned. Hence
+	 * it says "remembered", never "verified".
 	 */
 	import { inkOn, LAYER_COLORS, type DesignStore } from '$lib/design.svelte';
 	import { t } from '$lib/i18n/index.svelte';
@@ -28,142 +28,142 @@
 		onChanged?: () => void;
 	} = $props();
 
-	/** Waar de aanwijzer of het toetsenbord nu staat; anders de actieve kleur. */
-	let aangewezen = $state<string | null>(null);
+	/** Where the pointer or the keyboard is now; otherwise the active colour. */
+	let pointed = $state<string | null>(null);
 
-	let kleuren = $derived(
+	let colours = $derived(
 		(design.palette?.colors.map((c) => c.color) ?? LAYER_COLORS).map((c) => c.toLowerCase())
 	);
 	let active = $derived((design.palette?.default_color ?? '').toLowerCase());
-	let getoond = $derived(aangewezen ?? active ?? null);
-	let selectie = $derived(design.selectedIds.length);
+	let shown = $derived(pointed ?? active ?? null);
+	let selection = $derived(design.selectedIds.length);
 
-	/** De laag die deze kleur nu draagt, plus zijn plek in de brandvolgorde. */
-	function laag(kleur: string) {
-		const op = design.layerWithColor(kleur);
+	/** The layer that carries this colour now, plus its place in the burn order. */
+	function layerOf(colour: string) {
+		const op = design.layerWithColor(colour);
 		if (!op) return null;
-		const nummer = design.operations.filter((o) => !o.grid).findIndex((o) => o.id === op.id);
-		return { op, nummer: nummer < 0 ? null : nummer + 1 };
+		const number = design.operations.filter((o) => !o.grid).findIndex((o) => o.id === op.id);
+		return { op, number: number < 0 ? null : number + 1 };
 	}
 
-	function waarden(kleur: string): string | null {
-		const gevonden = laag(kleur);
-		if (gevonden?.op.speed != null) {
-			const vermogen = gevonden.op.power == null ? null : Math.round(gevonden.op.power / 10);
-			return `${gevonden.op.speed} mm/s${vermogen == null ? '' : ` · ${vermogen}%`}`;
+	function values(colour: string): string | null {
+		const found = layerOf(colour);
+		if (found?.op.speed != null) {
+			const power = found.op.power == null ? null : Math.round(found.op.power / 10);
+			return `${found.op.speed} mm/s${power == null ? '' : ` · ${power}%`}`;
 		}
-		const onthouden = design.memoryFor(kleur);
-		if (!onthouden?.speed_mm_s) return null;
-		return `${onthouden.speed_mm_s} mm/s${
-			onthouden.power_percent == null ? '' : ` · ${Math.round(onthouden.power_percent)}%`
+		const remembered = design.memoryFor(colour);
+		if (!remembered?.speed_mm_s) return null;
+		return `${remembered.speed_mm_s} mm/s${
+			remembered.power_percent == null ? '' : ` · ${Math.round(remembered.power_percent)}%`
 		}`;
 	}
 
-	/** Eén zin die zegt wat er gebeurt als je hier klikt. */
-	function omschrijving(kleur: string): string {
-		const gevonden = laag(kleur);
-		const cijfers = waarden(kleur);
-		const where = gevonden
-			? t('palette.layerNamed', { n: gevonden.nummer, label: gevonden.op.label })
-			: cijfers
+	/** One sentence saying what happens if you click here. */
+	function describe(colour: string): string {
+		const found = layerOf(colour);
+		const figures = values(colour);
+		const where = found
+			? t('palette.layerNamed', { n: found.number, label: found.op.label })
+			: figures
 				? t('palette.noLayerYetRemembered')
 				: t('palette.noLayerYetBlank');
-		const what = selectie
-			? t('palette.putInColour', { n: selectie })
+		const what = selection
+			? t('palette.putInColour', { n: selection })
 			: t('palette.setForNewWork');
-		return `${what} ${where}${cijfers ? ` · ${cijfers}` : ''}`;
+		return `${what} ${where}${figures ? ` · ${figures}` : ''}`;
 	}
 
-	// De hoogte van de onderrand (deze strook plus een eventuele waarschuwing)
-	// wordt gemeten in Canvas.svelte en daar in `--palet-hoogte` gezet — de
-	// camerapil rekent ermee. Eén meter voor het hele blok, want er kan meer dan
-	// één strook onder het bed staan.
+	// The height of the bottom edge (this strip plus a possible warning) is
+	// measured in Canvas.svelte and set there as `--palette-height` — the camera
+	// pill reckons with it. One measure for the whole block, because there can be
+	// more than one strip under the bed.
 
-	async function kies(kleur: string) {
+	async function pick(colour: string) {
 		if (!canEdit || edits.busy) return;
-		const ok = await edits.paletteColor(kleur, design.selectedIds);
+		const ok = await edits.paletteColor(colour, design.selectedIds);
 		if (!ok) return;
 		await design.load();
 		onChanged?.();
 	}
 </script>
 
-<div class="palet" class:leeg={!canEdit}>
-	<!-- De kop zegt wat een klik doet, niet wat de vakjes zijn.
-	     Hiervóór stond hier "Laagkleur" en helemaal rechts, in kleine grijze
-	     letters, wat een klik zou doen — en dát verandert met de selectie. Eén
-	     strook met twee betekenissen, en het verschil stond op de plek waar je
-	     het laatst kijkt. Nu staat het vooraan, waar het label hoort. -->
-	<span class="kop">{selectie ? t('palette.selectionToLayer') : t('palette.forNewWork')}</span>
-	<div class="strook" role="group" aria-label={t('palette.aria')}>
-		{#each kleuren as kleur, index (kleur)}
-			{@const gevonden = laag(kleur)}
+<div class="palette" class:empty={!canEdit}>
+	<!-- The heading says what a click does, not what the swatches are.
+	     Before this it read "Layer colour" here, and at the far right, in small grey
+	     letters, what a click would do — and *that* changes with the selection. One
+	     strip with two meanings, and the difference sat in the place you look at
+	     last. Now it is up front, where the label belongs. -->
+	<span class="head">{selection ? t('palette.selectionToLayer') : t('palette.forNewWork')}</span>
+	<div class="strip" role="group" aria-label={t('palette.aria')}>
+		{#each colours as colour, index (colour)}
+			{@const found = layerOf(colour)}
 			<button
-				class="vak"
-				class:gebruikt={!!gevonden}
-				class:nu={kleur === active}
-				style="background: {kleur}; color: {inkOn(kleur)}"
+				class="swatch"
+				class:used={!!found}
+				class:now={colour === active}
+				style="background: {colour}; color: {inkOn(colour)}"
 				disabled={!canEdit || edits.busy}
-				aria-pressed={kleur === active}
-				aria-label={t('palette.colourAria', { n: index + 1, description: omschrijving(kleur) })}
-				title={omschrijving(kleur)}
-				onpointerenter={() => (aangewezen = kleur)}
-				onpointerleave={() => (aangewezen = null)}
-				onfocus={() => (aangewezen = kleur)}
-				onblur={() => (aangewezen = null)}
-				onclick={() => kies(kleur)}
+				aria-pressed={colour === active}
+				aria-label={t('palette.colourAria', { n: index + 1, description: describe(colour) })}
+				title={describe(colour)}
+				onpointerenter={() => (pointed = colour)}
+				onpointerleave={() => (pointed = null)}
+				onfocus={() => (pointed = colour)}
+				onblur={() => (pointed = null)}
+				onclick={() => pick(colour)}
 			>
-				<!-- Nooit alleen kleur: het laagnummer staat in het vakje, zoals bij de
-				     chips in het lagenpaneel. Een kleur zonder laag krijgt een point —
-				     dan is het vakje leeg maar niet dood. -->
-				{#if gevonden?.nummer}
-					<span class="mono">{gevonden.nummer}</span>
+				<!-- Never colour alone: the layer number sits in the swatch, as on the
+				     chips in the layers panel. A colour without a layer gets a dot —
+				     then the swatch is empty but not dead. -->
+				{#if found?.number}
+					<span class="mono">{found.number}</span>
 				{:else}
-					<span class="point" aria-hidden="true"></span>
+					<span class="dot" aria-hidden="true"></span>
 				{/if}
 			</button>
 		{/each}
 	</div>
 
-	<!-- Het geheugen, uitgeschreven. Dit is de helft van B2 die je anders nooit
-	     te zien krijgt, en de plek waar het onderscheid met een preset valt. -->
-	<div class="geheugen" aria-live="polite">
-		{#if getoond}
-			{@const gevonden = laag(getoond)}
-			{@const cijfers = waarden(getoond)}
-			<span class="stip" style="background: {getoond}"></span>
-			<span class="wie">
-				{#if gevonden}
-					{t('palette.layerNamed', { n: gevonden.nummer, label: gevonden.op.label })}
-				{:else if getoond === active}
+	<!-- The memory, written out. This is the half of B2 you would otherwise never
+	     get to see, and the place where the distinction from a preset falls. -->
+	<div class="memory" aria-live="polite">
+		{#if shown}
+			{@const found = layerOf(shown)}
+			{@const figures = values(shown)}
+			<span class="dot" style="background: {shown}"></span>
+			<span class="who">
+				{#if found}
+					{t('palette.layerNamed', { n: found.number, label: found.op.label })}
+				{:else if shown === active}
 					{t('palette.newWork')}
 				{:else}
 					{t('palette.noLayerYet')}
 				{/if}
 			</span>
-			{#if cijfers}
-				<span class="cijfers mono">{cijfers}</span>
+			{#if figures}
+				<span class="figures mono">{figures}</span>
 				<span
-					class="bron"
-					title={gevonden ? t('palette.layerValues') : t('palette.memory')}
-				>{gevonden ? t('palette.inUse') : t('palette.remembered')}</span>
+					class="source"
+					title={found ? t('palette.layerValues') : t('palette.memory')}
+				>{found ? t('palette.inUse') : t('palette.remembered')}</span>
 			{:else}
-				<span class="niets">{t('palette.nothingRemembered')}</span>
+				<span class="none">{t('palette.nothingRemembered')}</span>
 			{/if}
 		{/if}
 	</div>
 
-	<span class="uitleg">
-		{selectie
-			? selectie === 1
+	<span class="hint">
+		{selection
+			? selection === 1
 				? t('palette.clickHintOne')
-				: t('palette.clickHintMany', { n: selectie })
+				: t('palette.clickHintMany', { n: selection })
 			: t('palette.clickHintNew')}
 	</span>
 </div>
 
 <style>
-	.palet {
+	.palette {
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
@@ -172,39 +172,39 @@
 		background: var(--surface-1);
 		min-height: 40px;
 		flex-wrap: wrap;
-		/* Op 768px liep deze strook 91px buiten beeld, en met `visible` betekent
-		   dat afgekapt in plaats van scrollbaar. De swatches zijn since besluit
-		   B2 een besturingselement: een vakje dat je niet kunt raken is een
-		   verdwenen functie, geen verdwenen versiering. */
+		/* At 768px this strip ran 91px off screen, and with `visible` that means
+		   clipped rather than scrollable. Since decision B2 the swatches are a
+		   control: a swatch you cannot reach is a lost function, not lost
+		   decoration. */
 		min-width: 0;
 	}
-	.kop {
+	.head {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		text-transform: none;
 		white-space: nowrap;
 		flex: 0 0 auto;
 	}
-	/* Onder 800px is er geen ruimte voor het woord naast tien vakjes van 44px.
-	   De vakjes winnen: die zijn de bediening, dit is het bijschrift. */
+	/* Below 800px there is no room for the word beside ten 44px swatches. The
+	   swatches win: they are the control, this is the caption. */
 	@media (max-width: 800px) {
-		.kop { display: none; }
+		.head { display: none; }
 	}
-	/* De swatches blijven altijd heel — ze zijn het enige hier dat je aanraakt —
-	   maar op tablet zijn ze 44px, en tien daarvan is 476px. Naast de kop en de
-	   stand past dat niet in 768. Dus wrappen: liever twee rijen vakjes dan één
-	   rij waarvan de last drie buiten beeld vallen. */
-	.strook {
+	/* The swatches always stay whole — they are the only thing here you touch —
+	   but on a tablet they are 44px, and ten of those is 476px. Beside the heading
+	   and the state that does not fit in 768. So wrap: two rows of swatches beats
+	   one row with the last three off screen. */
+	.strip {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 4px;
 		min-width: 0;
-		/* `auto` als basis houdt de tien vakjes op één rij zolang ze passen; pas
-		   als dat niet meer kan, breekt hij. Met basis 0 wrapte hij ook op 1024
-		   naar vier rijen, en dat is erger dan het probleem. */
+		/* `auto` as the basis keeps the ten swatches on one row as long as they fit;
+		   only when that is no longer possible does it break. With basis 0 it wrapped
+		   into four rows at 1024 as well, and that is worse than the problem. */
 		flex: 0 1 auto;
 	}
-	.vak {
+	.swatch {
 		width: 26px;
 		height: 26px;
 		border: 1px solid rgb(0 0 0 / 0.18);
@@ -215,42 +215,42 @@
 		padding: 0;
 		font-size: var(--text-xs);
 		line-height: 1;
-		/* Een vakje zonder laag is lichter aanwezig: de strook laat zo in één
-		   blik zien welke kleuren dit ontwerp gebruikt. */
+		/* A swatch without a layer is present more faintly: that way the strip shows
+		   at a glance which colours this design uses. */
 		opacity: 0.55;
 		transition: opacity 150ms ease-out, border-color 150ms ease-out;
 	}
-	.vak.gebruikt {
+	.swatch.used {
 		opacity: 1;
 	}
-	/* Geen optilling bij hover: een doel van 26px dat een pixel omhoog springt,
-	   verschuift onder je cursor terwijl je mikt. Het design system verbiedt
-	   layout-verschuiving bij hover en focus; de nadruk komt uit de dekking en
-	   een iets zwaardere rand. */
-	.vak:hover:not(:disabled) {
+	/* No lift on hover: a 26px target that jumps up a pixel shifts under your
+	   cursor while you are aiming. The design system forbids layout shift on hover
+	   and focus; the emphasis comes from the opacity and a slightly heavier
+	   border. */
+	.swatch:hover:not(:disabled) {
 		opacity: 1;
 		border-color: rgb(0 0 0 / 0.45);
 	}
-	.vak:disabled {
+	.swatch:disabled {
 		cursor: default;
 	}
-	.vak:focus-visible {
+	.swatch:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
-	/* De kleur voor nieuw werk: een ring in de tekstkleur van de app, niet in
-	   het accent — het accent betekent hier "actie", en dit is een stand. */
-	.vak.nu {
+	/* The colour for new work: a ring in the app's text colour, not in the accent —
+	   the accent means "action" here, and this is a state. */
+	.swatch.now {
 		box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--text-1);
 	}
-	.point {
+	.dot {
 		width: 4px;
 		height: 4px;
 		border-radius: var(--radius-dot);
 		background: currentColor;
 		opacity: 0.5;
 	}
-	.geheugen {
+	.memory {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -259,78 +259,78 @@
 		min-width: 0;
 		flex: 1;
 	}
-	.stip {
+	.dot {
 		width: 8px;
 		height: 8px;
 		border-radius: var(--radius-dot);
 		flex: none;
 		border: 1px solid rgb(0 0 0 / 0.2);
 	}
-	.wie {
+	.who {
 		color: var(--text-1);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-	.cijfers {
+	.figures {
 		font-variant-numeric: tabular-nums;
 		color: var(--text-1);
 		white-space: nowrap;
 	}
-	.bron,
-	.niets {
+	.source,
+	.none {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-dot);
 		padding: 1px var(--space-2);
 		white-space: nowrap;
-		/* Bewust geen accent- of statuskleur: dit is gewoonte, geen bewijs.
-		   Groen of amber zijn hier verboden — die betekenen "geverifieerd" en
-		   "geëxtrapoleerd" bij presets, en dat is iets heel anders. */
+		/* Deliberately not an accent or status colour: this is habit, not evidence.
+		   Green or amber are forbidden here — on presets those mean "verified" and
+		   "extrapolated", and that is something else entirely. */
 		background: var(--surface-2);
 	}
-	/* De sluitende tekst geeft als eerste mee — die is uitleg, geen bediening. */
-	.uitleg {
+	/* The closing text gives way first — it is explanation, not control. */
+	.hint {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* De stand en de uitleg zijn bijschrift bij de vakjes; als er te weinig
-	   ruimte is, geven zíj mee. De vakjes zijn de bediening en blijven heel. */
-	.geheugen { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+	/* The state and the explanation are captions to the swatches; when there is too
+	   little room, *they* give way. The swatches are the control and stay whole. */
+	.memory { min-width: 0; flex: 0 1 auto; overflow: hidden; }
 	@media (max-width: 820px) {
-		.geheugen,
-		.uitleg { display: none; }
+		.memory,
+		.hint { display: none; }
 	}
-	.uitleg {
+	.hint {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		white-space: nowrap;
 		margin-left: auto;
 	}
 	@media (max-width: 1199px) {
-		/* De sluitende tekst geeft als eerste mee — die is uitleg, geen bediening. */
-	.uitleg {
+		/* The closing text gives way first — it is explanation, not control. */
+	.hint {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* De stand en de uitleg zijn bijschrift bij de vakjes; als er te weinig
-	   ruimte is, geven zíj mee. De vakjes zijn de bediening en blijven heel. */
-	.geheugen { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+	/* The state and the explanation are captions to the swatches; when there is too
+	   little room, *they* give way. The swatches are the control and stay whole. */
+	.memory { min-width: 0; flex: 0 1 auto; overflow: hidden; }
 	@media (max-width: 820px) {
-		.geheugen,
-		.uitleg { display: none; }
+		.memory,
+		.hint { display: none; }
 	}
-	.uitleg {
+	.hint {
 			display: none;
 		}
 	}
 	@media (max-width: 720px) {
-		.geheugen {
-			/* Op de telefoon staat de strook op één regel en het geheugen eronder;
-			   afkappen zou juist het stuk weghalen waar het om gaat. */
+		.memory {
+			/* On the phone the strip is on one line with the memory below it; clipping
+			   would remove exactly the part that matters. */
 			flex-basis: 100%;
 		}
 	}

@@ -1028,7 +1028,7 @@
 		     actiebalk en de vellenbalk af — precies de twee dingen die je nodig hebt
 		     terwijl er een melding staat. Gemeten met een USB-failure: de kaart lag over
 		     de uitlijnknoppen en over de plus van de vellenbalk, en Playwright kon er
-		     niet doorheen klikken. Dezelfde aanpak als `--palet-hoogte` onder het
+		     niet doorheen klikken. Dezelfde aanpak als `--palette-height` onder het
 		     canvas: opmeten, niet uitrekenen. -->
 		<div class="bovenrand" bind:clientHeight={bovenrandHoogte}>
 		<!-- Uitlijnen, groeperen, spiegelen en de geschiedenis: werkwoorden op de
@@ -1299,7 +1299,7 @@
 	job={status.activeJob}
 	connected={status.connected}
 	{control}
-	acties={!tablet}
+	actions={!tablet}
 />
 {/if}
 
@@ -1550,10 +1550,10 @@
 	.camstrip {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));
-		/* --palet-hoogte komt van de kleurenstrook onder het canvas (B2), die
+		/* --palette-height komt van de kleurenstrook onder het canvas (B2), die
 		   zichzelf opmeet. Zonder die term lag de camerapil over de eerste
 		   kleurvakjes heen. Nul zolang er geen strook is. */
-		bottom: calc(var(--statusbar-height) + var(--space-3) + var(--palet-hoogte, 0px));
+		bottom: calc(var(--statusbar-height) + var(--space-3) + var(--palette-height, 0px));
 		z-index: 5;
 		display: flex;
 		align-items: center;
@@ -1570,11 +1570,11 @@
 	@media (max-width: 1199px) {
 		.camstrip {
 			left: calc(var(--rail-width) + var(--space-3));
-			bottom: calc(var(--statusbar-height) + var(--space-3) + 56px + var(--palet-hoogte, 0px));
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 56px + var(--palette-height, 0px));
 		}
 		.camerror {
 			left: calc(var(--rail-width) + var(--space-3));
-			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px + var(--palet-hoogte, 0px));
+			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px + var(--palette-height, 0px));
 		}
 	}
 	.cam {
@@ -1593,7 +1593,7 @@
 	.camerror {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));
-		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px + var(--palet-hoogte, 0px));
+		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px + var(--palette-height, 0px));
 		z-index: 5;
 		display: flex;
 		align-items: flex-start;
