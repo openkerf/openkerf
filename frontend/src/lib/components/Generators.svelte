@@ -256,7 +256,7 @@
 			voorbeeld = data;
 		} catch (e) {
 			if (mijn === ronde)
-				voorbeeldFout = t('grid.error.network', { message: e instanceof Error ? e.message : e });
+				voorbeeldFout = t('error.network', { message: e instanceof Error ? e.message : e });
 		}
 	}
 

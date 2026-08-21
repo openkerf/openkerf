@@ -256,7 +256,7 @@
 			}
 			return data;
 		} catch (e) {
-			const melding = t('grid.error.network', { message: e instanceof Error ? e.message : e });
+			const melding = t('error.network', { message: e instanceof Error ? e.message : e });
 			if (stil) voorbeeldFout = melding;
 			else error = melding;
 			return null;
@@ -767,7 +767,7 @@
 			}
 			naarMachine = klaar;
 		} catch (e) {
-			machineFout = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			machineFout = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 		} finally {
 			if (naarMachine === bezig) naarMachine = null;
 		}

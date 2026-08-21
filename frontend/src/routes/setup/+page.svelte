@@ -100,7 +100,7 @@
 			}
 			voorbeeld = data;
 		} catch (e) {
-			profielFout = t('grid.error.network', { message: e instanceof Error ? e.message : e });
+			profielFout = t('error.network', { message: e instanceof Error ? e.message : e });
 		} finally {
 			profielBezig = false;
 		}

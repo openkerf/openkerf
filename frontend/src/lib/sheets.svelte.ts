@@ -64,7 +64,7 @@ export class SheetStore {
 			this.sheets = (await response.json()).sheets;
 			return true;
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return false;
 		} finally {
 			this.busy = false;

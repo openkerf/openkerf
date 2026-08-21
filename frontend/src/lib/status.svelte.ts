@@ -1,8 +1,8 @@
 /**
- * Live connection met de OpenKerf API.
+ * Live connection to the OpenKerf API.
  *
- * De WebSocket stuurt een snapshot bij connect, daarna kernel-signalen en elke
- * 2 s opnieuw een volledige snapshot. Read-only: we sturen niets terug.
+ * The WebSocket sends a snapshot on connect, then kernel signals, and a full
+ * snapshot again every 2 s. Read-only: we send nothing back.
  */
 
 import { currentJob } from './api';
@@ -14,64 +14,65 @@ const RECONNECT_MAX = 10_000;
 const MAX_EVENTS = 25;
 
 /**
- * Het spoor van de kop tijdens een job — gat J3.
+ * The trail of the head during a job — gap J3.
  *
- * DESIGN-SYSTEM v2 beloofde dat de contour zich op het canvas aftekent terwijl
- * de machine hem snijdt. Die belofte is nooit ingelost, en de reden dat het niet
- * zomaar kan: wij weten hoe ver een job is (`steps_done` van `steps_total`) maar
- * niet in welke volgorde de engine de vormen afwerkt. Een percentage over een
- * verzonnen route uitsmeren zou een tekening opleveren die er goed uitziet en
- * niet klopt — precies wat je bij een machine die brandt niet moet doen.
+ * DESIGN-SYSTEM v2 promised that the contour draws itself on the canvas while the
+ * machine cuts it. That promise was never kept, and the reason it cannot simply
+ * be done: we know how far a job has got (`steps_done` of `steps_total`) but not
+ * in which order the engine works through the shapes. Smearing a percentage over
+ * an invented route would produce a drawing that looks right and is not — exactly
+ * what you must not do around a machine that is burning.
  *
- * Wat we wél weten is gemeten: de driver seint bij elke beweging `driver;position`
- * met de vorige en de nieuwe stand van de kop (ruida/driver.py:571,
- * ruida/controller.py:253, en dezelfde regel bij grbl en lihuiyu). Die punten
- * achter elkaar zijn geen model maar een verslag: hier is de kop geweest.
+ * What we *do* know is measured: on every movement the driver signals
+ * `driver;position` with the previous and the new position of the head
+ * (ruida/driver.py:571, ruida/controller.py:253, and the same line in grbl and
+ * lihuiyu). Those points in sequence are not a model but a report: the head has
+ * been here.
  *
- * Twee eerlijkheidsgrenzen die de weergave moet dragen:
- * 1. Het signaal zegt niet of de laser aan stond. Snijden en de sprong ernaartoe
- *    zien er in dit spoor hetzelfde uit, dus het heet "spoor" en geen "kerf".
- * 2. Tussen twee notifications trekken we een rechte lijn. Bij een boog is dat de
- *    koorde, niet de boog.
+ * Two limits of honesty the display has to carry:
+ * 1. The signal does not say whether the laser was on. Cutting and the jump
+ *    towards it look the same in this trail, so it is called a "trail" and not a
+ *    "kerf".
+ * 2. Between two reports we draw a straight line. On an arc that is the chord,
+ *    not the arc.
  *
- * Het spoor hangt hier en niet in het canvas omdat de signalen hier binnenkomen;
- * het canvas leest hem als losse module-import, zodat er geen prop door de
- * pagina heen hoeft.
+ * The trail lives here and not in the canvas because the signals arrive here; the
+ * canvas reads it as a plain module import, so no prop has to travel through the
+ * page.
  */
-const SPOOR_MAX = 6000;
-/** Hoe vaak het spoor opnieuw getekend wordt. Tijdens een raster komen er
- *  honderden notifications per seconde binnen; elke melding een hertekening is een
- *  onbruikbaar canvas. */
-const SPOOR_HERTEKEN_MS = 120;
+const TRAIL_MAX = 6000;
+/** How often the trail is redrawn. During a raster hundreds of reports arrive per
+ *  second; a redraw per report is an unusable canvas. */
+const TRAIL_REDRAW_MS = 120;
 
-export class Kopspoor {
+export class HeadTrail {
 	/**
-	 * De punten als vlakke reeks x0,y0,x1,y1,… in scene-eenheden — dezelfde
-	 * eenheid als `bounds` in `/api/design`, dus delen door `units_per_mm` geeft
-	 * millimeters. Rauw en niet diep reactief: een proxy om zesduizend getallen
-	 * kost meer dan het hertekenen zelf.
+	 * The points as a flat sequence x0,y0,x1,y1,… in scene units — the same unit
+	 * as `bounds` in `/api/design`, so dividing by `units_per_mm` gives
+	 * millimetres. Raw and not deeply reactive: a proxy around six thousand
+	 * numbers costs more than the redraw itself.
 	 */
-	punten = $state.raw<number[]>([]);
-	/** Van welke job dit spoor is; wisselt hij, dan begint het opnieuw. */
+	points = $state.raw<number[]>([]);
+	/** Which job this trail belongs to; if it changes, the trail starts over. */
 	job = $state<string | null>(null);
 
 	#buffer: number[] = [];
 	#timer: ReturnType<typeof setTimeout> | null = null;
 
-	/** Een melding van de driver: waar de kop vandaan kwam en waar hij nu is. */
+	/** A report from the driver: where the head came from and where it is now. */
 	push(args: unknown[]) {
-		const getal = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-		const x0 = getal(args[0]);
-		const y0 = getal(args[1]);
-		const x1 = getal(args[2]);
-		const y1 = getal(args[3]);
+		const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+		const x0 = num(args[0]);
+		const y0 = num(args[1]);
+		const x1 = num(args[2]);
+		const y1 = num(args[3]);
 		if (x1 === null || y1 === null) return;
-		// Het eerste point van een verse job krijgt ook zijn vertrekpunt mee;
-		// daarna is het vertrekpunt het vorige eindpunt en zou het dubbel staan.
+		// The first point of a fresh job carries its starting point as well; after
+		// that the starting point is the previous end point and would be doubled.
 		if (!this.#buffer.length && x0 !== null && y0 !== null) this.#buffer.push(x0, y0);
 		this.#buffer.push(x1, y1);
-		if (this.#buffer.length > SPOOR_MAX * 2) {
-			this.#buffer = this.#buffer.slice(this.#buffer.length - SPOOR_MAX * 2);
+		if (this.#buffer.length > TRAIL_MAX * 2) {
+			this.#buffer = this.#buffer.slice(this.#buffer.length - TRAIL_MAX * 2);
 		}
 		this.#plan();
 	}
@@ -80,30 +81,30 @@ export class Kopspoor {
 		if (this.#timer) return;
 		this.#timer = setTimeout(() => {
 			this.#timer = null;
-			this.punten = this.#buffer.slice();
-		}, SPOOR_HERTEKEN_MS);
+			this.points = this.#buffer.slice();
+		}, TRAIL_REDRAW_MS);
 	}
 
-	/** Nieuwe job, of geen job meer: een spoor van gisteren is misleiding. */
+	/** A new job, or no job at all: yesterday's trail is a misdirection. */
 	begin(job: string | null) {
 		if (this.job === job) return;
 		this.job = job;
 		this.#buffer = [];
 		if (this.#timer) clearTimeout(this.#timer);
 		this.#timer = null;
-		this.punten = [];
+		this.points = [];
 	}
 }
 
-/** Eén spoor per pagina; het canvas leest hem rechtstreeks. */
-export const kopspoor = new Kopspoor();
+/** One trail per page; the canvas reads it directly. */
+export const headTrail = new HeadTrail();
 
 export class StatusConnection {
 	snapshot = $state<Snapshot | null>(null);
 	events = $state<SignalEvent[]>([]);
 	connected = $state(false);
 	lastUpdate = $state<number | null>(null);
-	/** Welk serverproces we aan de lijn hebben; verandert alleen bij een restarted. */
+	/** Which server process we have on the line; changes only on a restart. */
 	instance = $state<string | null>(null);
 
 	#socket: WebSocket | null = null;
@@ -117,29 +118,29 @@ export class StatusConnection {
 	}
 
 	/**
-	 * De job waar de bediening over gaat — lopend óf stilstaand.
+	 * The job the controls are about — running *or* standing still.
 	 *
-	 * Dit filterde op `running`, en dat vlaggetje gaat bij Lihuiyu op `false`
-	 * zodra je pauzeert. Gevolg: de job verdween uit de statusbalk, uit het
-	 * Job-paneel en van de telefoon, er was geen knop om te hervatten, en
-	 * "Job starten" werd weer active bovenop werk dat alleen maar stilstond.
+	 * This filtered on `running`, and on Lihuiyu that flag goes to `false` as soon
+	 * as you pause. Consequence: the job disappeared from the status bar, from the
+	 * Job panel and from the phone, there was no button to resume, and "Start job"
+	 * became active again on top of work that was merely paused.
 	 */
 	get activeJob() {
 		return currentJob(this.device);
 	}
 
 	/**
-	 * Welke job dit is, als één tekenreeks.
+	 * Which job this is, as a single string.
 	 *
-	 * Label plus het aantal stappen, en bewust níet de lengte van de wachtrij:
-	 * die loopt terug zodra een job vóór deze klaar is, en dan zou het spoor
-	 * midden in het branden op zwart springen.
+	 * Label plus the number of steps, and deliberately *not* the length of the
+	 * queue: that counts down as soon as a job ahead of this one finishes, and the
+	 * trail would jump to black in the middle of burning.
 	 *
-	 * Twee keer hetzelfde vel achter elkaar geeft twee jobs met dezelfde sleutel,
-	 * maar daartussen is er even geen actieve job — dan komt hier `null` langs en
-	 * begint het spoor sowieso opnieuw.
+	 * The same sheet twice in a row gives two jobs with the same key, but in
+	 * between there is briefly no active job — then `null` comes past here and the
+	 * trail starts over anyway.
 	 */
-	#jobsleutel(): string | null {
+	#jobKey(): string | null {
 		const job = this.activeJob;
 		if (!job) return null;
 		return `${job.label}|${job.steps_total ?? 0}`;
@@ -147,23 +148,22 @@ export class StatusConnection {
 
 	connect() {
 		this.#stopped = false;
-		connection.retryNow = () => this.#nu();
+		connection.retryNow = () => this.#now();
 		this.#open();
 	}
 
 	/**
-	 * Meteen opnieuw proberen in plaats van de backoff uitzitten.
+	 * Try again straight away instead of sitting out the backoff.
 	 *
-	 * Na een halve minuut wachten we tien seconden tussen pogingen. Wie net de
-	 * server heeft restarted wil niet tien seconden naar een dood scherm kijken,
-	 * en heeft bovendien informatie die wij niet hebben: hij weet dát hij hem
-	 * restarted heeft.
+	 * After half a minute we wait ten seconds between attempts. Somebody who has
+	 * just restarted the server does not want to stare at a dead screen for ten
+	 * seconds, and has information we do not have: they know they restarted it.
 	 */
-	#nu() {
+	#now() {
 		if (this.#retryTimer) clearTimeout(this.#retryTimer);
 		this.#retryTimer = null;
 		this.#retryDelay = RECONNECT_MIN;
-		this.#tellen(0);
+		this.#countdown(0);
 		this.#open();
 	}
 
@@ -171,7 +171,7 @@ export class StatusConnection {
 		this.#stopped = true;
 		if (this.#retryTimer) clearTimeout(this.#retryTimer);
 		this.#retryTimer = null;
-		this.#tellen(0);
+		this.#countdown(0);
 		this.#socket?.close();
 		this.#socket = null;
 		this.connected = false;
@@ -187,7 +187,7 @@ export class StatusConnection {
 			this.connected = true;
 			connection.online = true;
 			connection.since = null;
-			this.#tellen(0);
+			this.#countdown(0);
 			this.#retryDelay = RECONNECT_MIN;
 		};
 
@@ -200,17 +200,17 @@ export class StatusConnection {
 			}
 			this.lastUpdate = Date.now();
 			if (payload.type === 'hello') {
-				this.#hallo(payload.instance);
+				this.#hello(payload.instance);
 			} else if (payload.type === 'snapshot') {
 				this.snapshot = payload.data;
-				// Het spoor hoort bij één job (gat J3). Zodra er een andere in de
-				// spooler staat — of geen enkele meer — begint het opnieuw, want
-				// een lijn van de vorige job over het huidige werk is een leugen
-				// die er precies uitziet als voortgang.
-				kopspoor.begin(this.#jobsleutel());
+				// The trail belongs to one job (gap J3). As soon as another one is in
+				// the spooler — or none at all — it starts over, because a line from
+				// the previous job across the current work is a lie that looks exactly
+				// like progress.
+				headTrail.begin(this.#jobKey());
 			} else {
 				if (payload.code === 'driver;position' && this.activeJob) {
-					kopspoor.push(payload.args);
+					headTrail.push(payload.args);
 				}
 				this.events = [payload, ...this.events].slice(0, MAX_EVENTS);
 			}
@@ -228,21 +228,21 @@ export class StatusConnection {
 	}
 
 	/**
-	 * De server stelt zich voor (gat E2).
+	 * The server introduces itself (gap E2).
 	 *
-	 * Hier zat een stille failure: de WebSocket verbond na een restarted keurig
-	 * terug, de statusbalk werd weer groen, en de pagina toonde daarna
-	 * onverstoorbaar het ontwerp van vóór de restarted — dat aan de andere kant
-	 * niet meer bestaat. Je tekent verder in een document dat weg is.
+	 * There was a silent failure here: after a restart the WebSocket reconnected
+	 * neatly, the status bar went green again, and the page then imperturbably
+	 * showed the design from before the restart — which no longer exists on the
+	 * other side. You go on drawing in a document that is gone.
 	 *
-	 * Zelfde `instance` = hetzelfde proces, dus een netwerkhik: de snapshot die
-	 * er meteen achteraan komt herstelt alles wat live is, en er valt niets op
-	 * te halen. Een ander `instance` betekent een nieuwe engine met een lege
-	 * boom, en dan is er niets meer te redden aan de pagina zoals hij is. We
-	 * herladen niet uit onszelf — dat gooit ongesaveld werk weg zonder dat
-	 * iemand erom vroeg — maar zetten de vlag waar de app op reageert.
+	 * Same `instance` = the same process, so a network hiccup: the snapshot that
+	 * follows immediately restores everything that is live, and there is nothing to
+	 * retrieve. A different `instance` means a new engine with an empty tree, and
+	 * then there is nothing left to save about the page as it is. We do not reload
+	 * of our own accord — that throws away unsaved work without anybody asking —
+	 * but we set the flag the app reacts to.
 	 */
-	#hallo(instance: string) {
+	#hello(instance: string) {
 		if (!instance) return;
 		if (this.instance === null) {
 			this.instance = instance;
@@ -256,7 +256,7 @@ export class StatusConnection {
 
 	#scheduleReconnect() {
 		if (this.#stopped || this.#retryTimer) return;
-		this.#tellen(this.#retryDelay);
+		this.#countdown(this.#retryDelay);
 		this.#retryTimer = setTimeout(() => {
 			this.#retryTimer = null;
 			this.#open();
@@ -265,25 +265,25 @@ export class StatusConnection {
 	}
 
 	/**
-	 * De aftelklok naar de volgende poging.
+	 * The countdown to the next attempt.
 	 *
-	 * Een app die stilstaat zonder te zeggen dat hij iets doet, ziet eruit als
-	 * een app die vastgelopen is. Eén zichtbaar getal is het verschil tussen
-	 * "hij is bezig" en "hij is dood".
+	 * An app that stands still without saying it is doing something looks like an
+	 * app that has crashed. One visible number is the difference between "it is
+	 * busy" and "it is dead".
 	 */
-	#tellen(ms: number) {
-		if (this.#tikker) clearInterval(this.#tikker);
-		this.#tikker = null;
+	#countdown(ms: number) {
+		if (this.#ticker) clearInterval(this.#ticker);
+		this.#ticker = null;
 		connection.inSeconds = Math.ceil(ms / 1000);
 		if (ms <= 0) return;
-		this.#tikker = setInterval(() => {
+		this.#ticker = setInterval(() => {
 			connection.inSeconds = Math.max(0, connection.inSeconds - 1);
-			if (connection.inSeconds === 0 && this.#tikker) {
-				clearInterval(this.#tikker);
-				this.#tikker = null;
+			if (connection.inSeconds === 0 && this.#ticker) {
+				clearInterval(this.#ticker);
+				this.#ticker = null;
 			}
 		}, 1000);
 	}
 
-	#tikker: ReturnType<typeof setInterval> | null = null;
+	#ticker: ReturnType<typeof setInterval> | null = null;
 }

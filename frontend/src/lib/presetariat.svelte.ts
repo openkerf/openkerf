@@ -73,7 +73,7 @@ export class PresetariatStore {
 			this.stale = data.stale;
 			if (data.error) this.error = t('presetariat.fromCopy', { error: data.error });
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 		} finally {
 			this.busy = false;
 		}

@@ -13,7 +13,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import Segmented from '$components/Segmented.svelte';
-	import { KINDS, kindOfMachine, type CatalogFamily, type ScanResult, type Vondst } from '$lib/machines.svelte';
+	import { KINDS, kindOfMachine, type CatalogFamily, type ScanResult, type Finding } from '$lib/machines.svelte';
 	import { t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 
@@ -83,7 +83,7 @@
 	 * Confirming. Only here does the creating begin — and even then not at once: you
 	 * land in the ordinary "name" step, where you can still go back.
 	 */
-	function bevestig(vondst: Vondst) {
+	function bevestig(vondst: Finding) {
 		const key = keuze[vondst.id] ?? vondst.suggestions[0]?.key;
 		if (!key) return;
 		const params = new URLSearchParams({ type: key });

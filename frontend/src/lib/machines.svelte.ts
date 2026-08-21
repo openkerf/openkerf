@@ -1,8 +1,8 @@
 /**
- * Machinebeheer: catalogus, aanmaken en instellingen.
+ * Machine management: catalogue, creation and settings.
  *
- * De catalogus komt uit MeerK40t's eigen `dev_info`-registry, dus nieuwe
- * machinetypes uit upstream verschijnen hier zonder codewijziging.
+ * The catalogue comes from MeerK40t's own `dev_info` registry, so new machine
+ * types from upstream appear here without a code change.
  */
 
 import { apiError, t } from './i18n/core.ts';
@@ -24,8 +24,8 @@ export type Machine = {
 	label: string;
 	provider: string | null;
 	active: boolean;
-	/** Door een mens ingesteld, of door de engine zelf verzonnen bij het
-	 *  opstarten? Ontbreekt bij een oudere server. */
+	/** Set up by a human, or invented by the engine itself at startup? Absent on
+	 *  an older server. */
 	configured?: boolean;
 };
 
@@ -42,12 +42,12 @@ export type SettingField = {
 export type SettingSheet = { sheet: string; fields: SettingField[] };
 
 /**
- * De soorten machine die een gebruiker herkent.
+ * The kinds of machine a user recognises.
  *
- * MeerK40t's catalogus is geordend op merk en bord — veertig namen waarvan je
- * er geen kent als je net begint. Wie in zijn werkplaats staat weet wél of hij
- * een glazen buis met waterkoeling heeft of een open diodeframe. Deze indeling
- * is dus geen technische maar een herkenbare.
+ * MeerK40t's catalogue is ordered by brand and board — forty names, none of
+ * which you know when you are starting out. Somebody standing in their workshop
+ * does know whether they have a glass tube with water cooling or an open diode
+ * frame. So this division is not a technical one but a recognisable one.
  */
 export type Kind = 'co2-ruida' | 'co2-k40' | 'diode' | 'galvo';
 
@@ -88,18 +88,18 @@ export const KINDS: {
 ];
 
 /**
- * Bij welke soort één machine uit de catalogus hoort.
+ * Which kind one machine from the catalogue belongs to.
  *
- * Classificeren gebeurt per **machine**, niet per familie. Dat is geen detail:
- * MeerK40t's familie "K-Series CO2-Laser" bevat naast twee Nano-borden en twee
- * GRBL-borden óók `ruida-beta` — de enige Ruida in de hele catalogus. Wie op
- * familienaam sorteerde, schoof die ene Ruida mee naar "K40 CO2" en liet de
- * soort "CO2 met Ruida of Newly" achter met eenendertig Newly's en nul Ruida's.
+ * Classifying happens per **machine**, not per family. That is not a detail:
+ * besides two Nano boards and two GRBL boards, MeerK40t's family "K-Series
+ * CO2-Laser" also contains `ruida-beta` — the only Ruida in the whole catalogue.
+ * Sorting on family name shoved that one Ruida along into "K40 CO2" and left the
+ * kind "CO2 with Ruida or Newly" with thirty-one Newlys and no Ruidas at all.
  *
- * De `provider` is de betrouwbaarste bron die de catalogus meegeeft: hij zegt
- * welke driver de machine aanstuurt, en dat is precies wat de soort betekent.
- * Familienaam en sleutel zijn alleen nog terugval voor providers die we niet
- * kennen — nieuwe upstream-drivers vallen dan niet meteen uit de lijst.
+ * The `provider` is the most reliable source the catalogue supplies: it says
+ * which driver drives the machine, and that is exactly what the kind means.
+ * Family name and key are only a fallback for providers we do not know — that way
+ * new upstream drivers do not drop straight out of the list.
  */
 export function kindOfMachine(machine: {
 	family?: string;
@@ -111,50 +111,50 @@ export function kindOfMachine(machine: {
 	if (driver === 'ruida' || driver === 'newly' || driver === 'moshi') return 'co2-ruida';
 	if (driver === 'lhystudios') return 'co2-k40';
 	if (driver === 'grbl') {
-		// Een GRBL-bord in een K40-kast is nog steeds een K40 voor wie ernaar
-		// kijkt; alle andere GRBL's zijn open diodeframes.
+		// A GRBL board in a K40 case is still a K40 to whoever is looking at it;
+		// every other GRBL is an open diode frame.
 		const context = `${machine.family ?? ''} ${machine.key ?? ''}`.toLowerCase();
 		return /k-series|k40/.test(context) ? 'co2-k40' : 'diode';
 	}
 
-	const naam = (machine.family ?? '').toLowerCase();
-	const sleutel = (machine.key ?? '').toLowerCase();
-	if (/balor|fibre|fiber|uv/.test(naam + sleutel)) return 'galvo';
-	if (/ruida|newly|moshi/.test(naam + sleutel)) return 'co2-ruida';
-	if (/k-series|k40|nano/.test(naam + sleutel)) return 'co2-k40';
-	if (/co2/.test(naam)) return 'co2-ruida';
+	const name = (machine.family ?? '').toLowerCase();
+	const key = (machine.key ?? '').toLowerCase();
+	if (/balor|fibre|fiber|uv/.test(name + key)) return 'galvo';
+	if (/ruida|newly|moshi/.test(name + key)) return 'co2-ruida';
+	if (/k-series|k40|nano/.test(name + key)) return 'co2-k40';
+	if (/co2/.test(name)) return 'co2-ruida';
 	return 'diode';
 }
 
 /**
- * Wat een zoekopdracht oplevert (besluit B6).
+ * What a search turns up (decision B6).
  *
- * Een vondst is een *voorstel*, geen machine: hij bestaat alleen in dit
- * antwoord tot de gebruiker hem bevestigt. De API-kant is daarom een GET zonder
- * schrijfrechten — zie `machines.py`, sectie "detection".
+ * A finding is a *proposal*, not a machine: it exists only in this answer until
+ * the user confirms it. The API side is therefore a GET without write rights —
+ * see `machines.py`, section "detection".
  */
-export type Vondst = {
+export type Finding = {
 	id: string;
 	transport: 'usb' | 'serieel' | 'netwerk' | string;
-	/** Wat er gevonden is, in mensentaal: "K40-bord (CH341)". */
+	/** What was found, in plain words: "K40 board (CH341)". */
 	title: string;
-	/** Waar het zit: een poortnaam, een IP-adres, een USB-identiteit. */
+	/** Where it sits: a port name, an IP address, a USB identity. */
 	where: string;
 	detail: string | null;
 	kind: Kind | string;
 	confidence: 'zeker' | 'waarschijnlijk' | 'onzeker' | string;
-	/** Waarom we dit denken. Altijd tonen: een gok zonder reden is een gok. */
+	/** Why we think this. Always shown: a guess without a reason is a guess. */
 	why: string;
 	suggestions: { key: string; label: string; family: string }[];
-	/** Verbindingsinstellingen die uit de vondst volgen (poort, adres). */
+	/** Connection settings that follow from the finding (port, address). */
 	settings: Record<string, string>;
 };
 
 export type ScanResult = {
-	candidates: Vondst[];
-	/** Waar gekeken is — nodig om "niets gevonden" te kunnen vertrouwen. */
+	candidates: Finding[];
+	/** Where we looked — needed before "nothing found" can be trusted. */
 	searched: string[];
-	/** Waarom ergens níet gekeken kon worden, of wat er stil bleef. */
+	/** Why somewhere could *not* be looked at, or what stayed silent. */
 	notes: string[];
 	duration_ms: number;
 };
@@ -191,7 +191,7 @@ export class MachineStore {
 			}
 			return response.status === 204 ? {} : await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -217,10 +217,10 @@ export class MachineStore {
 	}
 
 	/**
-	 * Zoek naar machines op USB, seriële poorten en het lokale netwerk.
+	 * Search for machines on USB, serial ports and the local network.
 	 *
-	 * `signal` hoort erbij: dit duurt seconden, en een gebruiker die niet kan
-	 * stoppen wacht niet maar ververst de pagina.
+	 * `signal` belongs with it: this takes seconds, and a user who cannot stop it
+	 * does not wait but reloads the page.
 	 */
 	async scan(options: { network?: boolean; seconds?: number; signal?: AbortSignal } = {}) {
 		const { network = true, seconds = 2, signal } = options;
@@ -237,7 +237,7 @@ export class MachineStore {
 			return (await response.json()) as ScanResult;
 		} catch (e) {
 			if (e instanceof DOMException && e.name === 'AbortError') return null;
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -276,7 +276,7 @@ export class MachineStore {
 }
 
 async function describe(response: Response): Promise<string> {
-	if (response.status === 401) return 'Geen of onjuiste token — wijzigen is geblokkeerd.';
+	if (response.status === 401) return t('error.noToken');
 	try {
 		const body = await response.json();
 		if (typeof body.detail === 'string') return apiError(response, body.detail);

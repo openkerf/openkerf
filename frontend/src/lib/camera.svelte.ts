@@ -74,7 +74,7 @@ export class CameraStore {
 			this.state = state;
 			return state;
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;

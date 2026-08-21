@@ -75,7 +75,7 @@
 			page = wanted;
 			searched = true;
 		} catch (e) {
-			error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 		} finally {
 			busy = false;
 			loadingMore = false;

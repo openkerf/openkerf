@@ -1,9 +1,9 @@
 /**
- * Tegels: een plaat branden die groter is dan het bed.
+ * Tiles: burning a board that is bigger than the bed.
  *
- * De opdeling is berekend en niet opgeslagen — hij wordt opnieuw opgehaald
- * zodra het ontwerp of de plaatmaat verandert. De lopende reeks komt uit de
- * statuspayload, zodat canvas, bovenbalk en telefoon dezelfde stand zien.
+ * The division is computed and not stored — it is fetched again as soon as the
+ * design or the board size changes. The running series comes from the status
+ * payload, so canvas, top bar and phone all see the same state.
  */
 
 import { apiError, t } from './i18n/core.ts';
@@ -14,15 +14,15 @@ export type Tile = {
 	row: number;
 	column: number;
 	burn: TileRect;
-	/** Hoe ver de plaat moet opschuiven ten opzichte van de vorige tegel. Null
-	 *  bij de eerste. De server rekent dit uit, want het is de stap tussen de
-	 *  vensters en niet die tussen de brandgebieden — zie `_tile_json`. */
+	/** How far the board has to shift relative to the previous tile. Null on the
+	 *  first one. The server works this out, because it is the step between the
+	 *  windows and not the one between the burn areas — see `_tile_json`. */
 	shift_mm: { x: number; y: number } | null;
 };
 export type Mark = {
 	boundary: number;
-	/** Of de overlapzone hoog-en-smal is. Bepaalt aan welke kant het nummer van
-	 *  een merk staat — gebrand én op het canvas, zodat ze overeenkomen. */
+	/** Whether the overlap zone is tall and narrow. Decides which side the number
+	 *  of a mark sits on — burned *and* on the canvas, so the two agree. */
 	along_y: boolean;
 	points: { x_mm: number; y_mm: number }[];
 };
@@ -51,7 +51,7 @@ export class TilingStore {
 		this.#token = token;
 	}
 
-	/** De tegel die nu aan de beurt is, of niets. */
+	/** The tile whose turn it is now, or nothing. */
 	get current(): Tile | null {
 		if (!this.run || !this.layout) return null;
 		return this.layout.tiles[this.run.current] ?? null;
@@ -67,21 +67,21 @@ export class TilingStore {
 	}
 
 	/**
-	 * Waar de kop nú staat, gelezen bij de server.
+	 * Where the head is *now*, read from the server.
 	 *
-	 * Niet uit de statussnapshot: die is tot twee seconden oud, en bij het
-	 * aantikken van een merk is dat het verschil tussen "waar de kop staat" en
-	 * "waar hij stond". Gemeten met de grbl-mock: het paneel dacht (5,5) terwijl
-	 * de server (0,235) las — 230 mm ernaast, en de tweede tik gebruikt wél de
-	 * live stand van de server. Twee bronnen voor één meting is precies de failure
-	 * die dit hele onderdeel moet uitsluiten, dus lezen beide tikken nu hetzelfde.
+	 * Not from the status snapshot: that is up to two seconds old, and when
+	 * tapping a mark that is the difference between "where the head is" and "where
+	 * it was". Measured with the grbl mock: the panel thought (5,5) while the
+	 * server read (0,235) — 230 mm off, and the second tap did use the server's
+	 * live position. Two sources for one measurement is exactly the failure this
+	 * whole feature has to rule out, so both taps now read the same thing.
 	 */
 	async liveHead(): Promise<{ x_mm: number; y_mm: number } | null> {
 		try {
 			const response = await fetch('/api/devices');
 			if (!response.ok) return null;
-			const alle = await response.json();
-			const active = alle.find((d: { active?: boolean }) => d.active) ?? alle[0];
+			const all = await response.json();
+			const active = all.find((d: { active?: boolean }) => d.active) ?? all[0];
 			const mm = active?.position?.mm;
 			return Array.isArray(mm) ? { x_mm: mm[0], y_mm: mm[1] } : null;
 		} catch {
@@ -89,7 +89,7 @@ export class TilingStore {
 		}
 	}
 
-	/** De reeks komt uit de statuspayload; deze wordt daar aangeroepen. */
+	/** The series comes from the status payload; this is called from there. */
 	adopt(state: TileRun | null) {
 		this.run = state;
 	}
@@ -111,13 +111,13 @@ export class TilingStore {
 				this.error = apiError(response, (await response.json().catch(() => null))?.detail);
 				return false;
 			}
-			this.run = this.#normaliseer(await response.json());
+			this.run = this.#normalise(await response.json());
 			return true;
 		} catch {
-			// Zonder dit valt er bij een wegvallende connection niets te zien:
-			// de failure vliegt ongevangen naar buiten, `error` blijft leeg en de
-			// gebruiker staat aan de machine naar een knop te kijken die niets
-			// deed. In een werkplaats is dat geen randgeval.
+			// Without this there is nothing to see when the connection drops: the
+			// failure flies out uncaught, `error` stays empty and the user stands at
+			// the machine looking at a button that did nothing. In a workshop that is
+			// not an edge case.
 			this.error = t('error.noMachine');
 			return false;
 		} finally {
@@ -126,33 +126,33 @@ export class TilingStore {
 	}
 
 	/**
-	 * Een reeks die afgelopen of afgebroken is, is geen reeks meer.
+	 * A series that has finished or been cancelled is no longer a series.
 	 *
-	 * `cancel` antwoordt met `{cancelled: true}` en een afrondende `advance` met
-	 * `{finished: true}` — allebei zonder de velden van een lopende reeks. Die
-	 * rauw overnemen zou de store even in een vorm zetten die nergens op slaat
-	 * (`tiles` en `aligned` ineens leeg), tot de volgende statusmelding hem een
-	 * seconde later overschrijft. Hier is dat gewoon `null`, wat het is.
+	 * `cancel` answers with `{cancelled: true}` and a closing `advance` with
+	 * `{finished: true}` — both without the fields of a running series. Adopting
+	 * those raw would briefly put the store in a shape that means nothing (`tiles`
+	 * and `aligned` suddenly empty) until the next status report overwrites it a
+	 * second later. Here that is simply `null`, which is what it is.
 	 */
-	#normaliseer(data: unknown): TileRun | null {
+	#normalise(data: unknown): TileRun | null {
 		const body = data as Record<string, unknown> | null;
 		if (!body || body.cancelled || body.finished) return null;
 		return body as unknown as TileRun;
 	}
 
 	start = () => this.#send('/api/tiling/start');
-	/** `confirm: true` bevestigt dat een al gebrande tegel opnieuw mag. */
+	/** `confirm: true` confirms that an already burned tile may go again. */
 	burn = (confirm = false) => this.#send('/api/tiling/burn', confirm ? { confirm: true } : undefined);
 	advance = () => this.#send('/api/tiling/advance');
 	cancel = () => this.#send('/api/tiling/cancel');
 
 	/**
-	 * Het aanbod op het canvas: tegels aanzetten en meteen beginnen.
+	 * The offer on the canvas: switch tiling on and start straight away.
 	 *
-	 * In twee stappen omdat het twee dingen zijn — een instelling op het vel, en
-	 * een reeks die loopt — maar voor de gebruiker is het één antwoord op één
-	 * ask. Hem eerst naar een instelling sturen die nergens op het scherm
-	 * staat, is precies wat deze knop moet voorkomen.
+	 * In two steps because they are two things — a setting on the sheet, and a
+	 * series that runs — but to the user it is one answer to one question. Sending
+	 * them off to a setting that is nowhere on screen is exactly what this button
+	 * has to prevent.
 	 */
 	async enableAndStart(sheetId: string) {
 		this.busy = true;
@@ -163,13 +163,13 @@ export class TilingStore {
 				'Content-Type': 'application/json',
 				...(token ? { Authorization: `Bearer ${token}` } : {})
 			};
-			const aan = await fetch(`/api/sheets/${sheetId}`, {
+			const on = await fetch(`/api/sheets/${sheetId}`, {
 				method: 'PATCH',
 				headers,
 				body: JSON.stringify({ tiling: { enabled: true } })
 			});
-			if (!aan.ok) {
-				this.error = apiError(aan, (await aan.json().catch(() => null))?.detail);
+			if (!on.ok) {
+				this.error = apiError(on, (await on.json().catch(() => null))?.detail);
 				return false;
 			}
 		} catch {
@@ -183,10 +183,10 @@ export class TilingStore {
 	}
 
 	/**
-	 * "Hier": de huidige kopstand als aangetikt point.
+	 * "Here": the current head position as a tapped point.
 	 *
-	 * Voor de eerste tegel is dat de hoek van de plaat, daarna een merk. Twee
-	 * merken betekent twee keer aantikken; de server houdt bij hoeveel er zijn.
+	 * For the first tile that is the corner of the board, after that a mark. Two
+	 * marks means tapping twice; the server keeps track of how many there are.
 	 */
 	alignHere = (reference: 'plate_corner' | 'markers', earlier: { x_mm: number; y_mm: number }[] = []) =>
 		this.#send('/api/tiling/align', { reference, points: earlier, use_current: true });

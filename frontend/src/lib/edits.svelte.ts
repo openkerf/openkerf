@@ -45,7 +45,7 @@ export class EditController {
 			const data = await response.json();
 			return { ok: true, idsInvalidated: Boolean(data?.ids_invalidated) };
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return { ok: false, idsInvalidated: false };
 		} finally {
 			this.busy = false;
@@ -194,7 +194,7 @@ export class EditController {
 			}
 			return { ok: true, idsInvalidated: false };
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return { ok: false, idsInvalidated: false };
 		} finally {
 			this.busy = false;
@@ -231,7 +231,7 @@ export class EditController {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -314,7 +314,7 @@ export class EditController {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;
@@ -340,7 +340,7 @@ export class EditController {
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = `Netwerkfout: ${e instanceof Error ? e.message : e}`;
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 			return null;
 		} finally {
 			this.busy = false;

@@ -9,7 +9,6 @@
 		OPERATIONS,
 		SOURCE_LABEL,
 		operationName,
-		toen,
 		type ImportPreview,
 		type ImportResult,
 		type PresetConflict,
@@ -707,7 +706,7 @@
 							<!-- With the photo beside it the caption already names the square;
 							     repeating the same thing two lines further on is noise. -->
 							#{preset.grid_id}{preset.grid_date
-								? ` · ${t('library.grid.burned', { when: toen(preset.grid_date) })}`
+								? ` · ${t('library.grid.burned', { when: i18n.ago(preset.grid_date) })}`
 								: ''}{preset.grid_cell && !preset.grid_photo
 								? ` · ${t('library.grid.cell', {
 										row: preset.grid_cell.row + 1,
@@ -724,7 +723,7 @@
 					<dd>{preset.air_assist ? t('library.on') : t('library.off')}</dd>
 					{#if preset.last_used_at}
 						<dt>{t('library.lastUsed')}</dt>
-						<dd>{toen(preset.last_used_at)}</dd>
+						<dd>{i18n.ago(preset.last_used_at)}</dd>
 					{/if}
 				</dl>
 				<div class="bewijsvak">
@@ -885,7 +884,7 @@
 				<span class="mono">{bestandsnaam}</span>
 				{#if voorbeeld.exported_at}
 					<span class="scheiding">·</span>
-					{t('import.exportedAt', { when: toen(voorbeeld.exported_at) })}
+					{t('import.exportedAt', { when: i18n.ago(voorbeeld.exported_at) })}
 				{/if}
 			</p>
 			<ul class="inhoud">

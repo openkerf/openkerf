@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { currentJob } from '$lib/api';
 	import type { Device } from '$lib/api';
-	import { kopspoor } from '$lib/status.svelte';
+	import { headTrail } from '$lib/status.svelte';
 	import { nulpunt } from '$lib/control.svelte';
 	import { elementName, type DesignStore } from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
@@ -325,7 +325,7 @@
 	// machine hem snijdt. Wat daarvoor nodig is — de volgorde waarin de engine de
 	// vormen afwerkt — komt nergens naar buiten; wij krijgen een percentage en een
 	// stroom kopposities. Dus tekenen we wat gemeten is en niet wat mooi is:
-	// het spoor dat de kop werkelijk gereden heeft (zie `Kopspoor` in
+	// het spoor dat de kop werkelijk gereden heeft (zie `HeadTrail` in
 	// status.svelte.ts), plus de voortgang als ring óm de kop.
 	//
 	// Wat dit bewust níet doet: doen alsof het een kerf is. Het signaal zegt niet
@@ -343,7 +343,7 @@
 	/** Het spoor in millimeters, klaar om als polyline neer te zetten. */
 	let spoor = $derived.by(() => {
 		if (!job) return '';
-		const punten = kopspoor.punten;
+		const punten = headTrail.points;
 		if (punten.length < 4) return '';
 		const perMm = design.design?.units_per_mm ?? 1;
 		const stukken = [];
@@ -364,7 +364,7 @@
 	const VERS_PUNTEN = 14;
 	let spoorKop = $derived.by(() => {
 		if (!job) return '';
-		const punten = kopspoor.punten;
+		const punten = headTrail.points;
 		if (punten.length < 4) return '';
 		const perMm = design.design?.units_per_mm ?? 1;
 		const vanaf = Math.max(0, punten.length - 2 * VERS_PUNTEN);
