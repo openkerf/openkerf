@@ -1,5 +1,5 @@
 """
-Clipart zoeken in openbare collecties.
+Searching clipart in public collections.
 
 Deliberately no library of our own: referring instead of hosting. That saves maintenance
 and, more importantly, it puts the licence responsibility where it belongs — with the
@@ -72,7 +72,7 @@ class Clipart:
         # Injectable, so that tests do not have to go on the internet.
         self.fetch = fetch
 
-    # -------------------------------------------------------------- zoeken
+    # ------------------------------------------------------------ searching
 
     def search(self, query: str, sources=None, limit: int = 24, page: int = 1) -> dict:
         text = str(query or "").strip()
@@ -255,7 +255,7 @@ class Clipart:
                 {
                     "id": f"openclipart:{item.get('id')}",
                     "source": "Openclipart",
-                    "title": item.get("title") or "zonder titel",
+                    "title": item.get("title") or "untitled",
                     "svg_url": svg,
                     "thumbnail_url": (item.get("svg") or {}).get("png_thumb") or svg,
                     "page_url": item.get("detail_link"),
@@ -271,7 +271,7 @@ class Clipart:
 
     def insert(self, url: str, width_mm=60.0, x_mm=10.0, y_mm=10.0) -> dict:
         """
-        Een found tekening in het ontwerp zetten, op ware grootte.
+        Putting a drawing that was found into the design, at its real size.
 
         The check is here and not at the search: only when you really want to use it is it
         worth knowing what is left of it on a laser.
@@ -297,7 +297,7 @@ class Clipart:
             raise DesignError(
                 "This address does not belong to Iconify, Wikimedia Commons or "
                 "Openclipart. Choose a drawing from the search window; only those "
-                "bronnen worden opgehaald."
+                "sources are being fetched."
             )
         width = float(width_mm)
         if not 1 <= width <= 2000:

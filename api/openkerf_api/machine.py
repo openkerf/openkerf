@@ -14,7 +14,7 @@ from .edits import DesignError, _finite
 
 MOVES = ("home", "physical_home", "unlock", "lock")
 
-# Waar bewaarde positions staan (gat J6).
+# Where saved positions live (gap J6).
 #
 # On the device service, not in our library: a position is a property of *this* machine
 # with *this* jig on it, and a service's settings are made for exactly that — they move
@@ -24,12 +24,12 @@ POSITIONS_KEY = "openkerf_positions"
 MAX_POSITIES = 12
 MAX_NAAM = 40
 
-# De gebruikersoorsprong (gat J12).
+# The user origin (gap J12).
 #
 # Beside the saved positions and for the same reason: a zero point belongs to *this*
 # machine with *this* offcut on it, not to the browser you happen to be sitting at. One per
 # machine — two zero points at once is no longer a zero point.
-OORSPRONG_KEY = "openkerf_origin"
+ORIGIN_KEY = "openkerf_origin"
 
 # Focusing sits on the Ruida (`focusz`), not on every device. The same approach as with
 # pausing and stopping: ask what this device knows, do not assume.
@@ -86,7 +86,7 @@ class MachineControl:
             "disconnect": self._link_command(DISCONNECTS) is not None,
         }
 
-    # ------------------------------------------------------------- verbinding
+    # ------------------------------------------------------------- connection
 
     def _link_command(self, names) -> str | None:
         for name in names:
@@ -141,7 +141,7 @@ class MachineControl:
 
     def _idle(self) -> None:
         """
-        Niet bewegen terwijl er gebrand wordt.
+        No moving while something is burning.
 
         The UI disables the buttons, but the UI is advice: a second tab, a phone or a curl
         command can go straight through it. Moving the head during a job ruins it at best.
@@ -261,8 +261,8 @@ class MachineControl:
 
     def focus(self, distance_mm) -> dict:
         """
-        De kop hoger of lager zetten. Scherpstellen is dagelijks werk: nieuwe
-        materiaaldikte, nieuwe height.
+        Moving the head up or down. Focusing is daily work: a new material
+        thickness, a new height.
         """
         self._require(FOCUS)
         self._idle()
@@ -292,13 +292,13 @@ class MachineControl:
         device = self._device()
         try:
             device.setting(str, POSITIONS_KEY, "[]")
-            ruw = json.loads(getattr(device, POSITIONS_KEY, "[]") or "[]")
+            raw = json.loads(getattr(device, POSITIONS_KEY, "[]") or "[]")
         except Exception:
             return []
-        if not isinstance(ruw, list):
+        if not isinstance(raw, list):
             return []
         clean = []
-        for item in ruw:
+        for item in raw:
             if not isinstance(item, dict):
                 continue
             name = str(item.get("name", "")).strip()
@@ -332,13 +332,13 @@ class MachineControl:
             raise DesignError("A saved position needs a name.")
 
         if x_mm is None or y_mm is None:
-            huidig = self._current_mm()
-            if huidig is None:
+            current = self._current_mm()
+            if current is None:
                 raise DesignError(
                     "This machine reports no position, so there is nothing to "
                     "keep. Fill in the coordinates by hand."
                 )
-            x_mm, y_mm = huidig
+            x_mm, y_mm = current
         x = _finite(x_mm, "x_mm")
         y = _finite(y_mm, "y_mm")
 
@@ -388,11 +388,11 @@ class MachineControl:
         except DesignError:
             return None
         try:
-            device.setting(str, OORSPRONG_KEY, "")
-            ruw = getattr(device, OORSPRONG_KEY, "") or ""
-            if not ruw:
+            device.setting(str, ORIGIN_KEY, "")
+            raw = getattr(device, ORIGIN_KEY, "") or ""
+            if not raw:
                 return None
-            value = json.loads(ruw)
+            value = json.loads(raw)
         except Exception:
             return None
         if not isinstance(value, dict):
@@ -410,13 +410,13 @@ class MachineControl:
         button. Typing numbers is possible, but then you knew them already.
         """
         if x_mm is None or y_mm is None:
-            huidig = self._current_mm()
-            if huidig is None:
+            current = self._current_mm()
+            if current is None:
                 raise DesignError(
                     "This machine reports no position, so no zero point can be "
                     "set. Fill in the coordinates by hand."
                 )
-            x_mm, y_mm = huidig
+            x_mm, y_mm = current
         x = round(_finite(x_mm, "x_mm"), 2)
         y = round(_finite(y_mm, "y_mm"), 2)
 
@@ -428,16 +428,16 @@ class MachineControl:
             )
 
         device = self._device()
-        device.setting(str, OORSPRONG_KEY, "")
-        setattr(device, OORSPRONG_KEY, json.dumps({"x_mm": x, "y_mm": y}))
+        device.setting(str, ORIGIN_KEY, "")
+        setattr(device, ORIGIN_KEY, json.dumps({"x_mm": x, "y_mm": y}))
         self._store()
         return {"x_mm": x, "y_mm": y}
 
     def clear_origin(self) -> dict:
         """Back to the machine's own zero point."""
         device = self._device()
-        device.setting(str, OORSPRONG_KEY, "")
-        setattr(device, OORSPRONG_KEY, "")
+        device.setting(str, ORIGIN_KEY, "")
+        setattr(device, ORIGIN_KEY, "")
         self._store()
         return {"cleared": True}
 
@@ -449,7 +449,7 @@ class MachineControl:
         except Exception:  # pragma: no cover - the engine must not break us
             pass
 
-    # ------------------------------------------ bijstellen tijdens een job (J11)
+    # ---------------------------------------------- adjusting during a job (J11)
     #
     # In its Move window LightBurn has two columns "Adjust Speed" and "Adjust Power" with
     # which you rescue a running job instead of doing it again. The engine can do this, but
@@ -467,7 +467,7 @@ class MachineControl:
     def _driver(self):
         return getattr(getattr(self.kernel, "device", None), "driver", None)
 
-    def _kan(self, wat: str) -> bool:
+    def _can(self, wat: str) -> bool:
         driver = self._driver()
         question = getattr(driver, f"has_adjustable_{wat}", None)
         if question is None:
@@ -478,7 +478,7 @@ class MachineControl:
             return False
 
     def adjust_capabilities(self) -> dict:
-        return {"power": self._kan("power"), "speed": self._kan("speed")}
+        return {"power": self._can("power"), "speed": self._can("speed")}
 
     def adjustment(self) -> dict:
         """What is adjusted right now, as a factor (1.0 = as designed)."""
@@ -505,11 +505,11 @@ class MachineControl:
         driver = self._driver()
         if driver is None:
             raise DesignError("There is no active machine.")
-        gedaan = {}
+        applied = {}
         for name, value in (("power", power), ("speed", speed)):
             if value is None:
                 continue
-            if not self._kan(name):
+            if not self._can(name):
                 raise DesignError(
                     "This machine cannot adjust speed and power during a job. "
                     "The driver has no realtime channel for it; "
@@ -522,10 +522,10 @@ class MachineControl:
                     f"accepts ({self.ADJUST_MIN:g}–{self.ADJUST_MAX:g})."
                 )
             getattr(driver, f"set_{name}_scale")(factor)
-            gedaan[name] = factor
-        if not gedaan:
+            applied[name] = factor
+        if not applied:
             raise DesignError("Give a factor for speed or power.")
-        return {**self.adjustment(), "applied": gedaan}
+        return {**self.adjustment(), "applied": applied}
 
     def unlock(self) -> dict:
         """Release the motors, so the head can be moved by hand."""

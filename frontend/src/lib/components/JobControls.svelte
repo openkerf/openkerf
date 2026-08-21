@@ -308,14 +308,14 @@
 				? t('job.blocked.duringJob')
 				: undefined
 	);
-	let bewegenUit = $derived(running || !connection.online);
+	let movingOff = $derived(running || !connection.online);
 
 	// ------------------------------------------- bewaarde posities (gat J6)
 
 	let posities = $state<Position[]>([]);
 	let saving = $state(false);
 	let nieuweNaam = $state('');
-	let huidigMm = $derived(device?.position.mm ?? null);
+	let currentMm = $derived(device?.position.mm ?? null);
 
 	async function ophalenPosities() {
 		posities = await control.listPositions();
@@ -821,23 +821,23 @@
 			     beside them. Home sits next to it and not in the middle, because it is
 			     not a direction. -->
 			<div class="pad" class:metz={control.capabilities?.motion?.focus}>
-				<button class="jog up" aria-label={t('job.jog.up')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
-				<button class="jog left" aria-label={t('job.jog.left')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
-				<button class="jog down" aria-label={t('job.jog.down')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
-				<button class="jog right" aria-label={t('job.jog.right')} disabled={bewegenUit} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
-				<button class="jog home" disabled={bewegenUit} title={movingBlocked} onclick={() => onHome?.()}>{t('job.home')}</button>
+				<button class="jog up" aria-label={t('job.jog.up')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
+				<button class="jog left" aria-label={t('job.jog.left')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="jog down" aria-label={t('job.jog.down')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
+				<button class="jog right" aria-label={t('job.jog.right')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
+				<button class="jog home" disabled={movingOff} title={movingBlocked} onclick={() => onHome?.()}>{t('job.home')}</button>
 				{#if control.capabilities?.motion?.focus}
 					<!-- The Z axis is in the same pad as X and Y: it is the same operation
 					     with a third direction, and it follows the same step size. -->
 					<button
 						class="jog zup"
-						disabled={bewegenUit}
+						disabled={movingOff}
 						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zUp') })}
 						onclick={() => onFocus?.(-step)}
 					>Z&nbsp;↑</button>
 					<button
 						class="jog zdown"
-						disabled={bewegenUit}
+						disabled={movingOff}
 						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zDown') })}
 						onclick={() => onFocus?.(step)}
 					>Z&nbsp;↓</button>
@@ -850,7 +850,7 @@
 					bind:value={step}
 					options={[0.1, 1, 10, 50].map((size) => ({ value: size, label: `${size} mm` }))}
 				/>
-				<button class="rot" disabled={bewegenUit} title={movingBlocked} onclick={() => onUnlock?.()}>
+				<button class="rot" disabled={movingOff} title={movingBlocked} onclick={() => onUnlock?.()}>
 					{t('job.unlock')}
 				</button>
 			</div>
@@ -864,7 +864,7 @@
 					<div class="puntrij">
 						<button
 							class="rot"
-							disabled={bewegenUit}
+							disabled={movingOff}
 							title={movingBlocked ?? t('job.toOrigin.title')}
 							onclick={() => control.moveTo(0, 0)}
 						>
@@ -874,7 +874,7 @@
 							<span class="place">
 								<button
 									class="rot name"
-									disabled={bewegenUit}
+									disabled={movingOff}
 									title={movingBlocked ??
 										t('job.toSpot.title', { x: size(place.x_mm), y: size(place.y_mm) })}
 									onclick={() => control.moveTo(place.x_mm, place.y_mm)}
@@ -920,10 +920,10 @@
 					{:else}
 						<button
 							class="rot"
-							disabled={bewegenUit || huidigMm === null}
-							title={huidigMm === null
+							disabled={movingOff || currentMm === null}
+							title={currentMm === null
 								? t('job.noPosition.keep')
-								: t('job.keepSpot.title', { x: size(huidigMm[0]), y: size(huidigMm[1]) })}
+								: t('job.keepSpot.title', { x: size(currentMm[0]), y: size(currentMm[1]) })}
 							onclick={() => {
 								nieuweNaam = '';
 								saving = true;
@@ -962,10 +962,10 @@
 					<div class="puntrij">
 						<button
 							class="rot"
-							disabled={bewegenUit || huidigMm === null}
-							title={huidigMm === null
+							disabled={movingOff || currentMm === null}
+							title={currentMm === null
 								? t('job.noPosition.origin')
-								: t('job.origin.setTitle', { x: size(huidigMm[0]), y: size(huidigMm[1]) })}
+								: t('job.origin.setTitle', { x: size(currentMm[0]), y: size(currentMm[1]) })}
 							onclick={() => control.setOrigin()}
 						>
 							{control.origin ? t('job.origin.reset') : t('job.origin.set')}
@@ -973,7 +973,7 @@
 						{#if control.origin}
 							<button
 								class="rot"
-								disabled={bewegenUit}
+								disabled={movingOff}
 								title={movingBlocked ?? t('job.origin.goTitle')}
 								onclick={() =>
 									control.origin && control.moveTo(control.origin.x_mm, control.origin.y_mm)}

@@ -126,7 +126,7 @@ class Presetariat:
 
     def import_presets(self, ids: list[str], machine_id=None) -> dict:
         """
-        Gekozen presets in de eigen bibliotheek zetten.
+        Putting the chosen presets into your own library.
 
         Already imported before? Then we skip it rather than making a second row: the
         catalogue is a source, not a second library.
@@ -170,7 +170,7 @@ class Presetariat:
             "missing": missing,
         }
 
-    # ---------------------------------------------------------------- delen
+    # -------------------------------------------------------------- sharing
 
     def as_contribution(self, preset_id: int) -> dict:
         """One of your own presets in the catalogue's format, ready to share."""

@@ -63,7 +63,7 @@ class Autosave:
         another three shapes in those twenty seconds and then stops never got a write for
         those three — no further signal comes, after all. Measured: three shapes in three
         seconds, server killed hard, and the
-        herstelbestand bevatte er één.
+        recovery file held one.
 
         Runs as a kernel job, so on the same thread as the tree signals. That is not a
         detail: a timer thread of its own would read the element tree while the kernel is
@@ -89,18 +89,18 @@ class Autosave:
         # `basename` is a property without a setter; it derives from `_filename`, and that is
         # what `save` sets.
         elements = self.kernel.elements
-        bestand_voor = getattr(elements, "_filename", None)
+        filename_before = getattr(elements, "_filename", None)
         try:
             written = self.drawing.export_svg("herstel.svg")
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self.path.write_bytes(written.read_bytes())
             return True
         except Exception:
-            # Automatisch bewaren mag nooit een operation laten mislukken.
+            # Saving automatically must never make an operation fail.
             return False
         finally:
             try:
-                elements._filename = bestand_voor
+                elements._filename = filename_before
             except Exception:
                 pass
 
@@ -130,7 +130,7 @@ class Autosave:
         project file. If it is True there is unsecured work and the safety net stays, even
         when the user empties the canvas.
 
-        Geeft terug of er werkelijk iets weggehaald is.
+        Reports whether anything was really removed.
         """
         if self.document.dirty:
             return False

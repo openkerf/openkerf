@@ -1,9 +1,9 @@
 """
-Besluit B7: de bibliotheek is uitwisselbaar.
+Decision B7: the library is exchangeable.
 
-De enige meting die telt staat onderaan: een gevulde bibliotheek exporteren,
-alles wissen, terugzetten, en dan controleren dat de herkomst én de foto's er
-nog zijn. Alles daarboven bewijst de onderdelen daarvan.
+The only measurement that counts is at the bottom: export a filled library, wipe
+everything, put it back, and then check that the provenance *and* the photos are
+still there. Everything above it proves the parts of that.
 """
 
 import json
@@ -16,14 +16,14 @@ from fastapi.testclient import TestClient
 from openkerf_api.library import BUNDLE_INDEX, Library, LibraryError
 from openkerf_api.server import ApiServer
 
-FOTO = bytes.fromhex(
+PHOTO = bytes.fromhex(
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
     "890000000a49444154789c6360000002000100"
     "05fe02fea7d4b2000000000049454e44ae426082"
 )
 
 
-UITLIJNING = [
+ALIGNMENT = [
     {"x": 0.12, "y": 0.08},
     {"x": 0.91, "y": 0.14},
     {"x": 0.88, "y": 0.93},
@@ -32,23 +32,23 @@ UITLIJNING = [
 
 
 @pytest.fixture
-def bib(tmp_path):
-    return Library(tmp_path / "bron" / "library.db")
+def mine(tmp_path):
+    return Library(tmp_path / "source" / "library.db")
 
 
 @pytest.fixture
-def leeg(tmp_path):
-    return Library(tmp_path / "doel" / "library.db")
+def empty(tmp_path):
+    return Library(tmp_path / "target" / "library.db")
 
 
-def vul(library: Library) -> dict:
-    """Een bibliotheek zoals hij er na een werkweek uitziet."""
+def fill(library: Library) -> dict:
+    """A library the way it looks after a week of work."""
     machine = library.add_machine(name="5030 CO2", power_watt=80, lens_mm=63.5)
-    berken = library.add_material("Multiplex berken", ["berkenmultiplex"])
-    acryl = library.add_material("Acryl")
-    raster = library.add_test_grid(
+    birch = library.add_material("Birch plywood", ["birchply"])
+    acrylic = library.add_material("Acrylic")
+    grid = library.add_test_grid(
         {
-            "material_id": berken["id"],
+            "material_id": birch["id"],
             "machine_id": machine["id"],
             "thickness_mm": 3,
             "operation": "snijden",
@@ -58,23 +58,23 @@ def vul(library: Library) -> dict:
         },
         [{"row": 1, "column": 2, "speed_mm_s": 12, "power_percent": 65, "operation_id": "op1"}],
     )
-    library.set_grid_photo(raster["id"], ".png", FOTO)
-    # De uitlijning is handwerk en hoort dus bij het bewijs (T4).
-    library.set_grid_alignment(raster["id"], UITLIJNING)
-    gemeten = library.add_preset(
-        material_id=berken["id"],
+    library.set_grid_photo(grid["id"], ".png", PHOTO)
+    # The alignment is handwork and so belongs with the evidence (T4).
+    library.set_grid_alignment(grid["id"], ALIGNMENT)
+    measured = library.add_preset(
+        material_id=birch["id"],
         machine_id=machine["id"],
         thickness_mm=3,
         operation="snijden",
         speed_mm_s=12,
         power_percent=65,
         source="testraster",
-        origin_id=f"testgrid:{raster['id']}",
-        note="schone onderkant",
+        origin_id=f"testgrid:{grid['id']}",
+        note="clean underside",
     )
-    library.mark_cell(raster["id"], 1, 2, gemeten["id"])
+    library.mark_cell(grid["id"], 1, 2, measured["id"])
     library.add_preset(
-        material_id=acryl["id"],
+        material_id=acrylic["id"],
         machine_id=machine["id"],
         thickness_mm=3,
         operation="graveren-raster",
@@ -83,238 +83,238 @@ def vul(library: Library) -> dict:
         interval_mm=0.1,
         source="handmatig",
     )
-    return {"machine": machine, "berken": berken, "raster": raster, "preset": gemeten}
+    return {"machine": machine, "birch": birch, "grid": grid, "preset": measured}
 
 
-# ------------------------------------------------------------------ exporteren
+# -------------------------------------------------------------------- exporting
 
-def test_export_carries_data_and_photos(bib, tmp_path):
-    vul(bib)
+def test_export_carries_data_and_photos(mine, tmp_path):
+    fill(mine)
 
-    bundel = bib.export_bundle()
+    bundle = mine.export_bundle()
 
-    assert bundel.name.endswith(".openkerf-lib")
-    with zipfile.ZipFile(bundel) as zip_:
-        namen = zip_.namelist()
+    assert bundle.name.endswith(".openkerf-lib")
+    with zipfile.ZipFile(bundle) as zip_:
+        names = zip_.namelist()
         data = json.loads(zip_.read(BUNDLE_INDEX))
     assert len(data["materials"]) == 2
     assert len(data["presets"]) == 2
     assert len(data["machines"]) == 1
     assert len(data["test_grids"]) == 1
-    # Het bewijs gaat mee, niet alleen de verwijzing ernaar.
-    fotos = [n for n in namen if n.startswith("fotos/")]
-    assert fotos and data["test_grids"][0]["photo_file"] == fotos[0]
+    # The evidence comes along, not only the reference to it.
+    photos = [n for n in names if n.startswith("photos/")]
+    assert photos and data["test_grids"][0]["photo_file"] == photos[0]
 
 
-def test_a_file_that_is_not_a_library_is_refused(leeg, tmp_path):
-    nep = tmp_path / "vakantie.zip"
-    nep.write_bytes(b"dit is geen zip")
+def test_a_file_that_is_not_a_library_is_refused(empty, tmp_path):
+    fake = tmp_path / "holiday.zip"
+    fake.write_bytes(b"this is not a zip")
 
-    with pytest.raises(LibraryError) as fout:
-        leeg.read_bundle(nep)
-    assert "not an OpenKerf library" in str(fout.value)
+    with pytest.raises(LibraryError) as error:
+        empty.read_bundle(fake)
+    assert "not an OpenKerf library" in str(error.value)
 
 
-def test_a_zip_without_a_library_is_refused(leeg, tmp_path):
-    nep = tmp_path / "fotos.openkerf-lib"
-    with zipfile.ZipFile(nep, "w") as zip_:
-        zip_.writestr("plaatje.png", FOTO)
+def test_a_zip_without_a_library_is_refused(empty, tmp_path):
+    fake = tmp_path / "photos.openkerf-lib"
+    with zipfile.ZipFile(fake, "w") as zip_:
+        zip_.writestr("plaatje.png", PHOTO)
 
     with pytest.raises(LibraryError):
-        leeg.read_bundle(nep)
+        empty.read_bundle(fake)
 
 
-# --------------------------------------------------------------- het voorbeeld
+# -------------------------------------------------------------------- preview
 
-def test_preview_says_what_is_new_before_anything_happens(bib, leeg):
-    vul(bib)
-    bundel = bib.export_bundle()
+def test_preview_says_what_is_new_before_anything_happens(mine, empty):
+    fill(mine)
+    bundle = mine.export_bundle()
 
-    voorbeeld = leeg.preview_import(bundel)
+    preview = empty.preview_import(bundle)
 
-    assert voorbeeld["bevat"] == {
+    assert preview["contains"] == {
         "materials": 2, "presets": 2, "machines": 1, "test_grids": 1, "photos": 1
     }
-    assert sorted(voorbeeld["samenvoegen"]["materials"]["new"]) == ["Acryl", "Multiplex berken"]
-    assert voorbeeld["samenvoegen"]["presets"]["new"] == 2
+    assert sorted(preview["merge"]["materials"]["new"]) == ["Acrylic", "Birch plywood"]
+    assert preview["merge"]["presets"]["new"] == 2
     # En kijken heeft niets veranderd.
-    assert leeg.materials() == []
+    assert empty.materials() == []
 
 
-def test_preview_separates_identical_from_conflicting(bib, leeg):
-    stand = vul(bib)
-    bundel = bib.export_bundle()
-    leeg.import_bundle(bundel)
+def test_preview_separates_identical_from_conflicting(mine, empty):
+    before = fill(mine)
+    bundle = mine.export_bundle()
+    empty.import_bundle(bundle)
     # Eén preset bijgesteld: dezelfde plank, dezelfde snede, andere getallen.
-    mijne = next(p for p in leeg.presets() if p["operation"] == "snijden")
-    leeg.update_preset(mijne["id"], speed_mm_s=10)
+    ours = next(p for p in empty.presets() if p["operation"] == "snijden")
+    empty.update_preset(ours["id"], speed_mm_s=10)
 
-    voorbeeld = leeg.preview_import(bundel)["samenvoegen"]["presets"]
+    preview = empty.preview_import(bundle)["merge"]["presets"]
 
-    assert voorbeeld["new"] == 0
-    assert voorbeeld["identical"] == 1
-    assert len(voorbeeld["conflicts"]) == 1
-    botsing = voorbeeld["conflicts"][0]
-    assert botsing["material"] == "Multiplex berken"
-    # Beide kanten staan erbij: zonder de eigen waarde is er niets af te wegen.
-    assert botsing["mine"]["speed_mm_s"] == 10
-    assert botsing["theirs"]["speed_mm_s"] == stand["preset"]["speed_mm_s"]
+    assert preview["new"] == 0
+    assert preview["identical"] == 1
+    assert len(preview["conflicts"]) == 1
+    clash = preview["conflicts"][0]
+    assert clash["material"] == "Birch plywood"
+    # Both sides are there: without your own value there is nothing to weigh up.
+    assert clash["mine"]["speed_mm_s"] == 10
+    assert clash["theirs"]["speed_mm_s"] == before["preset"]["speed_mm_s"]
 
 
-def test_a_colliding_name_is_offered_as_a_merge_not_done_silently(bib, leeg):
+def test_a_colliding_name_is_offered_as_a_merge_not_done_silently(mine, empty):
     """
-    De valkuil uit M5: "Berkentriplex" en "Multiplex berken" zijn één plank.
+    The trap from M5: "Birchply board" and "Birch plywood" are one board.
 
-    Vanzelf samenvoegen mag niet — een verkeerde gok plakt andermans getallen
-    op jouw materiaal. Aanwijzen moet wél, anders staan er twee.
+    Merging by itself is not allowed — a wrong guess sticks somebody else's
+    numbers on your material. Pointing at it has to work, or you end up with two.
     """
-    vul(bib)
-    leeg.add_material("Berkentriplex")
-    bundel = bib.export_bundle()
+    fill(mine)
+    empty.add_material("Birchply board")
+    bundle = mine.export_bundle()
 
-    voorbeeld = leeg.preview_import(bundel)["samenvoegen"]["materials"]
+    preview = empty.preview_import(bundle)["merge"]["materials"]
 
-    assert "Multiplex berken" in voorbeeld["new"]
-    voorstel = next(v for v in voorbeeld["similar"] if v["name"] == "Multiplex berken")
-    assert voorstel["match"] == "Berkentriplex"
-    assert "berken" in voorstel["why"] and "multiplex" in voorstel["why"]
+    assert "Birch plywood" in preview["new"]
+    suggestion = next(v for v in preview["similar"] if v["name"] == "Birch plywood")
+    assert suggestion["match"] == "Birchply board"
+    assert "birch" in suggestion["why"] and "plywood" in suggestion["why"]
 
-    # Aangewezen: dan is het geen nieuw materiaal meer, ook niet na importeren.
-    keuze = {"Multiplex berken": voorstel["material_id"]}
-    assert "Multiplex berken" not in leeg.preview_import(bundel, keuze)["samenvoegen"]["materials"]["new"]
-    leeg.import_bundle(bundel, merge_materials=keuze)
-    assert [m["name"] for m in leeg.materials()] == ["Acryl", "Berkentriplex"]
-    assert any(p["material_name"] == "Berkentriplex" for p in leeg.presets())
-
-
-def test_a_synonym_counts_as_the_same_material(bib, leeg):
-    vul(bib)
-    leeg.add_material("Berken 3mm", ["berkenmultiplex"])
-    bundel = bib.export_bundle()
-
-    voorbeeld = leeg.preview_import(bundel)["samenvoegen"]["materials"]
-
-    assert "Multiplex berken" not in voorbeeld["new"]
-    assert any(v["as"] == "Berken 3mm" for v in voorbeeld["existing"])
+    # Pointed at: then it is no longer a new material, not even after importing.
+    choice = {"Birch plywood": suggestion["material_id"]}
+    assert "Birch plywood" not in empty.preview_import(bundle, choice)["merge"]["materials"]["new"]
+    empty.import_bundle(bundle, merge_materials=choice)
+    assert [m["name"] for m in empty.materials()] == ["Acrylic", "Birchply board"]
+    assert any(p["material_name"] == "Birchply board" for p in empty.presets())
 
 
-# ------------------------------------------------------------------ importeren
+def test_a_synonym_counts_as_the_same_material(mine, empty):
+    fill(mine)
+    empty.add_material("Birch 3mm", ["birchply"])
+    bundle = mine.export_bundle()
 
-def test_merge_keeps_your_own_measurements(bib, leeg):
-    vul(bib)
-    bundel = bib.export_bundle()
-    leeg.import_bundle(bundel)
-    mijne = next(p for p in leeg.presets() if p["operation"] == "snijden")
-    leeg.update_preset(mijne["id"], speed_mm_s=10)
+    preview = empty.preview_import(bundle)["merge"]["materials"]
 
-    resultaat = leeg.import_bundle(bundel)
-
-    assert resultaat["presets"]["added"] == 0
-    assert resultaat["presets"]["updated"] == 0
-    assert leeg.preset(mijne["id"])["speed_mm_s"] == 10
-    assert len(leeg.presets()) == 2
+    assert "Birch plywood" not in preview["new"]
+    assert any(v["as"] == "Birch 3mm" for v in preview["existing"])
 
 
-def test_the_file_can_win_when_you_say_so(bib, leeg):
-    vul(bib)
-    bundel = bib.export_bundle()
-    leeg.import_bundle(bundel)
-    mijne = next(p for p in leeg.presets() if p["operation"] == "snijden")
-    leeg.update_preset(mijne["id"], speed_mm_s=10)
+# -------------------------------------------------------------------- importing
 
-    resultaat = leeg.import_bundle(bundel, on_conflict="bestand")
+def test_merge_keeps_your_own_measurements(mine, empty):
+    fill(mine)
+    bundle = mine.export_bundle()
+    empty.import_bundle(bundle)
+    ours = next(p for p in empty.presets() if p["operation"] == "snijden")
+    empty.update_preset(ours["id"], speed_mm_s=10)
 
-    assert resultaat["presets"]["updated"] == 1
-    assert leeg.preset(mijne["id"])["speed_mm_s"] == 12
+    result = empty.import_bundle(bundle)
 
-
-def test_replace_throws_away_what_was_there(bib, leeg):
-    vul(bib)
-    leeg.add_material("Karton")
-    bundel = bib.export_bundle()
-
-    resultaat = leeg.import_bundle(bundel, mode="vervangen")
-
-    assert resultaat["removed"]["materials"] == 1
-    assert "Karton" not in [m["name"] for m in leeg.materials()]
-    assert len(leeg.presets()) == 2
+    assert result["presets"]["added"] == 0
+    assert result["presets"]["updated"] == 0
+    assert empty.preset(ours["id"])["speed_mm_s"] == 10
+    assert len(empty.presets()) == 2
 
 
-def test_an_unknown_mode_is_refused(bib, leeg):
-    bundel = bib.export_bundle()
+def test_the_file_can_win_when_you_say_so(mine, empty):
+    fill(mine)
+    bundle = mine.export_bundle()
+    empty.import_bundle(bundle)
+    ours = next(p for p in empty.presets() if p["operation"] == "snijden")
+    empty.update_preset(ours["id"], speed_mm_s=10)
+
+    result = empty.import_bundle(bundle, on_conflict="file")
+
+    assert result["presets"]["updated"] == 1
+    assert empty.preset(ours["id"])["speed_mm_s"] == 12
+
+
+def test_replace_throws_away_what_was_there(mine, empty):
+    fill(mine)
+    empty.add_material("Cardboard")
+    bundle = mine.export_bundle()
+
+    result = empty.import_bundle(bundle, mode="replace")
+
+    assert result["removed"]["materials"] == 1
+    assert "Cardboard" not in [m["name"] for m in empty.materials()]
+    assert len(empty.presets()) == 2
+
+
+def test_an_unknown_mode_is_refused(mine, empty):
+    bundle = mine.export_bundle()
     with pytest.raises(LibraryError):
-        leeg.import_bundle(bundel, mode="alles wissen graag")
+        empty.import_bundle(bundle, mode="wipe it all please")
 
 
-def test_importing_twice_does_not_duplicate(bib, leeg):
-    vul(bib)
-    bundel = bib.export_bundle()
+def test_importing_twice_does_not_duplicate(mine, empty):
+    fill(mine)
+    bundle = mine.export_bundle()
 
-    leeg.import_bundle(bundel)
-    leeg.import_bundle(bundel)
+    empty.import_bundle(bundle)
+    empty.import_bundle(bundle)
 
-    assert len(leeg.materials()) == 2
-    assert len(leeg.presets()) == 2
-    assert len(leeg.test_grids()) == 1
+    assert len(empty.materials()) == 2
+    assert len(empty.presets()) == 2
+    assert len(empty.test_grids()) == 1
 
 
-# ------------------------------------------------- de meting die telt: rondje
+# ------------------------------------- the measurement that counts: round trip
 
-def test_a_full_round_trip_keeps_provenance_and_photos(bib, leeg):
+def test_a_full_round_trip_keeps_provenance_and_photos(mine, empty):
     """
     Exporteren, wissen, terugzetten. Wat terugkomt moet nog steeds kunnen
     aanwijzen wáár het vandaan komt — anders is het een lijst getallen.
     """
-    vul(bib)
-    bundel = bib.export_bundle()
-    bib.clear()
-    assert bib.presets() == []
+    fill(mine)
+    bundle = mine.export_bundle()
+    mine.clear()
+    assert mine.presets() == []
 
-    bib.import_bundle(bundel, mode="vervangen")
+    mine.import_bundle(bundle, mode="replace")
 
-    gemeten = next(p for p in bib.presets() if p["source"] == "testraster")
-    assert gemeten["material_name"] == "Multiplex berken"
-    assert gemeten["machine_name"] == "5030 CO2"
-    assert gemeten["note"] == "schone onderkant"
-    # De herkomst wijst naar het raster dat mee is gekomen…
-    raster = bib.test_grids()[0]
-    assert gemeten["origin_id"] == f"testgrid:{raster['id']}"
-    assert gemeten["grid_id"] == raster["id"]
+    measured = next(p for p in mine.presets() if p["source"] == "testraster")
+    assert measured["material_name"] == "Birch plywood"
+    assert measured["machine_name"] == "5030 CO2"
+    assert measured["note"] == "clean underside"
+    # The provenance points at the grid that came along…
+    grid = mine.test_grids()[0]
+    assert measured["origin_id"] == f"testgrid:{grid['id']}"
+    assert measured["grid_id"] == grid["id"]
     # …het vakje wijst terug naar deze preset…
-    assert gemeten["grid_cell"] == {"row": 1, "column": 2}
+    assert measured["grid_cell"] == {"row": 1, "column": 2}
     # …en de foto staat er echt, met dezelfde bytes.
-    assert Path(raster["photo_path"]).read_bytes() == FOTO
-    # De uitlijning hoort bij die foto: zonder haar staat het bewijs er nog maar
-    # wijst het niets meer aan (T4).
-    assert raster["alignment"] == UITLIJNING
-    # En een rasterpreset zonder lijnafstand is niet na te branden (B12).
-    hun_raster = next(p for p in bib.presets() if p["operation"] == "graveren-raster")
-    assert hun_raster["interval_mm"] == 0.1
+    assert Path(grid["photo_path"]).read_bytes() == PHOTO
+    # The alignment belongs to that photo: without it the evidence is still there
+    # but no longer points at anything (T4).
+    assert grid["alignment"] == ALIGNMENT
+    # And a raster preset without a line spacing cannot be burned again (B12).
+    their_grid = next(p for p in mine.presets() if p["operation"] == "graveren-raster")
+    assert their_grid["interval_mm"] == 0.1
 
 
-def test_the_burn_date_of_the_evidence_survives(bib, leeg):
-    vul(bib)
-    with bib._connect() as db:
+def test_the_burn_date_of_the_evidence_survives(mine, empty):
+    fill(mine)
+    with mine._connect() as db:
         db.execute("UPDATE test_grid SET created_at = '2026-03-01 09:15:00'")
-    bundel = bib.export_bundle()
+    bundle = mine.export_bundle()
 
-    leeg.import_bundle(bundel)
+    empty.import_bundle(bundle)
 
-    assert leeg.test_grids()[0]["created_at"] == "2026-03-01 09:15:00"
+    assert empty.test_grids()[0]["created_at"] == "2026-03-01 09:15:00"
 
 
-def test_the_source_is_not_downgraded_on_your_own_backup(bib, leeg):
+def test_the_source_is_not_downgraded_on_your_own_backup(mine, empty):
     """
     Presetariat importeert als "geimporteerd" — daar komt het van een vreemde
-    machine. Je eigen back-up terugzetten is iets anders: dan is "testraster"
+    machine. Je mine back-up terugzetten is iets anders: dan is "testraster"
     de waarheid, en die weggooien is het bewijs weggooien.
     """
-    vul(bib)
-    bundel = bib.export_bundle()
+    fill(mine)
+    bundle = mine.export_bundle()
 
-    leeg.import_bundle(bundel)
+    empty.import_bundle(bundle)
 
-    assert {p["source"] for p in leeg.presets()} == {"testraster", "handmatig"}
+    assert {p["source"] for p in empty.presets()} == {"testraster", "handmatig"}
 
 
 # ---------------------------------------------------------------------- routes
@@ -327,7 +327,7 @@ def client(kernel, tmp_path):
 
 
 def test_the_routes_walk_the_same_road(client):
-    client.post("/api/library/materials", json={"name": "Multiplex berken"})
+    client.post("/api/library/materials", json={"name": "Birch plywood"})
     client.post(
         "/api/library/presets",
         json={
@@ -341,22 +341,22 @@ def test_the_routes_walk_the_same_road(client):
 
     download = client.get("/api/library/export.openkerf-lib")
     assert download.status_code == 200
-    assert "bibliotheek.openkerf-lib" in download.headers["content-disposition"]
+    assert "library.openkerf-lib" in download.headers["content-disposition"]
 
     upload = client.post(
         "/api/library/import/upload",
-        files={"file": ("bibliotheek.openkerf-lib", download.content, "application/zip")},
+        files={"file": ("library.openkerf-lib", download.content, "application/zip")},
     )
     assert upload.status_code == 200
-    voorbeeld = upload.json()
-    assert voorbeeld["bundle"]
-    assert voorbeeld["samenvoegen"]["presets"]["identical"] == 1
+    preview = upload.json()
+    assert preview["bundle"]
+    assert preview["merge"]["presets"]["identical"] == 1
 
-    klaar = client.post(
+    done = client.post(
         "/api/library/import",
-        json={"bundle": voorbeeld["bundle"], "mode": "samenvoegen"},
+        json={"bundle": preview["bundle"], "mode": "merge"},
     )
-    assert klaar.status_code == 200
+    assert done.status_code == 200
     assert len(client.get("/api/library/presets?all_machines=true").json()) == 1
 
 
@@ -367,83 +367,83 @@ def test_importing_without_a_file_is_a_clean_refusal(client):
 def test_uploading_something_else_is_a_clean_refusal(client):
     response = client.post(
         "/api/library/import/upload",
-        files={"file": ("foto.png", FOTO, "image/png")},
+        files={"file": ("foto.png", PHOTO, "image/png")},
     )
     assert response.status_code == 409
     assert "library" in json.dumps(response.json())
 
 
-def test_the_alignment_survives_a_backup(bib, leeg):
+def test_the_alignment_survives_a_backup(mine, empty):
     """
-    De uitlijning is met de hand gedaan en hoort bij de foto. Ging hij bij een
-    back-up verloren, dan stond het bewijs er nog maar wees het niets meer aan.
+    The alignment was done by hand and belongs to the photo. If it got lost in a
+    backup, the evidence would still be there but point at nothing.
     """
-    vul(bib)
+    fill(mine)
 
-    leeg.import_bundle(bib.export_bundle())
+    empty.import_bundle(mine.export_bundle())
 
-    teruggekomen = leeg.test_grids()[0]
-    assert teruggekomen["alignment"] == UITLIJNING
-
-
-def test_the_line_spacing_survives_a_backup(bib, leeg):
-    """Een rasterpreset zonder lijnafstand is niet na te branden (B12)."""
-    vul(bib)
-
-    leeg.import_bundle(bib.export_bundle())
-
-    raster = [p for p in leeg.presets() if p["operation"] == "graveren-raster"][0]
-    assert raster["interval_mm"] == 0.1
+    returned = empty.test_grids()[0]
+    assert returned["alignment"] == ALIGNMENT
 
 
-def test_two_presets_that_differ_only_in_interval_are_a_conflict(bib, leeg):
+def test_the_line_spacing_survives_a_backup(mine, empty):
+    """A raster preset without a line spacing cannot be burned again (B12)."""
+    fill(mine)
+
+    empty.import_bundle(mine.export_bundle())
+
+    grid = [p for p in empty.presets() if p["operation"] == "graveren-raster"][0]
+    assert grid["interval_mm"] == 0.1
+
+
+def test_two_presets_that_differ_only_in_interval_are_a_conflict(mine, empty):
     """
-    Zonder de lijnafstand in de vergelijking zou de ene stilletjes de andere
-    overschrijven: dezelfde snelheid en hetzelfde vermogen, ander resultaat.
+    Without the line spacing in the comparison one would quietly overwrite the
+    other: the same speed and the same power, a different result.
     """
-    vul(bib)
-    vul(leeg)
-    van_mij = [p for p in leeg.presets() if p["operation"] == "graveren-raster"][0]
-    leeg.update_preset(van_mij["id"], interval_mm=0.2)
+    fill(mine)
+    fill(empty)
+    ours = [p for p in empty.presets() if p["operation"] == "graveren-raster"][0]
+    empty.update_preset(ours["id"], interval_mm=0.2)
 
-    voorstel = leeg.preview_import(bib.export_bundle())
+    suggestion = empty.preview_import(mine.export_bundle())
 
-    botsingen = voorstel["samenvoegen"]["presets"]["conflicts"]
-    assert [b["operation"] for b in botsingen] == ["graveren-raster"]
-
-
-# --------------------------------- benoemde rasterrecepten mee (gat T7)
+    clashes = suggestion["merge"]["presets"]["conflicts"]
+    assert [b["operation"] for b in clashes] == ["graveren-raster"]
 
 
-def test_named_recipes_travel_with_the_library(bib, leeg):
+# ------------------------------ named grid recipes come along (gap T7)
+
+
+def test_named_recipes_travel_with_the_library(mine, empty):
     """
-    Een recept is werk dat je zelf hebt uitgezocht. Een back-up die je
-    materialen en metingen meeneemt maar je recepten laat staan, is een halve
-    back-up — en dat merk je pas op de tweede computer.
+    A recipe is work you sorted out yourself. A backup that takes your materials
+    and measurements along but leaves your recipes behind is half a backup — and
+    you only notice that on the second computer.
     """
-    berken = bib.add_material("Multiplex berken")
-    bib.save_grid_recipe(
-        "Berk snijden",
+    birch = mine.add_material("Birch plywood")
+    mine.save_grid_recipe(
+        "Birch cut",
         {"operation": "snijden", "speed_min": 5, "speed_max": 25, "cell_mm": 8},
-        berken["id"],
+        birch["id"],
     )
-    bib.save_grid_recipe("Snelle 4×4", {"operation": "snijden", "cell_mm": 6})
+    mine.save_grid_recipe("Quick 4×4", {"operation": "snijden", "cell_mm": 6})
 
-    leeg.import_bundle(bib.export_bundle())
+    empty.import_bundle(mine.export_bundle())
 
-    recepten = {r["name"]: r for r in leeg.grid_recipes()}
-    assert set(recepten) == {"Berk snijden", "Snelle 4×4"}
-    assert recepten["Berk snijden"]["material_name"] == "Multiplex berken"
-    assert recepten["Snelle 4×4"]["material_id"] is None
-    assert recepten["Berk snijden"]["settings"]["speed_max"] == 25
+    recipes = {r["name"]: r for r in empty.grid_recipes()}
+    assert set(recipes) == {"Birch cut", "Quick 4×4"}
+    assert recipes["Birch cut"]["material_name"] == "Birch plywood"
+    assert recipes["Quick 4×4"]["material_id"] is None
+    assert recipes["Birch cut"]["settings"]["speed_max"] == 25
 
 
-def test_your_own_recipe_wins_from_the_file(bib, leeg):
-    """Zelfde regel als bij presets: wat jij hebt uitgezocht blijft staan."""
-    bib.save_grid_recipe("Snel", {"operation": "snijden", "cell_mm": 6})
-    leeg.save_grid_recipe("Snel", {"operation": "snijden", "cell_mm": 12})
+def test_your_own_recipe_wins_from_the_file(mine, empty):
+    """The same rule as for presets: what you sorted out yourself stays."""
+    mine.save_grid_recipe("Quick", {"operation": "snijden", "cell_mm": 6})
+    empty.save_grid_recipe("Quick", {"operation": "snijden", "cell_mm": 12})
 
-    resultaat = leeg.import_bundle(bib.export_bundle())
+    result = empty.import_bundle(mine.export_bundle())
 
-    assert resultaat["grid_recipes"] == 0
-    assert leeg.grid_recipes()[0]["settings"]["cell_mm"] == 12
+    assert result["grid_recipes"] == 0
+    assert empty.grid_recipes()[0]["settings"]["cell_mm"] == 12

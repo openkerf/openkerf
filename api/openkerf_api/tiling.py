@@ -65,7 +65,7 @@ def _axis(
     plate: float, bed: float, settings: TilingSettings
 ) -> list[tuple[float, float]]:
     """
-    De vensters op één as: paren (begin, eind) in plaatcoördinaten.
+    The windows on one axis: pairs (start, end) in sheet coordinates.
 
     The number follows from the requirement that consecutive windows share at least
     `overlap_mm`. After that they are **divided equally** instead of full-full-remainder, so
@@ -257,14 +257,14 @@ def marker_spots(
         x = zone.x0 + half
         while x <= zone.x1 - half + 1e-9:
             point = Point(x, y)
-            vak = mark_footprint(point, size_mm, zone)
-            binnen = (
-                zone.x0 <= vak.x0
-                and vak.x1 <= zone.x1
-                and zone.y0 <= vak.y0
-                and vak.y1 <= zone.y1
+            patch = mark_footprint(point, size_mm, zone)
+            inside = (
+                zone.x0 <= patch.x0
+                and patch.x1 <= zone.x1
+                and zone.y0 <= patch.y0
+                and patch.y1 <= zone.y1
             )
-            if binnen and not any(_overlaps(vak, b) for b in blocked):
+            if inside and not any(_overlaps(patch, b) for b in blocked):
                 vrij.append(point)
             x += step_x
         y += step_y
@@ -374,13 +374,13 @@ def _rand_segmenten(rect_units: Rect):
         (complex(rect_units.x0, rect_units.y1), complex(rect_units.x0, rect_units.y0)),
     )
     edges = Geomstr()
-    for begin, eind in corners:
-        edges.line(begin, eind)
+    for start, end in corners:
+        edges.line(start, end)
         edges.end()
     return edges
 
 
-def _stukken(geom, index: int, ts):
+def _pieces(geom, index: int, ts):
     """
     The pieces of one segment, split at the given parameters.
 
@@ -400,15 +400,15 @@ def _stukken(geom, index: int, ts):
     if int(geom.segments[index][2].real) != TYPE_ARC:
         return list(geom.split(index, sorted(ts)))
 
-    grenzen = [0.0] + sorted(ts) + [1.0]
+    edges_at = [0.0] + sorted(ts) + [1.0]
     hulp = Geomstr()
-    for begin, eind in zip(grenzen, grenzen[1:]):
-        if eind - begin < 1e-12:
+    for start, end in zip(edges_at, edges_at[1:]):
+        if end - start < 1e-12:
             continue
         hulp.arc(
-            geom.position(index, begin),
-            geom.position(index, (begin + eind) / 2),
-            geom.position(index, eind),
+            geom.position(index, start),
+            geom.position(index, (start + end) / 2),
+            geom.position(index, end),
         )
     return [hulp.segments[i] for i in range(hulp.index)]
 
@@ -449,7 +449,7 @@ def clip_geometry(geom, rect_units: Rect):
     for index in range(geom.index):
         if int(geom.segments[index][2].real) not in dragend:
             continue
-        snijpunten = set()
+        crossings = set()
         for edge in range(edges.index):
             if int(edges.segments[edge][2].real) not in dragend:
                 continue
@@ -457,16 +457,16 @@ def clip_geometry(geom, rect_units: Rect):
                 # The end points themselves are not a split: the segment already stops
                 # there, and splitting at 0 or 1 produces an empty piece.
                 if 1e-9 < float(t) < 1 - 1e-9:
-                    snijpunten.add(round(float(t), 9))
-        for stuk in _stukken(geom, index, sorted(snijpunten)):
-            pieces.append_segment(*stuk)
+                    crossings.add(round(float(t), 9))
+        for piece in _pieces(geom, index, sorted(crossings)):
+            pieces.append_segment(*piece)
 
-    binnen = Geomstr()
+    inside = Geomstr()
     for index in range(pieces.index):
         middle = pieces.position(index, 0.5)
         if (
             rect_units.x0 <= middle.real < rect_units.x1
             and rect_units.y0 <= middle.imag < rect_units.y1
         ):
-            binnen.append_segment(*pieces.segments[index])
-    return binnen
+            inside.append_segment(*pieces.segments[index])
+    return inside

@@ -1,5 +1,5 @@
 """
-Eigen lettertypen bruikbaar maken.
+Making your own fonts usable.
 
 The engine only reads `.ttf`, `.shx` and `.jhf`, and keeps the list it found in a cache
 file. Two consequences a user experiences as "my font does not work":
@@ -168,7 +168,7 @@ class Fonts:
             from fontTools.pens.cu2quPen import Cu2QuPen
             from fontTools.pens.ttGlyphPen import TTGlyphPen
             from fontTools.ttLib import TTFont
-        except ImportError as e:  # pragma: no cover - alleen zonder fonttools
+        except ImportError as e:  # pragma: no cover - only without fonttools
             raise DesignError(
                 "Converting needs the 'fonttools' package; install it beside the API."
             ) from e

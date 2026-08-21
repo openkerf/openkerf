@@ -1,5 +1,5 @@
 """
-Een rasteraar zonder GUI.
+A rasteriser without a GUI.
 
 During planning `op raster` turns its shapes into a bitmap, and asks the kernel for the
 service `render-op/make_raster` for that (`meerk40t/core/node/op_raster.py:468`). That
@@ -254,7 +254,7 @@ def _draw_geometry(canvas, draw, node, geometry, transform):
         else getattr(node, "stroke_width", None)
     )
 
-    vlakken = []
+    areas = []
     for polyline in _polylines(geometry):
         points = transform.points(polyline)
         if len(points) < 2:
@@ -267,13 +267,13 @@ def _draw_geometry(canvas, draw, node, geometry, transform):
             continue
         closed = _is_closed(points, tolerance=transform.supersample)
         if fill and closed and len(points) >= 3:
-            vlakken.append(points)
+            areas.append(points)
         if stroke:
             draw.line(points, fill="black", width=width, joint="curve")
-    _fill(canvas, draw, vlakken)
+    _fill(canvas, draw, areas)
 
 
-def _fill(canvas, draw, vlakken) -> None:
+def _fill(canvas, draw, areas) -> None:
     """
     Filling one shape's closed subpaths, with holes.
 
@@ -288,13 +288,13 @@ def _fill(canvas, draw, vlakken) -> None:
     only the shape's bounding box, so that a large bed does not cost a full image per
     subpath.
     """
-    if not vlakken:
+    if not areas:
         return
-    if len(vlakken) == 1:
-        draw.polygon(vlakken[0], fill="black")
+    if len(areas) == 1:
+        draw.polygon(areas[0], fill="black")
         return
 
-    points = [p for vlak in vlakken for p in vlak]
+    points = [p for area in areas for p in area]
     x0 = max(int(min(x for x, _ in points)) - 1, 0)
     y0 = max(int(min(y for _, y in points)) - 1, 0)
     x1 = min(int(max(x for x, _ in points)) + 2, canvas.width)
@@ -303,10 +303,10 @@ def _fill(canvas, draw, vlakken) -> None:
         return
 
     masker = Image.new("1", (x1 - x0, y1 - y0), 0)
-    for vlak in vlakken:
+    for area in areas:
         layer = Image.new("1", masker.size, 0)
         ImageDraw.Draw(layer).polygon(
-            [(x - x0, y - y0) for x, y in vlak], fill=1
+            [(x - x0, y - y0) for x, y in area], fill=1
         )
         masker = ImageChops.logical_xor(masker, layer)
     canvas.paste("black", (x0, y0), masker)

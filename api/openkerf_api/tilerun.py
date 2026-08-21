@@ -96,23 +96,23 @@ def marker_geometry(points, size_mm: float, units_per_mm: float, along_y: bool =
 
     from .tiling import DIGIT_FRACTION, DIGIT_GAP_MM
 
-    straal = size_mm / 2 * units_per_mm
+    radius = size_mm / 2 * units_per_mm
     height = size_mm * DIGIT_FRACTION * units_per_mm
-    gat = DIGIT_GAP_MM * units_per_mm
+    gap = DIGIT_GAP_MM * units_per_mm
     geom = Geomstr()
     for nummer, point in enumerate(points, 1):
         cx = point.x_mm * units_per_mm
         cy = point.y_mm * units_per_mm
-        geom.append(Geomstr.circle(straal, cx, cy))
-        geom.line(complex(cx - straal, cy), complex(cx + straal, cy))
+        geom.append(Geomstr.circle(radius, cx, cy))
+        geom.line(complex(cx - radius, cy), complex(cx + radius, cy))
         geom.end()
-        geom.line(complex(cx, cy - straal), complex(cx, cy + straal))
+        geom.line(complex(cx, cy - radius), complex(cx, cy + radius))
         geom.end()
         if along_y:
-            hoek_x, hoek_y = cx - height / 2, cy + straal + gat
+            anchor_x, anchor_y = cx - height / 2, cy + radius + gap
         else:
-            hoek_x, hoek_y = cx + straal + gat, cy - height / 2
-        geom.append(digit_geometry(nummer, hoek_x, hoek_y, height))
+            anchor_x, anchor_y = cx + radius + gap, cy - height / 2
+        geom.append(digit_geometry(nummer, anchor_x, anchor_y, height))
         geom.end()
     return geom
 
@@ -336,11 +336,11 @@ class TileRun:
         raise DesignError("There is no active sheet.")
 
     def _settings(self, sheet) -> TilingSettings:
-        blok = sheet.get("tiling") or {}
+        block = sheet.get("tiling") or {}
         return TilingSettings(
-            margin_mm=float(blok.get("margin_mm", 10.0)),
-            overlap_mm=float(blok.get("overlap_mm", 25.0)),
-            marker_size_mm=float(blok.get("marker_size_mm", 8.0)),
+            margin_mm=float(block.get("margin_mm", 10.0)),
+            overlap_mm=float(block.get("overlap_mm", 25.0)),
+            marker_size_mm=float(block.get("marker_size_mm", 8.0)),
         )
 
     def layout(self) -> dict:
@@ -515,7 +515,7 @@ class TileRun:
         seams = sorted({t.burn.y1 for t in tiles[:-1]})
         return sum(1 for y in seams for s in spans if s.y0 < y < s.y1)
 
-    def _tile_json(self, tile, vorige=None) -> dict:
+    def _tile_json(self, tile, previous=None) -> dict:
         """
         One tile for the outside world, with how far the board has to shift.
 
@@ -541,15 +541,15 @@ class TileRun:
             },
             "shift_mm": (
                 None
-                if vorige is None
+                if previous is None
                 else {
-                    "x": round(tile.window.x0 - vorige.window.x0, 2),
-                    "y": round(tile.window.y0 - vorige.window.y0, 2),
+                    "x": round(tile.window.x0 - previous.window.x0, 2),
+                    "y": round(tile.window.y0 - previous.window.y0, 2),
                 }
             ),
         }
 
-    # ------------------------------------------------------------- de reeks
+    # ------------------------------------------------------------- de series
 
     def _fingerprint(self, sheet) -> str:
         """
@@ -567,17 +567,17 @@ class TileRun:
         """
         import hashlib
 
-        stukken = [
+        parts = [
             f"{sheet['width_mm']}x{sheet['height_mm']}",
             json.dumps(sheet.get("tiling"), sort_keys=True),
         ]
         for node in self.kernel.elements.elems():
             bounds = getattr(node, "bounds", None)
-            stukken.append(
+            parts.append(
                 f"{node.type}:"
                 + ("-".join(f"{v:.1f}" for v in bounds) if bounds else "?")
             )
-        return hashlib.sha1("|".join(stukken).encode()).hexdigest()
+        return hashlib.sha1("|".join(parts).encode()).hexdigest()
 
     def state(self) -> dict | None:
         data = self._read()
@@ -782,7 +782,7 @@ class TileRun:
         bed = self.drawing.bed_mm()
         if bed is None:
             return
-        straal = self._settings(self._sheet()).marker_size_mm / 2
+        radius = self._settings(self._sheet()).marker_size_mm / 2
         corners = [
             (burn.x0, burn.y0),
             (burn.x1, burn.y0),
@@ -794,10 +794,10 @@ class TileRun:
             # that edge is burned.
             corners.extend(
                 [
-                    (mark.x_mm - straal, mark.y_mm - straal),
-                    (mark.x_mm + straal, mark.y_mm - straal),
-                    (mark.x_mm - straal, mark.y_mm + straal),
-                    (mark.x_mm + straal, mark.y_mm + straal),
+                    (mark.x_mm - radius, mark.y_mm - radius),
+                    (mark.x_mm + radius, mark.y_mm - radius),
+                    (mark.x_mm - radius, mark.y_mm + radius),
+                    (mark.x_mm + radius, mark.y_mm + radius),
                 ]
             )
         angle = math.radians(mutator.alignment.angle_deg)
@@ -823,12 +823,12 @@ class TileRun:
         if data is None:
             raise DesignError("There is no tile run going.")
         done = sorted(set(data["done"]) | {data["current"]})
-        volgende = data["current"] + 1
-        self._alignment = None  # de board gaat verschuiven; de oude state vervalt
-        if volgende >= data["tiles"]:
+        next_index = data["current"] + 1
+        self._alignment = None  # the board is going to shift; the old state lapses
+        if next_index >= data["tiles"]:
             self._write(None)
             return {"finished": True, "tiles": data["tiles"], "done": done}
-        data.update({"done": done, "current": volgende})
+        data.update({"done": done, "current": next_index})
         self._write(data)
         return self.state()
 

@@ -270,7 +270,7 @@ def test_a_restart_comes_back_to_the_sheet_you_left(kernel, tmp_path):
 
         second.post("/api/sheets/sheet-2/activate")
 
-    bewaard = tmp_path / "openkerf-vellen" / "sheet-1.svg"
+    bewaard = tmp_path / "openkerf-sheets" / "sheet-1.svg"
     assert bewaard.is_file(), "wisselen na een herstart gooide het vel weg"
 
 

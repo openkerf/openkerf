@@ -137,7 +137,7 @@ def _line_of(node) -> dict | None:
 
 def _text_of(node) -> dict | None:
     """
-    Bewerkbare vector-tekst.
+    Editable vector text.
 
     `linetext` makes a path, but the engine keeps the source on the node (`mktext`,
     `mkfont`, `mkfontsize`, ...) and can render it again. Without these fields text would be

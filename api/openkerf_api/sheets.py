@@ -167,9 +167,9 @@ class Sheets:
         for sheet in sheets:
             if sheet["id"] == sheet_id:
                 return sheet
-        namen = ", ".join(f"'{s['name']}'" for s in sheets) or "none"
+        names = ", ".join(f"'{s['name']}'" for s in sheets) or "none"
         raise DesignError(
-            f"Sheet '{sheet_id}' does not exist. Available: {namen}. Pick one from "
+            f"Sheet '{sheet_id}' does not exist. Available: {names}. Pick one from "
             "the sheet bar above the canvas.",
             code="sheet.unknown",
         )
@@ -195,7 +195,7 @@ class Sheets:
             (int(s["id"].rsplit("-", 1)[-1]) for s in sheets if s["id"][-1].isdigit()),
             default=0,
         )
-        # Namen uniek houden: twee dozen achter elkaar leverden anders twee
+        # Keeping names unique: two boxes one after another used to give two
         # sheets both called "Box 2", and then you cannot tell which is which.
         wanted = str(name or f"{DEFAULT_SHEET_NAME.rstrip('1')}{number + 1}").strip()[:40]
         taken = {s["name"] for s in sheets}
@@ -244,7 +244,7 @@ class Sheets:
             raise DesignError(f"{label} has to be between 5 and 5000 mm.")
         return round(size, 1)
 
-    def _tiling(self, huidig, gevraagd) -> dict:
+    def _tiling(self, current, asked) -> dict:
         """
         The tile settings of this sheet, checked for coherence.
 
@@ -253,27 +253,27 @@ class Sheets:
         only at burning time — by then you are already standing there with a plate
         in the machine.
         """
-        blok = dict(DEFAULT_TILING)
-        blok.update(huidig or {})
-        if not isinstance(gevraagd, dict):
+        block = dict(DEFAULT_TILING)
+        block.update(current or {})
+        if not isinstance(asked, dict):
             raise DesignError("tiling has to be a block of settings.")
-        blok["enabled"] = bool(gevraagd.get("enabled", blok["enabled"]))
-        for sleutel in ("margin_mm", "overlap_mm", "marker_size_mm"):
-            if gevraagd.get(sleutel) is not None:
-                blok[sleutel] = round(_positive(gevraagd[sleutel], sleutel), 1)
+        block["enabled"] = bool(asked.get("enabled", block["enabled"]))
+        for key in ("margin_mm", "overlap_mm", "marker_size_mm"):
+            if asked.get(key) is not None:
+                block[key] = round(_positive(asked[key], key), 1)
 
-        speling = 4.0
-        if blok["overlap_mm"] < blok["marker_size_mm"] + speling:
+        slack = 4.0
+        if block["overlap_mm"] < block["marker_size_mm"] + slack:
             raise DesignError(
-                f"An alignment marker is {blok['marker_size_mm']:g} mm across and does "
-                f"not fit in an overlap of {blok['overlap_mm']:g} mm. Make the overlap "
-                f"minstens {blok['marker_size_mm'] + speling:g} mm."
+                f"An alignment marker is {block['marker_size_mm']:g} mm across and does "
+                f"not fit in an overlap of {block['overlap_mm']:g} mm. Make the overlap "
+                f"at least {block['marker_size_mm'] + slack:g} mm."
             )
-        if blok["margin_mm"] > 100:
+        if block["margin_mm"] > 100:
             raise DesignError(
                 "A margin of more than 100 mm leaves no bed.", code="sheet.marginTooBig"
             )
-        return blok
+        return block
 
     def update(self, sheet_id: str, **fields) -> dict:
         sheets = self._ensure()
@@ -354,7 +354,7 @@ class Sheets:
             # broke.
             target.unlink(missing_ok=True)
             return
-        written = self.drawing.export_svg("vel.svg")
+        written = self.drawing.export_svg("sheet.svg")
         shutil.copyfile(written, target)
 
     def _load(self, sheet_id: str) -> None:

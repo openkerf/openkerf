@@ -200,7 +200,7 @@ class DesignEditor:
         self._refresh()
         return {"operation_id": operation_id, "removed": removed}
 
-    # ---------------------------------------------------------------- splitsen
+    # --------------------------------------------------------------- splitting
 
     def split(self, element_ids) -> dict:
         """
@@ -245,7 +245,7 @@ class DesignEditor:
         and that is not a reference and may stay.
         """
         levend = {id(node) for node in self.elements.elems()}
-        weg = 0
+        dropped = 0
         for operation in list(self.elements.ops()):
             for child in list(operation.children):
                 if str(getattr(child, "type", "")) != "reference":
@@ -253,8 +253,8 @@ class DesignEditor:
                 node = getattr(child, "node", None)
                 if node is None or id(node) not in levend:
                     child.remove_node()
-                    weg += 1
-        return weg
+                    dropped += 1
+        return dropped
 
     def apply_settings(
         self,

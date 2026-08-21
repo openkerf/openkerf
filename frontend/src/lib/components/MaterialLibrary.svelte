@@ -367,11 +367,11 @@
 
 	let bezigFoto = $state<number | null>(null);
 
-	async function fotoBij(gridId: number, bestand: File) {
+	async function photoFor(gridId: number, file: File) {
 		bezigFoto = gridId;
 		try {
 			const form = new FormData();
-			form.append('file', bestand);
+			form.append('file', file);
 			const response = await fetch(`/api/library/testgrids/${gridId}/photo`, {
 				method: 'POST',
 				headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -385,15 +385,15 @@
 
 	// ------------------------------------------------ uitwisselen (besluit B7)
 
-	type Voorstel = ImportPreview['samenvoegen']['materials']['similar'][number];
+	type Suggestion = ImportPreview['merge']['materials']['similar'][number];
 
 	let preview = $state<ImportPreview | null>(null);
-	let bestandsnaam = $state('');
-	let modus = $state<'samenvoegen' | 'vervangen'>('samenvoegen');
-	let botsWint = $state<'eigen' | 'bestand'>('eigen');
+	let fileName = $state('');
+	let mode = $state<'merge' | 'replace'>('merge');
+	let clashWinner = $state<'mine' | 'file'>('mine');
 	/** Which material from the file is laid onto which of your own materials. */
-	let koppel = $state<Record<string, number>>({});
-	let wisZeker = $state(false);
+	let links = $state<Record<string, number>>({});
+	let wipeConfirmed = $state(false);
 	let ready = $state<ImportResult | null>(null);
 	/**
 	 * Every proposal we ever showed, including after it has been ticked.
@@ -402,11 +402,11 @@
 	 * server's proposals — and with it the tick you just made would disappear. Then
 	 * the choice can no longer be undone without cancelling.
 	 */
-	let gezien = $state<Record<string, Voorstel>>({});
+	let seen = $state<Record<string, Suggestion>>({});
 	let voorstellen = $derived.by(() => {
-		const list = [...(preview?.samenvoegen.materials.similar ?? [])];
-		for (const name of Object.keys(koppel)) {
-			if (gezien[name] && !list.some((p) => p.name === name)) list.push(gezien[name]);
+		const list = [...(preview?.merge.materials.similar ?? [])];
+		for (const name of Object.keys(links)) {
+			if (seen[name] && !list.some((p) => p.name === name)) list.push(seen[name]);
 		}
 		return list.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
 	});
@@ -428,15 +428,15 @@
 		(welke === 'ready' ? klaarEl : wisselEl)?.scrollIntoView({ block: 'start' });
 	}
 
-	async function kiesBestand(bestand: File) {
+	async function pickFile(file: File) {
 		ready = null;
-		modus = 'samenvoegen';
-		botsWint = 'eigen';
-		koppel = {};
-		gezien = {};
-		wisZeker = false;
-		bestandsnaam = bestand.name;
-		preview = await library.uploadBundle(bestand);
+		mode = 'merge';
+		clashWinner = 'mine';
+		links = {};
+		seen = {};
+		wipeConfirmed = false;
+		fileName = file.name;
+		preview = await library.uploadBundle(file);
 		if (preview) naarBoven('preview');
 	}
 
@@ -447,15 +447,15 @@
 	 * because of it, and a tally that does not move with your choice is a tally you
 	 * cannot trust.
 	 */
-	async function koppelen(paar: Voorstel, on: boolean) {
+	async function linkTo(pair: Suggestion, on: boolean) {
 		// Remember it before recomputing: after that the server knows this material and
 		// no longer offers the proposal.
-		gezien = { ...gezien, [paar.name]: paar };
-		koppel = on
-			? { ...koppel, [paar.name]: paar.material_id }
-			: Object.fromEntries(Object.entries(koppel).filter(([k]) => k !== paar.name));
+		seen = { ...seen, [pair.name]: pair };
+		links = on
+			? { ...links, [pair.name]: pair.material_id }
+			: Object.fromEntries(Object.entries(links).filter(([k]) => k !== pair.name));
 		if (preview) {
-			const again = await library.previewBundle(preview.bundle, koppel);
+			const again = await library.previewBundle(preview.bundle, links);
 			if (again) preview = again;
 		}
 	}
@@ -463,15 +463,15 @@
 	async function importeren() {
 		if (!preview) return;
 		const zichtbaarVoor = library.presets.length;
-		const uitkomst = await library.importBundle(preview.bundle, modus, koppel, botsWint);
-		if (uitkomst) {
+		const outcome = await library.importBundle(preview.bundle, mode, links, clashWinner);
+		if (outcome) {
 			// "4 settings added" while the screen does not change is not reassurance but
 			// a riddle: they belong to another machine then and fall outside the filter.
 			// Measured rather than guessed.
 			hidden =
-				uitkomst.presets.added > 0 &&
-				library.presets.length - zichtbaarVoor < uitkomst.presets.added;
-			ready = uitkomst;
+				outcome.presets.added > 0 &&
+				library.presets.length - zichtbaarVoor < outcome.presets.added;
+			ready = outcome;
 			preview = null;
 			naarBoven('ready');
 		}
@@ -484,20 +484,20 @@
 	 * one from the file was burned on a grid. Then the rule beats the measurement, and
 	 * somebody should see that before they choose.
 	 */
-	function sterkerBewijs(botsing: PresetConflict) {
-		return botsing.theirs.source === 'testraster' && botsing.mine.source !== 'testraster';
+	function sterkerBewijs(clash: PresetConflict) {
+		return clash.theirs.source === 'testraster' && clash.mine.source !== 'testraster';
 	}
 
 	/** "3 settings" — and "1 setting", because that is what a person reads too. */
-	function tel(n: number, what: 'materials' | 'presets' | 'machines' | 'testGrids' | 'photos' | 'grids') {
+	function count(n: number, what: 'materials' | 'presets' | 'machines' | 'testGrids' | 'photos' | 'grids') {
 		return t(`count.${what}` as never, { n });
 	}
 
 	/** What hangs off a machine profile; only what is really there. */
 	function bewijs(machine: { presets: number; test_grids: number }) {
 		const parts = [];
-		if (machine.presets) parts.push(tel(machine.presets, 'presets'));
-		if (machine.test_grids) parts.push(tel(machine.test_grids, 'grids'));
+		if (machine.presets) parts.push(count(machine.presets, 'presets'));
+		if (machine.test_grids) parts.push(count(machine.test_grids, 'grids'));
 		return parts.join(' · ');
 	}
 
@@ -767,7 +767,7 @@
 									onchange={(e) => {
 										const f = e.currentTarget.files?.[0];
 										e.currentTarget.value = '';
-										if (f && preset.grid_id) fotoBij(preset.grid_id, f);
+										if (f && preset.grid_id) photoFor(preset.grid_id, f);
 									}}
 								/>
 							</label>
@@ -876,33 +876,33 @@
 	<!-- The import preview takes over the whole dialog. This is the moment
 	     where the decision falls; going on browsing beside it through the library you
 	     are about to overwrite helps nobody. -->
-	{@const s = preview.samenvoegen}
+	{@const s = preview.merge}
 	<section class="wissel" bind:this={wisselEl}>
 		<header class="wisselkop">
 			<h2>{t('import.title')}</h2>
 			<p class="source">
-				<span class="mono">{bestandsnaam}</span>
+				<span class="mono">{fileName}</span>
 				{#if preview.exported_at}
 					<span class="scheiding">·</span>
 					{t('import.exportedAt', { when: i18n.ago(preview.exported_at) })}
 				{/if}
 			</p>
 			<ul class="contents">
-				<li>{tel(preview.bevat.materials, 'materials')}</li>
-				<li>{tel(preview.bevat.presets, 'presets')}</li>
-				<li>{tel(preview.bevat.machines, 'machines')}</li>
-				<li>{tel(preview.bevat.test_grids, 'testGrids')}</li>
-				<li class:mist={preview.bevat.photos === 0}>
-					{tel(preview.bevat.photos, 'photos')}
+				<li>{count(preview.contains.materials, 'materials')}</li>
+				<li>{count(preview.contains.presets, 'presets')}</li>
+				<li>{count(preview.contains.machines, 'machines')}</li>
+				<li>{count(preview.contains.test_grids, 'testGrids')}</li>
+				<li class:missing={preview.contains.photos === 0}>
+					{count(preview.contains.photos, 'photos')}
 				</li>
 			</ul>
 			<!-- What it will lie next to. Without this "6 settings" are six loose
 			     numbers; beside it, it is a ratio. -->
 			<p class="now">
 				{t('import.yoursNow', {
-					materials: tel(preview.current.materials, 'materials'),
-					presets: tel(preview.current.presets, 'presets'),
-					grids: tel(preview.current.test_grids, 'testGrids')
+					materials: count(preview.current.materials, 'materials'),
+					presets: count(preview.current.presets, 'presets'),
+					grids: count(preview.current.test_grids, 'testGrids')
 				})}
 			</p>
 		</header>
@@ -910,19 +910,19 @@
 		<!-- The two choices sit side by side and both carry their consequence, so that
 		     "replace" is not picked by accident because it sounds shorter. -->
 		<div class="keuzes">
-			<label class="choice" class:on={modus === 'samenvoegen'}>
-				<input type="radio" name="importmodus" value="samenvoegen" bind:group={modus} />
+			<label class="choice" class:on={mode === 'merge'}>
+				<input type="radio" name="importmode" value="merge" bind:group={mode} />
 				<span class="titelklein">{t('import.merge')}</span>
 				<span class="hint">{t('import.merge.explain')}</span>
 			</label>
-			<label class="choice danger" class:on={modus === 'vervangen'}>
-				<input type="radio" name="importmodus" value="vervangen" bind:group={modus} />
+			<label class="choice danger" class:on={mode === 'replace'}>
+				<input type="radio" name="importmode" value="replace" bind:group={mode} />
 				<span class="titelklein">{t('import.replace')}</span>
 				<span class="hint">{t('import.replace.explain')}</span>
 			</label>
 		</div>
 
-		{#if modus === 'samenvoegen'}
+		{#if mode === 'merge'}
 			<ul class="gevolg">
 				{#if s.materials.new.length}
 					<li class="erbij">
@@ -966,19 +966,19 @@
 				<!-- The trap from M5: "birch plywood" and "plywood, birch" are one board.
 				     Merging them ourselves would be a guess with someone else's numbers on
 				     your material; pointing it out is something the user may do. -->
-				<div class="blok">
+				<div class="block">
 					<h3>{t('import.sameBoard')}</h3>
 					<p class="fijn">{t('import.sameBoard.body')}</p>
-					{#each voorstellen as paar (paar.name)}
+					{#each voorstellen as pair (pair.name)}
 						<label class="samenvoeg">
 							<input
 								type="checkbox"
-								checked={koppel[paar.name] === paar.material_id}
-								onchange={(e) => koppelen(paar, e.currentTarget.checked)}
+								checked={links[pair.name] === pair.material_id}
+								onchange={(e) => linkTo(pair, e.currentTarget.checked)}
 							/>
 							<span>
-								{t('import.mergeWith', { name: paar.name, match: paar.match })}
-								<span class="fijn">— {paar.why}</span>
+								{t('import.mergeWith', { name: pair.name, match: pair.match })}
+								<span class="fijn">— {pair.why}</span>
 							</span>
 						</label>
 					{/each}
@@ -986,48 +986,48 @@
 			{/if}
 
 			{#if s.presets.conflicts.length}
-				<div class="blok bots">
+				<div class="block clash">
 					<h3>{t('import.conflicts', { n: s.presets.conflicts.length })}</h3>
 					<p class="fijn">{t('import.conflicts.body')}</p>
-					<div class="wint">
+					<div class="wins">
 						<label class="bereik">
-							<input type="radio" name="botsing" value="eigen" bind:group={botsWint} />
+							<input type="radio" name="clash" value="mine" bind:group={clashWinner} />
 							<span>{t('import.keepMine')}</span>
 						</label>
 						<label class="bereik">
-							<input type="radio" name="botsing" value="bestand" bind:group={botsWint} />
+							<input type="radio" name="clash" value="file" bind:group={clashWinner} />
 							<span>{t('import.takeTheirs')}</span>
 						</label>
 					</div>
 					<ul class="botsingen">
-						{#each s.presets.conflicts as botsing (`${botsing.material}-${botsing.operation}-${botsing.thickness_mm}`)}
+						{#each s.presets.conflicts as clash (`${clash.material}-${clash.operation}-${clash.thickness_mm}`)}
 							<li>
 								<span class="wat">
-									{botsing.material}{botsing.thickness_mm !== null
-										? `, ${botsing.thickness_mm} mm`
-										: ''} · {operationLabel(botsing.operation)}
+									{clash.material}{clash.thickness_mm !== null
+										? `, ${clash.thickness_mm} mm`
+										: ''} · {operationLabel(clash.operation)}
 								</span>
-								<span class="paar">
-									<span class="kant" class:wint={botsWint === 'eigen'}>
+								<span class="pair">
+									<span class="side" class:wins={clashWinner === 'mine'}>
 										<span class="k">{t('import.mine')}</span>
 										<span class="mono"
-											>{botsing.mine.speed_mm_s} mm/s · {botsing.mine.power_percent}%</span
+											>{clash.mine.speed_mm_s} mm/s · {clash.mine.power_percent}%</span
 										>
 									</span>
 									<span class="pijl" aria-hidden="true">→</span>
-									<span class="kant" class:wint={botsWint === 'bestand'}>
+									<span class="side" class:wins={clashWinner === 'file'}>
 										<span class="k">{t('import.theirs')}</span>
 										<span class="mono"
-											>{botsing.theirs.speed_mm_s} mm/s · {botsing.theirs.power_percent}%</span
+											>{clash.theirs.speed_mm_s} mm/s · {clash.theirs.power_percent}%</span
 										>
 									</span>
 								</span>
-								{#if sterkerBewijs(botsing)}
+								{#if sterkerBewijs(clash)}
 									<span class="beter">
 										{t('import.strongerEvidence', {
 											source:
-												SOURCE_LABEL[botsing.mine.source as Preset['source']]?.text.toLowerCase() ??
-												botsing.mine.source
+												SOURCE_LABEL[clash.mine.source as Preset['source']]?.text.toLowerCase() ??
+												clash.mine.source
 										})}
 									</span>
 								{/if}
@@ -1037,13 +1037,13 @@
 				</div>
 			{/if}
 		{:else}
-			<div class="blok erase">
+			<div class="block erase">
 				<h3>{t('import.wipe.title')}</h3>
 				<p>
 					{t('import.wipe.body', {
-						materials: tel(preview.vervangen.removes.materials, 'materials'),
-						presets: tel(preview.vervangen.removes.presets, 'presets'),
-						grids: tel(preview.vervangen.removes.test_grids, 'testGrids')
+						materials: count(preview.replace.removes.materials, 'materials'),
+						presets: count(preview.replace.removes.presets, 'presets'),
+						grids: count(preview.replace.removes.test_grids, 'testGrids')
 					})}
 				</p>
 				<!-- The advice has to be actionable here. Otherwise it says "make a backup
@@ -1056,7 +1056,7 @@
 					</button>
 				</p>
 				<label class="samenvoeg">
-					<input type="checkbox" bind:checked={wisZeker} />
+					<input type="checkbox" bind:checked={wipeConfirmed} />
 					<span>{t('import.wipe.confirm')}</span>
 				</label>
 			</div>
@@ -1069,11 +1069,11 @@
 		<div class="actions">
 			<button
 				class="btn primary"
-				class:danger={modus === 'vervangen'}
-				disabled={library.busy || (modus === 'vervangen' && !wisZeker)}
+				class:danger={mode === 'replace'}
+				disabled={library.busy || (mode === 'replace' && !wipeConfirmed)}
 				onclick={importeren}
 			>
-				{modus === 'vervangen' ? t('import.doReplace') : t('import.merge')}
+				{mode === 'replace' ? t('import.doReplace') : t('import.merge')}
 			</button>
 			<button class="btn" onclick={() => (preview = null)}>{t('common.cancel')}</button>
 		</div>
@@ -1084,14 +1084,14 @@
 	<!-- What actually happened, in the same words as the preview. -->
 	<div class="ready" role="status" bind:this={klaarEl}>
 		<strong>
-			{ready.mode === 'vervangen' ? t('import.done.replaced') : t('import.done.merged')}
+			{ready.mode === 'replace' ? t('import.done.replaced') : t('import.done.merged')}
 		</strong>
 		<span>
 			{t('import.addedPresets', { n: ready.presets.added })}{ready.presets.updated
 				? `, ${t('import.done.updated', { n: ready.presets.updated })}`
 				: ''}{ready.presets.skipped
 				? `, ${t('import.done.skipped', { n: ready.presets.skipped })}`
-				: ''} · {tel(ready.test_grids, 'testGrids')}.
+				: ''} · {count(ready.test_grids, 'testGrids')}.
 		</span>
 		{#if hidden && library.activeMachine}
 			<span class="fijn">{t('import.done.hidden', { machine: library.activeMachine.name })}</span>
@@ -1227,7 +1227,7 @@
 	     without having to look for the field. -->
 	<div class="welcome narrow">
 		<h2>{t('library.nothingFound', { query: zoek })}</h2>
-		<p>{t('library.nothingFound.body', { materials: tel(library.materials.length, 'materials') })}</p>
+		<p>{t('library.nothingFound.body', { materials: count(library.materials.length, 'materials') })}</p>
 		<button class="btn" onclick={() => (zoek = '')}>{t('library.clearSearch')}</button>
 	</div>
 {:else}
@@ -1526,7 +1526,7 @@
 					onchange={(e) => {
 						const f = e.currentTarget.files?.[0];
 						e.currentTarget.value = '';
-						if (f) kiesBestand(f);
+						if (f) pickFile(f);
 					}}
 				/>
 			</label>
@@ -2070,7 +2070,7 @@
 		color: var(--text-2);
 	}
 	/* Zero photos is not a detail: then the evidence does not come along. */
-	.contents li.mist { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+	.contents li.missing { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
 	.now { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-2); }
 
 	.keuzes {
@@ -2128,24 +2128,24 @@
 	.gevolg li.zelfde { color: var(--text-2); }
 	.gevolg .fijn { margin: 0; }
 
-	.blok {
+	.block {
 		margin-top: var(--space-3);
 		padding: var(--space-3);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.blok h3 {
+	.block h3 {
 		margin: 0 0 4px;
 		font-size: var(--text-sm);
 		font-weight: 600;
 	}
-	.blok.bots { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-	.blok.erase {
+	.block.clash { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+	.block.erase {
 		border-color: color-mix(in srgb, var(--danger) 50%, transparent);
 		background: color-mix(in srgb, var(--danger) 9%, transparent);
 	}
-	.blok.erase p { margin: 0 0 var(--space-2); }
+	.block.erase p { margin: 0 0 var(--space-2); }
 	/* At touch widths a checkbox is 44px tall (design system), so aligning to the top
 	   puts the glyph a line below its own label. Centring keeps it beside the text on
 	   every device. */
@@ -2158,7 +2158,7 @@
 		font-size: var(--text-xs);
 		cursor: pointer;
 	}
-	.wint { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
+	.wins { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
 	.botsingen { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 	/* Comparing two values only works when they are in a column. Every row therefore
 	   shares the same grid: what, mine, the file's. */
@@ -2175,8 +2175,8 @@
 	}
 	.botsingen .wat { font-weight: 500; }
 	.beter { grid-column: 1 / -1; color: var(--warn); }
-	.paar { display: contents; }
-	.kant {
+	.pair { display: contents; }
+	.side {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
@@ -2186,12 +2186,12 @@
 	/* Which side wins can be read off without re-reading the choice above: the winning
 	   side is bold and marked, the other stays readable — they are both numbers you
 	   want to be able to see. */
-	.kant.wint { color: var(--text-1); font-weight: 600; }
-	.kant.wint .k::after {
+	.side.wins { color: var(--text-1); font-weight: 600; }
+	.side.wins .k::after {
 		content: ' ✓';
 		color: var(--ok);
 	}
-	.kant .k {
+	.side .k {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		font-weight: 400;

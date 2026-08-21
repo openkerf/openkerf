@@ -280,7 +280,7 @@ class CommandRunner:
             return found
         try:
             operations = list(self.kernel.elements.ops())
-        except Exception:  # pragma: no cover - een boom zonder ops-tak
+        except Exception:  # pragma: no cover - a tree without an ops branch
             return found
         for operation in operations:
             if not str(getattr(operation, "type", "")).startswith("op "):
@@ -297,7 +297,7 @@ class CommandRunner:
     @staticmethod
     def _share_pass_settings(steps) -> list:
         """
-        De passes van één layer in één RD-layer houden.
+        Keeping the passes of one layer inside one RD layer.
 
         Runs *after* `blob`, because before then the copies do not exist. `blob` gives every
         pass its own settings dict (`core/cutplan.py` `_blob_convert` copies the dict as soon
@@ -312,7 +312,7 @@ class CommandRunner:
         same one. Layers with a Z step are deliberately left out: there a `z_move` belongs
         between the passes, and that sequence was measured with a layer of its own per pass.
         """
-        eerste: dict = {}
+        first: dict = {}
         for step in steps:
             if not hasattr(step, "__iter__"):
                 continue
@@ -322,12 +322,12 @@ class CommandRunner:
                     continue
                 if settings.get("z_step_mm"):
                     continue
-                sleutel = settings.get("id")
-                if sleutel is None:
+                key = settings.get("id")
+                if key is None:
                     continue
-                gedeeld = eerste.setdefault(sleutel, settings)
-                if gedeeld is not settings:
-                    item.settings = gedeeld
+                shared = first.setdefault(key, settings)
+                if shared is not settings:
+                    item.settings = shared
         return list(steps)
 
     def _multi_pass_layers(self) -> list:
@@ -355,7 +355,7 @@ class CommandRunner:
         found = []
         try:
             operations = list(self.kernel.elements.ops())
-        except Exception:  # pragma: no cover - een boom zonder ops-tak
+        except Exception:  # pragma: no cover - a tree without an ops branch
             return found
         for operation in operations:
             if not str(getattr(operation, "type", "")).startswith("op "):
@@ -442,8 +442,8 @@ class CommandRunner:
         if not queue:
             return
         job = queue[-1]
-        huidig = str(getattr(job, "label", "") or "")
-        if huidig and not re.fullmatch(r"\w+:\d+ items?", huidig):
+        current = str(getattr(job, "label", "") or "")
+        if current and not re.fullmatch(r"\w+:\d+ items?", current):
             return
         try:
             job.label = title

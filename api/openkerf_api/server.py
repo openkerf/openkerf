@@ -210,24 +210,26 @@ class ApiServer:
             kernel,
             self.drawing,
             self.document,
-            Path(self.library.path).with_name("openkerf-vellen"),
+            self._beside("openkerf-sheets", "openkerf-vellen"),
         )
         self.tiles = TileRun(
             kernel,
             self.drawing,
             self.sheets,
             self.commands,
-            Path(self.library.path).with_name("openkerf-tegelreeks.json"),
+            self._beside("openkerf-tiles.json", "openkerf-tegelreeks.json"),
         )
         # Where a layer's settings come from. Beside the library, because it is about
         # presets; not *in* it, because it is about this project.
         self.provenance = Provenance(
-            Path(self.library.path).with_name("openkerf-herkomst.json")
+            self._beside("openkerf-provenance.json", "openkerf-herkomst.json")
         )
         # What every palette colour last did on this machine (decision B2). Beside the
         # provenance and emphatically not in it: this is habit, not evidence — see the head
         # of palette.py.
-        self.palette = Palette(Path(self.library.path).with_name("openkerf-palet.json"))
+        self.palette = Palette(
+            self._beside("openkerf-palette.json", "openkerf-palet.json")
+        )
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
         self.fonts = Fonts(kernel)
@@ -521,7 +523,7 @@ class ApiServer:
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
             result = act(self.commands.load_file, str(target))
-            # Net geladen: het ontwerp is gelijk aan het bestand.
+            # Just loaded: the design equals the file.
             self.document.clean()
             return result
 
@@ -585,7 +587,7 @@ class ApiServer:
         @app.post("/api/project/new", dependencies=write)
         def new_project():
             """
-            Opnieuw beginnen: leeg ontwerp, één leeg sheet.
+            Starting over: an empty design, one empty sheet.
 
             Saving and opening already existed, starting over did not — the only way to
             make a new project was to remove everything by hand, and anybody who forgets
@@ -611,7 +613,7 @@ class ApiServer:
 
         @app.get("/api/project/export.openkerf")
         def export_project(filename: str = "project.openkerf"):
-            """Ontwerp plus bibliotheek-context in één bestand."""
+            """The design plus its library context in one file."""
             from fastapi.responses import FileResponse
 
             path = manage(
@@ -838,7 +840,7 @@ class ApiServer:
 
         @app.post("/api/design/boolean", dependencies=write)
         def boolean_elements(body: dict):
-            """Verenigen, verschil, doorsnede of uitsluiten."""
+            """Unite, subtract, intersect or exclude."""
             return manage(self.drawing.boolean, body.get("ids"), body.get("operation"))
 
         @app.post("/api/design/align", dependencies=write)
@@ -868,7 +870,7 @@ class ApiServer:
         def machine_jog(body: dict):
             return manage(self.motion.jog, body.get("dx_mm"), body.get("dy_mm"))
 
-        # -- bewaarde positions (gat J6) — eigen blokje, zie machine.py ------
+        # -- saved positions (gap J6) — a block of its own, see machine.py ---
         @app.get("/api/machine/positions")
         def machine_positions():
             """Positions this machine remembers: a jig, the zero of a fixture."""
@@ -888,9 +890,9 @@ class ApiServer:
         def delete_machine_position(name: str):
             return manage(self.motion.delete_position, name)
 
-        # -- einde blok positions --------------------------------------------
+        # -- end of the positions block --------------------------------------
 
-        # -- gebruikersoorsprong (gat J12) — zie machine.py -----------------
+        # -- user origin (gap J12) — see machine.py -------------------------
         @app.get("/api/machine/origin")
         def machine_origin():
             """The zero point of this machine, or null when none is set."""
@@ -908,7 +910,7 @@ class ApiServer:
         def clear_machine_origin():
             return manage(self.motion.clear_origin)
 
-        # -- bijstellen tijdens een lopende job (gat J11) -------------------
+        # -- adjusting during a running job (gap J11) -----------------------
         @app.get("/api/job/adjust")
         def job_adjustment():
             """What is adjusted right now, and whether this machine can do it at all."""
@@ -959,7 +961,7 @@ class ApiServer:
         @app.post("/api/machine/connect", dependencies=write)
         def connect_machine():
             """
-            De verbinding opzetten.
+            Opening the connection.
 
             Moves nothing. The engine reports a failed attempt only on the console channel
             and then returns neatly, so we look at the state afterwards and pass the message
@@ -1092,7 +1094,7 @@ class ApiServer:
 
         @app.post("/api/design/operations/sort", dependencies=write)
         def sort_operations():
-            """Graveren vóór snijden, in één handeling (gat L2)."""
+            """Engrave before cut, in one action (gap L2)."""
             return manage(self.drawing.sort_operations)
 
         @app.post("/api/design/operations/{operation_id}/move", dependencies=write)
@@ -1165,7 +1167,7 @@ class ApiServer:
         @app.post("/api/design/split", dependencies=write)
         def split_elements(body: dict):
             """
-            Een path opdelen in zijn losse stukken.
+            Splitting a path into its separate pieces.
 
             A CAD export is often one path with dozens of subpaths; nothing in it can be
             clicked separately. After this every piece is a shape of its own.
@@ -1343,10 +1345,10 @@ class ApiServer:
         def add_machine_profile(body: dict):
             return manage(lambda: self.library.add_machine(**body))
 
-        # ------------------------------------------ bibliotheek uitwisselen (B7)
+        # ------------------------------------------------ library exchange (B7)
 
         @app.get("/api/library/export.openkerf-lib")
-        def export_library(filename: str = "bibliotheek"):
+        def export_library(filename: str = "library"):
             """The whole library as one file, photos included."""
             from fastapi.responses import FileResponse
 
@@ -1363,7 +1365,7 @@ class ApiServer:
             It stays under its own name in the upload directory, so that the preview can be
             recomputed without uploading again.
             """
-            target = self._upload_path(file.filename or f"bibliotheek{BUNDLE_SUFFIX}")
+            target = self._upload_path(file.filename or f"library{BUNDLE_SUFFIX}")
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
             preview = manage(self.library.preview_import, target)
@@ -1390,19 +1392,19 @@ class ApiServer:
             # Which material lay on which sheet, by name: on a replace, materials get new
             # ids and the sheet would otherwise point at nothing.
             names = {m["id"]: m["name"] for m in self.library.materials()}
-            vellen = {
+            sheet_names = {
                 s["id"]: names.get(s.get("material_id"))
                 for s in self.sheets.state()["sheets"]
             }
             result = manage(
                 self.library.import_bundle,
                 target,
-                body.get("mode") or "samenvoegen",
+                body.get("mode") or "merge",
                 body.get("merge_materials"),
-                body.get("on_conflict") or "eigen",
+                body.get("on_conflict") or "mine",
             )
             again = {m["name"]: m["id"] for m in self.library.materials()}
-            for sheet_id, name in vellen.items():
+            for sheet_id, name in sheet_names.items():
                 if name and again.get(name) is not None:
                     self.sheets.update(sheet_id, material_id=again[name])
             return result
@@ -1520,7 +1522,7 @@ class ApiServer:
             """While calibrating you want to see the unprocessed image."""
             return manage(self.camera.set_corrected, bool(body.get("corrected")))
 
-        # ----------------------------------------------------------------- vellen
+        # ----------------------------------------------------------------- sheets
 
         @app.get("/api/sheets")
         def list_sheets():
@@ -1592,13 +1594,13 @@ class ApiServer:
             def run():
                 points = list(body.get("points") or [])
                 if body.get("use_current"):
-                    huidig = self.motion._current_mm()
-                    if huidig is None:
+                    current = self.motion._current_mm()
+                    if current is None:
                         raise DesignError(
                             "This machine reports no position, so 'Here' does not know "
                             "where it is. Fill in the coordinates by hand."
                         )
-                    points.append({"x_mm": huidig[0], "y_mm": huidig[1]})
+                    points.append({"x_mm": current[0], "y_mm": current[1]})
                 return self.tiles.align(points, body.get("reference") or "markers")
 
             return manage(run)
@@ -1717,7 +1719,7 @@ class ApiServer:
 
         @app.post("/api/design/generate/grid", dependencies=write)
         def generate_grid(body: dict):
-            """De selectie in rijen en kolommen herhalen."""
+            """Repeating the selection in rows and columns."""
             return manage(
                 self.generators.grid,
                 body.get("ids") or [],
@@ -1888,7 +1890,7 @@ class ApiServer:
                 # runs to the right, so it helps decide how wide the board becomes. Adding it
                 # afterwards gave a reported measure narrower than what burns.
                 plan, cells = plan_grid(**grid_fields(body))
-                # Het grid is één object op het canvas — vakjes, aslabels,
+                # The grid is one object on the canvas — squares, axis labels,
                 # caption and frame in one group, in one action. The cells keep their own
                 # operations, because those *are* the sweep.
                 drawn, group_id = self.grids.draw(plan, cells)
@@ -1914,7 +1916,7 @@ class ApiServer:
             """
             return self.library.last_grid_settings(material_id)
 
-        # ---------------------------------------- benoemde recepten (gat T7)
+        # ------------------------------------------- named recipes (gap T7)
         #
         # Before `/testgrids/{grid_id}`, otherwise that route catches "recipes" as an id.
         # That is FastAPI's order of declaration, not of specificity.
@@ -1922,12 +1924,12 @@ class ApiServer:
         @app.get("/api/library/testgrids/recipes")
         def list_grid_recipes(material_id: int | None = None):
             """
-            Bewaarde generatorinstellingen onder een name.
+            Saved generator settings under a name.
 
             T3 remembers the previous grid per material; this is the same in the plural, so
             that "cut birch" and "engrave birch" can sit beside
             kunnen bestaan. Dezelfde sleutels, zodat de wizard beide op
-            dezelfde manier invult.
+            fills in the same way.
             """
             return manage(self.library.grid_recipes, material_id)
 
@@ -1994,7 +1996,7 @@ class ApiServer:
             suffix = Path(file.filename or "").suffix
             data = await file.read()
             if not data:
-                raise HTTPException(status_code=422, detail="Lege foto.")
+                raise HTTPException(status_code=422, detail="Empty photo.")
             return manage(self.library.set_grid_photo, grid_id, suffix, data)
 
         @app.put("/api/library/testgrids/{grid_id}/alignment", dependencies=write)
@@ -2027,7 +2029,7 @@ class ApiServer:
             if not cell:
                 return FileResponse(path)
             try:
-                row, column = (int(deel) for deel in str(cell).split("-", 1))
+                row, column = (int(part) for part in str(cell).split("-", 1))
             except ValueError:
                 raise HTTPException(
                     status_code=422, detail="cell has the shape <row>-<column>."
@@ -2046,7 +2048,7 @@ class ApiServer:
             """
             chosen = body.get("cells")
             if not isinstance(chosen, list) or not chosen:
-                raise HTTPException(status_code=422, detail="Kies minstens één vakje.")
+                raise HTTPException(status_code=422, detail="Pick at least one square.")
 
             def run():
                 grid = self.library.test_grid(grid_id)
@@ -2154,7 +2156,7 @@ class ApiServer:
             from .machines import PROFILE_SUFFIX
 
             profile = manage(self.machines.export_profile, path)
-            veilig = "".join(
+            safe = "".join(
                 c if c.isalnum() or c in "-_" else "-"
                 for c in str(profile["machine"]["label"] or path)
             ).strip("-") or path
@@ -2162,7 +2164,7 @@ class ApiServer:
                 profile,
                 headers={
                     "Content-Disposition": (
-                        f'attachment; filename="{veilig}{PROFILE_SUFFIX}"'
+                        f'attachment; filename="{safe}{PROFILE_SUFFIX}"'
                     )
                 },
             )
@@ -2285,6 +2287,25 @@ class ApiServer:
         else:
             self.channel(f"Write actions need this token: {self.token}")
 
+    def _beside(self, name: str, was: str) -> Path:
+        """
+        A state file next to the library, moved along if it still has its old name.
+
+        These names were Dutch before the interface became English. They hold live
+        work — the sheets you are drawing on, where a layer's settings came from,
+        what every palette colour last did — so renaming them without moving them
+        would quietly throw that away. Moving only happens when the new name is not
+        taken yet; anything else would overwrite newer state with older.
+        """
+        target = Path(self.library.path).with_name(name)
+        legacy = Path(self.library.path).with_name(was)
+        if legacy.exists() and not target.exists():
+            try:
+                legacy.rename(target)
+            except OSError:  # pragma: no cover - a read-only or busy directory
+                return legacy
+        return target
+
     def _upload_path(self, filename: str) -> Path:
         """Uploads land in a private temp dir; only the basename is honoured."""
         if self._upload_dir is None:
@@ -2349,8 +2370,8 @@ class ApiServer:
         controller = getattr(getattr(device, "driver", None), "controller", None)
         if controller is None:
             return
-        einde = time.monotonic() + self.QUIET_TIMEOUT_S
-        while time.monotonic() < einde:
+        deadline = time.monotonic() + self.QUIET_TIMEOUT_S
+        while time.monotonic() < deadline:
             try:
                 if not controller.is_busy:
                     return

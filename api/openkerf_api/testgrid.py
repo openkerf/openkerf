@@ -173,7 +173,7 @@ DEFAULT_LABEL_SPEED_MM_S = 80.0
 DEFAULT_LABEL_POWER_PERCENT = 30.0
 
 
-def _rond_af(value: float, ruwe_stap: float) -> float:
+def _tidy(value: float, raw_step: float) -> float:
     """
     Nudging an intermediate value to the nearest tidy number.
 
@@ -183,17 +183,17 @@ def _rond_af(value: float, ruwe_stap: float) -> float:
     """
     # The coarsest tidy step that is at most half a step: then a value never moves further
     # than a quarter of a step and the series keeps climbing tidily.
-    grens = ruwe_stap / 2 if ruwe_stap else 1
-    passend = [k for k in _TIDY_STEPS if k <= grens]
-    korrel = passend[-1] if passend else _TIDY_STEPS[0]
-    afgerond = round(value / korrel) * korrel
-    # Drijvende komma laat 3 * 0.1 als 0.30000000000000004 achter.
-    return round(afgerond, 3)
+    bound = raw_step / 2 if raw_step else 1
+    fitting = [k for k in _TIDY_STEPS if k <= bound]
+    grain = fitting[-1] if fitting else _TIDY_STEPS[0]
+    rounded = round(value / grain) * grain
+    # Floating point leaves 3 * 0.1 behind as 0.30000000000000004.
+    return round(rounded, 3)
 
 
 def _spread(low: float, high: float, steps: int) -> list[float]:
     """
-    De reeks values voor één as.
+    The series of values for one axis.
 
     The start and the end stay exactly what was asked for — that is the range the user
     wants to sweep. Only the intermediate steps move to a tidy number, and when two of them
@@ -202,38 +202,38 @@ def _spread(low: float, high: float, steps: int) -> list[float]:
     if steps == 1:
         return [low]
     span = (high - low) / (steps - 1)
-    ruw = [low + span * i for i in range(steps)]
-    net = [ruw[0]] + [_rond_af(v, span) for v in ruw[1:-1]] + [ruw[-1]]
-    if len(set(net)) < len(net) or any(
-        net[i] >= net[i + 1] for i in range(len(net) - 1)
+    raw = [low + span * i for i in range(steps)]
+    tidy = [raw[0]] + [_tidy(v, span) for v in raw[1:-1]] + [raw[-1]]
+    if len(set(tidy)) < len(tidy) or any(
+        tidy[i] >= tidy[i + 1] for i in range(len(tidy) - 1)
     ):
-        return ruw
-    return net
+        return raw
+    return tidy
 
 
-def _bereik(name: str, lo, hi, count) -> list[float]:
+def _range(name: str, lo, hi, count) -> list[float]:
     """The values on one axis, checked and rounded to tidy numbers."""
     # Since point 2 the reason is on screen *beside* the preview instead of below the
     # fold, so it is now text for a human and not a field name from the API. "speed_max
     # must be at least speed_min" is not a sentence.
     label = AXES[name]["label"]
     layer = _positive(lo, f"The {label} at 'from'")
-    hoog = _positive(hi, f"The {label} at 'to'")
-    if hoog < layer:
+    high = _positive(hi, f"The {label} at 'to'")
+    if high < layer:
         raise DesignError(
             f"The {label} at 'to' has to be at least the {label} at 'from'."
         )
-    if name == "power" and hoog > 100:
+    if name == "power" and high > 100:
         raise DesignError("Power cannot go above 100 per cent.")
-    if name == "interval" and hoog > 5:
+    if name == "interval" and high > 5:
         raise DesignError("An interval above 5 mm is no longer an engraving.")
-    return _spread(layer, hoog, _steps(count, f"Het count steps {label}"))
+    return _spread(layer, high, _steps(count, f"The number of steps {label}"))
 
 
-def _vast(name: str, value, terugval) -> float:
+def _fixed(name: str, value, fallback) -> float:
     """The value of the quantity that is *not* on an axis."""
     if value in (None, ""):
-        value = terugval
+        value = fallback
     if value in (None, ""):
         raise DesignError(
             f"Set a fixed value for {AXES[name]['label']}; it is not on an axis."
@@ -313,16 +313,16 @@ def plan_grid(
         "interval": (interval_min, interval_max, interval_steps),
     }
     values = {
-        name: _bereik(name, *reeksen[name]) if name in axes else None
+        name: _range(name, *reeksen[name]) if name in axes else None
         for name in AXES
     }
-    vaste = {
-        "speed": None if "speed" in axes else _vast("speed", speed_mm_s, speed_min),
-        "power": None if "power" in axes else _vast("power", power_percent, power_min),
+    fixed_values = {
+        "speed": None if "speed" in axes else _fixed("speed", speed_mm_s, speed_min),
+        "power": None if "power" in axes else _fixed("power", power_percent, power_min),
         "interval": (
             None
             if "interval" in axes or not interval_telt
-            else _vast(
+            else _fixed(
                 "interval",
                 interval_mm,
                 interval_min if interval_min else DEFAULT_INTERVAL_MM,
@@ -403,9 +403,9 @@ def plan_grid(
                 # in `caption_text`, but the keys were never passed along — so the branch
                 # never fired.
                 **{
-                    f"{name}_min": vaste[name]
+                    f"{name}_min": fixed_values[name]
                     for name in AXES
-                    if vaste[name] is not None
+                    if fixed_values[name] is not None
                 },
             }
         )
@@ -432,7 +432,7 @@ def plan_grid(
     # the top of the highest one lies a text height plus the line spacings above that.
     # Measured against the shapes as actually drawn (see
     # `test_the_reported_size_covers_everything_that_is_drawn`).
-    boven = round(
+    above = round(
         max(
             2 + text_height,
             4
@@ -442,23 +442,23 @@ def plan_grid(
         1,
     )
 
-    links_pad = (margin if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
-    boven_pad = (boven if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
-    rechts_pad = onder_pad = BORDER_PAD_MM if frame else 0.0
+    pad_left = (margin if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
+    pad_above = (above if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
+    pad_right = pad_below = BORDER_PAD_MM if frame else 0.0
 
-    outer_width = round(links_pad + width + rechts_pad, 3)
-    outer_height = round(boven_pad + height + onder_pad, 3)
+    outer_width = round(pad_left + width + pad_right, 3)
+    outer_height = round(pad_above + height + pad_below, 3)
 
     if anchor == "center":
         outer_x = round(float(origin_x_mm) - outer_width / 2, 3)
         outer_y = round(float(origin_y_mm) - outer_height / 2, 3)
-        origin_x_mm = round(outer_x + links_pad, 3)
-        origin_y_mm = round(outer_y + boven_pad, 3)
+        origin_x_mm = round(outer_x + pad_left, 3)
+        origin_y_mm = round(outer_y + pad_above, 3)
     else:
         origin_x_mm = float(origin_x_mm)
         origin_y_mm = float(origin_y_mm)
-        outer_x = round(origin_x_mm - links_pad, 3)
-        outer_y = round(origin_y_mm - boven_pad, 3)
+        outer_x = round(origin_x_mm - pad_left, 3)
+        outer_y = round(origin_y_mm - pad_above, 3)
 
     cells = []
     for row in range(rows):
@@ -477,7 +477,7 @@ def plan_grid(
                 elif name == column_axis:
                     number = values[name][column]
                 else:
-                    number = vaste[name]
+                    number = fixed_values[name]
                 entry[as_["cell_key"]] = None if number is None else round(number, 4)
             cells.append(entry)
 
@@ -562,20 +562,20 @@ def plan_grid(
     # database stays enough to rebuild the grid, and the columns that were already there
     # keep meaning what they meant.
     for name in AXES:
-        reeks = values[name]
-        if reeks is None:
-            vast = vaste[name]
-            plan[f"{name}_min"] = vast
-            plan[f"{name}_max"] = vast
-            plan[f"{name}_steps"] = 1 if vast is not None else None
+        series = values[name]
+        if series is None:
+            fixed = fixed_values[name]
+            plan[f"{name}_min"] = fixed
+            plan[f"{name}_max"] = fixed
+            plan[f"{name}_steps"] = 1 if fixed is not None else None
         else:
-            plan[f"{name}_min"] = reeks[0]
-            plan[f"{name}_max"] = reeks[-1]
-            plan[f"{name}_steps"] = len(reeks)
+            plan[f"{name}_min"] = series[0]
+            plan[f"{name}_max"] = series[-1]
+            plan[f"{name}_steps"] = len(series)
     return plan, cells
 
 
-# ------------------------------------------------------- het cell aanwijzen
+# ----------------------------------------------------- marking out the cell
 #
 # M4: the provenance says "row 2, column 3", but nothing is marked on the photo — the
 # evidence is there, the pointer is not. With the alignment from T4 in the database the
@@ -592,7 +592,7 @@ DEFAULT_CORNERS = [
 ]
 
 
-def _homografie(corners: list[dict]):
+def _homography(corners: list[dict]):
     """
     Projective mapping from the unit square to the four corners.
 
@@ -621,16 +621,16 @@ def _homografie(corners: list[dict]):
     )
 
 
-def cel_veelhoek(grid: dict, cell: dict) -> list[tuple[float, float]]:
+def cell_polygon(grid: dict, cell: dict) -> list[tuple[float, float]]:
     """The four corners of one square in photo coordinates (0–1)."""
     pitch = grid["cell_mm"] + grid["gap_mm"]
-    kolommen = grid.get("columns") or grid["power_steps"]
-    rijen = grid.get("rows") or grid["speed_steps"]
-    width = kolommen * pitch - grid["gap_mm"]
-    height = rijen * pitch - grid["gap_mm"]
-    a, b, c, d, e, f, g, h = _homografie(grid.get("alignment") or DEFAULT_CORNERS)
+    columns = grid.get("columns") or grid["power_steps"]
+    rows = grid.get("rows") or grid["speed_steps"]
+    width = columns * pitch - grid["gap_mm"]
+    height = rows * pitch - grid["gap_mm"]
+    a, b, c, d, e, f, g, h = _homography(grid.get("alignment") or DEFAULT_CORNERS)
 
-    def naar_foto(u, v):
+    def to_photo(u, v):
         w = g * u + h * v + 1 or 1e-9
         return ((a * u + b * v + c) / w, (d * u + e * v + f) / w)
 
@@ -638,7 +638,7 @@ def cel_veelhoek(grid: dict, cell: dict) -> list[tuple[float, float]]:
     v0 = (cell["y_mm"] - grid["origin_y_mm"]) / height
     u1 = u0 + cell["width_mm"] / width
     v1 = v0 + cell["height_mm"] / height
-    return [naar_foto(u0, v0), naar_foto(u1, v0), naar_foto(u1, v1), naar_foto(u0, v1)]
+    return [to_photo(u0, v0), to_photo(u1, v0), to_photo(u1, v1), to_photo(u0, v1)]
 
 
 # ---------------------------------------------------- is this node ours?
@@ -700,21 +700,21 @@ def markeer_foto(grid: dict, path, row: int, column: int) -> bytes:
     if cell is None:
         raise DesignError(f"Cell row {row}, column {column} does not belong to this grid.")
 
-    foto = Image.open(path).convert("RGB")
-    width, height = foto.size
-    points = [(x * width, y * height) for x, y in cel_veelhoek(grid, cell)]
-    dik = max(3, round(min(width, height) / 160))
-    teken = ImageDraw.Draw(foto)
-    # Wit eronder, accent erop: op donker verbrand hout verdwijnt één lijn.
-    teken.polygon(points, outline=(255, 255, 255), width=dik * 2)
-    teken.polygon(points, outline=(42, 166, 177), width=dik)
+    photo = Image.open(path).convert("RGB")
+    width, height = photo.size
+    points = [(x * width, y * height) for x, y in cell_polygon(grid, cell)]
+    thick = max(3, round(min(width, height) / 160))
+    draw = ImageDraw.Draw(photo)
+    # White underneath, accent on top: on dark scorched wood a single line vanishes.
+    draw.polygon(points, outline=(255, 255, 255), width=thick * 2)
+    draw.polygon(points, outline=(42, 166, 177), width=thick)
 
     buffer = BytesIO()
-    foto.save(buffer, format="JPEG", quality=88)
+    photo.save(buffer, format="JPEG", quality=88)
     return buffer.getvalue()
 
 
-def as_waarde(cell: dict, name: str):
+def axis_value(cell: dict, name: str):
     """The value of one quantity in a cell, or None when it does not take part."""
     return cell.get(AXES[name]["cell_key"])
 
@@ -723,20 +723,20 @@ def show(name: str, value) -> str:
     """An axis value with its unit, as it ends up on the wood."""
     if value is None:
         return ""
-    eenheid = AXES[name]["unit"]
+    unit = AXES[name]["unit"]
     if name == "interval":
-        return f"{value:g}{eenheid}"
-    return f"{value:g}{'' if eenheid == '%' else ' '}{eenheid}"
+        return f"{value:g}{unit}"
+    return f"{value:g}{'' if unit == '%' else ' '}{unit}"
 
 
 def _words(text) -> list[str]:
     """The separate words of a piece of text, lower case and without accents."""
-    plat = unicodedata.normalize("NFKD", str(text or "").lower())
-    plat = "".join(c for c in plat if not unicodedata.combining(c))
-    return [w for w in re.split(r"[^0-9a-z]+", plat) if w]
+    flat = unicodedata.normalize("NFKD", str(text or "").lower())
+    flat = "".join(c for c in flat if not unicodedata.combining(c))
+    return [w for w in re.split(r"[^0-9a-z]+", flat) if w]
 
 
-def _already_said(woord: str, said: list[str]) -> bool:
+def _already_said(word: str, said: list[str]) -> bool:
     """
     Is this word already in the caption the user typed themselves?
 
@@ -744,9 +744,9 @@ def _already_said(woord: str, said: list[str]) -> bool:
     the material "Acrylic (extruded)", even with a different ending on it. Short words do
     not take part — "mm" or "cm" occurs everywhere and would wipe out half the captions.
     """
-    if len(woord) < 4:
+    if len(word) < 4:
         return False
-    return any(w.startswith(woord) or woord.startswith(w) for w in said if len(w) >= 4)
+    return any(w.startswith(word) or word.startswith(w) for w in said if len(w) >= 4)
 
 
 # What an operation is called on the wood. `graveren-raster` is a key from our database,
@@ -827,28 +827,28 @@ def caption_text(plan: dict) -> str:
     return " · ".join(caption_lines(plan))
 
 
-def _breek(lines: list[str], tekens: int) -> list[str]:
+def _breek(lines: list[str], chars: int) -> list[str]:
     """
     Breaking lines that are too long at the separators already in them.
 
     Only when it really does not fit: the caption shrinks first (see `plan_grid`), and only
     below the readability bound does a line get added. A part that is too long on its own
     stays whole — breaking in the middle of
-    "Acrylaat" levert geen leesbaarder board op.
+    "Acrylic" does not make the board any easier to read.
     """
-    uit: list[str] = []
+    out: list[str] = []
     for line in lines:
-        lopend = ""
-        for deel in line.split(" · "):
-            kandidaat = f"{lopend} · {deel}" if lopend else deel
-            if lopend and len(kandidaat) > tekens:
-                uit.append(lopend)
-                lopend = deel
+        running = ""
+        for part in line.split(" · "):
+            candidate = f"{running} · {part}" if running else part
+            if running and len(candidate) > chars:
+                out.append(running)
+                running = part
             else:
-                lopend = kandidaat
-        if lopend:
-            uit.append(lopend)
-    return uit
+                running = candidate
+        if running:
+            out.append(running)
+    return out
 
 
 def _cell_label(plan: dict, cell: dict) -> str:
@@ -859,7 +859,7 @@ def _cell_label(plan: dict, cell: dict) -> str:
     makes the layers panel unreadable.
     """
     return " · ".join(
-        show(name, as_waarde(cell, name))
+        show(name, axis_value(cell, name))
         for name in (plan.get("row_axis", "speed"), plan.get("column_axis", "power"))
     )
 
@@ -986,7 +986,7 @@ class TestGridGenerator:
         with self.elements.undoscope("Generate test grid"):
             for cell in cells:
                 node = self._square(cell, filled=op_type == "op raster")
-                instelling = {
+                settings = {
                     "type": op_type,
                     "speed": cell["speed_mm_s"],
                     # MeerK40t's power runs 0-1000, not 0-100.
@@ -1005,8 +1005,8 @@ class TestGridGenerator:
                 # The engine calls the line spacing dpi. Only a raster operation knows it;
                 # on the others it would be an ignored key.
                 if op_type == "op raster" and cell.get("interval_mm"):
-                    instelling["dpi"] = int(round(25.4 / cell["interval_mm"]))
-                operation = self.elements.op_branch.add(**instelling)
+                    settings["dpi"] = int(round(25.4 / cell["interval_mm"]))
+                operation = self.elements.op_branch.add(**settings)
                 operation.add_reference(node)
                 drawn.append({**cell, "element_id": None, "operation_id": None,
                               "_node": node, "_op": operation})
@@ -1042,8 +1042,8 @@ class TestGridGenerator:
         """
         rij_as = plan.get("row_axis", "speed")
         kolom_as = plan.get("column_axis", "power")
-        speeds = {c["row"]: as_waarde(c, rij_as) for c in cells}
-        powers = {c["column"]: as_waarde(c, kolom_as) for c in cells}
+        speeds = {c["row"]: axis_value(c, rij_as) for c in cells}
+        powers = {c["column"]: axis_value(c, kolom_as) for c in cells}
         pitch = plan["cell_mm"] + plan["gap_mm"]
         # Scale with the square. At true size "25 mm/s" is nearly 20 mm wide and sticks out
         # to the left of the bed.
@@ -1102,17 +1102,17 @@ class TestGridGenerator:
         # on a board of 46 mm — it stuck out to the right, and then the measure we report
         # (T9) does not agree with what burns.
         # `plan_grid` has already chosen the height on this basis; this measurement is the
-        # safety net for the characters CAPTION_CHAR_RATIO's estimate is out on. The board
+        # safety tidy for the characters CAPTION_CHAR_RATIO's estimate is out on. The board
         # no longer grows for it: better a slightly smaller line than a board that is wider
         # than its own trial.
-        rand = BORDER_PAD_MM if plan.get("border") else 0.0
-        available = plan.get("outer_width_mm", plan["width_mm"]) - 2 * rand
+        edge = BORDER_PAD_MM if plan.get("border") else 0.0
+        available = plan.get("outer_width_mm", plan["width_mm"]) - 2 * edge
         labels = None
         for index, line in enumerate(lines):
             node = self._text(line, height)
             if node is None:
                 return
-            width = self._breedte_mm(node)
+            width = self._width_mm(node)
             if width > available:
                 self._scale_to_height(node, height * available / width)
             labels = labels or self._label_op(plan)
@@ -1121,7 +1121,7 @@ class TestGridGenerator:
                 # Aligned left on the board, not on the squares: the row labels stick out
                 # to the left, and a caption starting halfway reads as a caption to the
                 # wrong column.
-                left=plan.get("outer_x_mm", plan["origin_x_mm"]) + rand,
+                left=plan.get("outer_x_mm", plan["origin_x_mm"]) + edge,
                 # *Above* the column labels, with the same margin as those labels
                 # themselves — and in the place `plan_grid` reserved for it, so with the
                 # full caption height and not the shrunken measure. Otherwise a shrunken
@@ -1137,7 +1137,7 @@ class TestGridGenerator:
             extras.append(node)
 
     @staticmethod
-    def _breedte_mm(node) -> float:
+    def _width_mm(node) -> float:
         from meerk40t.core.units import UNITS_PER_MM
 
         x0, _, x1, _ = node.bounds

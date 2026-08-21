@@ -181,7 +181,7 @@ class Generators:
         self, text, kind="code128", x_mm=0.0, y_mm=0.0, width_mm=60.0, height_mm=20.0
     ) -> dict:
         """
-        Een streepjescode als vlakken.
+        A barcode as filled areas.
 
         The encoding comes from `python-barcode`; we draw the bars ourselves, as with the
         QR code. An engraved bitmap goes vague on wood, and a barcode that does not scan is
@@ -872,7 +872,7 @@ class Generators:
         self, points, label: str, subpaths: bool = False, intent: str = "cut"
     ):
         """
-        Een gesloten shape rechtstreeks als geometrie toevoegen.
+        Adding a closed shape straight in as geometry.
 
         *Not* through the `path` command: that reads its d-string as SVG user units and
         then scales it again, which made a box of 100 mm come out as 72 metres. Geomstr
@@ -991,7 +991,7 @@ def _as_d(groups) -> tuple[str, tuple[float, float, float, float]]:
 
 def _extent(boxes, parts):
     """
-    De doos om alles heen, in mm.
+    The box around everything, in mm.
 
     For a rotated copy we rotate the four corners of its box along. That is slightly more
     generous than the shape itself, and that is allowed: this only decides how far the

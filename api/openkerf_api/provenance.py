@@ -73,7 +73,7 @@ class Provenance:
 
     def forget_sheet(self, sheet_id: str) -> None:
         """
-        Een verwijderd sheet neemt zijn briefjes mee.
+        A deleted sheet takes its notes with it.
 
         Necessary, not housekeeping: sheet numbers are reused, so without this a new
         "sheet-3" inherits the old one's provenance.

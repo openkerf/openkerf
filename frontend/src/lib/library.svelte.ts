@@ -146,9 +146,9 @@ export type Tally = {
 export type ImportPreview = {
 	bundle: string;
 	exported_at: string | null;
-	bevat: Tally & { photos: number };
+	contains: Tally & { photos: number };
 	current: Tally;
-	samenvoegen: {
+	merge: {
 		materials: {
 			new: string[];
 			existing: { name: string; as: string; material_id: number }[];
@@ -159,7 +159,7 @@ export type ImportPreview = {
 		presets: { new: number; identical: number; conflicts: PresetConflict[] };
 		test_grids: { new: number; existing: number };
 	};
-	vervangen: { removes: Tally };
+	replace: { removes: Tally };
 };
 
 export type ImportResult = {
@@ -388,9 +388,9 @@ export class LibraryStore {
 
 	async importBundle(
 		bundle: string,
-		mode: 'samenvoegen' | 'vervangen',
+		mode: 'merge' | 'replace',
 		mergeMaterials: Record<string, number>,
-		onConflict: 'eigen' | 'bestand'
+		onConflict: 'mine' | 'file'
 	): Promise<ImportResult | null> {
 		const done = await this.#request('/api/library/import', {
 			method: 'POST',

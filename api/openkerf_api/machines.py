@@ -229,7 +229,7 @@ class MachineManager:
 
     def _remember_active(self, device) -> None:
         """
-        Vastleggen welke machine actief is, meteen.
+        Recording which machine is active, at once.
 
         MeerK40t only writes `activated_device` at `preshutdown`
         (`device/basedevice.py:322`) and at startup otherwise falls back on
@@ -311,7 +311,7 @@ class MachineManager:
 
         extra = self._undeclared_essentials(device, described)
         if extra:
-            sheets.append({"sheet": "verbinding", "fields": extra})
+            sheets.append({"sheet": "connection", "fields": extra})
         return sheets
 
     def _undeclared_essentials(self, device, described: set) -> list[dict]:
@@ -449,7 +449,7 @@ class MachineManager:
 
     def _info_key(self, device) -> str | None:
         """
-        Uit welke catalogusregel deze machine created is.
+        Which catalogue line this machine was created from.
 
         Since E5 we stamp it on the device when creating it. Machines from before that
         version do not carry it; then the provider is the best we have, and on Ruida that
@@ -462,8 +462,8 @@ class MachineManager:
         provider = getattr(device, "registered_path", None)
         kandidaten = [
             entry
-            for familie in self.catalog()
-            for entry in familie["machines"]
+            for family in self.catalog()
+            for entry in family["machines"]
             if entry["provider"] == provider
         ]
         return kandidaten[0]["key"] if kandidaten else None
@@ -539,8 +539,8 @@ class MachineManager:
         machine = data["machine"]
         bekend = {
             entry["key"]: entry
-            for familie in self.catalog()
-            for entry in familie["machines"]
+            for family in self.catalog()
+            for entry in family["machines"]
         }
         line = bekend.get(machine["info"])
         values = machine.get("settings") or {}
@@ -588,13 +588,13 @@ class MachineManager:
         usable = {
             k: v for k, v in values.items() if k in types and k != "label"
         }
-        overgeslagen = sorted(set(values) - set(usable))
+        skipped = sorted(set(values) - set(usable))
         if usable:
             self.update_settings(created["path"], usable)
         return {
             **created,
             "applied": len(usable),
-            "skipped": overgeslagen,
+            "skipped": skipped,
         }
 
     # ------------------------------------------------------------------ scan

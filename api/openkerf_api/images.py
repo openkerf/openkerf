@@ -1,5 +1,5 @@
 """
-Afbeeldingen: plaatsen, bewerken en zichtbaar maken.
+Images: placing, editing and making them visible.
 
 An `elem image` has no `as_geometry`, so it falls outside the path-based snapshot and was
 therefore invisible on our canvas. This is where the data the frontend needs to draw it
@@ -199,7 +199,7 @@ class Images:
         """Run the recipe over the original again."""
         node._processed_image = None
         node.update(self.kernel.root)
-        # update() rekent in een eigen thread; active_image wacht daar netjes op.
+        # update() works in a thread of its own; active_image waits for it politely.
         node.active_image  # noqa: B018
         self.elements.signal("element_property_update", [node])
         self.elements.signal("refresh_scene", "Scene")

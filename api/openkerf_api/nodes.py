@@ -125,7 +125,7 @@ class Nodes:
 
     def _replace(self, node, geometry, element_id: str) -> str:
         """
-        De nieuwe shape terugschrijven.
+        Writing the new shape back.
 
         A path can simply replace its geometry. A rectangle cannot: it becomes a path, and
         then everything that hung off it has to come along — colour, label and above all the

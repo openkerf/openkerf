@@ -44,20 +44,20 @@ class CornerError(Exception):
         self.code = code
 
 
-def _eenheid(z: complex) -> complex:
-    lengte = abs(z)
-    return z / lengte if lengte else 0j
+def _unit(z: complex) -> complex:
+    length = abs(z)
+    return z / length if length else 0j
 
 
 def corner_geometry(geom, size_units: float, style: str):
     """
-    De geometrie met afgeronde of afgeschuinde corners.
+    The geometry with rounded or bevelled corners.
 
     Hands back `(new_geomstr, changed, skipped)`: how many corners were dealt with and how
     many were skipped. That second number is not cosmetic — it is the difference between
     "done" and "nothing happened to half your corners", and the user should read that.
 
-    Het origineel blijft ongemoeid.
+    The original is left untouched.
 
     A corner takes part when two **straight** sides meet at it and the size fits on both
     sides. A corner where an arc arrives stays: setting back along a curve is a different
@@ -77,52 +77,52 @@ def corner_geometry(geom, size_units: float, style: str):
     changed = 0
     skipped = 0
 
-    for subpad in geom.as_subpaths():
-        rows = [subpad.segments[i] for i in range(subpad.index)]
-        rows = [r for r in rows if int(r[2].real) != 0x80]  # einde-markeringen weg
+    for subpath in geom.as_subpaths():
+        rows = [subpath.segments[i] for i in range(subpath.index)]
+        rows = [r for r in rows if int(r[2].real) != 0x80]  # end markers dropped
         if not rows:
             continue
-        gesloten = abs(rows[0][0] - rows[-1][4]) < 1e-9 and len(rows) > 2
+        closed = abs(rows[0][0] - rows[-1][4]) < 1e-9 and len(rows) > 2
 
-        # Per segment: hoeveel er aan begin en eind af gaat.
+        # Per segment: how much comes off at the start and at the end.
         trim_start = [0.0] * len(rows)
         trim_end = [0.0] * len(rows)
         corners = []  # (index of the first side, index of the second)
         pairs = list(zip(range(len(rows) - 1), range(1, len(rows))))
-        if gesloten:
+        if closed:
             pairs.append((len(rows) - 1, 0))
 
-        for eerste, tweede in pairs:
-            a, b = rows[eerste], rows[tweede]
+        for first, second in pairs:
+            a, b = rows[first], rows[second]
             if int(a[2].real) != TYPE_LINE or int(b[2].real) != TYPE_LINE:
                 skipped += 1
                 continue
             if abs(a[4] - b[0]) > 1e-9:
-                # Geen aansluitende corner maar twee losse stukken.
+                # Not a joined corner but two loose pieces.
                 continue
             len_a, len_b = abs(a[4] - a[0]), abs(b[4] - b[0])
             bound = FRACTION_PER_SIDE * min(len_a, len_b)
             if size_units > bound + 1e-9:
                 skipped += 1
                 continue
-            trim_end[eerste] = size_units
-            trim_start[tweede] = size_units
-            corners.append((eerste, tweede))
+            trim_end[first] = size_units
+            trim_start[second] = size_units
+            corners.append((first, second))
             changed += 1
 
         if not corners:
-            for rij in rows:
-                out.append_segment(*rij)
+            for row in rows:
+                out.append_segment(*row)
             continue
 
-        ingekort = _inkorten(rows, trim_start, trim_end)
-        verbinding = {eerste: tweede for eerste, tweede in corners}
-        for index, rij in enumerate(ingekort):
-            out.append_segment(*rij)
-            tweede = verbinding.get(index)
-            if tweede is None:
+        trimmed = _trim(rows, trim_start, trim_end)
+        joins = {first: second for first, second in corners}
+        for index, row in enumerate(trimmed):
+            out.append_segment(*row)
+            second = joins.get(index)
+            if second is None:
                 continue
-            _join(out, rij[4], rows[index][4], ingekort[tweede][0], style)
+            _join(out, row[4], rows[index][4], trimmed[second][0], style)
 
     if not changed:
         raise CornerError(
@@ -133,16 +133,16 @@ def corner_geometry(geom, size_units: float, style: str):
     return out, changed, skipped
 
 
-def _inkorten(rows, trim_start, trim_end):
+def _trim(rows, trim_start, trim_end):
     """Shorten every line at both ends by what the corners ask for."""
-    ingekort = []
-    for index, rij in enumerate(rows):
-        start, control, info, control2, eind = rij
-        richting = _eenheid(eind - start)
-        nieuw_start = start + richting * trim_start[index]
-        nieuw_eind = eind - richting * trim_end[index]
-        ingekort.append((nieuw_start, control, info, control2, nieuw_eind))
-    return ingekort
+    trimmed = []
+    for index, row in enumerate(rows):
+        start, control, info, control2, end = row
+        direction = _unit(end - start)
+        new_start = start + direction * trim_start[index]
+        new_end = end - direction * trim_end[index]
+        trimmed.append((new_start, control, info, control2, new_end))
+    return trimmed
 
 
 def _join(out, start: complex, corner_point: complex, end: complex, style: str) -> None:
@@ -157,20 +157,20 @@ def _join(out, start: complex, corner_point: complex, end: complex, style: str) 
         out.line(start, end)
         return
 
-    naar_a = _eenheid(start - corner_point)
-    naar_b = _eenheid(end - corner_point)
-    bisector = _eenheid(naar_a + naar_b)
+    to_a = _unit(start - corner_point)
+    to_b = _unit(end - corner_point)
+    bisector = _unit(to_a + to_b)
     if bisector == 0:
         # The sides lie in one line: there is no corner to round.
         out.line(start, end)
         return
 
-    cos_hoek = max(
-        -1.0, min(1.0, (naar_a.real * naar_b.real + naar_a.imag * naar_b.imag))
+    cos_angle = max(
+        -1.0, min(1.0, (to_a.real * to_b.real + to_a.imag * to_b.imag))
     )
-    halve = math.acos(cos_hoek) / 2
-    terug = abs(start - corner_point)
-    radius = terug * math.tan(halve)
-    to_centre = terug / math.cos(halve)
+    half = math.acos(cos_angle) / 2
+    setback = abs(start - corner_point)
+    radius = setback * math.tan(half)
+    to_centre = setback / math.cos(half)
     middle = corner_point + bisector * (to_centre - radius)
     out.arc(start, middle, end)

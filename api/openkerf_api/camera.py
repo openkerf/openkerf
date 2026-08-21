@@ -16,7 +16,7 @@ Three choices that make it smooth:
    anything itself.
 3. **The camera only runs while somebody is watching.** A read thread that runs on for hours
    while nobody sees the image costs power and keeps the device
-   bezet voor andere programma's.
+   occupied as far as other programs are concerned.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ class Camera:
 
     def _why_no_picture(self, uri) -> str:
         """
-        Een bruikbare uitleg in plaats van "there is no image".
+        A usable explanation instead of "there is no image".
 
         The difference between "there is no camera attached" and "this program is not
         allowed near the camera" entirely decides what you have to do about it, and that

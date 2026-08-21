@@ -145,7 +145,7 @@ class Drawing:
                 raise DesignError("Een point is [x, y] of [x, y, cx, cy].")
             cleaned.append([_finite(value, "point") for value in point])
         if len(cleaned) < 2:
-            raise DesignError("Een pad heeft minstens twee points.")
+            raise DesignError("A path needs at least two points.")
 
         def at(values, index=0):
             return complex(
@@ -287,12 +287,12 @@ class Drawing:
             radius = fields.get("corner_radius_mm")
             if radius not in (None, ""):
                 size = _positive(radius, "corner_radius_mm")
-                halve = min(v["width_mm"], v["height_mm"]) / 2
-                if size > halve:
+                half = min(v["width_mm"], v["height_mm"]) / 2
+                if size > half:
                     raise DesignError(
                         f"A corner radius of {size:g} mm does not fit in a rectangle "
                         f"of {v['width_mm']:g}×{v['height_mm']:g} mm. At most "
-                        f"{halve:g} mm.",
+                        f"{half:g} mm.",
                         code="draw.radiusTooBig",
                     )
                 row += f" -x {_mm(size)} -y {_mm(size)}"
@@ -332,7 +332,7 @@ class Drawing:
 
     def update_text(self, element_id: str, **fields) -> dict:
         """
-        Bestaande vector-text bijwerken: contents, lettertype, height,
+        Updating existing vector text: contents, font, height,
         spatiëring of uitlijning.
 
         The engine keeps the source on the node and re-renders, so text does not have to
@@ -496,7 +496,7 @@ class Drawing:
 
     def boolean(self, element_ids, operation: str) -> dict:
         """
-        Vormen samenvoegen, aftrekken, snijden of uitsluiten.
+        Uniting, subtracting, intersecting or excluding shapes.
 
         The commands come from `extra/cag.py` and work on a chain, not on their own:
         `element union` takes the emphasis selection. The result is one new path;
@@ -986,7 +986,7 @@ class Drawing:
 
     def sort_operations(self) -> dict:
         """
-        Graveren vóór snijden, in één handeling (gat L2).
+        Engrave before cut, in one action (gap L2).
 
         LightBurn has `Sort Cuts Last` for this, and that is one click for the most
         expensive mistake there is: the workpiece falls out of the sheet before the caption
@@ -1022,10 +1022,10 @@ class Drawing:
             # The first layer stays where the first layer was; the rest queues up behind
             # it in order. That way a test grid in between keeps its own place and only
             # what we sort moves.
-            vorige = wanted[0]
+            previous = wanted[0]
             for node in wanted[1:]:
-                vorige.insert_sibling(node, below=True)
-                vorige = node
+                previous.insert_sibling(node, below=True)
+                previous = node
         self._refresh()
         return {"sorted": True, "order": [node.id for node in wanted]}
 
@@ -1081,7 +1081,7 @@ class Drawing:
         siblings = list(parent.children)
         here = siblings.index(old)
         colour = self._usable_color(old)
-        bewaard = {
+        kept = {
             name: getattr(old, name, None)
             for name in self.TYPE_KEEP
             if getattr(old, name, None) is not None
@@ -1091,8 +1091,8 @@ class Drawing:
         # engraves. A name the user gave *themselves* stays: that says what the layer is
         # for and not what it does.
         default = {f"op {k}": v for k, v in self.LAYER_NAMES.items()}
-        if bewaard.get("label") == default.get(str(old.type)):
-            bewaard["label"] = self.LAYER_NAMES.get(kind, kind)
+        if kept.get("label") == default.get(str(old.type)):
+            kept["label"] = self.LAYER_NAMES.get(kind, kind)
         shapes = [
             reference.node
             for reference in list(old.children)
@@ -1102,11 +1102,11 @@ class Drawing:
         with self.elements.undoscope("Change layer type"):
             before = {id(o) for o in self.elements.ops()}
             self.runner.run(OPERATIONS[kind])
-            gemaakt = [o for o in self.elements.ops() if id(o) not in before]
-            if not gemaakt:
+            created = [o for o in self.elements.ops() if id(o) not in before]
+            if not created:
                 raise DesignError("The engine created no layer.", code="draw.noLayer")
-            fresh = gemaakt[0]
-            for name, value in bewaard.items():
+            fresh = created[0]
+            for name, value in kept.items():
                 setattr(fresh, name, value)
             if colour:
                 self._set_color(fresh, colour)
@@ -1593,7 +1593,7 @@ class Drawing:
 
     def prune_operations(self) -> dict:
         """
-        Lege layers weg.
+        Empty layers gone.
 
         An empty project has twelve of them before you have done anything — at startup
         the engine creates a raster layer, two engrave layers and nine cut layers, one per
@@ -1638,7 +1638,7 @@ class Drawing:
 
     def delete_all_operations(self) -> dict:
         """
-        Alle gewone layers in één handeling weg.
+        Every ordinary layer gone in one action.
 
         Per layer that costs three clicks (expand, delete, confirm), so anybody wanting
         to reclassify an imported SVG with ten colours clicks thirty times. Here it is once,
@@ -1914,7 +1914,7 @@ class Drawing:
 
     def bounds_report(self, sheet=None) -> dict:
         """
-        Wat er buiten het bed of buiten het sheet valt (gat C2).
+        What falls outside the bed or outside the sheet (gap C2).
 
         Two different mistakes, and the difference counts: off the bed the machine
         *cannot* go — there the head runs into its end stop or the driver skips the
@@ -2083,7 +2083,7 @@ class Drawing:
 
     def _burnable(self, operation) -> list:
         """
-        De shapes onder een layer, verwijzingen opgelost.
+        The shapes under a layer, references resolved.
 
         A layer contains `ReferenceNode`s that point at the element, and an effect (hatch,
         wobble) is itself a container with geometry of its own. What is hidden is not burned
@@ -2133,15 +2133,15 @@ class Drawing:
         except Exception:
             pass
         try:
-            totaal, vorige = 0.0, None
+            total, previous = 0.0, None
             for point in geometry.as_interpolated_points(interpolate=20):
                 if point is None:
-                    vorige = None
+                    previous = None
                     continue
-                if vorige is not None:
-                    totaal += hypot(point.real - vorige.real, point.imag - vorige.imag)
-                vorige = point
-            return totaal / UNITS_PER_MM
+                if previous is not None:
+                    total += hypot(point.real - previous.real, point.imag - previous.imag)
+                previous = point
+            return total / UNITS_PER_MM
         except Exception:
             return 0.0
 
@@ -2248,7 +2248,7 @@ class Drawing:
             except Exception:
                 presets = []
 
-        def herkomst(speed, power):
+        def source_of(speed, power):
             if speed is None or power is None:
                 return None
             for preset in presets:
@@ -2298,7 +2298,7 @@ class Drawing:
                     # without a rasteriser, and then the table must not show a speed and a
                     # power as if something is going to happen.
                     "burns": not (str(operation.type) == "op raster" and not rasters),
-                    "source": (entry or {}).get("source") or herkomst(speed, power),
+                    "source": (entry or {}).get("source") or source_of(speed, power),
                     "preset_id": (entry or {}).get("preset_id"),
                     "material_id": (entry or {}).get("material_id"),
                     "material_name": (entry or {}).get("material_name"),
