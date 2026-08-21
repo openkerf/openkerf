@@ -1,10 +1,10 @@
 """
-Hoeken afronden of afschuinen.
+Rounding or bevelling corners.
 
-Puur rekenwerk op geometrie, dus geen kernel en geen HTTP. Wat hier getoetst
-wordt is niet "loopt het door" maar "komt er de vorm uit die je bedoelde" — en
-vooral: wat gebeurt er bij de hoeken waar het niet kán. Een hoek stilzwijgend
-verkeerd afsnijden is de fout die je pas op materiaal ziet.
+Pure arithmetic on geometry, so no kernel and no HTTP. What is tested here is not
+"does it run through" but "does the shape you meant come out" — and above all:
+what happens at the corners where it cannot be done. Quietly cutting a corner
+wrong is the mistake you only see on material.
 """
 
 import math
@@ -15,92 +15,91 @@ from meerk40t.core.geomstr import TYPE_ARC, TYPE_LINE, Geomstr
 from openkerf_api.corners import CornerError, corner_geometry
 
 
-def vierkant(zijde=100.0):
-    """Een gesloten vierkant van vier losse lijnsegmenten."""
+def square(side=100.0):
+    """A closed square of four separate line segments."""
     geom = Geomstr()
-    hoeken = [
+    corners = [
         complex(0, 0),
-        complex(zijde, 0),
-        complex(zijde, zijde),
-        complex(0, zijde),
+        complex(side, 0),
+        complex(side, side),
+        complex(0, side),
     ]
-    for a, b in zip(hoeken, hoeken[1:] + hoeken[:1]):
+    for a, b in zip(corners, corners[1:] + corners[:1]):
         geom.line(a, b)
     return geom
 
 
-def soorten(geom):
+def kinds(geom):
     return [int(geom.segments[i][2].real) for i in range(geom.index)]
 
 
-def lengte(geom):
+def length(geom):
     return sum(abs(geom.length(i)) for i in range(geom.index))
 
 
 def test_chamfering_a_square_cuts_all_four_corners():
     """
-    Vier hoeken eraf betekent vier zijden plus vier schuine kantjes.
+    Four corners off means four sides plus four bevels.
 
-    De schuine kant van een rechte hoek waarbij je aan beide zijden 10 mm
-    terugsnijdt, is 10·√2 lang. Dat is met de hand na te rekenen, en daarom
-    staat het hier in plaats van "er komt iets uit".
+    The bevel of a right angle where you set back 10 mm on both sides is 10·√2
+    long. That can be worked out by hand, and that is why it is here instead of
+    "something comes out".
     """
-    uit, gewijzigd, overgeslagen = corner_geometry(vierkant(), 10.0, "chamfer")
+    out, changed, skipped = corner_geometry(square(), 10.0, "chamfer")
 
-    assert (gewijzigd, overgeslagen) == (4, 0)
-    assert len(soorten(uit)) == 8
-    assert set(soorten(uit)) == {TYPE_LINE}
-    schuin = 10.0 * math.sqrt(2)
-    assert lengte(uit) == pytest.approx(4 * 80.0 + 4 * schuin, rel=1e-6)
+    assert (changed, skipped) == (4, 0)
+    assert len(kinds(out)) == 8
+    assert set(kinds(out)) == {TYPE_LINE}
+    bevel = 10.0 * math.sqrt(2)
+    assert length(out) == pytest.approx(4 * 80.0 + 4 * bevel, rel=1e-6)
 
 
 def test_rounding_a_square_gives_real_arcs():
     """
-    Afronden geeft bogen, geen veelhoekjes.
+    Rounding gives arcs, not little polygons.
 
-    Bij een rechte hoek is de terugsnijmaat gelijk aan de radius, dus dit is
-    dezelfde vorm die de engine voor een rechthoek met `rx` tekent — daarmee
-    zien een afgeronde rechthoek en een afgeronde veelhoek er hetzelfde uit.
+    At a right angle the setback equals the radius, so this is the same shape the
+    engine draws for a rectangle with `rx` — which makes a rounded rectangle and a
+    rounded polygon look the same.
     """
-    uit, gewijzigd, overgeslagen = corner_geometry(vierkant(), 10.0, "round")
+    out, changed, skipped = corner_geometry(square(), 10.0, "round")
 
-    assert (gewijzigd, overgeslagen) == (4, 0)
-    assert soorten(uit).count(TYPE_ARC) == 4
-    kwart = 2 * math.pi * 10.0 / 4
-    assert lengte(uit) == pytest.approx(4 * 80.0 + 4 * kwart, rel=1e-3)
+    assert (changed, skipped) == (4, 0)
+    assert kinds(out).count(TYPE_ARC) == 4
+    quarter = 2 * math.pi * 10.0 / 4
+    assert length(out) == pytest.approx(4 * 80.0 + 4 * quarter, rel=1e-3)
 
 
 def test_a_size_too_large_for_every_corner_is_a_refusal():
     """
-    Twee afschuiningen die elkaar zouden overlappen, leveren een vorm op die
-    niemand bedoelde. De grens is de helft van de kortste zijde: bij een
-    vierkant van 10 mm mag de maat tot 5 mm, en 8 mm niet.
+    Two bevels that would overlap each other give a shape nobody meant. The bound
+    is half the shortest side: on a square of 10 mm the size may go up to 5 mm,
+    and 8 mm may not.
 
-    Past het bij géén enkele hoek, dan is dat een weigering en niet "klaar, 4
-    overgeslagen". Dezelfde geometrie teruggeven zou betekenen dat de laag het
-    ontwerp vervangt door iets identieks en de gebruiker een melding krijgt over
-    werk dat niet gedaan is — dan is weigeren eerlijker, en het zegt wat hij
-    eraan doet.
+    If it fits at no corner at all, that is a refusal and not "done, 4 skipped".
+    Handing back the same geometry would mean the layer replaces the design with
+    something identical and the user gets a message about work that was not done —
+    refusing is more honest, and it says what to do about it.
     """
-    with pytest.raises(CornerError) as fout:
-        corner_geometry(vierkant(10.0), 8.0, "chamfer")
+    with pytest.raises(CornerError) as error:
+        corner_geometry(square(10.0), 8.0, "chamfer")
 
-    assert "smaller size" in str(fout.value)
+    assert "smaller size" in str(error.value)
 
 
-def test_the_grens_is_half_the_shortest_edge():
-    """Precies op de helft mag nog: dan sluiten twee hoeken naadloos aan."""
-    uit, gewijzigd, overgeslagen = corner_geometry(vierkant(10.0), 5.0, "chamfer")
+def test_the_bound_is_half_the_shortest_edge():
+    """Exactly half is still allowed: then two corners join seamlessly."""
+    out, changed, skipped = corner_geometry(square(10.0), 5.0, "chamfer")
 
-    assert (gewijzigd, overgeslagen) == (4, 0)
-    # Alle rechte stukken zijn weggesneden; wat overblijft zijn vier schuinten.
-    assert lengte(uit) == pytest.approx(4 * 5.0 * math.sqrt(2), rel=1e-6)
+    assert (changed, skipped) == (4, 0)
+    # Every straight piece is cut away; what is left are four bevels.
+    assert length(out) == pytest.approx(4 * 5.0 * math.sqrt(2), rel=1e-6)
 
 
 def test_a_corner_against_a_curve_is_skipped():
     """
-    Terugsnijden langs een boog is een ander probleem dan terugsnijden langs een
-    lijn. Zulke hoeken laten we staan in plaats van er iets van te maken.
+    Setting back along an arc is a different problem from setting back along a
+    line. We leave such corners alone instead of making something up.
     """
     geom = Geomstr()
     geom.line(complex(0, 0), complex(100, 0))
@@ -108,93 +107,93 @@ def test_a_corner_against_a_curve_is_skipped():
     geom.arc(complex(100, 100), complex(50, 150), complex(0, 100))
     geom.line(complex(0, 100), complex(0, 0))
 
-    uit, gewijzigd, overgeslagen = corner_geometry(geom, 10.0, "chamfer")
+    out, changed, skipped = corner_geometry(geom, 10.0, "chamfer")
 
-    # Alleen de twee hoeken tussen twee lijnen doen mee: (100,0) en (0,0).
-    assert gewijzigd == 2
-    assert overgeslagen == 2
-    assert TYPE_ARC in soorten(uit)
+    # Only the two corners between two lines take part: (100,0) and (0,0).
+    assert changed == 2
+    assert skipped == 2
+    assert TYPE_ARC in kinds(out)
 
 
 def test_an_open_polyline_has_no_corner_at_its_loose_ends():
-    """Een los uiteinde is geen hoek: daar komt maar één zijde op uit."""
+    """A loose end is not a corner: only one side arrives there."""
     geom = Geomstr()
     geom.line(complex(0, 0), complex(100, 0))
     geom.line(complex(100, 0), complex(100, 100))
 
-    uit, gewijzigd, overgeslagen = corner_geometry(geom, 10.0, "chamfer")
+    out, changed, skipped = corner_geometry(geom, 10.0, "chamfer")
 
-    assert (gewijzigd, overgeslagen) == (1, 0)
-    assert len(soorten(uit)) == 3
+    assert (changed, skipped) == (1, 0)
+    assert len(kinds(out)) == 3
 
 
 def test_nothing_to_do_is_a_refusal_with_a_sentence():
     """
-    Een selectie zonder één bruikbare hoek moet dat zeggen. Stil niets doen
-    laat de gebruiker denken dat de knop stuk is.
+    A selection without a single usable corner has to say so. Doing nothing
+    quietly leaves the user thinking the button is broken.
     """
     geom = Geomstr()
     geom.line(complex(0, 0), complex(100, 0))
 
-    with pytest.raises(CornerError) as fout:
+    with pytest.raises(CornerError) as error:
         corner_geometry(geom, 10.0, "chamfer")
 
-    assert "corner" in str(fout.value).lower()
+    assert "corner" in str(error.value).lower()
 
 
 def test_the_original_geometry_is_left_alone():
-    origineel = vierkant()
-    voor = origineel.index
+    original = square()
+    before = original.index
 
-    corner_geometry(origineel, 10.0, "chamfer")
+    corner_geometry(original, 10.0, "chamfer")
 
-    assert origineel.index == voor
+    assert original.index == before
 
 
 def test_an_unknown_style_is_refused():
     with pytest.raises(CornerError):
-        corner_geometry(vierkant(), 10.0, "schuinweg")
+        corner_geometry(square(), 10.0, "obliquely")
 
 
 def test_a_sharp_corner_gets_the_right_arc():
     """
-    Alle andere tests hier gebruiken rechte hoeken, en bij 90° valt de
-    terugsnijmaat samen met de radius — dan klopt de trigonometrie ook als je
-    hem verkeerd hebt. Een gelijkzijdige driehoek heeft hoeken van 60°, en daar
-    lopen ze uiteen: radius = maat · tan(30°), en de boog draait 120°.
+    Every other test here uses right angles, and at 90° the setback coincides
+    with the radius — then the trigonometry checks out even when you have it
+    wrong. An equilateral triangle has corners of 60°, and there the two come
+    apart: radius = size · tan(30°), and the arc turns 120°.
     """
-    zijde = 100.0
-    hoog = zijde * math.sqrt(3) / 2
-    punten = [complex(0, 0), complex(zijde, 0), complex(zijde / 2, hoog)]
+    side = 100.0
+    height = side * math.sqrt(3) / 2
+    points = [complex(0, 0), complex(side, 0), complex(side / 2, height)]
     geom = Geomstr()
-    for a, b in zip(punten, punten[1:] + punten[:1]):
+    for a, b in zip(points, points[1:] + points[:1]):
         geom.line(a, b)
 
-    maat = 10.0
-    uit, gewijzigd, overgeslagen = corner_geometry(geom, maat, "round")
+    size = 10.0
+    out, changed, skipped = corner_geometry(geom, size, "round")
 
-    assert (gewijzigd, overgeslagen) == (3, 0)
-    radius = maat * math.tan(math.radians(30))
-    boog = radius * math.radians(120)
-    recht = 3 * (zijde - 2 * maat)
-    assert lengte(uit) == pytest.approx(recht + 3 * boog, rel=2e-3)
+    assert (changed, skipped) == (3, 0)
+    radius = size * math.tan(math.radians(30))
+    arc = radius * math.radians(120)
+    straight = 3 * (side - 2 * size)
+    assert length(out) == pytest.approx(straight + 3 * arc, rel=2e-3)
 
 
 def test_a_sharp_corner_chamfers_to_the_right_width():
     """
-    Bij 60° is de schuine kant korter dan bij 90°: met de cosinusregel is hij
-    maat·√(2−2·cos60°) = maat. Dat is met de hand na te rekenen en pint vast dat
-    de terugsnijmaat langs de zíjde gemeten wordt, niet ergens anders.
+    At 60° the bevel is shorter than at 90°: by the cosine rule it is
+    size·√(2−2·cos60°) = size. That can be worked out by hand and pins down that
+    the setback is measured along the *side* and not somewhere else.
     """
-    zijde = 100.0
-    hoog = zijde * math.sqrt(3) / 2
-    punten = [complex(0, 0), complex(zijde, 0), complex(zijde / 2, hoog)]
+    side = 100.0
+    height = side * math.sqrt(3) / 2
+    points = [complex(0, 0), complex(side, 0), complex(side / 2, height)]
     geom = Geomstr()
-    for a, b in zip(punten, punten[1:] + punten[:1]):
+    for a, b in zip(points, points[1:] + points[:1]):
         geom.line(a, b)
 
-    maat = 10.0
-    uit, _gewijzigd, _overgeslagen = corner_geometry(geom, maat, "chamfer")
+    size = 10.0
+    out, _changed, _skipped = corner_geometry(geom, size, "chamfer")
 
-    schuin = maat * math.sqrt(2 - 2 * math.cos(math.radians(60)))
-    assert lengte(uit) == pytest.approx(3 * (zijde - 2 * maat) + 3 * schuin, rel=1e-6)
+    bevel = size * math.sqrt(2 - 2 * math.cos(math.radians(60)))
+    assert length(out) == pytest.approx(3 * (side - 2 * size) + 3 * bevel, rel=1e-6)
