@@ -27,20 +27,20 @@ export const nl: Catalogue = {
 	'topbar.material.noThickness':
 		'Dit vel is {material} (dikte niet ingevuld) — klik om te wijzigen',
 	'topbar.project': 'Project',
-	'topbar.project.aria': 'Project — openen en saving',
+	'topbar.project.aria': 'Project — openen en opslaan',
 	'topbar.project.title':
-		'Project — openen en saving (ontwerp, vellen en bibliotheek in één bestand)',
+		'Project — openen en opslaan (ontwerp, vellen en bibliotheek in één bestand)',
 	'topbar.project.pick': 'Projectbestand kiezen',
 	'topbar.project.new': 'Nieuw project',
 	'topbar.project.open': 'Project openen…',
-	'topbar.project.save': 'Project saving',
+	'topbar.project.save': 'Project opslaan',
 	'topbar.project.hint': 'Ontwerp, vellen, materialen en machineprofielen in één bestand.',
 	'topbar.import': 'Importeren',
 	'topbar.import.title':
 		'Bestand in dit vel importeren — SVG, DXF, RD, G-code of een afbeelding',
 	'topbar.import.aria': 'Bestand importeren in dit vel',
 	'topbar.export': 'Exporteren',
-	'topbar.export.title': 'Dit vel saving als SVG',
+	'topbar.export.title': 'Dit vel opslaan als SVG',
 	'topbar.frame': 'Kader tonen',
 	'topbar.frame.short': 'Kader',
 	'topbar.frame.title': 'De kop langs de omtrek van je werk sturen, zonder te branden',
@@ -265,7 +265,7 @@ export const nl: Catalogue = {
 	'reason.bedEmpty': 'Er staat niets op het bed',
 	'reason.layerEmpty': 'Deze laag is leeg',
 	'reason.alreadyFirst': 'Deze laag brandt al als eerste',
-	'reason.alreadyLast': 'Deze laag brandt al als last',
+	'reason.alreadyLast': 'Deze laag brandt al als laatste',
 	'reason.testGridLayer': 'Deze laag hoort bij een testraster',
 
 	// ── Wat een handeling betekent ─────────────────────────────────────────────
@@ -329,14 +329,8 @@ export const nl: Catalogue = {
 	'replace.title.new': 'Opnieuw beginnen',
 	'replace.title.unsaved': 'Niet-opgeslagen wijzigingen',
 	'replace.title.project': 'Er ligt al werk in dit project',
-	'replace.title.sheet': 'Er ligt al werk op dit vel',
-	'replace.changed': 'Dit ontwerp is gewijzigd since de last keer saving.',
-	'replace.workOnSheet': {
-		one: 'Op dit vel staat werk: die ene vorm verdwijnt van het bed.',
-		other: 'Op dit vel staat werk: die {n} vormen verdwijnen van het bed.'
-	},
+	'replace.changed': 'Dit ontwerp is gewijzigd sinds de laatste keer opslaan.',
 	'replace.workInProject': 'Er staat werk in dit project.',
-	'replace.opensSheet': 'Openen vervangt wat er nu op dit vel staat.',
 	'replace.opensProject': {
 		one: 'Openen vervangt het hele project: het ontwerp, het vel en het materiaal komen uit het bestand.',
 		other: 'Openen vervangt het hele project: het ontwerp, alle {n} vellen en het materiaal komen uit het bestand.'
@@ -346,7 +340,7 @@ export const nl: Catalogue = {
 	'replace.recoverable': 'Van dit vel blijft een automatisch bewaarde versie van {when} staan; die wordt bij de volgende start aangeboden. De andere vellen niet.',
 	'replace.saveAndStart': 'Opslaan en beginnen',
 	'replace.saveAndOpen': 'Opslaan en openen',
-	'replace.dontSave': 'Niet saving',
+	'replace.dontSave': 'Niet opslaan',
 
 	// ── Venstertitels ─────────────────────────────────────────────────────────
 	'notifications.title': 'Meldingen',
@@ -667,7 +661,7 @@ export const nl: Catalogue = {
 	'panel.list': 'Lijst',
 	'panel.list.title': 'Handelingen op de hele lijst',
 	'panel.list.sort': 'Op brandvolgorde zetten',
-	'panel.list.sort.explain': 'Rasteren, graveren, punten, snijden als last',
+	'panel.list.sort.explain': 'Rasteren, graveren, punten, snijden als laatste',
 	'panel.list.sort.already': 'De lagen staan al op brandvolgorde',
 	'panel.list.prune': 'Lege lagen opruimen',
 	'panel.list.pruneCount': {
@@ -742,7 +736,7 @@ export const nl: Catalogue = {
 	'panel.zStep': 'Zakken per pass',
 	'panel.zStep.off': 'Uit. Elke pass snijdt op dezelfde hoogte.',
 	'panel.zStep.onePass': 'Doet nog niets: deze laag brandt één pass. Zet het aantal passes hoger om in lagen te snijden.',
-	'panel.zStep.explain': '{passes}× snijden, elke keer {step} mm {direction}. Na de last pass gaat de kop terug naar de hoogte waarop hij begon.',
+	'panel.zStep.explain': '{passes}× snijden, elke keer {step} mm {direction}. Na de laatste pass gaat de kop terug naar de hoogte waarop hij begon.',
 	'panel.zStep.lower': 'lager',
 	'panel.zStep.higher': 'hoger',
 	'panel.overscan': 'Overscan',
@@ -1000,7 +994,7 @@ export const nl: Catalogue = {
 	'grid.caption.placeholder': 'bijv. proef achterkant',
 	'grid.caption.hint': 'Wordt mee gegraveerd, met materiaal, dikte en datum erachter. Een bord zonder opschrift is over twee weken een raadselachtig stuk hout.',
 	'grid.preview': 'Voorbeeld van het bord',
-	'grid.preview.lastValid': 'Hieronder staat je last geldige bord.',
+	'grid.preview.lastValid': 'Hieronder staat je laatste geldige bord.',
 	'grid.preview.overlap': 'Dit bord valt over raster #{id}, dat nog op je vel ligt. Schuif het {anchor} op.',
 	'grid.anchor.centreWord': 'midden',
 	'grid.anchor.startWord': 'startpunt',
@@ -1070,8 +1064,8 @@ export const nl: Catalogue = {
 	'grid.recipe.none': '— nog geen bewaarde instellingen —',
 	'grid.recipe.pick': '— kies een bewaarde instelling —',
 	'grid.recipe.allMaterials': 'alle materialen',
-	'grid.recipe.dontSave': 'Niet saving',
-	'grid.recipe.save': 'Dit saving…',
+	'grid.recipe.dontSave': 'Niet opslaan',
+	'grid.recipe.save': 'Dit opslaan…',
 	'grid.recipe.namePlaceholder': 'Naam, bijv. Berk 3 mm snijden',
 	'grid.recipe.nameAria': 'Naam van dit recept',
 	'grid.recipe.saveFailed': 'Opslaan is mislukt ({status}).',
@@ -1099,7 +1093,7 @@ export const nl: Catalogue = {
 	'genPreview.pieces': '{n} stuks',
 	'genPreview.modules': '{n} modules',
 	'genPreview.bars': '{n} streepjes',
-	'genPreview.lastValid': 'Hieronder staat je last geldige vorm.',
+	'genPreview.lastValid': 'Hieronder staat je laatste geldige vorm.',
 	'genPreview.aria': 'Voorbeeld van wat deze generator maakt, {width} bij {height} millimeter',
 	'genPreview.sketchAria': 'Schets van wat deze generator maakt',
 	'genPreview.calculatingAria': 'Het voorbeeld wordt berekend',
@@ -1165,6 +1159,10 @@ export const nl: Catalogue = {
 	},
 	'notice.split.done': '{n} vormen — los aan te klikken.',
 	'notice.split.nothing': 'Deze vorm bestaat uit één stuk; er valt niets te splitsen.',
+	'notice.import.added': {
+		one: '1 vorm geïmporteerd en geselecteerd — sleep hem op zijn plek.',
+		other: '{n} vormen geïmporteerd en geselecteerd — sleep ze op hun plek.'
+	},
 	'notice.fill.filled': {
 		one: '1 vorm gevuld — een rasterlaag brandt nu het vlak.',
 		other: '{n} vormen gevuld — een rasterlaag brandt nu het vlak.'
@@ -1384,7 +1382,7 @@ export const nl: Catalogue = {
 	'error.insertFailed': 'Invoegen mislukte.',
 	'error.importFailed': 'Importeren mislukte.',
 	'error.materialFailed': 'Materiaal aanmaken mislukte.',
-	'error.photoFailed': 'Foto saving mislukte.',
+	'error.photoFailed': 'Foto opslaan is mislukt.',
 	'error.presetFailed': 'Preset maken mislukte.',
 	'error.fetchFailed': 'Ophalen mislukte.',
 	'error.noToken': 'Geen of onjuiste token — bewerken is geblokkeerd.',
@@ -1439,7 +1437,7 @@ export const nl: Catalogue = {
 	'phone.onTheBed': 'Op het bed',
 	'phone.nothing': 'niets',
 	'phone.noLayer': ', {n} in geen laag',
-	'phone.lastSeen': 'Dit is de last stand die we gezien hebben.',
+	'phone.lastSeen': 'Dit is de laatste stand die we gezien hebben.',
 	'phone.unplugged': 'Er hangt geen machine aan de server. Controleer of hij aanstaat en of de kabel erin zit.',
 	'phone.idle': 'Niets aan het branden. Een job start je op de desktop.',
 	'phone.cameraNoImage': 'De camera staat aan maar levert geen beeld. Kabel los?',
@@ -1493,8 +1491,8 @@ export const nl: Catalogue = {
 	// ── Connection ────────────────────────────────────────────────────────────────
 	'connection.minutes': '{n} min',
 	'connection.lost': 'Geen verbinding met OpenKerf',
-	'connection.lost.body': 'De server reageert niet. Wat je nu tekent of instelt komt niet aan, en de standen hieronder zijn de last die we gezien hebben.',
-	'connection.lost.bodyFor': 'De server reageert al {duration} niet. Wat je nu tekent of instelt komt niet aan, en de standen hieronder zijn de last die we gezien hebben.',
+	'connection.lost.body': 'De server reageert niet. Wat je nu tekent of instelt komt niet aan, en de standen hieronder zijn de laatste die we gezien hebben.',
+	'connection.lost.bodyFor': 'De server reageert al {duration} niet. Wat je nu tekent of instelt komt niet aan, en de standen hieronder zijn de laatste die we gezien hebben.',
 	'connection.stillBurning': 'De machine loopt door. Stoppen kan nu alleen met de knop op de machine zelf.',
 	'connection.retryNow': 'Nu opnieuw proberen',
 	'connection.autoIn': 'vanzelf over {seconds} s',
@@ -1715,7 +1713,7 @@ export const nl: Catalogue = {
 	'api.project.noDesign': 'Het project bevat geen ontwerp.',
 	'api.project.notOurs': 'Dit is geen OpenKerf-project.',
 	'api.sheet.needsName': 'Een vel heeft een naam nodig.',
-	'api.sheet.needsOne': 'Het last vel kan niet weg; een project heeft er één.',
+	'api.sheet.needsOne': 'Het laatste vel kan niet weg; een project heeft er één.',
 	'api.sheet.nothingSelected': 'Kies eerst wat er mee moet.',
 	'api.sheet.sameSheet': 'Dat is het vel waar je al op werkt.',
 	'api.sheet.tooThick': 'Een vel van meer dan 500 mm dik gaat er niet in.',

@@ -31,6 +31,10 @@ const SLACK = 2;
 /** Selectors that clip on purpose, because the content has no known length. */
 const BY_DESIGN = [
 	'.layer-name',
+	// The layer name in the pre-flight table: same rule as the one in the panel —
+	// a name has no known length, the cell clips it with an ellipsis and carries the
+	// whole thing in its `title`.
+	'.pf-name',
 	'.current-job',
 	'.name',
 	'.matname',

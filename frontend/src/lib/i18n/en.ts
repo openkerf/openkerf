@@ -334,14 +334,8 @@ export const en = {
 	'replace.title.new': 'Start over',
 	'replace.title.unsaved': 'Unsaved changes',
 	'replace.title.project': 'There is already work in this project',
-	'replace.title.sheet': 'There is already work on this sheet',
 	'replace.changed': 'This design has changed since it was last saved.',
-	'replace.workOnSheet': {
-		one: 'There is work on this sheet: that one shape will disappear from the bed.',
-		other: 'There is work on this sheet: those {n} shapes will disappear from the bed.'
-	},
 	'replace.workInProject': 'There is work in this project.',
-	'replace.opensSheet': 'Opening replaces what is on this sheet now.',
 	'replace.opensProject': {
 		one: 'Opening replaces the whole project: the design, the sheet and the material come from the file.',
 		other: 'Opening replaces the whole project: the design, all {n} sheets and the material come from the file.'
@@ -1170,6 +1164,10 @@ export const en = {
 	},
 	'notice.split.done': '{n} shapes — clickable separately.',
 	'notice.split.nothing': 'This shape consists of one piece; there is nothing to split.',
+	'notice.import.added': {
+		one: '1 shape imported and selected — drag it into place.',
+		other: '{n} shapes imported and selected — drag them into place.'
+	},
 	'notice.fill.filled': {
 		one: '1 shape filled — a raster layer now burns the area.',
 		other: '{n} shapes filled — a raster layer now burns the area.'

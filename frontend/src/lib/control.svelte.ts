@@ -100,6 +100,36 @@ export class Controller {
 		return this.token ? { Authorization: `Bearer ${this.token}` } : {};
 	}
 
+	/**
+	 * Same as `#post`, but with the answer.
+	 *
+	 * `#post` reports only whether it worked, and for most buttons that is all there
+	 * is to know. An import is the exception: what came in is in the answer.
+	 */
+	async #postJson(
+		path: string,
+		action: string,
+		body?: FormData
+	): Promise<Record<string, unknown> | null> {
+		this.busy = action;
+		this.error = null;
+		try {
+			const response = await fetch(path, { method: 'POST', headers: this.#headers(), body });
+			if (response.status === 401) this.rejected = true;
+			if (!response.ok) {
+				this.error = await describeFailure(response, this.token !== '');
+				return null;
+			}
+			this.rejected = false;
+			return (await response.json().catch(() => ({}))) as Record<string, unknown>;
+		} catch (e) {
+			this.error = onbereikbaar(e);
+			return null;
+		} finally {
+			this.busy = null;
+		}
+	}
+
 	async #post(path: string, action: string, body?: FormData) {
 		this.busy = action;
 		this.error = null;
@@ -328,10 +358,20 @@ export class Controller {
 		return uitslag;
 	}
 
-	load(file: File) {
+	/**
+	 * Importing a drawing: it is added to the sheet, not put in its place.
+	 *
+	 * Hands back the ids of what came in, so the interface can select it. Whoever
+	 * imports wants to move the new work somewhere, and among shapes that were
+	 * already there you cannot see which ones just arrived.
+	 */
+	async load(file: File): Promise<string[] | null> {
 		const form = new FormData();
 		form.append('file', file);
-		return this.#post('/api/job/load', 'load', form);
+		const body = await this.#postJson('/api/job/load', 'load', form);
+		if (body === null) return null;
+		const added = body.added;
+		return Array.isArray(added) ? added.filter((id): id is string => typeof id === 'string') : [];
 	}
 }
 

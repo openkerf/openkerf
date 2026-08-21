@@ -518,14 +518,33 @@ class ApiServer:
 
         @app.post("/api/job/load", dependencies=write)
         async def load_job(file: UploadFile):
-            """Upload a design and load it into the element tree."""
+            """
+            Upload a drawing and add it to the sheet.
+
+            Importing *adds*. The engine loads a file on top of what is already there
+            and that is what a laser cutter wants: a sheet is a plate, and a plate
+            holds more than one part. Emptying it first belongs to opening a project,
+            which says so.
+
+            So the shapes that came in are reported by id. Whoever imports wants to
+            put the new work somewhere, and without those ids the interface cannot
+            select it — you would be hunting for what just arrived among what was
+            already there.
+            """
             target = self._upload_path(file.filename or "upload.svg")
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
+            before = self.design.element_ids()
             result = act(self.commands.load_file, str(target))
-            # Just loaded: the design equals the file.
-            self.document.clean()
-            return result
+            added = [id_ for id_ in self.design.element_ids() if id_ not in before]
+            # An empty bed plus a file *is* that file; anything else is a mixture that
+            # exists nowhere on disk, so it counts as unsaved work. Marking it clean
+            # there would tell the recovery file there is nothing to keep.
+            if before:
+                self.document.touch()
+            else:
+                self.document.clean()
+            return {**result, "added": added, "count": len(added)}
 
         @app.post("/api/job/start", dependencies=write)
         def start_job():

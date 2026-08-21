@@ -383,10 +383,6 @@ export class EditController {
 		return this.#post('/api/machine/unlock');
 	}
 
-	clear() {
-		return this.#post('/api/design/clear');
-	}
-
 	undo() {
 		return this.#post('/api/design/undo');
 	}
