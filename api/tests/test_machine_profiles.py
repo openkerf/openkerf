@@ -1,9 +1,9 @@
 """
-Machineprofielen: één per machine, met de naam die de gebruiker koos.
+Machine profiles: one per machine, with the name the user chose.
 
-Jelle vond tien profielen in een lijst waar hij er één had aangemaakt, en de
-namen erin waren de interne namen van MeerK40t ("lihuiyu-device") in plaats van
-hoe hij zijn laser noemde. Drie oorzaken, drie groepen tests.
+Jelle found ten profiles in a list where he had created one, and the names in it
+were MeerK40t's internal names ("lihuiyu-device") instead of what he called his
+laser. Three causes, three groups of tests.
 """
 
 import sqlite3
@@ -32,48 +32,48 @@ def client(server):
         yield c
 
 
-# ------------------------------------------------------------------ dubbelen
+# ----------------------------------------------------------------- duplicates
 
 
 def test_simultaneous_readers_share_one_profile(library):
     """
-    De bibliotheek vraagt drie routes tegelijk op en meerdere daarvan willen
-    het actieve profiel. Zonder slot leverde dat één profiel per verzoek op —
-    gemeten: acht aanroepen, acht profielen.
+    The library asks for three routes at once and several of them want the active
+    profile. Without a lock that gave one profile per request — measured: eight
+    calls, eight profiles.
     """
-    fouten = []
+    errors = []
 
-    def vraag():
+    def ask():
         try:
-            library.profile_for_device("ruida", "Mijn 5030")
-        except Exception as e:  # pragma: no cover - alleen bij een regressie
-            fouten.append(e)
+            library.profile_for_device("ruida", "My 5030")
+        except Exception as e:  # pragma: no cover - only on a regression
+            errors.append(e)
 
-    threads = [threading.Thread(target=vraag) for _ in range(8)]
+    threads = [threading.Thread(target=ask) for _ in range(8)]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
 
-    assert fouten == []
+    assert errors == []
     assert len(library.machines()) == 1
 
 
 def test_a_second_profile_for_the_same_machine_is_refused(library):
-    library.add_machine(name="Mijn 5030", device_path="ruida")
+    library.add_machine(name="My 5030", device_path="ruida")
 
     with pytest.raises(sqlite3.IntegrityError):
-        library.add_machine(name="Nog een", device_path="ruida")
+        library.add_machine(name="Another one", device_path="ruida")
 
 
 def test_existing_duplicates_are_merged_on_open(tmp_path):
-    """De bibliotheek van Jelle heeft twee regels 'lihuiyu-device'; die moeten
-    samengaan, met hun presets erbij, zonder dat er bewijs verdwijnt."""
+    """Jelle's library has two rows 'lihuiyu-device'; those have to be merged,
+    presets and all, without any evidence disappearing."""
     path = tmp_path / "oud.db"
     library = Library(path)
-    materiaal = library.add_material("Multiplex")
+    material = library.add_material("Multiplex")
     with sqlite3.connect(path) as db:
-        # Zoals de database eruitzag vóór het slot erop kwam.
+        # The way the database looked before the lock went on it.
         db.execute("DROP INDEX IF EXISTS machine_profile_device")
         db.execute(
             "INSERT INTO machine_profile (id, name, device_path) VALUES (1, 'A', 'ruida')"
@@ -83,59 +83,59 @@ def test_existing_duplicates_are_merged_on_open(tmp_path):
         )
     for machine_id in (1, 2):
         library.add_preset(
-            material_id=materiaal["id"],
+            material_id=material["id"],
             machine_id=machine_id,
             operation="snijden",
             speed_mm_s=12,
             power_percent=65,
         )
 
-    heropend = Library(path)
+    reopened = Library(path)
 
-    machines = heropend.machines()
+    machines = reopened.machines()
     assert [m["id"] for m in machines] == [1]
-    # Geen preset kwijt, en allebei bij het overgebleven profiel.
-    presets = heropend.presets()
+    # No preset lost, and both on the profile that stayed.
+    presets = reopened.presets()
     assert len(presets) == 2
     assert {p["machine_id"] for p in presets} == {1}
 
 
-# ------------------------------------------------------------------- de naam
+# -------------------------------------------------------------------- the name
 
 
 def test_the_profile_follows_the_name_of_the_machine(library):
     """
-    Bij Jelle heet het apparaat "KH-5030 50W" en het profiel nog "K50 CO2":
-    de naam werd één keer overgenomen en daarna nooit meer.
+    On Jelle's machine the device is called "KH-5030 50W" and the profile is
+    still "K50 CO2": the name was taken over once and never again.
     """
-    eerst = library.profile_for_device("ruida", "K50 CO2")
+    first_time = library.profile_for_device("ruida", "K50 CO2")
 
-    daarna = library.profile_for_device("ruida", "KH-5030 50W")
+    after = library.profile_for_device("ruida", "KH-5030 50W")
 
-    assert daarna["id"] == eerst["id"]
-    assert daarna["name"] == "KH-5030 50W"
+    assert after["id"] == first_time["id"]
+    assert after["name"] == "KH-5030 50W"
     assert [m["name"] for m in library.machines()] == ["KH-5030 50W"]
 
 
 def test_renaming_a_machine_renames_its_profile(client, kernel):
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Berk-lasertje"})
-    assert client.get("/api/library/active-machine").json()["name"] == "Berk-lasertje"
-    pad = kernel.device.path
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "Little birch laser"})
+    assert client.get("/api/library/active-machine").json()["name"] == "Little birch laser"
+    path = kernel.device.path
 
-    client.post(f"/api/machines/{pad}/rename", json={"label": "Mijn 5030"})
+    client.post(f"/api/machines/{path}/rename", json={"label": "My 5030"})
 
-    assert client.get("/api/library/active-machine").json()["name"] == "Mijn 5030"
-    assert [m["name"] for m in client.get("/api/library/machines").json()] == ["Mijn 5030"]
+    assert client.get("/api/library/active-machine").json()["name"] == "My 5030"
+    assert [m["name"] for m in client.get("/api/library/machines").json()] == ["My 5030"]
 
 
-# ----------------------------------------------------- machines die niemand koos
+# ------------------------------------------------------- machines nobody chose
 
 
 def test_reading_the_library_does_not_invent_a_machine(client):
     """
-    Verse installatie: de engine heeft zijn eigen lhystudios-apparaat, niemand
-    heeft iets ingesteld. Openen van de bibliotheek maakte daar een profiel
-    voor aan — met de interne naam van dat apparaat.
+    A fresh install: the engine has its own lhystudios device, nobody has set
+    anything up. Opening the library used to create a profile for it — with that
+    device's internal name.
     """
     assert client.get("/api/library/machines").json() == []
 
@@ -146,33 +146,33 @@ def test_reading_the_library_does_not_invent_a_machine(client):
 
 
 def test_a_machine_from_the_wizard_does_get_a_profile(client):
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Mijn 5030"})
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "My 5030"})
     assert client.get("/api/library/active-machine").status_code == 200
 
-    profielen = client.get("/api/library/machines").json()
+    profiles = client.get("/api/library/machines").json()
 
-    assert [m["name"] for m in profielen] == ["Mijn 5030"]
-    assert profielen[0]["orphaned"] is False
+    assert [m["name"] for m in profiles] == ["My 5030"]
+    assert profiles[0]["orphaned"] is False
 
 
-# --------------------------------------------------------------- verweesd
+# --------------------------------------------------------------- orphaned
 
 
 def test_a_profile_without_a_machine_is_marked(client, server):
-    server.library.add_machine(name="Laser van vroeger", device_path="ruida7")
+    server.library.add_machine(name="Laser from the old days", device_path="ruida7")
 
-    profiel = client.get("/api/library/machines").json()[0]
+    profile = client.get("/api/library/machines").json()[0]
 
-    assert profiel["orphaned"] is True
-    assert profiel["presets"] == 0
+    assert profile["orphaned"] is True
+    assert profile["presets"] == 0
 
 
 def test_a_profile_for_the_engines_placeholder_counts_as_orphaned(client, kernel):
     """
-    Wat de oude versie achterliet: een profiel voor het lhystudios-apparaat dat
-    MeerK40t zelf aanmaakt. Het apparaat bestáát, dus zonder deze regel staat
-    het in de lijst als levende machine — terwijl niemand het koos, en dat is
-    precies de naam die er niet hoort te staan.
+    What the old version left behind: a profile for the lhystudios device that
+    MeerK40t creates itself. The device *does* exist, so without this rule it sits
+    in the list as a live machine — while nobody chose it, and that is exactly the
+    name that should not be there.
     """
     kernel.device.setting(bool, "openkerf_configured", False)
     assert kernel.device.openkerf_configured is False
@@ -186,65 +186,65 @@ def test_a_profile_for_the_engines_placeholder_counts_as_orphaned(client, kernel
 
 
 def test_an_orphan_can_be_cleaned_up(client, server):
-    profiel = server.library.add_machine(name="Laser van vroeger", device_path="ruida7")
+    profile = server.library.add_machine(name="Laser from the old days", device_path="ruida7")
 
-    response = client.delete(f"/api/library/machines/{profiel['id']}")
+    response = client.delete(f"/api/library/machines/{profile['id']}")
 
     assert response.status_code == 200
     assert client.get("/api/library/machines").json() == []
 
 
 def test_a_profile_with_evidence_is_not_thrown_away(client, server):
-    profiel = server.library.add_machine(name="Laser van vroeger", device_path="ruida7")
-    materiaal = server.library.add_material("Multiplex")
+    profile = server.library.add_machine(name="Laser from the old days", device_path="ruida7")
+    material = server.library.add_material("Multiplex")
     server.library.add_preset(
-        material_id=materiaal["id"],
-        machine_id=profiel["id"],
+        material_id=material["id"],
+        machine_id=profile["id"],
         operation="snijden",
         speed_mm_s=12,
         power_percent=65,
     )
 
-    response = client.delete(f"/api/library/machines/{profiel['id']}")
+    response = client.delete(f"/api/library/machines/{profile['id']}")
 
     assert response.status_code == 409
     assert "1 setting" in response.json()["detail"]
     assert len(client.get("/api/library/machines").json()) == 1
 
 
-# ---------------------------------------------------- welke machine actief is
+# ------------------------------------------------- which machine is active
 
 
 def test_the_chosen_machine_survives_a_restart(client, kernel):
     """
-    MeerK40t schrijft `activated_device` pas bij een nette afsluiting en valt
-    daarna terug op `preferred_device` — standaard de lhystudios-plaatsvervanger.
-    Een headless engine die omvalt, draait na de herstart dus op een K40-driver
-    en de bovenbalk zegt "lihuiyu-device".
+    MeerK40t only writes `activated_device` on a clean shutdown and otherwise
+    falls back on `preferred_device` — the lhystudios stand-in by default. So a
+    headless engine that falls over runs on a K40 driver after the restart and the
+    top bar says "lihuiyu-device".
     """
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Mijn 5030"})
-    pad = kernel.device.path
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "My 5030"})
+    path = kernel.device.path
 
-    assert kernel.read_persistent(str, "/", "activated_device", None) == pad
+    assert kernel.read_persistent(str, "/", "activated_device", None) == path
 
-    # De testkernel start met het dummy-apparaat in de rol van MeerK40t's
-    # lhystudios-plaatsvervanger: erbij gezet door de engine, niet door een mens.
+    # The test kernel starts with the dummy device in the role of MeerK40t's
+    # lhystudios stand-in: put there by the engine, not by a human.
     client.post("/api/machines/dummy/activate")
     assert kernel.read_persistent(str, "/", "activated_device", None) == "dummy"
 
-    client.post(f"/api/machines/{pad}/activate")
-    assert kernel.read_persistent(str, "/", "activated_device", None) == pad
+    client.post(f"/api/machines/{path}/activate")
+    assert kernel.read_persistent(str, "/", "activated_device", None) == path
 
 
 def test_the_machine_you_are_working_on_keeps_its_profile(client, kernel):
     """
-    Weg is hij toch niet: de eerstvolgende leesroute maakt hem opnieuw aan. Wat
-    er wél verandert is dat elke preset die eraan hing losraakt.
+    It is not gone anyway: the very next read route creates it again. What *does*
+    change is that every preset hanging off it comes loose.
     """
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Mijn 5030"})
-    profiel = client.get("/api/library/active-machine").json()
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "My 5030"})
+    profile = client.get("/api/library/active-machine").json()
 
-    response = client.delete(f"/api/library/machines/{profiel['id']}")
+    response = client.delete(f"/api/library/machines/{profile['id']}")
 
     assert response.status_code == 409
     assert len(client.get("/api/library/machines").json()) == 1
@@ -252,20 +252,20 @@ def test_the_machine_you_are_working_on_keeps_its_profile(client, kernel):
 
 def test_the_list_shows_the_current_name_of_every_machine(client, kernel, server):
     """
-    Niet alleen van de machine waarop je werkt. Bij Jelle staat in de lijst nog
-    "K50 CO2" terwijl dat apparaat allang "KH-5030 50W" heet — hij werkt er nu
-    even niet op, dus niets liep die naam ooit na.
+    Not only of the machine you are working on. Jelle's list still says "K50 CO2"
+    while that device has long been called "KH-5030 50W" — he is not working on it
+    at the moment, so nothing ever went back to check that name.
     """
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Berk 5030 CO2"})
-    eerste = kernel.device.path
-    profiel = client.get("/api/library/active-machine").json()
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Tweede"})
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "Birch 5030 CO2"})
+    first = kernel.device.path
+    profile = client.get("/api/library/active-machine").json()
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "Second"})
     client.get("/api/library/active-machine")
-    # De stand van vóór deze reparatie: het profiel draagt een naam van vroeger
-    # en de machine waar hij bij hoort is niet de actieve.
-    server.library.update_machine(profiel["id"], {"name": "K50 CO2"})
-    assert kernel.device.path != eerste
+    # The state before this repair: the profile carries a name from the past and
+    # the machine it belongs to is not the active one.
+    server.library.update_machine(profile["id"], {"name": "K50 CO2"})
+    assert kernel.device.path != first
 
-    namen = {m["name"] for m in client.get("/api/library/machines").json()}
+    names = {m["name"] for m in client.get("/api/library/machines").json()}
 
-    assert namen == {"Berk 5030 CO2", "Tweede"}
+    assert names == {"Birch 5030 CO2", "Second"}
