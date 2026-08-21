@@ -2,7 +2,7 @@
 	import { currentJob } from '$lib/api';
 	import type { Device } from '$lib/api';
 	import { headTrail } from '$lib/status.svelte';
-	import { nulpunt } from '$lib/control.svelte';
+	import { origin } from '$lib/control.svelte';
 	import { elementName, type DesignStore } from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
@@ -57,7 +57,7 @@
 		/** Source of the camera image, or null when the camera is off. */
 		cameraSrc?: string | null;
 		cameraOpacity?: number;
-		/** Het actieve vel: het stuk materiaal binnen het bed. */
+		/** Het actieve sheet: het piece materiaal binnen het bed. */
 		sheet?: { name: string; width: number; height: number } | null;
 		/** The active sheet's id — needed to switch tiling on. */
 		sheetId?: string | null;
@@ -71,7 +71,7 @@
 		 *  here", and then it has to know where "here" is. */
 		onContextCanvas?: (event: MouseEvent, point: { x: number; y: number }) => void;
 		/**
-		 * Het beeld van buitenaf bedienen.
+		 * Het beeld from buitenaf bedienen.
 		 *
 		 * The zooming lives here — the scale, the pan and the measures of the work area
 		 * are here — but it also belongs in the canvas context menu and in the shortcuts,
@@ -156,10 +156,10 @@
 			// the centre rather than measuring it: on a run of wheel ticks the DOM is one
 			// tick behind, and then every tick zooms to a point the previous tick had
 			// already moved.
-			const vlak = frame.getBoundingClientRect();
+			const area = frame.getBoundingClientRect();
 			const ratio = next / zoom;
-			const dx = clientX - (vlak.left + RULER + canvasWidth / 2 + pan.x);
-			const dy = clientY - (vlak.top + RULER + canvasHeight / 2 + pan.y);
+			const dx = clientX - (area.left + RULER + canvasWidth / 2 + pan.x);
+			const dy = clientY - (area.top + RULER + canvasHeight / 2 + pan.y);
 			pan = { x: pan.x - dx * (ratio - 1), y: pan.y - dy * (ratio - 1) };
 		}
 		zoom = next;
@@ -192,9 +192,9 @@
 	}
 
 	/** To a requested percentage, around the centre of the view. */
-	function naarProcent(doel: number) {
-		const nieuw = (doel / 100) * (PX_PER_MM / fitScale);
-		const factor = nieuw / zoom;
+	function naarProcent(target: number) {
+		const fresh = (target / 100) * (PX_PER_MM / fitScale);
+		const factor = fresh / zoom;
 		if (!Number.isFinite(factor) || factor <= 0) return;
 		// Around the centre of the work area, not around the cursor: there is no cursor
 		// when this comes from a menu or a shortcut.
@@ -212,11 +212,11 @@
 		if (!canvasWidth || !canvasHeight || w <= 0 || h <= 0) return;
 		// canvasWidth is the area *inside* the rulers; subtracting those again made
 		// everything called "fitting" a notch too small.
-		const doel = Math.min(
+		const target = Math.min(
 			(canvasWidth - MARGIN * 2) / w,
 			(canvasHeight - MARGIN * 2) / h
 		);
-		zoom = Math.min(20, Math.max(0.2, doel / fitScale));
+		zoom = Math.min(20, Math.max(0.2, target / fitScale));
 
 		// Centring on the calculated position did not hold: there is more between the
 		// measuring point of `canvasWidth` and the top-left corner of the bed than the
@@ -225,23 +225,23 @@
 		// correct the difference in one step.
 		requestAnimationFrame(() => {
 			if (!frame) return;
-			const vlak = frame.getBoundingClientRect();
+			const area = frame.getBoundingClientRect();
 			const bedvlak = frame.querySelector('.bed')?.getBoundingClientRect();
 			if (!bedvlak) return;
 			const perMm = bedvlak.width / bed.width;
 			const midX = bedvlak.x + (x + w / 2) * perMm;
 			const midY = bedvlak.y + (y + h / 2) * perMm;
 			pan = {
-				x: pan.x + (vlak.x + vlak.width / 2 - midX),
-				y: pan.y + (vlak.y + vlak.height / 2 - midY)
+				x: pan.x + (area.x + area.width / 2 - midX),
+				y: pan.y + (area.y + area.height / 2 - midY)
 			};
 		});
 	}
 
 	/** Everything that is there, or the whole bed when there is nothing. */
 	function passend() {
-		const doos = omvat(design.elements ?? []);
-		if (doos) fitTo(doos.x, doos.y, doos.width, doos.height);
+		const box = omvat(design.elements ?? []);
+		if (box) fitTo(box.x, box.y, box.width, box.height);
 		else fitTo(0, 0, bed.width, bed.height);
 	}
 
@@ -253,9 +253,9 @@
 	 * soon as nothing is selected.
 	 */
 	function naarSelectie() {
-		const gekozen = (design.elements ?? []).filter((e) => design.isSelected(e.id));
-		const doos = omvat(gekozen);
-		if (doos) fitTo(doos.x, doos.y, doos.width, doos.height);
+		const chosen = (design.elements ?? []).filter((e) => design.isSelected(e.id));
+		const box = omvat(chosen);
+		if (box) fitTo(box.x, box.y, box.width, box.height);
 		else passend();
 	}
 
@@ -313,7 +313,7 @@
 	 * As long as space is held the cursor is a hand and a left click drags the view
 	 * instead of a selection frame.
 	 */
-	let spatie = $state(false);
+	let space = $state(false);
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
 
@@ -333,20 +333,20 @@
 	let job = $derived(currentJob(device));
 	let voortgang = $derived.by(() => {
 		if (!job) return null;
-		const deel = job.progress;
-		if (deel === null || deel === undefined || !Number.isFinite(deel)) return null;
-		return Math.min(1, Math.max(0, deel));
+		const part = job.progress;
+		if (part === null || part === undefined || !Number.isFinite(part)) return null;
+		return Math.min(1, Math.max(0, part));
 	});
 
 	/** The trail in millimetres, ready to lay down as a polyline. */
-	let spoor = $derived.by(() => {
+	let trail = $derived.by(() => {
 		if (!job) return '';
-		const punten = headTrail.points;
-		if (punten.length < 4) return '';
+		const points = headTrail.points;
+		if (points.length < 4) return '';
 		const perMm = design.design?.units_per_mm ?? 1;
 		const stukken = [];
-		for (let i = 0; i < punten.length; i += 2) {
-			stukken.push(`${(punten[i] / perMm).toFixed(2)},${(punten[i + 1] / perMm).toFixed(2)}`);
+		for (let i = 0; i < points.length; i += 2) {
+			stukken.push(`${(points[i] / perMm).toFixed(2)},${(points[i + 1] / perMm).toFixed(2)}`);
 		}
 		return stukken.join(' ');
 	});
@@ -361,13 +361,13 @@
 	const VERS_PUNTEN = 14;
 	let spoorKop = $derived.by(() => {
 		if (!job) return '';
-		const punten = headTrail.points;
-		if (punten.length < 4) return '';
+		const points = headTrail.points;
+		if (points.length < 4) return '';
 		const perMm = design.design?.units_per_mm ?? 1;
-		const vanaf = Math.max(0, punten.length - 2 * VERS_PUNTEN);
+		const from = Math.max(0, points.length - 2 * VERS_PUNTEN);
 		const stukken = [];
-		for (let i = vanaf; i < punten.length; i += 2) {
-			stukken.push(`${(punten[i] / perMm).toFixed(2)},${(punten[i + 1] / perMm).toFixed(2)}`);
+		for (let i = from; i < points.length; i += 2) {
+			stukken.push(`${(points[i] / perMm).toFixed(2)},${(points[i + 1] / perMm).toFixed(2)}`);
 		}
 		return stukken.join(' ');
 	});
@@ -384,15 +384,15 @@
 	// the kind of surprise this feature is meant to prevent. So the bed carries the point
 	// itself *and* a dotted frame where the work will land.
 	$effect(() => {
-		nulpunt.laad();
+		origin.laad();
 	});
-	let nulstand = $derived(nulpunt.point);
+	let originPoint = $derived(origin.point);
 	/** Where the work will lie: the bounding box, shifted by the zero point. */
-	let brandtHier = $derived.by(() => {
-		if (!nulstand || (!nulstand.x_mm && !nulstand.y_mm)) return null;
-		const doos = omvat(design.elements ?? []);
-		if (!doos) return null;
-		return { ...doos, x: doos.x + nulstand.x_mm, y: doos.y + nulstand.y_mm };
+	let burnsHere = $derived.by(() => {
+		if (!originPoint || (!originPoint.x_mm && !originPoint.y_mm)) return null;
+		const box = omvat(design.elements ?? []);
+		if (!box) return null;
+		return { ...box, x: box.x + originPoint.x_mm, y: box.y + originPoint.y_mm };
 	});
 
 	// Only with exactly one selected line: that one you edit by its points.
@@ -422,7 +422,7 @@
 
 	function moveEndpoint(event: PointerEvent) {
 		if (!endpointDrag || !endpointPreview) return;
-		const at = snapPunt(pointerMm(event, true), event);
+		const at = snapped(pointerMm(event, true), event);
 		endpointPreview =
 			endpointDrag.index === 0
 				? { ...endpointPreview, x1_mm: at.x, y1_mm: at.y }
@@ -479,11 +479,11 @@
 		};
 	});
 
-	// ── Tegels: plaat groter dan bed (Task 15) ─────────────────────────────────
+	// ── Tegels: board groter dan bed (Task 15) ─────────────────────────────────
 	//
 	// For a board that is itself bigger than the bed, "falls off the bed" is not an error
 	// but a method — that is exactly what tiling exists for. The same comparison as
-	// `buitenstaanders` below, but on the sheet itself in
+	// `outsiders` below, but on the sheet itself in
 	// place of on a shape inside it.
 	/**
 	 * The seam whose marks you are tapping *now*, or null when no series is running.
@@ -507,13 +507,13 @@
 		tiling?.load();
 	});
 
-	let tegelLayout = $derived(tiling?.layout ?? null);
+	let tileLayout = $derived(tiling?.layout ?? null);
 	let huidigeTegel = $derived(tiling?.run?.current ?? -1);
 	let klareTegels = $derived(new Set(tiling?.run?.done ?? []));
 
 	let tegelPositie = $derived.by(() => {
 		const m = new Map<string, Tile>();
-		for (const t of tegelLayout?.tiles ?? []) m.set(`${t.row},${t.column}`, t);
+		for (const t of tileLayout?.tiles ?? []) m.set(`${t.row},${t.column}`, t);
 		return m;
 	});
 
@@ -522,7 +522,7 @@
 	 *  continuous line. */
 	let tegelNaden = $derived.by(() => {
 		const lijnen: { x1: number; y1: number; x2: number; y2: number }[] = [];
-		for (const t of tegelLayout?.tiles ?? []) {
+		for (const t of tileLayout?.tiles ?? []) {
 			const rechts = tegelPositie.get(`${t.row},${t.column + 1}`);
 			if (rechts)
 				lijnen.push({ x1: t.burn.x1_mm, y1: t.burn.y0_mm, x2: t.burn.x1_mm, y2: t.burn.y1_mm });
@@ -574,7 +574,7 @@
 
 	function moveNode(event: PointerEvent) {
 		if (!nodeDrag) return;
-		const at = snapPunt(pointerMm(event, true), event);
+		const at = snapped(pointerMm(event, true), event);
 		nodeDrag = { ...nodeDrag, x: at.x, y: at.y };
 	}
 
@@ -639,7 +639,7 @@
 	 * snapping looks wrong. The path data is in Tats, so the shift in mm has to go back to
 	 * that.
 	 */
-	function verschuiving(id: string) {
+	function offset(id: string) {
 		if (!drag || !preview || !design.isSelected(id)) return undefined;
 		const per = design.design?.units_per_mm ?? 1;
 		if (drag.mode === 'move') return `translate(${drag.dx * per} ${drag.dy * per})`;
@@ -712,7 +712,7 @@
 	function drawAt(event: MouseEvent) {
 		// Placing snaps just as well as dragging: a new shape should land on the grid line
 		// where you put it, not 3.7 mm beside it.
-		const at = snapPunt(pointerMm(event), event);
+		const at = snapped(pointerMm(event), event);
 		const half = DEFAULT_MM / 2;
 		if (tool === 'rect') {
 			onDrawn?.({
@@ -777,7 +777,7 @@
 		if (drag.mode === 'rotate') {
 			const now = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX);
 			let degrees = ((now - drag.startAngle) * 180) / Math.PI;
-			// Shift klikt vast op stappen van 15 graden.
+			// Shift klikt vast op steps from 15 graden.
 			if (event.shiftKey) degrees = Math.round(degrees / 15) * 15;
 			drag.angle = degrees;
 			return;
@@ -785,27 +785,27 @@
 		let dx = (event.clientX - drag.startX) * mmPerPixel();
 		let dy = (event.clientY - drag.startY) * mmPerPixel();
 
-		if (snapUit(event)) {
+		if (snapOff(event)) {
 			guides = [];
 		} else if (drag.mode === 'move') {
 			// Verplaatsen: randen én hartlijnen mogen vastklikken, per as apart.
-			const uit = snapBox(drag.origin, { dx, dy }, targets, snapGrid, snapTolerance);
-			dx = uit.dx;
-			dy = uit.dy;
-			guides = uit.guides;
+			const off = snapBox(drag.origin, { dx, dy }, targets, snapGrid, snapTolerance);
+			dx = off.dx;
+			dy = off.dy;
+			guides = off.guides;
 		} else {
 			// Scaling: only the corner you are holding. The opposite corner stays put, so
 			// it has no business among the candidates.
 			const links = drag.corner % 2 === 0;
 			const boven = drag.corner < 2;
-			const hoek = {
+			const corner = {
 				x: (links ? drag.origin.x : drag.origin.x + drag.origin.width) + dx,
 				y: (boven ? drag.origin.y : drag.origin.y + drag.origin.height) + dy
 			};
-			const uit = snapPoint(hoek, targets, snapGrid, snapTolerance);
-			dx += uit.x - hoek.x;
-			dy += uit.y - hoek.y;
-			guides = uit.guides;
+			const off = snapPoint(corner, targets, snapGrid, snapTolerance);
+			dx += off.x - corner.x;
+			dy += off.y - corner.y;
+			guides = off.guides;
 		}
 
 		drag.dx = dx;
@@ -999,7 +999,7 @@
 		)
 	);
 
-	// ── Buiten het bed of buiten het vel ───────────────────────────────────────
+	// ── Buiten het bed of buiten het sheet ───────────────────────────────────────
 	//
 	// Gap C2: a shape that crosses the bed or the sheet was reported nowhere. Two
 	// different errors, and the difference counts: off the bed the machine *cannot* go,
@@ -1009,21 +1009,21 @@
 
 	function buitenKader(
 		box: { x: number; y: number; width: number; height: number },
-		kader: { width: number; height: number }
+		frame: { width: number; height: number }
 	) {
 		return (
 			box.x < -RAND_SPELING ||
 			box.y < -RAND_SPELING ||
-			box.x + box.width > kader.width + RAND_SPELING ||
-			box.y + box.height > kader.height + RAND_SPELING
+			box.x + box.width > frame.width + RAND_SPELING ||
+			box.y + box.height > frame.height + RAND_SPELING
 		);
 	}
 
 	/** Per element: does it fall off the bed, or only off the sheet? */
-	let buitenstaanders = $derived.by(() => {
+	let outsiders = $derived.by(() => {
 		const perMm = design.design?.units_per_mm;
-		const uit = new Map<string, 'bed' | 'vel'>();
-		if (!perMm) return uit;
+		const off = new Map<string, 'bed' | 'sheet'>();
+		if (!perMm) return off;
 		for (const element of design.elements) {
 			if (!element.bounds || element.hidden) continue;
 			// Only work that really goes into the machine later. A shape that is in no
@@ -1034,15 +1034,15 @@
 			const streek = design.strokeFor(element);
 			if (streek.dashed || streek.dimmed || !streek.visible) continue;
 			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
-			const doos = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
-			if (buitenKader(doos, bed)) uit.set(element.id, 'bed');
-			else if (sheet && buitenKader(doos, sheet)) uit.set(element.id, 'vel');
+			const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+			if (buitenKader(box, bed)) off.set(element.id, 'bed');
+			else if (sheet && buitenKader(box, sheet)) off.set(element.id, 'sheet');
 		}
-		return uit;
+		return off;
 	});
 
-	let buitenBed = $derived([...buitenstaanders.values()].filter((v) => v === 'bed').length);
-	let buitenVel = $derived([...buitenstaanders.values()].filter((v) => v === 'vel').length);
+	let buitenBed = $derived([...outsiders.values()].filter((v) => v === 'bed').length);
+	let offSheet = $derived([...outsiders.values()].filter((v) => v === 'sheet').length);
 
 	// ── Layer numbers beside the shape (gap C6) ───────────────────────────────
 	//
@@ -1057,14 +1057,14 @@
 	// and it would not say *which* of the four cut layers you are looking at either. The
 	// number does say that, and it is exactly the same number as in the list and in the
 	// pre-flight (gap J7).
-	let nummersAan = $state(
+	let numbersOn = $state(
 		typeof window === 'undefined' || localStorage.getItem('openkerf.laagnummers') !== 'uit'
 	);
 
 	function nummersSchakel() {
-		nummersAan = !nummersAan;
+		numbersOn = !numbersOn;
 		if (typeof window !== 'undefined') {
-			localStorage.setItem('openkerf.laagnummers', nummersAan ? 'aan' : 'uit');
+			localStorage.setItem('openkerf.laagnummers', numbersOn ? 'aan' : 'uit');
 		}
 	}
 
@@ -1075,8 +1075,8 @@
 	 * shape is a blot, and fifty blots make the bed unreadable. Anybody who wants to see
 	 * it up close zooms in — then they appear by themselves.
 	 */
-	let laagLabels = $derived.by(() => {
-		if (!nummersAan) return [];
+	let layerLabels = $derived.by(() => {
+		if (!numbersOn) return [];
 		const perMm = design.design?.units_per_mm;
 		if (!perMm) return [];
 		const labels = [];
@@ -1100,8 +1100,8 @@
 					beste = id;
 				}
 			}
-			const nummer = design.numberFor(beste);
-			if (!nummer) continue;
+			const number = design.numberFor(beste);
+			if (!number) continue;
 			const [x0, y0, x1, y1] = element.bounds.map((v) => v / perMm);
 			// Gap C8: a shape that is smaller on screen than the figure does not get one —
 			// with fifty small shapes the bed otherwise becomes a cloud of numbers that
@@ -1113,8 +1113,8 @@
 			if (klein && !design.isSelected(element.id)) continue;
 			labels.push({
 				id: element.id,
-				nummer,
-				kleur: streek.color,
+				number,
+				colour: streek.color,
 				x: x0,
 				y: y0,
 				dim: streek.dimmed
@@ -1138,7 +1138,7 @@
 	let snapGrid = $derived(subStep || rulerStep);
 
 	/**
-	 * De dozen van alle andere vormen, in mm.
+	 * De dozen from alle andere shapes, in mm.
 	 *
 	 * What you are dragging yourself does not count: a shape does not snap to itself.
 	 * Hidden shapes do not either — you cannot see them, so a guide line on them is
@@ -1155,7 +1155,7 @@
 	});
 
 	let targets = $derived(
-		surroundingTargets({ bed, vel: sheet, anderen: andereDozen })
+		surroundingTargets({ bed, sheet: sheet, anderen: andereDozen })
 	);
 
 	/** The guide lines that are visible *now*. Empty as soon as you let go. */
@@ -1170,10 +1170,10 @@
 	 * the whole bed.
 	 */
 	let guideLines = $derived.by(() => {
-		const marge = 14 * mmPerPx;
+		const margin = 14 * mmPerPx;
 		const live = preview ?? selection;
 		// Where the eye is: the thing you are moving, or otherwise the cursor.
-		const anker = live
+		const anchor = live
 			? {
 					x0: Math.min(live.x, live.x + live.width),
 					x1: Math.max(live.x, live.x + live.width),
@@ -1183,41 +1183,41 @@
 			: hover
 				? { x0: hover.x, x1: hover.x, y0: hover.y, y1: hover.y }
 				: { x0: 0, x1: bed.width, y0: 0, y1: bed.height };
-		const klem = (v: number, laag: number, hoog: number) => Math.min(Math.max(v, laag), hoog);
+		const clamp = (v: number, layer: number, high: number) => Math.min(Math.max(v, layer), high);
 
 		return guides.map((g) => {
-			let van = 0;
-			let tot = g.axis === 'x' ? bed.height : bed.width;
+			let from = 0;
+			let until = g.axis === 'x' ? bed.height : bed.width;
 			if (g.span) {
-				van = Math.min(g.span[0], g.axis === 'x' ? anker.y0 : anker.x0);
-				tot = Math.max(g.span[1], g.axis === 'x' ? anker.y1 : anker.x1);
-				van -= marge;
-				tot += marge;
+				from = Math.min(g.span[0], g.axis === 'x' ? anchor.y0 : anchor.x0);
+				until = Math.max(g.span[1], g.axis === 'x' ? anchor.y1 : anchor.x1);
+				from -= margin;
+				until += margin;
 			}
 			// The little word hangs off the shape you are moving, not off the end of the
 			// line: for a line that runs across the whole bed that end fell behind the
 			// right-hand panel and you read "bed ed…".
-			const tekst = SNAP_LABEL[g.kind];
-			const breed = tekst.length * labelSize * 0.55;
+			const text = SNAP_LABEL[g.kind];
+			const wide = text.length * labelSize * 0.55;
 			const vertical = g.axis === 'x';
-			let tx = vertical ? g.pos : anker.x1 + labelSize * 0.5;
-			let anchor = vertical ? 'middle' : 'start';
-			if (!vertical && tx + breed > bed.width) {
-				tx = anker.x0 - labelSize * 0.5;
-				anchor = 'end';
+			let tx = vertical ? g.pos : anchor.x1 + labelSize * 0.5;
+			let textAnchor = vertical ? 'middle' : 'start';
+			if (!vertical && tx + wide > bed.width) {
+				tx = anchor.x0 - labelSize * 0.5;
+				textAnchor = 'end';
 			}
 			return {
 				key: `${g.axis}:${g.kind}:${g.pos.toFixed(3)}`,
-				label: tekst,
-				x1: vertical ? g.pos : van,
-				x2: vertical ? g.pos : tot,
-				y1: vertical ? van : g.pos,
-				y2: vertical ? tot : g.pos,
-				tx: vertical ? klem(tx, breed / 2, bed.width - breed / 2) : klem(tx, 0, bed.width),
+				label: text,
+				x1: vertical ? g.pos : from,
+				x2: vertical ? g.pos : until,
+				y1: vertical ? from : g.pos,
+				y2: vertical ? until : g.pos,
+				tx: vertical ? clamp(tx, wide / 2, bed.width - wide / 2) : clamp(tx, 0, bed.width),
 				ty: vertical
-					? klem(anker.y0 - labelSize * 1.1, labelSize, bed.height - labelSize * 0.3)
-					: klem(g.pos - labelSize * 0.4, labelSize, bed.height - labelSize * 0.3),
-				anchor
+					? clamp(anchor.y0 - labelSize * 1.1, labelSize, bed.height - labelSize * 0.3)
+					: clamp(g.pos - labelSize * 0.4, labelSize, bed.height - labelSize * 0.3),
+				anchor: textAnchor
 			};
 		});
 	});
@@ -1232,7 +1232,7 @@
 		typeof window === 'undefined' || localStorage.getItem('openkerf.snap') !== 'uit'
 	);
 
-	function snapSchakel() {
+	function snapToggle() {
 		snapOn = !snapOn;
 		guides = [];
 		if (typeof window !== 'undefined') {
@@ -1246,19 +1246,19 @@
 	 * modifier that does nothing as soon as you have switched the feature off is a dead
 	 * key.
 	 */
-	function snapUit(event: { altKey?: boolean } | null | undefined) {
+	function snapOff(event: { altKey?: boolean } | null | undefined) {
 		return snapOn === (event?.altKey === true);
 	}
 
-	/** Een los point vastklikken en meteen de hulplijnen zetten. */
-	function snapPunt(at: { x: number; y: number }, event?: { altKey?: boolean } | null) {
-		if (snapUit(event)) {
+	/** Snapping a single point and setting the guide lines at the same time. */
+	function snapped(at: { x: number; y: number }, event?: { altKey?: boolean } | null) {
+		if (snapOff(event)) {
 			guides = [];
 			return at;
 		}
-		const uit = snapPoint(at, targets, snapGrid, snapTolerance);
-		guides = uit.guides;
-		return { x: uit.x, y: uit.y };
+		const off = snapPoint(at, targets, snapGrid, snapTolerance);
+		guides = off.guides;
+		return { x: off.x, y: off.y };
 	}
 
 	// The grid did not follow the zoom: it was fixed at 50 mm while the ruler jumped to
@@ -1296,11 +1296,11 @@
 			]
 		},
 		{
-			items: [25, 50, 100, 200, 400].map((waarde) => ({
-				id: `z-${waarde}`,
-				label: `${waarde} %`,
-				on: procent === waarde,
-				run: () => naarProcent(waarde)
+			items: [25, 50, 100, 200, 400].map((value) => ({
+				id: `z-${value}`,
+				label: `${value} %`,
+				on: procent === value,
+				run: () => naarProcent(value)
 			}))
 		}
 	]);
@@ -1314,15 +1314,15 @@
 	 * the block as a whole. Measure, do not calculate: the height differs per device,
 	 * because on touch screens the buttons are bigger and the line breaks.
 	 */
-	let onderrandHoogte = $state(0);
+	let bottomEdgeHeight = $state(0);
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		document.documentElement.style.setProperty('--palette-height', `${onderrandHoogte}px`);
+		document.documentElement.style.setProperty('--palette-height', `${bottomEdgeHeight}px`);
 		return () => document.documentElement.style.removeProperty('--palette-height');
 	});
 
 	/**
-	 * Het handvat naar buiten.
+	 * Het handvat to buiten.
 	 *
 	 * The page needs this for the canvas context menu and for the shortcuts; those are
 	 * handled there because there is one table of shortcuts. The alternative was lifting
@@ -1338,9 +1338,9 @@
 				else honderd();
 			},
 			step: (factor: number) => zoomAt(factor),
-			snap: snapSchakel,
+			snap: snapToggle,
 			layerNumbers: nummersSchakel,
-			state: () => ({ snap: snapOn, layerNumbers: nummersAan })
+			state: () => ({ snap: snapOn, layerNumbers: numbersOn })
 		};
 		return () => (control = null);
 	});
@@ -1358,17 +1358,17 @@
 </script>
 
 <!-- The zoom shortcuts used to be here and have moved to the page: since there is one
-     table of shortcuts (`$lib/acties.ts`) there should also be one place that handles
+     table of shortcuts (`$lib/actions.ts`) there should also be one place that handles
      them. What stays here is what only exists here: finishing the pen, and the space bar
      you pan with. -->
 <svelte:window
 	onkeydown={(e) => {
-		const doel = e.target as HTMLElement | null;
-		const tikt = doel && /^(INPUT|TEXTAREA|SELECT)$/.test(doel.tagName);
-		if (e.key === ' ' && !tikt && !spatie) {
+		const target = e.target as HTMLElement | null;
+		const ticking = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+		if (e.key === ' ' && !ticking && !space) {
 			// Prevent the page scrolling along as long as space is the pan grip.
 			e.preventDefault();
-			spatie = true;
+			space = true;
 			return;
 		}
 		if (tool !== 'pen' || !penPoints.length) return;
@@ -1382,24 +1382,24 @@
 	}}
 	onkeyup={(e) => {
 		if (e.key === ' ') {
-			spatie = false;
+			space = false;
 			panning = null;
 		}
 	}}
 	onblur={() => {
 		// The window loses focus with space still held: then the keyup never comes and
 		// the canvas stays stuck in pan mode.
-		spatie = false;
+		space = false;
 		panning = null;
 	}}
 />
 
-<!-- Wiel zoomt, alt of middelste knop pant. Toetsenbord: de zoomknoppen
-     rechtsonder zijn gewone knoppen. -->
+<!-- Wiel zoomt, alt of middelste button pant. Toetsenbord: de zoomknoppen
+     rechtsonder zijn gewone buttons. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="canvas-wrap"
-	class:pannen={spatie}
+	class:panning={space}
 	bind:this={frame}
 	onwheel={(e) => {
 		e.preventDefault();
@@ -1407,7 +1407,7 @@
 	}}
 	onpointerdown={(e) => {
 		// Middle button, alt, or space held: drag to pan.
-		if (e.button === 1 || e.altKey || (spatie && e.button === 0)) {
+		if (e.button === 1 || e.altKey || (space && e.button === 0)) {
 			e.preventDefault();
 			startPan(e);
 		}
@@ -1543,11 +1543,11 @@
 				onclick={(e) => {
 					if (e.target !== e.currentTarget) return;
 					if (tool === 'pen' && canEdit) {
-						penClick(snapPunt(pointerMm(e), e));
+						penClick(snapped(pointerMm(e), e));
 						return;
 					}
 					if (tool === 'measure') {
-						const at = snapPunt(pointerMm(e), e);
+						const at = snapped(pointerMm(e), e);
 						if (!measureFrom || measureTo) {
 							measureFrom = at;
 							measureTo = null;
@@ -1576,17 +1576,17 @@
 					// Above an element as well: dragging draws a frame, clicking without
 					// dragging selects. Without this you could no longer draw a selection
 					// inside a large frame as soon as that frame became clickable.
-					if (tool === 'select' && !e.altKey && !spatie && e.button === 0) {
+					if (tool === 'select' && !e.altKey && !space && e.button === 0) {
 						startBand(e);
 					}
 				}}
 				onpointermove={(e) => {
 					// Where the tool would land, *with* snapping — that way you see the
 						// guide line before the click and not only afterwards.
-						if (tool === 'measure' && measureFrom && !measureTo) hover = snapPunt(pointerMm(e), e);
-					else if (tool === 'pen' && penPoints.length) hover = snapPunt(pointerMm(e), e);
-					else if (lineStart) hover = snapPunt(pointerMm(e), e);
-						else if (canEdit && tekengereedschap) snapPunt(pointerMm(e), e);
+						if (tool === 'measure' && measureFrom && !measureTo) hover = snapped(pointerMm(e), e);
+					else if (tool === 'pen' && penPoints.length) hover = snapped(pointerMm(e), e);
+					else if (lineStart) hover = snapped(pointerMm(e), e);
+						else if (canEdit && tekengereedschap) snapped(pointerMm(e), e);
 					moveBand(e);
 				}}
 				onpointerup={endBand}
@@ -1598,10 +1598,10 @@
 				     says *which* operation it was. On top of a 1.2 px line the trail in
 				     --text-2 was literally invisible on the trial job; measured and
 				     weggegooid. -->
-				{#if spoor}
+				{#if trail}
 					<polyline
-						class="spoor-baan"
-						points={spoor}
+						class="trail-baan"
+						points={trail}
 						vector-effect="non-scaling-stroke"
 						aria-hidden="true"
 					/>
@@ -1612,40 +1612,40 @@
 				     than what is still to come, and the marks as a circle-with-cross. That way
 				     you see at a glance what is already down and what is still coming. Only
 				     with two or more tiles: with one tile there is nothing to divide. -->
-				{#if tegelLayout && tegelLayout.tiles.length > 1}
-					<g class="tegels" aria-hidden="true">
-						{#each tegelLayout.tiles as tegel (tegel.index)}
-							{#if tegel.index !== huidigeTegel}
+				{#if tileLayout && tileLayout.tiles.length > 1}
+					<g class="tiles" aria-hidden="true">
+						{#each tileLayout.tiles as tile (tile.index)}
+							{#if tile.index !== huidigeTegel}
 								<rect
-									class="tegel-vlak"
-									class:tegel-klaar={klareTegels.has(tegel.index)}
-									x={tegel.burn.x0_mm}
-									y={tegel.burn.y0_mm}
-									width={tegel.burn.x1_mm - tegel.burn.x0_mm}
-									height={tegel.burn.y1_mm - tegel.burn.y0_mm}
+									class="tile-area"
+									class:tile-ready={klareTegels.has(tile.index)}
+									x={tile.burn.x0_mm}
+									y={tile.burn.y0_mm}
+									width={tile.burn.x1_mm - tile.burn.x0_mm}
+									height={tile.burn.y1_mm - tile.burn.y0_mm}
 								/>
 							{/if}
 						{/each}
-						{#each tegelNaden as naad, i (i)}
+						{#each tegelNaden as seam, i (i)}
 							<line
-								class="tegel-naad"
-								x1={naad.x1}
-								y1={naad.y1}
-								x2={naad.x2}
-								y2={naad.y2}
+								class="tile-seam"
+								x1={seam.x1}
+								y1={seam.y1}
+								x2={seam.x2}
+								y2={seam.y2}
 								vector-effect="non-scaling-stroke"
 							/>
 						{/each}
-						{#each tegelLayout.marks as merk (merk.boundary)}
-							{#each merk.points as point, i (i)}
+						{#each tileLayout.marks as mark (mark.boundary)}
+							{#each mark.points as point, i (i)}
 								<!-- The marks of the seam you are tapping *now* are at full strength;
 								     the rest dim. Without that difference, three tiles give four marks
 								     called 1, 2, 1, 2, and then a number is just as confusing as a
 								     word for a position. The marks you tap are those of the seam before
 								     the current tile — that one burned the previous tile. -->
 								<g
-									class="tegel-merk"
-									class:active={actieveGrens === null || merk.boundary === actieveGrens}
+									class="tile-mark"
+									class:active={actieveGrens === null || mark.boundary === actieveGrens}
 								>
 									<circle cx={point.x_mm} cy={point.y_mm} r={4 * mmPerPx} />
 									<line
@@ -1666,10 +1666,10 @@
 									     millimetres has to be counter-scaled, hence `mmPerPx` in the
 									     font size. -->
 									<text
-										x={merk.along_y ? point.x_mm : point.x_mm + 7 * mmPerPx}
-										y={merk.along_y ? point.y_mm + 13 * mmPerPx : point.y_mm + 4 * mmPerPx}
+										x={mark.along_y ? point.x_mm : point.x_mm + 7 * mmPerPx}
+										y={mark.along_y ? point.y_mm + 13 * mmPerPx : point.y_mm + 4 * mmPerPx}
 										font-size={11 * mmPerPx}
-										text-anchor={merk.along_y ? 'middle' : 'start'}
+										text-anchor={mark.along_y ? 'middle' : 'start'}
 									>{i + 1}</text>
 								</g>
 							{/each}
@@ -1684,14 +1684,14 @@
 						{#each design.elements as element (element.id)}
 							<!-- While moving, the shape follows the frame; without that the guide
 							     lines point at an edge that is not there yet. -->
-							<g transform={verschuiving(element.id)}>
+							<g transform={offset(element.id)}>
 							{#if !element.hidden && element.image && design.strokeFor(element).visible}
-								{#if buitenstaanders.get(element.id)}
+								{#if outsiders.get(element.id)}
 									<!-- The same message as for a path, but an image has no contour to
 									     make glow: then the frame is the subject. -->
 									<rect
 										class="buiten-gloed"
-										class:velrand={buitenstaanders.get(element.id) === 'vel'}
+										class:sheetedge={outsiders.get(element.id) === 'sheet'}
 										x={element.image.x_mm * (design.design?.units_per_mm ?? 1)}
 										y={element.image.y_mm * (design.design?.units_per_mm ?? 1)}
 										width={element.image.width_mm * (design.design?.units_per_mm ?? 1)}
@@ -1756,7 +1756,7 @@
 								     there but never mistake it for work that is going into the
 								     machine. -->
 								{@const streek = design.strokeFor(element)}
-								{@const buiten = buitenstaanders.get(element.id)}
+								{@const buiten = outsiders.get(element.id)}
 								{#if buiten}
 									<!-- Gap C2: a glow in the colour of the objection, running under
 									     the shape. So the layer colour stays visible — you still have
@@ -1765,13 +1765,13 @@
 									     a panel you can collapse. -->
 									<path
 										class="buiten-gloed"
-										class:velrand={buiten === 'vel'}
+										class:sheetedge={buiten === 'sheet'}
 										d={element.path}
 										fill="none"
 										vector-effect="non-scaling-stroke"
 									/>
 								{/if}
-								<!-- A raster layer burns the area away, not an outline. Showing that
+								<!-- A grid layer burns the area away, not an outline. Showing that
 								     as a line says something other than what happens, so such a shape
 								     gets its area: in the layer colour, half transparent, so that you
 								     still see through it what lies underneath and the contour itself
@@ -1779,7 +1779,7 @@
 								     that is there anyway — no second drawing, no rasteriser in the
 								     loop, so the cost per pointer move does not change. -->
 								<path
-									class:vlak={streek.filled}
+									class:area={streek.filled}
 									class:gedempt={streek.dimmed}
 									d={element.path}
 									fill={streek.filled ? streek.color : 'none'}
@@ -1838,15 +1838,15 @@
 					     because the text has to stay the same size at every zoom level. The
 					     figure gets a border in the bed colour (`paint-order`), otherwise it
 					     disappears against a grid line or against the shape below it. -->
-					{#each laagLabels as label (label.id)}
+					{#each layerLabels as label (label.id)}
 						<!-- @svg-space: millimetre space, not CSS pixels; `labelSize` is the
 						     converted-back screen size of --text-xs. -->
 						<text
-							style="font-size: {labelSize}px; fill: {label.kleur}; fill-opacity: {label.dim ? 0.5 : 1}"
+							style="font-size: {labelSize}px; fill: {label.colour}; fill-opacity: {label.dim ? 0.5 : 1}"
 							class="laagnummer mono"
 							x={label.x + 2 * mmPerPx}
 							y={label.y - 3 * mmPerPx}
-						>{label.nummer}</text>
+						>{label.number}</text>
 					{/each}
 
 					<!-- Selection contour: the kerf line. Statically dashed, and only animated
@@ -1971,17 +1971,17 @@
 				     catch no pointer. -->
 				<!-- The label is at full --text-xs (11 px): making it smaller to win room is
 				     exactly what the pixel judge rejects. -->
-				{#each guideLines as lijn (lijn.key)}
+				{#each guideLines as line (line.key)}
 					<g class="guide">
-						<line x1={lijn.x1} y1={lijn.y1} x2={lijn.x2} y2={lijn.y2} />
+						<line x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} />
 						<text
 							class="mono"
-							x={lijn.tx}
-							y={lijn.ty}
-								text-anchor={lijn.anchor}
+							x={line.tx}
+							y={line.ty}
+								text-anchor={line.anchor}
 							style="font-size: {labelSize}px"
 						>
-							{lijn.label}
+							{line.label}
 						</text>
 					</g>
 				{/each}
@@ -2136,7 +2136,7 @@
 				     until it covers half the bed. -->
 				<!-- @svg-space: axis letters in millimetre space, converted back to the screen
 				     size of --text-xs. -->
-				<g class="oorsprong" aria-hidden="true">
+				<g class="originMark" aria-hidden="true">
 					<!-- Two axes with an arrowhead: X to the right, Y downwards. That is the
 					     direction in which the machine counts, so that is what is drawn. -->
 					<line x1="0" y1="0" x2={14 * mmPerPx} y2="0" />
@@ -2162,44 +2162,44 @@
 				     is the head and the mark at 0,0 (C5) is *also* a fixed sign, so this third
 				     point has to be distinguishable from both. All measures converted back to
 				     screen pixels — otherwise the cross grows with the zoom. -->
-				{#if nulstand}
-					<g class="nulpunt-merk" aria-hidden="true">
+				{#if originPoint}
+					<g class="origin-mark" aria-hidden="true">
 						<line
-							x1={nulstand.x_mm - 9 * mmPerPx}
-							y1={nulstand.y_mm}
-							x2={nulstand.x_mm - 3 * mmPerPx}
-							y2={nulstand.y_mm}
+							x1={originPoint.x_mm - 9 * mmPerPx}
+							y1={originPoint.y_mm}
+							x2={originPoint.x_mm - 3 * mmPerPx}
+							y2={originPoint.y_mm}
 						/>
 						<line
-							x1={nulstand.x_mm + 3 * mmPerPx}
-							y1={nulstand.y_mm}
-							x2={nulstand.x_mm + 9 * mmPerPx}
-							y2={nulstand.y_mm}
+							x1={originPoint.x_mm + 3 * mmPerPx}
+							y1={originPoint.y_mm}
+							x2={originPoint.x_mm + 9 * mmPerPx}
+							y2={originPoint.y_mm}
 						/>
 						<line
-							x1={nulstand.x_mm}
-							y1={nulstand.y_mm - 9 * mmPerPx}
-							x2={nulstand.x_mm}
-							y2={nulstand.y_mm - 3 * mmPerPx}
+							x1={originPoint.x_mm}
+							y1={originPoint.y_mm - 9 * mmPerPx}
+							x2={originPoint.x_mm}
+							y2={originPoint.y_mm - 3 * mmPerPx}
 						/>
 						<line
-							x1={nulstand.x_mm}
-							y1={nulstand.y_mm + 3 * mmPerPx}
-							x2={nulstand.x_mm}
-							y2={nulstand.y_mm + 9 * mmPerPx}
+							x1={originPoint.x_mm}
+							y1={originPoint.y_mm + 3 * mmPerPx}
+							x2={originPoint.x_mm}
+							y2={originPoint.y_mm + 9 * mmPerPx}
 						/>
 						<text
 							class="as mono"
-							x={nulstand.x_mm + 11 * mmPerPx}
-							y={nulstand.y_mm - 5 * mmPerPx}
+							x={originPoint.x_mm + 11 * mmPerPx}
+							y={originPoint.y_mm - 5 * mmPerPx}
 							style="font-size: {labelSize}px">0</text
 						>
 					</g>
-					{#if brandtHier}
+					{#if burnsHere}
 						<!-- Where the work lands. Without this frame the zero point only says
 						     that something shifts and not where to, and then you have to work it
 						     out while what you wanted was to be able to look. -->
-						<g class="brandt-hier" aria-hidden="true">
+						<g class="burns-hier" aria-hidden="true">
 							<!-- The sheet moves along. That is not decoration but the meaning of
 							     the zero point: you put it on the corner of the material that is in
 							     there, so the material is there. Without this frame the work sat
@@ -2207,25 +2207,25 @@
 							     — a drawing that contradicts itself. -->
 							{#if sheet}
 								<rect
-									class="velschets"
-									x={nulstand.x_mm}
-									y={nulstand.y_mm}
+									class="sheetsketch"
+									x={originPoint.x_mm}
+									y={originPoint.y_mm}
 									width={sheet.width}
 									height={sheet.height}
 									vector-effect="non-scaling-stroke"
 								/>
 							{/if}
 							<rect
-								x={brandtHier.x}
-								y={brandtHier.y}
-								width={brandtHier.width}
-								height={brandtHier.height}
+								x={burnsHere.x}
+								y={burnsHere.y}
+								width={burnsHere.width}
+								height={burnsHere.height}
 								vector-effect="non-scaling-stroke"
 							/>
 							<text
 								class="mono"
-								x={brandtHier.x + 2 * mmPerPx}
-								y={brandtHier.y - 3 * mmPerPx}
+								x={burnsHere.x + 2 * mmPerPx}
+								y={burnsHere.y - 3 * mmPerPx}
 								style="font-size: {labelSize}px">{t('canvas.burnsHere')}</text
 							>
 						</g>
@@ -2234,10 +2234,10 @@
 
 				<!-- The fresh piece, on top: where the head is *now*. Kept short (see
 				     VERS_PUNTEN) so that the difference stays between "it has been here"
-				     en "hier is hij nu". -->
+				     en "hier is hij now". -->
 				{#if spoorKop}
-					<g class="spoor" aria-hidden="true">
-						<polyline class="vers" points={spoorKop} vector-effect="non-scaling-stroke" />
+					<g class="trail" aria-hidden="true">
+						<polyline class="fresh" points={spoorKop} vector-effect="non-scaling-stroke" />
 					</g>
 				{/if}
 
@@ -2284,9 +2284,9 @@
 		     because with fifty shapes on a sheet it is a cloud of figures. -->
 		<button
 			class="snap"
-			class:aan={nummersAan}
-			aria-pressed={nummersAan}
-			title={nummersAan ? t('canvas.layerNumbers.on') : t('canvas.layerNumbers.off')}
+			class:on={numbersOn}
+			aria-pressed={numbersOn}
+			title={numbersOn ? t('canvas.layerNumbers.on') : t('canvas.layerNumbers.off')}
 			aria-label={t('action.layerNumbers')}
 			onclick={nummersSchakel}
 		>
@@ -2300,11 +2300,11 @@
 		     does not say whether it is on or off. -->
 		<button
 			class="snap"
-			class:aan={snapOn}
+			class:on={snapOn}
 			aria-pressed={snapOn}
 			title={snapOn ? t('canvas.snap.on') : t('canvas.snap.off')}
 			aria-label={t('action.snap')}
-			onclick={snapSchakel}
+			onclick={snapToggle}
 		>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d="M6 4v8a6 6 0 0 0 12 0V4" />
@@ -2325,8 +2325,8 @@
 			aria-expanded={zoomMenu}
 			title={t('canvas.zoomLevels')}
 			onclick={(e) => {
-				const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
-				zoomMenuAt = { x: doos.left, y: doos.top - 8 };
+				const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+				zoomMenuAt = { x: box.left, y: box.top - 8 };
 				zoomMenu = !zoomMenu;
 			}}
 		>
@@ -2370,12 +2370,12 @@
      measurement the pill lay over this warning the moment it appeared (measured at
      1440: 34 px of overlap). One measurement for the whole bottom edge is the only
      one that holds, because there can be more than one strip. -->
-<div class="onderrand" bind:clientHeight={onderrandHoogte}>
+<div class="onderrand" bind:clientHeight={bottomEdgeHeight}>
 <!-- The node tool is pressed but does nothing: say why. Without this line the
      difference between "you still have to pick a shape" and "this shape cannot do
      it" was invisible, and both looked like a broken tool. -->
 {#if nodeReden}
-	<p class="tool-uitleg" role="status">
+	<p class="tool-hint" role="status">
 		{#if nodeReden === 'geen'}
 			{t('canvas.nodes.pickOne')}
 		{:else if nodeReden === 'meerdere'}
@@ -2392,9 +2392,9 @@
      of it. An image that promises more than it knows is worse than no image, so
      here is what you are looking at. Only during a job; outside one there is
      nothing to say. -->
-{#if job && spoor}
-	<p class="spoor-uitleg" role="status">
-		<span class="spoor-merk" aria-hidden="true"></span>
+{#if job && trail}
+	<p class="trail-hint" role="status">
+		<span class="trail-mark" aria-hidden="true"></span>
 		<!-- All the text in one child: with loose text nodes beside it every piece
 		     becomes a flex item of its own, and then "62%" sat in a column of its own
 		     next to a broken-off sentence on a tablet (measured at 1024). -->
@@ -2405,15 +2405,15 @@
 		>
 	</p>
 {/if}
-{#if plaatTeGroot || buitenBed || buitenVel}
-	<div class="buiten-strook" role="status">
+{#if plaatTeGroot || buitenBed || offSheet}
+	<div class="buiten-strip" role="status">
 		{#if plaatTeGroot}
 			<!-- Task 15: with a plate that is itself larger than the bed this is not a
 			     mistake but a way of working — the message becomes the offer to burn in
 			     tiles, instead of the ordinary "falls outside the bed" line (which
 			     would go off on nearly every shape here anyway). -->
-			<span class="regel aanbod">
-				<span class="teken" aria-hidden="true">!</span>
+			<span class="row aanbod">
+				<span class="sign" aria-hidden="true">!</span>
 				<span>{t('canvas.tooBig')}</span>
 				<button
 					class="btn subtle"
@@ -2425,17 +2425,17 @@
 				</button>
 			</span>
 		{:else if buitenBed}
-			<span class="regel bedrand">
-				<span class="teken" aria-hidden="true">!</span>
+			<span class="row bededge">
+				<span class="sign" aria-hidden="true">!</span>
 				<span>{t('canvas.outsideBed', { n: buitenBed })}</span>
 			</span>
 		{/if}
-		{#if buitenVel}
-			<span class="regel velrand">
-				<span class="teken" aria-hidden="true">!</span>
+		{#if offSheet}
+			<span class="row sheetedge">
+				<span class="sign" aria-hidden="true">!</span>
 				<span
 					>{t('canvas.outsideSheet', {
-						n: buitenVel,
+						n: offSheet,
 						sheet: sheet ? sheet.name : t('canvas.theSheet')
 					})}</span
 				>
@@ -2454,8 +2454,8 @@
 <style>
 	/* As long as space is held the cursor says what a click does now. Without that
 	   difference the canvas looks broken: you click and no frame appears. */
-	.canvas-wrap.pannen,
-	.canvas-wrap.pannen * {
+	.canvas-wrap.panning,
+	.canvas-wrap.panning * {
 		cursor: grab;
 	}
 	.canvas-wrap {
@@ -2631,24 +2631,24 @@
 	   the head marker — that was the very confusion — and in this system red means
 	   danger. This is a fixed point on the machine, so the app's text colour, half
 	   transparent so that it never shouts above the work. */
-	.oorsprong {
+	.originMark {
 		pointer-events: none;
 	}
-	.oorsprong line {
+	.originMark line {
 		stroke: var(--text-1);
 		stroke-width: 1.4;
 		vector-effect: non-scaling-stroke;
 		opacity: 0.55;
 	}
-	.oorsprong .point {
+	.originMark .point {
 		fill: var(--text-1);
 		opacity: 0.55;
 	}
-	.oorsprong .knoop {
+	.originMark .knoop {
 		fill: var(--text-1);
 		opacity: 0.8;
 	}
-	.oorsprong text {
+	.originMark text {
 		fill: var(--text-1);
 		opacity: 0.75;
 		font-family: var(--font-mono);
@@ -2658,7 +2658,7 @@
 		stroke-linejoin: round;
 		vector-effect: non-scaling-stroke;
 	}
-	/* A shape in a raster layer: that burns its area away, so we show the area. Half
+	/* A shape in a grid layer: that burns its area away, so we show the area. Half
 	   transparent, because you have to be able to see through it what lies underneath.
 
 	   The opacity differs per theme, and that is not taste but measurement. The same 38%
@@ -2667,21 +2667,21 @@
 	   2.12:1. It cannot go much higher: on a dark bed even a fully opaque layer colour
 	   only reaches ~2.65:1, and the area must not become opaque. The contour carries the
 	   shape; the fill only says what happens to it. */
-	.vlak {
+	.area {
 		fill-opacity: 0.38;
 	}
 
 	/* A layer set to "does not burn": visible, never to be mistaken for work that is
 	   going into the machine. The same rule as for the line beside it. */
-	.vlak.gedempt {
+	.area.gedempt {
 		fill-opacity: 0.14;
 	}
 
-	:global([data-theme='dark']) .vlak {
+	:global([data-theme='dark']) .area {
 		fill-opacity: 0.62;
 	}
 
-	:global([data-theme='dark']) .vlak.gedempt {
+	:global([data-theme='dark']) .area.gedempt {
 		fill-opacity: 0.24;
 	}
 
@@ -2712,12 +2712,12 @@
 	   workshop light. Dashed also suits what it says: the material under this shape
 	   stops. The shape itself stays solid — on this canvas dashed lines mean "is in no
 	   layer". */
-	.buiten-gloed.velrand {
+	.buiten-gloed.sheetedge {
 		stroke: var(--warn-solid);
 		stroke-dasharray: 3 3;
 		stroke-opacity: 0.55;
 	}
-	.buiten-strook {
+	.buiten-strip {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2) var(--space-3);
@@ -2725,7 +2725,7 @@
 		border-top: 1px solid var(--line);
 		background: var(--surface-1);
 	}
-	.buiten-strook .regel {
+	.buiten-strip .row {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-2);
@@ -2735,12 +2735,12 @@
 		color: var(--text-1);
 		border-left: 4px solid var(--danger-solid);
 	}
-	.buiten-strook .regel.velrand {
+	.buiten-strip .row.sheetedge {
 		border-left-color: var(--warn-solid);
 	}
 	/* The sign is the second encoding *beside* the colour: printed in black and white it
 	   is still an exclamation mark in a circle. */
-	.buiten-strook .teken {
+	.buiten-strip .sign {
 		flex: none;
 		width: 16px;
 		height: 16px;
@@ -2753,17 +2753,17 @@
 		color: var(--on-color);
 		background: var(--danger-solid);
 	}
-	.buiten-strook .regel.velrand .teken {
+	.buiten-strip .row.sheetedge .sign {
 		background: var(--warn-solid);
 		color: var(--void);
 	}
 	/* Task 15: this is not an error but an offer, so the accent instead of the danger or
 	   warning red, and a button with it instead of a sentence alone. */
-	.buiten-strook .regel.aanbod {
+	.buiten-strip .row.aanbod {
 		align-items: center;
 		border-left-color: var(--accent);
 	}
-	.buiten-strook .regel.aanbod .teken {
+	.buiten-strip .row.aanbod .sign {
 		background: var(--accent);
 		color: var(--on-color);
 	}
@@ -2786,7 +2786,7 @@
 	   layer, and we do not know that. */
 	/* The path covered: wide and soft, running under the design. Wide enough to read on a
 	   zoomed-out bed too, soft enough not to crowd out the layer colour above it. */
-	.spoor-baan {
+	.trail-baan {
 		fill: none;
 		stroke: var(--accent);
 		stroke-width: 6;
@@ -2799,45 +2799,45 @@
 	   still visible, not to be mistaken for where the head is now. A finished tile is a
 	   little less dimmed than what is still to come, so that "already burned" and "still
 	   coming" can be told apart without the step list too. */
-	.tegel-vlak {
+	.tile-area {
 		fill: color-mix(in oklab, var(--bed) 62%, transparent);
 		pointer-events: none;
 	}
-	.tegel-vlak.tegel-klaar {
+	.tile-area.tile-ready {
 		fill: color-mix(in oklab, var(--bed) 82%, transparent);
 	}
-	.tegel-naad {
+	.tile-seam {
 		stroke: var(--text-2);
 		stroke-width: 1.4;
 		stroke-dasharray: 6 4;
 		stroke-opacity: 0.7;
 		pointer-events: none;
 	}
-	.tegel-merk {
+	.tile-mark {
 		pointer-events: none;
 		/* Not the marks of the seam whose turn it is now. Without that difference three
 		   tiles give four marks called 1, 2, 1, 2, and a number is as confusing as a word
 		   for a position. When no series is running there is no "now" either and they all
-		   stand equally strong — then this is a plan. */
+		   state equally strong — then this is a plan. */
 		opacity: 0.35;
 	}
-	.tegel-merk.active {
+	.tile-mark.active {
 		opacity: 1;
 	}
-	.tegel-merk circle {
+	.tile-mark circle {
 		fill: none;
 		stroke: var(--text-1);
 		stroke-width: 1.4;
 		stroke-opacity: 0.75;
 		vector-effect: non-scaling-stroke;
 	}
-	.tegel-merk line {
+	.tile-mark line {
 		stroke: var(--text-1);
 		stroke-width: 1.4;
 		stroke-opacity: 0.75;
 		vector-effect: non-scaling-stroke;
 	}
-	.tegel-merk text {
+	.tile-mark text {
 		fill: var(--text-1);
 		fill-opacity: 0.8;
 		font-weight: 600;
@@ -2845,7 +2845,7 @@
 	}
 	/* The fresh piece in the accent: that is where the machine is working now, and it is
 	   the only piece you know for certain has just happened. */
-	.spoor polyline.vers {
+	.trail polyline.fresh {
 		stroke: var(--accent);
 		stroke-width: 1.6;
 		stroke-opacity: 0.9;
@@ -2863,12 +2863,12 @@
 		stroke-linecap: round;
 	}
 	/* ── The user's zero point (gap J12) ─────────────────────────────────────── */
-	.nulpunt-merk line {
+	.origin-mark line {
 		stroke: var(--text-1);
 		stroke-width: 1.4;
 		vector-effect: non-scaling-stroke;
 	}
-	.nulpunt-merk text {
+	.origin-mark text {
 		fill: var(--text-1);
 		paint-order: stroke;
 		stroke: var(--bed);
@@ -2878,7 +2878,7 @@
 	/* Where the work lands: dotted and muted, because it is not a shape but an
 	   announcement. Not in --danger or --warn — nothing is wrong; it is exactly what you
 	   asked for. */
-	.brandt-hier rect {
+	.burns-hier rect {
 		fill: none;
 		stroke: var(--text-1);
 		stroke-width: 1;
@@ -2887,11 +2887,11 @@
 	}
 	/* The sheet in its new place is one step softer than the work in it: it is the
 	   ground, not the subject. */
-	.brandt-hier rect.velschets {
+	.burns-hier rect.sheetsketch {
 		stroke-opacity: 0.3;
 		stroke-dasharray: 2 5;
 	}
-	.brandt-hier text {
+	.burns-hier text {
 		fill: var(--text-2);
 		paint-order: stroke;
 		stroke: var(--bed);
@@ -2900,7 +2900,7 @@
 	}
 	/* The same place and the same tone as the trail explanation: a line that says what
 	   you are looking at, not a warning. */
-	.tool-uitleg {
+	.tool-hint {
 		margin: 0;
 		padding: var(--space-2) var(--space-3);
 		font-size: var(--text-xs);
@@ -2908,7 +2908,7 @@
 		color: var(--text-2);
 		border-top: 1px solid var(--line-1);
 	}
-	.spoor-uitleg {
+	.trail-hint {
 		display: flex;
 		align-items: baseline;
 		gap: var(--space-2);
@@ -2921,7 +2921,7 @@
 	}
 	/* The little mark is the piece of line itself: that way you do not have to guess
 	   which line on the bed belongs to this sentence. */
-	.spoor-merk {
+	.trail-mark {
 		flex: none;
 		width: 22px;
 		height: 0;
@@ -3054,7 +3054,7 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.zoom .snap.aan {
+	.zoom .snap.on {
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 	}

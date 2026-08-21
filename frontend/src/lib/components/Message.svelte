@@ -17,7 +17,7 @@
 </script>
 
 {#if control.error}
-	<div class="melding" role="alert">
+	<div class="notice" role="alert">
 		<span class="stip" aria-hidden="true"></span>
 		<p>{control.error}</p>
 		<button aria-label={t('message.close')} onclick={() => (control.error = null)}>×</button>
@@ -25,7 +25,7 @@
 {/if}
 
 <style>
-	.melding {
+	.notice {
 		position: fixed;
 		/* Top right, below the top bar. At first it was in the bottom right and covered
 		   the zoom buttons; besides, most of these errors come from the top bar (open,

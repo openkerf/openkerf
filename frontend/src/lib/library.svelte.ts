@@ -147,7 +147,7 @@ export type ImportPreview = {
 	bundle: string;
 	exported_at: string | null;
 	bevat: Tally & { photos: number };
-	huidig: Tally;
+	current: Tally;
 	samenvoegen: {
 		materials: {
 			new: string[];

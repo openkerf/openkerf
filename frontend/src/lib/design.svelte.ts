@@ -112,7 +112,7 @@ export type DesignOperation = {
 	speed: number | null;
 	power: number | null;
 	passes: number | null;
-	/** Only meaningful on raster and image layers. */
+	/** Only meaningful on grid and image layers. */
 	dpi: number | null;
 	overscan: string | null;
 	bidirectional: boolean;
@@ -539,13 +539,13 @@ export class DesignStore {
 		/**
 		 * The shape is burned as an area, not as a line (gap R1).
 		 *
-		 * Where on a cut or engrave layer the head follows the contour, a raster
+		 * Where on a cut or engrave layer the head follows the contour, a grid
 		 * layer sweeps the *area* away. Showing that as an outline is not merely less
 		 * pretty — it is a different result from what comes out of the machine.
 		 *
-		 * Two conditions, because both decide what burns: the layer has to be a raster
+		 * Two conditions, because both decide what burns: the layer has to be a grid
 		 * layer *and* the shape has to have a fill. A shape without a fill burns only
-		 * its outline in a raster layer too — measured in
+		 * its outline in a grid layer too — measured in
 		 * `test_an_unfilled_shape_burns_its_outline_and_not_its_middle` — so that one
 		 * stays a line here.
 		 */

@@ -360,7 +360,7 @@ export class Watchdog {
 	 * The snapshot, every two seconds.
 	 *
 	 * This is where "done" and "not making progress" are detected. The bound for
-	 * that last one is deliberately generous: a raster with many small operations
+	 * that last one is deliberately generous: a grid with many small operations
 	 * may look idle for a while, and a false alarm on a machine that is burning is
 	 * worse than a late report.
 	 */

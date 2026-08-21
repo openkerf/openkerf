@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Een getal met − en +.
+	 * Een number met − en +.
 	 *
 	 * The browser's own spinner is two pixels tall and unusable with gloves on; beside a
 	 * running laser you would rather not type. See DESIGN-SYSTEM, "Number input is a
@@ -37,13 +37,13 @@
 	const id = $props.id();
 
 	function set(richting: number) {
-		const nu = Number(value);
-		const basis = Number.isFinite(nu) ? nu : 0;
-		let nieuw = basis + richting * step;
-		if (min !== null) nieuw = Math.max(min, nieuw);
-		if (max !== null) nieuw = Math.min(max, nieuw);
+		const now = Number(value);
+		const basis = Number.isFinite(now) ? now : 0;
+		let fresh = basis + richting * step;
+		if (min !== null) fresh = Math.max(min, fresh);
+		if (max !== null) fresh = Math.min(max, fresh);
 		// Drijvende komma laat 0.1 + 0.2 als 0.30000000000000004 achter.
-		value = String(Math.round(nieuw * 1000) / 1000);
+		value = String(Math.round(fresh * 1000) / 1000);
 		onchange?.(value);
 	}
 
@@ -75,8 +75,8 @@
 	}
 </script>
 
-<div class="veld">
-	<label class="naam" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
+<div class="field">
+	<label class="name" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
 	<span class="teller">
 		<button
 			type="button"
@@ -109,8 +109,8 @@
 	/* min-width: 0 at all three levels. Without that the input keeps its own width of
 	   ~20 characters and the stepper runs out of a narrow column — in the layers panel it
 	   stuck 28px outside the panel. */
-	.veld { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
-	.naam { font-size: var(--text-xs); color: var(--text-2); }
+	.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
+	.name { font-size: var(--text-xs); color: var(--text-2); }
 	.eenheid { color: var(--text-2); }
 	.teller { display: flex; min-width: 0; }
 	.teller input {

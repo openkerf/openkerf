@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * De pictogrammen voor schikken: uitlijnen, verdelen, spiegelen, groeperen
+	 * De pictogrammen voor schikken: aligning, verdelen, spiegelen, groeperen
 	 * en combineren.
 	 *
 	 * They are all deliberately drawn to the same grammar, because that is what makes an

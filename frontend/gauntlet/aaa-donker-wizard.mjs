@@ -31,8 +31,8 @@ const MACHINE = await fetch(`${BASE}/api/machines`, {
  * Twee lijsten, en dat onderscheid is het halve script.
  *
  * Een wizardstap zonder de queryparameter die hij nodig heeft rendert niet het
- * scherm maar de vangnetpagina ernaast: `/setup/klaar` zonder `?machine=` valt
- * in "Deze machine bestaat niet (meer)", en `/setup/naam?type=lhystudios` geeft
+ * scherm maar de vangnetpagina ernaast: `/setup/done` zonder `?machine=` valt
+ * in "Deze machine bestaat niet (meer)", en `/setup/name?type=lhystudios` geeft
  * een leeg naamveld met een uitgeschakelde knop, omdat `lhystudios` een
  * apparaatpad is en geen catalogussleutel. Meet je die, dan meet je de guard en
  * de disabled-staat — allebei het meten waard, geen van beide het scherm waar
@@ -46,17 +46,17 @@ const MACHINE = await fetch(`${BASE}/api/machines`, {
  */
 const ECHT = [
 	['overzicht', '/setup', 'Jouw machines'],
-	['soort', '/setup/soort', 'Wat voor machine'],
+	['soort', '/setup/kind', 'Wat voor machine'],
 	['type', '/setup/type', /model|type|kies/i],
-	['naam', `/setup/naam?type=${CATALOGUS}`, 'Geef de machine een naam'],
-	['instellen', `/setup/instellen?machine=${MACHINE}`, /werkgebied|bed|breedte/i],
-	['klaar', `/setup/klaar?machine=${MACHINE}`, 'staat klaar']
+	['naam', `/setup/name?type=${CATALOGUS}`, 'Geef de machine een naam'],
+	['instellen', `/setup/settings?machine=${MACHINE}`, /werkgebied|bed|breedte/i],
+	['klaar', `/setup/done?machine=${MACHINE}`, 'staat klaar']
 ];
 
 const VANGNET = [
-	['naam-leeg', '/setup/naam?type=lhystudios', 'Geef de machine een naam'],
-	['klaar-guard', '/setup/klaar', 'bestaat niet'],
-	['instellen-standaard', '/setup/instellen?machine=lhystudios', /werkgebied|bed|breedte/i]
+	['naam-leeg', '/setup/name?type=lhystudios', 'Geef de machine een naam'],
+	['klaar-guard', '/setup/done', 'bestaat niet'],
+	['instellen-standaard', '/setup/settings?machine=lhystudios', /werkgebied|bed|breedte/i]
 ];
 
 const ROUTES = [...ECHT, ...VANGNET];

@@ -44,8 +44,8 @@ self.addEventListener('activate', (event) => {
  */
 self.addEventListener('notificationclick', (event) => {
 	const worker = self as unknown as ServiceWorkerGlobalScope;
-	const melding = (event as NotificationEvent).notification;
-	melding.close();
+	const notice = (event as NotificationEvent).notification;
+	notice.close();
 	event.waitUntil(
 		worker.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((vensters) => {
 			for (const venster of vensters) {

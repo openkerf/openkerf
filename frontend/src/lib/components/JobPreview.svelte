@@ -351,7 +351,7 @@
 		     stop. Two equally red cards in a row (as it was) make those two
 		     equally bad, and then neither carries any weight. -->
 		{#if offBedCount}
-			<p class="melding offbed" role="alert">
+			<p class="notice offbed" role="alert">
 				<strong>{t('preview.outsideBed.title')}</strong>
 				{t('preview.outsideBed.body', {
 					n: offBedCount,
@@ -365,7 +365,7 @@
 			</p>
 		{/if}
 		{#if offSheetCount}
-			<p class="melding offsheet">
+			<p class="notice offsheet">
 				{t('preview.outsideSheet', {
 					n: offSheetCount,
 					sheet: sheet ? sheet.name : t('preview.sheetFallback')
@@ -373,7 +373,7 @@
 			</p>
 		{/if}
 		{#if silentCount}
-			<p class="melding silent">{t('preview.silent', { n: silentCount })}</p>
+			<p class="notice silent">{t('preview.silent', { n: silentCount })}</p>
 		{/if}
 	</div>
 
@@ -503,26 +503,26 @@
 		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 	}
-	.melding {
+	.notice {
 		margin-top: var(--space-2);
 		font-size: var(--text-xs);
 		line-height: 1.45;
 	}
-	.melding.offsheet,
-	.melding.offbed {
+	.notice.offsheet,
+	.notice.offbed {
 		color: var(--text-1);
 		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
 		border-radius: 0 var(--radius-field) var(--radius-field) 0;
 	}
-	.melding.offbed {
+	.notice.offbed {
 		border-left: 4px solid var(--danger-solid);
 		background: color-mix(in srgb, var(--danger) 18%, transparent);
 	}
-	.melding.offsheet {
+	.notice.offsheet {
 		border-left: 4px solid var(--warn-solid);
 		background: color-mix(in srgb, var(--warn) 18%, transparent);
 	}
-	.melding.silent {
+	.notice.silent {
 		color: var(--text-2);
 	}
 </style>

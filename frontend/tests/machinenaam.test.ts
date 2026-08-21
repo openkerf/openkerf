@@ -58,7 +58,7 @@ after(async () => {
 });
 
 async function noem(naam: string) {
-	await page.goto(`${BASE}/setup/naam?type=ruida-beta`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`${BASE}/setup/name?type=ruida-beta`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(1800);
 	await page.fill('input[type=text]', naam);
 	await page.waitForTimeout(500);
@@ -98,7 +98,7 @@ test('de voorgestelde naam is meteen vrij van botsingen', async (t) => {
 	assert.deepEqual([...labels].sort(), [NAAM, `${NAAM} (2)`]);
 
 	// En de standaardnaam op een vers scherm botst ook niet meer.
-	await page.goto(`${BASE}/setup/naam?type=ruida-beta`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`${BASE}/setup/name?type=ruida-beta`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(1800);
 	assert.equal(await page.getByRole('alert').count(), 0);
 });

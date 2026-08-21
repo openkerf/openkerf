@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Offset — een pad naar buiten of naar binnen zetten.
+	 * Offset — een pad to buiten of to binnen zetten.
 	 *
 	 * This went through `window.prompt('Offset in mm (negative = inwards)', '2')`. That is
 	 * the only place in the app where a browser dialog asked the question, and everything
@@ -18,20 +18,20 @@
 
 	let {
 		open = $bindable(false),
-		aantal = 0,
-		bezig = false,
+		count = 0,
+		busy = false,
 		onToepassen
 	}: {
 		open?: boolean;
-		aantal?: number;
-		bezig?: boolean;
+		count?: number;
+		busy?: boolean;
 		onToepassen: (afstandMm: number) => void;
 	} = $props();
 
 	let afstand = $state('2');
-	let waarde = $derived(Number(afstand));
-	let geldig = $derived(Number.isFinite(waarde) && waarde !== 0);
-	let richting = $derived(t(waarde > 0 ? 'offset.outward' : 'offset.inward'));
+	let value = $derived(Number(afstand));
+	let geldig = $derived(Number.isFinite(value) && value !== 0);
+	let richting = $derived(t(value > 0 ? 'offset.outward' : 'offset.inward'));
 </script>
 
 <Dialog title={t('offset.title')} bind:open width="400px">
@@ -43,28 +43,28 @@
 			     still have to work out which side is negative. -->
 			<p class="richting">
 				{#if geldig}
-					{t('offset.reading', { mm: i18n.number(Math.abs(waarde)), direction: richting })}
+					{t('offset.reading', { mm: i18n.number(Math.abs(value)), direction: richting })}
 				{:else}
 					{t('offset.fillIn')}
 				{/if}
 			</p>
 		</div>
-		<p class="regel">{t('offset.explain')}</p>
+		<p class="row">{t('offset.explain')}</p>
 	</div>
 
 	<div class="ask-actions">
 		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button
 			class="btn primary"
-			disabled={bezig || !geldig || !aantal}
-			onclick={() => onToepassen(waarde)}
+			disabled={busy || !geldig || !count}
+			onclick={() => onToepassen(value)}
 		>
-			{#if !aantal}
+			{#if !count}
 				{t('offset.make')}
 			{:else}
 				{t('offset.button', {
-					shapes: t('corners.shapes', { n: aantal }),
-					mm: Math.abs(waarde) ? i18n.number(Math.abs(waarde)) : '?',
+					shapes: t('corners.shapes', { n: count }),
+					mm: Math.abs(value) ? i18n.number(Math.abs(value)) : '?',
 					direction: richting
 				})}
 			{/if}
@@ -90,7 +90,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.regel {
+	.row {
 		margin: 0;
 		font-size: var(--text-xs);
 		line-height: 1.5;

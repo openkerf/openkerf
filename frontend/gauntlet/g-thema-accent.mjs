@@ -22,9 +22,9 @@ const schermen = [
 	{ naam: 'werkgebied · bewerken', path: '/?tab=design' },
 	{ naam: 'werkgebied · lagen', path: '/?tab=layers' },
 	{ naam: 'werkgebied · job', path: '/?tab=job' },
-	{ naam: 'wizard · soort', path: '/setup/soort' },
-	{ naam: 'wizard · instellen', path: '/setup/instellen?machine=ruida' },
-	{ naam: 'wizard · klaar', path: '/setup/klaar' }
+	{ naam: 'wizard · soort', path: '/setup/kind' },
+	{ naam: 'wizard · instellen', path: '/setup/settings?machine=ruida' },
+	{ naam: 'wizard · klaar', path: '/setup/done' }
 ];
 const vensters = [
 	['materiaalbibliotheek', 'button[title="Materiaalbibliotheek"]'],

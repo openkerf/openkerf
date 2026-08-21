@@ -59,7 +59,7 @@ for (const breedte of [1440, 390]) {
 			['gevonden', VONDSTEN, '.vondst'],
 			['leeg', LEEG, '.niets']
 		]) {
-			const page = await open(b, { width: breedte, theme: thema, path: '/setup/soort' });
+			const page = await open(b, { width: breedte, theme: thema, path: '/setup/kind' });
 			await page.route('**/api/machines/scan*', (r) => r.fulfill({ json: stub }));
 			await page.getByRole('button', { name: 'Machines zoeken' }).click();
 			await page.waitForSelector(wacht, { timeout: 10000 });

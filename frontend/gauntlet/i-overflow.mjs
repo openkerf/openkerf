@@ -107,11 +107,11 @@ const SCREENS = [
 	['layers', '/?tab=layers'],
 	['job', '/?tab=job'],
 	['setup', '/setup'],
-	['setup-kind', '/setup/soort'],
+	['setup-kind', '/setup/kind'],
 	['setup-model', '/setup/type'],
-	['setup-name', '/setup/naam?type=ruida'],
-	['setup-settings', '/setup/instellen?machine=ruida'],
-	['setup-done', '/setup/klaar?machine=ruida']
+	['setup-name', '/setup/name?type=ruida'],
+	['setup-settings', '/setup/settings?machine=ruida'],
+	['setup-done', '/setup/done?machine=ruida']
 ];
 
 let problems = 0;

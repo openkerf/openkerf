@@ -75,7 +75,7 @@
 	 * There used to be one sentence: "Connected to the laser", or not. It was
 	 * untrue three ways over. It said "connected" while no cable was plugged in, on
 	 * a dropped server it pointed at the laser while the problem was the server —
-	 * and then you stand there checking a USB cable that is perfectly fine — and it
+	 * and then you state there checking a USB cable that is perfectly fine — and it
 	 * said it even when nobody *could* know.
 	 *
 	 * That last one was gap E3. For grbl, newly and the dummy device the engine
@@ -94,7 +94,7 @@
 	 * reported "USB connection did not exist". The spooler runs happily on without
 	 * a machine; it is therefore not a handshake.
 	 */
-	let onbekend = $derived(
+	let unknown = $derived(
 		connected && machineState !== 'unplugged' && device?.connection?.state !== 'connected'
 	);
 	/**
@@ -114,12 +114,12 @@
 			? t('status.machine.unknown')
 			: machineState === 'unplugged'
 				? t('status.machine.notConnected')
-				: onbekend
+				: unknown
 					? t('status.machine.connectionUnknown')
 					: t('status.machine.connected')
 	);
 	/**
-	 * De knop naast de toestand.
+	 * De button naast de toestand.
 	 *
 	 * The bar could read that no machine was on the line and do nothing about it —
 	 * "not connected" without a button. Only visible when the driver knows it: grbl
@@ -145,13 +145,13 @@
 	let zekerVerbreken = $state(false);
 
 	let verbindingsuitleg = $derived(
-		onbekend
+		unknown
 			? t('status.machine.connectionUnknown.hint')
 			: undefined
 	);
 </script>
 
-<ConnectionCard brandt={Boolean(job?.running)} />
+<ConnectionCard burns={Boolean(job?.running)} />
 
 <!-- Gap E2. The socket is back, the bar is green again, but it is a different
      engine from the one this page knows: the element tree on the other side is
@@ -160,7 +160,7 @@
      after this is about a document that no longer exists over there. -->
 {#if connection.restarted}
 	<div class="restarted" role="alert">
-		<div class="tekst">
+		<div class="text">
 			<strong>{t('status.restart.title')}</strong>
 			<p>
 				{t('status.restart.body')}
@@ -296,7 +296,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
-	.restarted .tekst { min-width: 0; }
+	.restarted .text { min-width: 0; }
 	.restarted strong { display: block; font-size: var(--text-sm); }
 	.restarted p { margin: 0; color: var(--text-2); }
 	.restarted button {

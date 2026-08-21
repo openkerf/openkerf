@@ -16,35 +16,35 @@
 	// It used to say "3 questions" here against "Step 1 of 5" further on, and then
 	// you immediately no longer know which is which.
 	const VRAAGT = [
-		{ kop: t('setup.step.kind'), uitleg: t('welcome.asks.kind') },
-		{ kop: t('setup.step.model'), uitleg: t('welcome.asks.model') },
-		{ kop: t('setup.step.name'), uitleg: t('welcome.asks.name') },
-		{ kop: t('welcome.asks.workarea'), uitleg: t('welcome.asks.workarea.body') }
+		{ head: t('setup.step.kind'), hint: t('welcome.asks.kind') },
+		{ head: t('setup.step.model'), hint: t('welcome.asks.model') },
+		{ head: t('setup.step.name'), hint: t('welcome.asks.name') },
+		{ head: t('welcome.asks.workarea'), hint: t('welcome.asks.workarea.body') }
 	];
 
 	const DAARNA = [t('welcome.after.design'), t('job.frame'), t('welcome.after.cut')];
 </script>
 
 <main>
-	<section class="kaart">
-		<div class="merk"><Logo /><span>OpenKerf</span></div>
+	<section class="card">
+		<div class="mark"><Logo /><span>OpenKerf</span></div>
 
 		<h1>{t('welcome.title')}</h1>
 		<p class="lead">{t('welcome.lead')}</p>
 
 		<ol class="vraagt">
-			{#each VRAAGT as stap, index (stap.kop)}
+			{#each VRAAGT as step, index (step.head)}
 				<li>
-					<span class="nummer mono">{index + 1}</span>
-					<span class="tekst">
-						<strong>{stap.kop}</strong>
-						<span class="muted">{stap.uitleg}</span>
+					<span class="number mono">{index + 1}</span>
+					<span class="text">
+						<strong>{step.head}</strong>
+						<span class="muted">{step.hint}</span>
 					</span>
 				</li>
 			{/each}
 		</ol>
 
-		<a class="knop primair" href="/setup/soort">{t('setup.crumb')}</a>
+		<a class="button primary" href="/setup/kind">{t('setup.crumb')}</a>
 
 		<!-- The arrows inherit the text colour of the line. They used to be on --line
 		     and got 1.41 in light and 1.62 in dark that way: practically invisible, so
@@ -52,7 +52,7 @@
 		     tuned for borders *against* a surface, not for something to be read. -->
 		<p class="daarna">
 			{t('welcome.after')}
-			{#each DAARNA as stap, index (stap)}<span class="stap">{stap}</span>{#if index < DAARNA.length - 1}<span
+			{#each DAARNA as step, index (step)}<span class="step">{step}</span>{#if index < DAARNA.length - 1}<span
 					aria-hidden="true">→</span
 				>{/if}{/each}
 		</p>
@@ -78,7 +78,7 @@
 		padding: var(--space-6) var(--space-4);
 		background: var(--surface-0);
 	}
-	.kaart {
+	.card {
 		position: relative;
 		width: 100%;
 		max-width: 520px;
@@ -91,7 +91,7 @@
 	/* The kerf line as a cut across the top edge of the card. Static: in DESIGN-SYSTEM the
 	   animated variant is reserved for selection, job progress and the active tab, and a
 	   welcome screen should be quiet. */
-	.kaart::before {
+	.card::before {
 		content: '';
 		position: absolute;
 		left: var(--space-6);
@@ -106,7 +106,7 @@
 			transparent 6px 10px
 		);
 	}
-	.merk {
+	.mark {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -136,7 +136,7 @@
 		align-items: flex-start;
 		gap: var(--space-3);
 	}
-	.nummer {
+	.number {
 		flex: none;
 		width: 22px;
 		height: 22px;
@@ -149,16 +149,16 @@
 		color: var(--text-1);
 		font-size: var(--text-xs);
 	}
-	.tekst {
+	.text {
 		display: grid;
 		gap: 2px;
 		min-width: 0;
 	}
-	.tekst .muted {
+	.text .muted {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.knop {
+	.button {
 		display: block;
 		text-align: center;
 		padding: 12px var(--space-4);
@@ -172,7 +172,7 @@
 	}
 	/* No colour change on hover: a generic .btn:hover made the main button white on light
 	   grey elsewhere (X1 in FEATURE-GAPS). Darker is enough. */
-	.knop.primair:hover {
+	.button.primary:hover {
 		filter: brightness(0.92);
 	}
 	.daarna {
@@ -212,7 +212,7 @@
 	/* The type scale already shifts along in tokens.css; here only the touch targets,
 	   because 44px suits a glove and 40 does not. */
 	@media (max-width: 1199px) {
-		.knop,
+		.button,
 		.tekstknop {
 			min-height: 44px;
 		}

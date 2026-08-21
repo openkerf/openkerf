@@ -41,7 +41,7 @@ const MAX_EVENTS = 25;
  * page.
  */
 const TRAIL_MAX = 6000;
-/** How often the trail is redrawn. During a raster hundreds of reports arrive per
+/** How often the trail is redrawn. During a grid hundreds of reports arrive per
  *  second; a redraw per report is an unusable canvas. */
 const TRAIL_REDRAW_MS = 120;
 

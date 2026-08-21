@@ -17,7 +17,7 @@
 	// found travel along as a parameter to the settings step. They are only applied
 	// *there*, and only when you save there: until then nothing is connected.
 	let connection = $derived($page.url.searchParams.get('connection') ?? '');
-	let gevonden = $derived($page.url.searchParams.get('gevonden') ?? '');
+	let found = $derived($page.url.searchParams.get('found') ?? '');
 
 	onMount(async () => {
 		// Fetch the existing machines too: a name that already exists is not a name.
@@ -41,10 +41,10 @@
 	 * it.
 	 */
 	function uniek(wens: string): string {
-		const bezet = new Set(store.machines.map((m) => m.label));
-		if (!bezet.has(wens)) return wens;
+		const taken = new Set(store.machines.map((m) => m.label));
+		if (!taken.has(wens)) return wens;
 		let n = 2;
-		while (bezet.has(`${wens} (${n})`)) n += 1;
+		while (taken.has(`${wens} (${n})`)) n += 1;
 		return `${wens} (${n})`;
 	}
 
@@ -57,7 +57,7 @@
 		if (result) {
 			const params = new URLSearchParams({ machine: result.path });
 			if (connection) params.set('connection', connection);
-			await goto(`/setup/instellen?${params}`);
+			await goto(`/setup/settings?${params}`);
 		}
 	}
 </script>
@@ -78,8 +78,8 @@
 		<p class="muted">
 			{chosen ? t('setup.nameIt.bodyModel', { model: chosen.friendly_name }) : t('setup.nameIt.body')}
 		</p>
-		{#if gevonden}
-			<p class="gevonden">{t('setup.found', { what: gevonden })}</p>
+		{#if found}
+			<p class="found">{t('setup.found', { what: found })}</p>
 		{/if}
 		<label class="field">
 			<span>{t('panel.name')}</span>
@@ -104,7 +104,7 @@
 		<div class="actions">
 			<!-- Whoever got here via the search button chose no model in step 2; going
 			     back to the model list would show a step they never saw. -->
-			<a class="btn" href={gevonden ? '/setup/soort' : '/setup/type'}>{t('common.back')}</a>
+			<a class="btn" href={found ? '/setup/kind' : '/setup/type'}>{t('common.back')}</a>
 			<button class="btn primary" onclick={create} disabled={store.busy || !label.trim()}>
 				{store.busy ? t('common.busy') : t('setup.create')}
 			</button>
@@ -138,7 +138,7 @@
 		text-decoration: underline;
 		cursor: pointer;
 	}
-	.gevonden {
+	.found {
 		margin: var(--space-3) 0 0;
 		padding: var(--space-2) var(--space-3);
 		font-size: var(--text-xs);

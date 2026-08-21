@@ -127,7 +127,7 @@ export type HelloEvent = { type: 'hello'; instance: string };
 export type ApiEvent = SignalEvent | SnapshotEvent | HelloEvent;
 
 /**
- * Machine state as the UI shows it — dubbel gecodeerd, nooit alleen kleur.
+ * Machine state as the UI shows it — dubbel gecodeerd, nooit alleen colour.
  *
  * `offline` and `unplugged` are two different disasters and ask for two different
  * actions. `offline`: the app cannot reach the OpenKerf server — restart the server,
@@ -215,7 +215,7 @@ export function currentJob(device: Device | null): Job | null {
 /**
  * Is there work that is not making progress? That is something other than "no
  * job": the
- * verschil tussen hervatten en opnieuw starten hangt eraan.
+ * verschil tussen hervatten en again starten hangt eraan.
  *
  * Not just looking at the status field: pausing sets `running` to `false` on
  * Lihuiyu without reporting anything else, and the drivers do not signal a pause back

@@ -35,19 +35,19 @@
 	 */
 	type Machine = { path: string; label: string; configured?: boolean };
 
-	let stand = $state<'onbekend' | 'nodig' | 'klaar'>('onbekend');
+	let gateState = $state<'unknown' | 'needed' | 'ready'>('unknown');
 	// Looking around is a choice for this session, not for good: starting up next time
 	// should begin at the question again.
-	let rondkijken = $state(false);
+	let lookingAround = $state(false);
 
 	let inWizard = $derived($page.url.pathname.startsWith('/setup'));
 
 	/**
 	 * The wizard changes the answer, so ask again after the wizard.
 	 *
-	 * This was the bug Jelle found: anybody starting on the work area gets `stand =
-	 * 'nodig'` here, goes into the wizard, creates their machine and clicks "To the work
-	 * area" — and lands on the welcome gate again, because that `stand` from before the
+	 * This was the bug Jelle found: anybody starting on the work area gets `gateState =
+	 * 'needed'` here, goes into the wizard, creates their machine and clicks "To the work
+	 * area" — and lands on the welcome gate again, because that `gateState` from before the
 	 * wizard was still there. Only a manual refresh helped, and that is precisely the
 	 * action this gate is supposed to save.
 	 *
@@ -55,28 +55,28 @@
 	 * changes along with the route, and the effect already hangs off that through
 	 * `inWizard`.
 	 */
-	let opnieuwVragen = false;
+	let askAgain = false;
 
 	$effect(() => {
 		if (inWizard) {
 			// Whatever happens here — creating, deleting, renaming — on return the answer
 			// from a moment ago is worth nothing.
-			opnieuwVragen = true;
+			askAgain = true;
 			return;
 		}
-		if (stand !== 'onbekend' && !opnieuwVragen) return;
-		opnieuwVragen = false;
+		if (gateState !== 'unknown' && !askAgain) return;
+		askAgain = false;
 		(async () => {
 			try {
 				const response = await fetch('/api/machines');
-				if (!response.ok) return (stand = 'klaar');
+				if (!response.ok) return (gateState = 'ready');
 				const machines: Machine[] = await response.json();
 				// An older server does not know `configured`. Then better to let everybody
 				// through than to strand them on a welcome screen.
-				const kent = machines.some((m) => 'configured' in m);
-				stand = kent && !machines.some((m) => m.configured) ? 'nodig' : 'klaar';
+				const knows = machines.some((m) => 'configured' in m);
+				gateState = knows && !machines.some((m) => m.configured) ? 'needed' : 'ready';
 			} catch {
-				stand = 'klaar';
+				gateState = 'ready';
 			}
 		})();
 	});
@@ -87,18 +87,18 @@
      nothing to that and was the app's *only* external request; without a network it
      produced ERR_FAILED in the console. -->
 
-{#if inWizard || rondkijken || stand === 'klaar'}
+{#if inWizard || lookingAround || gateState === 'ready'}
 	{@render children()}
-{:else if stand === 'nodig'}
-	<Welcome onrondkijken={() => (rondkijken = true)} />
+{:else if gateState === 'needed'}
+	<Welcome onrondkijken={() => (lookingAround = true)} />
 {:else}
-	<!-- As long as `stand` is unknown we do not draw the work area: that would flash up
+	<!-- As long as `gateState` is unknown we do not draw the work area: that would flash up
 	     with the message that the laser is ready. But an entirely blank page cannot be
 	     told apart from a broken screen, and on a slow server "one moment" took
 	     noticeably longer than a moment. So this line only appears after 400 ms: if the
 	     server is fast you never see it; if it is slow, it says what we are waiting
 	     for. -->
-	<p class="wachten" role="status">{t('layout.lookingForMachine')}</p>
+	<p class="waiting" role="status">{t('layout.lookingForMachine')}</p>
 {/if}
 
 <style>
@@ -107,7 +107,7 @@
 		flex-direction: column;
 		overflow: hidden;
 	}
-	.wachten {
+	.waiting {
 		flex: 1;
 		display: grid;
 		place-items: center;
@@ -130,7 +130,7 @@
 	/* Anybody who switches motion off gets the line at once: it is a message, not
 	   decoration, and must not disappear entirely. */
 	@media (prefers-reduced-motion: reduce) {
-		.wachten {
+		.waiting {
 			opacity: 1;
 			animation: none;
 		}

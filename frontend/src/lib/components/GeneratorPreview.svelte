@@ -28,7 +28,7 @@
 	 *
 	 * 1. **On invalid input the image does not jump away.** Half-typed numbers are just
 	 *    as invalid; the last valid image stays up with the reason above it. See
-	 *    `TestGrid.svelte`, `voorbeeldFout`.
+	 *    `TestGrid.svelte`, `previewError`.
 	 * 2. **The preview shows no more than what burns.** The sheet is a thin guide line,
 	 *    not a shape, and is recognisable as such.
 	 *
@@ -39,23 +39,23 @@
 
 	import { t } from '$lib/i18n/index.svelte';
 	let {
-		soort,
-		waarden,
-		voorbeeld = null,
+		kind,
+		values,
+		preview = null,
 		failure = null,
 		children
 	}: {
-		soort: string;
+		kind: string;
 		/** The raw form fields, for the fallback sketch. */
-		waarden: Record<string, unknown>;
-		voorbeeld?: Voorbeeld | null;
+		values: Record<string, unknown>;
+		preview?: Voorbeeld | null;
 		/** Why the last image was not refreshed; the image stays up. */
 		failure?: string | null;
 		children?: import('svelte').Snippet;
 	} = $props();
 
-	function n(sleutel: string, standaard: number): number {
-		const v = Number(waarden[sleutel]);
+	function n(key: string, standaard: number): number {
+		const v = Number(values[key]);
 		return Number.isFinite(v) && v !== 0 ? v : standaard;
 	}
 
@@ -63,7 +63,7 @@
 	let kolommen = $derived(Math.min(6, Math.max(1, Math.round(n('columns', 4)))));
 	let rijen = $derived(Math.min(6, Math.max(1, Math.round(n('rows', 3)))));
 	let herhalingen = $derived(Math.min(16, Math.max(2, Math.round(n('repeats', 8)))));
-	let draait = $derived(waarden.rotate !== false);
+	let draait = $derived(values.rotate !== false);
 
 	// The shapes you want to see as an *area*: a QR code of separate little outlines is
 	// no longer a QR code. The rest is a line, because that is what the laser follows.
@@ -77,53 +77,53 @@
 	 * come near it you see it lying there.
 	 */
 	let venster = $derived.by(() => {
-		if (!voorbeeld) return null;
-		const [x0, y0, x1, y1] = voorbeeld.bounds;
-		const marge = Math.max((x1 - x0) * 0.08, (y1 - y0) * 0.08, 1);
+		if (!preview) return null;
+		const [x0, y0, x1, y1] = preview.bounds;
+		const margin = Math.max((x1 - x0) * 0.08, (y1 - y0) * 0.08, 1);
 		return {
-			x: x0 - marge,
-			y: y0 - marge,
-			w: Math.max(x1 - x0 + marge * 2, 0.01),
-			h: Math.max(y1 - y0 + marge * 2, 0.01)
+			x: x0 - margin,
+			y: y0 - margin,
+			w: Math.max(x1 - x0 + margin * 2, 0.01),
+			h: Math.max(y1 - y0 + margin * 2, 0.01)
 		};
 	});
 
-	let breed = $derived(voorbeeld ? voorbeeld.bounds[2] - voorbeeld.bounds[0] : 0);
-	let hoog = $derived(voorbeeld ? voorbeeld.bounds[3] - voorbeeld.bounds[1] : 0);
+	let wide = $derived(preview ? preview.bounds[2] - preview.bounds[0] : 0);
+	let high = $derived(preview ? preview.bounds[3] - preview.bounds[1] : 0);
 
 	/** Does something stick out beyond the sheet? On a laser that is not a detail. */
-	let buitenVel = $derived.by(() => {
-		if (!voorbeeld) return false;
-		const [x0, y0, x1, y1] = voorbeeld.bounds;
-		return x0 < -0.01 || y0 < -0.01 || x1 > voorbeeld.sheet.width_mm + 0.01
-			|| y1 > voorbeeld.sheet.height_mm + 0.01;
+	let offSheet = $derived.by(() => {
+		if (!preview) return false;
+		const [x0, y0, x1, y1] = preview.bounds;
+		return x0 < -0.01 || y0 < -0.01 || x1 > preview.sheet.width_mm + 0.01
+			|| y1 > preview.sheet.height_mm + 0.01;
 	});
 
-	const maat = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
+	const size = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
 
 	/** What is under the drawing: the count, in the unit of this thing. */
 	let telling = $derived.by(() => {
-		if (!voorbeeld) return null;
-		if (voorbeeld.what === 'box')
-			return voorbeeld.sheets > 1
-				? t('genPreview.panelsSheets', { n: voorbeeld.parts.length, sheets: voorbeeld.sheets })
-				: t('genPreview.panels', { n: voorbeeld.parts.length });
-		if (voorbeeld.what === 'grid' || voorbeeld.what === 'radial')
-			return t('genPreview.pieces', { n: voorbeeld.parts.length });
-		if (voorbeeld.modules) return t('genPreview.modules', { n: voorbeeld.modules });
-		if (voorbeeld.bars) return t('genPreview.bars', { n: voorbeeld.bars });
+		if (!preview) return null;
+		if (preview.what === 'box')
+			return preview.sheets > 1
+				? t('genPreview.panelsSheets', { n: preview.parts.length, sheets: preview.sheets })
+				: t('genPreview.panels', { n: preview.parts.length });
+		if (preview.what === 'grid' || preview.what === 'radial')
+			return t('genPreview.pieces', { n: preview.parts.length });
+		if (preview.modules) return t('genPreview.modules', { n: preview.modules });
+		if (preview.bars) return t('genPreview.bars', { n: preview.bars });
 		return null;
 	});
 
 	function veelhoekPunten(zijden: number, straal: number, binnen: number) {
-		const punten: string[] = [];
+		const points: string[] = [];
 		const totaal = binnen ? zijden * 2 : zijden;
 		for (let i = 0; i < totaal; i++) {
 			const r = binnen && i % 2 ? binnen : straal;
-			const hoek = (i / totaal) * Math.PI * 2 - Math.PI / 2;
-			punten.push(`${(50 + Math.cos(hoek) * r).toFixed(1)},${(50 + Math.sin(hoek) * r).toFixed(1)}`);
+			const corner = (i / totaal) * Math.PI * 2 - Math.PI / 2;
+			points.push(`${(50 + Math.cos(corner) * r).toFixed(1)},${(50 + Math.sin(corner) * r).toFixed(1)}`);
 		}
-		return punten.join(' ');
+		return points.join(' ');
 	}
 </script>
 
@@ -133,37 +133,37 @@
 		     delete a digit and the radius is zero until you type the next one. The image
 		     stays, with the reason above it — dropping a hole teaches you nothing and
 		     makes half the window jump. -->
-		<p class="onaf" role="status">
+		<p class="unfinished" role="status">
 			{failure}
-			{#if voorbeeld}<br /><span class="stil">{t('genPreview.lastValid')}</span>{/if}
+			{#if preview}<br /><span class="quiet">{t('genPreview.lastValid')}</span>{/if}
 		</p>
 	{/if}
 
-	{#if voorbeeld && venster}
+	{#if preview && venster}
 		<svg
 			viewBox="{venster.x} {venster.y} {venster.w} {venster.h}"
 			role="img"
-			aria-label={t('genPreview.aria', { width: maat(breed), height: maat(hoog) })}
+			aria-label={t('genPreview.aria', { width: size(wide), height: size(high) })}
 		>
 			<!-- The sheet as a guide, not as a shape: it does not get burned. -->
 			<rect
-				class="vel"
+				class="sheet"
 				x="0"
 				y="0"
-				width={voorbeeld.sheet.width_mm}
-				height={voorbeeld.sheet.height_mm}
+				width={preview.sheet.width_mm}
+				height={preview.sheet.height_mm}
 			/>
-			<g class:vlak={GEVULD.has(voorbeeld.what)}>
-				{#each voorbeeld.parts as deel (deel)}
+			<g class:area={GEVULD.has(preview.what)}>
+				{#each preview.parts as part (part)}
 					<path
-						class="vorm"
-						d={voorbeeld.shapes[deel.shape]}
-						transform="translate({deel.x} {deel.y}) rotate({deel.rot} {deel.rx ?? 0} {deel.ry ?? 0})"
+						class="shape"
+						d={preview.shapes[part.shape]}
+						transform="translate({part.x} {part.y}) rotate({part.rot} {part.rx ?? 0} {part.ry ?? 0})"
 					/>
 				{/each}
 			</g>
 		</svg>
-	{:else if soort === 'grid'}
+	{:else if kind === 'grid'}
 		<!-- Fallback: without the chosen elements we do not know what is being repeated,
 		     so it stays at the meaning of the fields. -->
 		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
@@ -174,35 +174,35 @@
 						y={12 + r * (76 / rijen)}
 						width={76 / kolommen - 76 / kolommen / 4}
 						height={76 / rijen - 76 / rijen / 4}
-						class="vorm"
+						class="shape"
 					/>
 				{/each}
 			{/each}
 			{#if kolommen > 1}
-				<line class="maat" x1={12 + 76 / kolommen - 76 / kolommen / 4} y1="8" x2={12 + 76 / kolommen} y2="8" />
+				<line class="size" x1={12 + 76 / kolommen - 76 / kolommen / 4} y1="8" x2={12 + 76 / kolommen} y2="8" />
 				<text class="bij" x={12 + 76 / kolommen - 76 / kolommen / 8} y="6"
 					>{t('genPreview.space')}</text
 				>
 			{/if}
 		</svg>
-	{:else if soort === 'radial'}
+	{:else if kind === 'radial'}
 		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
 			<circle class="hulp" cx="50" cy="50" r="32" />
 			{#each Array(herhalingen) as _, i}
-				{@const hoek = (i / herhalingen) * Math.PI * 2 - Math.PI / 2}
+				{@const corner = (i / herhalingen) * Math.PI * 2 - Math.PI / 2}
 				<rect
-					class="vorm"
-					x={50 + Math.cos(hoek) * 32 - 5}
-					y={50 + Math.sin(hoek) * 32 - 3.5}
+					class="shape"
+					x={50 + Math.cos(corner) * 32 - 5}
+					y={50 + Math.sin(corner) * 32 - 3.5}
 					width="10"
 					height="7"
 					transform={draait
-						? `rotate(${(i / herhalingen) * 360} ${50 + Math.cos(hoek) * 32} ${50 + Math.sin(hoek) * 32})`
+						? `rotate(${(i / herhalingen) * 360} ${50 + Math.cos(corner) * 32} ${50 + Math.sin(corner) * 32})`
 						: undefined}
 				/>
 			{/each}
 		</svg>
-	{:else if soort === 'polygon'}
+	{:else if kind === 'polygon'}
 		<!-- Only until the first answer is in; after that the real image takes its
 		     place. An empty box would make the window jump. -->
 		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
@@ -214,15 +214,15 @@
 		</svg>
 	{/if}
 
-	{#if voorbeeld}
-		<figcaption class="cijfers">
-			<span class="mono">{maat(breed)} × {maat(hoog)} mm</span>
-			{#if telling}<span class="stil">{telling}</span>{/if}
+	{#if preview}
+		<figcaption class="figures">
+			<span class="mono">{size(wide)} × {size(high)} mm</span>
+			{#if telling}<span class="quiet">{telling}</span>{/if}
 		</figcaption>
-		{#if buitenVel}
+		{#if offSheet}
 			<figcaption class="waarschuwing">{t('genPreview.offSheet')}</figcaption>
 		{/if}
-		{#each voorbeeld.notes as note (note)}
+		{#each preview.notes as note (note)}
 			<figcaption class="waarschuwing">{note}</figcaption>
 		{/each}
 	{:else}
@@ -243,7 +243,7 @@
 	svg { width: 190px; height: 150px; display: block; margin: 0 auto; }
 	/* All the measures in here are in millimetres, not in pixels — hence
 	   non-scaling-stroke, otherwise the line weight changes with the zoom. */
-	.vorm, .hulp {
+	.shape, .hulp {
 		fill: none;
 		stroke: var(--accent);
 		stroke-width: 1.4;
@@ -252,8 +252,8 @@
 	}
 	.hulp { stroke: var(--text-2); stroke-dasharray: 3 2; }
 	/* Nobody reads a QR code of separate little outlines; it should be solid. */
-	.vlak .vorm { fill: var(--accent); stroke: none; }
-	.vel {
+	.area .shape { fill: var(--accent); stroke: none; }
+	.sheet {
 		fill: none;
 		stroke: var(--text-2);
 		stroke-width: 1;
@@ -261,14 +261,14 @@
 		vector-effect: non-scaling-stroke;
 		opacity: 0.6;
 	}
-	.maat { stroke: var(--text-2); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
-	/* @svg-space: deze terugvalschets rekent in viewBox-eenheden (100 breed op
+	.size { stroke: var(--text-2); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
+	/* @svg-space: deze terugvalschets rekent in viewBox-eenheden (100 wide op
 	   190 px), niet in CSS-pixels. */
 	.bij { font-size: 7.5px; fill: var(--text-2); font-family: var(--font-mono); }
 	figcaption { font-size: var(--text-xs); color: var(--text-2); text-align: center; }
-	.cijfers { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
-	.cijfers .mono { color: var(--text-1); font-family: var(--font-mono); }
-	.stil { color: var(--text-2); }
+	.figures { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
+	.figures .mono { color: var(--text-1); font-family: var(--font-mono); }
+	.quiet { color: var(--text-2); }
 	.waarschuwing { color: var(--warn); }
-	.onaf { margin: 0; font-size: var(--text-xs); color: var(--warn); text-align: left; line-height: 1.4; }
+	.unfinished { margin: 0; font-size: var(--text-xs); color: var(--warn); text-align: left; line-height: 1.4; }
 </style>

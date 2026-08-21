@@ -79,7 +79,7 @@ const b = await browser();
 for (const [device, breedte] of Object.entries(WIDTHS)) {
 	for (const thema of ['light', 'dark']) {
 		// --- rust ------------------------------------------------------------
-		let page = await open(b, { width: breedte, theme: thema, path: '/setup/soort' });
+		let page = await open(b, { width: breedte, theme: thema, path: '/setup/kind' });
 		await shoot(page, 'rust', breedte, thema);
 
 		// --- bezig -----------------------------------------------------------
@@ -97,7 +97,7 @@ for (const [device, breedte] of Object.entries(WIDTHS)) {
 		await page.context().close();
 
 		// --- gevonden --------------------------------------------------------
-		page = await open(b, { width: breedte, theme: thema, path: '/setup/soort' });
+		page = await open(b, { width: breedte, theme: thema, path: '/setup/kind' });
 		await page.route('**/api/machines/scan*', (route) =>
 			route.fulfill({ json: VONDSTEN })
 		);
@@ -108,7 +108,7 @@ for (const [device, breedte] of Object.entries(WIDTHS)) {
 		await page.context().close();
 
 		// --- leeg (echte scan over het echte netwerk) ------------------------
-		page = await open(b, { width: breedte, theme: thema, path: '/setup/soort' });
+		page = await open(b, { width: breedte, theme: thema, path: '/setup/kind' });
 		await page.getByRole('button', { name: 'Machines zoeken' }).click();
 		await page.waitForSelector('.niets', { timeout: 20000 });
 		await shoot(page, 'leeg', breedte, thema);

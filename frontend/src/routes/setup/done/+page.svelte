@@ -20,7 +20,7 @@
 
 	let machinePath = $derived($page.url.searchParams.get('machine') ?? '');
 	let machine = $derived(store.machines.find((m) => m.path === machinePath) ?? null);
-	let geladen = $state(false);
+	let loaded = $state(false);
 
 	/**
 	 * The sheet does not follow the machine by itself (gap E2).
@@ -39,31 +39,31 @@
 	);
 	let bed = $state<{ w: number; h: number } | null>(null);
 	/** Answered (adjusted or left as it was): then the question is gone. */
-	let velAntwoord = $state<'aangepast' | 'gelaten' | null>(null);
+	let sheetAnswer = $state<'aangepast' | 'gelaten' | null>(null);
 
 	let velVraag = $derived.by(() => {
-		const vel = sheets.active;
-		if (!bed || !vel || velAntwoord) return null;
+		const sheet = sheets.active;
+		if (!bed || !sheet || sheetAnswer) return null;
 		// Een tiende millimeter verschil is afronding, geen mismatch.
 		const afwijkt =
-			Math.abs(vel.width_mm - bed.w) > 0.5 || Math.abs(vel.height_mm - bed.h) > 0.5;
-		return afwijkt ? { vel, bed } : null;
+			Math.abs(sheet.width_mm - bed.w) > 0.5 || Math.abs(sheet.height_mm - bed.h) > 0.5;
+		return afwijkt ? { sheet, bed } : null;
 	});
 
-	function maat(value: number) {
+	function size(value: number) {
 		return String(Math.round(value * 10) / 10).replace('.', ',');
 	}
 
 	async function velNaarBed() {
 		const ask = velVraag;
 		if (!ask) return;
-		if (await sheets.update(ask.vel.id, { width_mm: bed!.w, height_mm: bed!.h }))
-			velAntwoord = 'aangepast';
+		if (await sheets.update(ask.sheet.id, { width_mm: bed!.w, height_mm: bed!.h }))
+			sheetAnswer = 'aangepast';
 	}
 
 	onMount(async () => {
 		await store.loadMachines();
-		geladen = true;
+		loaded = true;
 		// The bed size in millimetres comes from the status: the engine's settings hand
 		// back "24.0in", and that is the wrong unit to compute with here.
 		await sheets.load();
@@ -83,17 +83,17 @@
 	});
 
 	const STAPPEN = [
-		{ kop: t('setup.done.draw.title'), uitleg: t('setup.done.draw.body') },
-		{ kop: t('setup.done.layer.title'), uitleg: t('setup.done.layer.body') },
-		{ kop: t('job.frame'), uitleg: t('setup.done.frame.body') },
-		{ kop: t('job.startJob'), uitleg: t('setup.done.start.body') }
+		{ head: t('setup.done.draw.title'), hint: t('setup.done.draw.body') },
+		{ head: t('setup.done.layer.title'), hint: t('setup.done.layer.body') },
+		{ head: t('job.frame'), hint: t('setup.done.frame.body') },
+		{ head: t('job.startJob'), hint: t('setup.done.start.body') }
 	];
 </script>
 
 <svelte:head><title>{t('setup.head.done')}</title></svelte:head>
 
 <section class="setup narrow">
-	{#if geladen && !machine}
+	{#if loaded && !machine}
 		<h1>{t('setup.gone')}</h1>
 		<p class="muted">
 			{machinePath ? t('setup.gone.path', { path: machinePath }) : t('setup.gone.noPath')}
@@ -108,46 +108,46 @@
 
 		{#if velVraag}
 			<div class="velvraag">
-				<h2 class="kop">{t('setup.sheetFits')}</h2>
+				<h2 class="head">{t('setup.sheetFits')}</h2>
 				<p>
 					{t('setup.sheetFits.body', {
-						sheet: `${velVraag.vel.name} — ${maat(velVraag.vel.width_mm)} × ${maat(
-							velVraag.vel.height_mm
+						sheet: `${velVraag.sheet.name} — ${size(velVraag.sheet.width_mm)} × ${size(
+							velVraag.sheet.height_mm
 						)} mm`,
 						machine: machine?.label ?? t('setup.sheetFits.thisMachine'),
-						bed: `${maat(velVraag.bed.w)} × ${maat(velVraag.bed.h)} mm`
+						bed: `${size(velVraag.bed.w)} × ${size(velVraag.bed.h)} mm`
 					})}
 				</p>
 				<p class="muted">
-					{t('setup.sheetFits.offcut', { width: maat(velVraag.vel.width_mm) })}
+					{t('setup.sheetFits.offcut', { width: size(velVraag.sheet.width_mm) })}
 				</p>
 				<div class="velknoppen">
 					<button class="btn primary" disabled={sheets.busy} onclick={velNaarBed}>
 						{t('setup.sheetToBed')}
 					</button>
-					<button class="btn subtle" onclick={() => (velAntwoord = 'gelaten')}>
+					<button class="btn subtle" onclick={() => (sheetAnswer = 'gelaten')}>
 						{t('setup.sheetLeave')}
 					</button>
 				</div>
 				{#if sheets.error}<p class="failure" role="alert">{sheets.error}</p>{/if}
 			</div>
-		{:else if velAntwoord === 'aangepast' && sheets.active}
+		{:else if sheetAnswer === 'aangepast' && sheets.active}
 			<p class="velgoed" role="status">
 				{t('setup.sheetNow', {
 					sheet: sheets.active.name,
-					size: `${maat(sheets.active.width_mm)} × ${maat(sheets.active.height_mm)} mm`
+					size: `${size(sheets.active.width_mm)} × ${size(sheets.active.height_mm)} mm`
 				})}
 			</p>
 		{/if}
 
 		<h2>{t('setup.firstCut')}</h2>
-		<ol class="weg">
-			{#each STAPPEN as stap, index (stap.kop)}
+		<ol class="gone">
+			{#each STAPPEN as step, index (step.head)}
 				<li>
-					<span class="nummer mono">{index + 1}</span>
-					<span class="tekst">
-						<strong>{stap.kop}</strong>
-						<span class="muted">{stap.uitleg}</span>
+					<span class="number mono">{index + 1}</span>
+					<span class="text">
+						<strong>{step.head}</strong>
+						<span class="muted">{step.hint}</span>
 					</span>
 				</li>
 			{/each}
@@ -166,19 +166,19 @@
 		font-weight: 600;
 		margin: var(--space-6) 0 var(--space-3);
 	}
-	.weg {
+	.gone {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: grid;
 		gap: var(--space-3);
 	}
-	.weg li {
+	.gone li {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-3);
 	}
-	.nummer {
+	.number {
 		flex: none;
 		width: 22px;
 		height: 22px;
@@ -191,12 +191,12 @@
 		color: var(--text-1);
 		font-size: var(--text-xs);
 	}
-	.tekst {
+	.text {
 		display: grid;
 		gap: 2px;
 		min-width: 0;
 	}
-	.tekst .muted {
+	.text .muted {
 		font-size: var(--text-xs);
 	}
 
@@ -210,7 +210,7 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.velvraag .kop {
+	.velvraag .head {
 		margin: 0 0 var(--space-2);
 	}
 	.velvraag p {
@@ -220,7 +220,7 @@
 	.velknoppen {
 		display: flex;
 		flex-wrap: wrap;
-		/* Two outcomes that exclude each other: far enough apart not to mis-aim with a
+		/* Two outcomes that exclude each other: far enough apart not to bad-aim with a
 		   thumb. */
 		gap: var(--space-6);
 		margin-top: var(--space-3);

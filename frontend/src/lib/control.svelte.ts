@@ -25,12 +25,12 @@ export type Position = { name: string; x_mm: number; y_mm: number };
  */
 class Nulpunt {
 	point = $state<{ x_mm: number; y_mm: number } | null>(null);
-	#geladen = false;
+	#loaded = false;
 
 	/** Fetched once per page; whoever wants it again passes `again`. */
-	async laad(opnieuw = false) {
-		if (this.#geladen && !opnieuw) return;
-		this.#geladen = true;
+	async laad(again = false) {
+		if (this.#loaded && !again) return;
+		this.#loaded = true;
 		try {
 			const response = await fetch('/api/machine/origin');
 			if (!response.ok) return;
@@ -42,7 +42,7 @@ class Nulpunt {
 	}
 }
 
-export const nulpunt = new Nulpunt();
+export const origin = new Nulpunt();
 
 export class Controller {
 	capabilities = $state<Capabilities | null>(null);
@@ -129,7 +129,7 @@ export class Controller {
 	 *
 	 * The machine can report that it is still busy; that lands in `error` here, because
 	 * otherwise you think you have seen the frame while a
-	 * hoek ontbrak.
+	 * corner ontbrak.
 	 */
 	async frame() {
 		this.busy = 'frame';
@@ -270,24 +270,24 @@ export class Controller {
 	// browser: it belongs to *this* laser with *this* piece of wood in it.
 
 	get origin() {
-		return nulpunt.point;
+		return origin.point;
 	}
 
 	loadOrigin() {
-		return nulpunt.laad(true);
+		return origin.laad(true);
 	}
 
 	/** Without coordinates: where the head is now. */
 	async setOrigin(xMm?: number, yMm?: number) {
 		const body = xMm === undefined || yMm === undefined ? {} : { x_mm: xMm, y_mm: yMm };
 		const uitslag = await this.#json('/api/machine/origin', 'set-origin', 'POST', body);
-		if (uitslag) nulpunt.point = { x_mm: uitslag.x_mm, y_mm: uitslag.y_mm };
+		if (uitslag) origin.point = { x_mm: uitslag.x_mm, y_mm: uitslag.y_mm };
 		return uitslag;
 	}
 
 	async clearOrigin() {
 		const uitslag = await this.#json('/api/machine/origin', 'clear-origin', 'DELETE');
-		if (uitslag) nulpunt.point = null;
+		if (uitslag) origin.point = null;
 		return uitslag;
 	}
 
@@ -373,8 +373,8 @@ async function describeFailure(response: Response, metToken: boolean): Promise<s
 }
 
 function zinnig(output: string[]): string {
-	const regels = output
+	const rows = output
 		.map((r) => r.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '').trim())
 		.filter((r) => r && !/^(plan|spool|load|estop|abort|pause|resume)\b/.test(r));
-	return (regels.length ? regels : output).join(' · ');
+	return (rows.length ? rows : output).join(' · ');
 }

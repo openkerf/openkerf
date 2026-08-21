@@ -44,7 +44,7 @@
 		onHome?: () => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
-		/** De kop langs de omtrek sturen, zonder te branden. */
+		/** De head langs de omtrek sturen, zonder te branden. */
 		onFrame?: () => void;
 		/** The same layer colour the canvas and the layer list show. */
 		colorFor?: (operationId: string | null) => string;
@@ -53,7 +53,7 @@
 	} = $props();
 
 	// Gap J9: one source for "where does this action live". See screen.svelte.ts.
-	let balkdraagt = $derived(screen.controlsInBar);
+	let barCarries = $derived(screen.controlsInBar);
 	let actions = $derived(control.capabilities?.actions ?? null);
 	let running = $derived(Boolean(job?.running));
 	// Standing still, not only "paused according to the status field": on Lihuiyu
@@ -63,7 +63,7 @@
 	let queued = $derived(device?.spooler.queue_length ?? 0);
 	// A running job is the reason starting is not allowed; that has to be in the
 	// tooltip, because a grey button without a reason is a riddle.
-	let bezet = $derived(running || paused);
+	let taken = $derived(running || paused);
 	let tokenDraft = $state('');
 	let step = $state(10);
 	type Warning = { code: string; text: string; ernst?: number };
@@ -112,7 +112,7 @@
 		sheet?: SheetInfo | null;
 		layers?: Layer[];
 		bounds?: Bounds | null;
-		engine?: { raster: boolean } | null;
+		engine?: { grid: boolean } | null;
 	} | null>(null);
 	let layers = $derived(overzicht?.layers ?? []);
 	/**
@@ -135,9 +135,9 @@
 		layers
 			.filter((l) => l.burns !== false && l.warnings?.length)
 			.map((l) => ({
-				laag: l.label,
+				layer: l.label,
 				ernst: Math.max(...(l.warnings ?? []).map((w) => w.ernst ?? 1)),
-				tekst: (l.warnings ?? []).map((w) => w.text).join(' ')
+				text: (l.warnings ?? []).map((w) => w.text).join(' ')
 			}))
 			.sort((a, b) => b.ernst - a.ernst)
 	);
@@ -147,16 +147,16 @@
 		mismatch.length > 1 && mismatch[0].ernst > mismatch[mismatch.length - 1].ernst
 	);
 	let velTekst = $derived.by(() => {
-		const vel = overzicht?.sheet;
-		if (!vel?.material_name) return null;
-		const dikte = vel.thickness_mm;
-		return dikte === null || dikte === undefined
-			? vel.material_name
-			: `${vel.material_name} · ${String(dikte).replace('.', ',')} mm`;
+		const sheet = overzicht?.sheet;
+		if (!sheet?.material_name) return null;
+		const thickness = sheet.thickness_mm;
+		return thickness === null || thickness === undefined
+			? sheet.material_name
+			: `${sheet.material_name} · ${String(thickness).replace('.', ',')} mm`;
 	});
 
 	/**
-	 * Past het op het bed, en past het op het vel? (gaten J5 en C2)
+	 * Past het op het bed, en past het op het sheet? (gaten J5 en C2)
 	 *
 	 * Both questions are answered by the server and not here: it measures them for the
 	 * canvas and the phone anyway, and three places computing it themselves can
@@ -172,12 +172,12 @@
 	/**
 	 * Brandt deze engine rasterlagen?
 	 *
-	 * No, headless: the converter from raster area to laser lines sits in the wxPython
+	 * No, headless: the converter from grid area to laser lines sits in the wxPython
 	 * GUI. During planning the layer throws its own shapes away and produces no
 	 * cutcode. That must not be a surprise *after* burning, and the time estimate must
 	 * not promise seconds for it.
 	 */
-	let rasterUit = $derived(overzicht?.engine?.raster === false);
+	let rasterUit = $derived(overzicht?.engine?.grid === false);
 	let blindeLagen = $derived(layers.filter((l) => l.burns === false));
 	// Whole millimetres where it can be; 0.5 mm stays 0.5 mm. Written in the
 	// reader's own notation, because these numbers get typed into a machine.
@@ -226,18 +226,18 @@
 	// Two requests, deliberately not one: the overview (layers, material, objections)
 	// arrives at once, the clock may come afterwards. The other way round the
 	// waarschuwing over verkeerd materiaal minutenlang achter een tijdschatting
-	// te wachten op een zwaar ontwerp.
+	// te waiting op een zwaar ontwerp.
 	async function loadEstimate() {
 		estimating = true;
 		estimateTraag = false;
 		try {
 			// Side by side: the drawing and the layer table should appear on screen
 			// together, not one half a second after the other.
-			const [lagen, snapshot] = await Promise.all([
+			const [layers, snapshot] = await Promise.all([
 				fetch('/api/job/layers'),
 				fetch('/api/design')
 			]);
-			overzicht = lagen.ok ? await lagen.json() : null;
+			overzicht = layers.ok ? await layers.json() : null;
 			ontwerp = snapshot.ok ? await snapshot.json() : null;
 		} catch {
 			overzicht = null;
@@ -270,11 +270,11 @@
 	let schatKlok: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
 		// Deliberately *not* looking at `busyWithWork`: that hangs off the estimate via
-		// `leeg`, and then this effect would be its own trigger. The queue length says
+		// `empty`, and then this effect would be its own trigger. The queue length says
 		// the same thing without the loop.
-		const zichtbaar = (device?.spooler?.queue_length ?? 0) === 0;
+		const visible = (device?.spooler?.queue_length ?? 0) === 0;
 		void revisie;
-		if (!zichtbaar) {
+		if (!visible) {
 			if (schatKlok) clearTimeout(schatKlok);
 			return;
 		}
@@ -313,7 +313,7 @@
 	// ------------------------------------------- bewaarde posities (gat J6)
 
 	let posities = $state<Position[]>([]);
-	let bewaren = $state(false);
+	let saving = $state(false);
 	let nieuweNaam = $state('');
 	let huidigMm = $derived(device?.position.mm ?? null);
 
@@ -338,17 +338,17 @@
 	];
 
 	async function bewaar() {
-		const naam = nieuweNaam.trim();
-		if (!naam) return;
-		if (await control.savePosition(naam)) {
-			bewaren = false;
+		const name = nieuweNaam.trim();
+		if (!name) return;
+		if (await control.savePosition(name)) {
+			saving = false;
 			nieuweNaam = '';
 			await ophalenPosities();
 		}
 	}
 
-	async function vergeet(naam: string) {
-		if (await control.deletePosition(naam)) await ophalenPosities();
+	async function vergeet(name: string) {
+		if (await control.deletePosition(name)) await ophalenPosities();
 	}
 
 	async function confirmStart() {
@@ -368,10 +368,10 @@
 	 * would do nothing. As long as the estimate is still running we do not know, and
 	 * then we keep quiet.
 	 */
-	let leeg = $derived(!estimating && estimate !== null && estimate.parts === 0);
+	let empty = $derived(!estimating && estimate !== null && estimate.parts === 0);
 
 	/**
-	 * De phase, uit één bron (`jobPhase` in `$lib/api.ts`).
+	 * De phase, off één source (`jobPhase` in `$lib/api.ts`).
 	 *
 	 * Before this, this panel read `job.running` and the top bar read the machine
 	 * state, and for a job that had been spooled but not yet picked up (`status:
@@ -379,14 +379,14 @@
 	 * this panel left it on. One tap here then spooled a second job on top of the
 	 * first.
 	 */
-	let phase = $derived(jobPhase(device, job, leeg));
+	let phase = $derived(jobPhase(device, job, empty));
 	let busyWithWork = $derived(jobBusy(phase));
 	let voortgang = $derived.by(() => {
-		const deel = job?.progress;
-		if (deel === null || deel === undefined || !Number.isFinite(deel)) return null;
+		const part = job?.progress;
+		if (part === null || part === undefined || !Number.isFinite(part)) return null;
 		// A job that is finished but not signed off by the engine sits at 0.998; we show
 		// that as full, because that is what has happened.
-		return phase === 'done' ? 1 : Math.min(1, Math.max(0, deel));
+		return phase === 'done' ? 1 : Math.min(1, Math.max(0, part));
 	});
 	let resterend = $derived(phase === 'done' ? 0 : remainingSeconds(job));
 </script>
@@ -433,14 +433,14 @@
 			burns directly. "Start job" arms, "Start now" fires — and unlike before,
 			nothing disappears from view on that first tap.
 		-->
-		<div class="preflight" class:niets={leeg}>
+		<div class="preflight" class:none={empty}>
 			<!-- "Estimated time 0:00" above an empty bed reads as a job of zero
 			     seconds instead of as no job. With nothing to do the clock keeps
 			     quiet and the message below it speaks. -->
 			<!-- The workpiece first, the numbers about it after (decision B8).
 			     Whoever sees something hanging off the sheet need not read the time
 			     any more — and on tablet and phone the canvas is not beside it. -->
-			{#if !leeg}
+			{#if !empty}
 				<!-- The messages about bed and sheet belong to the drawing and so
 				     live in it, right under the shape they are about (gaps J5 and C2).
 				     They used to be here as two equally red cards in a row; that made
@@ -452,7 +452,7 @@
 					bounds={grenzen}
 					{colorFor}
 				/>
-				<!-- The converter that turns a raster area into laser lines lives in
+				<!-- The converter that turns a grid area into laser lines lives in
 				     the wxPython version of the engine. When it is missing, the layer
 				     throws its own shapes away during planning and nothing comes out
 				     of the machine. The same words as the block in the test-grid
@@ -478,7 +478,7 @@
 				     with. Without it there is a table of numbers with no subject. -->
 				<!-- Always a line, even without material. Saying nothing reads as
 				     "not needed"; and then you run a birch preset on acrylic. -->
-				<div class="pf-time vel" class:onbekend={!velTekst}>
+				<div class="pf-time sheet" class:unknown={!velTekst}>
 					<span class="muted">{t('job.material')}</span>
 					<span class="v">{velTekst ?? t('job.material.none')}</span>
 				</div>
@@ -487,7 +487,7 @@
 						     preflight is the last moment you can still see that. So it is
 						     here as a line of its own — saying nothing would mean the one
 						     screen before burning does not say *where* it burns. -->
-						<div class="pf-time vel">
+						<div class="pf-time sheet">
 							<span class="muted">{t('job.origin')}</span>
 							<span class="v mono"
 								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
@@ -500,7 +500,7 @@
 				     information but noise. What the view does *not* do is hold the work
 				     up against the bed — that is below. -->
 			{/if}
-			{#if !leeg && device?.connection?.state === 'disconnected'}
+			{#if !empty && device?.connection?.state === 'disconnected'}
 				<!-- Starting is allowed: the engine queues the job and connects as
 				     soon as the machine is there. But whoever presses "Start now" and
 				     walks over to a silent machine has to know the waiting is down to
@@ -542,14 +542,14 @@
 										     and the digit beside the shape on the canvas, so they cannot
 										     drift apart. -->
 										{#if colorFor}
-											{@const nummer = layerNumber(ontwerp, layer.id)}
+											{@const number = layerNumber(ontwerp, layer.id)}
 											<!-- Without `aria-hidden` a screen reader would otherwise hear a
 											     bare digit in front of the layer name: "1 Cut". `role="img"`
 											     with a name turns it into "Layer 1, Cut"; without a role most
 											     screen readers ignore an aria-label on a span. With no number
 											     the chip is colour only, and therefore decoration — that one
 											     stays hidden. -->
-											{#if nummer === null}
+											{#if number === null}
 												<span class="chip mono" style:background={colorFor(layer.id)} aria-hidden="true"
 												></span>
 											{:else}
@@ -558,8 +558,8 @@
 													style:background={colorFor(layer.id)}
 													style:color={inkOn(colorFor(layer.id))}
 													role="img"
-													aria-label={t('job.layerAria', { n: nummer })}
-												>{nummer}</span>
+													aria-label={t('job.layerAria', { n: number })}
+												>{number}</span>
 											{/if}
 										{/if}{layer.label}
 									</td>
@@ -591,15 +591,15 @@
 
 				     Within the list not everything weighs the same. A measured value
 				     from the wrong material outranks a calculated value on the right
-				     one, and when those two stand side by side the tag says which to
+				     one, and when those two state side by side the tag says which to
 				     fix first. -->
 				{#if mismatch.length}
 					<ul class="pf-mismatch" role="alert">
-						{#each mismatch as melding, i (i)}
-							<li class:licht={melding.ernst < 2}>
+						{#each mismatch as notice, i (i)}
+							<li class:licht={notice.ernst < 2}>
 								{#if i === 0 && eersteWeegtZwaarder}
 									<span class="eerst">{t('job.first')}</span>
-								{/if}<strong>{melding.laag}</strong> — {melding.tekst}
+								{/if}<strong>{notice.layer}</strong> — {notice.text}
 							</li>
 						{/each}
 					</ul>
@@ -609,9 +609,9 @@
 				{/if}
 			{/if}
 
-			{#if leeg}
+			{#if empty}
 				<!-- No checklist, no start button: there is nothing to run through. -->
-				<div class="pf-leeg">
+				<div class="pf-empty">
 					<strong>{t('job.nothing.title')}</strong>
 					<p>{t('job.nothing.body')}</p>
 				</div>
@@ -624,7 +624,7 @@
 			     check made the real message invisible. Neutral now, and as a list,
 			     because you work down it. -->
 			<div class="pf-check">
-				<span class="pf-kop">{t('job.checklist.title')}</span>
+				<span class="pf-head">{t('job.checklist.title')}</span>
 				<ul>
 					<li>{t('job.checklist.lid')}</li>
 					<li>{t('job.checklist.air')}</li>
@@ -698,40 +698,40 @@
 			the top, with the buttons that do something at *this* moment. The shortcuts
 			are on the buttons themselves, because that is where you learn them.
 		-->
-		<div class="nu" class:brandt={phase === 'burning'} class:pauze={phase === 'paused'}>
-			<div class="nu-kop">
-				<span class="nu-phase">{phaseTitle(phase)}</span>
+		<div class="now" class:burns={phase === 'burning'} class:pause={phase === 'paused'}>
+			<div class="now-head">
+				<span class="now-phase">{phaseTitle(phase)}</span>
 				{#if job}
-					<span class="nu-job mono" title={job.label}>{job.label}</span>
+					<span class="now-job mono" title={job.label}>{job.label}</span>
 				{/if}
 			</div>
 
 			{#if voortgang !== null}
 				<!-- The bar and the percentage belong together and so sit on one line;
 				     the times below in the same columns as always. -->
-				<div class="nu-balk" role="progressbar" aria-valuenow={Math.round(voortgang * 100)} aria-valuemin="0" aria-valuemax="100" aria-label={t('job.progressAria')}>
-					<span class="nu-vol" style="width: {Math.round(voortgang * 1000) / 10}%"></span>
+				<div class="now-bar" role="progressbar" aria-valuenow={Math.round(voortgang * 100)} aria-valuemin="0" aria-valuemax="100" aria-label={t('job.progressAria')}>
+					<span class="now-vol" style="width: {Math.round(voortgang * 1000) / 10}%"></span>
 				</div>
-				<div class="nu-cijfers mono">
-					<span class="nu-pct">{Math.round(voortgang * 100)}%</span>
+				<div class="now-figures mono">
+					<span class="now-pct">{Math.round(voortgang * 100)}%</span>
 					{#if job?.steps_total}
-						<span class="nu-stap">{t('job.steps', { done: job.steps_done ?? 0, total: job.steps_total })}</span>
+						<span class="now-step">{t('job.steps', { done: job.steps_done ?? 0, total: job.steps_total })}</span>
 					{/if}
 					{#if (job?.loops ?? 1) > 1}
-						<span class="nu-pass">{t('job.pass', { n: (job?.loops_executed ?? 0) + 1, total: job?.loops })}</span>
+						<span class="now-pass">{t('job.pass', { n: (job?.loops_executed ?? 0) + 1, total: job?.loops })}</span>
 					{/if}
 				</div>
-				<div class="nu-tijd">
+				<div class="now-time">
 					<span>{t('job.elapsed', { time: formatDuration(job?.elapsed_seconds ?? null) })}</span>
-					{#if resterend !== null}<span class="nu-rest"
+					{#if resterend !== null}<span class="now-rest"
 							>{t('status.remaining', { remaining: formatDuration(resterend) })}</span
 						>{/if}
 				</div>
 			{/if}
 
-			<p class="nu-uitleg">{phaseBody(phase)}</p>
+			<p class="now-hint">{phaseBody(phase)}</p>
 
-			<div class="nu-acties">
+			<div class="now-actions">
 				{#if paused}
 					<button
 						class="btn primary"
@@ -753,8 +753,8 @@
 						onclick={() => control.pause()}
 					>{t('job.pause')}</button>
 				{/if}
-				<span class="nu-rek"></span>
-				<!-- Stop keeps its own space, away to the left of pause: a mis-tap here
+				<span class="now-stretch"></span>
+				<!-- Stop keeps its own space, away to the left of pause: a bad-tap here
 				     costs the workpiece. See DESIGN-SYSTEM v2, "Touch as first-class
 				     input". -->
 				<button
@@ -813,7 +813,7 @@
 		<details class="machinevouw" open={!busyWithWork}>
 			<summary>
 				{t('job.machineControls')}
-				{#if busyWithWork}<span class="waarom">— {t('job.machineControls.notNow')}</span>{/if}
+				{#if busyWithWork}<span class="why">— {t('job.machineControls.notNow')}</span>{/if}
 			</summary>
 		<div class="motion">
 			<span class="rot-label">{t('job.move')}</span>
@@ -859,7 +859,7 @@
 			     has "Go to Origin" and saved positions; whoever has a jig on the bed
 			     otherwise jogs that corner together again every session. -->
 			{#if control.capabilities?.motion?.move}
-				<div class="punten">
+				<div class="points">
 					<span class="rot-label">{t('job.toPoint')}</span>
 					<div class="puntrij">
 						<button
@@ -870,35 +870,35 @@
 						>
 							{t('job.toOrigin')}
 						</button>
-						{#each posities as plek (plek.name)}
-							<span class="plek">
+						{#each posities as place (place.name)}
+							<span class="place">
 								<button
-									class="rot naam"
+									class="rot name"
 									disabled={bewegenUit}
 									title={movingBlocked ??
-										t('job.toSpot.title', { x: size(plek.x_mm), y: size(plek.y_mm) })}
-									onclick={() => control.moveTo(plek.x_mm, plek.y_mm)}
+										t('job.toSpot.title', { x: size(place.x_mm), y: size(place.y_mm) })}
+									onclick={() => control.moveTo(place.x_mm, place.y_mm)}
 								>
-									{plek.name}
+									{place.name}
 									<!-- The coordinates with it, not only in the tooltip: on a touch
 									     screen there is no hover, and then a saved position is a name
 									     without a place. LightBurn puts them in a column of their own;
 									     there is no column for that here, so they sit muted behind the
 									     name in the same chip. -->
-									<span class="coord mono">{size(plek.x_mm)},&#8239;{size(plek.y_mm)}</span>
+									<span class="coord mono">{size(place.x_mm)},&#8239;{size(place.y_mm)}</span>
 								</button>
 								<!-- Discarding is in the button itself, not in a menu: there are at
 								     most twelve of them and you do it rarely. -->
 								<button
-									class="rot weg"
-									aria-label={t('job.forgetSpotAria', { name: plek.name })}
+									class="rot gone"
+									aria-label={t('job.forgetSpotAria', { name: place.name })}
 									title={t('job.forgetSpot')}
-									onclick={() => vergeet(plek.name)}
+									onclick={() => vergeet(place.name)}
 								>×</button>
 							</span>
 						{/each}
 					</div>
-					{#if bewaren}
+					{#if saving}
 						<div class="bewaarrij">
 							<!-- svelte-ignore a11y_autofocus -->
 							<input
@@ -909,13 +909,13 @@
 								bind:value={nieuweNaam}
 								onkeydown={(e) => {
 									if (e.key === 'Enter') bewaar();
-									if (e.key === 'Escape') bewaren = false;
+									if (e.key === 'Escape') saving = false;
 								}}
 							/>
 							<button class="rot" onclick={bewaar} disabled={!nieuweNaam.trim()}>
 								{t('job.keep')}
 							</button>
-							<button class="rot" onclick={() => (bewaren = false)}>{t('common.cancel')}</button>
+							<button class="rot" onclick={() => (saving = false)}>{t('common.cancel')}</button>
 						</div>
 					{:else}
 						<button
@@ -926,7 +926,7 @@
 								: t('job.keepSpot.title', { x: size(huidigMm[0]), y: size(huidigMm[1]) })}
 							onclick={() => {
 								nieuweNaam = '';
-								bewaren = true;
+								saving = true;
 							}}
 						>
 							{t('job.keepSpot')}
@@ -944,13 +944,13 @@
 			     the saved positions say "go there", this says "measure from there".
 			     Among the spots it would read as one more spot. -->
 			{#if control.capabilities?.motion?.move}
-				<div class="nulpunt" class:gezet={control.origin !== null}>
+				<div class="origin" class:gezet={control.origin !== null}>
 					<span class="rot-label">{t('job.workOrigin')}</span>
 					{#if control.origin}
 						<!-- The number is always with it. A zero point you cannot read off is
 						     a setting that quietly moves your work, and that is exactly the
 						     kind of surprise that makes a laser expensive. -->
-						<p class="nulstand">
+						<p class="originPoint">
 							<span class="mono"
 								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
 							>
@@ -1022,19 +1022,19 @@
 									>
 								</span>
 								<div class="stelknoppen">
-									{#each [-0.1, -0.01, 0.01, 0.1] as stap (stap)}
+									{#each [-0.1, -0.01, 0.01, 0.1] as step (step)}
 										<button
-											class="rot stel"
+											class="rot adjust"
 											disabled={!connection.online}
-											title={t(stap > 0 ? 'job.adjust.more' : 'job.adjust.less', {
+											title={t(step > 0 ? 'job.adjust.more' : 'job.adjust.less', {
 												what: t(axis.key).toLowerCase()
 											})}
-											onclick={() => control.setAdjustment(axis.what, level + stap)}
-											>{stap > 0 ? '+' : '−'}{Math.abs(Math.round(stap * 100))}%</button
+											onclick={() => control.setAdjustment(axis.what, level + step)}
+											>{step > 0 ? '+' : '−'}{Math.abs(Math.round(step * 100))}%</button
 										>
 									{/each}
 									<button
-										class="rot stel terug"
+										class="rot adjust terug"
 										disabled={!connection.online || level === 1}
 										title={t('job.adjust.resetTitle')}
 										onclick={() => control.setAdjustment(axis.what, 1)}
@@ -1267,12 +1267,12 @@
 		letter-spacing: 0.04em;
 	}
 	/* The size is secondary but has to stay readable; no separate tone. */
-	.pf-time.vel { border-bottom: none; padding-bottom: 0; margin-bottom: var(--space-2); }
-	.pf-time.vel .v { font-size: var(--text-sm); }
+	.pf-time.sheet { border-bottom: none; padding-bottom: 0; margin-bottom: var(--space-2); }
+	.pf-time.sheet .v { font-size: var(--text-sm); }
 	/* A missing material is not a fault but is a gap: the same muted tone as the
 	   labels, so that it reads as "something still belongs here" and not as a material
 	   called "not filled in". */
-	.pf-time.vel.onbekend .v { color: var(--text-2); font-style: italic; }
+	.pf-time.sheet.unknown .v { color: var(--text-2); font-style: italic; }
 	.pf-check {
 		margin: var(--space-3) 0;
 		padding: var(--space-2) var(--space-3);
@@ -1280,7 +1280,7 @@
 		background: var(--surface-2);
 		font-size: var(--text-xs);
 	}
-	.pf-kop {
+	.pf-head {
 		display: block;
 		font-weight: 600;
 		color: var(--text-2);
@@ -1296,14 +1296,14 @@
 	.pf-check li { padding: 1px 0; }
 	/* The pre-flight's border is neutral; on "nothing to do" it may say so without
 	   raising an alarm — this is not a fault, only an empty tray. */
-	.preflight.niets { border-color: var(--warn); }
-	.pf-leeg { margin-bottom: var(--space-3); }
-	.pf-leeg strong {
+	.preflight.none { border-color: var(--warn); }
+	.pf-empty { margin-bottom: var(--space-3); }
+	.pf-empty strong {
 		display: block;
 		font-size: var(--text-sm);
 		margin-bottom: 2px;
 	}
-	.pf-leeg p {
+	.pf-empty p {
 		margin: 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
@@ -1406,7 +1406,7 @@
 	   What is going on *now*, at the top of the panel. The sizes are generous: this is
 	   the block you look at from two metres away while standing at the machine, not
 	   something you read from close up. */
-	.nu {
+	.now {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
@@ -1418,21 +1418,21 @@
 	/* Only a running job gets the accent. A paused one gets the warning colour, because
 	   standing still with work in the machine is a state you have to do something
 	   about. */
-	.nu.brandt { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-	.nu.pauze { border-color: color-mix(in srgb, var(--warn-solid) 55%, var(--line)); }
-	.nu-kop {
+	.now.burns { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+	.now.pause { border-color: color-mix(in srgb, var(--warn-solid) 55%, var(--line)); }
+	.now-head {
 		display: flex;
 		align-items: baseline;
 		gap: var(--space-2);
 	}
-	.nu-phase {
+	.now-phase {
 		font-size: var(--text-md);
 		font-weight: 600;
 		color: var(--text-1);
 	}
-	.nu.brandt .nu-phase { color: var(--accent); }
-	.nu.pauze .nu-phase { color: var(--warn); }
-	.nu-job {
+	.now.burns .now-phase { color: var(--accent); }
+	.now.pause .now-phase { color: var(--warn); }
+	.now-job {
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
@@ -1442,21 +1442,21 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.nu-balk {
+	.now-bar {
 		height: 8px;
 		border-radius: 999px;
 		background: var(--surface-2);
 		overflow: hidden;
 	}
-	.nu-vol {
+	.now-vol {
 		display: block;
 		height: 100%;
 		border-radius: 999px;
 		background: var(--accent);
 		transition: width var(--transition);
 	}
-	.nu.pauze .nu-vol { background: var(--warn-solid); }
-	.nu-cijfers {
+	.now.pause .now-vol { background: var(--warn-solid); }
+	.now-figures {
 		display: flex;
 		align-items: baseline;
 		gap: var(--space-3);
@@ -1464,37 +1464,37 @@
 		color: var(--text-2);
 	}
 	/* The percentage is the number you read from a distance; the rest is caption. */
-	.nu-pct {
+	.now-pct {
 		font-size: var(--text-lg);
 		font-weight: 600;
 		color: var(--text-1);
 		font-variant-numeric: tabular-nums;
 	}
-	.nu-stap,
-	.nu-pass { font-variant-numeric: tabular-nums; }
-	.nu-tijd {
+	.now-step,
+	.now-pass { font-variant-numeric: tabular-nums; }
+	.now-time {
 		display: flex;
 		justify-content: space-between;
 		gap: var(--space-3);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.nu-rest { color: var(--text-1); font-weight: 500; }
-	.nu-uitleg {
+	.now-rest { color: var(--text-1); font-weight: 500; }
+	.now-hint {
 		margin: 0;
 		font-size: var(--text-xs);
 		line-height: 1.5;
 		color: var(--text-2);
 	}
-	.nu-acties {
+	.now-actions {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		margin-top: var(--space-1);
 	}
-	/* Stop keeps its distance from pause: a mis-tap here costs the workpiece. */
-	.nu-rek { flex: 1; min-width: var(--space-6); }
-	.nu-acties .btn { min-height: 40px; padding: 0 var(--space-4); }
+	/* Stop keeps its distance from pause: a bad-tap here costs the workpiece. */
+	.now-stretch { flex: 1; min-width: var(--space-6); }
+	.now-actions .btn { min-height: 40px; padding: 0 var(--space-4); }
 	.wachtrij { align-self: flex-start; }
 
 	/* De machinebediening onder de voortgang, dicht zolang er werk onderweg is. */
@@ -1521,7 +1521,7 @@
 	}
 	.machinevouw[open] > summary::before { content: '▾'; }
 	.machinevouw > summary:hover { color: var(--text-1); }
-	.machinevouw .waarom {
+	.machinevouw .why {
 		text-transform: none;
 		letter-spacing: 0;
 		font-weight: 400;
@@ -1544,7 +1544,7 @@
 	}
 	/* The secondary button keeps its word on one line; the primary gets the rest. With
 	   `flex: 1` on both, "Show frame" broke over two lines and the row became
-	   twee keer zo hoog. */
+	   twee keer zo high. */
 	.pf-plak .btn { flex: none; white-space: nowrap; }
 	.pf-plak .btn.primary { flex: 1; }
 
@@ -1573,7 +1573,7 @@
 		.toetsen { display: none; }
 	}
 	/* Jumping to a point, beside the direction buttons above. */
-	.punten { margin-top: var(--space-3); }
+	.points { margin-top: var(--space-3); }
 	.puntrij {
 		display: flex;
 		flex-wrap: wrap;
@@ -1582,23 +1582,23 @@
 	}
 	/* Name and cross are one thing with two targets; the seam between them is a
 	   hairline, so it reads as one chip and not as two loose buttons. */
-	.plek { display: inline-flex; }
-	.plek .naam { border-radius: var(--radius-field) 0 0 var(--radius-field); }
-	.plek .weg {
+	.place { display: inline-flex; }
+	.place .name { border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	.place .gone {
 		border-left: none;
 		border-radius: 0 var(--radius-field) var(--radius-field) 0;
 		padding: 4px var(--space-2);
 		color: var(--text-2);
 	}
-	.plek .weg:hover { color: var(--danger); }
-	/* On a touch screen a 20px cross is a mistake waiting to happen: one mis-aimed tap
+	.place .gone:hover { color: var(--danger); }
+	/* On a touch screen a 20px cross is a mistake waiting to happen: one bad-aimed tap
 	   and your saved position is gone. It is
 	   recoverable (jog there, save again) and therefore not worth a confirmation, but
 	   the target may well be glove-sized. */
 	@media (pointer: coarse) {
-		.plek .naam,
-		.plek .weg { min-height: 44px; }
-		.plek .weg { padding: 0 var(--space-3); }
+		.place .name,
+		.place .gone { min-height: 44px; }
+		.place .gone { padding: 0 var(--space-3); }
 	}
 	/* Muted and a size smaller: the name is what you aim at, the coordinates are the
 	   confirmation that it is the right place. */
@@ -1614,7 +1614,7 @@
 	   on or off and that moves your work. Without the frame it reads as yet another row
 	   of buttons among the saved places, and then you do not see that something is
 	   on. */
-	.nulpunt {
+	.origin {
 		margin-top: var(--space-3);
 		padding: var(--space-2h) var(--space-3);
 		border: 1px solid var(--line-1);
@@ -1624,16 +1624,16 @@
 	/* When a zero point is set, the left border carries that — so you see it at the
 	   edge of your eye without reading the text. In the accent and not in a warning
 	   colour: this is not dangerous, it is on. */
-	.nulpunt.gezet {
+	.origin.gezet {
 		border-left: 3px solid var(--accent);
 	}
-	.nulstand {
+	.originPoint {
 		margin: var(--space-1h) 0 0;
 		font-size: var(--text-xs);
 		line-height: 1.45;
 		color: var(--text-2);
 	}
-	.nulstand .mono {
+	.originPoint .mono {
 		color: var(--text-1);
 		font-variant-numeric: tabular-nums;
 	}
@@ -1659,7 +1659,7 @@
 	}
 	/* Five buttons on one row in a 280 px panel: each may shrink, but the text stays on
 	   the type scale — only the air around it comes off. */
-	.stel {
+	.adjust {
 		flex: 1;
 		min-width: 0;
 		padding: 4px 2px;
@@ -1668,7 +1668,7 @@
 		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 	}
-	.stel.terug { flex: 1.3; }
+	.adjust.terug { flex: 1.3; }
 	.naamveld {
 		flex: 1;
 		min-width: 10ch;

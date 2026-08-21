@@ -205,7 +205,7 @@ export type Handlers = {
 	split: () => void;
 	fill: (on: boolean) => void;
 	corners: () => void;
-	onlyLayer: (kind: 'cut' | 'engrave' | 'raster') => void;
+	onlyLayer: (kind: 'cut' | 'engrave' | 'grid') => void;
 	assignLayer: (id: string, inside: boolean) => void;
 	toSheet: (id: string) => void;
 	editText: () => void;
@@ -339,7 +339,7 @@ export function historyActions(ctx: Context, h: Handlers): Action[] {
  *
  * The order is the order of every desktop app: clipboard first, then arranging,
  * then the shape itself, then where it belongs (layer, sheet), and only at the
- * bottom what throws it away. Whoever mis-clicks here hits "Copy" and not
+ * bottom what throws it away. Whoever bad-clicks here hits "Copy" and not
  * "Delete".
  */
 export function objectMenu(ctx: Context, h: Handlers): Menu {
@@ -413,10 +413,10 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 			run: () => h.onlyLayer('engrave')
 		},
 		{
-			id: 'layer-only-raster',
+			id: 'layer-only-grid',
 			label: t('action.onlyRaster'),
 			off: needsOne,
-			run: () => h.onlyLayer('raster')
+			run: () => h.onlyLayer('grid')
 		}
 	];
 

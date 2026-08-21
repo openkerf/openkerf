@@ -41,8 +41,8 @@
 		const rauw = $page.url.searchParams.get('connection');
 		if (!rauw) return null;
 		try {
-			const uit = JSON.parse(rauw);
-			return uit && typeof uit === 'object' ? (uit as Record<string, string>) : null;
+			const off = JSON.parse(rauw);
+			return off && typeof off === 'object' ? (off as Record<string, string>) : null;
 		} catch {
 			return null;
 		}
@@ -73,8 +73,8 @@
 		// Only fill in what this machine really knows: a `serial_port` on a device
 		// that has none is refused by the API.
 		if (connection) {
-			for (const [attr, waarde] of Object.entries(connection)) {
-				if (attr in values) values[attr] = waarde;
+			for (const [attr, value] of Object.entries(connection)) {
+				if (attr in values) values[attr] = value;
 			}
 		}
 	}
@@ -92,25 +92,25 @@
 	 */
 	const NAAR_MM: Record<string, number> = { mm: 1, cm: 10, in: 25.4, mil: 0.0254 };
 
-	function alsGetal(waarde: unknown): string {
-		const tekst = String(waarde ?? '').trim();
-		const gevonden = tekst.match(/^\s*(-?\d+(?:\.\d+)?)\s*([a-zA-Z]*)/);
-		if (!gevonden) return '0';
-		const factor = NAAR_MM[gevonden[2].toLowerCase()] ?? 1;
-		const mm = Number(gevonden[1]) * factor;
+	function alsGetal(value: unknown): string {
+		const text = String(value ?? '').trim();
+		const found = text.match(/^\s*(-?\d+(?:\.\d+)?)\s*([a-zA-Z]*)/);
+		if (!found) return '0';
+		const factor = NAAR_MM[found[2].toLowerCase()] ?? 1;
+		const mm = Number(found[1]) * factor;
 		// No trail of floating-point digits behind a measure in millimetres.
 		return String(Math.round(mm * 100) / 100);
 	}
 
-	let breedte = $state('0');
-	let hoogte = $state('0');
-	let geladen = $state(false);
+	let width = $state('0');
+	let height = $state('0');
+	let loaded = $state(false);
 
 	$effect(() => {
-		if (geladen || !('bedwidth' in values)) return;
-		breedte = alsGetal(values.bedwidth);
-		hoogte = alsGetal(values.bedheight);
-		geladen = true;
+		if (loaded || !('bedwidth' in values)) return;
+		width = alsGetal(values.bedwidth);
+		height = alsGetal(values.bedheight);
+		loaded = true;
 	});
 
 	// Where the head goes when you say "home". The engine calls this "Force Declared
@@ -125,7 +125,7 @@
 		{ id: 'center', label: t('setup.corner.centre') }
 	];
 	let heeftHoek = $derived('home_corner' in values);
-	let hoek = $derived(String(values.home_corner ?? 'auto'));
+	let corner = $derived(String(values.home_corner ?? 'auto'));
 
 	/** Position of the origin dot in the drawing, in per cent. */
 	let stip = $derived(
@@ -135,7 +135,7 @@
 			'bottom-left': { x: 0, y: 100 },
 			'bottom-right': { x: 100, y: 100 },
 			center: { x: 50, y: 50 }
-		}[hoek] ?? null
+		}[corner] ?? null
 	);
 
 	// The drawing is an ordinary SVG in pixels, not in millimetres: the trap from
@@ -145,7 +145,7 @@
 	/** Margin around it, so the bed reads as a surface *inside* a workspace. */
 	const ROOM = { w: 176, h: 108 };
 	let verhouding = $derived(
-		Math.max(0.2, Math.min(4, (Number(breedte) || 1) / (Number(hoogte) || 1)))
+		Math.max(0.2, Math.min(4, (Number(width) || 1) / (Number(height) || 1)))
 	);
 	let bedDoos = $derived(
 		verhouding >= ROOM.w / ROOM.h
@@ -163,28 +163,28 @@
 	 */
 	let restVelden = $derived.by(() => {
 		const gezien = new Set(OURS);
-		const velden: SettingField[] = [];
+		const fields: SettingField[] = [];
 		for (const sheet of store.settings) {
 			for (const field of sheet.fields) {
 				if (gezien.has(field.attr)) continue;
 				gezien.add(field.attr);
-				velden.push(field);
+				fields.push(field);
 			}
 		}
-		return velden;
+		return fields;
 	});
 	let restOpen = $state(false);
 
 	async function save() {
 		if ('bedwidth' in values) {
-			values.bedwidth = `${Number(breedte) || 0}mm`;
-			values.bedheight = `${Number(hoogte) || 0}mm`;
+			values.bedwidth = `${Number(width) || 0}mm`;
+			values.bedheight = `${Number(height) || 0}mm`;
 		}
 		if (Object.keys(values).length) {
 			if (!(await store.updateSettings(machinePath, values))) return;
 		}
 		await bewaarProfiel();
-		await goto(`/setup/klaar?machine=${encodeURIComponent(machinePath)}`);
+		await goto(`/setup/ready?machine=${encodeURIComponent(machinePath)}`);
 	}
 
 	// The library profile belongs to this device; the checkboxes below live there,
@@ -238,8 +238,8 @@
 					<span class="mono">
 						{ingevuld
 							.map(
-								([attr, waarde]) =>
-									`${woord(VERBINDINGSWOORD, attr)}: ${woord(VERBINDINGSWAARDE, waarde)}`
+								([attr, value]) =>
+									`${woord(VERBINDINGSWOORD, attr)}: ${woord(VERBINDINGSWAARDE, value)}`
 							)
 							.join(' · ')}
 					</span>
@@ -254,19 +254,19 @@
 		<p class="muted">{t('setup.bedSize.body')}</p>
 
 		<div class="werkgebied">
-			<div class="velden">
+			<div class="fields">
 				{#if 'bedwidth' in values}
-					<NumberField label={t('gen.width')} unit="mm" bind:value={breedte} step={10} min={1} />
-					<NumberField label={t('gen.height')} unit="mm" bind:value={hoogte} step={10} min={1} />
+					<NumberField label={t('gen.width')} unit="mm" bind:value={width} step={10} min={1} />
+					<NumberField label={t('gen.height')} unit="mm" bind:value={height} step={10} min={1} />
 				{:else}
 					<p class="muted">{t('setup.noBedSize')}</p>
 				{/if}
 
 				{#if heeftHoek}
-					<label class="keuze">
+					<label class="choice">
 						<span>{t('setup.whereIsZero')}</span>
 						<select
-							value={hoek}
+							value={corner}
 							onchange={(e) => (values.home_corner = e.currentTarget.value)}
 						>
 							{#each HOEKEN as optie (optie.id)}
@@ -280,7 +280,7 @@
 
 			<figure class="drawing">
 				<svg viewBox="0 0 {DRAWING.w} {DRAWING.h}" role="img"
-					aria-label={t('setup.bedAria', { width: breedte, height: hoogte })}>
+					aria-label={t('setup.bedAria', { width: width, height: height })}>
 					<defs>
 						<pattern id="bedgrid" width="10" height="10" patternUnits="userSpaceOnUse">
 							<path d="M10 0 L0 0 0 10" fill="none" stroke="var(--line)" stroke-width="0.5" />
@@ -290,19 +290,19 @@
 					<g transform="translate({(DRAWING.w - bedDoos.w) / 2} {(DRAWING.h - bedDoos.h) / 2})">
 							<rect width={bedDoos.w} height={bedDoos.h} class="bed" />
 							<rect width={bedDoos.w} height={bedDoos.h} fill="url(#bedgrid)" />
-							<rect width={bedDoos.w} height={bedDoos.h} class="rand" />
+							<rect width={bedDoos.w} height={bedDoos.h} class="edge" />
 							{#if stip}
 								<circle
 									cx={(bedDoos.w * stip.x) / 100}
 									cy={(bedDoos.h * stip.y) / 100}
 									r="3.5"
-									class="oorsprong"
+									class="originMark"
 								/>
 							{/if}
 					</g>
 				</svg>
 				<figcaption>
-					<span class="maat mono">{breedte} × {hoogte} mm</span>
+					<span class="size mono">{width} × {height} mm</span>
 					{#if stip}{t('setup.zeroOnDot')}{:else}{t('setup.zeroByMachine')}{/if}
 				</figcaption>
 			</figure>
@@ -336,7 +336,7 @@
 						checked={!essentialOnly}
 						onchange={(e) => {
 							essentialOnly = !e.currentTarget.checked;
-							geladen = false;
+							loaded = false;
 							reload();
 						}}
 					/>
@@ -378,7 +378,7 @@
 		align-items: start;
 		margin: var(--space-4) 0;
 	}
-	.velden {
+	.fields {
 		display: grid;
 		gap: var(--space-3);
 		min-width: 0;
@@ -386,15 +386,15 @@
 		   no longer read them as one control. */
 		max-width: 320px;
 	}
-	.keuze {
+	.choice {
 		display: grid;
 		gap: 4px;
 	}
-	.keuze > span:first-child {
+	.choice > span:first-child {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.keuze select {
+	.choice select {
 		font: inherit;
 		padding: 8px;
 		min-height: 40px;
@@ -428,12 +428,12 @@
 	.drawing .bed {
 		fill: var(--bed);
 	}
-	.drawing .rand {
+	.drawing .edge {
 		fill: none;
 		stroke: var(--text-2);
 		stroke-width: 1;
 	}
-	.drawing .oorsprong {
+	.drawing .originMark {
 		fill: var(--accent);
 	}
 	.drawing figcaption {
@@ -444,7 +444,7 @@
 		text-align: center;
 		margin-top: var(--space-2);
 	}
-	.drawing .maat {
+	.drawing .size {
 		color: var(--text-1);
 	}
 
@@ -494,7 +494,7 @@
 	   tablet at 40px (measured: select 40, expander row 32). */
 	@media (max-width: 1199px) {
 		.rest summary,
-		.keuze select {
+		.choice select {
 			min-height: 44px;
 		}
 		.toggle input { width: 22px; height: 22px; }

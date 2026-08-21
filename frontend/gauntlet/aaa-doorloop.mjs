@@ -10,7 +10,7 @@ mkdirSync(OUT, { recursive: true });
 const ronde = process.argv[2] ?? 'r1';
 
 const b = await browser();
-const page = await open(b, { width: 1440, theme: 'light', path: '/setup/soort' });
+const page = await open(b, { width: 1440, theme: 'light', path: '/setup/kind' });
 
 async function stap(naam, fn) {
 	await fn();

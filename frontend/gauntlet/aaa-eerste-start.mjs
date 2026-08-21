@@ -12,10 +12,10 @@ const ronde = process.argv[2] ?? 'r1';
 const paden = [
 	['start', '/'],
 	['setup', '/setup'],
-	['soort', '/setup/soort'],
+	['soort', '/setup/kind'],
 	['type', '/setup/type?soort=co2'],
-	['naam', '/setup/naam?type=lhystudios'],
-	['klaar', '/setup/klaar']
+	['naam', '/setup/name?type=lhystudios'],
+	['klaar', '/setup/done']
 ];
 
 const b = await browser();

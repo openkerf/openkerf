@@ -73,7 +73,7 @@
 
 	const ICON = {
 		beeld: 'M3.5 5h17v14h-17z',
-		raster: 'M3.5 3.5h17v17h-17z M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17',
+		grid: 'M3.5 3.5h17v17h-17z M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17',
 		boeken: 'M4 5h6v14H4zM14 5h6v14h-6zM4 9h6M14 9h6'
 	};
 
@@ -148,7 +148,7 @@
 			<span class="name">{t('rail.library.short')}</span>
 		</button>
 		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => { moreOpen = false; onOpenGrid?.(); }}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.raster} /></svg>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>
 			<span class="name">{t('testgrid.title')}</span>
 		</button>
 		<hr />
@@ -177,7 +177,7 @@
 			onclick={() => (moreOpen = false)}
 		></div>
 		<div class="menu" role="menu" tabindex="-1">
-			<p class="kop">{t('rail.group.tools')}</p>
+			<p class="head">{t('rail.group.tools')}</p>
 			{#each hidden as item (item.id)}
 				<button class="row" role="menuitemradio" title={item.label} aria-checked={tool === item.id} disabled={!canEdit} onclick={() => pick(item.id)}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={item.path} /></svg>
@@ -185,7 +185,7 @@
 				</button>
 			{/each}
 
-			<p class="kop">{t('rail.group.add')}</p>
+			<p class="head">{t('rail.group.add')}</p>
 			<label class="row" class:off={!canEdit}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
 				<span>{t('rail.placeImage')}</span>
@@ -206,7 +206,7 @@
 			</button>
 
 			{#if files}
-				<p class="kop">{t('rail.group.file')}</p>
+				<p class="head">{t('rail.group.file')}</p>
 				<label class="row">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
 					<span>{t('rail.importHere')}</span>
@@ -267,7 +267,7 @@
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
 		</button>
 		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => onOpenGrid?.()}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.raster} /></svg>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>
 		</button>
 		<button class="tool" title={t('rail.presetariat')} onclick={() => onOpenCatalogue?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
@@ -392,7 +392,7 @@
 		box-shadow: var(--shadow-float);
 		z-index: 20;
 	}
-	.kop {
+	.head {
 		margin: var(--space-2) 0 var(--space-1);
 		padding: 0 var(--space-2);
 		font-size: var(--text-xs);
@@ -401,7 +401,7 @@
 		text-transform: uppercase;
 		color: var(--text-2);
 	}
-	.kop:first-child {
+	.head:first-child {
 		margin-top: 0;
 	}
 	.row {

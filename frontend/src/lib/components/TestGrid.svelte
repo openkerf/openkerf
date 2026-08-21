@@ -68,10 +68,10 @@
 	 */
 	type As = GridAxis;
 	const AS_ORDE: As[] = ['speed', 'power', 'interval'];
-	const INVOER: Record<As, { stap: number; max?: number }> = {
-		speed: { stap: 1 },
-		power: { stap: 5, max: 100 },
-		interval: { stap: 0.01, max: 5 }
+	const INVOER: Record<As, { step: number; max?: number }> = {
+		speed: { step: 1 },
+		power: { step: 5, max: 100 },
+		interval: { step: 0.01, max: 5 }
 	};
 	/** Where the line spacing means something; when cutting the head lays one line. */
 	const INTERVAL_BEWERKINGEN = ['graveren-raster'];
@@ -90,8 +90,8 @@
 	 * 810 pixels wide and the reason sat below the fold. Now the last valid image
 	 * stays up with this notice above it.
 	 */
-	let voorbeeldFout = $state<string | null>(null);
-	let gelukt = $state<{ id: number; cellen: number } | null>(null);
+	let previewError = $state<string | null>(null);
+	let done = $state<{ id: number; cellen: number } | null>(null);
 	// The measures in the plan are numbers, row_axis/column_axis are words.
 	type Plan = Record<string, number> & {
 		row_axis?: As;
@@ -106,7 +106,7 @@
 	let preview = $state<{
 		plan: Plan;
 		cells: Cell[];
-		engine?: { raster?: boolean };
+		engine?: { grid?: boolean };
 	} | null>(null);
 
 	let form = $state({
@@ -166,7 +166,7 @@
 	);
 	/** Raster chosen on an engine that cannot convert it into laser lines. */
 	let rasterOnmogelijk = $derived(
-		form.operation === 'graveren-raster' && preview?.engine?.raster === false
+		form.operation === 'graveren-raster' && preview?.engine?.grid === false
 	);
 	let assen = $derived([form.row_axis, form.column_axis] as As[]);
 	let vasteAs = $derived(
@@ -180,10 +180,10 @@
 	 * the columns and that one moves to the vacated place. That is what a user
 	 * means by "swap", and it saves an error message.
 	 */
-	function kiesAs(welke: 'row_axis' | 'column_axis', nieuw: As) {
+	function kiesAs(welke: 'row_axis' | 'column_axis', fresh: As) {
 		const andere = welke === 'row_axis' ? 'column_axis' : 'row_axis';
-		if (form[andere] === nieuw) form[andere] = form[welke];
-		form[welke] = nieuw;
+		if (form[andere] === fresh) form[andere] = form[welke];
+		form[welke] = fresh;
 	}
 
 	// If the operation jumps back to cutting while interval is on an axis, that axis
@@ -195,7 +195,7 @@
 	});
 
 	function body(metOpschrift = false) {
-		const uit: Record<string, unknown> = {
+		const off: Record<string, unknown> = {
 			material_id: form.material_id,
 			thickness_mm: form.thickness_mm === '' ? null : Number(form.thickness_mm),
 			operation: form.operation,
@@ -214,24 +214,24 @@
 		};
 		for (const as of AS_ORDE) {
 			if (assen.includes(as)) {
-				uit[`${as}_min`] = Number(form[`${as}_min`]);
-				uit[`${as}_max`] = Number(form[`${as}_max`]);
-				uit[`${as}_steps`] = Number(form[`${as}_steps`]);
+				off[`${as}_min`] = Number(form[`${as}_min`]);
+				off[`${as}_max`] = Number(form[`${as}_max`]);
+				off[`${as}_steps`] = Number(form[`${as}_steps`]);
 			} else {
-				uit[VAST_VELD[as]] = Number(form[VAST_VELD[as]]);
+				off[VAST_VELD[as]] = Number(form[VAST_VELD[as]]);
 			}
 		}
 		// The planning route does not know "caption"; only the board carries it.
-		if (metOpschrift) uit.caption = form.caption.trim();
-		return uit;
+		if (metOpschrift) off.caption = form.caption.trim();
+		return off;
 	}
 
-	async function send(path: string, metOpschrift = false, stil = false) {
-		if (stil) bezigVoorbeeld = true;
+	async function send(path: string, metOpschrift = false, quiet = false) {
+		if (quiet) bezigVoorbeeld = true;
 		else busy = true;
 		// A quiet preview round does not touch `error`: that block sits at the bottom
 		// of the form and belongs to a failed action, not to a half-typed number.
-		if (stil) voorbeeldFout = null;
+		if (quiet) previewError = null;
 		else error = null;
 		try {
 			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -245,22 +245,22 @@
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				const melding =
+				const notice =
 					typeof data?.detail === 'string'
 						? data.detail
 						: t('grid.error.refused', { status: response.status });
-				if (stil) voorbeeldFout = melding;
-				else error = melding;
+				if (quiet) previewError = notice;
+				else error = notice;
 				return null;
 			}
 			return data;
 		} catch (e) {
-			const melding = t('error.network', { message: e instanceof Error ? e.message : e });
-			if (stil) voorbeeldFout = melding;
-			else error = melding;
+			const notice = t('error.network', { message: e instanceof Error ? e.message : e });
+			if (quiet) previewError = notice;
+			else error = notice;
 			return null;
 		} finally {
-			if (stil) bezigVoorbeeld = false;
+			if (quiet) bezigVoorbeeld = false;
 			else busy = false;
 		}
 	}
@@ -319,18 +319,18 @@
 		interval: 'interval_mm'
 	};
 
-	/** De waarden waarop echt gebrand wordt — na afronding, in rasterorde. */
+	/** De values waarop echt gebrand wordt — na afronding, in rasterorde. */
 	function langsAs(richting: 'row' | 'column'): number[] {
 		if (!preview) return [];
 		const as: As =
 			richting === 'row'
 				? (preview.plan.row_axis ?? 'speed')
 				: (preview.plan.column_axis ?? 'power');
-		const gevonden = new Map<number, number>();
+		const found = new Map<number, number>();
 		for (const cell of preview.cells) {
-			gevonden.set(cell[richting], cell[CEL_SLEUTEL[as]] as number);
+			found.set(cell[richting], cell[CEL_SLEUTEL[as]] as number);
 		}
-		return [...gevonden.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+		return [...found.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 	}
 	let rijwaarden = $derived(preview ? langsAs('row') : []);
 	let kolomwaarden = $derived(preview ? langsAs('column') : []);
@@ -355,15 +355,15 @@
 	}
 
 	let brandschaal = $derived.by(() => {
-		if (!preview) return { laag: 0, hoog: 1 };
+		if (!preview) return { layer: 0, high: 1 };
 		const scores = preview.cells.map(score);
-		const laag = Math.min(...scores);
-		const hoog = Math.max(...scores);
-		return { laag, hoog: hoog > laag ? hoog : laag + 1 };
+		const layer = Math.min(...scores);
+		const high = Math.max(...scores);
+		return { layer, high: high > layer ? high : layer + 1 };
 	});
 
 	function brand(cell: Cell) {
-		const t = (score(cell) - brandschaal.laag) / (brandschaal.hoog - brandschaal.laag);
+		const t = (score(cell) - brandschaal.layer) / (brandschaal.high - brandschaal.layer);
 		// Not all the way to zero: even the lightest square is a cut in wood.
 		return Math.max(0, Math.min(1, 0.12 + 0.88 * t));
 	}
@@ -400,10 +400,10 @@
 	});
 
 	/** "0.05 mm", "60%", "12 mm/s" — the axis value as it ends up on the wood. */
-	function toon(as: As, waarde: number | null | undefined) {
-		if (waarde === null || waarde === undefined) return '';
+	function show(as: As, value: number | null | undefined) {
+		if (value === null || value === undefined) return '';
 		const eenheid = AXIS_UNIT[as];
-		return eenheid === '%' ? `${waarde}%` : `${waarde} ${eenheid}`;
+		return eenheid === '%' ? `${value}%` : `${value} ${eenheid}`;
 	}
 
 	// The preview is drawn in real pixels rather than in millimetres: an SVG with a
@@ -426,15 +426,15 @@
 	// "No material" is not the same as "the field is empty": an id that is not in the
 	// library produces no preset later on just the same. So the warning belongs there
 	// in that case too, and not one frame later.
-	let geenMateriaal = $derived(
+	let noMaterial = $derived(
 		form.material_id === null ||
 			(library.materials.length > 0 &&
 				!library.materials.some((m) => m.id === form.material_id))
 	);
-	let stap = $derived(gelukt ? 2 : 1);
+	let step = $derived(done ? 2 : 1);
 
 	/**
-	 * Waar het vorige bord kwam te liggen.
+	 * Waar het vorige board kwam te liggen.
 	 *
 	 * Needed because by default a second grid lands in exactly the same place: Start X
 	 * and Start Y are still what they were. Measured: two boards, both at 20, 20 mm,
@@ -445,23 +445,23 @@
 		id: number;
 		x: number;
 		y: number;
-		breedte: number;
-		hoogte: number;
+		width: number;
+		height: number;
 	} | null>(null);
 
 	async function generate() {
-		gelukt = null;
+		done = null;
 		const grid = await send('/api/library/testgrids', true);
 		if (grid) {
-			gelukt = { id: grid.id, cellen: grid.cells?.length ?? 0 };
+			done = { id: grid.id, cellen: grid.cells?.length ?? 0 };
 			const plan = preview?.plan;
 			vorigBord = plan
 				? {
 						id: grid.id,
 						x: plan.outer_x_mm ?? plan.origin_x_mm,
 						y: plan.outer_y_mm ?? plan.origin_y_mm,
-						breedte: plan.outer_width_mm ?? plan.width_mm,
-						hoogte: plan.outer_height_mm ?? plan.height_mm
+						width: plan.outer_width_mm ?? plan.width_mm,
+						height: plan.outer_height_mm ?? plan.height_mm
 					}
 				: null;
 			onGenerated?.(grid.id);
@@ -478,26 +478,26 @@
 	 * of the previous board on screen so you lay the new one beside it instead of on
 	 * top of it.
 	 */
-	function opnieuw() {
-		gelukt = null;
+	function again() {
+		done = null;
 		naarMachine = null;
-		machineFout = null;
+		machineError = null;
 		machineLet = null;
 		error = null;
 	}
 
-	/** Zou het nieuwe bord bovenop het vorige vallen? */
+	/** Zou het nieuwe board bovenop het vorige vallen? */
 	let botsing = $derived.by(() => {
-		if (!vorigBord || gelukt || !preview) return false;
+		if (!vorigBord || done || !preview) return false;
 		const plan = preview.plan;
 		const x = plan.outer_x_mm ?? plan.origin_x_mm;
 		const y = plan.outer_y_mm ?? plan.origin_y_mm;
 		const b = plan.outer_width_mm ?? plan.width_mm;
 		const h = plan.outer_height_mm ?? plan.height_mm;
 		return (
-			x < vorigBord.x + vorigBord.breedte &&
+			x < vorigBord.x + vorigBord.width &&
 			vorigBord.x < x + b &&
-			y < vorigBord.y + vorigBord.hoogte &&
+			y < vorigBord.y + vorigBord.height &&
 			vorigBord.y < y + h
 		);
 	});
@@ -508,7 +508,7 @@
 	// previous grid for this material *is* that setting; no separate preferences table
 	// is needed for it.
 
-	let overgenomen = $state<{ datum: string; raster: number } | null>(null);
+	let overgenomen = $state<{ dateOf: string; grid: number } | null>(null);
 	let geladenVoor = $state<number | null | undefined>(undefined);
 
 	const OVER_TE_NEMEN = [
@@ -528,11 +528,11 @@
 	 * beside it.
 	 */
 	function neemOver(vorige: Record<string, unknown>) {
-		for (const sleutel of OVER_TE_NEMEN) {
-			const waarde = vorige[sleutel];
-			if (waarde === null || waarde === undefined) continue;
-			(form as Record<string, unknown>)[sleutel] =
-				typeof waarde === 'number' ? String(waarde) : waarde;
+		for (const key of OVER_TE_NEMEN) {
+			const value = vorige[key];
+			if (value === null || value === undefined) continue;
+			(form as Record<string, unknown>)[key] =
+				typeof value === 'number' ? String(value) : value;
 		}
 		// A fixed quantity sits in the previous row as min == max.
 		for (const as of AS_ORDE) {
@@ -564,9 +564,9 @@
 			const vorige = await response.json();
 			// Only adopt it as long as you have generated nothing yet: otherwise you
 			// overwrite the form you were just working in.
-			if (!vorige || gelukt || form.material_id !== id) return;
+			if (!vorige || done || form.material_id !== id) return;
 			neemOver(vorige);
-			overgenomen = { datum: vorige.from_date, raster: vorige.from_grid };
+			overgenomen = { dateOf: vorige.from_date, grid: vorige.from_grid };
 		})();
 	});
 
@@ -592,7 +592,7 @@
 	let receptFout = $state<string | null>(null);
 	let receptBezig = $state(false);
 	/** The save field is closed until you open it: it is not the main route. */
-	let bewaren = $state(false);
+	let saving = $state(false);
 
 	async function haalRecepten() {
 		const ask =
@@ -624,8 +624,8 @@
 	}
 
 	async function bewaarRecept() {
-		const naam = receptNaam.trim();
-		if (!naam) return;
+		const name = receptNaam.trim();
+		if (!name) return;
 		receptBezig = true;
 		receptFout = null;
 		try {
@@ -635,15 +635,15 @@
 			if (token) headers.Authorization = `Bearer ${token}`;
 			// Exactly what gets burned later on, minus the caption: that belongs to one
 			// board and not to the recipe.
-			const instellingen = { ...body(false) };
-			delete (instellingen as Record<string, unknown>).material_id;
+			const settings = { ...body(false) };
+			delete (settings as Record<string, unknown>).material_id;
 			const response = await fetch('/api/library/testgrids/recipes', {
 				method: 'POST',
 				headers,
 				body: JSON.stringify({
-					name: naam,
+					name: name,
 					material_id: form.material_id,
-					settings: instellingen
+					settings: settings
 				})
 			});
 			const data = await response.json().catch(() => null);
@@ -656,7 +656,7 @@
 			}
 			await haalRecepten();
 			gekozenRecept = data?.id ?? null;
-			bewaren = false;
+			saving = false;
 		} finally {
 			receptBezig = false;
 		}
@@ -701,7 +701,7 @@
 	// now. They call the same APIs as the control panel.
 
 	let naarMachine = $state<string | null>(null);
-	let machineFout = $state<string | null>(null);
+	let machineError = $state<string | null>(null);
 	let machineLet = $state<string | null>(null);
 
 	/**
@@ -733,9 +733,9 @@
 		}
 	}
 
-	async function machineActie(pad: string, bezig: string, klaar: string) {
-		naarMachine = bezig;
-		machineFout = null;
+	async function machineActie(pad: string, busy: string, ready: string) {
+		naarMachine = busy;
+		machineError = null;
 		try {
 			// Only before burning. Running a frame is precisely the way to see that
 			// something falls off the bed; blocking that would block the very check you
@@ -743,7 +743,7 @@
 			if (pad.includes('/job/start')) {
 				const bezwaar = await tegenhouder();
 				if (bezwaar) {
-					machineFout = bezwaar;
+					machineError = bezwaar;
 					return;
 				}
 			}
@@ -754,20 +754,20 @@
 			const response = await fetch(pad, { method: 'POST', headers, body: '{}' });
 			if (!response.ok) {
 				const data = await response.json().catch(() => null);
-				const melding = data?.detail;
-				machineFout =
-					typeof melding === 'string'
-						? melding
-						: Array.isArray(melding?.output)
-							? melding.output.join(' ')
+				const notice = data?.detail;
+				machineError =
+					typeof notice === 'string'
+						? notice
+						: Array.isArray(notice?.output)
+							? notice.output.join(' ')
 							: `De machine weigerde dit (${response.status}).`;
 				return;
 			}
-			naarMachine = klaar;
+			naarMachine = ready;
 		} catch (e) {
-			machineFout = t('error.network', { message: e instanceof Error ? e.message : String(e) });
+			machineError = t('error.network', { message: e instanceof Error ? e.message : String(e) });
 		} finally {
-			if (naarMachine === bezig) naarMachine = null;
+			if (naarMachine === busy) naarMachine = null;
 		}
 	}
 
@@ -777,10 +777,10 @@
 	let materiaalFout = $state<string | null>(null);
 
 	async function maakMateriaal() {
-		const naam = nieuwMateriaal.trim();
-		if (!naam) return;
+		const name = nieuwMateriaal.trim();
+		if (!name) return;
 		materiaalFout = null;
-		const gemaakt = await library.addMaterial(naam);
+		const gemaakt = await library.addMaterial(name);
 		if (!gemaakt) {
 			materiaalFout = library.error ?? t('error.materialFailed');
 			return;
@@ -793,9 +793,9 @@
 <div class="wizard">
 	<!-- The wizard is the didactic core of the app: it says where you are and what
 	     is still to come, even though step 3 only happens beside the machine. -->
-	<ol class="stappen" aria-label={t('grid.steps')}>
-		<li class:nu={stap === 1}><span class="nr">1</span>{t('grid.step.setUp')}</li>
-		<li class:nu={stap === 2}><span class="nr">2</span>{t('grid.step.burn')}</li>
+	<ol class="steps" aria-label={t('grid.steps')}>
+		<li class:now={step === 1}><span class="nr">1</span>{t('grid.step.setUp')}</li>
+		<li class:now={step === 2}><span class="nr">2</span>{t('grid.step.burn')}</li>
 		<li><span class="nr">3</span>{t('grid.step.photograph')}</li>
 		<li><span class="nr">4</span>{t('grid.step.bestCell')}</li>
 	</ol>
@@ -815,8 +815,8 @@
 		     cannot sit side by side in that. At the top, as in LightBurn: you pick your
 		     recipe before you start tinkering, not after. -->
 		<div class="recepten">
-			<label class="veld">
-				<span class="naam">{t('grid.recipe')}</span>
+			<label class="field">
+				<span class="name">{t('grid.recipe')}</span>
 				<select
 					value={gekozenRecept}
 					disabled={recepten.length === 0}
@@ -836,16 +836,16 @@
 				</select>
 			</label>
 			<div class="receptknoppen">
-				<button class="btn" onclick={() => (bewaren = !bewaren)} aria-expanded={bewaren}>
-					{bewaren ? t('grid.recipe.dontSave') : t('grid.recipe.save')}
+				<button class="btn" onclick={() => (saving = !saving)} aria-expanded={saving}>
+					{saving ? t('grid.recipe.dontSave') : t('grid.recipe.save')}
 				</button>
 				{#if gekozenRecept !== null}
-					<button class="btn stil" disabled={receptBezig} onclick={wisRecept}
+					<button class="btn quiet" disabled={receptBezig} onclick={wisRecept}
 						>{t('common.remove')}</button
 					>
 				{/if}
 			</div>
-			{#if bewaren}
+			{#if saving}
 				<div class="erbij">
 					<input
 						type="text"
@@ -879,8 +879,8 @@
 		<div class="werkbank">
 			<div class="grid">
 				<div class="paar">
-				<label class="veld">
-					<span class="naam">{t('library.material')}</span>
+				<label class="field">
+					<span class="name">{t('library.material')}</span>
 					<select bind:value={form.material_id}>
 						<option value={null}>{t('grid.none')}</option>
 						{#each library.materials as material (material.id)}
@@ -888,8 +888,8 @@
 						{/each}
 					</select>
 				</label>
-				<label class="veld">
-					<span class="naam">{t('library.operation')}</span>
+				<label class="field">
+					<span class="name">{t('library.operation')}</span>
 					<select bind:value={form.operation}>
 						{#each OPERATIONS as op (op.value)}
 							<option value={op.value}>{op.label}</option>
@@ -898,7 +898,7 @@
 				</label>
 				</div>
 
-				{#if geenMateriaal}
+				{#if noMaterial}
 					<!-- Before the wood goes, not after: without a material no preset can come
 					     out of this board later, and that is the whole reason you burn it. The
 					     warning does not only point at the gap but closes it — otherwise there
@@ -934,7 +934,7 @@
 				{/if}
 
 				{#if rasterOnmogelijk}
-					<!-- The engine turns a raster layer into a bitmap while planning, and that
+					<!-- The engine turns a grid layer into a bitmap while planning, and that
 					     converter lives in the wxPython GUI. When the server runs headless — as
 					     here — the layer throws its own shapes away and the board comes out of
 					     the machine blank. That is a gap in the engine, not a choice of ours;
@@ -948,8 +948,8 @@
 				{#if overgenomen}
 					<p class="overgenomen" role="status">
 						{t('grid.carriedOver', {
-							date: kortedatum(overgenomen.datum),
-							grid: overgenomen.raster
+							date: kortedatum(overgenomen.dateOf),
+							grid: overgenomen.grid
 						})}
 					</p>
 				{/if}
@@ -984,28 +984,28 @@
 				<!-- Decision B12: you pick which two quantities you sweep. The third stays
 				     fixed and ends up on the caption of the board. -->
 				<div class="paar">
-				<label class="veld">
-					<span class="naam">{t('grid.rowsDown')}</span>
+				<label class="field">
+					<span class="name">{t('grid.rowsDown')}</span>
 					<select
 						value={form.row_axis}
 						onchange={(e) => kiesAs('row_axis', e.currentTarget.value as As)}
 					>
-						{#each AS_ORDE as waarde (waarde)}
-							{#if waarde !== 'interval' || intervalKan}
-								<option value={waarde}>{axisLabel(waarde)}</option>
+						{#each AS_ORDE as value (value)}
+							{#if value !== 'interval' || intervalKan}
+								<option value={value}>{axisLabel(value)}</option>
 							{/if}
 						{/each}
 					</select>
 				</label>
-				<label class="veld">
-					<span class="naam">{t('grid.columnsRight')}</span>
+				<label class="field">
+					<span class="name">{t('grid.columnsRight')}</span>
 					<select
 						value={form.column_axis}
 						onchange={(e) => kiesAs('column_axis', e.currentTarget.value as As)}
 					>
-						{#each AS_ORDE as waarde (waarde)}
-							{#if waarde !== 'interval' || intervalKan}
-								<option value={waarde}>{axisLabel(waarde)}</option>
+						{#each AS_ORDE as value (value)}
+							{#if value !== 'interval' || intervalKan}
+								<option value={value}>{axisLabel(value)}</option>
 							{/if}
 						{/each}
 					</select>
@@ -1019,7 +1019,7 @@
 					<NumberField
 						label={t('grid.fixedAxis', { axis: axisLabel(as) })}
 						unit={AXIS_UNIT[as]}
-						step={INVOER[as].stap}
+						step={INVOER[as].step}
 						min={0}
 						max={INVOER[as].max ?? null}
 						bind:value={form[VAST_VELD[as]]}
@@ -1034,18 +1034,18 @@
 						<!-- The unit once, in the block's heading. It used to be in both field
 						     labels ("from (mm/s)", "to (mm/s)") and then you read it twice to
 						     understand one range. -->
-						<legend class="naam">{t('grid.axisRange', { axis: axisLabel(as), unit: AXIS_UNIT[as] })}</legend>
+						<legend class="name">{t('grid.axisRange', { axis: axisLabel(as), unit: AXIS_UNIT[as] })}</legend>
 						<div class="paar">
 							<NumberField
 								label={t('grid.from')}
-								step={INVOER[as].stap}
+								step={INVOER[as].step}
 								min={0}
 								max={INVOER[as].max ?? null}
 								bind:value={form[`${as}_min`]}
 							/>
 							<NumberField
 								label={t('grid.to')}
-								step={INVOER[as].stap}
+								step={INVOER[as].step}
 								min={0}
 								max={INVOER[as].max ?? null}
 								bind:value={form[`${as}_max`]}
@@ -1072,8 +1072,8 @@
 				     grid you have not seen yet should go. The centre applies to the whole
 				     board, captions included — otherwise it sits askew the moment the row
 				     labels stick out on the left. -->
-				<label class="veld">
-					<span class="naam">{t('grid.measureFrom')}</span>
+				<label class="field">
+					<span class="name">{t('grid.measureFrom')}</span>
 					<select bind:value={form.anchor}>
 						<option value="corner">{t('grid.anchor.corner')}</option>
 						<option value="center">{t('grid.anchor.center')}</option>
@@ -1101,7 +1101,7 @@
 				     it is half the evidence. On by default, so whoever does nothing keeps
 				     what was there. -->
 				<fieldset class="schakelaars">
-					<legend class="naam">{t('grid.extras')}</legend>
+					<legend class="name">{t('grid.extras')}</legend>
 					<label class="vink">
 						<input type="checkbox" bind:checked={form.text} />
 						<span>{t('grid.extras.text')}</span>
@@ -1142,8 +1142,8 @@
 					/>
 				{/if}
 
-				<label class="veld breed">
-					<span class="naam">{t('grid.caption')}</span>
+				<label class="field wide">
+					<span class="name">{t('grid.caption')}</span>
 					<input
 						type="text"
 						bind:value={form.caption}
@@ -1156,21 +1156,21 @@
 
 			{#if preview}
 				<aside class="preview" aria-label={t('grid.preview')}>
-					{#if voorbeeldFout}
+					{#if previewError}
 						<!-- While typing, an intermediate state is nearly always briefly
 						     invalid: you adjust "from" and it is then higher than "to" until you
 						     adjust that too. The preview stays, with the reason above it —
 						     dropping a hole teaches you nothing and makes half the wizard
 						     jump. -->
-						<p class="onaf" role="status">
-							{voorbeeldFout}<br />
-							<span class="stil">{t('grid.preview.lastValid')}</span>
+						<p class="unfinished" role="status">
+							{previewError}<br />
+							<span class="quiet">{t('grid.preview.lastValid')}</span>
 						</p>
 					{:else if botsing}
 						<!-- The previous board is still there, and Start X/Y is still in the same
 						     place. Two boards over each other you do not see on the canvas and do
 						     see in the machine. -->
-						<p class="onaf" role="status">
+						<p class="unfinished" role="status">
 							{t('grid.preview.overlap', {
 								id: vorigBord?.id,
 								anchor: t(form.anchor === 'center' ? 'grid.anchor.centreWord' : 'grid.anchor.startWord')
@@ -1219,13 +1219,13 @@
 					     preview too, because they do not go on the wood. The border is a line
 					     around the whole thing, exactly where it burns. -->
 					<div
-						class="bord"
+						class="board"
 						class:kaal={!form.text}
-						class:kader={form.border}
+						class:frame={form.border}
 						style="--cel: {celPx}px; --gat: {gatPx}px;"
 					>
 						{#if form.text}
-						<div class="hoek"></div>
+						<div class="corner"></div>
 						<div class="koplabels">
 							{#each kolomwaarden as v, i (i)}
 								<span class="as mono"
@@ -1250,16 +1250,16 @@
 						</div>
 						{/if}
 						<div
-							class="vakjes"
+							class="cells"
 							style="grid-template-columns: repeat({kolomwaarden.length}, var(--cel));"
 						>
 							{#each preview.cells as cell (`${cell.row}-${cell.column}`)}
 								<span
-									class="vakje"
+									class="cell"
 									style="--burn: {brand(cell)}"
 									title={t('grid.cellTitle', {
-										row: toon(form.row_axis, cell[CEL_SLEUTEL[form.row_axis]]),
-										column: toon(form.column_axis, cell[CEL_SLEUTEL[form.column_axis]])
+										row: show(form.row_axis, cell[CEL_SLEUTEL[form.row_axis]]),
+										column: show(form.column_axis, cell[CEL_SLEUTEL[form.column_axis]])
 									})}
 								></span>
 							{/each}
@@ -1296,7 +1296,7 @@
 						{#each vasteAs as as (as)}
 							{t('grid.legend.fixed', {
 								axis: axisLabel(as),
-								value: toon(as, Number(form[VAST_VELD[as]]))
+								value: show(as, Number(form[VAST_VELD[as]]))
 							})}
 						{/each}
 						{diepsteHoek
@@ -1317,38 +1317,38 @@
 
 		{#if error}<p class="error" role="alert">{error}</p>{/if}
 
-		{#if gelukt}
+		{#if done}
 			<!-- Gap T1: this is where the wizard used to stop, leaving you with a drawn
 			     grid on the canvas and no hint how to burn it. Frame first, then start —
 			     the same order as in the control panel, and the same APIs. -->
-			<div class="gelukt" role="status">
+			<div class="done" role="status">
 				<p>
-					<strong>{t('grid.done.title', { id: gelukt.id })}</strong>
-					{t('grid.done.body', { cells: gelukt.cellen })}
+					<strong>{t('grid.done.title', { id: done.id })}</strong>
+					{t('grid.done.body', { cells: done.cellen })}
 				</p>
 				<div class="branden">
 					<button
 						class="btn"
-						disabled={naarMachine === 'kader'}
-						onclick={() => machineActie('/api/machine/frame', 'kader', 'kader-klaar')}
+						disabled={naarMachine === 'frame'}
+						onclick={() => machineActie('/api/machine/frame', 'frame', 'frame-ready')}
 					>
-						{naarMachine === 'kader' ? t('grid.frameRunning') : t('job.frame')}
+						{naarMachine === 'frame' ? t('grid.frameRunning') : t('job.frame')}
 					</button>
 					<button
 						class="btn primary"
 						disabled={naarMachine === 'start'}
-						onclick={() => machineActie('/api/job/start', 'start', 'start-klaar')}
+						onclick={() => machineActie('/api/job/start', 'start', 'start-ready')}
 					>
 						{naarMachine === 'start' ? t('grid.starting') : t('job.startJob')}
 					</button>
 				</div>
-				{#if naarMachine === 'kader-klaar'}
+				{#if naarMachine === 'frame-ready'}
 					<p class="nagekomen">{t('grid.frameDone')}</p>
-				{:else if naarMachine === 'start-klaar'}
+				{:else if naarMachine === 'start-ready'}
 					<p class="nagekomen">{t('grid.startDone')}</p>
 				{/if}
 				{#if machineLet}<p class="nagekomen">{t('grid.watchOut', { what: machineLet })}</p>{/if}
-				{#if machineFout}<p class="failure" role="alert">{machineFout}</p>{/if}
+				{#if machineError}<p class="failure" role="alert">{machineError}</p>{/if}
 			</div>
 		{/if}
 
@@ -1357,7 +1357,7 @@
 			<!-- Form rule v4: the primary button is on the right, the helper on the left.
 			     They used to sit next to each other on the left, and then the button that
 			     goes into the wood is as prominent as the one that suggests a number. -->
-			<span class="rek"></span>
+			<span class="stretch"></span>
 			<!-- E4: without a material this stays an ordinary button. It works — sometimes
 			     you *do* want to burn a board without getting a preset out of it — but it
 			     does not promise that this is the intended route. -->
@@ -1366,20 +1366,20 @@
 			     of which only one is at issue. The button on a burned board does not draw,
 			     it puts you back at the settings: a second board would otherwise fall on
 			     the first. -->
-			{#if gelukt}
-				<button class="btn" onclick={opnieuw}>{t('grid.another')}</button>
+			{#if done}
+				<button class="btn" onclick={again}>{t('grid.another')}</button>
 			{:else}
 				<button
 					class="btn"
-					class:primary={!geenMateriaal}
-					disabled={busy || !preview || voorbeeldFout !== null}
+					class:primary={!noMaterial}
+					disabled={busy || !preview || previewError !== null}
 					onclick={generate}
 				>
 					{#if busy}
 						{t('common.busy')}
-					{:else if voorbeeldFout}
+					{:else if previewError}
 						{t('grid.draw')}
-					{:else if geenMateriaal}
+					{:else if noMaterial}
 						{t('grid.drawAnyway')}
 					{:else if preview}
 						{t('grid.drawWith', {
@@ -1400,7 +1400,7 @@
 <style>
 	.wizard { display: grid; gap: var(--space-3); }
 
-	.stappen {
+	.steps {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2);
@@ -1408,21 +1408,21 @@
 		padding: 0;
 		list-style: none;
 	}
-	.stappen li {
+	.steps li {
 		display: flex;
 		align-items: center;
 		gap: var(--space-1h);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.stappen li + li::before {
+	.steps li + li::before {
 		content: '';
 		width: 12px;
 		height: 1px;
 		background: var(--line);
 		margin-right: var(--space-1h);
 	}
-	.stappen .nr {
+	.steps .nr {
 		display: grid;
 		place-items: center;
 		width: 18px;
@@ -1432,8 +1432,8 @@
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
 	}
-	.stappen li.nu { color: var(--text-1); font-weight: 600; }
-	.stappen li.nu .nr {
+	.steps li.now { color: var(--text-1); font-weight: 600; }
+	.steps li.now .nr {
 		background: var(--accent);
 		border-color: var(--accent);
 		color: var(--accent-ink);
@@ -1460,8 +1460,8 @@
 		gap: var(--space-3);
 		align-items: end;
 	}
-	.veld { display: grid; gap: 4px; }
-	.naam { font-size: var(--text-xs); color: var(--text-2); }
+	.field { display: grid; gap: 4px; }
+	.name { font-size: var(--text-xs); color: var(--text-2); }
 	/* An axis is one statement: from, to and the number of steps belong in one framed
 	   block, because loose in the flow they read as three separate numbers. */
 	.asblok {
@@ -1548,8 +1548,8 @@
 	.receptknoppen .btn { min-height: 38px; padding: var(--space-1h) var(--space-3); }
 	/* Deleting is quiet: it is there in case you need it, not as a suggestion beside
 	   the button you actually have to use. */
-	.btn.stil { border-color: transparent; background: transparent; color: var(--text-2); }
-	.btn.stil:hover:not(:disabled) { background: var(--surface-1); color: var(--text-1); }
+	.btn.quiet { border-color: transparent; background: transparent; color: var(--text-2); }
+	.btn.quiet:hover:not(:disabled) { background: var(--surface-1); color: var(--text-1); }
 
 	/* Two switches that belong together: a fieldset, because they share one question
 	   ("what else goes on the board"). */
@@ -1605,7 +1605,7 @@
 	}
 	/* The reason the preview is briefly not keeping up. A calm notice and not an
 	   alarm: this is an intermediate state while typing, not a failure. */
-	.onaf {
+	.unfinished {
 		margin: 0 0 var(--space-2);
 		padding: var(--space-1h) var(--space-2);
 		border-radius: var(--radius-field);
@@ -1614,7 +1614,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
-	.onaf .stil { color: var(--text-2); }
+	.unfinished .quiet { color: var(--text-2); }
 
 	.figures {
 		display: flex;
@@ -1627,7 +1627,7 @@
 
 	/* The preview is in pixels, not in millimetres: labels inside a mm viewBox come
 	   out a factor of ten too large. See DESIGN-SYSTEM v3. */
-	.bord {
+	.board {
 		display: grid;
 		grid-template-columns: auto auto;
 		grid-template-rows: auto auto;
@@ -1635,10 +1635,10 @@
 	}
 	/* Without a caption there is no label column either: then the board is exactly the
 	   squares, and that is what the preview should show. */
-	.bord.kaal { grid-template-columns: auto; grid-template-rows: auto; }
+	.board.kaal { grid-template-columns: auto; grid-template-rows: auto; }
 	/* The border as it burns: around everything, with the same gap in between that the
 	   generator keeps. */
-	.bord.kader {
+	.board.frame {
 		padding: var(--space-2);
 		border: 1px solid var(--text-2);
 		border-radius: var(--radius-sharp);
@@ -1654,16 +1654,16 @@
 		overflow: hidden;
 	}
 	.zijlabels .as { justify-items: end; padding-right: 2px; }
-	.vakjes { display: grid; gap: var(--gat); }
+	.cells { display: grid; gap: var(--gat); }
 	/* The board is wood and the cut is soot: the same tones the material card uses, so
 	   that the preview *reads* as the board that will be on the table rather than as a
 	   bar chart. */
-	.vakje {
+	.cell {
 		width: var(--cel);
 		height: var(--cel);
 		background: color-mix(in srgb, var(--void) calc(var(--burn) * 88%), var(--mat-wood));
 	}
-	.vakjes {
+	.cells {
 		padding: var(--space-1);
 		background: var(--mat-wood);
 		border-radius: var(--radius-field);
@@ -1693,7 +1693,7 @@
 	/* The button from step 1 has to stay on screen. In an 80vh dialog with twelve
 	   fields above it, it disappeared below the fold, and then the wizard looks like a
 	   dead end. */
-	.actions .rek { flex: 1; }
+	.actions .stretch { flex: 1; }
 	.actions {
 		position: sticky;
 		bottom: 0;
@@ -1740,20 +1740,20 @@
 		flex: 1;
 		min-width: 16rem;
 	}
-	.error, .gelukt {
+	.error, .done {
 		margin: 0;
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 	}
 	.error { background: color-mix(in srgb, var(--danger-solid, var(--danger)) 14%, transparent); }
-	.gelukt {
+	.done {
 		display: grid;
 		gap: var(--space-2);
 		background: color-mix(in srgb, var(--ok) 14%, transparent);
 		border-left: 3px solid var(--ok);
 	}
-	.gelukt p { margin: 0; }
+	.done p { margin: 0; }
 	.branden { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 	/* The start button should be the largest in this block, but not so large that it
 	   starts imitating the sticky main button below it. */

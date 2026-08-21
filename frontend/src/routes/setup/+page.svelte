@@ -60,7 +60,7 @@
 		return key in VELDNAAM ? t(VELDNAAM[key]) : key;
 	}
 
-	let voorbeeld = $state<Voorbeeld | null>(null);
+	let preview = $state<Voorbeeld | null>(null);
 	let profielFout = $state<string | null>(null);
 	let profielBezig = $state(false);
 	let ingelezen = $state<string | null>(null);
@@ -71,14 +71,14 @@
 	}
 
 	function exporteer(machine: Machine) {
-		const anker = document.createElement('a');
-		anker.href = `/api/machines/${encodeURIComponent(machine.path)}/export.openkerf-machine`;
-		anker.download = `${machine.label}.openkerf-machine`;
-		anker.click();
+		const anchor = document.createElement('a');
+		anchor.href = `/api/machines/${encodeURIComponent(machine.path)}/export.openkerf-machine`;
+		anchor.download = `${machine.label}.openkerf-machine`;
+		anchor.click();
 	}
 
 	async function kiesProfiel(bestand: File) {
-		voorbeeld = null;
+		preview = null;
 		ingelezen = null;
 		profielFout = null;
 		profielBezig = true;
@@ -98,7 +98,7 @@
 						: t('setup.import.failed', { status: response.status });
 				return;
 			}
-			voorbeeld = data;
+			preview = data;
 		} catch (e) {
 			profielFout = t('error.network', { message: e instanceof Error ? e.message : e });
 		} finally {
@@ -107,14 +107,14 @@
 	}
 
 	async function neemProfiel() {
-		if (!voorbeeld) return;
+		if (!preview) return;
 		profielBezig = true;
 		profielFout = null;
 		try {
 			const response = await fetch('/api/machines/import', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...token() },
-				body: JSON.stringify({ profile: voorbeeld.profile })
+				body: JSON.stringify({ profile: preview.profile })
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
@@ -126,11 +126,11 @@
 			}
 			ingelezen = data.skipped?.length
 				? t('setup.imported.skipped', {
-						label: data.label ?? voorbeeld.label,
+						label: data.label ?? preview.label,
 						n: data.skipped.length
 					})
-				: t('setup.imported', { label: data.label ?? voorbeeld.label });
-			voorbeeld = null;
+				: t('setup.imported', { label: data.label ?? preview.label });
+			preview = null;
 			await store.loadMachines();
 		} finally {
 			profielBezig = false;
@@ -145,7 +145,7 @@
 
 	<h1>{t('setup.yourMachines')}</h1>
 	{#if eigen.length === 0}
-		<p class="leeg">
+		<p class="empty">
 			<strong>{t('setup.none.title')}</strong>
 			<span class="muted">{t('setup.none.body')}</span>
 		</p>
@@ -163,7 +163,7 @@
 						<button class="btn" onclick={() => useMachine(machine)}>{t('setup.use')}</button>
 					{/if}
 					<!-- Settings used to be reachable only while creating the machine. -->
-					<a class="btn" href="/setup/instellen?machine={encodeURIComponent(machine.path)}">
+					<a class="btn" href="/setup/settings?machine={encodeURIComponent(machine.path)}">
 						{t('setup.settings')}
 					</a>
 					<!-- Gap E5: this machine as a file, for a second computer. -->
@@ -181,7 +181,7 @@
 	{/if}
 
 	<div class="actions">
-		<a class="btn primary" href="/setup/soort">{t('setup.addMachine')}</a>
+		<a class="btn primary" href="/setup/kind">{t('setup.addMachine')}</a>
 		<!-- Gap E5: the same route as "Add a machine", but with a profile someone else
 		     has already filled in. -->
 		<label class="btn file">
@@ -199,42 +199,42 @@
 	</div>
 
 	{#if profielFout}<p class="error" role="alert">{profielFout}</p>{/if}
-	{#if ingelezen}<p class="gelukt" role="status">{ingelezen}</p>{/if}
+	{#if ingelezen}<p class="done" role="status">{ingelezen}</p>{/if}
 
-	{#if voorbeeld}
+	{#if preview}
 		<!-- What is in it first, only then create. A profile decides the bed size, the
 		     connection and the mirroring; that should not happen *to* you. -->
-		<aside class="voorbeeld">
-			<h2>{t('setup.profile.title', { label: voorbeeld.label })}</h2>
-			{#if voorbeeld.known}
+		<aside class="preview">
+			<h2>{t('setup.profile.title', { label: preview.label })}</h2>
+			{#if preview.known}
 				<p class="muted">
 					{t('setup.profile.known', {
-						name: `${voorbeeld.friendly_name}${voorbeeld.family ? ` · ${voorbeeld.family}` : ''}`,
-						n: voorbeeld.settings
+						name: `${preview.friendly_name}${preview.family ? ` · ${preview.family}` : ''}`,
+						n: preview.settings
 					})}
 				</p>
 			{:else}
-				<p class="muted">{t('setup.profile.unknown', { type: voorbeeld.info })}</p>
+				<p class="muted">{t('setup.profile.unknown', { type: preview.info })}</p>
 			{/if}
-			<dl class="feiten">
-				{#each Object.entries(voorbeeld.essential) as [naam, waarde] (naam)}
-					<div><dt>{veldnaam(naam)}</dt><dd class="mono">{waarde}</dd></div>
+			<dl class="facts">
+				{#each Object.entries(preview.essential) as [name, value] (name)}
+					<div><dt>{veldnaam(name)}</dt><dd class="mono">{value}</dd></div>
 				{/each}
 			</dl>
-			{#if Object.keys(voorbeeld.local).length}
+			{#if Object.keys(preview.local).length}
 				<p class="lokaal">
 					{t('setup.profile.local', {
-						values: Object.entries(voorbeeld.local)
-							.map(([naam, waarde]) => `${veldnaam(naam)} ${waarde}`)
+						values: Object.entries(preview.local)
+							.map(([name, value]) => `${veldnaam(name)} ${value}`)
 							.join(', ')
 					})}
 				</p>
 			{/if}
 			<div class="uitknoppen">
-				<button class="btn primary" disabled={profielBezig || !voorbeeld.known} onclick={neemProfiel}>
+				<button class="btn primary" disabled={profielBezig || !preview.known} onclick={neemProfiel}>
 					{profielBezig ? t('common.busy') : t('setup.profile.create')}
 				</button>
-				<button class="btn subtle" onclick={() => (voorbeeld = null)}
+				<button class="btn subtle" onclick={() => (preview = null)}
 					>{t('setup.profile.cancel')}</button
 				>
 			</div>
@@ -246,7 +246,7 @@
 			<h2>{t('setup.placeholder.title')}</h2>
 			<p class="muted">{t('setup.placeholder.body', { label: placeholder.label })}</p>
 			<p class="muted">{t('setup.placeholder.yours')}</p>
-			<a class="btn" href="/setup/instellen?machine={encodeURIComponent(placeholder.path)}">
+			<a class="btn" href="/setup/settings?machine={encodeURIComponent(placeholder.path)}">
 				{t('setup.placeholder.adopt')}
 			</a>
 		</aside>
@@ -316,7 +316,7 @@
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
 		color: var(--text-1);
 	}
-	.leeg {
+	.empty {
 		display: grid;
 		gap: var(--space-2);
 		margin: 0;
@@ -359,7 +359,7 @@
 		opacity: 0;
 		cursor: pointer;
 	}
-	.gelukt {
+	.done {
 		margin: var(--space-4) 0 0;
 		padding: var(--space-3);
 		border-radius: var(--radius-field);
@@ -367,28 +367,28 @@
 		background: color-mix(in srgb, var(--ok) 14%, transparent);
 		font-size: var(--text-xs);
 	}
-	.voorbeeld {
+	.preview {
 		margin-top: var(--space-4);
 		padding: var(--space-4);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.voorbeeld h2 {
+	.preview h2 {
 		font-size: var(--text-sm);
 		font-weight: 600;
 		margin: 0 0 var(--space-2);
 	}
-	.voorbeeld p { margin: 0 0 var(--space-2); font-size: var(--text-xs); }
-	.feiten {
+	.preview p { margin: 0 0 var(--space-2); font-size: var(--text-xs); }
+	.facts {
 		display: grid;
 		gap: var(--space-1);
 		margin: 0 0 var(--space-3);
 		font-size: var(--text-xs);
 	}
-	.feiten div { display: flex; justify-content: space-between; gap: var(--space-3); }
-	.feiten dt { color: var(--text-2); }
-	.feiten dd { margin: 0; }
+	.facts div { display: flex; justify-content: space-between; gap: var(--space-3); }
+	.facts dt { color: var(--text-2); }
+	.facts dd { margin: 0; }
 	/* The address of the other workbench is the first thing here that does not hold. Not
 	   an error, but something to check before you burn anything. */
 	.lokaal {

@@ -25,29 +25,29 @@
 		onDone?: () => void;
 	} = $props();
 
-	let nieuw = $state('');
+	let fresh = $state('');
 	let toevoegen = $state(false);
 
 	// The thicknesses that lie on every saw table. One tap instead of typing a number —
 	// on a tablet beside the machine that saves a keyboard.
 	const GANGBAAR = [1, 2, 3, 4, 5, 6, 8, 10];
 
-	let dikte = $derived(sheet.thickness_mm);
+	let thickness = $derived(sheet.thickness_mm);
 
-	let instellingen = $derived(
+	let settings = $derived(
 		sheet.material_id === null
 			? []
 			: library.presets.filter(
 					(p) =>
 						p.material_id === sheet.material_id &&
-						(dikte === null ||
+						(thickness === null ||
 							p.thickness_mm === null ||
-							Math.abs(p.thickness_mm - dikte) < 0.51)
+							Math.abs(p.thickness_mm - thickness) < 0.51)
 				)
 	);
 
-	function kiesMateriaal(waarde: string) {
-		sheets.update(sheet.id, { material_id: waarde ? Number(waarde) : null });
+	function kiesMateriaal(value: string) {
+		sheets.update(sheet.id, { material_id: value ? Number(value) : null });
 	}
 
 	function kiesDikte(mm: number | null) {
@@ -55,25 +55,25 @@
 	}
 
 	async function maakMateriaal() {
-		if (!nieuw.trim()) return;
-		const created = await library.addMaterial(nieuw.trim());
+		if (!fresh.trim()) return;
+		const created = await library.addMaterial(fresh.trim());
 		if (created) {
 			await sheets.update(sheet.id, { material_id: created.id });
-			nieuw = '';
+			fresh = '';
 			toevoegen = false;
 		}
 	}
 </script>
 
 <div class="wrap">
-	<p class="uitleg">
+	<p class="hint">
 		{t('sheetMat.applies', {
 			sheet: sheet.name,
 			size: `${sheet.width_mm} × ${sheet.height_mm} mm`
 		})}
 	</p>
 
-	<label class="veld">
+	<label class="field">
 		<span>{t('library.material')}</span>
 		<select
 			value={sheet.material_id === null ? '' : String(sheet.material_id)}
@@ -88,14 +88,14 @@
 	</label>
 
 	{#if toevoegen}
-		<div class="nieuw">
+		<div class="fresh">
 			<input
 				type="text"
-				bind:value={nieuw}
+				bind:value={fresh}
 				placeholder={t('library.material.placeholder')}
 				aria-label={t('gen.text')}
 			/>
-			<button class="btn primary" disabled={!nieuw.trim() || library.busy} onclick={maakMateriaal}>
+			<button class="btn primary" disabled={!fresh.trim() || library.busy} onclick={maakMateriaal}>
 				{t('sheetMat.add')}
 			</button>
 			<button class="btn" onclick={() => (toevoegen = false)}>{t('common.cancel')}</button>
@@ -104,17 +104,17 @@
 		<button class="link" onclick={() => (toevoegen = true)}>{t('sheetMat.notListed')}</button>
 	{/if}
 
-	<div class="veld">
+	<div class="field">
 		<!-- The unit in the label, not behind the input: otherwise there is a row of
 		     bare numbers whose measure only becomes clear on the right. -->
 		<span>{t('sheetMat.thickness')}</span>
-		<div class="diktes">
+		<div class="thicknesses">
 			{#each GANGBAAR as mm (mm)}
 				<button
 					class="chip"
-					aria-pressed={dikte === mm}
+					aria-pressed={thickness === mm}
 					disabled={sheets.busy}
-					onclick={() => kiesDikte(dikte === mm ? null : mm)}
+					onclick={() => kiesDikte(thickness === mm ? null : mm)}
 				>{mm}</button>
 			{/each}
 			<input
@@ -125,7 +125,7 @@
 				max="500"
 				placeholder={t('sheetMat.other')}
 				aria-label={t('sheetMat.otherAria')}
-				value={dikte !== null && !GANGBAAR.includes(dikte) ? dikte : ''}
+				value={thickness !== null && !GANGBAAR.includes(thickness) ? thickness : ''}
 				onchange={(e) =>
 					kiesDikte(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
 			/>
@@ -141,19 +141,19 @@
 	<p class="opbrengst">
 		{#if sheet.material_id === null}
 			{t('sheetMat.noMaterial')}
-		{:else if instellingen.length === 0}
+		{:else if settings.length === 0}
 			{t('sheetMat.noPresets')}
 		{:else}
-			{dikte === null
-				? t('sheetMat.presets', { n: instellingen.length })
+			{thickness === null
+				? t('sheetMat.presets', { n: settings.length })
 				: t('sheetMat.presetsAround', {
-						n: instellingen.length,
-						thickness: i18n.number(dikte)
+						n: settings.length,
+						thickness: i18n.number(thickness)
 					})}
 		{/if}
 	</p>
 
-	<div class="acties">
+	<div class="actions">
 		<button class="btn primary" onclick={() => onDone?.()}>{t('common.done')}</button>
 	</div>
 </div>
@@ -163,16 +163,16 @@
 		display: grid;
 		gap: var(--space-3);
 	}
-	.uitleg {
+	.hint {
 		margin: 0;
 		color: var(--text-2);
 		font-size: var(--text-sm);
 	}
-	.veld {
+	.field {
 		display: grid;
 		gap: var(--space-1h);
 	}
-	.veld > span {
+	.field > span {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
@@ -186,11 +186,11 @@
 		background: var(--surface-1);
 		color: var(--text-1);
 	}
-	.nieuw {
+	.fresh {
 		display: flex;
 		gap: var(--space-2);
 	}
-	.nieuw input { flex: 1; min-width: 0; }
+	.fresh input { flex: 1; min-width: 0; }
 	.link {
 		justify-self: start;
 		color: var(--text-2);
@@ -199,7 +199,7 @@
 		text-underline-offset: 3px;
 	}
 	.link:hover { color: var(--text-1); }
-	.diktes {
+	.thicknesses {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -228,7 +228,7 @@
 		color: var(--text-2);
 	}
 	.error { margin: 0; color: var(--danger); font-size: var(--text-sm); }
-	.acties {
+	.actions {
 		display: flex;
 		justify-content: flex-end;
 	}

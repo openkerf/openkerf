@@ -257,7 +257,7 @@ export class EditController {
 	/**
 	 * Giving a shape an area, or taking it away.
 	 *
-	 * Needed to raster something you drew yourself: the rasteriser fills what has a
+	 * Needed to grid something you drew yourself: the rasteriser fills what has a
 	 * fill and otherwise only draws a line around the shape.
 	 */
 	async fill(
@@ -277,7 +277,7 @@ export class EditController {
 	/** Putting the selection in one layer, and out of all the others. */
 	async singleLayer(
 		ids: string[],
-		kind: 'cut' | 'engrave' | 'raster'
+		kind: 'cut' | 'engrave' | 'grid'
 	): Promise<{
 		operation_id: string;
 		type: string;
@@ -288,7 +288,7 @@ export class EditController {
 		return this.#postJson('/api/design/single-layer', { ids, type: kind });
 	}
 
-	/** Lege lagen weg. */
+	/** Lege layers gone. */
 	async prune(): Promise<{ removed: number; ids: string[] } | null> {
 		return this.#postJson('/api/design/operations/prune', {});
 	}

@@ -82,7 +82,7 @@ for (const [naam, width] of [['desktop', 1440], ['tablet', 1024], ['telefoon', 3
 		await page.context().close();
 
 		// De instelstap van de wizard: daar staan de vinkjes.
-		const w = await open(b, { width, theme, path: '/setup/instellen?machine=ruida' });
+		const w = await open(b, { width, theme, path: '/setup/settings?machine=ruida' });
 		await weg(w);
 		await poort(w, '.setup', `${naam} ${theme} instellen`);
 		await w.screenshot({ path: `${OUT}/${ronde}-${naam}-${theme}-instellen.png`, fullPage: false });

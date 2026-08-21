@@ -14,7 +14,7 @@
 		canStop,
 		stopArmed = false,
 		canEdit = false,
-		smal = false,
+		narrow = false,
 		canPause = false,
 		canResume = false,
 		paused = false,
@@ -47,13 +47,13 @@
 		 *
 		 * Gap J9: this prop and the `@media (max-width: 1199px)` in JobControls were
 		 * two sources for one rule. Both components now read
-		 * `screen.controlsInBar`. De prop blijft geaccepteerd zodat de
-		 * pagina niet in dezelfde stap mee hoeft; hij mag daar weg.
+		 * `screen.controlsInBar`. De prop stays geaccepteerd zodat de
+		 * pagina niet in dezelfde step mee hoeft; hij mag daar gone.
 		 */
 		tablet?: boolean;
 		/** Below ~950px the file buttons no longer fit; they then live in the tool
 		 *  rail's menu. */
-		smal?: boolean;
+		narrow?: boolean;
 		canPause?: boolean;
 		canResume?: boolean;
 		paused?: boolean;
@@ -88,10 +88,10 @@
 	 * dialog claims there is unsaved work. See `$lib/saving`. The `href` stays, so that
 	 * the button is a real link without JavaScript as well.
 	 */
-	async function bewaar(event: MouseEvent, url: string, naam: string) {
+	async function bewaar(event: MouseEvent, url: string, name: string) {
 		event.preventDefault();
 		projectOpen = false;
-		if (await saveFile(url, naam)) onSaved?.();
+		if (await saveFile(url, name)) onSaved?.();
 	}
 
 	/**
@@ -104,17 +104,17 @@
 	let projectOpen = $state(false);
 	let projectPos = $state({ x: 0, y: 0 });
 
-	function openProjectMenu(knop: HTMLElement) {
+	function openProjectMenu(button: HTMLElement) {
 		if (projectOpen) {
 			projectOpen = false;
 			return;
 		}
-		const doos = knop.getBoundingClientRect();
+		const box = button.getBoundingClientRect();
 		// Aligned to the button's right edge, but never off screen.
-		const breedte = 250;
+		const width = 250;
 		projectPos = {
-			x: Math.max(8, Math.min(doos.right - breedte, window.innerWidth - breedte - 8)),
-			y: doos.bottom + 6
+			x: Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8)),
+			y: box.bottom + 6
 		};
 		projectOpen = true;
 	}
@@ -122,7 +122,7 @@
 	// The top bar is always there; the listening to the screen width hangs here, so
 	// the rest of the app does not have to do it again.
 	$effect(() => screen.follow());
-	let balkdraagt = $derived(screen.controlsInBar);
+	let barCarries = $derived(screen.controlsInBar);
 
 	/**
 	 * Without a server this is no longer a control, and you have to see that.
@@ -139,28 +139,28 @@
 	 * last part is half the answer; without that sentence you only have a dead
 	 * button.
 	 */
-	let weg = $derived(!connection.online);
+	let gone = $derived(!connection.online);
 	let stopTitel = $derived(
-		weg
+		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
 			: stopArmed
 				? t('transport.stop.now', { key: STOP_KEY })
 				: t('transport.stop.armed', { key: STOP_KEY })
 	);
 	let pauzeTitel = $derived(
-		weg
+		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.pause')}`
 			: canPause
 				? t('transport.pause.title')
 				: t('transport.pause.unsupported')
 	);
 	let hervatTitel = $derived(
-		weg
+		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.resume')}`
 			: t('transport.resume.title')
 	);
 	let startTitel = $derived(
-		weg
+		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.start')}`
 			: stopArmed
 				? t('transport.start.busy')
@@ -189,10 +189,10 @@
 		}
 		// Do not intervene while somebody is typing a measure or a name: there Ctrl+.
 		// is a character and not an emergency stop.
-		const doel = e.target as HTMLElement | null;
+		const target = e.target as HTMLElement | null;
 		if (
-			doel?.isContentEditable ||
-			['INPUT', 'TEXTAREA', 'SELECT'].includes(doel?.tagName ?? '')
+			target?.isContentEditable ||
+			['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')
 		) {
 			return;
 		}
@@ -200,14 +200,14 @@
 		// Stop: Ctrl/⌘ + full stop. One hand, no mode, and free in every browser.
 		if (meta && (e.key === '.' || e.code === 'Period')) {
 			e.preventDefault();
-			if (canStop && !weg) onStop();
+			if (canStop && !gone) onStop();
 			return;
 		}
 		// Pause/resume: the Pause key, with or without Ctrl (Ctrl+Break sends the same
 		// `key`). A toggle, because you press it twice.
 		if (e.key === 'Pause') {
 			e.preventDefault();
-			if (weg) return;
+			if (gone) return;
 			if (paused && canResume) onResume?.();
 			else if (!paused && canPause && stopArmed) onPause?.();
 		}
@@ -220,15 +220,15 @@
 	// "3 mm", not "3.0 mm" — and in the reader's notation: 3,5 in Dutch, 3.5 in
 	// English. Glued to the unit, because every pixel counts in the bar and it
 	// reads as one measurement.
-	let dikte = $derived(
+	let thickness = $derived(
 		thicknessMm === null || thicknessMm === undefined
 			? null
 			: `${i18n.number(thicknessMm)}mm`
 	);
 	let materiaalTitel = $derived(
 		material
-			? dikte
-				? t('topbar.material.isThickness', { material, thickness: dikte })
+			? thickness
+				? t('topbar.material.isThickness', { material, thickness: thickness })
 				: t('topbar.material.noThickness', { material })
 			: t('topbar.material.none')
 	);
@@ -236,7 +236,7 @@
 
 <svelte:window onkeydown={sneltoets} />
 
-<header class="topbar" class:smal class:weg>
+<header class="topbar" class:narrow class:gone>
 	<div class="brand" title={t('app.name')}><Logo /><span class="woord">OpenKerf</span></div>
 
 	<!-- Machine first: the user always knows whether the laser "is there". Clicking
@@ -256,7 +256,7 @@
 			: ''}"
 	>
 		<span class="dot {machineState}" aria-hidden="true"></span>
-		<span class="naam">{device?.label ?? t('topbar.machine.setup')}</span>
+		<span class="name">{device?.label ?? t('topbar.machine.setup')}</span>
 		<!-- The word beside the state was here for a third time: the status bar in the
 		     bottom right says it in full, and the coloured dot already says it here.
 		     Those 55px are the room the material fits in — and without that room the
@@ -270,7 +270,7 @@
 	     in a dialog that you close again — see decision B1. -->
 	<button
 		class="machine materiaal"
-		class:leeg={!material}
+		class:empty={!material}
 		disabled={!canEdit}
 		title={materiaalTitel}
 		onclick={onOpenMaterial}
@@ -279,8 +279,8 @@
 		<!-- On a narrow tablet "Choose material" is 49px that push the start button off
 		     the screen. One word beside a dashed border and a little plank invites just
 		     as well, and the whole sentence is in the tooltip. -->
-		<span class="naam">{material ?? (smal ? t('topbar.material.short') : t('topbar.material.choose'))}</span>
-		{#if dikte}<span class="dikte mono">{dikte}</span>{/if}
+		<span class="name">{material ?? (narrow ? t('topbar.material.short') : t('topbar.material.choose'))}</span>
+		{#if thickness}<span class="thickness mono">{thickness}</span>{/if}
 	</button>
 
 	<div class="spacer"></div>
@@ -291,11 +291,11 @@
 	     there for two rounds ("all I see is export and import"). The decision "the
 	     project leads" stands; only the execution was no good.
 	     This button costs 106px with its word and 44px without, so it fits at 768 beside
-	     the emergency stop as well (measured with c7-balk). The word "Project" is on
+	     the emergency stop as well (measured with c7-bar). The word "Project" is on
 	     screen with it: *that* is what was missing — not the action, but the existence
 	     of the concept in the bar. -->
 	<button
-		class="btn project-knop"
+		class="btn project-button"
 		aria-haspopup="menu"
 		aria-expanded={projectOpen}
 		aria-label={t('topbar.project.aria')}
@@ -303,8 +303,8 @@
 		onclick={(e) => openProjectMenu(e.currentTarget as HTMLElement)}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
-		<!-- Without `blijft`: below 1200px the word drops away, as with the other file
-		     buttons. Measured with c7-balk: *with* the word the bar runs 44px over the
+		<!-- Without `stays`: below 1200px the word drops away, as with the other file
+		     buttons. Measured with c7-bar: *with* the word the bar runs 44px over the
 		     edge at 768 and then the start button slides off the screen. A folder with a
 		     downward arrow is the menu idiom at that width, and the tooltip and the
 		     aria-label carry the word. -->
@@ -315,14 +315,14 @@
 	{#if projectOpen}
 		<!-- `position: fixed`, because the bar itself scrolls internally (`overflow-x`)
 		     and would clip an absolute menu. -->
-		<div class="afdek" role="presentation" onclick={() => (projectOpen = false)}></div>
+		<div class="cover" role="presentation" onclick={() => (projectOpen = false)}></div>
 		<div class="projectmenu" role="menu" style="left: {projectPos.x}px; top: {projectPos.y}px">
 			<!-- Save and open were already here, starting over was not: the only way to
 			     begin something new was to remove everything by hand. Above the pair,
 			     because it is the first action of a session — and it asks first, just
 			     like opening. -->
 			<button
-				class="regel"
+				class="row"
 				role="menuitem"
 				type="button"
 				onclick={() => {
@@ -336,7 +336,7 @@
 			<span class="menuscheiding" role="separator"></span>
 			<!-- A label with a hidden file field in it: no `menuitem` role, because the
 			     input is already the operable element. -->
-			<label class="regel">
+			<label class="row">
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
 				<span>{t('topbar.project.open')}</span>
 				<input
@@ -353,7 +353,7 @@
 				/>
 			</label>
 			<a
-				class="regel"
+				class="row"
 				role="menuitem"
 				href="/api/project/export.openkerf"
 				download="project.openkerf"
@@ -362,7 +362,7 @@
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
 				<span>{t('topbar.project.save')}</span>
 			</a>
-			<p class="uitleg">{t('topbar.project.hint')}</p>
+			<p class="hint">{t('topbar.project.hint')}</p>
 		</div>
 	{/if}
 
@@ -399,9 +399,9 @@
 	<!-- The last check before you burn: does it fit, is it straight, is the clamp in
 	     the way. The laser stays off. -->
 	<button
-		class="btn kader"
-		disabled={!canFrame || weg}
-		title={weg
+		class="btn frame"
+		disabled={!canFrame || gone}
+		title={gone
 			? `${t('transport.noServer')} ${t('topbar.frame.noServer')}`
 			: canFrame
 				? t('topbar.frame.title')
@@ -414,13 +414,13 @@
 		     short form is left. Two whole labels rather than a word plus a
 		     fragment: "show" on its own is not translatable, and in some languages
 		     it does not even come second. -->
-		<span class="btn-label blijft lang">{t('topbar.frame')}</span>
-		<span class="btn-label blijft kort">{t('topbar.frame.short')}</span>
+		<span class="btn-label stays lang">{t('topbar.frame')}</span>
+		<span class="btn-label stays short">{t('topbar.frame.short')}</span>
 	</button>
 	<!--
 		Pausing belongs beside starting and stopping, at every width.
 
-		This sat behind `balkdraagt`, so on the desktop the top bar carried start and
+		This sat behind `barCarries`, so on the desktop the top bar carried start and
 		stop but *not* pause — that lived in the status bar, at the bottom of the screen.
 		Two of the three transport buttons together and the third somewhere else is the
 		kind of inconsistency you only discover at the moment you need it. The status bar
@@ -432,23 +432,23 @@
 	-->
 		{#if paused}
 			<button
-				class="btn hervat"
-				disabled={!canResume || weg}
+				class="btn resume"
+				disabled={!canResume || gone}
 				title={hervatTitel}
 				onclick={onResume}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-				<span class="btn-label blijft">{t('transport.resume')}</span>
+				<span class="btn-label stays">{t('transport.resume')}</span>
 			</button>
 		{:else}
 			<button
-				class="btn pauze"
-				disabled={!canPause || !stopArmed || weg}
+				class="btn pause"
+				disabled={!canPause || !stopArmed || gone}
 				title={pauzeTitel}
 				onclick={onPause}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/></svg>
-				<span class="btn-label blijft">{t('transport.pause')}</span>
+				<span class="btn-label stays">{t('transport.pause')}</span>
 			</button>
 		{/if}
 	<!-- Stopping is always possible, anywhere, in one tap. Full red only when something
@@ -459,21 +459,21 @@
 	     button, hover does not exist. -->
 	<button
 		class="btn danger"
-		class:sluimer={!stopArmed && !weg}
-		class:dood={weg}
-		disabled={!canStop || weg}
+		class:sluimer={!stopArmed && !gone}
+		class:dood={gone}
+		disabled={!canStop || gone}
 		onclick={onStop}
 		title={stopTitel}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-		<span class="btn-label blijft"
-			>{weg ? t('transport.stop.onMachine') : t('transport.stop')}</span
+		<span class="btn-label stays"
+			>{gone ? t('transport.stop.onMachine') : t('transport.stop')}</span
 		>
 	</button>
 	<!-- Opens no dialog but the pre-flight in the right-hand panel. -->
 	<button
 		class="btn primary"
-		disabled={!canStart || weg}
+		disabled={!canStart || gone}
 		title={startTitel}
 		onclick={onStart}
 	>
@@ -482,8 +482,8 @@
 		     one. Gluing "job" onto "Start" made the button read "Startjob" the
 		     moment Svelte trimmed the leading space, and it is not a fragment a
 		     translator can do anything with. -->
-		<span class="btn-label blijft lang">{t('transport.start')}</span>
-		<span class="btn-label blijft kort">{t('transport.start.short')}</span>
+		<span class="btn-label stays lang">{t('transport.start')}</span>
+		<span class="btn-label stays short">{t('transport.start.short')}</span>
 	</button>
 	<LanguagePicker />
 	<button class="iconbtn" onclick={onToggleTheme} title={t('topbar.theme')} aria-label={t('topbar.theme')}>
@@ -517,14 +517,14 @@
 	   aria-label, so no meaning is lost. The bound is at 1200px, not at 900: on a 1024
 	   tablet the labels otherwise break over two lines and the bar grows with them. */
 	@media (max-width: 1199px) {
-		.kader .kort { display: inline; }
+		.frame .short { display: inline; }
 		/* The buttons that drive the machine keep their word: a little red square
 		   without text is not an emergency stop. */
-		.topbar :global(.btn-label:not(.blijft)) { display: none; }
+		.topbar :global(.btn-label:not(.stays)) { display: none; }
 		/* The frame keeps its word — on a tablet this is a first-class action and a
 		   thin dashed square says nothing — but only the short form: "Frame" next to
 		   that square is unambiguous. */
-		.kader .lang { display: none; }
+		.frame .lang { display: none; }
 		/* The whole brand goes, word *and* image.
 		   The wordmark already cost 100px; the logo costs another 108 with its gap
 		   (measured), and those are worth more here than a logo. On a tablet you know
@@ -543,7 +543,7 @@
 		/* A machine name can be arbitrarily long and at 768 pushed the start button off
 		   the screen. Only the machine link: `a.machine`, not `.machine` — the material
 		   chip carries the same class and has a size of its own. */
-		a.machine .naam {
+		a.machine .name {
 			max-width: 10ch;
 			overflow: hidden;
 			text-overflow: ellipsis;
@@ -562,7 +562,7 @@
 	   B1) and has no substitute; the frame has its dotted square, its fixed place beside
 	   the controls and its tooltip. Without that word the name keeps 64px. */
 	@media (max-width: 849px) {
-		.topbar .kader .btn-label { display: none; }
+		.topbar .frame .btn-label { display: none; }
 		/* And without a server the material name drops away at 768 as well.
 		   "Stop on the machine" is 60px wider than "Stop", and the material is the only
 		   flexible thing in this bar, so it paid those 60px with its name: it read
@@ -570,7 +570,7 @@
 		   moment the server is down the material is unchangeable and not what you are
 		   looking at; the only question is where the stop is, and that answer may have
 		   the whole width. Above 850px the chip stays — the room is there (measured). */
-		.topbar.weg .materiaal { display: none; }
+		.topbar.gone .materiaal { display: none; }
 	}
 	/* That is where the project button stops.
 	   It is the only button in this bar that is not a machine action, and the material
@@ -583,7 +583,7 @@
 	   and *that* is the improvement: the bound was at 1600, and there the user did not
 	   find it for two rounds. */
 	@media (max-width: 879px) {
-		.topbar .project-knop { display: none; }
+		.topbar .project-button { display: none; }
 	}
 	/* Below ~950px the file buttons disappear; the material stays, because it belongs
 	   with what is about to happen. Only tighter. */
@@ -597,7 +597,7 @@
 	   shrinks to 137px and the name to 64px, internal overflow 0, last button at 756 of
 	   768. An extra media query for the narrowest case was therefore unnecessary: the
 	   safety net *does* its work. */
-	.topbar.smal .materiaal .naam { max-width: 10ch; }
+	.topbar.narrow .materiaal .name { max-width: 10ch; }
 	/* Framing *stays* on screen on a tablet.
 	   It was on `display: none` below 950px here, with the argument that it also lives
 	   in the pre-flight. That argument does not hold for *this* device: the tablet is
@@ -616,19 +616,19 @@
 	   selector that beats this one. A rule that does nothing but promises something is
 	   worse than no rule. */
 	.materiaal { flex: 0 1 auto; min-width: 0; }
-	.materiaal .naam { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.materiaal .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	/* A truncated material name is a shame but readable through the tooltip; a
 	   truncated invitation ("Materia…") is incomprehensible. This selector has to beat
 	   the rule above, so the whole chain is in it. */
-	.topbar.smal .materiaal.leeg .naam { max-width: none; }
+	.topbar.narrow .materiaal.empty .name { max-width: none; }
 	/* The project pair has become one button with a menu.
 	   Four file buttons *with* labels cost 560px and at 1440 did not fit beside machine,
 	   material and controls; the project pair then moved out to the rail menu. That was
 	   too far away — the user did not find them for two rounds. One "Project" button
 	   costs 106px, fits everywhere, and keeps the word on screen. Import and export stay
 	   separate buttons: *that* is what you do while working. */
-	.project-knop .pijl { color: var(--text-2); margin-left: -2px; }
-	.afdek {
+	.project-button .pijl { color: var(--text-2); margin-left: -2px; }
+	.cover {
 		position: fixed;
 		inset: 0;
 		z-index: 39;
@@ -643,7 +643,7 @@
 		box-shadow: var(--shadow-float);
 		z-index: 40;
 	}
-	.projectmenu .regel {
+	.projectmenu .row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
@@ -663,15 +663,15 @@
 		border: 0;
 		font: inherit;
 	}
-	.projectmenu .regel svg { flex: none; color: var(--text-2); }
+	.projectmenu .row svg { flex: none; color: var(--text-2); }
 	.projectmenu .menuscheiding {
 		display: block;
 		height: 1px;
 		margin: var(--space-2) var(--space-2);
 		background: var(--line);
 	}
-	.projectmenu .regel:hover,
-	.projectmenu .regel:focus-within { background: var(--surface-2); }
+	.projectmenu .row:hover,
+	.projectmenu .row:focus-within { background: var(--surface-2); }
 	.projectmenu input[type='file'] {
 		position: absolute;
 		width: 0;
@@ -680,7 +680,7 @@
 	}
 	/* What is in that file, once, here — not in a tooltip that does not exist on a
 	   touch screen. */
-	.projectmenu .uitleg {
+	.projectmenu .hint {
 		margin: var(--space-2) 0 0;
 		padding: 0 var(--space-2);
 		font-size: var(--text-xs);
@@ -689,12 +689,12 @@
 	/* Below ~950px there is no room left for file actions *beside* the machine
 	   controls. The machine wins; the files then live in the tool rail's menu, one tap
 	   away. */
-	.topbar.smal .docs { display: none; }
+	.topbar.narrow .docs { display: none; }
 	/* Narrow bar: the short label, wide bar: the long one. Two whole labels, so a
 	   translation is never half a sentence. */
-	.btn-label.kort { display: none; }
-	.topbar.smal .btn.primary .lang { display: none; }
-	.topbar.smal .btn.primary .kort { display: inline; }
+	.btn-label.short { display: none; }
+	.topbar.narrow .btn.primary .lang { display: none; }
+	.topbar.narrow .btn.primary .short { display: inline; }
 	/* The project and the separate files are two kinds of action; a hairline says so
 	   without words. */
 	.scheiding {
@@ -739,21 +739,21 @@
 	/* Nothing chosen yet is not an error, so no red and no exclamation mark. A dashed
 	   border says "something still belongs here" and nothing else; as soon as there is a
 	   material it becomes an ordinary chip. */
-	.materiaal.leeg {
+	.materiaal.empty {
 		background: transparent;
 		/* --line is tuned for surfaces that lie against each other; as a loose dashed
 		   border on the bar it disappears. The same secondary text colour,
-		   verdund, houdt hem zichtbaar zonder alarm te slaan. */
+		   verdund, houdt hem visible zonder alarm te slaan. */
 		border: 1px dashed color-mix(in srgb, var(--text-2) 45%, transparent);
 		color: var(--text-2);
 	}
 	/* "Choose material" is shorter than a material name and may stay whole: truncated
 	   to "Material…" it is no longer an invitation. */
-	.materiaal.leeg .naam { max-width: none; }
-	.materiaal.leeg:hover:not(:disabled) { color: var(--text-1); }
+	.materiaal.empty .name { max-width: none; }
+	.materiaal.empty:hover:not(:disabled) { color: var(--text-1); }
 	.materiaal:disabled { cursor: not-allowed; }
 	.materiaal svg { color: var(--text-2); flex: none; }
-	.materiaal .naam {
+	.materiaal .name {
 		max-width: 14ch;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -761,7 +761,7 @@
 	}
 	/* The thickness is half the answer and must not drop away, but it does not have to
 	   weigh as much as the name. */
-	.dikte { color: var(--text-2); font-size: var(--text-xs); }
+	.thickness { color: var(--text-2); font-size: var(--text-xs); }
 	.toestand { display: none; }
 	.dot {
 		width: 8px;
@@ -808,9 +808,9 @@
 	.btn.danger:hover:not(:disabled) { background: var(--danger-solid); filter: brightness(1.06); }
 	/* Pause and stop have opposing consequences — one saves your workpiece, the other
 	   throws it away. So 24px here too, as in the status bar. */
-	.btn.hervat,
-	.btn.pauze { margin-right: var(--space-3); }
-	.btn.hervat {
+	.btn.resume,
+	.btn.pause { margin-right: var(--space-3); }
+	.btn.resume {
 		background: var(--accent);
 		border-color: var(--accent);
 		color: var(--accent-ink);

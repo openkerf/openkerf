@@ -11,11 +11,11 @@
 	// machines — a destination, not a step within one machine. Two levels in one row
 	// of pills reads as a mistake, and it was one.
 	const STEPS = [
-		{ path: '/setup/soort', title: t('setup.step.kind') },
+		{ path: '/setup/kind', title: t('setup.step.kind') },
 		{ path: '/setup/type', title: t('setup.step.model') },
-		{ path: '/setup/naam', title: t('setup.step.name') },
-		{ path: '/setup/instellen', title: t('setup.step.settings') },
-		{ path: '/setup/klaar', title: t('setup.step.done') }
+		{ path: '/setup/name', title: t('setup.step.name') },
+		{ path: '/setup/settings', title: t('setup.step.settings') },
+		{ path: '/setup/done', title: t('setup.step.done') }
 	];
 
 	let current = $derived(STEPS.findIndex((s) => s.path === $page.url.pathname));
@@ -23,8 +23,8 @@
 	// Steps with little on screen get a narrower card. Otherwise a 460px column sits
 	// on the left of a 900px card with the right half empty — which reads as a page
 	// something has fallen off.
-	const SMAL = ['/setup/naam', '/setup/klaar'];
-	let smal = $derived(SMAL.includes($page.url.pathname));
+	const SMAL = ['/setup/name', '/setup/done'];
+	let narrow = $derived(SMAL.includes($page.url.pathname));
 </script>
 
 <header class="topbar">
@@ -34,7 +34,7 @@
 	<a class="btn" href="/">{t('common.back')}<span class="lang">{t('setup.backToWorkArea')}</span></a>
 </header>
 
-<main class:smal>
+<main class:narrow>
 	{#if current >= 0}
 	<nav class="steps" aria-label={t('setup.progress')}>
 		<!-- Five pills without a count do not say how far you are; on a phone they
@@ -57,7 +57,7 @@
 
 	<!-- The steps sat as bare text in an empty window: at 1440 by 900 two thirds of the
 	     screen was nothing. A card makes it a screen rather than a document. -->
-	<div class="blad">
+	<div class="sheetcard">
 		{@render children()}
 	</div>
 </main>
@@ -104,10 +104,10 @@
 		width: 100%;
 		margin: 0 auto;
 	}
-	main.smal {
+	main.narrow {
 		max-width: 560px;
 	}
-	.blad {
+	.sheetcard {
 		background: var(--surface-1);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
@@ -115,7 +115,7 @@
 		padding: var(--space-6);
 	}
 	@media (max-width: 560px) {
-		.blad {
+		.sheetcard {
 			padding: var(--space-4);
 		}
 	}
@@ -142,7 +142,7 @@
 		color: var(--text-2);
 		text-decoration: none;
 	}
-	/* Een afgeronde stap staat op --surface-2, en daar blijft --accent op 4,33
+	/* Een afgeronde step staat op --surface-2, en daar stays --accent op 4,33
 	   short; --accent-text is the same colour one shade deeper and reaches 5.09. On hover
 	   as well, because that lays --line underneath. */
 	.steps li.done a {
@@ -182,7 +182,7 @@
 	:global(.setup .muted) {
 		color: var(--text-2);
 	}
-	/* The width now lives on the card (main.smal), not in the content: otherwise a 460px
+	/* The width now lives on the card (main.narrow), not in the content: otherwise a 460px
 	   column sat on the left of a 900 card. */
 	:global(.setup.narrow) {
 		max-width: none;

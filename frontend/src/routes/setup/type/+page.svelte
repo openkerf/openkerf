@@ -12,8 +12,8 @@
 
 	// The chosen kind is in the URL: this step has to survive a refresh and the
 	// back button.
-	let soort = $derived($page.url.searchParams.get('soort'));
-	let gekozenSoort = $derived(KINDS.find((k) => k.id === soort) ?? null);
+	let kind = $derived($page.url.searchParams.get('kind'));
+	let gekozenSoort = $derived(KINDS.find((k) => k.id === kind) ?? null);
 
 	let families = $derived(
 		store.catalog
@@ -23,7 +23,7 @@
 				...family,
 				machines: family.machines.filter(
 					(machine) =>
-						(!soort || kindOfMachine(machine) === soort) &&
+						(!kind || kindOfMachine(machine) === kind) &&
 						`${machine.friendly_name} ${family.family}`
 							.toLowerCase()
 							.includes(search.trim().toLowerCase())
@@ -60,7 +60,7 @@
 				<li>
 					<!-- The choice travels as a query parameter: the next step is a page of
 					     its own and has to survive a refresh. -->
-					<a class="type" href="/setup/naam?type={encodeURIComponent(machine.key)}">
+					<a class="type" href="/setup/name?type={encodeURIComponent(machine.key)}">
 						<span class="name">{machine.friendly_name}</span>
 						{#if machine.extended_info}
 							<span class="muted">{machine.extended_info}</span>
@@ -74,18 +74,18 @@
 		     the search term — even when you had typed nothing and it was the kind
 		     filter that left everything out. Then it read "Nothing found for “”" and
 		     the only way out was the back button. -->
-		<p class="niets muted">
+		<p class="none muted">
 			{#if store.busy}
 				{t('setup.loadingCatalogue')}
 			{:else if search.trim()}
-				{t(soort ? 'setup.nothingFound.within' : 'setup.nothingFound', { query: search.trim() })}
-			{:else if soort}
+				{t(kind ? 'setup.nothingFound.within' : 'setup.nothingFound', { query: search.trim() })}
+			{:else if kind}
 				{t('setup.kindEmpty')}
 			{:else}
 				{t('setup.catalogue.empty')}
 			{/if}
 		</p>
-		{#if !store.busy && (soort || search.trim())}
+		{#if !store.busy && (kind || search.trim())}
 			<p><a class="btn" href="/setup/type">{t('setup.showAllModels')}</a></p>
 		{/if}
 	{/each}
@@ -156,7 +156,7 @@
 	.name {
 		font-weight: 500;
 	}
-	.niets {
+	.none {
 		margin-top: var(--space-6);
 	}
 </style>

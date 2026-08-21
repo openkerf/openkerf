@@ -33,14 +33,14 @@
 		}))
 	);
 
-	// ------------------------------------------------------------------ zoeken
+	// ------------------------------------------------------------------ search
 
 	let zoekt = $state(false);
 	let resultaat = $state<ScanResult | null>(null);
 	let verstreken = $state(0);
 	/** Past this bound "just a moment" has become an assumption. */
 	const TRAAG = 8;
-	let keuze = $state<Record<string, string>>({});
+	let choice = $state<Record<string, string>>({});
 	let controller: AbortController | null = null;
 	let tikker: ReturnType<typeof setInterval> | null = null;
 
@@ -59,11 +59,11 @@
 		tikker = setInterval(() => (verstreken += 1), 1000);
 		controller = new AbortController();
 		try {
-			const gevonden = await store.scan({ signal: controller.signal });
-			if (gevonden) {
-				resultaat = gevonden;
-				keuze = Object.fromEntries(
-					gevonden.candidates
+			const found = await store.scan({ signal: controller.signal });
+			if (found) {
+				resultaat = found;
+				choice = Object.fromEntries(
+					found.candidates
 						.filter((v) => v.suggestions.length)
 						.map((v) => [v.id, v.suggestions[0].key])
 				);
@@ -84,16 +84,16 @@
 	 * land in the ordinary "name" step, where you can still go back.
 	 */
 	function bevestig(vondst: Finding) {
-		const key = keuze[vondst.id] ?? vondst.suggestions[0]?.key;
+		const key = choice[vondst.id] ?? vondst.suggestions[0]?.key;
 		if (!key) return;
 		const params = new URLSearchParams({ type: key });
 		if (Object.keys(vondst.settings).length) {
 			// The connection travels along as a parameter, so the back button and a
 			// refresh keep working — the same rule as for the rest of the wizard.
 			params.set('connection', JSON.stringify(vondst.settings));
-			params.set('gevonden', `${vondst.title} · ${vondst.where}`);
+			params.set('found', `${vondst.title} · ${vondst.where}`);
 		}
-		goto(`/setup/naam?${params}`);
+		goto(`/setup/name?${params}`);
 	}
 
 	// Short: the pill says by which route, the line below says exactly where. A pill
@@ -109,20 +109,20 @@
 	}
 
 	/** Certainty gets a word *and* a shape — colour alone is not enough. */
-	const ZEKERHEID: Record<string, { woord: MessageKey; uitleg: MessageKey; icon: string }> = {
+	const ZEKERHEID: Record<string, { woord: MessageKey; hint: MessageKey; icon: string }> = {
 		zeker: {
 			woord: 'setup.certainty.answered',
-			uitleg: 'setup.certainty.answered.why',
+			hint: 'setup.certainty.answered.why',
 			icon: 'M4 12.5 9 17.5 20 6.5'
 		},
 		waarschijnlijk: {
 			woord: 'setup.certainty.probable',
-			uitleg: 'setup.certainty.probable.why',
+			hint: 'setup.certainty.probable.why',
 			icon: 'M12 3.5 22 20H2z'
 		},
 		onzeker: {
 			woord: 'setup.certainty.guess',
-			uitleg: 'setup.certainty.guess.why',
+			hint: 'setup.certainty.guess.why',
 			icon: 'M9 8.5a3 3 0 1 1 3 3.5v2M12 18.5v.01'
 		}
 	};
@@ -136,8 +136,8 @@
 	<h1>{t('setup.whatKind')}</h1>
 	<p class="muted">{t('setup.whatKind.body')}</p>
 
-	<section class="zoeken" aria-labelledby="zoekkop">
-		<div class="kop">
+	<section class="search" aria-labelledby="zoekkop">
+		<div class="head">
 			<h2 id="zoekkop">{t('setup.scan.title')}</h2>
 			{#if !zoekt}
 				<button class="btn primary" onclick={zoek}>
@@ -147,7 +147,7 @@
 		</div>
 
 		{#if zoekt}
-			<div class="bezig" role="status" aria-live="polite">
+			<div class="busy" role="status" aria-live="polite">
 				<span class="ring" aria-hidden="true"></span>
 				<div>
 					<div class="bezigkop">{t('setup.scan.running', { seconds: verstreken })}</div>
@@ -165,7 +165,7 @@
 
 		<!-- The promise stays put while searching too: that is exactly when you wonder
 		     what is happening to your machine. -->
-		<p class="belofte">
+		<p class="promise">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" />
 			</svg>
@@ -181,9 +181,9 @@
 						<li class="vondst" class:gok={vondst.confidence === 'onzeker'}>
 							<!-- Stacked, not side by side: at 390 px the title otherwise became a
 							     column two words wide and an IP address broke in the middle. -->
-							<div class="regel">
+							<div class="row">
 								<span class="transport">{transport(vondst.transport)}</span>
-								<span class="zekerheid" title={t(zeker.uitleg)}>
+								<span class="certainty" title={t(zeker.hint)}>
 									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 										<path d={zeker.icon} />
 									</svg>
@@ -195,7 +195,7 @@
 								{vondst.where}{vondst.detail ? ` · ${vondst.detail}` : ''}
 							</div>
 
-							<p class="waarom">{vondst.why}</p>
+							<p class="why">{vondst.why}</p>
 
 							{#if vondst.suggestions.length > 1}
 								<div class="model">
@@ -204,10 +204,10 @@
 										<Segmented
 											label={t('setup.model')}
 											options={vondst.suggestions.map((s) => ({ value: s.key, label: s.label }))}
-											bind:value={keuze[vondst.id]}
+											bind:value={choice[vondst.id]}
 										/>
 									{:else}
-										<select bind:value={keuze[vondst.id]}>
+										<select bind:value={choice[vondst.id]}>
 											{#each vondst.suggestions as suggestie (suggestie.key)}
 												<option value={suggestie.key}>{suggestie.label}</option>
 											{/each}
@@ -234,7 +234,7 @@
 					{/each}
 				</ul>
 			{:else}
-				<div class="niets">
+				<div class="none">
 					<h3>{t('setup.nothing')}</h3>
 					<p>{t('setup.nothing.body')}</p>
 					{#if resultaat.notes.length === 1}
@@ -264,16 +264,16 @@
 		{#each aantallen as kind (kind.id)}
 			<li>
 				<a
-					class="soort"
-					class:leeg={kind.count === 0}
-					href={kind.count ? `/setup/type?soort=${kind.id}` : undefined}
+					class="kind"
+					class:empty={kind.count === 0}
+					href={kind.count ? `/setup/type?kind=${kind.id}` : undefined}
 					aria-disabled={kind.count === 0}
 				>
 					<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 						<path d={kind.icon} />
 					</svg>
-					<span class="naam">{kind.label}</span>
-					<span class="uitleg">{kind.blurb}</span>
+					<span class="name">{kind.label}</span>
+					<span class="hint">{kind.blurb}</span>
 					<span class="hoeveel mono">
 						{kind.count === 0 ? t('setup.models.none') : t('setup.models', { n: kind.count })}
 					</span>
@@ -290,20 +290,20 @@
 
 <style>
 	/* ------------------------------------------------------------ search block */
-	.zoeken {
+	.search {
 		margin: var(--space-4) 0 var(--space-8);
 		padding: var(--space-4);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.kop {
+	.head {
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
 		flex-wrap: wrap;
 	}
-	.zoeken h2 {
+	.search h2 {
 		flex: 1;
 		margin: 0;
 		font-size: var(--text-md);
@@ -312,7 +312,7 @@
 	}
 	/* The promise from the decision is on the screen, not only in a document: anybody
 	   pressing a button that could touch a laser should know that this one does not. */
-	.belofte {
+	.promise {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-2);
@@ -320,12 +320,12 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.belofte svg {
+	.promise svg {
 		flex: none;
 		margin-top: 1px;
 	}
 
-	.bezig {
+	.busy {
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
@@ -334,17 +334,17 @@
 	.bezigkop {
 		font-weight: 500;
 	}
-	.bezig p {
+	.busy p {
 		margin: 2px 0 0;
 		font-size: var(--text-xs);
 	}
-	.bezig .traag {
+	.busy .traag {
 		color: var(--text-1);
 		border-left: 3px solid var(--warn);
 		padding-left: var(--space-2);
 		margin-top: var(--space-2);
 	}
-	.bezig > div {
+	.busy > div {
 		flex: 1;
 		min-width: 0;
 	}
@@ -369,7 +369,7 @@
 	}
 
 	.uitslag,
-	.niets h3 {
+	.none h3 {
 		margin: var(--space-4) 0 var(--space-2);
 		font-size: var(--text-sm);
 		font-weight: 600;
@@ -395,7 +395,7 @@
 	.vondst.gok {
 		border-left-color: var(--warn);
 	}
-	.regel {
+	.row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -417,20 +417,20 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.zekerheid {
+	.certainty {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-1h);
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
-	.zekerheid svg {
+	.certainty svg {
 		color: var(--ok);
 	}
-	.gok .zekerheid svg {
+	.gok .certainty svg {
 		color: var(--warn);
 	}
-	.waarom {
+	.why {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
@@ -476,18 +476,18 @@
 		font-size: var(--text-xs);
 	}
 
-	.niets {
+	.none {
 		margin-top: var(--space-3);
 		padding: var(--space-3);
 		border: 1px dashed var(--line);
 		border-radius: var(--radius-card);
 		background: var(--surface-1);
 	}
-	.niets p {
+	.none p {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-xs);
 	}
-	.niets p:last-child {
+	.none p:last-child {
 		margin-bottom: 0;
 	}
 	.herkomst {
@@ -503,7 +503,7 @@
 		margin-bottom: 4px;
 	}
 
-	/* --------------------------------------------------------- eigen keuze */
+	/* --------------------------------------------------------- eigen choice */
 	.zelfkop {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-md);
@@ -520,7 +520,7 @@
 		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 		gap: var(--space-3);
 	}
-	.soort {
+	.kind {
 		display: grid;
 		gap: var(--space-2);
 		/* Equal height, whatever the text does: a ragged grid of cards reads as a list
@@ -535,12 +535,12 @@
 		text-decoration: none;
 		box-shadow: var(--lift-1);
 	}
-	.soort:hover { border-color: var(--accent); }
-	.soort svg { color: var(--accent); }
-	.naam { font-weight: 600; }
-	.uitleg { font-size: var(--text-xs); color: var(--text-2); }
+	.kind:hover { border-color: var(--accent); }
+	.kind svg { color: var(--accent); }
+	.name { font-weight: 600; }
+	.hint { font-size: var(--text-xs); color: var(--text-2); }
 	.hoeveel { font-size: var(--text-xs); color: var(--text-2); margin-top: 4px; }
-	.soort.leeg { opacity: 0.5; pointer-events: none; }
+	.kind.empty { opacity: 0.5; pointer-events: none; }
 	.anders { margin-top: var(--space-4); font-size: var(--text-xs); color: var(--text-2); }
 	.anders a { color: var(--accent-text); }
 
@@ -549,20 +549,20 @@
 		.model select {
 			min-height: 44px;
 		}
-		.zoeken :global(.btn) {
+		.search :global(.btn) {
 			min-height: 44px;
 		}
 	}
 	/* At 390 px "Let OpenKerf search" broke over three lines beside the button, and that
 	   button sat askew in the remaining hole. Better stacked, then. */
 	@media (max-width: 560px) {
-		.kop {
+		.head {
 			display: grid;
 		}
-		.zoeken :global(.btn) {
+		.search :global(.btn) {
 			justify-content: center;
 		}
-		.bezig {
+		.busy {
 			display: grid;
 			gap: var(--space-2);
 			grid-template-columns: auto 1fr;
@@ -573,7 +573,7 @@
 		.ring {
 			margin-top: 2px;
 		}
-		.bezig > button {
+		.busy > button {
 			grid-column: 1 / -1;
 			justify-content: center;
 		}

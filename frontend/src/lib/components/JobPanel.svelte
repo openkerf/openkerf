@@ -89,8 +89,8 @@
 			<!-- Only the job the controls are about can stall; the rest are simply
 			     waiting their turn. Without that distinction every waiting job got
 			     the paused look. -->
-			{@const stil = job === activeJob && isStalled(job)}
-			<article class="job" class:running={job.running || stil} class:paused={stil}>
+			{@const quiet = job === activeJob && isStalled(job)}
+			<article class="job" class:running={job.running || quiet} class:paused={quiet}>
 				<header>
 					<!-- "Spooler:3 items" is the engine's internal tally, not a name
 					     (gap P4). The wording lives in api.ts, so the Job panel, the
@@ -99,12 +99,12 @@
 					<span class="name" title={job.label}>{jobLabel(job)}</span>
 					<!-- The engine says "running"/"queued"; this app speaks the user's
 					     language. -->
-					<span class="status" class:nu={job.running && !stil} class:pauze={stil}
-						>{stil ? t('job.status.paused') : jobStatusLabel(job)}</span
+					<span class="status" class:now={job.running && !quiet} class:pause={quiet}
+						>{quiet ? t('job.status.paused') : jobStatusLabel(job)}</span
 					>
 				</header>
 
-				{#if job.running || stil}
+				{#if job.running || quiet}
 					<!-- "How much longer" is the only number someone standing next to
 					     the machine wants; elapsed and total sit below it so the sum can
 					     be checked. -->
@@ -255,8 +255,8 @@
 		color: var(--text-2);
 		flex: none;
 	}
-	.status.nu { color: var(--accent); font-weight: 600; }
-	.status.pauze { color: var(--warn); font-weight: 600; }
+	.status.now { color: var(--accent); font-weight: 600; }
+	.status.pause { color: var(--warn); font-weight: 600; }
 	.progress {
 		width: 100%;
 		height: 6px;

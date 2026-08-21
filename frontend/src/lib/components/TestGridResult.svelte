@@ -50,16 +50,16 @@
 	} as const;
 
 	/** "12 mm/s", "60%" — what differed in this square from its neighbour. */
-	function aswaarde(cell: Cell, as: Grid['row_axis']) {
-		const waarde = cell[CEL_SLEUTEL[as]];
-		if (waarde === null || waarde === undefined) return '';
-		return as === 'power' ? `${waarde}%` : `${waarde} ${EENHEID[as]}`;
+	function axisValue(cell: Cell, as: Grid['row_axis']) {
+		const value = cell[CEL_SLEUTEL[as]];
+		if (value === null || value === undefined) return '';
+		return as === 'power' ? `${value}%` : `${value} ${EENHEID[as]}`;
 	}
 
 	/** The two quantities that distinguish this square, one after the other. */
-	function celtekst(cell: Cell) {
+	function cellText(cell: Cell) {
 		if (!grid) return '';
-		return `${aswaarde(cell, grid.row_axis)} · ${aswaarde(cell, grid.column_axis)}`;
+		return `${axisValue(cell, grid.row_axis)} · ${axisValue(cell, grid.column_axis)}`;
 	}
 
 	let {
@@ -69,7 +69,7 @@
 	}: {
 		library: LibraryStore;
 		canEdit?: boolean;
-		/** Net gegenereerd raster: daar wil je meteen naartoe. */
+		/** Net gegenereerd grid: daar wil je meteen naartoe. */
 		focusGrid?: number | null;
 	} = $props();
 
@@ -79,7 +79,7 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let photoStamp = $state(0);
-	let uitlijnen = $state(false);
+	let aligning = $state(false);
 	let aangewezen = $state<Cell | null>(null);
 	let podium = $state<HTMLElement | null>(null);
 
@@ -98,7 +98,7 @@
 	});
 
 	/** "11 Aug 21:26" — enough to separate three trials from the same week. */
-	function datum(ruw: string) {
+	function dateOf(ruw: string) {
 		const d = new Date(ruw.replace(' ', 'T'));
 		if (Number.isNaN(d.getTime())) return ruw;
 		return d.toLocaleString(i18n.locale, {
@@ -131,7 +131,7 @@
 
 	// ------------------------------------------------------------- uitlijning
 	//
-	// A photo of a board is never a tidy crop: you stand at an angle above it, with
+	// A photo of a board is never a tidy crop: you state at an angle above it, with
 	// the board half in frame. Without correction the overlay lies beside the burned
 	// squares and you therefore point at the wrong square — which makes the one step
 	// that sets this app apart worthless. Hence four draggable corners and a
@@ -154,7 +154,7 @@
 		t('result.corner.bottomLeft')
 	];
 
-	let hoeken = $state<Punt[]>(DEFAULT_CORNERS.map((p) => ({ ...p })));
+	let corners = $state<Punt[]>(DEFAULT_CORNERS.map((p) => ({ ...p })));
 	let bewaarFout = $state<string | null>(null);
 
 	$effect(() => {
@@ -164,12 +164,12 @@
 		// alignment state would snap shut as soon as saving sent its answer back —
 		// in the middle of dragging.
 		const bewaard = untrack(() => grids.find((g) => g.id === id)?.alignment ?? null);
-		hoeken =
+		corners =
 			bewaard && bewaard.length === 4
 				? bewaard.map((p) => ({ x: p.x, y: p.y }))
 				: DEFAULT_CORNERS.map((p) => ({ ...p }));
 		// Nog nooit uitgelijnd? Dan is dát de eerste handeling.
-		uitlijnen = bewaard === null;
+		aligning = bewaard === null;
 		aangewezen = null;
 		bewaarFout = null;
 	});
@@ -182,13 +182,13 @@
 		// rounds to the database for one alignment.
 		if (bewaartimer) clearTimeout(bewaartimer);
 		const id = openId;
-		const punten = hoeken.map((p) => ({ x: p.x, y: p.y }));
+		const points = corners.map((p) => ({ x: p.x, y: p.y }));
 		bewaartimer = setTimeout(async () => {
 			try {
 				const response = await fetch(`/api/library/testgrids/${id}/alignment`, {
 					method: 'PUT',
 					headers: headers(true),
-					body: JSON.stringify({ corners: punten })
+					body: JSON.stringify({ corners: points })
 				});
 				if (!response.ok) {
 					bewaarFout = t('result.align.failed');
@@ -211,7 +211,7 @@
 	 * below does catch that.
 	 */
 	let afbeelding = $derived.by(() => {
-		const [p0, p1, p2, p3] = hoeken;
+		const [p0, p1, p2, p3] = corners;
 		const dx1 = p1.x - p2.x;
 		const dx2 = p3.x - p2.x;
 		const dx3 = p0.x - p1.x + p2.x - p3.x;
@@ -262,46 +262,46 @@
 
 	function sleep(index: number, event: PointerEvent) {
 		if (!podium) return;
-		const doel = event.currentTarget as HTMLElement;
-		doel.setPointerCapture(event.pointerId);
+		const target = event.currentTarget as HTMLElement;
+		target.setPointerCapture(event.pointerId);
 		const rect = podium.getBoundingClientRect();
 		const beweeg = (e: PointerEvent) => {
-			hoeken[index] = {
+			corners[index] = {
 				x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
 				y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
 			};
 		};
 		const stop = () => {
-			doel.removeEventListener('pointermove', beweeg);
-			doel.removeEventListener('pointerup', stop);
+			target.removeEventListener('pointermove', beweeg);
+			target.removeEventListener('pointerup', stop);
 			bewaarUitlijning();
 		};
-		doel.addEventListener('pointermove', beweeg);
-		doel.addEventListener('pointerup', stop);
+		target.addEventListener('pointermove', beweeg);
+		target.addEventListener('pointerup', stop);
 	}
 
 	function toets(index: number, event: KeyboardEvent) {
-		const stap = event.shiftKey ? 0.02 : 0.004;
+		const step = event.shiftKey ? 0.02 : 0.004;
 		const richting: Record<string, [number, number]> = {
-			ArrowLeft: [-stap, 0],
-			ArrowRight: [stap, 0],
-			ArrowUp: [0, -stap],
-			ArrowDown: [0, stap]
+			ArrowLeft: [-step, 0],
+			ArrowRight: [step, 0],
+			ArrowUp: [0, -step],
+			ArrowDown: [0, step]
 		};
 		const d = richting[event.key];
 		if (!d) return;
 		event.preventDefault();
-		hoeken[index] = {
-			x: Math.min(1, Math.max(0, hoeken[index].x + d[0])),
-			y: Math.min(1, Math.max(0, hoeken[index].y + d[1]))
+		corners[index] = {
+			x: Math.min(1, Math.max(0, corners[index].x + d[0])),
+			y: Math.min(1, Math.max(0, corners[index].y + d[1]))
 		};
 		bewaarUitlijning();
 	}
 
-	// ------------------------------------------------------------------ keuze
+	// ------------------------------------------------------------------ choice
 
 	function toggle(cell: Cell) {
-		if (!canEdit || uitlijnen) return;
+		if (!canEdit || aligning) return;
 		const id = key(cell);
 		picked = picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id];
 	}
@@ -310,7 +310,7 @@
 		grid ? grid.cells.filter((c) => picked.includes(key(c))) : []
 	);
 	/** The squares a preset has already been taken from — the evidence under the card. */
-	let gebruikteCellen = $derived(
+	let usedCells = $derived(
 		grid ? grid.cells.filter((c) => c.preset_id !== undefined && c.preset_id !== null) : []
 	);
 
@@ -346,7 +346,7 @@
 			photoStamp = Date.now();
 			// A fresh photo is not yet under the overlay: that is the first action, so
 			// set it up straight away.
-			uitlijnen = true;
+			aligning = true;
 		} finally {
 			busy = false;
 		}
@@ -384,7 +384,7 @@
 </script>
 
 <div class="resultaat">
-	<div class="kop">
+	<div class="head">
 		<h2 class="titel">{t('result.title')}</h2>
 		{#if grids.length}
 			<select class="picker" bind:value={openId} aria-label={t('result.pickGrid')}>
@@ -393,7 +393,7 @@
 					<!-- The date with it: whoever has done three tests on the same material
 					     otherwise sees three identical lines. -->
 					<option value={g.id}>
-						{datum(g.created_at)} · {g.material_name ?? t('result.noMaterial')} · {g.operation}
+						{dateOf(g.created_at)} · {g.material_name ?? t('result.noMaterial')} · {g.operation}
 						{g.photo_path ? t('result.withPhoto') : t('result.waitingPhoto')}
 					</option>
 				{/each}
@@ -405,9 +405,9 @@
 		<p class="muted">{t('result.noGrids')}</p>
 	{/if}
 
-	{#if error}<p class="melding failure" role="alert">{error}</p>{/if}
+	{#if error}<p class="notice failure" role="alert">{error}</p>{/if}
 	{#if gemaakt}
-		<p class="melding goed" role="status">
+		<p class="notice good" role="status">
 			{t('result.saved', {
 				n: gemaakt,
 				material: grid?.material_name ?? t('result.thisMaterial')
@@ -420,7 +420,7 @@
 			<!-- No photo: then no grid of empty squares over nothing. Say what has to
 			     happen and how you do it with a phone. -->
 			<div class="geenfoto">
-				<p class="waarom">
+				<p class="why">
 					<strong>{t('result.burnFirst')}</strong>
 					{t('result.burnFirst.how')}
 				</p>
@@ -439,7 +439,7 @@
 					alt={t('result.photoAlt')}
 				/>
 
-				<svg viewBox="0 0 1 1" preserveAspectRatio="none" class:uitlijnen>
+				<svg viewBox="0 0 1 1" preserveAspectRatio="none" class:aligning>
 					{#each grid.cells as cell (key(cell))}
 						<g
 							class="cell"
@@ -451,8 +451,8 @@
 						>
 							<polygon
 								role="button"
-								tabindex={uitlijnen ? -1 : 0}
-								aria-label="Rij {cell.row + 1}, kolom {cell.column + 1} — {celtekst(cell)}"
+								tabindex={aligning ? -1 : 0}
+								aria-label="Rij {cell.row + 1}, column {cell.column + 1} — {cellText(cell)}"
 								aria-pressed={picked.includes(key(cell))}
 								points={veelhoek(cell)}
 								onclick={() => toggle(cell)}
@@ -467,18 +467,18 @@
 							/>
 						</g>
 					{/each}
-					{#if uitlijnen}
+					{#if aligning}
 						<polygon
-							class="kader"
-							points={hoeken.map((p) => `${p.x},${p.y}`).join(' ')}
+							class="frame"
+							points={corners.map((p) => `${p.x},${p.y}`).join(' ')}
 						/>
 					{/if}
 				</svg>
 
-				{#if uitlijnen}
-					{#each hoeken as point, i (i)}
+				{#if aligning}
+					{#each corners as point, i (i)}
 						<button
-							class="hoek"
+							class="corner"
 							style="left: {point.x * 100}%; top: {point.y * 100}%"
 							aria-label={t('result.corner.drag', { corner: HOEKNAAM[i] })}
 							onpointerdown={(e) => sleep(i, e)}
@@ -490,13 +490,13 @@
 				<!-- Which setting is under your finger? Without this you point at a square
 				     without knowing what you are choosing. -->
 				<div class="aflezing mono" aria-live="polite">
-					{#if uitlijnen}
+					{#if aligning}
 						{t('result.dragCorners')}
 					{:else if aangewezen}
 						{t('result.rowColumn', {
 							row: aangewezen.row + 1,
 							column: aangewezen.column + 1,
-							values: celtekst(aangewezen)
+							values: cellText(aangewezen)
 						})}
 					{:else}
 						{t('result.tapBest')}
@@ -507,12 +507,12 @@
 			<div class="onderbalk">
 				<button
 					class="btn"
-					aria-pressed={uitlijnen}
+					aria-pressed={aligning}
 					onclick={() => {
-						uitlijnen = !uitlijnen;
-						if (!uitlijnen) bewaarUitlijning();
+						aligning = !aligning;
+						if (!aligning) bewaarUitlijning();
 					}}
-				>{uitlijnen ? t('result.alignDone') : t('result.align')}</button>
+				>{aligning ? t('result.alignDone') : t('result.align')}</button>
 
 				{#if canEdit}
 					<label class="btn file">
@@ -521,7 +521,7 @@
 					</label>
 				{/if}
 
-				<div class="keuze">
+				<div class="choice">
 					{#if gekozenCellen.length}
 						{#each gekozenCellen as cell (key(cell))}
 							<button
@@ -530,12 +530,12 @@
 								aria-label={t('result.undoChoice', {
 									row: cell.row + 1,
 									column: cell.column + 1,
-									values: celtekst(cell)
+									values: cellText(cell)
 								})}
 							>{t('result.chip', {
 									row: cell.row + 1,
 									column: cell.column + 1,
-									values: celtekst(cell)
+									values: cellText(cell)
 								})} ×</button>
 						{/each}
 					{:else}
@@ -560,16 +560,16 @@
 				{/if}
 			</div>
 
-			{#if bewaarFout}<p class="melding failure" role="alert">{bewaarFout}</p>{/if}
+			{#if bewaarFout}<p class="notice failure" role="alert">{bewaarFout}</p>{/if}
 
-			{#if gebruikteCellen.length}
+			{#if usedCells.length}
 				<!-- Gap M4: the provenance said "row 2, column 3" and nothing was marked on
 				     the photo. Now that the alignment is saved, the same overlay can point
 				     at the square — here by highlighting it, and in the library because the
 				     photo with ?cell= gets the outline drawn in. -->
 				<div class="herkomst">
 					<span class="muted">{t('result.becamePreset')}</span>
-					{#each gebruikteCellen as cell (key(cell))}
+					{#each usedCells as cell (key(cell))}
 						<button
 							class="chip bewijs mono"
 							onpointerenter={() => (aangewezen = cell)}
@@ -580,7 +580,7 @@
 						>{t('result.chip', {
 								row: cell.row + 1,
 								column: cell.column + 1,
-								values: celtekst(cell)
+								values: cellText(cell)
 							})}</button>
 					{/each}
 					<span class="muted">{t('result.pointHighlights')}</span>
@@ -588,7 +588,7 @@
 			{/if}
 
 			{#if grid.material_id === null}
-				<p class="melding waarschuwing">{t('result.gridNoMaterial')}</p>
+				<p class="notice waarschuwing">{t('result.gridNoMaterial')}</p>
 			{/if}
 		{/if}
 	{/if}
@@ -602,7 +602,7 @@
 		padding-top: var(--space-4);
 		border-top: 1px solid var(--line);
 	}
-	.kop { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+	.head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 	.titel {
 		margin: 0;
 		font-size: var(--text-sm);
@@ -633,11 +633,11 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.waarom { margin: 0; max-width: 44ch; font-size: var(--text-sm); color: var(--text-1); }
+	.why { margin: 0; max-width: 44ch; font-size: var(--text-sm); color: var(--text-1); }
 
 	.podium {
 		position: relative;
-		/* Krimpen tot de foto: anders liggen de hoeken deels in de grijze
+		/* Krimpen until de foto: anders liggen de corners deels in de grijze
 		   letterbox naast het beeld. */
 		width: fit-content;
 		margin-inline: auto;
@@ -656,7 +656,7 @@
 	}
 	.podium img { display: block; max-width: 100%; max-height: 46vh; }
 	.podium svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-	.podium svg.uitlijnen { pointer-events: none; }
+	.podium svg.aligning { pointer-events: none; }
 
 	/* This SVG measures in units from 0 to 1 and is stretched to hundreds of pixels.
 	   Every edge therefore gets non-scaling-stroke, and there is no text, radius or
@@ -693,7 +693,7 @@
 		stroke: var(--accent);
 		stroke-width: 3;
 	}
-	.kader {
+	.frame {
 		fill: none;
 		stroke: var(--accent);
 		stroke-width: 2;
@@ -703,7 +703,7 @@
 
 	/* A 44px touch target with a small dot in it: your finger has to reach it, your
 	   eye has to see where the corner exactly lies. */
-	.hoek {
+	.corner {
 		position: absolute;
 		width: var(--grip);
 		height: var(--grip);
@@ -716,13 +716,13 @@
 		cursor: grab;
 		touch-action: none;
 	}
-	.hoek span {
+	.corner span {
 		width: 8px;
 		height: 8px;
 		border-radius: var(--radius-dot);
 		background: var(--accent);
 	}
-	.hoek:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	.corner:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 	.aflezing {
 		position: absolute;
@@ -744,7 +744,7 @@
 		gap: var(--space-2);
 		flex-wrap: wrap;
 	}
-	.keuze { display: flex; gap: var(--space-1); flex-wrap: wrap; flex: 1; min-width: 8rem; }
+	.choice { display: flex; gap: var(--space-1); flex-wrap: wrap; flex: 1; min-width: 8rem; }
 	.herkomst {
 		display: flex;
 		align-items: center;
@@ -809,18 +809,18 @@
 	.btn.file { cursor: pointer; display: inline-grid; place-items: center; }
 	.btn.file input { position: absolute; width: 0; height: 0; opacity: 0; }
 
-	.melding {
+	.notice {
 		margin: 0;
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 	}
-	.melding.failure { background: color-mix(in srgb, var(--danger-solid) 14%, transparent); }
-	.melding.goed {
+	.notice.failure { background: color-mix(in srgb, var(--danger-solid) 14%, transparent); }
+	.notice.good {
 		background: color-mix(in srgb, var(--ok) 14%, transparent);
 		border-left: 3px solid var(--ok);
 	}
-	.melding.waarschuwing {
+	.notice.waarschuwing {
 		background: color-mix(in srgb, var(--warn-solid) 12%, transparent);
 		border-left: 3px solid var(--warn-solid);
 	}

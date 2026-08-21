@@ -32,7 +32,7 @@
 		current?: string | null;
 	} = $props();
 
-	function kies(item: { file: string; name: string } | null) {
+	function pick(item: { file: string; name: string } | null) {
 		font = item?.file ?? '';
 		fontName = item?.name ?? '';
 	}
@@ -81,7 +81,7 @@
 			}
 			const added = await response.json();
 			await loadFonts(true);
-			kies(added);
+			pick(added);
 			importable = importable.filter((f) => f.file !== item.file);
 			importing = false;
 		} finally {
@@ -117,8 +117,8 @@
 	let faces = $derived(
 		[...familie]
 			.map(
-				([file, naam]) =>
-					`@font-face{font-family:"${naam}";src:url("/api/design/fonts/file?name=${encodeURIComponent(file)}");font-display:swap;}`
+				([file, name]) =>
+					`@font-face{font-family:"${name}";src:url("/api/design/fonts/file?name=${encodeURIComponent(file)}");font-display:swap;}`
 			)
 			.join('')
 	);
@@ -140,9 +140,9 @@
 		role="option"
 		aria-selected={font === ''}
 		class:picked={font === ''}
-		onclick={() => kies(null)}
+		onclick={() => pick(null)}
 	>
-		<span class="naam">{t('font.default')}</span>
+		<span class="name">{t('font.default')}</span>
 	</button>
 	{#each shown.slice(0, 60) as item (item.file)}
 		<button
@@ -150,7 +150,7 @@
 			role="option"
 			aria-selected={font === item.file}
 			class:picked={font === item.file}
-			onclick={() => kies(item)}
+			onclick={() => pick(item)}
 		>
 			<!--
 				The name on the left in the interface font, the sample on the right in the
@@ -160,7 +160,7 @@
 				The name is the key to finding something back, the sample is what you choose
 				on; those two tasks do not tolerate the same font.
 			-->
-			<span class="naam">{item.name}</span>
+			<span class="name">{item.name}</span>
 			<span class="proef" style={familie.has(item.file) ? `font-family: "${familie.get(item.file)}", var(--font-ui)` : ''}
 				>{sample.trim().slice(0, 18) || t('font.sample')}</span>
 		</button>
@@ -237,7 +237,7 @@
 	}
 	/* Emphatically the interface typeface: the name is the key by which you find a
 	   typeface again and therefore has to stay readable. */
-	.font .naam {
+	.font .name {
 		font-family: var(--font-ui);
 		font-size: var(--text-sm);
 		/* A long name must not push the preview off the row. */

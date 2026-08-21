@@ -15,7 +15,7 @@
 	import { t } from '$lib/i18n/index.svelte';
 	import { connection } from '$lib/connection.svelte';
 
-	let { brandt = false }: { brandt?: boolean } = $props();
+	let { burns = false }: { burns?: boolean } = $props();
 
 	// Half a second of network hiccup is not a message; the reconnect succeeds
 	// before anybody has read it. Only speak up after two seconds.
@@ -30,11 +30,11 @@
 		return () => clearTimeout(t);
 	});
 
-	let weg = $derived(
+	let gone = $derived(
 		connection.since ? Math.round((Date.now() - connection.since) / 1000) : 0
 	);
 	// Only mentioned when it lasts long enough to worry about.
-	let duur = $derived(weg >= 60 ? t('connection.minutes', { n: Math.floor(weg / 60) }) : null);
+	let duur = $derived(gone >= 60 ? t('connection.minutes', { n: Math.floor(gone / 60) }) : null);
 
 	/**
 	 * This card and the machine alarm form one column, and this is its measure.
@@ -83,12 +83,12 @@
 {#if !connection.online && late}
 	<div class="dropped" role="alert" bind:this={card}>
 		<span class="dot" aria-hidden="true"></span>
-		<div class="tekst">
+		<div class="text">
 			<strong>{t('connection.lost')}</strong>
 			<p>
 				{duur ? t('connection.lost.bodyFor', { duration: duur }) : t('connection.lost.body')}
 			</p>
-			{#if brandt}
+			{#if burns}
 				<p class="urgent">{t('connection.stillBurning')}</p>
 			{/if}
 		</div>
@@ -138,7 +138,7 @@
 		border-radius: var(--radius-dot);
 		background: var(--danger-solid);
 	}
-	.tekst { min-width: 0; }
+	.text { min-width: 0; }
 	strong { display: block; font-size: var(--text-sm); margin-bottom: 2px; }
 	p { margin: 0; color: var(--text-2); }
 	.urgent { margin-top: var(--space-2); color: var(--danger); font-weight: 500; }

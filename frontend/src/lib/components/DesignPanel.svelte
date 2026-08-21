@@ -50,7 +50,7 @@
 		/** What the last corner operation has to report (skipped corners). In a fixed
 		 *  place in the panel, not in a browser popup. */
 		cornerNote?: string | null;
-		/** Lege lagen weg. */
+		/** Lege layers gone. */
 		onPrune?: () => void;
 		/** What the last tidy-up action has to report. */
 		tidyNote?: string | null;
@@ -135,12 +135,12 @@
 		const ids = new Set(chosen.flatMap((e) => e.operation_ids ?? []));
 		const gewoon = design.operations.filter((op) => !op.grid);
 		return gewoon
-			.map((op, index) => ({ ...op, nummer: index + 1 }))
+			.map((op, index) => ({ ...op, number: index + 1 }))
 			.filter((op) => ids.has(op.id));
 	});
 	let selectedIds = $derived(design.selectedIds);
 
-	// ------------------------------------------------------------- de stand
+	// ------------------------------------------------------------- de state
 	//
 	// Rotating and mirroring were blind actions until now: you could click but not see
 	// where you were, so every click stacked on the previous one and the only way back
@@ -187,7 +187,7 @@
 	$effect(() => {
 		const key = selectedIds.join(',');
 		const start = design.selectedSize;
-		const stand = pose;
+		const state = pose;
 		untrack(() => {
 			if (!key || !start) {
 				anchor = null;
@@ -196,7 +196,7 @@
 			// Only re-anchor on a *new* selection. If the anchor followed every edit it
 			// would not be an anchor but a mirror of the last click.
 			if (anchor?.key === key) return;
-			anchor = { key, angle: stand.angle, mirrored: stand.mirrored, box: { ...start } };
+			anchor = { key, angle: state.angle, mirrored: state.mirrored, box: { ...start } };
 		});
 	});
 
@@ -296,7 +296,7 @@
 		rijMenu = {
 			x,
 			y,
-			lijst: layerMenu(
+			list: layerMenu(
 				{
 					label: op.label,
 					shapeCount: op.element_ids.length,
@@ -324,7 +324,7 @@
 	}
 
 	let rijMenu = $state<{
-		lijst: MenuList;
+		list: MenuList;
 		x: number;
 		y: number;
 		/** For a menu that hangs off a button at the bottom of the panel. */
@@ -341,7 +341,7 @@
 	const teSplitsen = $derived.by(() => {
 		const samengesteld = chosen.filter((e) => (e.subpaths ?? 1) > 1);
 		return {
-			vormen: samengesteld.length,
+			shapes: samengesteld.length,
 			stukken: samengesteld.reduce((n, e) => n + (e.subpaths ?? 1), 0)
 		};
 	});
@@ -350,7 +350,7 @@
 	 * Can this selection carry a fill, and does it already?
 	 *
 	 * A line and a point have no inside; the button should not be there then. Without a
-	 * fill a shape only rasters its outline, and that is the whole reason this button
+	 * fill a shape only grids its outline, and that is the whole reason this button
 	 * exists.
 	 */
 	const VULBAAR = ['elem rect', 'elem ellipse', 'elem path', 'elem polyline'];
@@ -365,7 +365,7 @@
 	);
 
 	let plainLayers = $derived(operations.filter((o) => !o.grid));
-	/** Lagen zonder werk: wat 'lege lagen opruimen' weghaalt. */
+	/** Lagen zonder werk: wat 'lege layers opruimen' weghaalt. */
 	const legeLagen = $derived(plainLayers.filter((op) => !op.element_ids.length));
 
 	let gridGroups = $derived.by(() => {
@@ -399,7 +399,7 @@
 	const LAYER_TYPES = [
 		{ value: 'cut', label: t('panel.kind.cut'), noun: t('panel.kind.cutNoun') },
 		{ value: 'engrave', label: t('panel.kind.engrave'), noun: t('panel.kind.engraveNoun') },
-		{ value: 'raster', label: t('panel.kind.raster'), noun: t('panel.kind.rasterNoun') },
+		{ value: 'grid', label: t('panel.kind.raster'), noun: t('panel.kind.rasterNoun') },
 		{ value: 'dots', label: t('panel.kind.dots'), noun: t('panel.kind.dotsNoun') }
 	];
 	let newLayerNoun = $derived(
@@ -420,8 +420,8 @@
 
 	/** Graveren vóór snijden, in één klik (gat L2). */
 	async function sorteerLagen() {
-		const uit = await edits.sortLayers();
-		if (uit.ok) onLayerChange?.();
+		const off = await edits.sortLayers();
+		if (off.ok) onLayerChange?.();
 	}
 
 	/**
@@ -431,8 +431,8 @@
 	 * expander closes: it would otherwise point at a layer that no longer exists.
 	 */
 	async function retypeLayer(id: string, type: string) {
-		const uit = await edits.retypeLayer(id, type);
-		if (!uit.ok) return;
+		const off = await edits.retypeLayer(id, type);
+		if (!off.ok) return;
 		editingLayer = null;
 		onLayerChange?.();
 	}
@@ -445,9 +445,9 @@
 	//
 	// The ↑/↓ buttons in the expander stay, and the grip itself does the same with the
 	// arrow keys — dragging is an extra route, not a replacement.
-	let slepen = $state<{ id: string; van: number; naar: number } | null>(null);
+	let dragging = $state<{ id: string; from: number; to: number } | null>(null);
 	let rijElementen: (HTMLElement | null)[] = [];
-	let rijGrenzen: { top: number; midden: number }[] = [];
+	let rijGrenzen: { top: number; centre: number }[] = [];
 
 	function startSleep(event: PointerEvent, id: string, index: number) {
 		if (!canEdit || edits.busy) return;
@@ -458,35 +458,35 @@
 		rijGrenzen = rijElementen
 			.filter((el): el is HTMLElement => !!el)
 			.map((el) => {
-				const doos = el.getBoundingClientRect();
-				return { top: doos.top, midden: doos.top + doos.height / 2 };
+				const box = el.getBoundingClientRect();
+				return { top: box.top, centre: box.top + box.height / 2 };
 			});
-		slepen = { id, van: index, naar: index };
+		dragging = { id, from: index, to: index };
 	}
 
 	function beweegSleep(event: PointerEvent) {
-		if (!slepen) return;
-		let naar = 0;
+		if (!dragging) return;
+		let to = 0;
 		for (let i = 0; i < rijGrenzen.length; i++) {
-			if (event.clientY > rijGrenzen[i].midden) naar = i + 1;
+			if (event.clientY > rijGrenzen[i].centre) to = i + 1;
 		}
 		// Landing above your own row means: in that place. Below your own row everything
 		// in between shifts up one, so the destination is one lower.
-		if (naar > slepen.van) naar -= 1;
-		naar = Math.min(Math.max(naar, 0), rijGrenzen.length - 1);
-		if (naar !== slepen.naar) slepen = { ...slepen, naar };
+		if (to > dragging.from) to -= 1;
+		to = Math.min(Math.max(to, 0), rijGrenzen.length - 1);
+		if (to !== dragging.to) dragging = { ...dragging, to };
 	}
 
 	async function eindSleep() {
-		const beweging = slepen;
-		slepen = null;
-		if (!beweging || beweging.naar === beweging.van) return;
-		const uit = await edits.dropLayerAt(beweging.id, beweging.naar);
-		if (uit.ok) onLayerChange?.();
+		const movement = dragging;
+		dragging = null;
+		if (!movement || movement.to === movement.from) return;
+		const off = await edits.dropLayerAt(movement.id, movement.to);
+		if (off.ok) onLayerChange?.();
 	}
 
 	/**
-	 * Compacte lijst (gat L5).
+	 * Compacte list (gat L5).
 	 *
 	 * Measured: our row is 76 px on the desktop and 111 px on a touch screen; LightBurn
 	 * does 23–26 px. Above eight layers our list is therefore a scrolling exercise.
@@ -548,12 +548,12 @@
 	 *
 	 * The engine calls them `op cut`; our four choices are called `cut`. An image
 	 * layer (`op image`) has no choice of its own — the engine makes that itself
-	 * when an image is placed — and falls under raster, because that is what it
+	 * when an image is placed — and falls under grid, because that is what it
 	 * does.
 	 */
 	function kindOf(type: string): string {
 		const kind = String(type).replace(/^op /, '');
-		return kind === 'image' ? 'raster' : kind;
+		return kind === 'image' ? 'grid' : kind;
 	}
 
 	/** Power sits at 0–1000 in the engine; the user reckons in per cent. */
@@ -674,10 +674,10 @@
 					{#if inLagen.length === 0}
 						<span class="geenlaag" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
 					{:else}
-						{#each inLagen as laag (laag.id)}
-							<span class="laagchip" title={t('panel.layerChip', { n: laag.nummer, label: laag.label })}>
-								<span class="stip" style="background: {laag.color}"></span>
-								{laag.label}
+						{#each inLagen as layer (layer.id)}
+							<span class="laagchip" title={t('panel.layerChip', { n: layer.number, label: layer.label })}>
+								<span class="stip" style="background: {layer.color}"></span>
+								{layer.label}
 							</span>
 						{/each}
 					{/if}
@@ -695,14 +695,14 @@
 				{#each [
 					[t('panel.widthShort'), 'width', t('panel.width')],
 					[t('panel.heightShort'), 'height', t('panel.height')]
-				] as [label, key, naam] (key)}
+				] as [label, key, name] (key)}
 					<label class="f">
 						<span>{label}</span>
 						<input
 							type="number"
 							step="0.1"
 							min="0.1"
-							aria-label={t('panel.inMillimetres', { what: naam })}
+							aria-label={t('panel.inMillimetres', { what: name })}
 							disabled={!canEdit}
 							value={(live ?? size)[key as 'width' | 'height'].toFixed(1)}
 							onchange={(e) => commitSize(key as 'width' | 'height', e.currentTarget.value)}
@@ -726,13 +726,13 @@
 						{/if}
 					</svg>
 				</button>
-				{#each [['X', 'x', t('panel.positionX')], ['Y', 'y', t('panel.positionY')]] as [label, key, naam] (key)}
+				{#each [['X', 'x', t('panel.positionX')], ['Y', 'y', t('panel.positionY')]] as [label, key, name] (key)}
 					<label class="f">
 						<span>{label}</span>
 						<input
 							type="number"
 							step="0.1"
-							aria-label={t('panel.inMillimetres', { what: naam })}
+							aria-label={t('panel.inMillimetres', { what: name })}
 							disabled={!canEdit}
 							value={(live ?? size)[key as 'x' | 'y'].toFixed(1)}
 							onchange={(e) => commitPosition(key as 'x' | 'y', e.currentTarget.value)}
@@ -840,14 +840,14 @@
 				<p class="hint">{t('panel.inEffect', { label: selected.effect.label })}</p>
 			{/if}
 
-			{#if teSplitsen.vormen}
+			{#if teSplitsen.shapes}
 				<!-- This is a diagnosis, not an operation: it says what you are holding.
 				     The button that went with it ("Split into n shapes") moved to the
 				     right-click menu, under "Edit path", with the same number. Without
 				     this line the menu would promise a count you could not check
 				     anywhere. -->
 				<p class="tip">
-					{t('panel.splittable', { n: teSplitsen.vormen, pieces: teSplitsen.stukken })}
+					{t('panel.splittable', { n: teSplitsen.shapes, pieces: teSplitsen.stukken })}
 				</p>
 			{/if}
 			{#if tidyNote}
@@ -1008,18 +1008,18 @@
 				looking, and the tidy-up line — which reports a *state* ("there are empty
 				layers") and offers the way out in the same line.
 			-->
-			<div class="lijst-balk">
+			<div class="list-bar">
 				{#if canEdit}
 					<button
-						class="lijstmeer"
+						class="listmore"
 						aria-haspopup="menu"
 						title={t('panel.list.title')}
 						onclick={(e) => {
-							const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
+							const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
 							rijMenu = {
-								x: doos.left,
-								y: doos.bottom + 4,
-								lijst: [
+								x: box.left,
+								y: box.bottom + 4,
+								list: [
 									{
 										items: [
 											{
@@ -1043,7 +1043,7 @@
 									{
 										items: [
 											{
-												id: 'alles-weg',
+												id: 'alles-gone',
 												label: t('panel.list.dropAll'),
 												explain: t('explain.layerRemove'),
 												danger: true,
@@ -1059,7 +1059,7 @@
 						<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
 					</button>
 				{/if}
-				<span class="lijst-rek"></span>
+				<span class="list-stretch"></span>
 				<button
 					class="dichtheid"
 					aria-pressed={compact}
@@ -1080,7 +1080,7 @@
 				<!-- A state with its way out in the same line. As a button in the bar it
 				     was there even when there was nothing to clear out; as a line it is
 				     only there when it means something, and then it says how many. -->
-				<p class="opruimregel">
+				<p class="tidyrow">
 					{t('panel.empties', { n: legeLagen.length })}
 					<button class="alsLink" disabled={edits.busy} onclick={() => onPrune?.()}
 						>{t('panel.tidyUp')}</button
@@ -1124,10 +1124,10 @@
 				class:off={!op.output}
 				class:onzichtbaar={design.isLayerHidden(op.id)}
 				class:open
-				class:sleept={slepen?.id === op.id}
-				class:sleep-modus={slepen != null}
-				class:doel-boven={slepen != null && slepen.id !== op.id && slepen.naar === index && index < slepen.van}
-				class:doel-onder={slepen != null && slepen.id !== op.id && slepen.naar === index && index > slepen.van}
+				class:sleept={dragging?.id === op.id}
+				class:sleep-modus={dragging != null}
+				class:target-boven={dragging != null && dragging.id !== op.id && dragging.to === index && index < dragging.from}
+				class:target-onder={dragging != null && dragging.id !== op.id && dragging.to === index && index > dragging.from}
 				bind:this={rijElementen[index]}
 				role="presentation"
 				oncontextmenu={(e) => {
@@ -1152,14 +1152,14 @@
 						longer has to be three buttons tall.
 					-->
 					<button
-						class="greep"
+						class="grip"
 						aria-label={t('panel.layer.dragAria', { label: op.label })}
 						title={t('panel.layer.dragTitle')}
 						disabled={edits.busy}
 						onpointerdown={(e) => startSleep(e, op.id, index)}
 						onpointermove={beweegSleep}
 						onpointerup={eindSleep}
-						onpointercancel={() => (slepen = null)}
+						onpointercancel={() => (dragging = null)}
 						onkeydown={(e) => {
 							if (e.key === 'ArrowUp' && index > 0) {
 								e.preventDefault();
@@ -1251,8 +1251,8 @@
 							title={t('panel.layer.moreTitle', { label: op.label })}
 							aria-label={t('panel.layer.moreAria', { label: op.label })}
 							onclick={(e) => {
-								const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
-								opendLaagMenu(op, index, doos.right - 200, doos.bottom + 4);
+								const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+								opendLaagMenu(op, index, box.right - 200, box.bottom + 4);
 							}}
 						>⋯</button>
 					{/if}
@@ -1269,7 +1269,7 @@
 				<div class="vals">
 					{#if canEdit && compact}
 						<button
-							class="kort mono"
+							class="short mono"
 							title={t('panel.layer.valuesTitle')}
 							aria-expanded={open}
 							aria-label={t('panel.layer.valuesAria', { label: op.label, values: short(op) })}
@@ -1356,8 +1356,8 @@
 						     The pill only appears when the driver has a command that really
 						     switches the blower; on a Ruida there is none (L8). -->
 						<button
-							class="tag lucht"
-							class:uit={!op.air_assist}
+							class="tag air"
+							class:off={!op.air_assist}
 							role="switch"
 							aria-checked={op.air_assist}
 							aria-label={t('panel.air.aria', { label: op.label })}
@@ -1452,7 +1452,7 @@
 					     material and a thickness and says something has been burned. This
 					     only says what you last did here, and that must never pass for
 					     evidence. -->
-					<p class="geheugen wide">
+					<p class="memory wide">
 						{#if onthouden?.speed_mm_s}
 							{t('panel.memory.remembered', {
 								values: `${onthouden.speed_mm_s} mm/s${
@@ -1480,13 +1480,13 @@
 					     cut layer into an engrave layer could only be done by throwing it away
 					     and redoing every assignment; LightBurn has a dropdown for it in the
 					     row. The shapes and the settings come along. -->
-					<div class="soort wide">
+					<div class="kind wide">
 						<span class="rot-label">{t('panel.kind')}</span>
 						<Segmented
 							label={t('panel.kindOf', { label: op.label })}
 							options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
 							disabled={edits.busy}
-							bind:value={() => kindOf(op.type), (waarde) => retypeLayer(op.id, waarde)}
+							bind:value={() => kindOf(op.type), (value) => retypeLayer(op.id, value)}
 						/>
 						<p class="hint">{t('panel.kind.hint')}</p>
 					</div>
@@ -1622,7 +1622,7 @@
 							>
 						</div>
 					{:else}
-						<button class="weg wide" onclick={() => (confirmDrop = op.id)}>
+						<button class="gone wide" onclick={() => (confirmDrop = op.id)}>
 							{t('panel.drop.layer')}
 						</button>
 					{/if}
@@ -1661,7 +1661,7 @@
 						</label>
 					{/each}
 					{#if canEdit}
-						<button class="weg cells-remove" onclick={() => removeGrid(group.id)}>
+						<button class="gone cells-remove" onclick={() => removeGrid(group.id)}>
 							{t('panel.grid.remove')}
 						</button>
 					{/if}
@@ -1688,16 +1688,16 @@
 				aria-haspopup="menu"
 				disabled={edits.busy}
 				onclick={(e) => {
-					const doos = (e.currentTarget as HTMLElement).getBoundingClientRect();
+					const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
 					rijMenu = {
-						x: doos.left,
-						y: doos.top - 8,
+						x: box.left,
+						y: box.top - 8,
 						upward: true,
-						lijst: [
+						list: [
 							{
 								title: t('panel.addLayer'),
 								items: LAYER_TYPES.map(({ value, label }) => ({
-									id: `nieuw-${value}`,
+									id: `fresh-${value}`,
 									label,
 									run: () => {
 										newLayerType = value;
@@ -1724,7 +1724,7 @@
 
 {#if rijMenu}
 	<Menu
-		menu={rijMenu.lijst}
+		menu={rijMenu.list}
 		x={rijMenu.x}
 		y={rijMenu.y}
 		upward={rijMenu.upward ?? false}
@@ -1831,7 +1831,7 @@
 	}
 	/* The three values as one line. A button and not text: it opens the same expander as
 	   the chip, so that you get to the field from the number you want to change. */
-	.kort {
+	.short {
 		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 		font-size: var(--text-xs);
@@ -1842,7 +1842,7 @@
 		padding: 0;
 		white-space: nowrap;
 	}
-	.kort:hover {
+	.short:hover {
 		color: var(--text-1);
 		text-decoration: underline;
 	}
@@ -1871,7 +1871,7 @@
 	@media (max-width: 1199px), (pointer: coarse) {
 	}
 	/* ── Slepen om te herordenen (L1) ──────────────────────────────────────── */
-	.greep {
+	.grip {
 		flex: none;
 		width: 14px;
 		height: 22px;
@@ -1885,7 +1885,7 @@
 		cursor: grab;
 		touch-action: none;
 	}
-	.greep:hover:not(:disabled) {
+	.grip:hover:not(:disabled) {
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
@@ -1898,23 +1898,23 @@
 		cursor: grabbing;
 	}
 	/* The destination, as a line against the row. A line and not an opened gap: the list
-	   must not slide under your finger, or you will mis-aim. */
-	.layer.doel-boven {
+	   must not slide under your finger, or you will bad-aim. */
+	.layer.target-boven {
 		box-shadow: inset 0 3px 0 0 var(--accent);
 	}
-	.layer.doel-onder {
+	.layer.target-onder {
 		box-shadow: inset 0 -3px 0 0 var(--accent);
 	}
-	.lijst-balk {
+	.list-bar {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		margin-bottom: var(--space-2);
 	}
-	.lijst-rek { flex: 1; }
+	.list-stretch { flex: 1; }
 	/* The list menu: the same shape as the density switch beside it, because they are in
 	   the same bar and should not fight for attention. */
-	.lijstmeer {
+	.listmore {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-1h);
@@ -1926,9 +1926,9 @@
 		background: var(--surface-1);
 		color: var(--text-2);
 	}
-	.lijstmeer:hover { background: var(--surface-2); color: var(--text-1); }
+	.listmore:hover { background: var(--surface-2); color: var(--text-1); }
 	/* A state with its way out on the same line. */
-	.opruimregel {
+	.tidyrow {
 		display: flex;
 		align-items: baseline;
 		gap: var(--space-2);
@@ -1963,11 +1963,11 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	.soort {
+	.kind {
 		display: grid;
 		gap: var(--space-1);
 	}
-	.soort :global(.segmented) {
+	.kind :global(.segmented) {
 		width: 100%;
 	}
 	/* The field with its explanation as one block: the sentence below it says what
@@ -1979,7 +1979,7 @@
 	/* Four words in 222 px: with the standard 12 px spacing per side "Engrave" ran over
 	   its own segment and read "Engrav". The letters stay on the type scale; only the air
 	   around them shrinks. */
-	.soort :global(.segmented button) {
+	.kind :global(.segmented button) {
 		padding-left: var(--space-1);
 		padding-right: var(--space-1);
 	}
@@ -2036,7 +2036,7 @@
 	}
 	/* Air assist on: not a warning, so not in amber. A state you have to be able to see,
 	   in the ordinary text colour with a border around it. */
-	.tag.lucht {
+	.tag.air {
 		color: var(--text-1);
 		font-weight: 400;
 		border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
@@ -2047,17 +2047,17 @@
 	/* Off is not an empty spot but a struck-through word: doubly encoded, so that it can
 	   be read without a difference in colour too — and so that "this machine cannot do
 	   it" (no pill) stays something other than "it is switched off". */
-	.tag.lucht.uit {
+	.tag.air.off {
 		color: var(--text-2);
 		border-color: var(--line);
 		background: transparent;
 		text-decoration: line-through;
 	}
-	.tag.lucht:hover:not(:disabled) {
+	.tag.air:hover:not(:disabled) {
 		border-color: var(--accent);
 		color: var(--text-1);
 	}
-	.geheugen {
+	.memory {
 		margin: 0;
 		font-size: var(--text-xs);
 		line-height: 1.4;
@@ -2236,7 +2236,7 @@
 		}
 		/* The grip is narrower than the rest but just as tall: it has to be grabbable
 		   with a finger without pushing the name out of the row. */
-		.greep {
+		.grip {
 			width: 26px;
 			height: 44px;
 			min-height: 44px;
@@ -2253,7 +2253,7 @@
 		}
 		.val input {
 			/* 44 px tall, even though this is not a <button> and the global rule does not
-			   catch it. With a glove on you would otherwise mis-aim here. */
+			   catch it. With a glove on you would otherwise bad-aim here. */
 			padding: var(--space-3) 2px var(--space-3) var(--space-2);
 			width: 3.6em;
 		}
@@ -2277,13 +2277,13 @@
 			height: 44px;
 			min-height: 44px;
 		}
-		/* Order and delete must not touch each other: one mis-aimed tap further along
+		/* Order and delete must not touch each other: one bad-aimed tap further along
 		   costs you a layer with all its assignments. */
-		.layer-edit .weg,
+		.layer-edit .gone,
 		.confirm .drop {
 			margin-left: var(--space-6);
 		}
-		.layer-edit .weg {
+		.layer-edit .gone {
 			margin-top: var(--space-6);
 		}
 	}
@@ -2509,7 +2509,7 @@
 	   `danger` — the safety net in tokens.css fills every `button.danger` solid red on
 	   hover, and that belongs to a button that erases straight away. This one opens a
 	   confirmation. */
-	.layer-edit .weg {
+	.layer-edit .gone {
 		font-size: var(--text-xs);
 		color: var(--danger);
 		text-align: left;

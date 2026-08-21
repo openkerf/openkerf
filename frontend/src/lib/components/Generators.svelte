@@ -108,7 +108,7 @@
 
 	let current = $derived(TABS.find((t) => t.id === tab)!);
 	/** The fields of the visible tab, for the sketch beside it. */
-	let huidig = $derived(
+	let currentValues = $derived(
 		(
 			{
 				grid, radial, polygon, box, qrcode: qr, barcode: bar, arctext: arc
@@ -174,10 +174,10 @@
 		};
 	}
 
-	// ---------------------------------------------------------- het voorbeeld
+	// ---------------------------------------------------------- het preview
 
-	let voorbeeld = $state<Voorbeeld | null>(null);
-	let voorbeeldFout = $state<string | null>(null);
+	let preview = $state<Voorbeeld | null>(null);
+	let previewError = $state<string | null>(null);
 	/**
 	 * Valt er iets te tonen?
 	 *
@@ -206,7 +206,7 @@
 	 * The polygon's inner radius is not among them: empty means "no star" there, and
 	 * that is a valid choice.
 	 */
-	const GETALVELDEN: Record<Tab, string[]> = {
+	const NUMBER_FIELDS: Record<Tab, string[]> = {
 		grid: ['columns', 'rows', 'gap_x_mm', 'gap_y_mm'],
 		radial: ['repeats', 'radius_mm'],
 		polygon: ['corners', 'radius_mm', 'cx_mm', 'cy_mm'],
@@ -215,13 +215,13 @@
 		barcode: ['width_mm', 'height_mm'],
 		arctext: ['cx_mm', 'cy_mm', 'radius_mm', 'font_size_mm']
 	};
-	let onaf = $derived(
-		GETALVELDEN[tab].some((veld) => {
-			const waarde = huidig[veld];
+	let unfinished = $derived(
+		NUMBER_FIELDS[tab].some((field) => {
+			const value = currentValues[field];
 			return (
-				typeof waarde !== 'string' ||
-				waarde.trim() === '' ||
-				!Number.isFinite(Number(waarde))
+				typeof value !== 'string' ||
+				value.trim() === '' ||
+				!Number.isFinite(Number(value))
 			);
 		})
 	);
@@ -245,18 +245,18 @@
 			const data = await response.json().catch(() => null);
 			if (mijn !== round) return;
 			if (!response.ok) {
-				voorbeeldFout =
+				previewError =
 					typeof data?.detail === 'string' ? data.detail : t('gen.cannotDraw');
 				return;
 			}
-			voorbeeldFout = null;
+			previewError = null;
 			// Only replace it when something valid came out; leaving the last valid
 			// image is calmer than dropping a hole, and also more honest: that is still
 			// what you would get if you stopped typing now.
-			voorbeeld = data;
+			preview = data;
 		} catch (e) {
 			if (mijn === round)
-				voorbeeldFout = t('error.network', { message: e instanceof Error ? e.message : e });
+				previewError = t('error.network', { message: e instanceof Error ? e.message : e });
 		}
 	}
 
@@ -286,16 +286,16 @@
 		// preview of something other than the form beside it.
 		if (what !== vorigTabblad) {
 			vorigTabblad = what;
-			voorbeeld = null;
-			voorbeeldFout = null;
+			preview = null;
+			previewError = null;
 		}
 		if (!open || !voorbeeldbaar) {
-			voorbeeld = null;
-			voorbeeldFout = null;
+			preview = null;
+			previewError = null;
 			return;
 		}
-		if (onaf) {
-			voorbeeldFout = t('gen.incomplete');
+		if (unfinished) {
+			previewError = t('gen.incomplete');
 			return;
 		}
 		timer = setTimeout(() => haalVoorbeeld(mijn, what, body), 200);
@@ -311,16 +311,16 @@
 	 * translation can put the words in its own order within each of them.
 	 */
 	let knopStaart = $derived.by(() => {
-		if (!voorbeeld || voorbeeldFout) return '';
-		if (voorbeeld.what === 'box')
+		if (!preview || previewError) return '';
+		if (preview.what === 'box')
 			return ` — ${
-				voorbeeld.sheets > 1
-					? t('gen.tail.sheets', { parts: voorbeeld.parts.length, sheets: voorbeeld.sheets })
-					: t('gen.tail.fits', { parts: voorbeeld.parts.length })
+				preview.sheets > 1
+					? t('gen.tail.sheets', { parts: preview.parts.length, sheets: preview.sheets })
+					: t('gen.tail.fits', { parts: preview.parts.length })
 			}`;
-		const b = voorbeeld.bounds;
-		const maat = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
-		return ` — ${t('gen.tail.size', { width: maat(b[2] - b[0]), height: maat(b[3] - b[1]) })}`;
+		const b = preview.bounds;
+		const size = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
+		return ` — ${t('gen.tail.size', { width: size(b[2] - b[0]), height: size(b[3] - b[1]) })}`;
 	});
 </script>
 
@@ -520,7 +520,7 @@
 	</div>
 
 	<!-- The shape beside the form that makes it. -->
-	<GeneratorPreview soort={tab} waarden={huidig} {voorbeeld} failure={voorbeeldFout}>
+	<GeneratorPreview kind={tab} values={currentValues} {preview} failure={previewError}>
 		{#if current.needsSelection}
 			{t('gen.preview.sketch')}
 		{:else if !voorbeeldbaar}

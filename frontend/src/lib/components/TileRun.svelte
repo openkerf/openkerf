@@ -109,18 +109,18 @@
 	<!-- Outside `{#if run}`: a failed start (the offer on the canvas, say, before
 	     a run exists) has to be visible when there is no tile yet either.
 	     Otherwise a button that 409s looks like it does nothing. -->
-	<p class="melding" role="alert">{tiling.error}</p>
+	<p class="notice" role="alert">{tiling.error}</p>
 {/if}
 
 {#if run}
-	<section class="tegels" aria-label={t('tiles.aria')}>
+	<section class="tiles" aria-label={t('tiles.aria')}>
 		<header>
 			<div>
 				<strong>{t('tiles.current', { n: run.current + 1, total: run.tiles })}</strong>
 				<!-- The assumption you cannot see as a user: during a tile run the
 				     marks decide where the burning happens, not the zero point set
 				     for the sheet. -->
-				<p class="nulpunt">{t('tiles.originIgnored')}</p>
+				<p class="origin">{t('tiles.originIgnored')}</p>
 			</div>
 			<button class="btn subtle" type="button" onclick={() => tiling.cancel()}>
 				{t('tiles.stop')}
@@ -132,14 +132,14 @@
 			     read it there as well. -->
 			<ol class="voortgang" aria-label={t('tiles.progressAria')}>
 				{#each Array(run.tiles) as _, i (i)}
-					<li class:klaar={run.done.includes(i)} class:nu={i === run.current}>
+					<li class:ready={run.done.includes(i)} class:now={i === run.current}>
 						{i + 1}{#if run.done.includes(i)}&nbsp;✓{/if}
 					</li>
 				{/each}
 			</ol>
 
 		{#if run.stale}
-			<p class="melding stale" role="alert">{run.message}</p>
+			<p class="notice stale" role="alert">{run.message}</p>
 		{:else if !run.aligned}
 			<p>
 				{#if first}
@@ -167,7 +167,7 @@
 				<!-- The tapped marks live only in this page's memory; a refresh does
 				     not know them any more. The geometry itself is not at risk, but
 				     someone who just set a tap should not silently end up back at 0. -->
-				<p class="nulpunt">{t('tiles.refreshWarning')}</p>
+				<p class="origin">{t('tiles.refreshWarning')}</p>
 			{/if}
 		{:else}
 			<p class="uitgelijnd">
@@ -177,7 +177,7 @@
 					· {t('tiles.distanceError', { mm: run.distance_error_mm.toFixed(1) })}
 				{/if}
 			</p>
-			<div class="acties">
+			<div class="actions">
 				<button class="btn primary" type="button" onclick={() => tiling.burn()} disabled={tiling.busy}>
 					{t('tiles.burnThis')}
 				</button>
@@ -195,13 +195,13 @@
 		{/if}
 
 		{#if localError}
-			<p class="melding" role="alert">{localError}</p>
+			<p class="notice" role="alert">{localError}</p>
 		{/if}
 	</section>
 {/if}
 
 <style>
-	.tegels {
+	.tiles {
 		display: grid;
 		gap: var(--space-2);
 		padding: var(--space-3);
@@ -215,7 +215,7 @@
 		align-items: flex-start;
 		gap: var(--space-2);
 	}
-	.nulpunt {
+	.origin {
 		margin: 2px 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
@@ -229,26 +229,26 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.voortgang .klaar {
+	.voortgang .ready {
 		color: var(--text-1);
 	}
-	.voortgang .nu {
+	.voortgang .now {
 		color: var(--accent);
 		font-weight: 600;
 	}
 	.uitgelijnd {
 		color: var(--text-1);
 	}
-	.acties {
+	.actions {
 		display: flex;
 		gap: var(--space-2);
 		flex-wrap: wrap;
 	}
-	.melding {
+	.notice {
 		color: var(--danger);
 		margin: 0;
 	}
-	.melding.stale {
+	.notice.stale {
 		color: var(--warn);
 	}
 	.btn {
