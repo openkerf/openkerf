@@ -1256,7 +1256,7 @@
 							{#each preview.cells as cell (`${cell.row}-${cell.column}`)}
 								<span
 									class="vakje"
-									style="--brand: {brand(cell)}"
+									style="--burn: {brand(cell)}"
 									title={t('grid.cellTitle', {
 										row: toon(form.row_axis, cell[CEL_SLEUTEL[form.row_axis]]),
 										column: toon(form.column_axis, cell[CEL_SLEUTEL[form.column_axis]])
@@ -1661,11 +1661,11 @@
 	.vakje {
 		width: var(--cel);
 		height: var(--cel);
-		background: color-mix(in srgb, var(--void) calc(var(--brand) * 88%), var(--mat-hout));
+		background: color-mix(in srgb, var(--void) calc(var(--burn) * 88%), var(--mat-wood));
 	}
 	.vakjes {
 		padding: var(--space-1);
-		background: var(--mat-hout);
+		background: var(--mat-wood);
 		border-radius: var(--radius-field);
 	}
 	.kosten {

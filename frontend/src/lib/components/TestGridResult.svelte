@@ -705,9 +705,9 @@
 	   eye has to see where the corner exactly lies. */
 	.hoek {
 		position: absolute;
-		width: var(--greep);
-		height: var(--greep);
-		margin: calc(var(--greep) / -2) 0 0 calc(var(--greep) / -2);
+		width: var(--grip);
+		height: var(--grip);
+		margin: calc(var(--grip) / -2) 0 0 calc(var(--grip) / -2);
 		border-radius: var(--radius-dot);
 		background: color-mix(in srgb, var(--accent) 22%, transparent);
 		border: 1px solid var(--accent);
