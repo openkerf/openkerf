@@ -439,8 +439,8 @@ def test_network_scan_reports_a_host_that_answers(monkeypatch, scanner):
 
 def test_a_busy_listen_port_becomes_a_readable_note(monkeypatch, scanner):
     """
-    Poort 40200 is niet configureerbaar. Is hij bezet, dan is dat een uitleg
-    aan de gebruiker, geen stacktrace.
+    Port 40200 is not configurable. If it is taken, that is an explanation for the
+    user, not a stack trace.
     """
     import ipaddress
 
@@ -452,15 +452,15 @@ def test_a_busy_listen_port_becomes_a_readable_note(monkeypatch, scanner):
         try:
             blocker.bind(("", RUIDA_LISTEN_PORT))
         except OSError:
-            # Er draait al een OpenKerf met een verbonden Ruida: die houdt deze
-            # poort vast. Dan is de toestand die deze test nabouwt gewoon echt,
-            # en hoeft hij niet als eigen fout te verschijnen.
-            pytest.skip(f"poort {RUIDA_LISTEN_PORT} is al bezet buiten deze test")
+            # An OpenKerf with a connected Ruida is already running: that holds
+            # this port. Then the state this test rebuilds is simply real, and it
+            # need not appear as a failure of its own.
+            pytest.skip(f"port {RUIDA_LISTEN_PORT} is already taken outside this test")
         original = socket.socket
 
         class Exclusive(original):
             def setsockopt(self, *a):
-                pass  # zonder SO_REUSEADDR botst de bind écht
+                pass  # without SO_REUSEADDR the bind really does clash
 
         monkeypatch.setattr(socket, "socket", Exclusive)
         result = scanner._scan_network(notes, [], seconds=0.5)
@@ -470,27 +470,27 @@ def test_a_busy_listen_port_becomes_a_readable_note(monkeypatch, scanner):
 
 
 def test_network_scan_is_time_boxed():
-    """Een scan die minuten hangt, is in de praktijk de scan die je afbreekt."""
+    """A scan that hangs for minutes is in practice the scan you abort."""
     assert MachineScanner.MAX_SECONDS <= 6.0
 
 
 def test_nothing_found_still_says_where_it_looked(monkeypatch, client):
     """
-    De vaakst voorkomende uitkomst. Het antwoord moet dan nog steeds vertellen
-    waar gekeken is — anders is 'niets gevonden' niet te vertrouwen.
+    The most common outcome. The answer then still has to say where it looked —
+    otherwise 'nothing found' cannot be trusted.
     """
     result = client.get("/api/machines/scan?network=false").json()
 
     assert "candidates" in result
-    assert result["searched"], "er is ergens gekeken"
+    assert result["searched"], "it looked somewhere"
     assert isinstance(result["duration_ms"], int)
 
 
-# --------------------------- een machineprofiel uitwisselen (gat E5)
+# ------------------------- exchanging a machine profile (gap E5)
 
 
 def _ruida(client):
-    """Een Ruida, want die heeft een interface en een adres om mee te nemen."""
+    """A Ruida, because that has an interface and an address to take along."""
     return client.post(
         "/api/machines", json={"info": "ruida-beta", "label": "5030 Ruida"}
     ).json()
@@ -503,14 +503,14 @@ def test_a_profile_carries_the_type_and_the_settings(client):
         json={"bedwidth": "600mm", "bedheight": "400mm"},
     )
 
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
 
-    assert profiel["format"] == "openkerf-machine"
-    assert profiel["machine"]["info"] == "ruida-beta"
-    assert profiel["machine"]["label"] == "5030 Ruida"
-    assert profiel["machine"]["settings"]["bedwidth"] == "600mm"
+    assert profile["format"] == "openkerf-machine"
+    assert profile["machine"]["info"] == "ruida-beta"
+    assert profile["machine"]["label"] == "5030 Ruida"
+    assert profile["machine"]["settings"]["bedwidth"] == "600mm"
 
 
 def test_the_export_is_offered_as_a_file(client):
@@ -524,75 +524,75 @@ def test_the_export_is_offered_as_a_file(client):
 
 def test_a_profile_recreates_the_machine_elsewhere(client, kernel):
     """
-    Wie een tweede computer inricht, typt nu niets over. Dat is de hele reden
-    van E5: LightBurn levert `.lbdev`, wij dit.
+    Anybody setting up a second computer now types nothing over. That is the whole
+    reason for E5: LightBurn delivers `.lbdev`, we deliver this.
     """
     machine = _ruida(client)
     client.patch(
         f"/api/machines/{machine['path']}/settings",
         json={"bedwidth": "600mm", "bedheight": "400mm"},
     )
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
     client.delete(f"/api/machines/{machine['path']}")
 
-    binnen = client.post(
+    uploaded = client.post(
         "/api/machines/import/upload",
-        files={"file": ("5030.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("5030.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
 
-    assert binnen["known"] is True
-    assert binnen["essential"]["bedwidth"] == "600mm"
+    assert uploaded["known"] is True
+    assert uploaded["essential"]["bedwidth"] == "600mm"
 
-    gemaakt = client.post(
-        "/api/machines/import", json={"profile": binnen["profile"]}
+    created = client.post(
+        "/api/machines/import", json={"profile": uploaded["profile"]}
     ).json()
 
-    settings = client.get(f"/api/machines/{gemaakt['path']}/settings").json()
-    waarden = {
-        veld["attr"]: veld["value"] for blad in settings for veld in blad["fields"]
+    settings = client.get(f"/api/machines/{created['path']}/settings").json()
+    values = {
+        field["attr"]: field["value"] for sheet in settings for field in sheet["fields"]
     }
-    assert waarden["bedwidth"] == "600mm"
-    assert waarden["bedheight"] == "400mm"
-    assert gemaakt["applied"] > 0
+    assert values["bedwidth"] == "600mm"
+    assert values["bedheight"] == "400mm"
+    assert created["applied"] > 0
 
 
 def test_the_preview_names_what_is_local_to_this_bench(client):
     """
-    Het IP-adres van déze controller is het eerste dat elders niet klopt. Het
-    gaat mee, maar het voorbeeld noemt het apart.
+    The IP address of *this* controller is the first thing that is wrong
+    elsewhere. It comes along, but the preview names it separately.
     """
     machine = _ruida(client)
     client.patch(
         f"/api/machines/{machine['path']}/settings", json={"address": "192.168.1.55"}
     )
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
 
-    voorbeeld = client.post(
+    preview = client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
 
-    assert voorbeeld["local"]["address"] == "192.168.1.55"
+    assert preview["local"]["address"] == "192.168.1.55"
 
 
 def test_importing_creates_nothing_before_you_say_so(client):
-    """Uploaden is kijken. Een profiel dat je nog niet accepteerde, bestaat niet."""
+    """Uploading is looking. A profile you have not accepted yet does not exist."""
     machine = _ruida(client)
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
-    voor = len(client.get("/api/machines").json())
+    before = len(client.get("/api/machines").json())
 
     client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     )
 
-    assert len(client.get("/api/machines").json()) == voor
+    assert len(client.get("/api/machines").json()) == before
 
 
 def test_something_that_is_not_a_profile_is_refused(client):
@@ -612,97 +612,96 @@ def test_a_profile_from_the_future_is_refused(manager):
 
 def test_settings_this_engine_does_not_know_are_skipped_not_fatal(client):
     """
-    Een profiel uit een nieuwere MeerK40t hoort je inrichting niet te blokkeren
-    om één instelling die hier niet bestaat.
+    A profile from a newer MeerK40t should not block your setup over one setting
+    that does not exist here.
     """
     machine = _ruida(client)
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
-    profiel["machine"]["settings"]["iets_van_later"] = 1
+    profile["machine"]["settings"]["something_from_later"] = 1
     client.delete(f"/api/machines/{machine['path']}")
 
-    binnen = client.post(
+    uploaded = client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
-    gemaakt = client.post(
-        "/api/machines/import", json={"profile": binnen["profile"]}
+    created = client.post(
+        "/api/machines/import", json={"profile": uploaded["profile"]}
     ).json()
 
-    assert gemaakt["skipped"] == ["iets_van_later"]
-    assert gemaakt["path"]
+    assert created["skipped"] == ["something_from_later"]
+    assert created["path"]
 
 
 def test_an_imported_machine_can_be_exported_again(client):
-    """De rondgang: wat eruit komt, gaat er ook weer in."""
+    """The round trip: what comes out goes back in again."""
     machine = _ruida(client)
-    profiel = client.get(
+    profile = client.get(
         f"/api/machines/{machine['path']}/export.openkerf-machine"
     ).json()
-    binnen = client.post(
+    uploaded = client.post(
         "/api/machines/import/upload",
-        files={"file": ("x.openkerf-machine", json.dumps(profiel), "application/json")},
+        files={"file": ("x.openkerf-machine", json.dumps(profile), "application/json")},
     ).json()
-    gemaakt = client.post(
-        "/api/machines/import", json={"profile": binnen["profile"], "label": "Kopie"}
-    ).json()
-
-    opnieuw = client.get(
-        f"/api/machines/{gemaakt['path']}/export.openkerf-machine"
+    created = client.post(
+        "/api/machines/import", json={"profile": uploaded["profile"], "label": "Copy"}
     ).json()
 
-    assert opnieuw["machine"]["info"] == profiel["machine"]["info"]
-    assert opnieuw["machine"]["label"] == "Kopie"
+    again = client.get(
+        f"/api/machines/{created['path']}/export.openkerf-machine"
+    ).json()
+
+    assert again["machine"]["info"] == profile["machine"]["info"]
+    assert again["machine"]["label"] == "Copy"
 
 
 def test_a_setting_also_emits_the_signals_it_declares(kernel):
     """
-    Een instelling mag zeggen welke signalen erbij horen, en die horen mee.
+    A setting may say which signals belong with it, and those have to come along.
 
-    De engine kent daar een afspraak voor: een keuze draagt een `signals`-sleutel
-    met de extra signalen die bij een wijziging horen. Wij seinden alleen de
-    naam van de instelling zelf, en dat is precies één signaal te weinig — de
-    grbl-controller luistert bijvoorbeeld op `update_interface` om zijn
-    verbinding opnieuw op te bouwen (`grbl/controller.py:523`), niet op
-    `interface`. Wie in OpenKerf de interface op `mock` zette, kreeg zijn
-    instelling wél opgeslagen maar bleef op de oude verbinding zitten.
+    The engine has a convention for that: a choice carries a `signals` key with the
+    extra signals that belong to a change. We only signalled the name of the
+    setting itself, and that is exactly one signal too few — the grbl controller,
+    for instance, listens on `update_interface` to rebuild its connection
+    (`grbl/controller.py:523`), not on `interface`. Anybody setting the interface to
+    `mock` in OpenKerf did get their setting saved but stayed on the old connection.
 
-    Zeven-en-dertig van die declaraties staan in de engine, in elke driver:
-    `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart`. Ze
-    vielen allemaal stil.
+    Thirty-seven of those declarations live in the engine, in every driver:
+    `coolant_changed`, `pwm_mode_changed`, `newly_autoplay`, `restart`. They all
+    fell silent.
     """
     manager = MachineManager(kernel)
     device = kernel.device
-    device.proefstand = "aan"
+    device.bench = "aan"
     device.register_choices(
-        "proefstand",
+        "bench",
         [
             {
-                "attr": "proefstand",
+                "attr": "bench",
                 "object": device,
                 "default": "aan",
                 "type": str,
-                "label": "Proefstand",
-                "signals": ("bouw_opnieuw", "en_deze_ook"),
+                "label": "Test bench",
+                "signals": ("rebuild", "and_this_one_too"),
             }
         ],
     )
 
-    gezien = []
-    codes = ("proefstand", "bouw_opnieuw", "en_deze_ook")
-    luisteraars = {
-        code: (lambda origin, *args, code=code: gezien.append(code)) for code in codes
+    seen = []
+    codes = ("bench", "rebuild", "and_this_one_too")
+    listeners = {
+        code: (lambda origin, *args, code=code: seen.append(code)) for code in codes
     }
-    for code, luisteraar in luisteraars.items():
-        kernel.listen(code, luisteraar)
+    for code, listener in listeners.items():
+        kernel.listen(code, listener)
     try:
-        manager.update_settings(device.path, {"proefstand": "uit"})
+        manager.update_settings(device.path, {"bench": "uit"})
         kernel.process_queue()
     finally:
-        for code, luisteraar in luisteraars.items():
-            kernel.unlisten(code, luisteraar)
+        for code, listener in listeners.items():
+            kernel.unlisten(code, listener)
 
-    assert device.proefstand == "uit"
-    assert "proefstand" in gezien
-    assert "bouw_opnieuw" in gezien and "en_deze_ook" in gezien
+    assert device.bench == "uit"
+    assert "bench" in seen
+    assert "rebuild" in seen and "and_this_one_too" in seen

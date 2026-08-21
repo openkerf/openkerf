@@ -266,15 +266,15 @@ def test_machine_profile_round_trip(client):
 def test_update_a_preset(library, stocked):
     _, preset = stocked
 
-    updated = library.update_preset(preset["id"], speed_mm_s=14, power_percent=70, note="sneller")
+    updated = library.update_preset(preset["id"], speed_mm_s=14, power_percent=70, note="faster")
 
     assert updated["speed_mm_s"] == 14
     assert updated["power_percent"] == 70
-    assert updated["note"] == "sneller"
+    assert updated["note"] == "faster"
 
 
 def test_identity_fields_cannot_be_changed(library, stocked):
-    """Ander materiaal of andere bewerking is een andere preset, geen wijziging."""
+    """A different material or operation is a different preset, not a change."""
     _, preset = stocked
 
     for bad in ({"material_id": 99}, {"operation": "graveren-raster"}, {"source": "testraster"}):
@@ -344,58 +344,58 @@ def test_suggestion_prefers_the_same_thickness(library):
 
 def test_presets_follow_the_active_machine(client):
     """
-    Een preset is een uitspraak over déze laser op dit materiaal. Standaard
-    toont de bibliotheek dus wat bij de actieve machine hoort.
+    A preset is a statement about *this* laser on this material. So by default the
+    library shows what belongs to the active machine.
     """
-    # Een machine die iemand heeft ingesteld; de engine start met een
-    # lhystudios-plaatsvervanger die niemand koos, en die krijgt bewust geen
-    # profiel (zie test_machine_profiles.py).
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Mijn 5030"})
-    profiel = client.get("/api/library/active-machine").json()
-    assert profiel["device_path"], "het profiel hangt aan een device van de engine"
+    # A machine somebody set up; the engine starts with an lhystudios stand-in
+    # that nobody chose, and that one deliberately gets no profile (see
+    # test_machine_profiles.py).
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "My 5030"})
+    profile = client.get("/api/library/active-machine").json()
+    assert profile["device_path"], "the profile hangs off a device of the engine"
 
-    materiaal = client.post("/api/library/materials", json={"name": "Berk"}).json()
-    eigen = client.post(
+    material = client.post("/api/library/materials", json={"name": "Birch"}).json()
+    ours = client.post(
         "/api/library/presets",
         json={
-            "material_id": materiaal["id"],
+            "material_id": material["id"],
             "operation": "snijden",
             "speed_mm_s": 12,
             "power_percent": 70,
         },
     ).json()
-    assert eigen["machine_id"] == profiel["id"], "krijgt de actieve machine mee"
+    assert ours["machine_id"] == profile["id"], "takes the active machine along"
 
-    # Eentje van een andere machine.
-    ander = client.post(
+    # One from another machine.
+    other = client.post(
         "/api/library/machines", json={"name": "Ruida 60W"}
     ).json()
     client.post(
         "/api/library/presets",
         json={
-            "material_id": materiaal["id"],
+            "material_id": material["id"],
             "operation": "snijden",
             "speed_mm_s": 30,
             "power_percent": 55,
-            "machine_id": ander["id"],
+            "machine_id": other["id"],
         },
     )
 
     van_ons = client.get("/api/library/presets").json()
     alles = client.get("/api/library/presets?all_machines=true").json()
 
-    assert [p["id"] for p in van_ons] == [eigen["id"]]
+    assert [p["id"] for p in van_ons] == [ours["id"]]
     assert len(alles) == 2
 
 
 def test_a_machine_can_declare_a_z_axis_and_autofocus(client):
     """Wat de machine kán, bepaalt wat er in de jog verschijnt."""
-    client.post("/api/machines", json={"info": "ruida-beta", "label": "Mijn 5030"})
-    profiel = client.get("/api/library/active-machine").json()
-    assert profiel["has_z"] == 0 and profiel["has_autofocus"] == 0
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "My 5030"})
+    profile = client.get("/api/library/active-machine").json()
+    assert profile["has_z"] == 0 and profile["has_autofocus"] == 0
 
     bijgewerkt = client.patch(
-        f"/api/library/machines/{profiel['id']}",
+        f"/api/library/machines/{profile['id']}",
         json={"has_z": True, "has_autofocus": True},
     ).json()
 
