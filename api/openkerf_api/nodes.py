@@ -1,27 +1,26 @@
 """
-Knooppunten bewerken: de punten van een vorm zelf verslepen.
+Editing nodes: dragging a shape's own points.
 
-Tot nu toe kon je een vorm als geheel verplaatsen, schalen en draaien, maar niet
-één hoek verleggen. Dat is precies wat je nodig hebt om een gescand of
-geïmporteerd pad passend te maken.
+Until now you could move, scale and rotate a shape as a whole, but not move one corner. That
+is exactly what you need to make a scanned or imported path fit.
 
 Twee dingen om te weten:
 
-- De engine bewaart een `elem path` als een **Geomstr**: segmenten met complexe
-  getallen als punten. Een punt verplaatsen betekent alle segmenten aanpassen
-  waar dat punt in voorkomt — begin- én eindpunt, anders valt het pad open.
-- Vormen (`elem rect`, `elem ellipse`, …) hebben geen losse punten; ze zijn
-  parameters. Wie daar een hoek van versleept, bedoelt "make it a path".
-  Dat doen we dan ook, met behoud van kleur, laagtoewijzing en label — anders
-  verdwijnt de vorm uit zijn bewerking en zou hij niet meer meebranden.
+- The engine keeps an `elem path` as a **Geomstr**: segments with complex numbers as
+  points. Moving a point means adjusting every segment that point occurs in — start *and*
+  end point, otherwise the path falls open.
+- Shapes (`elem rect`, `elem ellipse`, …) have no separate points; they are parameters.
+  Anybody dragging a corner of one means "make it a path". So that is what we do, keeping
+  the colour, the layer assignment and the label — otherwise the shape disappears from its
+  operation and would no longer burn.
 """
 
 from __future__ import annotations
 
 from .edits import DesignError
 
-# Punten die binnen deze afstand (in Tats) liggen, zijn hetzelfde punt.
-# 65535 Tats is een inch, dus dit is ruwweg een honderdste millimeter.
+# Points within this distance (in Tats) are the same point. 65535 Tats is an inch, so this
+# is roughly a hundredth of a millimetre.
 SAME_POINT = 30.0
 
 SHAPES = ("elem rect", "elem ellipse", "elem line", "elem polyline", "elem path")
@@ -89,15 +88,15 @@ class Nodes:
     def _geometry(self, node):
         try:
             return node.as_geometry()
-        except Exception as e:  # pragma: no cover - alleen bij exotische nodes
+        except Exception as e:  # pragma: no cover - only on exotic nodes
             raise DesignError(f"No shape can be read from this element: {e}") from e
 
     def _unique(self, geometry) -> list[complex]:
         """
-        Elk knooppunt één keer, in de volgorde waarin het pad loopt.
+        Every node once, in the order the path runs.
 
-        Segmenten delen hun eindpunten; zonder ontdubbelen zou de gebruiker twee
-        handvatten op elkaar zien liggen en zou "punt 3" niets betekenen.
+        Segments share their end points; without deduplication the user would see two handles
+        lying on top of each other and "point 3" would mean nothing.
         """
         found: list[complex] = []
         for segment in geometry.segments[: geometry.index]:
@@ -117,8 +116,8 @@ class Nodes:
             for column in (0, 4):
                 if abs(complex(segment[column]) - source) <= SAME_POINT:
                     segment[column] = target
-            # Regelrechte lijnen hebben hun controlepunten op de uiteinden
-            # liggen; laat je die staan, dan knikt een rechte lijn krom.
+            # Straight lines have their control points lying on the ends; leave those and a
+            # straight line kinks into a curve.
             for column in (1, 3):
                 if abs(complex(segment[column]) - source) <= SAME_POINT:
                     segment[column] = complex(segment[column]) + shift
@@ -128,14 +127,14 @@ class Nodes:
         """
         De nieuwe vorm terugschrijven.
 
-        Een pad kan zijn geometrie gewoon vervangen. Een rechthoek niet: die
-        wordt een pad, en dan moet alles wat eraan hing mee — kleur, label en
-        vooral de bewerkingen waar hij in zat.
+        A path can simply replace its geometry. A rectangle cannot: it becomes a path, and
+        then everything that hung off it has to come along — colour, label and above all the
+        operations it was in.
         """
         if node.type == "elem path":
             node.geometry = geometry
-            # De matrix zit al in as_geometry() verwerkt; hem laten staan zou de
-            # verplaatsing een tweede keer toepassen.
+            # The matrix is already worked into as_geometry(); leaving it would apply the
+            # movement a second time.
             node.matrix.reset()
             node.altered()
             return element_id

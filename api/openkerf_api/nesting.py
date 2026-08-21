@@ -1,25 +1,25 @@
 """
-Nesten: de gekozen vormen zo dicht mogelijk op het materiaal leggen.
+Nesting: laying the chosen shapes as close together on the material as possible.
 
-De engine kent hier niets voor, dus dit is eigen werk. Bewust een eenvoudige
-methode — vormen op planken leggen, hoogste eerst — en niet meer dan dat:
+The engine knows nothing for this, so this is our own work. Deliberately a simple method —
+laying shapes on shelves, tallest first — and no more than that:
 
-- Het rekent op **omhullende rechthoeken**, niet op de echte omtrek. Twee ronde
-  vormen kunnen dus verder uit elkaar liggen dan strikt nodig. Dat is eerlijker
-  dan doen alsof het optimaal is, en het gaat nooit mis: rechthoeken die elkaar
-  niet raken, raken de vormen erin ook niet.
-- De marge staat er om de snijbreedte en het brandrandje heen. Nul marge betekent
-  dat twee sneden elkaar raken, en dan is het één snede.
+- It computes on **bounding rectangles**, not on the real outline. So two round shapes can
+  lie further apart than strictly necessary. That is more honest than pretending it is
+  optimal, and it never goes wrong: rectangles that do not touch, do not have their shapes
+  touching either.
+- The margin is there for the kerf and the burn edge. Zero margin means two cuts touch, and
+  then it is one cut.
 
-**Een groep is één ding.** Wat bij elkaar hoort, verhuist als geheel: de vormen
-erin houden onderling exact hun plek. Dat is geen nettigheid maar een
-noodzaak — een testbord is een meetinstrument, en zodra de vakjes onderling
-herschikt zijn betekent "rij 3, kolom 5" niets meer en is de proef weggegooid.
-Hetzelfde geldt voor een tandwiel dat je zelf uit vier vormen bouwde.
+**A group is one thing.** What belongs together moves as a whole: the shapes in it keep
+their places relative to each other exactly. That is not tidiness but a necessity — a test
+board is a measuring instrument, and as soon as the squares are rearranged relative to each
+other "row 3, column 5" means nothing and the trial has been thrown away. The same holds for
+a gear you built yourself out of four shapes.
 
-Raakt de nesting één lid van een groep, dan verhuist de hele groep — ook de
-leden die niet meegegeven zijn. Anders zou "put everything back on the bed" (dat alleen
-de vormen kent die het ziet) een bord alsnog uit elkaar trekken.
+If the nesting touches one member of a group, the whole group moves — including the members
+that were not passed in. Otherwise "put everything back on the bed" (which only knows the
+shapes it sees) would pull a board apart after all.
 """
 
 from .edits import DesignError, _finite
@@ -77,7 +77,7 @@ class Nesting:
         widest = max(box["width"] for box in boxes)
         usable = max(width_mm - 2 * origin_x, widest + margin)
 
-        # Hoogste eerst: dan blijft er minder lucht boven een plank staan.
+        # Tallest first: then less air is left above a shelf.
         boxes.sort(key=lambda box: box["height"], reverse=True)
 
         placed, x, y, shelf = [], origin_x, origin_y, 0.0
@@ -97,8 +97,8 @@ class Nesting:
                 dy = box["to_y"] - box["y"]
                 if abs(dx) < 0.001 and abs(dy) < 0.001:
                     continue
-                # Alle leden van de eenheid in één zet: `translate` werkt op de
-                # hele selectie, dus de onderlinge afstanden blijven exact.
+                # All the unit's members in one move: `translate` works on the whole
+                # selection, so the distances between them stay exact.
                 self.editor.move(box["ids"], dx, dy)
                 moved += len(box["ids"])
 
@@ -112,12 +112,11 @@ class Nesting:
     @staticmethod
     def _group_of(node):
         """
-        De **buitenste** groep waar deze vorm in zit, of niets.
+        The **outermost** group this shape is in, or nothing.
 
-        Buitenste en niet dichtstbijzijnde: een testbord met een gegroepeerd
-        opschrift erin is nog steeds één bord. De diepte is begrensd zoals
-        overal waar we de boom oplopen — een cyclus in de boom mag geen
-        eindeloze lus worden.
+        Outermost and not nearest: a test board with a grouped caption in it is still one
+        board. The depth is bounded as everywhere we walk up the tree — a cycle in the tree
+        must not become an endless loop.
         """
         parent = getattr(node, "parent", None)
         buitenste = None
@@ -161,6 +160,6 @@ class Nesting:
         try:
             return float(Length(value).mm)
         except Exception:
-            # Zonder bekend bed nemen we een halve meter aan; nesten mag niet
-            # afketsen op een apparaat dat zijn maat niet vertelt.
+            # Without a known bed we assume half a metre; nesting must not fail on a device
+            # that does not tell us its size.
             return 500.0

@@ -1,22 +1,21 @@
 """
-Waar de instellingen van een laag vandaan komen.
+Where a layer's settings came from.
 
-De pre-flight leidde de herkomst tot nu toe af uit de getallen zelf: zoek in de
-bibliotheek een preset met dezelfde snelheid en hetzelfde vermogen, en neem
-diens bron over. Dat werkt zolang die combinatie uniek is, en juist waar het
-ertoe doet is ze dat niet — 12 mm/s op 65% bestaat voor berken én voor acryl.
-Dan staat er "gemeten" boven een getal dat op ander materiaal gemeten is.
+Until now the pre-flight derived the provenance from the numbers themselves: look in the
+library for a preset with the same speed and the same power, and adopt its source. That
+works as long as that combination is unique, and precisely where it matters it is not —
+12 mm/s at 65% exists for birch *and* for acrylic. Then it says "measured" above a number
+measured on another material.
 
-Daarom onthouden we het toepassen zelf. Wie een preset op een laag zet, laat
-hier een briefje achter: welke preset, welk materiaal, welke dikte, welke bron.
-Dat briefje overleeft het sluiten van de bibliotheek, en het is wat de
-pre-flight nodig heeft om te zeggen "deze laag draagt een instelling van 3 mm
-berken, maar dit vel is 5 mm acryl".
+So we remember the applying itself. Whoever puts a preset on a layer leaves a note here:
+which preset, which material, which thickness, which source. That note survives closing the
+library, and it is what the pre-flight needs to say "this layer carries a setting for 3 mm
+birch, but this sheet is 5 mm acrylic".
 
-Het briefje is een momentopname, geen verwijzing: verandert de preset later,
-dan blijft staan wat er op de laag gezet is. En verandert iemand de snelheid
-met de hand, dan klopt het briefje niet meer — daarom noteren we de waarden
-erbij en zwijgen we zodra ze afwijken. Liever geen herkomst dan een verkeerde.
+The note is a snapshot, not a reference: if the preset changes later, what was put on the
+layer stays. And if somebody changes the speed by hand, the note no longer holds — which is
+why we record the values with it and keep quiet as soon as they deviate. Better no
+provenance than a wrong one.
 """
 
 from __future__ import annotations
@@ -25,8 +24,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Ruimer dan een afrondingsverschil, krapper dan een bewuste bijstelling. De
-# engine bewaart vermogen in promille, dus 0,1% is de fijnste stap die er is.
+# More generous than a rounding difference, tighter than a deliberate adjustment. The
+# engine keeps power in per mille, so 0.1% is the finest step there is.
 SPEED_SLACK = 0.01
 POWER_SLACK = 0.1
 
@@ -64,8 +63,8 @@ class Provenance:
             "source": preset.get("source"),
             "machine_id": preset.get("machine_id"),
             "machine_name": preset.get("machine_name"),
-            # De waarden zoals ze op de laag terechtkwamen: hiermee zien we
-            # later of er met de hand aan gedraaid is.
+            # The values as they landed on the layer: with these we later see whether
+            # somebody has turned them by hand.
             "speed_mm_s": preset.get("speed_mm_s"),
             "power_percent": preset.get("power_percent"),
             "applied_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -76,8 +75,8 @@ class Provenance:
         """
         Een verwijderd vel neemt zijn briefjes mee.
 
-        Nodig, geen opruimwerk: vel-nummers worden hergebruikt, dus zonder dit
-        erft een nieuw "vel-3" de herkomst van het oude.
+        Necessary, not housekeeping: sheet numbers are reused, so without this a new
+        "vel-3" inherits the old one's provenance.
         """
         data = self._read()
         if data.pop(sheet_id, None) is not None:
@@ -85,12 +84,12 @@ class Provenance:
 
     def clear(self) -> None:
         """
-        Alle briefjes weg — bij een nieuw project.
+        All the notes gone — on a new project.
 
-        Om dezelfde reden als `forget_sheet`: een nieuw project begint weer op
-        "vel-1", en zonder dit draagt de eerste laag daarvan de herkomst van
-        het werk van gisteren. Een instelling die zegt dat hij uit een testraster
-        komt terwijl niemand die preset toepaste, is erger dan geen herkomst.
+        For the same reason as `forget_sheet`: a new project starts at "vel-1" again, and
+        without this its first layer carries yesterday's work's provenance. A setting saying
+        it comes from a test grid while nobody applied that preset is worse than no
+        provenance.
         """
         self.path.unlink(missing_ok=True)
 
@@ -104,10 +103,10 @@ class Provenance:
         power_percent=None,
     ) -> dict | None:
         """
-        Het briefje van deze laag, als het nog klopt.
+        This layer's note, if it still holds.
 
-        Wijkt de laag inmiddels af van wat de preset erop zette, dan is dit
-        niet meer die preset en geven we niets terug.
+        If the layer now deviates from what the preset put on it, this is no longer that
+        preset and we hand back nothing.
         """
         if not sheet_id or not operation_id:
             return None
@@ -123,8 +122,8 @@ class Provenance:
 
 def _same(a, b, slack) -> bool:
     if a is None or b is None:
-        # Zonder vergelijkingswaarde vergelijken we niet; dat is geen bewijs
-        # van gelijkheid, maar ook geen reden om het briefje weg te gooien.
+        # Without a value to compare against we do not compare; that is no proof of
+        # equality, but no reason to throw the note away either.
         return True
     try:
         return abs(float(a) - float(b)) <= slack

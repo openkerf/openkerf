@@ -239,10 +239,10 @@ class DesignEditor:
 
     def _drop_dead_references(self) -> int:
         """
-        Verwijzingen naar elementen die niet meer in de boom staan, weghalen.
+        Removing references to elements that are no longer in the tree.
 
-        Alleen `reference`-kinderen: een operatie kan ook een echt kind hebben
-        (`effect hatch`), en dat is geen verwijzing en mag blijven staan.
+        Only `reference` children: an operation can also have a real child (`effect hatch`),
+        and that is not a reference and may stay.
         """
         levend = {id(node) for node in self.elements.elems()}
         weg = 0
@@ -291,8 +291,8 @@ class DesignEditor:
                 operation.passes = count
                 applied["passes"] = count
             if dpi is not None:
-                # DPI bepaalt de lijnafstand van een rastergravure: te hoog kost
-                # uren, te laag geeft strepen.
+                # DPI decides the line spacing of a raster engraving: too high costs hours,
+                # too low gives stripes.
                 value = _positive(dpi, "dpi")
                 if not 10 <= value <= 2000:
                     raise DesignError("dpi has to be between 10 and 2000.")
@@ -302,7 +302,7 @@ class DesignEditor:
                 distance = _finite(overscan_mm, "overscan_mm")
                 if not 0 <= distance <= 50:
                     raise DesignError("overscan_mm has to be between 0 and 50.")
-                # Overscan is een lengte-met-eenheid in de engine, geen getal.
+                # In the engine overscan is a length-with-unit, not a number.
                 operation.overscan = f"{distance}mm"
                 applied["overscan"] = operation.overscan
             if bidirectional is not None:

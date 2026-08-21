@@ -1,29 +1,28 @@
 """
 Wat een paletkleur eerder deed, per machine.
 
-Besluit B2. In LightBurn kennen gebruikers hun palet uit hun hoofd: rood is
-"cutting at 12 mm/s", blauw is "engraving at 300". Dat werkt omdat de kleur zijn
-snelheid en vermogen onthoudt, over jobs heen. Bij ons begon elke nieuwe laag
-blanco, dus die reflex kon niet ontstaan.
+Decision B2. In LightBurn users know their palette by heart: red is "cutting at 12 mm/s",
+blue is "engraving at 300". That works because the colour remembers its speed and power,
+across jobs. With us every new layer started blank, so that reflex could not form.
 
-**Dit is nadrukkelijk geen preset.** Het verschil is de reikwijdte, en het is
-geen woordenspel:
+**This is emphatically not a preset.** The difference is the scope, and it is not a play on
+words:
 
 | | palet-geheugen | preset |
 |---|---|---|
-| hangt aan | machine + kleur | machine + materiaal + dikte |
-| komt van | wat jij het laatst deed | een meting, met herkomst |
-| zegt | "this is where you were last time" | "hierop is gebrand, en dit kwam eruit" |
+| hangs off | machine + colour | machine + material + thickness |
+| comes from | what you last did | a measurement, with provenance |
+| says | "this is where you were last time" | "this was burned on, and this came out" |
 
-Een preset draagt bewijs; het palet draagt gewoonte. Daarom overschrijven ze
-elkaar niet: een preset toepassen laat een briefje achter in `provenance.py` en
-werkt hier het geheugen bij (want dat is wat de kleur nu doet), maar andersom
-krijgt een palet-waarde nooit een herkomst. Wie een getal met herkomst ziet,
-mag erop vertrouwen dat er ooit iets gebrand is.
+A preset carries evidence; the palette carries habit. That is why they do not overwrite
+each other: applying a preset leaves a note in `provenance.py` and updates the memory here
+(because that is what the colour does now), but the other way round a palette value never
+gets a provenance. Anybody seeing a number with a provenance may trust that something was
+once burned.
 
-De machine hoort erbij omdat snelheid en vermogen machine-eigenschappen zijn.
-12 mm/s op 80 watt is een andere snede dan 12 mm/s op 40 watt, en een geheugen
-dat dat door elkaar haalt is erger dan geen geheugen.
+The machine belongs with it because speed and power are machine properties. 12 mm/s at 80
+watts is a different cut from 12 mm/s at 40 watts, and a memory that mixes those up is worse
+than no memory.
 """
 
 from __future__ import annotations
@@ -32,23 +31,22 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Zonder actieve machine hangt het geheugen nergens aan. We gooien het dan niet
-# weg — één sleutel voor "nog geen machine gekozen" is beter dan een gebruiker
-# die zijn instellingen kwijtraakt zodra hij zijn laser aansluit. Bij de eerste
-# echte machine begint hij wel opnieuw; dat is eerlijk, want de waarden van een
-# machineloze sessie zijn op niets gemeten.
-GEEN_MACHINE = "no-machine"
+# Without an active machine the memory hangs off nothing. We do not throw it away then —
+# one key for "no machine chosen yet" is better than a user who loses their settings as soon
+# as they connect their laser. With the first real machine it does start over; that is
+# honest, because a machineless session's values were measured on nothing.
+NO_MACHINE = "no-machine"
 
 
 def machine_key(profile: dict | None) -> str:
     """The key this machine's memory is stored under."""
     if not profile:
-        return GEEN_MACHINE
+        return NO_MACHINE
     machine_id = profile.get("id")
     if machine_id is not None:
         return f"machine-{machine_id}"
-    pad = str(profile.get("device_path") or "").strip()
-    return f"pad-{pad}" if pad else GEEN_MACHINE
+    path = str(profile.get("device_path") or "").strip()
+    return f"path-{path}" if path else NO_MACHINE
 
 
 def normalise(color) -> str | None:
@@ -94,14 +92,14 @@ class Palette:
         """
         Onthoud wat deze kleur op deze machine nu doet.
 
-        Halve waarden worden niet weggegooid maar aangevuld: wie alleen de
-        snelheid bijstelt, verliest daarmee niet het vermogen dat er stond.
+        Half values are not thrown away but filled in: adjusting only the speed does not
+        lose the power that was there.
         """
         kleur = normalise(color)
         if kleur is None:
             return None
         data = self._read()
-        machine = data.setdefault(str(key or GEEN_MACHINE), {})
+        machine = data.setdefault(str(key or NO_MACHINE), {})
         entry = dict(machine.get(kleur) or {})
         if speed is not None:
             try:
@@ -129,7 +127,7 @@ class Palette:
         if kleur is None:
             return
         data = self._read()
-        machine = data.get(str(key or GEEN_MACHINE)) or {}
+        machine = data.get(str(key or NO_MACHINE)) or {}
         if machine.pop(kleur, None) is not None:
             self._write(data)
 
@@ -139,9 +137,9 @@ class Palette:
         kleur = normalise(color)
         if kleur is None:
             return None
-        return (self._read().get(str(key or GEEN_MACHINE)) or {}).get(kleur)
+        return (self._read().get(str(key or NO_MACHINE)) or {}).get(kleur)
 
     def all(self, key: str) -> dict:
         """Everything this machine has remembered, by colour."""
-        machine = self._read().get(str(key or GEEN_MACHINE)) or {}
+        machine = self._read().get(str(key or NO_MACHINE)) or {}
         return {k: v for k, v in machine.items() if normalise(k)}

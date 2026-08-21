@@ -68,20 +68,18 @@ class StatusReader:
         """
         Staat de machine stil op verzoek?
 
-        Dit ontbrak, en het is de enige bron die er is. `LaserJob.status`
-        kent maar vier waarden — Running, Queued, Waiting, Disabled
-        (core/laserjob.py:66) — en `is_running()` is `not self._stopped`, wat
-        pauzeren niet aanraakt. Een gepauzeerde job ziet er in de spooler dus
-        exact hetzelfde uit als een lopende. Gevolg in de app: je drukt op
-        Pauze, de machine stopt, en het scherm blijft "Bezig" tonen met een
-        pauzeknop erbij. De hervatknop verscheen nooit, want er was niets waar
-        hij op kon afgaan.
+        This was missing, and it is the only source there is. `LaserJob.status` knows only
+        four values — Running, Queued, Waiting, Disabled
+        (core/laserjob.py:66) — and `is_running()` is `not self._stopped`, which pausing
+        does not touch. So in the spooler a paused job looks exactly the same as a running
+        one. The consequence in the app: you press Pause, the machine stops, and the screen
+        goes on showing "Busy" with a pause button beside it. The resume button never
+        appeared, because there was nothing for it to go by.
 
-        `driver.paused` wordt wél door alle drie de families gezet, op dezelfde
-        manier: lihuiyu/driver.py:325, ruida/driver.py:494, grbl/driver.py:869.
-        Geen driver of geen vlag = `None`, want "not paused" beweren over
-        een apparaat dat het niet vertelt is dezelfde gok die we bij de
-        verbinding al niet maken.
+        `driver.paused` *is* set by all three families, in the same way:
+        lihuiyu/driver.py:325, ruida/driver.py:494, grbl/driver.py:869. No driver or no flag =
+        `None`, because claiming "not paused" about a device that does not tell us is the same
+        guess we already refuse to make about the connection.
         """
         driver = _attr(device, "driver")
         if driver is None:
@@ -91,24 +89,22 @@ class StatusReader:
 
     def connection(self, device) -> dict:
         """
-        Hangt er echt een machine aan, of praten we tegen niemand?
+        Is a machine really attached, or are we talking to nobody?
 
-        Dit ontbrak, en dat is de duurste leugen die deze app kan vertellen: de
-        bovenbalk zei "Gereed" met een groene stip terwijl er geen kabel in zat,
-        puur omdat onze eigen WebSocket het deed. LightBurn zet hier
-        "Disconnected" en dat is precies het verschil dat iemand naast de
-        machine moet zien.
+        This was missing, and it is the most expensive lie this app can tell: the top bar said
+        "Ready" with a green dot while no cable was plugged in, purely because our own
+        WebSocket was working. LightBurn puts "Disconnected" here and that is exactly the
+        difference somebody beside the machine has to see.
 
-        Er is geen gedeelde driverinterface voor: MeerK40t garandeert alleen
-        `status()`, `get()`, `set()` en `hold_work()` (core/drivers.py). Elke
-        familie meldt het dus ergens anders, en waar geen enkele bron bestaat
-        zeggen we "unknown" in plaats van te gokken. Een gok naar "connected"
-        is de fout die we juist repareren.
+        There is no shared driver interface for it: MeerK40t only guarantees `status()`,
+        `get()`, `set()` and `hold_work()` (core/drivers.py). So every family reports it
+        somewhere else, and where no source exists at all we say "unknown" instead of
+        guessing. A guess at "connected" is the very fault we are repairing.
 
         `state` is er één van: "connected", "disconnected", "unknown".
         """
-        # Ruida (onze doelmachine) heeft een expliciete property; die is
-        # gebonden aan de sessielaag en dus de betrouwbaarste bron die er is.
+        # Ruida (our target machine) has an explicit property; it is bound to the session
+        # layer and therefore the most reliable source there is.
         ruida = _attr(device, "connected")
         if isinstance(ruida, bool):
             return {
@@ -116,8 +112,8 @@ class StatusReader:
                 "detail": None,
             }
 
-        # Lihuiyu (K40-borden): de controller houdt een verbinding en een
-        # leesbare toestand bij ("connected", "Not Connected", "Unknown"...).
+        # Lihuiyu (K40 boards): the controller keeps a connection and a readable state
+        # ("connected", "Not Connected", "Unknown"...).
         controller = _attr(device, "controller")
         if controller is not None:
             link = _attr(controller, "connection")
@@ -209,16 +205,16 @@ class StatusReader:
             return {"present": False, "idle": None, "queue_length": 0, "jobs": []}
 
         queue = _safe(lambda: list(spooler.queue), []) or []
-        # De pauze zit op de driver, niet op de job (zie `paused`). Hem hier
-        # meegeven scheelt de frontend een tweede bron: wie de job leest, leest
-        # ook of hij stilstaat.
+        # The pause sits on the driver, not on the job (see `paused`). Passing it along here
+        # saves the frontend a second source: whoever reads the job also reads whether it is
+        # standing still.
         paused = self.paused(device)
         return {
             "present": True,
             "idle": _safe(lambda: bool(spooler.is_idle)),
             "queue_length": len(queue),
-            # Alleen de eerste in de rij is de job waar de driver mee bezig is;
-            # wat erachter staat, wacht op zijn beurt en is niet gepauzeerd.
+            # Only the first in the queue is the job the driver is working on; what is
+            # behind it is waiting its turn and is not paused.
             "jobs": [
                 self.job_snapshot(job, paused if index == 0 else False)
                 for index, job in enumerate(queue)
@@ -241,11 +237,10 @@ class StatusReader:
             "status": _safe(lambda: job.status),
             "priority": _attr(job, "priority"),
             "running": running,
-            # Niet aan `running` ophangen: een job die nog niet begonnen is
-            # meldt `running is False`, en dan verdween een echte pauze uit
-            # beeld — de balk zei "Bezig" met een pauzeknop erbij, terwijl de
-            # machine stilstond en die job ook niet ging beginnen. Wie
-            # vooraan staat, staat stil.
+            # Do not hang it off `running`: a job that has not started yet reports
+            # `running is False`, and then a real pause disappeared from view — the bar said
+            # "Busy" with a pause button beside it, while the machine stood still and that job
+            # was not going to start either. Whoever is at the front is standing still.
             "paused": bool(device_paused),
             "steps_done": steps_done,
             "steps_total": steps_total,

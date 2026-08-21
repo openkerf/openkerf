@@ -1,31 +1,29 @@
 """
 Afbeeldingen: plaatsen, bewerken en zichtbaar maken.
 
-Een `elem image` heeft geen `as_geometry`, dus hij valt buiten de padgebaseerde
-snapshot en was daardoor onzichtbaar op ons canvas. Hier komen de gegevens
-vandaan die de frontend nodig heeft om hem te tekenen: het kader in millimeters
-plus een PNG-weergave van de huidige pixels.
+An `elem image` has no `as_geometry`, so it falls outside the path-based snapshot and was
+therefore invisible on our canvas. This is where the data the frontend needs to draw it
+comes from: the frame in millimetres plus a PNG rendering of the current pixels.
 
-Bewerkingen zijn **niet destructief**. Een `elem image` bewaart het origineel
-en een receptenlijst (`node.operations`); bij elke wijziging gaat dat hele
-recept opnieuw over het origineel heen. Dat is de reden dat je twee keer op
-dezelfde knop kunt drukken zonder de afbeelding weg te branden, en dat het
-paneel kan laten zien wát er aanstaat.
+Edits are **not destructive**. An `elem image` keeps the original and a list of operations
+(`node.operations`); on every change that whole recipe goes over the original again. That is
+the reason you can press the same button twice without burning the image away, and that the
+panel can show *what* is switched on.
 
-Eerder liep dit via de `image ...`-console­commando's. Die schrijven het
-resultaat terug in de afbeelding zelf, dus contrast twee keer verhogen deed dat
-ook echt twee keer, en na een paar klikken was er niets meer over. De engine had
-het goede model al; wij gebruikten het verkeerde.
+This used to go through the `image ...` console commands. Those write the result back into
+the image itself, so raising the contrast twice really did it twice, and after a few clicks
+there was nothing left. The engine already had the right model; we were using the wrong
+one.
 """
 
 from .commands import CommandRunner
 from .edits import DesignError
 
-# Bewerkingen die zonder argumenten werken; geverifieerd tegen de engine.
+# Edits that work without arguments; verified against the engine.
 ADJUSTMENTS = {
     "contrast": {
-        "label": "Contrast en helderheid",
-        # De engine rekent -128..127 om naar een factor rond 1.
+        "label": "Contrast and brightness",
+        # The engine converts -128..127 into a factor around 1.
         "defaults": {"contrast": 25, "brightness": 0},
         "ranges": {"contrast": (-127, 127), "brightness": (-127, 127)},
     },
@@ -56,10 +54,10 @@ ADJUSTMENTS = {
         "ranges": {},
     },
     "tone": {
-        "label": "Omkeren",
-        # Omkeren bestaat niet als eigen bewerking, maar een tooncurve van
-        # (0,255) naar (255,0) doet precies dat — en zit wél in het recept, dus
-        # blijft hij omkeerbaar.
+        "label": "Invert",
+        # Inverting does not exist as an operation of its own, but a tone curve from (0,255)
+        # to (255,0) does exactly that — and it *is* in the recipe, so it stays
+        # reversible.
         "defaults": {"type": "line", "values": [(0, 255), (255, 0)]},
         "ranges": {},
     },
@@ -81,8 +79,8 @@ DITHER_TYPES = (
     "Sierra-2-4a",
 )
 
-# Vectoriseren zit in aparte plugins die kunnen ontbreken (potrace heeft een
-# externe library nodig), dus we vragen de kernel wat er echt geregistreerd is.
+# Vectorising sits in separate plugins that may be absent (potrace needs an external
+# library), so we ask the kernel what is really registered.
 VECTORISERS = ("vectrace", "potrace")
 
 
@@ -105,10 +103,10 @@ class Images:
 
     def adjustments(self, element_id: str) -> dict:
         """
-        Wat er op deze afbeelding aanstaat, en met welke waarden.
+        What is switched on for this image, and with which values.
 
-        Zonder dit kon het paneel niet tonen wat er gekozen was — je zag alleen
-        knoppen en moest maar onthouden waar je op had gedrukt.
+        Without this the panel could not show what had been chosen — you only saw buttons and
+        had to remember what you had pressed.
         """
         node = self._node(element_id)
         recipe = {op.get("name"): op for op in getattr(node, "operations", []) or []}
@@ -128,8 +126,8 @@ class Images:
                     },
                 }
                 for name, spec in ADJUSTMENTS.items()
-                # Bijsnijden heeft een eigen weg (een kader op het canvas), dus
-                # het staat niet als knop tussen de rest.
+                # Cropping has a route of its own (a frame on the canvas), so it is not a
+                # button among the rest.
                 if name != "crop"
             ],
         }
@@ -138,9 +136,9 @@ class Images:
         """
         Eén bewerking aan- of uitzetten, of zijn waarden bijstellen.
 
-        Het recept gaat daarna in zijn geheel opnieuw over het **origineel**.
-        Twee keer dezelfde knop levert dus hetzelfde resultaat op, en uitzetten
-        brengt de afbeelding echt terug — dat was de fout in de vorige versie.
+        The recipe then goes over the **original** again in its entirety. So the same button
+        twice produces the same result, and switching it off really brings the image back —
+        that was the fault in the previous version.
         """
         spec = ADJUSTMENTS.get(name)
         if spec is None:
@@ -208,8 +206,7 @@ class Images:
 
     def set_dpi(self, element_id: str, dpi) -> dict:
         """
-        DPI bepaalt hoe fijn de raster-gravure wordt afgetast — en daarmee de
-        brandtijd.
+        DPI decides how finely the raster engraving is scanned — and with it the burn time.
         """
         node = self._node(element_id)
         try:
@@ -233,8 +230,7 @@ class Images:
 
     def vectorise(self, element_id: str, method: str = "vectrace") -> dict:
         """
-        Van pixels naar paden, zodat een gescande tekening gesneden kan worden in
-        plaats van gegraveerd.
+        From pixels to paths, so that a scanned drawing can be cut instead of engraved.
         """
         available = self.vectorisers()
         if method not in available:
@@ -261,9 +257,9 @@ class Images:
         """
         Bijsnijden op een rechthoek in millimeters.
 
-        Ook dit gaat in het recept in plaats van in de pixels: bijsnijden is
-        daarmee terug te draaien, en een tweede keer snijden rekent vanaf het
-        origineel in plaats van vanaf de al bijgesneden afbeelding.
+        This too goes into the recipe rather than into the pixels: that makes cropping
+        reversible, and a second crop computes from the original instead of from the
+        already-cropped image.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -309,17 +305,15 @@ class Images:
 
     def render_png(self, element_id: str) -> bytes:
         """
-        De huidige pixels als PNG, zodat het canvas de afbeelding kan tonen.
+        The current pixels as a PNG, so that the canvas can show the image.
 
-        Bytes, geen bestand. Dit liep eerst via één vast pad per element, en
-        dat brak zodra het canvas twee keer tegelijk om hetzelfde plaatje
-        vroeg — wat het doet, want elke verversing hangt er een nieuw
-        `?v=`-nummer aan terwijl de vorige aanvraag nog loopt. De ene aanvraag
-        schreef het bestand opnieuw terwijl de andere het aan het versturen
-        was: `Content-Length` van vóór het overschrijven, inhoud van erna, en
-        uvicorn viel om met `Too little data for declared Content-Length` in
-        het log van de gebruiker. Een antwoord uit het geheugen heeft altijd de
-        lengte die het meldt.
+        Bytes, not a file. This used to go through one fixed path per element, and that
+        broke as soon as the canvas asked for the same image twice at once — which it does,
+        because every refresh hangs a new `?v=` number on it while the previous request is
+        still running. One request rewrote the file while the other was sending it:
+        `Content-Length` from before the overwrite, content from after, and uvicorn fell over
+        with `Too little data for declared Content-Length` in the user's log. An answer from
+        memory always has the length it reports.
         """
         from io import BytesIO
 
