@@ -38,6 +38,7 @@
 		tiling = null,
 		onContextObject,
 		onContextCanvas,
+		onDeeper,
 		control = $bindable(null)
 	}: {
 		/** Where the pointer is, in mm on the bed. `null` when it is gone. */
@@ -66,7 +67,9 @@
 		tiling?: TilingStore | null;
 		/** Right-click on a shape. The canvas selects it first if it was not selected;
 		 *  the page then decides what is in the menu. */
-		onContextObject?: (event: MouseEvent) => void;
+		onContextObject?: (event: MouseEvent, under: string[]) => void;
+		/** Where you are in a pile of shapes after an Alt+click; null clears it again. */
+		onDeeper?: (info: { index: number; total: number } | null) => void;
 		/** Right-click on the bed itself, with the place in mm: the menu promises "paste
 		 *  here", and then it has to know where "here" is. */
 		onContextCanvas?: (event: MouseEvent, point: { x: number; y: number }) => void;
@@ -831,7 +834,15 @@
 		}
 
 		// Below half a pixel it is a click, not a drag.
-		if (Math.abs(finished.dx) < 0.05 && Math.abs(finished.dy) < 0.05) return;
+		if (Math.abs(finished.dx) < 0.05 && Math.abs(finished.dy) < 0.05) {
+			// And an Alt+click on the selection goes one shape deeper. The drag surface
+			// lies over the shapes, so without this the second Alt+click never reaches
+			// the contour below and the pile could be entered but not walked. Alt+drag
+			// keeps meaning "move without snapping": that is this same handler with
+			// movement in it.
+			if (finished.mode === 'move' && event.altKey) pickUnder(event, design.selectedIds[0]);
+			return;
+		}
 
 		if (finished.mode === 'move') {
 			await edits.move(design.selectedIds, finished.dx, finished.dy);
@@ -846,6 +857,62 @@
 	// After releasing, a click still fires in the same place. Without this flag that
 	// would clear the selection the drag frame has just made.
 	let bandJustEnded = false;
+
+	/**
+	 * Everything under the pointer, topmost first.
+	 *
+	 * Asking the browser instead of doing the sums ourselves: `elementsFromPoint`
+	 * uses exactly the hit geometry that is on screen, so a rotated shape, a hole in
+	 * a ring and the 12 px band around a hairline all count the way they look. Doing
+	 * the geometry a second time in JavaScript would be a second opinion, and the
+	 * two would differ on precisely the awkward cases.
+	 */
+	function stackAt(clientX: number, clientY: number): string[] {
+		if (typeof document === 'undefined') return [];
+		const ids: string[] = [];
+		for (const node of document.elementsFromPoint(clientX, clientY)) {
+			const id = (node as SVGElement).getAttribute?.('data-el');
+			if (id && !ids.includes(id)) ids.push(id);
+		}
+		return ids;
+	}
+
+	/**
+	 * What one shape lying over another asks for.
+	 *
+	 * A plain click takes the top one — that is what a click means. Alt+click walks
+	 * down the pile: whatever is selected now, the next one below it is chosen, and
+	 * from the bottom it starts again at the top. Inkscape, Affinity and Illustrator
+	 * all do it this way, so the finger memory is already there.
+	 *
+	 * Alt also skips snapping for one drag. There is no clash: that is about moving,
+	 * this is about a click that does not move.
+	 */
+	let deeperTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function pickUnder(event: MouseEvent, fallback: string) {
+		const stack = stackAt(event.clientX, event.clientY);
+		if (stack.length < 2) {
+			design.select(fallback);
+			return;
+		}
+		const now = design.selectedIds.length === 1 ? stack.indexOf(design.selectedIds[0]) : -1;
+		const next = stack[(now + 1) % stack.length];
+		design.select(next);
+		// Say where you are in the pile, or the second Alt+click looks like nothing
+		// happened — two shapes of the same size on top of each other look identical
+		// until you read their names.
+		//
+		// Upward, to the line in the action bar that already says what is selected.
+		// A strip below the bed would be honest but it lies *in the flow*: the canvas
+		// would get shorter, the drawing would rescale, and the next Alt+click would
+		// land somewhere else. Measured: the bed went from 1018×610 to 986×591 and the
+		// pile was gone from under the pointer.
+		onDeeper?.({ index: stack.indexOf(next) + 1, total: stack.length });
+		if (deeperTimer) clearTimeout(deeperTimer);
+		deeperTimer = setTimeout(() => onDeeper?.(null), 4000);
+	}
+
 
 	/**
 	 * Where the pointer is captured as soon as there really is a drag.
@@ -1713,6 +1780,7 @@
 								<rect
 									class="hit"
 									class:passive={!selectTool}
+									data-el={element.id}
 									role="button"
 									tabindex="0"
 									aria-label={t('canvas.selectImage')}
@@ -1728,6 +1796,7 @@
 											return;
 										}
 										if (e.shiftKey) design.toggle(element.id);
+										else if (e.altKey) pickUnder(e, element.id);
 										else design.select(element.id);
 									}}
 									oncontextmenu={(e) => {
@@ -1737,7 +1806,7 @@
 										// first: otherwise there is a menu over one shape that acts on
 										// *another* shape.
 										if (!design.isSelected(element.id)) design.select(element.id);
-										onContextObject?.(e);
+										onContextObject?.(e, stackAt(e.clientX, e.clientY));
 									}}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -1792,11 +1861,26 @@
 								/>
 								<!-- An invisible hit zone: a 1 px contour cannot be clicked, certainly
 								     not on a touch screen. -->
+								<!--
+									Only a *filled* shape catches a click on its inside.
+
+									This used to be `fill="transparent"`, and a transparent fill still
+									catches the pointer: the whole inside of every closed shape was
+									clickable. So anything drawn inside a rectangle — a hole, a label,
+									a part nested to save material — could not be picked up at all: the
+									rectangle lies over it and swallowed the click. The way a laser
+									cutter works, an outline is a line and not a surface, and that is
+									how LightBurn and Illustrator treat it too. Filled shapes keep
+									their face, because for those the surface *is* the work: that is
+									what a raster layer burns.
+								-->
 								<path
 									class="hit"
 									class:passive={!selectTool}
+									data-el={element.id}
 									d={element.path}
-									fill="transparent"
+									fill={streek.filled ? 'transparent' : 'none'}
+									fill-rule="nonzero"
 									stroke="transparent"
 									stroke-width="12"
 									vector-effect="non-scaling-stroke"
@@ -1814,13 +1898,15 @@
 										}
 										// Shift keeps the existing selection.
 										if (e.shiftKey) design.toggle(element.id);
+										// Alt goes one shape deeper into the pile under the pointer.
+										else if (e.altKey) pickUnder(e, element.id);
 										else design.select(element.id);
 									}}
 									oncontextmenu={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
 										if (!design.isSelected(element.id)) design.select(element.id);
-										onContextObject?.(e);
+										onContextObject?.(e, stackAt(e.clientX, e.clientY));
 									}}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -1888,7 +1974,7 @@
 										// in the middle of your own selection.
 										e.preventDefault();
 										e.stopPropagation();
-										onContextObject?.(e);
+										onContextObject?.(e, stackAt(e.clientX, e.clientY));
 									}}
 									onpointermove={moveDrag}
 									onpointerup={endDrag}

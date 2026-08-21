@@ -189,6 +189,16 @@ export type Context = {
 	 *  The number goes on the menu row, because a promise without a number
 	 *  ("split") does not say whether there is anything to split. */
 	splittable: { shapes: number; pieces: number };
+	/**
+	 * The shapes under the pointer, topmost first — for the right-click that opened
+	 * this menu.
+	 *
+	 * Alt+click walks down a pile, and that is quick once you know it. This is the
+	 * way that needs no knowing and no keyboard: a list, by name, with the one you
+	 * have now ticked. It is also the only way on a touch screen, where there is no
+	 * Alt to hold.
+	 */
+	under: { id: string; label: string; selected: boolean }[];
 };
 
 /** What the page must be able to perform. One object, so a test can fake it. */
@@ -206,6 +216,8 @@ export type Handlers = {
 	fill: (on: boolean) => void;
 	corners: () => void;
 	onlyLayer: (kind: 'cut' | 'engrave' | 'raster') => void;
+	/** Select exactly this one shape — from the list of what lies under the pointer. */
+	selectOne: (id: string) => void;
 	assignLayer: (id: string, inside: boolean) => void;
 	toSheet: (id: string) => void;
 	editText: () => void;
@@ -420,7 +432,26 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 		}
 	];
 
+	// Only when there is really something to choose between: one shape under the
+	// pointer is not a choice, and a row that says what you already have is noise.
+	const under: Submenu[] =
+		ctx.under.length > 1
+			? [
+					{
+						id: 'under-pointer',
+						label: t('canvas.under'),
+						items: ctx.under.map((shape) => ({
+							id: `under-${shape.id}`,
+							label: shape.label,
+							on: shape.selected,
+							run: () => h.selectOne(shape.id)
+						}))
+					}
+				]
+			: [];
+
 	const menu: Menu = [
+		...(under.length ? [{ items: under }] : []),
 		{
 			items: [
 				{ id: 'cut', label: t('action.cut'), key: K('cut'), off: needsOne, run: h.cut },
