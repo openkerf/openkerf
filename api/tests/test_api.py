@@ -37,9 +37,9 @@ def test_devices_endpoint(client):
 
 def test_websocket_sends_snapshot_on_connect(client):
     with client.websocket_connect("/api/ws") as ws:
-        # Eerst stelt de server zich voor: aan dit id ziet een herverbindende
-        # client of hij tegen hetzelfde proces praat als vóór de stilte, of dat
-        # de engine herstart is en de pagina van een ander leven is (gat E2).
+        # First the server introduces itself: by this id a reconnecting client sees whether
+        # it is talking to the same process as before the silence, or whether the engine has
+        # restarted and the page is from another life (gap E2).
         hello = json.loads(ws.receive_text())
         assert hello["type"] == "hello"
         assert hello["instance"]
@@ -74,41 +74,38 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/elements/{element_id}/vectorise",
         "/api/design/elements/{element_id}/crop",
         "/api/project/open",
-        # Opnieuw beginnen. Gooit het ontwerp en de vellen weg, dus hij hoort
-        # achter dezelfde poort als openen; de frontend vraagt het eerst.
+        # Starting over. Throws the design and the sheets away, so it belongs behind the same
+        # gate as opening; the frontend asks first.
         "/api/project/new",
         "/api/design/elements",
         "/api/design/elements/delete",
         "/api/design/elements/duplicate",
-        # Knippen, kopiëren en plakken (usability-ronde). Het klembord van de
-        # engine is de bewaarplaats; deze drie routes zetten alleen de nadruk en
-        # geven de stand terug. Plakken schrijft in de boom, dus achter dezelfde
-        # poort als de rest.
+        # Cut, copy and paste (usability round). The engine's clipboard is the store; these
+        # three routes only set the emphasis and hand back the state. Pasting writes in the
+        # tree, so behind the same gate as the rest.
         "/api/design/clipboard/copy",
         "/api/design/clipboard/cut",
         "/api/design/clipboard/paste",
         "/api/design/operations",
-        # Volgorde en soort van een laag. Alle drie schrijven in de
-        # bewerkingenboom en niet aan de machine: `move` schuift een laag op in
-        # de brandvolgorde (L1), `sort` zet graveren vóór snijden in één
-        # handeling (L2), en `type` vervangt een laag door een van een ander
-        # soort met de vormen erin (L3) — dat laatste is een POST en geen PATCH
-        # omdat de laag een nieuw id krijgt. Zie de sectie "Lagen" in
-        # FEATURE-GAPS.md.
+        # A layer's order and kind. All three write in the operation tree and not to the
+        # machine: `move` shifts a layer in the burn order (L1), `sort` puts engraving before
+        # cutting in one action (L2), and `type` replaces a layer with one of another kind with
+        # the shapes in it (L3) — that last one is a POST and not a PATCH because the layer
+        # gets a new id. See the "Layers" section in FEATURE-GAPS.md.
         "/api/design/operations/{operation_id}/move",
-        # Gat L2: graveren vóór snijden in één handeling. Schrijft aan de
-        # brandvolgorde in de boom, dus achter dezelfde poort.
+        # Gap L2: engraving before cutting in one action. Writes to the burn order in the
+        # tree, so behind the same gate.
         "/api/design/operations/sort",
-        # Gat L3: het soort bewerking van een bestaande laag. Vervangt de knoop
-        # en verhuist de referenties — een eigen route, want het id verandert.
+        # Gap L3: an existing layer's operation kind. Replaces the node and moves the
+        # references — a route of its own, because the id changes.
         "/api/design/operations/{operation_id}/type",
         "/api/design/operations/sort",
         "/api/design/operations/{operation_id}/type",
         "/api/design/align",
         "/api/design/offset",
         "/api/design/simplify",
-        # Hoeken afronden of afschuinen. Afronden van een rechthoek blijft een
-        # rechthoek; al het andere wordt een pad, en dat is eenrichting.
+        # Rounding or chamfering corners. Rounding a rectangle stays a rectangle; everything
+        # else becomes a path, and that is one-way.
         "/api/design/corners",
         "/api/design/split",
         "/api/design/fill",
@@ -125,15 +122,15 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/machine/jog",
         "/api/machine/focus",
         "/api/machine/frame",
-        # Gat J6: posities die deze machine onthoudt. Schrijft aan de settings
-        # van de device-service, dus achter dezelfde poort als bewegen.
+        # Gap J6: positions this machine remembers. Writes to the device service's settings,
+        # so behind the same gate as movement.
         "/api/machine/positions",
-        # Gat J12: het nulpunt van de gebruiker. Schrijft net als de posities
-        # aan de settings van de device-service, en het verplaatst het werk op
-        # weg naar de machine — dus zeker achter de poort.
+        # Gap J12: the user's zero point. Like the positions it writes to the device
+        # service's settings, and it moves the work on its way to the machine — so certainly
+        # behind the gate.
         "/api/machine/origin",
-        # Gat J11: snelheid en vermogen bijstellen tijdens een lopende job.
-        # Dit stuurt realtime bytes naar de driver; dat is de machine aanraken.
+        # Gap J11: adjusting speed and power during a running job. This sends realtime bytes
+        # to the driver; that is touching the machine.
         "/api/job/adjust",
         "/api/machine/unlock",
         "/api/machine/connect",
@@ -143,8 +140,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/rotate",
         "/api/design/assign",
         "/api/design/unassign",
-        # Besluit B2: één klik op een paletkleur. Schrijft aan de boom (de
-        # selectie verhuist) of aan de tekenkleur, dus achter dezelfde poort.
+        # Decision B2: one click on a palette colour. Writes to the tree (the selection
+        # moves) or to the drawing colour, so behind the same gate.
         "/api/design/palette",
         "/api/design/undo",
         "/api/design/redo",
@@ -152,9 +149,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/library/presets",
         "/api/library/machines",
         "/api/library/presets/{preset_id}/apply",
-        # Besluit B7: de bibliotheek uitwisselen. Uploaden en voorbeeld zijn ook
-        # POSTs — ze schrijven een bestand in de uploadmap en horen dus achter
-        # dezelfde poort als het importeren zelf.
+        # Decision B7: exchanging the library. Upload and preview are POSTs too — they write
+        # a file in the upload directory and so belong behind the same gate as the import
+        # itself.
         "/api/library/import/upload",
         "/api/library/import/preview",
         "/api/library/import",
@@ -170,8 +167,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/path",
         "/api/design/autosave/restore",
         "/api/design/nest",
-        # Rekent alleen: geeft de vorm terug als paddata, en laat de tekening
-        # met rust. Zie test_generator_preview.py.
+        # Only computes: hands the shape back as path data, and leaves the drawing alone. See
+        # test_generator_preview.py.
         "/api/design/generate/preview",
         "/api/design/generate/grid",
         "/api/design/generate/radial",
@@ -185,19 +182,18 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/library/testgrids/{grid_id}/photo",
         "/api/library/testgrids/{grid_id}/remove-from-design",
         "/api/library/testgrids/{grid_id}/presets",
-        # Gat T7: benoemde generatorinstellingen. Schrijft alleen in de
-        # bibliotheek — geen machine, geen ontwerp — maar wel in jouw
-        # bibliotheek, dus achter dezelfde poort als de rest daarvan.
+        # Gap T7: named generator settings. Writes only in the library — no machine, no
+        # design — but in *your* library, so behind the same gate as the rest of it.
         "/api/library/testgrids/recipes",
-        # Gat E5: een machineprofiel inlezen. Uploaden schrijft een bestand in
-        # de uploadmap en importeren maakt een machine aan met instellingen die
-        # bepalen waar de kop heen gaat — allebei achter de poort.
+        # Gap E5: reading a machine profile in. The upload writes a file in the upload
+        # directory and the import creates a machine with settings that decide where the head
+        # goes — both behind the gate.
         "/api/machines/import/upload",
         "/api/machines/import",
         # Rekent alleen; zie READ_ONLY_POSTS in test_write_actions.py.
         "/api/library/testgrids/preview",
-        # Tegelreeks: de plaat is groter dan het bed, dus start/align/burn/
-        # advance/cancel schrijven de reeks weg en sturen de spooler aan.
+        # Tile series: the board is bigger than the bed, so start/align/burn/advance/cancel
+        # write the series out and drive the spooler.
         "/api/tiling/start",
         "/api/tiling/align",
         "/api/tiling/burn",
@@ -210,11 +206,10 @@ def test_write_routes_are_limited_to_the_known_set(client):
         for route in client.app.routes
         for method in getattr(route, "methods", set())
     }
-    # PUT kwam erbij met `/api/library/testgrids/{grid_id}/alignment` (T4): de
-    # uitlijning van een testbord wordt in zijn geheel vervangen, niet deels
-    # bijgewerkt. Dat is verdedigbaar REST, maar het is wel de enige PUT in een
-    # API waar elke andere wijziging PATCH is — de keuze hoort bij de eigenaar
-    # van dat oppervlak, niet bij deze test.
+    # PUT arrived with `/api/library/testgrids/{grid_id}/alignment` (T4): a test board's
+    # alignment is replaced in its entirety, not partly updated. That is defensible REST, but
+    # it is the only PUT in an API where every other change is a PATCH — the choice belongs to
+    # that surface's owner, not to this test.
     assert methods <= {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
 
 

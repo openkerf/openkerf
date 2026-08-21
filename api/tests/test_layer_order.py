@@ -1,10 +1,9 @@
 """
 Lagen herordenen, sorteren, van soort wisselen, en air assist per laag.
 
-De gaten die hier gedicht worden: L1 (slepen naar een plek), L2 (graveren vóór
-snijden in één handeling), L3 (laagsoort wijzigen met behoud van de vormen), L4
-met besluit B11 (air assist alleen als de driver hem kent) en C2 (wat er buiten
-het bed of buiten het vel valt).
+The gaps closed here: L1 (dragging to a place), L2 (engraving before cutting in one
+action), L3 (changing a layer's kind while keeping the shapes), L4 with decision B11 (air
+assist only when the driver knows it) and C2 (what falls off the bed or off the sheet).
 """
 
 import pytest
@@ -23,16 +22,15 @@ def client(kernel, tmp_path):
 
 @pytest.fixture
 def drawing(kernel):
-    # De engine zet bij het opstarten een hele reeks standaardbewerkingen in de
-    # boom (bij ons filtert de snapshot die eruit zolang ze leeg zijn). Voor een
-    # test over volgorde is dat ruis: dan is "plek 1" niet de eerste laag die je
-    # ziet. Schone tak, dus.
+    # At startup the engine puts a whole series of default operations in the tree (with us
+    # the snapshot filters those out while they are empty). For a test about order that is
+    # noise: then "place 1" is not the first layer you see. So: a clean branch.
     kernel.elements.clear_operations()
     return Drawing(kernel)
 
 
 def types(kernel):
-    """De brandvolgorde zoals de boom hem heeft, zonder de `op `-prefix."""
+    """The burn order as the tree has it, without the `op ` prefix."""
     return [
         str(op.type).replace("op ", "")
         for op in kernel.elements.op_branch.children
@@ -44,11 +42,11 @@ def maak(drawing, *soorten):
     return [drawing.create_operation(soort)["id"] for soort in soorten]
 
 
-# ------------------------------------------------------- L1: naar een plek
+# ---------------------------------------------------------- L1: to a place
 
 
 def zichtbaar(drawing):
-    """De lagen zoals het paneel ze toont — dus zonder de lege standaardlagen."""
+    """The layers as the panel shows them — so without the empty default layers."""
     from openkerf_api.design import DesignReader
 
     reader = DesignReader(
@@ -62,13 +60,12 @@ def zichtbaar(drawing):
 @pytest.fixture
 def volle_boom(kernel):
     """
-    Een boom zoals hij in het echt is: mét de standaardlagen van de engine.
+    A tree as it really is: *with* the engine's default layers.
 
-    De fixture hierboven veegt die weg, en juist dáárdoor stond deze suite
-    groen terwijl verschuiven in de app niets deed. Een verse boom heeft ruim
-    tweehonderd lege `op`-knopen die het paneel niet toont; wie in knopen telt
-    in plaats van in zichtbare lagen, schuift een laag langs een buur die
-    niemand ziet. Deze fixture houdt ze dus expres staan.
+    The fixture above sweeps those away, and that is exactly why this suite stood green while
+    moving did nothing in the app. A fresh tree has well over two hundred empty `op` nodes the
+    panel does not show; anybody counting in nodes rather than in visible layers moves a layer
+    past a neighbour nobody sees. So this fixture deliberately keeps them.
     """
     return Drawing(kernel)
 
@@ -86,7 +83,7 @@ def test_moving_a_layer_down_moves_it_past_a_layer_you_can_see(volle_boom):
 
 
 def test_dragging_a_layer_lands_where_the_list_says(volle_boom):
-    """Slepen telt in de lijst waaruit je sleept, niet in knopen van de boom."""
+    """Dragging counts in the list you drag from, not in nodes of the tree."""
     drawing = volle_boom
     drawing.create_operation("engrave", label="Een")
     drawing.create_operation("cut", label="Twee")
@@ -99,11 +96,10 @@ def test_dragging_a_layer_lands_where_the_list_says(volle_boom):
 
 def test_a_layer_at_the_edge_does_not_pretend_to_move(volle_boom):
     """
-    De bovenste laag omhoog is geen beweging, en mag dat ook niet melden.
+    The top layer upwards is not a movement, and must not report one either.
 
-    Meldde hij `moved: true`, dan verversde het paneel voor niets — en erger:
-    dat was precies het signaal waarmee de kapotte versie deed alsof er iets
-    gebeurd was.
+    If it reported `moved: true`, the panel refreshed for nothing — and worse: that was
+    precisely the signal with which the broken version pretended something had happened.
     """
     drawing = volle_boom
     een = drawing.create_operation("engrave", label="Een")["id"]
@@ -126,10 +122,10 @@ def test_move_to_index_places_the_layer_there(kernel, drawing):
 
 def test_move_to_index_downwards_lands_below_the_target(kernel, drawing):
     """
-    Naar beneden slepen betekent: onder de laag komen die daar nu staat.
+    Dragging down means: coming below the layer that is there now.
 
-    Zonder dat onderscheid landt de laag er steeds één naast en loopt de lijst
-    bij het slepen een plek achter op de aanwijzer.
+    Without that distinction the layer keeps landing one place beside it and while dragging
+    the list runs a place behind the pointer.
     """
     ids = maak(drawing, "cut", "engrave", "raster")
 
@@ -164,10 +160,10 @@ def test_move_to_index_out_of_range_is_refused(drawing):
 
 
 def test_move_route_accepts_an_index(client, kernel, drawing):
-    # Via de route aanmaken, niet via de fixture: de server houdt zijn eigen
-    # `Drawing` en dus zijn eigen lijst van "door de gebruiker gemaakt". Maak
-    # je de lagen ernaast, dan kent de route ze niet als zichtbare laag en
-    # rangschik je iets wat voor de server niet in de lijst staat.
+    # Create them through the route, not through the fixture: the server keeps its own
+    # `Drawing` and therefore its own list of "made by the user". Make the layers beside it and
+    # the route does not know them as a visible layer and you are ordering something that is
+    # not in the server's list.
     ids = [
         client.post("/api/design/operations", json={"type": soort}).json()["id"]
         for soort in ("cut", "engrave")
@@ -217,11 +213,10 @@ def test_sort_puts_the_lightest_layer_of_a_kind_first(kernel, drawing):
     """
     Gat L7: binnen dezelfde soort telt de sterkte mee.
 
-    Twee snijlagen zijn niet uitwisselbaar. Een scoreerlijn op 12 % en een
-    doorsnede op 90 % horen in die volgorde: zodra het werkstuk los is, ligt het
-    niet meer stil voor de rest. Eerder keek het sorteren alleen naar het soort,
-    en dan ging een snijlaag op 5 % even hard naar achteren als een die er
-    doorheen gaat.
+    Two cut layers are not interchangeable. A score line at 12% and a through-cut at 90%
+    belong in that order: as soon as the workpiece is loose it no longer lies still for the
+    rest. The sorting used to look only at the kind, and then a cut layer at 5% went to the
+    back just as hard as one that goes through.
     """
     diep = drawing.create_operation("cut", label="Doorsnijden", speed=8, power_percent=90)
     licht = drawing.create_operation("cut", label="Scoreren", speed=40, power_percent=12)
@@ -253,7 +248,7 @@ def test_sort_route(client, kernel, drawing):
     assert types(kernel) == ["raster", "cut"]
 
 
-# ----------------------------------------------- L3: soort van een laag
+# -------------------------------------------------- L3: a layer's kind
 
 
 def test_retype_keeps_the_shapes_and_the_place(kernel, drawing):
@@ -267,9 +262,9 @@ def test_retype_keeps_the_shapes_and_the_place(kernel, drawing):
 
     assert uit["changed"] is True
     assert uit["elements"] == 1
-    # Op de plek van de oude laag: de brandvolgorde mag niet verspringen omdat je
-    # het soort bijstelt. (De engine hangt bij het tekenen zelf ook een
-    # classificatielaag in de boom, dus we toetsen de plek en niet de hele lijst.)
+    # In the old layer's place: the burn order must not jump because you adjust the kind.
+    # (While drawing, the engine also hangs a classification layer in the tree itself, so we
+    # test the place and not the whole list.)
     kinderen = [op.id for op in kernel.elements.op_branch.children]
     assert kinderen.index(uit["id"]) == uit["index"]
     assert types(kernel)[uit["index"]] == "engrave"
@@ -344,8 +339,8 @@ def test_retype_route(client, kernel, drawing):
 
 def test_air_assist_is_not_offered_without_a_driver_command(client, drawing):
     """
-    Besluit B11: wat de machine niet kan, hoort niet als schakelaar op het
-    scherm. Het dummy-apparaat heeft geen coolant-methode geclaimd.
+    Decision B11: what the machine cannot do does not belong on the screen as a switch. The
+    dummy device has claimed no coolant method.
     """
     assert drawing.air_assist_supported() is False
     # Dezelfde regel geldt voor de Z-stap per pass: het dummy-apparaat heeft
