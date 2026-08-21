@@ -1,9 +1,9 @@
 """
-Clipart zoeken in openbare collecties.
+Searching clipart in public collections.
 
-Geen netwerk in de tests: de ophaalfunctie is injecteerbaar. Dat is niet alleen
-handig maar ook nodig — een test die van Wikimedia afhangt, faalt op een dag
-zonder dat er iets stuk is.
+No network in the tests: the fetch function is injectable. That is not only handy
+but necessary — a test that depends on Wikimedia fails one day without anything
+being broken.
 """
 
 import json
@@ -21,25 +21,25 @@ WIKI_ANSWER = {
         "pages": {
             "1": {
                 "pageid": 1,
-                "title": "File:Hart.svg",
+                "title": "File:Heart.svg",
                 "imageinfo": [
                     {
                         "mime": "image/svg+xml",
-                        "url": "https://upload.wikimedia.org/hart.svg?utm_source=x",
-                        "thumburl": "https://upload.wikimedia.org/thumb/hart.png",
-                        "descriptionurl": "https://commons.wikimedia.org/wiki/File:Hart.svg",
+                        "url": "https://upload.wikimedia.org/heart.svg?utm_source=x",
+                        "thumburl": "https://upload.wikimedia.org/thumb/heart.png",
+                        "descriptionurl": "https://commons.wikimedia.org/wiki/File:Heart.svg",
                         "extmetadata": {
                             "LicenseShortName": {"value": "CC0"},
-                            "Artist": {"value": '<a href="x">Iemand</a>'},
+                            "Artist": {"value": '<a href="x">Somebody</a>'},
                         },
                     }
                 ],
             },
             "2": {
                 "pageid": 2,
-                "title": "File:Foto.jpg",
+                "title": "File:Photo.jpg",
                 "imageinfo": [
-                    {"mime": "image/jpeg", "url": "https://upload.wikimedia.org/foto.jpg"}
+                    {"mime": "image/jpeg", "url": "https://upload.wikimedia.org/photo.jpg"}
                 ],
             },
         }
@@ -50,11 +50,11 @@ CLIPART_ANSWER = {
     "payload": [
         {
             "id": 77,
-            "title": "ster",
-            "uploader": "iemand",
+            "title": "star",
+            "uploader": "somebody",
             "detail_link": "https://openclipart.org/detail/77",
             "svg": {
-                "url": "https://openclipart.org/download/77/ster.svg",
+                "url": "https://openclipart.org/download/77/star.svg",
                 "png_thumb": "https://openclipart.org/image/64px/77",
             },
         }
@@ -81,13 +81,13 @@ A_DRAWING = b"""<?xml version="1.0"?>
 A_MESSY_DRAWING = b"""<?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
   <linearGradient id="g"><stop offset="0"/></linearGradient>
-  <text x="10" y="20">hallo</text>
+  <text x="10" y="20">hello</text>
   <path d="M 10 10 L 90 10 L 90 90 Z" fill="url(#g)"/>
 </svg>"""
 
 
 def answers(**by_fragment):
-    """Een neppe ophaalfunctie: kiest een antwoord op wat er in de URL staat."""
+    """A fake fetch function: picks an answer on what the URL holds."""
 
     def fetch(url, timeout=None):
         for fragment, payload in by_fragment.items():
@@ -97,7 +97,7 @@ def answers(**by_fragment):
                 if isinstance(payload, bytes):
                     return payload
                 return json.dumps(payload).encode()
-        raise AssertionError(f"onverwachte url: {url}")
+        raise AssertionError(f"unexpected url: {url}")
 
     return fetch
 
@@ -116,7 +116,7 @@ def shop(kernel):
 
 
 def test_all_sources_come_back(shop):
-    found = shop.search("hart")
+    found = shop.search("heart")
 
     sources = {r["source"] for r in found["results"]}
     assert sources == {"Iconify", "Wikimedia Commons", "Openclipart"}
@@ -124,51 +124,51 @@ def test_all_sources_come_back(shop):
 
 
 def test_only_vectors_from_wikimedia(shop):
-    """Een JPEG uit Commons is voor een laser een heel ander gesprek."""
-    titles = [r["title"] for r in shop.search("hart", sources=["wikimedia"])["results"]]
+    """A JPEG out of Commons is a very different conversation for a laser."""
+    titles = [r["title"] for r in shop.search("heart", sources=["wikimedia"])["results"]]
 
-    assert titles == ["Hart.svg"]
+    assert titles == ["Heart.svg"]
 
 
 def test_the_tracking_tail_is_stripped(shop):
     """
-    Commons hangt `?utm_source=` achter zijn URL's. Daar struikelde de filter
-    op bestandsnaam over, en het hoort ook niet in ons ontwerp terecht te komen.
+    Commons hangs `?utm_source=` on the end of its URLs. The file-name filter
+    tripped over that, and it does not belong in our design either.
     """
-    first = shop.search("hart", sources=["wikimedia"])["results"][0]
+    first = shop.search("heart", sources=["wikimedia"])["results"][0]
 
-    assert first["svg_url"] == "https://upload.wikimedia.org/hart.svg"
+    assert first["svg_url"] == "https://upload.wikimedia.org/heart.svg"
 
 
 def test_a_source_that_answers_nonsense_says_so_plainly(kernel):
-    """Openclipart geeft bij storing HTML terug; een parse-fout helpt niemand."""
+    """On a fault Openclipart hands back HTML; a parse error helps nobody."""
     from openkerf_api.drawing import Drawing
 
     def fetch(url, timeout=None):
         if "commons" in url:
             return json.dumps(WIKI_ANSWER).encode()
-        return b"<html>onderhoud</html>"
+        return b"<html>maintenance</html>"
 
     shop = Clipart(kernel, Drawing(kernel), fetch=fetch)
 
-    assert shop.search("hart", sources=["wikimedia", "openclipart"])[
+    assert shop.search("heart", sources=["wikimedia", "openclipart"])[
         "unavailable"
     ] == {"openclipart": "gave an unexpected answer"}
 
 
 def test_the_licence_travels_along(shop):
-    """Wie lasert verkoopt wat hij snijdt; dan moet je de licentie kunnen zien."""
-    first = shop.search("hart", sources=["wikimedia"])["results"][0]
+    """People who laser sell what they cut, so the licence has to be visible."""
+    first = shop.search("heart", sources=["wikimedia"])["results"][0]
 
     assert first["license"] == "CC0"
-    # Wikimedia levert HTML in zijn metadata; dat wil niemand zien.
-    assert first["author"] == "Iemand"
+    # Wikimedia hands HTML in its metadata; nobody wants to see that.
+    assert first["author"] == "Somebody"
 
 
 def test_a_source_that_is_down_does_not_hold_up_the_rest(kernel):
     """
-    Openclipart ligt er met enige regelmaat uit. Dan hoor je te zien wat er wél
-    is, plus welke bron niet antwoordde.
+    Openclipart is down fairly regularly. Then you should see what there *is*,
+    plus which source did not answer.
     """
     shop = Clipart(
         kernel,
@@ -176,7 +176,7 @@ def test_a_source_that_is_down_does_not_hold_up_the_rest(kernel):
         fetch=answers(commons=WIKI_ANSWER, openclipart=TimeoutError()),
     )
 
-    found = shop.search("hart", sources=["wikimedia", "openclipart"])
+    found = shop.search("heart", sources=["wikimedia", "openclipart"])
 
     assert [r["source"] for r in found["results"]] == ["Wikimedia Commons"]
     assert found["unavailable"] == {"openclipart": "did not answer in time"}
@@ -189,7 +189,7 @@ def test_both_down_is_reported_not_pretended_empty(kernel):
         fetch=answers(commons=TimeoutError(), openclipart=TimeoutError()),
     )
 
-    found = shop.search("hart", sources=["wikimedia", "openclipart"])
+    found = shop.search("heart", sources=["wikimedia", "openclipart"])
 
     assert found["results"] == []
     assert set(found["unavailable"]) == {"wikimedia", "openclipart"}
@@ -200,7 +200,7 @@ def test_a_one_letter_search_is_refused(shop):
         shop.search("a")
 
 
-# ------------------------------------------------------------------ invoegen
+# ------------------------------------------------------------------ inserting
 
 
 @pytest.fixture
@@ -209,7 +209,7 @@ def inserter(kernel):
         kernel,
         Drawing(kernel),
         fetch=answers(
-            **{"hart.svg": A_DRAWING, "rommel.svg": A_MESSY_DRAWING}
+            **{"heart.svg": A_DRAWING, "mess.svg": A_MESSY_DRAWING}
         ),
     )
 
@@ -218,7 +218,7 @@ def test_inserting_places_it_at_the_size_you_asked_for(kernel, inserter):
     from meerk40t.core.units import UNITS_PER_MM
 
     result = inserter.insert(
-        "https://upload.wikimedia.org/hart.svg", width_mm=50, x_mm=20, y_mm=30
+        "https://upload.wikimedia.org/heart.svg", width_mm=50, x_mm=20, y_mm=30
     )
 
     assert result["count"] >= 1
@@ -233,20 +233,20 @@ def test_inserting_places_it_at_the_size_you_asked_for(kernel, inserter):
 
 def test_what_a_laser_cannot_do_is_reported(inserter):
     """
-    Gradiënten en tekst komen niet mee. Dat hoor je te weten voordat je
-    materiaal in de machine legt, niet erna.
+    Gradients and text do not come along. You should know that before you put
+    material in the machine, not after.
     """
-    result = inserter.insert("https://upload.wikimedia.org/rommel.svg")
+    result = inserter.insert("https://upload.wikimedia.org/mess.svg")
 
     assert any("gradients" in note for note in result["notes"])
     assert any("text" in note for note in result["notes"])
 
 
 def test_a_random_address_is_not_fetched(inserter):
-    """De server iets willekeurigs laten ophalen is een open deur."""
+    """Letting the server fetch something arbitrary is an open door."""
     for url in (
-        "https://voorbeeld.nl/iets.svg",
-        "http://upload.wikimedia.org/hart.svg",
+        "https://example.com/something.svg",
+        "http://upload.wikimedia.org/heart.svg",
         "file:///etc/passwd",
     ):
         with pytest.raises(DesignError):
@@ -255,7 +255,7 @@ def test_a_random_address_is_not_fetched(inserter):
 
 def test_an_absurd_width_is_refused(inserter):
     with pytest.raises(DesignError):
-        inserter.insert("https://upload.wikimedia.org/hart.svg", width_mm=9000)
+        inserter.insert("https://upload.wikimedia.org/heart.svg", width_mm=9000)
 
 
 def test_the_routes_work_end_to_end(kernel, tmp_path):
@@ -263,16 +263,16 @@ def test_the_routes_work_end_to_end(kernel, tmp_path):
     server.clipart.fetch = answers(
         commons=WIKI_ANSWER,
         openclipart=CLIPART_ANSWER,
-        **{"hart.svg": A_DRAWING},
+        **{"heart.svg": A_DRAWING},
     )
     with TestClient(server.build_app()) as client:
-        found = client.get("/api/clipart/search", params={"q": "hart"})
+        found = client.get("/api/clipart/search", params={"q": "heart"})
         assert found.status_code == 200
         assert found.json()["results"]
 
         made = client.post(
             "/api/clipart/insert",
-            json={"url": "https://upload.wikimedia.org/hart.svg", "width_mm": 40},
+            json={"url": "https://upload.wikimedia.org/heart.svg", "width_mm": 40},
         )
         assert made.status_code == 201
         assert client.get("/api/design").json()["elements"]
@@ -280,8 +280,8 @@ def test_the_routes_work_end_to_end(kernel, tmp_path):
 
 def test_a_very_busy_drawing_is_flagged(kernel):
     """
-    Een tekening uit een encyclopedie heeft zo duizend paden. Dat brandt niet
-    fout, maar het duurt uren — en dat weet je liever voordat je begint.
+    A drawing out of an encyclopedia easily has a thousand paths. That does not
+    burn wrong, but it takes hours — and you would rather know before you start.
     """
     from openkerf_api.drawing import Drawing
 
@@ -290,15 +290,15 @@ def test_a_very_busy_drawing_is_flagged(kernel):
         + b'<path d="M 1 1 L 9 9"/>' * 500
         + b"</svg>"
     )
-    shop = Clipart(kernel, Drawing(kernel), fetch=answers(**{"druk.svg": busy}))
+    shop = Clipart(kernel, Drawing(kernel), fetch=answers(**{"busy.svg": busy}))
 
-    result = shop.insert("https://upload.wikimedia.org/druk.svg")
+    result = shop.insert("https://upload.wikimedia.org/busy.svg")
 
     assert any("loose paths" in note for note in result["notes"])
 
 
 def watcher(kernel):
-    """Een neppe bron die onthoudt welke URL's er gevraagd zijn."""
+    """A fake source that remembers which URLs were asked for."""
     from openkerf_api.drawing import Drawing
 
     asked = []
@@ -316,13 +316,12 @@ def watcher(kernel):
 
 def test_paging_asks_the_sources_for_the_next_batch(kernel):
     """
-    Twaalf resultaten is vaak te weinig om te vinden wat je zoekt. De twee
-    bronnen tellen anders: Commons in een beginpositie, Openclipart in
-    pagina's.
+    Twelve results is often too few to find what you are after. The two sources
+    count differently: Commons in a start offset, Openclipart in pages.
     """
     shop, asked = watcher(kernel)
 
-    shop.search("hart", limit=24, page=3)
+    shop.search("heart", limit=24, page=3)
 
     assert "gsroffset=16" in next(u for u in asked if "commons" in u)
     assert "page=3" in next(u for u in asked if "openclipart" in u)
@@ -332,7 +331,7 @@ def test_paging_asks_the_sources_for_the_next_batch(kernel):
 def test_the_first_page_starts_at_the_beginning(kernel):
     shop, asked = watcher(kernel)
 
-    shop.search("hart")
+    shop.search("heart")
 
     assert "gsroffset=0" in next(u for u in asked if "commons" in u)
     assert "page=1" in next(u for u in asked if "openclipart" in u)
@@ -341,24 +340,24 @@ def test_the_first_page_starts_at_the_beginning(kernel):
 
 def test_a_half_empty_page_means_the_end(shop):
     """
-    Geen van beide API's zegt hoeveel resultaten er in totaal zijn. Een pagina
-    die niet vol raakt, is dus het eerlijkste teken dat we er zijn.
+    Neither API says how many results there are in total. So a page that does not
+    fill up is the most honest sign that we are at the end.
     """
-    found = shop.search("hart", limit=24)
+    found = shop.search("heart", limit=24)
 
     assert found["page"] == 1
     assert found["has_more"] is False
 
 
 def test_an_absurd_page_is_refused(shop):
-    for page in (0, -3, 500, "twee"):
+    for page in (0, -3, 500, "two"):
         with pytest.raises(DesignError):
-            shop.search("hart", page=page)
+            shop.search("heart", page=page)
 
 
 def test_iconify_carries_its_set_licence(shop):
-    """De licentie verschilt per iconenset en staat in hetzelfde antwoord."""
-    icon = next(r for r in shop.search("hart")["results"] if r["source"] == "Iconify")
+    """The licence differs per icon set and sits in the same answer."""
+    icon = next(r for r in shop.search("heart")["results"] if r["source"] == "Iconify")
 
     assert icon["license"] == "Apache 2.0"
     assert icon["author"] == "Pictogrammers"
@@ -366,10 +365,10 @@ def test_iconify_carries_its_set_licence(shop):
 
 def test_an_icon_gets_a_real_size_and_colour(shop):
     """
-    Iconify levert standaard een vierkantje van 1em in de tekstkleur. Zonder
-    echte maat en kleur weet de engine niet wat hij moet tekenen.
+    By default Iconify hands back a 1em square in the text colour. Without a real
+    size and colour the engine does not know what to draw.
     """
-    icon = next(r for r in shop.search("hart")["results"] if r["source"] == "Iconify")
+    icon = next(r for r in shop.search("heart")["results"] if r["source"] == "Iconify")
 
     assert "height=240" in icon["svg_url"]
     assert "color=%23000000" in icon["svg_url"]

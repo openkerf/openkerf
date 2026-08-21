@@ -1,10 +1,10 @@
 """
-Besluit B2: het palet met geheugen, en het verschil met een preset.
+Decision B2: the palette with a memory, and the difference from a preset.
 
-Twee dingen worden hier bewaakt. Ten eerste dat één klik op een kleur genoeg is
-om een vorm van laag te laten wisselen — dat is de hele winst. Ten tweede dat
-het geheugen en de herkomst gescheiden blijven: een onthouden getal mag nooit
-als "gemeten" gaan gelden.
+Two things are guarded here. First that one click on a colour is enough to move a
+shape to another layer — that is the whole gain. Second that the memory and the
+provenance stay apart: a remembered number must never come to count as
+"measured".
 """
 
 import pytest
@@ -13,13 +13,13 @@ from fastapi.testclient import TestClient
 from openkerf_api.palette import Palette, machine_key, normalise
 from openkerf_api.server import ApiServer
 
-ROOD = "#e5484d"
-BLAUW = "#0090ff"
+RED = "#e5484d"
+BLUE = "#0090ff"
 
 
 @pytest.fixture
 def server(kernel, tmp_path):
-    return ApiServer(kernel, library_path=tmp_path / "bibliotheek.db")
+    return ApiServer(kernel, library_path=tmp_path / "library.db")
 
 
 @pytest.fixture
@@ -48,40 +48,40 @@ def _op(client, operation_id):
     return next(o for o in design["operations"] if o["id"] == operation_id)
 
 
-# ------------------------------------------------------------------- opslag
+# ------------------------------------------------------------------- storage
 
 
 def test_memory_survives_a_new_store_on_the_same_file(tmp_path):
-    path = tmp_path / "palet.json"
-    Palette(path).remember("machine-1", ROOD, speed=12, power_percent=65)
+    path = tmp_path / "palette.json"
+    Palette(path).remember("machine-1", RED, speed=12, power_percent=65)
 
-    assert Palette(path).recall("machine-1", ROOD)["speed_mm_s"] == 12
+    assert Palette(path).recall("machine-1", RED)["speed_mm_s"] == 12
 
 
 def test_memory_is_per_machine(tmp_path):
-    palette = Palette(tmp_path / "palet.json")
-    palette.remember("machine-1", ROOD, speed=12, power_percent=65)
-    palette.remember("machine-2", ROOD, speed=300, power_percent=20)
+    palette = Palette(tmp_path / "palette.json")
+    palette.remember("machine-1", RED, speed=12, power_percent=65)
+    palette.remember("machine-2", RED, speed=300, power_percent=20)
 
-    assert palette.recall("machine-1", ROOD)["speed_mm_s"] == 12
-    assert palette.recall("machine-2", ROOD)["speed_mm_s"] == 300
+    assert palette.recall("machine-1", RED)["speed_mm_s"] == 12
+    assert palette.recall("machine-2", RED)["speed_mm_s"] == 300
 
 
 def test_a_half_update_keeps_the_other_half(tmp_path):
-    """Wie alleen de snelheid bijstelt, verliest het vermogen niet."""
-    palette = Palette(tmp_path / "palet.json")
-    palette.remember("m", ROOD, speed=12, power_percent=65)
-    palette.remember("m", ROOD, speed=14)
+    """Adjusting only the speed does not lose the power."""
+    palette = Palette(tmp_path / "palette.json")
+    palette.remember("m", RED, speed=12, power_percent=65)
+    palette.remember("m", RED, speed=14)
 
-    entry = palette.recall("m", ROOD)
+    entry = palette.recall("m", RED)
     assert (entry["speed_mm_s"], entry["power_percent"]) == (14, 65)
 
 
 def test_only_real_colours_are_stored(tmp_path):
-    palette = Palette(tmp_path / "palet.json")
-    assert palette.remember("m", "rood", speed=12) is None
-    assert palette.recall("m", "rood") is None
-    assert normalise("#E5484D") == ROOD
+    palette = Palette(tmp_path / "palette.json")
+    assert palette.remember("m", "red", speed=12) is None
+    assert palette.recall("m", "red") is None
+    assert normalise("#E5484D") == RED
     assert normalise("#xyzxyz") is None
 
 
@@ -104,50 +104,50 @@ def test_palette_lists_ten_colours_with_their_memory(client):
 
 def test_one_click_moves_a_shape_to_the_colour_layer(client):
     """
-    De meting uit de opdracht: van drie handelingen naar één.
+    The measurement from the brief: from three actions to one.
 
-    Drie waren het via het lagenpaneel — tabblad Lagen, de laag opzoeken, "hierin".
-    Hier is het één verzoek, en de vorm zit erna in precies één laag.
+    Three it was through the layers panel — the Layers tab, find the layer, "into
+    this". Here it is one request, and afterwards the shape is in exactly one layer.
     """
     element = _rect(client)
 
-    response = client.post("/api/design/palette", json={"color": BLAUW, "ids": [element]})
+    response = client.post("/api/design/palette", json={"color": BLUE, "ids": [element]})
 
     assert response.status_code == 200, response.text
     operation_id = response.json()["operation_id"]
     assert _layer_of(client, element) == [operation_id]
-    assert _op(client, operation_id)["color"] == BLAUW
+    assert _op(client, operation_id)["color"] == BLUE
 
 
 def test_moving_does_not_leave_the_shape_in_its_old_layer(client):
-    """Twee lagen betekent twee keer branden — daar is een verhuizing geen verhuizing."""
+    """Two layers means burning twice — then a move is not a move."""
     element = _rect(client)
-    first = client.post("/api/design/palette", json={"color": ROOD, "ids": [element]})
-    tweede = client.post("/api/design/palette", json={"color": BLAUW, "ids": [element]})
+    first = client.post("/api/design/palette", json={"color": RED, "ids": [element]})
+    second = client.post("/api/design/palette", json={"color": BLUE, "ids": [element]})
 
-    assert _layer_of(client, element) == [tweede.json()["operation_id"]]
+    assert _layer_of(client, element) == [second.json()["operation_id"]]
     assert first.json()["operation_id"] not in _layer_of(client, element)
 
 
 def test_a_fresh_layer_starts_on_what_the_colour_did_before(client, server):
     """
-    Het hele punt van B2. Zet een kleur op 42 mm/s, gooi de laag weg, klik de
-    kleur opnieuw: de nieuwe laag begint op 42, niet blanco.
+    The whole point of B2. Put a colour at 42 mm/s, throw the layer away, click
+    the colour again: the new layer starts at 42, not blank.
     """
     element = _rect(client)
-    eerste = client.post(
-        "/api/design/palette", json={"color": BLAUW, "ids": [element]}
+    first = client.post(
+        "/api/design/palette", json={"color": BLUE, "ids": [element]}
     ).json()["operation_id"]
     client.patch(
-        f"/api/design/operations/{eerste}", json={"speed": 42, "power_percent": 33}
+        f"/api/design/operations/{first}", json={"speed": 42, "power_percent": 33}
     )
-    client.delete(f"/api/design/operations/{eerste}")
+    client.delete(f"/api/design/operations/{first}")
 
-    tweede = client.post(
-        "/api/design/palette", json={"color": BLAUW, "ids": [element]}
+    second = client.post(
+        "/api/design/palette", json={"color": BLUE, "ids": [element]}
     ).json()["operation_id"]
 
-    layer = _op(client, tweede)
+    layer = _op(client, second)
     assert layer["speed"] == 42
     assert layer["power"] == 330
 
@@ -155,43 +155,43 @@ def test_a_fresh_layer_starts_on_what_the_colour_did_before(client, server):
 def test_the_strip_reports_the_memory_it_will_use(client):
     element = _rect(client)
     operation = client.post(
-        "/api/design/palette", json={"color": BLAUW, "ids": [element]}
+        "/api/design/palette", json={"color": BLUE, "ids": [element]}
     ).json()["operation_id"]
     client.patch(f"/api/design/operations/{operation}", json={"speed": 42})
 
-    onthouden = {
+    remembered = {
         c["color"]: c["memory"] for c in client.get("/api/design/palette").json()["colors"]
     }
-    assert onthouden[BLAUW]["speed_mm_s"] == 42
-    assert onthouden[ROOD] is None
+    assert remembered[BLUE]["speed_mm_s"] == 42
+    assert remembered[RED] is None
 
 
 def test_clicking_without_a_selection_sets_the_colour_for_new_work(client, server):
-    response = client.post("/api/design/palette", json={"color": BLAUW})
+    response = client.post("/api/design/palette", json={"color": BLUE})
 
     assert response.status_code == 200, response.text
     assert response.json()["operation_id"] is None
-    assert server.drawing.default_color() == BLAUW
-    assert client.get("/api/design/palette").json()["default_color"] == BLAUW
+    assert server.drawing.default_color() == BLUE
+    assert client.get("/api/design/palette").json()["default_color"] == BLUE
 
-    # En een verse vorm komt er dan ook in terecht.
+    # And a fresh shape does land in it.
     element = _rect(client)
     design = client.get("/api/design").json()
     stroke = next(e for e in design["elements"] if e["id"] == element)["stroke"]
-    assert stroke.lower() == BLAUW
+    assert stroke.lower() == BLUE
 
 
 def test_drawing_in_a_remembered_colour_seeds_the_layer_the_engine_makes(client):
     """
-    De andere helft van de belofte.
+    The other half of the promise.
 
-    Kies je een kleur zonder laag en teken je daarna, dan maakt de engine zelf
-    de laag aan — niet wij. Zonder ingreep begon die op de fabriekswaarde,
-    terwijl de gebruiker net een kleur koos waarvan hij weet wat hij ermee deed.
+    If you pick a colour with no layer and then draw, the engine creates the layer
+    itself — not us. Without an intervention that started on the factory value,
+    while the user has just picked a colour they know what they did with.
     """
     element = _rect(client)
     operation = client.post(
-        "/api/design/palette", json={"color": BLAUW, "ids": [element]}
+        "/api/design/palette", json={"color": BLUE, "ids": [element]}
     ).json()["operation_id"]
     client.patch(
         f"/api/design/operations/{operation}", json={"speed": 77, "power_percent": 22}
@@ -199,39 +199,39 @@ def test_drawing_in_a_remembered_colour_seeds_the_layer_the_engine_makes(client)
     client.post("/api/design/elements/delete", json={"ids": [element]})
     client.delete(f"/api/design/operations/{operation}")
 
-    client.post("/api/design/palette", json={"color": BLAUW})
-    verse = _rect(client, x=60)
+    client.post("/api/design/palette", json={"color": BLUE})
+    fresh = _rect(client, x=60)
 
     design = client.get("/api/design").json()
-    laag = next(
+    layer = next(
         o
         for o in design["operations"]
-        if verse in o["element_ids"] and (o["color"] or "").lower() == BLAUW
+        if fresh in o["element_ids"] and (o["color"] or "").lower() == BLUE
     )
-    assert laag["speed"] == 77
-    assert laag["power"] == 220
+    assert layer["speed"] == 77
+    assert layer["power"] == 220
 
 
 def test_a_bad_colour_is_refused(client):
-    assert client.post("/api/design/palette", json={"color": "rood"}).status_code == 409
+    assert client.post("/api/design/palette", json={"color": "red"}).status_code == 409
 
 
 def test_the_memory_is_not_a_provenance(client, server):
     """
-    Het onderscheid dat B2 expliciet maakt.
+    The distinction B2 makes explicitly.
 
-    Het palet onthoudt wat je deed; de herkomst zegt dat er iets gebrand is.
-    Een laag die zijn waarden uit het geheugen kreeg, mag dus geen herkomst
-    hebben — anders leest gewoonte als bewijs.
+    The palette remembers what you did; the provenance says something was burned.
+    So a layer that got its values out of the memory must not have a provenance —
+    otherwise habit reads as evidence.
     """
     element = _rect(client)
     operation = client.post(
-        "/api/design/palette", json={"color": BLAUW, "ids": [element]}
+        "/api/design/palette", json={"color": BLUE, "ids": [element]}
     ).json()["operation_id"]
     client.patch(f"/api/design/operations/{operation}", json={"speed": 42})
     client.delete(f"/api/design/operations/{operation}")
-    opnieuw = client.post(
-        "/api/design/palette", json={"color": BLAUW, "ids": [element]}
+    again = client.post(
+        "/api/design/palette", json={"color": BLUE, "ids": [element]}
     ).json()["operation_id"]
 
-    assert server.provenance.lookup(server.sheets.active_id, opnieuw, 42, None) is None
+    assert server.provenance.lookup(server.sheets.active_id, again, 42, None) is None
