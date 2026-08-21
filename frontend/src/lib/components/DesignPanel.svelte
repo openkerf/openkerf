@@ -399,7 +399,7 @@
 	const LAYER_TYPES = [
 		{ value: 'cut', label: t('panel.kind.cut'), noun: t('panel.kind.cutNoun') },
 		{ value: 'engrave', label: t('panel.kind.engrave'), noun: t('panel.kind.engraveNoun') },
-		{ value: 'grid', label: t('panel.kind.raster'), noun: t('panel.kind.rasterNoun') },
+		{ value: 'raster', label: t('panel.kind.raster'), noun: t('panel.kind.rasterNoun') },
 		{ value: 'dots', label: t('panel.kind.dots'), noun: t('panel.kind.dotsNoun') }
 	];
 	let newLayerNoun = $derived(
@@ -553,7 +553,7 @@
 	 */
 	function kindOf(type: string): string {
 		const kind = String(type).replace(/^op /, '');
-		return kind === 'image' ? 'grid' : kind;
+		return kind === 'image' ? 'raster' : kind;
 	}
 
 	/** Power sits at 0–1000 in the engine; the user reckons in per cent. */

@@ -205,7 +205,7 @@ export type Handlers = {
 	split: () => void;
 	fill: (on: boolean) => void;
 	corners: () => void;
-	onlyLayer: (kind: 'cut' | 'engrave' | 'grid') => void;
+	onlyLayer: (kind: 'cut' | 'engrave' | 'raster') => void;
 	assignLayer: (id: string, inside: boolean) => void;
 	toSheet: (id: string) => void;
 	editText: () => void;
@@ -413,10 +413,10 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 			run: () => h.onlyLayer('engrave')
 		},
 		{
-			id: 'layer-only-grid',
+			id: 'layer-only-raster',
 			label: t('action.onlyRaster'),
 			off: needsOne,
-			run: () => h.onlyLayer('grid')
+			run: () => h.onlyLayer('raster')
 		}
 	];
 
