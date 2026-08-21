@@ -423,7 +423,7 @@ def test_the_marks_are_burned_last(kernel):
     steps = runner.build_plan([mutator])
 
     laatste = [s for s in steps if getattr(s, "children", None)][-1]
-    assert laatste.label == "Uitlijnmerken"
+    assert laatste.label == "Alignment marks"
     assert len(laatste.children) == 1
 
 
@@ -487,7 +487,7 @@ def test_the_last_tile_burns_no_marks(kernel):
         ]
     )
 
-    assert not [s for s in steps if getattr(s, "label", None) == "Uitlijnmerken"]
+    assert not [s for s in steps if getattr(s, "label", None) == "Alignment marks"]
 
 
 def test_the_shift_puts_the_marks_on_the_bed(kernel, tmp_path):
