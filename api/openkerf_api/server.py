@@ -44,7 +44,7 @@ from .testgrid import (
     TestGridGenerator,
     is_cel_element,
     is_cel_operatie,
-    is_raster_groep,
+    is_raster_group,
     markeer_foto,
     plan_grid,
     raster_supported,
@@ -1984,7 +1984,7 @@ class ApiServer:
                 # `is_cel_operatie`.
                 if grid.get("group_id"):
                     node = self.kernel.elements.find_node(grid["group_id"])
-                    if node is not None and is_raster_groep(node):
+                    if node is not None and is_raster_group(node):
                         removed["elements"] = len(list(node.flat())) - 1
                         node.remove_node(children=True, destroy=True)
                 for cell in grid["cells"]:

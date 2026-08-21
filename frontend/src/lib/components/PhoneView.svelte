@@ -144,7 +144,7 @@
 	// The ring: one outline that carries the progress, instead of the same percentage
 	// in three shapes side by side.
 	const RADIUS = 78;
-	const OMTREK = 2 * Math.PI * RADIUS;
+	const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 	// Grids still waiting for a photo: that is the reason you are standing beside the
 	// machine with a phone. The library does not hold on to them, so we fetch them
@@ -758,8 +758,8 @@
 							class="before"
 							class:pause={quiet}
 							cx="100" cy="100" r={RADIUS}
-							stroke-dasharray="{OMTREK}"
-							stroke-dashoffset={OMTREK * (1 - progress)}
+							stroke-dasharray="{CIRCUMFERENCE}"
+							stroke-dashoffset={CIRCUMFERENCE * (1 - progress)}
 						/>
 					</svg>
 					<div class="inside">

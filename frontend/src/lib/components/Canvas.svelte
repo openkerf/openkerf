@@ -378,7 +378,7 @@
 	/** Radius and circumference of the progress ring, converted back to screen pixels. */
 	const RING_PX = 13;
 	let ringR = $derived(RING_PX * mmPerPx);
-	let ringOmtrek = $derived(2 * Math.PI * ringR);
+	let ringCircumference = $derived(2 * Math.PI * ringR);
 
 	// ── The user's zero point (gap J12) ───────────────────────────────────────
 	//
@@ -523,7 +523,7 @@
 	/** Seam lines: one segment per row or column boundary. The division is a regular
 	 *  lattice, so the segments of consecutive rows (or columns) join up into the same
 	 *  continuous line. */
-	let tegelNaden = $derived.by(() => {
+	let tileSeams = $derived.by(() => {
 		const lijnen: { x1: number; y1: number; x2: number; y2: number }[] = [];
 		for (const t of tileLayout?.tiles ?? []) {
 			const toTheRight = tilePosition.get(`${t.row},${t.column + 1}`);
@@ -780,7 +780,7 @@
 		if (drag.mode === 'rotate') {
 			const now = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX);
 			let degrees = ((now - drag.startAngle) * 180) / Math.PI;
-			// Shift klikt vast op steps from 15 graden.
+			// Shift klikt vast op steps from 15 degrees.
 			if (event.shiftKey) degrees = Math.round(degrees / 15) * 15;
 			drag.angle = degrees;
 			return;
@@ -1693,7 +1693,7 @@
 								/>
 							{/if}
 						{/each}
-						{#each tegelNaden as seam, i (i)}
+						{#each tileSeams as seam, i (i)}
 							<line
 								class="tile-seam"
 								x1={seam.x1}
@@ -2354,7 +2354,7 @@
 								cy={head[1]}
 								r={ringR}
 								vector-effect="non-scaling-stroke"
-								stroke-dasharray="{ringOmtrek * progressPart} {ringOmtrek}"
+								stroke-dasharray="{ringCircumference * progressPart} {ringCircumference}"
 								transform="rotate(-90 {head[0]} {head[1]})"
 							/>
 						{/if}

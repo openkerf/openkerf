@@ -19,6 +19,7 @@ Every script takes its origin from `OK_BASE` and falls back to
 | `seed.mjs` | puts a design with four layers, work in each of them and two awkward states (no burn along, passes) on the bed. Pure API, so it survives interface changes |
 | `i-shots.mjs` | the screenshot set per language: `node gauntlet/i-shots.mjs en\|nl` → `screenshots/i18n/<language>/` |
 | `i-overflow.mjs` | measures text that does not fit its box, per language. Elements that clip by design are listed in the script itself |
+| `docs-shots.mjs` | the pictures for the handbook: `node gauntlet/docs-shots.mjs [name-fragment]` → `docs/images/`. English, light theme, desktop 1440×900 and phone 390×844. Seeds its own drawing through the API, so a rerun gives the same picture; it does not start the laser, so there is no shot of the queue |
 | `selftest.mjs` | checks the checker: injects a contrast that is too low and fails if the measurement does not find it |
 | `i-apply.py` | moves a batch of literals out of a component into the catalogues (used for the English conversion; kept for the next language) |
 

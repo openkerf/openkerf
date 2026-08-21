@@ -165,7 +165,7 @@
 		t(form.text ? 'grid.labelLayer.caption' : 'grid.labelLayer.border')
 	);
 	/** Raster chosen on an engine that cannot convert it into laser lines. */
-	let rasterOnmogelijk = $derived(
+	let rasterImpossible = $derived(
 		form.operation === 'graveren-raster' && preview?.engine?.grid === false
 	);
 	let assen = $derived([form.row_axis, form.column_axis] as As[]);
@@ -933,7 +933,7 @@
 					</div>
 				{/if}
 
-				{#if rasterOnmogelijk}
+				{#if rasterImpossible}
 					<!-- The engine turns a grid layer into a bitmap while planning, and that
 					     converter lives in the wxPython GUI. When the server runs headless — as
 					     here — the layer throws its own shapes away and the board comes out of

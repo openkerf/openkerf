@@ -166,7 +166,7 @@ export function snapAxis(
  */
 export function snapBox(
 	box: Box,
-	verplaatsing: { dx: number; dy: number },
+	shift: { dx: number; dy: number },
 	targets: { x: SnapTarget[]; y: SnapTarget[] },
 	rasterstap: number,
 	trefafstand: number
@@ -174,14 +174,14 @@ export function snapBox(
 	const g = edgesOf(box);
 	const x = snapAxis(
 		'x',
-		[g.x0 + verplaatsing.dx, (g.x0 + g.x1) / 2 + verplaatsing.dx, g.x1 + verplaatsing.dx],
+		[g.x0 + shift.dx, (g.x0 + g.x1) / 2 + shift.dx, g.x1 + shift.dx],
 		targets.x,
 		rasterstap,
 		trefafstand
 	);
 	const y = snapAxis(
 		'y',
-		[g.y0 + verplaatsing.dy, (g.y0 + g.y1) / 2 + verplaatsing.dy, g.y1 + verplaatsing.dy],
+		[g.y0 + shift.dy, (g.y0 + g.y1) / 2 + shift.dy, g.y1 + shift.dy],
 		targets.y,
 		rasterstap,
 		trefafstand
@@ -190,8 +190,8 @@ export function snapBox(
 	if (x) guides.push(x.guide);
 	if (y) guides.push(y.guide);
 	return {
-		dx: verplaatsing.dx + (x?.delta ?? 0),
-		dy: verplaatsing.dy + (y?.delta ?? 0),
+		dx: shift.dx + (x?.delta ?? 0),
+		dy: shift.dy + (y?.delta ?? 0),
 		guides
 	};
 }

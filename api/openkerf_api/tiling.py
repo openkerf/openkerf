@@ -313,30 +313,30 @@ def alignment(
     if abs(board) < 1e-6 or abs(measured) < 1e-6:
         raise TilingError("The two tapped points lie on top of each other.")
 
-    afwijking = abs(measured) - abs(board)
-    if abs(afwijking) > tolerance_mm:
+    off_by = abs(measured) - abs(board)
+    if abs(off_by) > tolerance_mm:
         raise TilingError(
-            f"These two points lie {abs(afwijking):.1f} mm "
-            f"{'further' if afwijking > 0 else 'closer'} "
+            f"These two points lie {abs(off_by):.1f} mm "
+            f"{'further' if off_by > 0 else 'closer'} "
             "apart than the marks I burned. Did you tap the right mark?"
         )
 
     angle = math.atan2(measured.imag, measured.real) - math.atan2(board.imag, board.real)
     angle = math.atan2(math.sin(angle), math.cos(angle))
-    graden = math.degrees(angle)
-    if abs(graden) > max_angle_deg:
+    degrees = math.degrees(angle)
+    if abs(degrees) > max_angle_deg:
         raise TilingError(
-            f"The plate would lie {abs(graden):.1f}° askew. That is more than a "
+            f"The plate would lie {abs(degrees):.1f}° askew. That is more than a "
             "plate *can* lie askew without you seeing it — the wrong mark was "
             "probably tapped. Lay it straight and tap again."
         )
 
-    gedraaid = complex(p1.x_mm, p1.y_mm) * complex(math.cos(angle), math.sin(angle))
+    turned = complex(p1.x_mm, p1.y_mm) * complex(math.cos(angle), math.sin(angle))
     return Alignment(
-        angle_deg=graden,
-        dx_mm=m1.x_mm - gedraaid.real,
-        dy_mm=m1.y_mm - gedraaid.imag,
-        distance_error_mm=afwijking,
+        angle_deg=degrees,
+        dx_mm=m1.x_mm - turned.real,
+        dy_mm=m1.y_mm - turned.imag,
+        distance_error_mm=off_by,
     )
 
 

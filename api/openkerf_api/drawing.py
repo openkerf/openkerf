@@ -333,7 +333,7 @@ class Drawing:
     def update_text(self, element_id: str, **fields) -> dict:
         """
         Updating existing vector text: contents, font, height,
-        spatiëring of uitlijning.
+        spatiëring of alignment.
 
         The engine keeps the source on the node and re-renders, so text does not have to
         be deleted and placed again.
@@ -1846,7 +1846,7 @@ class Drawing:
     # Half a millimetre of tolerance. Lying exactly on the edge is not a mistake — that
     # is a shape filling the sheet — and measurement noise in the bounding box must not
     # produce a red outline on work that simply fits.
-    RAND_SPELING = 0.5
+    EDGE_SLACK = 0.5
 
     def bed_mm(self) -> tuple[float, float] | None:
         """The bed size of the active machine in millimetres."""
@@ -1997,7 +1997,7 @@ class Drawing:
 
     @classmethod
     def _outside(cls, x0, y0, x1, y1, frame) -> bool:
-        tolerance = cls.RAND_SPELING
+        tolerance = cls.EDGE_SLACK
         return (
             x0 < -tolerance
             or y0 < -tolerance
@@ -2467,7 +2467,7 @@ class Drawing:
 # The difference in thickness at which a setting is still "from the same board". Half a
 # millimetre covers the spread of sheet material; above that it is a different thickness
 # and therefore a different cut.
-DIKTE_SPELING = 0.51
+THICKNESS_SLACK = 0.51
 
 
 def _mm_tekst(value) -> str:
@@ -2523,7 +2523,7 @@ def _layer_warnings(entry: dict | None, sheet: dict | None) -> list[dict]:
     elif (
         vel_dikte is not None
         and entry.get("thickness_mm") is not None
-        and abs(float(entry["thickness_mm"]) - float(vel_dikte)) >= DIKTE_SPELING
+        and abs(float(entry["thickness_mm"]) - float(vel_dikte)) >= THICKNESS_SLACK
     ):
         warnings.append(
             {

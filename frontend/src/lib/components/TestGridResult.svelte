@@ -129,7 +129,7 @@
 		})();
 	});
 
-	// ------------------------------------------------------------- uitlijning
+	// ------------------------------------------------------------- alignment
 	//
 	// A photo of a board is never a tidy crop: you state at an angle above it, with
 	// the board half in frame. Without correction the overlay lies beside the burned

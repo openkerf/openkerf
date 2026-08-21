@@ -650,10 +650,10 @@ def cell_polygon(grid: dict, cell: dict) -> list[tuple[float, float]]:
 # not only at the id but also at whether the node found really is this cell. The same
 # requirement `DesignReader._grid_for` makes when marking.
 
-MAAT_SPELING_MM = 0.6  # de lijndikte telt mee in `bounds`
+SIZE_SLACK_MM = 0.6  # de lijndikte telt mee in `bounds`
 
 
-def is_raster_groep(node) -> bool:
+def is_raster_group(node) -> bool:
     return str(getattr(node, "type", "")).startswith("group")
 
 
@@ -680,7 +680,7 @@ def is_cel_element(node, cell: dict) -> bool:
     x0, y0, x1, y1 = (float(v) / UNITS_PER_MM for v in bounds)
     gemeten = (x0, y0, x1 - x0, y1 - y0)
     verwacht = (cell["x_mm"], cell["y_mm"], cell["width_mm"], cell["height_mm"])
-    return all(abs(a - b) <= MAAT_SPELING_MM for a, b in zip(gemeten, verwacht))
+    return all(abs(a - b) <= SIZE_SLACK_MM for a, b in zip(gemeten, verwacht))
 
 
 def markeer_foto(grid: dict, path, row: int, column: int) -> bytes:
