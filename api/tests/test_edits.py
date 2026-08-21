@@ -58,7 +58,7 @@ def test_move_accepts_negative_and_fractional_millimetres(kernel, editor):
 
 def test_move_rejects_nonsense(kernel, editor):
     element_id = first_id(kernel)
-    for bad in ("kaas", None, float("inf")):
+    for bad in ("cheese", None, float("inf")):
         with pytest.raises(DesignError):
             editor.move(element_id, bad, 0)
 
@@ -124,11 +124,11 @@ def test_undo_reports_that_ids_are_no_longer_valid(kernel, editor):
 
 def test_undo_steps_back_one_edit_and_not_two(kernel, editor):
     """
-    Upstream #3258, afgevangen in `_undo_target`.
+    Upstream #3258, caught in `_undo_target`.
 
-    De stapel bewaart per wijziging de toestand *vóór* die wijziging, maar
-    `Undo.undo()` herstelt er nog eentje onder. Gemeten op de oude code: drie
-    getekende vormen, één keer ongedaan maken, en er stond er nog één.
+    The stack keeps, per change, the state *before* that change, but `Undo.undo()`
+    restores one below that. Measured on the old code: three shapes drawn, one
+    undo, and one was left.
     """
     from openkerf_api.drawing import Drawing
 
@@ -143,7 +143,7 @@ def test_undo_steps_back_one_edit_and_not_two(kernel, editor):
 
 
 def test_undo_and_redo_land_on_the_same_states(kernel, editor):
-    """Wat één keer terug gaat, komt met één keer vooruit weer terug."""
+    """What goes back once comes back with one step forward."""
     from openkerf_api.drawing import Drawing
 
     drawing = Drawing(kernel)
@@ -162,31 +162,31 @@ def test_undo_and_redo_land_on_the_same_states(kernel, editor):
 
 def test_undo_puts_a_shape_back_in_the_layer_it_came_from(kernel, editor):
     """
-    De vraag van Jelle: valt een laagtoewijzing onder ongedaan maken?
+    Jelle's question: does a layer assignment fall under undo?
 
-    Ja — maar op de oude code sprong de vorm niet naar de vórige laag terug
-    maar naar die van de handeling dáárvoor, en als dat dezelfde was, leek
-    ongedaan maken niets te doen.
+    It does — but on the old code the shape did not jump back to the *previous*
+    layer but to the one of the action before that, and if that was the same one,
+    undo looked as if it did nothing.
     """
     from openkerf_api.drawing import Drawing
 
     drawing = Drawing(kernel)
     element_id = first_id(kernel)
-    rood = drawing.paint([element_id], "#ff0000", None)["operation_id"]
+    red = drawing.paint([element_id], "#ff0000", None)["operation_id"]
     drawing.paint([element_id], "#0000ff", None)
 
-    def in_laag(operation_id):
+    def in_layer(operation_id):
         return any(
             element_id in op["element_ids"]
             for op in DesignReader(kernel).snapshot()["operations"]
             if op["id"] == operation_id
         )
 
-    assert in_laag(rood) is False
+    assert in_layer(red) is False
 
     editor.undo()
 
-    assert in_laag(rood) is True
+    assert in_layer(red) is True
 
 
 def test_undo_at_the_bottom_of_the_stack_is_not_an_error(kernel, editor):
@@ -217,7 +217,7 @@ def test_bad_payload_is_a_409(kernel, editor, client):
     element_id = first_id(kernel)
 
     response = client.post(
-        "/api/design/move", json={"ids": [element_id], "dx_mm": "kaas", "dy_mm": 0}
+        "/api/design/move", json={"ids": [element_id], "dx_mm": "cheese", "dy_mm": 0}
     )
 
     assert response.status_code == 409
@@ -278,14 +278,14 @@ def test_rotate_changes_the_bounding_box(kernel, editor):
 
 def test_rotate_rejects_nonsense(kernel, editor):
     with pytest.raises(DesignError):
-        editor.rotate(first_id(kernel), "scheef")
+        editor.rotate(first_id(kernel), "skewed")
 
 
 def test_pose_reports_the_angle_and_the_mirroring(kernel, editor):
     """
-    De stand van een vorm is een feit uit de engine, geen optelsom van het
-    paneel. Zonder deze twee velden kan de rechterbalk wel draaien maar niet
-    tonen waar je staat.
+    The pose of a shape is a fact from the engine, not a sum the panel keeps.
+    Without these two fields the right-hand bar can rotate but cannot show where
+    you are.
     """
     element_id = first_id(kernel)
     assert pose(kernel, element_id) == {"angle_deg": 0.0, "mirrored": False}
@@ -297,9 +297,9 @@ def test_pose_reports_the_angle_and_the_mirroring(kernel, editor):
 
 def test_pose_does_not_call_mirroring_a_half_turn(kernel, editor):
     """
-    `matrix.rotation` telt een spiegeling als 180° mee. Een vorm die alleen
-    gespiegeld is, staat niet op zijn kop, dus die halve slag hoort er weer af
-    voordat het getal in beeld komt.
+    `matrix.rotation` counts a mirroring as 180°. A shape that is only mirrored is
+    not upside down, so that half turn has to come off again before the number
+    reaches the screen.
     """
     element_id = first_id(kernel)
     DrawingMirror = __import__(
@@ -312,14 +312,13 @@ def test_pose_does_not_call_mirroring_a_half_turn(kernel, editor):
 
 def test_absolute_rotation_is_a_destination_not_a_step(kernel, editor):
     """
-    Hetzelfde getal twee keer moet hetzelfde beeld geven. Dat is de hele reden
-    dat het hoekveld intikbaar mag zijn.
+    The same number twice has to give the same picture. That is the whole reason
+    the angle field may be typed into.
 
-    De engine heeft hier zelf `rotate -a` voor, maar die rekent
-    `start - doel` waar `doel - start` bedoeld is en verdubbelt daardoor de
-    hoek bij elke aanroep; vandaar dat het verschil in onze laag wordt
-    uitgerekend. Deze test valt om zodra upstream dat repareert én wij het weer
-    gaan gebruiken.
+    The engine has `rotate -a` for this itself, but that computes `start - target`
+    where `target - start` is meant and so doubles the angle on every call; hence
+    the difference is worked out in our layer. This test falls over as soon as
+    upstream repairs that *and* we start using it again.
     """
     element_id = first_id(kernel)
     before = bounds_mm(kernel, element_id)
@@ -331,7 +330,7 @@ def test_absolute_rotation_is_a_destination_not_a_step(kernel, editor):
     editor.rotate(element_id, 40, absolute=True)
     assert bounds_mm(kernel, element_id) == once
 
-    # En terug naar nul is echt terug: geen drift over een reeks draaiingen.
+    # And back to zero is really back: no drift over a series of rotations.
     editor.rotate(element_id, 0, absolute=True)
     assert bounds_mm(kernel, element_id) == before
 
@@ -431,34 +430,34 @@ def test_assign_over_http(kernel, editor, client):
     assert response.json()["added"] == 1
 
 
-def _aantal(c):
+def _count(c):
     return len(c.get("/api/design").json()["elements"])
 
 
-@pytest.mark.parametrize("vooraf", [0, 25])
-def test_undo_after_delete_regardless_of_history_length(kernel, vooraf):
+@pytest.mark.parametrize("beforehand", [0, 25])
+def test_undo_after_delete_regardless_of_history_length(kernel, beforehand):
     """
-    De stapel van de engine houdt 20 toestanden vast (`Undo.levels`). Zit hij
-    vol, dan gooit `validate()` de oudste eruit en schuiven alle indexen op —
-    terwijl `undo()` zijn doelindex al vóór die validate berekend heeft.
+    The engine's stack holds 20 states (`Undo.levels`). Once it is full,
+    `validate()` throws the oldest out and every index shifts — while `undo()` has
+    already worked out its target index before that validate.
     """
     with TestClient(ApiServer(kernel).build_app()) as c:
-        for i in range(vooraf):
+        for i in range(beforehand):
             c.post(
                 "/api/design/elements",
                 json={"type": "rect", "x_mm": 1 + i, "y_mm": 200, "width_mm": 2, "height_mm": 2},
             )
-        basis = _aantal(c)
+        base = _count(c)
         for i in range(3):
             c.post(
                 "/api/design/elements",
                 json={"type": "rect", "x_mm": 10 + i * 30, "y_mm": 10, "width_mm": 20, "height_mm": 20},
             )
-        assert _aantal(c) == basis + 3
+        assert _count(c) == base + 3
         ids = [e["id"] for e in c.get("/api/design").json()["elements"]]
         c.post("/api/design/elements/delete", json={"ids": [ids[-1]]})
-        assert _aantal(c) == basis + 2
+        assert _count(c) == base + 2
 
         c.post("/api/design/undo", json={})
 
-        assert _aantal(c) == basis + 3
+        assert _count(c) == base + 3
