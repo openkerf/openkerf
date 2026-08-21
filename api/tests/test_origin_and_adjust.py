@@ -70,8 +70,8 @@ def test_shifting_moves_the_work_and_puts_it_back(kernel, client):
     drawing = Drawing(kernel)
     voor = [tuple(node.bounds) for node in kernel.elements.elems()]
 
-    with drawing.verschoven({"x_mm": 100, "y_mm": 50}) as verschoof:
-        assert verschoof is True
+    with drawing.shifted({"x_mm": 100, "y_mm": 50}) as shift:
+        assert shift is True
         tijdens = [tuple(node.bounds) for node in kernel.elements.elems()]
 
     na = [tuple(node.bounds) for node in kernel.elements.elems()]
@@ -95,7 +95,7 @@ def test_shift_is_undone_even_when_the_body_raises(kernel, client):
     voor = [tuple(node.bounds) for node in kernel.elements.elems()]
 
     with pytest.raises(RuntimeError):
-        with drawing.verschoven({"x_mm": 100, "y_mm": 50}):
+        with drawing.shifted({"x_mm": 100, "y_mm": 50}):
             raise RuntimeError("plannen mislukt")
 
     na = [tuple(node.bounds) for node in kernel.elements.elems()]
@@ -114,7 +114,7 @@ def test_shift_does_not_touch_the_undo_history(kernel, client):
     drawing = Drawing(kernel)
     diep = len(kernel.elements.undo._undo_stack)
 
-    with drawing.verschoven({"x_mm": 40, "y_mm": 40}):
+    with drawing.shifted({"x_mm": 40, "y_mm": 40}):
         pass
 
     assert len(kernel.elements.undo._undo_stack) == diep
@@ -152,49 +152,50 @@ def test_bounds_report_measures_the_bed_from_the_origin(client):
 
 def test_the_cutcode_that_reaches_the_machine_carries_the_offset(kernel, client):
     """
-    Het bewijs dat J12 iets doet: niet de boom maar de **cutcode** telt.
+    The proof that J12 does something: it is not the tree but the **cutcode** that
+    counts.
 
-    Dat is wat de spooler de driver in duwt, en het is het enige punt waarop je
-    kunt controleren of het nulpunt de machine ook echt bereikt. Zonder deze
-    test zou een verschuiving die net ná het bouwen van de cutcode wordt
-    teruggedraaid er van buiten precies hetzelfde uitzien — en niets doen.
+    That is what the spooler pushes into the driver, and it is the only point at
+    which you can check whether the origin really reaches the machine. Without this
+    test a shift that is undone just *after* the cutcode is built would look exactly
+    the same from the outside — and do nothing.
     """
     from openkerf_api.drawing import Drawing
 
-    operatie = client.post("/api/design/operations", json={"type": "cut"}).json()["id"]
-    vorm = _rect(client, x_mm=10, y_mm=10, width_mm=30, height_mm=20)
-    client.post("/api/design/assign", json={"ids": [vorm], "operation_id": operatie})
+    operation = client.post("/api/design/operations", json={"type": "cut"}).json()["id"]
+    shape = _rect(client, x_mm=10, y_mm=10, width_mm=30, height_mm=20)
+    client.post("/api/design/assign", json={"ids": [shape], "operation_id": operation})
     drawing = Drawing(kernel)
 
-    def hoeken(oorsprong):
-        with drawing.verschoven(oorsprong):
+    def corners(origin):
+        with drawing.shifted(origin):
             kernel.console("plan clear copy preprocess validate blob preopt optimize\n")
             code = list(kernel.planner.default_plan.plan)[0]
-            punten = [p for cut in code.flat() for p in (cut.start, cut.end)]
+            points = [p for cut in code.flat() for p in (cut.start, cut.end)]
             return (
-                min(p[0] for p in punten),
-                min(p[1] for p in punten),
+                min(p[0] for p in points),
+                min(p[1] for p in points),
             )
 
-    x0, y0 = hoeken(None)
-    x1, y1 = hoeken({"x_mm": 100, "y_mm": 60})
+    x0, y0 = corners(None)
+    x1, y1 = corners({"x_mm": 100, "y_mm": 60})
 
-    # De native eenheid van dit apparaat doet er niet toe; het verschil moet
-    # exact de verschuiving zijn, omgerekend in diezelfde eenheid.
-    schaal = (x1 - x0) / 100
-    assert schaal > 0
-    assert (y1 - y0) / 60 == pytest.approx(schaal, rel=1e-6)
+    # The native unit of this device does not matter; the difference has to be
+    # exactly the shift, converted into that same unit.
+    scale = (x1 - x0) / 100
+    assert scale > 0
+    assert (y1 - y0) / 60 == pytest.approx(scale, rel=1e-6)
 
 
-# --------------------------------------------------- bijstellen tijdens de job
+# ------------------------------------------------- adjusting during the job
 
 
 def test_ruida_cannot_adjust_and_says_so(kernel, client):
     """
-    Gat J11. Alleen de grbl-driver heeft realtime overrides; de Ruida zet
-    snelheid en vermogen per cut-segment uit de settings. Wat de machine niet
-    kan, hoort geen knop te krijgen — en de route moet het weigeren, want de
-    UI is een advies en curl trekt zich daar niets van aan.
+    Gap J11. Only the grbl driver has realtime overrides; the Ruida sets speed and
+    power per cut segment out of the settings. What the machine cannot do should
+    not get a button — and the route has to refuse it, because the UI is advice and
+    curl takes no notice of it.
     """
     caps = client.get("/api/capabilities").json()["adjust"]
     assert caps == {"power": False, "speed": False}
@@ -208,7 +209,7 @@ def test_ruida_cannot_adjust_and_says_so(kernel, client):
 
 
 def test_adjustment_is_offered_when_the_driver_has_it(kernel):
-    """Een driver die het wél kan, krijgt de knoppen — en de factor komt aan."""
+    """A driver that *can* do it gets the buttons — and the factor arrives."""
 
     class Driver:
         power_scale = 1.0
@@ -250,12 +251,12 @@ def test_adjustment_is_offered_when_the_driver_has_it(kernel):
 
 def test_the_popup_coolant_method_does_not_count_as_air_assist(kernel):
     """
-    Gat L8. De engine kent drie coolant-methoden; twee zijn grbl-only en de
-    derde ("popup") stuurt niets naar de laser maar roept `kernel.yesno` — en
-    dat is buiten de wx-GUI een `input()` op stdin. Headless staat de
-    spoolerthread dan te wachten op een toets die niemand indrukt.
+    Gap L8. The engine knows three coolant methods; two are grbl-only and the
+    third ("popup") sends nothing to the laser but calls `kernel.yesno` — and
+    outside the wx GUI that is an `input()` on stdin. Headless, the spooler thread
+    then stands waiting for a key nobody presses.
 
-    Een schakelaar die de job laat hangen is erger dan geen schakelaar.
+    A switch that leaves the job hanging is worse than no switch.
     """
     from openkerf_api.drawing import Drawing
 
@@ -267,8 +268,8 @@ def test_the_popup_coolant_method_does_not_count_as_air_assist(kernel):
     kernel.root.coolant.claim_coolant(kernel.device, "popup")
 
     assert kernel.root.coolant.get_device_function(kernel.device) is not None, (
-        "de engine claimt hem wel"
+        "the engine does claim it"
     )
     assert drawing.air_assist_supported() is False, (
-        "maar hij schakelt niets, dus wij bieden hem niet aan"
+        "but it switches nothing, so we do not offer it"
     )

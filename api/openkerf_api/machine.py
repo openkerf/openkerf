@@ -368,7 +368,7 @@ class MachineControl:
             return None
         return (float(mm[0]), float(mm[1]))
 
-    # ------------------------------------------- gebruikersoorsprong (J12)
+    # ----------------------------------------------- user origin (J12)
     #
     # LightBurn has Set Origin / Clear Origin / Go to Origin: you put a zero point on your
     # workpiece and the work burns from there. That is the operation when aligning on an

@@ -56,8 +56,8 @@ def test_moving_a_corner_moves_only_that_corner(client, rect):
 
 def test_a_moved_rectangle_becomes_a_path_but_keeps_its_layer(client, rect):
     """
-    Een rechthoek is parameters, geen punten. Wordt hij een pad, dan moet de
-    bewerking mee — anders brandt hij niet meer mee zonder dat iemand dat ziet.
+    A rectangle is parameters, not points. If it becomes a path, the operation has
+    to come along — otherwise it stops burning without anybody seeing it.
     """
     operation = client.post(
         "/api/design/operations", json={"type": "cut", "label": "Cut"}
@@ -75,7 +75,7 @@ def test_a_moved_rectangle_becomes_a_path_but_keeps_its_layer(client, rect):
 
 
 def test_a_path_keeps_its_identity(client):
-    """Een pad hoeft niet vervangen te worden, dus houdt het zijn id."""
+    """A path does not have to be replaced, so it keeps its id."""
     line = client.post(
         "/api/design/elements",
         json={"type": "line", "x1_mm": 0, "y1_mm": 0, "x2_mm": 20, "y2_mm": 0},

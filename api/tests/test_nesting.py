@@ -40,13 +40,13 @@ def test_nesting_pulls_scattered_shapes_together(client):
     assert response.status_code == 200
     placed = boxes(client)
     spread = max(b[2] for b in placed.values()) - min(b[0] for b in placed.values())
-    assert spread < 80, "de vormen liggen nog steeds ver uit elkaar"
+    assert spread < 80, "the shapes are still far apart"
 
 
 def test_nested_shapes_do_not_touch(client):
     """
-    Twee sneden die elkaar raken zijn één snede. De marge staat er om de
-    snijbreedte en het brandrandje heen, dus die moet echt overblijven.
+    Two cuts that touch each other are one cut. The margin is there to hold the
+    kerf and the scorch edge, so it really has to be left over.
     """
     ids = [a_rect(client, 10, 10, 30, 20), a_rect(client, 100, 100, 25, 40)]
     margin = 4
@@ -66,7 +66,7 @@ def test_nesting_wraps_to_a_new_row_beyond_the_bed(client):
 
     placed = boxes(client)
     tops = {round(b[1], 1) for b in placed.values()}
-    assert len(tops) > 1, "alles staat op één regel, breder dan het bed"
+    assert len(tops) > 1, "everything is on one row, wider than the bed"
 
 
 def test_nesting_one_shape_is_refused(client):
@@ -110,7 +110,7 @@ def test_a_closed_path_returns_to_its_start(client):
 
 
 def test_a_control_point_bends_the_line(client):
-    """Een punt van vier getallen trekt de lijn ernaartoe krom."""
+    """A point of four numbers bends the line towards it."""
     straight = client.post(
         "/api/design/path", json={"points": [[0, 0], [40, 0]]}
     ).json()["ids"][0]
@@ -132,52 +132,52 @@ def test_a_malformed_point_is_refused(client):
     assert response.status_code == 409
 
 
-# ------------------------------------------------------- een groep is één ding
+# ----------------------------------------------------- a group is one thing
 
 
 def test_nesting_moves_a_group_as_one_thing(client):
     """
-    Wat gegroepeerd is, houdt onderling exact zijn plek.
+    What is grouped keeps its place exactly, relative to itself.
 
-    Het nestte élk element los, dus een tandwiel van vier vormen — of een
-    testbord van negen vakjes — kwam er als losse onderdelen in nette rijen uit.
+    It nested *every* element separately, so a gear of four shapes — or a test
+    board of nine squares — came out as loose parts in tidy rows.
     """
-    links = a_rect(client, 5, 5, 20, 10)
-    rechts = a_rect(client, 40, 5, 20, 10)
-    client.post("/api/design/group", json={"ids": [links, rechts]})
-    los = a_rect(client, 5, 200, 30, 30)
+    left = a_rect(client, 5, 5, 20, 10)
+    right = a_rect(client, 40, 5, 20, 10)
+    client.post("/api/design/group", json={"ids": [left, right]})
+    loose = a_rect(client, 5, 200, 30, 30)
 
-    voor = boxes(client)
-    onderling = [
-        voor[rechts][0] - voor[links][0],
-        voor[rechts][1] - voor[links][1],
+    before = boxes(client)
+    relative = [
+        before[right][0] - before[left][0],
+        before[right][1] - before[left][1],
     ]
 
-    antwoord = client.post(
-        "/api/design/nest", json={"ids": [links, rechts, los], "margin_mm": 3}
+    answer = client.post(
+        "/api/design/nest", json={"ids": [left, right, loose], "margin_mm": 3}
     )
-    assert antwoord.status_code == 200
+    assert answer.status_code == 200
 
-    na = boxes(client)
-    assert [na[rechts][0] - na[links][0], na[rechts][1] - na[links][1]] == pytest.approx(
-        onderling
+    after = boxes(client)
+    assert [after[right][0] - after[left][0], after[right][1] - after[left][1]] == pytest.approx(
+        relative
     )
-    # De groep is als geheel verhuisd — dat is wat nesten hoort te doen.
-    assert na[los][1] == pytest.approx(na[links][1], abs=0.1) or na[los] != voor[los]
+    # The group moved as a whole — that is what nesting should do.
+    assert after[loose][1] == pytest.approx(after[left][1], abs=0.1) or after[loose] != before[loose]
 
 
 def test_one_group_and_one_shape_are_two_units(client):
     """
-    Twee vormen die samen één groep zijn, tellen als één ding.
+    Two shapes that together are one group count as one thing.
 
-    Anders zou "nest deze twee" op een gegroepeerd paar zeggen dat het er twee
-    zijn en het paar alsnog uit elkaar trekken.
+    Otherwise "nest these two" on a grouped pair would say there are two of them
+    and pull the pair apart anyway.
     """
     a = a_rect(client, 5, 5)
     b = a_rect(client, 40, 5)
     client.post("/api/design/group", json={"ids": [a, b]})
 
-    antwoord = client.post("/api/design/nest", json={"ids": [a, b], "margin_mm": 3})
+    answer = client.post("/api/design/nest", json={"ids": [a, b], "margin_mm": 3})
 
-    assert antwoord.status_code == 409
-    assert "at least two" in antwoord.json()["detail"]
+    assert answer.status_code == 409
+    assert "at least two" in answer.json()["detail"]

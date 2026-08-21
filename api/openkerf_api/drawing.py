@@ -1862,10 +1862,10 @@ class Drawing:
         except Exception:
             return None
 
-    # ------------------------------------------- gebruikersoorsprong (J12)
+    # ----------------------------------------------- user origin (J12)
 
     @contextmanager
-    def verschoven(self, oorsprong):
+    def shifted(self, origin):
         """
         Putting the whole design aside for a moment, while it goes into the machine.
 
@@ -1883,8 +1883,8 @@ class Drawing:
         The shift is undone in a `finally`: if the planning breaks, the design must not be
         left behind shifted.
         """
-        dx = float((oorsprong or {}).get("x_mm") or 0.0)
-        dy = float((oorsprong or {}).get("y_mm") or 0.0)
+        dx = float((origin or {}).get("x_mm") or 0.0)
+        dy = float((origin or {}).get("y_mm") or 0.0)
         if not dx and not dy:
             yield False
             return

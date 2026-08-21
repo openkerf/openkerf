@@ -539,7 +539,7 @@ class ApiServer:
                 # Gap J12: when a zero point is set, the work goes into the machine from
                 # there. The shift lives only while the plan is being built; after that the
                 # drawing is back where it was.
-                with self.drawing.verschoven(self.motion.origin()):
+                with self.drawing.shifted(self.motion.origin()):
                     return self.commands.start_job(sheet.get("name"))
 
             return act(run)

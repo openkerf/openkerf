@@ -735,7 +735,7 @@ class TileRun:
         # Two shifts on top of each other is a mistake you only see on material: the tile
         # matrix already does what the zero point would do, and it is measured rather than
         # set.
-        with self.drawing.verschoven(None):
+        with self.drawing.shifted(None):
             self.runner.start_job(f"Tegel {index + 1}", mutators=[mutator])
         data["burned"] = sorted(set(data.get("burned", [])) | {index})
         self._write(data)
