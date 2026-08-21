@@ -50,6 +50,7 @@ function context(over: Partial<Context> = {}): Context {
 		layerNumbers: true,
 		empty: false,
 		splittable: { shapes: 0, pieces: 0 },
+		under: [],
 		...over
 	};
 }
@@ -112,6 +113,57 @@ test('a keystroke reads as the combo that is in the table', () => {
 	// the shortcut works on one keyboard layout and not on the next.
 	assert.equal(read({ shiftKey: true, key: '!' }), 'shift+1');
 	assert.equal(read({ shiftKey: true, key: '1' }), 'shift+1');
+});
+
+test('what lies under the pointer is offered as a list, in order', () => {
+	// The pile as the canvas hands it over: topmost first.
+	const under = [
+		{ id: 'a', label: 'Rectangle', selected: true },
+		{ id: 'b', label: 'Circle', selected: false },
+		{ id: 'c', label: 'Text “Openkerf”', selected: false }
+	];
+	const group = rows(objectMenu(context({ under }), HANDLERS)).find(
+		(row) => row.id === 'under-pointer'
+	);
+
+	assert.ok(group, 'no list of what is under the pointer');
+	assert.deepEqual(
+		group.items.map((row: { label: string }) => row.label),
+		['Rectangle', 'Circle', 'Text “Openkerf”']
+	);
+	// The one you have now is ticked; without that the list says nothing about
+	// where you are in the pile.
+	assert.deepEqual(
+		group.items.map((row: { on?: boolean }) => Boolean(row.on)),
+		[true, false, false]
+	);
+});
+
+test('one shape under the pointer is not a choice', () => {
+	for (const under of [[], [{ id: 'a', label: 'Rectangle', selected: true }]]) {
+		const rows_ = rows(objectMenu(context({ under }), HANDLERS));
+		assert.equal(
+			rows_.find((row) => row.id === 'under-pointer'),
+			undefined,
+			`a list appeared for ${under.length} shape(s) under the pointer`
+		);
+	}
+});
+
+test('picking from that list selects exactly that shape', () => {
+	const picked: string[] = [];
+	const handlers = { ...HANDLERS, selectOne: (id: string) => picked.push(id) } as Handlers;
+	const under = [
+		{ id: 'top', label: 'Rectangle', selected: true },
+		{ id: 'below', label: 'Circle', selected: false }
+	];
+
+	const group = rows(objectMenu(context({ under }), handlers)).find(
+		(row) => row.id === 'under-pointer'
+	);
+	group.items[1].run();
+
+	assert.deepEqual(picked, ['below']);
 });
 
 test('a disabled row always says why', () => {

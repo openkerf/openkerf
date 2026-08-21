@@ -4,7 +4,7 @@
 	import { page } from '$app/stores';
 	import { jobBusy, jobPhase, machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
-	import { DesignStore, isDesignSignal } from '$lib/design.svelte';
+	import { DesignStore, elementName, isDesignSignal, type DesignElement } from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
 	import { saveFile } from '$lib/saving';
 	import type { Tool } from '$components/ToolRail.svelte';
@@ -763,6 +763,16 @@
 	let menu = $state<{ list: MenuList; x: number; y: number } | null>(null);
 	/** Where the bed was clicked — "paste here" promises that place. */
 	let menuPoint = $state<{ x: number; y: number } | null>(null);
+	/**
+	 * The shapes under the right-click that opened the menu, topmost first.
+	 *
+	 * The canvas knows this — it asks the browser what is under the pointer — and
+	 * hands it over, because the menu is built here. Emptied when the menu closes, so
+	 * a later menu cannot show yesterday's pile.
+	 */
+	let underPointer = $state<string[]>([]);
+	/** Where you are in a pile of shapes after an Alt+click; the action bar says it. */
+	let deeper = $state<{ index: number; total: number } | null>(null);
 
 	let handlers: Handlers = {
 		cut: () => klembordActie('cut', design.selectedIds),
@@ -814,8 +824,31 @@
 		zoom: (what) => canvasControl?.zoom(what),
 		snap: () => canvasControl?.snap(),
 		layerNumbers: () => canvasControl?.layerNumbers(),
-		rescue: () => arrange('rescue')
+		rescue: () => arrange('rescue'),
+		selectOne: (id) => design.select(id)
 	};
+
+	/**
+	 * One shape as a line of text: what it is, and how big.
+	 *
+	 * For the list of what lies under the pointer. The name alone is not enough
+	 * there — two rectangles on top of each other both read "Rectangle" — and the
+	 * measure is what you can see on the bed, so it is the quickest way to tell which
+	 * of the two you mean.
+	 */
+	function shapeLine(element: DesignElement, index: number): string {
+		const perMm = design.design?.units_per_mm ?? 1;
+		const box = element.bounds;
+		if (!box) return `${index}. ${elementName(element)}`;
+		return t('canvas.under.item', {
+			index,
+			name: elementName(element),
+			// No forced decimal: "60 × 60 mm" fits on one line of the menu where
+			// "60.0 × 60.0 mm" wraps, and a tenth only shows when there is one.
+			width: i18n.number((box[2] - box[0]) / perMm),
+			height: i18n.number((box[3] - box[1]) / perMm)
+		});
+	}
 
 	/** The state in which an action is or is not possible. */
 	let actionContext = $derived.by<ActionContext>(() => {
@@ -848,17 +881,30 @@
 			},
 			snap: state?.snap ?? true,
 			layerNumbers: state?.layerNumbers ?? true,
-			empty: design.isEmpty
+			empty: design.isEmpty,
+			// By name, in the order they lie: the top one first. With the measure behind
+			// it, because a pile is usually two shapes of the same kind — a list that
+			// says "Rectangle" twice is no choice at all.
+			under: underPointer
+				.map((id) => design.elements.find((e) => e.id === id))
+				.filter((e): e is NonNullable<typeof e> => Boolean(e))
+				.map((e, index) => ({
+					id: e.id,
+					label: shapeLine(e, index + 1),
+					selected: design.isSelected(e.id)
+				}))
 		};
 	});
 
-	function openObjectMenu(event: MouseEvent) {
+	function openObjectMenu(event: MouseEvent, under: string[] = []) {
 		menuPoint = null;
+		underPointer = under;
 		menu = { list: objectMenu(actionContext, handlers), x: event.clientX, y: event.clientY };
 	}
 
 	function openCanvasMenu(event: MouseEvent, point: { x: number; y: number }) {
 		menuPoint = point;
+		underPointer = [];
 		menu = {
 			list: canvasMenu(actionContext, handlers, point),
 			x: event.clientX,
@@ -1042,6 +1088,7 @@
 			align={alignActions(actionContext, handlers)}
 			arrange={arrangeActions(actionContext, handlers)}
 			count={actionContext.count}
+			note={deeper ? t('canvas.deeper', { index: deeper.index, total: deeper.total }) : null}
 			onMore={(event: MouseEvent) => {
 				const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
 				menuPoint = null;
@@ -1067,6 +1114,7 @@
 		<Canvas
 			onPointerMm={(point) => (pointerMm = point)}
 			onContextObject={openObjectMenu}
+			onDeeper={(info) => (deeper = info)}
 			onContextCanvas={openCanvasMenu}
 			bind:control={canvasControl}
 			{device}

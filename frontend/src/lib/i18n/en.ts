@@ -376,6 +376,12 @@ export const en = {
 	'canvas.snap.off': 'Snapping is off — hold Alt to use it for one move',
 	'canvas.bedSize': 'bed {width} × {height} mm',
 	'canvas.empty.body': 'Use Import in the top bar for an existing design, or pick a shape on the left and click the bed.',
+	// Alt+click walks down a pile of shapes; this says where you are in it.
+	'canvas.deeper': 'Shape {index} of {total} under the pointer — Alt+click for the next.',
+	'canvas.under': 'Under the pointer',
+	// Numbered by depth, so two shapes of the same kind and size are still two
+	// different rows — and the number is the one the hint counts with.
+	'canvas.under.item': '{index}. {name} · {width} × {height} mm',
 	'canvas.nodes.pickOne': 'Nodes works on one shape. Click one on the bed.',
 	'canvas.nodes.tooMany': 'Nodes works on one shape at a time; {n} are selected. Click just one of them.',
 	'canvas.nodes.noPoints': 'This shape has no loose points. Make it a path first with Combine, in the panel on the right.',

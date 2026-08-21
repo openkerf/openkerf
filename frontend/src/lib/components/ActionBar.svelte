@@ -30,6 +30,7 @@
 		align,
 		arrange,
 		count,
+		note = null,
 		onMore
 	}: {
 		history: Action[];
@@ -39,6 +40,8 @@
 		arrange: Action[];
 		/** How many shapes are selected — decides the text on the right. */
 		count: number;
+		/** Something more specific to say on that same line, for as long as it holds. */
+		note?: string | null;
 		/** Opens the full menu, for everything that does not fit here. */
 		onMore: (event: MouseEvent) => void;
 	} = $props();
@@ -128,8 +131,12 @@
 	<!-- What is selected, in words. The panel says it too, but that can be on
 	     another tab; this bar should say what it works on. Without this line a row
 	     of grey buttons is unexplained. -->
+	<!-- A note takes this line over for as long as it lasts: "shape 2 of 3 under the
+	     pointer" is about the selection you have just made, so it belongs where the
+	     selection is reported and not in a strip of its own — a strip below the bed
+	     shortens the canvas and moves the drawing under your pointer. -->
 	<p class="state" aria-live="polite">
-		{count === 0 ? t('bar.selection.none') : t('bar.selection.count', { n: count })}
+		{note ?? (count === 0 ? t('bar.selection.none') : t('bar.selection.count', { n: count }))}
 	</p>
 </div>
 
