@@ -71,7 +71,7 @@ def test_a_radial_copy_places_the_requested_number(client):
 
 
 def path_box(element):
-    """De omhullende van het pad zoals het canvas het tekent, in eenheden."""
+    """The path's bounding box as the canvas draws it, in units."""
     getallen = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?(?:E-?\d+)?", element["path"])]
     xs, ys = getallen[0::2], getallen[1::2]
     return [min(xs), min(ys), max(xs), max(ys)]
@@ -79,12 +79,11 @@ def path_box(element):
 
 def assert_bounds_follow_the_shape(client):
     """
-    De handvatten staan om de vorm die je aanklikt.
+    The handles are around the shape you click.
 
-    `bounds` voedt het selectiekader, `path` de tekening. Lopen ze uiteen, dan
-    krijgt de aangeklikte kopie wel een dikke rand maar staat het kader om een
-    andere vorm — precies wat er gebeurde toen de engine de omhullende van het
-    origineel meekopieerde zonder hem opnieuw te berekenen.
+    `bounds` feeds the selection frame, `path` the drawing. If they drift apart, the copy you
+    clicked does get a thick border but the frame is around another shape — exactly what
+    happened when the engine copied the original's bounding box along without recomputing it.
     """
     for element in elements(client):
         box = path_box(element)
@@ -150,28 +149,26 @@ def test_two_corners_is_not_a_polygon(client):
 
 def test_every_joint_is_complementary():
     """
-    De kern van de doos: waar het ene paneel een tand heeft, hoort het andere
-    een gat te hebben. Eén verkeerde en de doos past niet in elkaar — en dat
-    merk je pas als het hout al gesneden is.
+    The core of the box: where one panel has a tooth, the other should have a gap. One wrong
+    and the box does not fit together — and you only notice that once the wood has been cut.
     """
     for left, right in JOINTS:
         assert PHASE[left] != PHASE[right], f"{left} en {right} hebben allebei dezelfde fase"
 
 
 def test_mating_edges_get_the_same_number_of_teeth():
-    """Anders liggen de tanden niet op dezelfde plek, hoe je ze ook keert."""
-    # Een wandhoogte van 50 raakt zowel de voorkant als de zijkant.
+    """Otherwise the teeth are not in the same place, however you turn them."""
+    # A wall height of 50 touches both the front and the side.
     assert teeth_count(50, 10) == teeth_count(50, 10)
-    # Altijd oneven: een rand begint en eindigt met materiaal.
+    # Always odd: an edge begins and ends with material.
     for length in (30, 45, 50, 63.5, 120):
         assert teeth_count(length, 10) % 2 == 1
 
 
 def test_a_box_panel_is_the_size_you_asked_for(client):
     """
-    De `path`-opdracht las eerder een d-string als SVG-gebruikerseenheden en
-    schaalde die nog eens: een doos van 100 mm kwam er als 72 meter uit. Alleen
-    het aantal panelen tellen zag dat niet.
+    The `path` command used to read a d-string as SVG user units and scale it again: a box of
+    100 mm came out as 72 metres. Counting only the number of panels did not see that.
     """
     client.post(
         "/api/design/generate/box",
@@ -188,7 +185,7 @@ def test_a_box_panel_is_the_size_you_asked_for(client):
     per_mm = design["units_per_mm"]
     bodem = next(e for e in design["elements"] if e["label"].endswith("bottom"))
     x0, y0, x1, y1 = (v / per_mm for v in bodem["bounds"])
-    # Breedte plus de tanden die aan weerszijden uitsteken (2 x de dikte).
+    # The width plus the teeth sticking out on both sides (2 × the thickness).
     assert (x1 - x0) == pytest.approx(60 + 2 * 3, abs=0.2)
     assert (y1 - y0) == pytest.approx(40 + 2 * 3, abs=0.2)
 
@@ -203,7 +200,7 @@ def test_a_qr_code_is_the_size_you_asked_for(client):
     per_mm = design["units_per_mm"]
     code = design["elements"][0]
     x0, _, x1, _ = (v / per_mm for v in code["bounds"])
-    # Zonder de stille rand eromheen: die is leeg en telt niet mee in de bounds.
+    # Without the quiet zone around it: that is empty and does not count in the bounds.
     assert 20 <= (x1 - x0) <= 30
 
 
@@ -243,8 +240,8 @@ def test_a_box_without_a_lid_yields_five(client):
 
 def test_the_kerf_makes_tabs_bigger_not_smaller():
     """
-    De laser haalt aan beide kanten van elke snede materiaal weg. Een tand die
-    op papier precies past, is in hout te smal — dus moet hij groeien.
+    The laser takes material off both sides of every cut. A tooth that fits exactly on paper
+    is too narrow in wood — so it has to grow.
     """
     zonder = dict(box_panels(100, 80, 50, 3, 10, 0.0))
     met = dict(box_panels(100, 80, 50, 3, 10, 0.4))
@@ -264,7 +261,7 @@ def test_material_thicker_than_the_box_is_refused(client):
 
 
 def test_a_finger_thinner_than_the_material_is_refused(client):
-    """Zo'n vinger breekt af zodra je de doos in elkaar zet."""
+    """Such a finger snaps off as soon as you assemble the box."""
     response = client.post(
         "/api/design/generate/box",
         json={
@@ -299,8 +296,8 @@ def test_an_empty_qr_code_is_refused(client):
 
 def test_box_panels_stay_on_the_bed(client):
     """
-    Zes panelen op één rij zijn zo een meter breed. Wat buiten het bed valt is
-    niet meer aan te wijzen, dus dan kun je het ook niet terughalen.
+    Six panels in one row are a metre wide in no time. What falls off the bed can no longer
+    be pointed at, so you cannot bring it back either.
     """
     bed = client.get("/api/devices").json()[0]["bed"]
     client.post(
@@ -322,7 +319,7 @@ def test_box_panels_stay_on_the_bed(client):
     assert low <= bed["height_mm"] + 0.5, f"loopt tot {low:.0f} mm door"
 
     rows = {round(e["bounds"][1] / per_mm) for e in design["elements"]}
-    assert len(rows) > 1, "alles staat nog op één rij"
+    assert len(rows) > 1, "everything is still in one row"
 
 
 BIG_BOX = {
@@ -336,8 +333,8 @@ BIG_BOX = {
 
 def test_a_box_that_does_not_fit_is_spread_over_sheets(client):
     """
-    Eerder werd zo'n doos geweigerd met het advies "snijd hem in twee keer",
-    zonder dat je dat kon doen. Nu legt hij zichzelf op meerdere vellen.
+    Such a box used to be refused with the advice "cut it in two goes", without you being
+    able to do that. Now it lays itself out on several sheets.
     """
     response = client.post("/api/design/generate/box", json=BIG_BOX)
 
@@ -346,20 +343,20 @@ def test_a_box_that_does_not_fit_is_spread_over_sheets(client):
 
     sheets = client.get("/api/sheets").json()["sheets"]
     assert len(sheets) > 1
-    # We staan weer op het vel waar we begonnen; het canvas hoort niet onder je
-    # vandaan te schuiven.
+    # We are back on the sheet we started on; the canvas should not slide out from under
+    # you.
     assert sheets[0]["active"] is True
 
     on_each = []
     for sheet in sheets:
         client.post(f"/api/sheets/{sheet['id']}/activate")
         on_each.append(len(client.get("/api/design").json()["elements"]))
-    assert sum(on_each) == 6, f"niet alle panelen zijn getekend: {on_each}"
+    assert sum(on_each) == 6, f"not all the panels have been drawn: {on_each}"
     assert all(count > 0 for count in on_each)
 
 
 def test_spreading_can_be_switched_off(client):
-    """Wie geen extra vellen wil, hoort dat te horen in plaats van ze te krijgen."""
+    """Anybody who does not want extra sheets should be told instead of getting them."""
     response = client.post(
         "/api/design/generate/box", json={**BIG_BOX, "spread": False}
     )
@@ -370,7 +367,7 @@ def test_spreading_can_be_switched_off(client):
 
 
 def test_a_panel_wider_than_the_sheet_stays_refused(client):
-    """Verdelen helpt niet als één paneel al te breed is."""
+    """Spreading does not help when one panel is already too wide."""
     response = client.post(
         "/api/design/generate/box",
         json={
@@ -391,9 +388,9 @@ def test_a_panel_wider_than_the_sheet_stays_refused(client):
 
 def test_generated_parts_land_in_exactly_one_layer(client):
     """
-    Kleurclassificatie zette een doospaneel in een gráveerlaag én in een tweede
-    laag die dezelfde kleur claimt — hetzelfde paneel twee keer gebrand, en dat
-    merk je pas op materiaal. Vandaar één expliciete laag.
+    Colour classification put a box panel in an *engrave* layer *and* in a second layer
+    claiming the same colour — the same panel burned twice, and you only notice that on
+    material. Hence one explicit layer.
     """
     client.post(
         "/api/design/generate/box",
@@ -416,24 +413,24 @@ def test_a_qr_code_is_engraved_not_cut(client):
     assert [o["label"] for o in layers] == ["Engrave"]
 
 
-# --------------------------------------------------- het deksel dat klemt
+# ------------------------------------------------------- the lid that binds
 
 
 def test_a_lid_used_to_be_a_bottom_with_nowhere_to_go():
     """
-    De fout die op het hout gevonden werd, als test.
+    The fault found on the wood, as a test.
 
-    Het deksel was een exacte kopie van de bodem — 48 punten, dus uitsparingen
-    rondom — en de wanden hadden een kaarsrechte bovenrand. Die happen pasten
-    dus nergens in. Nu heeft élke rand van het deksel een tegenhanger.
+    The lid was an exact copy of the bottom — 48 points, so cut-outs all round — and the walls
+    had a dead straight top edge. So those bites fitted nowhere. Now *every* edge of the lid
+    has a counterpart.
     """
     from openkerf_api.generators import JOINTS
 
     naden = {links for links, _ in JOINTS} | {rechts for _, rechts in JOINTS}
 
     for rand in ("front", "back", "left", "right"):
-        assert ("lid", rand) in naden, f"het deksel staat los op zijn {rand}rand"
-        assert (rand, "over") in naden, f"de {rand}wand heeft geen tand voor het deksel"
+        assert ("lid", rand) in naden, f"the lid is loose on its {rand} edge"
+        assert (rand, "over") in naden, f"the {rand} wall has no tooth for the lid"
 
 
 def test_the_walls_grow_teeth_on_top_only_when_there_is_a_lid():

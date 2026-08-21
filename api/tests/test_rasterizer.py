@@ -1,9 +1,9 @@
 """
 De rasteraar zonder GUI.
 
-Wat hier getest wordt gaat écht de machine in: een rasterlaag die er verkeerd
-uitkomt, brandt verkeerd. Daarom niet alleen "er komt een plaatje uit", maar ook
-hoe groot het is en welke pixels zwart zijn.
+What is tested here really goes into the machine: a raster layer that comes out wrong burns
+wrong. So not only "an image comes out", but also how big it is and which pixels are
+black.
 """
 
 import numpy as np
@@ -22,7 +22,7 @@ MM = 65535 / 25.4  # één millimeter in native eenheden (Tats)
 @pytest.fixture
 def make_raster(kernel):
     dienst = kernel.root.lookup("render-op/make_raster")
-    assert dienst is not None, "de rasteraar hoort door onze plugin geregistreerd te zijn"
+    assert dienst is not None, "the rasteriser should be registered by our plugin"
     return dienst
 
 
@@ -39,22 +39,22 @@ def _grijs(image):
     return np.asarray(image.convert("L"))
 
 
-# ------------------------------------------------------- de dienst zelf
+# -------------------------------------------------------- the service itself
 
 
 def test_the_engine_has_a_rasteriser(kernel):
     """
-    Zonder deze dienst neemt `OpRasterNode.preprocess` de `strip_rasters`-tak:
-    de laag gooit zijn eigen kinderen weg en levert nul cutcode. Onze plugin
-    vult dat gat op de plek die MeerK40t er zelf voor biedt.
+    Without this service `OpRasterNode.preprocess` takes the `strip_rasters` branch: the
+    layer throws its own children away and produces no cutcode. Our plugin fills that gap in
+    the place MeerK40t offers for it.
     """
     assert callable(kernel.root.lookup("render-op/make_raster"))
 
 
 def test_a_gui_rasteriser_wins_from_ours(kernel):
     """
-    Draait iemand mét wxPython, dan tekent die versie met de echte fonts en de
-    echte penstreken. Wij zijn de terugval, niet de voorkeur.
+    If somebody runs *with* wxPython, that version draws with the real fonts and the real pen
+    strokes. We are the fallback, not the preference.
     """
     van_de_gui = object()
     kernel.root.register("render-op/make_raster", van_de_gui)
@@ -71,7 +71,7 @@ def test_without_bounds_there_is_nothing_to_render(make_raster):
 
 
 def test_an_empty_node_list_does_not_fall_over(make_raster):
-    """Een laag zonder tekenbare kinderen levert een leeg vel, geen fout."""
+    """A layer without drawable children produces an empty sheet, not an error."""
     beeld = make_raster([], bounds=(0, 0, 10 * MM, 10 * MM), step_x=100, step_y=100)
 
     assert beeld.mode == "RGB"
@@ -80,9 +80,8 @@ def test_an_empty_node_list_does_not_fall_over(make_raster):
 
 def test_the_size_follows_the_step_rate(kernel, make_raster):
     """
-    De stap is de omgekeerde dpi: bij `dpi_to_steps` van de machine hoort een
-    afbeelding die het kader precies dekt. Klopt dat niet, dan staat het beeld
-    straks op de verkeerde schaal in het bed.
+    The step is the inverse dpi: the machine's `dpi_to_steps` goes with an image that covers
+    the frame exactly. If that does not hold, the image is at the wrong scale in the bed.
     """
     step_x, step_y = kernel.device.view.dpi_to_steps(250)
     bounds = (0, 0, 30 * MM, 20 * MM)
@@ -102,7 +101,7 @@ def test_an_explicit_size_wins_from_the_step_rate(make_raster):
 
 
 def test_a_zero_step_is_treated_as_one(make_raster):
-    """Een stap van nul is geen stap maar een deling door nul."""
+    """A step of zero is not a step but a division by zero."""
     beeld = make_raster([], bounds=(0, 0, 100, 50), step_x=0, step_y=0)
 
     assert beeld.size == (100, 50)
@@ -110,8 +109,8 @@ def test_a_zero_step_is_treated_as_one(make_raster):
 
 def test_keep_ratio_uses_the_smallest_of_both_scales(kernel, make_raster):
     """
-    Met `keep_ratio` mag het beeld niet uitgerekt worden: een vierkant blijft
-    vierkant, ook in een kader dat dat niet is.
+    With `keep_ratio` the image must not be stretched: a square stays a square, in a frame
+    that is not one as well.
     """
     node = _rect(kernel, 0, 0, 20, 20, fill="black")
     bounds = Node.union_bounds([node], attr="paint_bounds")
@@ -129,8 +128,8 @@ def test_keep_ratio_uses_the_smallest_of_both_scales(kernel, make_raster):
 
 def test_white_is_white_and_black_is_black(kernel, make_raster):
     """
-    Wit is achtergrond, zwart is werk — de engine drempelt dit hierna. Een
-    gevuld vlak hoort dus als vlek uit te komen, niet als omtrek.
+    White is background, black is work — the engine thresholds this afterwards. So a filled
+    area should come out as a blot, not as an outline.
     """
     node = _rect(kernel, 10, 10, 20, 10, fill="black")
     bounds = Node.union_bounds([node], attr="paint_bounds")
@@ -138,15 +137,14 @@ def test_white_is_white_and_black_is_black(kernel, make_raster):
     grijs = _grijs(make_raster([node], bounds=bounds, step_x=200, step_y=200))
 
     hoogte, breedte = grijs.shape
-    assert grijs[hoogte // 2, breedte // 2] < 40, "het midden van een gevuld vlak is zwart"
-    assert grijs.mean() < 80, "een gevuld vlak is overwegend zwart"
+    assert grijs[hoogte // 2, breedte // 2] < 40, "the middle of a filled area is black"
+    assert grijs.mean() < 80, "a filled area is predominantly black"
 
 
 def test_an_unfilled_shape_burns_its_outline_and_not_its_middle(kernel, make_raster):
     """
-    Precies wat de wx-versie doet: hij tekent met de kleuren van de knoop. Een
-    vierkant zonder vulling is een omtrek — vullen zou materiaal verbranden dat
-    de gebruiker niet heeft aangewezen.
+    Exactly what the wx version does: it draws with the node's colours. A square without a
+    fill is an outline — filling it would burn material the user has not pointed at.
     """
     node = _rect(kernel, 10, 10, 20, 20)
     bounds = Node.union_bounds([node], attr="paint_bounds")
@@ -155,14 +153,14 @@ def test_an_unfilled_shape_burns_its_outline_and_not_its_middle(kernel, make_ras
 
     hoogte, breedte = grijs.shape
     assert grijs[hoogte // 2, breedte // 2] > 200, "het midden blijft onaangeroerd"
-    assert grijs[hoogte // 2, 1] < 128, "de linkerrand is de omtrek"
-    assert grijs[1, breedte // 2] < 128, "de bovenrand ook"
+    assert grijs[hoogte // 2, 1] < 128, "the left edge is the outline"
+    assert grijs[1, breedte // 2] < 128, "the top edge as well"
 
 
 def test_the_shape_lands_where_the_bounds_say_it_lands(kernel, make_raster):
     """
-    Twee vlakken in één kader: het linker hoort links te staan. Staat het
-    gespiegeld of verschoven, dan brandt de machine op de verkeerde plek.
+    Two areas in one frame: the left one should be on the left. If it is mirrored or shifted,
+    the machine burns in the wrong place.
     """
     links = _rect(kernel, 0, 0, 10, 40, fill="black")
     rechts = _rect(kernel, 30, 0, 10, 10, fill="black")
@@ -172,17 +170,17 @@ def test_the_shape_lands_where_the_bounds_say_it_lands(kernel, make_raster):
     vlek = grijs < 128
     hoogte, breedte = grijs.shape
 
-    assert vlek[:, : breedte // 4].mean() > 0.5, "links staat een hoge kolom"
+    assert vlek[:, : breedte // 4].mean() > 0.5, "there is a tall column on the left"
     assert vlek[hoogte // 2 :, breedte * 3 // 4 :].mean() < 0.1, (
-        "rechtsonder staat niets"
+        "there is nothing at the bottom right"
     )
 
 
 def test_a_text_node_does_not_bring_the_raster_down(kernel, make_raster):
     """
-    Zonder GUI is er geen font-engine. Onze app zet tekst vóór het planmoment om
-    in geometrie; komt er toch een `elem text` langs, dan is niets tekenen beter
-    dan een half plan en een uitzondering.
+    Without a GUI there is no font engine. Our app converts text into geometry before the
+    planning moment; if an `elem text` does come past, drawing nothing is better than half a
+    plan and an exception.
     """
     kernel.console('text "hallo"\n')
     tekst = [n for n in kernel.elements.elems() if n.type == "elem text"]
@@ -195,9 +193,8 @@ def test_a_text_node_does_not_bring_the_raster_down(kernel, make_raster):
 
 def test_an_image_node_is_pasted_with_its_own_matrix(kernel, make_raster):
     """
-    Een afbeelding draagt zijn plaatsing in zijn matrix, niet in zijn pixels.
-    Wordt die genegeerd, dan komt de foto op de oorsprong terecht in plaats van
-    op de plek waar hij ligt.
+    An image carries its placement in its matrix, not in its pixels. If that is ignored, the
+    photo ends up at the origin instead of in the place where it lies.
     """
     from meerk40t.core.node.elem_image import ImageNode
     from meerk40t.svgelements import Matrix
@@ -210,16 +207,16 @@ def test_an_image_node_is_pasted_with_its_own_matrix(kernel, make_raster):
     kernel.elements.elem_branch.add_node(node)
     node.set_dirty_bounds()
 
-    # Een omtrek van 40 × 20 mm zet het kader; daarbinnen is te zien wáár de
-    # afbeelding belandt in plaats van alleen dát hij er is.
+    # An outline of 40 × 20 mm sets the frame; inside it you can see *where* the image lands
+    # instead of only *that* it is there.
     kader = _rect(kernel, 0, 0, 40, 20)
 
     bounds = Node.union_bounds([kader, node], attr="paint_bounds")
     grijs = _grijs(make_raster([kader, node], bounds=bounds, width=80, height=40))
     vlek = grijs < 128
 
-    assert vlek[5:15, 45:55].mean() > 0.9, "de afbeelding staat rechtsboven"
-    assert vlek[5:15, 5:15].mean() < 0.1, "en linksboven staat niets"
+    assert vlek[5:15, 45:55].mean() > 0.9, "the image is at the top right"
+    assert vlek[5:15, 5:15].mean() < 0.1, "and there is nothing at the top left"
 
 
 # ------------------------------------------------------- van laag tot cutcode
@@ -227,7 +224,7 @@ def test_an_image_node_is_pasted_with_its_own_matrix(kernel, make_raster):
 
 def test_a_raster_layer_now_produces_cutcode(kernel):
     """
-    Het punt van dit alles: `op raster` levert headless werk in plaats van een
+    The point of all this: `op raster` produces work headless instead of a
     lege laag. Voorheen gaf ditzelfde ontwerp nul stukken en nul seconden.
     """
     node = _rect(kernel, 10, 10, 20, 20, fill="black")

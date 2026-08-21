@@ -1,13 +1,13 @@
 """
 Meerdere passes op een testbord.
 
-Het geval waar dit uit komt: een materiaal dat op 5 mm/s bijna doorsnijdt, en
-dat je op 8 mm/s in twee passes wilt proberen. Eén getal voor het hele bord —
-passes als derde as zou een bord opleveren dat niemand meer terugleest.
+The case this comes from: a material that almost cuts through at 5 mm/s, and that you want
+to try at 8 mm/s in two passes. One number for the whole board — passes as a third axis would
+produce a board nobody reads back.
 
-De laatste test in dit bestand is de belangrijkste: een vakje dat het alleen in
-twee passes haalde, moet een preset opleveren die dat óók zegt. Anders snijdt
-die preset later één keer en merk je het op materiaal.
+The last test in this file is the most important: a square that only made it in two passes
+has to produce a preset that says so *too*. Otherwise that preset later cuts once and you
+notice it on material.
 """
 
 import pytest
@@ -45,8 +45,8 @@ def test_a_board_burns_once_unless_you_ask_for_more():
     plan, _ = plan_grid(**BASE)
 
     assert plan["passes"] == 1
-    # Een leeg veld is geen fout: het formulier stuurt "" voor "niet ingevuld",
-    # net als bij de labelsnelheid.
+    # An empty field is not an error: the form sends "" for "not filled in", as with the
+    # label speed.
     assert plan_grid(**BASE, passes="")[0]["passes"] == 1
 
 
@@ -64,11 +64,11 @@ def test_a_pass_count_that_is_not_a_whole_number_of_passes_is_refused(waarde):
 
 def test_the_estimate_counts_every_pass():
     """
-    Ronde getallen, met de hand na te rekenen.
+    Round numbers, checkable by hand.
 
-    Vier vakjes van 10 mm snijden op 10 mm/s: 40 mm brandweg per vakje, dus 4 s.
-    De sprong naar het volgende vakje is de steek (10 + 2 mm) op 100 mm/s en
-    hoort één keer bij elk vakje, hoeveel passes je ook doet.
+    Four squares of 10 mm cutting at 10 mm/s: 40 mm of burn path per square, so 4 s. The jump
+    to the next square is the pitch (10 + 2 mm) at 100 mm/s and belongs to each square once,
+    however many passes you do.
     """
     een = dict(
         BASE,
@@ -92,10 +92,10 @@ def test_the_estimate_counts_every_pass():
 
 def test_the_caption_says_how_many_passes():
     """
-    Over twee weken moet het bord terug te rekenen zijn naar een instelling.
+    In two weeks the board has to be convertible back into a setting.
 
-    Bij één pass staat het er niet: dat is de normale gang van zaken en het
-    opschrift moet kort blijven — het bepaalt de bordbreedte.
+    With one pass it is not there: that is the normal state of affairs and the caption has to
+    stay short — it decides the board width.
     """
     plan, _ = plan_grid(**BASE, passes=2)
     regels = " · ".join(caption_lines(plan))
@@ -105,7 +105,7 @@ def test_the_caption_says_how_many_passes():
 
 
 def test_the_caption_room_is_measured_with_the_passes_in_it():
-    """De maat moet dekken wat er brandt; het opschrift is breder met passes."""
+    """The measure has to cover what burns; the caption is wider with passes."""
     plan, _ = plan_grid(**BASE, passes=2)
 
     assert "2 passes" in plan["caption_text"]
@@ -116,14 +116,13 @@ def test_the_caption_room_is_measured_with_the_passes_in_it():
 
 def test_every_cell_layer_gets_the_passes(kernel):
     """
-    Niet alleen het veld: het getal dat de planner werkelijk leest.
+    Not only the field: the number the planner really reads.
 
-    Gemeten fout, en op de machine gevonden: `passes` zetten is niet genoeg. De
-    engine leest `implicit_passes`, en die geeft 1 terug zolang `passes_custom`
-    uit staat (`core/parameters.py:401`). Het bord meldde dus twee passes en
-    brandde er één. Onze eigen laaginstellingen zetten die vlag wél
-    (`Drawing.apply_settings`); het bord bouwde zijn lagen rechtstreeks op de
-    knoop en sloeg hem over.
+    A measured fault, found on the machine: setting `passes` is not enough. The engine reads
+    `implicit_passes`, and that hands back 1 as long as `passes_custom` is off
+    (`core/parameters.py:401`). So the board reported two passes and burned one. Our own layer
+    settings *do* set that flag (`Drawing.apply_settings`); the board built its layers directly
+    on the node and skipped it.
     """
     plan, cells = plan_grid(**BASE, passes=3)
     getekend, _ = TestGridGenerator(kernel).draw(plan, cells)
@@ -136,11 +135,11 @@ def test_every_cell_layer_gets_the_passes(kernel):
 
 def _brandwerk(passes) -> int:
     """
-    Hoeveel keer de machine over het werk gaat, uit het snijplan zelf.
+    How many times the machine goes over the work, from the cut plan itself.
 
-    De engine kan passes op twee manieren dragen: één stuk cutcode met
-    `passes=N`, of N kopieën met `passes=1` — dat hangt af van
-    `opt_merge_passes` en de optimalisatiestand (`core/cutplan.py:432`). De som
+    The engine can carry passes in two ways: one piece of cutcode with `passes=N`, or N copies
+    with `passes=1` — that depends on `opt_merge_passes` and the optimisation state
+    (`core/cutplan.py:432`). The sum
     is onder beide vormen hetzelfde, en de som is wat er brandt.
     """
     from conftest import _bootstrap
@@ -149,8 +148,8 @@ def _brandwerk(passes) -> int:
 
     kernel = _bootstrap()
     try:
-        # Zonder opschriften: de labellaag brandt terecht één keer, en die zou
-        # het getal waar het hier om gaat vertroebelen.
+        # Without captions: the label layer rightly burns once, and that would muddy the
+        # number this is about.
         opzet = dict(BASE, text=False)
         plan, cells = plan_grid(**opzet, passes=passes)
         TestGridGenerator(kernel).draw(plan, cells)
@@ -168,24 +167,24 @@ def _brandwerk(passes) -> int:
 
 def test_the_cutcode_really_burns_every_square_three_times():
     """
-    Het bewijs uit het snijplan, want dat is wat naar de machine gaat.
+    The proof from the cut plan, because that is what goes to the machine.
 
-    Dit is de test die de fout had moeten vangen die op materiaal gevonden werd:
-    het bord meldde twee passes en brandde er één. Een test op het veld `passes`
-    ging vrolijk groen, want dat veld stond gewoon goed.
+    This is the test that should have caught the fault found on material: the board reported
+    two passes and burned one. A test on the `passes` field went cheerfully green, because that
+    field was simply right.
     """
     enkel = _brandwerk(1)
     drie = _brandwerk(3)
 
-    # Negen vakjes, dus negen keer branden bij één pass en zevenentwintig bij
-    # drie. Het exacte getal staat er zodat een verschuiving in de vorm van het
-    # plan opvalt in plaats van weg te vallen in een verhouding.
+    # Nine squares, so nine burns at one pass and twenty-seven at three. The exact number is
+    # there so that a shift in the plan's shape stands out instead of disappearing into a
+    # ratio.
     assert enkel == 9
     assert drie == 27
 
 
 def test_a_single_pass_board_still_says_one(kernel):
-    """De engine gebruikt 0 voor 'niet ingesteld'; dat leest als nul keer."""
+    """The engine uses 0 for 'not set'; that reads as zero times."""
     plan, cells = plan_grid(**BASE)
     getekend, _ = TestGridGenerator(kernel).draw(plan, cells)
 
@@ -209,8 +208,8 @@ def test_the_board_remembers_its_passes(client):
     assert grid["passes"] == 2
     assert client.get(f"/api/library/testgrids/{grid['id']}").json()["passes"] == 2
 
-    # En de volgende keer staat het getal er weer: dit is een instelling die je
-    # per materiaal één keer uitzoekt.
+    # And next time the number is there again: this is a setting you work out once per
+    # material.
     vorige = client.get(
         "/api/library/testgrids/defaults", params={"material_id": materiaal["id"]}
     ).json()
@@ -227,15 +226,15 @@ def test_the_preview_shows_the_longer_time_before_anything_is_drawn(client):
     assert dubbel["plan"]["seconds"] > enkel["plan"]["seconds"]
 
 
-# --------------------------------------------------- de lus die het waard is
+# ----------------------------------------------------- the loop worth having
 
 
 def test_a_preset_from_a_two_pass_board_says_two_passes(client):
     """
-    Het vakje haalde het in twee passes; de preset moet dat meenemen.
+    The square made it in two passes; the preset has to take that along.
 
-    Zonder deze regel levert een geslaagd bord een preset op die één keer
-    snijdt — en dat merk je pas op materiaal, met een plaat die vastzit.
+    Without this line a successful board produces a preset that cuts once — and you only
+    notice that on material, with a board that is stuck.
     """
     materiaal = client.post("/api/library/materials", json={"name": "Berk 3"}).json()
     grid = client.post(
@@ -262,10 +261,9 @@ def test_a_layer_that_only_looks_like_three_passes_is_reported_as_one(client, ke
     """
     De omgekeerde leugen, en dezelfde oorzaak.
 
-    Een laag kan `passes = 3` dragen terwijl de engine er één doet, want zij
-    leest `implicit_passes`. Het paneel en de pre-flight lazen het veld en
-    meldden dus drie. Dat is precies het getal waarop iemand zijn plaat
-    inplant.
+    A layer can carry `passes = 3` while the engine does one, because it reads
+    `implicit_passes`. The panel and the pre-flight read the field and so reported three. That
+    is precisely the number somebody plans their board on.
     """
     vorm = client.post(
         "/api/design/elements",
@@ -285,7 +283,7 @@ def test_a_layer_that_only_looks_like_three_passes_is_reported_as_one(client, ke
     )
     assert getoond["passes"] == 1
 
-    # En met de vlag erbij zegt hij wél drie — anders had deze test niets bewezen.
+    # And with the flag it does say three — otherwise this test would have proved nothing.
     node.passes_custom = True
     getoond = next(
         op

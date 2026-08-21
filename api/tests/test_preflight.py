@@ -1,9 +1,8 @@
 """
 De pre-flight: wat gaat de machine dóén.
 
-Tijd en aantal onderdelen alleen is theater. Wie tien jaar met een laser werkt
-kijkt vóór het starten naar snelheid, vermogen, passes — en waar die getallen
-vandaan komen.
+Time and the number of parts alone is theatre. Anybody who has worked with a laser for ten
+years looks at speed, power, passes before starting — and where those numbers came from.
 """
 
 import pytest
@@ -40,7 +39,7 @@ def test_the_preflight_says_what_the_machine_will_do(client):
 
     assert estimate["seconds"] > 0
     layers = [l for l in estimate["layers"] if l["label"] == "Cut"]
-    assert layers, "de laag staat niet in de pre-flight"
+    assert layers, "the layer is not in the pre-flight"
     layer = layers[0]
     assert layer["speed_mm_s"] == 12
     assert layer["power_percent"] == 65
@@ -49,7 +48,7 @@ def test_the_preflight_says_what_the_machine_will_do(client):
 
 
 def test_settings_that_came_from_a_test_grid_are_marked_as_measured(client):
-    """Gemeten is een ander gesprek dan gegokt, en dat hoor je te zien."""
+    """Measured is a different conversation from guessed, and you should see that."""
     material = client.post("/api/library/materials", json={"name": "Berken"}).json()
     client.post(
         "/api/library/presets",
@@ -79,7 +78,7 @@ def test_settings_nobody_measured_have_no_provenance(client):
 
 
 def test_a_layer_that_does_not_burn_is_left_out(client):
-    """Wat niet meebrandt hoort niet in de opsomming van wat er gaat gebeuren."""
+    """What does not burn does not belong in the list of what is going to happen."""
     layer = a_job(client)
     client.patch(f"/api/design/operations/{layer['id']}", json={"output": False})
 
@@ -111,8 +110,8 @@ def layer_of(client, label="Cut"):
 
 def test_applying_a_preset_records_where_the_settings_came_from(client):
     """
-    De pre-flight raadde de herkomst aan de getallen. 12 mm/s op 65% bestaat
-    voor meer dan één materiaal, dus dat raden moet een weten worden.
+    The pre-flight guessed the provenance from the numbers. 12 mm/s at 65% exists for more
+    than one material, so that guessing has to become knowing.
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
@@ -130,7 +129,7 @@ def test_applying_a_preset_records_where_the_settings_came_from(client):
 
 
 def test_the_preflight_warns_when_a_layer_carries_another_materials_setting(client):
-    """Dit is de vraag waar B1 over gaat: hoort deze instelling bij dit vel?"""
+    """This is the question B1 is about: does this setting belong to this sheet?"""
     berken = a_material(client, "Berken")
     acryl = a_material(client, "Acryl")
     preset = a_preset(client, berken, thickness_mm=3)
@@ -162,8 +161,8 @@ def test_the_same_material_in_another_thickness_is_also_worth_a_word(client):
 
 def test_an_extrapolated_setting_says_it_was_never_burned(client):
     """
-    De taak die dit moet verbeteren: zie je vóór het starten dat deze waarden
-    nooit gebrand zijn?
+    The task this has to improve: do you see before starting that these values have never
+    been burned?
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="geextrapoleerd")
@@ -180,7 +179,7 @@ def test_an_extrapolated_setting_says_it_was_never_burned(client):
 
 
 def test_a_matching_material_and_thickness_says_nothing(client):
-    """Wie niets te melden heeft, zwijgt: anders leert de gebruiker wegkijken."""
+    """Whoever has nothing to report keeps quiet: otherwise the user learns to look away."""
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
     client.patch("/api/sheets/sheet-1", json={"material_id": berken["id"], "thickness_mm": 3})
@@ -194,8 +193,8 @@ def test_a_matching_material_and_thickness_says_nothing(client):
 
 def test_hand_edited_values_lose_their_claimed_provenance(client):
     """
-    Een briefje dat niet meer klopt is erger dan geen briefje: dan staat er
-    "3 mm berken, gemeten" boven getallen die iemand zelf heeft bijgedraaid.
+    A note that no longer holds is worse than no note: then it says "3 mm birch, measured"
+    above numbers somebody has turned themselves.
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
@@ -224,9 +223,9 @@ def test_the_estimate_names_the_sheet_it_burns_on(client):
 
 def test_a_removed_sheet_does_not_bequeath_its_provenance(client):
     """
-    Vel-nummers worden hergebruikt: verwijder sheet-2 en het volgende nieuwe vel
-    heet weer sheet-2. Zonder opruimen erft dat vel de herkomst van zijn
-    voorganger, en dan staat er een materiaal bij een laag die het nooit zag.
+    Sheet numbers are reused: delete sheet-2 and the next new sheet is called sheet-2 again.
+    Without cleaning up, that sheet inherits its predecessor's provenance, and then a material
+    appears beside a layer that never saw it.
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
@@ -249,10 +248,10 @@ def test_a_removed_sheet_does_not_bequeath_its_provenance(client):
 
 def test_the_heaviest_objection_comes_first(client):
     """
-    Een gemeten instelling van het verkeerde materiaal weegt zwaarder dan een
-    uitgerekende op het juiste: die getallen zijn wél waar, maar over iets
-    anders. Wie beide even zwaar toont, laat de gebruiker uitzoeken wat er
-    eerst moet — precies op het moment dat daar geen tijd voor is.
+    A measured setting for the wrong material weighs more than a calculated one for the
+    right material: those numbers *are* true, but about something else. Showing both with
+    equal weight leaves the user to work out what has to come first — exactly when there is no
+    time for it.
     """
     berken = a_material(client, "Berken")
     zacht = a_preset(client, berken, thickness_mm=6, source="geextrapoleerd")
@@ -271,10 +270,9 @@ def test_the_heaviest_objection_comes_first(client):
 
 def test_what_will_be_burned_can_be_read_without_building_the_plan(client):
     """
-    De tijdschatting bouwt het hele snijplan en duurt op een zwaar ontwerp
-    minuten (gat J1). De waarschuwing dat een laag bij een ander materiaal
-    hoort, mag daar niet achteraan staan — dat is juist wat je vóór het starten
-    moet weten.
+    The time estimate builds the whole cut plan and takes minutes on a heavy design (gap
+    J1). The warning that a layer belongs to another material must not queue behind it — that
+    is precisely what you have to know before starting.
     """
     berken = a_material(client, "Berken")
     preset = a_preset(client, berken, thickness_mm=3, source="testraster")
@@ -289,18 +287,18 @@ def test_what_will_be_burned_can_be_read_without_building_the_plan(client):
     assert overzicht["sheet"]["material_name"] == "Berken"
     gevonden = next(l for l in overzicht["layers"] if l["label"] == "Cut")
     assert gevonden["preset_id"] == preset["id"]
-    # Dezelfde lagen als de pre-flight, alleen zonder klok.
+    # The same layers as the pre-flight, only without the clock.
     assert "seconds" not in overzicht
 
 
 def test_bounds_travel_with_the_layers_not_only_with_the_clock(client):
     """
-    Buiten het bed is een blokkade, geen klokgegeven.
+    Off the bed is a blockage, not a clock fact.
 
-    De pre-flight leest zijn laagoverzicht uit `/api/job/layers` en de tijd
-    daarná — bewust gescheiden (zie de test hierboven). Stond `bounds` alleen
-    in `/api/job/estimate`, dan verscheen "valt buiten het bed" pas als de
-    schatting terug was, en dat is precies de melding die niet mag wachten.
+    The pre-flight reads its layer overview from `/api/job/layers` and the time after that —
+    deliberately separated (see the test above). If `bounds` were only in
+    `/api/job/estimate`, "falls off the bed" would only appear once the estimate was back, and
+    that is precisely the message that must not wait.
     """
     a_job(client)
 
@@ -312,17 +310,17 @@ def test_bounds_travel_with_the_layers_not_only_with_the_clock(client):
         "height_mm": vel["height_mm"],
     }
     assert overzicht["bounds"]["outside_bed"] == 0
-    # Dezelfde meting als de klokroute geeft; twee bronnen zouden het over de
-    # rand oneens kunnen worden.
+    # The same measurement the clock route gives; two sources could disagree about the
+    # edge.
     assert overzicht["bounds"] == client.get("/api/job/estimate").json()["bounds"]
 
 
 def test_shapes_outside_the_bed_are_named_with_the_ids_the_design_uses(client):
     """
-    De weergave kleurt op id, dus de id's moeten die van `/api/design` zijn.
+    The drawing colours by id, so the ids have to be `/api/design`'s.
 
-    Zonder `validate_ids()` gaf `bounds_report` lege strings terug voor alles
-    wat uit een SVG kwam — en dan kleurt de weergave niets.
+    Without `validate_ids()`, `bounds_report` handed back empty strings for everything that
+    came from an SVG — and then the drawing colours nothing.
     """
     ver = client.post(
         "/api/design/elements",
@@ -339,22 +337,21 @@ def test_shapes_outside_the_bed_are_named_with_the_ids_the_design_uses(client):
 
 def test_a_raster_layer_promises_no_time_on_an_engine_that_cannot_burn_it(client, kernel):
     """
-    Geen seconden beloven voor werk dat de engine niet uitvoert.
+    Do not promise seconds for work the engine does not execute.
 
-    `op raster` zet zijn vormen tijdens het plannen om in een bitmap via
-    `render-op/make_raster`. Onze plugin registreert die dienst zelf, dus
-    normaal brandt een rasterlaag gewoon — maar draait iemand met een oudere
-    installatie of valt de registratie weg, dan neemt `preprocess` de
-    `strip_rasters`-tak: de laag gooit zijn eigen kinderen weg en levert nul
-    cutcode. Onze som rekende daar wél tijd voor. Gemeten op één gevuld vlak
-    van 60x40 mm: 385,5 s beloofd tegen 70,0 s in het echte plan.
+    During planning `op raster` turns its shapes into a bitmap through
+    `render-op/make_raster`. Our plugin registers that service itself, so normally a raster
+    layer simply burns — but if somebody runs an older installation or the registration drops
+    away, `preprocess` takes the `strip_rasters` branch: the layer throws its own children
+    away and produces no cutcode. Our sum *did* compute time for it. Measured on one filled
+    area of 60x40 mm: 385.5 s promised against 70.0 s in the real plan.
     """
     made = client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 20, "y_mm": 20, "width_mm": 60, "height_mm": 40},
     ).json()
-    # Een rasterlaag brandt het vlak, en een vorm zonder vulling heeft dat niet;
-    # zonder deze regel meet de test een laag die sowieso nul kost.
+    # A raster layer burns the area, and a shape without a fill has none; without this line
+    # the test measures a layer that costs zero anyway.
     from meerk40t.svgelements import Color
 
     node = list(kernel.elements.elems())[-1]
