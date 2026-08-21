@@ -1,9 +1,9 @@
 /**
- * Gereedschap voor de gauntlet.
+ * Tools for the gauntlet.
  *
- * Bevindingen moeten bewijs hebben, dus meten we in de browser in plaats van
- * te kijken: afmetingen, berekende stijlen en tijden. Screenshots zijn het
- * archief, de metingen zijn het argument.
+ * Findings need evidence, so we measure in the browser instead of looking:
+ * sizes, computed styles and times. Screenshots are the archive, the
+ * measurements are the argument.
  */
 import { chromium } from 'playwright';
 
@@ -15,11 +15,11 @@ export async function browser() {
 }
 
 /**
- * Schone lei voor een criticus.
+ * A clean slate for a critic.
  *
- * Zonder dit staat het herstelvenster van een vorige meting over het scherm en
- * meet je door een modaal venster heen — dat kostte me een ronde voordat ik het
- * doorhad.
+ * Without this the recovery dialog from a previous measurement lies over the
+ * screen and you measure through a modal — that cost me a round before I
+ * noticed.
  */
 export async function reset() {
 	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' }).catch(() => {});
@@ -33,13 +33,14 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 		colorScheme: theme === 'dark' ? 'dark' : 'light'
 	});
 	const page = await context.newPage();
-	// Het thema vóór het tekenen zetten. Achteraf omschakelen betekent meten
-	// tijdens de overgang, en dan lees je halverwege gemengde kleuren — dat
-	// leverde "contrastfouten" op die na een seconde vanzelf weg waren.
+	// Set the theme before anything is drawn. Switching afterwards means
+	// measuring during the transition, and then you read mixed colours halfway —
+	// which produced "contrast faults" that went away by themselves after a
+	// second.
 	if (theme === 'dark') {
 		await page.addInitScript(() => {
-			// Een initscript draait al vóórdat <html> bestaat; dan is
-			// documentElement nog null en gooit setAttribute.
+			// An init script runs before <html> exists; documentElement is null
+			// then and setAttribute throws.
 			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
 			set();
 			document.addEventListener('DOMContentLoaded', set);
@@ -51,15 +52,15 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 	});
 	page.on('pageerror', (e) => problems.push(`pageerror: ${String(e).slice(0, 160)}`));
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
-	// Niet op networkidle wachten: de statusverbinding blijft open, dus die
-	// toestand komt nooit. Wachten tot de app zelf getekend heeft.
+	// Do not wait for networkidle: the status connection stays open, so that
+	// state never arrives. Wait until the app itself has drawn.
 	await page.waitForSelector('.statusbar, .setup', { timeout: 20000 }).catch(() => {});
 	await page.waitForTimeout(700);
 	page.problems = problems;
 	return page;
 }
 
-/** Alle zichtbare elementen met hun doos en een paar stijlen. */
+/** Every visible element with its box and a few styles. */
 export async function survey(page, selector = '*') {
 	return page.$$eval(selector, (nodes) =>
 		nodes
@@ -97,7 +98,7 @@ export function report(name, findings) {
 	);
 	for (const f of findings) {
 		console.log(`[${f.severity}] ${f.what}`);
-		console.log(`    bewijs: ${f.evidence}`);
+		console.log(`    evidence: ${f.evidence}`);
 	}
 	return tally;
 }
