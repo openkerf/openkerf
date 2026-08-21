@@ -1,5 +1,5 @@
 """
-Meerdere passes op een testbord.
+Meerdere passes op one testbord.
 
 The case this comes from: a material that almost cuts through at 5 mm/s, and that you want
 to try at 8 mm/s in two passes. One number for the whole board — passes as a third axis would
@@ -70,7 +70,7 @@ def test_the_estimate_counts_every_pass():
     to the next square is the pitch (10 + 2 mm) at 100 mm/s and belongs to each square once,
     however many passes you do.
     """
-    een = dict(
+    one = dict(
         BASE,
         speed_min=10,
         speed_max=10,
@@ -82,8 +82,8 @@ def test_the_estimate_counts_every_pass():
         gap_mm=2,
     )
     reizen = 4 * 12 / 100.0
-    enkel, cellen = plan_grid(**een)
-    dubbel, _ = plan_grid(**een, passes=2)
+    enkel, cellen = plan_grid(**one)
+    dubbel, _ = plan_grid(**one, passes=2)
 
     assert len(cellen) == 4
     assert enkel["seconds"] == pytest.approx(4 * 4.0 + reizen, abs=0.05)
@@ -128,9 +128,9 @@ def test_every_cell_layer_gets_the_passes(kernel):
     getekend, _ = TestGridGenerator(kernel).draw(plan, cells)
 
     lagen = [kernel.elements.find_node(entry["operation_id"]) for entry in getekend]
-    assert lagen and all(laag is not None for laag in lagen)
-    assert {int(laag.passes) for laag in lagen} == {3}
-    assert {laag.implicit_passes for laag in lagen} == {3}
+    assert lagen and all(layer is not None for layer in lagen)
+    assert {int(layer.passes) for layer in lagen} == {3}
+    assert {layer.implicit_passes for layer in lagen} == {3}
 
 
 def _brandwerk(passes) -> int:
@@ -174,13 +174,13 @@ def test_the_cutcode_really_burns_every_square_three_times():
     field was simply right.
     """
     enkel = _brandwerk(1)
-    drie = _brandwerk(3)
+    three = _brandwerk(3)
 
     # Nine squares, so nine burns at one pass and twenty-seven at three. The exact number is
     # there so that a shift in the plan's shape stands out instead of disappearing into a
     # ratio.
     assert enkel == 9
-    assert drie == 27
+    assert three == 27
 
 
 def test_a_single_pass_board_still_says_one(kernel):
@@ -189,8 +189,8 @@ def test_a_single_pass_board_still_says_one(kernel):
     getekend, _ = TestGridGenerator(kernel).draw(plan, cells)
 
     lagen = [kernel.elements.find_node(entry["operation_id"]) for entry in getekend]
-    assert {int(laag.passes) for laag in lagen} == {1}
-    assert {laag.implicit_passes for laag in lagen} == {1}
+    assert {int(layer.passes) for layer in lagen} == {1}
+    assert {layer.implicit_passes for layer in lagen} == {1}
 
 
 # -------------------------------------------------------------- onthouden
@@ -265,60 +265,61 @@ def test_a_layer_that_only_looks_like_three_passes_is_reported_as_one(client, ke
     `implicit_passes`. The panel and the pre-flight read the field and so reported three. That
     is precisely the number somebody plans their board on.
     """
-    vorm = client.post(
+    shape = client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     ).json()["ids"][0]
-    laag = client.post("/api/design/operations", json={"type": "cut"}).json()
-    client.post("/api/design/assign", json={"ids": [vorm], "operation_id": laag["id"]})
+    layer = client.post("/api/design/operations", json={"type": "cut"}).json()
+    client.post("/api/design/assign", json={"ids": [shape], "operation_id": layer["id"]})
 
-    node = kernel.elements.find_node(laag["id"])
+    node = kernel.elements.find_node(layer["id"])
     node.passes = 3
     node.passes_custom = False
 
-    getoond = next(
+    shown = next(
         op
         for op in client.get("/api/design").json()["operations"]
-        if op["id"] == laag["id"]
+        if op["id"] == layer["id"]
     )
-    assert getoond["passes"] == 1
+    assert shown["passes"] == 1
 
     # And with the flag it does say three — otherwise this test would have proved nothing.
     node.passes_custom = True
-    getoond = next(
+    shown = next(
         op
         for op in client.get("/api/design").json()["operations"]
-        if op["id"] == laag["id"]
+        if op["id"] == layer["id"]
     )
-    assert getoond["passes"] == 3
+    assert shown["passes"] == 3
 
 
 def test_the_estimate_only_counts_passes_the_machine_will_do(client, kernel):
     """
-    Elke extra pass kost precies één keer branden, en de vlag uit kost niets.
+    Every extra pass costs exactly one more burn, and the flag off costs nothing.
 
-    Geen verdrievoudiging als verwachting: in de schatting zit ook reistijd, en
-    die gaat niet mee omhoog. De aanwas per pass is wat hier klopt moet zijn.
+    Not a threefold rise as the expectation: the estimate holds travel time too,
+    and that does not go up with it. What has to be right here is the increase per
+    pass.
     """
-    vorm = client.post(
+    shape = client.post(
         "/api/design/elements",
         json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 20, "height_mm": 20},
     ).json()["ids"][0]
-    laag = client.post("/api/design/operations", json={"type": "cut", "speed": 10}).json()
-    client.post("/api/design/assign", json={"ids": [vorm], "operation_id": laag["id"]})
-    node = kernel.elements.find_node(laag["id"])
+    layer = client.post("/api/design/operations", json={"type": "cut", "speed": 10}).json()
+    client.post("/api/design/assign", json={"ids": [shape], "operation_id": layer["id"]})
+    node = kernel.elements.find_node(layer["id"])
 
-    def schatting(passes, vlag):
-        node.passes, node.passes_custom = passes, vlag
+    def estimate(passes, flag):
+        node.passes, node.passes_custom = passes, flag
         return client.get("/api/job/estimate").json()["seconds"]
 
-    een = schatting(1, False)
-    stil = schatting(3, False)
-    twee = schatting(2, True)
-    drie = schatting(3, True)
+    one = estimate(1, False)
+    quiet = estimate(3, False)
+    two = estimate(2, True)
+    three = estimate(3, True)
 
-    # De vlag uit verandert niets, hoe hoog het veld ook staat.
-    assert stil == pytest.approx(een, rel=0.01)
-    # En met de vlag aan kost elke pass erbij hetzelfde stuk werk.
-    assert twee - een > 0
-    assert drie - twee == pytest.approx(twee - een, rel=0.02)
+    # The flag off changes nothing, however high the field is set.
+    assert quiet == pytest.approx(one, rel=0.01)
+    # And with the flag on every extra pass costs the same piece of work.
+    assert two - one > 0
+    assert three - two == pytest.approx(two - one, rel=0.02)

@@ -25,8 +25,8 @@ def images(kernel):
 
 def a_png(size=(120, 80)):
     """
-    Geen vlakke kleur maar een vorm met licht en donker: op een egale
-    afbeelding verandert contrast niets, en dan test je niets.
+    Not a flat colour but a shape with light and dark: on an even image contrast
+    changes nothing, and then you are testing nothing.
     """
     from PIL import ImageDraw
 
@@ -64,13 +64,13 @@ def test_the_pixels_can_be_fetched(client, loaded):
 
 def test_the_pixels_are_as_long_as_the_answer_says(client, loaded):
     """
-    De lengte die het antwoord meldt moet de lengte zijn die het levert.
+    The length the answer reports has to be the length it delivers.
 
-    Dit ging via één vast bestand per element. Vroeg het canvas twee keer
-    tegelijk om hetzelfde plaatje — en dat doet het, want elke verversing hangt
-    er een nieuw `?v=`-nummer aan — dan schreef de ene aanvraag het bestand
-    opnieuw terwijl de andere het verstuurde. Uvicorn viel dan om met
-    `Too little data for declared Content-Length`, in het log van de gebruiker.
+    This went through one fixed file per element. If the canvas asked for the same
+    picture twice at once — and it does, because every refresh hangs a new `?v=`
+    number on it — then one request rewrote the file while the other was sending
+    it. Uvicorn then fell over with `Too little data for declared Content-Length`,
+    in the user's log.
     """
     response = client.get(f"/api/design/elements/{loaded['id']}/image.png")
 
@@ -164,7 +164,7 @@ def test_unknown_vectoriser_is_refused(client, loaded):
 
 
 def test_cropping_shrinks_the_pixels(client, loaded):
-    """De helft wegsnijden moet ook echt de helft van de pixels schelen."""
+    """Cutting half away really has to save half the pixels."""
     box = loaded["image"]
 
     response = client.post(
@@ -211,8 +211,8 @@ def pixels(client, element_id):
 
 def test_the_panel_can_see_what_is_switched_on(client, loaded):
     """
-    Zonder deze lijst zag je alleen knoppen en moest je onthouden waar je op
-    had gedrukt.
+    Without this list you saw only buttons and had to remember what you had
+    pressed.
     """
     state = client.get(f"/api/design/elements/{loaded['id']}/image").json()
 
@@ -248,8 +248,8 @@ def test_an_adjustment_switches_on_and_off(client, loaded):
 
 def test_clicking_the_same_thing_twice_changes_nothing_more(client, loaded):
     """
-    Dit ging mis: elke klik werkte op het resultaat van de vorige, dus na een
-    paar keer was de afbeelding weggebrand.
+    This went wrong: every click worked on the result of the previous one, so
+    after a few times the image was burned away.
     """
     body = {"adjustment": "contrast", "enabled": True, "values": {"contrast": 60}}
 
@@ -310,7 +310,7 @@ def test_an_unknown_dither_type_is_refused(client, loaded):
 
 
 def test_cropping_can_be_undone(client, loaded):
-    """Ook bijsnijden gaat in het recept, dus het origineel blijft bestaan."""
+    """Cropping goes into the recipe too, so the original stays."""
     box = loaded["image"]
     before = pixels(client, loaded["id"])
 
