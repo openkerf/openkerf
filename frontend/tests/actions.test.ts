@@ -46,6 +46,7 @@ function context(over: Partial<Context> = {}): Context {
 	return {
 		count: 1,
 		inGroup: false,
+		lockedCount: 0,
 		isImage: false,
 		isText: false,
 		isCropped: false,

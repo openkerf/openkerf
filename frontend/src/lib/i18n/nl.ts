@@ -226,6 +226,39 @@ export const nl: Catalogue = {
 	'action.path': 'Pad bewerken',
 	'action.offset': 'Offset…',
 	'action.simplify': 'Vereenvoudigen',
+	'action.duplicates': 'Duplicaten opruimen…',
+	'duplicates.title': 'Vormen die op elkaar liggen',
+	'duplicates.none': 'Er liggen in dit ontwerp geen twee vormen op elkaar.',
+	'duplicates.found': {
+		one: 'Eén vorm ligt op een andere. Weghalen laat degene staan die er het eerst lag.',
+		other: '{n} vormen liggen op een andere, allemaal op dezelfde plek. Weghalen laat degene staan die er het eerst lag.'
+	},
+	'duplicates.foundSpread':
+		'{n} vormen liggen op een andere, op {stacks} plekken. Weghalen laat op elke plek degene staan die er het eerst lag.',
+	'duplicates.why': 'Een duplicaat is onzichtbaar en brandt twee keer: dezelfde lijn opnieuw, wat op dun materiaal de rand verbrandt en op dik gewoon de tijd kost.',
+	'duplicates.skipped': {
+		one: 'Eén vorm is niet vergeleken, omdat hij geen omtrek heeft om te vergelijken (een afbeelding of een groep).',
+		other: '{n} vormen zijn niet vergeleken, omdat ze geen omtrek hebben om te vergelijken (afbeeldingen en groepen).'
+	},
+	'duplicates.remove': '{n} weghalen',
+	'notice.duplicates.removed': {
+		one: '1 duplicaat weggehaald.',
+		other: '{n} duplicaten weggehaald.'
+	},
+	'action.lock': 'Vergrendelen',
+	'action.unlock': 'Ontgrendelen',
+	'reason.locked': 'Deze vorm is vergrendeld',
+	'reason.someLocked': '{n} van de vormen die je koos zijn vergrendeld',
+	'notice.lock.locked': {
+		one: '1 vorm vergrendeld — hij kan niet verplaatst, geschaald of verwijderd worden tot je hem ontgrendelt.',
+		other: '{n} vormen vergrendeld — ze kunnen niet verplaatst, geschaald of verwijderd worden tot je ze ontgrendelt.'
+	},
+	'notice.lock.unlocked': {
+		one: '1 vorm ontgrendeld.',
+		other: '{n} vormen ontgrendeld.'
+	},
+	'panel.locked': 'Vergrendeld',
+	'panel.locked.body': 'Beschermd tegen verplaatsen, schalen en verwijderen. De laag, de kleur en de bruggen kun je nog wel wijzigen.',
 	'action.nest': 'Nesten',
 	'action.split': 'Splitsen in losse vormen',
 	'action.splitInto': 'Splitsen in {n} vormen',

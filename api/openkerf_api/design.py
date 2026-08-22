@@ -459,6 +459,10 @@ class DesignReader:
             "type": node.type,
             "label": _label(node, node.type.replace("elem ", "")),
             "hidden": bool(getattr(node, "hidden", False)),
+            # The engine's own lock (core/node/node.py:85). The canvas draws no
+            # handles on a locked shape and the panel offers the way out, so the
+            # flag has to travel with every snapshot rather than be asked for.
+            "locked": bool(getattr(node, "lock", False)),
             "group_id": _group_of(node),
             "text": _text_of(node),
             "line": _line_of(node),

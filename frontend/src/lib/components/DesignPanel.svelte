@@ -25,6 +25,7 @@
 		onRotate,
 		onAssign,
 		onLayerChange,
+		onUnlock,
 		onArrange,
 		cornerNote = null,
 		onPrune,
@@ -50,6 +51,8 @@
 		onRotate?: (angleDeg: number) => void;
 		onAssign?: (operationId: string, assigned: boolean) => void;
 		onLayerChange?: () => void;
+		/** Unlock the selection — the one verb a lock may not refuse. */
+		onUnlock?: () => void;
 		/** Only for "put everything on the bed" now: since v4 the rest of the arranging
 		 *  lives in the action bar and the context menu. */
 		onArrange?: (action: string) => void;
@@ -170,6 +173,11 @@
 	 * one-click default sits in the right-click menu; this is where you say how many and
 	 * how long.
 	 */
+	/** Is everything selected locked? Then the panel says so and offers the way out. */
+	let lockedHere = $derived(
+		chosen.length > 0 && chosen.every((element) => element.locked)
+	);
+
 	let bridges = $derived(bridgeSummary(chosen));
 	/** The two numbers as typed, so a half-typed "1." does not jump away. */
 	let bridgeFields = $state({ count: '', length: '' });
@@ -915,6 +923,20 @@
 				<p class="tip" role="status">{cornerNote}</p>
 			{/if}
 
+			<!-- A locked shape looks the same apart from its handles, so the panel says it
+			     in words and offers the way out in the same place. Above the values,
+			     because it explains why half of them cannot be typed into. -->
+			{#if lockedHere}
+				<div class="locked-note">
+					<span class="rot-label">{t('panel.locked')}</span>
+					<p class="hint">{t('panel.locked.body')}</p>
+					<button
+						class="rot"
+						disabled={!canEdit || edits.busy}
+						onclick={() => onUnlock?.()}>{t('action.unlock')}</button
+					>
+				</div>
+			{/if}
 			<!-- Bridges (tabs): the gaps that keep a cut part in the sheet. A value you set
 			     and read back, so it lives here and not in the menu; the menu carries the
 			     one-click default (four of 2 mm) because a panel field nobody finds is not a

@@ -272,6 +272,7 @@ const HANDLERS = new Proxy({}, { get: () => NOTHING }) as Handlers & LayerHandle
 const WIDE: Context = {
 	count: 3,
 	inGroup: true,
+		lockedCount: 0,
 	isImage: true,
 	isText: true,
 	isCropped: true,

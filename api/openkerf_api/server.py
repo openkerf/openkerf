@@ -24,6 +24,7 @@ from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
 from .document import Document
+from .duplicates import Duplicates
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
@@ -243,6 +244,7 @@ class ApiServer:
         )
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
+        self.duplicates = Duplicates(kernel, self.drawing)
         self.fonts = Fonts(kernel)
         self.camera = Camera(kernel, self.commands)
         self.clipart = Clipart(kernel, self.drawing)
@@ -925,6 +927,36 @@ class ApiServer:
         def update_line(element_id: str, body: dict):
             """Move one end; a line is two points, not a box."""
             return manage(lambda: self.drawing.update_line(element_id, **body))
+
+        @app.get("/api/design/duplicates")
+        def count_duplicates(ids: str | None = None):
+            """
+            How many shapes lie on top of each other, without touching anything.
+
+            Looking first, because removing them changes nothing you can see: the
+            drawing looks the same and only the count says what happened. So the
+            interface asks with the number in the question.
+            """
+            picked = [i for i in (ids or "").split(",") if i]
+            return manage(lambda: self.duplicates.find(picked or None))
+
+        @app.post("/api/design/duplicates/remove", dependencies=write)
+        def remove_duplicates(body: dict):
+            return manage(lambda: self.duplicates.remove(body.get("ids")))
+
+        @app.post("/api/design/lock", dependencies=write)
+        def lock_elements(body: dict):
+            """
+            Lock or unlock the selection: protected from moving, sizing and deleting.
+
+            One route for both directions, with the wanted state in the body, because
+            a selection can hold a mix of the two and "make these locked" is the
+            operation a user means — not "toggle each of them", which on a mixed
+            selection leaves you with the other half of the mess.
+            """
+            return manage(
+                lambda: self.drawing.set_locked(body.get("ids"), body.get("locked", True))
+            )
 
         @app.post("/api/design/bridges", dependencies=write)
         def set_bridges(body: dict):

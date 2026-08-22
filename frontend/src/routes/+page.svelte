@@ -532,6 +532,60 @@
 		bridgeNotice = t('notice.bridges.cleared', { n: outcome.cleared });
 	}
 
+	/**
+	 * Lock or unlock what is selected.
+	 *
+	 * The notice says what a lock means, because the shape looks the same afterwards
+	 * apart from its handles: without a word, the first thing a user does is try to
+	 * drag it and read a refusal instead.
+	 */
+	/** Ask the API what lies on top of what; the answer opens the question. */
+	async function lookForDuplicates() {
+		if (!canEdit) return;
+		layoutNotice = null;
+		const picked = design.selectedIds;
+		const query = picked.length ? `?ids=${picked.map(encodeURIComponent).join(',')}` : '';
+		const response = await fetch(`/api/design/duplicates${query}`);
+		if (!response.ok) return;
+		const found = await response.json();
+		// Also when there is nothing: the answer belongs where the question was asked.
+		// A note in the side panel would be invisible with nothing selected, which is
+		// exactly the case you get from the bed's own menu.
+		duplicates = found;
+	}
+
+	async function removeDuplicates() {
+		const found = duplicates;
+		duplicates = null;
+		if (!found) return;
+		const picked = design.selectedIds;
+		const outcome = await post('/api/design/duplicates/remove', {
+			ids: picked.length ? picked : undefined
+		});
+		if (!outcome.ok) return;
+		const body = await outcome.json().catch(() => null);
+		await design.load();
+		// Select what stayed: it puts the count in a panel that is only there with a
+		// selection, and it shows *where* the stacks were — the drawing itself gives no
+		// sign that anything happened.
+		const stacks: string[][] = found.groups ?? [];
+		const gone = new Set<string>(body?.removed_ids ?? []);
+		const keepers = stacks.flat().filter((id) => !gone.has(id));
+		if (keepers.length) design.selectMany(keepers);
+		layoutNotice = t('notice.duplicates.removed', { n: body?.removed ?? found.extra });
+	}
+
+	async function lockSelection(locked: boolean) {
+		if (!canEdit || !hasSelection) return;
+		layoutNotice = null;
+		const ids = design.selectedIds;
+		if (!(await edits.setLocked(ids, locked)).ok) return;
+		await design.load();
+		layoutNotice = t(locked ? 'notice.lock.locked' : 'notice.lock.unlocked', {
+			n: ids.length
+		});
+	}
+
 	async function toALayer(kind: 'cut' | 'engrave' | 'raster') {
 		if (!canEdit || !hasSelection) return;
 		layoutNotice = null;
@@ -695,7 +749,12 @@
 			}
 			const wanted = $page.url.searchParams.get('select');
 			if (wanted) {
-				const ids = wanted.split(',').filter(Boolean);
+				// Only what is still there. A bookmark or a reload can name a shape that
+				// has since been deleted, and a selection of a shape that does not exist
+				// is worse than none: the action bar counts one, the panel shows nothing,
+				// and the right-click menu comes up empty.
+				const here = new Set(design.elements.map((element) => element.id));
+				const ids = wanted.split(',').filter((id) => here.has(id));
 				design.select(ids[0] ?? null);
 				ids.slice(1).forEach((id) => design.toggle(id));
 			}
@@ -865,6 +924,20 @@
 	let underPointer = $state<string[]>([]);
 	/** Where you are in a pile of shapes after an Alt+click; the action bar says it. */
 	let deeper = $state<{ index: number; total: number } | null>(null);
+	/**
+	 * What a look for duplicates found, while the question is on screen.
+	 *
+	 * Looking and removing are two steps on purpose: removing changes nothing you can
+	 * see — the drawing looks the same, because what goes was lying underneath — so the
+	 * number in the question is the only evidence the user gets.
+	 */
+	let duplicates = $state<{
+		looked_at: number;
+		skipped: number;
+		stacks: number;
+		extra: number;
+		groups?: string[][];
+	} | null>(null);
 
 	let handlers: Handlers = {
 		cut: () => klembordActie('cut', design.selectedIds),
@@ -928,7 +1001,9 @@
 		layerNumbers: () => canvasControl?.layerNumbers(),
 		rescue: () => arrange('rescue'),
 		cutPath: () => (cutPathOpen = true),
-		selectOne: (id) => design.select(id)
+		selectOne: (id) => design.select(id),
+		setLocked: (locked) => lockSelection(locked),
+		duplicates: () => lookForDuplicates()
 	};
 
 	/**
@@ -964,6 +1039,7 @@
 		return {
 			count: chosen.length,
 			inGroup: chosen.some((e) => Boolean(e.group_id)),
+			lockedCount: chosen.filter((e) => e.locked).length,
 			isImage: image,
 			isText: chosen.length === 1 && chosen[0]?.text !== null,
 			isCropped: image && Boolean(imageState?.cropped),
@@ -1126,6 +1202,8 @@
 			[KEYS.copy]: handlers.copy,
 			[KEYS.paste]: () => handlers.paste(),
 			[KEYS.duplicate]: handlers.duplicate,
+			// ⌘L reads the current state, so the same key locks and unlocks.
+			[KEYS.lock]: () => handlers.setLocked(actionContext.lockedCount !== actionContext.count),
 			[KEYS.delete]: handlers.remove,
 			[KEYS.selectAll]: handlers.selectAll,
 			[KEYS.group]: () => handlers.arrange('group'),
@@ -1457,6 +1535,7 @@
 					onRotate={rotate}
 					onAssign={assign}
 					onLayerChange={() => design.load()}
+					onUnlock={() => lockSelection(false)}
 					box={design.liveBox}
 					onSetPosition={setPosition}
 					onSetSize={setSize}
@@ -1660,6 +1739,37 @@
 			>{pending?.kind === 'fresh' ? t('replace.saveAndStart') : t('replace.saveAndOpen')}</button
 		>
 	</div>
+</Dialog>
+
+<!-- What lies on top of what: the count, why it matters, and one button that does
+     it. A confirm and not a straight action, because the drawing looks identical
+     afterwards — the only proof is the sentence in the notice. -->
+<Dialog title={t('duplicates.title')} open={duplicates !== null} width="470px">
+	{#if duplicates}
+		<p class="ask">
+			{duplicates.stacks === 0
+				? t('duplicates.none')
+				: duplicates.stacks > 1
+					? t('duplicates.foundSpread', { n: duplicates.extra, stacks: duplicates.stacks })
+					: t('duplicates.found', { n: duplicates.extra })}
+		</p>
+		{#if duplicates.stacks}
+			<p class="ask nuance">{t('duplicates.why')}</p>
+		{/if}
+		{#if duplicates.skipped}
+			<p class="ask nuance">{t('duplicates.skipped', { n: duplicates.skipped })}</p>
+		{/if}
+		<div class="ask-actions">
+			{#if duplicates.stacks}
+				<button class="btn" onclick={() => (duplicates = null)}>{t('common.cancel')}</button>
+				<button class="btn primary" onclick={removeDuplicates}
+					>{t('duplicates.remove', { n: duplicates.extra })}</button
+				>
+			{:else}
+				<button class="btn primary" onclick={() => (duplicates = null)}>{t('common.close')}</button>
+			{/if}
+		</div>
+	{/if}
 </Dialog>
 
 <!-- The prompt card floats and does not block: a job has just started, and that

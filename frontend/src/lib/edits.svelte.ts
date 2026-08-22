@@ -474,6 +474,17 @@ export class EditController {
 		return this.#post('/api/machine/unlock');
 	}
 
+	/**
+	 * Lock or unlock the selection.
+	 *
+	 * The wanted state travels in the body rather than being toggled per shape: a
+	 * mixed selection has no sensible toggle, and "make these locked" is what the
+	 * menu row says.
+	 */
+	setLocked(ids: string[], locked: boolean) {
+		return this.#post('/api/design/lock', { ids, locked });
+	}
+
 	undo() {
 		return this.#post('/api/design/undo');
 	}

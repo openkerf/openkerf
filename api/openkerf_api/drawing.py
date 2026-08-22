@@ -391,7 +391,7 @@ class Drawing:
         """
         from meerk40t.core.units import UNITS_PER_MM
 
-        node = self._nodes([element_id])[0]
+        node = self._nodes([element_id], protect="changed")[0]
         if getattr(node, "mktext", None) is None:
             raise DesignError(
                 "This element is not editable text.", code="draw.notText"
@@ -625,7 +625,7 @@ class Drawing:
         """Move one end of a line, without drawing it again."""
         from meerk40t.core.units import UNITS_PER_MM
 
-        node = self._nodes([element_id])[0]
+        node = self._nodes([element_id], protect="changed")[0]
         if node.type != "elem line":
             raise DesignError("This element is not a line.", code="draw.notALine")
 
@@ -679,9 +679,9 @@ class Drawing:
             raise DesignError(
                 f"Unknown alignment: {mode}. Choose from {', '.join(self.ALIGNMENTS_2D)}."
             )
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="aligned")
         if len(nodes) < 2:
-            raise DesignError("Uitlijnen heeft minstens twee elementen needed.")
+            raise DesignError("Aligning needs at least two shapes.", code="draw.needsTwo")
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope("Align"):
             self.runner.run(f"align {mode}")
@@ -691,7 +691,7 @@ class Drawing:
     def group(self, element_ids) -> dict:
         nodes = self._nodes(element_ids)
         if len(nodes) < 2:
-            raise DesignError("Groeperen heeft minstens twee elementen needed.")
+            raise DesignError("Grouping needs at least two shapes.", code="draw.needsTwo")
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope("Group"):
             self.runner.run("group")
@@ -703,7 +703,7 @@ class Drawing:
         """
         Ungroup. The elements stay; only the wrapper disappears.
         """
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="ungrouped")
         groups = []
         for node in nodes:
             parent = getattr(node, "parent", None)
@@ -733,7 +733,7 @@ class Drawing:
         """
         if axis not in ("horizontal", "vertical"):
             raise DesignError("The mirror axis has to be 'horizontal' or 'vertical'.")
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="mirrored")
         self.elements.set_emphasis(nodes)
         factors = "-1 1" if axis == "horizontal" else "1 -1"
         with self.elements.undoscope("Mirror"):
@@ -753,7 +753,7 @@ class Drawing:
             raise DesignError(
                 f"Unknown operation: {operation}. Choose from {', '.join(self.BOOLEAN)}."
             )
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="combined")
         if len(nodes) < 2:
             raise DesignError(f"{operation} needs at least two shapes.")
         before = {id(n) for n in self.elements.elems()}
@@ -778,7 +778,7 @@ class Drawing:
         distance = _finite(distance_mm, "distance_mm")
         if distance == 0:
             raise DesignError("An offset of zero yields nothing.")
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="offset")
         before = {id(n) for n in self.elements.elems()}
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope("Offset"):
@@ -815,7 +815,7 @@ class Drawing:
                 f"Onbekende hoekstijl: {style}. Kies 'round' of 'chamfer'."
             )
         size = _positive(size_mm, "size_mm")
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="changed")
         units = self._units_per_mm()
 
         afgerond, paths, skipped = [], [], 0
@@ -864,7 +864,7 @@ class Drawing:
 
     def simplify(self, element_ids) -> dict:
         """Fewer nodes, same shape — saves time on complicated paths."""
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="simplified")
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope("Simplify"):
             self.runner.run("simplify")
@@ -883,7 +883,7 @@ class Drawing:
             raise DesignError(
                 f"Unknown effect: {effect}. Choose from {', '.join(sorted(self.EFFECTS))}."
             )
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="changed")
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope(f"Add {effect}"):
             self.runner.run(command)
@@ -892,7 +892,7 @@ class Drawing:
         return {"effect": effect, "ids": [n.id for n in nodes]}
 
     def delete(self, element_ids) -> dict:
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="deleted")
         self.elements.set_emphasis(nodes)
         with self.elements.undoscope("Delete"):
             # `delete` on its own does not exist on the base context; `element delete`
@@ -910,6 +910,13 @@ class Drawing:
         created = [n for n in self.elements.elems() if id(n) not in before]
         if not created:
             raise DesignError("The engine duplicated nothing.")
+        # The engine copies the lock along with everything else, and then the copy of a
+        # locked jig cannot be dragged into place — the opposite of what duplicating is
+        # for. Measured before this line: duplicate a locked rectangle and the new one
+        # came out locked too.
+        for node in created:
+            if getattr(node, "lock", False):
+                node.lock = False
         self.elements.validate_ids()
         self.elements.set_emphasis(created)
         self._refresh()
@@ -977,7 +984,7 @@ class Drawing:
         return self.clipboard_state()
 
     def clipboard_cut(self, element_ids) -> dict:
-        nodes = self._nodes(element_ids)
+        nodes = self._nodes(element_ids, protect="cut")
         self._clipboard_group = self._whole_group(nodes)
         self.elements.set_emphasis(nodes)
         # The engine puts an undo scope around the deletion itself.
@@ -1044,7 +1051,42 @@ class Drawing:
     def _alle_groepen(self) -> list:
         return [n for n in self.elements.elem_branch.flat() if n.type == "group"]
 
-    def _nodes(self, element_ids):
+    def set_locked(self, element_ids, locked: bool) -> dict:
+        """
+        Lock or unlock shapes.
+
+        The flag is the engine's own (`node.lock`), so a design locked here opens
+        locked in the wxPython interface too. Not guarded against locked shapes for
+        obvious reasons: unlocking is the one verb a lock may not refuse.
+        """
+        # No check on an empty selection here: `_nodes` refuses that one line down, in
+        # the same words every other edit uses.
+        nodes = self._nodes(element_ids)
+        want = bool(locked)
+        changed = []
+        with self.elements.undoscope("Lock" if want else "Unlock"):
+            for node in nodes:
+                if bool(getattr(node, "lock", False)) != want:
+                    node.lock = want
+                    changed.append(node.id)
+        self._refresh()
+        return {
+            "ids": [node.id for node in nodes],
+            "locked": want,
+            "changed": len(changed),
+        }
+
+    def _nodes(self, element_ids, protect: str | None = None):
+        """
+        The nodes these ids point at.
+
+        `protect` names the verb of an edit that changes geometry or takes a shape
+        away; those refuse a locked shape. It is opt-in and not the default because
+        the same funnel serves the edits that a lock deliberately allows — a layer,
+        a colour, a fill, bridges — and a lock that stopped those would stop you
+        working instead of stopping an accident. The list of which is which is in
+        locking.py, in words.
+        """
         from .edits import _ids
 
         nodes = []
@@ -1053,6 +1095,10 @@ class Drawing:
             if node is None:
                 raise DesignError(f"Element {node_id} does not exist (any more).")
             nodes.append(node)
+        if protect is not None:
+            from .locking import refuse_locked
+
+            refuse_locked(nodes, protect)
         return nodes
 
     # ------------------------------------------------------------- operations

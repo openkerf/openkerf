@@ -88,6 +88,8 @@ export const KEYS: Record<string, string> = {
 	duplicate: 'mod+d',
 	delete: 'delete',
 	selectAll: 'mod+a',
+	// Locking a shape is the counterpart of selecting it, and ⌘L is free here.
+	lock: 'mod+l',
 	group: 'mod+g',
 	// Two keys for one operation: ⌘⇧G comes from Illustrator and Figma, ⌘U from
 	// LightBurn. Whoever comes from one of the three need not relearn.
@@ -181,6 +183,8 @@ export type Context = {
 	count: number;
 	/** Is the selection inside a group? */
 	inGroup: boolean;
+	/** How many of the selected shapes are locked. Decides the row and its reason. */
+	lockedCount: number;
 	isImage: boolean;
 	isText: boolean;
 	isCropped: boolean;
@@ -243,6 +247,10 @@ export type Handlers = {
 	onlyLayer: (kind: 'cut' | 'engrave' | 'raster') => void;
 	/** Select exactly this one shape — from the list of what lies under the pointer. */
 	selectOne: (id: string) => void;
+	/** Lock the selection, or unlock it. */
+	setLocked: (locked: boolean) => void;
+	/** Look for shapes lying on top of each other, and offer to remove them. */
+	duplicates: () => void;
 	assignLayer: (id: string, inside: boolean) => void;
 	toSheet: (id: string) => void;
 	editText: () => void;
@@ -381,9 +389,23 @@ export function historyActions(ctx: Context, h: Handlers): Action[] {
  * bottom what throws it away. Whoever bad-clicks here hits "Copy" and not
  * "Delete".
  */
+/** Is every shape in the selection locked? Decides which way the lock row points. */
+function allLocked(ctx: Context): boolean {
+	return ctx.count > 0 && ctx.lockedCount === ctx.count;
+}
+
 export function objectMenu(ctx: Context, h: Handlers): Menu {
 	const cannot = mayWrite(ctx);
-	const needsOne = cannot ?? (ctx.count ? undefined : t('reason.pickShape'));
+	// A locked shape refuses geometry in the API, so the row says why before you
+	// press it. Without this the menu offers "Mirror" and the app answers 409 — the
+	// reason arrives after the click instead of on it.
+	const locked =
+		ctx.lockedCount === 0
+			? undefined
+			: ctx.lockedCount === ctx.count && ctx.count === 1
+				? t('reason.locked')
+				: t('reason.someLocked', { n: ctx.lockedCount });
+	const needsOne = cannot ?? locked ?? (ctx.count ? undefined : t('reason.pickShape'));
 
 	const combine: Action[] = (
 		[
@@ -422,6 +444,15 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 				: t('action.split'),
 			off: needsOne ?? (ctx.splittable.shapes ? undefined : t('reason.onePiece')),
 			run: h.split
+		},
+		{
+			// On the selection here; the bed's own menu has the same verb for the whole
+			// design. Two shapes are the fewest that can lie on top of each other.
+			id: 'path-duplicates',
+			label: t('action.duplicates'),
+			off: cannot ?? (ctx.count > 1 ? undefined : t('reason.needsTwo')),
+			explain: t('duplicates.why'),
+			run: h.duplicates
 		},
 		{ id: 'path-hatch', label: t('action.hatch'), off: needsOne, run: () => h.arrange('hatch') },
 		{ id: 'path-wobble', label: t('action.wobble'), off: needsOne, run: () => h.arrange('wobble') }
@@ -502,6 +533,18 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 					items: alignActions(ctx, h)
 				},
 				...arrangeActions(ctx, h),
+				{
+					// One row, two directions: "Lock" while something is still unlocked,
+					// "Unlock" when everything picked is locked. A mixed selection locks
+					// the rest, because that is what somebody who picked all of it means.
+					id: allLocked(ctx) ? 'unlock' : 'lock',
+					label: allLocked(ctx) ? t('action.unlock') : t('action.lock'),
+					key: K('lock'),
+					// Deliberately not `needsOne`: that one carries the locked reason, and
+					// this is the single row a lock may never refuse.
+					off: cannot ?? (ctx.count ? undefined : t('reason.pickShape')),
+					run: () => h.setLocked(!allLocked(ctx))
+				},
 				{
 					id: 'rotate',
 					label: t('action.rotate'),
@@ -726,6 +769,16 @@ export function canvasMenu(
 		},
 		{
 			items: [
+				{
+					// The same verb as in the shape menu, and here it means the whole bed —
+					// which is how you meet the problem: an import landed on top of what was
+					// already there and nothing looks wrong.
+					id: 'canvas-duplicates',
+					label: t('action.duplicates'),
+					off: cannot ?? (ctx.empty ? t('reason.bedEmpty') : undefined),
+					explain: t('duplicates.why'),
+					run: h.duplicates
+				},
 				{
 					id: 'rescue',
 					label: t('action.rescue'),

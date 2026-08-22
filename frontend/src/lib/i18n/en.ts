@@ -231,6 +231,39 @@ export const en = {
 	'action.path': 'Edit path',
 	'action.offset': 'Offset…',
 	'action.simplify': 'Simplify',
+	// Locking: the shapes you must not touch are the ones you touch by accident.
+	'action.duplicates': 'Remove duplicates…',
+	'duplicates.title': 'Shapes lying on top of each other',
+	'duplicates.none': 'No two shapes in this design lie on top of each other.',
+	'duplicates.found': {
+		one: 'One shape lies on top of another. Removing it leaves the one that was there first.',
+		other: '{n} shapes lie on top of another one, all in the same place. Removing them leaves the one that was there first.'
+	},
+	'duplicates.foundSpread': '{n} shapes lie on top of another one, in {stacks} places. Removing them leaves the one that was there first in each place.',
+	'duplicates.why': 'A duplicate is invisible and it burns twice: the same line again, which scorches the edge on thin material and simply costs the time on thick.',
+	'duplicates.skipped': {
+		one: 'One shape was not compared, because it has no outline to compare (an image or a group).',
+		other: '{n} shapes were not compared, because they have no outline to compare (images and groups).'
+	},
+	'duplicates.remove': 'Remove {n}',
+	'notice.duplicates.removed': {
+		one: '1 duplicate removed.',
+		other: '{n} duplicates removed.'
+	},
+	'action.lock': 'Lock',
+	'action.unlock': 'Unlock',
+	'reason.locked': 'This shape is locked',
+	'reason.someLocked': '{n} of the shapes you picked are locked',
+	'notice.lock.locked': {
+		one: '1 shape locked — it cannot be moved, sized or deleted until you unlock it.',
+		other: '{n} shapes locked — they cannot be moved, sized or deleted until you unlock them.'
+	},
+	'notice.lock.unlocked': {
+		one: '1 shape unlocked.',
+		other: '{n} shapes unlocked.'
+	},
+	'panel.locked': 'Locked',
+	'panel.locked.body': 'Protected from moving, sizing and deleting. Its layer, colour and bridges can still be changed.',
 	'action.nest': 'Nest',
 	'action.split': 'Split into separate shapes',
 	'action.splitInto': 'Split into {n} shapes',

@@ -110,8 +110,20 @@ class DesignEditor:
             )
         return node
 
-    def _target(self, element_ids) -> list:
+    def _target(self, element_ids, verb: str = "changed") -> list:
+        """
+        The nodes an edit acts on, emphasised for the engine — and never a locked one.
+
+        Every transform in this class comes through here, which is why the lock is
+        checked here and not three times over: a guard you have to remember is a guard
+        that gets forgotten on the fourth transform somebody adds.
+        """
+        # Imported here and not at the top: locking.py takes DesignError from this
+        # module, and a module-level import back would be a circle.
+        from .locking import refuse_locked
+
         nodes = [self._node(node_id) for node_id in _ids(element_ids)]
+        refuse_locked(nodes, verb)
         self.elements.set_emphasis(nodes)
         return nodes
 
@@ -121,7 +133,7 @@ class DesignEditor:
         dx = _finite(dx_mm, "dx_mm")
         dy = _finite(dy_mm, "dy_mm")
         ids = _ids(element_ids)
-        self._target(ids)
+        self._target(ids, "moved")
         self.runner.run(f"translate {_mm(dx)} {_mm(dy)}")
         return {"ids": ids, "moved": [dx, dy]}
 
@@ -133,7 +145,7 @@ class DesignEditor:
         ids = _ids(element_ids)
         # With several elements the engine resizes their combined bounding box
         # and keeps their relative positions, like dragging a group.
-        self._target(ids)
+        self._target(ids, "resized")
         self.runner.run(f"resize {_mm(x)} {_mm(y)} {_mm(width)} {_mm(height)}")
         return {"ids": ids, "bounds": [x, y, width, height]}
 
@@ -151,7 +163,7 @@ class DesignEditor:
         """
         angle = _finite(angle_deg, "angle_deg")
         ids = _ids(element_ids)
-        nodes = self._target(ids)
+        nodes = self._target(ids, "rotated")
         if absolute:
             angles = [_visual_angle(node) for node in nodes]
             known = [value for value in angles if value is not None]
