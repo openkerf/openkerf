@@ -85,6 +85,24 @@
 		color: var(--on-color);
 		box-shadow: var(--lift-2);
 	}
+	/**
+	 * Out of the way while a window is open — still on top, still readable.
+	 *
+	 * The alarm outranks everything, and that stays true; what it may not do is lie
+	 * across a window whose whole content is one picture. Measured on the cut-path
+	 * window: 620 x 111 px of alarm over a drawing of 1006 x 522, with contour number 1
+	 * underneath it. `data-modal` is set by Dialog.svelte for as long as any dialog is
+	 * open, so the card moves to the bottom edge instead of being demoted.
+	 *
+	 * It does still lie over the bottom of the window — there is no free strip on a
+	 * 900 px screen with a dialog of 760 in the middle of it. What is down there is
+	 * text that scrolls, and "Seen" stays where the thumb expects it; what is up there
+	 * is a picture you cannot scroll back into view.
+	 */
+	:global(html[data-modal]) .alarm {
+		top: auto;
+		bottom: calc(var(--statusbar-height, 0px) + var(--space-3));
+	}
 	.sign {
 		flex: none;
 		width: 22px;

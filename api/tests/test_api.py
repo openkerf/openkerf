@@ -137,6 +137,10 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # service's settings, and it moves the work on its way to the machine — so certainly
         # behind the gate.
         "/api/machine/origin",
+        # The rotary. Machine-wide settings that scale Y on the way to the machine, so a
+        # write that changes what burns — behind the gate with the rest of the machine.
+        "/api/machine/rotary",
+        "/api/machine/rotary/calibrate",
         # Gap J11: adjusting speed and power during a running job. This sends realtime bytes
         # to the driver; that is touching the machine.
         "/api/job/adjust",

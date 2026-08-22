@@ -8,6 +8,7 @@ on uvicorn worker threads and must not interleave mid-pipeline.
 
 import re
 import threading
+from contextlib import contextmanager
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
@@ -46,6 +47,22 @@ PLAN_BLOB = "plan preprocess validate blob preopt optimize"
 PLAN_SPOOL = "plan spool"
 
 
+#: The plan pipeline in phases, for a build that has to be interruptible.
+#:
+#: Cut into pieces on purpose: each line starts with `plan`, which fetches the
+#: kernel-global plan again, so the phases chain through it and not through the
+#: console's input/output types. Measured identical to the one-liner (same cut
+#: object count on 10, 100, 200, 400 and 960 shapes). What the pieces buy is the
+#: gap between them: a job that wants the plan gets it there instead of after the
+#: whole build. Measured per phase at 960 squares: copy 0.006 s, preprocess
+#: 0.008 s, validate 0.000 s, blob 0.260 s, preopt 0.000 s, optimize 2.261 s.
+PREVIEW_PHASES = ("plan preprocess", "plan validate", "plan blob")
+
+
+class PlanYielded(RuntimeError):
+    """A preview build gave the plan up because a job claimed it."""
+
+
 class CommandError(RuntimeError):
     def __init__(self, command, output):
         super().__init__(f"Command failed: {command}")
@@ -57,8 +74,20 @@ class CommandRunner:
     def __init__(self, kernel, document=None):
         self.kernel = kernel
         self._lock = threading.Lock()
+        # The cut plan is kernel-global: `plan copy` adds to whatever is there and
+        # `plan clear` throws away whatever somebody else was reading. So a whole
+        # pipeline needs a lock of its own, above the per-line one — otherwise two
+        # pipelines interleave and both get half a plan.
+        self._plan_lock = threading.RLock()
+        # How often a real job has claimed the plan. A preview build watches this
+        # number and gives way when it moves; it does not need to know who moved it.
+        self._plan_claims = 0
         # Set by the server; every write command makes the design dirty.
         self.document = document
+        # Set by the server as well: the rotary, which scales Y while the plan is being
+        # built (see rotary.py). None means "no rotary layer at all", which is what a test
+        # or a script that builds a runner of its own gets.
+        self.rotary = None
 
     def run(self, command: str) -> list[str]:
         """Execute one console line and return its output. Raises CommandError."""
@@ -181,6 +210,111 @@ class CommandRunner:
 
     # ------------------------------------------------------ zakken per pass
 
+    @contextmanager
+    def claim_plan(self):
+        """
+        Take the plan for real work, and say so first.
+
+        The counter goes up *before* the lock is asked for, so a preview build that
+        is halfway through sees the claim at its next phase boundary and gives up
+        instead of finishing a plan that is about to be thrown away.
+
+        A phase boundary is as fine as this gets: `plan optimize` is one console call
+        and cannot be interrupted from outside, and at the preview ceiling it is the
+        2.26 s of a 3.2 s build. Measured on 990 squares, a start fired 0, 200 and
+        600 ms after a build began answered 200 after 3.23, 3.05 and 2.50 s. So this
+        is not "at most one phase" — it is two to three and a half seconds in the
+        heaviest case the preview admits, and all three of those starts succeeded.
+        """
+        with self._lock:
+            self._plan_claims += 1
+        with self._plan_lock:
+            yield
+
+    @property
+    def plan_claims(self) -> int:
+        return self._plan_claims
+
+    def preview_plan(self, harvest):
+        """
+        Build the plan for looking at, and hand it to `harvest` before letting go.
+
+        Same route as a real job — the pass unfolding and the shared settings dict
+        included, because a preview that skips our own workarounds shows something
+        the machine will not do — with `spool` left off and the lock released
+        between the phases.
+
+        `harvest` runs while the lock is still held: after this method there is no
+        plan any more (`plan clear` in the `finally`), and a caller holding a
+        reference into it would be reading the next job's work.
+
+        Raises `PlanYielded` when a job claimed the plan meanwhile. That is not an
+        error but the answer: whoever is burning wins.
+        """
+        with self.rotary_applied():
+            return self._preview_plan_locked(harvest)
+
+    def _preview_plan_locked(self, harvest):
+        # Split off only so that the rotary wraps the whole build; `preprocess` is the
+        # phase that reads `device.rotary`, and it is one of the phases below.
+        multi = self._multi_pass_layers()
+        root = self.kernel.root
+        root.setting(bool, "opt_merge_ops", True)
+        root.setting(bool, "opt_merge_passes", True)
+        earlier = (root.opt_merge_ops, root.opt_merge_passes)
+        if multi:
+            # Same reason as in `_plan_with_mutators`: with merging on, the
+            # optimisation glues the passes into one piece and pushes the console
+            # steps to the back, so the preview would draw a Z drop that happens
+            # after the burning instead of between the passes.
+            root.opt_merge_ops = False
+            root.opt_merge_passes = False
+        claims = self._plan_claims
+        try:
+            with self._plan_lock:
+                self._give_way(claims)
+                self.run(PLAN_COPY)
+                if multi:
+                    from meerk40t.core.node.util_console import ConsoleOperation
+
+                    self._apply_mutators(
+                        [lambda steps: self._with_passes(steps, ConsoleOperation)]
+                    )
+            for phase in PREVIEW_PHASES:
+                with self._plan_lock:
+                    self._give_way(claims)
+                    self.run(phase)
+            with self._plan_lock:
+                self._give_way(claims)
+                if multi:
+                    self._apply_mutators([self._share_pass_settings])
+                self.run("plan preopt")
+                self.run("plan optimize")
+                return harvest(self.kernel.planner.default_plan)
+        finally:
+            root.opt_merge_ops, root.opt_merge_passes = earlier
+            with self._plan_lock:
+                self.run("plan clear")
+
+    @contextmanager
+    def rotary_applied(self):
+        """
+        The rotary's Y scale, for as long as the plan is being built.
+
+        Sits here and not at the routes because every plan goes through this class: a job,
+        a tile run, the cut-path preview and the exact estimate. A scale that reached only
+        one of them would show a preview of a job that burns differently.
+        """
+        if self.rotary is None:
+            yield None
+            return
+        with self.rotary.applied() as scale:
+            yield scale
+
+    def _give_way(self, claims: int) -> None:
+        if self._plan_claims != claims:
+            raise PlanYielded()
+
     def _plan_and_spool(self, mutators=()) -> list[str]:
         """
         Het plan bouwen. Met mutators in twee steps, anders in één.
@@ -192,6 +326,14 @@ class CommandRunner:
         The ordinary route stays literally one line: that path is walked on every job and
         deserves no extra bends.
         """
+        with self.claim_plan():
+            # The rotary scales Y on its way to the machine (rotary.py), in the same place
+            # and for the same reason as the zero point: the design on screen is untouched.
+            with self.rotary_applied():
+                return self._plan_and_spool_locked(mutators)
+
+    def _plan_and_spool_locked(self, mutators=()) -> list[str]:
+        """The same, with the plan already claimed. See `claim_plan`."""
         all_mutators = list(mutators)
         after = []
         if self._multi_pass_layers():

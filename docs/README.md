@@ -40,7 +40,8 @@ order or looked up when you need them.
 | [The bed](canvas.md) | The drawing area: the eight tools, drawing and editing curves, bridges that keep a cut part in the sheet, why an outline is caught on its line and a filled shape on its face, walking down a pile of overlapping shapes, snapping, moving the view, and sheets. |
 | [Shapes, text, images and generators](shapes-and-generators.md) | Everything else that puts geometry on the bed — text, images, clipart, the eight generators — and the path operations that reshape it afterwards. |
 | [Layers](layers.md) | What the machine does with a shape: the four kinds of layer, speed, power and passes, the colour strip, burn order, raster settings, drop per pass and air assist. |
-| [Burning](job.md) | The Job tab from top to bottom: the pre-flight, the two taps that start a job, progress and adjustment while it burns, the queue, jogging the head, connecting, and the phone screen. |
+| [Burning](job.md) | The Job tab from top to bottom: the pre-flight, the cut path you can walk through before anything moves, the two taps that start a job, progress and adjustment while it burns, the queue, jogging the head, connecting, and the phone screen. |
+| [The rotary](rotary.md) | Burning on a cylinder: where the settings live, calibrating from a burned line, what changes on the machine while a rotary is fitted, and the ten steps to work through standing at the laser. |
 | [Test grids](test-grid.md) | Burning a board of squares to find the settings for a material, photographing it, aligning the photo and turning the best square into a saved setting. |
 | [The material library](library.md) | Keeping those settings: where a number came from and how far to trust it, applying one to a layer, machine profiles, and moving a library between computers or taking settings from other people. |
 | [Plates larger than the bed](tiling.md) | Burning a plate that does not fit, in tiles: alignment marks, sliding the plate along, and the two taps that tell the machine where it now lies. |
@@ -57,7 +58,10 @@ node gauntlet/docs-shots.mjs 07       # only the shots whose name contains 07
 ```
 
 Each shot puts the state it needs there itself through the API, so nothing
-depends on what happened to be on the bed. The files land in `docs/images/`.
+depends on what happened to be on the bed. That includes the machine: every
+picture has a bed in it and this handbook quotes its size, so a run switches to
+the KH-5030 if some other machine happens to be active. The files land in
+`docs/images/`.
 
 What keeps the prose honest is a test:
 

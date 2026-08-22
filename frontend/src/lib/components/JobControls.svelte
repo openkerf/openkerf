@@ -18,6 +18,9 @@
 	import { connection } from '$lib/connection.svelte';
 	import { inkOn, layerNumber, type Design } from '$lib/design.svelte';
 	import JobPreview from './JobPreview.svelte';
+	import Dialog from './Dialog.svelte';
+	import { rotary } from '$lib/rotary.svelte';
+	import type { RotaryState } from '$lib/rotary';
 	import Segmented from './Segmented.svelte';
 
 	let {
@@ -31,6 +34,7 @@
 		onUnlock,
 		onFocus,
 		onFrame,
+		onCutPath,
 		colorFor,
 		profile = null
 	}: {
@@ -41,11 +45,16 @@
 		revision?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
-		onHome?: () => void;
+		/** `force` presses through the rotary guard — see the dialog below. */
+		onHome?: (force?: boolean) => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
 		/** Sending the head around the outline, without burning. */
 		onFrame?: () => void;
+		/** Opening the cut-path window (gap S1). Beside "Show frame", because this is
+		 *  the moment you want to know in what order it burns — and unlike the frame
+		 *  it costs no movement of the machine. */
+		onCutPath?: () => void;
 		/** The same layer colour the canvas and the layer list show. */
 		colorFor?: (operationId: string | null) => string;
 		/** What this machine profile says it can do; decides what appears. */
@@ -113,6 +122,9 @@
 		layers?: Layer[];
 		bounds?: Bounds | null;
 		engine?: { grid: boolean } | null;
+		/** Machine-wide, and it changes what burns — so the pre-flight says it out loud
+		 *  rather than leaving it on a settings page nobody opens twice. */
+		rotary?: RotaryState | null;
 	} | null>(null);
 	let layers = $derived(overview?.layers ?? []);
 	/**
@@ -178,6 +190,25 @@
 	 * not promise seconds for it.
 	 */
 	let gridOff = $derived(overview?.engine?.grid === false);
+	/**
+	 * The rotary, from the pre-flight's own answer.
+	 *
+	 * `/api/job/layers` carries it, so the sentence beside the start button is measured
+	 * against the same design as the layer table. The store beside it (`rotary`) is what
+	 * the *buttons* read — the home guard has to know before any estimate has come in.
+	 */
+	let rotaryOn = $derived(overview?.rotary?.active === true);
+	let rotaryText = $derived.by(() => {
+		const state = overview?.rotary;
+		if (!state?.active) return null;
+		const factor = i18n.number(Math.round(state.scale_y * 10000) / 10000);
+		return state.kind === 'roller'
+			? t('job.rotary.roller', {
+					circumference: i18n.number(Math.round(state.circumference_mm * 10) / 10),
+					factor
+				})
+			: t('job.rotary.chuck', { diameter: i18n.number(state.diameter_mm), factor });
+	});
 	let blindLayers = $derived(layers.filter((l) => l.burns === false));
 	// Whole millimetres where it can be; 0.5 mm stays 0.5 mm. Written in the
 	// reader's own notation, because these numbers get typed into a machine.
@@ -346,6 +377,9 @@
 		void device?.path;
 		ophalenPosities();
 		control.loadOrigin();
+		// The rotary too: it is bolted into *this* bed, so switching machine switches
+		// the answer to "is homing safe".
+		rotary.load(true);
 		if (control.canAdjust) control.loadAdjustment();
 	});
 
@@ -371,6 +405,24 @@
 
 	async function confirmStart() {
 		if (await control.start()) preflight = false;
+	}
+
+	/**
+	 * Homing with a rotary in the bed.
+	 *
+	 * The API refuses it (rotary.py: the head drives into the chuck), and a refusal you
+	 * only see after pressing is a poor way to learn that. So the question comes first,
+	 * here, and the answer travels as `force`. The refusal stays in the API: this dialog
+	 * is advice, and a second tab or a curl command does not see it.
+	 */
+	let askHome = $state(false);
+
+	function home() {
+		if (rotary.active) {
+			askHome = true;
+			return;
+		}
+		onHome?.();
 	}
 
 	/**
@@ -475,6 +527,17 @@
 					bounds={bounds}
 					{colorFor}
 				/>
+				<!-- Under the drawing, because it is the same drawing with the order in
+				     it (gap S1). Deliberately *not* in the sticky row with the frame and
+				     the start button: measured at 1440 px with three buttons in that row,
+				     "Start job 1:26" was clipped at the right edge of the panel — the
+				     primary action half off screen, which is the very thing the second
+				     usability round fixed. -->
+				{#if onCutPath}
+					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
+						{t('cutpath.show')}
+					</button>
+				{/if}
 				<!-- The converter that turns a grid area into laser lines lives in
 				     the wxPython version of the engine. When it is missing, the layer
 				     throws its own shapes away during planning and nothing comes out
@@ -516,6 +579,20 @@
 								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
 							>
 						</div>
+					{/if}
+					{#if rotaryText}
+						<!-- The rotary changes the shape of what comes out, so it belongs on
+						     the one screen you read before burning. A job that silently comes
+						     out stretched costs the workpiece, and you have one of those. -->
+						<p class="pf-warn strong">{rotaryText}</p>
+						{#if overview?.rotary?.overlap}
+							<p class="pf-warn">
+								{t('rotary.overlap', {
+									work: i18n.number(overview.rotary.overlap.burns_mm),
+									circumference: i18n.number(overview.rotary.overlap.circumference_mm)
+								})}
+							</p>
+						{/if}
 					{/if}
 					<!-- No second line with the job size: the view above already puts
 				     "work 120 × 80 mm" under the drawing (decision B8). That same
@@ -685,7 +762,9 @@
 						<button
 							class="btn"
 							disabled={control.busy !== null || running}
-							title={t('job.frame.title')}
+							title={rotary.active
+								? `${t('job.frame.title')} ${t('job.rotary.frame')}`
+								: t('job.frame.title')}
 							onclick={() => onFrame?.()}
 						>
 							{t('job.frame')}
@@ -851,7 +930,7 @@
 				<button class="jog left" aria-label={t('job.jog.left')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
 				<button class="jog down" aria-label={t('job.jog.down')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
 				<button class="jog right" aria-label={t('job.jog.right')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
-				<button class="jog home" disabled={movingOff} title={movingBlocked} onclick={() => onHome?.()}>{t('job.home')}</button>
+				<button class="jog home" disabled={movingOff} title={movingBlocked ?? (rotary.active ? t('rotary.safety.home') : undefined)} onclick={home}>{t('job.home')}</button>
 				{#if control.capabilities?.motion?.focus}
 					<!-- The Z axis is in the same pad as X and Y: it is the same operation
 					     with a third direction, and it follows the same step size. -->
@@ -1097,7 +1176,32 @@
 	     here would show it twice whenever you happen to be on Job. -->
 </div>
 
+<!-- Homing with the rotary in the bed. The head goes to the corner over the place where
+     the rotary stands, so this is a question and not a confirmation of a click. -->
+<Dialog title={t('job.home.rotary.title')} bind:open={askHome} width="440px">
+	<p class="dialog-text">{t('job.home.rotary.body')}</p>
+	<div class="dialog-buttons">
+		<button class="btn" onclick={() => (askHome = false)}>{t('job.home.rotary.cancel')}</button>
+		<button
+			class="btn primary"
+			onclick={() => {
+				askHome = false;
+				onHome?.(true);
+			}}>{t('job.home.rotary.confirm')}</button
+		>
+	</div>
+</Dialog>
+
 <style>
+	.dialog-text {
+		margin: 0 0 var(--space-4);
+		font-size: var(--text-sm);
+	}
+	.dialog-buttons {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-2);
+	}
 	.section-title {
 		font-size: var(--text-xs);
 		font-weight: 600;
@@ -1156,6 +1260,24 @@
 	   sources for one agreement, which can drift apart with the worst outcome being
 	   that the pause button sits nowhere or twice. Both now read
 	   `screen.controlsInBar`; the class below is the consequence, not the rule. */
+	/* A way in, not a command: this opens a window, it does not do anything to the
+	   machine. So it is a quiet full-width row under the drawing rather than a third
+	   button competing with "Start job". */
+	.pf-order {
+		display: block;
+		width: 100%;
+		margin: 0 0 var(--space-3);
+		padding: 6px 10px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+		color: var(--text-1);
+		font-size: var(--text-xs);
+		text-align: center;
+	}
+	.pf-order:hover {
+		background: var(--surface-2);
+	}
 	.preflight {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);

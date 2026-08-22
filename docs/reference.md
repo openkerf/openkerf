@@ -99,6 +99,15 @@ bed.
 | + | Zoom in a step | `zoomIn` |
 | − | Zoom out a step | `zoomOut` |
 
+### Before a job runs
+
+| Keys | What it does | |
+|---|---|---|
+| ⌥P / Alt+P | Open the **Cut path** window: the order, the travel and the clock | `cutPath` |
+
+Alt+P is LightBurn's own key for its preview, and the browser hands it over — with
+the canvas focused the window opens and nothing else moves.
+
 ### While a job runs
 
 | Keys | What it does |
@@ -250,6 +259,7 @@ This menu is about the view and the whole design, not about one shape.
 | Snap to grid and shapes | On or off; the explanation reads "Hold Alt to skip it for one move" | `snap` |
 | Layer numbers next to the shapes | On or off; the small numbers beside each shape | `layerNumbers` |
 | Put everything on the bed | Pulls the whole design back inside the bed, "Including what lies off screen and cannot be clicked" | `rescue` |
+| Show cut path | Opens the **Cut path** window: in what order the machine burns, where it travels without burning, and how the time builds up (⌥P) | `cut-path` |
 
 ## Right-click on a node
 
@@ -394,6 +404,15 @@ runs in: that is where the token for this server is printed." The field stays,
 so you can put a different one in. Elsewhere a blocked edit reads "No token, or
 the wrong one — editing is blocked."; the machine buttons say "Fill in a token
 first"; the tool rail says "{name} — requires a token".
+
+## The rotary
+
+Not an app-wide setting but a machine-wide one, and this is where people look for
+it: **Machine → Your machines → Rotary**, per machine. It holds the switch **Burn
+on a cylinder**, the kind of rotary with its diameter or circumference, the Y
+scale, a calibration from a burned line, and the ten steps to work through at the
+laser. While it is on, homing is refused and the pre-flight says the rotary is on
+before every start. The whole of it is on [The rotary](rotary.md).
 
 ## The camera
 

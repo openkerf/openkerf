@@ -169,11 +169,31 @@ class MachineControl:
                 "device-service geleverd."
             )
 
-    def home(self, physical: bool = False) -> dict:
+    def home(self, physical: bool = False, force: bool = False) -> dict:
+        """
+        To the zero point. The head really moves — and with a rotary fitted it moves
+        into it.
+
+        A chuck rotary stands in the bed where the gantry wants to go, so homing Y drives
+        the head against it. The engine's own guard for that lives in the rotary service
+        that never attaches to a Ruida (see rotary.py), so it is ours, and it is a refusal
+        and not a greyed-out button: the interface is advice and a second tab takes no
+        notice of it. `force` is the way through for whoever has taken the rotary out —
+        the interface asks first and passes it on.
+        """
         command = "physical_home" if physical else "home"
         self._require(command)
         self._idle()
-        return {"output": self.runner.run(command)}
+        if not force:
+            reason = self._rotary().homing_refusal()
+            if reason is not None:
+                raise DesignError(reason, code="rotary.homeWhileActive")
+        return {"output": self.runner.run(command), "forced": bool(force)}
+
+    def _rotary(self):
+        from .rotary import RotaryControl
+
+        return RotaryControl(self.kernel)
 
     def move_to(self, x_mm, y_mm) -> dict:
         """Absolute position. The head moves; this is not a drawing command."""

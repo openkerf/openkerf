@@ -609,6 +609,59 @@ export const nl: Catalogue = {
 		other: '{n} vormen zitten in geen enkele laag die meebrandt — grijs gestippeld hierboven. De machine slaat ze over.'
 	},
 
+	// ── The cut path (gap S1 / L1) ────────────────────────────────────────────────
+	'cutpath.title': 'Snijpad',
+	'cutpath.show': 'Snijpad bekijken',
+	'cutpath.show.title':
+		'Zie in welke volgorde de machine brandt, waar de kop zonder te branden heen rijdt, en hoe de tijd oploopt',
+	'cutpath.unreachable': 'Het pad is niet op te halen zolang de server weg is.',
+	'cutpath.building': 'Het pad wordt uitgerekend…',
+	'cutpath.building.slow':
+		'Dit is een groot ontwerp, dus het pad duurt even. Een job starten wacht er niet op.',
+	'cutpath.empty': 'Er wordt niets gebrand, dus er is geen pad om af te lopen.',
+	'cutpath.busy':
+		'De job zelf had het snijplan nodig, dus het pad moest wijken. Het komt van zichzelf terug.',
+	'cutpath.tooBig':
+		'Dit ontwerp is te zwaar om vooraf af te lopen: {n} segmenten tegen een plafond van {limit}. Het pad bouwen zou seconden tot een minuut werk kosten, en het antwoord zou in de megabytes lopen.',
+	'cutpath.tooBig.hint':
+		'Zet een laag uit of verdeel het werk over vellen, dan verschijnt het pad van wat overblijft.',
+	'cutpath.failed': 'Het pad kon niet gebouwd worden. De engine zei: {message}',
+	'cutpath.limited':
+		'Dit pad bestaat uit {n} stappen, meer dan de {limit} die dit venster in één keer tekent.',
+	'cutpath.limited.totals':
+		'De totalen gaan over de hele job: {time} op de klok en {travel} mm rijden.',
+	'cutpath.aria': 'Het snijpad over het bed: {n} stappen in {total}.',
+	'cutpath.status.ready': 'Het pad is klaar: {n} stappen in {total}.',
+	'cutpath.play': 'Afspelen',
+	'cutpath.pause': 'Pauzeren',
+	'cutpath.scrub': 'Door de job schuiven',
+	'cutpath.rate': {
+		one: 'De weergave loopt ongeveer even snel als de machine.',
+		other: 'De weergave loopt {n} keer sneller dan de machine.'
+	},
+	'cutpath.sum.time': 'Op de klok',
+	'cutpath.sum.burning': 'Branden',
+	'cutpath.sum.travelling': 'Rijden',
+	'cutpath.sum.contours': 'Omtrekken',
+	'cutpath.tooManyNumbers':
+		'Er zijn {n} omtrekken, te veel om op de tekening te nummeren. Speel het pad af om de volgorde te zien.',
+	'cutpath.cluster':
+		'Nummers die elkaar zouden bedekken staan als één nummer op de tekening: “7+3” is omtrek 7 en drie andere die op dezelfde plek beginnen. De lijst hieronder noemt elke omtrek op volgorde.',
+	'cutpath.order.title': 'De volgorde, in woorden ({n} omtrekken)',
+	'cutpath.order.item': '{n}: {layer}, {w} × {h} mm, begint op {x}, {y}.',
+	'cutpath.order.itemPasses':
+		'{n}: {layer}, {w} × {h} mm, begint op {x}, {y}, wordt {passes} keer afgelopen.',
+	'cutpath.order.noLayer': 'geen laag',
+	'cutpath.legend.travel': 'Rijden zonder te branden',
+	'cutpath.honest.title': 'Wat dit niet kan beloven.',
+	'cutpath.honest.body':
+		'De volgorde en het rijden zijn precies wat de machine meekrijgt. De klok is de rekensom van het snijplan zelf, en de machine kan langzamer zijn: de engine mengt zijn brandmodel met het tempo dat op een afgeronde pass gemeten is, en geen van die twee weet hoe jouw laser in een bocht afremt.',
+	'cutpath.honest.slower':
+		'Deze klok telt ook langer dan de schatting op de startknop: de rekensom per stap in het plan draagt de marge van de engine voor het optrekken en elke veeg van een rasterlaag, en de schatting niet. Gemeten op negen snijvierkanten van 30 mm: 2:01 hier tegen 1:51 daar, en op één gevuld vlak van 60 × 40 mm in een rasterlaag 7:30 hier tegen 0:00 daar — de schatting ziet een gevuld vlak helemaal niet.',
+	'cutpath.honest.here':
+		'Op dit ontwerp zegt dit venster {here} en de startknop {there}.',
+	'cutpath.built': 'Dit pad bouwen kostte {seconds} seconden.',
+
 	// ── Tile run ──────────────────────────────────────────────────────────────────
 	'tiles.mark': 'merk {n}',
 	'tiles.layPlate': 'Leg de plaat zo dat de linkerbovenhoek onder de kop kan. Jog ernaartoe en druk op Hier.',
@@ -1743,6 +1796,104 @@ export const nl: Catalogue = {
 	'text.right': 'Rechts',
 	'layout.lookingForMachine': 'Even kijken welke machine er is…',
 
+	// ── De rotary: branden op een cilinder ────────────────────────────────────
+	'rotary.head': 'Rotary — OpenKerf',
+	'rotary.title': 'Rotary',
+	'rotary.intro':
+		'Een rotary draait het werkstuk onder de kop door, dus de hoogte van je tekening wordt rotatie om het object in plaats van afstand over het bed. Een millimeter blijft een millimeter op het oppervlak: wat je 30 mm hoog tekent, komt er 30 mm hoog op.',
+	'rotary.forMachine': 'Deze instellingen horen bij {machine}.',
+	'rotary.needsMachine':
+		'Kies eerst een machine: een rotary zit in één bepaald bed gemonteerd, dus de instellingen horen bij die machine.',
+	'rotary.backToMachines': 'Terug naar de machines',
+	'rotary.engineOwn':
+		'Deze machine brengt de eigen rotary van MeerK40t mee, en die blijft de baas. Stel hem in bij de instellingen van de machine zelf; OpenKerf blijft er hier af.',
+	'rotary.use': 'Branden op een cilinder',
+	'rotary.use.hint':
+		'Zet dit aan zodra de rotary in het bed staat en het werkstuk vrij draait.',
+	'rotary.kind': 'Soort rotary',
+	'rotary.kind.chuck': 'Klauwplaat — ik weet de diameter',
+	'rotary.kind.roller': 'Rollen — ik weet de omtrek',
+	'rotary.diameter': 'Diameter van het object',
+	'rotary.diameter.hint':
+		'Meet hem met een schuifmaat op de hoogte waar het ontwerp komt; een beker loopt taps.',
+	'rotary.circumference': 'Omtrek van het object',
+	'rotary.circumference.hint':
+		'Zet een streep, rol het object één keer rond en meet hoe ver het gekomen is. Op rollen is dat betrouwbaarder dan de diameter, want ze slippen.',
+	'rotary.circumference.is': 'Eén keer rond is {mm} mm.',
+	'rotary.scale': 'Y-schaal',
+	'rotary.scale.explain':
+		'De schaal corrigeert een rotary die iets te ver of net niet ver genoeg draait. Laat hem op 1 staan als de controller Y zelf al omrekent naar rotatie, want twee correcties vermenigvuldigen.',
+	'rotary.scale.source.none': 'Geen correctie — de controller rekent om',
+	'rotary.scale.source.manual': 'Een factor die ik invul',
+	'rotary.scale.source.steps': 'Uitgerekend uit de twee motoren',
+	'rotary.scale.factor': 'Factor',
+	'rotary.scale.flatSteps': 'Stappen per mm van het vlakke bed',
+	'rotary.scale.rotarySteps': 'Stappen per mm van de rotary',
+	'rotary.scale.now': 'Y gaat maal {factor} de machine in.',
+	'rotary.scale.example': 'Een vorm van {drawn} mm hoog brandt {burned} mm om het object.',
+	'rotary.scale.range':
+		'Een factor tussen {min} en {max} is een kalibratie; daarbuiten is het een verschaling en weigert de machine hem.',
+	'rotary.calibrate.title': 'Kalibreren met een gebrande lijn',
+	'rotary.calibrate.body':
+		'Brand een lijn van een bekende lengte om het object, meet wat eruit komt en vul beide in. Later opnieuw kalibreren bouwt voort op wat er nu staat in plaats van opnieuw te beginnen.',
+	'rotary.calibrate.commanded': 'Lengte die ik gevraagd heb',
+	'rotary.calibrate.measured': 'Lengte die ik gemeten heb',
+	'rotary.calibrate.preview': 'Dat geeft een factor van {factor}.',
+	'rotary.calibrate.apply': 'Deze factor gebruiken',
+	'rotary.calibrate.last':
+		'Laatst gekalibreerd op {commanded} mm gevraagd en {measured} mm gemeten, dat gaf {factor}.',
+	'rotary.save': 'Rotary opslaan',
+	'rotary.saved': 'Opgeslagen. De volgende job gaat met deze schaal de machine in.',
+	'rotary.overlap':
+		'Het werk is {work} mm hoog en één keer rond is {circumference} mm, dus het eind brandt over het begin.',
+	'rotary.failed': 'De machine weigerde deze rotary-instelling ({status}).',
+	'rotary.safety.title': 'Wat er aan de machine verandert',
+	'rotary.safety.home':
+		'Homen wordt geweigerd zolang de rotary aanstaat: de kop zou erin rijden. Haal de rotary er eerst uit, of bevestig dat het bed vrij is.',
+	'rotary.safety.frame':
+		'Het kader trekt nog steeds een rechthoek, maar de hoogte daarvan is rotatie: je ziet het object draaien onder een kop die blijft staan.',
+	'rotary.safety.preflight':
+		'Voor elke start zegt de pre-flight dat de rotary aanstaat en met hoeveel Y geschaald wordt.',
+	'rotary.safety.position':
+		'De schaal rekent vanaf het machinenulpunt, dus een vorm die hoger in de tekening staat, komt ook verderop terecht. Leg je werk boven op het vel en brand de kalibratielijn op dezelfde plek.',
+	'rotary.scope.title': 'Wat dit met opzet niet doet',
+	'rotary.scope.firmware':
+		'Er wordt niets in de controller geschreven. Een Ruida houdt zijn eigen rotary-pagina, en op een GRBL-machine laat OpenKerf $101 bij het starten van een job staan: dat is firmware, en dat stel je in waar de firmware woont.',
+	'rotary.scope.rest':
+		'De feeder, de dubbele laser en de galvomodus horen hier ook niet bij.',
+	'rotary.checklist.title': 'Aan de machine: de eerste ring',
+	'rotary.checklist.intro':
+		'Of een gebrande ring rond en op maat uit de machine komt, is zonder hardware niet te testen; niets hieronder is door ons gereden. Dit is de volgorde, met per stap het getal dat je mag verwachten.',
+	'rotary.checklist.1':
+		'Zet de rotary in het bed, leg er een beker met rechte wand in en zet de laser uit met de sleutel. Schuif de kop met de hand naar het midden van het object.',
+	'rotary.checklist.2':
+		'Stel de rotary in op het paneel van de Ruida zelf (pulsen per omwenteling en diameter). Dat is de omrekening van de controller; die van ons blijft 1 zolang hij het werk doet.',
+	'rotary.checklist.3':
+		'Zet de rotary hier aan, vul de diameter in en laat de schaal op "geen correctie" staan.',
+	'rotary.checklist.4':
+		'Druk op Home. Verwacht: hij wordt geweigerd, met de reden erbij. Die weigering is het veiligheidsdeel van deze functie.',
+	'rotary.checklist.5':
+		'Teken een rechthoek van 100 mm hoog en 10 mm breed, leg hem in een snijlaag op laag vermogen en kijk naar de pre-flight. Verwacht: die zegt dat de rotary aanstaat, met de diameter en factor 1.',
+	'rotary.checklist.6':
+		'Brand hem en meet met een rolmaat hoe ver de gebrande lijn om het object loopt.',
+	'rotary.checklist.7':
+		'Vul die meting hierboven in: 100 gevraagd, wat je gemeten hebt. Verwacht: een factor van 100 gedeeld door je meting — 96,5 mm geeft 1,0363.',
+	'rotary.checklist.8':
+		'Brand dezelfde rechthoek nog eens en meet opnieuw. Verwacht: binnen een halve millimeter van 100 mm. Is het slechter, kalibreer dan nog een keer — het bouwt voort op de eerste factor.',
+	'rotary.checklist.9':
+		'Brand nu een ring helemaal rond: een rechthoek zo hoog als de omtrek die deze pagina noemt. Verwacht: het eind sluit op het begin. Een gat of een overlap betekent dat de diameter niet klopt, niet de factor.',
+	'rotary.checklist.10':
+		'Schrijf de factor bij de machine op. Hij hoort bij deze rotary met dit object; een andere diameter is een andere meting.',
+	'setup.rotary': 'Rotary',
+	'job.rotary.chuck': 'De rotary staat aan: een klauwplaat van {diameter} mm, Y maal {factor}.',
+	'job.rotary.roller': 'De rotary staat aan: {circumference} mm rond, Y maal {factor}.',
+	'job.rotary.frame':
+		'Op een rotary draait het kader het object; de kop komt bijna niet over het bed.',
+	'job.home.rotary.title': 'Homen met de rotary erin?',
+	'job.home.rotary.body':
+		'Homen stuurt de kop over het bed en de rotary in. Ga alleen door als de rotary eruit is of de kop de hoek vrij kan bereiken.',
+	'job.home.rotary.confirm': 'Het bed is vrij — homen',
+	'job.home.rotary.cancel': 'Niet homen',
 	// ── Refusals the API can name ─────────────────────────────────────────────────
 	'api.bridges.notSupported': 'Bruggen werken alleen op een rechthoek, een ellips, een polylijn of een pad.',
 	'api.bridges.needsCount': 'Vraag om minstens één brug, of haal ze juist weg.',
@@ -1780,6 +1931,14 @@ export const nl: Catalogue = {
 	'api.nodes.notEditable': 'Van deze vorm zijn geen knooppunten te bewerken.',
 	'api.project.noDesign': 'Het project bevat geen ontwerp.',
 	'api.project.notOurs': 'Dit is geen OpenKerf-project.',
+	'api.rotary.needsDiameter': 'Een rotary met klauwplaat heeft de diameter van het object nodig, gemeten met een schuifmaat.',
+	'api.rotary.needsCircumference': 'Een rotary met rollen heeft de omtrek van het object nodig: zet een streep, rol één keer rond en meet.',
+	'api.rotary.needsSteps': 'De Y-schaal uitrekenen uit de motoren vraagt beide getallen: de stappen per millimeter van het vlakke bed en die van de rotary.',
+	'api.rotary.unknownKind': 'Een rotary is een klauwplaat of een rollenbank.',
+	'api.rotary.unknownScaleSource': 'De Y-schaal komt uit de twee motoren, uit een getal dat je invult, of nergens vandaan.',
+	'api.rotary.needsMeasurement': 'Kalibreren vraagt beide lengtes: wat je de machine gevraagd hebt en wat je op het object gemeten hebt.',
+	'api.rotary.noMachine': 'Er is geen machine gekozen, dus er is geen rotary om in te stellen.',
+	'api.rotary.homeWhileActive': 'De rotary staat aan. Homen stuurt de kop over het bed en de rotary in. Haal de rotary er eerst uit, of bevestig dat hij vrij is.',
 	'api.sheet.needsName': 'Een vel heeft een naam nodig.',
 	'api.sheet.needsOne': 'Het laatste vel kan niet weg; een project heeft er één.',
 	'api.sheet.nothingSelected': 'Kies eerst wat er mee moet.',

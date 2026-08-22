@@ -456,8 +456,14 @@ export class EditController {
 		return this.#post('/api/design/ungroup', { ids });
 	}
 
-	home(physical = false) {
-		return this.#post('/api/machine/home', { physical });
+	/**
+	 * Homing. `force` presses through the rotary guard.
+	 *
+	 * The API refuses homing while the rotary is switched on — the head drives into the
+	 * chuck (rotary.py) — and the panel asks before it sends this.
+	 */
+	home(physical = false, force = false) {
+		return this.#post('/api/machine/home', { physical, force });
 	}
 
 	jog(dxMm: number, dyMm: number) {

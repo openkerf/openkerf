@@ -19,6 +19,7 @@
 	import { StatusConnection } from '$lib/status.svelte';
 	import Canvas from '$components/Canvas.svelte';
 	import DesignPanel from '$components/DesignPanel.svelte';
+	import CutPath from '$components/CutPath.svelte';
 	import JobPanel from '$components/JobPanel.svelte';
 	import StatusBar from '$components/StatusBar.svelte';
 	import ToolRail from '$components/ToolRail.svelte';
@@ -840,6 +841,14 @@
 	});
 
 	let cornersOpen = $state(false);
+	/**
+	 * The cut-path window (gap S1).
+	 *
+	 * State here and not in the panel: it is opened from two places — the pre-flight
+	 * and the canvas menu — and a window that two surfaces can open has to be owned
+	 * by the page above both of them.
+	 */
+	let cutPathOpen = $state(false);
 	let offsetOpen = $state(false);
 
 	/** Which menu is open, and where. */
@@ -918,6 +927,7 @@
 		snap: () => canvasControl?.snap(),
 		layerNumbers: () => canvasControl?.layerNumbers(),
 		rescue: () => arrange('rescue'),
+		cutPath: () => (cutPathOpen = true),
 		selectOne: (id) => design.select(id)
 	};
 
@@ -1003,7 +1013,15 @@
 	function refusedRow(combo: string): Action | undefined {
 		const label = keyLabel(combo);
 		if (!label) return undefined;
-		return objectMenu(actionContext, handlers)
+		// Both surfaces, because both carry rows with a reason. Alt+P opened the cut path
+		// on an empty bed while the canvas-menu row beside it was disabled with "Nothing
+		// is on the bed" — measured; the same held for zoom-all and zoom-selection. The
+		// point of `off` is that one table governs the menu, the action bar and the
+		// keyboard, and searching one menu made that untrue for the other.
+		return [
+			...objectMenu(actionContext, handlers),
+			...canvasMenu(actionContext, handlers, menuPoint)
+		]
 			.flatMap((group) => group.items)
 			.find(
 				(item): item is Action =>
@@ -1125,6 +1143,7 @@
 			[KEYS.zoomAllOld]: () => handlers.zoom('all'),
 			[KEYS.zoomSelectionOld]: () => handlers.zoom('selection'),
 			[KEYS.zoomSelectionLightburn]: () => handlers.zoom('selection'),
+			[KEYS.cutPath]: handlers.cutPath,
 			[KEYS.zoomIn]: () => canvasControl?.step(1.25),
 			[KEYS.zoomOut]: () => canvasControl?.step(1 / 1.25)
 		};
@@ -1136,7 +1155,9 @@
 			// this with a line selected: ⌘⇧B posted /api/design/bridges anyway, came back 409
 			// with a console error, while the menu row beside it was greyed out and said "A
 			// line, text or an image carries no bridges". Only a row that is *explicitly* off
-			// stops the key, so no shortcut that worked before stops working.
+			// stops the key, so no shortcut that worked before stops working — and it is
+			// both menus that are searched (see `refusedRow`), because the reasons live on
+			// the canvas menu too.
 			if (refusedRow(combo)) return;
 			action();
 			return;
@@ -1470,14 +1491,17 @@
 					onJog={async (dx, dy) => {
 						await edits.jog(dx, dy);
 					}}
-					onHome={async () => {
-						await edits.home();
+					onHome={async (force?: boolean) => {
+						// `force` comes from the rotary question in the panel: the API refuses
+						// homing while the rotary is on, and this is the confirmed way through.
+						await edits.home(false, force);
 					}}
 					onUnlock={async () => {
 						await edits.unlock();
 					}}
 					profile={library.activeMachine}
 					onFrame={() => control.frame()}
+					onCutPath={() => (cutPathOpen = true)}
 					colorFor={(id) => design.colorFor(id)}
 		onFocus={async (mm) => {
 						await post('/api/machine/focus', { distance_mm: mm });
@@ -1653,6 +1677,17 @@
 {#if menu}
 	<Menu menu={menu.list} x={menu.x} y={menu.y} onClose={() => (menu = null)} />
 {/if}
+
+<!-- The cut path: a workspace, so a window of its own (the placement rule). The bed
+     comes from the machine and the sheet from the project, so the path lies on the
+     same two rectangles as the canvas draws. -->
+<CutPath
+	bind:open={cutPathOpen}
+	revision={design.revision}
+	bed={device?.bed ?? null}
+	sheet={sheets.active}
+	colorFor={(id) => design.colorFor(id)}
+/>
 
 <CornersDialog
 	bind:open={cornersOpen}

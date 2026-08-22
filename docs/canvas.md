@@ -308,6 +308,11 @@ design back inside the bed, "Including what lies off screen and cannot be
 clicked". That last one is the only way to reach a shape you have dragged out of
 sight and can no longer click.
 
+One row on that menu is not about the view at all: **Show cut path** (⌥P) opens
+the window that walks through the job in the order the machine will burn it. It is
+here as well as in the pre-flight because this is where you are while you are
+still drawing — see [Burning](job.md#the-cut-path).
+
 Every row, with its shortcut and the reason it can be greyed out, is in
 [Reference](reference.md#right-click-on-the-canvas).
 

@@ -89,6 +89,7 @@ before(async () => {
 	await page.goto(`${BASE}/?tab=design`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(3000);
 
+	await clearAlarm();
 	const box = await page.$eval('.bed > svg', (node) => {
 		const rect = node.getBoundingClientRect();
 		return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
@@ -104,8 +105,27 @@ after(async () => {
 	await browser?.close();
 });
 
+/**
+ * Get the machine's alarm card out of the way.
+ *
+ * A laser that is not answering puts "No connection to the machine" over the top left
+ * of the canvas, and it outranks everything on purpose. Measured on this bench: the
+ * card occupies 68,133 to 688,244, and the click on the rectangle at 20,20 mm lands at
+ * 307,233 — inside it. Every click in this file then hit the card, ten of the eleven
+ * tests failed, and none of them said why. It is dismissible in the app, so it is
+ * dismissed here; without a card the click is a no-op.
+ */
+async function clearAlarm() {
+	await page
+		.locator('.alarm .seen')
+		.first()
+		.click({ timeout: 500 })
+		.catch(() => {});
+}
+
 /** Click the top edge of the rectangle — an outline is a line, not a surface. */
 async function pickRectangle() {
+	await clearAlarm();
 	const p = at(50, 20);
 	await page.mouse.click(p.x, p.y);
 	await page.waitForTimeout(800);
@@ -233,6 +253,7 @@ test('after a refusal the two fields show the shape again, not the refused numbe
 
 test('the shortcut obeys the reason the menu row gives', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
+	await clearAlarm();
 	const p = at(70, 100); // the line, which carries no bridges
 	await page.mouse.click(p.x, p.y);
 	await page.waitForTimeout(800);
@@ -253,6 +274,7 @@ test('the shortcut obeys the reason the menu row gives', async (t) => {
 
 test('a shape whose type carries no bridges says that, and the menu row says why', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
+	await clearAlarm();
 	const p = at(70, 100); // the line
 	await page.mouse.click(p.x, p.y);
 	await page.waitForTimeout(800);
@@ -309,6 +331,7 @@ test('the shortcut puts them on and takes them off again', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
 	// The circle, so this does not lean on whatever the rectangle ended up with. ⌘⇧B is
 	// Chrome's bookmarks-bar toggle and *is* interceptable — this is where that is verified.
+	await clearAlarm();
 	const p = at(140, 20);
 	await page.mouse.click(p.x, p.y);
 	await page.waitForTimeout(800);

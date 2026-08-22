@@ -20,6 +20,7 @@ Every script takes its origin from `OK_BASE` and falls back to
 | `i-shots.mjs` | the screenshot set per language: `node gauntlet/i-shots.mjs en\|nl` → `screenshots/i18n/<language>/` |
 | `i-overflow.mjs` | measures text that does not fit its box, per language. Elements that clip by design are listed in the script itself |
 | `docs-shots.mjs` | the pictures for the handbook: `node gauntlet/docs-shots.mjs [name-fragment]` → `docs/images/`. English, light theme, desktop 1440×900 and phone 390×844. Seeds its own drawing through the API, so a rerun gives the same picture; it does not start the laser, so there is no shot of the queue |
+| `preview-check.mjs` | the cut-path window, measured: overlapping numbers, the reachable end of the scrubber, the false "server is away" on the way in, what lies over the drawing, and where Tab goes. What of it fits in a test is in `tests/cutpath-window.test.ts`; the stacking and the focus ring are here |
 | `selftest.mjs` | checks the checker: injects a contrast that is too low and fails if the measurement does not find it |
 | `i-apply.py` | moves a batch of literals out of a component into the catalogues (used for the English conversion; kept for the next language) |
 
