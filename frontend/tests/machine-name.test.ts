@@ -68,7 +68,7 @@ test('the first machine with this name goes through without complaint', async (t
 	if (!reachable) return t.skip(`no server on ${BASE}`);
 	await name(NAME);
 	assert.equal(await page.getByRole('alert').count(), 0);
-	await page.getByRole('button', { name: 'Create the machine' }).click();
+	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	await page.waitForTimeout(2500);
 	assert.ok((await machines()).some((m) => m.label === NAME));
 });
@@ -92,7 +92,7 @@ test('the second with the same name is reported, with a way out', async (t) => {
 
 test('the suggested name is free of clashes straight away', async (t) => {
 	if (!reachable) return t.skip(`no server on ${BASE}`);
-	await page.getByRole('button', { name: 'Create the machine' }).click();
+	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	await page.waitForTimeout(2500);
 	const labels = (await machines()).map((m) => m.label).filter((l) => l.startsWith(NAME));
 	assert.deepEqual([...labels].sort(), [NAME, `${NAME} (2)`]);

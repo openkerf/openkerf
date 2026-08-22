@@ -30,6 +30,26 @@ const point = (xmm: number, ymm: number, wide: number, high: number) => ({
 	y: bed.y + (bed.h * ymm) / high
 });
 
+/**
+ * The middle of a shape's top edge, in screen coordinates.
+ *
+ * Clicking the centre of a shape used to select it: the invisible hit area was a
+ * transparent fill over the whole inside. Since an outline is a line and not a
+ * surface (see selection-depth.test.ts) that click lands on the bed, so these
+ * tests aimed at nothing and asserted nothing. The bounds come from the design
+ * itself, so this keeps working when the tools change what they draw.
+ */
+async function edgeOf(index: number) {
+	const design = await (await fetch(`${BASE}/api/design`)).json();
+	const element = design.elements[index];
+	const perMm = design.units_per_mm ?? 1;
+	const [x0, y0, x1] = element.bounds.map((v: number) => v / perMm);
+	const size = (await (await fetch(`${BASE}/api/devices`)).json()).find(
+		(d: { active: boolean }) => d.active
+	).bed;
+	return point((x0 + x1) / 2, y0, size.width_mm, size.height_mm);
+}
+
 before(async () => {
 	reachable = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(2000) })
 		.then((r) => r.ok)
@@ -101,8 +121,8 @@ test('with two shapes selected it says how many too many there are', async (t) =
 	).bed;
 	await page.getByRole('button', { name: 'Select', exact: true }).click();
 	await page.waitForTimeout(250);
-	const a = point(80, 60, size.width_mm, size.height_mm);
-	const b = point(200, 60, size.width_mm, size.height_mm);
+	const a = await edgeOf(0);
+	const b = await edgeOf(1);
 	await page.mouse.click(a.x, a.y);
 	await page.waitForTimeout(600);
 	await page.keyboard.down('Shift');
@@ -127,7 +147,7 @@ test('with exactly one shape the explanation goes quiet and the points are there
 	const empty = point(size.width_mm - 20, size.height_mm - 20, size.width_mm, size.height_mm);
 	await page.mouse.click(empty.x, empty.y);
 	await page.waitForTimeout(600);
-	const a = point(80, 60, size.width_mm, size.height_mm);
+	const a = await edgeOf(0);
 	await page.mouse.click(a.x, a.y);
 	await page.waitForTimeout(900);
 	await page.getByRole('button', { name: /Nodes/ }).click();

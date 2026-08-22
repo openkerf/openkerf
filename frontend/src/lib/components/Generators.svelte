@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { t } from '$lib/i18n/index.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import FontPicker from './FontPicker.svelte';
 	import GeneratorPreview from './GeneratorPreview.svelte';
 	import NumberField from './NumberField.svelte';
+	import Segmented from './Segmented.svelte';
 
 	import type { Voorbeeld } from './GeneratorPreview.svelte';
 
@@ -28,7 +29,8 @@
 		) => Promise<{ error?: string | null; notice?: string | null }>;
 	} = $props();
 
-	type Tab = 'grid' | 'radial' | 'polygon' | 'box' | 'qrcode' | 'barcode' | 'arctext';
+	type Tab = 'grid' | 'radial' | 'polygon' | 'box' | 'qrcode' | 'barcode' | 'arctext' | 'hinge';
+	type HingePattern = 'straight' | 'staggered' | 'wavy';
 	let tab = $state<Tab>('grid');
 	let error = $state<string | null>(null);
 
@@ -59,6 +61,18 @@
 		// dialog — with a preview in the typeface itself.
 		font: '',
 		fontName: ''
+	});
+
+	let hinge = $state({
+		pattern: 'staggered' as HingePattern,
+		slit_mm: '8',
+		gap_mm: '3',
+		row_mm: '2',
+		x_mm: '0',
+		y_mm: '0',
+		width_mm: '60',
+		height_mm: '40',
+		from_selection: false
 	});
 
 	// The types python-barcode can handle that make sense on a laser.
@@ -103,6 +117,14 @@
 			label: t('gen.tab.arctext'),
 			needsSelection: false,
 			icon: 'M4 16a8 8 0 0 1 16 0M8 12l.8-2.4M12 10.6V8M16 12l-.8-2.4'
+		},
+		{
+			id: 'hinge',
+			// The icon is the pattern itself: two rows of slits, the second one shifted.
+			// That is the one thing about a hinge you can see without reading.
+			label: t('gen.tab.hinge'),
+			needsSelection: false,
+			icon: 'M4 8h5M12 8h5M20 8h1M3 12h2M8 12h5M16 12h5M4 16h5M12 16h5M20 16h1'
 		}
 	];
 
@@ -111,7 +133,7 @@
 	let currentValues = $derived(
 		(
 			{
-				grid, radial, polygon, box, qrcode: qr, barcode: bar, arctext: arc
+				grid, radial, polygon, box, qrcode: qr, barcode: bar, arctext: arc, hinge
 			} as Record<string, Record<string, unknown>>
 		)[tab] ?? {}
 	);
@@ -167,12 +189,35 @@
 				text: bar.text.trim(), kind: bar.kind,
 				width_mm: n(bar.width_mm), height_mm: n(bar.height_mm)
 			};
+		if (tab === 'arctext')
+			return {
+				text: arc.text.trim(), cx_mm: n(arc.cx_mm), cy_mm: n(arc.cy_mm),
+				radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm),
+				inside: arc.inside, font: arc.font || null
+			};
 		return {
-			text: arc.text.trim(), cx_mm: n(arc.cx_mm), cy_mm: n(arc.cy_mm),
-			radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm),
-			inside: arc.inside, font: arc.font || null
+			pattern: hinge.pattern,
+			slit_mm: n(hinge.slit_mm), gap_mm: n(hinge.gap_mm), row_mm: n(hinge.row_mm),
+			x_mm: n(hinge.x_mm), y_mm: n(hinge.y_mm),
+			width_mm: n(hinge.width_mm), height_mm: n(hinge.height_mm),
+			from_selection: hinge.from_selection
 		};
 	}
+
+	/**
+	 * What the two numbers beside each other mean in wood.
+	 *
+	 * The gap between two slits in a row *is* the bridge that carries the whole twist, and
+	 * it is the piece that snaps. Nothing is invented on top of that — no threshold, no
+	 * advice. The one thing that is beyond argument, a bridge thinner than the cut itself,
+	 * the API says, and that lands under the preview with the other warnings.
+	 */
+	let bridges = $derived.by(() => {
+		const gap = Number(hinge.gap_mm);
+		const row = Number(hinge.row_mm);
+		if (!Number.isFinite(gap) || !Number.isFinite(row) || gap <= 0 || row <= 0) return '';
+		return t('gen.hinge.material', { gap: i18n.mm(gap), row: i18n.mm(row) });
+	});
 
 	// ----------------------------------------------------------- the preview
 
@@ -191,7 +236,8 @@
 		(!current.needsSelection || selectedIds.length > 0) &&
 			(tab !== 'qrcode' || qr.text.trim() !== '') &&
 			(tab !== 'barcode' || bar.text.trim() !== '') &&
-			(tab !== 'arctext' || arc.text.trim() !== '')
+			(tab !== 'arctext' || arc.text.trim() !== '') &&
+			(tab !== 'hinge' || !hinge.from_selection || selectedIds.length > 0)
 	);
 
 	/**
@@ -213,10 +259,21 @@
 		box: ['width_mm', 'depth_mm', 'height_mm', 'thickness_mm', 'finger_mm', 'kerf_mm'],
 		qrcode: ['size_mm'],
 		barcode: ['width_mm', 'height_mm'],
-		arctext: ['cx_mm', 'cy_mm', 'radius_mm', 'font_size_mm']
+		arctext: ['cx_mm', 'cy_mm', 'radius_mm', 'font_size_mm'],
+		hinge: ['slit_mm', 'gap_mm', 'row_mm', 'x_mm', 'y_mm', 'width_mm', 'height_mm']
 	};
+	/**
+	 * The area fields are not on screen when the selection supplies the area, so they must
+	 * not be able to hold the preview back either: "fill in the empty fields" pointing at a
+	 * field you cannot see is worse than the refusal it was meant to prevent.
+	 */
+	let required = $derived(
+		tab === 'hinge' && hinge.from_selection
+			? ['slit_mm', 'gap_mm', 'row_mm']
+			: NUMBER_FIELDS[tab]
+	);
 	let unfinished = $derived(
-		NUMBER_FIELDS[tab].some((field) => {
+		required.some((field) => {
 			const value = currentValues[field];
 			return (
 				typeof value !== 'string' ||
@@ -472,7 +529,7 @@
 		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
 		>
-	{:else}
+	{:else if tab === 'arctext'}
 		<p class="lead">{t('gen.arc.lead')}</p>
 		<div class="fields">
 			<label
@@ -515,6 +572,51 @@
 		</div>
 		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
+		>
+	{:else}
+		<p class="lead">{t('gen.hinge.lead')}</p>
+		<div class="fields">
+			<div class="wide">
+				<span class="grouplabel">{t('gen.hinge.pattern')}</span>
+				<Segmented
+					label={t('gen.hinge.pattern')}
+					bind:value={hinge.pattern}
+					options={[
+						{ value: 'straight', label: t('gen.hinge.straight') },
+						{ value: 'staggered', label: t('gen.hinge.staggered') },
+						{ value: 'wavy', label: t('gen.hinge.wavy') }
+					]}
+				/>
+			</div>
+			<div class="three">
+				<NumberField label={t('gen.hinge.slit')} unit="mm" step={0.5} bind:value={hinge.slit_mm} />
+				<NumberField label={t('gen.hinge.gap')} unit="mm" step={0.1} bind:value={hinge.gap_mm} />
+				<NumberField label={t('gen.hinge.rows')} unit="mm" step={0.1} bind:value={hinge.row_mm} />
+			</div>
+			<!-- Beside the fields, not under the preview: this is what the two numbers you
+			     just typed mean in wood, and it is the mistake that snaps the piece. It says
+			     nothing about a limit — how thin a bridge may be depends on the material —
+			     only what the bridge is and what it does. -->
+			{#if bridges}
+				<p class="bridgeline">{bridges}</p>
+			{/if}
+			<label class="check areatoggle">
+				<input type="checkbox" bind:checked={hinge.from_selection} disabled={!hasSelection} />
+				<span>{hasSelection ? t('gen.hinge.fromSelection') : t('gen.hinge.noSelection')}</span>
+			</label>
+			{#if !hinge.from_selection}
+				<div class="pair">
+					<NumberField label={t('gen.hinge.left')} unit="mm" step={1} bind:value={hinge.x_mm} />
+					<NumberField label={t('gen.hinge.top')} unit="mm" step={1} bind:value={hinge.y_mm} />
+				</div>
+				<div class="pair">
+					<NumberField label={t('gen.width')} unit="mm" step={1} bind:value={hinge.width_mm} />
+					<NumberField label={t('gen.height')} unit="mm" step={1} bind:value={hinge.height_mm} />
+				</div>
+			{/if}
+		</div>
+		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+			>{t('gen.hinge.go', { tail: buttonTail })}</button
 		>
 	{/if}
 	</div>
@@ -595,6 +697,16 @@
 	.pair { grid-template-columns: 1fr 1fr; }
 	.three { grid-template-columns: 1fr 1fr 1fr; }
 	.fields .check { display: flex; align-items: center; gap: 6px; align-self: end; }
+	/* A row that is not an <input> and therefore cannot be a <label>: the Segmented has
+	   its own aria-label, this is the one you read. */
+	.fields .wide { display: grid; gap: 2px; }
+	.grouplabel { font-size: var(--text-xs); color: var(--text-2); }
+	/* This one governs the four fields below it, so it lines up with them on the left. The
+	   `align-self: end` of `.check` is for a checkbox beside a field on the same row (the
+	   box tab); here there is no row to line up with, and to the right it stood alone in the
+	   middle of the form. */
+	.fields .check.areatoggle { align-self: start; }
+	.bridgeline { margin: 0; font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
 	.fontchoice { margin-bottom: var(--space-4); }
 	.letterregel {
 		display: flex;

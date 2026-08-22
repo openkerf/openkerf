@@ -39,11 +39,11 @@ The rail on the left holds eight tools; one is active at a time.
 | Tool | What it does |
 | --- | --- |
 | **Select** | The resting state: pick things up, move, scale, rotate. |
-| **Nodes — pick a shape first, then drag the points** | Drag the individual points of one shape. |
+| **Nodes — pick a shape first, then drag the points** | Drag the points of one shape, add and remove them, and bend a straight piece into a curve. |
 | **Rectangle** | Click the bed and a 20 mm square is placed there. |
 | **Circle** | Click the bed and a circle 20 mm across is placed there. |
 | **Line** | The first click sets the start, the second the end. The line follows the pointer in between. |
-| **Pen — click points, Enter finishes** | Click point after point. Enter finishes it open; clicking back on the first point closes it; Escape throws away what you had. |
+| **Pen — click points, Enter finishes** | Click for a corner, press and pull for a curve. Enter or a double-click finishes it open; clicking back on the first point closes it; Escape throws away what you had. |
 | **Text** | Click the bed and the **Place text** window opens, with the text itself, **Height (mm)**, **Letter spacing** and **Alignment**. |
 | **Measure** | Two clicks; the distance in millimetres stays on the bed until you start again. |
 
@@ -113,7 +113,8 @@ underneath stays readable. Its measure stands underneath it, live: `60.0 × 40.0
   ignored.
 - **A line** has no corner handles: you grab it by its two end points, and the length in
   millimetres shows while you drag.
-- **Nodes** puts the shape's own points on screen; drag one and the shape follows.
+- **Nodes** puts the shape's own points on screen; drag one and the shape follows. It does
+  more than dragging — see [Curves, points and pieces](#curves-points-and-pieces) below.
 
 Only one command goes to the engine, when you let go. Until then what you see is a preview,
 shape and all.
@@ -125,6 +126,146 @@ bed:
 - "Nodes works on one shape at a time; 3 are selected. Click just one of them."
 - "This shape has no loose points. Make it a path first with Combine, in the panel on the
   right."
+- "The nodes of this shape could not be read. Try clicking it again; if it keeps failing, the
+  engine is not answering." — the shape may well be editable; this one says the question
+  itself did not get an answer, which is a different thing from a shape that has no points.
+
+## Curves, points and pieces
+
+A laser cuts curves as happily as straight lines, and two tools put them on the bed without
+an import: the **Pen** draws them, the **Nodes** tool changes them afterwards.
+
+![A path with a curved piece on the bed, the node tool active. The points sit on the line as
+round knots, one of them filled to show it is in hand, with a square handle on a tether
+beside it. The right-click menu on that node offers "Add a node here", "Make this piece
+straight" and "Remove this node".](images/27-nodes.png)
+
+### Drawing one with the pen
+
+**Click for a corner, drag for a curve.** That is the whole of it, and it is the same
+gesture Illustrator and Inkscape use: a plain click puts a corner point down, while pressing
+and pulling away from the point drags out a handle and the line arrives there bent. The
+handle you pull is mirrored on the other side of the point, so a curve runs smoothly through
+it rather than kinking.
+
+Four screen pixels of movement is the line between the two. Below that a press is a click,
+because a finger on a trackpad moves a pixel or two between pressing and letting go, and at
+two pixels every corner came out slightly bent.
+
+The hint under the bed says what the keys do while you are drawing: "Click for a corner,
+drag for a curve. Enter finishes the line, Backspace takes back the last point, Escape
+stops." A double-click finishes it too. Clicking back on the first point closes the shape.
+
+The line you see while drawing is computed from the same numbers that are sent when you
+finish, so the preview is not an impression of the result — it is the result.
+
+Snapping applies to the points and not to the handles. A point lands on the grid or on a
+neighbour's edge like anything else you place; a handle is a direction rather than a place,
+and snapped to the grid a curve would jump between the few tangents the grid allows. For the
+same reason Alt does not pan the view while the pen is in hand: there it means "this one
+point does not snap".
+
+### Changing one with the Nodes tool
+
+Pick **Nodes** and click a shape. Its points appear on the line as round knots. Clicking a
+knot takes it **in hand** — it fills in — and that is what the operations below act on,
+because removing a node has to know which one you mean. A node can also be reached with the
+keyboard: tab to it and press Enter or space.
+
+The hint under the bed is the short version: "Double-click the line to add a node. With a
+node in hand: Delete removes it, Shift+U curves the piece after it, Shift+L straightens it."
+
+Right-click a node and its three rows stand there in full:
+
+- **Add a node here** — "Halfway along the piece after this node. A double-click on the line
+  puts one exactly where you click."
+- **Make this piece a curve** — "The line stays where it is and gets a handle to pull it
+  with." On a piece that is already curved the row reads **Make this piece straight**
+  instead.
+- **Remove this node** — red, and at the bottom of the menu.
+
+A curve is carried by the **piece between two points**, not by a point, which is why the
+rows say "this piece" and why a handle appears on a tether beside the knot rather than on
+it. Handles are drawn as squares and knots as circles: the two lie close together and mean
+different things. Only the pieces touching the node in hand show their handles — on a path
+of fifty points, every handle at once would put a hundred squares on the bed.
+
+Dragging a handle bends the piece live, and the line follows the handle rather than waiting
+for the server to answer.
+
+**When it goes wrong.** A greyed row in the node menu says why:
+
+- "Click a node on the shape first" — nothing is in hand yet.
+- "This is the last node; there is no piece after it" — the end of an open line has nothing
+  leaving it, so there is nothing to bend or to divide.
+- "A closed shape needs three nodes" and "A line needs two nodes" — removing this one would
+  leave no shape behind.
+
+One thing to know before you start: giving a rectangle or an ellipse an extra node turns it
+into a path. Measured on a 60 × 40 mm rectangle, adding one node left a path of five points
+where a rectangle had been. That is the same trade the chamfer makes — width and height can
+no longer be set separately afterwards — and undo brings it back.
+
+## Bridges: keeping the part in the sheet
+
+Cut a shape all the way round and the part drops. It drops while the head is still moving,
+so the last millimetres of the cut land beside the line, and on a small part it drops into
+the machine. Every cutter therefore leaves a few **bridges** — small gaps in the cut that
+hold the part in the sheet until you push it out by hand.
+
+![A rectangle on the bed with four visible gaps in its outline, and the Edit panel on the
+right open on Bridges: the tick "Leave gaps in the cut", a Number of 4 and a Length per
+bridge of 2 mm, with the read-back sentence underneath.](images/26-bridges.png)
+
+The quick way is the right-click menu: **Add bridges (4 × 2 mm)** — "Small gaps in the cut,
+so the part stays in the sheet instead of dropping into the machine". Four of 2 mm is one
+per side of a rectangle, so the part hangs on four corners instead of tipping on one. The
+same row reads **Remove bridges** on a shape that has them: "The cut closes again and the
+part comes loose". The keyboard shortcut is in [Reference](reference.md#bridges).
+
+The two numbers are in the panel on the right, under **Bridges**, because they are values
+you set and read back:
+
+- the tick **Leave gaps in the cut**;
+- **Number** — how many, spread evenly along the contour. They stay spread when you resize
+  the shape.
+- **Length per bridge** — in millimetres.
+
+The two fields are independent: typing a length leaves the number as it was, and the other
+way round.
+
+Underneath stands what you have actually asked for, in millimetres of contour: "4 gaps of 2
+mm, spread over a contour of 200 mm. What is left to cut is 192 mm." With several shapes
+selected that are not all the same size, the sentence quotes the tightest of them, because
+that is the one that runs out of contour first. And when the bridges sit at places of their
+own rather than evenly: "At 10, 40 and 70 percent along the contour, each 2 mm long."
+
+**The gaps are drawn on the bed.** The outline is shown with the bridges cut out of it,
+because that is what the machine will cut — a value you cannot see is a value you cannot
+check. A fill stays whole, though: a raster layer burns the area, and an area with four
+notches in its outline is not what happens.
+
+**When it goes wrong.**
+
+- Not every kind of shape can carry them. On a line, a text or an image the panel says so:
+  "This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path
+  — not on a line, text or an image." The menu row is greyed with the short version, "A line,
+  text or an image carries no bridges".
+- Bridges only mean something to a cut. In an engrave or raster layer the panel keeps the
+  fields but adds: "This shape is not in a cut layer, so the gaps change nothing yet. They
+  only matter to a cut."
+- Too much bridge for the contour is refused, with the arithmetic in the sentence. Measured
+  on a 60 × 40 mm rectangle, four bridges of 30 mm came back as "4 bridges of 30 mm take 120
+  mm of the contour of meerk40t:7, and that contour is 200.0 mm long; at most half of it may
+  be bridge. Use fewer or shorter bridges." The shape is named by the label you gave it, and
+  by its internal name where you gave it none. With more than one shape selected the sentence
+  also says how many of them would have been fine, and it names the tightest one — on a
+  nested sheet of forty parts, knowing that one of them is too small does not tell you which.
+- More than 200 in one contour: "More than 200 bridges in one contour is not a cut any
+  more." At that point the outline is a dotted line.
+- A mixed selection where the shapes carry different bridges says so before you overwrite
+  them: "These shapes have different bridges. Setting a number here gives them all the
+  same."
 
 ## Snapping, and what Alt does to it
 

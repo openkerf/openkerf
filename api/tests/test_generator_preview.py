@@ -84,6 +84,18 @@ CASES = [
     ("qrcode", {"text": "1", "size_mm": 45, "border": 0}, False),
     ("barcode", {"text": "OPENKERF-1", "kind": "code128", "width_mm": 60, "height_mm": 20}, False),
     ("barcode", {"text": "4006381333931", "kind": "ean13", "width_mm": 40, "height_mm": 15}, False),
+    (
+        "hinge",
+        {"pattern": "staggered", "x_mm": 10, "y_mm": 10, "width_mm": 60, "height_mm": 40,
+         "slit_mm": 8, "gap_mm": 3, "row_mm": 2},
+        False,
+    ),
+    (
+        "hinge",
+        {"pattern": "wavy", "x_mm": 5, "y_mm": 5, "width_mm": 40, "height_mm": 30,
+         "slit_mm": 6, "gap_mm": 2, "row_mm": 2.5},
+        False,
+    ),
 ]
 
 
@@ -287,6 +299,18 @@ BAD = [
         "arctext",
         {"text": "EEN VEEL TE LANGE ZIN VOOR DIT CIRKELTJE", "cx_mm": 50, "cy_mm": 50,
          "radius_mm": 3, "font_size_mm": 10},
+        False,
+    ),
+    (
+        "hinge",
+        {"pattern": "straight", "width_mm": 60, "height_mm": 40, "slit_mm": 60,
+         "gap_mm": 3, "row_mm": 2},
+        False,
+    ),
+    (
+        "hinge",
+        {"pattern": "straight", "width_mm": 60, "height_mm": 3, "slit_mm": 8,
+         "gap_mm": 3, "row_mm": 2},
         False,
     ),
 ]

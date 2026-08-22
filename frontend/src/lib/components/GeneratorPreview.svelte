@@ -11,6 +11,10 @@
 		labels?: string[];
 		modules?: number;
 		bars?: number;
+		/** The living hinge: how many slits, in how many rows, and how wide the bridge is. */
+		slits?: number;
+		rows?: number;
+		bridge_mm?: number;
 	};
 </script>
 
@@ -110,6 +114,8 @@
 				: t('genPreview.panels', { n: preview.parts.length });
 		if (preview.what === 'grid' || preview.what === 'radial')
 			return t('genPreview.pieces', { n: preview.parts.length });
+		if (preview.what === 'hinge')
+			return t('genPreview.slits', { n: preview.slits ?? 0, rows: preview.rows ?? 0 });
 		if (preview.modules) return t('genPreview.modules', { n: preview.modules });
 		if (preview.bars) return t('genPreview.bars', { n: preview.bars });
 		return null;

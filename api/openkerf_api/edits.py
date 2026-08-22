@@ -33,11 +33,21 @@ class DesignError(RuntimeError):
     the reader's language. The message is English — the source language of this
     layer — and is what a client without a catalogue shows: curl, a script, a log.
     A raise without a code is one whose message only a developer reads.
+
+    `values` carries the numbers the sentence needs, for the refusal whose only
+    variable is a constant of ours: the interface then has the number and can put it
+    in its own sentence. Measured before this: "More than 200 bridges in one contour
+    is not a cut any more." came out in English in an otherwise Dutch panel, because
+    a code alone could not carry the 200. A refusal whose numbers are *measured* per
+    call still keeps its English sentence — see the note in `en.ts`.
     """
 
-    def __init__(self, message: str, code: str | None = None):
+    def __init__(
+        self, message: str, code: str | None = None, values: dict | None = None
+    ):
         super().__init__(message)
         self.code = code
+        self.values = values
 
 
 def _finite(value, name: str) -> float:

@@ -93,6 +93,10 @@ export const KEYS: Record<string, string> = {
 	// LightBurn. Whoever comes from one of the three need not relearn.
 	ungroup: 'mod+shift+g',
 	ungroupAlt: 'mod+u',
+	// Bridges (tabs) in a cut line. ⌘⇧B is Chrome's bookmarks-bar toggle, and unlike ⌘0
+	// that one *is* interceptable — verified in the browser: with the canvas focused the
+	// bookmarks bar stays as it was and the bridges land on the selection.
+	bridges: 'mod+shift+b',
 	mirrorH: 'mod+shift+h',
 	mirrorV: 'mod+shift+v',
 	rotateLeft: ',',
@@ -107,7 +111,16 @@ export const KEYS: Record<string, string> = {
 	zoomSelectionOld: 'shift+2',
 	zoomSelectionLightburn: 'mod+shift+a',
 	zoomIn: '+',
-	zoomOut: '-'
+	zoomOut: '-',
+	// Node editing (P1). Shift+L and Shift+U are Inkscape's own keys for "make this
+	// segment straight" and "make it a curve", so whoever comes from there need not
+	// relearn. Inkscape adds a node with Insert; a Mac keyboard has no Insert, so it is
+	// Shift+I here. Delete removes the node and not the shape — while the node tool has a
+	// node in hand, that is what "delete" means.
+	nodeAdd: 'shift+i',
+	nodeCorner: 'shift+l',
+	nodeCurve: 'shift+u',
+	nodeRemove: 'delete'
 };
 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
@@ -169,6 +182,12 @@ export type Context = {
 	isCropped: boolean;
 	/** Does the selection already have a fill? Decides the wording of the fill row. */
 	filled: boolean;
+	/**
+	 * Bridges (tabs) on the selection: can these shapes carry them at all, and do they
+	 * have them now? The second decides whether the row offers them or takes them away —
+	 * one row for both, like the fill row above.
+	 */
+	bridges: { carries: boolean; has: boolean };
 	/** How many shapes are on the clipboard. */
 	clipboard: number;
 	/** Is a write action still in flight? */
@@ -215,6 +234,8 @@ export type Handlers = {
 	split: () => void;
 	fill: (on: boolean) => void;
 	corners: () => void;
+	/** Bridges on the selection; `false` takes them away again. */
+	bridges: (on: boolean) => void;
 	onlyLayer: (kind: 'cut' | 'engrave' | 'raster') => void;
 	/** Select exactly this one shape — from the list of what lies under the pointer. */
 	selectOne: (id: string) => void;
@@ -520,6 +541,19 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 					run: h.corners
 				},
 				{
+					id: 'bridges',
+					label: ctx.bridges.has ? t('action.bridgesOff') : t('action.bridges'),
+					key: K('bridges'),
+					explain: ctx.bridges.has ? t('explain.bridgesOff') : t('explain.bridges'),
+					// The panel has the two numbers; this row is the one-click default, because a
+					// field nobody finds is not a feature. Four of 2 mm: one per side of a
+					// rectangle, so the part hangs on four corners instead of tipping on one.
+					off:
+						needsOne ??
+						(ctx.bridges.carries ? undefined : t('reason.noBridges')),
+					run: () => h.bridges(!ctx.bridges.has)
+				},
+				{
 					id: 'fill',
 					label: ctx.filled ? t('action.unfill') : t('action.fill'),
 					off: needsOne,
@@ -681,6 +715,95 @@ export function canvasMenu(
 					off: cannot ?? (ctx.empty ? t('reason.bedEmpty') : undefined),
 					explain: t('explain.rescue'),
 					run: h.rescue
+				}
+			]
+		}
+	];
+}
+
+// ─── The menu on a node ──────────────────────────────────────────────────────
+//
+// Its own context, like the layer row's, because a node is not a selection of shapes: a
+// verb here works on one point of one shape and its reasons are different ones. The
+// keyboard reads the same rows, so Delete on a node cannot come to mean something else
+// than the row that says "Remove this node".
+
+export type NodeContext = {
+	/** Which node this is about; -1 when none is in hand. */
+	index: number;
+	/** How many nodes the shape has. */
+	count: number;
+	/** Does the shape come back to where it started? */
+	closed: boolean;
+	/** The kind of the segment leaving this node, or null when there is none (the last
+	 *  node of an open path). */
+	kind: 'line' | 'quad' | 'cubic' | 'arc' | null;
+	busy: boolean;
+	may: boolean;
+};
+
+export type NodeHandlers = {
+	addNode: () => void;
+	removeNode: () => void;
+	setKind: (kind: 'line' | 'quad') => void;
+};
+
+export function nodeMenu(ctx: NodeContext, h: NodeHandlers): Menu {
+	const cannot =
+		!ctx.may
+			? t('reason.needsToken')
+			: ctx.busy
+				? t('reason.busy')
+				: ctx.index < 0
+					? t('reason.pickNode')
+					: undefined;
+	// A segment is what carries the curve, so without one there is nothing to bend. That
+	// is the last node of an open path.
+	const needsSegment = cannot ?? (ctx.kind ? undefined : t('reason.nodeIsLast'));
+	// What is refused is what would leave no shape behind.
+	const tooFew = ctx.closed
+		? ctx.count <= 3
+			? t('reason.nodeClosedThree')
+			: undefined
+		: ctx.count <= 2
+			? t('reason.nodeOpenTwo')
+			: undefined;
+	// With no piece at all the row is disabled anyway, and then the offer ("a curve") reads
+	// better than its undo ("straight"): there is nothing there yet to straighten.
+	const straight = ctx.kind === 'line' || ctx.kind === null;
+
+	return [
+		{
+			items: [
+				{
+					id: 'node-add',
+					label: t('action.nodeAdd'),
+					key: K('nodeAdd'),
+					off: needsSegment,
+					explain: t('explain.nodeAdd'),
+					run: h.addNode
+				},
+				{
+					// One row for both directions, like the fill row: a segment is either
+					// straight or curved and the row says which way it will go.
+					id: 'node-kind',
+					label: straight ? t('action.nodeCurve') : t('action.nodeCorner'),
+					key: K(straight ? 'nodeCurve' : 'nodeCorner'),
+					off: needsSegment,
+					explain: straight ? t('explain.nodeCurve') : undefined,
+					run: () => h.setKind(straight ? 'quad' : 'line')
+				}
+			]
+		},
+		{
+			items: [
+				{
+					id: 'node-remove',
+					label: t('action.nodeRemove'),
+					key: K('nodeRemove'),
+					off: cannot ?? tooFew,
+					danger: true,
+					run: h.removeNode
 				}
 			]
 		}

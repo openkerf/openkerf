@@ -72,6 +72,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/clear",
         "/api/design/elements/{element_id}/image",
         "/api/design/elements/{element_id}/vectorise",
+        # A node on a segment (P1). The pen can draw a curve, and this is the other half:
+        # repairing one that was imported.
+        "/api/design/elements/{element_id}/nodes",
         "/api/design/elements/{element_id}/crop",
         "/api/project/open",
         # Starting over. Throws the design and the sheets away, so it belongs behind the same
@@ -112,6 +115,11 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/single-layer",
         "/api/design/operations/prune",
         "/api/design/effect",
+        # Gap T1: bridges (tabs) in a cut line. Writes two attributes on the shapes, so
+        # behind the same gate as the rest of the tree; `clear` is a POST because the ids
+        # travel in the body.
+        "/api/design/bridges",
+        "/api/design/bridges/clear",
         "/api/design/mirror",
         "/api/design/boolean",
         "/api/design/group",
@@ -177,6 +185,8 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/generate/qrcode",
         "/api/design/generate/arctext",
         "/api/design/generate/barcode",
+        # Gap G1: the field of slits that makes sheet material bend.
+        "/api/design/generate/hinge",
         "/api/presetariat/import",
         "/api/library/testgrids",
         "/api/library/testgrids/{grid_id}/photo",

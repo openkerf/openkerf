@@ -442,15 +442,24 @@ class ApiServer:
             every client reads it that way. A header adds the machine-readable half
             without breaking the human-readable one, so the web app can say the
             refusal in the reader's language while curl still shows a sentence.
+
+            A refusal may also carry the numbers its sentence needs, and those go in
+            a second header as JSON. That is for the number that is a constant of
+            ours — "at most 200 bridges" — which a code alone cannot carry, so the
+            translated sentence used to be impossible and the panel showed English.
             """
             try:
                 return action(*args)
             except (MachineError, DesignError, LibraryError) as e:
                 code = getattr(e, "code", None)
+                headers = {"X-OpenKerf-Error": code} if code else None
+                values = getattr(e, "values", None)
+                if headers and values:
+                    headers["X-OpenKerf-Error-Values"] = json.dumps(values)
                 raise HTTPException(
                     status_code=409,
                     detail=str(e),
-                    headers={"X-OpenKerf-Error": code} if code else None,
+                    headers=headers,
                 ) from e
             except CommandError as e:
                 raise HTTPException(
@@ -698,6 +707,48 @@ class ApiServer:
                 body.get("y_mm"),
             )
 
+        @app.post("/api/design/elements/{element_id}/nodes", dependencies=write)
+        def add_element_node(element_id: str, body: dict):
+            """
+            A node on a segment: either a place on the bed (a double-click) or a segment
+            and a parameter (the menu, which means "the middle of this piece").
+            """
+            return manage(
+                self.nodes.insert_point,
+                element_id,
+                body.get("segment_index"),
+                body.get("t"),
+                body.get("x_mm"),
+                body.get("y_mm"),
+            )
+
+        @app.delete("/api/design/elements/{element_id}/nodes/{index}", dependencies=write)
+        def remove_element_node(element_id: str, index: int):
+            return manage(self.nodes.remove_point, element_id, index)
+
+        # A kind and a handle sit on a *segment*, not on a node: a curve lives between two
+        # points, and addressing it by one of them would leave the question which of the two
+        # segments meeting there was meant.
+        @app.patch(
+            "/api/design/elements/{element_id}/segments/{index}/kind", dependencies=write
+        )
+        def set_segment_kind(element_id: str, index: int, body: dict):
+            return manage(self.nodes.set_kind, element_id, index, body.get("kind"))
+
+        @app.patch(
+            "/api/design/elements/{element_id}/segments/{index}/control",
+            dependencies=write,
+        )
+        def move_segment_control(element_id: str, index: int, body: dict):
+            return manage(
+                self.nodes.move_control,
+                element_id,
+                index,
+                body.get("which"),
+                body.get("x_mm"),
+                body.get("y_mm"),
+            )
+
         @app.delete("/api/design/elements/{element_id}/crop", dependencies=write)
         def uncrop_image(element_id: str):
             """Undo the crop; the original was never thrown away."""
@@ -825,6 +876,30 @@ class ApiServer:
         def update_line(element_id: str, body: dict):
             """Move one end; a line is two points, not a box."""
             return manage(lambda: self.drawing.update_line(element_id, **body))
+
+        @app.post("/api/design/bridges", dependencies=write)
+        def set_bridges(body: dict):
+            """
+            Bridges (tabs) in a cut line, on the whole selection at once.
+
+            A collection route and not a route per element, because a bridge is something
+            you put on every part you are about to cut loose: the answer says how many
+            shapes got them and how many were skipped for their type.
+            """
+            return manage(
+                lambda: self.drawing.set_bridges(
+                    body.get("ids"),
+                    count=body.get("count"),
+                    length_mm=body.get("length_mm"),
+                    positions_percent=body.get("positions_percent"),
+                )
+            )
+
+        # A POST and not a DELETE: the ids are in the body, and this API sends a body only
+        # on POST and PATCH — `element delete` does it the same way.
+        @app.post("/api/design/bridges/clear", dependencies=write)
+        def clear_bridges(body: dict):
+            return manage(self.drawing.clear_bridges, body.get("ids"))
 
         @app.post("/api/design/offset", dependencies=write)
         def offset_elements(body: dict):
@@ -1800,6 +1875,23 @@ class ApiServer:
                 body.get("font"),
                 body.get("spacing"),
                 bool(body.get("inside")),
+            )
+
+        @app.post("/api/design/generate/hinge", dependencies=write, status_code=201)
+        def generate_hinge(body: dict):
+            """A field of slits that lets rigid sheet material bend."""
+            return manage(
+                self.generators.hinge,
+                body.get("ids") or [],
+                body.get("pattern") or "staggered",
+                body.get("slit_mm", 8.0),
+                body.get("gap_mm", 3.0),
+                body.get("row_mm", 2.0),
+                body.get("x_mm", 0.0),
+                body.get("y_mm", 0.0),
+                body.get("width_mm", 60.0),
+                body.get("height_mm", 40.0),
+                body.get("from_selection", False) is True,
             )
 
         @app.post("/api/design/generate/barcode", dependencies=write, status_code=201)

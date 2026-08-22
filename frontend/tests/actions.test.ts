@@ -22,16 +22,25 @@ import {
 	comboOf,
 	keyLabel,
 	layerMenu,
+	nodeMenu,
 	objectMenu,
 	type Context,
 	type Handlers,
 	type LayerContext,
 	type LayerHandlers,
+	type NodeContext,
+	type NodeHandlers,
 	type Menu
 } from '../src/lib/actions.ts';
 
 const NOTHING = () => {};
-const HANDLERS = new Proxy({}, { get: () => NOTHING }) as Handlers & LayerHandlers;
+const HANDLERS = new Proxy({}, { get: () => NOTHING }) as Handlers &
+	LayerHandlers &
+	NodeHandlers;
+
+function nodeCtx(over: Partial<NodeContext> = {}): NodeContext {
+	return { index: 0, count: 5, closed: true, kind: 'line', busy: false, may: true, ...over };
+}
 
 function context(over: Partial<Context> = {}): Context {
 	return {
@@ -41,6 +50,7 @@ function context(over: Partial<Context> = {}): Context {
 		isText: false,
 		isCropped: false,
 		filled: false,
+		bridges: { carries: true, has: false },
 		clipboard: 0,
 		busy: false,
 		may: true,
@@ -82,11 +92,15 @@ test('every shortcut is unique, except where that is on purpose', () => {
 	const seen = new Map<string, string>();
 	// Two keys for one operation is allowed: ⌘⇧G and ⌘U both ungroup, and the zoom
 	// keys keep their older variant.
+	// And Delete deliberately means two things: with a node in hand the node tool takes it
+	// (`nodeRemove`), otherwise it throws the shape away. The page decides in that order,
+	// so the two can never both fire.
 	const allowed = new Set([
 		'ungroupAlt',
 		'zoomAllOld',
 		'zoomSelectionOld',
-		'zoomSelectionLightburn'
+		'zoomSelectionLightburn',
+		'nodeRemove'
 	]);
 	for (const [name, combo] of Object.entries(KEYS)) {
 		if (allowed.has(name)) continue;
@@ -325,4 +339,74 @@ test('the shortcut on a row is the same as the one in the table', () => {
 	assert.equal(find('copy').key, keyLabel(KEYS.copy));
 	assert.equal(find('group').key, keyLabel(KEYS.group));
 	assert.equal(find('delete').key, keyLabel(KEYS.delete));
+});
+
+test('the bridges row offers them, and takes them away once they are there', () => {
+	// One row for both directions, like the fill row: what it says is what the selection
+	// is not yet. A separate "remove" row would be grey nine times out of ten.
+	const off = rows(objectMenu(context(), HANDLERS)).find((r) => r.id === 'bridges');
+	assert.equal(off.label, 'Add bridges (4 × 2 mm)');
+	assert.equal(off.off, undefined);
+	assert.equal(off.key, keyLabel(KEYS.bridges));
+
+	const on = rows(
+		objectMenu(context({ bridges: { carries: true, has: true } }), HANDLERS)
+	).find((r) => r.id === 'bridges');
+	assert.equal(on.label, 'Remove bridges');
+});
+
+test('a shape that carries no bridges says so instead of going quietly grey', () => {
+	const row = rows(
+		objectMenu(context({ bridges: { carries: false, has: false } }), HANDLERS)
+	).find((r) => r.id === 'bridges');
+
+	assert.equal(row.off, 'A line, text or an image carries no bridges');
+});
+
+// ─── The menu on a node (P1) ─────────────────────────────────────────────────
+
+test('a node with no piece after it cannot be bent or split', () => {
+	// The last node of an open path: there is no segment leaving it, so there is nothing
+	// to add a node to and nothing to curve.
+	const menu = nodeMenu(nodeCtx({ closed: false, kind: null }), HANDLERS);
+	const find = (id: string) => rows(menu).find((r) => r.id === id);
+
+	assert.match(find('node-add').off, /no piece after it/);
+	assert.match(find('node-kind').off, /no piece after it/);
+	// Removing it is exactly what you do want with a node like that.
+	assert.equal(find('node-remove').off, undefined);
+});
+
+test('the one row says which way the piece will go', () => {
+	const straight = nodeMenu(nodeCtx({ kind: 'line' }), HANDLERS);
+	const curved = nodeMenu(nodeCtx({ kind: 'quad' }), HANDLERS);
+	const label = (menu: Menu) => rows(menu).find((r) => r.id === 'node-kind').label;
+
+	assert.match(label(straight), /curve/);
+	assert.match(label(curved), /straight/);
+	// And the key follows the direction, so what the row does and what it says stay
+	// together.
+	assert.equal(rows(straight).find((r) => r.id === 'node-kind').key, keyLabel(KEYS.nodeCurve));
+	assert.equal(rows(curved).find((r) => r.id === 'node-kind').key, keyLabel(KEYS.nodeCorner));
+});
+
+test('what would leave no shape behind says so instead of failing', () => {
+	const closed = nodeMenu(nodeCtx({ closed: true, count: 3 }), HANDLERS);
+	const open = nodeMenu(nodeCtx({ closed: false, count: 2 }), HANDLERS);
+	const off = (menu: Menu) => rows(menu).find((r) => r.id === 'node-remove').off;
+
+	assert.match(off(closed), /three nodes/);
+	assert.match(off(open), /two nodes/);
+	// One more and it is allowed again.
+	assert.equal(rows(nodeMenu(nodeCtx({ count: 4 }), HANDLERS)).find((r) => r.id === 'node-remove').off, undefined);
+});
+
+test('without a node in hand every row says to pick one', () => {
+	const menu = nodeMenu(nodeCtx({ index: -1 }), HANDLERS);
+	for (const row of rows(menu)) assert.match(row.off, /Click a node/);
+});
+
+test('a read-only session cannot edit nodes either', () => {
+	const menu = nodeMenu(nodeCtx({ may: false }), HANDLERS);
+	for (const row of rows(menu)) assert.match(row.off, /token/);
 });

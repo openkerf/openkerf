@@ -122,6 +122,49 @@ def test_a_control_point_bends_the_line(client):
     assert placed[curved][3] - placed[curved][1] > placed[straight][3] - placed[straight][1]
 
 
+def test_a_cubic_point_bends_the_line_at_both_ends(client):
+    """
+    A pen drag makes two handles, not one.
+
+    An S is the shape that only a cubic can be: one handle up out of the start, the other
+    down into the end. With a quad the two would have to agree on one control point, and
+    then the curve leans one way over its whole length.
+    """
+    ess = client.post(
+        "/api/design/path",
+        json={"points": [[0, 20], [40, 20, 10, 0, 30, 40]]},
+    )
+
+    assert ess.status_code == 201
+    element = next(
+        e
+        for e in client.get("/api/design").json()["elements"]
+        if e["id"] == ess.json()["ids"][0]
+    )
+    assert " C " in element["path"]
+    box = boxes(client)[ess.json()["ids"][0]]
+    # The curve leaves above its chord and arrives below it, so it is taller than the
+    # 0 mm a straight line between the two points would be.
+    assert box[3] - box[1] > 10
+
+
+def test_a_drawn_path_lands_in_a_layer(client):
+    """
+    Without this the pen drew work that does not burn.
+
+    Measured before: a pen path came back with `operation_ids []` and the "no layer"
+    stroke #e5484d, so it lay on the bed grey-dotted and went into no operation.
+    """
+    drawn = client.post(
+        "/api/design/path", json={"points": [[0, 0], [30, 0], [30, 20]]}
+    ).json()["ids"][0]
+
+    element = next(
+        e for e in client.get("/api/design").json()["elements"] if e["id"] == drawn
+    )
+    assert element["operation_ids"]
+
+
 def test_a_path_of_one_point_is_refused(client):
     response = client.post("/api/design/path", json={"points": [[10, 10]]})
     assert response.status_code == 409

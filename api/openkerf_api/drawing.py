@@ -89,6 +89,38 @@ def _is_filled(node) -> bool:
     return getattr(fill, "alpha", 255) != 0
 
 
+#: What a shape is called in a refusal, per element type. The engine's own type strings
+#: ("elem rect") are not a name a reader recognises.
+_SHAPE_WORDS = {
+    "elem rect": "a rectangle",
+    "elem ellipse": "an ellipse",
+    "elem polyline": "a polyline",
+    "elem path": "a path",
+    "elem line": "a line",
+    "elem point": "a point",
+    "elem text": "a text",
+    "elem image": "an image",
+}
+
+
+def _shape_name(node) -> str:
+    """
+    The shape by the shortest name that identifies it.
+
+    A label if it has one, because that is the name the user gave it; otherwise the id,
+    which is what the interface and the API both key on and what a script can look up.
+    The type word is the last resort — it names a kind and not a shape, but it beats
+    saying nothing.
+    """
+    label = getattr(node, "label", None)
+    if isinstance(label, str) and label.strip():
+        return f'"{label.strip()}"'
+    element_id = getattr(node, "id", None)
+    if isinstance(element_id, str) and element_id.strip():
+        return element_id.strip()
+    return _SHAPE_WORDS.get(str(getattr(node, "type", "")), "this shape")
+
+
 def _number(value):
     """A number, or nothing. The engine sometimes hands a string or numpy here."""
     if value is None:
@@ -128,10 +160,19 @@ class Drawing:
         """
         A free path from separate points — the pen.
 
-        Every point may carry a curve: `[x, y]` is a straight corner, and
-        `[x, y, cx, cy]` bends the line towards it through that control point. That way
-        the pen can set a corner with one click and a curve by dragging, as every drawing
-        program does.
+        A point's numbers describe the segment *arriving* at it, exactly as SVG path data
+        does, so there is never a question which of the two segments at a point a handle
+        belongs to:
+
+        - `[x, y]` — a straight corner.
+        - `[x, y, cx, cy]` — a quadratic curve through one control point.
+        - `[x, y, c1x, c1y, c2x, c2y]` — a cubic, `c1` leaving the previous point and `c2`
+          arriving at this one. A pen drag makes two handles and not one, so without this
+          form the pen could only draw quads, and then a dragged handle at both ends of a
+          segment had nowhere to go.
+
+        With `closed` the first point's own numbers describe the closing segment — it is
+        the only segment that arrives at point one.
 
         The geometry goes straight into the element tree. The engine's `path` command
         scales its d-string, and then a path of 10 cm draws itself tens of metres wide.
@@ -141,11 +182,14 @@ class Drawing:
 
         cleaned = []
         for point in points or []:
-            if not isinstance(point, (list, tuple)) or len(point) not in (2, 4):
-                raise DesignError("Een point is [x, y] of [x, y, cx, cy].")
+            if not isinstance(point, (list, tuple)) or len(point) not in (2, 4, 6):
+                raise DesignError(
+                    "A point is [x, y], [x, y, cx, cy] or [x, y, c1x, c1y, c2x, c2y].",
+                    code="draw.pointShape",
+                )
             cleaned.append([_finite(value, "point") for value in point])
         if len(cleaned) < 2:
-            raise DesignError("A path needs at least two points.")
+            raise DesignError("A path needs at least two points.", code="draw.needsTwoPoints")
 
         def at(values, index=0):
             return complex(
@@ -157,7 +201,9 @@ class Drawing:
         if closed:
             pairs.append((cleaned[-1], cleaned[0]))
         for start, end in pairs:
-            if len(end) == 4:
+            if len(end) == 6:
+                geometry.cubic(at(start), at(end, 2), at(end, 4), at(end))
+            elif len(end) == 4:
                 geometry.quad(at(start), at(end, 2), at(end))
             else:
                 geometry.line(at(start), at(end))
@@ -171,7 +217,12 @@ class Drawing:
                 label=label,
             )
             self.elements.validate_ids()
-        self.user_operations  # noqa: B018 - documents that layers are left alone
+            # A drawn shape lands in a layer, and a pen path is a drawn shape. It did not:
+            # measured, a pen path came back with `operation_ids []` and the "no layer"
+            # stroke #e5484d, so it drew itself grey-dotted on the bed and burned nothing.
+            # Inside the same undoscope, for the same reason as in `create`: laying down a
+            # shape is one step, so one undo.
+            self._single_layer(node)
         self.elements.set_emphasis([node])
         self._refresh()
         return {"ids": [node.id], "type": node.type}
@@ -373,6 +424,202 @@ class Drawing:
         self.elements.validate_ids()
         self._refresh()
         return {"id": node.id, "text": node.mktext}
+
+    #: The default bridge: four of two millimetres.
+    #:
+    #: Two millimetres is the engine's own default length (`mktablength` starts at
+    #: `2 * 65535 / 2.54 / 10` = 5160.236 units, which is 2.000 mm), and four is what the
+    #: right-click row puts on in one go — one per side of a rectangle, so a cut part hangs
+    #: in the sheet on four corners instead of tipping on one.
+    DEFAULT_COUNT = 4
+    DEFAULT_LENGTH_MM = 2.0
+
+    def set_bridges(
+        self, element_ids, count=None, length_mm=None, positions_percent=None
+    ) -> dict:
+        """
+        Leave gaps in the cut so the part stays in the sheet.
+
+        Either a count — then they are spread evenly and stay spread when the shape is
+        resized — or an explicit list of percentages along the path. The length is one
+        bridge, in millimetres; the engine keeps it in its own units.
+
+        Each of the three is optional and what is left out stays as it is. That is what makes
+        the panel's two fields independent: typing a length must not silently reset the count
+        to four. Measured before this: with six bridges on the shape, changing the length to
+        30 mm was refused with "4 bridges of 30 mm" — a sentence about a number the user had
+        not asked for.
+
+        The refusals are ours, because the engine has none worth the name. It checks only
+        `len(positions) * tablen < total_length` and says nothing either way: measured on a
+        200 mm perimeter, four bridges of 49.9 mm pass that check and leave 0.15 mm of cut
+        in the whole contour, and `"*100"` of 2 mm fails it and hands back an *empty*
+        geometry — no cut at all, no message.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        from .bridges import (
+            MAX_COUNT,
+            MAX_FRACTION,
+            TAB_TYPES,
+            format_positions,
+            parse_positions,
+            path_length,
+        )
+
+        if length_mm is not None:
+            length = _finite(length_mm, "length_mm")
+            if length <= 0:
+                raise DesignError(
+                    "A bridge needs a length greater than zero.", code="bridges.needsLength"
+                )
+        else:
+            length = None
+
+        if positions_percent is not None:
+            if not isinstance(positions_percent, (list, tuple)) or not positions_percent:
+                raise DesignError(
+                    "Name at least one place for a bridge, or ask for a number of them.",
+                    code="bridges.needsCount",
+                )
+            spots = [_finite(value, "positions_percent") for value in positions_percent]
+            for value in spots:
+                if not 0 <= value <= 100:
+                    raise DesignError(
+                        "A bridge sits somewhere between 0 and 100 percent along the path.",
+                        code="bridges.percentRange",
+                    )
+            if len(spots) > MAX_COUNT:
+                raise DesignError(
+                    f"More than {MAX_COUNT} bridges in one contour is not a cut any more.",
+                    code="bridges.tooMany",
+                    values={"max": MAX_COUNT},
+                )
+            text = format_positions(None, spots)
+        elif count is not None:
+            wanted = int(_finite(count, "count"))
+            if wanted <= 0:
+                raise DesignError(
+                    "Ask for at least one bridge, or clear them instead.",
+                    code="bridges.needsCount",
+                )
+            if wanted > MAX_COUNT:
+                raise DesignError(
+                    f"More than {MAX_COUNT} bridges in one contour is not a cut any more.",
+                    code="bridges.tooMany",
+                    values={"max": MAX_COUNT},
+                )
+            spots = None
+            text = format_positions(wanted, None)
+        else:
+            # Neither: only the length changes, and every shape keeps the bridges it has.
+            spots = None
+            text = None
+
+        nodes = self._nodes(element_ids)
+        targets = [node for node in nodes if node.type in TAB_TYPES]
+        skipped = len(nodes) - len(targets)
+        if not targets:
+            raise DesignError(
+                "Bridges only work on a rectangle, an ellipse, a polyline or a path.",
+                code="bridges.notSupported",
+            )
+
+        # What each shape ends up with, worked out per shape: leaving a field out means
+        # keeping what is there, and two shapes can hold different bridges.
+        plan = []
+        for node in targets:
+            final_text = text if text is not None else (getattr(node, "mktabpositions", "") or "")
+            if not final_text:
+                final_text = format_positions(self.DEFAULT_COUNT, None)
+            final_length = length
+            if final_length is None:
+                try:
+                    final_length = float(getattr(node, "mktablength", 0) or 0) / UNITS_PER_MM
+                except (TypeError, ValueError):
+                    final_length = 0.0
+                if final_length <= 0:
+                    final_length = self.DEFAULT_LENGTH_MM
+            number = len(parse_positions(final_text))
+            if not number:
+                # The stored string says nothing readable — an old project, or a hand-edited
+                # SVG. Then there is nothing to keep, so the default lands rather than a
+                # write that would leave the shape with no bridges and no message.
+                final_text = format_positions(self.DEFAULT_COUNT, None)
+                number = self.DEFAULT_COUNT
+            plan.append((node, final_text, final_length, number))
+
+        # Per shape, because the bound is the shape's own contour: a 2 mm bridge is nothing
+        # on a 200 mm perimeter and everything on a 10 mm one. Refusing here rather than
+        # skipping the shape: whoever asks for bridges and gets none on one shape of twenty
+        # would find that out on the material.
+        #
+        # And every shape is measured before the refusal, not just up to the first that
+        # fails. Measured before this with three rectangles selected (contours 200, 200 and
+        # 12 mm): the sentence named "a contour that is 12.0 mm long" and nothing else, so
+        # on a nested sheet of forty parts the offending one could not be found.
+        too_tight = []
+        for node, _final_text, final_length, number in plan:
+            total = path_length(node.as_geometry()) / UNITS_PER_MM
+            if number * final_length > total * MAX_FRACTION:
+                too_tight.append((node, final_length, number, total))
+        if too_tight:
+            node, final_length, number, total = min(too_tight, key=lambda row: row[3])
+            fine = len(plan) - len(too_tight)
+            where = _shape_name(node)
+            tally = (
+                ""
+                if len(plan) == 1
+                else f" {fine} of the {len(plan)} shapes would have been fine."
+            )
+            raise DesignError(
+                f"{number} bridges of {final_length:g} mm take "
+                f"{number * final_length:g} mm of the contour of {where}, and that "
+                f"contour is {total:.1f} mm long; at most half of it may be bridge."
+                f"{tally} Use fewer or shorter bridges."
+            )
+
+        with self.elements.undoscope("Bridges"):
+            for node, final_text, final_length, _number in plan:
+                node.mktablength = final_length * UNITS_PER_MM
+                node.mktabpositions = final_text
+                # A raw assignment reports nothing to the node, so the cached bounds and the
+                # scene would keep the version without gaps.
+                node.altered()
+        self._refresh()
+        return {
+            "ids": [node.id for node, *_ in plan],
+            "bridged": len(plan),
+            "skipped": skipped,
+            # The count and the length as they now stand on the first shape: with a mixed
+            # selection the rest can differ, and the notice says how many shapes it was.
+            "count": plan[0][3],
+            "length_mm": plan[0][2],
+            "positions_percent": spots,
+        }
+
+    def clear_bridges(self, element_ids) -> dict:
+        """
+        Take the bridges away — the cut closes again.
+
+        An empty position string is the engine's own off state: `final_geometry` applies
+        tabs only `if tablen and numtabs`. The length stays on the node, so switching them
+        back on offers the length that was there.
+        """
+        from .bridges import TAB_TYPES
+
+        nodes = self._nodes(element_ids)
+        targets = [
+            node
+            for node in nodes
+            if node.type in TAB_TYPES and getattr(node, "mktabpositions", "")
+        ]
+        with self.elements.undoscope("Remove bridges"):
+            for node in targets:
+                node.mktabpositions = ""
+                node.altered()
+        self._refresh()
+        return {"ids": [node.id for node in targets], "cleared": len(targets)}
 
     def update_line(self, element_id: str, **fields) -> dict:
         """Move one end of a line, without drawing it again."""

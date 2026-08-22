@@ -47,6 +47,31 @@ OpenKerf writes the one that matches the keyboard you are on.
 | , | Rotate 90° anticlockwise | `rotateLeft` |
 | . | Rotate 90° clockwise | `rotateRight` |
 
+### Bridges
+
+| Keys | What it does | |
+|---|---|---|
+| ⌘⇧B / Ctrl+Shift+B | Add bridges to the selection, four of 2 mm; on a shape that already has them, take them away | `bridges` |
+
+Chrome uses this combination for its bookmarks bar, and unlike ⌘0 it does hand it
+over: with the canvas focused the bar stays as it was and the bridges land on the
+selection.
+
+### The node tool
+
+These work while the Nodes tool has a node in hand — click a knot on the shape, or
+tab to it and press Enter.
+
+| Keys | What it does | |
+|---|---|---|
+| ⇧I / Shift+I | Add a node halfway along the piece after this one | `nodeAdd` |
+| ⇧U / Shift+U | Make that piece a curve | `nodeCurve` |
+| ⇧L / Shift+L | Make that piece straight again | `nodeCorner` |
+| ⌫ / Del | Remove the node — not the shape | `nodeRemove` |
+
+Shift+U and Shift+L are Inkscape's own keys for the same two operations. Inkscape
+adds a node with Insert; a Mac keyboard has none, so it is Shift+I here.
+
 ### Moving with the arrow keys
 
 | Keys | What it does |
@@ -82,8 +107,11 @@ bed.
 | Pause | Pause the job, and press again to resume. |
 
 None of the shortcuts fire while the cursor is in a field: in a measurement box
-a full stop is a decimal point, not an emergency stop. The pen tool has its own
-key — Enter finishes the line you are clicking out.
+a full stop is a decimal point, not an emergency stop.
+
+The pen tool has keys of its own while a line is under construction, and they are
+its alone: Enter or a double-click finishes the line, Backspace takes back the
+last point, and Escape throws the line away.
 
 ## The action bar above the canvas
 
@@ -92,7 +120,7 @@ separated by thin dividers, with a "More" button at the end and, on the right,
 what is selected — "Pick a shape on the bed", "1 shape selected" or
 "{n} shapes selected".
 
-![The OpenKerf window with a circle selected. Above the canvas the action bar shows undo and redo, then two groups of four alignment icons, then group, ungroup and the two mirror buttons, a More button, and on the right the words "1 shape selected". The right-hand panel is on the Edit tab and gives width, height, X, Y and angle of the ellipse.](images/07-selection.png)
+![The OpenKerf window with a circle selected. Above the canvas the action bar shows undo and redo, then two groups of four alignment icons, then group, ungroup and the two mirror buttons, a More button, and on the right the words "1 shape selected". The right-hand panel is on the Edit tab and gives width, height, X, Y and angle of the ellipse, and under Bridges the unticked "Leave gaps in the cut".](images/07-selection.png)
 
 | Button | What it does | |
 |---|---|---|
@@ -181,6 +209,8 @@ Under "Edit path" (`path`).
 | Row | What it does | |
 |---|---|---|
 | Corners… | Round or chamfer, with the preview beside it | `corners` |
+| Add bridges (4 × 2 mm) | Small gaps in the cut, so the part stays in the sheet instead of dropping into the machine | `bridges` |
+| Remove bridges | The same row on a shape that has them: the cut closes again and the part comes loose | `bridges` |
 | Fill — for rastering | A raster layer then burns the area instead of just the outline | `fill` |
 | Remove fill | The same row on a shape that already has a fill: without a fill a shape only rasters its outline | `fill` |
 | Edit text… | Only on text: change the words, the font and the size | `text` |
@@ -221,6 +251,19 @@ This menu is about the view and the whole design, not about one shape.
 | Layer numbers next to the shapes | On or off; the small numbers beside each shape | `layerNumbers` |
 | Put everything on the bed | Pulls the whole design back inside the bed, "Including what lies off screen and cannot be clicked" | `rescue` |
 
+## Right-click on a node
+
+With the Nodes tool active, a right-click on one of the shape's own points. It is
+a menu about one point of one shape, so it has reasons of its own — see the table
+of greyed-out reasons below.
+
+| Row | What it does | |
+|---|---|---|
+| Add a node here | Halfway along the piece after this node. A double-click on the line puts one exactly where you click. | `node-add` |
+| Make this piece a curve | The line stays where it is and gets a handle to pull it with | `node-kind` |
+| Make this piece straight | The same row on a piece that is already curved | `node-kind` |
+| Remove this node | Red, and at the bottom. It removes the point, not the shape. | `node-remove` |
+
 ## Right-click on a layer
 
 The same menu opens from the "…" button on a layer row in the Layers tab.
@@ -258,6 +301,11 @@ A grey button always says why, in its tooltip. These are all the reasons:
 | This layer already burns first | It cannot move up |
 | This layer already burns last | It cannot move down |
 | This layer belongs to a test grid | A test grid's layers are evidence; they are locked |
+| A line, text or an image carries no bridges | Bridges work on a rectangle, an ellipse, a polyline or a path |
+| Click a node on the shape first | The node operations act on one point; click a knot to take it in hand |
+| This is the last node; there is no piece after it | The end of an open line has nothing leaving it to bend or divide |
+| A closed shape needs three nodes | Removing this one would leave no shape behind |
+| A line needs two nodes | The same, for an open line |
 
 On the tool rail the same rule applies with its own wording: a tool you cannot
 use reads "{name} — requires a token", and every tool except Select is off

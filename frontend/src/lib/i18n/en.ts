@@ -86,12 +86,12 @@ export const en = {
 	'rail.tool.rect': 'Rectangle',
 	'rail.tool.circle': 'Circle',
 	'rail.tool.line': 'Line',
-	'rail.tool.pen': 'Pen — click points, Enter finishes',
+	'rail.tool.pen': 'Pen — click for a corner, drag for a curve, Enter finishes',
 	'rail.tool.pen.short': 'Pen',
 	'rail.tool.text': 'Text',
 	'rail.tool.measure': 'Measure',
 	'rail.placeImage': 'Place image',
-	'rail.generators': 'Generators — grid, circle, polygon, box, QR',
+	'rail.generators': 'Generators — repeats, boxes, codes and a living hinge',
 	'rail.generators.short': 'Generators',
 	'rail.clipart': 'Search clipart in public collections',
 	'rail.clipart.short': 'Search clipart',
@@ -237,6 +237,8 @@ export const en = {
 	'action.hatch': 'Hatch',
 	'action.wobble': 'Wobble',
 	'action.corners': 'Corners…',
+	'action.bridges': 'Add bridges (4 × 2 mm)',
+	'action.bridgesOff': 'Remove bridges',
 	'action.fill': 'Fill — for rastering',
 	'action.unfill': 'Remove fill',
 	'action.layer': 'Layer',
@@ -256,6 +258,12 @@ export const en = {
 	'action.snap': 'Snap to grid and shapes',
 	'action.layerNumbers': 'Layer numbers next to the shapes',
 	'action.rescue': 'Put everything on the bed',
+	// Node editing (P1). "Curve" and "corner" and not "quadratic" and "straight": the word
+	// on the row is the thing that happens to the line, not the name of the maths.
+	'action.nodeAdd': 'Add a node here',
+	'action.nodeCurve': 'Make this piece a curve',
+	'action.nodeCorner': 'Make this piece straight',
+	'action.nodeRemove': 'Remove this node',
 
 	// ── Why an operation cannot run now ────────────────────────────────────────
 	'reason.needsToken': 'Requires a token',
@@ -264,6 +272,7 @@ export const en = {
 	'reason.needsTwo': 'Select at least two shapes',
 	'reason.needsThree': 'Distributing needs at least three shapes',
 	'reason.notInGroup': 'This selection is not in a group',
+	'reason.noBridges': 'A line, text or an image carries no bridges',
 	'reason.onePiece': 'This shape is a single piece',
 	'reason.clipboardEmpty': 'Nothing is on the clipboard',
 	'reason.nothingSelected': 'Nothing is selected',
@@ -272,6 +281,10 @@ export const en = {
 	'reason.alreadyFirst': 'This layer already burns first',
 	'reason.alreadyLast': 'This layer already burns last',
 	'reason.testGridLayer': 'This layer belongs to a test grid',
+	'reason.pickNode': 'Click a node on the shape first',
+	'reason.nodeIsLast': 'This is the last node; there is no piece after it',
+	'reason.nodeOpenTwo': 'A line needs two nodes',
+	'reason.nodeClosedThree': 'A closed shape needs three nodes',
 
 	// ── What an operation means, when nothing is in the way ────────────────────
 	'explain.group': 'The shapes move together from now on',
@@ -280,6 +293,8 @@ export const en = {
 	'explain.combine': 'The result is one path; the shapes disappear',
 	'explain.nest': 'Pack the selection close together to save material',
 	'explain.corners': 'Round or chamfer, with the preview beside it',
+	'explain.bridges': 'Small gaps in the cut, so the part stays in the sheet instead of dropping into the machine',
+	'explain.bridgesOff': 'The cut closes again and the part comes loose',
 	'explain.fill': 'A raster layer then burns the area instead of just the outline',
 	'explain.unfill': 'Without a fill a shape only rasters its outline',
 	'explain.crop': 'Then drag a frame over the image',
@@ -291,6 +306,8 @@ export const en = {
 	'explain.visible': 'Changes nothing about the job',
 	'explain.layerSettings': 'Name, speed, power, passes, colour',
 	'explain.layerRemove': 'The shapes stay on the bed',
+	'explain.nodeAdd': 'Halfway along the piece after this node. A double-click on the line puts one exactly where you click.',
+	'explain.nodeCurve': 'The line stays where it is and gets a handle to pull it with',
 
 	// ── The menu on a layer row ───────────────────────────────────────────────
 	'layerMenu.selectShapes': {
@@ -370,6 +387,9 @@ export const en = {
 	'canvas.selectShape': 'Select {name}',
 	'canvas.dragEndpoint': 'Drag endpoint {n}',
 	'canvas.dragNode': 'Drag node {n}',
+	'canvas.dragHandle': 'Drag the handle of piece {n}',
+	'canvas.pen.hint': 'Click for a corner, drag for a curve. Enter finishes the line, Backspace takes back the last point, Escape stops.',
+	'canvas.nodes.hint': 'Double-click the line to add a node. With a node in hand: Delete removes it, Shift+U curves the piece after it, Shift+L straightens it.',
 	'canvas.layerNumbers.on': 'Layer numbers next to the shapes are on',
 	'canvas.layerNumbers.off': 'Layer numbers next to the shapes are off',
 	'canvas.snap.on': 'Snapping is on — hold Alt to skip it for one move',
@@ -385,6 +405,7 @@ export const en = {
 	'canvas.nodes.pickOne': 'Nodes works on one shape. Click one on the bed.',
 	'canvas.nodes.tooMany': 'Nodes works on one shape at a time; {n} are selected. Click just one of them.',
 	'canvas.nodes.noPoints': 'This shape has no loose points. Make it a path first with Combine, in the panel on the right.',
+	'canvas.nodes.failed': 'The nodes of this shape could not be read. Try clicking it again; if it keeps failing, the engine is not answering.',
 	'canvas.trace': 'Trace of the head — measured, including the jumps between shapes.',
 	'canvas.traceProgress': '{percent}% shows as a ring around the head.',
 	'canvas.outsideBed': {
@@ -660,6 +681,17 @@ export const en = {
 	'panel.anchor.back': 'Put back',
 	'panel.anchor.backTitle': 'Back to how it was when you clicked this selection',
 	'panel.inEffect': 'Part of effect: {label}',
+	'panel.bridges': 'Bridges',
+	'panel.bridges.on': 'Leave gaps in the cut',
+	'panel.bridges.count': 'Number',
+	'panel.bridges.length': 'Length per bridge',
+	'panel.bridges.off': 'No bridges: this shape comes loose the moment the cut closes.',
+	'panel.bridges.explain': '{count} gaps of {length} mm, spread over a contour of {total} mm. What is left to cut is {cut} mm.',
+	'panel.bridges.explainTightest': 'Each of these {n} shapes gets {count} gaps of {length} mm. The tightest contour among them is {total} mm long, which leaves {cut} mm to cut there.',
+	'panel.bridges.places': 'At {places} percent along the contour, each {length} mm long.',
+	'panel.bridges.notSupported': 'This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path — not on a line, text or an image.',
+	'panel.bridges.mixed': 'These shapes have different bridges. Setting a number here gives them all the same.',
+	'panel.bridges.notCut': 'This shape is not in a cut layer, so the gaps change nothing yet. They only matter to a cut.',
 	'panel.splittable': {
 		one: 'This shape consists of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.',
 		other: 'These {n} shapes consist of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.'
@@ -1118,6 +1150,7 @@ export const en = {
 	'gen.tab.qrcode': 'QR code',
 	'gen.tab.barcode': 'Barcode',
 	'gen.tab.arctext': 'Arc text',
+	'gen.tab.hinge': 'Living hinge',
 	'gen.cannotDraw': 'The engine cannot draw this.',
 	'gen.incomplete': 'Not complete yet: fill in the empty fields.',
 	'gen.needsSelection': 'Select what should be repeated first.',
@@ -1162,6 +1195,21 @@ export const en = {
 	'gen.tail.sheets': '{parts} on this sheet, {sheets} sheets',
 	'gen.tail.fits': '{parts} pieces, fits on this sheet',
 	'gen.tail.size': '{width} × {height} mm',
+	'gen.hinge.lead': 'A field of slits that lets rigid sheet material bend. The slits lie across, and a sheet bends around a line parallel to its slits, so this one curls from top to bottom. Turn the group a quarter afterwards and it bends the other way.',
+	'gen.hinge.pattern': 'Pattern',
+	'gen.hinge.straight': 'Straight slits',
+	'gen.hinge.staggered': 'Staggered rows',
+	'gen.hinge.wavy': 'Wavy slits',
+	'gen.hinge.slit': 'Slit length',
+	'gen.hinge.gap': 'Gap in a row',
+	'gen.hinge.rows': 'Between rows',
+	'gen.hinge.material': 'Between two slits in a row {gap} of material stays behind, and between two rows {row}. That bridge is what twists, and what breaks.',
+	'gen.hinge.fromSelection': 'Fill the area of the selected shape',
+	'gen.hinge.noSelection': 'Select a shape first to use its area',
+	'gen.hinge.left': 'Left',
+	'gen.hinge.top': 'Top',
+	'gen.hinge.go': 'Make the hinge{tail}',
+	'genPreview.slits': '{n} slits in {rows} rows',
 
 	// ── Edit notices ──────────────────────────────────────────────────────────────
 	'notice.corners.skipped': {
@@ -1181,6 +1229,18 @@ export const en = {
 	'notice.fill.cleared': {
 		one: 'Fill removed from 1 shape.',
 		other: 'Fill removed from {n} shapes.'
+	},
+	'notice.bridges.done': {
+		one: 'One shape got {count} bridges of {length} mm.',
+		other: '{n} shapes got {count} bridges of {length} mm.'
+	},
+	'notice.bridges.doneSkipped': {
+		one: 'One shape got {count} bridges of {length} mm; one was skipped, because its type carries no bridges.',
+		other: '{n} shapes got {count} bridges of {length} mm; {skipped} were skipped, because their type carries no bridges.'
+	},
+	'notice.bridges.cleared': {
+		one: 'The bridges are gone from one shape; the cut closes again.',
+		other: 'The bridges are gone from {n} shapes; the cut closes again.'
 	},
 	'notice.fill.skipped': {
 		one: 'One was skipped: a line has no inside.',
@@ -1701,6 +1761,14 @@ export const en = {
 	// reader's own language. A code whose message carries numbers — a size, a count
 	// — is not here: those parts do not travel in a header, and half a sentence with
 	// the number missing is worse than the English one.
+	'api.bridges.notSupported': 'Bridges only work on a rectangle, an ellipse, a polyline or a path.',
+	'api.bridges.needsCount': 'Ask for at least one bridge, or clear them instead.',
+	'api.bridges.needsLength': 'A bridge needs a length greater than zero.',
+	// The one refusal here whose sentence carries a number: it is a constant of ours, not
+	// a measurement, so it travels beside the code in `X-OpenKerf-Error-Values` and
+	// `MAX_COUNT` in `bridges.py` stays the only place it is written down.
+	'api.bridges.tooMany': 'More than {max} bridges in one contour is not a cut any more.',
+	'api.bridges.percentRange': 'A bridge sits somewhere between 0 and 100 percent along the path.',
 	'api.corners.none': 'Not one corner can be rounded or bevelled: no two straight sides meet there, or the size is too big for the sides. Choose a smaller size.',
 	'api.draw.booleanEmpty': 'That combination yielded nothing — do the shapes actually overlap?',
 	'api.draw.emptyText': 'Text cannot be empty.',
@@ -1715,6 +1783,8 @@ export const en = {
 	'api.edit.needsElement': 'Name at least one element.',
 	'api.edit.staleElement': 'That shape is gone. Refresh the design.',
 	'api.gen.needsSelection': 'Choose what should be repeated first.',
+	'api.gen.hingeEmpty': 'Nothing is left of this field inside the area.',
+	'api.gen.hingeNeedsSelection': 'Choose the shape whose area the slits have to fill first.',
 	'api.gen.noBarcodeLib': 'Barcodes need the python-barcode package.',
 	'api.gen.noFont': 'There is not one usable font on this computer.',
 	'api.gen.noQrLib': 'QR codes need the segno package; install it beside the API.',

@@ -422,7 +422,10 @@ def clip_geometry(geom, rect_units: Rect):
     an arc** — nothing is interpolated, and that is visible on the workpiece.
 
     `rect_units` is in engine units, not in millimetres: the clipping happens in the same
-    space as the geometry. The original is not touched.
+    space as the geometry. The original is not touched. The only demand is that the two are
+    in the *same* space — the living hinge (`generators.py:_plan_hinge`) computes its slit
+    field in millimetres and clips it with a rectangle in millimetres, and that is right for
+    the same reason.
 
     **The lower edge counts, the upper edge does not.** A line lying exactly on a seam is cut
     by neither tile — it crosses nothing — so without that difference its middle would fall

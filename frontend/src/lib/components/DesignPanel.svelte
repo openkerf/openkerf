@@ -1,6 +1,8 @@
 <script lang="ts">
 	import {
+		DEFAULT_BRIDGES,
 		LAYER_COLORS,
+		bridgeSummary,
 		elementName,
 		inkOn,
 		type DesignOperation,
@@ -35,6 +37,10 @@
 		image = null,
 		onImageSet,
 		onImageClear,
+		onBridges,
+		onBridgesOff,
+		bridgeNote = null,
+		bridgeRevision = 0,
 		show = 'selection',
 		bed = null
 	}: {
@@ -78,6 +84,14 @@
 			values: Record<string, unknown> | null
 		) => void;
 		onImageClear?: () => void;
+		/** Bridges (tabs) on the selection: the count, the length, or both. */
+		onBridges?: (fields: { count?: number; length_mm?: number }) => void;
+		onBridgesOff?: () => void;
+		/** What the last bridge action has to report: how many shapes got them, or why not.
+		 *  Beside the field and not at the top of the panel — that is 700 px away. */
+		bridgeNote?: string | null;
+		/** Bumped when a bridge write was refused, so the fields go back to the shape. */
+		bridgeRevision?: number;
 		/** Which part is shown. Selection and layers side by side in one panel became
 		 *  too busy to find anything in. */
 		show?: 'selection' | 'layers';
@@ -148,6 +162,50 @@
 	// is now in the snapshot and the panel shows it. That makes every action a value
 	// rather than a step: typing the same number gives the same picture, however many
 	// times you have clicked.
+
+	/**
+	 * The bridges on the selection.
+	 *
+	 * A value you set and read back, so it belongs in the panel (the placement rule). The
+	 * one-click default sits in the right-click menu; this is where you say how many and
+	 * how long.
+	 */
+	let bridges = $derived(bridgeSummary(chosen));
+	/** The two numbers as typed, so a half-typed "1." does not jump away. */
+	let bridgeFields = $state({ count: '', length: '' });
+	$effect(() => {
+		// Follow the selection, not the typing: whenever the summary changes the fields show
+		// what is really on the shapes again.
+		//
+		// And on `bridgeRevision` too, which the page bumps on a refusal. A refused write
+		// changes nothing on the shapes, so the summary is the same object and this would
+		// not run — measured: after typing 999 in Number and 9 in Length the two fields kept
+		// 999 and 9 while the sentence six pixels below still read "12 gaps of 2 mm", and
+		// only clicking another shape and back brought the true numbers back.
+		void bridgeRevision;
+		bridgeFields = {
+			count: String(bridges.count),
+			length: String(Math.round(bridges.lengthMm * 100) / 100)
+		};
+	});
+
+	/**
+	 * Are these shapes in a layer that cuts?
+	 *
+	 * Bridges only do something on a cut, and hiding the field on anything else would hide
+	 * the reason too. So the field stays and says where it is true — the same rule as the
+	 * angle: show the state, do not guess for the user.
+	 */
+	let bridgesCut = $derived.by(() => {
+		const ids = new Set(chosen.flatMap((e) => e.operation_ids ?? []));
+		const own = design.operations.filter((op) => ids.has(op.id));
+		return own.length === 0 || own.some((op) => op.type === 'op cut');
+	});
+
+	function applyBridges(fields: { count?: number; length_mm?: number }) {
+		if (!canEdit || !selectedIds.length) return;
+		onBridges?.(fields);
+	}
 
 	/** The selection's angle, or null when the shapes disagree. */
 	let pose = $derived.by(() => {
@@ -856,6 +914,98 @@
 			{#if cornerNote}
 				<p class="tip" role="status">{cornerNote}</p>
 			{/if}
+
+			<!-- Bridges (tabs): the gaps that keep a cut part in the sheet. A value you set
+			     and read back, so it lives here and not in the menu; the menu carries the
+			     one-click default (four of 2 mm) because a panel field nobody finds is not a
+			     feature.
+
+			     Not hidden when the shape is not in a cut layer either. Hiding it would hide
+			     the reason with it, and then somebody looks for bridges on an engraving and
+			     concludes the app cannot do them. It says where it is true instead. -->
+			<div class="bridges">
+				<span class="rot-label">{t('panel.bridges')}</span>
+				<label class="check">
+					<input
+						type="checkbox"
+						checked={bridges.has}
+						disabled={!canEdit || !bridges.carries || edits.busy}
+						onchange={(e) =>
+							e.currentTarget.checked
+								? applyBridges({
+										count: DEFAULT_BRIDGES.count,
+										length_mm: DEFAULT_BRIDGES.lengthMm
+									})
+								: onBridgesOff?.()}
+					/>
+					<span>{t('panel.bridges.on')}</span>
+				</label>
+
+				{#if !bridges.carries}
+					<p class="hint">{t('panel.bridges.notSupported')}</p>
+				{:else if bridges.has}
+					<div class="steppers">
+						<NumberField
+							label={t('panel.bridges.count')}
+							bind:value={bridgeFields.count}
+							step={1}
+							min={1}
+							max={200}
+							disabled={!canEdit || edits.busy}
+							onchange={(v) => applyBridges({ count: Number(v) })}
+						/>
+						<NumberField
+							label={t('panel.bridges.length')}
+							unit="mm"
+							bind:value={bridgeFields.length}
+							step={0.5}
+							min={0.1}
+							disabled={!canEdit || edits.busy}
+							onchange={(v) => applyBridges({ length_mm: Number(v) })}
+						/>
+					</div>
+					{#if bridges.mixed}
+						<p class="tip">{t('panel.bridges.mixed')}</p>
+					{:else if bridges.places}
+						<p class="hint">
+							{t('panel.bridges.places', {
+								places: i18n.list(bridges.places.map((p) => i18n.number(p))),
+								length: i18n.number(bridges.lengthMm)
+							})}
+						</p>
+					{:else}
+						<!-- The shortest contour is the honest one to quote — it is the one the
+						     API's bound trips over first — but when the shapes are not all the
+						     same size the sentence has to say so. Measured with a 200 mm
+						     rectangle and a 125.7 mm circle selected: "spread over a contour of
+						     125.7 mm" never mentioned the rectangle. -->
+						<p class="hint">
+							{t(
+								bridges.shapes > 1 && !bridges.sameContour
+									? 'panel.bridges.explainTightest'
+									: 'panel.bridges.explain',
+								{
+									n: bridges.shapes,
+									count: bridges.count,
+									length: i18n.number(bridges.lengthMm),
+									total: i18n.number(Math.round(bridges.shortestMm * 10) / 10),
+									cut: i18n.number(
+										Math.round((bridges.shortestMm - bridges.count * bridges.lengthMm) * 10) / 10
+									)
+								}
+							)}
+						</p>
+					{/if}
+					{#if !bridgesCut}
+						<p class="tip">{t('panel.bridges.notCut')}</p>
+					{/if}
+				{:else}
+					<p class="hint">{t('panel.bridges.off')}</p>
+				{/if}
+				{#if bridgeNote}
+					<p class="tip" role="status">{bridgeNote}</p>
+				{/if}
+			</div>
 
 			<!-- Three collapsed folds used to be here: Combine (unite, difference,
 			     intersect, exclude), Edit path (nest, offset, simplify, hatch, wobble)
@@ -1969,6 +2119,19 @@
 	}
 	.kind :global(.segmented) {
 		width: 100%;
+	}
+	/* Switch, two numbers and the sentence that says what they mean, as one block — the
+	   same shape as the Z-step field in the layer card. */
+	.bridges {
+		display: grid;
+		gap: var(--space-1);
+	}
+	.bridges .check {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
 	}
 	/* The field with its explanation as one block: the sentence below it says what
 	   happens at this number of passes, and that belongs beside the number. */

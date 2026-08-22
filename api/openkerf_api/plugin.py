@@ -23,6 +23,18 @@ def plugin(kernel, lifecycle=None):
 
         register_rasterizer(kernel)
 
+        # Bridges have to survive a save and an open, and without these two lines they do
+        # not. `core/svg_io.py:897` only `literal_eval`s an `mk*` attribute that is in this
+        # registry; MeerK40t registers both of them in `main.py:258` — its own entry point,
+        # which our stack never runs. Measured without them: the export writes
+        # `mktablength="5160.23622047244"`, the reload hands it back as the *string*, and
+        # `final_geometry()` then dies on `ufunc 'greater' did not contain a loop with
+        # signature matching types (Float64DType, StrDType)` — so opening a saved project
+        # with bridges in it broke the cut plan. With them the reload gives the float back
+        # and the estimate matches the 19.3 s from before the save.
+        for index, attribute in enumerate(("mktablength", "mktabpositions")):
+            kernel.register(f"registered_mk_svg_parameters/tabs{index}", attribute)
+
         @kernel.console_option(
             "port", "p", type=int, default=8080, help=_("port to listen on")
         )
