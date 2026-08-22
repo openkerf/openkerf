@@ -196,6 +196,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/generate/barcode",
         # Gap G1: the field of slits that makes sheet material bend.
         "/api/design/generate/hinge",
+        # Gap H4: a focus test. Draws a board and its heights ride along in the plan as
+        # `z_move` steps, so it writes on the tree like any other generator.
+        "/api/design/generate/focus",
         "/api/presetariat/import",
         "/api/library/testgrids",
         "/api/library/testgrids/{grid_id}/photo",

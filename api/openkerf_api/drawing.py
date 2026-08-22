@@ -812,7 +812,7 @@ class Drawing:
 
         if style not in STYLES:
             raise DesignError(
-                f"Onbekende hoekstijl: {style}. Kies 'round' of 'chamfer'."
+                f"Unknown corner style: {style}. Choose 'round' or 'chamfer'."
             )
         size = _positive(size_mm, "size_mm")
         nodes = self._nodes(element_ids, protect="changed")

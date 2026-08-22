@@ -1227,6 +1227,7 @@ export const nl: Catalogue = {
 	'gen.tab.barcode': 'Streepjescode',
 	'gen.tab.arctext': 'Boogtekst',
 	'gen.tab.hinge': 'Levend scharnier',
+	'gen.tab.focus': 'Focustest',
 	'gen.cannotDraw': 'Dit kan de engine niet tekenen.',
 	'gen.incomplete': 'Nog niet compleet: vul de lege velden in.',
 	'gen.needsSelection': 'Selecteer eerst wat er herhaald moet worden.',
@@ -1285,6 +1286,18 @@ export const nl: Catalogue = {
 	'gen.hinge.left': 'Links',
 	'gen.hinge.top': 'Boven',
 	'gen.hinge.go': 'Maak het scharnier{tail}',
+	'gen.focus.lead':
+		'Hetzelfde korte lijntje gebrand op een reeks hoogtes, zodat je ziet waar deze lens werkelijk scherp staat. Brand het bord, zoek het dunste en donkerste streepje, en zet de kop op de hoogte die eronder staat.',
+	'gen.focus.from': 'Begin bereik',
+	'gen.focus.to': 'Einde bereik',
+	'gen.focus.marks': 'Streepjes',
+	'gen.focus.mark': 'Lengte streepje',
+	'gen.focus.gap': 'Ruimte tussen de streepjes',
+	'gen.focus.text': 'Brand de hoogte onder elk streepje',
+	'gen.focus.direction': 'De getallen zijn afwijkingen van de hoogte waarop de kop staat als de job begint: een plus laat de kop zakken, een min laat hem stijgen. Daarna gaat hij terug naar waar hij begon.',
+	'gen.focus.step': '{step} tussen twee streepjes, over een bereik van {span}.',
+	'gen.focus.go': 'Maak het bord{tail}',
+	'genPreview.marks': '{n} streepjes, {step} hoogteverschil ertussen.',
 	'genPreview.slits': '{n} sleuven in {rows} rijen',
 
 	// ── Edit notices ──────────────────────────────────────────────────────────────

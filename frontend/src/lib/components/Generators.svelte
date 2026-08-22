@@ -14,10 +14,15 @@
 		hasSelection = false,
 		selectedIds = [],
 		busy = false,
+		hasZAxis = false,
 		onGenerate
 	}: {
 		open: boolean;
 		hasSelection?: boolean;
+		/** Can the software move this machine's Z? The focus test is the one tab that
+		 *  cannot do anything without it — it would burn every mark at the same height —
+		 *  so on other machines the tab is not there. Same flag as the drop per pass. */
+		hasZAxis?: boolean;
 		/** What has to be repeated. Without this list, repeat and circle cannot show
 		 *  a real preview; the image then falls back on the sketch that only explains
 		 *  the fields. */
@@ -29,7 +34,16 @@
 		) => Promise<{ error?: string | null; notice?: string | null }>;
 	} = $props();
 
-	type Tab = 'grid' | 'radial' | 'polygon' | 'box' | 'qrcode' | 'barcode' | 'arctext' | 'hinge';
+	type Tab =
+		| 'grid'
+		| 'radial'
+		| 'polygon'
+		| 'box'
+		| 'qrcode'
+		| 'barcode'
+		| 'arctext'
+		| 'hinge'
+		| 'focus';
 	type HingePattern = 'straight' | 'staggered' | 'wavy';
 	let tab = $state<Tab>('grid');
 	let error = $state<string | null>(null);
@@ -73,6 +87,17 @@
 		width_mm: '60',
 		height_mm: '40',
 		from_selection: false
+	});
+
+	let focus = $state({
+		z_from_mm: '-2',
+		z_to_mm: '2',
+		marks: '9',
+		mark_mm: '15',
+		gap_mm: '8',
+		x_mm: '10',
+		y_mm: '10',
+		text: true
 	});
 
 	// The types python-barcode can handle that make sense on a laser.
@@ -125,15 +150,31 @@
 			label: t('gen.tab.hinge'),
 			needsSelection: false,
 			icon: 'M4 8h5M12 8h5M20 8h1M3 12h2M8 12h5M16 12h5M4 16h5M12 16h5M20 16h1'
+		},
+		{
+			id: 'focus',
+			// The icon is the board: lines of the same length at different heights, the
+			// middle one the sharpest.
+			label: t('gen.tab.focus'),
+			needsSelection: false,
+			icon: 'M4 6v12M8 8v8M12 4v16M16 8v8M20 6v12'
 		}
 	];
+
+	// A tab that can do nothing on this machine is not shown greyed out but left out:
+	// the whole point of the board is that the head moves between the marks.
+	let tabs = $derived(TABS.filter((item) => item.id !== 'focus' || hasZAxis));
+	// Switching machine can take the visible tab away under your feet.
+	$effect(() => {
+		if (!tabs.some((item) => item.id === tab)) tab = 'grid';
+	});
 
 	let current = $derived(TABS.find((t) => t.id === tab)!);
 	/** The fields of the visible tab, for the sketch beside it. */
 	let currentValues = $derived(
 		(
 			{
-				grid, radial, polygon, box, qrcode: qr, barcode: bar, arctext: arc, hinge
+				grid, radial, polygon, box, qrcode: qr, barcode: bar, arctext: arc, hinge, focus
 			} as Record<string, Record<string, unknown>>
 		)[tab] ?? {}
 	);
@@ -195,6 +236,12 @@
 				radius_mm: n(arc.radius_mm), font_size_mm: n(arc.font_size_mm),
 				inside: arc.inside, font: arc.font || null
 			};
+		if (tab === 'focus')
+			return {
+				z_from_mm: n(focus.z_from_mm), z_to_mm: n(focus.z_to_mm),
+				marks: n(focus.marks), mark_mm: n(focus.mark_mm), gap_mm: n(focus.gap_mm),
+				x_mm: n(focus.x_mm), y_mm: n(focus.y_mm), text: focus.text
+			};
 		return {
 			pattern: hinge.pattern,
 			slit_mm: n(hinge.slit_mm), gap_mm: n(hinge.gap_mm), row_mm: n(hinge.row_mm),
@@ -217,6 +264,24 @@
 		const row = Number(hinge.row_mm);
 		if (!Number.isFinite(gap) || !Number.isFinite(row) || gap <= 0 || row <= 0) return '';
 		return t('gen.hinge.material', { gap: i18n.mm(gap), row: i18n.mm(row) });
+	});
+
+	/**
+	 * What the sweep comes down to per mark.
+	 *
+	 * The step is the thing you are really setting and it is nowhere in the form: you
+	 * type two ends and a count. A tenth of a millimetre apart is a board you cannot
+	 * read, and finding that out after burning it is the whole problem.
+	 */
+	let sweep = $derived.by(() => {
+		const low = Number(focus.z_from_mm);
+		const high = Number(focus.z_to_mm);
+		const count = Number(focus.marks);
+		if (![low, high, count].every(Number.isFinite) || count < 2 || low === high) return '';
+		return t('gen.focus.step', {
+			step: i18n.mm(Math.abs(high - low) / (count - 1)),
+			span: i18n.mm(Math.abs(high - low))
+		});
 	});
 
 	// ----------------------------------------------------------- the preview
@@ -260,7 +325,8 @@
 		qrcode: ['size_mm'],
 		barcode: ['width_mm', 'height_mm'],
 		arctext: ['cx_mm', 'cy_mm', 'radius_mm', 'font_size_mm'],
-		hinge: ['slit_mm', 'gap_mm', 'row_mm', 'x_mm', 'y_mm', 'width_mm', 'height_mm']
+		hinge: ['slit_mm', 'gap_mm', 'row_mm', 'x_mm', 'y_mm', 'width_mm', 'height_mm'],
+		focus: ['z_from_mm', 'z_to_mm', 'marks', 'mark_mm', 'gap_mm', 'x_mm', 'y_mm']
 	};
 	/**
 	 * The area fields are not on screen when the selection supplies the area, so they must
@@ -383,7 +449,7 @@
 
 <Dialog title={t('gen.title')} bind:open width="800px">
 	<div class="tabs">
-		{#each TABS as item (item.id)}
+		{#each tabs as item (item.id)}
 			<button class="tab" aria-pressed={tab === item.id} onclick={() => { tab = item.id; error = null; }}>
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<path d={item.icon} />
@@ -572,6 +638,40 @@
 		</div>
 		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
+		>
+	{:else if tab === 'focus'}
+		<p class="lead">{t('gen.focus.lead')}</p>
+		<div class="fields">
+			<div class="three">
+				<NumberField
+					label={t('gen.focus.from')}
+					unit="mm"
+					step={0.5}
+					bind:value={focus.z_from_mm}
+				/>
+				<NumberField label={t('gen.focus.to')} unit="mm" step={0.5} bind:value={focus.z_to_mm} />
+				<NumberField label={t('gen.focus.marks')} step={1} min={2} bind:value={focus.marks} />
+			</div>
+			<!-- Which way is which. "+2" on the board says nothing by itself, and the sign
+			     convention is the same one the drop per pass uses — one rule, not two. -->
+			<p class="bridgeline">{t('gen.focus.direction')}</p>
+			{#if sweep}
+				<p class="bridgeline">{sweep}</p>
+			{/if}
+			<div class="pair">
+				<NumberField label={t('gen.focus.mark')} unit="mm" step={1} bind:value={focus.mark_mm} />
+				<NumberField label={t('gen.focus.gap')} unit="mm" step={1} bind:value={focus.gap_mm} />
+			</div>
+			<div class="pair">
+				<NumberField label={t('gen.hinge.left')} unit="mm" step={1} bind:value={focus.x_mm} />
+				<NumberField label={t('gen.hinge.top')} unit="mm" step={1} bind:value={focus.y_mm} />
+			</div>
+			<label class="check"
+				><input type="checkbox" bind:checked={focus.text} /><span>{t('gen.focus.text')}</span></label
+			>
+		</div>
+		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+			>{t('gen.focus.go', { tail: buttonTail })}</button
 		>
 	{:else}
 		<p class="lead">{t('gen.hinge.lead')}</p>

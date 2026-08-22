@@ -1831,6 +1831,7 @@
 	hasSelection={design.selectedIds.length > 0}
 	selectedIds={design.selectedIds}
 	busy={edits.busy}
+	hasZAxis={design.layerCapabilities.z_step}
 	onGenerate={async (what, body) => {
 		const response = await post(`/api/design/generate/${what}`, {
 			...body,

@@ -915,7 +915,7 @@ class TestGridGenerator:
         """
         op_type = OPERATION_TYPES.get(plan["operation"])
         if op_type is None:
-            raise DesignError(f"Onbekende operation: {plan['operation']}")
+            raise DesignError(f"Unknown operation: {plan['operation']}")
 
         # The whole board, not only the squares: captions and border frame get burned just
         # the same, and those are exactly what stuck out on the left and top (T11).
@@ -930,7 +930,7 @@ class TestGridGenerator:
         # `label_room` and `board_room` say so in the preview.
         if bed and (outer_x + outer_w > bed[0] or outer_y + outer_h > bed[1]):
             raise DesignError(
-                f"Het board ({outer_w:.0f}×{outer_h:.0f} mm vanaf "
+                f"The board ({outer_w:.0f}×{outer_h:.0f} mm from "
                 f"{outer_x:.0f},{outer_y:.0f}) falls outside the bed "
                 f"of {bed[0]:.0f}×{bed[1]:.0f} mm."
             )
@@ -954,7 +954,7 @@ class TestGridGenerator:
 
     def _group_board(self, members: list):
         """
-        Vouw dít board tot één groep — cells, aslabels, caption en frame.
+        Fold *this* board into one group — cells, axis labels, caption and frame.
 
         A grid is one thing: half-dragging it makes no sense, and as loose squares it fills
         the selection and the canvas with noise. The cells do each keep their own operation —

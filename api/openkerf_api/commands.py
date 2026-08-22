@@ -317,7 +317,7 @@ class CommandRunner:
 
     def _plan_and_spool(self, mutators=()) -> list[str]:
         """
-        Het plan bouwen. Met mutators in twee steps, anders in één.
+        Building the plan. With mutators in two steps, otherwise in one.
 
         A mutator is a callable that gets the plan steps and hands them back. The order
         counts: tiles first (clipping and moving), Z steps afterwards (unfolding the passes) —
@@ -336,6 +336,13 @@ class CommandRunner:
         """The same, with the plan already claimed. See `claim_plan`."""
         all_mutators = list(mutators)
         after = []
+        if self._focus_layers():
+            from meerk40t.core.node.util_console import ConsoleOperation
+
+            # Before the passes: the height belongs to the layer, and unfolding the passes
+            # only repeats the layer. The other way round the repeats would each get their
+            # own move of zero.
+            all_mutators.append(lambda steps: self._with_focus_moves(steps, ConsoleOperation))
         if self._multi_pass_layers():
             from meerk40t.core.node.util_console import ConsoleOperation
 
@@ -348,7 +355,7 @@ class CommandRunner:
 
     def _plan_with_mutators(self, mutators, post=()) -> list[str]:
         """
-        Het plan opbouwen, bewerken, en dan pas afmaken.
+        Build the plan, work on it, and only then finish it.
 
         `opt_merge_ops`/`opt_merge_passes` go off while we are working on the plan. With
         those flags on, the optimisation glues pieces into one cutcode and pushes console
@@ -539,6 +546,66 @@ class CommandRunner:
                     console_operation(command=f"z_move {-z_step * (passes - 1):.3f}mm")
                 )
         return uitgebreid
+
+    def _focus_layers(self) -> list:
+        """
+        Layers of a focus board: they carry a Z offset of their own.
+
+        Same first question as the Z step per pass, and for the same reason: a board drawn
+        on a machine with a Z axis keeps its offsets when you switch to a machine without
+        one, and there a `z_move` does not exist. Then the board burns every mark at the
+        same height — which looks like an answer and is not — but at least the job does not
+        die on an unknown command with the head on the work.
+        """
+        found = []
+        device = getattr(self.kernel, "device", None)
+        if device is None or not getattr(device, "supports_z_axis", False):
+            return found
+        if not self.kernel.find("command", "None", "z_move$"):
+            return found
+        try:
+            operations = list(self.kernel.elements.ops())
+        except Exception:  # pragma: no cover - a tree without an ops branch
+            return found
+        for operation in operations:
+            if not str(getattr(operation, "type", "")).startswith("op "):
+                continue
+            if not getattr(operation, "output", True):
+                continue
+            if getattr(operation, "focus_z_mm", None) is None:
+                continue
+            found.append(operation)
+        return found
+
+    @staticmethod
+    def _with_focus_moves(steps, console_operation) -> list:
+        """
+        The plan steps with the focus board's height changes in them.
+
+        Every layer that carries `focus_z_mm` gets a `z_move` in front of it — of the
+        *difference* with the height the head is already at, not of the offset itself,
+        because `z_move` is a relative move. At the end one move back to where the head
+        started, so the next job on the same sheet is not burned at the last mark's height.
+
+        Only when the height actually changes: a layer unfolded into several passes appears
+        several times in the list, and a `z_move 0` between the copies would be a command
+        for nothing. Pure arithmetic on the step list, so testable without a machine.
+        """
+        out = []
+        current = 0.0
+        for step in steps:
+            offset = getattr(step, "focus_z_mm", None)
+            if offset is None:
+                out.append(step)
+                continue
+            wanted = float(offset)
+            if abs(wanted - current) > 1e-6:
+                out.append(console_operation(command=f"z_move {wanted - current:.3f}mm"))
+                current = wanted
+            out.append(step)
+        if abs(current) > 1e-6:
+            out.append(console_operation(command=f"z_move {-current:.3f}mm"))
+        return out
 
     @staticmethod
     def _with_z_moves(steps, console_operation) -> list:

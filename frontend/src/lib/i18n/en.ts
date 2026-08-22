@@ -1239,6 +1239,7 @@ export const en = {
 	'gen.tab.barcode': 'Barcode',
 	'gen.tab.arctext': 'Arc text',
 	'gen.tab.hinge': 'Living hinge',
+	'gen.tab.focus': 'Focus test',
 	'gen.cannotDraw': 'The engine cannot draw this.',
 	'gen.incomplete': 'Not complete yet: fill in the empty fields.',
 	'gen.needsSelection': 'Select what should be repeated first.',
@@ -1297,6 +1298,18 @@ export const en = {
 	'gen.hinge.left': 'Left',
 	'gen.hinge.top': 'Top',
 	'gen.hinge.go': 'Make the hinge{tail}',
+	'gen.focus.lead':
+		'The same short line burned at a series of heights, so you can see where this lens actually focuses. Burn the board, look for the thinnest and darkest mark, and set the head at the height written under it.',
+	'gen.focus.from': 'Sweep start',
+	'gen.focus.to': 'Sweep end',
+	'gen.focus.marks': 'Marks',
+	'gen.focus.mark': 'Mark length',
+	'gen.focus.gap': 'Space between marks',
+	'gen.focus.text': 'Burn the height under every mark',
+	'gen.focus.direction': 'The numbers are offsets from the height the head is at when the job starts: a plus drops the head, a minus raises it. Afterwards it goes back to where it began.',
+	'gen.focus.step': '{step} between two marks, over a sweep of {span}.',
+	'gen.focus.go': 'Make the board{tail}',
+	'genPreview.marks': '{n} marks, {step} apart in height.',
 	'genPreview.slits': '{n} slits in {rows} rows',
 
 	// ── Edit notices ──────────────────────────────────────────────────────────────

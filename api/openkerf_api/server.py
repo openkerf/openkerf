@@ -25,6 +25,7 @@ from .commands import CommandError, CommandRunner
 from .design import DesignReader
 from .document import Document
 from .duplicates import Duplicates
+from .focus import FocusBoard
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
@@ -245,6 +246,7 @@ class ApiServer:
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
         self.duplicates = Duplicates(kernel, self.drawing)
+        self.focus = FocusBoard(kernel, self.drawing)
         self.fonts = Fonts(kernel)
         self.camera = Camera(kernel, self.commands)
         self.clipart = Clipart(kernel, self.drawing)
@@ -462,7 +464,7 @@ class ApiServer:
                     detail={"command": e.command, "output": e.output},
                 ) from e
 
-        def manage(action, *args):
+        def manage(action, *args, **kwargs):
             """
             Same for machine management, where failures are our own.
 
@@ -478,7 +480,7 @@ class ApiServer:
             translated sentence used to be impossible and the panel showed English.
             """
             try:
-                return action(*args)
+                return action(*args, **kwargs)
             except (MachineError, DesignError, LibraryError) as e:
                 code = getattr(e, "code", None)
                 headers = {"X-OpenKerf-Error": code} if code else None
@@ -1310,7 +1312,7 @@ class ApiServer:
         @app.post("/api/design/operations/{operation_id}/move", dependencies=write)
         def move_operation(operation_id: str, body: dict):
             """
-            Een layer verplaatsen in de brandvolgorde.
+            Moving a layer in the burn order.
 
             `direction` is one step (the buttons), `index` is a destination (dragging, gap
             L1).
@@ -2008,6 +2010,30 @@ class ApiServer:
                 body.get("width_mm", 60.0),
                 body.get("height_mm", 40.0),
                 body.get("from_selection", False) is True,
+            )
+
+        @app.post("/api/design/generate/focus", dependencies=write, status_code=201)
+        def generate_focus(body: dict):
+            """
+            A focus test: the same mark burned at a series of heights (gap H4).
+
+            Only on a machine whose Z the software can move; the refusal explains why,
+            because on a Ruida this would burn ten identical marks and call it an answer.
+            """
+            return manage(
+                self.focus.draw,
+                z_from_mm=body.get("z_from_mm", -2.0),
+                z_to_mm=body.get("z_to_mm", 2.0),
+                marks=body.get("marks", 9),
+                mark_mm=body.get("mark_mm", 15.0),
+                gap_mm=body.get("gap_mm", 8.0),
+                x_mm=body.get("x_mm", 10.0),
+                y_mm=body.get("y_mm", 10.0),
+                speed_mm_s=body.get("speed_mm_s"),
+                power_percent=body.get("power_percent"),
+                text=body.get("text", True) is not False,
+                label_speed_mm_s=body.get("label_speed_mm_s"),
+                label_power_percent=body.get("label_power_percent"),
             )
 
         @app.post("/api/design/generate/barcode", dependencies=write, status_code=201)
