@@ -179,6 +179,27 @@ Rows are laid out from the middle of the area outwards, so no row lands exactly 
 
 The result is one shape in a cut layer, named after the pattern it was made with, with every slit as a loose piece of it. It moves as one thing, and the laser cuts each slit once. The count under the preview reads `{n} slits in {rows} rows`; measured on a 60 × 40 mm area with a slit of 8 mm, a gap of 3 mm and 2 mm between rows: 120 slits in 20 rows for straight and staggered, 114 in 19 for wavy, which needs a little height for its crests.
 
+### Focus test
+
+Only on a machine whose Z axis the software can move. Elsewhere the tab is not there at all, and that is not tidiness: a focus board on a machine that cannot move its head would burn every mark at the same height — ten identical marks that look like an answer. The same flag decides this and **Drop per pass** in the layer panel, so a machine cannot offer one and refuse the other.
+
+The focal point of a lens is a plane a few tenths of a millimetre thick, and where it lies depends on the lens, the nozzle, the material thickness and whatever the last person to touch the machine did. The board answers it by measurement: the same short line burned at a series of heights, with the height written under each one. Burn it, look for the thinnest and darkest mark, and set the head at the height beside it.
+
+![The Generators window on the Focus test tab: Sweep start -2, Sweep end 2 and Marks 9, the
+line about which way a plus moves the head, the step per mark, the size and position fields,
+and a preview of nine short lines side by side captioned with the board size and the step in
+height.](images/33-focus.png)
+
+Three numbers make the sweep — **Sweep start**, **Sweep end** and **Marks** — and beside them stands what they come to per mark: `0.5 mm between two marks, over a sweep of 4.0 mm.` That step is the thing you are really setting and it is in none of the three fields, which is why it is spelled out; a board whose marks are a tenth of a millimetre apart cannot answer its own question, and you find that out after burning it.
+
+Which way is which is written under the fields: `The numbers are offsets from the height the head is at when the job starts: a plus drops the head, a minus raises it. Afterwards it goes back to where it began.` They are offsets and not machine coordinates, because the height the head starts at is the one thing the software cannot know. The sign is the same convention as the drop per pass — one rule, not two.
+
+Then **Mark length** and **Space between marks** for the size of the board, **Left** and **Top** for where it lands, and **Burn the height under every mark**, which is what makes the board readable a week later.
+
+Every mark becomes a layer of its own. That is not tidiness either: the engine keeps one settings dict per layer, so a height per mark has nowhere else to live. What actually moves the head is a console step in the job between the marks, and it moves by the *difference* with the previous mark, with one move at the end that brings the head back to where it started.
+
+Refused, in these words: fewer than two marks ("one mark compares nothing"), both ends the same, a sweep further than 20 mm, more than 30 marks, and steps closer together than 0.05 mm — "closer than you can see on the material. Use fewer marks or a wider sweep." A board that would fall off the bed is refused with both measurements in the sentence.
+
 ### When it goes wrong
 
 The refusals come from the same calculation as the preview, so what you read while setting up is what you read if you press the button anyway.

@@ -1140,11 +1140,13 @@
 			     It is an action and now lives in the context menu under "To another
 			     sheet" — with the same sheet names, without unfolding first. -->
 
+			<!-- Not under a locked selection: "drag the box to move" is exactly what a lock
+			     refuses, and the note above already says what can and cannot be done. -->
 			<p class="hint">
-				{#if canEdit}
-					{t('panel.dragHint')}
-				{:else}
+				{#if !canEdit}
 					{t('panel.needsToken')}
+				{:else if !lockedHere}
+					{t('panel.dragHint')}
 				{/if}
 			</p>
 		</div>

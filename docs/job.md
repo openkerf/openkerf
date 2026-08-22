@@ -425,6 +425,65 @@ When one is set, **To zero point** goes there and **Clear** puts it back to the
 machine's own zero. With none set the line reads "Off: the work burns at the
 coordinates you drew it on."
 
+### Print and cut
+
+**Print and cut** is the zero point's bigger brother, and it sits right under it. A
+zero point can shift the work; it cannot turn it. Material that comes in printed —
+a sheet of stickers, a printed label, a plate somebody else engraved — lies where it
+lies: a couple of millimetres off *and* a fraction of a degree askew, and at kerf
+scale both matter. Two points can measure that, and one cannot.
+
+It works in three steps.
+
+1. **Point out the marks.** Select on the canvas the two shapes in your drawing that
+   are also on the material — the printed crosses, two drilled holes, an engraved
+   corner — and press **Use the two selected shapes**. Exactly two: with one there is
+   no angle, and with three there is no agreement. The button stays dead with
+   anything else selected and says why: "Select exactly two shapes on the canvas
+   first".
+2. **Drive to them.** Jog the head over the first mark and press **The head is on
+   mark 1**; then over the second and **The head is on mark 2**. After the first, the
+   line reads "One of the two marks has been measured. Drive the head over the other
+   one and press the button." Doing one over is the ordinary correction — the buttons
+   then read **Mark 1 again** — and the answer is recomputed from both.
+3. **Burn.** With both points in, the block reads back what was measured: how far
+   mark 1 moved, and how far out the sheet lies — `2.5, 1.2 mm — mark 1 has moved
+   that far, and the sheet lies 0.3° out`. It shows the movement of mark 1 rather
+   than the internal offset because that is a number you can check with a ruler.
+
+![The Job panel scrolled to the machine controls: under Zero point of the work, the block
+Print and cut showing "2.5, 1.2 mm — mark 1 has moved that far, and the sheet lies 0.3° out",
+the sentence about the zero point staying out of it, and the buttons Mark 1 again, Mark 2
+again and Forget the alignment.](images/34-printcut.png)
+
+While an alignment is on, the zero point stays out of it: "The job goes onto the
+sheet as measured. The zero point stays out of it while this is on: both at once
+would shift the work twice." Nothing happens to your drawing — it stays where you
+drew it, on screen and in the file. The pose is applied once while the job is being
+planned, in exactly the same place as the zero point and the rotary correction.
+
+**Forget the alignment** puts it back to an ordinary job. It also lapses by itself in
+the two cases where it has quietly stopped being true, and says which: one of the two
+marks is no longer in the drawing, or you have switched machine — a pose is a pair of
+machine coordinates, and on another bed it is a shift into nowhere. It is never
+written to disk either, because a pose says where a sheet lies *now*.
+
+Two refusals, and both mean "one of these is not the mark I think it is":
+
+- The distance between the two points must match the distance between the two shapes,
+  within 2 mm. "The two points you drove to lie 6.0 mm further apart than the same
+  two marks in your drawing. That is more than a sheet stretches." Scale is checked
+  and never adopted: adopt it and one slip of the aim stretches the whole job.
+- More than 3° out is refused: "A sheet does not lie that far askew without you
+  seeing it, so the marks were probably swapped."
+
+Marks closer together than 10 mm are refused when you point them out, for the same
+reason in reverse: a millimetre of aiming error over 10 mm is already several
+degrees. Pick two marks as far apart as the sheet allows.
+
+This is the same measurement a tile of a large job uses, where the plate has to go
+back in the machine between tiles — see [Bigger than the bed](tiling.md).
+
 **When it goes wrong.**
 
 - Everything here is off during a job, with the tooltip "Not possible while a job
@@ -445,6 +504,8 @@ coordinates you drew it on."
 - Autofocus is not started from here: "Autofocus is started on the machine
   itself."
 - Focus steps are capped: "More than 100 mm at once is not focusing."
+- Print and cut needs a machine that says where its head is: "The machine does not
+  say where its head is, so there is nothing to take".
 
 ## Connect and disconnect
 

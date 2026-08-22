@@ -888,6 +888,179 @@ if (wanted('30')) {
 	);
 }
 
+// ═════════════════════════════════════════ 9. the four small ones (lock … cut)
+
+/**
+ * A locked shape, and the panel saying what a lock covers.
+ *
+ * The shape is selected *and* locked, because the whole point of the picture is what
+ * the selection looks like when it cannot be dragged: no corner handles, no rotation
+ * stem, and the note in the panel with the way out in it. Locking through the API and
+ * not with ⌘L, so the picture does not depend on which element the keyboard focus
+ * happened to be in.
+ */
+if (wanted('31')) {
+	await clear();
+	const made = await api('POST', '/api/design/elements', {
+		type: 'rect',
+		x_mm: 40,
+		y_mm: 40,
+		width_mm: 120,
+		height_mm: 70
+	});
+	const id = made?.ids?.[0];
+	await api('POST', '/api/design/lock', { ids: [id], locked: true });
+	await scene('31-lock.png', `/?tab=design&select=${encodeURIComponent(id)}`, {}, async (page) => {
+		await page.waitForTimeout(800);
+	});
+	await api('POST', '/api/design/lock', { ids: [id], locked: false });
+}
+
+/**
+ * The duplicates question, with real numbers in it.
+ *
+ * Three copies of one rectangle and two of one circle: two places, three shapes too
+ * many — so the sentence in the picture is the plural one with both counts, which is
+ * the wording the page quotes. The dialog is opened from the bed's own menu, because
+ * that is the way in that searches the whole sheet.
+ */
+if (wanted('32')) {
+	await clear();
+	for (let i = 0; i < 3; i++)
+		await api('POST', '/api/design/elements', {
+			type: 'rect',
+			x_mm: 40,
+			y_mm: 40,
+			width_mm: 90,
+			height_mm: 60
+		});
+	for (let i = 0; i < 2; i++)
+		await api('POST', '/api/design/elements', { type: 'circle', cx_mm: 240, cy_mm: 90, r_mm: 30 });
+	await scene('32-duplicates.png', '/?tab=design', {}, async (page) => {
+		const bed = await page.locator('.bed > svg').boundingBox();
+		await page.mouse.click(bed.x + bed.width * 0.9, bed.y + bed.height * 0.9, {
+			button: 'right'
+		});
+		await page.waitForTimeout(500);
+		await page.getByRole('menuitem', { name: /Remove duplicates/ }).first().click();
+		await page.waitForSelector(DIALOG, { timeout: 10000 });
+		await page.waitForTimeout(600);
+	});
+}
+
+/**
+ * The focus test tab.
+ *
+ * The handbook's machine is a Ruida and has no Z axis the software can move, so the
+ * tab is not there — correctly. The capability answer is therefore given from the
+ * script for the length of this one page, exactly as shot 01 does with the machine
+ * list: the app then draws its own tab, with its own preview from the real server
+ * (the preview needs no Z; only burning does).
+ */
+if (wanted('33')) {
+	await clear();
+	await scene(
+		'33-focus.png',
+		'/?tab=design',
+		{
+			route: async (page) => {
+				await page.route('**/api/design/capabilities', (r) =>
+					r.fulfill({
+						status: 200,
+						contentType: 'application/json',
+						body: JSON.stringify({ air_assist: false, z_step: true })
+					})
+				);
+			}
+		},
+		async (page) => {
+			await page.locator(TOOL.generators).click();
+			await page.waitForSelector(DIALOG, { timeout: 10000 });
+			await page.locator(`${DIALOG} .tabs button.tab`, { hasText: 'Focus test' }).click();
+			// The preview waits 250 ms after the last change and then asks the server.
+			await page.waitForTimeout(2500);
+		}
+	);
+}
+
+/**
+ * Print and cut, with an alignment in it.
+ *
+ * The measured pose is answered from the script, and that is the honest way round:
+ * the real thing needs a head driven over two marks on a printed sheet, and there is
+ * no sheet in the machine. The numbers are the ones the page quotes — mark 1 moved
+ * 2.5, 1.2 mm and the sheet lies 0.3° out — so the picture and the prose cannot
+ * drift apart. The shapes are on the bed for real, so the drawing behind the panel is
+ * a drawing with two marks in it.
+ */
+if (wanted('34')) {
+	await clear();
+	const first = await api('POST', '/api/design/elements', {
+		type: 'circle',
+		cx_mm: 30,
+		cy_mm: 30,
+		r_mm: 3
+	});
+	const second = await api('POST', '/api/design/elements', {
+		type: 'circle',
+		cx_mm: 260,
+		cy_mm: 40,
+		r_mm: 3
+	});
+	await api('POST', '/api/design/elements', {
+		type: 'rect',
+		x_mm: 70,
+		y_mm: 70,
+		width_mm: 140,
+		height_mm: 90
+	});
+	const marks = [first?.ids?.[0], second?.ids?.[0]];
+	await scene(
+		'34-printcut.png',
+		'/?tab=job',
+		{
+			// Tall enough that the print-and-cut block is in the picture: the panel is one
+			// scrolling column and this block sits under the zero point, which is under the
+			// machine controls. Measured: at 1300 px it fell just below the edge.
+			height: 1700,
+			route: async (page) => {
+				await page.route('**/api/printcut', (r) =>
+					r.fulfill({
+						status: 200,
+						contentType: 'application/json',
+						body: JSON.stringify({
+							marks: [
+								{
+									id: marks[0],
+									drawn: { x_mm: 30, y_mm: 30 },
+									measured: { x_mm: 32.5, y_mm: 31.2 }
+								},
+								{
+									id: marks[1],
+									drawn: { x_mm: 260, y_mm: 40 },
+									measured: { x_mm: 262.5, y_mm: 42.4 }
+								}
+							],
+							offset_mm: { x_mm: 2.5, y_mm: 1.2 },
+							aligned: true,
+							angle_deg: 0.3,
+							dx_mm: 2.5,
+							dy_mm: 1.2,
+							distance_error_mm: 0.01,
+							tolerance_mm: 2,
+							max_angle_deg: 3,
+							lapsed: null
+						})
+					})
+				);
+			}
+		},
+		async (page) => {
+			await page.waitForTimeout(900);
+		}
+	);
+}
+
 // ──────────────────────────────────────────────────────────────── leaving tidy
 //
 // Back to the drawing of section 3. A run ends the way it began, so opening the app
