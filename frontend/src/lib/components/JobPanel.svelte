@@ -32,6 +32,7 @@
 		onUnlock,
 		onFocus,
 		onFrame,
+		onCutPath,
 		colorFor,
 		profile = null
 	}: {
@@ -44,10 +45,14 @@
 		revision?: number;
 		preflight: boolean;
 		onJog?: (dxMm: number, dyMm: number) => void;
-		onHome?: () => void;
+		/** `force` comes from the rotary question in the panel; it has to travel through
+		 *  here, otherwise confirming does nothing and the API refuses again. */
+		onHome?: (force?: boolean) => void;
 		onUnlock?: () => void;
 		onFocus?: (distanceMm: number) => void;
 		onFrame?: () => void;
+		/** Opening the cut-path window; the pre-flight is where you want it (gap S1). */
+		onCutPath?: () => void;
 		colorFor?: (operationId: string | null) => string;
 		profile?: { has_z: number; has_autofocus: number } | null;
 	} = $props();
@@ -66,7 +71,7 @@
 </script>
 
 <TileRun {tiling} />
-<JobControls {control} {device} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {colorFor} {profile} />
+<JobControls {control} {device} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} />
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->

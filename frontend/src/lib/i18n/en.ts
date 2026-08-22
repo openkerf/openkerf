@@ -619,6 +619,61 @@ export const en = {
 		other: '{n} shapes sit in no layer that burns — dashed grey above. The machine skips them.'
 	},
 
+	// ── The cut path (gap S1 / L1) ────────────────────────────────────────────────
+	'cutpath.title': 'Cut path',
+	'cutpath.show': 'Show cut path',
+	'cutpath.show.title':
+		'See in what order the machine burns, where the head travels without burning, and how the time builds up',
+	'cutpath.unreachable': 'The path cannot be fetched while the server is away.',
+	'cutpath.building': 'Working out the path…',
+	'cutpath.building.slow':
+		'This is a big design, so the path takes a while. Starting the job does not wait for it.',
+	'cutpath.empty': 'Nothing is going to be burned, so there is no path to walk.',
+	'cutpath.busy':
+		'The job itself needed the cut plan, so the path had to give way. It comes back on its own.',
+	'cutpath.tooBig':
+		'This design is too heavy to walk through beforehand: {n} segments against a ceiling of {limit}. Building the path would cost seconds to a minute of work, and the answer would run to megabytes.',
+	'cutpath.tooBig.hint':
+		'Switch a layer off or split the work over sheets, and the path appears for what is left.',
+	'cutpath.failed': 'The path could not be built. The engine said: {message}',
+	'cutpath.limited':
+		'This path holds {n} steps, more than the {limit} this window can draw at once.',
+	'cutpath.limited.totals':
+		'The totals are the whole job: {time} on the clock and {travel} mm of travel.',
+	'cutpath.aria': 'The cut path over the bed: {n} steps in {total}.',
+	'cutpath.status.ready': 'The path is ready: {n} steps in {total}.',
+	'cutpath.play': 'Play',
+	'cutpath.pause': 'Pause',
+	'cutpath.scrub': 'Move through the job',
+	// At a job of about twenty seconds the rate rounds to 1, and "runs 1 times faster"
+	// was on screen. One is not a multiplier, it is the machine's own pace.
+	'cutpath.rate': {
+		one: 'The replay runs at about the speed of the machine.',
+		other: 'The replay runs {n} times faster than the machine.'
+	},
+	'cutpath.sum.time': 'On the clock',
+	'cutpath.sum.burning': 'Burning',
+	'cutpath.sum.travelling': 'Travelling',
+	'cutpath.sum.contours': 'Contours',
+	'cutpath.tooManyNumbers':
+		'There are {n} contours, too many to number on the drawing. Play the path to see the order.',
+	'cutpath.cluster':
+		'Numbers that would cover each other are drawn as one: “7+3” is contour 7 and three more that start in the same spot. The list below names every contour in order.',
+	'cutpath.order.title': 'The order, in words ({n} contours)',
+	'cutpath.order.item': '{n}: {layer}, {w} × {h} mm, starting at {x}, {y}.',
+	'cutpath.order.itemPasses':
+		'{n}: {layer}, {w} × {h} mm, starting at {x}, {y}, walked {passes} times.',
+	'cutpath.order.noLayer': 'no layer',
+	'cutpath.legend.travel': 'Moving without burning',
+	'cutpath.honest.title': 'What this cannot promise.',
+	'cutpath.honest.body':
+		'The order and the travel are exactly what the machine has been given. The clock is the cut plan’s own arithmetic, and the machine can be slower: the engine mixes its burn model with the pace measured on a finished pass, and neither of the two knows how your laser slows down in a corner.',
+	'cutpath.honest.slower':
+		'This clock also counts longer than the estimate on the start button: the plan’s accounting per step carries the engine’s allowance for acceleration and every sweep of a raster layer, and the estimate does not. Measured on nine cut squares of 30 mm: 2:01 here against 1:51 there, and on one filled area of 60 × 40 mm in a raster layer 7:30 here against 0:00 there — the estimate does not see a filled area at all.',
+	'cutpath.honest.here':
+		'On this design this window says {here} and the start button says {there}.',
+	'cutpath.built': 'Building this path took {seconds} seconds.',
+
 	// ── Tile run ──────────────────────────────────────────────────────────────────
 	'tiles.mark': 'mark {n}',
 	'tiles.layPlate': 'Lay the plate so its top-left corner can sit under the head. Jog to it and press Here.',
@@ -1754,6 +1809,109 @@ export const en = {
 	'text.right': 'Right',
 	'layout.lookingForMachine': 'Just checking which machine is there…',
 
+	// ── The rotary: burning on a cylinder ─────────────────────────────────────
+	//
+	// Machine-wide, so it lives with the machine settings. The sentences here say what
+	// the numbers *do*, because a factor of 1.036 means nothing on its own — and because
+	// the one thing that goes wrong on a rotary (a job that silently comes out stretched)
+	// costs the workpiece and there is only one of those.
+	'rotary.head': 'Rotary — OpenKerf',
+	'rotary.title': 'Rotary',
+	'rotary.intro':
+		'A rotary turns the workpiece under the head, so the height of your drawing becomes rotation around the object instead of distance across the bed. A millimetre stays a millimetre on the surface: what you draw 30 mm tall comes off the cup 30 mm tall.',
+	'rotary.forMachine': 'These settings belong to {machine}.',
+	'rotary.needsMachine':
+		'Choose a machine first: a rotary is bolted into one particular bed, so the settings belong to that machine.',
+	'rotary.backToMachines': 'Back to the machines',
+	'rotary.engineOwn':
+		'This machine brings MeerK40t’s own rotary along, and that one stays in charge. Set it up in the machine’s own settings; OpenKerf leaves it alone here.',
+	'rotary.use': 'Burn on a cylinder',
+	'rotary.use.hint':
+		'Switch this on once the rotary is in the bed and the workpiece turns freely.',
+	'rotary.kind': 'Kind of rotary',
+	'rotary.kind.chuck': 'Chuck — I know the diameter',
+	'rotary.kind.roller': 'Rollers — I know the circumference',
+	'rotary.diameter': 'Diameter of the object',
+	'rotary.diameter.hint':
+		'Measure it with calipers at the height where the design goes; a mug tapers.',
+	'rotary.circumference': 'Circumference of the object',
+	'rotary.circumference.hint':
+		'Mark a line, roll the object round once, and measure how far it travelled. On rollers this is more reliable than the diameter, because they slip.',
+	'rotary.circumference.is': 'Once round is {mm} mm.',
+	'rotary.scale': 'Y scale',
+	'rotary.scale.explain':
+		'The scale corrects a rotary that turns a little too far or not far enough. Leave it at 1 when the controller already converts Y to rotation itself, because two corrections multiply.',
+	'rotary.scale.source.none': 'No correction — the controller does the conversion',
+	'rotary.scale.source.manual': 'A factor I fill in',
+	'rotary.scale.source.steps': 'Computed from the two motors',
+	'rotary.scale.factor': 'Factor',
+	'rotary.scale.flatSteps': 'Steps per mm of the flat bed',
+	'rotary.scale.rotarySteps': 'Steps per mm of the rotary',
+	'rotary.scale.now': 'Y goes into the machine multiplied by {factor}.',
+	'rotary.scale.example': 'A shape {drawn} mm tall burns {burned} mm around the object.',
+	'rotary.scale.range':
+		'A factor between {min} and {max} is a calibration; anything beyond that is a resize and the machine refuses it.',
+	'rotary.calibrate.title': 'Calibrate from a burned line',
+	'rotary.calibrate.body':
+		'Burn a line of a known length around the object, measure what came out, and fill both in. Calibrating again later builds on what is set now instead of starting over.',
+	'rotary.calibrate.commanded': 'Length I asked for',
+	'rotary.calibrate.measured': 'Length I measured',
+	'rotary.calibrate.preview': 'That gives a factor of {factor}.',
+	'rotary.calibrate.apply': 'Use this factor',
+	'rotary.calibrate.last':
+		'Last calibrated on {commanded} mm asked for and {measured} mm measured, giving {factor}.',
+	'rotary.save': 'Save the rotary',
+	'rotary.saved': 'Saved. The next job goes into the machine with this scale.',
+	'rotary.overlap':
+		'The work is {work} mm tall and once round is {circumference} mm, so the end burns over the beginning.',
+	'rotary.failed': 'The machine refused this rotary setting ({status}).',
+	'rotary.safety.title': 'What changes on the machine',
+	'rotary.safety.home':
+		'Homing is refused while the rotary is on: the head would drive into it. Take the rotary out first, or confirm that the bed is clear.',
+	'rotary.safety.frame':
+		'The frame still traces a rectangle, but its height is rotation: you see the object turn under a head that stays where it is.',
+	'rotary.safety.preflight':
+		'Before every start the pre-flight says that the rotary is on and by how much Y is scaled.',
+	'rotary.safety.position':
+		'The scale counts from the machine zero, so a shape further up the drawing also lands further along. Put your work near the top of the sheet and burn the calibration line in the same place.',
+	'rotary.scope.title': 'What this deliberately does not do',
+	'rotary.scope.firmware':
+		'Nothing is written into the controller. A Ruida keeps its own rotary page, and on a GRBL machine OpenKerf leaves $101 alone at the start of a job: that is firmware, and it is set where the firmware lives.',
+	'rotary.scope.rest':
+		'The feeder, the dual laser and galvo mode are not part of this either.',
+	'rotary.checklist.title': 'At the machine: the first ring',
+	'rotary.checklist.intro':
+		'Whether a burned ring comes out round and the right size cannot be tested without the hardware, so nothing below has been driven by us. This is the order to do it in, and the number to expect at each step.',
+	'rotary.checklist.1':
+		'Fit the rotary, put a straight-sided tumbler in it, and switch the laser off at the key. Move the head by hand to the middle of the object.',
+	'rotary.checklist.2':
+		'Set the rotary up on the Ruida’s own panel (pulse per rotation and diameter). That is the controller’s conversion; ours stays at 1 as long as it does the work.',
+	'rotary.checklist.3':
+		'Switch the rotary on here, fill in the diameter, and leave the scale at "no correction".',
+	'rotary.checklist.4':
+		'Press Home. Expected: it is refused, with the reason. That refusal is the safety part of this feature.',
+	'rotary.checklist.5':
+		'Draw a rectangle 100 mm tall and 10 mm wide, put it in a cutting layer at low power, and look at the pre-flight. Expected: it says the rotary is on, with the diameter and a factor of 1.',
+	'rotary.checklist.6':
+		'Burn it, and measure with a flexible tape how far the burned line runs around the object.',
+	'rotary.checklist.7':
+		'Fill that measurement in above: 100 asked for, what you measured. Expected: a factor of 100 divided by your measurement — 96.5 mm gives 1.0363.',
+	'rotary.checklist.8':
+		'Burn the same rectangle again and measure again. Expected: within half a millimetre of 100 mm. If it is worse, calibrate once more — it builds on the first factor.',
+	'rotary.checklist.9':
+		'Now burn a ring all the way round: a rectangle as tall as the circumference this page reports. Expected: the end meets the beginning. A gap or an overlap means the diameter is wrong, not the factor.',
+	'rotary.checklist.10':
+		'Write the factor down beside the machine. It belongs to this rotary with this object; a different diameter is a different measurement.',
+	'setup.rotary': 'Rotary',
+	'job.rotary.chuck': 'The rotary is on: a chuck of {diameter} mm, Y scaled by {factor}.',
+	'job.rotary.roller': 'The rotary is on: {circumference} mm round, Y scaled by {factor}.',
+	'job.rotary.frame':
+		'On a rotary the frame turns the object; the head hardly crosses the bed.',
+	'job.home.rotary.title': 'Home with the rotary fitted?',
+	'job.home.rotary.body':
+		'Homing drives the head across the bed and into the rotary. Only continue if the rotary is out or the head can reach the corner freely.',
+	'job.home.rotary.confirm': 'The bed is clear — home',
+	'job.home.rotary.cancel': 'Do not home',
 	// ── Refusals the API can name ─────────────────────────────────────────────────
 	//
 	// The engine layer sends a code in `X-OpenKerf-Error` beside its English
@@ -1800,6 +1958,14 @@ export const en = {
 	'api.nodes.notEditable': 'The nodes of this shape cannot be edited.',
 	'api.project.noDesign': 'The project holds no design.',
 	'api.project.notOurs': 'This is not an OpenKerf project.',
+	'api.rotary.needsDiameter': 'A chuck rotary needs the diameter of the object, measured with calipers.',
+	'api.rotary.needsCircumference': 'A roller rotary needs the circumference of the object: mark a line, roll it round once, and measure.',
+	'api.rotary.needsSteps': 'Computing the Y scale from the motors needs both numbers: the steps per millimetre of the flat bed and of the rotary.',
+	'api.rotary.unknownKind': 'A rotary is either a chuck or a roller.',
+	'api.rotary.unknownScaleSource': 'The Y scale comes from the two motors, from a number you fill in, or nowhere at all.',
+	'api.rotary.needsMeasurement': 'Calibrating needs both lengths: what you asked the machine for and what you measured on the object.',
+	'api.rotary.noMachine': 'There is no machine selected, so there is no rotary to set up.',
+	'api.rotary.homeWhileActive': 'The rotary is switched on. Homing drives the head over the bed and into the rotary. Take the rotary out first, or confirm that it is clear.',
 	'api.sheet.needsName': 'A sheet needs a name.',
 	'api.sheet.needsOne': 'The last sheet cannot go; a project has one.',
 	'api.sheet.nothingSelected': 'Choose what should come along first.',

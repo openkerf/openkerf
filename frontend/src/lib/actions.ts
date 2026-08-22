@@ -117,6 +117,10 @@ export const KEYS: Record<string, string> = {
 	// relearn. Inkscape adds a node with Insert; a Mac keyboard has no Insert, so it is
 	// Shift+I here. Delete removes the node and not the shape — while the node tool has a
 	// node in hand, that is what "delete" means.
+	// The cut path (gap S1). Alt+P is LightBurn's own key for its Preview, and
+	// unlike ⌘0 the browser leaves Alt+P alone — verified in Chrome with the canvas
+	// focused: the window opens and nothing else moves.
+	cutPath: 'alt+p',
 	nodeAdd: 'shift+i',
 	nodeCorner: 'shift+l',
 	nodeCurve: 'shift+u',
@@ -251,6 +255,8 @@ export type Handlers = {
 	snap: () => void;
 	layerNumbers: () => void;
 	rescue: () => void;
+	/** Open the cut-path window: the order, the travel and the clock (gap S1). */
+	cutPath: () => void;
 };
 
 const K = (id: string) => keyLabel(KEYS[id]);
@@ -687,6 +693,17 @@ export function canvasMenu(
 					label: t('action.zoomHundred'),
 					key: K('zoomHundred'),
 					run: () => h.zoom('hundred')
+				},
+				{
+					// A workspace, so it opens a window of its own (the placement rule). Here
+					// as well as in the pre-flight: the pre-flight is where you *want* it,
+					// this is where you look for it while still drawing.
+					id: 'cut-path',
+					label: t('cutpath.show'),
+					key: K('cutPath'),
+					explain: t('cutpath.show.title'),
+					off: ctx.empty ? t('reason.bedEmpty') : undefined,
+					run: h.cutPath
 				}
 			]
 		},

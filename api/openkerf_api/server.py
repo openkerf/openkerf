@@ -31,6 +31,7 @@ from .library import BUNDLE_SUFFIX, Library, LibraryError, default_path
 from .autosave import Autosave
 from .camera import Camera
 from .clipart import Clipart
+from .cutpath import CutPath
 from .fonts import Fonts
 from .generators import Generators
 from .nesting import Nesting
@@ -38,6 +39,7 @@ from .nodes import Nodes
 from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
+from .rotary import RotaryControl
 from .sheets import Sheets
 from .tilerun import TileRun
 from .testgrid import (
@@ -204,6 +206,15 @@ class ApiServer:
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
         self.motion = MachineControl(kernel, self.commands)
+        # The rotary. Machine-wide, stored on the device service, and applied while the
+        # plan is being built — so the runner needs to know about it, not the routes: a
+        # job, a tile run, the preview and the exact estimate all go through there.
+        self.rotary = RotaryControl(kernel)
+        self.commands.rotary = self.rotary
+        # The cut path for looking at, cached against the design itself. Built in a
+        # thread of its own: a build takes seconds on a heavy design and a request
+        # that takes seconds is a request the browser gives up on.
+        self.cutpath = CutPath(kernel, self.commands, self.drawing)
         self.images = Images(kernel, self.commands)
         self.nodes = Nodes(kernel, self.commands)
         self.sheets = Sheets(
@@ -339,6 +350,22 @@ class ApiServer:
             )
         except Exception:
             return
+
+    def _rotary_state(self, sheet=None):
+        """
+        The rotary, with the height of what is on the bed measured against it.
+
+        That measurement is what turns the circumference from a number into an answer:
+        300 mm of work on a cup of 251.3 mm burns over itself. Reading the bounds must
+        never be the reason a pre-flight fails, hence the fallback.
+        """
+        height = None
+        try:
+            report = self.drawing.bounds_report(sheet)
+            height = (report.get("work") or {}).get("height_mm")
+        except Exception:  # pragma: no cover - the engine must not break the pre-flight
+            height = None
+        return self.rotary.state(height)
 
     def _active_sheet(self):
         """
@@ -839,6 +866,10 @@ class ApiServer:
                     ),
                     "bounds": self.drawing.bounds_report(sheet),
                     "engine": self.drawing.engine_report(),
+                    # The pre-flight has to say, before you press start, that the rotary
+                    # is on and by how much Y is scaled. A job that silently comes out
+                    # stretched costs a workpiece, and there is only one of those.
+                    "rotary": self._rotary_state(sheet),
                 }
             )
 
@@ -860,6 +891,24 @@ class ApiServer:
                     exact=exact,
                 )
             )
+
+        @app.get("/api/job/path")
+        def job_path():
+            """
+            The ordered path of the current design: what the machine does, when.
+
+            Answers at once, always. Building the plan is the most expensive thing
+            this API does (measured: 2.5 s on 960 squares, and quadratic above
+            that), so the build runs in a thread and this route says which of five
+            things is true: `ready` with the path, `building` with how long it has
+            been at it, `empty`, `too_big` with the numbers, `busy` because a job
+            claimed the plan, or `failed`. The client polls; nothing here waits.
+
+            The answer is cached against a fingerprint of the design, so a poll on
+            an untouched drawing costs the fingerprint and nothing else (measured:
+            0.017 s on 960 shapes against 2.5 s for the plan).
+            """
+            return manage(lambda: self.cutpath.state(self.motion.origin()))
 
         @app.get("/api/design/export.svg")
         def export_design(filename: str = "ontwerp.svg"):
@@ -953,8 +1002,43 @@ class ApiServer:
 
         @app.post("/api/machine/home", dependencies=write)
         def machine_home(body: dict | None = None):
-            """To the zero point. The head really moves."""
-            return manage(self.motion.home, bool((body or {}).get("physical")))
+            """
+            To the zero point. The head really moves.
+
+            Refused while the rotary is on: homing Y runs the head into a fitted chuck.
+            `force` is the way through for whoever has taken it out — see rotary.py.
+            """
+            fields = body or {}
+            return manage(
+                self.motion.home,
+                bool(fields.get("physical")),
+                bool(fields.get("force")),
+            )
+
+        # -- the rotary (machine-wide) — see rotary.py ----------------------
+        @app.get("/api/machine/rotary")
+        def machine_rotary():
+            """
+            How this machine's rotary is set up, and what it does to a job.
+
+            `work_height_mm` is optional and answers the one question the circumference
+            answers: does this design go round the object once without overlapping itself.
+            """
+            return manage(lambda: self._rotary_state(self._active_sheet()))
+
+        @app.post("/api/machine/rotary", dependencies=write)
+        def set_machine_rotary(body: dict | None = None):
+            """Change what was given; the rest stays. Refuses a rotary that cannot burn."""
+            return manage(self.rotary.update, body or {})
+
+        @app.post("/api/machine/rotary/calibrate", dependencies=write)
+        def calibrate_machine_rotary(body: dict):
+            """"Meant 100 mm, measured 96.5" -> the new Y factor."""
+            return manage(
+                self.rotary.calibrate, body.get("commanded_mm"), body.get("measured_mm")
+            )
+
+        # -- end of the rotary block ----------------------------------------
 
         @app.post("/api/machine/move", dependencies=write)
         def machine_move(body: dict):

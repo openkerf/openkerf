@@ -3,8 +3,9 @@
 Everything that puts light on material lives on the **Job** tab of the right-hand
 panel, and in the transport buttons at the right of the top bar. This page walks
 that panel from top to bottom: what the pre-flight shows you before anything
-moves, what the two taps that start a job do, what you can see and change while
-the machine is burning, and the controls for moving the head when it is not.
+moves, the cut path you can walk through before pressing anything, what the two
+taps that start a job do, what you can see and change while the machine is
+burning, and the controls for moving the head when it is not.
 
 The last section is about the phone view — the screen for somebody who is
 standing at the machine rather than at the keyboard.
@@ -34,7 +35,7 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", "Material — not filled in for this sheet", an amber box saying the machine is not responding, a three-row layer table with speed, power, passes and source, an amber note that three layers use unmeasured settings, and the checklist "RUN THROUGH THIS: Lid closed / Extraction and air assist on / Workpiece is clamped and flat". At the bottom of the panel a "Show frame" button beside a green "Start job 1:19".](images/12-job-preflight.png)
+![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", "Material — not filled in for this sheet", an amber box saying the machine is not responding, a three-row layer table with speed, power, passes and source, an amber note that three layers use unmeasured settings, and the checklist "RUN THROUGH THIS: Lid closed / Extraction and air assist on / Workpiece is clamped and flat". At the bottom of the panel a "Show frame" button beside a green "Start job 1:19".](images/12-job-preflight.png)
 
 ### The drawing
 
@@ -108,6 +109,18 @@ lines lives in the wxPython version of the engine. The clock below therefore
 counts zero for it. Make it an engrave or cut layer, or burn this job from the
 wxPython UI.'
 
+### With a rotary fitted
+
+A rotary changes the shape of what comes out, so it is said out loud on the one
+screen you read before burning. Above the start button: "The rotary is on: a chuck
+of 80 mm, Y scaled by 1.036." — or, on rollers, "The rotary is on: 251.3 mm round,
+Y scaled by 1.036." And if the work is taller than the object is round, a second
+line: "The work is 300 mm tall and once round is 251.3 mm, so the end burns over
+the beginning."
+
+Everything about setting one up, calibrating it and the order to do it in is on
+its own page: [The rotary](rotary.md).
+
 ### The checklist
 
 Three lines under the heading **Run through this**: *Lid closed*, *Extraction and
@@ -121,6 +134,142 @@ On an empty bed there is no clock, no checklist and no start button — only
 a layer that does not burn. Draw or import something, give it a layer, and come
 back here."
 
+## The cut path
+
+The pre-flight says *what* burns. The cut path says *in what order*, *where the
+head goes without burning*, and *how the time adds up*. It is a workspace you look
+at and compare in, so it opens in a window of its own, headed **Cut path**.
+
+Three ways in, and they are the same window:
+
+- **Show cut path** under the drawing in the pre-flight — the moment you actually
+  want it, just before pressing start.
+- The same row in the right-click menu on the empty bed, for while you are still
+  drawing.
+- **⌥P** (Alt+P on Windows and Linux), from anywhere on the bed.
+
+All three carry the same explanation: "See in what order the machine burns, where
+the head travels without burning, and how the time builds up".
+
+![The Cut path window. On the bed, a red square with a smaller red square inside it, a second red square to its right, an engraved bar below them, dashed grey lines running from one to the next, and the numbers 1, 2, 3 and 4 — the 1 on the inner square, the 2 on the one around it. The first two are drawn in solid red, the other two faint; a filled dot sits on the left edge of square 2. Under the drawing a Play button, a scrubber at 0:40 of 1:19, the line "The replay runs 4 times faster than the machine.", and four figures: On the clock 1:19, Burning 1,270 mm, Travelling 352.7 mm · 4%, Contours 4.](images/29-cutpath.png)
+
+### What the picture means
+
+The bed is the plain rectangle, the sheet the dashed one — the same two rectangles
+the canvas draws, so you can find yourself. Everything else is the job as the
+machine has been given it:
+
+- **A contour in its layer colour.** The same colour as on the canvas and in the
+  Layers tab, so a third scheme does not have to be learned. Faint is still to
+  come; solid is already burned at the moment the scrubber is on.
+- **A raster layer as an area,** not as an outline. That is the one distinction
+  that decides whether the head sweeps for six minutes or cuts for six seconds,
+  and a filled rectangle looks exactly like a cut-out one otherwise.
+- **The numbers are the order.** Numbers rather than arrows: an arrow gives a
+  direction, and the question is which one comes *first*. A small shape inside a
+  large one should be number 1 — if it is not, the part falls out of the sheet
+  before its own edge is cut.
+- **The dot is the head.** Solid while it burns, hollow while it travels: two
+  signals for one state, because on a busy path a colour alone gets lost.
+
+Numbers that would land on top of each other are folded into one: "Numbers that
+would cover each other are drawn as one: “7+3” is contour 7 and three more that
+start in the same spot. The list below names every contour in order." And past a
+certain crowd they are left off altogether: "There are 240 contours, too many to
+number on the drawing. Play the path to see the order."
+
+That list is **The order, in words (4 contours)**, folded shut under the figures.
+One sentence per contour — "1: Outline, 40 × 40 mm, starting at 60, 60." — with
+"walked 3 times" on the end when the layer has passes. It is the only form of the
+answer a screen reader can read, and on a crowded drawing it is the readable one
+for everybody.
+
+### Travel moves
+
+The dashed grey lines are the head moving with the laser off, from the end of one
+contour to the start of the next. The legend calls them "Moving without burning".
+
+They are the reason to open this window at all. Travel costs time and produces
+nothing, and the figure to watch is beside the millimetres: **Travelling 352.7 mm ·
+4%** — the share of the clock spent not burning. A third of the clock spent
+travelling is an ordering problem, and no drawing says that as quickly as one
+percentage.
+
+The order itself comes from the engine's own optimisation, not from OpenKerf, and
+this window does not change it. What it does is let you see it before the machine
+does — and what it shows is the job the spooler is handed, step for step and in the
+same order, not a separate drawing that resembles it.
+
+### Playing it back
+
+**Play** runs the head along the path; the scrubber and the clock go with it, and
+dragging the scrubber goes anywhere in the job. A replay lasts about twenty
+seconds however long the job lasts, and the line under it says by how much that is
+cheating: "The replay runs 4 times faster than the machine." — or, on a job of
+about twenty seconds, "The replay runs at about the speed of the machine."
+
+### What the clock does and does not promise
+
+Four figures under the drawing: **On the clock**, **Burning** (millimetres with the
+laser on), **Travelling** (millimetres and the percentage) and **Contours**.
+
+The order and the travel are exact. The clock is not, and the window says so in
+its own words:
+
+> **What this cannot promise.** "The order and the travel are exactly what the
+> machine has been given. The clock is the cut plan's own arithmetic, and the
+> machine can be slower: the engine mixes its burn model with the pace measured on
+> a finished pass, and neither of the two knows how your laser slows down in a
+> corner."
+
+It also counts differently from the estimate on the start button, and by more than
+a rounding:
+
+> "This clock also counts longer than the estimate on the start button: the plan's
+> accounting per step carries the engine's allowance for acceleration and every
+> sweep of a raster layer, and the estimate does not. Measured on nine cut squares
+> of 30 mm: 2:01 here against 1:51 there, and on one filled area of 60 × 40 mm in a
+> raster layer 7:30 here against 0:00 there — the estimate does not see a filled
+> area at all."
+
+So the two clocks are put side by side rather than left to be discovered: "On this
+design this window says 1:19 and the start button says 1:09." Where they disagree
+badly, this one is the one to believe — and a raster layer is where they disagree
+badly.
+
+At the foot: "Building this path took 0.01 seconds." Which is the other thing this
+window is honest about — it is not free. It builds the whole cut plan, the same
+work the estimate does, and on a heavy design that is seconds.
+
+One thing has not been checked against a machine, and it is worth knowing which:
+that the head really walks the contours in the order the numbers give. The order
+in the window is measured against the cutcode the spooler gets, which is as far as
+a computer without a laser can go.
+
+### When it goes wrong
+
+- While it is working: "Working out the path…", and on a big design a second line,
+  "This is a big design, so the path takes a while. Starting the job does not wait
+  for it." That is not a promise but a design decision: the engine has one cut
+  plan, and a job that arrives always wins. Measured at the heaviest design this
+  window accepts: a start pressed while it was building answered after two to
+  three and a half seconds, and the path usually still finished on its own.
+- When a job does take it: "The job itself needed the cut plan, so the path had to
+  give way. It comes back on its own."
+- With nothing that burns: "Nothing is going to be burned, so there is no path to
+  walk."
+- Too heavy to walk through beforehand, refused before any work is done: "This
+  design is too heavy to walk through beforehand: 8100 segments against a ceiling
+  of 8000. Building the path would cost seconds to a minute of work, and the answer
+  would run to megabytes.", followed by "Switch a layer off or split the work over
+  sheets, and the path appears for what is left."
+- A path with more steps than can be drawn at once still gives its totals: "This
+  path holds 24000 steps, more than the 20000 this window can draw at once." with
+  "The totals are the whole job: 12:30 on the clock and 4200.0 mm of travel."
+- With the server away: "The path cannot be fetched while the server is away."
+- And if the engine refuses the plan: "The path could not be built. The engine
+  said: …"
+
 ## Starting: two taps, never one
 
 No single click burns anything.
@@ -132,7 +281,9 @@ No single click burns anything.
 
 **Show frame** sits beside **Start job** while the job is not yet armed: it sends
 the head round the outline of your work with the laser off. That is the last check
-that the work is on the board and the clamp is not in the way. Arming replaces
+that the work is on the board and the clamp is not in the way. With a rotary
+fitted it means something else, and the button's tooltip says so: "On a rotary the
+frame turns the object; the head hardly crosses the bed." Arming replaces
 that pair with Cancel and Start now, so from then on the frame button to use is
 the one in the top bar, which is always there.
 
@@ -243,6 +394,23 @@ the same pad, **Z ↑** and **Z ↓**, for focusing. Every button follows the **
 size** below the pad: 0.1 mm, 1 mm, 10 mm or 50 mm.
 
 **Unlock** releases the motors so you can push the head by hand.
+
+### Homing with a rotary in the bed
+
+A chuck stands in the bed exactly where the gantry wants to go, so homing with one
+fitted drives the head into it. While the rotary is switched on, **Home** does not
+move anything: it opens the question **Home with the rotary fitted?** with
+"Homing drives the head across the bed and into the rotary. Only continue if the
+rotary is out or the head can reach the corner freely." The buttons say what they
+do — **The bed is clear — home** and **Do not home** — rather than OK and Cancel.
+
+The refusal is in the machine and not only in this window, because a second tab, a
+phone or a script comes straight past a greyed-out button: "The rotary is switched
+on. Homing drives the head over the bed and into the rotary. Take the rotary out
+first, or confirm that it is clear."
+
+Jogging in Y is deliberately *not* refused — that turns the workpiece, which is
+awkward at worst. See [The rotary](rotary.md#what-changes-on-the-machine).
 
 **Go to a point** is for going somewhere rather than in a direction. **To
 origin** sends the head to 0,0 of the bed. Beside it, the positions this machine

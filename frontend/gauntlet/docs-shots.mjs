@@ -48,6 +48,26 @@ async function api(method, path, body) {
 }
 
 /**
+ * The machine the handbook is written around.
+ *
+ * Every picture has a bed in it and half the prose quotes its size, so which machine
+ * is active is part of the state a shot needs — as much as the shapes on the bed.
+ * Left to chance it goes wrong quietly: a run made while `lihuiyu-device` happened to
+ * be active gave a bed of 310 × 210 mm in every picture, and the tiling shot (a plate
+ * of 900 × 280 mm) then overhung the bed in *both* directions, so the app refused to
+ * divide it and the picture showed no tiles at all — while the page beside it explains
+ * the seam. That is the engine's own fallback biting (CLAUDE.md: the chosen machine is
+ * only written at a clean shutdown), not somebody's choice, so the script puts it back.
+ */
+async function useTheHandbookMachine() {
+	const machines = (await api('GET', '/api/machines')) ?? [];
+	const wanted = machines.find((m) => m.path === 'ruida');
+	if (!wanted || wanted.active) return;
+	console.log(`activating ${wanted.label} — the handbook's machine`);
+	await api('POST', '/api/machines/ruida/activate');
+}
+
+/**
  * An empty bed, one sheet, no recovery file.
  *
  * The recovery file is the reason this exists: leave one behind and the next run
@@ -149,6 +169,8 @@ async function seed() {
 
 // ------------------------------------------------------------ the browser side
 
+await useTheHandbookMachine();
+
 const browser = await chromium.launch();
 
 async function open(path = '/', { width = 1440, height = 900, route = null } = {}) {
@@ -191,6 +213,13 @@ async function open(path = '/', { width = 1440, height = 900, route = null } = {
 const done = [];
 
 async function shot(name, page, { selector = null, pad = 0 } = {}) {
+	// An alarm from the machine, dismissed at the last moment. It outranks every dialog
+	// on purpose (the backdrop sits below it), so a real laser that is not answering
+	// puts a red card over the top-left of the canvas and over the cut-path drawing —
+	// measured on both. It is about this laser at this moment and it is dismissible in
+	// the app, so it is dismissed here. Not in `open()`: it arrives with the status
+	// stream, a second or two after the page is drawn, so a click there is too early.
+	await page.locator('.alarm .seen').first().click({ timeout: 500 }).catch(() => {});
 	let clip;
 	if (selector) {
 		const box = await page.locator(selector).first().boundingBox();
@@ -724,6 +753,139 @@ if (wanted('28')) {
 		// The preview waits 250 ms after the last change and then asks the server.
 		await page.waitForTimeout(2500);
 	});
+}
+
+/**
+ * The cut-path window, halfway through its replay.
+ *
+ * Its own little design and not the drawing of section 3: this picture is about the
+ * *order*, so the shapes have to be few enough that the numbers beside them can be
+ * read. Two squares of 80 mm, 60 mm apart, with a 40 mm one inside the left-hand
+ * square — that is checklist step 3 (does it cut inside before outside) and it is
+ * the one thing the picture has to prove it can show. The engraved bar underneath
+ * puts a second layer in the legend and a long travel line across the drawing.
+ *
+ * The scrubber is dragged to the middle rather than left at zero: at zero the whole
+ * path is faint and there is nothing to see about "burned so far". Setting the
+ * range's value with `fill` fires the same input event the mouse does, so the shot
+ * lands on a fixed moment of the job instead of on however long a play took.
+ */
+if (wanted('29')) {
+	await clear();
+	const cut = await api('POST', '/api/design/operations', {
+		type: 'cut',
+		label: 'Outline',
+		speed: 12,
+		power_percent: 65
+	});
+	const engrave = await api('POST', '/api/design/operations', {
+		type: 'engrave',
+		label: 'Caption',
+		speed: 250,
+		power_percent: 22
+	});
+	const put = async (shape, layer) => {
+		const made = await api('POST', '/api/design/elements', shape);
+		const id = made?.ids?.[0];
+		if (id && layer?.id) {
+			// New shapes are filed by colour, so out of everything first and then into
+			// the layer this picture needs — the same dance as `seed()`.
+			for (const op of [cut?.id, engrave?.id])
+				if (op) await api('POST', '/api/design/unassign', { ids: [id], operation_id: op });
+			await api('POST', '/api/design/assign', { ids: [id], operation_id: layer.id });
+		}
+		return id;
+	};
+	// The sizes are chosen against the numbering, not against the bed. A number is
+	// folded into its neighbour when the two would overlap, and at this bed (500 mm, so
+	// a digit is about 16 mm tall on the drawing) an inner square 12 mm inside its outer
+	// one gave "1+1" in one spot instead of a 1 and a 2 — true, and useless as a picture
+	// of the order. 20 mm between the two starting corners keeps them apart.
+	await put({ type: 'rect', x_mm: 40, y_mm: 40, width_mm: 80, height_mm: 80 }, cut);
+	await put({ type: 'rect', x_mm: 60, y_mm: 60, width_mm: 40, height_mm: 40 }, cut);
+	await put({ type: 'rect', x_mm: 180, y_mm: 40, width_mm: 80, height_mm: 80 }, cut);
+	await put({ type: 'rect', x_mm: 40, y_mm: 160, width_mm: 220, height_mm: 15 }, engrave);
+	await api('POST', '/api/design/operations/prune');
+	// The whole window does not fit in any picture, and no viewport changes that: the
+	// dialog is capped at min(80vh, 760px) while the drawing alone is 58vh, so the body
+	// always scrolls. Measured: at 1400 px high the path itself had scrolled out of the
+	// top of the crop (contour 4 at the edge, the squares gone). So this picture is the
+	// top of the window — the order, the travel and the clock — and the sums, the legend
+	// and the note about what the clock cannot promise are quoted in docs/job.md instead.
+	await scene('29-cutpath.png', '/?tab=job', { selector: DIALOG }, async (page) => {
+		// The pre-flight builds its estimate first; the button under the drawing only
+		// exists once the panel has drawn the pre-flight at all.
+		await page.waitForTimeout(3000);
+		await page.locator('button', { hasText: 'Show cut path' }).first().click();
+		await page.waitForSelector(`${DIALOG} .cp`, { timeout: 30000 });
+		const scrub = page.locator(`${DIALOG} input[type="range"]`).first();
+		const max = Number(await scrub.getAttribute('max'));
+		await scrub.fill(String(Math.round(max / 2)));
+		// Putting a value in the range scrolls it into view; if the window is scrollable
+		// at all, that takes the drawing with it.
+		await page.locator(DIALOG).first().evaluate((node) => node.scrollTo(0, 0));
+		await page.waitForTimeout(600);
+	});
+}
+
+/**
+ * The rotary page, for a machine that has one fitted.
+ *
+ * The state is answered from the script, the same way shot 01 answers the machine
+ * list, and for a stronger reason: the real answer here depends on which machine
+ * happens to be active in this session, and switching a machine on or writing a
+ * rotary setting would change the owner's laser to take a photograph. Nothing on
+ * this page writes anything by itself — it is a draft until Save, and the script
+ * does not press Save — so what is faked is only the answer it opens with.
+ *
+ * The numbers are the ones the handbook quotes: a chuck of 80 mm (251.33 mm round)
+ * and the factor 1.0363 that comes out of 100 mm asked for and 96.5 mm measured.
+ */
+if (wanted('30')) {
+	await scene(
+		'30-rotary.png',
+		'/setup/rotary?machine=ruida',
+		{
+			// Tall enough for the whole page in one picture, checklist and all: the ten
+			// steps at the foot are the part somebody reads standing at the laser, and a
+			// picture that stops above them would be a picture of half the feature.
+			// Measured: the page ends at 2044 px at this width, so 2060 is the whole of it
+			// with nothing but its own margin under the last step.
+			height: 2060,
+			route: async (page) => {
+				await page.route('**/api/machine/rotary', (r) =>
+					r.fulfill({
+						status: 200,
+						contentType: 'application/json',
+						body: JSON.stringify({
+							active: true,
+							kind: 'chuck',
+							diameter_mm: 80,
+							circumference_mm: 251.3274,
+							scale_source: 'manual',
+							manual_scale_y: 1.036269,
+							flat_steps_per_mm: 0,
+							rotary_steps_per_mm: 0,
+							last_calibration: {
+								commanded_mm: 100,
+								measured_mm: 96.5,
+								factor: 1.036269
+							},
+							scale_y: 1.036269,
+							scale_x: 1,
+							// The whole page: on a machine that brings MeerK40t's own rotary
+							// along, everything below the first paragraph is replaced by one
+							// sentence saying so.
+							engine_rotary: false
+						})
+					})
+				);
+			}
+		},
+		async (page) => {
+			await page.waitForTimeout(600);
+		}
+	);
 }
 
 // ──────────────────────────────────────────────────────────────── leaving tidy

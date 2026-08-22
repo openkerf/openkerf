@@ -2258,8 +2258,22 @@ class Drawing:
         return float(UNITS_PER_MM)
 
     def _plan_estimate(self) -> tuple[float, int]:
-        """The old route: build the whole plan and add up the duration from it."""
-        self.runner.run("plan copy preprocess validate blob preopt optimize")
+        """
+        The old route: build the whole plan and add up the duration from it.
+
+        Under `claim_plan` since the cut-path preview exists: that builds the same
+        kernel-global plan in a thread of its own, and two pipelines interleaving
+        leave both with half a plan. Claiming also tells the preview to give way,
+        which is right — this one is answering a request.
+        """
+        with self.runner.claim_plan(), self.runner.rotary_applied():
+            # With a rotary on, Y is scaled on its way to the machine, so the exact
+            # estimate has to be measured on the scaled plan or it would report a job
+            # other than the one that burns.
+            return self._plan_estimate_locked()
+
+    def _plan_estimate_locked(self) -> tuple[float, int]:
+        self.runner.run("plan clear copy preprocess validate blob preopt optimize")
         planner = getattr(self.kernel, "planner", None)
         seconds = 0.0
         pieces = 0

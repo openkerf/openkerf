@@ -166,6 +166,11 @@
 					<a class="btn" href="/setup/settings?machine={encodeURIComponent(machine.path)}">
 						{t('setup.settings')}
 					</a>
+					<!-- The rotary is bolted into *this* bed, so it belongs with this machine
+					     and not with the design. -->
+					<a class="btn" href="/setup/rotary?machine={encodeURIComponent(machine.path)}">
+						{t('setup.rotary')}
+					</a>
 					<!-- Gap E5: this machine as a file, for a second computer. -->
 					<button class="btn subtle" onclick={() => exporteer(machine)}
 						>{t('setup.exportProfile')}</button
