@@ -1566,6 +1566,7 @@
 					{control}
 					activeJob={status.activeJob}
 					revision={design.revision}
+					selectedIds={design.selectedIds}
 					bind:preflight
 					onJog={async (dx, dy) => {
 						await edits.jog(dx, dy);

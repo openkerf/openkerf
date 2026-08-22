@@ -26,6 +26,7 @@ from .design import DesignReader
 from .document import Document
 from .duplicates import Duplicates
 from .focus import FocusBoard
+from .printcut import PrintCut
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
@@ -247,6 +248,7 @@ class ApiServer:
         self.nesting = Nesting(kernel, self.editor)
         self.duplicates = Duplicates(kernel, self.drawing)
         self.focus = FocusBoard(kernel, self.drawing)
+        self.printcut = PrintCut(kernel, self.drawing, self.motion)
         self.fonts = Fonts(kernel)
         self.camera = Camera(kernel, self.commands)
         self.clipart = Clipart(kernel, self.drawing)
@@ -598,10 +600,50 @@ class ApiServer:
                 # Gap J12: when a zero point is set, the work goes into the machine from
                 # there. The shift lives only while the plan is being built; after that the
                 # drawing is back where it was.
-                with self.drawing.shifted(self.motion.origin()):
-                    return self.commands.start_job(sheet.get("name"))
+                #
+                # Print and cut goes on top of that as a mutator, and only when the sheet
+                # was actually aligned — otherwise this is the same single line it always
+                # was. With an alignment the zero point stays out of it: the pose is
+                # measured on the material and says where the work goes, which is the same
+                # job the zero point does by hand. Doing both would shift twice, and you
+                # would only see that on the workpiece.
+                pose = self.printcut.mutators()
+                origin = None if pose else self.motion.origin()
+                with self.drawing.shifted(origin):
+                    return self.commands.start_job(sheet.get("name"), mutators=pose)
 
             return act(run)
+
+        @app.get("/api/printcut")
+        def printcut_state():
+            """Where the sheet lies, as far as we have been told (gap H2)."""
+            return self.printcut.state()
+
+        @app.post("/api/printcut/marks", dependencies=write)
+        def printcut_marks(body: dict):
+            """The two shapes in the drawing that are on the material as well."""
+            return manage(self.printcut.set_marks, body.get("ids") or [])
+
+        @app.post("/api/printcut/measure", dependencies=write)
+        def printcut_measure(body: dict):
+            """
+            Where the head is standing now: over mark 1 or mark 2.
+
+            A write route, and not because it changes the drawing — it does not. It reads
+            the machine and it decides where a job will burn, and that is the side of the
+            line the gate is drawn on.
+            """
+            return manage(
+                self.printcut.measure,
+                int(body.get("index", 0)),
+                body.get("x_mm"),
+                body.get("y_mm"),
+            )
+
+        @app.post("/api/printcut/clear", dependencies=write)
+        def printcut_clear():
+            """Forget the alignment. The next job burns where it was drawn again."""
+            return manage(self.printcut.clear)
 
         @app.post("/api/job/pause", dependencies=write)
         def pause_job():

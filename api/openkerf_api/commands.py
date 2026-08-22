@@ -574,6 +574,12 @@ class CommandRunner:
                 continue
             if getattr(operation, "focus_z_mm", None) is None:
                 continue
+            if not list(getattr(operation, "children", []) or []):
+                # An empty layer burns nothing, so its height means nothing. This is not
+                # hypothetical: the engine restores the previous session's layer list from
+                # `operations.cfg` (see CLAUDE.md), so an empty focus layer from yesterday
+                # would put `z_move` steps in today's unrelated job.
+                continue
             found.append(operation)
         return found
 
@@ -595,7 +601,9 @@ class CommandRunner:
         current = 0.0
         for step in steps:
             offset = getattr(step, "focus_z_mm", None)
-            if offset is None:
+            if offset is None or not list(getattr(step, "children", []) or []):
+                # Same reason as in `_focus_layers`: a layer with nothing in it does not
+                # get a height change of its own.
                 out.append(step)
                 continue
             wanted = float(offset)

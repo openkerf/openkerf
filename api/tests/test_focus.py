@@ -274,12 +274,18 @@ def test_the_preview_puts_the_marks_where_the_board_puts_them(grbl, tmp_path):
 
 
 class Layer:
-    """A plan step with just enough on it to test the build-up."""
+    """
+    A plan step with just enough on it to test the build-up.
 
-    def __init__(self, focus_z_mm=None, passes=1):
+    `children` is part of that minimum: a layer with nothing in it burns nothing, and
+    then its height means nothing either — see `_focus_layers`.
+    """
+
+    def __init__(self, focus_z_mm=None, passes=1, children=("a shape",)):
         self.focus_z_mm = focus_z_mm
         self.passes = passes
         self.passes_custom = False
+        self.children = list(children)
 
 
 def commands_of(steps):
@@ -369,3 +375,16 @@ def test_the_plan_of_a_real_board_carries_its_heights(grbl, tmp_path):
             "z_move 1.000mm",
             "z_move -1.000mm",
         ]
+
+
+def test_an_empty_layer_gets_no_height_of_its_own():
+    """
+    Not hypothetical: the engine restores the previous session's layer list out of
+    `operations.cfg`, keyed on the kernel name (see CLAUDE.md). Yesterday's empty focus
+    layers would otherwise put `z_move` steps in today's unrelated job.
+    """
+    steps = [Layer(2.0, children=())]
+
+    out = CommandRunner._with_focus_moves(steps, ConsoleOperation)
+
+    assert out == steps

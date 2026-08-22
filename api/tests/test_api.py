@@ -221,6 +221,11 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/tiling/burn",
         "/api/tiling/advance",
         "/api/tiling/cancel",
+        # Gap H2: print and cut. Pointing out the marks, driving to them and clearing the
+        # alignment all decide where a job burns, so all three are behind the gate.
+        "/api/printcut/marks",
+        "/api/printcut/measure",
+        "/api/printcut/clear",
     }
 
     methods = {

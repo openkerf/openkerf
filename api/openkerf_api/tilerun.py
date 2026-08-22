@@ -22,6 +22,7 @@ from .tiling import (
     TilingSettings,
     alignment,
     alignment_from_corner,
+    pose_matrix,
     best_split,
     clip_geometry,
     marker_spots,
@@ -156,14 +157,8 @@ class TileMutator:
         )
 
     def matrix(self):
-        """The alignment as a matrix in engine units."""
-        from meerk40t.svgelements import Matrix
-
-        u = self.units_per_mm
-        mx = Matrix()
-        mx.post_rotate(math.radians(self.alignment.angle_deg))
-        mx.post_translate(self.alignment.dx_mm * u, self.alignment.dy_mm * u)
-        return mx
+        """The alignment as a matrix in engine units. Shared with print and cut."""
+        return pose_matrix(self.alignment, self.units_per_mm)
 
     # ------------------------------------------------------------ bewerken
 
@@ -672,7 +667,7 @@ class TileRun:
                 self._alignment = alignment_from_corner(Point(0.0, 0.0), measured[0])
             else:
                 if len(measured) != 2:
-                    raise DesignError("Uitlijnen vraagt twee aangetikte marks.")
+                    raise DesignError("Aligning asks for two tapped marks.")
                 marks = self._marks_for(data["current"] - 1)
                 self._alignment = alignment(
                     marks[0], marks[1], measured[0], measured[1]
@@ -736,7 +731,7 @@ class TileRun:
         # matrix already does what the zero point would do, and it is measured rather than
         # set.
         with self.drawing.shifted(None):
-            self.runner.start_job(f"Tegel {index + 1}", mutators=[mutator])
+            self.runner.start_job(f"Tile {index + 1}", mutators=[mutator])
         data["burned"] = sorted(set(data.get("burned", [])) | {index})
         self._write(data)
         return {
