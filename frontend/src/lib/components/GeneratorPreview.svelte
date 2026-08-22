@@ -15,6 +15,8 @@
 		slits?: number;
 		rows?: number;
 		bridge_mm?: number;
+		/** The focus board: how far apart two marks are in height. */
+		step_mm?: number;
 	};
 </script>
 
@@ -41,7 +43,7 @@
 	 * invented shape would be a preview that looks like yours and is not.
 	 */
 
-	import { t } from '$lib/i18n/index.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	let {
 		kind,
 		values,
@@ -116,6 +118,13 @@
 			return t('genPreview.pieces', { n: preview.parts.length });
 		if (preview.what === 'hinge')
 			return t('genPreview.slits', { n: preview.slits ?? 0, rows: preview.rows ?? 0 });
+		if (preview.what === 'focus')
+			// The count alone would say "9 marks" and leave out the one number that
+			// decides whether the board can answer anything: how far apart they are.
+			return t('genPreview.marks', {
+				n: preview.parts.length,
+				step: i18n.mm(Number(preview.step_mm ?? 0))
+			});
 		if (preview.modules) return t('genPreview.modules', { n: preview.modules });
 		if (preview.bars) return t('genPreview.bars', { n: preview.bars });
 		return null;

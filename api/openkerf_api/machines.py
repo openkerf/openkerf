@@ -174,7 +174,7 @@ class MachineManager:
         for device in self.kernel.services("device"):
             if device.path == path:
                 return device
-        raise MachineError(f"Onbekende machine: {path}")
+        raise MachineError(f"Unknown machine: {path}")
 
     def create(self, info_key: str, label: str | None = None) -> dict:
         """
@@ -188,7 +188,7 @@ class MachineManager:
         """
         known = {entry["key"] for family in self.catalog() for entry in family["machines"]}
         if info_key not in known:
-            raise MachineError(f"Onbekend machinetype: {info_key}")
+            raise MachineError(f"Unknown kind of machine: {info_key}")
 
         before = {device.path for device in self.kernel.services("device")}
         self.runner.run(f"device add {info_key}")
@@ -350,7 +350,7 @@ class MachineManager:
         applied = {}
         for attr, value in values.items():
             if attr not in types:
-                raise MachineError(f"Onbekende setting: {attr}")
+                raise MachineError(f"Unknown setting: {attr}")
             try:
                 coerced = _coerce(value, types[attr])
             except (TypeError, ValueError) as e:

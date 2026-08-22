@@ -393,6 +393,7 @@ class Generators:
             "barcode": self._preview_barcode,
             "arctext": self._preview_arctext,
             "hinge": self._preview_hinge,
+            "focus": self._preview_focus,
         }.get(str(what))
         if maker is None:
             raise DesignError(f"No preview can be made of '{what}'.")
@@ -623,6 +624,50 @@ class Generators:
             "rows": info["rows"],
             "bridge_mm": info["bridge_mm"],
             "notes": info["notes"],
+        }
+
+    def _preview_focus(self, body: dict) -> dict:
+        """
+        The focus board: one mark per height, at the spacing it will be burned at.
+
+        The marks themselves come from the same `plan_focus` the real board uses, so the
+        picture cannot say one thing and the wood another. The numbers under the marks are
+        deliberately *not* in it: they are vector text in a typeface the engine picks, and a
+        preview that draws its own version of them would be showing something else. The note
+        says how many there are and how far apart, which is what you are actually setting.
+        """
+        from .focus import plan_focus
+
+        plan = plan_focus(
+            z_from_mm=body.get("z_from_mm", -2.0),
+            z_to_mm=body.get("z_to_mm", 2.0),
+            marks=body.get("marks", 9),
+            mark_mm=body.get("mark_mm", 15.0),
+            gap_mm=body.get("gap_mm", 8.0),
+            x_mm=body.get("x_mm", 10.0),
+            y_mm=body.get("y_mm", 10.0),
+            speed_mm_s=body.get("speed_mm_s"),
+            power_percent=body.get("power_percent"),
+            text=body.get("text", True) is not False,
+        )
+        length = plan["mark_mm"]
+        top = plan["origin_y_mm"]
+        # One shape, used by every mark: a straight line down. Same trick as the repeat
+        # preview — the outline is drawn once and placed as often as needed.
+        shape = f"M 0,{top:.4f} L 0,{top + length:.4f}"
+        parts = [
+            {"shape": 0, "x": mark["x_mm"], "y": 0.0, "rot": 0.0}
+            for mark in plan["positions"]
+        ]
+        return {
+            "shapes": [shape],
+            "boxes": [(0.0, top, 0.0, top + length)],
+            "parts": parts,
+            "marks": plan["marks"],
+            "step_mm": plan["step_mm"],
+            "z_from_mm": plan["z_from_mm"],
+            "z_to_mm": plan["z_to_mm"],
+            "notes": plan["notes"],
         }
 
     def _preview_arctext(self, body: dict) -> dict:

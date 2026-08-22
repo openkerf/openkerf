@@ -24,6 +24,9 @@ from .auth import extract_token, generate_token, is_loopback, token_matches
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
 from .document import Document
+from .duplicates import Duplicates
+from .focus import FocusBoard
+from .printcut import PrintCut
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
 from .images import Images
@@ -243,6 +246,9 @@ class ApiServer:
         )
         self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
         self.nesting = Nesting(kernel, self.editor)
+        self.duplicates = Duplicates(kernel, self.drawing)
+        self.focus = FocusBoard(kernel, self.drawing)
+        self.printcut = PrintCut(kernel, self.drawing, self.motion)
         self.fonts = Fonts(kernel)
         self.camera = Camera(kernel, self.commands)
         self.clipart = Clipart(kernel, self.drawing)
@@ -460,7 +466,7 @@ class ApiServer:
                     detail={"command": e.command, "output": e.output},
                 ) from e
 
-        def manage(action, *args):
+        def manage(action, *args, **kwargs):
             """
             Same for machine management, where failures are our own.
 
@@ -476,7 +482,7 @@ class ApiServer:
             translated sentence used to be impossible and the panel showed English.
             """
             try:
-                return action(*args)
+                return action(*args, **kwargs)
             except (MachineError, DesignError, LibraryError) as e:
                 code = getattr(e, "code", None)
                 headers = {"X-OpenKerf-Error": code} if code else None
@@ -594,10 +600,50 @@ class ApiServer:
                 # Gap J12: when a zero point is set, the work goes into the machine from
                 # there. The shift lives only while the plan is being built; after that the
                 # drawing is back where it was.
-                with self.drawing.shifted(self.motion.origin()):
-                    return self.commands.start_job(sheet.get("name"))
+                #
+                # Print and cut goes on top of that as a mutator, and only when the sheet
+                # was actually aligned — otherwise this is the same single line it always
+                # was. With an alignment the zero point stays out of it: the pose is
+                # measured on the material and says where the work goes, which is the same
+                # job the zero point does by hand. Doing both would shift twice, and you
+                # would only see that on the workpiece.
+                pose = self.printcut.mutators()
+                origin = None if pose else self.motion.origin()
+                with self.drawing.shifted(origin):
+                    return self.commands.start_job(sheet.get("name"), mutators=pose)
 
             return act(run)
+
+        @app.get("/api/printcut")
+        def printcut_state():
+            """Where the sheet lies, as far as we have been told (gap H2)."""
+            return self.printcut.state()
+
+        @app.post("/api/printcut/marks", dependencies=write)
+        def printcut_marks(body: dict):
+            """The two shapes in the drawing that are on the material as well."""
+            return manage(self.printcut.set_marks, body.get("ids") or [])
+
+        @app.post("/api/printcut/measure", dependencies=write)
+        def printcut_measure(body: dict):
+            """
+            Where the head is standing now: over mark 1 or mark 2.
+
+            A write route, and not because it changes the drawing — it does not. It reads
+            the machine and it decides where a job will burn, and that is the side of the
+            line the gate is drawn on.
+            """
+            return manage(
+                self.printcut.measure,
+                int(body.get("index", 0)),
+                body.get("x_mm"),
+                body.get("y_mm"),
+            )
+
+        @app.post("/api/printcut/clear", dependencies=write)
+        def printcut_clear():
+            """Forget the alignment. The next job burns where it was drawn again."""
+            return manage(self.printcut.clear)
 
         @app.post("/api/job/pause", dependencies=write)
         def pause_job():
@@ -925,6 +971,36 @@ class ApiServer:
         def update_line(element_id: str, body: dict):
             """Move one end; a line is two points, not a box."""
             return manage(lambda: self.drawing.update_line(element_id, **body))
+
+        @app.get("/api/design/duplicates")
+        def count_duplicates(ids: str | None = None):
+            """
+            How many shapes lie on top of each other, without touching anything.
+
+            Looking first, because removing them changes nothing you can see: the
+            drawing looks the same and only the count says what happened. So the
+            interface asks with the number in the question.
+            """
+            picked = [i for i in (ids or "").split(",") if i]
+            return manage(lambda: self.duplicates.find(picked or None))
+
+        @app.post("/api/design/duplicates/remove", dependencies=write)
+        def remove_duplicates(body: dict):
+            return manage(lambda: self.duplicates.remove(body.get("ids")))
+
+        @app.post("/api/design/lock", dependencies=write)
+        def lock_elements(body: dict):
+            """
+            Lock or unlock the selection: protected from moving, sizing and deleting.
+
+            One route for both directions, with the wanted state in the body, because
+            a selection can hold a mix of the two and "make these locked" is the
+            operation a user means — not "toggle each of them", which on a mixed
+            selection leaves you with the other half of the mess.
+            """
+            return manage(
+                lambda: self.drawing.set_locked(body.get("ids"), body.get("locked", True))
+            )
 
         @app.post("/api/design/bridges", dependencies=write)
         def set_bridges(body: dict):
@@ -1278,7 +1354,7 @@ class ApiServer:
         @app.post("/api/design/operations/{operation_id}/move", dependencies=write)
         def move_operation(operation_id: str, body: dict):
             """
-            Een layer verplaatsen in de brandvolgorde.
+            Moving a layer in the burn order.
 
             `direction` is one step (the buttons), `index` is a destination (dragging, gap
             L1).
@@ -1976,6 +2052,30 @@ class ApiServer:
                 body.get("width_mm", 60.0),
                 body.get("height_mm", 40.0),
                 body.get("from_selection", False) is True,
+            )
+
+        @app.post("/api/design/generate/focus", dependencies=write, status_code=201)
+        def generate_focus(body: dict):
+            """
+            A focus test: the same mark burned at a series of heights (gap H4).
+
+            Only on a machine whose Z the software can move; the refusal explains why,
+            because on a Ruida this would burn ten identical marks and call it an answer.
+            """
+            return manage(
+                self.focus.draw,
+                z_from_mm=body.get("z_from_mm", -2.0),
+                z_to_mm=body.get("z_to_mm", 2.0),
+                marks=body.get("marks", 9),
+                mark_mm=body.get("mark_mm", 15.0),
+                gap_mm=body.get("gap_mm", 8.0),
+                x_mm=body.get("x_mm", 10.0),
+                y_mm=body.get("y_mm", 10.0),
+                speed_mm_s=body.get("speed_mm_s"),
+                power_percent=body.get("power_percent"),
+                text=body.get("text", True) is not False,
+                label_speed_mm_s=body.get("label_speed_mm_s"),
+                label_power_percent=body.get("label_power_percent"),
             )
 
         @app.post("/api/design/generate/barcode", dependencies=write, status_code=201)

@@ -130,6 +130,78 @@ bed:
   engine is not answering." — the shape may well be editable; this one says the question
   itself did not get an answer, which is a different thing from a shape that has no points.
 
+## Locking a shape
+
+The shapes you must not touch are the ones you touch by accident: an alignment mark, an
+outline you drew round the material, a jig you re-use every week. One drag box over the bed
+takes them along with everything else, and you see it when the part comes out 3 mm off.
+
+**Lock** (⌘L, or the row in the right-click menu) stops that. A locked shape draws no corner
+handles and no rotation stem, and it does not move when you drag it. The panel on the right
+says so, with the way back in it:
+
+> **LOCKED** — Protected from moving, sizing and deleting. Its layer, colour and bridges can
+> still be changed.
+
+![A locked rectangle selected on the bed: the dashed selection frame with its measure
+underneath, no corner handles and no rotation stem, and in the panel on the right the heading
+LOCKED with the sentence about what a lock protects and an Unlock button.](images/31-lock.png)
+
+That line is the whole rule, and the second half is deliberate. A lock protects **geometry
+and existence** — moving, scaling, rotating, mirroring, aligning, combining, offsetting,
+corners, simplifying, effects, editing text, deleting, and cutting to the clipboard. It does
+not protect **what the shape is for**: you can still put it in another layer, give it a
+colour, a fill or bridges, and you can still copy or duplicate it. A locked alignment mark
+that could not be given a layer would be a lock that stops you working rather than one that
+stops an accident.
+
+Two more things worth knowing:
+
+- A selection with one locked shape in it refuses **as a whole**: "1 of the 2 shapes you
+  picked are locked, so nothing was moved." Doing it to the loose ones and saying so
+  afterwards would leave a half-moved drawing and no way back except undo.
+- The copy of a locked shape is not locked itself — otherwise every duplicate would have to
+  be unlocked before you could place it, which is the opposite of what duplicating is for.
+
+The flag is the engine's own, so a design locked here opens locked in MeerK40t's own
+interface as well.
+
+## Shapes lying on top of each other
+
+A duplicate is the one mistake in a drawing you cannot see. Two identical rectangles at the
+same place look like one rectangle, and the laser cuts the line twice: on thin material the
+second pass scorches the edge, on thick material it simply costs the time. They arrive by
+themselves — an SVG exported twice, a paste that landed back where it came from, an import on
+top of work that was already there, a generator run twice with the same numbers.
+
+**Remove duplicates…** looks for them. It is in the right-click menu on a shape (then it
+searches the selection) and in the right-click menu on the empty bed (then it searches the
+whole sheet). It opens **Shapes lying on top of each other** with the count first:
+
+> 3 shapes lie on top of another one, in 2 places. Removing them leaves the one that was
+> there first in each place.
+
+![The window "Shapes lying on top of each other": the sentence counting three shapes in two
+places, the line about a duplicate burning twice, and the buttons Cancel and Remove
+3.](images/32-duplicates.png)
+
+Looking and removing are two steps on purpose, because removing changes nothing you can see:
+the drawing looks identical afterwards, so the number in the question and the number in the
+note ("3 duplicates removed.") are the only evidence you get. With nothing to remove it says
+so — "No two shapes in this design lie on top of each other." — and offers no button.
+
+What counts as the same shape is what the laser cannot tell apart: the same kind of shape,
+and the same points rounded to a tenth of a millimetre. That tolerance is a decision —
+exports round differently, and two outlines 0.02 mm apart are one line as far as a 0.2 mm
+kerf is concerned. The layer and the colour are deliberately *not* part of the comparison:
+two identical outlines in two layers burn twice, which is exactly the mistake being looked
+for. Shapes without an outline to compare (an image, a group) are counted as not compared and
+the dialog says how many.
+
+The shape that was there first stays, which in a drawing means the one you had before the
+import laid a copy on top of it. A locked shape always stays, whatever its place in the
+order: a lock says "do not touch this", and that has to win over "the first one stays".
+
 ## Curves, points and pieces
 
 A laser cuts curves as happily as straight lines, and two tools put them on the bed without
@@ -303,8 +375,9 @@ top-left corner lands where you clicked"), **Select all** and **Clear selection*
 then, under the heading **View**, the four zoom states — **Fit everything in
 view**, **To the selection**, **The whole bed** and **100 % — actual size**; then
 two switches, **Snap to grid and shapes** and **Layer numbers next to the
-shapes**; and at the bottom **Put everything on the bed**, which pulls the whole
-design back inside the bed, "Including what lies off screen and cannot be
+shapes**; then **Remove duplicates…**, which searches the whole sheet (see [Shapes lying on
+top of each other](#shapes-lying-on-top-of-each-other)); and at the bottom **Put
+everything on the bed**, which pulls the whole design back inside the bed, "Including what lies off screen and cannot be
 clicked". That last one is the only way to reach a shape you have dragged out of
 sight and can no longer click.
 

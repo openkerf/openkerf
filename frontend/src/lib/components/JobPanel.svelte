@@ -34,7 +34,8 @@
 		onFrame,
 		onCutPath,
 		colorFor,
-		profile = null
+		profile = null,
+		selectedIds = []
 	}: {
 		device: Device | null;
 		tiling: TilingStore;
@@ -55,6 +56,8 @@
 		onCutPath?: () => void;
 		colorFor?: (operationId: string | null) => string;
 		profile?: { has_z: number; has_autofocus: number } | null;
+		/** What is picked on the canvas; print and cut takes its two marks from there. */
+		selectedIds?: string[];
 	} = $props();
 
 	let spooler = $derived(device?.spooler ?? null);
@@ -71,7 +74,7 @@
 </script>
 
 <TileRun {tiling} />
-<JobControls {control} {device} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} />
+<JobControls {control} {device} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->

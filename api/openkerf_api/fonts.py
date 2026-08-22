@@ -96,7 +96,7 @@ class Fonts:
             if not path.is_file():
                 raise DesignError("That font is no longer there.")
             return path
-        raise DesignError("Onbekend lettertype.")
+        raise DesignError("Unknown typeface.")
 
     # ---------------------------------------------------------- importeren
 

@@ -111,6 +111,11 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # else becomes a path, and that is one-way.
         "/api/design/corners",
         "/api/design/split",
+        # Locking a shape: the engine's own `lock` flag, so a write on the tree.
+        "/api/design/lock",
+        # Shapes lying on top of each other. Looking is a GET; removing takes ids in
+        # the body and deletes, so it is a write like any other delete.
+        "/api/design/duplicates/remove",
         "/api/design/fill",
         "/api/design/single-layer",
         "/api/design/operations/prune",
@@ -191,6 +196,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/generate/barcode",
         # Gap G1: the field of slits that makes sheet material bend.
         "/api/design/generate/hinge",
+        # Gap H4: a focus test. Draws a board and its heights ride along in the plan as
+        # `z_move` steps, so it writes on the tree like any other generator.
+        "/api/design/generate/focus",
         "/api/presetariat/import",
         "/api/library/testgrids",
         "/api/library/testgrids/{grid_id}/photo",
@@ -204,7 +212,7 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # goes — both behind the gate.
         "/api/machines/import/upload",
         "/api/machines/import",
-        # Rekent alleen; zie READ_ONLY_POSTS in test_write_actions.py.
+        # Calculates only; see READ_ONLY_POSTS in test_write_actions.py.
         "/api/library/testgrids/preview",
         # Tile series: the board is bigger than the bed, so start/align/burn/advance/cancel
         # write the series out and drive the spooler.
@@ -213,6 +221,11 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/tiling/burn",
         "/api/tiling/advance",
         "/api/tiling/cancel",
+        # Gap H2: print and cut. Pointing out the marks, driving to them and clearing the
+        # alignment all decide where a job burns, so all three are behind the gate.
+        "/api/printcut/marks",
+        "/api/printcut/measure",
+        "/api/printcut/clear",
     }
 
     methods = {

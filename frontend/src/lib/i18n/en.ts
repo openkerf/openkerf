@@ -231,6 +231,39 @@ export const en = {
 	'action.path': 'Edit path',
 	'action.offset': 'Offset…',
 	'action.simplify': 'Simplify',
+	// Locking: the shapes you must not touch are the ones you touch by accident.
+	'action.duplicates': 'Remove duplicates…',
+	'duplicates.title': 'Shapes lying on top of each other',
+	'duplicates.none': 'No two shapes in this design lie on top of each other.',
+	'duplicates.found': {
+		one: 'One shape lies on top of another. Removing it leaves the one that was there first.',
+		other: '{n} shapes lie on top of another one, all in the same place. Removing them leaves the one that was there first.'
+	},
+	'duplicates.foundSpread': '{n} shapes lie on top of another one, in {stacks} places. Removing them leaves the one that was there first in each place.',
+	'duplicates.why': 'A duplicate is invisible and it burns twice: the same line again, which scorches the edge on thin material and simply costs the time on thick.',
+	'duplicates.skipped': {
+		one: 'One shape was not compared, because it has no outline to compare (an image or a group).',
+		other: '{n} shapes were not compared, because they have no outline to compare (images and groups).'
+	},
+	'duplicates.remove': 'Remove {n}',
+	'notice.duplicates.removed': {
+		one: '1 duplicate removed.',
+		other: '{n} duplicates removed.'
+	},
+	'action.lock': 'Lock',
+	'action.unlock': 'Unlock',
+	'reason.locked': 'This shape is locked',
+	'reason.someLocked': '{n} of the shapes you picked are locked',
+	'notice.lock.locked': {
+		one: '1 shape locked — it cannot be moved, sized or deleted until you unlock it.',
+		other: '{n} shapes locked — they cannot be moved, sized or deleted until you unlock them.'
+	},
+	'notice.lock.unlocked': {
+		one: '1 shape unlocked.',
+		other: '{n} shapes unlocked.'
+	},
+	'panel.locked': 'Locked',
+	'panel.locked.body': 'Protected from moving, sizing and deleting. Its layer, colour and bridges can still be changed.',
 	'action.nest': 'Nest',
 	'action.split': 'Split into separate shapes',
 	'action.splitInto': 'Split into {n} shapes',
@@ -475,6 +508,25 @@ export const en = {
 	'job.checklist.workpiece': 'Workpiece is clamped and flat',
 	'job.jog.down': 'Move down',
 	'job.jog.right': 'Move right',
+	'job.printcut': 'Print and cut',
+	'job.printcut.off': 'Off. The work burns where you drew it. Pick the two marks that are on your material as well — printed crosses, drilled holes, an engraved corner — and point them out here.',
+	'job.printcut.needsTwo': 'Select exactly two shapes on the canvas first',
+	'job.printcut.use': 'Use the two selected shapes',
+	'job.printcut.useTitle': 'Take these two shapes as the marks that are on the material',
+	'job.printcut.driveTo': {
+		one: 'One of the two marks has been measured. Drive the head over the other one and press the button.',
+		other: 'Drive the head over a mark and press the button for it. Both are needed: with one point there is no angle.'
+	},
+	'job.printcut.capture': 'The head is on mark {n}',
+	'job.printcut.again': 'Mark {n} again',
+	'job.printcut.captureTitle': 'Take {x}, {y} mm as the place of mark {n}',
+	'job.printcut.pose': 'mark 1 has moved that far, and the sheet lies {angle}° out',
+	'job.printcut.instead': 'The job goes onto the sheet as measured. The zero point stays out of it while this is on: both at once would shift the work twice.',
+	'job.printcut.clear': 'Forget the alignment',
+	'job.printcut.clearTitle': 'The next job burns where it was drawn again',
+	'job.printcut.lapsed.marks': 'The alignment has lapsed: one of the two marks is no longer in the drawing. Point two marks out again.',
+	'job.printcut.lapsed.machine': 'The alignment has lapsed: it was measured on another machine, and those coordinates mean nothing on this bed.',
+	'job.noPosition.printcut': 'The machine does not say where its head is, so there is nothing to take',
 	'job.workOrigin': 'Zero point of the work',
 	'job.jog.up': 'Move up',
 	'job.jog.left': 'Move left',
@@ -1206,6 +1258,7 @@ export const en = {
 	'gen.tab.barcode': 'Barcode',
 	'gen.tab.arctext': 'Arc text',
 	'gen.tab.hinge': 'Living hinge',
+	'gen.tab.focus': 'Focus test',
 	'gen.cannotDraw': 'The engine cannot draw this.',
 	'gen.incomplete': 'Not complete yet: fill in the empty fields.',
 	'gen.needsSelection': 'Select what should be repeated first.',
@@ -1264,6 +1317,18 @@ export const en = {
 	'gen.hinge.left': 'Left',
 	'gen.hinge.top': 'Top',
 	'gen.hinge.go': 'Make the hinge{tail}',
+	'gen.focus.lead':
+		'The same short line burned at a series of heights, so you can see where this lens actually focuses. Burn the board, look for the thinnest and darkest mark, and set the head at the height written under it.',
+	'gen.focus.from': 'Sweep start',
+	'gen.focus.to': 'Sweep end',
+	'gen.focus.marks': 'Marks',
+	'gen.focus.mark': 'Mark length',
+	'gen.focus.gap': 'Space between marks',
+	'gen.focus.text': 'Burn the height under every mark',
+	'gen.focus.direction': 'The numbers are offsets from the height the head is at when the job starts: a plus drops the head, a minus raises it. Afterwards it goes back to where it began.',
+	'gen.focus.step': '{step} between two marks, over a sweep of {span}.',
+	'gen.focus.go': 'Make the board{tail}',
+	'genPreview.marks': '{n} marks, {step} apart in height.',
 	'genPreview.slits': '{n} slits in {rows} rows',
 
 	// ── Edit notices ──────────────────────────────────────────────────────────────

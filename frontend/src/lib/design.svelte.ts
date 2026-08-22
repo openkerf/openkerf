@@ -61,6 +61,8 @@ export type DesignElement = {
 	type: string;
 	label: string;
 	hidden: boolean;
+	/** Locked in the engine's own node flag: no moving, sizing or deleting. */
+	locked?: boolean;
 	stroke: string | null;
 	fill: string | null;
 	bounds: [number, number, number, number] | null;

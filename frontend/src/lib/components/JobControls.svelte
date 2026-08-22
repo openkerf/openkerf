@@ -36,7 +36,8 @@
 		onFrame,
 		onCutPath,
 		colorFor,
-		profile = null
+		profile = null,
+		selectedIds = []
 	}: {
 		control: Controller;
 		device: Device | null;
@@ -59,6 +60,10 @@
 		colorFor?: (operationId: string | null) => string;
 		/** What this machine profile says it can do; decides what appears. */
 		profile?: { has_z: number; has_autofocus: number } | null;
+		/** What is selected on the canvas. Print and cut takes its two marks from
+		 *  there: pointing them out is a thing you do on the drawing, so it would be
+		 *  wrong to invent a second way of picking shapes inside this panel. */
+		selectedIds?: string[];
 	} = $props();
 
 	// Gap J9: one source for "where does this action live". See screen.svelte.ts.
@@ -73,6 +78,11 @@
 	// A running job is the reason starting is not allowed; that has to be in the
 	// tooltip, because a grey button without a reason is a riddle.
 	let taken = $derived(running || paused);
+	let cut = $derived(control.printcut);
+	// The marks that are actually usable: the API drops a mark whose shape was deleted
+	// to `drawn: null`, and offering "drive to mark 2" for a shape that is gone would be
+	// a button that can only fail.
+	let cutMarks = $derived((cut?.marks ?? []).filter((mark) => mark.drawn !== null));
 	let tokenDraft = $state('');
 	let step = $state(10);
 	type Warning = { code: string; text: string; weight?: number };
@@ -377,6 +387,9 @@
 		void device?.path;
 		ophalenPosities();
 		control.loadOrigin();
+		// Print and cut lives on the machine as well, and a pose measured on another
+		// bed means nothing here.
+		control.loadPrintCut();
 		// The rotary too: it is bolted into *this* bed, so switching machine switches
 		// the answer to "is homing safe".
 		rotary.load(true);
@@ -1091,6 +1104,83 @@
 								onclick={() => control.clearOrigin()}
 							>
 								{t('job.clearZero')}
+							</button>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
+			<!-- Print and cut (gap H2). The same family as the zero point above and
+			     deliberately right under it: both answer "where does the work go", and
+			     they are mutually exclusive — with a measured pose the zero point stays
+			     out of it, because doing both shifts twice.
+
+			     The marks come from the canvas selection: pointing out two shapes is
+			     something you do on the drawing, and a second shape picker inside this
+			     panel would be a second way to do one thing. -->
+			{#if control.capabilities?.motion?.move}
+				<div class="origin" class:gezet={cut?.aligned === true}>
+					<span class="rot-label">{t('job.printcut')}</span>
+					{#if cut?.aligned}
+						<p class="originPoint">
+							<span class="mono"
+								>{size(cut.offset_mm?.x_mm ?? 0)},&#8239;{size(cut.offset_mm?.y_mm ?? 0)} mm</span
+							>
+							— {t('job.printcut.pose', {
+								angle: i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100)
+							})}
+						</p>
+						<p class="hint">{t('job.printcut.instead')}</p>
+					{:else if cut?.lapsed === 'gone'}
+						<p class="hint">{t('job.printcut.lapsed.marks')}</p>
+					{:else if cut?.lapsed === 'machine'}
+						<p class="hint">{t('job.printcut.lapsed.machine')}</p>
+					{:else if cutMarks.length === 2}
+						<p class="hint">
+							{t('job.printcut.driveTo', {
+								n: cut?.marks.filter((m) => m.measured).length ?? 0
+							})}
+						</p>
+					{:else}
+						<p class="hint">{t('job.printcut.off')}</p>
+					{/if}
+					<div class="puntrij">
+						{#if cutMarks.length === 2}
+							{#each cutMarks as mark, index (mark.id)}
+								<button
+									class="rot"
+									disabled={movingOff || currentMm === null}
+									title={currentMm === null
+										? t('job.noPosition.printcut')
+										: t('job.printcut.captureTitle', {
+												n: index + 1,
+												x: size(currentMm[0]),
+												y: size(currentMm[1])
+											})}
+									onclick={() => control.measurePrintCut(index)}
+								>
+									{mark.measured
+										? t('job.printcut.again', { n: index + 1 })
+										: t('job.printcut.capture', { n: index + 1 })}
+								</button>
+							{/each}
+							<button
+								class="rot"
+								title={t('job.printcut.clearTitle')}
+								onclick={() => control.clearPrintCut()}
+							>
+								{t('job.printcut.clear')}
+							</button>
+						{:else}
+							<button
+								class="rot"
+								disabled={selectedIds.length !== 2}
+								title={selectedIds.length === 2
+									? t('job.printcut.useTitle')
+									: t('job.printcut.needsTwo')}
+								onclick={() => control.setPrintCutMarks(selectedIds)}
+							>
+								{t('job.printcut.use')}
 							</button>
 						{/if}
 					</div>

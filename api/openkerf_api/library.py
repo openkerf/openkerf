@@ -532,7 +532,7 @@ class Library:
             raise LibraryError(f"Unknown operation: {operation or '(empty)'}")
         source = str(fields.get("source") or "handmatig")
         if source not in SOURCES:
-            raise LibraryError(f"Onbekende source: {source}")
+            raise LibraryError(f"Unknown source: {source}")
 
         speed = _number(fields.get("speed_mm_s"), "speed_mm_s", positive=True)
         power = _number(fields.get("power_percent"), "power_percent", positive=True)

@@ -340,6 +340,19 @@
 	let space = $state(false);
 	let head = $derived(device?.position.mm ?? null);
 	let selection = $derived(design.selectedSize);
+	/**
+	 * Is everything in the selection locked?
+	 *
+	 * A locked shape keeps its outline — you must be able to see what you selected —
+	 * but loses its handles and its drag surface. Leaving them there would let you
+	 * drag a shape the API then refuses: the movement on screen and the refusal in the
+	 * panel disagree for as long as it takes to let go, and the user believes the
+	 * screen.
+	 */
+	let selectionLocked = $derived(
+		design.selectedIds.length > 0 &&
+			design.selectedIds.every((id) => design.elements.find((e) => e.id === id)?.locked)
+	);
 
 	// ── Progress on the canvas (gap J3) ───────────────────────────────────────
 	//
@@ -2309,7 +2322,7 @@
 							     that should put a node on the line landed on this rectangle
 							     instead, so adding a node did nothing at all. Moving a shape is
 							     the arrow's job, one tool to the left. -->
-							{#if canEdit && tool !== 'nodes'}
+							{#if canEdit && tool !== 'nodes' && !selectionLocked}
 								<!-- Keyboard equivalent: the arrow keys move the
 								     selectie (0,1 mm, met shift 1 mm). -->
 								<rect
@@ -2335,7 +2348,7 @@
 									onpointerup={endDrag}
 								/>
 							{/if}
-							{#if canEdit && center}
+							{#if canEdit && center && !selectionLocked}
 							<!-- Rotation handle: a stem above the frame, as a corner handle is for
 							     resizing. Shift snaps to 15 degrees. -->
 							<line
@@ -2369,7 +2382,7 @@
 						{/if}
 						<!-- On a line the end points are the handles; corner handles of an
 						     imaginary frame would lie on top of them. -->
-						{#each selectedLine ? [] : [[frameBox.x, frameBox.y], [frameBox.x + frameBox.width, frameBox.y], [frameBox.x, frameBox.y + frameBox.height], [frameBox.x + frameBox.width, frameBox.y + frameBox.height]] as [hx, hy], corner (corner)}
+						{#each selectedLine || selectionLocked ? [] : [[frameBox.x, frameBox.y], [frameBox.x + frameBox.width, frameBox.y], [frameBox.x, frameBox.y + frameBox.height], [frameBox.x + frameBox.width, frameBox.y + frameBox.height]] as [hx, hy], corner (corner)}
 								<rect
 									class="handle"
 									x={hx - handleR}

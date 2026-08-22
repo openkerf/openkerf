@@ -34,6 +34,7 @@ OpenKerf writes the one that matches the keyboard you are on.
 | ⌘A / Ctrl+A | Select all | `selectAll` |
 | Esc | Clear selection | `clearSelection` |
 | Alt+click | Walk down a pile of overlapping shapes, one click deeper each time | — |
+| ⌘L / Ctrl+L | Lock the selection, or unlock it when it is already locked | `lock` |
 
 ### Arranging
 
@@ -212,6 +213,7 @@ Under "Edit path" (`path`).
 | Split into separate shapes | Break one path into its loose pieces. When it can, the row counts them: "Split into 4 shapes". | `path-split` |
 | Hatch | Fill the shape with lines to burn | `path-hatch` |
 | Wobble | Give the line a wobble as it burns | `path-wobble` |
+| Remove duplicates… | Looks for shapes lying on top of each other and says how many there are before anything goes | `path-duplicates` |
 
 ### The shape itself
 
@@ -226,6 +228,8 @@ Under "Edit path" (`path`).
 | Crop | Only on an image: then drag a frame over the image | `crop` |
 | Undo crop | Only on an image you cropped: the whole picture back | `uncrop` |
 | Vectorise | Only on an image: turns the image into paths | `vectorise` |
+| Lock | Protects the shape from moving, sizing and deleting (⌘L) | `lock` |
+| Unlock | The same row on a locked shape: it can be dragged again | `lock` |
 
 ### Where it belongs
 
@@ -260,6 +264,7 @@ This menu is about the view and the whole design, not about one shape.
 | Layer numbers next to the shapes | On or off; the small numbers beside each shape | `layerNumbers` |
 | Put everything on the bed | Pulls the whole design back inside the bed, "Including what lies off screen and cannot be clicked" | `rescue` |
 | Show cut path | Opens the **Cut path** window: in what order the machine burns, where it travels without burning, and how the time builds up (⌥P) | `cut-path` |
+| Remove duplicates… | The same operation as in the shape menu, over the whole bed: opens **Shapes lying on top of each other** with the count in it | `canvas-duplicates` |
 
 ## Right-click on a node
 

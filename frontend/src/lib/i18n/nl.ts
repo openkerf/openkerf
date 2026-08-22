@@ -226,6 +226,39 @@ export const nl: Catalogue = {
 	'action.path': 'Pad bewerken',
 	'action.offset': 'Offset…',
 	'action.simplify': 'Vereenvoudigen',
+	'action.duplicates': 'Duplicaten opruimen…',
+	'duplicates.title': 'Vormen die op elkaar liggen',
+	'duplicates.none': 'Er liggen in dit ontwerp geen twee vormen op elkaar.',
+	'duplicates.found': {
+		one: 'Eén vorm ligt op een andere. Weghalen laat degene staan die er het eerst lag.',
+		other: '{n} vormen liggen op een andere, allemaal op dezelfde plek. Weghalen laat degene staan die er het eerst lag.'
+	},
+	'duplicates.foundSpread':
+		'{n} vormen liggen op een andere, op {stacks} plekken. Weghalen laat op elke plek degene staan die er het eerst lag.',
+	'duplicates.why': 'Een duplicaat is onzichtbaar en brandt twee keer: dezelfde lijn opnieuw, wat op dun materiaal de rand verbrandt en op dik gewoon de tijd kost.',
+	'duplicates.skipped': {
+		one: 'Eén vorm is niet vergeleken, omdat hij geen omtrek heeft om te vergelijken (een afbeelding of een groep).',
+		other: '{n} vormen zijn niet vergeleken, omdat ze geen omtrek hebben om te vergelijken (afbeeldingen en groepen).'
+	},
+	'duplicates.remove': '{n} weghalen',
+	'notice.duplicates.removed': {
+		one: '1 duplicaat weggehaald.',
+		other: '{n} duplicaten weggehaald.'
+	},
+	'action.lock': 'Vergrendelen',
+	'action.unlock': 'Ontgrendelen',
+	'reason.locked': 'Deze vorm is vergrendeld',
+	'reason.someLocked': '{n} van de vormen die je koos zijn vergrendeld',
+	'notice.lock.locked': {
+		one: '1 vorm vergrendeld — hij kan niet verplaatst, geschaald of verwijderd worden tot je hem ontgrendelt.',
+		other: '{n} vormen vergrendeld — ze kunnen niet verplaatst, geschaald of verwijderd worden tot je ze ontgrendelt.'
+	},
+	'notice.lock.unlocked': {
+		one: '1 vorm ontgrendeld.',
+		other: '{n} vormen ontgrendeld.'
+	},
+	'panel.locked': 'Vergrendeld',
+	'panel.locked.body': 'Beschermd tegen verplaatsen, schalen en verwijderen. De laag, de kleur en de bruggen kun je nog wel wijzigen.',
 	'action.nest': 'Nesten',
 	'action.split': 'Splitsen in losse vormen',
 	'action.splitInto': 'Splitsen in {n} vormen',
@@ -465,6 +498,25 @@ export const nl: Catalogue = {
 	'job.checklist.workpiece': 'Werkstuk ligt vast en vlak',
 	'job.jog.down': 'Naar beneden',
 	'job.jog.right': 'Naar rechts',
+	'job.printcut': 'Print en snij',
+	'job.printcut.off': 'Uit. Het werk brandt waar je het getekend hebt. Kies de twee merktekens die ook op je materiaal staan — gedrukte kruisjes, geboorde gaatjes, een gegraveerde hoek — en wijs ze hier aan.',
+	'job.printcut.needsTwo': 'Selecteer eerst precies twee vormen op het bed',
+	'job.printcut.use': 'Gebruik de twee geselecteerde vormen',
+	'job.printcut.useTitle': 'Neem deze twee vormen als de merktekens die op het materiaal staan',
+	'job.printcut.driveTo': {
+		one: 'Eén van de twee merktekens is gemeten. Zet de kop boven het andere en druk op de knop.',
+		other: 'Zet de kop boven een merkteken en druk op de knop ervan. Beide zijn nodig: met één punt is er geen hoek.'
+	},
+	'job.printcut.capture': 'De kop staat op merkteken {n}',
+	'job.printcut.again': 'Merkteken {n} opnieuw',
+	'job.printcut.captureTitle': 'Neem {x}, {y} mm als de plek van merkteken {n}',
+	'job.printcut.pose': 'zover is merkteken 1 verschoven, en de plaat ligt {angle}° scheef',
+	'job.printcut.instead': 'De job gaat op de plaat zoals gemeten. Het nulpunt blijft hier buiten zolang dit aanstaat: samen zouden ze het werk twee keer verschuiven.',
+	'job.printcut.clear': 'Vergeet de uitlijning',
+	'job.printcut.clearTitle': 'De volgende job brandt weer waar hij getekend is',
+	'job.printcut.lapsed.marks': 'De uitlijning is verlopen: één van de twee merktekens staat niet meer in de tekening. Wijs opnieuw twee merktekens aan.',
+	'job.printcut.lapsed.machine': 'De uitlijning is verlopen: hij is op een andere machine gemeten, en die coördinaten zeggen niets op dit bed.',
+	'job.noPosition.printcut': 'De machine zegt niet waar zijn kop staat, dus er is niets over te nemen',
 	'job.workOrigin': 'Nulpunt van het werk',
 	'job.jog.up': 'Naar boven',
 	'job.jog.left': 'Naar links',
@@ -1194,6 +1246,7 @@ export const nl: Catalogue = {
 	'gen.tab.barcode': 'Streepjescode',
 	'gen.tab.arctext': 'Boogtekst',
 	'gen.tab.hinge': 'Levend scharnier',
+	'gen.tab.focus': 'Focustest',
 	'gen.cannotDraw': 'Dit kan de engine niet tekenen.',
 	'gen.incomplete': 'Nog niet compleet: vul de lege velden in.',
 	'gen.needsSelection': 'Selecteer eerst wat er herhaald moet worden.',
@@ -1252,6 +1305,18 @@ export const nl: Catalogue = {
 	'gen.hinge.left': 'Links',
 	'gen.hinge.top': 'Boven',
 	'gen.hinge.go': 'Maak het scharnier{tail}',
+	'gen.focus.lead':
+		'Hetzelfde korte lijntje gebrand op een reeks hoogtes, zodat je ziet waar deze lens werkelijk scherp staat. Brand het bord, zoek het dunste en donkerste streepje, en zet de kop op de hoogte die eronder staat.',
+	'gen.focus.from': 'Begin bereik',
+	'gen.focus.to': 'Einde bereik',
+	'gen.focus.marks': 'Streepjes',
+	'gen.focus.mark': 'Lengte streepje',
+	'gen.focus.gap': 'Ruimte tussen de streepjes',
+	'gen.focus.text': 'Brand de hoogte onder elk streepje',
+	'gen.focus.direction': 'De getallen zijn afwijkingen van de hoogte waarop de kop staat als de job begint: een plus laat de kop zakken, een min laat hem stijgen. Daarna gaat hij terug naar waar hij begon.',
+	'gen.focus.step': '{step} tussen twee streepjes, over een bereik van {span}.',
+	'gen.focus.go': 'Maak het bord{tail}',
+	'genPreview.marks': '{n} streepjes, {step} hoogteverschil ertussen.',
 	'genPreview.slits': '{n} sleuven in {rows} rijen',
 
 	// ── Edit notices ──────────────────────────────────────────────────────────────

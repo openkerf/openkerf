@@ -23,6 +23,26 @@ export type Position = { name: string; x_mm: number; y_mm: number };
  * does not belong to this round, so rather than threading a prop through three layers
  * it lives here — one value, two readers.
  */
+/** What the machine knows about where the printed sheet lies. */
+export type PrintCut = {
+	marks: {
+		id: string;
+		drawn: { x_mm: number; y_mm: number } | null;
+		measured: { x_mm: number; y_mm: number } | null;
+	}[];
+	/** How far the first mark moved: what you can check with a ruler. */
+	offset_mm: { x_mm: number; y_mm: number } | null;
+	aligned: boolean;
+	angle_deg: number | null;
+	dx_mm: number | null;
+	dy_mm: number | null;
+	distance_error_mm: number | null;
+	tolerance_mm: number;
+	max_angle_deg: number;
+	/** Why an alignment that was there is gone: the marks, or the machine. */
+	lapsed: string | null;
+};
+
 class Nulpunt {
 	point = $state<{ x_mm: number; y_mm: number } | null>(null);
 	#loaded = false;
@@ -293,8 +313,7 @@ export class Controller {
 	//
 	// LightBurn's Set Origin: you put a zero point on your workpiece and the work
 	// burns from there. That is the operation when aligning on an offcut — the board
-	// lies where it lies, and you do not want to drag your drawing to
-	// erop te krijgen.
+	// lies where it lies, and you do not want to drag your whole drawing onto it.
 	//
 	// The zero point lives on the machine (like the saved positions), not in the
 	// browser: it belongs to *this* laser with *this* piece of wood in it.
@@ -319,6 +338,49 @@ export class Controller {
 		const uitslag = await this.#json('/api/machine/origin', 'clear-origin', 'DELETE');
 		if (uitslag) origin.point = null;
 		return uitslag;
+	}
+
+	// ------------------------------------------- print and cut (gap H2)
+	//
+	// The other half of the same idea as the zero point: there the material lies
+	// somewhere and you say where, here the material already carries marks and the
+	// machine measures where. Two points, so it can turn as well as shift — which the
+	// zero point cannot, and which is exactly what a printed sheet needs.
+	//
+	// Lives on the machine too, and only in its memory: a pose is a statement about
+	// where a sheet lies *now*.
+
+	printcut = $state<PrintCut | null>(null);
+
+	async loadPrintCut() {
+		try {
+			const response = await fetch('/api/printcut');
+			if (response.ok) this.printcut = await response.json();
+		} catch {
+			// Same silence as the zero point: the connection card already says it.
+		}
+	}
+
+	/** The two shapes in the drawing that are on the material as well. */
+	async setPrintCutMarks(ids: string[]) {
+		const result = await this.#json('/api/printcut/marks', 'printcut-marks', 'POST', { ids });
+		if (result) this.printcut = result;
+		return result;
+	}
+
+	/** Where the head is standing now: over mark 1 (0) or mark 2 (1). */
+	async measurePrintCut(index: number) {
+		const result = await this.#json('/api/printcut/measure', 'printcut-measure', 'POST', {
+			index
+		});
+		if (result) this.printcut = result;
+		return result;
+	}
+
+	async clearPrintCut() {
+		const result = await this.#json('/api/printcut/clear', 'printcut-clear', 'POST');
+		if (result) this.printcut = result;
+		return result;
 	}
 
 	// ---------------------------- adjusting during a running job (gap J11)

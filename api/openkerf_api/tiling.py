@@ -340,6 +340,22 @@ def alignment(
     )
 
 
+def pose_matrix(pose: Alignment, units_per_mm: float):
+    """
+    An alignment as a matrix in engine units.
+
+    One place, because two things now put a measured pose on the plan: a tile of a
+    series and a print-and-cut job. The order matters and is easy to get wrong — turn
+    about the origin first, then shift — so it is written once.
+    """
+    from meerk40t.svgelements import Matrix
+
+    matrix = Matrix()
+    matrix.post_rotate(math.radians(pose.angle_deg))
+    matrix.post_translate(pose.dx_mm * units_per_mm, pose.dy_mm * units_per_mm)
+    return matrix
+
+
 def alignment_from_corner(plate_corner: Point, measured: Point) -> Alignment:
     """
     Tile 1: there are no marks yet, so aligning happens on the board itself.
