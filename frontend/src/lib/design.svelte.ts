@@ -100,6 +100,23 @@ export type DesignElement = {
 	 * the matrix gives nothing away.
 	 */
 	pose: { angle_deg: number; mirrored: boolean } | null;
+	/**
+	 * The bridges (tabs) that keep this part in the sheet: small gaps left in the
+	 * cut. `null` for a shape whose type carries none — a line, a point, text, an
+	 * image — so the panel can say that instead of offering a field that does
+	 * nothing.
+	 *
+	 * `path` is the contour with the gaps already cut out, in the same native units
+	 * as `path`, and empty when there are no bridges. The canvas strokes that one
+	 * and keeps `path` for the fill and the hit zone.
+	 */
+	bridges: {
+		count: number;
+		length_mm: number;
+		positions_percent: number[];
+		path_length_mm: number;
+		path: string;
+	} | null;
 	operation_id: string | null;
 	operation_ids: string[];
 };
@@ -328,6 +345,101 @@ export function outsideFrame(
 		box.x + box.width > frame.width + slack ||
 		box.y + box.height > frame.height + slack
 	);
+}
+
+/** The bridges the selection has, as one answer. */
+export type BridgeSummary = {
+	/** Does at least one shape in the selection carry bridges at all? */
+	carries: boolean;
+	/** Does every shape that can carry them have them? */
+	has: boolean;
+	/** Do the shapes disagree about their bridges? Then a number typed here levels them. */
+	mixed: boolean;
+	/** The count and length they agree on, or the default when there are none yet. */
+	count: number;
+	lengthMm: number;
+	/**
+	 * The shortest contour in the selection, in millimetres.
+	 *
+	 * The shortest one, because that is the shape the API's bound trips over first: the
+	 * bridges may take at most half the path, and refusing is per shape.
+	 */
+	shortestMm: number;
+	/** How many shapes in the selection can carry bridges at all. */
+	shapes: number;
+	/**
+	 * Do those shapes all have the same contour length?
+	 *
+	 * The read-back sentence binds on the shortest contour, which is right — that is the
+	 * one the API's bound trips over first — but it may then only claim to be about *one*
+	 * shape when they are all the same size. Measured with a 200 mm rectangle and a
+	 * 125.7 mm circle selected: the sentence said "a contour of 125.7 mm" and the
+	 * rectangle went unmentioned.
+	 */
+	sameContour: boolean;
+	/**
+	 * The explicit places, when there is one shape and its bridges are not simply spread
+	 * evenly. `null` for the even spread — then the count says everything and a list of
+	 * percentages would only be noise.
+	 */
+	places: number[] | null;
+};
+
+/** The default bridge, the same one the API and the menu row use: four of two millimetres. */
+export const DEFAULT_BRIDGES = { count: 4, lengthMm: 2 };
+
+export function bridgeSummary(elements: DesignElement[]): BridgeSummary {
+	const carriers = elements.map((element) => element.bridges).filter(Boolean) as NonNullable<
+		DesignElement['bridges']
+	>[];
+	if (!carriers.length)
+		return {
+			carries: false,
+			has: false,
+			mixed: false,
+			count: DEFAULT_BRIDGES.count,
+			lengthMm: DEFAULT_BRIDGES.lengthMm,
+			shortestMm: 0,
+			shapes: 0,
+			sameContour: true,
+			places: null
+		};
+
+	const withBridges = carriers.filter((b) => b.count > 0);
+	const first = withBridges[0] ?? null;
+	const mixed =
+		withBridges.length !== carriers.length ||
+		carriers.some(
+			(b) => b.count !== carriers[0].count || Math.abs(b.length_mm - carriers[0].length_mm) > 0.001
+		);
+
+	// One shape, and its places are not the even spread the count would give: then the
+	// panel shows the places, because the count alone would be a lie about where they are.
+	let places: number[] | null = null;
+	if (carriers.length === 1 && first) {
+		const even = Array.from(
+			{ length: first.count },
+			(_, i) => Math.round(((i + 0.5) * 100) / first.count * 10000) / 10000
+		);
+		const same = first.positions_percent.every((v, i) => Math.abs(v - even[i]) < 0.01);
+		if (!same) places = first.positions_percent;
+	}
+
+	return {
+		carries: true,
+		has: withBridges.length > 0,
+		mixed,
+		count: first?.count ?? DEFAULT_BRIDGES.count,
+		lengthMm: first?.length_mm ?? carriers[0].length_mm ?? DEFAULT_BRIDGES.lengthMm,
+		shortestMm: Math.min(...carriers.map((b) => b.path_length_mm)),
+		shapes: carriers.length,
+		// A tenth of a millimetre, because that is the precision the sentence prints in: two
+		// contours that round to the same number are the same contour to the reader.
+		sameContour: carriers.every(
+			(b) => Math.abs(b.path_length_mm - carriers[0].path_length_mm) < 0.05
+		),
+		places
+	};
 }
 
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);

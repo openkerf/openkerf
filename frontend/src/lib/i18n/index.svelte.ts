@@ -17,6 +17,7 @@ import {
 	bindLanguage,
 	dateTime,
 	detect,
+	list,
 	locale,
 	mm,
 	number,
@@ -81,6 +82,10 @@ class I18n {
 
 	number(value: number, decimals?: number): string {
 		return number(value, decimals);
+	}
+
+	list(parts: string[]): string {
+		return list(parts);
 	}
 
 	mm(value: number | null | undefined, decimals = 1): string {

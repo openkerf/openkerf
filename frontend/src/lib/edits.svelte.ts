@@ -238,6 +238,73 @@ export class EditController {
 		}
 	}
 
+	/**
+	 * The three other node edits, and the handle.
+	 *
+	 * All four hand back the JSON and not just `ok`, for the same reason `moveNode` does:
+	 * a rectangle becomes a path the moment one of its nodes is touched, and then it has a
+	 * new id. A caller that does not follow that id loses the selection in mid-work.
+	 */
+	addNode(id: string, where: { segmentIndex?: number; t?: number; xMm?: number; yMm?: number }) {
+		return this.#node(`/api/design/elements/${encodeURIComponent(id)}/nodes`, 'POST', {
+			segment_index: where.segmentIndex,
+			t: where.t,
+			x_mm: where.xMm,
+			y_mm: where.yMm
+		});
+	}
+
+	removeNode(id: string, index: number) {
+		return this.#node(
+			`/api/design/elements/${encodeURIComponent(id)}/nodes/${index}`,
+			'DELETE'
+		);
+	}
+
+	/** A segment's kind: a corner into a curve and back. */
+	setSegmentKind(id: string, index: number, kind: 'line' | 'quad' | 'cubic') {
+		return this.#node(
+			`/api/design/elements/${encodeURIComponent(id)}/segments/${index}/kind`,
+			'PATCH',
+			{ kind }
+		);
+	}
+
+	/** Dragging a curve's handle. `which` is 1 or 2; a quad and an arc only have a 1. */
+	moveControl(id: string, index: number, which: number, xMm: number, yMm: number) {
+		return this.#node(
+			`/api/design/elements/${encodeURIComponent(id)}/segments/${index}/control`,
+			'PATCH',
+			{ which, x_mm: xMm, y_mm: yMm }
+		);
+	}
+
+	async #node(
+		path: string,
+		method: string,
+		body?: Record<string, unknown>
+	): Promise<{ id: string; was?: string; index?: number } | null> {
+		this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch(path, {
+				method,
+				headers: this.#headers(),
+				body: body === undefined ? undefined : JSON.stringify(body)
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return null;
+			}
+			return await response.json();
+		} catch (e) {
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
+			return null;
+		} finally {
+			this.busy = false;
+		}
+	}
+
 	offset(ids: string[], distanceMm: number) {
 		return this.#post('/api/design/offset', { ids, distance_mm: distanceMm });
 	}
@@ -286,6 +353,24 @@ export class EditController {
 		created: boolean;
 	} | null> {
 		return this.#postJson('/api/design/single-layer', { ids, type: kind });
+	}
+
+	/**
+	 * Bridges (tabs) in a cut line, on the whole selection at once.
+	 *
+	 * Millimetres go in; the API turns them into the engine's own units. Either a
+	 * count — then the engine spreads them evenly and keeps doing so when the shape
+	 * is resized — or an explicit list of percentages along the path.
+	 */
+	async setBridges(
+		ids: string[],
+		fields: { count?: number; length_mm?: number; positions_percent?: number[] }
+	): Promise<{ bridged: number; skipped: number; count: number; length_mm: number } | null> {
+		return this.#postJson('/api/design/bridges', { ids, ...fields });
+	}
+
+	async clearBridges(ids: string[]): Promise<{ cleared: number; ids: string[] } | null> {
+		return this.#postJson('/api/design/bridges/clear', { ids });
 	}
 
 	/** Lege layers gone. */

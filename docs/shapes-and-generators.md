@@ -1,6 +1,6 @@
 # Shapes, text, images and generators
 
-The drawing tools on the left give you a rectangle, a circle, a line and a pen path. Everything else that puts geometry on the bed is on this page: text, images, clipart from public collections, and the seven generators that compute a shape out of a handful of numbers.
+The drawing tools on the left give you a rectangle, a circle, a line and a pen path with curves in it. Everything else that puts geometry on the bed is on this page: text, images, clipart from public collections, and the eight generators that compute a shape out of a handful of numbers.
 
 The second half covers what you do to geometry once it is there — combining, offsetting, splitting, rounding corners, filling, hatching and nesting. Those all live in the right-click menu on a shape, so they read as one set.
 
@@ -99,21 +99,21 @@ A second note warns about weight: a drawing built from more than 400 separate pa
 
 ## Generators
 
-**Generators** in the tool rail opens one window with seven tabs. Every tab is a small form on the left and, beside it, the shape that form makes.
+**Generators** in the tool rail opens one window with eight tabs. Every tab is a small form on the left and, beside it, the shape that form makes.
 
-![The Generators window over the canvas, on the Repeat tab. Seven tabs across the top: Repeat, Circle, Polygon, Box, QR code, Barcode, Arc text. The form holds Columns 4, Rows 3, Space X (mm) 5 and Space Y (mm) 5, with a teal button reading "Make 12 copies". To the right a preview panel shows a 4 by 3 grid of small squares with the word "space" marked between two of them, captioned "Sketch, not to scale".](images/18-generators.png)
+![The Generators window over the canvas, on the Repeat tab. Eight tabs across the top: Repeat, Circle, Polygon, Box, QR code, Barcode, Arc text, Living hinge. The form holds Columns 4, Rows 3, Space X (mm) 5 and Space Y (mm) 5, with a teal button reading "Make 12 copies — 175 × 100.0 mm". To the right a preview panel shows the selected rectangle repeated in a 4 by 3 grid, with "175 × 100.0 mm 12 pieces" under it and the warning "This falls outside the sheet."](images/18-generators.png)
 
 ### The preview
 
 The picture beside the form is not a drawing of the idea — it is the result. The engine runs the same calculation it will run for the real work and sends back the outlines in millimetres, so what you see is what gets burned, including where it lands on the sheet. It refreshes as you type, with a fifth of a second of rest so it is not recomputed per keystroke.
 
-Under the shape sits its size as `{width} × {height} mm`, and the count in the unit that fits the thing: pieces for a repeat, panels for a box, modules for a QR code, bars for a barcode. If anything sticks out past the sheet edge you get `This falls outside the sheet.` — on a laser that is not a detail.
+Under the shape sits its size as `{width} × {height} mm`, and the count in the unit that fits the thing: pieces for a repeat, panels for a box, modules for a QR code, bars for a barcode, slits and rows for a living hinge. If anything sticks out past the sheet edge you get `This falls outside the sheet.` — on a laser that is not a detail.
 
-Two things it deliberately does not do. It does not blank out while you are halfway through typing a number: the last valid shape stays up with the reason above it (`Not complete yet: fill in the empty fields.` and `Below is your last valid shape.`). And for **Repeat** and **Circle**, which need to know what they are repeating, it falls back to a sketch of the fields marked `Sketch, not to scale` rather than repeating an invented shape that looks like yours and is not.
+Two things it deliberately does not do. It does not blank out while you are halfway through typing a number: the last valid shape stays up with the reason above it (`Not complete yet: fill in the empty fields.` and `Below is your last valid shape.`). And for **Repeat** and **Circle**, which need to know what they are repeating, it falls back to a sketch of the fields marked `Sketch, not to scale` for as long as it does not have the shapes you picked, rather than repeating an invented shape that looks like yours and is not.
 
 Two other lines you will meet there: `Type something and it appears here` before you have typed anything, `Calculating…` while it is being worked out, and `The engine cannot draw this.` when the answer comes back empty.
 
-The primary button carries the outcome, so you can read what is coming before you commit: **Make 12 copies**, **Place around**, **Draw**, **Make panels** or **Place**, each followed by the size or the piece count.
+The primary button carries the outcome, so you can read what is coming before you commit: **Make 12 copies**, **Place around**, **Draw**, **Make panels**, **Make the hinge** or **Place**, each followed by the size or the piece count.
 
 ### Repeat
 
@@ -157,6 +157,28 @@ Text bent along a circle, for a round sign or a lid. Fields: **Text**, **Centre 
 
 One thing to know before you use it: the result is a path and no longer text. The tab says why — the engine would render the wording straight again at the next change and silently wipe the arc away. So set the words right first; afterwards you edit it as geometry.
 
+### Living hinge
+
+A field of slits that lets rigid sheet material bend. Cut enough short slits across a piece of plywood and the strips of material left between them twist instead of snapping, and the sheet rolls. The tab says which way: `A field of slits that lets rigid sheet material bend. The slits lie across, and a sheet bends around a line parallel to its slits, so this one curls from top to bottom. Turn the group a quarter afterwards and it bends the other way.` There is no direction field, because a rotation already exists.
+
+![The Generators window on the Living hinge tab: the Pattern chooser set to Staggered rows, Slit length 8 mm, Gap in a row 3 mm and Between rows 2 mm, the line about what stays behind between them, and a preview of a dense field of short slits captioned with its size and the count of slits and rows.](images/28-hinge.png)
+
+**Pattern** picks the slit shape: **Straight slits**, **Staggered rows** or **Wavy slits**. Staggered is the one to start with — every other row is shifted half a pitch, so the bridge in one row sits opposite a slit in the next and the sheet bends evenly instead of hinging on a few lines. Wavy slits put more cut length in the same span and bend more easily; the slit becomes two curves rather than a straight line.
+
+Then three numbers, and they are the whole design of a hinge:
+
+- **Slit length** — how long one slit is.
+- **Gap in a row** — the material between two slits in the same row.
+- **Between rows** — the distance from one row of slits to the next.
+
+Beside the fields stands what those two gaps mean in wood: `Between two slits in a row 3.0 mm of material stays behind, and between two rows 2.0 mm. That bridge is what twists, and what breaks.` It says no more than that on purpose. How thin a bridge may be depends on the material, the thickness and how far you want to bend it, and a generator that pretends to know that is guessing with your plywood.
+
+The area comes from one of two places. Tick **Fill the area of the selected shape** and the slits fill the box around what you have selected; the tick reads **Select a shape first to use its area** when there is nothing selected. Untick it and you get four fields instead — **Left**, **Top**, **Width** and **Height** — and the field is placed on the bed where you say.
+
+Rows are laid out from the middle of the area outwards, so no row lands exactly on the boundary: a slit on the edge weakens the edge and hinges nothing. Along the row the field is tiled from the left and then clipped to the area, and the half slits that leaves at the edge of a staggered row are meant to be there — without them the stagger stops at the edge.
+
+The result is one shape in a cut layer, named after the pattern it was made with, with every slit as a loose piece of it. It moves as one thing, and the laser cuts each slit once. The count under the preview reads `{n} slits in {rows} rows`; measured on a 60 × 40 mm area with a slit of 8 mm, a gap of 3 mm and 2 mm between rows: 120 slits in 20 rows for straight and staggered, 114 in 19 for wavy, which needs a little height for its crests.
+
 ### When it goes wrong
 
 The refusals come from the same calculation as the preview, so what you read while setting up is what you read if you press the button anyway.
@@ -169,6 +191,11 @@ The refusals come from the same calculation as the preview, so what you read whi
 - QR code without content, or too much of it: `This text is too long for a readable QR code.`
 - Arc text that would wrap onto itself: `This text is too long for this radius; it would run over itself. Choose a larger radius or a smaller letter.`
 - QR codes and barcodes lean on packages that can be missing from an installation. Then you get `QR codes need the segno package; install it beside the API.` or `Barcodes need the python-barcode package.`
+- Living hinge, a slit as long as the area is wide: `A slit of 60 mm is as long as the 60 mm area is wide: that cuts the piece in two instead of bending it. Shorten the slit.`
+- Living hinge, an area that has no room for two rows: `This area is 40 mm high; at 30 mm between rows that is not two rows of slits. Make the area taller or the rows closer together.` One row of slits is a row of slits, not a hinge.
+- Living hinge, more slits than the cut plan can carry: `This comes to about 80400 slits; above 4000 the cut plan takes longer than the burn. Choose a bigger gap or fewer rows.`
+- Living hinge with the area from a selection, but nothing selected: `Choose the shape whose area the slits have to fill first.` And if the clipping leaves nothing at all: `Nothing is left of this field inside the area.`
+- Not a refusal but a warning under the preview, because whether it is fatal depends on your material: a gap of 0.4 mm or less gets `The bridges between the slits are 0.3 mm wide, and a CO2 cut is 0.1 to 0.3 mm wide itself: they burn away and the field falls apart.` Slit remnants at the edge shorter than half a millimetre are dropped and counted in a second line — that short, a cut frees nothing.
 
 ## Working on the geometry: the path operations
 

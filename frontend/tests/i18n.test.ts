@@ -236,3 +236,46 @@ test('a refusal with a code is said in the reader’s language', async () => {
 	assert.equal(apiError(known, 'Choose at least two shapes to nest.'), nl['api.nest.needsTwo']);
 	bindLanguage(() => 'en');
 });
+
+test('a refusal may bring the number its sentence needs', async () => {
+	// For the number that is a constant of the engine layer, not a measurement: a code
+	// alone cannot carry it, so `MAX_COUNT` would have to be written down a second time
+	// here to say the sentence in Dutch. Measured before this: "More than 200 bridges in
+	// one contour is not a cut any more." in an otherwise fully Dutch panel.
+	const { apiError, bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const refusal = () =>
+		new Response(null, {
+			headers: {
+				'X-OpenKerf-Error': 'bridges.tooMany',
+				'X-OpenKerf-Error-Values': '{"max":200}'
+			}
+		});
+
+	assert.equal(apiError(refusal(), 'English.'), 'More than 200 bridges in one contour is not a cut any more.');
+	bindLanguage(() => 'nl');
+	assert.equal(apiError(refusal(), 'English.'), 'Meer dan 200 bruggen in één omtrek is geen snede meer.');
+	bindLanguage(() => 'en');
+
+	// Rubbish in the header leaves the placeholder visible rather than throwing: a broken
+	// header must not take the message down with it.
+	const broken = new Response(null, {
+		headers: { 'X-OpenKerf-Error': 'bridges.tooMany', 'X-OpenKerf-Error-Values': 'nope' }
+	});
+	assert.match(apiError(broken, 'English.'), /\{max\}/);
+});
+
+test('a list of numbers is not separated by the decimal mark', async () => {
+	// Measured in Dutch with three places on a contour: "Op 10, 33,5, 70 procent van de
+	// omtrek" — four numbers to read where there are three, because the list separator and
+	// the decimal mark are the same character.
+	const { list, number, bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const places = [10, 33.5, 70];
+
+	assert.equal(list(places.map((p) => number(p))), '10, 33.5 and 70');
+	bindLanguage(() => 'nl');
+	assert.equal(list(places.map((p) => number(p))), '10, 33,5 en 70');
+	bindLanguage(() => 'en');
+
+	assert.equal(list(['10']), '10');
+	assert.equal(list([]), '');
+});

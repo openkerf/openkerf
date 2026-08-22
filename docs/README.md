@@ -37,8 +37,8 @@ order or looked up when you need them.
 | Page | What is in it |
 | --- | --- |
 | [Getting started](getting-started.md) | The road from a fresh installation to the first burn: the machine wizard, the sheet and its material, getting a design on the bed, giving it a layer, the pre-flight, and what to do when the machine is not answering. |
-| [The bed](canvas.md) | The drawing area: the eight tools, why an outline is caught on its line and a filled shape on its face, walking down a pile of overlapping shapes, snapping, moving the view, and sheets. |
-| [Shapes, text, images and generators](shapes-and-generators.md) | Everything else that puts geometry on the bed — text, images, clipart, the seven generators — and the path operations that reshape it afterwards. |
+| [The bed](canvas.md) | The drawing area: the eight tools, drawing and editing curves, bridges that keep a cut part in the sheet, why an outline is caught on its line and a filled shape on its face, walking down a pile of overlapping shapes, snapping, moving the view, and sheets. |
+| [Shapes, text, images and generators](shapes-and-generators.md) | Everything else that puts geometry on the bed — text, images, clipart, the eight generators — and the path operations that reshape it afterwards. |
 | [Layers](layers.md) | What the machine does with a shape: the four kinds of layer, speed, power and passes, the colour strip, burn order, raster settings, drop per pass and air assist. |
 | [Burning](job.md) | The Job tab from top to bottom: the pre-flight, the two taps that start a job, progress and adjustment while it burns, the queue, jogging the head, connecting, and the phone screen. |
 | [Test grids](test-grid.md) | Burning a board of squares to find the settings for a material, photographing it, aligning the photo and turning the best square into a saved setting. |

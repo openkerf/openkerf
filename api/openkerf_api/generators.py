@@ -10,6 +10,8 @@ was chosen on what really saves a laser user work:
 - **Box with finger joints** — the only generator that really saves arithmetic: finger
   width, material thickness and kerf have to be right or the box does not fit.
 - **QR code** — engraving an address or a serial number without hunting for an image.
+- **Living hinge** — a field of slits that makes plywood bend. Drawing a hundred and
+  twenty slits by hand is not the point; getting the bridge between them right is.
 
 Not built: jewellery, key fob and card generators. Those make one specific product; the
 box makes a category.
@@ -312,6 +314,55 @@ class Generators:
             "modules": modules,
         }
 
+    # -------------------------------------------------------- living hinge
+
+    def hinge(
+        self,
+        ids=None,
+        pattern="staggered",
+        slit_mm=8.0,
+        gap_mm=3.0,
+        row_mm=2.0,
+        x_mm=0.0,
+        y_mm=0.0,
+        width_mm=60.0,
+        height_mm=40.0,
+        from_selection=False,
+    ) -> dict:
+        """
+        A field of slits that lets rigid sheet material bend.
+
+        The slits run horizontally, so the sheet bends around a horizontal line: the
+        material between two slits in a row twists, and that is the whole mechanism. Turn
+        the group a quarter and it bends the other way — that is why there is no direction
+        field here, a rotation already exists.
+
+        One path with every slit as its own open subpath, in a cut layer: so the field
+        moves as one thing and the laser cuts every slit once. `_add_polygon` cannot do
+        this — it closes every ring, and a closed slit is cut twice.
+
+        The arithmetic is in `_plan_hinge`, so that the preview gets the same slits and the
+        same refusals as the real work.
+        """
+        geometry, info = self._plan_hinge(
+            ids, pattern, slit_mm, gap_mm, row_mm,
+            x_mm, y_mm, width_mm, height_mm, from_selection,
+        )
+
+        with self.elements.undoscope("Living hinge"):
+            node = self._add_geometry(
+                geometry, f"Living hinge — {PATTERN_LABELS[info['pattern']]}"
+            )
+            self.elements.validate_ids()
+        self._refresh()
+        return {
+            "generator": "hinge",
+            "ids": [node.id] if node.id else [],
+            "pattern": info["pattern"],
+            "slits": info["slits"],
+            "rows": info["rows"],
+        }
+
     # ------------------------------------------------------------- the preview
 
     # How many copies we draw out before we keep it to one outline per copy. Five hundred
@@ -341,6 +392,7 @@ class Generators:
             "qrcode": self._preview_qrcode,
             "barcode": self._preview_barcode,
             "arctext": self._preview_arctext,
+            "hinge": self._preview_hinge,
         }.get(str(what))
         if maker is None:
             raise DesignError(f"No preview can be made of '{what}'.")
@@ -542,6 +594,37 @@ class Generators:
             "notes": [],
         }
 
+    def _preview_hinge(self, body: dict) -> dict:
+        """
+        The slit field, exactly as it lands on the bed.
+
+        One shape with every slit as a subpath — the same Geomstr the real work adds, only
+        not scaled to Tats. So this cannot drift apart from what burns.
+        """
+        geometry, info = self._plan_hinge(
+            body.get("ids"),
+            body.get("pattern") or "staggered",
+            body.get("slit_mm", 8.0),
+            body.get("gap_mm", 3.0),
+            body.get("row_mm", 2.0),
+            body.get("x_mm", 0.0),
+            body.get("y_mm", 0.0),
+            body.get("width_mm", 60.0),
+            body.get("height_mm", 40.0),
+            body.get("from_selection", False) is True,
+        )
+        x0, y0, x1, y1 = geometry.bbox()
+        return {
+            "shapes": [geometry.as_path().d()],
+            "boxes": [(x0, y0, x1, y1)],
+            "parts": [{"shape": 0, "x": 0.0, "y": 0.0, "rot": 0.0}],
+            "pattern": info["pattern"],
+            "slits": info["slits"],
+            "rows": info["rows"],
+            "bridge_mm": info["bridge_mm"],
+            "notes": info["notes"],
+        }
+
     def _preview_arctext(self, body: dict) -> dict:
         """
         The arc text in the typeface it will be burned in.
@@ -665,6 +748,168 @@ class Generators:
     # and then it is worse than no preview. The same rule for the error messages — anybody
     # who reads in the preview why it cannot be done does not suddenly get a different
     # story later.
+
+    # The crest of a wavy slit, as a share of the distance between two rows. At 0.4 the
+    # crest stays 0.2 x that distance away from the next row's line, so no two rows run
+    # into each other; measured on 60 x 40 mm with rows 2 mm apart, the field spans
+    # y 1.2 .. 38.8 and one wavy slit is 4.39 mm of cut for 8 mm of span.
+    WAVE_CREST = 0.4
+    # A clipped remnant shorter than this is a dot, not a slit: about two kerfs of a CO2
+    # cut (0.1 to 0.3 mm each) laid end to end. Measured on a staggered field of 60 mm with
+    # a pitch of 11 mm: the remnants at the edge are 2.5 mm and stay, and only what a
+    # rounding leaves over goes.
+    MIN_SLIT_MM = 0.5
+    # Above this the cut plan is the problem and not the hinge: `plan copy` copies the
+    # cutcode per pass and the optimisation after it scales quadratically in the number of
+    # pieces (see the upstream list in CLAUDE.md).
+    MAX_SLITS = 4000
+
+    def _plan_hinge(
+        self, ids, pattern, slit_mm, gap_mm, row_mm,
+        x_mm, y_mm, width_mm, height_mm, from_selection,
+    ):
+        """
+        The slit field as a Geomstr in millimetres, plus what to say about it.
+
+        Rows are laid out from the middle of the area outwards, so no row lands exactly on
+        the boundary — a slit on the edge weakens the edge and hinges nothing. Along the row
+        the slits are tiled from the left edge and the field is **clipped** to the area, and
+        that is on purpose: the outer slit of a staggered row is supposed to be half a slit,
+        otherwise the stagger stops at the edge.
+
+        Clipping goes through `tiling.clip_geometry` and not through the engine's own `Clip`:
+        that one asks for its midpoints in one go and walks into the infinite recursion of
+        `Geomstr._arc_position` (upstream #3262), and drops segments besides (#3263). Ours
+        splits on the parameter, so a wavy slit stays two quads instead of becoming a
+        polyline.
+        """
+        from meerk40t.core.geomstr import Geomstr
+
+        from .tiling import Rect, clip_geometry
+
+        if pattern not in PATTERN_LABELS:
+            raise DesignError(
+                f"Unknown pattern: {pattern}. Choose from "
+                f"{', '.join(PATTERN_LABELS)}."
+            )
+        slit = _positive(slit_mm, "slit_mm")
+        gap = _positive(gap_mm, "gap_mm")
+        row = _positive(row_mm, "row_mm")
+
+        if from_selection:
+            x0, y0, width, height = self._selection_area(ids)
+        else:
+            x0 = _finite(x_mm, "x_mm")
+            y0 = _finite(y_mm, "y_mm")
+            width = _positive(width_mm, "width_mm")
+            height = _positive(height_mm, "height_mm")
+
+        if slit >= width:
+            raise DesignError(
+                f"A slit of {slit:.4g} mm is as long as the {width:.4g} mm area is wide: "
+                "that cuts the piece in two instead of bending it. Shorten the slit."
+            )
+        crest = row * self.WAVE_CREST if pattern == "wavy" else 0.0
+        usable = height - 2 * crest
+        rows = int(usable // row) if usable > 0 else 0
+        if rows < 2:
+            raise DesignError(
+                f"This area is {height:.4g} mm high; at {row:.4g} mm between rows that is "
+                "not two rows of slits. Make the area taller or the rows closer together."
+            )
+
+        pitch = slit + gap
+        columns = int(math.ceil(width / pitch)) + 1
+        if rows * columns > self.MAX_SLITS:
+            raise DesignError(
+                f"This comes to about {rows * columns} slits; above {self.MAX_SLITS} the "
+                "cut plan takes longer than the burn. Choose a bigger gap or fewer rows."
+            )
+        top = y0 + crest + (usable - (rows - 1) * row) / 2
+
+        field = Geomstr()
+        for index in range(rows):
+            y = top + index * row
+            # Half a pitch to the left on every other row: that is what makes a staggered
+            # field bend evenly — the bridge in one row sits opposite a slit in the next.
+            shift = -pitch / 2 if (pattern == "staggered" and index % 2) else 0.0
+            for column in range(columns):
+                left = x0 + shift + column * pitch
+                if left > x0 + width or left + slit < x0:
+                    continue
+                if pattern == "wavy":
+                    # Two quads, as MeerK40t's own wave cell does (fill/patterns.py:352). A
+                    # quad reaches half its control offset, so the control sits at twice the
+                    # crest. Not an arc: `Geomstr.split` has no arc branch and would lose
+                    # the piece at the edge (#3263).
+                    middle = left + slit / 2
+                    field.quad(
+                        complex(left, y),
+                        complex(left + slit / 4, y - 2 * crest),
+                        complex(middle, y),
+                    )
+                    field.quad(
+                        complex(middle, y),
+                        complex(left + 3 * slit / 4, y + 2 * crest),
+                        complex(left + slit, y),
+                    )
+                else:
+                    field.line(complex(left, y), complex(left + slit, y))
+
+        clipped = clip_geometry(field, Rect(x0, y0, x0 + width, y0 + height))
+        kept, dropped = Geomstr(), 0
+        for index in range(clipped.index):
+            if float(clipped.length(index)) < self.MIN_SLIT_MM:
+                dropped += 1
+                continue
+            kept.append_segment(*clipped.segments[index])
+        if kept.index == 0:
+            raise DesignError(
+                "Nothing is left of this field inside the area.", code="gen.hingeEmpty"
+            )
+
+        notes = []
+        if gap <= 0.4:
+            notes.append(
+                f"The bridges between the slits are {gap:.4g} mm wide, and a CO2 cut is "
+                "0.1 to 0.3 mm wide itself: they burn away and the field falls apart."
+            )
+        if dropped:
+            notes.append(
+                f"{dropped} slit remnants shorter than {self.MIN_SLIT_MM:.4g} mm at the "
+                "edge were left out; that short, a cut frees nothing."
+            )
+        return kept, {
+            "pattern": pattern,
+            "slits": _subpaths(kept),
+            "rows": rows,
+            "bridge_mm": gap,
+            "notes": notes,
+        }
+
+    def _selection_area(self, ids):
+        """The box around the selection in millimetres: x, y, width, height."""
+        from meerk40t.core.node.node import Node
+        from meerk40t.core.units import UNITS_PER_MM
+
+        nodes = []
+        for element_id in ids or []:
+            node = self.elements.find_node(element_id)
+            if node is None:
+                raise DesignError(f"Element {element_id} does not exist (any more).")
+            nodes.append(node)
+        if not nodes:
+            # Its own code and not `gen.needsSelection`: that one translates as "choose what
+            # should be repeated first", and nothing is being repeated here.
+            raise DesignError(
+                "Choose the shape whose area the slits have to fill first.",
+                code="gen.hingeNeedsSelection",
+            )
+        bounds = Node.union_bounds(nodes)
+        if not bounds:
+            raise DesignError("The selection has no size.")
+        x0, y0, x1, y1 = (value / UNITS_PER_MM for value in bounds)
+        return x0, y0, x1 - x0, y1 - y0
 
     def _plan_barcode(self, text, kind, x_mm, y_mm, width_mm, height_mm):
         content = str(text or "").strip()
@@ -902,6 +1147,30 @@ class Generators:
             self._file_under(node, intent)
         return node
 
+    def _add_geometry(self, geometry, label: str, intent: str = "cut"):
+        """
+        A finished Geomstr in millimetres straight in as one element.
+
+        The open-path sibling of `_add_polygon`: that one closes every ring
+        (`corners[1:] + corners[:1]`), and a slit is a line. Closed, the laser would run
+        every slit twice — once there and once back over the same cut.
+        """
+        from meerk40t.core.geomstr import Geomstr
+        from meerk40t.core.units import UNITS_PER_MM
+
+        scaled = Geomstr(geometry)
+        scaled.uscale(UNITS_PER_MM)
+        node = self.elements.elem_branch.add(
+            geometry=scaled,
+            type="elem path",
+            stroke=self.elements.default_stroke,
+            stroke_width=self.elements.default_strokewidth,
+            label=label,
+        )
+        if intent:
+            self._file_under(node, intent)
+        return node
+
     def _file_under(self, node, intent: str):
         """The shape in one layer of the requested kind, and in nothing else."""
         label = {"cut": "Cut", "engrave": "Engrave"}.get(intent, "Cut")
@@ -971,6 +1240,34 @@ class Generators:
             marker = getattr(node, "set_dirty_bounds", None)
             if marker is not None:
                 marker()
+
+
+# The three slit shapes of the living hinge, and what each one does. The key is data (it
+# travels in the request and out again); the value is the English name the window shows —
+# "staggered rows" and not "pattern 2", because that is the difference you have to be able
+# to see without burning it first.
+PATTERN_LABELS = {
+    "straight": "straight slits",
+    "staggered": "staggered rows",
+    "wavy": "wavy slits",
+}
+
+
+def _subpaths(geometry) -> int:
+    """
+    How many loose pieces are in this geometry.
+
+    Not the same as the number of segments: a wavy slit is two quads. A piece begins where
+    a segment does not carry on from the previous one, and `clip_geometry` keeps the order,
+    so the two halves of one wave stay next to each other.
+    """
+    count, previous = 0, None
+    for index in range(geometry.index):
+        start = complex(geometry.segments[index][0])
+        if previous is None or abs(start - previous) > 1e-9:
+            count += 1
+        previous = complex(geometry.segments[index][4])
+    return count
 
 
 def _as_d(groups) -> tuple[str, tuple[float, float, float, float]]:

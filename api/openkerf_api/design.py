@@ -106,6 +106,48 @@ def _xy(point):
         return float(point.x), float(point.y)
 
 
+def _bridges_of(node, geometry) -> dict | None:
+    """
+    The bridges (tabs) that keep this part attached to the sheet.
+
+    `None` for a shape whose type does not carry them, so the panel can say that rather
+    than offer a field that would do nothing. For a shape that does, the block is always
+    there — with `count: 0` when there are none — because the panel needs the path length to
+    judge a length the user types, and `path_length_mm` is the only place it comes from.
+
+    `path` is the contour with the gaps cut out of it, and only when there are bridges: that
+    is what the canvas strokes. See `bridges.py` for why it is not `final_geometry()`.
+    """
+    from .bridges import TAB_TYPES, bridged_geometry, parse_positions, path_length
+
+    if getattr(node, "type", None) not in TAB_TYPES or geometry is None:
+        return None
+    from meerk40t.core.units import UNITS_PER_MM
+
+    try:
+        length = float(getattr(node, "mktablength", 0) or 0)
+    except (TypeError, ValueError):
+        # A project saved before our SVG parameters were registered hands the length back
+        # as a string; then it is not a length yet and there is nothing to show.
+        length = 0.0
+    positions = parse_positions(getattr(node, "mktabpositions", ""))
+    # `float()` around the length: `Geomstr.length` gives a numpy scalar, and that is not
+    # JSON serialisable — it took the whole snapshot down with it, not just this block.
+    total = float(path_length(geometry))
+    block = {
+        "count": len(positions),
+        "length_mm": length / UNITS_PER_MM,
+        "positions_percent": [round(float(value), 4) for value in positions],
+        "path_length_mm": total / UNITS_PER_MM,
+        "path": "",
+    }
+    if positions and length > 0:
+        carved = bridged_geometry(geometry, positions, length)
+        if carved is not None:
+            block["path"] = carved.as_path().d()
+    return block
+
+
 def _line_of(node) -> dict | None:
     """
     A line's two end points.
@@ -401,7 +443,11 @@ class DesignReader:
         return cell
 
     def _element(self, node, element_id) -> dict | None:
-        path = self._path(node)
+        # One `as_geometry()` for the whole element: the path data and the bridges both come
+        # out of it, and asking twice doubles the only measurable cost in the snapshot
+        # (0.019 ms per shape, so 4 ms over 200 shapes on a poll).
+        geometry = self._geometry(node)
+        path = self._path(geometry)
         image = _image_of(node)
         # Images have no path; without this exception they fell out of the snapshot and were
         # invisible on the canvas.
@@ -418,6 +464,7 @@ class DesignReader:
             "line": _line_of(node),
             "effect": _effect_of(node),
             "pose": _pose_of(node),
+            "bridges": _bridges_of(node, geometry),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
             "bounds": [_plain(v) for v in (node.bounds or [])] or None,
@@ -429,16 +476,24 @@ class DesignReader:
             "path": path or "",
         }
 
-    def _path(self, node) -> str | None:
-        """SVG path data in native units, or None for nodes without outlines."""
+    def _geometry(self, node):
+        """The ideal outline, or None for nodes without one."""
         if not hasattr(node, "as_geometry"):
             return None
         try:
-            geometry = node.as_geometry()
-            data = geometry.as_path().d()
+            return node.as_geometry()
         except Exception:
             # Images and text may have no vector form; they are skipped rather
             # than breaking the whole snapshot.
+            return None
+
+    def _path(self, geometry) -> str | None:
+        """SVG path data in native units."""
+        if geometry is None:
+            return None
+        try:
+            data = geometry.as_path().d()
+        except Exception:
             return None
         return data or None
 

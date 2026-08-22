@@ -610,6 +610,122 @@ if (wanted('23')) {
 	});
 }
 
+/**
+ * One rectangle in a cut layer with four bridges in its outline.
+ *
+ * 60 × 40 mm and four gaps of 2 mm, because that is the case the page quotes: a
+ * contour of 200 mm with 192 mm left to cut. At the zoom the bed opens on, a 2 mm
+ * gap in a 1.2 px line is not visible, so the shot zooms to the selection first —
+ * the whole point of the picture is that you can see the gaps.
+ *
+ * A cut layer, and not whichever layer the colour happens to land the shape in:
+ * outside a cut layer the panel adds a line saying the gaps change nothing yet,
+ * and that line is true but it is not what this picture is about.
+ */
+if (wanted('26')) {
+	await clear();
+	const layer = await api('POST', '/api/design/operations', {
+		type: 'cut',
+		label: 'Outline',
+		speed: 12,
+		power_percent: 65
+	});
+	const made = await api('POST', '/api/design/elements', {
+		type: 'rect',
+		x_mm: 40,
+		y_mm: 40,
+		width_mm: 60,
+		height_mm: 40
+	});
+	const id = made?.ids?.[0];
+	if (layer?.id && id) await api('POST', '/api/design/assign', { ids: [id], operation_id: layer.id });
+	await api('POST', '/api/design/bridges', { ids: [id], count: 4, length_mm: 2 });
+	await scene('26-bridges.png', `/?tab=design&select=${id ?? ''}`, {}, async (page) => {
+		// "2" is the app's own key for zooming to the selection. The keyboard listener
+		// sits on the window, so nothing has to be clicked first — and clicking the bed
+		// would clear the selection this picture needs.
+		await page.keyboard.press('2');
+		await page.waitForTimeout(1200);
+	});
+}
+
+/**
+ * The node tool with a node in hand and its menu open.
+ *
+ * The curve is put there through the API, in the same three steps a user takes: add
+ * a node to a rectangle, make the piece after it a curve, pull the handle out. So
+ * the shape in the picture has a real curve with a real handle on it, and the menu
+ * beside it shows the row reading "Make this piece straight" — the state you are in
+ * once you have bent something, which is more informative than the offer.
+ */
+if (wanted('27')) {
+	await clear();
+	const made = await api('POST', '/api/design/elements', {
+		type: 'rect',
+		x_mm: 40,
+		y_mm: 50,
+		width_mm: 80,
+		height_mm: 50
+	});
+	let id = made?.ids?.[0];
+	const added = await api('POST', `/api/design/elements/${encodeURIComponent(id)}/nodes`, {
+		segment_index: 0
+	});
+	id = added?.id ?? id;
+	const curved = await fetch(
+		BASE + `/api/design/elements/${encodeURIComponent(id)}/segments/0/kind`,
+		{
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ kind: 'quad' })
+		}
+	).then((r) => r.json().catch(() => null));
+	id = curved?.id ?? id;
+	// The control of a fresh quad sits on the chord, so the curve is still straight
+	// until it is pulled off it. 20 mm above the top edge is a bend you can see at
+	// the size the handbook prints.
+	await fetch(BASE + `/api/design/elements/${encodeURIComponent(id)}/segments/0/control`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ which: 1, x_mm: 60, y_mm: 30 })
+	});
+	await scene('27-nodes.png', `/?tab=design&select=${id ?? ''}`, {}, async (page) => {
+		await page.keyboard.press('2');
+		await page.waitForTimeout(900);
+		await page.locator(`${RAIL}[title^="Nodes"]`).click();
+		// The knots come from the server, so they are not on screen the instant the
+		// tool is picked.
+		await page.waitForSelector('.knot', { timeout: 10000 });
+		// Node 1 is the start of segment 0, which is the piece that was bent — so it
+		// is the node whose handle is on screen and whose menu says "straight".
+		const grip = page.locator('[aria-label="Drag node 1"]').first();
+		await grip.click();
+		await page.waitForTimeout(400);
+		await grip.click({ button: 'right' });
+		await page.waitForSelector('.menu', { timeout: 5000 });
+		await page.waitForTimeout(400);
+	});
+}
+
+/**
+ * The living hinge tab, with its preview computed.
+ *
+ * The numbers are the ones the page quotes — 8 mm slits, 3 mm apart, 2 mm between
+ * rows — so the count under the preview reads the 120 slits in 20 rows that the
+ * text names. Those are the tab's own defaults, so nothing is typed here; the shot
+ * only has to open the tab and wait for the server to answer.
+ */
+if (wanted('28')) {
+	await clear();
+	await scene('28-hinge.png', '/?tab=design', {}, async (page) => {
+		await page.locator(TOOL.generators).click();
+		await page.waitForSelector(DIALOG, { timeout: 10000 });
+		await page.locator(`${DIALOG} .tabs button.tab`, { hasText: 'Living hinge' }).click();
+		// The preview waits 250 ms after the last change and then asks the server.
+		await page.waitForTimeout(2500);
+	});
+}
+
 // ──────────────────────────────────────────────────────────────── leaving tidy
 //
 // Back to the drawing of section 3. A run ends the way it began, so opening the app

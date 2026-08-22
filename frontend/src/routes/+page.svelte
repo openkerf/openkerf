@@ -1,10 +1,17 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { jobBusy, jobPhase, machineState } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
-	import { DesignStore, elementName, isDesignSignal, type DesignElement } from '$lib/design.svelte';
+	import {
+		DEFAULT_BRIDGES,
+		DesignStore,
+		bridgeSummary,
+		elementName,
+		isDesignSignal,
+		type DesignElement
+	} from '$lib/design.svelte';
 	import { EditController } from '$lib/edits.svelte';
 	import { saveFile } from '$lib/saving';
 	import type { Tool } from '$components/ToolRail.svelte';
@@ -41,12 +48,17 @@
 		KEYS,
 		comboOf,
 		canvasMenu,
+		keyLabel,
+		nodeMenu,
 		objectMenu,
 		historyActions,
 		arrangeActions,
 		alignActions,
+		type Action,
 		type Context as ActionContext,
 		type Handlers,
+		type NodeContext,
+		type NodeHandlers,
 		type Menu as MenuList
 	} from '$lib/actions';
 	import { i18n, t } from '$lib/i18n/index.svelte';
@@ -470,6 +482,55 @@
 			(outcome.skipped ? ` ${t('notice.fill.skipped', { n: outcome.skipped })}` : '');
 	}
 
+	/**
+	 * Bridges (tabs) on the selection: small gaps left in the cut.
+	 *
+	 * Without them a part drops into the machine the moment the contour closes, and a
+	 * dropped part shifts. The engine cuts the gaps itself once the two attributes are on
+	 * the shape, so this only sets them — and says how many shapes got them, because a
+	 * selection can hold a line, and a line carries none.
+	 */
+	async function setBridges(fields: { count?: number; length_mm?: number }) {
+		if (!canEdit || !hasSelection) return;
+		bridgeNotice = null;
+		const outcome = await edits.setBridges(design.selectedIds, fields);
+		if (!outcome) {
+			// The refusal goes beside the field that caused it. `edits.error` also lands at
+			// the top of the panel, and measured with the selection card open that sits 700 px
+			// above the bridge fields — off screen, so you type a length that cannot work and
+			// nothing at all seems to happen.
+			bridgeNotice = edits.error;
+			// Nothing changed on the shapes, so the panel's summary is the same object and its
+			// fields would keep the refused numbers — a read-back of a state that is not
+			// there. This tells the panel to fetch them from the shapes again.
+			bridgeRevision += 1;
+			return;
+		}
+		await design.load();
+		bridgeNotice = t(
+			outcome.skipped ? 'notice.bridges.doneSkipped' : 'notice.bridges.done',
+			{
+				n: outcome.bridged,
+				count: outcome.count,
+				length: i18n.number(outcome.length_mm),
+				skipped: outcome.skipped
+			}
+		);
+	}
+
+	async function clearBridges() {
+		if (!canEdit || !hasSelection) return;
+		bridgeNotice = null;
+		const outcome = await edits.clearBridges(design.selectedIds);
+		if (!outcome) {
+			bridgeNotice = edits.error;
+			bridgeRevision += 1;
+			return;
+		}
+		await design.load();
+		bridgeNotice = t('notice.bridges.cleared', { n: outcome.cleared });
+	}
+
 	async function toALayer(kind: 'cut' | 'engrave' | 'raster') {
 		if (!canEdit || !hasSelection) return;
 		layoutNotice = null;
@@ -753,8 +814,30 @@
 		step: (factor: number) => void;
 		snap: () => void;
 		layerNumbers: () => void;
-		state: () => { snap: boolean; layerNumbers: boolean };
+		node: (verb: 'add' | 'remove' | 'curve' | 'corner') => void;
+		penBack: () => void;
+		state: () => {
+			snap: boolean;
+			layerNumbers: boolean;
+			penDrawing: boolean;
+			nodeIndex: number;
+			nodeCount: number;
+			nodeClosed: boolean;
+			nodeKind: 'line' | 'quad' | 'cubic' | 'arc' | null;
+		};
 	} | null>(null);
+
+	/** What the last bridge action has to report — beside the field, not at the top. */
+	let bridgeNotice = $state<string | null>(null);
+	/** Bumped on a refusal, so the panel's two fields go back to what the shapes carry. */
+	let bridgeRevision = $state(0);
+	// The note belongs to the shapes it was about. Without this the refusal from a rectangle
+	// stayed on screen under a line that had just been selected — measured, and it read as if
+	// the line had been refused for the wrong reason.
+	$effect(() => {
+		design.selectedIds;
+		untrack(() => (bridgeNotice = null));
+	});
 
 	let cornersOpen = $state(false);
 	let offsetOpen = $state(false);
@@ -788,6 +871,16 @@
 		split: splitSelection,
 		fill: (on) => setFill(on),
 		corners: () => (cornersOpen = true),
+		// `DEFAULT_BRIDGES` and not the two numbers again: the panel's switch offers the same
+		// default, and the menu label names it ("Add bridges (4 × 2 mm)"). Written twice they
+		// drift, and then the row promises one thing and does another.
+		bridges: (on) =>
+			on
+				? setBridges({
+						count: DEFAULT_BRIDGES.count,
+						length_mm: DEFAULT_BRIDGES.lengthMm
+					})
+				: clearBridges(),
 		onlyLayer: (kind) => toALayer(kind),
 		assignLayer: (id, inside) => assign(id, inside),
 		toSheet: async (id) => {
@@ -851,6 +944,9 @@
 	}
 
 	/** The state in which an action is or is not possible. */
+	/** The bridges on the selection; the menu row, the shortcut and the panel all read it. */
+	let bridgeState = $derived(bridgeSummary(design.elements.filter((e) => design.isSelected(e.id))));
+
 	let actionContext = $derived.by<ActionContext>(() => {
 		const chosen = design.elements.filter((e) => design.isSelected(e.id));
 		const image = chosen.length === 1 && Boolean(chosen[0]?.image);
@@ -862,6 +958,7 @@
 			isText: chosen.length === 1 && chosen[0]?.text !== null,
 			isCropped: image && Boolean(imageState?.cropped),
 			filled: chosen.length > 0 && chosen.every((e) => Boolean(e.fill)),
+			bridges: { carries: bridgeState.carries, has: bridgeState.has },
 			clipboard: clipboard,
 			busy: edits.busy,
 			may: canEdit,
@@ -896,10 +993,62 @@
 		};
 	});
 
+	/**
+	 * The menu row for this key combination, if there is one and it is refused.
+	 *
+	 * The rows carry the reason a verb cannot be done now, and the keyboard has to obey the
+	 * same reason as the menu — otherwise the key posts a request the row already knows will
+	 * be refused, and the answer is a 409 in the console instead of a sentence.
+	 */
+	function refusedRow(combo: string): Action | undefined {
+		const label = keyLabel(combo);
+		if (!label) return undefined;
+		return objectMenu(actionContext, handlers)
+			.flatMap((group) => group.items)
+			.find(
+				(item): item is Action =>
+					typeof item !== 'string' &&
+					!('items' in item) &&
+					item.key === label &&
+					Boolean(item.off)
+			);
+	}
+
 	function openObjectMenu(event: MouseEvent, under: string[] = []) {
 		menuPoint = null;
 		underPointer = under;
 		menu = { list: objectMenu(actionContext, handlers), x: event.clientX, y: event.clientY };
+	}
+
+	/**
+	 * The node the canvas has in hand — for the menu on it and for its shortcuts.
+	 *
+	 * The state lives in the canvas (that is where the points are drawn and dragged) and
+	 * the table of verbs lives in `actions.ts`; this is the one place the two meet, so the
+	 * menu row and the key can never mean different things.
+	 */
+	function nodeContext(): NodeContext {
+		const state = canvasControl?.state();
+		return {
+			index: state?.nodeIndex ?? -1,
+			count: state?.nodeCount ?? 0,
+			closed: state?.nodeClosed ?? false,
+			kind: state?.nodeKind ?? null,
+			busy: edits.busy,
+			may: canEdit
+		};
+	}
+
+	const nodeHandlers: NodeHandlers = {
+		addNode: () => canvasControl?.node('add'),
+		removeNode: () => canvasControl?.node('remove'),
+		setKind: (kind) => canvasControl?.node(kind === 'line' ? 'corner' : 'curve')
+	};
+
+	function openNodeMenu(event: MouseEvent) {
+		menuPoint = null;
+		underPointer = [];
+		menu = { list: nodeMenu(nodeContext(), nodeHandlers), x: event.clientX, y: event.clientY };
 	}
 
 	function openCanvasMenu(event: MouseEvent, point: { x: number; y: number }) {
@@ -925,6 +1074,27 @@
 		if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
 		if (menu) return; // the menu handles its own keys
 		const combo = comboOf(event);
+		const canvas = canvasControl?.state();
+
+		// While the pen is drawing, Escape and Backspace are its: they stop the line and
+		// take back the last point. Deleting the shape that happens to be selected is never
+		// what was meant, and it is what used to happen.
+		if (canvas?.penDrawing && (combo === 'escape' || combo === KEYS.delete)) return;
+
+		// Same for the node tool with a node in hand. Run it through the menu rows, so the
+		// key and the row cannot disagree about whether it is allowed: a row that says
+		// "a line needs two nodes" must not be reachable by keyboard either.
+		if (tool === 'nodes' && (canvas?.nodeIndex ?? -1) >= 0) {
+			const rows = nodeMenu(nodeContext(), nodeHandlers)
+				.flatMap((group) => group.items)
+				.filter((item): item is Action => typeof item !== 'string' && !('items' in item));
+			const row = rows.find((r) => r.key && r.key === keyLabel(combo));
+			if (row) {
+				event.preventDefault();
+				if (!row.off) row.run();
+				return;
+			}
+		}
 
 		if (combo === 'escape') {
 			design.select(null);
@@ -943,6 +1113,7 @@
 			[KEYS.group]: () => handlers.arrange('group'),
 			[KEYS.ungroup]: () => handlers.arrange('ungroup'),
 			[KEYS.ungroupAlt]: () => handlers.arrange('ungroup'),
+			[KEYS.bridges]: () => handlers.bridges(!bridgeState.has),
 			[KEYS.mirrorH]: () => handlers.arrange('mirror-h'),
 			[KEYS.mirrorV]: () => handlers.arrange('mirror-v'),
 			[KEYS.rotateLeft]: () => handlers.rotate(-90),
@@ -960,6 +1131,13 @@
 		const action = run[combo];
 		if (action) {
 			event.preventDefault();
+			// A row that says why something cannot be done now must not be reachable by
+			// keyboard either — the same rule the node tool follows above. Measured before
+			// this with a line selected: ⌘⇧B posted /api/design/bridges anyway, came back 409
+			// with a console error, while the menu row beside it was greyed out and said "A
+			// line, text or an image carries no bridges". Only a row that is *explicitly* off
+			// stops the key, so no shortcut that worked before stops working.
+			if (refusedRow(combo)) return;
 			action();
 			return;
 		}
@@ -1139,6 +1317,7 @@
 					}
 				: null}
 			sheetId={sheets.active?.id ?? null}
+			onContextNode={(e) => openNodeMenu(e)}
 			onPath={async (points, closed) => {
 				if (!canEdit) return;
 				await post('/api/design/path', { points, closed });
@@ -1268,6 +1447,10 @@
 					onImageSet={(name, enabled, values) =>
 						setImage({ adjustment: name, enabled, values })}
 					onImageClear={() => setImage({ clear: true })}
+					onBridges={setBridges}
+					onBridgesOff={clearBridges}
+					bridgeNote={bridgeNotice}
+					bridgeRevision={bridgeRevision}
 					onImageDpi={async (dpi) => {
 						const id = design.selectedId;
 						if (!id) return;
@@ -1501,6 +1684,7 @@
 <Generators
 	bind:open={generatorsOpen}
 	hasSelection={design.selectedIds.length > 0}
+	selectedIds={design.selectedIds}
 	busy={edits.busy}
 	onGenerate={async (what, body) => {
 		const response = await post(`/api/design/generate/${what}`, {

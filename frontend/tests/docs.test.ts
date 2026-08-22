@@ -276,6 +276,7 @@ const WIDE: Context = {
 	isText: true,
 	isCropped: true,
 	filled: false,
+	bridges: { carries: true, has: false },
 	clipboard: 2,
 	busy: false,
 	may: true,

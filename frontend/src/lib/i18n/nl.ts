@@ -80,12 +80,12 @@ export const nl: Catalogue = {
 	'rail.tool.rect': 'Rechthoek',
 	'rail.tool.circle': 'Cirkel',
 	'rail.tool.line': 'Lijn',
-	'rail.tool.pen': 'Pen — klik punten, Enter sluit af',
+	'rail.tool.pen': 'Pen — klik voor een hoek, sleep voor een kromme, Enter sluit af',
 	'rail.tool.pen.short': 'Pen',
 	'rail.tool.text': 'Tekst',
 	'rail.tool.measure': 'Meten',
 	'rail.placeImage': 'Afbeelding plaatsen',
-	'rail.generators': 'Generatoren — raster, cirkel, veelhoek, doos, QR',
+	'rail.generators': 'Generatoren — herhalingen, dozen, codes en een living hinge',
 	'rail.generators.short': 'Generatoren',
 	'rail.clipart': 'Clipart zoeken in openbare collecties',
 	'rail.clipart.short': 'Clipart zoeken',
@@ -232,6 +232,8 @@ export const nl: Catalogue = {
 	'action.hatch': 'Arcering',
 	'action.wobble': 'Wobble',
 	'action.corners': 'CornersDialog…',
+	'action.bridges': 'Bruggen erin (4 × 2 mm)',
+	'action.bridgesOff': 'Bruggen weghalen',
 	'action.fill': 'Vullen — voor rasteren',
 	'action.unfill': 'Vulling weghalen',
 	'action.layer': 'Laag',
@@ -251,6 +253,10 @@ export const nl: Catalogue = {
 	'action.snap': 'Vastklikken op raster en vormen',
 	'action.layerNumbers': 'Laagnummers bij de vormen',
 	'action.rescue': 'Alles op het bed leggen',
+	'action.nodeAdd': 'Hier een knooppunt bijzetten',
+	'action.nodeCurve': 'Dit stuk krommen',
+	'action.nodeCorner': 'Dit stuk recht maken',
+	'action.nodeRemove': 'Dit knooppunt weghalen',
 
 	// ── Waarom iets nu niet kan ────────────────────────────────────────────────
 	'reason.needsToken': 'Vereist een token',
@@ -259,6 +265,7 @@ export const nl: Catalogue = {
 	'reason.needsTwo': 'Selecteer minstens twee vormen',
 	'reason.needsThree': 'Verdelen heeft minstens drie vormen nodig',
 	'reason.notInGroup': 'Deze selectie zit niet in een groep',
+	'reason.noBridges': 'Een lijn, tekst of een afbeelding draagt geen bruggen',
 	'reason.onePiece': 'Deze vorm bestaat uit één stuk',
 	'reason.clipboardEmpty': 'Er staat niets op het klembord',
 	'reason.nothingSelected': 'Er is niets geselecteerd',
@@ -267,6 +274,10 @@ export const nl: Catalogue = {
 	'reason.alreadyFirst': 'Deze laag brandt al als eerste',
 	'reason.alreadyLast': 'Deze laag brandt al als laatste',
 	'reason.testGridLayer': 'Deze laag hoort bij een testraster',
+	'reason.pickNode': 'Klik eerst een knooppunt op de vorm aan',
+	'reason.nodeIsLast': 'Dit is het laatste knooppunt; er komt geen stuk meer na',
+	'reason.nodeOpenTwo': 'Een lijn heeft twee knooppunten nodig',
+	'reason.nodeClosedThree': 'Een gesloten vorm heeft drie knooppunten nodig',
 
 	// ── Wat een handeling betekent ─────────────────────────────────────────────
 	'explain.group': 'De vormen bewegen voortaan samen',
@@ -275,6 +286,8 @@ export const nl: Catalogue = {
 	'explain.combine': 'Het resultaat is één pad; de vormen verdwijnen',
 	'explain.nest': 'Leg de selectie dicht op elkaar om materiaal te sparen',
 	'explain.corners': 'Afronden of afschuinen, met het voorbeeld erbij',
+	'explain.bridges': 'Kleine openingen in de snede, zodat het onderdeel in de plaat blijft zitten in plaats van in de machine te vallen',
+	'explain.bridgesOff': 'De snede sluit weer en het onderdeel komt los',
 	'explain.fill': 'Een rasterlaag brandt dan het vlak in plaats van alleen de omtrek',
 	'explain.unfill': 'Zonder vulling rastert een vorm alleen zijn omtrek',
 	'explain.crop': 'Sleep daarna een kader over de afbeelding',
@@ -286,6 +299,8 @@ export const nl: Catalogue = {
 	'explain.visible': 'Verandert niets aan de job',
 	'explain.layerSettings': 'Naam, snelheid, vermogen, passes, kleur',
 	'explain.layerRemove': 'De vormen blijven op het bed staan',
+	'explain.nodeAdd': 'Halverwege het stuk na dit knooppunt. Met een dubbelklik op de lijn zet je er een precies waar je klikt.',
+	'explain.nodeCurve': 'De lijn blijft liggen waar hij ligt en krijgt een greep om hem mee uit te trekken',
 
 	// ── Het menu op een laagrij ────────────────────────────────────────────────
 	'layerMenu.selectShapes': {
@@ -365,6 +380,9 @@ export const nl: Catalogue = {
 	'canvas.selectShape': 'Selecteer {name}',
 	'canvas.dragEndpoint': 'Eindpunt {n} verslepen',
 	'canvas.dragNode': 'Knooppunt {n} verslepen',
+	'canvas.dragHandle': 'Sleep de greep van stuk {n}',
+	'canvas.pen.hint': 'Klik voor een hoek, sleep voor een kromming. Enter maakt de lijn af, Backspace neemt het laatste punt terug, Escape stopt.',
+	'canvas.nodes.hint': 'Dubbelklik op de lijn om een knooppunt bij te zetten. Met een knooppunt in de hand: Delete haalt het weg, Shift+U kromt het stuk erna, Shift+L maakt het recht.',
 	'canvas.layerNumbers.on': 'Laagnummers bij de vormen staan aan',
 	'canvas.layerNumbers.off': 'Laagnummers bij de vormen staan uit',
 	'canvas.snap.on': 'Vastklikken staat aan — houd Alt ingedrukt om het even over te slaan',
@@ -377,6 +395,7 @@ export const nl: Catalogue = {
 	'canvas.nodes.pickOne': 'Knooppunten werkt op één vorm. Klik er een aan op het bed.',
 	'canvas.nodes.tooMany': 'Knooppunten werkt op één vorm tegelijk; er staan er {n} gekozen. Klik er één aan.',
 	'canvas.nodes.noPoints': 'Deze vorm heeft geen losse punten. Maak er eerst een pad van met Combineren, in het paneel rechts.',
+	'canvas.nodes.failed': 'De knooppunten van deze vorm konden niet gelezen worden. Klik hem nog eens aan; blijft het misgaan, dan antwoordt de engine niet.',
 	'canvas.trace': 'Spoor van de kop — gemeten, inclusief de sprongen tussen de vormen.',
 	'canvas.traceProgress': '{percent}% staat als ring om de kop.',
 	'canvas.outsideBed': {
@@ -652,6 +671,17 @@ export const nl: Catalogue = {
 	'panel.anchor.back': 'Terugzetten',
 	'panel.anchor.backTitle': 'Terug naar de stand van toen je deze selectie aanklikte',
 	'panel.inEffect': 'Zit in effect: {label}',
+	'panel.bridges': 'Bruggen',
+	'panel.bridges.on': 'Openingen in de snede laten',
+	'panel.bridges.count': 'Aantal',
+	'panel.bridges.length': 'Lengte per brug',
+	'panel.bridges.off': 'Geen bruggen: deze vorm komt los zodra de snede rond is.',
+	'panel.bridges.explain': '{count} openingen van {length} mm, verdeeld over een omtrek van {total} mm. Er blijft {cut} mm te snijden over.',
+	'panel.bridges.explainTightest': 'Elk van deze {n} vormen krijgt {count} openingen van {length} mm. De kortste omtrek erbij is {total} mm lang; daar blijft {cut} mm te snijden over.',
+	'panel.bridges.places': 'Op {places} procent van de omtrek, elk {length} mm lang.',
+	'panel.bridges.notSupported': 'Deze vorm draagt geen bruggen. Ze werken op een rechthoek, een ellips, een polylijn of een pad — niet op een lijn, tekst of een afbeelding.',
+	'panel.bridges.mixed': 'Deze vormen hebben verschillende bruggen. Een aantal invullen geeft ze allemaal hetzelfde.',
+	'panel.bridges.notCut': 'Deze vorm zit niet in een snijlaag, dus de openingen veranderen nog niets. Ze doen alleen iets bij snijden.',
 	'panel.splittable': {
 		one: 'Deze vorm bestaat uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.',
 		other: 'Deze {n} vormen bestaan uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.'
@@ -1110,6 +1140,7 @@ export const nl: Catalogue = {
 	'gen.tab.qrcode': 'QR-code',
 	'gen.tab.barcode': 'Streepjescode',
 	'gen.tab.arctext': 'Boogtekst',
+	'gen.tab.hinge': 'Levend scharnier',
 	'gen.cannotDraw': 'Dit kan de engine niet tekenen.',
 	'gen.incomplete': 'Nog niet compleet: vul de lege velden in.',
 	'gen.needsSelection': 'Selecteer eerst wat er herhaald moet worden.',
@@ -1154,6 +1185,21 @@ export const nl: Catalogue = {
 	'gen.tail.sheets': '{parts} op dit vel, {sheets} vellen',
 	'gen.tail.fits': '{parts} stuks, past op dit vel',
 	'gen.tail.size': '{width} × {height} mm',
+	'gen.hinge.lead': 'Een veld sleuven waardoor stijf plaatmateriaal buigt. De sleuven liggen dwars, en een plaat buigt om een lijn parallel aan zijn sleuven, dus deze rolt van boven naar onder. Draai de groep daarna een kwartslag en hij buigt de andere kant op.',
+	'gen.hinge.pattern': 'Patroon',
+	'gen.hinge.straight': 'Rechte sleuven',
+	'gen.hinge.staggered': 'Verschoven rijen',
+	'gen.hinge.wavy': 'Golvende sleuven',
+	'gen.hinge.slit': 'Sleuflengte',
+	'gen.hinge.gap': 'Ruimte in een rij',
+	'gen.hinge.rows': 'Tussen de rijen',
+	'gen.hinge.material': 'Tussen twee sleuven in een rij blijft {gap} materiaal staan, en tussen twee rijen {row}. Die brug is wat wringt, en wat breekt.',
+	'gen.hinge.fromSelection': 'Vul het gebied van de gekozen vorm',
+	'gen.hinge.noSelection': 'Kies eerst een vorm om zijn gebied te gebruiken',
+	'gen.hinge.left': 'Links',
+	'gen.hinge.top': 'Boven',
+	'gen.hinge.go': 'Maak het scharnier{tail}',
+	'genPreview.slits': '{n} sleuven in {rows} rijen',
 
 	// ── Edit notices ──────────────────────────────────────────────────────────────
 	'notice.corners.skipped': {
@@ -1173,6 +1219,18 @@ export const nl: Catalogue = {
 	'notice.fill.cleared': {
 		one: 'Vulling weg bij 1 vorm.',
 		other: 'Vulling weg bij {n} vormen.'
+	},
+	'notice.bridges.done': {
+		one: 'Eén vorm heeft {count} bruggen van {length} mm gekregen.',
+		other: '{n} vormen hebben {count} bruggen van {length} mm gekregen.'
+	},
+	'notice.bridges.doneSkipped': {
+		one: 'Eén vorm heeft {count} bruggen van {length} mm gekregen; één is overgeslagen, want dat soort vorm draagt geen bruggen.',
+		other: '{n} vormen hebben {count} bruggen van {length} mm gekregen; {skipped} zijn overgeslagen, want dat soort vorm draagt geen bruggen.'
+	},
+	'notice.bridges.cleared': {
+		one: 'De bruggen zijn weg bij één vorm; de snede sluit weer.',
+		other: 'De bruggen zijn weg bij {n} vormen; de snede sluit weer.'
 	},
 	'notice.fill.skipped': {
 		one: 'Eén overgeslagen: een lijn heeft geen binnenkant.',
@@ -1686,6 +1744,11 @@ export const nl: Catalogue = {
 	'layout.lookingForMachine': 'Even kijken welke machine er is…',
 
 	// ── Refusals the API can name ─────────────────────────────────────────────────
+	'api.bridges.notSupported': 'Bruggen werken alleen op een rechthoek, een ellips, een polylijn of een pad.',
+	'api.bridges.needsCount': 'Vraag om minstens één brug, of haal ze juist weg.',
+	'api.bridges.needsLength': 'Een brug heeft een lengte groter dan nul nodig.',
+	'api.bridges.tooMany': 'Meer dan {max} bruggen in één omtrek is geen snede meer.',
+	'api.bridges.percentRange': 'Een brug zit ergens tussen 0 en 100 procent van het pad.',
 	'api.corners.none': 'Geen enkele hoek is af te ronden of af te schuinen: er komen geen twee rechte zijden op uit, of de maat is te groot voor de zijden. Kies een kleinere maat.',
 	'api.draw.booleanEmpty': 'Die combinatie leverde niets op — overlappen de vormen wel?',
 	'api.draw.emptyText': 'Tekst mag niet leeg zijn.',
@@ -1700,6 +1763,8 @@ export const nl: Catalogue = {
 	'api.edit.needsElement': 'Geef minstens één element op.',
 	'api.edit.staleElement': 'Die vorm is er niet meer. Ververs het ontwerp.',
 	'api.gen.needsSelection': 'Kies eerst wat er herhaald moet worden.',
+	'api.gen.hingeEmpty': 'Binnen het gebied blijft er niets van dit veld over.',
+	'api.gen.hingeNeedsSelection': 'Kies eerst de vorm waarvan het gebied met sleuven gevuld moet worden.',
 	'api.gen.noBarcodeLib': 'Streepjescodes vereisen het pakket python-barcode.',
 	'api.gen.noFont': 'Er staat geen enkel bruikbaar lettertype op deze computer.',
 	'api.gen.noQrLib': 'QR-codes vereisen het pakket segno; installeer het naast de API.',

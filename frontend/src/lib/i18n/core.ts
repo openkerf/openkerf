@@ -162,6 +162,20 @@ export function number(value: number, decimals?: number): string {
 	}).format(value);
 }
 
+/**
+ * A list of numbers (or of words) in the reader's own notation.
+ *
+ * Not `join(', ')`. In Dutch the decimal mark *is* a comma, so three positions came out
+ * as "Op 10, 33,5, 70 procent" — four numbers to read, not three. `Intl.ListFormat`
+ * writes "10, 33,5 en 70" in Dutch and "10, 33.5 and 70" in English, and the separator
+ * can then never be the decimal mark. Style "unit" ("10, 33,5, 70") would keep the
+ * ambiguity, so this is the long form on purpose.
+ */
+export function list(parts: string[]): string {
+	if (parts.length <= 1) return parts[0] ?? '';
+	return new Intl.ListFormat(locale(), { style: 'long', type: 'conjunction' }).format(parts);
+}
+
 /** A length, with its unit. Keeps the space that stops "10mm". */
 export function mm(value: number | null | undefined, decimals = 1): string {
 	if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -235,6 +249,26 @@ function sqlToIso(value: string): string {
 export function apiError(response: Response, detail: string | null | undefined): string {
 	const code = response.headers.get('X-OpenKerf-Error');
 	const key = `api.${code}` as MessageKey;
-	if (code && key in en) return t(key);
+	if (code && key in en) return t(key, values(response));
 	return detail ?? t('notice.failed');
+}
+
+/**
+ * The numbers a coded refusal brings along, from `X-OpenKerf-Error-Values`.
+ *
+ * Only for a number that is a constant of that layer — "at most 200 bridges" — which a
+ * code alone cannot carry: measured before this, that refusal came out in English in an
+ * otherwise Dutch panel, because the catalogue had no way to learn the 200 and a second
+ * copy of it here would be a second source of truth. A refusal whose numbers are measured
+ * per call still keeps its English sentence.
+ */
+function values(response: Response): Record<string, unknown> | undefined {
+	const raw = response.headers.get('X-OpenKerf-Error-Values');
+	if (!raw) return undefined;
+	try {
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === 'object' ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
 }

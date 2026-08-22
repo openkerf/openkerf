@@ -17,6 +17,7 @@
 		SNAP_LABEL,
 		type SnapGuide
 	} from '$lib/snapping';
+	import { penPath, penPreview, HANDLE_THRESHOLD_PX, type PenPoint } from '$lib/pen';
 
 	let {
 		onPointerMm,
@@ -38,6 +39,7 @@
 		tiling = null,
 		onContextObject,
 		onContextCanvas,
+		onContextNode,
 		onDeeper,
 		control = $bindable(null)
 	}: {
@@ -73,6 +75,9 @@
 		/** Right-click on the bed itself, with the place in mm: the menu promises "paste
 		 *  here", and then it has to know where "here" is. */
 		onContextCanvas?: (event: MouseEvent, point: { x: number; y: number }) => void;
+		/** Right-click on a node of the shape being edited. The canvas takes the node in
+		 *  hand first; the page then builds the menu from `nodeMenu`. */
+		onContextNode?: (event: MouseEvent, index: number) => void;
 		/**
 		 * Operating the view from outside.
 		 *
@@ -87,7 +92,23 @@
 			step: (factor: number) => void;
 			snap: () => void;
 			layerNumbers: () => void;
-			state: () => { snap: boolean; layerNumbers: boolean };
+			/** The node verbs, so the shortcuts in the page reach them: the node in hand
+			 *  lives here, with the points it belongs to. */
+			node: (verb: 'add' | 'remove' | 'curve' | 'corner') => void;
+			/** Take back the last point of the line being drawn. */
+			penBack: () => void;
+			state: () => {
+				snap: boolean;
+				layerNumbers: boolean;
+				/** Is the pen in the middle of a line? Then Delete and Escape are its. */
+				penDrawing: boolean;
+				/** Which node the node tool has in hand, or -1. */
+				nodeIndex: number;
+				nodeCount: number;
+				nodeClosed: boolean;
+				/** The kind of the segment after the node in hand, or null. */
+				nodeKind: 'line' | 'quad' | 'cubic' | 'arc' | null;
+			};
 		} | null;
 	} = $props();
 
@@ -448,6 +469,38 @@
 	// once you turn it into a path.
 	let nodePoints = $state<{ index: number; x_mm: number; y_mm: number }[]>([]);
 	let nodeDrag = $state<{ index: number; x: number; y: number } | null>(null);
+
+	/**
+	 * The pieces between the points, which is where a curve actually lives.
+	 *
+	 * A control point belongs to a segment and not to a node — a quad keeps one, a cubic
+	 * two — so without this list the tool could show a curve but never touch it.
+	 */
+	type Segment = {
+		index: number;
+		kind: 'line' | 'quad' | 'cubic' | 'arc';
+		start: number;
+		end: number;
+		controls: { which: number; x_mm: number; y_mm: number }[];
+	};
+	let nodeSegments = $state<Segment[]>([]);
+	let nodeClosed = $state(false);
+	/** The node in hand. A verb needs to know *which* node, and clicking one is how you
+	 *  say it; -1 means none. */
+	let nodePicked = $state(-1);
+	let controlDrag = $state<{ segment: number; which: number; x: number; y: number } | null>(
+		null
+	);
+
+	/** The piece that leaves the node in hand — the one the verbs work on. */
+	let segmentAfter = $derived(nodeSegments.find((s) => s.start === nodePicked) ?? null);
+	/** The pieces the node in hand touches; only those show their handles, or a path of
+	 *  fifty points would put a hundred squares on the bed at once. */
+	let handleSegments = $derived(
+		nodePicked < 0
+			? []
+			: nodeSegments.filter((s) => s.start === nodePicked || s.end === nodePicked)
+	);
 	/**
 	 * Why there are no nodes on screen.
 	 *
@@ -457,7 +510,7 @@
 	 * shows the ordinary multiple selection and the word "node" appears nowhere on
 	 * screen. One line under the bed says where you are and what the next step is.
 	 */
-	let nodeReden = $state<'geen' | 'meerdere' | 'onbewerkbaar' | null>(null);
+	let nodeReason = $state<'none' | 'many' | 'noPoints' | 'failed' | null>(null);
 
 	$effect(() => {
 		const id = tool === 'nodes' && design.selectedIds.length === 1 ? design.selectedId : null;
@@ -465,17 +518,35 @@
 		void design.revision;
 		if (!id) {
 			nodePoints = [];
-			nodeReden =
-				tool !== 'nodes' ? null : design.selectedIds.length === 0 ? 'geen' : 'meerdere';
+			nodeSegments = [];
+			nodePicked = -1;
+			nodeReason =
+				tool !== 'nodes' ? null : design.selectedIds.length === 0 ? 'none' : 'many';
 			return;
 		}
 		let cancelled = false;
 		fetch(`/api/design/elements/${encodeURIComponent(id)}/nodes`)
-			.then((r) => (r.ok ? r.json() : null))
+			// A refusal and a shape without points are two different things, and the reader
+			// has to be told which one it is. Measured on a text turned into outlines: the
+			// route answered HTTP 500 and the line under the bed advised "make it a path
+			// first with Combine" about something that already was a path.
+			.then((r) => (r.ok ? r.json() : 'failed'))
 			.then((data) => {
 				if (cancelled) return;
-				nodePoints = data?.editable ? data.points : [];
-				nodeReden = data?.editable ? null : 'onbewerkbaar';
+				const readable = data !== 'failed' && data;
+				nodePoints = readable && data.editable ? data.points : [];
+				nodeSegments = readable && data.editable ? (data.segments ?? []) : [];
+				nodeClosed = Boolean(readable && data.closed);
+				// The node in hand has to stay in hand across a reload — every edit reloads
+				// this — but the shape may have fewer points than before.
+				if (nodePicked >= nodePoints.length) nodePicked = -1;
+				nodeReason = !readable ? 'failed' : data.editable ? null : 'noPoints';
+			})
+			.catch(() => {
+				if (cancelled) return;
+				nodePoints = [];
+				nodeSegments = [];
+				nodeReason = 'failed';
 			});
 		return () => {
 			cancelled = true;
@@ -536,24 +607,62 @@
 		return lijnen;
 	});
 
-	// The pen: clicking sets a point, Enter or a click on the start point closes it.
-	// Escape throws away what is there — stopping halfway must leave no mess.
-	let penPoints = $state<{ x: number; y: number }[]>([]);
+	// The pen: a click sets a corner, a press-and-pull sets a curve, Enter or a click on
+	// the start point closes it. Escape throws away what is there — stopping halfway must
+	// leave no mess — and Backspace takes back the last point, because the alternative was
+	// starting over for one misplaced click.
+	//
+	// The numbers themselves live in `$lib/pen.ts`: the preview and the request have to be
+	// the same line, and that agreement is testable without a browser.
+	let penPoints = $state<PenPoint[]>([]);
+	/** The point being pressed right now, and where on screen the press began — that
+	 *  distance is what tells a click from a pull. */
+	let penPress = $state<{ point: PenPoint; sx: number; sy: number } | null>(null);
 
-	function penClick(at: { x: number; y: number }) {
+	function penDown(event: PointerEvent) {
+		const at = snapped(pointerMm(event), event);
+		penPress = { point: { x: at.x, y: at.y, handle: null }, sx: event.clientX, sy: event.clientY };
+	}
+
+	function penDrag(event: PointerEvent) {
+		if (!penPress) return;
+		const far = Math.hypot(event.clientX - penPress.sx, event.clientY - penPress.sy);
+		// A handle is a direction, not a place: snapping it to the grid would make the
+		// curve jump between the few tangents the grid allows.
+		const handle = far < HANDLE_THRESHOLD_PX ? null : pointerMm(event);
+		// The guide lines belong to the point that was just snapped; while the handle is
+		// being pulled nothing snaps, so leaving them up promises a snap that is not
+		// happening.
+		if (handle) guides = [];
+		penPress = { ...penPress, point: { ...penPress.point, handle } };
+	}
+
+	function penUp() {
+		const press = penPress;
+		penPress = null;
+		if (!press) return;
+		const point = press.point;
 		const first = penPoints[0];
-		if (first && penPoints.length > 2 && Math.hypot(at.x - first.x, at.y - first.y) < 3) {
+		if (first && penPoints.length > 2 && Math.hypot(point.x - first.x, point.y - first.y) < 3) {
 			finishPen(true);
 			return;
 		}
-		penPoints = [...penPoints, at];
+		penPoints = [...penPoints, point];
 	}
 
 	async function finishPen(closed: boolean) {
-		const points = penPoints;
+		// A double-click finishes, and its second press has already put a point on top of
+		// the first — a segment of no length that nobody can grab again.
+		const points = penPoints.filter(
+			(point, index) =>
+				index === 0 ||
+				Math.hypot(point.x - penPoints[index - 1].x, point.y - penPoints[index - 1].y) > 0.2
+		);
 		penPoints = [];
+		penPress = null;
+		hover = null;
 		if (points.length < 2) return;
-		await onPath?.(points.map((p) => [p.x, p.y]), closed);
+		await onPath?.(penPath(points, closed), closed);
 	}
 
 	// Measuring: two clicks, and the distance stays until you start again. Useful for
@@ -571,6 +680,9 @@
 	function startNode(event: PointerEvent, index: number) {
 		event.stopPropagation();
 		(event.target as Element).setPointerCapture?.(event.pointerId);
+		// Touching a node takes it in hand, whether or not the press turns into a drag:
+		// the verbs need to know which node you mean, and pressing one is how you say it.
+		nodePicked = index;
 		const point = nodePoints.find((p) => p.index === index);
 		if (point) nodeDrag = { index, x: point.x_mm, y: point.y_mm };
 	}
@@ -591,6 +703,130 @@
 		// A shape becomes a path when dragged and then gets a new id; without this the
 		// user loses their selection in the middle of the work.
 		if (moved?.id && moved.id !== id) design.select(moved.id);
+		onEdited?.();
+	}
+
+	function startControl(event: PointerEvent, segment: Segment, control: { which: number; x_mm: number; y_mm: number }) {
+		event.stopPropagation();
+		(event.target as Element).setPointerCapture?.(event.pointerId);
+		controlDrag = { segment: segment.index, which: control.which, x: control.x_mm, y: control.y_mm };
+	}
+
+	function dragControl(event: PointerEvent) {
+		if (!controlDrag) return;
+		// No snapping: a handle is a direction and a length, not a place on the bed. Snapped
+		// to the grid the curve would jump between the few tangents the grid allows.
+		const at = pointerMm(event, true);
+		controlDrag = { ...controlDrag, x: at.x, y: at.y };
+	}
+
+	async function endControl() {
+		const drag = controlDrag;
+		controlDrag = null;
+		const id = design.selectedId;
+		if (!drag || !id) return;
+		const moved = await edits.moveControl(id, drag.segment, drag.which, drag.x, drag.y);
+		if (moved?.id && moved.id !== id) design.select(moved.id);
+		onEdited?.();
+	}
+
+	/**
+	 * The piece being bent, while it is being bent.
+	 *
+	 * Without it the handle moves and the line stays put until the server answers, and
+	 * then a drag is a guess. Built from the same numbers the request carries.
+	 */
+	let controlPreview = $derived.by(() => {
+		const drag = controlDrag;
+		if (!drag) return '';
+		const segment = nodeSegments.find((s) => s.index === drag.segment);
+		const from = nodePoints.find((p) => p.index === segment?.start);
+		const to = nodePoints.find((p) => p.index === segment?.end);
+		if (!segment || !from || !to) return '';
+		const at = (which: number) =>
+			which === drag.which
+				? { x: drag.x, y: drag.y }
+				: (() => {
+						const other = segment.controls.find((c) => c.which === which);
+						return other ? { x: other.x_mm, y: other.y_mm } : { x: from.x_mm, y: from.y_mm };
+					})();
+		const head = `M ${from.x_mm} ${from.y_mm}`;
+		if (segment.kind === 'cubic') {
+			const one = at(1);
+			const two = at(2);
+			return `${head} C ${one.x} ${one.y} ${two.x} ${two.y} ${to.x_mm} ${to.y_mm}`;
+		}
+		const one = at(1);
+		return `${head} Q ${one.x} ${one.y} ${to.x_mm} ${to.y_mm}`;
+	});
+
+	/**
+	 * The node verbs. One place, called by the menu, the shortcuts and the double-click.
+	 *
+	 * Every one of them can turn the shape into a path and so give it a new id; following
+	 * that is the difference between carrying on and losing the selection mid-work.
+	 */
+	async function nodeVerb(verb: 'add' | 'remove' | 'curve' | 'corner') {
+		const id = design.selectedId;
+		if (!id || !canEdit || nodePicked < 0) return;
+		const after = segmentAfter;
+		let result: { id: string; index?: number } | null = null;
+		if (verb === 'remove') {
+			result = await edits.removeNode(id, nodePicked);
+			nodePicked = -1;
+		} else if (!after) {
+			return;
+		} else if (verb === 'add') {
+			result = await edits.addNode(id, { segmentIndex: after.index });
+			if (result?.index !== undefined) nodePicked = result.index;
+		} else {
+			result = await edits.setSegmentKind(id, after.index, verb === 'curve' ? 'quad' : 'line');
+		}
+		if (result?.id && result.id !== id) design.select(result.id);
+		onEdited?.();
+	}
+
+	/**
+	 * A node taken in hand from the keyboard.
+	 *
+	 * Measured before this: 70 Tab presses from a fresh load reached none of the four
+	 * grips, because every one of them was `tabindex="-1"`. Only a pointer could set
+	 * `nodePicked`, so all four verbs were out of reach without a mouse and the refusal
+	 * written for "no node in hand" could never be seen.
+	 */
+	function pickNodeByKey(event: KeyboardEvent, index: number) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			event.stopPropagation();
+			nodePicked = index;
+			return;
+		}
+		// The menu on this node, from the keyboard: the two combinations a browser gives a
+		// focused element. Measured before this: Shift+F10 with the canvas focused opened
+		// nothing at all, so the verbs had no keyboard route even once a node was picked.
+		if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+			event.preventDefault();
+			event.stopPropagation();
+			nodePicked = index;
+			const box = (event.currentTarget as Element).getBoundingClientRect();
+			onContextNode?.(
+				new MouseEvent('contextmenu', {
+					clientX: Math.round(box.left + box.width / 2),
+					clientY: Math.round(box.top + box.height / 2)
+				}),
+				index
+			);
+		}
+	}
+
+	/** A double-click on the line: a node exactly where you clicked. */
+	async function addNodeAt(event: MouseEvent) {
+		const id = design.selectedId;
+		if (!id || !canEdit) return;
+		const at = pointerMm(event, true);
+		const added = await edits.addNode(id, { xMm: at.x, yMm: at.y });
+		if (added?.id && added.id !== id) design.select(added.id);
+		if (added?.index !== undefined) nodePicked = added.index;
 		onEdited?.();
 	}
 
@@ -704,6 +940,15 @@
 	// the preview.
 	let lineStart = $state<{ x: number; y: number } | null>(null);
 	let hover = $state<{ x: number; y: number } | null>(null);
+
+	/** The pen's line as it stands, including the piece under the pointer. Below `hover`,
+	 *  because it reads it. */
+	let penLine = $derived(
+		penPreview(
+			penPress ? [...penPoints, penPress.point] : penPoints,
+			penPress || !hover ? null : { x: hover.x, y: hover.y, handle: null }
+		)
+	);
 
 	$effect(() => {
 		if (tool !== 'line') lineStart = null;
@@ -923,6 +1168,15 @@
 	 * the pointer moves — then it is a drag, not a click.
 	 */
 	let bandCatcher: Element | null = null;
+
+	/**
+	 * Where the press that may become the next click started, and whether it moved.
+	 *
+	 * The svg gets the click of every press-and-release whose two ends lie on different
+	 * elements, and "clicked beside everything" is how it reads that. A drag is not that.
+	 */
+	let pressFrom: { x: number; y: number } | null = null;
+	let pressDragged = false;
 
 	function startBand(event: PointerEvent) {
 		const at = pointerMm(event);
@@ -1407,7 +1661,17 @@
 			step: (factor: number) => zoomAt(factor),
 			snap: snapToggle,
 			layerNumbers: nummersSchakel,
-			state: () => ({ snap: snapOn, layerNumbers: numbersOn })
+			node: nodeVerb,
+			penBack: () => (penPoints = penPoints.slice(0, -1)),
+			state: () => ({
+				snap: snapOn,
+				layerNumbers: numbersOn,
+				penDrawing: penPoints.length > 0,
+				nodeIndex: nodePicked,
+				nodeCount: nodePoints.length,
+				nodeClosed,
+				nodeKind: segmentAfter?.kind ?? null
+			})
 		};
 		return () => (control = null);
 	});
@@ -1445,6 +1709,11 @@
 		} else if (e.key === 'Escape') {
 			e.preventDefault();
 			penPoints = [];
+			penPress = null;
+		} else if (e.key === 'Backspace' || e.key === 'Delete') {
+			// One misplaced click used to mean starting the whole line again.
+			e.preventDefault();
+			penPoints = penPoints.slice(0, -1);
 		}
 	}}
 	onkeyup={(e) => {
@@ -1473,8 +1742,11 @@
 		zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY);
 	}}
 	onpointerdown={(e) => {
-		// Middle button, alt, or space held: drag to pan.
-		if (e.button === 1 || e.altKey || (space && e.button === 0)) {
+		// Middle button, alt, or space held: drag to pan. Not with the pen in hand: there
+		// Alt already means "this one point does not snap", and the press that follows is a
+		// pull that makes a curve. Both on one gesture means the bed slides away under the
+		// handle you are aiming.
+		if (e.button === 1 || (e.altKey && tool !== 'pen') || (space && e.button === 0)) {
 			e.preventDefault();
 			startPan(e);
 		}
@@ -1609,10 +1881,10 @@
 					: t('canvas.headUnknown')}
 				onclick={(e) => {
 					if (e.target !== e.currentTarget) return;
-					if (tool === 'pen' && canEdit) {
-						penClick(snapped(pointerMm(e), e));
-						return;
-					}
+					// The pen works on pointerdown/up, because a press that turns into a pull
+					// is a curve and a click is a corner — a `click` event cannot tell them
+					// apart.
+					if (tool === 'pen') return;
 					if (tool === 'measure') {
 						const at = snapped(pointerMm(e), e);
 						if (!measureFrom || measureTo) {
@@ -1633,11 +1905,32 @@
 						bandJustEnded = false;
 						return;
 					}
+					// And except when this "click" is the tail of a drag. A press that starts on
+					// a shape and ends somewhere else delivers its click to the svg, because
+					// that is the nearest ancestor of both. With the node tool in hand no
+					// selection frame catches that drag, so it landed here: measured, a drag
+					// from 90,40 mm across the top edge of a selected rectangle moved nothing
+					// (bounds unchanged) and yet left the panel reading "Nothing selected." with
+					// every knot gone from the bed.
+					if (pressDragged) {
+						pressDragged = false;
+						return;
+					}
 					design.select(null);
 				}}
 				onpointerdown={(e) => {
+					pressFrom = pointerMm(e);
+					pressDragged = false;
 					if (cropping && e.button === 0) {
 						startBand(e);
+						return;
+					}
+					if (tool === 'pen' && canEdit && e.button === 0 && e.target === e.currentTarget) {
+						// The capture goes on the svg itself: the pull that follows may leave
+						// the bed, and a handle that stops at the edge of the drawing is a
+						// handle you cannot aim.
+						(e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+						penDown(e);
 						return;
 					}
 					// Above an element as well: dragging draws a frame, clicking without
@@ -1651,12 +1944,35 @@
 					// Where the tool would land, *with* snapping — that way you see the
 						// guide line before the click and not only afterwards.
 						if (tool === 'measure' && measureFrom && !measureTo) hover = snapped(pointerMm(e), e);
+					else if (penPress) penDrag(e);
 					else if (tool === 'pen' && penPoints.length) hover = snapped(pointerMm(e), e);
 					else if (lineStart) hover = snapped(pointerMm(e), e);
 						else if (canEdit && tekengereedschap) snapped(pointerMm(e), e);
 					moveBand(e);
 				}}
-				onpointerup={endBand}
+				onpointerup={(e) => {
+					if (pressFrom) {
+						const at = pointerMm(e);
+						// Half a millimetre, the same threshold the selection frame uses to tell a
+						// drag from a click.
+						pressDragged =
+							Math.abs(at.x - pressFrom.x) > 0.5 || Math.abs(at.y - pressFrom.y) > 0.5;
+						pressFrom = null;
+					}
+					if (penPress) {
+						penUp();
+						return;
+					}
+					endBand(e);
+				}}
+				ondblclick={(e) => {
+					// Finishing the pen. A double-click is two presses, so the second point
+					// lands on the first; `finishPen` throws that duplicate away.
+					if (tool === 'pen' && penPoints.length >= 2) {
+						e.preventDefault();
+						finishPen(false);
+					}
+				}}
 			>
 				<!-- The head's trail, *below* the design (gap J3).
 				     First as a wide, soft band in the accent and only then the shapes over
@@ -1847,18 +2163,42 @@
 								     keeps carrying the layer colour. It stays one `fill` on the path
 								     that is there anyway — no second drawing, no rasteriser in the
 								     loop, so the cost per pointer move does not change. -->
+								<!-- Bridges (tabs): the shape is drawn with the gaps in it, because that
+								     is what the machine cuts. The gaps come out of the API as a second
+								     path — the contour minus the bridges, carved on the parameter, so a
+								     curve stays a curve. Measured: 149 characters of `d` become 331 for
+								     a rectangle with four bridges, where the engine's own gapped
+								     geometry would be 114,661.
+
+								     Two paths and not one, because the fill must stay whole: a raster
+								     layer burns the area, and an area with four notches in its outline
+								     is not what happens. So the fill comes off the ideal contour and
+								     only the stroke off the carved one. -->
+								{@const gapped = element.bridges?.path ?? ''}
 								<path
 									class:area={streek.filled}
 									class:gedempt={streek.dimmed}
 									d={element.path}
 									fill={streek.filled ? streek.color : 'none'}
 									fill-rule="nonzero"
-									stroke={streek.color}
+									stroke={gapped ? 'none' : streek.color}
 									stroke-dasharray={streek.dashed ? '6 4' : undefined}
 									stroke-opacity={streek.dimmed ? 0.4 : 1}
 									stroke-width={design.isSelected(element.id) ? 2 : streek.dimmed ? 0.9 : 1.2}
 									vector-effect="non-scaling-stroke"
 								/>
+								{#if gapped}
+									<path
+										class:gedempt={streek.dimmed}
+										d={gapped}
+										fill="none"
+										stroke={streek.color}
+										stroke-dasharray={streek.dashed ? '6 4' : undefined}
+										stroke-opacity={streek.dimmed ? 0.4 : 1}
+										stroke-width={design.isSelected(element.id) ? 2 : streek.dimmed ? 0.9 : 1.2}
+										vector-effect="non-scaling-stroke"
+									/>
+								{/if}
 								<!-- An invisible hit zone: a 1 px contour cannot be clicked, certainly
 								     not on a touch screen. -->
 								<!--
@@ -1901,6 +2241,16 @@
 										// Alt goes one shape deeper into the pile under the pointer.
 										else if (e.altKey) pickUnder(e, element.id);
 										else design.select(element.id);
+									}}
+									ondblclick={(e) => {
+										// A node exactly where you double-clicked, the way every drawing
+										// program does it. Only with the node tool in hand and only on
+										// the shape being edited: a double-click elsewhere means nothing
+										// here and must not silently change a different shape.
+										if (tool !== 'nodes' || !design.isSelected(element.id)) return;
+										e.preventDefault();
+										e.stopPropagation();
+										addNodeAt(e);
 									}}
 									oncontextmenu={(e) => {
 										e.preventDefault();
@@ -1953,8 +2303,13 @@
 								width={frameBox.width}
 								height={frameBox.height}
 							/>
-							<!-- Drag surface: the whole selection frame moves the element. -->
-							{#if canEdit}
+							<!-- Drag surface: the whole selection frame moves the element.
+							     Not with the node tool in hand: there you work on the points, and
+							     this surface lies over the contour. Measured: the double-click
+							     that should put a node on the line landed on this rectangle
+							     instead, so adding a node did nothing at all. Moving a shape is
+							     the arrow's job, one tool to the left. -->
+							{#if canEdit && tool !== 'nodes'}
 								<!-- Keyboard equivalent: the arrow keys move the
 								     selectie (0,1 mm, met shift 1 mm). -->
 								<rect
@@ -2130,10 +2485,54 @@
 				{/if}
 
 				{#if tool === 'nodes' && nodePoints.length}
+					{#if controlPreview}
+						<!-- The piece being bent, while it is being bent. -->
+						<path class="pen-line" d={controlPreview} fill="none" />
+					{/if}
+					{#each handleSegments as segment (segment.index)}
+						{#each segment.controls as control (control.which)}
+							{@const live =
+								controlDrag?.segment === segment.index && controlDrag.which === control.which
+									? controlDrag
+									: null}
+							{@const at = live ? { x: live.x, y: live.y } : { x: control.x_mm, y: control.y_mm }}
+							{@const anchor =
+								nodePoints.find(
+									(p) => p.index === (control.which === 1 ? segment.start : segment.end)
+								) ?? null}
+							{#if anchor}
+								<!-- A handle without its tether is a dot in the air: the line to the
+								     point it belongs to is what says *which* piece it bends. -->
+								<line class="tether" x1={anchor.x_mm} y1={anchor.y_mm} x2={at.x} y2={at.y} />
+							{/if}
+							<!-- Square and not round, so a handle can never be mistaken for a node —
+							     the two lie close together and mean different things. -->
+							<rect
+								class="handle-square"
+								x={at.x - handleR}
+								y={at.y - handleR}
+								width={handleR * 2}
+								height={handleR * 2}
+							/>
+							<circle
+								class="grip"
+								role="button"
+								tabindex="-1"
+								aria-label={t('canvas.dragHandle', { n: segment.index + 1 })}
+								cx={at.x}
+								cy={at.y}
+								r={hitR}
+								onpointerdown={(e) => startControl(e, segment, control)}
+								onpointermove={dragControl}
+								onpointerup={endControl}
+							/>
+						{/each}
+					{/each}
 					{#each nodePoints as point (point.index)}
 						{@const live = nodeDrag?.index === point.index ? nodeDrag : null}
 						<circle
 							class="knot"
+							class:picked={nodePicked === point.index}
 							cx={live ? live.x : point.x_mm}
 							cy={live ? live.y : point.y_mm}
 							r={handleR}
@@ -2141,30 +2540,55 @@
 						<circle
 							class="grip"
 							role="button"
-							tabindex="-1"
+							tabindex="0"
 							aria-label={t('canvas.dragNode', { n: point.index + 1 })}
+							aria-pressed={nodePicked === point.index}
 							cx={live ? live.x : point.x_mm}
 							cy={live ? live.y : point.y_mm}
 							r={hitR}
 							onpointerdown={(e) => startNode(e, point.index)}
 							onpointermove={moveNode}
 							onpointerup={endNode}
+							onkeydown={(e) => pickNodeByKey(e, point.index)}
+							oncontextmenu={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								nodePicked = point.index;
+								onContextNode?.(e, point.index);
+							}}
 						/>
 					{/each}
 				{/if}
 
-				{#if tool === 'pen' && penPoints.length}
-					{@const live = hover ? [...penPoints, hover] : penPoints}
-					<polyline
-						class="pen-line"
-						points={live.map((p) => `${p.x},${p.y}`).join(' ')}
-						fill="none"
-					/>
-					{#each penPoints as point, index (index)}
+				{#if tool === 'pen' && (penPoints.length || penPress)}
+					<!-- The line as a path and no longer a polyline: with a curve in it a
+					     polyline would show a straight line where the machine is going to cut
+					     a curve, and the preview is the only thing you have to judge it by. -->
+					<path class="pen-line" d={penLine} fill="none" />
+					{#each penPress ? [...penPoints, penPress.point] : penPoints as point, index (index)}
 						<!-- `handleR` and not a fixed number: 1.6 in this SVG is 1.6 mm, so the
 						     points of the pen drawing grew with the zoom and, zoomed in, covered
 						     the path you were laying down. -->
 						<circle class="pen-dot" cx={point.x} cy={point.y} r={handleR} />
+						{#if point.handle}
+							<!-- Both arms of the handle: the one you are pulling and its mirror,
+							     because the mirror is what bends the piece you have already laid
+							     down and you have to be able to see it doing that. -->
+							<line
+								class="pen-arm"
+								x1={2 * point.x - point.handle.x}
+								y1={2 * point.y - point.handle.y}
+								x2={point.handle.x}
+								y2={point.handle.y}
+							/>
+							<circle class="pen-grip" cx={point.handle.x} cy={point.handle.y} r={handleR} />
+							<circle
+								class="pen-grip"
+								cx={2 * point.x - point.handle.x}
+								cy={2 * point.y - point.handle.y}
+								r={handleR}
+							/>
+						{/if}
 					{/each}
 				{/if}
 
@@ -2460,16 +2884,26 @@
 <!-- The node tool is pressed but does nothing: say why. Without this line the
      difference between "you still have to pick a shape" and "this shape cannot do
      it" was invisible, and both looked like a broken tool. -->
-{#if nodeReden}
+<!-- And the same for a tool that *is* working: the pen and the node tool both do more
+     than a click, and a key nobody knows about is a key nobody uses. Measured on the pen
+     before this: clicking gave corners and nothing on screen said that dragging gives a
+     curve or that Enter is what finishes the line. -->
+{#if tool === 'pen'}
+	<p class="tool-hint" role="status">{t('canvas.pen.hint')}</p>
+{:else if nodeReason}
 	<p class="tool-hint" role="status">
-		{#if nodeReden === 'geen'}
+		{#if nodeReason === 'none'}
 			{t('canvas.nodes.pickOne')}
-		{:else if nodeReden === 'meerdere'}
+		{:else if nodeReason === 'many'}
 			{t('canvas.nodes.tooMany', { n: design.selectedIds.length })}
+		{:else if nodeReason === 'failed'}
+			{t('canvas.nodes.failed')}
 		{:else}
 			{t('canvas.nodes.noPoints')}
 		{/if}
 	</p>
+{:else if tool === 'nodes' && nodePoints.length}
+	<p class="tool-hint" role="status">{t('canvas.nodes.hint')}</p>
 {/if}
 <!-- What the trace on the bed is, in words (gap J3).
      A line growing across the bed during a job reads as "this has been cut
@@ -3070,12 +3504,48 @@
 	.grip:active {
 		cursor: grabbing;
 	}
+	/* Everything the pen draws while you are drawing catches no pointer. Measured: the
+	   preview runs to where the cursor is, so its own stroke was the topmost thing under
+	   the pointer and the next press landed on the line instead of on the bed — the second
+	   point of every line was simply lost. */
+	.pen-line,
+	.pen-dot,
+	.pen-arm,
+	.pen-grip {
+		pointer-events: none;
+	}
 	.pen-line {
 		stroke: var(--accent);
 		stroke-width: 1;
 		vector-effect: non-scaling-stroke;
 	}
 	.pen-dot { fill: var(--accent); }
+	/* A handle's arm and its two grips. Thinner and lighter than the line itself: the arm
+	   is scaffolding, the line is the work. */
+	.pen-arm,
+	.tether {
+		stroke: var(--accent);
+		stroke-width: 1;
+		stroke-dasharray: 2 2;
+		stroke-opacity: 0.7;
+		vector-effect: non-scaling-stroke;
+	}
+	.pen-grip {
+		fill: var(--surface-1);
+		stroke: var(--accent);
+		stroke-width: 1.2;
+		vector-effect: non-scaling-stroke;
+	}
+	/* Square, so a handle is never mistaken for a node; the two lie close together and
+	   mean different things. */
+	.handle-square {
+		fill: var(--surface-1);
+		stroke: var(--accent);
+		stroke-width: 1.5;
+		vector-effect: non-scaling-stroke;
+		pointer-events: none;
+	}
+	.handle-square:has(+ .grip:hover) { fill: var(--accent); }
 	.measure {
 		stroke: var(--accent);
 		stroke-width: 1;
@@ -3098,6 +3568,23 @@
 	}
 	/* The hit zone comes *after* the handle in the tree; :has looks ahead. */
 	.knot:has(+ .grip:hover) { fill: var(--accent); }
+	/* Tabbed to. The grip itself is transparent and has no size worth outlining, so the
+	   ring goes round the knot it belongs to — otherwise a keyboard user tabs through four
+	   invisible circles and sees nothing move. */
+	.knot:has(+ .grip:focus-visible) {
+		fill: var(--accent);
+		stroke: var(--surface-1);
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.grip:focus-visible { outline: none; }
+	/* The node in hand: the verbs work on this one, so it has to be the one that looks
+	   chosen. Filled, not merely outlined — an outline difference disappears at the size a
+	   node has on screen. */
+	.knot.picked {
+		fill: var(--accent);
+		stroke: var(--surface-1);
+	}
 	.crop-catch {
 		fill: rgb(0 0 0 / 0.18);
 		cursor: crosshair;
