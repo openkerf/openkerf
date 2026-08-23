@@ -244,6 +244,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/series/attach",
         # Pointing the bed at one row is reading, but it writes the run file's pointer
         # and re-renders the drawing, so it is gated like the rest of the family.
+        # Filling a plate with one piece per row: it copies shapes onto the drawing, so
+        # it is a write like any other generator. The GET beside it only counts.
+        "/api/series/plate",
         "/api/series/row",
         "/api/series/start",
         "/api/series/burn",

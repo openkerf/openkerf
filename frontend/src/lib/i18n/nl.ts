@@ -2053,6 +2053,16 @@ export const nl: Catalogue = {
 	'series.skipBlank': 'Een rij met een lege cel overslaan',
 	'series.skipBlank.cannot':
 		'Dit ontwerp neemt {n} rijen per brandbeurt, en een vol vel kan geen rij overslaan: de engine leest de rijen naast elkaar.',
+	'series.plate': 'Op één plaat',
+	'series.plate.size': '{w} × {h}',
+	'series.plate.fits': 'Een stuk van {piece} mm gaat {places} keer op deze plaat: {across} naast elkaar en {down} onder elkaar.',
+	'series.plate.more': 'De hele lijst is {burns} platen van deze, en op de laatste zijn {last} plekken in gebruik.',
+	'series.plate.done': 'Deze plaat is ingedeeld met {n} stukken, één per rij van de lijst.',
+	'series.plate.gap': 'Tussen de stukken',
+	'series.plate.margin': 'Vrij aan de rand',
+	'series.plate.fill': 'Leg {n} stukken neer',
+	'series.plate.fillPlain': 'Leg de stukken neer',
+	'series.plate.already': 'Deze plaat is al ingedeeld: de stukken erop lezen verder in de lijst dan de eerste rij.',
 	'series.startAt': 'Begin bij rij',
 	'series.startAt.hint': 'Welke rij de eerste brandbeurt pakt. De rest volgt in de orde van het bestand.',
 	'series.attach': 'Deze lijst gebruiken',
@@ -2148,6 +2158,25 @@ export const nl: Catalogue = {
 	'api.rotary.needsMeasurement': 'Kalibreren vraagt beide lengtes: wat je de machine gevraagd hebt en wat je op het object gemeten hebt.',
 	'api.rotary.noMachine': 'Er is geen machine gekozen, dus er is geen rotary om in te stellen.',
 	'api.rotary.homeWhileActive': 'De rotary staat aan. Homen stuurt de kop over het bed en de rotary in. Haal de rotary er eerst uit, of bevestig dat hij vrij is.',
+	'api.plate.alreadyFilled':
+		'Deze plaat is al ingedeeld: de stukken erop lezen verder in de lijst dan de eerste rij. Maak dat eerst ongedaan, of deel het losse stuk in waarmee je begon.',
+	'api.plate.badGap': 'Een negatieve tussenruimte laat twee stukken overlappen, en dan is het één snede.',
+	'api.plate.badMargin': 'Een negatieve rand legt het werk over de kant van de plaat heen.',
+	'api.plate.fixedRow':
+		'Dit stuk noemt een vaste rij, dus alle kopieën zouden diezelfde rij graveren. Haal het rijnummer uit de plaatshouder.',
+	'api.plate.noList':
+		'Er hangt geen lijst aan, dus elke kopie zou hetzelfde zeggen. Haal eerst een lijst binnen in het Serie-venster, of gebruik Herhalen als je gewone kopieën wilt.',
+	'api.plate.noSize':
+		'Dit stuk heeft geen maat op de plaat, dus er is niets in te delen. Meestal komt dat van een tekst die een kolom leest die de lijst niet heeft.',
+	'api.plate.nothing': 'Er ligt niets op de plaat om in te delen. Teken eerst het stuk.',
+	'api.plate.nothingReads':
+		'Niets in dit stuk leest uit de lijst, dus alle kopieën zouden hetzelfde zijn. Zet eerst een kolom in een tekst.',
+	'api.plate.onlyOne':
+		'Hier past er maar één van op de plaat, dus er is niets in te delen. De serie brandt ze plaat voor plaat.',
+	'api.plate.tooBig':
+		'Dit stuk is {piece_w}×{piece_h} mm en op de plaat is {room_w}×{room_h} mm vrij binnen de rand, dus er past er niet één op. Maak het stuk kleiner, de rand smaller of het vel groter.',
+	'api.plate.tooMany':
+		'{places} stukken op één plaat is meer dan deze app indeelt; houd het onder {max}. Daarboven kost het plan meer tijd dan het branden zelf.',
 	'api.series.badColumnName':
 		'Een kolomnaam mag geen accolade bevatten, want dat is juist wat een plaatshouder markeert. Geef de kolom in je bestand een andere naam.',
 	'api.series.needsColumnName':

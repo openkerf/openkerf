@@ -182,6 +182,43 @@ the third `{name#+2}`, and so on up to `{name#+11}`. Then **one burn eats twelve
 list of fifty makes five burns and not fifty, and the window says so in as many words: "This
 design takes 12 rows per burn, so one sheetful is that many rows."
 
+### Letting the app lay the plate out
+
+You do not have to place those twelve by hand. Draw the piece once — the outline and the text
+that reads the list, grouped or not — and the Series window works out how many fit under **On
+one plate**:
+
+> A piece of 110 × 60 mm goes 16 times on this plate: 4 across and 4 down.
+
+Two numbers decide it, and both are about the material rather than the list: **Between the
+pieces** is the gap where two cuts would otherwise become one, and **Free at the edge** is the
+margin where the clamps live. Press **Lay out 16 pieces** and the app moves the piece into the
+corner of that margin, copies it across the plate, and gives every copy the next row — copy
+two reads `{name#+1}`, copy sixteen `{name#+15}`. It is one undo.
+
+![A plate the app has just laid out: sixteen rounded tags in four rows of four, from the corner
+of the margin, each with a different name cut into it — Anna, Bram, Cees, Daan on the first row,
+then Eva, Fien, Gijs, Hanna, and so on to Pim. The panel says "32 elements": an outline and a
+name for every place.](images/38-series-plate.png)
+
+When the list is longer than the plate holds, the app says what the rest becomes rather than
+making more sheets:
+
+> The whole list is 2 plates of this one, and the last of them uses 7 of the places.
+
+Those other plates are **burns of this same plate**, not new sheets — the same material going
+back in the machine, counted by the run, with the same marks and the same redo. That is a
+decision and not a shortcut: sheets full of copies would put a hundred versions of one drawing
+in the document, they could not follow a list that changed afterwards, and a sheet has to name
+its rows outright, which would leave the run's count of plates and the sheets' own order
+saying two different things about one job.
+
+A few things it refuses, in these words: a piece bigger than the plate ("so not even one
+fits", with both measurements in it), a plate that is already laid out ("its pieces read
+further down the list than the first row"), a piece that reads nothing from the list, and a
+piece that names a fixed row. And it will not lay out a piece that fills the plate on its own:
+"Only one of these fits on the plate, so there is nothing to lay out."
+
 Which means the last plate is short. Fifty rows over twelve places leaves the fifth plate with
 two names on it and ten places empty. OpenKerf takes those ten shapes out of the job before it
 goes to the machine, and says how many: "10 places on this sheet have no row left, so they
@@ -199,7 +236,8 @@ Two consequences to keep in your head:
   through and rows fall into different plates than the ones you have already made. A run that
   has started notices, and refuses; see [The run](#the-run).
 
-The other way to fill a plank is to lay the copies out yourself. Select the tag, open
+The other way to fill a plank is to lay the copies out yourself, in the rows and columns you
+choose. Select the tag, open
 **Generators**, and on the **Repeat** tab tick **Each copy takes the next name from the list**
 — then each copy gets the next row rather than a twelfth Anna. That is a drawing operation and
 not a series setting; it is on [Shapes, text, images and

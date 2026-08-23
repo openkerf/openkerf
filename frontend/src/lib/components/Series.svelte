@@ -104,6 +104,13 @@
 	let rowMenu = $state<{ list: MenuList; x: number; y: number } | null>(null);
 	/** How tall the pinned banner strip is, so the search head can pin below it. */
 	let bannerHeight = $state(0);
+	/**
+	 * Filling the plate: how much material stays free at the edge, and how much between
+	 * two pieces. Numbers and not a tick, because both are decisions about the material
+	 * — the margin is where the clamps live and the gap is two kerfs plus what burns
+	 * away between them.
+	 */
+	let plate = $state({ margin_mm: '10', gap_mm: '5' });
 
 	/**
 	 * The server's own sum about the list and the design — `Series.check()` plus the
@@ -242,6 +249,51 @@
 	 * is left alone: the last valid reading is still the honest thing to have shown.
 	 */
 	$effect(() => () => series.cancelPreview());
+
+	/**
+	 * What filling the plate would do, asked again whenever a number or the list moves.
+	 *
+	 * Every answer is a read that draws nothing (`GET /api/series/plate`), so the
+	 * sentence above the button and the button itself come out of one sum — the rule the
+	 * generators window pays for in the same way.
+	 */
+	$effect(() => {
+		const margin = Number(plate.margin_mm);
+		const gap = Number(plate.gap_mm);
+		// `sum` is read so that filling, attaching another list or moving a shape asks
+		// again: how many fit depends on all three.
+		void sum?.row_count;
+		void sum?.step;
+		if (!open || !Number.isFinite(margin) || !Number.isFinite(gap)) return;
+		series.plan([], margin, gap);
+	});
+
+	/**
+	 * Is this plate already laid out?
+	 *
+	 * Read off the *design* and not off the last answer: how many rows a burn eats is
+	 * what a laid-out plate means, and that is the same number the burn list and the run
+	 * work from. A plate laid out before the window was opened, or one that came with a
+	 * project, says so here too.
+	 */
+	const laidOut = $derived((sum?.step ?? 1) > 1);
+	/** How many places the last plate uses. The others use all of them. */
+	const lastPlaces = $derived.by(() => {
+		const step = sum?.step ?? 1;
+		const rows = sum?.row_count ?? 0;
+		if (step < 2 || !rows) return step;
+		const rest = rows % step;
+		return rest === 0 ? step : rest;
+	});
+
+	/** Lay the piece out over the plate, then let the canvas read the design again. */
+	async function fillPlate() {
+		const margin = Number(plate.margin_mm);
+		const gap = Number(plate.gap_mm);
+		if (!Number.isFinite(margin) || !Number.isFinite(gap)) return;
+		if (!(await series.fill([], margin, gap))) return;
+		onChanged?.();
+	}
 
 	/**
 	 * Opening the window is what brings the rows themselves — and asks again when they
@@ -739,6 +791,99 @@
 							</li>
 						{/each}
 					</ul>
+				</div>
+			{/if}
+
+			<!-- On one plate. A verb with two numbers of its own, so it is a block and not
+			     a row: the margin is where the clamps live and the gap is two kerfs plus
+			     what burns away between them, and both are decisions about the material
+			     rather than about the list. It sits above the closing block because it
+			     changes the drawing, which is the thing the rest of this window reads. -->
+			{#if attached}
+				<div class="blok plaat">
+					<h3>{t('series.plate')}</h3>
+					{#if series.plateError}
+						<p class="fine">{series.plateError}</p>
+					{:else if laidOut}
+						<!-- Already laid out. The plan beside it would measure the whole plate
+						     as the piece and answer "one place, seven plates" about a plate that
+						     has just been filled, so what is said here is what the plate now
+						     holds — and the number of plates comes from the run's own sum. -->
+						<p class="fine">
+							{t('series.plate.done', { n: i18n.number(sum?.step ?? 1) })}
+						</p>
+						{#if (sum?.burns ?? 1) > 1}
+							<p class="fine">
+								{t('series.plate.more', {
+									burns: i18n.number(sum?.burns ?? 1),
+									last: i18n.number(lastPlaces)
+								})}
+							</p>
+						{/if}
+					{:else if series.plate}
+						<p class="fine">
+							{t('series.plate.fits', {
+								// `number` and not `mm` for the two halves: the sentence carries
+								// the unit once, and "80.0 mm × 40.0 mm mm" is what happens when
+								// both do.
+								piece: t('series.plate.size', {
+									w: i18n.number(series.plate.piece_mm[0]),
+									h: i18n.number(series.plate.piece_mm[1])
+								}),
+								places: i18n.number(series.plate.places),
+								across: i18n.number(series.plate.columns),
+								down: i18n.number(series.plate.rows)
+							})}
+						</p>
+						{#if series.plate.burns > 1}
+							<!-- The question this feature raises the moment it answers the first
+							     one: and the other thirty names? They are plates of this same
+							     sheet, which is what the run counts. -->
+							<p class="fine">
+								{t('series.plate.more', {
+									burns: i18n.number(series.plate.burns),
+									last: i18n.number(series.plate.last_places)
+								})}
+							</p>
+						{/if}
+					{/if}
+					{#if !laidOut}
+					<div class="paar">
+						<NumberField
+							label={t('series.plate.gap')}
+							unit="mm"
+							step={0.5}
+							min={0}
+							bind:value={plate.gap_mm}
+						/>
+						<NumberField
+							label={t('series.plate.margin')}
+							unit="mm"
+							step={1}
+							min={0}
+							bind:value={plate.margin_mm}
+						/>
+					</div>
+					<button
+						class="btn"
+						disabled={!canEdit ||
+							running ||
+							series.busy ||
+							!series.plate ||
+							series.plate.places < 2 ||
+							series.plate.already > 1}
+						title={running
+							? t('series.running')
+							: series.plate && series.plate.already > 1
+								? t('series.plate.already')
+								: undefined}
+						onclick={() => void fillPlate()}
+					>
+						{series.plate && series.plate.places > 1
+							? t('series.plate.fill', { n: i18n.number(series.plate.places) })
+							: t('series.plate.fillPlain')}
+					</button>
+					{/if}
 				</div>
 			{/if}
 

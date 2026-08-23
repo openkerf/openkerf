@@ -28,6 +28,7 @@ WRITE_ROUTES = [
     ("/api/series/upload", {"files": {"file": ("n.csv", b"name\nAnna\n", "text/csv")}}),
     ("/api/series/attach", {"json": {}}),
     ("/api/series/preview", {"json": {}}),
+    ("/api/series/plate", {"json": {}}),
     ("/api/series/row", {"json": {"row": 0}}),
     ("/api/series/start", {"json": {}}),
     ("/api/series/burn", {"json": {}}),
