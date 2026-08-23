@@ -267,7 +267,22 @@ function values(response: Response): Record<string, unknown> | undefined {
 	if (!raw) return undefined;
 	try {
 		const parsed = JSON.parse(raw);
-		return parsed && typeof parsed === 'object' ? parsed : undefined;
+		if (!parsed || typeof parsed !== 'object') return undefined;
+		// Numbers go through `Intl`, here as everywhere else. A refusal is not a place
+		// where the app may write in another notation than the panel behind it: measured
+		// with a Dutch reader, "Deze lijst heeft 1001 rijen en deze app draagt er hooguit
+		// 1000" beside a canvas that writes 1.001 everywhere. Anything that is not a
+		// number — a column name, a file name, the token that says which end of a range
+		// was wrong — is the reader's own data or a key, and is left exactly as it came.
+		const written: Record<string, unknown> = {};
+		for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) {
+			// `n` and `count` are left as they came: `t()` picks the singular or the
+			// plural from them, and it reads them with `Number()`. A Dutch "1.000" would
+			// parse back as 1 and put a refusal about a thousand rows in the singular.
+			const selects = name === 'n' || name === 'count';
+			written[name] = typeof value === 'number' && !selects ? number(value) : value;
+		}
+		return written;
 	} catch {
 		return undefined;
 	}

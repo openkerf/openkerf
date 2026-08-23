@@ -16,6 +16,8 @@
 	import { en } from '$lib/i18n/en';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { layerMenu, type Menu as MenuList } from '$lib/actions';
+	import { placeholders, resolve } from '$lib/series';
+	import type { SeriesStore } from '$lib/series.svelte';
 	import { untrack } from 'svelte';
 
 	let {
@@ -43,7 +45,8 @@
 		bridgeNote = null,
 		bridgeRevision = 0,
 		show = 'selection',
-		bed = null
+		bed = null,
+		series = null
 	}: {
 		design: DesignStore;
 		edits: EditController;
@@ -100,6 +103,12 @@
 		show?: 'selection' | 'layers';
 		/** Bed size in mm, to see whether something falls outside. */
 		bed?: { width: number; height: number } | null;
+		/**
+		 * The list a series burns from, so that the text quoted below can also be read
+		 * back as what it is going to engrave. Optional: without it this panel is exactly
+		 * what it was.
+		 */
+		series?: SeriesStore | null;
 	} = $props();
 
 	let elements = $derived(design.elements);
@@ -177,6 +186,51 @@
 	let lockedHere = $derived(
 		chosen.length > 0 && chosen.every((element) => element.locked)
 	);
+
+	/**
+	 * What the selected text engraves for the burn that is now on the bed.
+	 *
+	 * The line above quotes the template, and that is right — `{name}` is the value that
+	 * is stored on the shape, and a value belongs in this panel. It is also not enough:
+	 * somebody looking at a tag wants to know *which* name the machine is about to put on
+	 * it. This is the one line that says so, and it is the single thing this whole feature
+	 * has to be trusted about.
+	 *
+	 * Two sources, and their order is the point. `check().uses[].renders` is the engine's
+	 * own substitution for the row the bed is showing — the very call the burn makes — so
+	 * wherever there is an answer that answer wins, `{date}` and an absolute row included.
+	 * `resolve()` is our own arithmetic over the rows and covers the run the server has
+	 * not been asked about yet: a text edited a moment ago, whose new placeholder is not
+	 * in the last sum. A run neither can fill is left standing, because standing is
+	 * exactly what the engine engraves there.
+	 *
+	 * Null when there is nothing to add: no list attached, or a text without a
+	 * placeholder in it. Repeating the quote a line lower would teach the reader that
+	 * this line says nothing, and then it says nothing on the day it matters.
+	 */
+	let readsNow = $derived.by(() => {
+		const template = selected?.text?.text;
+		const sum = series?.state;
+		if (!template || !sum?.attached) return null;
+		const holders = placeholders(template);
+		if (!holders.length) return null;
+		const engine = new Map(sum.uses.map((use) => [use.placeholder, use.renders]));
+		// Walked with a cursor rather than replaced run by run: a text holding the same
+		// placeholder twice would otherwise have the second pass replace what the first
+		// one had already put there.
+		let out = '';
+		let cursor = 0;
+		for (const holder of holders) {
+			const at = template.indexOf(holder.text, cursor);
+			if (at < 0) continue;
+			out += template.slice(cursor, at);
+			out +=
+				engine.get(holder.text) ??
+				resolve(holder.text, sum.current_row, series?.rows ?? []);
+			cursor = at + holder.text.length;
+		}
+		return out + template.slice(cursor);
+	});
 
 	let bridges = $derived(bridgeSummary(chosen));
 	/** The two numbers as typed, so a half-typed "1." does not jump away. */
@@ -709,9 +763,12 @@
 		     sometimes want to take something back. Since the move they have ⌘Z and
 		     ⌘⇧Z as well. -->
 	</div>
-	{#if edits.error}
-		<p class="edit-error" role="alert">{edits.error}</p>
-	{/if}
+	<!-- A refused edit used to be here. It has gone to the notice at the top right
+	     (Message.svelte), because you draw from the tool rail, the right-click menu and
+	     the text window, and none of those needs this panel to be open — from the Job tab
+	     the shape stayed away and this line explained it to nobody. It was also 700 px
+	     above the fields it was often about, and the panel scrolls. One place, on every
+	     tab; not two. -->
 	{#if elements.length === 0}
 		<!-- This used to say "Use 'Load design…' in the Job tab". That button does
 		     not exist and never has (repo-wide grep: this line was the only place
@@ -870,6 +927,15 @@
 				     button doing both, and then the text is only readable once you have
 				     already clicked it. -->
 				<p class="tekstwaarde" title={selected.text.text}>“{selected.text.text}”</p>
+				{#if readsNow !== null}
+					<!-- And what that template comes out as. Under the quote and not instead of
+					     it: the two are different facts, and a panel that showed only the name
+					     would leave a reader unable to see which column the tag reads. Which
+					     column to put in is not a value of this shape — a text can hold several
+					     placeholders and literal words besides — so the chooser is a verb and
+					     lives in the right-click menu. -->
+					<p class="reads">{t('series.panelValue', { text: readsNow })}</p>
+				{/if}
 			{/if}
 
 			<!-- Twelve icons — align, distribute, mirror, group — used to be here. They
@@ -2474,13 +2540,6 @@
 			margin-top: var(--space-6);
 		}
 	}
-	.edit-error {
-		margin: 0 0 var(--space-2);
-		padding: var(--space-2);
-		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--danger) 14%, transparent);
-		font-size: var(--text-xs);
-	}
 	.imagefx { display: grid; gap: 4px; }
 	.fx-head { display: flex; align-items: center; gap: var(--space-2); }
 	.fx {
@@ -2533,6 +2592,15 @@
 		gap: 8px;
 	}
 	.stray p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
+	/* The read-back line under a text. Wraps rather than clips: it carries somebody's own
+	   name, and half a name is worse than two lines. */
+	.reads {
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: 1.45;
+		color: var(--text-2);
+		overflow-wrap: anywhere;
+	}
 	.tip {
 		margin: 0;
 		font-size: var(--text-xs);

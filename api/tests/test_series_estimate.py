@@ -486,3 +486,24 @@ def test_the_cut_path_window_draws_the_plate_and_not_the_drawing(client):
             and y0 - 1 <= step.get("y0", -1e9) <= y1 + 1
         )
         assert not inside, f"a step at {step.get('x0')},{step.get('y0')} is in the box of the place with no name"
+
+
+def test_a_shape_with_no_geometry_does_not_take_the_estimate_down(client):
+    """
+    The pre-flight showed no time at all, twice per refresh, and said nothing.
+
+    A text whose whole content is a placeholder has no geometry while no list is
+    attached — the state this feature makes on every detach — and its bounds are
+    (nan, nan, nan, nan). One of those poisons the nearest-neighbour travel sum, the
+    answer leaves as `nan` seconds, and FastAPI cannot serialise that: measured
+    `ValueError: Out of range float values are not JSON compliant: nan / when
+    serializing dict item 'seconds'`, a 500 on the route the pre-flight reads. `exact=1`
+    answered 200 all along, which is why it went unseen.
+    """
+    a_text(client, "{ghost}", 20.0)
+
+    answer = client.get("/api/job/estimate")
+
+    assert answer.status_code == 200, answer.text
+    seconds = answer.json()["seconds"]
+    assert seconds == seconds, "the estimate came back as nan"

@@ -15,6 +15,7 @@
 		selectedIds = [],
 		busy = false,
 		hasZAxis = false,
+		listAttached = false,
 		onGenerate
 	}: {
 		open: boolean;
@@ -28,6 +29,15 @@
 		 *  the fields. */
 		selectedIds?: string[];
 		busy?: boolean;
+		/**
+		 * Is there a list to take the next name from? (`SeriesStore.attached`.)
+		 *
+		 * Only the Repeat tab asks: without a list "each copy takes the next name" has
+		 * no next name, and the API refuses it (`gen.noList`). Grey with the reason
+		 * beside it rather than absent — a control that is not there teaches nobody
+		 * that the feature exists.
+		 */
+		listAttached?: boolean;
 		onGenerate: (
 			what: string,
 			body: Record<string, unknown>
@@ -48,7 +58,17 @@
 	let tab = $state<Tab>('grid');
 	let error = $state<string | null>(null);
 
-	let grid = $state({ columns: '4', rows: '3', gap_x_mm: '5', gap_y_mm: '5' });
+	let grid = $state({
+		columns: '4',
+		rows: '3',
+		gap_x_mm: '5',
+		gap_y_mm: '5',
+		// The gap this closes: `grid` copies with a plain `copy(node)` and knows nothing
+		// about a list, so three copies of a tag reading `{name}` came out as three
+		// Annas while chain-duplicating walked the list. Two ways of copying that
+		// disagree is worse than either.
+		follow_list: false
+	});
 	let radial = $state({ repeats: '8', radius_mm: '40', rotate: true });
 	let polygon = $state({ corners: '6', radius_mm: '20', inner: '', cx_mm: '50', cy_mm: '50' });
 	let box = $state({
@@ -206,7 +226,11 @@
 		if (tab === 'grid')
 			return {
 				columns: n(grid.columns), rows: n(grid.rows),
-				gap_x_mm: n(grid.gap_x_mm), gap_y_mm: n(grid.gap_y_mm)
+				gap_x_mm: n(grid.gap_x_mm), gap_y_mm: n(grid.gap_y_mm),
+				// `listAttached` as well as the box: the list can be taken away in the
+				// Series window while this dialog stands open, and a tick left over from
+				// then would send a request that can only be refused.
+				follow_list: listAttached && grid.follow_list
 			};
 		if (tab === 'radial')
 			return {
@@ -482,6 +506,18 @@
 				<NumberField label={t('gen.gapX')} unit="mm" step={0.5} bind:value={grid.gap_x_mm} />
 				<NumberField label={t('gen.gapY')} unit="mm" step={0.5} bind:value={grid.gap_y_mm} />
 			</div>
+			<!-- The one thing in this dialog that reads from outside the drawing. It goes
+			     through `opdracht()` with everything else, so the preview and the button
+			     cannot ask different things. -->
+			<label class="check listfollow" title={listAttached ? undefined : t('api.gen.noList')}>
+				<input type="checkbox" bind:checked={grid.follow_list} disabled={!listAttached} />
+				<span>{t('gen.followList')}</span>
+			</label>
+			{#if !listAttached}
+				<!-- The same sentence the server answers with, so the reason before the
+				     press and the answer after it are one wording. -->
+				<p class="hint">{t('api.gen.noList')}</p>
+			{/if}
 		</div>
 		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}>
 			{t('gen.grid.go', { n: n(grid.columns) * n(grid.rows), tail: buttonTail })}
@@ -806,6 +842,11 @@
 	   box tab); here there is no row to line up with, and to the right it stood alone in the
 	   middle of the form. */
 	.fields .check.areatoggle { align-self: start; }
+	/* The same reason as `.areatoggle` above: this one governs the whole repeat and
+	   lines up with the fields on the left. Measured with the default `align-self: end`
+	   it stood alone against the right edge of the form, a metre from the numbers it
+	   is about. */
+	.fields .check.listfollow { align-self: start; }
 	.bridgeline { margin: 0; font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
 	.fontchoice { margin-bottom: var(--space-4); }
 	.letterregel {

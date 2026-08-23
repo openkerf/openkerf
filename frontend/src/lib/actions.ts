@@ -226,6 +226,24 @@ export type Context = {
 	 * Alt to hold.
 	 */
 	under: { id: string; label: string; selected: boolean }[];
+	/**
+	 * The columns of the list a series burns from, spelled the way the reader spelled
+	 * them.
+	 *
+	 * Their own data, so they go into a row bare and never through the catalogue — the
+	 * same treatment `layers` and `sheets` above already get. Empty means no list is
+	 * attached, and then the row that would put one into a text says so instead of
+	 * disappearing: putting a column into a text is what makes a series a series, and a
+	 * verb nobody can find is a verb nobody uses.
+	 */
+	columns: string[];
+	/**
+	 * Is everything selected marked "burn only once"? Decides which way that row points.
+	 *
+	 * One row, two wordings, like the fill row. A mixed selection reads as not-yet-once,
+	 * because somebody who picked all of it and asked for "only once" means all of it.
+	 */
+	once: boolean;
 };
 
 /** What the page must be able to perform. One object, so a test can fake it. */
@@ -254,6 +272,16 @@ export type Handlers = {
 	assignLayer: (id: string, inside: boolean) => void;
 	toSheet: (id: string) => void;
 	editText: () => void;
+	/**
+	 * Put `{column}` into the selected text, so that this burn takes its value from the
+	 * list. Through the ordinary text route, which is what re-renders the path and what
+	 * refuses a bracket that does not close.
+	 */
+	insertColumn: (column: string) => void;
+	/** "Burn only once" on the selection, or on every plate of the series again. */
+	burnOnce: (once: boolean) => void;
+	/** Open the Series window: the list, the burns it makes and where to start. */
+	series: () => void;
 	crop: () => void;
 	uncrop: () => void;
 	vectorise: () => void;
@@ -608,6 +636,26 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 					off: needsOne,
 					explain: ctx.filled ? t('explain.unfill') : t('explain.fill'),
 					run: () => h.fill(!ctx.filled)
+				},
+				{
+					// One row, two wordings, like the fill row above it. In a series this shape
+					// is on the first plate and not on the forty-nine after it: a jig frame, or
+					// the pockets the pieces sit in.
+					//
+					// Not disabled while no list is attached, and that is deliberate: the mark
+					// belongs to the drawing and which burn leaves it out is a decision of the
+					// run. You mark the frame while you are drawing it, not after you have found
+					// the spreadsheet.
+					//
+					// Deliberately not `needsOne` either. That one carries the locked reason, and
+					// this changes no geometry at all — the API leaves it unguarded against a
+					// lock for exactly that reason, so the row may not refuse where the API does
+					// not.
+					id: 'burn-once',
+					label: ctx.once ? t('action.burnEvery') : t('action.burnOnce'),
+					explain: ctx.once ? t('explain.burnEvery') : t('explain.burnOnce'),
+					off: cannot ?? (ctx.count ? undefined : t('reason.pickShape')),
+					run: () => h.burnOnce(!ctx.once)
 				}
 			]
 		},
@@ -636,8 +684,48 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 	// Only what applies to *this* kind of shape. A menu that always offers "Crop"
 	// on a rectangle teaches you that half of it is grey.
 	const special: (MenuItem | 'separator')[] = [];
-	if (ctx.isText)
+	if (ctx.isText) {
 		special.push({ id: 'text', label: t('action.editText'), off: needsOne, run: h.editText });
+		// Putting a column of the list into a text is what makes a series a series, so the
+		// row is here even when there is no list yet: greyed, with the reason, because a
+		// verb nobody can find is a verb nobody uses.
+		//
+		// One row when there is one column and a submenu as soon as there is something to
+		// choose between — the same "one option is not a choice" rule the list of what lies
+		// under the pointer keeps. And the children carry their own `off` as well:
+		// disabling only the parent is enough for the mouse and not for the keyboard, nor
+		// for any second surface reading this list, which is what this list is for.
+		//
+		// The label of a child is the column's own name, bare — the reader's data, like a
+		// layer name or a sheet name, and never a catalogue key.
+		if (ctx.columns.length > 1) {
+			special.push({
+				id: 'insert-column',
+				label: t('series.insert'),
+				off: needsOne,
+				items: ctx.columns.map((column) => ({
+					id: `column-${column}`,
+					label: column,
+					off: needsOne,
+					run: () => h.insertColumn(column)
+				}))
+			});
+		} else {
+			const only = ctx.columns[0];
+			special.push({
+				// The id follows the wording, the way the lock row's does: with a column to
+				// name this row *is* that column and carries its name, and without one it is
+				// the family's own row saying why it cannot be used.
+				id: only ? `column-${only}` : 'insert-column',
+				label: only ? t('series.insert.named', { column: only }) : t('series.insert'),
+				off: needsOne ?? (only ? undefined : t('reason.noList')),
+				// `only ?? ''` and not a non-null assertion: the row is disabled without a
+				// column, and the handler refuses an empty name in so many words, so the two
+				// halves of that promise are both written down.
+				run: () => h.insertColumn(only ?? '')
+			});
+		}
+	}
 	if (ctx.isImage) {
 		special.push({
 			id: 'crop',
@@ -747,6 +835,25 @@ export function canvasMenu(
 					explain: t('cutpath.show.title'),
 					off: ctx.empty ? t('reason.bedEmpty') : undefined,
 					run: h.cutPath
+				}
+			]
+		},
+		{
+			items: [
+				{
+					// A workspace of its own, like the cut path above — a place you search and
+					// compare in — but a group of its own, because it is not about the view. The
+					// tool rail has the same door; this is the one you find while right-clicking
+					// the bed you are looking at. No shortcut: none of the five workspaces has
+					// one and keys are scarce.
+					id: 'series',
+					label: t('series.show'),
+					explain: t('series.show.title'),
+					// Everything in that window that is worth opening it for is a write, and
+					// the rail's button is greyed on the same condition. Two doors to one room
+					// that disagree about whether it is open is worse than either.
+					off: ctx.may ? undefined : t('reason.needsToken'),
+					run: h.series
 				}
 			]
 		},

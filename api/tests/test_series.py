@@ -376,7 +376,9 @@ def test_a_file_of_column_names_with_nothing_under_them_is_refused():
     with pytest.raises(DesignError) as e:
         read_rows(b"name,city\n")
 
-    assert refusal(e) == "series.noRows"
+    # Its own code beside `series.noRows`, which is what an empty *list* raises: the
+    # two sentences ask for different things, and one code carries one translation.
+    assert refusal(e) == "series.headerOnly"
 
 
 def test_a_file_of_one_line_is_read_as_a_heading_and_can_be_overruled():
@@ -391,7 +393,7 @@ def test_a_file_of_one_line_is_read_as_a_heading_and_can_be_overruled():
     """
     with pytest.raises(DesignError) as e:
         read_rows(b"Anna\n")
-    assert refusal(e) == "series.noRows"
+    assert refusal(e) == "series.headerOnly"
 
     told = read_rows(b"Anna\n", has_header=False)
     assert told["rows"] == [{"column_1": "Anna"}]
@@ -1037,6 +1039,12 @@ def test_a_numbered_column_may_not_be_called_something_the_engine_keeps():
     with pytest.raises(DesignError) as e:
         rows_from_numbers(1, 3, column="{n}")
     assert refusal(e) == "series.badColumnName"
+
+    # And a name that is not there at all is its own refusal, because it asks for
+    # something else: one code carries one translated sentence.
+    with pytest.raises(DesignError) as e:
+        rows_from_numbers(1, 3, column="   ")
+    assert refusal(e) == "series.needsColumnName"
 
     assert require_column_name("  part  ") == "part"
 

@@ -2632,7 +2632,12 @@ class Drawing:
             # An image has no path; that falls under the raster sum.
             return 0.0
         try:
-            return float(geometry.length()) / UNITS_PER_MM
+            length = float(geometry.length()) / UNITS_PER_MM
+            # `nan` is contagious: one shape with no geometry made the whole sum `nan`,
+            # and `nan` seconds is not JSON — see `_center_mm` for how such a shape is
+            # made and what it cost.
+            if length == length:
+                return length
         except Exception:
             pass
         try:
@@ -2644,18 +2649,30 @@ class Drawing:
                 if previous is not None:
                     total += hypot(point.real - previous.real, point.imag - previous.imag)
                 previous = point
-            return total / UNITS_PER_MM
+            total = total / UNITS_PER_MM
+            return total if total == total else 0.0
         except Exception:
             return 0.0
 
     @staticmethod
     def _center_mm(node) -> tuple[float, float] | None:
+        import math
+
         from meerk40t.core.units import UNITS_PER_MM
 
         bounds = getattr(node, "bounds", None)
         if not bounds:
             return None
         x0, y0, x1, y1 = bounds
+        # A shape can have a box of nan: a text whose whole content is a placeholder has
+        # no geometry while no list is attached, and that is a state this app makes on
+        # every detach. One nan poisons the whole nearest-neighbour sum, and the answer
+        # then leaves here as `nan` seconds — which FastAPI cannot serialise, so
+        # `/api/job/estimate` answered **500** and the pre-flight showed no time at all
+        # while logging two failed requests per refresh. A shape nobody can see is a
+        # shape the head does not travel to.
+        if not all(math.isfinite(float(v)) for v in (x0, y0, x1, y1)):
+            return None
         return (x0 + x1) / 2 / UNITS_PER_MM, (y0 + y1) / 2 / UNITS_PER_MM
 
     def _travel_mm(self, nodes) -> float:

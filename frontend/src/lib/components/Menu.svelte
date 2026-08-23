@@ -44,6 +44,18 @@
 	} = $props();
 
 	let box = $state<HTMLElement | null>(null);
+	/**
+	 * What had the focus when this menu opened, so that Escape can give it back.
+	 *
+	 * Measured without it, in the Series window and in the material library alike:
+	 * Escape closed the menu and left `document.activeElement` on BODY — outside the
+	 * dialog. The dialog's own Escape and its Tab trap both hang off a keydown on its
+	 * panel, so from there Escape no longer closed the window and Tab walked through
+	 * the page behind it. Only on Escape: when a row is chosen, `choose()` calls
+	 * `onClose()` before `run()`, and putting the focus back afterwards would fight
+	 * whatever that action opened.
+	 */
+	const opener = typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null);
 	let width = $state(240);
 	let height = $state(320);
 	let viewport = $state({ w: 1440, h: 900 });
@@ -79,6 +91,12 @@
 		item.run();
 	}
 
+	/** Close by Escape, and hand the focus back to where it came from. */
+	function dismiss() {
+		onClose();
+		opener?.focus?.();
+	}
+
 	function step(direction: number) {
 		if (!choosable.length) return;
 		cursor = (cursor + direction + choosable.length) % choosable.length;
@@ -90,7 +108,7 @@
 		if (!keys.includes(event.key)) return;
 		event.preventDefault();
 		event.stopPropagation();
-		if (event.key === 'Escape') return onClose();
+		if (event.key === 'Escape') return dismiss();
 		if (event.key === 'ArrowDown') return step(1);
 		if (event.key === 'ArrowUp') return step(-1);
 		if (event.key === 'Home') return (cursor = 0);

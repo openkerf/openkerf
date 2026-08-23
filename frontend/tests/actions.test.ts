@@ -62,6 +62,8 @@ function context(over: Partial<Context> = {}): Context {
 		empty: false,
 		splittable: { shapes: 0, pieces: 0 },
 		under: [],
+		columns: [],
+		once: false,
 		...over
 	};
 }
@@ -187,7 +189,12 @@ test('a disabled row always says why', () => {
 		context({ count: 1 }),
 		context({ may: false }),
 		context({ busy: true }),
-		context({ count: 3, inGroup: true })
+		context({ count: 3, inGroup: true }),
+		// The rows a text brings with it, in all three of their states: no list to read
+		// from, one column, and a submenu of several.
+		context({ count: 0, isText: true }),
+		context({ count: 1, isText: true, columns: ['name'] }),
+		context({ count: 1, isText: true, columns: ['name', 'city'], may: false })
 	])
 		for (const row of [
 			...rows(objectMenu(ctx, HANDLERS)),
@@ -362,6 +369,105 @@ test('a shape that carries no bridges says so instead of going quietly grey', ()
 	).find((r) => r.id === 'bridges');
 
 	assert.equal(row.off, 'A line, text or an image carries no bridges');
+});
+
+// ─── A series: putting a column into a text, and the jig frame ───────────────
+
+test('one column in the list is a row of its own, not a submenu of one', () => {
+	const ctx = context({ isText: true, columns: ['name'] });
+	const found = rows(objectMenu(ctx, HANDLERS));
+	// The parent-and-submenu form is what more than one column earns; with one there is
+	// nothing to choose between, so the row is the action and names the column.
+	assert.equal(found.find((row) => row.id === 'insert-column'), undefined);
+	const row = found.find((r) => r.id === 'column-name');
+	assert.equal(row.label, 'Insert name');
+	assert.equal(row.off, undefined);
+	assert.ok(!('items' in row), 'a single column still opened a submenu');
+});
+
+test('more than one column becomes a submenu, and every row in it carries its own reason', () => {
+	const ctx = context({ isText: true, columns: ['name', 'city'], count: 0 });
+	const parent = rows(objectMenu(ctx, HANDLERS)).find((r) => r.id === 'insert-column');
+
+	assert.equal(parent.label, 'Insert a column');
+	assert.deepEqual(
+		parent.items.map((row: { id: string; label: string }) => [row.id, row.label]),
+		[
+			['column-name', 'name'],
+			['column-city', 'city']
+		]
+	);
+	// Disabling only the parent is enough for the mouse and not for the keyboard or for
+	// any second surface reading this list — which is the reason this list exists.
+	assert.ok(parent.off, 'the parent row is usable with nothing selected');
+	for (const row of parent.items)
+		assert.ok(row.off, `"${row.label}" is usable with nothing selected`);
+});
+
+test('with no list attached the row still stands there and says why', () => {
+	const row = rows(objectMenu(context({ isText: true, columns: [] }), HANDLERS)).find(
+		(r) => r.id === 'insert-column'
+	);
+
+	assert.equal(row.label, 'Insert a column');
+	assert.equal(row.off, 'No list is attached in the Series window');
+});
+
+test('a column only goes into a text, and never into a rectangle', () => {
+	const plain = rows(objectMenu(context({ columns: ['name', 'city'] }), HANDLERS)).map(
+		(r) => r.id
+	);
+	assert.ok(!plain.includes('insert-column'), 'a rectangle offers to insert a column');
+	assert.ok(!plain.includes('column-name'), 'a rectangle offers a column of the list');
+});
+
+test('picking a column asks for that column and no other', () => {
+	const asked: string[] = [];
+	const handlers = { ...HANDLERS, insertColumn: (c: string) => asked.push(c) } as Handlers;
+	const ctx = context({ isText: true, columns: ['name', 'city'] });
+	const parent = rows(objectMenu(ctx, handlers)).find((r) => r.id === 'insert-column');
+
+	parent.items[1].run();
+	// And the one-column form runs the same handler with the same argument, so the two
+	// wordings cannot come to mean two different things.
+	rows(objectMenu(context({ isText: true, columns: ['city'] }), handlers))
+		.find((r) => r.id === 'column-city')
+		.run();
+
+	assert.deepEqual(asked, ['city', 'city']);
+});
+
+test('"burn only once" is one row that says which way it is going', () => {
+	const find = (ctx: Context) => rows(objectMenu(ctx, HANDLERS)).find((r) => r.id === 'burn-once');
+	assert.equal(find(context()).label, 'Burn only once');
+	assert.equal(find(context({ once: true })).label, 'Burn on every plate');
+
+	// A lock stops an accident with the geometry, and this changes none — the API leaves
+	// it unguarded for that reason, so the row may not refuse where the API does not.
+	assert.equal(find(context({ count: 1, lockedCount: 1 })).off, undefined);
+	assert.equal(find(context({ count: 0 })).off, 'Pick a shape first');
+});
+
+test('the flag flips to the other side of what the selection already is', () => {
+	const asked: boolean[] = [];
+	const handlers = { ...HANDLERS, burnOnce: (on: boolean) => asked.push(on) } as Handlers;
+	rows(objectMenu(context(), handlers)).find((r) => r.id === 'burn-once').run();
+	rows(objectMenu(context({ once: true }), handlers)).find((r) => r.id === 'burn-once').run();
+	assert.deepEqual(asked, [true, false]);
+});
+
+test('the bed itself has a door to the series, and no key on it', () => {
+	const row = rows(canvasMenu(context(), HANDLERS, null)).find((r) => r.id === 'series');
+
+	assert.equal(row.label, 'Set up a series');
+	assert.equal(row.key, undefined);
+	assert.equal(row.off, undefined);
+	// The tool rail greys its own button on the same condition. Two doors to one room
+	// that disagree about whether it is open is worse than either.
+	assert.equal(
+		rows(canvasMenu(context({ may: false }), HANDLERS, null)).find((r) => r.id === 'series').off,
+		'Requires a token'
+	);
 });
 
 // ─── The menu on a node (P1) ─────────────────────────────────────────────────

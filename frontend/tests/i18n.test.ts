@@ -113,9 +113,24 @@ test('every api.* key answers to a refusal the API can actually send', () => {
 	const python = sources(join(here, '..', '..', 'api', 'openkerf_api'), [], /\.py$/)
 		.map((p) => readFileSync(p, 'utf8'))
 		.join('\n');
+	// A code is usually a literal at the raise. A family of them can be assembled:
+	// `code=f"series.notAWholeNumber.{what}"` is four refusals from one raise, and a
+	// literal search calls all four orphans — which is how those four sat untranslated
+	// while the rest of the window spoke Dutch. So a template counts as well, and to
+	// stop it waving anything through, the segment it fills in has to be a quoted word
+	// of its own somewhere in the same Python: a key with a typo in that segment still
+	// has nothing to answer to.
+	const templates = [...python.matchAll(/code=f"([a-zA-Z0-9.]*)\{\w+\}"/g)].map((m) => m[1]);
+	const words = new Set([...python.matchAll(/"([A-Za-z_][A-Za-z0-9_]*)"/g)].map((m) => m[1]));
+	const sends = (code: string) =>
+		python.includes(`code="${code}"`) ||
+		templates.some((prefix) => {
+			const tail = code.startsWith(prefix) ? code.slice(prefix.length) : '';
+			return tail.length > 0 && !tail.includes('.') && words.has(tail);
+		});
 	const orphans = Object.keys(en)
 		.filter((key) => key.startsWith('api.'))
-		.filter((key) => !python.includes(`code="${key.slice(4)}"`));
+		.filter((key) => !sends(key.slice(4)));
 	assert.deepEqual(orphans, [], `translations for refusals the API no longer sends: ${orphans}`);
 });
 
@@ -190,16 +205,31 @@ test('no message is half a sentence', () => {
 });
 
 test('the translation is not accidentally still the source language', () => {
-	// A key that is literally the English *can* be right ("Project", "Alarm",
-	// "OpenKerf"), but a long sentence that is identical has been forgotten. The
-	// line is drawn at four words.
+	// A key that is literally the English *can* be right — "Project", "Alarm", "Esc",
+	// "mm", "QR" — but a sentence that is identical has been forgotten. The line used
+	// to be drawn at five words, and that let a short one stand for months: the top
+	// bar read "Start job" over a panel that read "Job starten", and nothing here saw
+	// it.
+	//
+	// So the line is drawn at two words, and the few that are rightly identical are
+	// named. Measured over the whole catalogue: 58 messages of 1841 are word for word
+	// the English, and 54 of those are a single word — a name, a unit, an
+	// abbreviation, or a word Dutch borrowed whole. One word being the same is
+	// ordinary, and a list of 54 exceptions is a list nobody reads; two words being
+	// the same is rare enough to be worth one line each.
+	const SAME = new Set([
+		'status.openkerf.live', // a product name and a word Dutch borrowed whole
+		'canvas.bedSize', // "bed … mm": a unit, and a noun Dutch spells the same way
+		'setup.head.machines', // "OpenKerf — machines", a window title around the product name
+		'rotary.head' // "Rotary — OpenKerf", the same, and a rotary is a rotary in the workshop
+	]);
 	for (const [language, catalogue] of Object.entries(TRANSLATIONS)) {
 		for (const [key, value] of Object.entries(en)) {
-			if (typeof value !== 'string') continue;
-			// Placeholders and loose characters do not count as words: "bed {width} ×
-			// {height} mm" is rightly the same in both languages.
+			if (typeof value !== 'string' || SAME.has(key)) continue;
+			// Placeholders and loose characters do not count as words: "{mm} mm
+			// {direction}" is one word, not three, and is rightly the same in both.
 			const words = value.replace(/\{\w+\}/g, ' ').match(/[A-Za-zÀ-ÿ]{2,}/g) ?? [];
-			if (words.length < 5) continue;
+			if (words.length < 2) continue;
 			assert.notEqual(
 				catalogue[key],
 				value,
@@ -278,4 +308,33 @@ test('a list of numbers is not separated by the decimal mark', async () => {
 
 	assert.equal(list(['10']), '10');
 	assert.equal(list([]), '');
+});
+
+test('a number in a refusal is written the way the rest of the app writes numbers', async () => {
+	// A refusal is not a place where the app may switch notation. Measured before this:
+	// a Dutch reader got "Deze lijst heeft 1001 rijen en deze app draagt er hooguit 1000"
+	// beside a canvas that writes 1.001 and 1.000 everywhere else — two thousands in one
+	// sentence, written two ways.
+	//
+	// What must NOT be formatted is the plural selector: `t()` reads `n` back with
+	// `Number()`, and a Dutch "1.000" parses as 1, which would put a sentence about a
+	// thousand rows in the singular.
+	const { apiError, bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const refusal = (code: string, values: Record<string, unknown>) =>
+		new Response(null, {
+			headers: {
+				'X-OpenKerf-Error': code,
+				'X-OpenKerf-Error-Values': JSON.stringify(values)
+			}
+		});
+
+	bindLanguage(() => 'nl');
+	const said = apiError(refusal('series.tooManyRows', { rows: 1001, max: 1000 }), 'English.');
+	assert.match(said, /1\.001/, `the row count was not written in Dutch: ${said}`);
+	assert.match(said, /1\.000/, `the limit was not written in Dutch: ${said}`);
+
+	// A column name is the reader's own data, whatever it looks like.
+	const named = apiError(refusal('series.unknownColumn', { column: '1000' }), 'English.');
+	assert.match(named, /1000/, `a column called "1000" was rewritten: ${named}`);
+	bindLanguage(() => 'en');
 });

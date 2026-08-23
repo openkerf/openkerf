@@ -95,6 +95,8 @@ export const en = {
 	'rail.generators.short': 'Generators',
 	'rail.clipart': 'Search clipart in public collections',
 	'rail.clipart.short': 'Search clipart',
+	'rail.series': 'Series — one design burned once per row of a list',
+	'rail.series.short': 'Series',
 	'rail.presetariat': 'Presetariat — shared settings',
 	'rail.presetariat.short': 'Presetariat',
 	'rail.library.short': 'Material',
@@ -274,6 +276,10 @@ export const en = {
 	'action.bridgesOff': 'Remove bridges',
 	'action.fill': 'Fill — for rastering',
 	'action.unfill': 'Remove fill',
+	// "Burn only once": one row, two wordings, for a jig frame in a series. The word is
+	// "plate" and not "row", because what the reader is holding is a plate.
+	'action.burnOnce': 'Burn only once',
+	'action.burnEvery': 'Burn on every plate',
 	'action.layer': 'Layer',
 	'action.onlyCut': 'Only in the cut layer',
 	'action.onlyEngrave': 'Only in the engrave layer',
@@ -306,6 +312,7 @@ export const en = {
 	'reason.needsThree': 'Distributing needs at least three shapes',
 	'reason.notInGroup': 'This selection is not in a group',
 	'reason.noBridges': 'A line, text or an image carries no bridges',
+	'reason.noList': 'No list is attached in the Series window',
 	'reason.onePiece': 'This shape is a single piece',
 	'reason.clipboardEmpty': 'Nothing is on the clipboard',
 	'reason.nothingSelected': 'Nothing is selected',
@@ -330,6 +337,9 @@ export const en = {
 	'explain.bridgesOff': 'The cut closes again and the part comes loose',
 	'explain.fill': 'A raster layer then burns the area instead of just the outline',
 	'explain.unfill': 'Without a fill a shape only rasters its outline',
+	'explain.burnOnce':
+		'In a series this shape burns on the first plate only — a jig frame, or the pockets the pieces sit in',
+	'explain.burnEvery': 'This shape goes onto every plate of the series again',
 	'explain.crop': 'Then drag a frame over the image',
 	'explain.vectorise': 'Turns the image into paths',
 	'explain.pasteHere': 'The top-left corner lands where you clicked',
@@ -402,6 +412,7 @@ export const en = {
 	'sheetMaterial.title': 'Material of this sheet',
 	'library.title': 'Material library',
 	'testgrid.title': 'Test grid',
+	'series.title': 'Series',
 
 	// ── Panel tabs ─────────────────────────────────────────────────────────────
 	'tabs.edit': 'Edit',
@@ -533,6 +544,12 @@ export const en = {
 	'job.keepSpot': 'Keep this spot',
 	'job.checklist.title': 'Run through this',
 	'job.estimatedTime': 'Estimated time',
+	// A series is one plate on the bed and an afternoon in front of you, and the clock
+	// above this line is about the plate. The count and the total both come from
+	// `/api/job/estimate` (`burns_left`, `seconds_total`), so the panel never
+	// multiplies anything itself: two places counting plates is how a number on the
+	// screen comes to be nobody's.
+	'job.seriesLeft': 'This is the plate now on the bed; the {burns} still to go take about {time} together.',
 	'job.toOrigin': 'To origin',
 	'job.toPoint': 'Go to a point',
 	'job.keep': 'Keep',
@@ -972,6 +989,8 @@ export const en = {
 	'count.testGrids': { one: '1 test grid', other: '{n} test grids' },
 	'count.photos': { one: '1 photo', other: '{n} photos' },
 	'count.rasters': { one: '1 grid', other: '{n} grids' },
+	'count.burns': { one: '1 burn', other: '{n} burns' },
+	'count.rows': { one: '1 row', other: '{n} rows' },
 	'import.title': 'This is what is going to happen',
 	'import.exportedAt': 'exported {when}',
 	'import.yoursNow': 'Your library now: {materials} · {presets} · {grids}',
@@ -1268,6 +1287,11 @@ export const en = {
 	'gen.gapX': 'Space X',
 	'gen.gapY': 'Space Y',
 	'gen.grid.go': 'Make {n} copies{tail}',
+	// The gap this closes: `grid` copies with a plain `copy(node)` and knows nothing
+	// about a list, so a repeated {name} gave the same name as many times as you asked
+	// for. The reason it is greyed out is the API's own sentence, `api.gen.noList` —
+	// one fact, one sentence, whether you read it here or get it back from the server.
+	'gen.followList': 'Each copy takes the next name from the list',
 	'gen.radial.lead': 'Repeat the selection around a centre point.',
 	'gen.count': 'Count',
 	'gen.radius': 'Radius',
@@ -1977,13 +2001,162 @@ export const en = {
 		'Homing drives the head across the bed and into the rotary. Only continue if the rotary is out or the head can reach the corner freely.',
 	'job.home.rotary.confirm': 'The bed is clear — home',
 	'job.home.rotary.cancel': 'Do not home',
+	// ── Series: one design, burned once per row of a list ─────────────────────────
+	//
+	// The interface never says "wordlist": that is the engine's word for it, not a
+	// reader's. Here it is a list, and what it makes is burns. The window's own title
+	// stays the fixed key 'series.title' so that a page can name it; the file it is
+	// reading is a line inside the body.
+	'series.burns.aria': 'The burns this list makes',
+	'series.search': 'Search the names',
+	'series.searchAria': 'Search what the burns engrave',
+	'series.summary': 'This list makes {burns} out of {rows}.',
+	'series.step': 'This design takes {n} rows per burn, so one sheetful is that many rows.',
+	'series.from.file': 'These rows came from the file {file}.',
+	'series.from.numbers': 'These rows were counted from {first} to {last}.',
+	// What one burn puts on the material. Several values in one line go through
+	// i18n.list(), because in Dutch the comma is the decimal mark.
+	'series.onBed': 'On the bed',
+	'series.onBed.title': 'This is the burn the bed is showing, and the one that burns next.',
+	'series.done': 'Burned',
+	'series.done.title': 'This burn is marked as done, so moving on skips over it.',
+	'series.burn.blank': 'This one has nothing to put on the material.',
+	'series.burn.short': {
+		one: 'One place on this sheet has no row left, so it stays empty.',
+		other: '{n} places on this sheet have no row left, so they stay empty.'
+	},
+	'series.rowMenu': 'More about this burn',
+	'series.menu.show': 'Show this one on the bed',
+	'series.menu.again': 'Burn this one again',
+	'series.menu.again.needsRun': 'No series is going, so there is nothing to burn again.',
+	'series.nothingReads':
+		'No text on the bed takes its value from this list, so each of these burns would be the same. Put a column into a text first.',
+	'series.nothingFound': 'No burn engraves {query}.',
+	'series.clearSearch': 'Show them all again',
+	'series.empty': 'No list is attached, so every burn would be the same.',
+	'series.empty.how':
+		'Import a file with a column of names, or count a range of numbers. A text on the bed reading {example} then takes its value from the column of that name, one row per burn.',
+	// Where the rows come from. Two doors and one list: numbers are not a second kind
+	// of series, only another way of filling the rows in.
+	'series.source': 'Where the rows come from',
+	'series.source.file': 'A file',
+	'series.source.numbers': 'Numbers',
+	'series.pick': 'Choose a file',
+	'series.pick.again': 'Choose another file',
+	'series.pick.hint': 'A spreadsheet saved as CSV, with one column per thing that changes.',
+	'series.chosen': 'Reading {file}.',
+	'series.numbers.first': 'First number',
+	'series.numbers.last': 'Last number',
+	'series.numbers.step': 'Step',
+	'series.numbers.padding': 'Digits',
+	'series.numbers.column': 'Column name',
+	'series.numbers.hint':
+		'Digits writes the number that many places wide, so 3 gives 001. A text reading {example} then takes the next number.',
+	'series.unfinished': 'Fill the numbers in and the rows appear below.',
+	// What this app decided about somebody's file. A decision taken silently is one
+	// they cannot overrule, so each one is on screen and the header is a control.
+	'series.firstRows': 'The first rows, as this app reads them',
+	'series.header': 'The first row',
+	'series.header.names': 'Column names',
+	'series.header.data': 'Data',
+	'series.header.guess.names':
+		'This app read the first row as the column names. Change it if that row is a value.',
+	'series.header.guess.data':
+		'This app read the first row as a value rather than as column names. Change it if those are the names.',
+	'series.delimiter': 'Separated by',
+	'series.delimiter.comma': 'Commas',
+	'series.delimiter.semicolon': 'Semicolons',
+	'series.delimiter.tab': 'Tabs',
+	'series.delimiter.bar': 'Vertical bars',
+	'series.encoding': 'Read as',
+	'series.moreRows': {
+		one: 'One more row follows these.',
+		other: '{n} more rows follow these.'
+	},
+	'series.columns': 'The columns in this list',
+	'series.column': 'Column',
+	'series.column.placeholder': 'In a text',
+	'series.column.blanks': 'Empty',
+	'series.column.used': 'In use',
+	'series.column.used.title': 'A text on the bed reads this column.',
+	'series.column.reserved.short': 'Kept name',
+	'series.column.reserved':
+		'The engine keeps this name for itself, so this column can never be read. Rename it in your file and import it again.',
+	// A text asking for a column the list has not got. It burns nothing and cannot be
+	// clicked either, so it is listed here rather than marked on the bed.
+	'series.ghosts': 'Texts that ask for a column this list has not got',
+	'series.ghosts.why':
+		'Each of these burns nothing at all, and cannot be clicked on the bed either — which is why they are listed here rather than marked on the bed. Give the list a column of that name, or take the shape away.',
+	'series.ghost.missing': 'It asks for {columns}.',
+	'series.ghost.delete': 'Delete the shape',
+	'series.skipBlank': 'Skip a row with an empty cell',
+	'series.skipBlank.cannot':
+		'This design takes {n} rows per burn, and a sheetful cannot skip a row: the engine reads the rows next to each other.',
+	'series.startAt': 'Start at row',
+	'series.startAt.hint': 'Which row the first burn takes. The rest follow in the order of the file.',
+	'series.attach': 'Use this list',
+	'series.attach.instead': 'Use this list instead',
+	'series.detach': 'Take the list away',
+	'series.running': 'A series is going. Stop it in the Job panel before you change the list.',
+	// The two verbs outside the window. "Insert a column" opens the submenu of columns;
+	// with one column the row is the action itself and names it, because one option is
+	// not a choice.
+	'series.insert': 'Insert a column',
+	'series.insert.named': 'Insert {column}',
+	'series.show': 'Set up a series',
+	'series.show.title': 'Attach a list, see what every burn engraves, and choose where to start',
+	// The read-back line under the text in the panel. The quotation marks are there so
+	// that a column with nothing in it reads as nothing rather than as a missing word.
+	'series.panelValue': 'For the burn now on the bed this reads “{text}”.',
+	// The run itself, read standing at the machine with a plate in your hand. The
+	// wordings deliberately differ from the tile run's: the two runs rhyme, and one
+	// sentence shared between them would be one of the two saying something it does
+	// not quite mean — "Stop the run" says nothing about which run.
+	// Before the first plate. The panel orders itself by the phase of the process, so
+	// "nothing has been burned yet" is a state of its own and not an empty version of
+	// the running one.
+	'series.ready.aria': 'The series that is ready to go',
+	'series.ready': 'A list is attached and it makes {burns} burns. Nothing has been burned yet.',
+	'series.ready.first': 'The first one engraves {what}.',
+	'series.begin': 'Start the series',
+	'series.begin.title':
+		'This only starts the count of plates. Nothing goes to the machine until you press Burn this one.',
+	'series.run.aria': 'The series now running',
+	'series.current': 'Burn {n} of {total}',
+	'series.engraves': 'This one engraves {what}.',
+	'series.progress': '{done} of {total} burns have been made.',
+	'series.progressAria': 'How far along this series is',
+	'series.burnThis': 'Burn this one',
+	'series.next': 'Burned, next one',
+	'series.next.title':
+		'This burns nothing. It moves the bed on to the next burn that still has to happen.',
+	'series.stop': 'Stop the series',
+	'series.stop.title':
+		'The list stays and so does the row; only the count of what has been burned goes.',
+	'series.burnAgain': 'Burn this one over again',
+	'series.sent': 'Burn {n} has gone to the machine.',
+	'series.finished': 'Every burn in this list is done, so the series has ended.',
+	// A run goes stale in two ways and the server tells them apart, because the
+	// punishment differs: shapes that have moved mean the plates already made belong
+	// to another drawing, while a changed number of places on a sheet means the rows
+	// fall into different burns than the ones ticked off.
+	'series.stale.geometry':
+		'The shapes have moved or been altered since this series began, so what is already burned belongs to the drawing as it was.',
+	'series.stale.places':
+		'A sheet now holds a different number of places than when this series began, so the rows fall into other burns than the ones already made.',
+	'series.stale.how':
+		'Stop the series and begin again to burn on with the drawing as it is now. What is already burned stays burned.',
+
 	// ── Refusals the API can name ─────────────────────────────────────────────────
 	//
 	// The engine layer sends a code in `X-OpenKerf-Error` beside its English
 	// sentence, so a refusal that is part of a normal flow can be read in the
-	// reader's own language. A code whose message carries numbers — a size, a count
-	// — is not here: those parts do not travel in a header, and half a sentence with
-	// the number missing is worse than the English one.
+	// reader's own language. What the sentence needs besides the code — a count of
+	// ours, a column name, a row number — rides in `X-OpenKerf-Error-Values` and
+	// arrives here as a placeholder of the same name, so the translated sentence
+	// keeps every number and every name the English one had. A refusal that bakes a
+	// number into its sentence and sends no values has no entry here: half a sentence
+	// with the number missing is worse than the English one with it.
 	'api.bridges.notSupported': 'Bridges only work on a rectangle, an ellipse, a polyline or a path.',
 	'api.bridges.needsCount': 'Ask for at least one bridge, or clear them instead.',
 	'api.bridges.needsLength': 'A bridge needs a length greater than zero.',
@@ -1993,7 +2166,14 @@ export const en = {
 	'api.bridges.tooMany': 'More than {max} bridges in one contour is not a cut any more.',
 	'api.bridges.percentRange': 'A bridge sits somewhere between 0 and 100 percent along the path.',
 	'api.corners.none': 'Not one corner can be rounded or bevelled: no two straight sides meet there, or the size is too big for the sides. Choose a smaller size.',
+	'api.draw.backwardsPlaceholder':
+		'A placeholder cannot count backwards. It would read the list\'s own bookkeeping instead of a row.',
+	'api.draw.badAlign': 'Text alignment has to be start, middle or end.',
+	'api.draw.badFontName':
+		'A font name cannot hold a quotation mark. Pick the font from the list instead of typing it.',
 	'api.draw.booleanEmpty': 'That combination yielded nothing — do the shapes actually overlap?',
+	'api.draw.bracesInText':
+		'A curly bracket has to open and close once around a column name, and a bracket cannot be burned as a bracket.',
 	'api.draw.emptyText': 'Text cannot be empty.',
 	'api.draw.noFonts': 'No font support available.',
 	'api.draw.noLayer': 'The engine created no layer.',
@@ -2008,6 +2188,13 @@ export const en = {
 	'api.gen.needsSelection': 'Choose what should be repeated first.',
 	'api.gen.hingeEmpty': 'Nothing is left of this field inside the area.',
 	'api.gen.hingeNeedsSelection': 'Choose the shape whose area the slits have to fill first.',
+	// The two refusals of "each copy takes the next name from the list". `gen.noList`
+	// is also what the greyed checkbox says, so the reason before the press and the
+	// answer after it are one sentence.
+	'api.gen.noList':
+		'No list is attached, so there is no next name to take. Import a list in the Series window first.',
+	'api.gen.nothingToFollow':
+		'None of the shapes you are repeating has a placeholder in its text, so there is no name for the copies to take. Put a column into a text first.',
 	'api.gen.noBarcodeLib': 'Barcodes need the python-barcode package.',
 	'api.gen.noFont': 'There is not one usable font on this computer.',
 	'api.gen.noQrLib': 'QR codes need the segno package; install it beside the API.',
@@ -2031,6 +2218,86 @@ export const en = {
 	'api.rotary.needsMeasurement': 'Calibrating needs both lengths: what you asked the machine for and what you measured on the object.',
 	'api.rotary.noMachine': 'There is no machine selected, so there is no rotary to set up.',
 	'api.rotary.homeWhileActive': 'The rotary is switched on. Homing drives the head over the bed and into the rotary. Take the rotary out first, or confirm that it is clear.',
+	// A series, in the order the reader meets them: reading a file, counting a range,
+	// attaching a list, and the run itself.
+	//
+	// One of its codes is deliberately absent: the two stale refusals have their code
+	// built in an expression, so the test that keeps these honest cannot find it — and
+	// the run block says both sentences itself (`series.stale.*`) with the button
+	// already off, so that refusal is unreachable from the interface.
+	'api.series.badColumnName':
+		'A column name cannot contain a curly bracket, because that is what marks a placeholder. Rename the column in your file.',
+	'api.series.needsColumnName':
+		'A numbered list needs a column name, because that is what goes between the curly brackets in the text.',
+	'api.series.unreadable':
+		'This file is not text this app can read. Save it from your spreadsheet as CSV UTF-8 and try again.',
+	'api.series.emptyFile':
+		'This file is empty. Save your list from the spreadsheet again and check that there is something in it.',
+	'api.series.headerOnly': 'This file has column names but no rows under them.',
+	'api.series.reservedColumn':
+		'A column cannot be called date, time or version, or begin with op_ — the engine keeps those names. Rename the column in your file and import it again.',
+	'api.series.braceInCell':
+		'Row {row} has a curly bracket in the column “{column}”, and a curly bracket cannot be burned as a bracket. Take it out of the cell.',
+	'api.series.tooManyRows': 'This list has {rows} rows and this app carries at most {max}.',
+	'api.series.noFileChosen':
+		'No file has been chosen, so there is no list to read. Pick a file, or fill in the numbers to count from.',
+	'api.series.uploadGone': 'That file is no longer on the server. Pick it again.',
+	'api.series.fileTooBig':
+		'This file is larger than {max_mb} MB. A list of names is a few kilobytes; this is probably not the file you meant.',
+	// The four ends of a counted range. One code each, because the sentence names which
+	// end it is about and an English word wedged into a Dutch sentence would be the only
+	// English left in it. The `which` the layer sends travels for a client without a
+	// catalogue; here the code has already said it.
+	'api.series.notAWholeNumber.first':
+		'Numbered rows run from one whole number to another, and the first number is not a whole number.',
+	'api.series.notAWholeNumber.last':
+		'Numbered rows run from one whole number to another, and the last number is not a whole number.',
+	'api.series.notAWholeNumber.step':
+		'Numbered rows run from one whole number to another, and the step is not a whole number.',
+	'api.series.notAWholeNumber.padding':
+		'Numbered rows run from one whole number to another, and the number of digits is not a whole number.',
+	'api.series.numberStepZero':
+		'A step of nothing never reaches the last number. Count in ones, or in whatever step the parts really go up by.',
+	'api.series.badPadding':
+		'A number written {padding} digits wide is not a part number. Use 0 for no padding, or up to {max}.',
+	'api.series.emptyRange':
+		'Counting from {first} to {last} in steps of {step} makes no rows at all. Turn the step around, or swap the two ends.',
+	'api.series.noRows': 'This list has no rows in it, so there is nothing to burn.',
+	'api.series.everyRowBlank':
+		'Every row is missing a value in {column}, so there is nothing to burn. Fill the column in, or switch off skipping blank rows.',
+	'api.series.unknownColumn':
+		'There is no column called {column} in the list, so this text would burn nothing. Take the placeholder out of the text, or add the column to the list and import it again.',
+	'api.series.noList':
+		'No list is attached, so a text with a placeholder in it cannot become anything. Attach a list in the Series window, or take the placeholder out of the text.',
+	'api.series.nothingAttached':
+		'No list is attached, so there is no row to burn. Import a list in the Series window first.',
+	'api.series.bundleUnreadable':
+		'The list in this project file cannot be read, so the project has opened without it. Import the list again from your spreadsheet.',
+	'api.series.badRow': 'A row is counted with a whole number, starting at the first row.',
+	'api.series.startPastEnd': 'This list has {rows} rows, so it cannot start at row {row}.',
+	'api.series.blankRow':
+		'Row {row} has nothing in it for the columns this design burns, and blank rows are being skipped, so there is no burn here. Switch off skipping blank rows, or move to another row.',
+	'api.series.nothingVariable':
+		'None of the text on the bed comes from the list, so every burn would be the same. Put a column into a text first.',
+	'api.series.noBurns':
+		'Every row in this list is missing a value the design needs, so with blank rows skipped there is nothing to burn. Switch off skipping blank rows, or fill the list in.',
+	'api.series.alreadyStarted':
+		'A series is already going. Stop it first — starting another one would throw away which plates have been burned.',
+	'api.series.runGoing':
+		'A series is going, so this button would burn one plate and count nothing. Press Burn this one instead: that is the button that counts the plates.',
+	'api.series.runGoingTiles':
+		'A series is going, and a series and a tile run both decide what the next burn is. Finish or stop the series first.',
+	'api.series.otherRunGoing':
+		'A tile run is going, and a tile run and a series both decide what the next burn is. Finish or stop one of the two.',
+	'api.series.runGoingProject':
+		'A series is going. Stop it before you replace the drawing, because the plates you have already burned belong to the design that would go.',
+	'api.series.listLocked':
+		'A series is going. Stop it before you change the list, otherwise what has been burned no longer matches what is left.',
+	'api.series.noRun': 'There is no series going.',
+	'api.series.alreadyBurned':
+		'This one has already been burned. Burning it again means the laser goes over work that is already there — only do that when the last attempt was spoiled. Confirm to carry on.',
+	'api.series.noSuchBurn': 'There is no burn for row {row} in this series.',
+	'api.series.noRunner': 'This series has no way to reach the machine.',
 	'api.sheet.needsName': 'A sheet needs a name.',
 	'api.sheet.needsOne': 'The last sheet cannot go; a project has one.',
 	'api.sheet.nothingSelected': 'Choose what should come along first.',

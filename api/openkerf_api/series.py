@@ -709,8 +709,11 @@ def _require_no_braces(rows, columns) -> None:
             value = str(row.get(column, ""))
             if "{" in value or "}" in value:
                 raise DesignError(
-                    f"Row {number} has a curly bracket in the column {column}, and "
-                    "a curly bracket cannot be burned as a bracket. Take it out of "
+                    # The column is quoted because the commonest column in this
+                    # feature is called `name`, and "a curly bracket in the column name"
+                    # reads as a sentence about the column's *name*.
+                    f"Row {number} has a curly bracket in the column \u201c{column}\u201d, "
+                    "and a curly bracket cannot be burned as a bracket. Take it out of "
                     "the cell.",
                     code="series.braceInCell",
                     values={"row": number, "column": column},
@@ -766,7 +769,10 @@ def read_rows(data, has_header=None) -> dict:
     if not body:
         raise DesignError(
             "This file has column names but no rows under them.",
-            code="series.noRows",
+            # Its own code, and not `series.noRows`, which the attach half raises for a
+            # list that arrives empty. One code carries one translated sentence, and
+            # these two ask for different things: fill the file in, or pick another one.
+            code="series.headerOnly",
         )
     if len(body) > MAX_ROWS:
         raise DesignError(
@@ -840,7 +846,10 @@ def _whole_number(value, what: str) -> int:
         "first": "first number",
         "last": "last number",
         "step": "step",
-        "padding": "width",
+        # The word the field carries on screen ("Digits"), not the word the parameter
+        # carries in the code: a refusal that names something the reader cannot see is
+        # a refusal they cannot act on.
+        "padding": "number of digits",
     }
     try:
         if isinstance(value, bool):
@@ -884,7 +893,11 @@ def rows_from_numbers(
         raise DesignError(
             "A numbered list needs a column name, because that is what goes between "
             "the curly brackets in the text.",
-            code="series.badColumnName",
+            # Its own code: `series.badColumnName` is the one for a name that *has* a
+            # curly bracket in it, and one code carries one translated sentence. Two
+            # sentences under one code means one of the two surfaces says the wrong
+            # thing the moment the catalogue answers it.
+            code="series.needsColumnName",
         )
 
     if stride == 0:
@@ -1694,7 +1707,12 @@ class Series:
         if (data or {}).get("run"):
             raise DesignError(
                 "A series is going, so this button would burn one plate and count "
-                "nothing. Burn from the Series panel.",
+                # Not "the Series panel": there is no such panel. The button that counts
+                # the plates is "Burn this one", in the series block at the head of the
+                # Job panel, and a refusal that sends the reader to a room that does not
+                # exist is worse than one that says nothing.
+                "nothing. Press Burn this one instead: that is the button that counts "
+                "the plates.",
                 code="series.runGoing",
             )
         self.vet()

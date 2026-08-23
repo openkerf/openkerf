@@ -49,7 +49,7 @@ export const nl: Catalogue = {
 	'topbar.theme': 'Thema wisselen',
 
 	// ── Bediening ──────────────────────────────────────────────────────────────
-	'transport.start': 'Start job',
+	'transport.start': 'Job starten',
 	'transport.start.short': 'Start',
 	'transport.start.preflight': 'De pre-flight openen',
 	'transport.start.busy': 'Er loopt al een job',
@@ -89,6 +89,8 @@ export const nl: Catalogue = {
 	'rail.generators.short': 'Generatoren',
 	'rail.clipart': 'Clipart zoeken in openbare collecties',
 	'rail.clipart.short': 'Clipart zoeken',
+	'rail.series': 'Serie — één ontwerp, één brandbeurt per rij van een lijst',
+	'rail.series.short': 'Serie',
 	'rail.presetariat': 'Presetariat — gedeelde instellingen',
 	'rail.presetariat.short': 'Presetariat',
 	'rail.library.short': 'Materiaal',
@@ -269,6 +271,8 @@ export const nl: Catalogue = {
 	'action.bridgesOff': 'Bruggen weghalen',
 	'action.fill': 'Vullen — voor rasteren',
 	'action.unfill': 'Vulling weghalen',
+	'action.burnOnce': 'Alleen de eerste keer branden',
+	'action.burnEvery': 'Op elke plaat branden',
 	'action.layer': 'Laag',
 	'action.onlyCut': 'Alleen in de snijlaag',
 	'action.onlyEngrave': 'Alleen in de graveerlaag',
@@ -299,6 +303,7 @@ export const nl: Catalogue = {
 	'reason.needsThree': 'Verdelen heeft minstens drie vormen nodig',
 	'reason.notInGroup': 'Deze selectie zit niet in een groep',
 	'reason.noBridges': 'Een lijn, tekst of een afbeelding draagt geen bruggen',
+	'reason.noList': 'Er is geen lijst aangekoppeld in het Serie-venster',
 	'reason.onePiece': 'Deze vorm bestaat uit één stuk',
 	'reason.clipboardEmpty': 'Er staat niets op het klembord',
 	'reason.nothingSelected': 'Er is niets geselecteerd',
@@ -323,6 +328,9 @@ export const nl: Catalogue = {
 	'explain.bridgesOff': 'De snede sluit weer en het onderdeel komt los',
 	'explain.fill': 'Een rasterlaag brandt dan het vlak in plaats van alleen de omtrek',
 	'explain.unfill': 'Zonder vulling rastert een vorm alleen zijn omtrek',
+	'explain.burnOnce':
+		'In een serie brandt deze vorm alleen op de eerste plaat — een mal, of de vakjes waar de stukken in liggen',
+	'explain.burnEvery': 'Deze vorm gaat weer op elke plaat van de serie mee',
 	'explain.crop': 'Sleep daarna een kader over de afbeelding',
 	'explain.vectorise': 'Maakt paden van de afbeelding',
 	'explain.pasteHere': 'De linkerbovenhoek komt op de plek waar je klikte',
@@ -395,6 +403,7 @@ export const nl: Catalogue = {
 	'sheetMaterial.title': 'Materiaal van dit vel',
 	'library.title': 'Materiaalbibliotheek',
 	'testgrid.title': 'Testraster',
+	'series.title': 'Serie',
 
 	// ── Paneeltabs ─────────────────────────────────────────────────────────────
 	'tabs.edit': 'Bewerken',
@@ -523,8 +532,9 @@ export const nl: Catalogue = {
 	'job.keepSpot': 'Deze plek bewaren',
 	'job.checklist.title': 'Loop dit even na',
 	'job.estimatedTime': 'Geschatte tijd',
+	'job.seriesLeft': 'Dit is de plaat die nu op het bed ligt; de {burns} die nog moeten duren samen ongeveer {time}.',
 	'job.toOrigin': 'Naar oorsprong',
-	'job.toPoint': 'Naar een point',
+	'job.toPoint': 'Naar een punt',
 	'job.keep': 'Bewaren',
 	'job.unlock': 'Ontgrendelen',
 	'job.toZero': 'Naar nulpunt',
@@ -960,6 +970,8 @@ export const nl: Catalogue = {
 	'count.testGrids': { one: '1 testraster', other: '{n} testrasters' },
 	'count.photos': { one: '1 foto', other: '{n} foto\'s' },
 	'count.rasters': { one: '1 raster', other: '{n} rasters' },
+	'count.burns': { one: '1 brandbeurt', other: '{n} brandbeurten' },
+	'count.rows': { one: '1 rij', other: '{n} rijen' },
 	'import.title': 'Dit gaat er gebeuren',
 	'import.exportedAt': 'geëxporteerd {when}',
 	'import.yoursNow': 'Je bibliotheek nu: {materials} · {presets} · {grids}',
@@ -1256,13 +1268,14 @@ export const nl: Catalogue = {
 	'gen.gapX': 'Ruimte X',
 	'gen.gapY': 'Ruimte Y',
 	'gen.grid.go': '{n} stuks maken{tail}',
+	'gen.followList': 'Elke kopie pakt de volgende naam uit de lijst',
 	'gen.radial.lead': 'De selectie rond een middelpunt herhalen.',
 	'gen.count': 'Aantal',
 	'gen.radius': 'Straal',
 	'gen.rotateAlong': 'Meedraaien',
 	'gen.radial.go': 'Rondzetten{tail}',
 	'gen.polygon.lead': 'Een regelmatige veelhoek. Vul een binnenstraal in en het wordt een ster.',
-	'gen.corners': 'CornersDialog',
+	'gen.corners': 'Hoeken',
 	'gen.innerRadius': 'Binnenstraal',
 	'gen.centreX': 'Midden X',
 	'gen.centreY': 'Midden Y',
@@ -1959,6 +1972,126 @@ export const nl: Catalogue = {
 		'Homen stuurt de kop over het bed en de rotary in. Ga alleen door als de rotary eruit is of de kop de hoek vrij kan bereiken.',
 	'job.home.rotary.confirm': 'Het bed is vrij — homen',
 	'job.home.rotary.cancel': 'Niet homen',
+	// ── Serie: één ontwerp, één brandbeurt per rij van een lijst ──────────────────
+	//
+	// Het woord "wordlist" komt hier niet voor: dat is het woord van de engine, niet
+	// van een lezer. Hier is het een lijst, en wat eruit komt zijn brandbeurten.
+	'series.burns.aria': 'De brandbeurten die deze lijst oplevert',
+	'series.search': 'Zoek in de namen',
+	'series.searchAria': 'Zoeken in wat de brandbeurten graveren',
+	'series.summary': 'Deze lijst levert {burns} uit {rows}.',
+	'series.step': 'Dit ontwerp neemt {n} rijen per brandbeurt, dus zoveel rijen gaan er in één vel.',
+	'series.from.file': 'Deze rijen komen uit het bestand {file}.',
+	'series.from.numbers': 'Deze rijen zijn geteld van {first} tot {last}.',
+	'series.onBed': 'Op het bed',
+	'series.onBed.title': 'Dit is de brandbeurt die op het bed staat, en die als eerste gaat branden.',
+	'series.done': 'Gebrand',
+	'series.done.title': 'Deze brandbeurt staat als gedaan aangemerkt, dus doorgaan slaat hem over.',
+	'series.burn.blank': 'Hier valt niets op het materiaal te zetten.',
+	'series.burn.short': {
+		one: 'Eén plek op dit vel heeft geen rij meer over en blijft dus leeg.',
+		other: '{n} plekken op dit vel hebben geen rij meer over en blijven dus leeg.'
+	},
+	'series.rowMenu': 'Meer over deze brandbeurt',
+	'series.menu.show': 'Deze op het bed zetten',
+	'series.menu.again': 'Deze opnieuw branden',
+	'series.menu.again.needsRun': 'Er loopt geen serie, dus er is niets om opnieuw te branden.',
+	'series.nothingReads':
+		'Geen tekst op het bed haalt zijn waarde uit deze lijst, dus elke brandbeurt zou dezelfde zijn. Zet eerst een kolom in een tekst.',
+	'series.nothingFound': 'Geen enkele brandbeurt graveert {query}.',
+	'series.clearSearch': 'Laat ze allemaal weer zien',
+	'series.empty': 'Er hangt geen lijst aan, dus elke brandbeurt zou dezelfde zijn.',
+	'series.empty.how':
+		'Haal een bestand met een kolom namen binnen, of tel een reeks getallen af. Een tekst op het bed die {example} leest, pakt zijn waarde dan uit de kolom met die naam — één rij per brandbeurt.',
+	'series.source': 'Waar de rijen vandaan komen',
+	'series.source.file': 'Een bestand',
+	'series.source.numbers': 'Getallen',
+	'series.pick': 'Kies een bestand',
+	'series.pick.again': 'Kies een ander bestand',
+	'series.pick.hint': 'Een spreadsheet, opgeslagen als CSV, met één kolom per ding dat verandert.',
+	'series.chosen': 'Leest {file}.',
+	'series.numbers.first': 'Eerste getal',
+	'series.numbers.last': 'Laatste getal',
+	'series.numbers.step': 'Stap',
+	'series.numbers.padding': 'Cijfers',
+	'series.numbers.column': 'Kolomnaam',
+	'series.numbers.hint':
+		'Cijfers schrijft het getal zo breed uit, dus 3 geeft 001. Een tekst die {example} leest, pakt dan het volgende getal.',
+	'series.unfinished': 'Vul de getallen in, dan verschijnen de rijen hieronder.',
+	'series.firstRows': 'De eerste rijen, zoals deze app ze leest',
+	'series.header': 'De eerste rij',
+	'series.header.names': 'Kolomnamen',
+	'series.header.data': 'Gegevens',
+	'series.header.guess.names':
+		'Deze app heeft de eerste rij als de kolomnamen gelezen. Verzet het als die rij een waarde is.',
+	'series.header.guess.data':
+		'Deze app heeft de eerste rij als een waarde gelezen en niet als de kolomnamen. Verzet het als dat de namen zijn.',
+	'series.delimiter': 'Gescheiden door',
+	'series.delimiter.comma': 'Komma’s',
+	'series.delimiter.semicolon': 'Puntkomma’s',
+	'series.delimiter.tab': 'Tabs',
+	'series.delimiter.bar': 'Verticale strepen',
+	'series.encoding': 'Gelezen als',
+	'series.moreRows': {
+		one: 'Hierna volgt nog één rij.',
+		other: 'Hierna volgen nog {n} rijen.'
+	},
+	'series.columns': 'De kolommen in deze lijst',
+	'series.column': 'Kolom',
+	'series.column.placeholder': 'In een tekst',
+	'series.column.blanks': 'Leeg',
+	'series.column.used': 'In gebruik',
+	'series.column.used.title': 'Een tekst op het bed leest deze kolom.',
+	'series.column.reserved.short': 'Vaste naam',
+	'series.column.reserved':
+		'De engine houdt deze naam voor zichzelf, dus deze kolom valt nooit te lezen. Geef hem een andere naam in je bestand en haal het opnieuw binnen.',
+	'series.ghosts': 'Teksten die om een kolom vragen die deze lijst niet heeft',
+	'series.ghosts.why':
+		'Elk hiervan brandt helemaal niets, en is op het bed ook niet aan te klikken — daarom staan ze hier en niet op het bed. Geef de lijst een kolom met die naam, of haal de vorm weg.',
+	'series.ghost.missing': 'Hij vraagt om {columns}.',
+	'series.ghost.delete': 'Haal de vorm weg',
+	'series.skipBlank': 'Een rij met een lege cel overslaan',
+	'series.skipBlank.cannot':
+		'Dit ontwerp neemt {n} rijen per brandbeurt, en een vol vel kan geen rij overslaan: de engine leest de rijen naast elkaar.',
+	'series.startAt': 'Begin bij rij',
+	'series.startAt.hint': 'Welke rij de eerste brandbeurt pakt. De rest volgt in de orde van het bestand.',
+	'series.attach': 'Deze lijst gebruiken',
+	'series.attach.instead': 'Deze lijst in plaats daarvan gebruiken',
+	'series.detach': 'Haal de lijst weg',
+	'series.running': 'Er loopt een serie. Stop hem in het Job-paneel voordat je de lijst verandert.',
+	'series.insert': 'Een kolom invoegen',
+	'series.insert.named': '{column} invoegen',
+	'series.show': 'Een serie opzetten',
+	'series.show.title': 'Koppel een lijst, zie wat elke brandbeurt graveert, en kies waar je begint',
+	'series.panelValue': 'Voor de brandbeurt die nu op het bed staat leest dit “{text}”.',
+	'series.ready.aria': 'De reeks die klaarstaat',
+	'series.ready': 'Er hangt een lijst aan en die maakt {burns} branden. Er is nog niets gebrand.',
+	'series.ready.first': 'De eerste graveert {what}.',
+	'series.begin': 'Start de reeks',
+	'series.begin.title':
+		'Dit begint alleen de telling van de platen. Er gaat niets naar de machine tot je op Brand deze drukt.',
+	'series.run.aria': 'De serie die nu loopt',
+	'series.current': 'Brandbeurt {n} van {total}',
+	'series.engraves': 'Deze graveert {what}.',
+	'series.progress': '{done} van de {total} brandbeurten zijn gedaan.',
+	'series.progressAria': 'Hoe ver deze serie is',
+	'series.burnThis': 'Deze branden',
+	'series.next': 'Gebrand, de volgende',
+	'series.next.title':
+		'Hier brandt niets van. Het zet het bed door naar de eerstvolgende brandbeurt die nog moet.',
+	'series.stop': 'Stop de serie',
+	'series.stop.title':
+		'De lijst blijft en de rij blijft; alleen de telling van wat er gebrand is gaat weg.',
+	'series.burnAgain': 'Deze nog een keer branden',
+	'series.sent': 'Brandbeurt {n} is naar de machine gestuurd.',
+	'series.finished': 'Elke brandbeurt uit deze lijst is gedaan, dus de serie is afgelopen.',
+	'series.stale.geometry':
+		'De vormen zijn verschoven of veranderd sinds deze serie begon, dus wat er al gebrand is hoort bij de tekening zoals die wás.',
+	'series.stale.places':
+		'Een vel heeft nu een ander aantal plekken dan toen deze serie begon, dus de rijen vallen in andere brandbeurten dan die al gemaakt zijn.',
+	'series.stale.how':
+		'Stop de serie en begin opnieuw om verder te branden met de tekening zoals die nu is. Wat gebrand is blijft gebrand.',
+
 	// ── Refusals the API can name ─────────────────────────────────────────────────
 	'api.bridges.notSupported': 'Bruggen werken alleen op een rechthoek, een ellips, een polylijn of een pad.',
 	'api.bridges.needsCount': 'Vraag om minstens één brug, of haal ze juist weg.',
@@ -1966,7 +2099,14 @@ export const nl: Catalogue = {
 	'api.bridges.tooMany': 'Meer dan {max} bruggen in één omtrek is geen snede meer.',
 	'api.bridges.percentRange': 'Een brug zit ergens tussen 0 en 100 procent van het pad.',
 	'api.corners.none': 'Geen enkele hoek is af te ronden of af te schuinen: er komen geen twee rechte zijden op uit, of de maat is te groot voor de zijden. Kies een kleinere maat.',
+	'api.draw.backwardsPlaceholder':
+		'Een plaatshouder kan niet terugtellen. Hij zou de eigen boekhouding van de lijst lezen in plaats van een regel.',
+	'api.draw.badAlign': 'Tekst lijnt uit op start, middle of end.',
+	'api.draw.badFontName':
+		'Een lettertypenaam mag geen aanhalingsteken bevatten. Kies het lettertype uit de lijst in plaats van het te typen.',
 	'api.draw.booleanEmpty': 'Die combinatie leverde niets op — overlappen de vormen wel?',
+	'api.draw.bracesInText':
+		'Een accolade moet één keer openen en sluiten om een kolomnaam heen, en een accolade is niet als accolade te branden.',
 	'api.draw.emptyText': 'Tekst mag niet leeg zijn.',
 	'api.draw.noFonts': 'Geen lettertype-ondersteuning beschikbaar.',
 	'api.draw.noLayer': 'De engine heeft geen laag aangemaakt.',
@@ -1981,6 +2121,10 @@ export const nl: Catalogue = {
 	'api.gen.needsSelection': 'Kies eerst wat er herhaald moet worden.',
 	'api.gen.hingeEmpty': 'Binnen het gebied blijft er niets van dit veld over.',
 	'api.gen.hingeNeedsSelection': 'Kies eerst de vorm waarvan het gebied met sleuven gevuld moet worden.',
+	'api.gen.noList':
+		'Er hangt geen lijst aan, dus er is geen volgende naam om te pakken. Haal eerst een lijst binnen in het Serie-venster.',
+	'api.gen.nothingToFollow':
+		'Geen van de vormen die je herhaalt heeft een plaatshouder in zijn tekst staan, dus er is geen naam voor de kopieën om te pakken. Zet eerst een kolom in een tekst.',
 	'api.gen.noBarcodeLib': 'Streepjescodes vereisen het pakket python-barcode.',
 	'api.gen.noFont': 'Er staat geen enkel bruikbaar lettertype op deze computer.',
 	'api.gen.noQrLib': 'QR-codes vereisen het pakket segno; installeer het naast de API.',
@@ -2004,6 +2148,75 @@ export const nl: Catalogue = {
 	'api.rotary.needsMeasurement': 'Kalibreren vraagt beide lengtes: wat je de machine gevraagd hebt en wat je op het object gemeten hebt.',
 	'api.rotary.noMachine': 'Er is geen machine gekozen, dus er is geen rotary om in te stellen.',
 	'api.rotary.homeWhileActive': 'De rotary staat aan. Homen stuurt de kop over het bed en de rotary in. Haal de rotary er eerst uit, of bevestig dat hij vrij is.',
+	'api.series.badColumnName':
+		'Een kolomnaam mag geen accolade bevatten, want dat is juist wat een plaatshouder markeert. Geef de kolom in je bestand een andere naam.',
+	'api.series.needsColumnName':
+		'Een genummerde lijst heeft een kolomnaam nodig, want dat is wat er tussen de accolades in de tekst komt.',
+	'api.series.unreadable':
+		'Dit bestand is geen tekst die deze app kan lezen. Sla het vanuit je spreadsheet op als CSV UTF-8 en probeer het opnieuw.',
+	'api.series.emptyFile':
+		'Dit bestand is leeg. Sla je lijst opnieuw op vanuit het spreadsheet en kijk of er iets in staat.',
+	'api.series.headerOnly': 'Dit bestand heeft wel kolomnamen, maar geen rijen eronder.',
+	'api.series.reservedColumn':
+		'Een kolom mag geen date, time of version heten, en niet met op_ beginnen — de engine houdt die namen voor zichzelf. Geef de kolom een andere naam in je bestand en haal het opnieuw binnen.',
+	'api.series.braceInCell':
+		'Rij {row} heeft een accolade staan in de kolom “{column}”, en een accolade is niet als accolade te branden. Haal hem uit de cel.',
+	'api.series.tooManyRows': 'Deze lijst heeft {rows} rijen en deze app draagt er hooguit {max}.',
+	'api.series.noFileChosen':
+		'Er is geen bestand gekozen, dus er is geen lijst om te lezen. Kies een bestand, of vul de getallen in om mee te tellen.',
+	'api.series.uploadGone': 'Dat bestand staat niet meer op de server. Kies het opnieuw.',
+	'api.series.fileTooBig':
+		'Dit bestand is groter dan {max_mb} MB. Een lijst met namen is een paar kilobytes; dit is waarschijnlijk niet het bestand dat je bedoelde.',
+	'api.series.notAWholeNumber.first':
+		'Getelde rijen lopen van het ene hele getal naar het andere, en het eerste getal is geen heel getal.',
+	'api.series.notAWholeNumber.last':
+		'Getelde rijen lopen van het ene hele getal naar het andere, en het laatste getal is geen heel getal.',
+	'api.series.notAWholeNumber.step':
+		'Getelde rijen lopen van het ene hele getal naar het andere, en de stap is geen heel getal.',
+	'api.series.notAWholeNumber.padding':
+		'Getelde rijen lopen van het ene hele getal naar het andere, en het aantal cijfers is geen heel getal.',
+	'api.series.numberStepZero':
+		'Een stap van niets bereikt het laatste getal nooit. Tel per één, of in de stap waarmee de onderdelen echt oplopen.',
+	'api.series.badPadding':
+		'Een getal dat {padding} cijfers breed geschreven wordt is geen onderdeelnummer. Gebruik 0 om niet op te vullen, of hooguit {max}.',
+	'api.series.emptyRange':
+		'Tellen van {first} naar {last} in stappen van {step} levert helemaal geen rijen op. Draai de stap om, of verwissel de twee uiteinden.',
+	'api.series.noRows': 'Deze lijst heeft geen rijen, dus er is niets te branden.',
+	'api.series.everyRowBlank':
+		'In “{column}” mist elke rij een waarde, dus er is niets te branden. Vul de kolom in, of zet het overslaan van lege rijen uit.',
+	'api.series.unknownColumn':
+		'Er is in de lijst geen kolom die “{column}” heet, dus deze tekst zou niets branden. Haal de plaatshouder uit de tekst, of zet de kolom in de lijst en haal die opnieuw binnen.',
+	'api.series.noList':
+		'Er hangt geen lijst aan, dus een tekst met een plaatshouder erin kan niets worden. Koppel een lijst in het Serie-venster, of haal de plaatshouder uit de tekst.',
+	'api.series.nothingAttached':
+		'Er hangt geen lijst aan, dus er is geen rij om te branden. Haal eerst een lijst binnen in het Serie-venster.',
+	'api.series.bundleUnreadable':
+		'De lijst in dit projectbestand is niet te lezen, dus het project is zonder die lijst geopend. Haal de lijst opnieuw binnen vanuit je spreadsheet.',
+	'api.series.badRow': 'Een rij wordt geteld met een heel getal, te beginnen bij de eerste rij.',
+	'api.series.startPastEnd': 'Deze lijst heeft {rows} rijen, dus beginnen bij rij {row} kan niet.',
+	'api.series.blankRow':
+		'Rij {row} heeft niets staan in de kolommen die dit ontwerp brandt, en lege rijen worden overgeslagen, dus hier is geen brandbeurt. Zet het overslaan van lege rijen uit, of ga naar een andere rij.',
+	'api.series.nothingVariable':
+		'Geen van de teksten op het bed komt uit de lijst, dus elke brandbeurt zou hetzelfde zijn. Zet eerst een kolom in een tekst.',
+	'api.series.noBurns':
+		'In elke rij van deze lijst mist een waarde die het ontwerp nodig heeft, dus met lege rijen overgeslagen is er niets te branden. Zet het overslaan van lege rijen uit, of vul de lijst in.',
+	'api.series.alreadyStarted':
+		'Er loopt al een serie. Stop die eerst — nog een serie beginnen gooit weg welke platen er gebrand zijn.',
+	'api.series.runGoing':
+		'Er loopt een serie, dus deze knop zou één plaat branden en niets meetellen. Druk in plaats daarvan op Deze branden: dat is de knop die de platen telt.',
+	'api.series.runGoingTiles':
+		'Er loopt een serie, en een serie en een tegelreeks bepalen allebei wat de volgende brandbeurt is. Maak de serie eerst af, of stop hem.',
+	'api.series.otherRunGoing':
+		'Er loopt een tegelreeks, en een tegelreeks en een serie bepalen allebei wat de volgende brandbeurt is. Maak er een van de twee af, of stop hem.',
+	'api.series.runGoingProject':
+		'Er loopt een serie. Stop hem voordat je de tekening vervangt, want de platen die je al gebrand hebt horen bij het ontwerp dat dan weggaat.',
+	'api.series.listLocked':
+		'Er loopt een serie. Stop hem voordat je de lijst verandert, anders klopt wat er gebrand is niet meer met wat er nog over is.',
+	'api.series.noRun': 'Er loopt op dit moment geen serie.',
+	'api.series.alreadyBurned':
+		'Deze is al gebrand. Nog een keer branden betekent dat de laser over werk gaat dat er al staat — doe dat alleen als de vorige poging mislukt is. Bevestig om door te gaan.',
+	'api.series.noSuchBurn': 'Er is in deze serie geen brandbeurt voor rij {row}.',
+	'api.series.noRunner': 'Deze serie heeft geen weg naar de machine.',
 	'api.sheet.needsName': 'Een vel heeft een naam nodig.',
 	'api.sheet.needsOne': 'Het laatste vel kan niet weg; een project heeft er één.',
 	'api.sheet.nothingSelected': 'Kies eerst wat er mee moet.',

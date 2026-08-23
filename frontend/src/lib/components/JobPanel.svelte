@@ -14,14 +14,17 @@
 	} from '$lib/api';
 	import type { Controller } from '$lib/control.svelte';
 	import type { TilingStore } from '$lib/tiling.svelte';
+	import type { SeriesStore } from '$lib/series.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { connection } from '$lib/connection.svelte';
 	import JobControls from './JobControls.svelte';
 	import TileRun from './TileRun.svelte';
+	import SeriesRun from './SeriesRun.svelte';
 
 	let {
 		device,
 		tiling,
+		series,
 		events,
 		control,
 		activeJob,
@@ -39,6 +42,14 @@
 	}: {
 		device: Device | null;
 		tiling: TilingStore;
+		/**
+		 * The list a series burns from, and the row the bed is pointing at.
+		 *
+		 * The same one instance `+page.svelte` builds beside `tiling` and hands to the
+		 * Series window: the run block writes to it (burn, next, stop) and the window
+		 * reads the answer, and a second store would be a second count of the plates.
+		 */
+		series: SeriesStore;
 		events: SignalEvent[];
 		control: Controller;
 		activeJob: Job | null;
@@ -74,7 +85,11 @@
 </script>
 
 <TileRun {tiling} />
-<JobControls {control} {device} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
+<!-- Above the ordinary controls, and only while a run is going: what is on the bed
+     now is the thing you came to this panel for. `SeriesRun` decides that for itself
+     off the run in the status payload, the same way `TileRun` does. -->
+<SeriesRun {series} />
+<JobControls {control} {device} {series} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->

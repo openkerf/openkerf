@@ -40,7 +40,16 @@ const BY_DESIGN = [
 	'.matname',
 	'.title',
 	'.machine',
-	'.mat'
+	'.mat',
+	// The Series window shows the reader's own spreadsheet: a column name and a cell
+	// have no known length at all, and both carry the whole string in their `title`.
+	// Without these three a forty-character header makes both language runs dirty on
+	// somebody else's file, which is not a fault of the layout.
+	'.colname',
+	'.cell',
+	// What the plate now on the bed engraves, in the run block. Same rule, and the
+	// card it sits in is 245 px wide: a long name clips there by design.
+	'.seriesRun .engraves'
 ];
 
 const browser = await chromium.launch();
@@ -104,11 +113,27 @@ const IDS = await (async () => {
 	return design.elements.map((e) => e.id);
 })();
 
+/**
+ * Open the Series window, which is where the reader's own spreadsheet is on screen.
+ *
+ * A dialog has no address of its own, so it needs a hand: this is the only screen in
+ * the list that is reached by pressing something. What it shows depends on what the
+ * server holds — attach a list with a long column name before running this, or the
+ * measurement is about an empty window and says nothing.
+ */
+async function openSeries(page) {
+	const rail = page.locator('button[title^="Series"], button[title^="Serie"]').first();
+	if (!(await rail.count())) return;
+	await rail.click();
+	await page.waitForTimeout(900);
+}
+
 const SCREENS = [
 	['canvas', '/?tab=design'],
 	['selection', `/?tab=design&select=${IDS.slice(0, 3).join(',')}`],
 	['layers', '/?tab=layers'],
 	['job', '/?tab=job'],
+	['series', '/?tab=design', openSeries],
 	['setup', '/setup'],
 	['setup-kind', '/setup/kind'],
 	['setup-model', '/setup/type'],
@@ -118,8 +143,9 @@ const SCREENS = [
 ];
 
 let problems = 0;
-for (const [name, path] of SCREENS) {
+for (const [name, path, prepare] of SCREENS) {
 	const page = await open(path);
+	if (prepare) await prepare(page);
 	const found = await measure(page, BY_DESIGN);
 	const real = found.filter((f) => !f.byDesign);
 	if (found.length !== real.length)

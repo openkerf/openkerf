@@ -290,7 +290,12 @@ const WIDE: Context = {
 	under: [
 		{ id: 'DATA1', label: 'Rectangle', selected: true },
 		{ id: 'DATA2', label: 'Circle', selected: false }
-	]
+	],
+	// Two columns and not one, on purpose: with a single column the Insert-column row
+	// *is* that column and carries its name, so the submenu — and its own label, which
+	// is ours and does belong on a page — would never be built here at all.
+	columns: ['DATA', 'DATA2'],
+	once: false
 };
 
 const LAYER: LayerContext = {
@@ -350,7 +355,11 @@ function operations(): Map<string, Set<string>> {
 		for (const row of menuRows(layerMenu({ ...LAYER, ...over }, HANDLERS))) add(row.id, row.label);
 
 	// The rows made out of the reader's own layers, sheets and pile of shapes.
-	for (const id of [...found.keys()]) if (/^(layer|sheet|under)-DATA/.test(id)) found.delete(id);
+	// `column-…` joins them: a row per column of somebody's own spreadsheet, whose label
+	// is that column's name. Demanding a page that names it would demand a page naming
+	// their data.
+	for (const id of [...found.keys()])
+		if (/^(layer|sheet|under|column)-DATA/.test(id)) found.delete(id);
 
 	// If the menus stop building, every check below passes on nothing.
 	assert.ok(found.size >= 60, `only ${found.size} operations read from actions.ts`);

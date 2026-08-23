@@ -22,6 +22,7 @@
 		job,
 		connected,
 		control,
+		edits = null,
 		pointerMm = null,
 		actions = true
 	}: {
@@ -30,6 +31,8 @@
 		job: Job | null;
 		connected: boolean;
 		control: Controller;
+		/** Refused edits ride along with the machine's complaints: see Message.svelte. */
+		edits?: { error: string | null } | null;
 		/** Pointer position on the bed; sits beside the machine position. */
 		pointerMm?: { x: number; y: number } | null;
 		/** Does this bar carry the pause and stop buttons? Not on a tablet: there
@@ -171,8 +174,9 @@
 {/if}
 <!-- Errors from write actions are not really at home here, but this is the only
      component that runs along on every tab. Without it a failed import landed in
-     a panel you did not have open at that moment. -->
-<Notice {control} />
+     a panel you did not have open at that moment — and a refused edit landed in the
+     design panel, which is just as easy not to be looking at. -->
+<Notice {control} {edits} />
 
 <footer class="statusbar mono">
 	<!-- Two positions side by side: where the head is, and where your pointer is.
