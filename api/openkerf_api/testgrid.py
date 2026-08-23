@@ -14,6 +14,7 @@ and it means the existing plan → spool route runs the grid without changes.
 import re
 import unicodedata
 
+from . import boardcode
 from .edits import DesignError
 
 MAX_CELLS = 400  # A 20x20 sweep is already more than anyone reads off a photo.
@@ -26,6 +27,17 @@ LABEL_LAYER = "Raster-labels"
 
 # The name of the group that holds one board together.
 BOARD_LABEL = "Testraster"
+
+# The layer the board's own code burns in, and the layer that cuts the tile loose. Named
+# here beside the caption layer because three places have to recognise them: the drawing,
+# the empty-layer sweep that `remove-from-design` does, and anything that must not mistake
+# a layer *of the board* for a layer of the user's.
+CODE_LAYER = "Board code"
+CUTOUT_LAYER = "Test board cut-out"
+
+# Every layer a board makes for itself. A layer in here is the board's and never catches
+# fresh work, and once its last shape is gone it is an empty layer nobody asked for.
+BOARD_LAYERS = (LABEL_LAYER, CODE_LAYER, CUTOUT_LAYER)
 
 
 def _positive(value, name: str) -> float:
@@ -172,6 +184,49 @@ BORDER_PAD_MM = 2.0
 DEFAULT_LABEL_SPEED_MM_S = 80.0
 DEFAULT_LABEL_POWER_PERCENT = 30.0
 
+# ------------------------------------------------------- the board's own name
+#
+# **Where the code goes, and why there.** Bottom right, outside the squares, in the strip
+# the board grows for it. Three requirements decided it and they only overlap in one place.
+#
+# *It must not eat a cell.* So it cannot go inside the grid, and the board has to grow for
+# it — which it does, downwards, so `outer_height_mm` covers it and the bed check and the
+# frame both see it.
+#
+# *It must survive being photographed.* A code needs four modules of untouched material
+# around it (`boardcode.QUIET_MODULES`: zero decoded 0 of 20 at every resolution) and the
+# thing most likely to eat that margin is other burning. The board's own text is all in the
+# top-left corner — the row labels down the left, the column labels and the caption across
+# the top — so the bottom right is the only corner with nothing in it. Diagonally opposite
+# the caption is also as far as the code can get from the dark squares, and those are what
+# loses the code for the plain OpenCV detector: 1 of 10 against 9 of 10 for Aruco on the
+# same photograph (see `boardcode.read`).
+#
+# *It must not confuse the alignment.* Filing a photograph means dragging four handles onto
+# the four corners of the *squares*. A code near the grid's own first corner sits exactly
+# where that first handle goes; down here it is outside the block being dragged, and
+# `cell_polygon` keeps normalising over the squares, so no alignment already stored means
+# anything different than it did.
+#
+# Right-aligned with the squares rather than with the board edge, so that a frame or a
+# cut-out line runs `BORDER_PAD_MM` clear of the code's quiet zone instead of through it.
+CODE_GAP_MM = 2.0
+
+# ---------------------------------------------------------- cutting it loose
+#
+# How far outside the whole board the cut runs. `BORDER_PAD_MM` cannot double as this: the
+# engraved frame *is* the outer box, so on the default form the board's own left edge
+# measures 0.4 mm from the bed edge and a cut there is a cut through the frame. Four
+# millimetres is a rim you can hold and that survives the char of the cut itself.
+CUTOUT_MARGIN_MM = 4.0
+
+# The tabs that keep the tile in the sheet: four of two millimetres, one per side, exactly
+# the default `DrawingService.set_bridges` puts on with one click. Not optional, and that is
+# the point of the whole layer order: a tile that comes free while squares are still burning
+# shifts, and then the rest of the sweep lands beside the line.
+CUTOUT_TABS = 4
+CUTOUT_TAB_MM = 2.0
+
 
 def _tidy(value: float, raw_step: float) -> float:
     """
@@ -271,6 +326,21 @@ def plan_grid(
     anchor="corner",
     text=True,
     border=False,
+    # The board's own name, and whether it is burned on the plank. Spelled the way the
+    # column is spelled, unlike `text`/`border` above them, because these three travel
+    # from the row to the form to the planner unchanged — `Library.GRID_DEFAULTS` hands
+    # them straight to this function, and a second spelling is a rename waiting to be
+    # forgotten in one of the three places.
+    code_enabled=False,
+    code_size_mm=None,
+    uid=None,
+    # Cutting the tile loose. The setting comes in already resolved — see `cutout_setting`,
+    # which is the half that needs a library and so cannot live in a pure planner.
+    cutout_enabled=False,
+    cut_speed_mm_s=None,
+    cut_power_percent=None,
+    cut_passes=None,
+    cutout_preset_id=None,
     label_speed_mm_s=None,
     label_power_percent=None,
     material_id=None,
@@ -348,6 +418,20 @@ def plan_grid(
         raise DesignError("Choose 'corner' (from the corner) or 'center' (from the middle).")
     text = bool(text)
     frame = bool(border)
+    code = bool(code_enabled)
+    cutout = bool(cutout_enabled)
+    # Minted here even when nothing is burned on the plank, because the name is the board's
+    # and not the code's: a board somebody photographs next month still has to be findable
+    # in the picker, and typing eight characters is the fallback that needs no camera. A
+    # name that came in is kept — a re-plan of a board that exists must not rename it, and a
+    # form that previews on every keystroke should send back the name its last preview gave
+    # it, or the printed name in the caption changes under the reader's eyes.
+    board_uid = boardcode.parse(uid) or boardcode.mint_uid()
+    code_size = (
+        _positive(code_size_mm, "code_size_mm")
+        if code_size_mm not in (None, "")
+        else boardcode.DEFAULT_SIZE_MM
+    )
     label_speed = _positive(
         DEFAULT_LABEL_SPEED_MM_S if label_speed_mm_s in (None, "") else label_speed_mm_s,
         "label_speed_mm_s",
@@ -398,6 +482,11 @@ def plan_grid(
                 "passes": pass_count,
                 "row_axis": row_axis,
                 "column_axis": column_axis,
+                # The name in letters, for whoever has no camera to hand. Only when the
+                # code is really on the plank: on a board without one those nine
+                # characters would name something nobody can check.
+                "code_enabled": code,
+                "uid": board_uid,
                 # The fixed quantity belongs with it: without it the board cannot be
                 # converted back into a setting in two weeks' time. This was already ready
                 # in `caption_text`, but the keys were never passed along — so the branch
@@ -444,10 +533,27 @@ def plan_grid(
 
     pad_left = (margin if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
     pad_above = (above if text else 0.0) + (BORDER_PAD_MM if frame else 0.0)
-    pad_right = pad_below = BORDER_PAD_MM if frame else 0.0
+    pad_right = BORDER_PAD_MM if frame else 0.0
+    # The code sits below the squares, between them and the frame, so the board grows for it
+    # and everything measured off `outer_*` — the bed check, the frame, the cut-out — covers
+    # it without being told about it.
+    pad_below = (CODE_GAP_MM + code_size if code else 0.0) + pad_right
 
     outer_width = round(pad_left + width + pad_right, 3)
     outer_height = round(pad_above + height + pad_below, 3)
+    # The code is right-aligned with the squares and grows leftwards, so what it may use is
+    # the squares plus the strip the row labels stand in — not the frame's own margin, which
+    # would put a cut or an engraved line through the quiet zone. On a board of small cells
+    # that runs out, and it is refused here rather than at drawing time so the form says so
+    # while the numbers are still on screen.
+    code_room = round((margin if text else 0.0) + width, 3)
+    if code and code_size > code_room:
+        raise DesignError(
+            f"A {code_size:g} mm code does not fit beside {code_room:g} mm of board; "
+            "use bigger or more squares, or a smaller code.",
+            code="library.grid.codeNoRoom",
+            values={"code_mm": round(code_size, 2), "board_mm": code_room},
+        )
 
     if anchor == "center":
         outer_x = round(float(origin_x_mm) - outer_width / 2, 3)
@@ -459,6 +565,27 @@ def plan_grid(
         origin_y_mm = float(origin_y_mm)
         outer_x = round(origin_x_mm - pad_left, 3)
         outer_y = round(origin_y_mm - pad_above, 3)
+
+    # Where the code goes, and what it will look like. `boardcode.plan` is asked here and
+    # not only at drawing time for two reasons: it refuses a size that cannot be read back
+    # (`library.grid.codeTooSmall`), and it warns about one that only just can — and both of
+    # those belong in the preview, beside the numbers that caused them, rather than in a 409
+    # after the user has pressed the button. Measured at 1.4 ms per call, which is a
+    # thousandth of what the board itself costs.
+    code_x = code_y = None
+    code_plan = None
+    if code:
+        code_x = round(origin_x_mm + width - code_size, 3)
+        code_y = round(origin_y_mm + height + CODE_GAP_MM, 3)
+        code_plan = boardcode.plan(board_uid, code_x, code_y, code_size)
+
+    # The cut runs `CUTOUT_MARGIN_MM` outside everything else the board draws — and outside
+    # `outer_*` on purpose, because `outer_*` is what the engraved frame *is*.
+    cut_margin = CUTOUT_MARGIN_MM if cutout else 0.0
+    cut_x = round(outer_x - cut_margin, 3)
+    cut_y = round(outer_y - cut_margin, 3)
+    cut_width = round(outer_width + 2 * cut_margin, 3)
+    cut_height = round(outer_height + 2 * cut_margin, 3)
 
     cells = []
     for row in range(rows):
@@ -503,6 +630,29 @@ def plan_grid(
         "anchor": anchor,
         "text": text,
         "border": frame,
+        "uid": board_uid,
+        "code_human": boardcode.human(board_uid),
+        "code_enabled": code,
+        "code_size_mm": code_size if code else None,
+        "code_x_mm": code_x,
+        "code_y_mm": code_y,
+        "code_dpi": boardcode.CODE_DPI,
+        "code_modules": code_plan["modules"] if code_plan else None,
+        "code_module_mm": round(code_plan["module_mm"], 3) if code_plan else None,
+        "cutout_enabled": cutout,
+        "cutout_preset_id": cutout_preset_id,
+        "cut_speed_mm_s": cut_speed_mm_s,
+        "cut_power_percent": cut_power_percent,
+        "cut_passes": int(cut_passes or 1),
+        "cut_tabs": CUTOUT_TABS if cutout else 0,
+        "cut_tab_mm": CUTOUT_TAB_MM,
+        "cut_x_mm": cut_x,
+        "cut_y_mm": cut_y,
+        "cut_width_mm": cut_width,
+        "cut_height_mm": cut_height,
+        # What is worth saying but is nobody's refusal: a code small enough to need a close
+        # photograph. `boardcode.plan` puts the numbers in the sentence.
+        "warnings": list(code_plan["warnings"]) if code_plan else [],
         "label_speed_mm_s": label_speed,
         "label_power_percent": label_power,
         "outer_x_mm": outer_x,
@@ -549,14 +699,40 @@ def plan_grid(
         # passes reports half its time, and we also use that number to say whether it
         # fits within a day.
         seconds += pass_count * burn_mm / speed + pitch / RAPID_MM_S
-    plan["seconds"] = round(seconds, 1)
+
+    # What the two extras cost, separately, because the form has to be able to say it.
+    # Measured through the engine's own plan on a sixteen-square board that burns for 56.9 s:
+    # the code is 14.8 s and the cut-out 29.6 s at 8 mm/s, so between them they can add half
+    # the board again. The arithmetic here comes out at 14.1 s and 29.5 s for the same two.
+    #
+    # The code is a raster sweep over the *pattern*, not over the whole footprint: the quiet
+    # zone is unburned material, so the layer's bitmap stops at the modules and four modules
+    # a side never see the head. That is 13.03 mm of an 18 mm code.
+    code_seconds = 0.0
+    if code_plan:
+        pattern = code_size - 2 * code_plan["quiet_mm"]
+        interval = 25.4 / boardcode.CODE_DPI
+        code_seconds = (pattern / interval * pattern + pattern) / label_speed
+    # The cut runs once round the tile, less what the tabs leave uncut.
+    cut_seconds = 0.0
+    if cutout and cut_speed_mm_s:
+        perimeter = 2 * (cut_width + cut_height) - CUTOUT_TABS * CUTOUT_TAB_MM
+        cut_seconds = int(cut_passes or 1) * perimeter / float(cut_speed_mm_s)
+    plan["code_seconds"] = round(code_seconds, 1)
+    plan["cut_seconds"] = round(cut_seconds, 1)
+    plan["seconds"] = round(seconds + code_seconds + cut_seconds, 1)
 
     plan["label_margin_mm"] = margin if text else 0.0
     # Are the row labels still on the bed? Without captions that question is gone.
     plan["label_room"] = (not text) or origin_x_mm >= margin
     # And the board as a whole: since T9 the centre can be the anchor, and then "set Start
     # X higher" is no longer an answer the user can give.
-    plan["board_room"] = outer_x >= 0 and outer_y >= 0
+    #
+    # Measured on the cut rectangle and not on `outer_*`, because that is what the head
+    # really has to reach: on the default form `outer_x_mm` is 0.4 mm, so a cut-out asked
+    # for there runs 3.6 mm off the left of the bed while every number in the form says the
+    # board fits. Without a cut-out the two rectangles are the same and nothing changes.
+    plan["board_room"] = cut_x >= 0 and cut_y >= 0
 
     # Every quantity gets its min/max/steps, the fixed one as well: then one row in the
     # database stays enough to rebuild the grid, and the columns that were already there
@@ -817,6 +993,14 @@ def caption_lines(plan: dict) -> list[str]:
         foot.append(f"{passes} passes")
     if plan.get("stamp"):
         foot.append(str(plan["stamp"]))
+    # The board's own name in letters, last, and only when the code is really burned beside
+    # it. Here rather than under the code itself for two reasons: the caption is the one
+    # thing on the board whose room is measured and reserved (see `plan_grid`), and every
+    # other fact that identifies this plank is already on this line. Nine characters of it,
+    # and they are the whole fallback for a phone that cannot decode — the picker's search
+    # box takes what is printed here.
+    if plan.get("code_enabled") and plan.get("uid"):
+        foot.append(boardcode.human(plan["uid"]))
 
     lines = [" · ".join(head), " · ".join(foot)]
     return [r for r in lines if r]
@@ -864,6 +1048,93 @@ def _cell_label(plan: dict, cell: dict) -> str:
     )
 
 
+def cutout_setting(library, fields: dict) -> dict:
+    """
+    The cut setting that will cut this tile loose, resolved from the library.
+
+    The half of the cut-out that needs a library, kept out of `plan_grid` so that the
+    planner stays arithmetic and can be previewed without one. Hands back the four fields
+    `plan_grid` wants, or `{}` when nothing is being cut loose.
+
+    **Refused rather than guessed.** The cut setting is precisely the unknown a test board
+    exists to discover, so a default here would cut the rim at a speed nobody has ever
+    burned — on the very plank whose purpose is to find out what that speed is. The refusal
+    names the thickness, because "there is no cut setting" and "there is no cut setting *for
+    3 mm*" send the user to two different places.
+
+    A cut preset for another thickness is not offered either: 3 mm birch at 8 mm/s does not
+    cut 6 mm birch at all, and half-cutting the rim is worse than not cutting it — the tile
+    stays in the sheet and the score line is a crack waiting to happen.
+    """
+    if not fields.get("cutout_enabled"):
+        return {}
+    material_id = fields.get("material_id")
+    if not material_id:
+        raise DesignError(
+            "Cutting the tile loose needs a material, so its cut setting can be looked up.",
+            code="library.grid.cutoutNeedsMaterial",
+        )
+    presets = [
+        preset
+        for preset in library.presets(
+            material_id=material_id,
+            operation="snijden",
+            machine_id=fields.get("machine_id"),
+        )
+        if preset.get("speed_mm_s") and preset.get("power_percent")
+    ]
+    thickness = fields.get("thickness_mm")
+    if thickness not in (None, ""):
+        wanted = float(thickness)
+        fitting = [
+            preset
+            for preset in presets
+            if preset.get("thickness_mm") is not None
+            and abs(float(preset["thickness_mm"]) - wanted) < 0.05
+        ]
+    else:
+        wanted = None
+        fitting = presets
+    if not fitting:
+        thicknesses = sorted(
+            {
+                float(preset["thickness_mm"])
+                for preset in presets
+                if preset.get("thickness_mm") is not None
+            }
+        )
+        known = (
+            " There are cut settings for " + ", ".join(f"{t:g} mm" for t in thicknesses) + "."
+            if thicknesses
+            else ""
+        )
+        raise DesignError(
+            "There is no cut setting for this material"
+            + (f" at {wanted:g} mm" if wanted is not None else "")
+            + "; burn a cutting board first, or add the setting by hand."
+            + known,
+            code="library.grid.cutoutNeedsPreset",
+            values={"thickness_mm": wanted, "known_mm": thicknesses},
+        )
+    # The one used most recently, and failing that the newest: the setting somebody reached
+    # for last week is the one they trust, and `presets()` orders by name and thickness
+    # rather than by date.
+    chosen = max(
+        fitting,
+        key=lambda preset: (
+            str(preset.get("last_used_at") or ""),
+            str(preset.get("created_at") or ""),
+            preset["id"],
+        ),
+    )
+    return {
+        "cutout_preset_id": chosen["id"],
+        "cut_speed_mm_s": chosen["speed_mm_s"],
+        "cut_power_percent": chosen["power_percent"],
+        "cut_passes": int(chosen.get("passes") or 1),
+    }
+
+
 def raster_supported(kernel) -> bool:
     """
     Can this engine actually burn a raster layer?
@@ -893,6 +1164,28 @@ OPERATION_TYPES = {
 }
 
 
+def _side_middles(plan: dict) -> list[float]:
+    """
+    The middle of each side of the cut-out rim, as percentages along the path.
+
+    The engine walks a rectangle from its top-left corner, so the four midpoints are at
+    half the width, then a height, then a width, then a height. Returned in the order the
+    path is walked, because that is the order the engine reads them in.
+    """
+    width = float(plan["cut_width_mm"])
+    height = float(plan["cut_height_mm"])
+    perimeter = 2 * (width + height)
+    if perimeter <= 0:  # pragma: no cover - refused long before this
+        return []
+    along = (
+        width / 2,
+        width + height / 2,
+        width + height + width / 2,
+        2 * width + height + height / 2,
+    )
+    return [round(100.0 * value / perimeter, 4) for value in along]
+
+
 class TestGridGenerator:
     def __init__(self, kernel):
         self.kernel = kernel
@@ -918,11 +1211,19 @@ class TestGridGenerator:
             raise DesignError(f"Unknown operation: {plan['operation']}")
 
         # The whole board, not only the squares: captions and border frame get burned just
-        # the same, and those are exactly what stuck out on the left and top (T11).
-        outer_x = plan.get("outer_x_mm", plan["origin_x_mm"])
-        outer_y = plan.get("outer_y_mm", plan["origin_y_mm"])
-        outer_w = plan.get("outer_width_mm", plan["width_mm"])
-        outer_h = plan.get("outer_height_mm", plan["height_mm"])
+        # the same, and those are exactly what stuck out on the left and top (T11). And
+        # since the cut-out, the outermost thing on the board is the cut line 4 mm outside
+        # all of that — `cut_*` is `outer_*` when nothing is cut loose.
+        def furthest(cut_key, outer_key, fallback):
+            for key in (cut_key, outer_key):
+                if plan.get(key) is not None:
+                    return plan[key]
+            return fallback
+
+        outer_x = furthest("cut_x_mm", "outer_x_mm", plan["origin_x_mm"])
+        outer_y = furthest("cut_y_mm", "outer_y_mm", plan["origin_y_mm"])
+        outer_w = furthest("cut_width_mm", "outer_width_mm", plan["width_mm"])
+        outer_h = furthest("cut_height_mm", "outer_height_mm", plan["height_mm"])
         bed = self._bed_mm()
         # Only to the right and below is this a refusal. On the left and top the captions
         # were already sticking out since T11, and there reporting was deliberately chosen
@@ -1019,6 +1320,14 @@ class TestGridGenerator:
                 self._caption(plan, extras)
             if plan.get("border"):
                 self._border(plan, extras)
+            if plan.get("code_enabled"):
+                self._code(plan, extras)
+            # Last of all, and that is the whole point of it being here: the order the
+            # operations are created in *is* the order the machine burns them, so a cut-out
+            # made before the label layer would cut the tile loose and then engrave a
+            # caption on a plank that has moved.
+            if plan.get("cutout_enabled"):
+                self._cutout(plan, extras)
 
             # Within the same action: the board is one thing, so also one step in the
             # history.
@@ -1162,6 +1471,271 @@ class TestGridGenerator:
             return
         self._label_op(plan).add_reference(node)
         extras.append(node)
+
+    def _code(self, plan: dict, extras: list):
+        """
+        The board's own name, burned on it as a QR code.
+
+        **One raster layer, one shape, and both of those are measured decisions.**
+
+        A raster layer, because `op_engrave.as_cutobjects`
+        (`meerk40t/core/node/op_engrave.py:358+`) traces `final_geometry().as_path()` and
+        never looks at a fill: 212 filled modules come out of an engrave layer as 212 little
+        outlines with unburned wood inside each one, and nothing on earth reads that.
+        Measured through the engine's own plan: the code layer is **one** cut object, where
+        the same modules in an engrave layer are 848 of them.
+
+        At `boardcode.CODE_DPI` and the caption's own speed, and both of those are pinned
+        rather than settable. Measured on a sixteen-square board that burns for 56.9 s: the
+        code is 14.8 s at 167 dpi, 22.1 at 250 and **43.7 at the engine's 500 dpi default** —
+        which nearly doubles the board, and that is the kind of number that gets a feature
+        switched off. 167 dpi is 0.15 mm a line, roughly four lines across a 0.62 mm module.
+
+        One shape with a subpath per run of modules, not a node per module (see
+        `_merged_rows`). Our rasteriser fills a shape's subpaths with an even-odd XOR
+        (`rasterizer._fill`), so two rings that touch can in principle cancel their shared
+        boundary pixel and leave a white seam between them. Measured through the real
+        `make_raster` and read back with OpenCV, on the plank as `burned_code` builds it in
+        the tests: 20 of 20 minted names decoded at `CODE_DPI`, which is 4.08 px per module.
+        The seam only bites at the floor — with one square per module, 2 px per module read 9
+        of 20 against 19 of 20 for a node per module — and 212 nodes on the canvas cost more
+        than that margin is worth.
+
+        **What is not in the bitmap is the quiet zone**, and that is right: `make_raster`
+        crops to the nodes' own bounds, so the sweep covers the pattern and the four modules
+        around it are simply material the head never visits. On a plank that *is* the quiet
+        zone. It also means the burn is 13.03 mm wide and not 18, which is where the
+        arithmetic in `plan_grid` gets its seconds from.
+        """
+        if not raster_supported(self.kernel):
+            # Not a warning: without a rasteriser `OpRasterNode.preprocess` takes the
+            # `strip_rasters` branch, the layer throws its own shapes away and the plank
+            # comes out with no code on it at all. A board that silently cannot say who it
+            # is, is the exact thing this feature exists to prevent.
+            raise DesignError(
+                "This engine cannot burn a raster layer, so it cannot burn a board code "
+                "either. Leave the code off, or install a rasteriser.",
+                code="library.grid.codeNeedsRasteriser",
+            )
+        code = boardcode.plan(
+            plan["uid"], plan["code_x_mm"], plan["code_y_mm"], plan["code_size_mm"]
+        )
+        node = self._filled_path(
+            self._merged_rows(code["squares"], code["module_mm"]),
+            f"Board code {code['human']}",
+        )
+        self._code_op(plan).add_reference(node)
+        extras.append(node)
+        return node
+
+    @staticmethod
+    def _merged_rows(squares, module_mm: float):
+        """
+        A row of touching modules as one rectangle instead of five.
+
+        The same area, drawn with half the rings: measured over 50 minted names, 225 dark
+        modules become 116 horizontal runs — a QR is full of them, its three finder patterns
+        alone are 7x7 blocks. That halving is worth having twice over. The design snapshot
+        is polled by the frontend and a code adds 86 KB of path data to it unmerged against
+        69 KB merged, on a board that is 55 KB without one — less than the halving of the
+        rings, because what is left is the coordinates themselves at full float precision.
+        And our rasteriser XORs one mask per ring (`rasterizer._fill`), so half the rings is
+        half that work.
+
+        Measured after merging, through the real burn and read back with OpenCV: still 20 of
+        20 at `CODE_DPI` and at 500 dpi. It can only help — merging removes shared boundaries
+        between modules, and a shared boundary is exactly what the XOR can cancel.
+
+        Grouping on the exact top edge is safe rather than sloppy: `boardcode.plan` computes
+        every module's edges from one expression, so two modules in the same row carry the
+        identical float. The gap test is against half a module for the same reason — the only
+        distances that occur are zero and a whole module.
+        """
+        rows: dict[tuple[float, float], list[tuple[float, float]]] = {}
+        for ring in squares:
+            left, top = ring[0]
+            right, bottom = ring[2]
+            rows.setdefault((top, bottom), []).append((left, right))
+        merged = []
+        for (top, bottom), spans in rows.items():
+            spans.sort()
+            start, end = spans[0]
+            for left, right in spans[1:]:
+                if left - end <= module_mm / 2:
+                    end = right
+                    continue
+                merged.append(
+                    [(start, top), (end, top), (end, bottom), (start, bottom)]
+                )
+                start, end = left, right
+            merged.append([(start, top), (end, top), (end, bottom), (start, bottom)])
+        return merged
+
+    def _filled_path(self, rings, label: str):
+        """
+        Many closed rings as one filled shape.
+
+        Straight in as geometry and not through the `path` command: that reads its d-string
+        as SVG user units and scales it again, which is the upstream row in CLAUDE.md about
+        a path coming out 725 times too big. Filled, because the rasteriser only burns what
+        has a fill — the same reason `_square` fills a raster board's squares.
+        """
+        from meerk40t.core.geomstr import Geomstr
+        from meerk40t.core.units import UNITS_PER_MM
+        from meerk40t.svgelements import Color
+
+        geometry = Geomstr()
+        for ring in rings:
+            corners = [complex(x * UNITS_PER_MM, y * UNITS_PER_MM) for x, y in ring]
+            for start, end in zip(corners, corners[1:] + corners[:1]):
+                geometry.line(start, end)
+        return self.elements.elem_branch.add(
+            geometry=geometry,
+            type="elem path",
+            fill=Color("black"),
+            stroke=None,
+            label=label,
+        )
+
+    def _code_op(self, plan: dict):
+        """
+        The layer the codes burn in; one for every board together, like the captions.
+
+        The same speed and power as the caption, because it is the same kind of work: it has
+        to be readable whatever the sweep turns out to say. That also pins what the 14.8 s in
+        `_code` means — the same code is 5.9 s at 200 mm/s, so the figure is only true at the
+        speed the caption burns at, and a form that changes the caption speed changes this.
+        """
+        speed = float(plan.get("label_speed_mm_s") or DEFAULT_LABEL_SPEED_MM_S)
+        power = (
+            float(plan.get("label_power_percent") or DEFAULT_LABEL_POWER_PERCENT) * 10
+        )
+        for node in self.elements.op_branch.children:
+            if getattr(node, "label", None) == CODE_LAYER:
+                node.speed = speed
+                node.power = power
+                node.dpi = boardcode.CODE_DPI
+                return node
+        return self.elements.op_branch.add(
+            type="op raster",
+            speed=speed,
+            power=power,
+            dpi=boardcode.CODE_DPI,
+            label=CODE_LAYER,
+        )
+
+    def _cutout(self, plan: dict, extras: list):
+        """
+        Cut the tile loose, on four tabs, in a layer of its own that burns last.
+
+        The tabs are not a nicety. A tile that comes free while the sweep is still running
+        shifts, and then the remaining squares burn on a moving target — which is a board
+        you cannot read and material you cannot get back. Four of two millimetres, through
+        the engine's own `mktablength`/`mktabpositions` (see `bridges.py`), so the cut plan,
+        the estimate and the RD stream all get the gaps for free.
+
+        Its own known cut setting, and refused when there is none: the cut setting is
+        precisely the unknown a test board exists to discover, so guessing one here would
+        cut a rim at a speed nobody has ever burned. `cutout_setting` resolves it from the
+        library before the planning starts.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        from .bridges import MAX_FRACTION, format_positions
+
+        speed = plan.get("cut_speed_mm_s")
+        power = plan.get("cut_power_percent")
+        if not speed or not power:
+            # A separate code from `cutout_setting`'s, because it is a separate situation
+            # and one code can only carry one sentence: that one means the library holds no
+            # cut setting for this material, this one means the board was planned without
+            # asking. Both are reachable — the second by anything that posts a board of its
+            # own making rather than going through `cutout_setting` first.
+            raise DesignError(
+                "This board was planned without a cut setting, so there is nothing to cut "
+                "the tile loose with.",
+                code="library.grid.cutoutNoSetting",
+            )
+
+        perimeter = 2 * (plan["cut_width_mm"] + plan["cut_height_mm"])
+        if CUTOUT_TABS * CUTOUT_TAB_MM > perimeter * MAX_FRACTION:
+            # The same bound `set_bridges` refuses on, for the same reason: the engine's own
+            # check is `count * length < total` and four tabs of 49.9 mm on a 200 mm contour
+            # pass that while leaving 0.15 mm of cut. On the smallest board this form can
+            # make the perimeter is 40 mm against 8 mm of tab, so this fires for nobody —
+            # and it fires loudly rather than cutting a rim that is all tab.
+            raise DesignError(
+                f"{CUTOUT_TABS} tabs of {CUTOUT_TAB_MM:g} mm leave too little cut in a "
+                f"{perimeter:.0f} mm outline; the board is too small to cut loose.",
+                code="library.grid.cutoutTabsTooBig",
+                values={"tabs": CUTOUT_TABS, "perimeter_mm": round(perimeter, 1)},
+            )
+
+        before = {id(n) for n in self.elements.elems()}
+        self.kernel.console(
+            f"rect {plan['cut_x_mm']}mm {plan['cut_y_mm']}mm "
+            f"{plan['cut_width_mm']}mm {plan['cut_height_mm']}mm\n"
+        )
+        node = next((n for n in self.elements.elems() if id(n) not in before), None)
+        if node is None:
+            raise DesignError("The engine created no cut-out.")
+        node.mktablength = CUTOUT_TAB_MM * UNITS_PER_MM
+        # One tab in the middle of each side, and not the engine's `*4` shorthand.
+        #
+        # `*4` spreads by fraction of the *perimeter*, which is even only on a square rim.
+        # Measured on a rim of 100.2 x 36.4 mm: the corners sit at 0 / 100.2 / 136.6 /
+        # 236.8 mm and `*4` put the gap centres at 34.2 / 102.5 / 170.8 / 239.1 — two of
+        # them 2.3 mm past a corner, with the tab edge 1.3 mm from it. A tab across a
+        # corner is the weakest tab there is: it holds on a bend, it tears when the tile is
+        # snapped out, and it leaves the corner ragged on the piece you keep to photograph.
+        #
+        # The price of saying it in percentages is that they no longer follow a resize the
+        # way `*4` does. A board is not resized — it is planned and burned — so that is a
+        # price of nothing here.
+        node.mktabpositions = format_positions(None, _side_middles(plan))
+        # A raw assignment reports nothing to the node, so the cached bounds and the scene
+        # would keep the version without gaps — the same trap `set_bridges` documents.
+        node.altered()
+        self._cutout_op(plan).add_reference(node)
+        extras.append(node)
+        return node
+
+    def _cutout_op(self, plan: dict):
+        """
+        The cut layer, and it has to be the last layer in the tree.
+
+        Being created last is enough for one board. It is not enough for two: the second
+        board's cell layers are created after the first board's cut-out, and then the tile
+        of board one comes free while board two is still being engraved. So the layer is
+        moved to the end every time a board asks for it. `insert_sibling` and not
+        `swap_node`, because `swap_node` takes both nodes' children along and on balance
+        nothing moves (see `DrawingService.move_operation`).
+        """
+        speed = float(plan["cut_speed_mm_s"])
+        power = float(plan["cut_power_percent"]) * 10
+        passes = int(plan.get("cut_passes") or 1)
+        operation = None
+        for node in self.elements.op_branch.children:
+            if getattr(node, "label", None) == CUTOUT_LAYER:
+                node.speed = speed
+                node.power = power
+                node.passes = passes
+                node.passes_custom = passes > 1
+                operation = node
+                break
+        if operation is None:
+            operation = self.elements.op_branch.add(
+                type="op cut",
+                speed=speed,
+                power=power,
+                passes=passes,
+                passes_custom=passes > 1,
+                label=CUTOUT_LAYER,
+            )
+        siblings = list(self.elements.op_branch.children)
+        if siblings and siblings[-1] is not operation:
+            siblings[-1].insert_sibling(operation, below=True)
+        return operation
 
     def _label_op(self, plan: dict | None = None):
         """The layer all the captions go into; one for every grid together."""

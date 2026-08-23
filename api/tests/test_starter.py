@@ -512,3 +512,43 @@ def test_not_sure_about_the_tube_power_goes_through_the_same_door(client, ruida)
     # unknown wattage is not an unknown laser.
     assert listing["count"] == 2
     assert all(p["power_unmatched"] for p in listing["presets"])
+
+
+def test_a_fetched_row_keeps_the_credit_it_came_with(tmp_path, kernel):
+    """
+    The licence, not the bookkeeping.
+
+    The catalogue is CC BY 4.0, so the attribution is a condition of the copy: a row that
+    arrives without it can never be passed on lawfully, and — worse — nobody can see that
+    it was dropped. Measured before the line that fixes this: a staged bundle carried
+    `origin_laser_type` and `origin_power_watt` and no handle at all, so every fetch
+    quietly laundered somebody's credit out of the data.
+    """
+    import json
+    import zipfile
+
+    from openkerf_api.library import Library
+    from openkerf_api.presetariat import Presetariat
+    from openkerf_api.starter import Starter
+
+    library = Library(tmp_path / "lib.db")
+    machine = library.add_machine(
+        name="Bench", laser_type="co2-glass", power_watt=80, device_path="ruida"
+    )
+    catalogue = Presetariat(
+        library, tmp_path / "cache.json", url="http://127.0.0.1:9/nothing.json"
+    )
+    starter = Starter(library, catalogue)
+
+    staged = starter.stage(machine, tmp_path / "staged", ids=None)
+    assert staged, staged
+
+    with zipfile.ZipFile(staged["file"] if isinstance(staged, dict) and "file" in staged
+                         else next((tmp_path / "staged").glob("*.openkerf-lib"))) as bundle:
+        name = next(n for n in bundle.namelist() if n.endswith(".json"))
+        payload = json.loads(bundle.read(name))
+    presets = payload["presets"]
+    assert presets, payload
+    assert all(row.get("origin_by") for row in presets), (
+        "a row came through with no credit: it cannot be passed on under CC BY"
+    )

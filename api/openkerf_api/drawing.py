@@ -18,7 +18,9 @@ from .design import _xy, operation_label
 from .edits import DesignError, _finite, _positive
 from .palette import normalise
 from .series import require_known_columns
-from .testgrid import LABEL_LAYER
+# `LABEL_LAYER` is re-exported through this module rather than merely imported:
+# `api/tests/test_import_hygiene.py` reads it from here.
+from .testgrid import BOARD_LAYERS, LABEL_LAYER  # noqa: F401
 
 # What a shape needs, and the console command that draws it. Millimetres in,
 # because that is what the user sees.
@@ -448,12 +450,19 @@ class Drawing:
         """
         A layer that belongs to a test board rather than to the user.
 
-        Two kinds: the cells (each with its own sweep setting) and the shared label layer
-        that all the boards' captions go into.
+        Two kinds: the cells (each with its own sweep setting) and the layers every board
+        shares — the captions, the board code and the cut-out (`testgrid.BOARD_LAYERS`).
+
+        The list and not just the caption layer, and that is measured rather than tidy:
+        with only the caption layer in here, `delete_all_operations` took the code's own
+        raster layer away and left the code shape with no references at all — on the canvas,
+        and burning nothing. That is the same fault this method was written for the first
+        time, when clearing the layers left every board's captions and frame without a
+        layer on a board where nothing else looked wrong.
         """
         if operation is None:
             return False
-        if getattr(operation, "label", None) == LABEL_LAYER:
+        if getattr(operation, "label", None) in BOARD_LAYERS:
             return True
         return self._is_grid_cell(operation, getattr(operation, "id", "") or "")
 

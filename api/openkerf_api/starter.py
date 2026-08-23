@@ -134,6 +134,15 @@ class Starter:
         knows_watt = bool(profile.get("power_watt")) or (
             profile.get("starter_state") == "power_unknown"
         )
+        if numbers["mine"] and not numbers["mine_measured"]:
+            # Settings, but every one of them out of a catalogue. Tested *before* the two
+            # questions about the machine, because the answer here does not need them: a
+            # test grid on this laser is what turns a starting point into a measurement,
+            # and asking what kind of tube it is first would be a form standing between
+            # the user and the one thing worth doing. The column default used to hide this
+            # — every profile claimed to be a CO2 glass tube, so nobody was ever asked —
+            # and making that honest is what brought the ordering to light.
+            return "unburned"
         if kind == "unknown" or not knows_watt:
             return "askMachine"
         if not numbers["mine"]:
@@ -325,6 +334,12 @@ class Starter:
         and not a measurement, and without those two columns nothing downstream can
         tell the difference — which is precisely how the 26 rows already in the library
         became unaccountable.
+
+        And `origin_by` travels with them, which is not bookkeeping but the licence. The
+        catalogue is CC BY 4.0: the credit is a condition of the copy, and a row that
+        loses it here can never be passed on lawfully again — nor can anybody see that it
+        was lost. Measured before this line existed: a staged bundle carried the origin
+        machine and no handle at all.
         """
         materials: dict[str, int] = {}
         presets = []
@@ -351,6 +366,7 @@ class Starter:
                     "origin_id": row.get("id"),
                     "origin_laser_type": origin.get("laser_type"),
                     "origin_power_watt": origin.get("power_watt"),
+                    "origin_by": row.get("by"),
                     "note": _note(row),
                 }
             )

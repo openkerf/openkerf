@@ -21,7 +21,13 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS machine_profile (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     name         TEXT NOT NULL,
-    laser_type   TEXT NOT NULL DEFAULT 'co2-glass',
+    -- 'unknown' and not 'co2-glass'. A profile is made the moment a device is activated,
+    -- before anybody has been asked anything, and a default of 'co2-glass' made every one
+    -- of them *claim* to be a glass tube: the wizard then only ever asked about the
+    -- wattage, and somebody with a diode was never asked at all while the catalogue
+    -- happily matched them against CO2 values. Unknown matches nothing and says so, which
+    -- is the answer a machine nobody has described deserves.
+    laser_type   TEXT NOT NULL DEFAULT 'unknown',
     power_watt   REAL,
     lens_mm      REAL,
     bed_width_mm REAL,
@@ -141,6 +147,41 @@ CREATE TABLE IF NOT EXISTS test_grid (
     -- then the overlay has to be the same.
     alignment     TEXT,
     group_id      TEXT,
+    -- The board's own name, eight Crockford base32 characters (see `boardcode`). Minted
+    -- for *every* board and back-filled for the ones that predate it, because eleven of
+    -- the author's thirty-two boards are physically indistinguishable from another one —
+    -- same material, same square size, same sweep, burned minutes apart — so filing a
+    -- photograph under the right board is guesswork without a name. Whether the name is
+    -- also burned on the plank is `code_enabled`; the row has it either way, so the
+    -- picker can show it and a search box can find it.
+    uid           TEXT,
+    -- What the user typed as the caption. Everything else the caption prints — material,
+    -- thickness, operation, the axes, the passes, the date — is a column already, so this
+    -- is the only part of the line on the plank that the row cannot rebuild.
+    caption       TEXT,
+    -- The whole board, captions, code and frame included. `origin_*` is the top-left of
+    -- the *squares* and stays that, because the photo overlay normalises over the squares.
+    -- These four are stored so that reading an alignment off the code's corners can be
+    -- added later without a second migration.
+    outer_x_mm    REAL,
+    outer_y_mm    REAL,
+    outer_width_mm REAL,
+    outer_height_mm REAL,
+    -- Where the code went and how big it was, for the same reason: three numbers are what
+    -- a homography off its corners needs, and they cost nothing now.
+    code_enabled  INTEGER NOT NULL DEFAULT 0,
+    code_size_mm  REAL,
+    code_x_mm     REAL,
+    code_y_mm     REAL,
+    -- Whether the tile was cut loose, with whose cut setting, and along which rectangle.
+    -- The setting is a real reference: a preset that is removed leaves no id claiming to
+    -- be the setting the tile was cut with.
+    cutout_enabled INTEGER NOT NULL DEFAULT 0,
+    cutout_preset_id INTEGER REFERENCES preset(id) ON DELETE SET NULL,
+    cut_x_mm      REAL,
+    cut_y_mm      REAL,
+    cut_width_mm  REAL,
+    cut_height_mm REAL,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -278,6 +319,9 @@ class Library:
             # column added to both and the version left alone, an already-stamped database
             # did not get it. Sniffing costs one `PRAGMA table_info` per table.
             self._add_missing_columns(db)
+            # And beside it, for the same reason and with the same cost: every board needs
+            # a name, and a board that has one already is left alone.
+            self._name_the_boards(db)
             if db.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
                 # What is *not* idempotent, or is expensive, stays behind the gate: the
                 # back-fills and the one-time relabel.
@@ -295,7 +339,6 @@ class Library:
                 # still in there.
                 self._dedupe_machines(db)
 
-    @staticmethod
     @staticmethod
     def _add_missing_columns(db):
         """
@@ -340,6 +383,37 @@ class Library:
                     ("label_power_percent", "REAL"),
                     # Boards from before this version burned over each square once.
                     ("passes", "INTEGER NOT NULL DEFAULT 1"),
+                    # The board's own name and what was drawn around it. Every one of
+                    # these defaults describes a board from before this round exactly:
+                    # no name burned on it, no cut-out, and nothing measured about where
+                    # the whole board lay — `_name_the_boards` fills the name in, the
+                    # rest stays NULL because inventing it would be a measurement we
+                    # never made.
+                    ("uid", "TEXT"),
+                    ("caption", "TEXT"),
+                    ("outer_x_mm", "REAL"),
+                    ("outer_y_mm", "REAL"),
+                    ("outer_width_mm", "REAL"),
+                    ("outer_height_mm", "REAL"),
+                    ("code_enabled", "INTEGER NOT NULL DEFAULT 0"),
+                    ("code_size_mm", "REAL"),
+                    ("code_x_mm", "REAL"),
+                    ("code_y_mm", "REAL"),
+                    ("cutout_enabled", "INTEGER NOT NULL DEFAULT 0"),
+                    # With the foreign key, and that is allowed here for one reason:
+                    # SQLite takes a REFERENCES clause on `ADD COLUMN` as long as the
+                    # default is NULL. Measured on SQLite 3.50.4 with
+                    # `PRAGMA foreign_keys = ON`: the column was added to a populated
+                    # table and `DELETE FROM preset` then set it back to NULL, so the
+                    # rule really is enforced and not just recorded.
+                    (
+                        "cutout_preset_id",
+                        "INTEGER REFERENCES preset(id) ON DELETE SET NULL",
+                    ),
+                    ("cut_x_mm", "REAL"),
+                    ("cut_y_mm", "REAL"),
+                    ("cut_width_mm", "REAL"),
+                    ("cut_height_mm", "REAL"),
                 ),
             ),
             (
@@ -370,6 +444,35 @@ class Library:
             for column, definition in columns:
                 if column not in existing:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    @staticmethod
+    def _name_the_boards(db):
+        """
+        Every board a name of its own, and the index that keeps it one.
+
+        Beside `_add_missing_columns` and not inside `_migrate`, and the reason is the
+        author's own library: the engine step of this round already stamped it at
+        `SCHEMA_VERSION`, so a back-fill behind that gate would never run there and its
+        thirty-two boards would stay nameless for ever. Here it is self-healing instead —
+        `WHERE uid IS NULL OR uid = ''` matches nothing the second time, so the cost of an
+        open is one scan of a table that holds tens of rows.
+
+        The names are minted one at a time rather than in one `UPDATE`, because every board
+        needs a *different* one and SQLite has no `secrets` of its own. The index is partial
+        so the moment before the back-fill — every row NULL — is legal.
+        """
+        db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS test_grid_uid "
+            "ON test_grid(uid) WHERE uid IS NOT NULL"
+        )
+        nameless = db.execute(
+            "SELECT id FROM test_grid WHERE uid IS NULL OR uid = ''"
+        ).fetchall()
+        for row in nameless:
+            db.execute(
+                "UPDATE test_grid SET uid = ? WHERE id = ?",
+                (_fresh_grid_uid(db), row["id"]),
+            )
 
     @staticmethod
     def _migrate(db):
@@ -491,7 +594,9 @@ class Library:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     name,
-                    fields.get("laser_type") or "co2-glass",
+                    # See the column comment: a kind nobody stated is `unknown`, never a
+                    # guess that reads like a statement.
+                    str(fields.get("laser_type") or "unknown"),
                     _watt(fields.get("power_watt")),
                     _number(fields.get("lens_mm"), "lens_mm", optional=True),
                     _number(fields.get("bed_width_mm"), "bed_width_mm", optional=True),
@@ -729,10 +834,13 @@ class Library:
             ):
                 if not target[column] and source[column]:
                     filled[column] = source[column]
-            # 'co2-glass' used to be the column default, so a profile nobody described
-            # claims to be a CO2 glass tube. That claim is not worth keeping over a real
-            # one from the other row.
-            if target["laser_type"] in ("", "unknown", None) and source["laser_type"]:
+            # A kind nobody stated is 'unknown', and 'unknown' has nothing to give: the
+            # merge fills the target's kind only from a source that really says something.
+            # Before the column default became honest, 'co2-glass' was written onto every
+            # profile the moment a device was activated, so this branch also stops that old
+            # claim from surviving a merge with a row that knows better.
+            vague = ("", "unknown", None)
+            if target["laser_type"] in vague and source["laser_type"] not in vague:
                 filled["laser_type"] = source["laser_type"]
             if not target["device_path"] and source["device_path"]:
                 # The source row goes in the same transaction, so the unique index on
@@ -1397,6 +1505,36 @@ class Library:
             )
         return _grid_row(row)
 
+    def test_grid_for_uid(self, uid: str | None) -> dict | None:
+        """
+        The board a code names, or None when this library holds no such board.
+
+        None rather than a refusal, and that is the point of the method: the code in a
+        photograph can fail in three different ways, and only the caller knows which
+        sentence the user needs. Nothing here reads back — no code found. A board that
+        belongs to somebody else's library — a name this library does not know. A board
+        that is not the one the user picked — the mix-up this whole feature exists to
+        prevent. One raise here would flatten all three into one sentence.
+
+        `boardcode.parse` first, so a uid typed off a plank finds the same board as one a
+        camera read: `7x4m qb2k`, `OK1:7X4MQB2K` and `7X4MQB2K` are one name. The unique
+        index `test_grid_uid` makes this at most one row.
+        """
+        from .boardcode import parse
+
+        clean = parse(uid)
+        if not clean:
+            return None
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT g.*, m.name AS material_name
+                   FROM test_grid g
+                   LEFT JOIN material m ON m.id = g.material_id
+                   WHERE g.uid = ?""",
+                (clean,),
+            ).fetchone()
+        return _grid_row(row) if row is not None else None
+
     def set_grid_group(self, grid_id: int, group_id: str | None) -> None:
         with self._connect() as db:
             db.execute(
@@ -1445,6 +1583,12 @@ class Library:
         "cell_mm", "gap_mm", "origin_x_mm", "origin_y_mm",
         "anchor", "text_enabled", "border_enabled",
         "label_speed_mm_s", "label_power_percent",
+        # Whether the board names itself and whether the tile comes loose are choices about
+        # how you work, not about this one material, so they belong with the rest of the
+        # form the next board starts from. `uid` deliberately does not: a name is one
+        # board's, and adopting the previous board's name would give two planks the same
+        # one — which is the whole problem this feature exists to solve.
+        "code_enabled", "code_size_mm", "cutout_enabled",
     )
 
     def last_grid_settings(self, material_id=None) -> dict | None:
@@ -1600,9 +1744,15 @@ class Library:
                         row_axis, column_axis, rows, columns,
                         cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells,
                         anchor, text_enabled, border_enabled,
-                        label_speed_mm_s, label_power_percent)
+                        label_speed_mm_s, label_power_percent,
+                        uid, caption,
+                        outer_x_mm, outer_y_mm, outer_width_mm, outer_height_mm,
+                        code_enabled, code_size_mm, code_x_mm, code_y_mm,
+                        cutout_enabled, cutout_preset_id,
+                        cut_x_mm, cut_y_mm, cut_width_mm, cut_height_mm)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     plan.get("material_id"),
                     plan.get("machine_id"),
@@ -1632,6 +1782,26 @@ class Library:
                     1 if plan.get("border") else 0,
                     plan.get("label_speed_mm_s"),
                     plan.get("label_power_percent"),
+                    # The name the plan already minted, so the code drawn on the plank and
+                    # the row in the database are the same name. A plan from before this
+                    # round has none, and then the board still gets one — a board without
+                    # a name cannot be found back from a photograph.
+                    _fresh_grid_uid(db, plan.get("uid")),
+                    plan.get("caption") or None,
+                    plan.get("outer_x_mm"),
+                    plan.get("outer_y_mm"),
+                    plan.get("outer_width_mm"),
+                    plan.get("outer_height_mm"),
+                    1 if plan.get("code_enabled") else 0,
+                    plan.get("code_size_mm"),
+                    plan.get("code_x_mm"),
+                    plan.get("code_y_mm"),
+                    1 if plan.get("cutout_enabled") else 0,
+                    plan.get("cutout_preset_id"),
+                    plan.get("cut_x_mm"),
+                    plan.get("cut_y_mm"),
+                    plan.get("cut_width_mm"),
+                    plan.get("cut_height_mm"),
                 ),
             )
             grid_id = cursor.lastrowid
@@ -2106,9 +2276,14 @@ class Library:
                         cell_mm, gap_mm, origin_x_mm, origin_y_mm, cells, alignment,
                         group_id, created_at,
                         anchor, text_enabled, border_enabled,
-                        label_speed_mm_s, label_power_percent)
+                        label_speed_mm_s, label_power_percent,
+                        uid, caption,
+                        outer_x_mm, outer_y_mm, outer_width_mm, outer_height_mm,
+                        code_enabled, code_size_mm, code_x_mm, code_y_mm,
+                        cutout_enabled, cut_x_mm, cut_y_mm, cut_width_mm, cut_height_mm)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     material_id.get(grid.get("material_id")),
                     machine_id.get(grid.get("machine_id")),
@@ -2137,6 +2312,28 @@ class Library:
                     1 if grid.get("border_enabled") else 0,
                     grid.get("label_speed_mm_s"),
                     grid.get("label_power_percent"),
+                    # The name travels with the board, because it is burned on the plank:
+                    # a photograph of that plank decodes this and nothing else. Only when
+                    # it is already taken here does a fresh one get minted.
+                    _fresh_grid_uid(db, grid.get("uid")),
+                    grid.get("caption"),
+                    grid.get("outer_x_mm"),
+                    grid.get("outer_y_mm"),
+                    grid.get("outer_width_mm"),
+                    grid.get("outer_height_mm"),
+                    1 if grid.get("code_enabled") else 0,
+                    grid.get("code_size_mm"),
+                    grid.get("code_x_mm"),
+                    grid.get("code_y_mm"),
+                    1 if grid.get("cutout_enabled") else 0,
+                    grid.get("cut_x_mm"),
+                    grid.get("cut_y_mm"),
+                    grid.get("cut_width_mm"),
+                    grid.get("cut_height_mm"),
+                    # `cutout_preset_id` deliberately does not travel. Presets are inserted
+                    # *after* the grids (they need the new grid ids for `origin_id`), so the
+                    # number in the bundle names a row in somebody else's library; keeping
+                    # it would point at whatever preset happens to have that id here.
                 ),
             )
             return cursor.lastrowid
@@ -2343,12 +2540,48 @@ class Library:
         return dict(row)
 
 
+def _fresh_grid_uid(db, wanted: str | None = None) -> str:
+    """
+    A board name nothing in this library carries yet.
+
+    `wanted` is a name that came in from somewhere — a bundle being imported — and it is
+    kept when it is free, because that name is on a plank somewhere and a photograph of
+    that plank will decode it. Taken, and it is replaced rather than refused: two libraries
+    merging must not fail on a name, and the board itself is still the same evidence.
+
+    The retry is for the unique index rather than for the odds: forty bits from `secrets`
+    against a library of tens of boards collides with a probability around 1 in 30 million,
+    and going round again costs one indexed lookup.
+    """
+    from .boardcode import mint_uid, parse
+
+    def free(candidate: str) -> bool:
+        return (
+            db.execute(
+                "SELECT 1 FROM test_grid WHERE uid = ?", (candidate,)
+            ).fetchone()
+            is None
+        )
+
+    clean = parse(wanted)
+    if clean and free(clean):
+        return clean
+    for _ in range(8):
+        candidate = mint_uid()
+        if free(candidate):
+            return candidate
+    raise LibraryError(
+        "Could not find a free name for this board; try again.",
+        code="library.grid.noFreeUid",
+    )
+
+
 def _grid_row(row) -> dict:
     data = dict(row)
     data["cells"] = json.loads(data["cells"])
     data["alignment"] = _alignment(data.get("alignment"))
     # SQLite has no booleans; the wizard does set ticks with them.
-    for key in ("text_enabled", "border_enabled"):
+    for key in ("text_enabled", "border_enabled", "code_enabled", "cutout_enabled"):
         if key in data:
             data[key] = bool(data[key])
     return data
@@ -2372,7 +2605,7 @@ def _recipe_settings(raw: dict) -> dict:
         if key not in raw or raw[key] is None:
             continue
         value = raw[key]
-        if key in ("text_enabled", "border_enabled"):
+        if key in ("text_enabled", "border_enabled", "code_enabled", "cutout_enabled"):
             kept[key] = bool(value)
         elif key in ("operation", "row_axis", "column_axis", "anchor"):
             kept[key] = str(value)

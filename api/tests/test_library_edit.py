@@ -378,6 +378,14 @@ def test_the_schema_is_what_this_suite_thinks_it_is(tmp_path):
             "column_axis", "rows", "columns", "cell_mm", "gap_mm", "origin_x_mm",
             "origin_y_mm", "cells", "photo_path", "alignment", "group_id", "anchor",
             "text_enabled", "border_enabled", "label_speed_mm_s", "label_power_percent",
+            # The board's own name, what was printed on it, and the two things that can be
+            # drawn around it. `outer_*` and `code_*` are stored rather than derived so that
+            # reading an alignment off the code's corners needs no second migration.
+            "uid", "caption",
+            "outer_x_mm", "outer_y_mm", "outer_width_mm", "outer_height_mm",
+            "code_enabled", "code_size_mm", "code_x_mm", "code_y_mm",
+            "cutout_enabled", "cutout_preset_id",
+            "cut_x_mm", "cut_y_mm", "cut_width_mm", "cut_height_mm",
             "created_at",
         },
         "grid_recipe": {

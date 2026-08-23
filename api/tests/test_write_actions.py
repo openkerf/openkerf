@@ -18,6 +18,19 @@ WRITE_ROUTES = [
     ("/api/library/import/preview", {"json": {}}),
     # Gap T7: saving a named recipe writes in the library.
     ("/api/library/testgrids/recipes", {"json": {}}),
+    # A photograph of a burned board, with and without the board's id in the path. Both
+    # decide which board a picture is evidence for, and every preset drawn off that board
+    # carries the picture — so from outside this computer neither may happen without a
+    # token. The id route was only ever covered by the walk-every-route check above; since
+    # it started reading the code in the pixels it earns a call of its own here.
+    (
+        "/api/library/testgrids/photo",
+        {"files": {"file": ("board.jpg", b"not really a photograph", "image/jpeg")}},
+    ),
+    (
+        "/api/library/testgrids/1/photo",
+        {"files": {"file": ("board.jpg", b"not really a photograph", "image/jpeg")}},
+    ),
     # Gap E5: reading a machine profile in creates a machine with a bed, an interface and an
     # address. That decides where the head goes.
     ("/api/machines/import", {"json": {}}),

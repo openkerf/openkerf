@@ -230,6 +230,12 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/presetariat/import",
         "/api/library/testgrids",
         "/api/library/testgrids/{grid_id}/photo",
+        # A photograph with no board id in the path: it reads the code on the plank and
+        # names its own board. A write like the id route beside it — it stores a file and
+        # points a row at it — and it is in this list separately because a route that
+        # writes without being told *which* row to write on is exactly the kind of thing
+        # this list exists to make somebody type out on purpose.
+        "/api/library/testgrids/photo",
         "/api/library/testgrids/{grid_id}/remove-from-design",
         "/api/library/testgrids/{grid_id}/presets",
         # Gap T7: named generator settings. Writes only in the library — no machine, no

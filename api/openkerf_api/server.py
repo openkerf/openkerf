@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .auth import extract_token, generate_token, is_loopback, token_matches
+from . import boardcode
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
 from .document import Document
@@ -58,6 +59,7 @@ from .starter import Starter
 from .tilerun import TileRun
 from .testgrid import (
     TestGridGenerator,
+    cutout_setting,
     is_cel_element,
     is_cel_operatie,
     is_raster_group,
@@ -3004,6 +3006,19 @@ class ApiServer:
                 )
                 if material:
                     fields["material_name"] = material["name"]
+            # The cut setting the rim is cut with, looked up here rather than asked of
+            # whoever fills in the form. `cutout_setting` is the half of the cut-out that
+            # needs a library, which is why it cannot live in the planner — and until this
+            # line nothing called it at all: a board posted with `cutout_enabled` and
+            # nothing else reached `_cutout` with no speed and was refused with
+            # `library.grid.cutoutNoSetting`, which names no way out. Measured before this
+            # line, every cut-out asked for through this route refused, so the feature was
+            # unreachable and the two refusals that *are* actionable — no material, and no
+            # cut setting for this thickness — could not be reached either. Only when the
+            # caller brought no setting of its own, so a script that knows its own speed
+            # keeps the number it sent.
+            if fields.get("cutout_enabled") and not fields.get("cut_speed_mm_s"):
+                fields.update(cutout_setting(self.library, fields))
             return fields
 
         @app.post("/api/library/testgrids/preview")
@@ -3029,7 +3044,24 @@ class ApiServer:
                 # The caption goes into the planning: it is aligned left on the board and
                 # runs to the right, so it helps decide how wide the board becomes. Adding it
                 # afterwards gave a reported measure narrower than what burns.
-                plan, cells = plan_grid(**grid_fields(body))
+                fields = grid_fields(body)
+                plan, cells = plan_grid(**fields)
+                # A name already burned on another plank must not be burned onto this one.
+                # `add_test_grid` mints a fresh name for the *row* when the one it is given
+                # is taken (`_fresh_grid_uid`), but by then the code is drawn: the row would
+                # say one name and the wood another, and a photograph of that wood would be
+                # filed under the older board — precisely the mix-up the code exists to
+                # prevent. Reachable through this route, and measured: posting the same
+                # `uid` twice gave a second plank burned `7X4M QB2K` under a row named
+                # `45E0JKKA`, with `test_grid_for_uid("7X4MQB2K")` answering board 1. The
+                # trigger is ordinary rather than exotic — a client that previews, gets a
+                # name, and then creates twice from that one preview.
+                #
+                # Planned again rather than patched, because the name is on the plank in two
+                # places: the code and the printed line in the caption, and `caption_text`
+                # is worked out inside `plan_grid`.
+                if plan.get("uid") and self.library.test_grid_for_uid(plan["uid"]):
+                    plan, cells = plan_grid(**{**fields, "uid": None})
                 # The grid is one object on the canvas — squares, axis labels,
                 # caption and frame in one group, in one action. The cells keep their own
                 # operations, because those *are* the sweep.
@@ -3130,22 +3162,164 @@ class ApiServer:
         def remove_test_grid(grid_id: int):
             return manage(self.library.remove_test_grid, grid_id)
 
-        # Seam for step 25 of the preset round, deliberately not opened here: the
-        # id-less `POST /api/library/testgrids/photo`, which reads the code in the
-        # picture and names its own board. It needs two things that do not exist yet —
-        # `boardcode.read` (its own phase) and a library lookup by board uid — and a
-        # route that answers 500 is worse than a route that is not there. When they land,
-        # this route also gains the refusal `library.photo.codeMismatch`: eleven of the
-        # author's thirty-two boards are physically indistinguishable from another, so a
-        # photograph filed under the wrong one is the failure this catches.
-        @app.post("/api/library/testgrids/{grid_id}/photo", dependencies=write)
-        async def upload_grid_photo(grid_id: int, file: UploadFile):
-            """The photo of the burned grid — usually taken on a phone."""
+        # ------------------------------------------- a photograph and its board
+        #
+        # Eleven of the author's thirty-two boards are physically indistinguishable from
+        # another one: same material, same square size, same sweep, burned minutes apart.
+        # By the time the wood is off the machine, filing the picture under the right row
+        # is guesswork, and a preset carrying the wrong board's photograph is evidence for
+        # something nobody burned. The code on the plank is what takes the guess out, and
+        # these two routes are its two halves — one that names the board from the picture,
+        # one that refuses a picture filed under the wrong board.
+
+        def boards_that_named_themselves(data: bytes):
+            """
+            The boards whose code is in this picture: ours, and strangers.
+
+            Two lists rather than one, because the difference between them is a different
+            sentence. `known` are rows in this library. `strangers` are codes that read
+            back as board names but name nothing here — somebody else's library, or a QR
+            that happened to be in shot. A stranger is not automatically an error: see
+            `upload_grid_photo`, where refusing on one would let a sticker on the bench
+            block an honest photograph.
+
+            The bytes of the **upload**, never a stored copy. Measured on a synthetic board
+            photograph, an 18 mm code on a 300 mm board: 1600 px across the frame decoded 6
+            of 20, 2400 px decoded 20 of 20 (`boardcode.read` carries the table). A
+            contribution's copy is 1600 px, so anything that decoded that would be reading
+            the one size that does not work.
+            """
+            known, strangers = [], []
+            for uid in boardcode.read(data):
+                board = self.library.test_grid_for_uid(uid)
+                if board is None:
+                    strangers.append(uid)
+                else:
+                    known.append(board)
+            return known, strangers
+
+        def a_decoder_or_a_refusal():
+            """OpenCV, or the refusal that says what to do instead."""
+            if boardcode.available():
+                return
+            raise LibraryError(
+                f"{boardcode.NO_DECODER_HINT} Choose the board yourself for now.",
+                code="library.photo.noDecoder",
+            )
+
+        @app.post("/api/library/testgrids/photo", dependencies=write)
+        async def upload_photo_of_its_own_board(file: UploadFile):
+            """
+            A photograph with no board id: it decodes the code and names its own board.
+
+            Four ways this can go, four sentences, because each one sends the reader
+            somewhere else: no OpenCV in this copy (install it, or pick the board by hand),
+            no code in the picture (photograph it more squarely, or pick the board by
+            hand), a code this library does not know (it is not this library's board), and
+            two boards in one frame (photograph one at a time). One sentence covering all
+            four would send three of those four readers the wrong way.
+
+            The board is not created here and nothing is guessed: this route only files a
+            photograph against a row that already exists, which is why it answers with the
+            same grid the id route does — one code path for the caller.
+            """
             suffix = Path(file.filename or "").suffix
             data = await file.read()
             if not data:
                 raise HTTPException(status_code=422, detail="Empty photo.")
-            return manage(self.library.set_grid_photo, grid_id, suffix, data)
+
+            def run():
+                a_decoder_or_a_refusal()
+                known, strangers = boards_that_named_themselves(data)
+                if not known and not strangers:
+                    raise LibraryError(
+                        "No code was found in this photograph. Choose the board it "
+                        "belongs to yourself, or photograph the code more squarely.",
+                        code="library.photo.noCode",
+                    )
+                if not known:
+                    found = boardcode.human(strangers[0])
+                    raise LibraryError(
+                        f"The code in this photograph says board {found}, and this "
+                        "library holds no board of that name. It belongs to another "
+                        "library, or the picture caught a code that is not a board.",
+                        code="library.photo.unknownBoard",
+                        values={"found": found},
+                    )
+                if len(known) > 1:
+                    named = " and ".join(boardcode.human(b["uid"]) for b in known[:2])
+                    raise LibraryError(
+                        f"This photograph holds the codes of more than one board "
+                        f"({named}). Photograph one board at a time, so the picture is "
+                        "evidence for the board it is filed under.",
+                        code="library.photo.manyBoards",
+                        values={"found": named, "n": len(known)},
+                    )
+                return self.library.set_grid_photo(known[0]["id"], suffix, data)
+
+            return manage(run)
+
+        @app.post("/api/library/testgrids/{grid_id}/photo", dependencies=write)
+        async def upload_grid_photo(grid_id: int, file: UploadFile):
+            """
+            The photo of the burned grid — usually taken on a phone — filed by hand.
+
+            The code is still read, for one purpose: to refuse a photograph whose code
+            names a *different* board of this library. That is the mix-up this feature
+            exists to prevent, and it is the only thing here that cannot be recovered
+            later — the picture would sit under a row it is not of, and every preset drawn
+            from it would carry it as evidence.
+
+            Only a code naming a board this library actually holds refuses. A code that
+            reads back but names nothing here is left alone deliberately: `boardcode.parse`
+            accepts eight characters of Crockford base32, and plenty of ordinary words
+            survive that folding (`notacode` reads back as `N0TAC0DE`), so a stranger's QR
+            in the corner of the frame would otherwise block a picture that is perfectly
+            right. Without a code, or without OpenCV, this route does exactly what it did
+            before: it stores what the user gave it.
+            """
+            suffix = Path(file.filename or "").suffix
+            data = await file.read()
+            if not data:
+                raise HTTPException(status_code=422, detail="Empty photo.")
+
+            def run():
+                picked = self.library.test_grid(grid_id)
+                known, _ = boards_that_named_themselves(data)
+                # Every code that named a board of this library, and none of them is the
+                # one the user picked. Two boards in one frame is fine here as long as the
+                # picked one is among them — it named itself, which is all that was asked.
+                if known and not any(b["id"] == picked["id"] for b in known):
+                    found = boardcode.human(known[0]["uid"])
+                    # A board with no name cannot happen: the migration back-filled the
+                    # thirty-two that predate this and every insert mints one. The number
+                    # is here because a refusal with a dash in it is not a sentence.
+                    mine = (
+                        boardcode.human(picked["uid"])
+                        if picked.get("uid")
+                        else f"number {picked['id']}"
+                    )
+                    raise LibraryError(
+                        f"The code in this photograph says board {found}; you picked "
+                        f"{mine}. File it under {found}, or pick that board here.",
+                        code="library.photo.codeMismatch",
+                        values={
+                            "found": found,
+                            "picked": mine,
+                            # The row the picture really belongs to, so the interface can
+                            # offer "File it under {found}" as a button rather than as a
+                            # sentence the reader has to act on themselves. It stays a
+                            # number safely because this refusal keeps its English
+                            # sentence — the codes in it are per-call data, not a constant
+                            # of ours — so it never passes through `values()` in core.ts,
+                            # which would write it through `Intl` and turn 1234 into
+                            # "1.234" for a Dutch reader.
+                            "found_id": known[0]["id"],
+                        },
+                    )
+                return self.library.set_grid_photo(grid_id, suffix, data)
+
+            return manage(run)
 
         @app.put("/api/library/testgrids/{grid_id}/alignment", dependencies=write)
         def set_grid_alignment(grid_id: int, body: dict):

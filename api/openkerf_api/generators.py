@@ -23,6 +23,68 @@ import math
 
 from .edits import DesignError, _finite, _positive
 
+#: Modules of empty material around a QR code. Two is what the public generator has
+#: always drawn and what the form still defaults to; the standard asks for four, and a
+#: board code takes four (see `boardcode.QUIET_MODULES`) because the wood around it is
+#: not paper. Measured through a simulated photograph — 7 degrees of rotation, a little
+#: perspective, blur and JPEG 80 — four modules decoded 20 of 20 at 6 px per module where
+#: two decoded 16 of 20. Zero never decodes at any resolution: 0 of 20 from 1 to 12 px
+#: per module, so the quiet zone is not decoration.
+QR_QUIET_DEFAULT = 2
+
+
+def qr_squares(content: str, x_mm: float, y_mm: float, size_mm: float, quiet: int):
+    """
+    The dark modules of a QR code, as little squares in millimetres.
+
+    `size_mm` is the whole footprint, quiet zone included, so an 18 mm code with 21
+    modules and a 4-module quiet zone gives a 0.621 mm module. `(squares, modules)` comes
+    back, where `modules` counts the quiet zone: the caller draws the squares and reserves
+    the footprint.
+
+    **`segno.make_qr` and not `segno.make`, and that is the whole point of this function
+    existing.** `make` returns a *Micro* QR for a short payload, and nothing we or the user
+    has can read one: measured with OpenCV 5.0.0 and segno 1.6.6, `segno.make('OK1:7X4MQB2K')`
+    gives M4-Q and `detectAndDecode` returns `''` — from a noise-free nearest-neighbour
+    render at 12 px per module with a 4-module quiet zone, so it is the format and not the
+    resolution. `segno.make_qr` on the same payload gives 1-Q and decodes to
+    `'OK1:7X4MQB2K'`. Chromium's `BarcodeDetector` lists no micro variant either, and
+    neither does the phone the board is photographed with. A 19-character payload gets a
+    full code out of `make` anyway, which is why the bug hid: it bites exactly the short
+    payloads a serial number or a board code is made of.
+
+    One square per dark module rather than merged runs, because the public generator
+    promises the user a path per module — they may want to outline it.
+    """
+    try:
+        import segno
+    except ImportError as e:  # pragma: no cover - only on a bare installation
+        raise DesignError(
+            "QR codes need the 'segno' package; install it beside the API.",
+            code="gen.noQrLib",
+        ) from e
+
+    matrix = [list(row) for row in segno.make_qr(content, error="m").matrix]
+    modules = len(matrix) + 2 * quiet
+    step = size_mm / modules
+
+    squares = []
+    for row, cells in enumerate(matrix):
+        for column, dark in enumerate(cells):
+            if not dark:
+                continue
+            left = x_mm + (column + quiet) * step
+            top = y_mm + (row + quiet) * step
+            squares.append(
+                [
+                    (left, top),
+                    (left + step, top),
+                    (left + step, top + step),
+                    (left, top + step),
+                ]
+            )
+    return squares, modules
+
 
 class Generators:
     def __init__(self, kernel, runner, drawing=None, sheets=None, series=None):
@@ -403,7 +465,9 @@ class Generators:
 
     # ------------------------------------------------------------- qr-code
 
-    def qrcode(self, text: str, x_mm=0.0, y_mm=0.0, size_mm=30.0, border=2) -> dict:
+    def qrcode(
+        self, text: str, x_mm=0.0, y_mm=0.0, size_mm=30.0, border=QR_QUIET_DEFAULT
+    ) -> dict:
         """
         A QR code as little squares, ready to engrave.
 
@@ -680,7 +744,7 @@ class Generators:
             body.get("x_mm", 0.0),
             body.get("y_mm", 0.0),
             body.get("size_mm", 30.0),
-            body.get("border", 2),
+            body.get("border", QR_QUIET_DEFAULT),
         )
         # All the little squares in one path: a version 40 QR code has well over fifteen
         # thousand of them, and those are not worth fifteen thousand separate messages.
@@ -1133,36 +1197,9 @@ class Generators:
         if not 0 <= quiet <= 8:
             raise DesignError("The quiet zone has to be between 0 and 8 modules.")
 
-        try:
-            import segno
-        except ImportError as e:  # pragma: no cover - only on a bare installation
-            raise DesignError(
-                "QR codes need the 'segno' package; install it beside the API.",
-                code="gen.noQrLib",
-            ) from e
-
-        code = segno.make(content, error="m")
-        matrix = [list(row) for row in code.matrix]
-        modules = len(matrix) + 2 * quiet
-        step = size / modules
-        x0 = _finite(x_mm, "x_mm")
-        y0 = _finite(y_mm, "y_mm")
-
-        squares = []
-        for row, cells in enumerate(matrix):
-            for column, dark in enumerate(cells):
-                if not dark:
-                    continue
-                left = x0 + (column + quiet) * step
-                top = y0 + (row + quiet) * step
-                squares.append(
-                    [
-                        (left, top),
-                        (left + step, top),
-                        (left + step, top + step),
-                        (left, top + step),
-                    ]
-                )
+        squares, modules = qr_squares(
+            content, _finite(x_mm, "x_mm"), _finite(y_mm, "y_mm"), size, quiet
+        )
         return content, squares, modules
 
     def _plan_box(

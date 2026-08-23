@@ -1,12 +1,26 @@
 """Planning and drawing a parametric test grid."""
 
+import sqlite3
+
 import pytest
 from fastapi.testclient import TestClient
 
+from openkerf_api import boardcode
 from openkerf_api.design import DesignReader
 from openkerf_api.edits import DesignError
+from openkerf_api.library import Library
 from openkerf_api.server import ApiServer
-from openkerf_api.testgrid import LABEL_FONTS, plan_grid
+from openkerf_api.testgrid import (
+    CODE_GAP_MM,
+    CODE_LAYER,
+    CUTOUT_LAYER,
+    CUTOUT_TAB_MM,
+    CUTOUT_TABS,
+    LABEL_FONTS,
+    cell_polygon,
+    cutout_setting,
+    plan_grid,
+)
 
 BASE = {
     "operation": "snijden",
@@ -1767,3 +1781,981 @@ def test_the_colour_for_new_work_is_one_you_can_point_at(client):
     design = client.get("/api/design").json()
     labellaag = next(o for o in design["operations"] if o["label"] == "Raster-labels")
     assert labellaag["color"] not in [c["color"] for c in palet["colors"]]
+
+
+# ================================================ the board's own name (step 23)
+#
+# Every number in the docstrings below was measured by running these tests, on this
+# laptop, with the dummy device and our own rasteriser. The board they measure is
+# `FOUR_BY_FOUR`: sixteen 8 mm squares cut at 5–25 mm/s and 40–80 %, captions on, which is
+# the shape of board the author actually burns.
+
+FOUR_BY_FOUR = {
+    **BASE,
+    "speed_steps": 4,
+    "power_steps": 4,
+    "origin_x_mm": 30,
+    "origin_y_mm": 30,
+}
+
+
+def code_layer(client):
+    """The Board code layer as the design snapshot has it, or None."""
+    design = client.get("/api/design").json()
+    return next(
+        (op for op in design["operations"] if op.get("label") == CODE_LAYER), None
+    )
+
+
+def burned_code(kernel, client, dpi=None):
+    """
+    The plank, as a picture: the bitmap the machine burns plus the wood around it.
+
+    The raster layer's bitmap stops at the modules, because `make_raster` crops to the
+    nodes' own bounds — so the quiet zone is not *in* the bitmap, it is the untouched
+    material the head never visits. Reading the code back therefore means putting the
+    unburned margin back around the burn, which is what a photograph of the plank shows.
+    Without this the first version of this helper read 0 of 20 at every resolution.
+    """
+    from PIL import Image
+
+    from meerk40t.core.units import UNITS_PER_MM
+
+    layer = code_layer(client)
+    node = kernel.elements.find_node(layer["element_ids"][0])
+    make_raster = kernel.root.lookup("render-op/make_raster")
+    x0, y0, x1, y1 = node.bounds
+    dpi = dpi or boardcode.CODE_DPI
+    across = max(1, round((x1 - x0) / UNITS_PER_MM / 25.4 * dpi))
+    down = max(1, round((y1 - y0) / UNITS_PER_MM / 25.4 * dpi))
+    burn = make_raster([node], node.bounds, width=across, height=down).convert("L")
+
+    modules = boardcode.plan("7X4MQB2K", 0, 0, 18.0)["modules"]
+    quiet = round(across / (modules - 2 * boardcode.QUIET_MODULES) * boardcode.QUIET_MODULES)
+    plank = Image.new("L", (burn.width + 2 * quiet, burn.height + 2 * quiet), 255)
+    plank.paste(burn, (quiet, quiet))
+    return plank
+
+
+def test_the_board_carries_a_name_of_its_own(client):
+    """
+    Eleven of the author's thirty-two boards are physically indistinguishable from
+    another one, so a board that cannot say which one it is cannot be filed. Every board
+    gets a name, whether or not it is burned on the plank: the printed name in the caption
+    and a search box need no camera, and that is the fallback for every phone.
+    """
+    first = client.post("/api/library/testgrids", json=BASE).json()
+    second = client.post("/api/library/testgrids", json=BASE).json()
+
+    assert len(first["uid"]) == 8
+    assert set(first["uid"]) <= set(boardcode.UID_ALPHABET)
+    assert first["uid"] != second["uid"]
+
+
+def test_a_board_burned_before_names_existed_gets_one(tmp_path):
+    """
+    The thirty-two boards already in a library are the ones worth naming — they are the
+    ones that cannot be told apart. So the name is back-filled, and *not* behind the
+    version gate: the engine step of this round already stamped the author's library at
+    `SCHEMA_VERSION`, so a back-fill inside `_migrate` would never run there.
+
+    Idempotent, because it runs on every open: the second open changes nothing.
+
+    Measured on a copy of the author's real 204 KB library, which is already stamped at
+    `SCHEMA_VERSION` by this round's engine step: **32 boards named, 32 distinct names**, and
+    everything else unchanged — 7 profiles, 20 materials, 35 presets, 1 recipe, the preset
+    speed and power sums still 3373.0 and 1940.0, and `user_version` still 1, which is the
+    proof that the back-fill ran outside the gate. First open 25.0 ms, second 1.9 ms.
+    """
+    from openkerf_api.library import Library
+
+    library = Library(tmp_path / "old.db")
+    material = library.add_material(name="Birch")["id"]
+    grid = library.add_test_grid(
+        {
+            "material_id": material, "operation": "snijden", "thickness_mm": 3,
+            "speed_min": 8, "speed_max": 20, "speed_steps": 2,
+            "power_min": 40, "power_max": 100, "power_steps": 2,
+            "cell_mm": 8, "gap_mm": 2, "origin_x_mm": 0, "origin_y_mm": 0,
+        },
+        [],
+    )
+    # Wind it back to a board from before this round.
+    db = sqlite3.connect(library.path)
+    with db:
+        db.execute("UPDATE test_grid SET uid = NULL WHERE id = ?", (grid["id"],))
+    db.close()
+
+    named = Library(library.path).test_grid(grid["id"])
+    again = Library(library.path).test_grid(grid["id"])
+
+    assert named["uid"] and len(named["uid"]) == 8
+    assert again["uid"] == named["uid"]
+
+
+def test_two_boards_can_never_share_a_name(tmp_path):
+    """
+    A name that names two planks names neither. Forty bits from `secrets` collide about
+    once in thirty million on a library of tens of boards, so the index is what makes it a
+    rule instead of a probability — and `_fresh_grid_uid` re-mints rather than raising.
+    """
+    from openkerf_api.library import Library
+
+    library = Library(tmp_path / "lib.db")
+    material = library.add_material(name="Birch")["id"]
+    plan = {
+        "material_id": material, "operation": "snijden",
+        "speed_min": 8, "speed_max": 20, "speed_steps": 2,
+        "power_min": 40, "power_max": 100, "power_steps": 2,
+        "cell_mm": 8, "gap_mm": 2, "origin_x_mm": 0, "origin_y_mm": 0,
+    }
+    first = library.add_test_grid({**plan, "uid": "7X4MQB2K"}, [])
+    # The same name offered twice: the second board is given one of its own instead.
+    second = library.add_test_grid({**plan, "uid": "7X4MQB2K"}, [])
+
+    assert first["uid"] == "7X4MQB2K"
+    assert second["uid"] != first["uid"]
+    db = sqlite3.connect(library.path)
+    index = db.execute(
+        "SELECT sql FROM sqlite_master WHERE name = 'test_grid_uid'"
+    ).fetchone()
+    db.close()
+    assert index and "UNIQUE" in index[0]
+
+
+def test_a_name_already_on_a_plank_is_never_burned_onto_a_second_one(kernel, client):
+    """
+    Two planks with one code name neither, and the second board is the one that lies.
+
+    `add_test_grid` mints a fresh name for the *row* when the name it is handed is taken,
+    but the code is drawn before that happens — so without the check in `create_test_grid`
+    the plank came out of the machine saying one name and its row said another. Measured
+    through this route before the fix: board 2's plank was burned `7X4M QB2K`, its row said
+    `45E0JKKA`, and `test_grid_for_uid("7X4MQB2K")` answered board **1**. A photograph of
+    plank 2 would then have been filed under board 1 — the exact mix-up the code exists to
+    prevent, produced by the code itself.
+
+    The trigger is ordinary: a client that previews once, is given a name, and creates two
+    boards from that one preview.
+    """
+    body = {**FOUR_BY_FOUR, "code_enabled": True, "uid": "7X4MQB2K"}
+    first = client.post("/api/library/testgrids", json=body).json()
+    second = client.post(
+        "/api/library/testgrids", json={**body, "origin_x_mm": 150}
+    ).json()
+
+    assert first["uid"] == "7X4MQB2K"
+    assert second["uid"] != first["uid"]
+    # What is on the wood, in both places it is written: the code's own shape and the
+    # printed line in the caption.
+    for board in (first, second):
+        group = kernel.elements.find_node(board["group_id"])
+        drawn = [
+            (getattr(node, "label", "") or "")
+            for node in group.flat()
+            if (getattr(node, "label", "") or "").startswith("Board code")
+        ]
+        assert drawn == [f"Board code {boardcode.human(board['uid'])}"]
+    # And the library holds two names, not one twice — so a photograph of either plank
+    # lands on the row that plank belongs to.
+    assert len({board["uid"] for board in client.get("/api/library/testgrids").json()}) == 2
+
+
+def test_no_code_is_burned_unless_you_ask(kernel, client):
+    """
+    Off by default, and that means completely off: no layer, no shape, and nothing in the
+    caption either. Nine characters of code on a board nobody can photograph-identify are
+    nine characters of noise.
+    """
+    grid = client.post("/api/library/testgrids", json=BASE).json()
+
+    assert grid["code_enabled"] is False
+    assert code_layer(client) is None
+    plan = client.post("/api/library/testgrids/preview", json=BASE).json()["plan"]
+    assert boardcode.human(grid["uid"]) not in plan["caption_text"]
+
+
+def test_the_code_burns_as_a_raster_layer_at_a_pinned_dpi(kernel, client):
+    """
+    A raster layer and not an engrave layer, because `op_engrave.as_cutobjects`
+    (`meerk40t/core/node/op_engrave.py:358+`) traces `final_geometry().as_path()` and never
+    consults a fill — so 212 filled modules would come out as 212 little outlines with
+    unburned wood inside each one, and nothing reads that.
+
+    The dpi is pinned rather than settable because the engine's default is 500, and measured
+    on this board that is the difference between 14.8 s of code and 43.7 s of it.
+    """
+    body = {**FOUR_BY_FOUR, "code_enabled": True}
+    grid = client.post("/api/library/testgrids", json=body).json()
+
+    layer = code_layer(client)
+    assert layer is not None
+    assert layer["type"] == "op raster"
+    assert layer["dpi"] == boardcode.CODE_DPI == 167
+    # One shape, not one per module: 212 nodes on the canvas would be the same picture and
+    # a great deal more of it.
+    assert len(layer["element_ids"]) == 1
+    assert grid["code_enabled"] is True
+    assert grid["code_size_mm"] == boardcode.DEFAULT_SIZE_MM
+
+
+def test_the_code_can_be_read_back_from_what_the_machine_burns(kernel, client):
+    """
+    The measurement that decides whether any of this is worth burning: not that a code was
+    drawn, but that the bitmap the machine lays down decodes to this board's name.
+
+    Measured through the real `make_raster` at `CODE_DPI`, on the plank as `burned_code`
+    builds it: at 18 mm over 29 modules the burn is 4.08 px per module, and **20 of 20**
+    minted names decoded — as did 20 of 20 at 500 dpi and 18 of 20 at 100 dpi (2.44 px per
+    module), which is below anything this feature offers.
+
+    The first version of this measurement read 0 of 20 at every resolution, and the reason is
+    written down in `burned_code`: the quiet zone is not in the bitmap, because it is
+    unburned wood rather than something the head visits.
+    """
+    if not boardcode.available():
+        pytest.skip(boardcode.NO_DECODER_HINT)
+    import numpy as np
+
+    grid = client.post(
+        "/api/library/testgrids", json={**FOUR_BY_FOUR, "code_enabled": True}
+    ).json()
+
+    plank = burned_code(kernel, client)
+
+    assert boardcode.read(np.array(plank)) == [grid["uid"]]
+
+
+def test_a_code_at_the_engines_default_dpi_would_not_be_worth_the_time(kernel, client):
+    """
+    The counter-proof to the pinned dpi, from the other side: at 500 dpi the same code is
+    still perfectly readable, so readability is not what pins it — burn time is. Measured on
+    this board: 14.8 s of code at 167 dpi against 43.7 s at 500, on a board that burns for
+    56.9 s without one.
+    """
+    if not boardcode.available():
+        pytest.skip(boardcode.NO_DECODER_HINT)
+    import numpy as np
+
+    grid = client.post(
+        "/api/library/testgrids", json={**FOUR_BY_FOUR, "code_enabled": True}
+    ).json()
+
+    assert boardcode.read(np.array(burned_code(kernel, client, dpi=500))) == [grid["uid"]]
+
+
+def test_the_code_costs_a_quarter_of_the_board_and_not_the_whole_of_it(kernel, client):
+    """
+    Measured through the engine's own cut plan, with every layer but the code switched off:
+    **one** cut object and **14.8 s**, on a board that costs 56.9 s without it and 73.1 s
+    with it. At the engine's 500 dpi default the same code is 43.7 s — nearly doubling the
+    board, which is the kind of number that gets a feature switched off; 250 dpi is 22.1 s
+    and 125 dpi is 11.3 s.
+
+    The ceiling is what this test is for: a dpi regression back to the engine's default
+    fails it, and so does a code that is quietly drawn in the wrong layer.
+    """
+    client.post("/api/library/testgrids", json={**FOUR_BY_FOUR, "code_enabled": True})
+    for operation in kernel.elements.ops():
+        operation.output = getattr(operation, "label", None) == CODE_LAYER
+
+    exact = client.get("/api/job/estimate?exact=1").json()
+
+    assert exact["parts"] == 1
+    assert 5 < exact["seconds"] < 20, exact["seconds"]
+
+
+def test_the_board_prints_its_own_name_beside_the_code(kernel, client):
+    """
+    Two groups of four in the caption, and it is not decoration: it is the whole fallback
+    for a phone that cannot decode, for a computer without OpenCV, and for the picker's
+    search box. Last on the line, after the date, because it is a serial number and not a
+    fact about the burning.
+    """
+    body = {**FOUR_BY_FOUR, "code_enabled": True}
+    grid = client.post("/api/library/testgrids", json=body).json()
+
+    plan = client.post("/api/library/testgrids/preview", json=body).json()["plan"]
+    assert plan["caption_text"].endswith(plan["code_human"])
+    assert " " in boardcode.human(grid["uid"])
+    # And it really goes on the plank: the caption lines are drawn as vector text.
+    design = client.get("/api/design").json()
+    labels = next(op for op in design["operations"] if op["label"] == "Raster-labels")
+    assert len(labels["element_ids"]) >= len(plan["caption_lines"])
+
+
+def test_the_code_never_eats_a_cell(kernel, client):
+    """
+    Where the code goes was a real decision (argued at `CODE_GAP_MM`): bottom right,
+    outside the squares, in the strip the board grows for it. This is the half of that
+    decision a test can hold: no square loses any of its area, and the board's reported
+    size covers the code — because if it did not, the bed check and the frame would both
+    miss it.
+    """
+    body = {**FOUR_BY_FOUR, "code_enabled": True}
+    plan, cells = plan_grid(**body)
+    plain = plan_grid(**FOUR_BY_FOUR)[0]
+
+    code = (
+        plan["code_x_mm"], plan["code_y_mm"],
+        plan["code_x_mm"] + plan["code_size_mm"],
+        plan["code_y_mm"] + plan["code_size_mm"],
+    )
+    for cell in cells:
+        square = (
+            cell["x_mm"], cell["y_mm"],
+            cell["x_mm"] + cell["width_mm"], cell["y_mm"] + cell["height_mm"],
+        )
+        assert code[0] >= square[2] or code[2] <= square[0] or (
+            code[1] >= square[3] or code[3] <= square[1]
+        ), (cell["row"], cell["column"])
+    # The board grew downwards for it and not sideways at all, and the code lies wholly
+    # inside what the board reports as its size — that is what makes the bed check and the
+    # frame cover it without being told about it.
+    assert plan["outer_width_mm"] == plain["outer_width_mm"]
+    assert plan["code_y_mm"] >= plan["origin_y_mm"] + plan["height_mm"]
+    assert plan["code_y_mm"] + plan["code_size_mm"] <= (
+        plan["outer_y_mm"] + plan["outer_height_mm"]
+    )
+    # Nothing was below the squares before, so the whole 18 mm of code plus its 2 mm gap is
+    # growth. Measured, it grows by 18.7 and not 20: the printed name lengthens the second
+    # caption line, so the caption shrinks to fit the board and gives 1.3 mm back above.
+    assert plain["outer_y_mm"] + plain["outer_height_mm"] == pytest.approx(
+        plain["origin_y_mm"] + plain["height_mm"]
+    )
+    assert plan["outer_height_mm"] - plain["outer_height_mm"] == pytest.approx(18.7, abs=0.1)
+
+
+def test_a_code_that_could_not_be_read_back_is_refused(client):
+    """
+    A code below `boardcode.MIN_SIZE_MM` is not a smaller feature, it is burn time on a
+    board that afterwards still cannot say who it is: 12 mm over 29 modules is a 0.414 mm
+    module, two kerfs wide, so the laser would decide where the module edges are. Refused
+    in the planner so the form says it while the numbers are on screen, rather than in a
+    409 after the button.
+    """
+    small = client.post(
+        "/api/library/testgrids/preview",
+        json={**FOUR_BY_FOUR, "code_enabled": True, "code_size_mm": 10},
+    )
+
+    assert small.status_code == 409
+    assert small.headers["X-OpenKerf-Error"] == "library.grid.codeTooSmall"
+
+    # And between the floor and comfortable it is drawn, with the numbers said out loud.
+    warned = client.post(
+        "/api/library/testgrids/preview",
+        json={**FOUR_BY_FOUR, "code_enabled": True, "code_size_mm": 13},
+    ).json()["plan"]
+    assert [w["code"] for w in warned["warnings"]] == ["boardcode.smallCode"]
+    assert warned["warnings"][0]["values"]["module_mm"] == pytest.approx(0.448, abs=0.01)
+
+
+def test_a_code_that_does_not_fit_the_board_is_refused(client):
+    """
+    The code is right-aligned with the squares and grows leftwards, so on a board of small
+    cells it runs out over the row labels and then over the edge of the plate. Measured:
+    four 4 mm squares with no captions leave 9 mm of board, and an 18 mm code is refused
+    with both numbers in it.
+    """
+    tight = client.post(
+        "/api/library/testgrids/preview",
+        json={
+            **BASE, "speed_steps": 2, "power_steps": 2, "cell_mm": 4, "gap_mm": 1,
+            "text": False, "code_enabled": True,
+        },
+    )
+
+    assert tight.status_code == 409
+    assert tight.headers["X-OpenKerf-Error"] == "library.grid.codeNoRoom"
+
+
+def test_without_a_rasteriser_the_code_is_refused_and_not_burned_blank(kernel, client):
+    """
+    The same failure `test_without_a_rasteriser_the_same_grid_burns_nothing` pins for the
+    squares. Without `render-op/make_raster` the layer takes `preprocess`'s `strip_rasters`
+    branch, throws its own shape away and burns nothing — so the plank comes out with no
+    code on it, which is precisely the thing this feature exists to prevent. Refused, and
+    nothing is drawn.
+    """
+    kernel.root.register("render-op/make_raster", None)
+
+    refused = client.post(
+        "/api/library/testgrids", json={**FOUR_BY_FOUR, "code_enabled": True}
+    )
+
+    assert refused.status_code == 409
+    assert refused.headers["X-OpenKerf-Error"] == "library.grid.codeNeedsRasteriser"
+    assert code_layer(client) is None
+
+
+def test_the_code_belongs_to_the_board_and_leaves_with_it(kernel, client):
+    """
+    The code goes in `extras`, so `_group_board` folds it into the Testraster group. Without
+    that, `remove-from-design` — which removes the group, the cell nodes and empty label
+    layers — would leave the code lying on the canvas: a QR of a board that is no longer
+    there.
+    """
+    grid = client.post(
+        "/api/library/testgrids", json={**FOUR_BY_FOUR, "code_enabled": True}
+    ).json()
+    node_id = code_layer(client)["element_ids"][0]
+    group = kernel.elements.find_node(grid["group_id"])
+    assert node_id in {n.id for n in group.flat()}
+
+    client.post(f"/api/library/testgrids/{grid['id']}/remove-from-design")
+
+    assert kernel.elements.find_node(node_id) is None
+
+
+def test_a_name_travels_with_the_board_it_is_burned_on(client, tmp_path):
+    """
+    The name is on a plank. A library exported and imported somewhere else has to carry it,
+    or a photograph of that plank decodes a name the library no longer knows.
+    """
+    made = client.post(
+        "/api/library/testgrids", json={**FOUR_BY_FOUR, "code_enabled": True}
+    ).json()
+
+    bundle = client.get("/api/library/export.openkerf-lib").content
+    path = tmp_path / "shared.openkerf-lib"
+    path.write_bytes(bundle)
+    from openkerf_api.library import Library
+
+    elsewhere = Library(tmp_path / "elsewhere.db")
+    elsewhere.import_bundle(path, mode="merge")
+
+    theirs = elsewhere.test_grids()[0]
+    assert theirs["uid"] == made["uid"]
+    assert theirs["code_enabled"] is True
+    assert theirs["code_size_mm"] == made["code_size_mm"]
+
+
+# ================================================== cutting it loose (step 24)
+
+
+@pytest.fixture
+def cutting(kernel, tmp_path):
+    """A client plus the library behind it, and a cut setting for 3 mm birch in it."""
+    server = ApiServer(kernel, library_path=tmp_path / "cutting.db")
+    with TestClient(server.build_app()) as c:
+        material = c.post("/api/library/materials", json={"name": "Birch"}).json()
+        c.post(
+            "/api/library/presets",
+            json={
+                "material_id": material["id"], "operation": "snijden",
+                "thickness_mm": 3, "speed_mm_s": 8, "power_percent": 90, "passes": 1,
+            },
+        )
+        yield c, server.library, material["id"]
+
+
+def tile_body(material_id, **extra):
+    return {
+        **FOUR_BY_FOUR,
+        "material_id": material_id,
+        "thickness_mm": 3,
+        "cutout_enabled": True,
+        **extra,
+    }
+
+
+def test_the_cut_setting_comes_from_the_library_and_is_never_guessed(cutting):
+    """
+    The cut setting is precisely the unknown a test board exists to discover, so guessing
+    one here would cut the rim at a speed nobody has ever burned — on the plank whose whole
+    purpose is to find that speed out.
+    """
+    _, library, material = cutting
+    from openkerf_api.testgrid import cutout_setting
+
+    setting = cutout_setting(library, {"cutout_enabled": True,
+                                       "material_id": material, "thickness_mm": 3})
+
+    assert setting["cut_speed_mm_s"] == 8
+    assert setting["cut_power_percent"] == 90
+    assert setting["cutout_preset_id"]
+    # And nothing is looked up for a board that is not being cut loose.
+    assert cutout_setting(library, {"material_id": material}) == {}
+
+
+def test_a_material_with_no_cut_setting_cannot_have_its_tile_cut_out(cutting):
+    """
+    Refused, and the refusal names the thicknesses there *are* settings for: "there is no
+    cut setting" and "there is no cut setting for 6 mm" send the user to two different
+    places.
+    """
+    _, library, material = cutting
+    from openkerf_api.testgrid import cutout_setting
+
+    with pytest.raises(DesignError) as refused:
+        cutout_setting(
+            library,
+            {"cutout_enabled": True, "material_id": material, "thickness_mm": 6},
+        )
+
+    assert refused.value.code == "library.grid.cutoutNeedsPreset"
+    assert refused.value.values["known_mm"] == [3.0]
+    assert "3 mm" in str(refused.value)
+
+
+def test_asking_for_the_tile_loose_is_enough_and_the_library_supplies_the_setting(cutting):
+    """
+    The form ticks one box; the speed comes from the library.
+
+    This is the wiring `cutout_setting` was written for, and without it the whole cut-out
+    was unreachable: `grid_fields` handed the body straight to the planner, so a board
+    posted with `cutout_enabled` and nothing else arrived at `_cutout` with no speed and
+    was refused with `library.grid.cutoutNoSetting` — a sentence that names no way out.
+    Measured before the wiring landed: every cut-out asked for through this route refused,
+    and the two refusals that *are* actionable could not be reached at all.
+
+    The setting here is the 3 mm birch cut in the fixture, 8 mm/s at 90 %, and it is the
+    preview that has to know it too: the seconds of the rim are what somebody weighs the
+    cut-out against, and a preview reporting 0 s would be advertising it as free.
+    """
+    client, _, material = cutting
+
+    made = client.post("/api/library/testgrids", json=tile_body(material))
+
+    assert made.status_code == 201, made.text
+    board = made.json()
+    assert board["cutout_enabled"] is True
+    assert board["cutout_preset_id"]
+    preview = client.post(
+        "/api/library/testgrids/preview", json=tile_body(material)
+    ).json()["plan"]
+    assert preview["cut_speed_mm_s"] == 8
+    assert preview["cut_power_percent"] == 90
+    assert preview["cut_seconds"] == pytest.approx(29.6, rel=0.05)
+    # And a setting the caller brought itself is left alone: it is the board they are
+    # burning, and the library is only there for the boards that ask.
+    mine = client.post(
+        "/api/library/testgrids/preview",
+        json=tile_body(material, cut_speed_mm_s=20, cut_power_percent=70),
+    ).json()["plan"]
+    assert (mine["cut_speed_mm_s"], mine["cut_power_percent"]) == (20, 70)
+
+
+def test_a_thickness_the_library_has_no_cut_setting_for_is_refused_by_the_route(cutting):
+    """
+    The same refusal as `cutout_setting`'s own test, but through the door a person uses —
+    which is the half that was unreachable. The fixture holds a cut for 3 mm birch only, so
+    6 mm is refused, and the sentence names the thickness there *is* a setting for.
+    """
+    client, _, material = cutting
+
+    refused = client.post(
+        "/api/library/testgrids", json=tile_body(material, thickness_mm=6)
+    )
+
+    assert refused.status_code == 409
+    assert refused.headers["X-OpenKerf-Error"] == "library.grid.cutoutNeedsPreset"
+    assert "3 mm" in refused.json()["detail"]
+    # And a board with no material at all cannot be looked up for at all.
+    nameless = client.post(
+        "/api/library/testgrids",
+        json={**FOUR_BY_FOUR, "cutout_enabled": True},
+    )
+    assert nameless.status_code == 409
+    assert nameless.headers["X-OpenKerf-Error"] == "library.grid.cutoutNeedsMaterial"
+
+
+def test_a_plan_that_carries_no_cut_setting_still_will_not_draw_one(kernel, cutting):
+    """
+    The planner's own guard, kept for whatever draws a board without going past
+    `grid_fields` — a script, a test, a future route. No setting, no cut line: a sentence
+    rather than a 500 on `float(None)`.
+
+    Reached here by planning and drawing directly, because through the route the library
+    now answers first (see the test above) and this branch is no longer reachable there.
+    """
+    from openkerf_api.testgrid import TestGridGenerator
+
+    _, _, material = cutting
+    plan, cells = plan_grid(
+        **{**FOUR_BY_FOUR, "material_id": material, "thickness_mm": 3},
+        cutout_enabled=True,
+    )
+    assert plan["cut_speed_mm_s"] is None
+
+    with pytest.raises(DesignError) as refused:
+        TestGridGenerator(kernel).draw(plan, cells)
+
+    assert refused.value.code == "library.grid.cutoutNoSetting"
+
+
+def test_the_cut_runs_four_millimetres_outside_everything_else(cutting):
+    """
+    `BORDER_PAD_MM` cannot double as the cut margin: the engraved frame *is* the outer box,
+    so a cut there is a cut through the frame. Measured on the default form, `outer_x_mm` is
+    0.4 mm — which is also why `board_room` had to move onto these numbers.
+    """
+    client, _, material = cutting
+    body = tile_body(material, cut_speed_mm_s=8, cut_power_percent=90)
+
+    plan = client.post("/api/library/testgrids/preview", json=body).json()["plan"]
+
+    assert plan["cut_x_mm"] == pytest.approx(plan["outer_x_mm"] - 4.0)
+    assert plan["cut_y_mm"] == pytest.approx(plan["outer_y_mm"] - 4.0)
+    assert plan["cut_width_mm"] == pytest.approx(plan["outer_width_mm"] + 8.0)
+    assert plan["cut_height_mm"] == pytest.approx(plan["outer_height_mm"] + 8.0)
+    # Without a cut-out the two rectangles are the same thing, so nothing that reads
+    # `cut_*` changes meaning for a board that is not being cut loose.
+    plain = client.post(
+        "/api/library/testgrids/preview", json={**body, "cutout_enabled": False}
+    ).json()["plan"]
+    assert plain["cut_x_mm"] == plain["outer_x_mm"]
+    assert plain["cut_width_mm"] == plain["outer_width_mm"]
+
+
+def test_a_tile_that_would_be_cut_off_the_bed_says_so(cutting):
+    """
+    `board_room` used to measure `outer_*`, and on the default form that is 0.4 mm from the
+    left edge — so a cut-out asked for there runs 3.6 mm off the bed while every number in
+    the form says the board fits. Measured here at Start X 20: the board's own left edge is
+    2.4 mm on the bed and the cut line is 1.6 mm off it.
+
+    Reported and not refused, on the left and top, because that is the rule T11 settled and
+    `test_a_board_that_starts_left_of_the_bed_is_reported_not_refused` pins: the board burns
+    and what falls outside does not. On the right and below it *is* a refusal, and since the
+    cut line is now the outermost thing on the board it is that line the bed is measured
+    against — a board that fits and a rim that does not is refused where it used to be
+    drawn.
+    """
+    client, _, material = cutting
+    off_the_left = tile_body(
+        material, cut_speed_mm_s=8, cut_power_percent=90, origin_x_mm=20, origin_y_mm=22
+    )
+
+    plan = client.post("/api/library/testgrids/preview", json=off_the_left).json()["plan"]
+
+    assert plan["outer_x_mm"] == pytest.approx(2.4)
+    assert plan["cut_x_mm"] == pytest.approx(-1.6)
+    assert plan["board_room"] is False
+    assert client.post("/api/library/testgrids", json=off_the_left).status_code == 201
+
+    # The bed is 320x220 mm on the dummy device. `outer_x_mm` is Start X less the strip the
+    # row labels stand in, so a Start X of "bed less the board plus that strip" puts the
+    # board's own right edge on the bed edge; two millimetres back from there leaves the
+    # board inside and the cut line, four millimetres further out, outside.
+    board = plan_grid(**FOUR_BY_FOUR)[0]
+    room = 320 - board["outer_width_mm"] + board["label_margin_mm"] - 2
+    off_the_right = tile_body(
+        material, cut_speed_mm_s=8, cut_power_percent=90,
+        origin_x_mm=room, origin_y_mm=40,
+    )
+    fits = client.post(
+        "/api/library/testgrids/preview", json={**off_the_right, "cutout_enabled": False}
+    ).json()["plan"]
+    assert fits["outer_x_mm"] + fits["outer_width_mm"] < 320
+
+    refused = client.post("/api/library/testgrids", json=off_the_right)
+    assert refused.status_code == 409
+    assert "outside the bed" in refused.json()["detail"]
+
+
+def test_the_tile_hangs_on_four_tabs(kernel, cutting):
+    """
+    A tile that comes free while squares are still burning shifts, and the rest of the sweep
+    lands beside the line. Four of two millimetres, through the engine's own
+    `mktablength`/`mktabpositions` rather than a second way of making a tab — so the cut
+    plan, the estimate and the RD stream get the gaps for free.
+
+    Measured on this board: the outline is 244.2 mm and the cut path is 236.2 mm, which is
+    the eight millimetres of tab exactly.
+
+    What it costs is worth knowing: the engine applies the tabs by resampling the contour at
+    0.05 mm (`Geomstr.wobble_tab`), so this one rectangle is **4719 cut objects** and the
+    whole board goes from 925 to 5684. That is the price of any bridged cut in this codebase
+    — `bridges.py` measures the same thing on a 60x40 rectangle — and not something this
+    layer does differently.
+    """
+    from meerk40t.core.units import UNITS_PER_MM
+
+    from openkerf_api.bridges import bridged_geometry, parse_positions, path_length
+
+    client, _, material = cutting
+    body = tile_body(material, cut_speed_mm_s=8, cut_power_percent=90)
+    client.post("/api/library/testgrids", json=body)
+
+    design = client.get("/api/design").json()
+    layer = next(op for op in design["operations"] if op["label"] == CUTOUT_LAYER)
+    node = kernel.elements.find_node(layer["element_ids"][0])
+
+    # One per side, in the middle of its own side, rather than the engine's `*4` — which
+    # spreads by fraction of the perimeter and is only even on a square rim. This board's
+    # rim is nearly square, so the two answers are close (12.5 / 37.5 / 62.5 / 87.5 against
+    # these), and on the 100.2 x 36.4 mm rim in
+    # `test_a_cut_out_tab_sits_in_the_middle_of_a_side_and_never_across_a_corner` the
+    # shorthand put two tabs *past* a corner. Held as the property, not as four numbers:
+    # what matters is that a tab is centred on a side.
+    from openkerf_api.testgrid import _side_middles
+
+    grid = client.get("/api/library/testgrids").json()[0]
+    assert parse_positions(node.mktabpositions) == _side_middles(
+        {"cut_width_mm": grid["cut_width_mm"], "cut_height_mm": grid["cut_height_mm"]}
+    )
+    assert node.mktablength / UNITS_PER_MM == pytest.approx(CUTOUT_TAB_MM)
+    whole = path_length(node.as_geometry()) / UNITS_PER_MM
+    gapped = bridged_geometry(
+        node.as_geometry(), parse_positions(node.mktabpositions), node.mktablength
+    )
+    assert whole - path_length(gapped) / UNITS_PER_MM == pytest.approx(
+        CUTOUT_TABS * CUTOUT_TAB_MM, abs=0.05
+    )
+
+
+def test_the_cut_out_burns_last(kernel, cutting):
+    """
+    The label layer is last today only by accident of creation order. The cut-out has to be
+    last on purpose, or the tile comes free while the sweep is still running.
+
+    And last on a *second* board too, which is the case creation order alone gets wrong: the
+    second board's sixteen cell layers are made after the first board's cut-out, so the
+    layer is moved to the end every time a board asks for it.
+    """
+    client, _, material = cutting
+    body = tile_body(material, cut_speed_mm_s=8, cut_power_percent=90)
+
+    client.post("/api/library/testgrids", json=body)
+    labels = [getattr(op, "label", None) for op in kernel.elements.op_branch.children]
+    assert labels[-1] == CUTOUT_LAYER
+
+    client.post(
+        "/api/library/testgrids",
+        json={**body, "origin_x_mm": 150, "origin_y_mm": 30},
+    )
+
+    labels = [getattr(op, "label", None) for op in kernel.elements.op_branch.children]
+    assert labels[-1] == CUTOUT_LAYER
+    assert labels.count(CUTOUT_LAYER) == 1
+
+
+def test_the_cut_out_is_its_own_layer_with_the_librarys_setting(kernel, cutting):
+    """
+    Its own `op cut`, not the caption layer's `op engrave` the `border_enabled` frame hangs
+    in: an engraved frame and a cut rim are two different things, and three of the four
+    checkbox combinations of the two are nonsense.
+    """
+    client, _, material = cutting
+    client.post(
+        "/api/library/testgrids",
+        json=tile_body(material, cut_speed_mm_s=8, cut_power_percent=90),
+    )
+
+    design = client.get("/api/design").json()
+    layer = next(op for op in design["operations"] if op["label"] == CUTOUT_LAYER)
+
+    assert layer["type"] == "op cut"
+    assert layer["speed"] == 8
+    # The engine's power runs 0–1000, not 0–100.
+    assert layer["power"] == 900
+    assert len(layer["element_ids"]) == 1
+
+
+def test_the_tile_leaves_with_the_board(kernel, cutting):
+    """Same reason as the code: it goes in `extras`, so the group takes it away."""
+    client, _, material = cutting
+    grid = client.post(
+        "/api/library/testgrids",
+        json=tile_body(material, cut_speed_mm_s=8, cut_power_percent=90),
+    ).json()
+    design = client.get("/api/design").json()
+    node_id = next(
+        op for op in design["operations"] if op["label"] == CUTOUT_LAYER
+    )["element_ids"][0]
+
+    client.post(f"/api/library/testgrids/{grid['id']}/remove-from-design")
+
+    assert kernel.elements.find_node(node_id) is None
+
+
+def test_what_the_extras_cost_is_in_the_preview(cutting):
+    """
+    Measured through the engine's own cut plan on this board: 56.9 s plain, 14.8 s of code
+    at 167 dpi, and 29.6 s of cut-out at 8 mm/s (35.5 s once the code has made the board
+    taller and the rim longer). The planner's own arithmetic has to come out near enough that
+    the number in the form is the number that burns, and it does: 14.1 s and 35.4 s for the
+    same two, within 5 % and 0.3 %.
+
+    Stated separately as well as in the total, because the cut-out is the item somebody will
+    want to weigh: the same rim is 19.7 s at 12 mm/s and 11.9 s at 20.
+    """
+    client, _, material = cutting
+    plain = client.post(
+        "/api/library/testgrids/preview",
+        json={**FOUR_BY_FOUR, "material_id": material, "thickness_mm": 3},
+    ).json()["plan"]
+    both = client.post(
+        "/api/library/testgrids/preview",
+        json=tile_body(
+            material, code_enabled=True, cut_speed_mm_s=8, cut_power_percent=90
+        ),
+    ).json()["plan"]
+
+    assert both["code_seconds"] == pytest.approx(14.1, rel=0.05)
+    assert both["cut_seconds"] == pytest.approx(35.4, rel=0.05)
+    assert both["seconds"] == pytest.approx(
+        plain["seconds"] + both["code_seconds"] + both["cut_seconds"], abs=0.2
+    )
+
+
+def test_a_board_from_before_all_this_still_opens_and_still_points_at_a_cell(tmp_path):
+    """
+    Requirement 3 of the round, and the one that matters most: a board burned before any of
+    this existed has to go on working. Its row is wound back here to exactly that — no name,
+    no code, no cut-out, no `outer_*` — and it still has to open, still take the alignment
+    somebody pointed out by hand, and still map a tap back to the cell it always did.
+
+    `cell_polygon` normalises over the *squares* and nothing this round adds touches those,
+    which is why no alignment already stored is reinterpreted.
+    """
+    library = Library(tmp_path / "old.db")
+    material = library.add_material(name="Birch")["id"]
+    plan, cells = plan_grid(**BASE, material_id=material)
+    grid = library.add_test_grid(plan, cells)
+    db = sqlite3.connect(library.path)
+    with db:
+        db.execute(
+            """UPDATE test_grid SET uid = NULL, caption = NULL,
+                   outer_x_mm = NULL, outer_y_mm = NULL,
+                   outer_width_mm = NULL, outer_height_mm = NULL,
+                   code_enabled = 0, code_size_mm = NULL,
+                   cutout_enabled = 0, cut_x_mm = NULL
+               WHERE id = ?""",
+            (grid["id"],),
+        )
+    db.close()
+
+    library = Library(library.path)
+    corners = [
+        {"x": 0.05, "y": 0.05}, {"x": 0.95, "y": 0.06},
+        {"x": 0.94, "y": 0.93}, {"x": 0.06, "y": 0.92},
+    ]
+    library.set_grid_alignment(grid["id"], corners)
+    again = library.test_grid(grid["id"])
+
+    # Named on the way past, because a nameless board cannot be filed — but nothing else
+    # about it changed.
+    assert again["uid"] and len(again["uid"]) == 8
+    assert again["code_enabled"] is False
+    assert again["cutout_enabled"] is False
+    assert again["alignment"] == corners
+    assert cell_polygon(again, again["cells"][0])[0] == pytest.approx(
+        (0.05, 0.05), abs=0.02
+    )
+    # And a tap on the last square still lands inside the four corners it was aligned to.
+    last = cell_polygon(again, again["cells"][-1])
+    assert all(0.05 <= x <= 0.95 and 0.05 <= y <= 0.95 for x, y in last)
+
+
+def test_clearing_all_layers_leaves_a_coded_board_intact(kernel, cutting):
+    """
+    "Clear all layers" must not take a board's own layers with it. That was fixed once for
+    the caption layer, with a sentence about how bad it is: every board's captions and frame
+    were left behind without a layer and so no longer burned, on a board where nothing else
+    looked wrong.
+
+    Measured before this test existed, with the code and the cut-out not yet counted as a
+    board's layers: clearing the layers removed the Board code layer and left the code shape
+    on the canvas with **zero** references — a QR on the plate that burns nothing. Same for
+    the cut-out, which is worse: the tile silently stays in the sheet.
+    """
+    client, _, material = cutting
+    client.post(
+        "/api/library/testgrids",
+        json=tile_body(
+            material, code_enabled=True, cut_speed_mm_s=8, cut_power_percent=90
+        ),
+    )
+    design = client.get("/api/design").json()
+    mine = {
+        layer["label"]: layer["element_ids"][0]
+        for layer in design["operations"]
+        if layer["label"] in (CODE_LAYER, CUTOUT_LAYER)
+    }
+    assert set(mine) == {CODE_LAYER, CUTOUT_LAYER}
+
+    client.delete("/api/design/operations")
+
+    after = client.get("/api/design").json()
+    for label, node_id in mine.items():
+        layer = next((op for op in after["operations"] if op["label"] == label), None)
+        assert layer is not None, label
+        assert layer["element_ids"] == [node_id]
+
+
+def test_the_board_layers_never_catch_fresh_work(kernel, cutting):
+    """
+    The code's layer holds a black-filled shape, and black is a colour a user draws in — so
+    without this the engine's colour classification would drop the next black rectangle into
+    a raster layer running at 167 dpi and the board's own cut-out layer would cut it out.
+    The same promise `test_the_label_layer_never_catches_fresh_work` makes for the captions.
+    """
+    client, _, material = cutting
+    client.post(
+        "/api/library/testgrids",
+        json=tile_body(
+            material, code_enabled=True, cut_speed_mm_s=8, cut_power_percent=90
+        ),
+    )
+
+    # With the user's own layers thrown away, which is the state that made this bite for
+    # the caption layer: then a board's layer is the only one of its colour left.
+    client.delete("/api/design/operations")
+    fresh = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 200, "y_mm": 150, "width_mm": 10, "height_mm": 10},
+    ).json()["ids"][0]
+
+    design = client.get("/api/design").json()
+    shape = next(e for e in design["elements"] if e["id"] == fresh)
+    landed = [op for op in design["operations"] if op["id"] in shape["operation_ids"]]
+
+    assert landed, "a fresh shape should land in a layer"
+    assert all(
+        op["label"] not in (CODE_LAYER, CUTOUT_LAYER, "Raster-labels") for op in landed
+    ), [op["label"] for op in landed]
+
+
+def test_a_cut_out_tab_sits_in_the_middle_of_a_side_and_never_across_a_corner(kernel):
+    """
+    A tab across a corner is the weakest tab there is: it holds on a bend, it tears when
+    the tile is snapped out, and it leaves the corner ragged on the very piece you keep in
+    order to photograph it.
+
+    The engine's `*4` shorthand spreads by fraction of the *perimeter*, which is even only
+    on a square rim. Measured on the rim this test builds — 100.2 x 36.4 mm, corners at
+    0 / 100.2 / 136.6 / 236.8 of a 273.2 mm path — `*4` put two gap centres at 102.5 and
+    239.1 mm: 2.3 mm past a corner, with the tab edge 1.3 mm from it.
+    """
+    from openkerf_api.bridges import gap_spans
+    from openkerf_api.testgrid import CUTOUT_TAB_MM, _side_middles
+
+    width, height = 100.2, 36.4
+    perimeter = 2 * (width + height)
+    corners = (0.0, width, width + height, 2 * width + height, perimeter)
+
+    centres = [
+        percent * perimeter / 100.0 for percent in _side_middles(
+            {"cut_width_mm": width, "cut_height_mm": height}
+        )
+    ]
+    assert len(centres) == 4
+
+    # Every gap has to lie inside one side, with room to spare on both ends.
+    for start, end in gap_spans(perimeter, _side_middles(
+        {"cut_width_mm": width, "cut_height_mm": height}
+    ), CUTOUT_TAB_MM):
+        side = next(
+            (low, high)
+            for low, high in zip(corners, corners[1:])
+            if low <= (start + end) / 2 <= high
+        )
+        assert side[0] < start and end < side[1], (
+            f"a gap runs from {start:.1f} to {end:.1f} mm and the side is "
+            f"{side[0]:.1f} to {side[1]:.1f} mm — it crosses a corner"
+        )
+        # And it really is the middle of that side, not merely inside it.
+        assert abs((start + end) / 2 - (side[0] + side[1]) / 2) < 0.01
