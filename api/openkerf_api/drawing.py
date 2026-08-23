@@ -17,6 +17,7 @@ from .commands import CommandRunner
 from .design import _xy, operation_label
 from .edits import DesignError, _finite, _positive
 from .palette import normalise
+from .series import require_known_columns
 from .testgrid import LABEL_LAYER
 
 # What a shape needs, and the console command that draws it. Millimetres in,
@@ -58,6 +59,88 @@ _OPERATION_TYPES = {
 
 def _mm(value: float) -> str:
     return f"{value:.4f}mm"
+
+
+#: A placeholder in a line of text: one opening brace, a name, one closing brace.
+#: The engine's own pattern is `\{[^}]+\}` (`meerk40t/core/wordlist.py:_BRACKETS`), which
+#: is why a doubled brace is not an escape: it matches the inner pair and leaves the outer
+#: brace standing. This one refuses to look inside a second brace, so that a doubled brace
+#: is left over for `_check_placeholders` to see.
+_PLACEHOLDER = re.compile(r"\{([^{}]*)\}")
+
+
+def _check_placeholders(text: str, columns=None) -> None:
+    """
+    Three ways a curly bracket in a line of text burns something nobody asked for.
+
+    A brace marks a placeholder: the engine substitutes `{name}` out of its wordlist on
+    every render (`meerk40t/extra/hershey.py:355` and `:504`) and again while the plan is
+    being built (`core/cutplan.py:325`). That is a feature, and this function is not here
+    to take it away. It is here for the two shapes of it that cannot come out right,
+    because in both the machine burns something the screen never showed.
+
+    **A brace that does not open and close once.** There is no escape in the engine's
+    syntax, so a bracket cannot be asked for as a bracket. Measured on the engine's own
+    `wordlist_translate`: `'a {{name}}'` renders `'a }'` and `'{{name}'` renders `''` —
+    the inner pair is read as a key nobody has and deleted, and what is left of the outer
+    braces is what gets engraved. A lone `'{name'` survives as itself, which is the same
+    mistake pointing the other way: the reader meant a name from the list and gets three
+    letters more than they meant. `'{}'` is the same story with nothing in it: the engine's
+    pattern needs a character between the braces, so both brackets go on the workpiece.
+    Refusing costs a user who really wants a bracket on the workpiece; letting it through
+    costs a plate.
+
+    **A placeholder that counts backwards.** `fetch_value` guards only the upper bound
+    (`core/wordlist.py:263-269`), so a negative offset walks off the front of the list and
+    into the list's own bookkeeping. Measured with a three-name list standing on its first
+    row: `{name#-1}` engraves `2` (the row pointer) and `{name#-2}` engraves `1` (the type
+    field), both as real geometry on a real node. One row further along it silently reads a
+    different row instead, which is worse rather than better: there is no offset here that
+    means what it says.
+
+    **A placeholder the attached list cannot fill.** The rule for that one lives in
+    `series.py`, because it is the list that knows: `columns` holds the column names of
+    the attached list, or `None` when nobody can say. See `series.require_known_columns`
+    for the measurement, and for why `None` lets a placeholder through — in short, a
+    design may be drawn before the spreadsheet arrives.
+    """
+    # Take out every well-formed placeholder and see which braces are left standing.
+    # Anything left is a brace that does not pair up, and the engine will either swallow
+    # text around it or burn it as a literal bracket.
+    remainder = _PLACEHOLDER.sub("", text)
+    names = _PLACEHOLDER.findall(text)
+    if "{" in remainder or "}" in remainder or any(not n.strip() for n in names):
+        raise DesignError(
+            "A curly bracket has to open and close once around a column name, and a "
+            "bracket cannot be burned as a bracket.",
+            code="draw.bracesInText",
+        )
+    for name in names:
+        # The engine's own reading of the modifier, kept deliberately identical to
+        # `core/wordlist.py:518-531`: a `#` after the first character, and a sign that
+        # makes the number an offset from the current row rather than a row of its own.
+        key = name.lower().strip()
+        hash_at = key.find("#")
+        if hash_at <= 0:
+            continue
+        modifier = key[hash_at + 1 :]
+        if not modifier.startswith(("+", "-")):
+            continue
+        try:
+            offset = int(modifier)
+        except ValueError:
+            # The engine reads an unparsable offset as zero, so it is not backwards.
+            continue
+        if offset < 0:
+            raise DesignError(
+                "A placeholder cannot count backwards. It would read the list's own "
+                "bookkeeping instead of a row.",
+                code="draw.backwardsPlaceholder",
+            )
+    # Last, because the two above are about the text alone and hold whether a list is
+    # attached or not. This one is an opinion of the list's, and a text that is malformed
+    # is worth saying so about before its columns are looked up.
+    require_known_columns(text, columns)
 
 
 def _passes_of(node) -> int:
@@ -149,10 +232,30 @@ class Drawing:
         self.origin = lambda: None
         # Was there a whole group on the clipboard? See `clipboard_paste`.
         self._clipboard_group = False
+        # The list a series burns from. Bound by the server after both exist, because
+        # `ApiServer` builds this object first — the `Series` spools through the command
+        # runner this one already owns, so a constructor argument would mean building the
+        # two in the other order and handing the runner around twice.
+        #
+        # `None` is a working state and not a missing dependency: a `Drawing` on its own
+        # has no opinion about which columns exist, which is exactly the answer a text
+        # with a placeholder in it should get from a layer that cannot know. Every test
+        # that builds a bare `Drawing` therefore keeps working, and so does an OpenKerf
+        # embedded somewhere that never wires a series up.
+        self.series = None
 
     @property
     def elements(self):
         return self.kernel.elements
+
+    def _columns(self):
+        """
+        The columns a placeholder may name, or None when this layer cannot say.
+
+        Both doors into a text — `_command` when one is placed, `update_text` when one is
+        edited — ask here, so there is one answer and not two that agree today.
+        """
+        return None if self.series is None else self.series.columns()
 
     # --------------------------------------------------------------- elements
 
@@ -246,7 +349,7 @@ class Drawing:
         # Drawing *and* putting it in a layer within the same action: laying down a
         # shape is one step, so one undo. If finding the layer fell outside it, the first
         # `undo` would only remove that layer and the shape would stay.
-        with self.elements.undoscope(f"Draw {kind}"):
+        with self.elements.undoscope(f"Draw {kind}"), self._keep_last_font():
             self.runner.run(self._command(kind, values, fields))
             created = [n for n in self.elements.elems() if id(n) not in before]
             if created:
@@ -260,6 +363,34 @@ class Drawing:
         self.elements.set_emphasis(created)
         self._refresh()
         return {"ids": [n.id for n in created], "type": created[0].type}
+
+    @contextmanager
+    def _keep_last_font(self):
+        """
+        Placing one text must not decide what the next one is set in.
+
+        `create_linetext_node` writes the typeface it used into `context.last_font`
+        unconditionally (`meerk40t/extra/hershey.py:492`), and a `linetext` without `-f`
+        reads that setting back (`hershey.py:894`). So one text placed in a chosen font
+        becomes the app-wide default for every text after it, in this document and in the
+        next one. Measured before this guard: with `last_font` standing on NewYork.ttf a
+        text without a font came out in NewYork.ttf; after one text placed with
+        `-f "meerk40t.jhf"` the very same request came out in meerk40t.jhf. That is how a
+        test board once came out in Apple Chancery.
+
+        Same guard and same reason as `testgrid.py:_text`, with one difference worth
+        stating: there the font is ours and obviously nobody's preference, here it is the
+        user's own choice. Restoring it is still right, because the choice belongs to the
+        text they made it on. A request that names no font should get the document's font,
+        not a souvenir of the last shape somebody drew.
+        """
+        root = self.kernel.root
+        root.setting(str, "last_font", "")
+        previous = root.last_font
+        try:
+            yield
+        finally:
+            root.last_font = previous
 
     def _single_layer(self, node) -> None:
         """
@@ -362,13 +493,20 @@ class Drawing:
                 "Quotation marks in text are not supported yet.",
                 code="draw.quotesInText",
             )
+        _check_placeholders(text, self._columns())
         # linetext, not text: bitmap text has no geometry and is therefore invisible on
         # the canvas and cannot be positioned.
         parts = ["linetext", _mm(v["x_mm"]), _mm(v["y_mm"])]
         font = str(fields.get("font") or "").strip()
         if font:
+            # The name goes between quotes on the console line, so a quotation mark in it
+            # ends the argument halfway through and the rest of the name becomes commands.
             if '"' in font:
-                raise DesignError("Ongeldige fontnaam.")
+                raise DesignError(
+                    "A font name cannot hold a quotation mark. Pick the font from the "
+                    "list instead of typing it.",
+                    code="draw.badFontName",
+                )
             parts += ["-f", f'"{font}"']
         size = fields.get("font_size_mm")
         if size is not None:
@@ -379,15 +517,21 @@ class Drawing:
         parts.append(f'"{text}"')
         return " ".join(parts)
 
+    #: How a line of text sits against its own anchor point. These are the engine's own
+    #: `mkalign` values, and the refusal below names all three so that a client without a
+    #: catalogue — curl, a script — reads what it may send.
     ALIGNMENTS = ("start", "middle", "end")
 
     def update_text(self, element_id: str, **fields) -> dict:
         """
-        Updating existing vector text: contents, font, height,
-        spatiëring of alignment.
+        Updating existing vector text: contents, font, height, spacing or alignment.
 
         The engine keeps the source on the node and re-renders, so text does not have to
         be deleted and placed again.
+
+        The new contents pass the same check as a text being placed. A placeholder that
+        the machine cannot read right is no better for having been typed into an existing
+        shape, and this is the second of the two doors: `_command` is the other.
         """
         from meerk40t.core.units import UNITS_PER_MM
 
@@ -406,6 +550,7 @@ class Drawing:
                 new = str(fields["text"]).strip()
                 if not new:
                     raise DesignError("Text cannot be empty.", code="draw.emptyText")
+                _check_placeholders(new, self._columns())
                 text = new
             if fields.get("font"):
                 node.mkfont = str(fields["font"])
@@ -417,7 +562,8 @@ class Drawing:
                 align = str(fields["align"])
                 if align not in self.ALIGNMENTS:
                     raise DesignError(
-                        f"Alignment has to be one of {', '.join(self.ALIGNMENTS)}."
+                        "Text alignment has to be start, middle or end.",
+                        code="draw.badAlign",
                     )
                 node.mkalign = align
             registry.update_linetext(node, text)
@@ -1073,6 +1219,56 @@ class Drawing:
         return {
             "ids": [node.id for node in nodes],
             "locked": want,
+            "changed": len(changed),
+        }
+
+    def once(self, element_ids, once: bool = True) -> dict:
+        """
+        Burn this shape only once in a series, or on every plate again.
+
+        What it is for: a jig frame, or the pockets that hold the pieces. You cut those
+        into the board once and then fifty pieces go through them in turn. Outside a
+        series the flag does nothing at all — an ordinary Burn sends the whole design —
+        and that is deliberate: the mark belongs to the drawing, and which burn leaves
+        it out is a decision of the run (`series.OverrunMutator`).
+
+        The attribute name is load-bearing and the `mk` prefix is the whole of it.
+        MeerK40t's SVG writer emits every non-underscore attribute of scalar type in one
+        generic loop (`core/svg_io.py:457-473`), while the reader restores only the ones
+        beginning with `mk` (`check_for_mk_path_attributes`, `core/svg_io.py:872-899`).
+        Verified both ways in a fresh kernel: `mkonce` came back as `'1'` and a
+        `burnonce` beside it was written to the file and silently dropped on reload. So
+        this rides `design.svg`, every sheet, the recovery file and the project bundle
+        without one line of export code.
+
+        Switching it off **deletes** the attribute and never writes a falsy value, and
+        that is not tidiness. The reader hands back whatever string the writer put there,
+        so `mkonce = False` comes back as the four characters `"False"` — measured — and
+        every shape ever switched off would read as "burn only once" for the rest of its
+        life. There is no way back from that inside a saved file.
+
+        Not guarded against a locked shape, for the reason locking.py gives in words: a
+        lock is there to stop an accident with the geometry, and this changes none.
+        """
+        nodes = self._nodes(element_ids)
+        want = bool(once)
+        changed = []
+        with self.elements.undoscope("Burn only once" if want else "Burn every time"):
+            for node in nodes:
+                if bool(getattr(node, "mkonce", None)) == want:
+                    continue
+                if want:
+                    node.mkonce = "1"
+                else:
+                    try:
+                        del node.mkonce
+                    except AttributeError:  # pragma: no cover - never set on this node
+                        pass
+                changed.append(node.id)
+        self._refresh()
+        return {
+            "ids": [node.id for node in nodes],
+            "once": want,
             "changed": len(changed),
         }
 
@@ -2642,6 +2838,12 @@ class Drawing:
         An SVG keeps the shapes and operations, but not which material or which test grid
         belonged with it — those live in the local database. So a project is a zip with the
         SVG and a JSON beside it.
+
+        The list a series burns from goes in as well, through `Series.export_into`. It has
+        no argument here the way `library` and `sheets` do, because it is bound on this
+        object for the refusal at the text field and one collaborator reached two ways is
+        one way too many. Nothing is written when no series is wired at all, which leaves
+        exactly the bundle this method wrote before.
         """
         import json
         import tempfile
@@ -2666,6 +2868,8 @@ class Drawing:
             # the project: then you miss the other sheets, but not your work.
             bundle.write(design, "design.svg")
             bundle.writestr("library.json", json.dumps(context, indent=1, default=str))
+            if self.series is not None:
+                self.series.export_into(bundle)
             if sheets is not None:
                 index = sheets.export_into(bundle)
                 bundle.writestr(
@@ -2684,14 +2888,28 @@ class Drawing:
 
         Existing materials and presets stay; we only fill in what is not there, so that
         opening a project does not overwrite somebody else's work.
+
+        The list a series burns from comes out of the bundle too, and it comes out last:
+        loading an SVG does not re-render a text that reads from a list — measured, the
+        node came back carrying the geometry that was in the file and no translation at
+        all — so the list has to arrive while the new texts are already in the tree. See
+        `Series.import_from` for what an absent `series.json` means and why it is not the
+        same as an empty one.
         """
         import json
+        import tempfile
         import zipfile
         from pathlib import Path
 
         source = Path(path)
         if not zipfile.is_zipfile(source):
             raise DesignError("This is not an OpenKerf project.", code="project.notOurs")
+        # Before one shape is touched: a series counts plates made from *this* drawing,
+        # and this method replaces the drawing. Asked here rather than beside the list
+        # below, because a refusal that arrives after the sheets are in leaves a project
+        # half opened.
+        if self.series is not None:
+            self.series.vet_new_design()
         with zipfile.ZipFile(source) as bundle:
             names = set(bundle.namelist())
             if "design.svg" not in names:
@@ -2711,15 +2929,17 @@ class Drawing:
                     bundle, index.get("sheets") or [], index.get("active")
                 )
 
-        import tempfile
+            scratch = Path(tempfile.mkdtemp(prefix="openkerf-open-")) / "design.svg"
+            scratch.write_bytes(svg)
+            self.elements.clear_all()
+            self.user_operations.clear()
+            self.runner.run(f'load "{scratch}"')
+            self.elements.validate_ids()
+            self._refresh()
 
-        scratch = Path(tempfile.mkdtemp(prefix="openkerf-open-")) / "design.svg"
-        scratch.write_bytes(svg)
-        self.elements.clear_all()
-        self.user_operations.clear()
-        self.runner.run(f'load "{scratch}"')
-        self.elements.validate_ids()
-        self._refresh()
+            # Inside the bundle and after the design, for the reason in the docstring.
+            if self.series is not None:
+                self.series.import_from(bundle)
 
         added = self._merge_library(context, library)
         return {"imported": True, "library": added}
