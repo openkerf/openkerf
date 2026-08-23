@@ -88,6 +88,7 @@ export const en = {
 	'rail.tool.line': 'Line',
 	'rail.tool.pen': 'Pen — click for a corner, drag for a curve, Enter finishes',
 	'rail.tool.pen.short': 'Pen',
+	'rail.tool.point': 'Point — one spot, for a Dots layer',
 	'rail.tool.text': 'Text',
 	'rail.tool.measure': 'Measure',
 	'rail.placeImage': 'Place image',

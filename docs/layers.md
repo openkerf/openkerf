@@ -13,6 +13,17 @@ passes and a colour. There are four kinds, and the panel names them **Cut**,
 **Engrave**, **Raster** and **Dots**. Cut and engrave follow the outline of your
 shape; raster sweeps the area line by line; dots burns single points.
 
+**Dots takes only points, and nothing else.** That is the engine's rule, not ours:
+a Dots layer burns one spot at a time, so a rectangle in it would have no meaning.
+Put a shape in one and it says so rather than swallowing it:
+
+> A Dots layer burns single points, so a point is the only thing it takes; 1 shape
+> stayed out of it. Place points with the point tool, or choose another kind of layer
+> for these shapes.
+
+The points themselves come from the **Point** tool in the rail; a fresh point lands
+in a Dots layer of its own accord, because no other kind will hold it.
+
 The same shape can sit in more than one layer. That is not a mistake in the
 drawing — it means the shape is burned once per layer. On the canvas the shape is
 drawn in the colour of the topmost layer it belongs to.
@@ -165,6 +176,17 @@ Open the fold and there is more: the ten colour swatches, a **Name** field, and
 Engrave, Raster and Dots, with the note **The shapes and the settings stay; only
 what the machine does with them changes.** You do not have to throw the layer
 away and assign everything again.
+
+One switch is refused rather than done: a layer holding shapes cannot become a
+**Dots** layer, because Dots would keep none of them. It says how many and leaves
+everything where it is —
+
+> 1 shape in this layer cannot go into a Dots layer: it burns single points, so a
+> point is the only thing it takes. Take those shapes out of the layer first, or make
+> a new layer for them.
+
+— so emptying a layer stays your decision. An empty layer switches to Dots without
+a word, since there is nothing to lose.
 
 The fold closes after the switch. The layer is a new one as far as the engine is
 concerned, so the panel does not keep pointing at what has gone.

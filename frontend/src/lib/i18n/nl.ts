@@ -82,6 +82,7 @@ export const nl: Catalogue = {
 	'rail.tool.line': 'Lijn',
 	'rail.tool.pen': 'Pen — klik voor een hoek, sleep voor een kromme, Enter sluit af',
 	'rail.tool.pen.short': 'Pen',
+	'rail.tool.point': 'Punt — één plek, voor een Dots-laag',
 	'rail.tool.text': 'Tekst',
 	'rail.tool.measure': 'Meten',
 	'rail.placeImage': 'Afbeelding plaatsen',

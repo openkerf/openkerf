@@ -26,6 +26,11 @@ from .testgrid import BOARD_LAYERS, LABEL_LAYER  # noqa: F401
 # because that is what the user sees.
 SHAPES = {
     "rect": ("x_mm", "y_mm", "width_mm", "height_mm"),
+    # One spot, and the only thing a Dots layer will burn. Until this existed the app
+    # offered a Dots layer that nothing in the app could ever fill: measured, `type:
+    # "point"` answered 409 "Choose from circle, ellipse, line, rect, text" while the
+    # layer kind sat in the list beside the other four.
+    "point": ("x_mm", "y_mm"),
     "ellipse": ("cx_mm", "cy_mm", "rx_mm", "ry_mm"),
     "circle": ("cx_mm", "cy_mm", "r_mm"),
     "line": ("x1_mm", "y1_mm", "x2_mm", "y2_mm"),
@@ -40,6 +45,20 @@ TEXT_OPTIONS = {
 }
 
 # Library operation names map onto MeerK40t's own console commands.
+# Which element types a layer kind will hold, for the kinds whose list is narrower than
+# "any shape". The engine is the authority — every operation class carries
+# `_allowed_elements`, and `op dots` sets it to `("elem point",)`
+# (`core/node/op_dots.py:24`) — but that list only exists once the node does, and this
+# question is asked *before* the new layer is made. Kept to the one narrow kind on purpose:
+# a table of everything would drift away from the engine without anybody noticing.
+NARROW_LAYERS = {"dots": ("elem point",)}
+
+
+def _may_hold(kind: str, node) -> bool:
+    allowed = NARROW_LAYERS.get(kind)
+    return allowed is None or str(getattr(node, "type", "")) in allowed
+
+
 OPERATIONS = {
     "cut": "cut",
     "engrave": "engrave",
@@ -352,7 +371,11 @@ class Drawing:
         # shape is one step, so one undo. If finding the layer fell outside it, the first
         # `undo` would only remove that layer and the shape would stay.
         with self.elements.undoscope(f"Draw {kind}"), self._keep_last_font():
-            self.runner.run(self._command(kind, values, fields))
+            row = self._command(kind, values, fields)
+            if row is None:
+                self._add_point(values)
+            else:
+                self.runner.run(row)
             created = [n for n in self.elements.elems() if id(n) not in before]
             if created:
                 self.elements.validate_ids()
@@ -365,6 +388,26 @@ class Drawing:
         self.elements.set_emphasis(created)
         self._refresh()
         return {"ids": [n.id for n in created], "type": created[0].type}
+
+    def _add_point(self, values: dict) -> None:
+        """
+        One point on the bed, as a node, because the engine has no command for it.
+
+        `elem point` is what a Dots layer burns, and the engine's own writer and reader
+        both know the type (`core/elements/element_types.py:31`, `core/svg_io.py`), so a
+        point saves and reopens like any other shape. It carries a stroke for one reason:
+        the layer a fresh shape lands in is decided on its stroke colour
+        (`_own_layer`), and a point without one would land nowhere.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        self.elements.elem_branch.add(
+            type="elem point",
+            x=values["x_mm"] * UNITS_PER_MM,
+            y=values["y_mm"] * UNITS_PER_MM,
+            stroke=self.elements.default_stroke,
+            stroke_width=self.elements.default_strokewidth,
+        )
 
     @contextmanager
     def _keep_last_font(self):
@@ -429,7 +472,19 @@ class Drawing:
             self._own_layer(node)
 
     def _own_layer(self, node) -> None:
-        """Give a shape without a layer one, on its own stroke colour."""
+        """
+        Give a shape without a layer one, on its own stroke colour.
+
+        A point is the exception, and not for tidiness: `op cut._allowed_elements` does not
+        list `elem point` (`core/node/op_cut.py:46`) and neither does engrave or raster, so
+        the colour route can only ever hand a point to a layer that drops it. Measured
+        before this: a fresh point ended with `operation_ids []` beside a brand-new cut
+        layer holding nothing — a shape on the bed that no layer would take and nothing
+        said so. A Dots layer is the only kind that burns one, so that is where it goes.
+        """
+        if str(getattr(node, "type", "")) == "elem point":
+            self._dots_layer().add_reference(node)
+            return
         colour = normalise(str(getattr(node, "stroke", "") or "")[:7])
         if colour is None:
             return
@@ -445,6 +500,16 @@ class Drawing:
         except DesignError:
             return
         self._operation(layer["id"]).add_reference(node)
+
+    def _dots_layer(self):
+        """The Dots layer to put points in — the first one there is, or a new one."""
+        for operation in self.elements.ops():
+            if str(getattr(operation, "type", "")) == "op dots" and not self._is_board_layer(
+                operation
+            ):
+                return operation
+        made = self.create_operation("dots")
+        return self._operation(made["id"])
 
     def _is_board_layer(self, operation) -> bool:
         """
@@ -488,6 +553,12 @@ class Drawing:
                     )
                 row += f" -x {_mm(size)} -y {_mm(size)}"
             return row
+        if kind == "point":
+            # There is no `point` console command in the engine (checked: no
+            # `console_command("point"` anywhere in `core/elements/`), so this one kind is
+            # made as a node. `_command` still owns the decision, and `create` sees a node
+            # appear either way.
+            return None
         if kind == "circle":
             return f"circle {_mm(v['cx_mm'])} {_mm(v['cy_mm'])} {_mm(v['r_mm'])}"
         if kind == "ellipse":
@@ -1596,6 +1667,27 @@ class Drawing:
             for reference in list(old.children)
             if getattr(reference, "node", None) is not None
         ]
+        # Not every kind takes every shape, and the ones it will not take are dropped by
+        # `add_reference` without a word. Measured before this refusal existed: a cut layer
+        # holding one rectangle, changed to Dots, answered `200 {"elements": 1}` — claiming
+        # it had carried the rectangle over — and the new layer held nothing. The shape was
+        # not lost (it stays on the bed, layerless), but the answer was untrue and the
+        # screen said nothing, so the reader was left with an empty layer that refuses
+        # everything and a preview saying there is nothing to burn. That is where this
+        # question came from.
+        #
+        # Refusing rather than dropping, because emptying somebody's layer is not a side
+        # effect: they can take the shapes out themselves, and then it is their decision.
+        unwanted = [node for node in shapes if not _may_hold(kind, node)]
+        if unwanted:
+            raise DesignError(
+                f"{len(unwanted)} shape{'s' if len(unwanted) != 1 else ''} in this layer "
+                f"cannot go into a {self.LAYER_NAMES.get(kind, kind)} layer: it burns "
+                "single points, so a point is the only thing it takes. Take those shapes "
+                "out of the layer first, or make a new layer for them.",
+                code="layer.typeWontHold",
+                values={"n": len(unwanted), "kind": self.LAYER_NAMES.get(kind, kind)},
+            )
 
         with self.elements.undoscope("Change layer type"):
             before = {id(o) for o in self.elements.ops()}

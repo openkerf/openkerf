@@ -1086,3 +1086,109 @@ def test_a_corner_size_too_large_is_refused(client):
 
     assert answer.status_code == 409
     assert "smaller size" in answer.json()["detail"]
+
+
+# ------------------------------------------------- a point, and the layer that burns it
+
+
+def test_a_dots_layer_says_what_it_takes_instead_of_dropping_it(client):
+    """
+    Reported by the user: set a layer to Dots and the shape in it falls out, the preview
+    says there is nothing left to burn, and adding a shape is impossible — with no reason
+    anywhere on screen.
+
+    The engine is right about all of it: `OpDotsNode._allowed_elements` is `("elem point",)`
+    (`core/node/op_dots.py:24`), and `add_reference` drops silently what is not in that
+    list. Our layer told two untruths on top of it, and this pins both.
+
+    Measured before: assigning a rectangle to a Dots layer answered `200 {"added": 1}`
+    while the layer held 0, and changing a cut layer with one rectangle into Dots answered
+    `200 {"elements": 1}` — claiming it had carried the shape over — with the new layer
+    holding nothing.
+    """
+    ids = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 40, "height_mm": 20},
+    ).json()["ids"]
+    made = client.post("/api/design/operations", json={"type": "dots"}).json()
+    dots = made.get("id") or made["operations"][-1]["id"]
+
+    refused = client.post(
+        "/api/design/assign", json={"operation_id": dots, "ids": ids}
+    )
+    assert refused.status_code == 409, refused.text
+    assert refused.headers["X-OpenKerf-Error"] == "layer.takesOnly"
+    said = refused.json()["detail"]
+    assert "point" in said and "Dots" in said, said
+
+    layer = next(
+        o for o in client.get("/api/design").json()["operations"] if o["id"] == dots
+    )
+    assert layer["element_ids"] == []
+
+
+def test_a_layer_holding_shapes_refuses_to_become_a_dots_layer(client):
+    """The other half: the shapes stay where they are, and the reason is said."""
+    ids = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 40, "height_mm": 20},
+    ).json()["ids"]
+    cut = client.post("/api/design/operations", json={"type": "cut"}).json()
+    cut_id = cut.get("id") or cut["operations"][-1]["id"]
+    client.post("/api/design/assign", json={"operation_id": cut_id, "ids": ids})
+
+    answer = client.post(f"/api/design/operations/{cut_id}/type", json={"type": "dots"})
+    assert answer.status_code == 409, answer.text
+    assert answer.headers["X-OpenKerf-Error"] == "layer.typeWontHold"
+    assert "1 shape" in answer.json()["detail"]
+
+    # Nothing moved and nothing was emptied.
+    layer = next(
+        o for o in client.get("/api/design").json()["operations"] if o["id"] == cut_id
+    )
+    assert layer["type"] == "op cut"
+    assert layer["element_ids"] == ids
+
+    # And an empty layer may still change, because there is nothing to lose.
+    empty = client.post("/api/design/operations", json={"type": "cut"}).json()
+    empty_id = empty.get("id") or empty["operations"][-1]["id"]
+    ok = client.post(f"/api/design/operations/{empty_id}/type", json={"type": "dots"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["type"] == "op dots"
+
+
+def test_a_point_can_be_drawn_and_lands_where_it_can_burn(client):
+    """
+    Until this existed the app offered a layer kind that nothing in the app could fill.
+
+    Measured: `type: "point"` answered `409 Unknown shape: point. Choose from circle,
+    ellipse, line, rect, text.` — while Dots sat in the layer-kind list beside the other
+    four. And a point may not be classified by its stroke colour like every other shape:
+    `op cut._allowed_elements` (`core/node/op_cut.py:46`) has no `elem point` in it, so
+    the colour route can only hand it to a layer that drops it. Measured before the
+    exception: a fresh point ended with `operation_ids []` beside a new cut layer holding
+    nothing.
+    """
+    answer = client.post(
+        "/api/design/elements", json={"type": "point", "x_mm": 25, "y_mm": 40}
+    )
+    assert answer.status_code == 201, answer.text
+    assert answer.json()["type"] == "elem point"
+
+    design = client.get("/api/design").json()
+    point = next(e for e in design["elements"] if e["type"] == "elem point")
+    # It has to be drawable and clickable: finite bounds, and not flagged broken.
+    assert point["broken"] is False
+    assert point["bounds"] is not None
+    assert len(point["operation_ids"]) == 1
+
+    layer = next(
+        o for o in design["operations"] if o["id"] == point["operation_ids"][0]
+    )
+    assert layer["type"] == "op dots"
+    assert layer["element_ids"] == [point["id"]]
+
+    # A second point joins the layer that is there rather than making another.
+    client.post("/api/design/elements", json={"type": "point", "x_mm": 30, "y_mm": 40})
+    again = client.get("/api/design").json()
+    assert len([o for o in again["operations"] if o["type"] == "op dots"]) == 1

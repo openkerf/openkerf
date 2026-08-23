@@ -306,7 +306,7 @@
 	/** Tools that put something in a place; snapping belongs with those. */
 	let tekengereedschap = $derived(
 		tool === 'rect' || tool === 'circle' || tool === 'line' || tool === 'text' ||
-			tool === 'pen' || tool === 'measure'
+			tool === 'point' || tool === 'pen' || tool === 'measure'
 	);
 
 	let frame = $state<HTMLElement | null>(null);
@@ -985,6 +985,11 @@
 			});
 		} else if (tool === 'circle') {
 			onDrawn?.({ type: 'circle', cx_mm: at.x, cy_mm: at.y, r_mm: half });
+		} else if (tool === 'point') {
+			// One click, one spot, and no size to give it — which is why it is the only
+			// tool here that ignores `half`. It lands in a Dots layer, because that is the
+			// only kind of layer that burns a point at all.
+			onDrawn?.({ type: 'point', x_mm: at.x, y_mm: at.y });
 		} else if (tool === 'line') {
 			// A line has two points: the first click sets the start, the second the end.
 			// Placing a fixed horizontal line made no sense.

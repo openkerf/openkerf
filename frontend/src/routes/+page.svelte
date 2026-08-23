@@ -417,7 +417,14 @@ import { SeriesStore } from '$lib/series.svelte';
 			await design.load();
 			// Back to selecting: one shape per click is more predictable than
 			// accidentally leaving a row of shapes behind.
-			tool = 'select';
+			//
+			// Except for a point, where a row of them is the whole idea: points are
+			// placed for perforating or for drill marks, and one alone is rarely the
+			// job. Measured on three clicks with the general rule in force: one point
+			// on the bed and the tool back on Select, so the second and third click
+			// selected instead of placing. Escape or the Select button ends it, and the
+			// rail shows which mode you are in, which is where a mode belongs.
+			if (shape.type !== 'point') tool = 'select';
 		}
 	}
 

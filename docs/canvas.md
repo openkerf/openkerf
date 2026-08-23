@@ -43,6 +43,7 @@ The rail on the left holds eight tools; one is active at a time.
 | **Rectangle** | Click the bed and a 20 mm square is placed there. |
 | **Circle** | Click the bed and a circle 20 mm across is placed there. |
 | **Line** | The first click sets the start, the second the end. The line follows the pointer in between. |
+| **Point — one spot, for a Dots layer** | One click, one spot, and no size to give it. It lands in a **Dots** layer — the only kind that burns a point — and the tool stays in hand, because points are placed in rows for perforating or for drill marks. Escape or the Select tool ends it. |
 | **Pen — click points, Enter finishes** | Click for a corner, press and pull for a curve. Enter or a double-click finishes it open; clicking back on the first point closes it; Escape throws away what you had. |
 | **Text** | Click the bed and the **Place text** window opens, with the text itself, **Height (mm)**, **Letter spacing** and **Alignment**. |
 | **Measure** | Two clicks; the distance in millimetres stays on the bed until you start again. |

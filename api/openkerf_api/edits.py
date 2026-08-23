@@ -72,6 +72,47 @@ def _mm(value: float) -> str:
     return f"{value:.4f}mm"
 
 
+# What a layer will take, in the words a reader uses for it. The engine keeps the list of
+# element types per operation class (`_allowed_elements`), which is the authority; this is
+# only the naming, and only for the kinds whose list is narrower than "any shape".
+_ONLY_TAKES = {"op dots": "point"}
+
+# The names of the layer kinds, as the interface writes them.
+_LAYER_KINDS = {
+    "op cut": "Cut",
+    "op engrave": "Engrave",
+    "op raster": "Engrave (raster)",
+    "op image": "Image",
+    "op dots": "Dots",
+}
+
+
+def _layer_kind(operation) -> str:
+    return _LAYER_KINDS.get(str(getattr(operation, "type", "")), "This")
+
+
+def _takes_only(operation, n: int) -> str:
+    """Why a shape did not go in, said in one sentence with a way out."""
+    kind = _layer_kind(operation)
+    takes = _ONLY_TAKES.get(str(getattr(operation, "type", "")))
+    if takes == "point":
+        return (
+            f"A {kind} layer burns single points, so a point is the only thing it takes; "
+            f"{n} shape{'s' if n != 1 else ''} stayed out of it. Place points with the "
+            "point tool, or choose another kind of layer for these shapes."
+        )
+    allowed = ", ".join(
+        str(name).replace("elem ", "")
+        for name in getattr(operation, "_allowed_elements", ()) or ()
+    )
+    if allowed:
+        return (
+            f"A {kind} layer takes only {allowed}; {n} shape"
+            f"{'s' if n != 1 else ''} stayed out of it."
+        )
+    return f"{n} shape{'s' if n != 1 else ''} did not go into this layer."
+
+
 def _ids(value) -> list[str]:
     if isinstance(value, str):
         value = [value]
@@ -199,14 +240,38 @@ class DesignEditor:
         operation = self._operation(operation_id)
         nodes = [self._node(node_id) for node_id in _ids(element_ids)]
 
-        added = 0
+        added, refused = 0, []
         with self.elements.undoscope("Assign to operation"):
             for node in nodes:
-                if not self._referenced(operation, node):
-                    operation.add_reference(node)
+                if self._referenced(operation, node):
+                    continue
+                operation.add_reference(node)
+                # `add_reference` is not a promise. Every operation carries a list of the
+                # element types it will take (`_allowed_elements`), and a dots operation
+                # takes `("elem point",)` and nothing else (`core/node/op_dots.py:24`), so
+                # a rectangle handed to it is dropped without a word. Measured before this
+                # was counted: assigning a rectangle to a dots layer answered
+                # `200 {"added": 1}` while the layer held nothing — and the user, who was
+                # trying exactly that, was left with "it is impossible to add shapes to
+                # that layer" and no reason anywhere on screen.
+                if self._referenced(operation, node):
                     added += 1
+                else:
+                    refused.append(node)
         self._refresh()
-        return {"operation_id": operation_id, "added": added}
+        if refused and not added:
+            raise DesignError(
+                _takes_only(operation, len(refused)),
+                code="layer.takesOnly",
+                values={"n": len(refused), "kind": _layer_kind(operation)},
+            )
+        answer = {"operation_id": operation_id, "added": added}
+        if refused:
+            # Part of a selection landing and part not is not an error — the shapes that
+            # fit are in — but it may not be silent either.
+            answer["refused"] = len(refused)
+            answer["why"] = _takes_only(operation, len(refused))
+        return answer
 
     def unassign(self, element_ids, operation_id: str) -> dict:
         operation = self._operation(operation_id)

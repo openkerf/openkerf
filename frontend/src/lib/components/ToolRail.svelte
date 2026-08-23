@@ -1,5 +1,14 @@
 <script lang="ts">
-	export type Tool = 'select' | 'nodes' | 'measure' | 'pen' | 'rect' | 'circle' | 'line' | 'text';
+	export type Tool =
+		| 'select'
+		| 'nodes'
+		| 'measure'
+		| 'pen'
+		| 'rect'
+		| 'circle'
+		| 'line'
+		| 'point'
+		| 'text';
 
 	import { saveFile } from '$lib/saving';
 	import { t } from '$lib/i18n/index.svelte';
@@ -66,6 +75,14 @@
 		{ id: 'rect', label: t('rail.tool.rect'), path: 'M4 6h16v12H4z' },
 		{ id: 'circle', label: t('rail.tool.circle'), path: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z' },
 		{ id: 'line', label: t('rail.tool.line'), path: 'M4 20L20 4' },
+		// A ring around a filled centre, and not a plain dot: at 18 px a single dot is a
+		// smudge, and the ring says "one spot" the way a crosshair does. Beside Line
+		// because a point is what is left of a line.
+		{
+			id: 'point',
+			label: t('rail.tool.point'),
+			path: 'M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z'
+		},
 		{ id: 'pen', label: t('rail.tool.pen'), path: 'M4 20l4-1 11-11-3-3L5 16z' },
 		{ id: 'text', label: t('rail.tool.text'), path: 'M5 6h14M12 6v13' },
 		{ id: 'measure', label: t('rail.tool.measure'), path: 'M3 15L15 3l6 6L9 21z M7 11l2 2M11 7l2 2' }
