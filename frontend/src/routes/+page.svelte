@@ -178,6 +178,8 @@ import { SeriesStore } from '$lib/series.svelte';
 		await loadImageState();
 	}
 	let libraryOpen = $state(false);
+	// Which layer a setting should land on, when the library was opened from one.
+	let libraryLayer = $state<string | null>(null);
 	let generatorsOpen = $state(false);
 	let clipartOpen = $state(false);
 	let seriesOpen = $state(false);
@@ -1607,6 +1609,14 @@ import { SeriesStore } from '$lib/series.svelte';
 					{series}
 					onRotate={rotate}
 					onAssign={assign}
+					onChooseMaterial={(id) => {
+						// From the layer to the library, which is the direction the question
+						// comes from: this shape has to be cut, so what is it made of? The
+						// layer travels along, so the window opens with Apply already
+						// pointed at it and one tap does the rest.
+						libraryLayer = id;
+						libraryOpen = true;
+					}}
 					onLayerChange={() => design.load()}
 					onUnlock={() => lockSelection(false)}
 					box={design.liveBox}
@@ -1975,6 +1985,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		operations={design.operations}
 		sheetMaterialId={sheets.active?.material_id ?? null}
 		sheetMaterialName={sheetMaterial}
+		targetLayer={libraryLayer}
 		{canEdit}
 		onApplied={() => design.load()}
 		token={token()}

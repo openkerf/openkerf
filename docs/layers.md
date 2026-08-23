@@ -45,7 +45,16 @@ layer will do nothing.
 Clicking the coloured chip unfolds the layer's settings. Right-clicking the row,
 or clicking **⋯**, opens the row menu: **Select the shape in this layer**, **Put
 selection in this layer**, **Burns along**, **Visible on the canvas**, **Burn
-earlier**, **Burn later**, **Settings…** and **Remove layer**.
+earlier**, **Burn later**, **Settings…**, **Choose a material setting…** and
+**Remove layer**.
+
+**Choose a material setting…** is the short way to the question this panel raises:
+this shape has to be cut — what is it made of? It opens the material library with
+**Apply to** already pointing at this layer, so finding the setting and pressing
+**Apply** is all that is left. The other direction still works, and is the one to
+use when you are comparing settings rather than dressing one layer: open the
+library yourself and pick the layer there. Greyed out without a token, and on a
+test board's own layers, whose speeds are the trial.
 
 With more than one layer in the list there is also a **List** button for the whole
 list, and a density switch that reads **Compact** or **Roomy**. Compact puts the

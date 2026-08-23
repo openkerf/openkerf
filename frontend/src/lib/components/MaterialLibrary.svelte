@@ -29,6 +29,7 @@
 		canEdit = false,
 		sheetMaterialId = null,
 		sheetMaterialName = null,
+		targetLayer = null,
 		onApplied,
 		onMakeGrid,
 		onReadBoard,
@@ -42,6 +43,8 @@
 		 *  machine, not for everything you have ever burned. */
 		sheetMaterialId?: number | null;
 		sheetMaterialName?: string | null;
+		/** The layer Apply should point at, when this window was opened from one. */
+		targetLayer?: string | null;
 		onApplied?: () => void;
 		/** Opens the test grid dialog for this material. */
 		onMakeGrid?: (materialId: number | null) => void;
@@ -66,6 +69,16 @@
 		power_percent: ''
 	});
 	let targetOperation = $state<string>('');
+
+	// Opened from a layer's own menu: then Apply points at that layer and not at
+	// whichever one happens to be first. Guarded on the layer still existing, because
+	// this window outlives the drawing it was opened over — delete the layer while the
+	// library is open and the target would name nothing.
+	$effect(() => {
+		if (targetLayer && operations.some((o) => o.id === targetLayer)) {
+			targetOperation = targetLayer;
+		}
+	});
 	let editing = $state<number | null>(null);
 	let herkomst = $state<number | null>(null);
 	let weghalen = $state<number | null>(null);

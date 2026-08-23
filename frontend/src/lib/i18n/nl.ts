@@ -336,6 +336,7 @@ export const nl: Catalogue = {
 	'explain.rescue': 'Ook wat buiten beeld ligt en niet aan te klikken is',
 	'explain.burns': 'Uit betekent: deze laag gaat de machine niet in',
 	'explain.visible': 'Verandert niets aan de job',
+	'explain.layerMaterial': 'Opent de materiaalbibliotheek met deze laag als doel, zodat één tik de snelheid en het vermogen erop zet.',
 	'explain.layerSettings': 'Naam, snelheid, vermogen, passes, kleur',
 	'explain.layerRemove': 'De vormen blijven op het bed staan',
 	'explain.nodeAdd': 'Halverwege het stuk na dit knooppunt. Met een dubbelklik op de lijn zet je er een precies waar je klikt.',
@@ -352,6 +353,7 @@ export const nl: Catalogue = {
 	'layerMenu.visible': 'Zichtbaar op het canvas',
 	'layerMenu.earlier': 'Eerder branden',
 	'layerMenu.later': 'Later branden',
+	'layerMenu.material': 'Een materiaalinstelling kiezen…',
 	'layerMenu.settings': 'Instellingen…',
 	'layerMenu.remove': 'Laag verwijderen',
 

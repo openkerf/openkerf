@@ -1012,6 +1012,7 @@ export type LayerHandlers = {
 	up: () => void;
 	down: () => void;
 	openSettings: () => void;
+	chooseMaterial: () => void;
 	remove: () => void;
 };
 
@@ -1081,6 +1082,18 @@ export function layerMenu(ctx: LayerContext, h: LayerHandlers): Menu {
 					label: t('layerMenu.settings'),
 					explain: t('explain.layerSettings'),
 					run: h.openSettings
+				},
+				{
+					// The way in that was missing. Applying a setting ran one way only —
+					// open the library, and pick the layer *there* from an "Apply to"
+					// dropdown — while the question arises the other way round: you have a
+					// shape that has to be cut, so you go to its layer and want to say what
+					// it is made of. Asked by the user, who had to ask how it was done.
+					id: 'layer-material',
+					label: t('layerMenu.material'),
+					off: cannot ?? locked,
+					explain: t('explain.layerMaterial'),
+					run: h.chooseMaterial
 				}
 			]
 		},

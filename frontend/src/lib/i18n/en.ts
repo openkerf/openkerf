@@ -345,6 +345,7 @@ export const en = {
 	'explain.rescue': 'Including what lies off screen and cannot be clicked',
 	'explain.burns': 'Off means: this layer does not go to the machine',
 	'explain.visible': 'Changes nothing about the job',
+	'explain.layerMaterial': 'Opens the material library with this layer as the target, so one tap puts the speed and power on it.',
 	'explain.layerSettings': 'Name, speed, power, passes, colour',
 	'explain.layerRemove': 'The shapes stay on the bed',
 	'explain.nodeAdd': 'Halfway along the piece after this node. A double-click on the line puts one exactly where you click.',
@@ -361,6 +362,7 @@ export const en = {
 	'layerMenu.visible': 'Visible on the canvas',
 	'layerMenu.earlier': 'Burn earlier',
 	'layerMenu.later': 'Burn later',
+	'layerMenu.material': 'Choose a material setting…',
 	'layerMenu.settings': 'Settings…',
 	'layerMenu.remove': 'Remove layer',
 

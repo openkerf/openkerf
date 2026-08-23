@@ -26,6 +26,7 @@
 		canEdit = false,
 		onRotate,
 		onAssign,
+		onChooseMaterial,
 		onLayerChange,
 		onUnlock,
 		onArrange,
@@ -53,6 +54,8 @@
 		canEdit?: boolean;
 		onRotate?: (angleDeg: number) => void;
 		onAssign?: (operationId: string, assigned: boolean) => void;
+		/** Opens the material library with this layer as the target of Apply. */
+		onChooseMaterial?: (operationId: string) => void;
 		onLayerChange?: () => void;
 		/** Unlock the selection — the one verb a lock may not refuse. */
 		onUnlock?: () => void;
@@ -437,6 +440,7 @@
 					up: () => moveLayer(op.id, 'up'),
 					down: () => moveLayer(op.id, 'down'),
 					openSettings: () => (editingLayer = op.id),
+					chooseMaterial: () => onChooseMaterial?.(op.id),
 					remove: () => (confirmDrop = op.id)
 				}
 			)

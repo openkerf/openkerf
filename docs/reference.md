@@ -298,6 +298,7 @@ The same menu opens from the "…" button on a layer row in the Layers tab.
 | Burn earlier | One place up in the burn order | `layer-up` |
 | Burn later | One place down in the burn order | `layer-down` |
 | Settings… | "Name, speed, power, passes, colour" | `layer-settings` |
+| Choose a material setting… | Opens the material library with this layer as the target of **Apply**: "Opens the material library with this layer as the target, so one tap puts the speed and power on it." | `layer-material` |
 | Remove layer | Red. "The shapes stay on the bed." | `layer-remove` |
 
 ## Right-click on a row in the material library
