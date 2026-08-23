@@ -130,6 +130,200 @@ The caption never makes the board wider than its squares plus the row labels. It
 until it fits, and only breaks onto a second line when shrinking further would make it
 unreadable.
 
+## A board that says who it is, and a tile you can keep
+
+Two more things a board can carry. Both were built this round, both are in the engine, and
+**neither is on the form yet** — today they are asked for through the API, on
+`POST /api/library/testgrids`, with `code_enabled` and `cutout_enabled`. And neither has
+ever been burned: not one board with a code or a cut-out has come out of a machine, on any
+material. The numbers below are measured on pixels and on the engine's own cut plan, not on
+wood. Read them as a starting point, exactly the way you would read somebody else's speed
+and power.
+
+### The code, and what it is for
+
+Every board has a name of its own — eight characters, minted when the board is planned, kept
+for as long as the row exists. Boards that predate this round were given one too, so every
+board in your library already has a name whether or not it is burned on the plank.
+
+That name can be burned on the board as a QR code saying `OK1:7X4MQB2K`. When it is, the
+same name goes on the end of the caption line in a form a person can read — `7X4M QB2K` —
+so a board whose code is scuffed or badly lit can still be identified by eye.
+
+The reason is a repair, not a feature. Of the thirty-two boards in the author's own library,
+**eleven are physically indistinguishable from another one** — same material, same square
+size, same sweep, burned minutes apart. By the time the wood is off the machine, filing the
+photograph is guesswork, and guessing wrong writes somebody else's numbers into a setting
+that then carries the wrong photograph as its evidence. A board that says who it is takes
+the guess out: photograph it, and the picture finds its own row.
+
+The characters are Crockford's base32 — the alphabet without I, L, O and U, because those
+are precisely the ones somebody mistypes off a plank, and the line printed in the caption is
+meant to be read back by a person.
+
+### How big it has to be, and why
+
+The default is **18 mm** square, quiet zone included. That is not a round number picked for
+looks:
+
+- A board name is always 21 modules of QR, **29 with the four-module quiet zone** the
+  standard asks for — measured over 300 minted names, always exactly that, so the footprint
+  of a code never changes.
+- 18 mm over 29 modules is a **0.62 mm module**, which clears the rule of thumb that a
+  module wants to be at least three kerfs wide.
+- Of those 18 mm, 4.97 mm is quiet zone and the pattern itself is 13.03 mm. The quiet zone
+  is not decoration: through a simulated photograph, four modules of margin decoded 20 of
+  20 where two decoded 16 of 20 — and **zero never decoded at all**, at any resolution
+  from 1 to 12 pixels per module.
+
+How big it has to be in the *photograph* was measured by reading back what the machine
+actually gets: the real rasteriser at 167 dpi, an 86 × 86 pixel bitmap, upscaled onto a
+300 mm plank, tilted 5°, blurred and saved as JPEG at quality 85, forty different names at
+each size.
+
+| The photograph is | Names decoded |
+| --- | --- |
+| 1200 px across | 34 of 40 |
+| 1600 px across | 36 of 40 |
+| 2000 px across and up | 40 of 40 |
+
+Any phone takes a 2000 px picture. What does *not* work is the 1600 px copy that travels
+with a contribution — so a code is read off the upload, never off a downsized copy.
+
+Which decoder matters more than the size: on the same picture the plain OpenCV detector read
+1 of 10 where the Aruco detector read 9 of 10, because a board's own grid of dark squares is
+exactly what the plain one loses a code in. A board photograph always has those squares, so
+OpenKerf asks Aruco first.
+
+Below 14 mm the code is drawn with a warning — *A 13 mm code has 0.45 mm modules;
+photograph the board from close by, or make the code bigger.* — and below 12 mm it is
+refused outright:
+
+> A board code smaller than 12 mm cannot be read back; 11 mm was asked for.
+
+A code that cannot be read is not a smaller version of the feature; it is burn time and a
+board that still cannot say who it is.
+
+### Where it goes on the board, and what it costs
+
+Bottom right, outside the squares, in a strip the board grows for it: the code plus a 2 mm
+gap, so 20 mm of extra board at the default size. Growing the board rather than fitting the
+code inside it is what makes the bed check, the frame and the cut-out cover the code without
+being told about it. Bottom right because the caption and both sets of axis labels are up in the
+top-left corner, which makes it the only corner with nothing else burning near the quiet
+zone, and because it is outside the block of squares you drag the four alignment handles
+onto.
+
+It burns in a raster layer of its own, called **Board code**, at 167 dots per inch and at
+the caption layer's own speed. Both of those are pinned rather than settable, and the reason
+is arithmetic: at the engine's default 500 dpi the same code costs 46.4 s, which nearly
+doubles a small board. At 167 dpi — 0.15 mm a line, about four overlapping lines across a
+0.62 mm module — it is 15.8 s.
+
+It has to be a raster layer. An engrave layer traces outlines and never looks at a fill, so
+the same 212 filled modules come out of the machine as 212 little outlines with unburned
+wood inside each one, and nothing on earth reads that. Measured through the engine's own
+plan: one raster object against 848 cut objects. On an engine with no rasteriser at all the
+code is refused rather than drawn:
+
+> This engine cannot burn a raster layer, so it cannot burn a board code either. Leave the code off, or install a rasteriser.
+
+Measured on a four-by-four board through the real cut plan: **56.9 s and 17 layers** plain,
+**73.8 s and 18 layers** with the code.
+
+A board of small squares can run out of room for it, and that is said while the numbers are
+still on screen rather than after the button:
+
+> A 18 mm code does not fit beside 12 mm of board; use bigger or more squares, or a smaller code.
+
+### Reading it back off a photograph
+
+With a code on the board, a photograph does not need to be told which board it is of. There
+is a route that takes a picture with no board named — it decodes the code and files the
+picture against the board it names. And the ordinary per-board upload now refuses a
+photograph whose code names a *different* board of your library:
+
+> The code in this photograph says board 7X4M QB2K; you picked R8KA C1HX. File it under 7X4M QB2K, or pick that board here.
+
+That is the mix-up the whole thing exists for, and it is the one mistake that cannot be
+repaired later: the picture would sit under a row it is not of, and every setting drawn from
+it would carry it as evidence.
+
+Three more answers, because each sends you somewhere else: no code in the picture — *No code
+was found in this photograph. Choose the board it belongs to yourself, or photograph the code
+more squarely.*; a code this library does not know — *The code in this photograph says board
+7X4M QB2K, and this library holds no board of that name. It belongs to another library, or
+the picture caught a code that is not a board.*; and two boards in one frame — *This
+photograph holds the codes of more than one board (7X4M QB2K and R8KA C1HX). Photograph one
+board at a time, so the picture is evidence for the board it is filed under.*
+
+Reading a code needs OpenCV, which is not part of the engine's own installation. Without it
+the board still burns its code and everything else still works; only the reading back is
+gone, and it says so: *Reading codes from photographs needs OpenCV. Install it beside the
+engine with 'pip install opencv-python-headless'. Choose the board yourself for now.*
+
+A code that reads back but names nothing in this library is deliberately left alone: eight
+characters of that alphabet is not a rare thing for a stranger's QR sticker to survive, and
+blocking a perfectly good picture over one in the corner of the frame would be worse than
+ignoring it.
+
+One thing the printed name cannot do yet: the board picker in step 3 does not search on it,
+so with no camera and no OpenCV you are still choosing the board off its date, material and
+operation the way you always did.
+
+![The bed with a test board drawn on it: four rows of four squares with the power percentages above the columns and the speeds beside the rows, and the caption across the top — "Cut trial", the material, the thickness, the operation, which way the two axes run, the date, and on its own last line the board name 7X4M QB2K. Below the squares, at the bottom right of the board, a QR code.](images/41-board-code.png)
+
+### Cutting the tile loose
+
+The other thing a board can carry is a cut around itself, so the finished board comes out of
+the sheet as a tile you keep — flat, photographable, filable in a drawer beside the others.
+
+What it draws is one rectangle **4 mm outside everything else on the board**, in a cut layer
+of its own called **Test board cut-out**. Four millimetres and not the two the engraved
+border uses, because the engraved border *is* the board's outer box — a cut at the border's
+own padding would run along the frame. Four is also a rim you can hold, and one that survives
+the char of its own cut.
+
+That margin is what "does the board fit on the bed?" is now measured on. It has to be: on the
+default form the board's own left edge sits 0.4 mm from the edge of the bed, so a cut-out
+asked for there would run 3.6 mm off the bed while every number on the form said the board
+fitted. Without a cut-out the two rectangles are the same and nothing changes.
+
+**The tile hangs on four tabs until you snap it out.** Four gaps of 2 mm, one in the middle
+of each side, through the engine's own bridge mechanism — so the cut plan, the time estimate
+and the stream to the machine all get the gaps for free. They are not optional, and that is
+the point of the layer order: a tile that comes free while the sweep is still running
+shifts, and the rest of the squares then burn on a moving target. That is a board you cannot
+read and material you cannot get back.
+
+For the same reason the cut layer is created **last**, so it burns last — and it is moved to
+the end again every time another board asks for one, because creation order alone gets a
+*second* board wrong: board one's tile would come free while board two is still being
+engraved.
+
+The rim is cut with a cut setting from your own library, for this material, this thickness
+and this machine — the one you used most recently. It is refused when there is none, rather
+than guessed:
+
+> There is no cut setting for this material
+
+with the thickness named when there is one, and the thicknesses you *do* have listed after
+it. Guessing here would cut the rim at a speed nobody has ever burned, on the very plank
+whose purpose is to find out what that speed is. A cut setting for another thickness is not
+offered either: half-cutting the rim leaves the tile in the sheet with a crack line through
+it, which is worse than not cutting at all. Cutting loose also needs a material at all:
+*Cutting the tile loose needs a material, so its cut setting can be looked up.*
+
+Measured on the same four-by-four board: **109.9 s and 19 layers** with both the code and
+the cut-out, against 73.8 s with the code alone and 56.9 s with neither. A rim is not free.
+
+One thing worth knowing before you use it. On a loose tile the most obvious rectangle in the
+photograph is the tile's own edge, roughly 20 mm outside the squares — and dragging the four
+alignment handles onto *that* puts every square in the wrong place without a word of
+complaint. So a board you intend to cut loose is a board that wants a code on it.
+
+![The bed with a test board drawn on it and a rectangle around the whole board, four millimetres clear of it, with a small gap in the middle of each of its four sides. In the Layers tab beside it three layers, in burn order: the one holding the caption and the axis labels (named "Raster-labels" on screen), then "Board code", and last "Test board cut-out" at 12 mm/s and 65% — the cut setting looked up from the library rather than guessed.](images/42-board-tile.png)
+
 ## Where the board lies
 
 **Measure the position from** offers **The top-left corner of the board** or **The centre

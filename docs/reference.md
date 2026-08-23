@@ -300,6 +300,35 @@ The same menu opens from the "…" button on a layer row in the Layers tab.
 | Settings… | "Name, speed, power, passes, colour" | `layer-settings` |
 | Remove layer | Red. "The shapes stay on the bed." | `layer-remove` |
 
+## Right-click on a row in the material library
+
+The **Material library** window has two lists and both of them carry the same **⋯** at the
+end of a row, opening the same menu a right-click on the row does. They are not canvas
+operations, so they are not in `actions.ts` and have no shortcuts; they are here because
+this page is where you look up what a menu holds. The whole of it is on
+[The material library](library.md).
+
+On a setting:
+
+| Row | What it does |
+|---|---|
+| Apply to layer {n} | Puts this speed and power on that layer. Reads "Apply" when there is no layer to name. |
+| Provenance and evidence | Unfolds where the numbers came from, with the photo of the board — explanation "Where these values come from" |
+| Adjust the values | Speed, power, line spacing, passes, thickness, note and machine profile. Material, operation and source stay fixed. |
+| Make a test grid for {material} | Opens the test grid window with this material filled in |
+| Share with Presetariat | Opens a pre-filled proposal for the shared catalogue in a new tab |
+| Remove setting | Red, and at the bottom. Asks under the row, and says when the setting was measured. |
+
+On a material:
+
+| Row | What it does |
+|---|---|
+| Show only this material | The same narrowing as the checkbox in the header |
+| Make a test grid | Opens the test grid window with this material filled in |
+| Rename this material… | The name, and the other names it answers to |
+| Merge into another material… | Moves the settings, boards, recipes and photographs onto another material |
+| Remove this material | Red, and at the bottom. Counts what would go before it asks. |
+
 ## When an operation is greyed out
 
 A grey button always says why, in its tooltip. These are all the reasons:
@@ -326,6 +355,8 @@ A grey button always says why, in its tooltip. These are all the reasons:
 | This is the last node; there is no piece after it | The end of an open line has nothing leaving it to bend or divide |
 | A closed shape needs three nodes | Removing this one would leave no shape behind |
 | A line needs two nodes | The same, for an open line |
+| Make a layer in the Layers tab first | Applying a setting needs a layer to put it on |
+| There is only one material to merge | Merging needs a second material to merge into |
 
 On the tool rail the same rule applies with its own wording: a tool you cannot
 use reads "{name} — requires a token", and every tool except Select is off
@@ -423,6 +454,20 @@ on a cylinder**, the kind of rotary with its diameter or circumference, the Y
 scale, a calibration from a burned line, and the ten steps to work through at the
 laser. While it is on, homing is refused and the pre-flight says the rotary is on
 before every start. The whole of it is on [The rotary](rotary.md).
+
+## What kind of laser it is, and how strong
+
+Machine-wide as well, and asked once: **Machine → Your machines → Settings**, under the
+fieldset **The laser itself**. It holds **Kind of laser** — "CO2 with a glass tube", "CO2
+with an RF metal tube", "Diode", "Fibre", "UV" or "I do not know" — the **Tube power** in
+watts, with the tick box "I am not sure how powerful my tube is" as a real answer, and the
+**Lens** in mm. The wizard asks all three on its **Set up** screen; the material library
+offers the same three for the machine you are on.
+
+They decide one thing: which settings measured on somebody else's laser can be a starting
+point for yours. Without them nothing matches at all. See [Getting
+started](getting-started.md#setting-up-the-machine) and [The material
+library](library.md#starting-points-from-the-shared-catalogue).
 
 ## The camera
 
