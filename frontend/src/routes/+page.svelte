@@ -1909,7 +1909,15 @@ import { SeriesStore } from '$lib/series.svelte';
 <Series
 	bind:open={seriesOpen}
 	{series}
+	{sheets}
+	{library}
 	{canEdit}
+	onEditMaterial={() => {
+		// One modal at a time: the material dialog is a decision you make once, and two
+		// stacked windows leave the reader guessing which Escape closes what.
+		seriesOpen = false;
+		materialOpen = true;
+	}}
 	onChanged={() => design.load()}
 	onDeleteShape={async (id) => {
 		// `.ok` and not the result itself: an EditResult is an object and therefore

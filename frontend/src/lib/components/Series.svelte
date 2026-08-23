@@ -57,16 +57,31 @@
 	import type { Menu as MenuList } from '$lib/actions';
 	import { findColumn, columnsUsed, reservedColumn } from '$lib/series';
 	import type { SeriesRequest, SeriesStore } from '$lib/series.svelte';
+	import type { SheetStore } from '$lib/sheets.svelte';
+	import type { LibraryStore } from '$lib/library.svelte';
 
 	let {
 		open = $bindable(),
 		series,
+		sheets,
+		library,
 		canEdit = false,
 		onChanged,
-		onDeleteShape
+		onDeleteShape,
+		onEditMaterial
 	}: {
 		open: boolean;
 		series: SeriesStore;
+		/**
+		 * The sheets, because the plate this window lays out *is* the active sheet: how
+		 * many pieces fit is measured against its size, so its size has to be readable
+		 * and changeable from here. The sheet stays the one source — this is a second
+		 * door to it, exactly as the sheet editor's material button is a second door to
+		 * the top bar's dialog.
+		 */
+		sheets: SheetStore;
+		/** Only to put a name to the material the plate is made of. */
+		library: LibraryStore;
 		canEdit?: boolean;
 		/** After anything that moves the pointer or changes the list: the bed shows
 		 *  another name, so the canvas has to read the design again. */
@@ -80,6 +95,12 @@
 		 * half the time is worse than the sentence above the list, which says why.
 		 */
 		onDeleteShape?: (id: string) => Promise<void> | void;
+		/**
+		 * Open the top bar's material dialog. The same door the sheet editor uses, and
+		 * for the same reason (decision B1): the material of a sheet is chosen in one
+		 * place, whatever surface sends you there.
+		 */
+		onEditMaterial?: () => void;
 	} = $props();
 
 	/** Which of the two doors the rows come through. */
@@ -261,9 +282,12 @@
 		const margin = Number(plate.margin_mm);
 		const gap = Number(plate.gap_mm);
 		// `sum` is read so that filling, attaching another list or moving a shape asks
-		// again: how many fit depends on all three.
+		// again, and the plate's own size because that is what the pieces are counted
+		// against: how many fit depends on all four.
 		void sum?.row_count;
 		void sum?.step;
+		void sheets.active?.width_mm;
+		void sheets.active?.height_mm;
 		if (!open || !Number.isFinite(margin) || !Number.isFinite(gap)) return;
 		series.plan([], margin, gap);
 	});
@@ -285,6 +309,29 @@
 		const rest = rows % step;
 		return rest === 0 ? step : rest;
 	});
+
+	/** What the plate is made of, in the reader's own words. Null when nothing is set. */
+	const materialName = $derived.by(() => {
+		const sheet = sheets.active;
+		if (!sheet || sheet.material_id === null) return null;
+		const material = library.materials.find((one) => one.id === sheet.material_id);
+		if (!material) return null;
+		return sheet.thickness_mm === null
+			? material.name
+			: t('series.plate.materialThick', {
+					name: material.name,
+					thickness: i18n.number(sheet.thickness_mm)
+				});
+	});
+
+	/** Change the plate itself. The sheet is the one source; this is a door to it. */
+	async function resize(fields: Record<string, number>) {
+		const sheet = sheets.active;
+		if (!sheet) return;
+		const value = Object.values(fields)[0];
+		if (!Number.isFinite(value) || value < 5) return;
+		await sheets.update(sheet.id, fields);
+	}
 
 	/** Lay the piece out over the plate, then let the canvas read the design again. */
 	async function fillPlate() {
@@ -802,6 +849,49 @@
 			{#if attached}
 				<div class="blok plaat">
 					<h3>{t('series.plate')}</h3>
+					<!-- Which plate this is, and what it is made of. The sum below is measured
+					     against these three numbers, and a number you cannot check is a number
+					     you cannot trust — that is why they are here and not only under the
+					     sheet tab. -->
+					<p class="fine">
+						{#if laidOut}
+							<!-- The fields are gone once the plate is laid out, so the size comes
+							     back into the sentence: this is then the only place it is said. -->
+							{t('series.plate.sheet', {
+								name: sheets.active?.name ?? '',
+								size: t('series.plate.size', {
+									w: i18n.number(sheets.active?.width_mm ?? 0),
+									h: i18n.number(sheets.active?.height_mm ?? 0)
+								})
+							})}
+						{:else}
+							{sheets.active?.name ?? ''}
+						{/if}
+						· {materialName ?? t('sheets.materialNotFilled')}
+					</p>
+					{#if !laidOut}
+						<div class="paar">
+							<NumberField
+								label={t('series.plate.width')}
+								unit="mm"
+								step={10}
+								min={5}
+								value={String(sheets.active?.width_mm ?? '')}
+								onchange={(value) => void resize({ width_mm: Number(value) })}
+							/>
+							<NumberField
+								label={t('series.plate.height')}
+								unit="mm"
+								step={10}
+								min={5}
+								value={String(sheets.active?.height_mm ?? '')}
+								onchange={(value) => void resize({ height_mm: Number(value) })}
+							/>
+						</div>
+						<button class="btn subtle" type="button" onclick={() => onEditMaterial?.()}>
+							{materialName ? t('series.plate.material.change') : t('series.plate.material')}
+						</button>
+					{/if}
 					{#if series.plateError}
 						<p class="fine">{series.plateError}</p>
 					{:else if laidOut}

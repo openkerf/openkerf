@@ -2054,6 +2054,12 @@ export const nl: Catalogue = {
 	'series.skipBlank.cannot':
 		'Dit ontwerp neemt {n} rijen per brandbeurt, en een vol vel kan geen rij overslaan: de engine leest de rijen naast elkaar.',
 	'series.plate': 'Op één plaat',
+	'series.plate.sheet': '{name} meet {size} mm',
+	'series.plate.materialThick': '{thickness} mm {name}',
+	'series.plate.width': 'Breedte van de plaat',
+	'series.plate.height': 'Hoogte van de plaat',
+	'series.plate.material': 'Kies het materiaal',
+	'series.plate.material.change': 'Verander het materiaal',
 	'series.plate.size': '{w} × {h}',
 	'series.plate.fits': 'Een stuk van {piece} mm gaat {places} keer op deze plaat: {across} naast elkaar en {down} onder elkaar.',
 	'series.plate.more': 'De hele lijst is {burns} platen van deze, en op de laatste zijn {last} plekken in gebruik.',
