@@ -1117,6 +1117,40 @@ export const nl: Catalogue = {
 	'library.menu.share': 'Delen met Presetariat',
 	'library.menu.remove': 'Instelling verwijderen',
 	'library.share.failed': 'Delen lukte niet.',
+	'library.share.tier.measured': 'Dit gaat erin als meting, afgelezen van bord {board}.',
+	'library.share.tier.startingPoint': 'Dit gaat erin als startwaarde, niet als meting.',
+	'library.share.why.notMeasured':
+		'Deze waarden zijn van geen enkel bord afgelezen, dus de catalogus neemt ze als een beredeneerde gok.',
+	'library.share.why.derived':
+		'Deze waarden komen uit de catalogus zelf, uit {id}, dus ze gaan terug als een gok die op die regel leunt en niet als bewijs.',
+	'library.share.why.boardGone':
+		'Het bord achter deze instelling is er niet meer, en een meting in de catalogus wordt naar zijn bord teruggevolgd.',
+	'library.share.why.otherMachine':
+		'Deze instelling staat onder een andere laser dan het bord waarop hij gebrand is, dus voor deze machine is het een startwaarde.',
+	'library.share.why.noOutcome':
+		'Het bord is er nog, maar niemand heeft opgeschreven wat er uit het materiaal kwam, en een snelheid zonder uitkomst ernaast kan niemand anders beoordelen.',
+	'library.share.charring': 'De rand',
+	'library.share.charring.pick': '— zeg hoe de rand eruit kwam —',
+	'library.share.charring.none': 'Schoon, geen verkoling',
+	'library.share.charring.light': 'Licht verkoold',
+	'library.share.charring.heavy': 'Zwaar verkoold',
+	'library.share.cutThrough': 'Doorgesneden',
+	'library.share.cutThrough.unsure': 'Zeg ik liever niet',
+	'library.share.cutThrough.yes': 'Ja, het stuk kwam los',
+	'library.share.cutThrough.no': 'Nee, het bleef vastzitten',
+	'library.share.kerf': 'Kerf',
+	'library.share.outcome.why':
+		'Zeg hoe het eruit kwam en dit gaat erin als meting, met zijn bord erachter. Het blijft bij de instelling staan, dus het wordt één keer gevraagd.',
+	'library.share.handle': 'Je GitHub-handle',
+	'library.share.handle.placeholder': 'bijv. jelle-t',
+	'library.share.handle.why':
+		'De catalogus staat onder CC BY 4.0, dus bij elke regel staat wie hem aanbood — dat is de naamsvermelding die ieder die hem hergebruikt moet kunnen geven. Het wordt één keer gevraagd en blijft op deze computer staan.',
+	'library.share.by': 'Wordt aangeboden als {by}.',
+	'library.share.handle.change': 'Andere handle gebruiken',
+	'library.share.open': 'Open het voorstel op GitHub',
+	'library.share.open.why':
+		'Er opent een vooringevuld voorstel in een nieuw tabblad, zodat je zelf kunt lezen wat je gaat delen voordat iemand anders het leest.',
+	'library.share.close': 'Dit paneel sluiten',
 	'library.material.more.aria': 'Meer voor {material}',
 	'library.material.menu.rename': 'Dit materiaal een andere naam geven…',
 	'library.material.menu.merge': 'Samenvoegen met een ander materiaal…',
@@ -1765,6 +1799,7 @@ export const nl: Catalogue = {
 
 	// ── Phone view ────────────────────────────────────────────────────────────────
 	'phone.photoSaved': 'Foto opgeslagen. De preset haal je er op de desktop uit.',
+	'phone.photoFailed': 'De foto is niet opgeslagen. Houd het bord bij de hand en probeer het opnieuw.',
 	'phone.noConnection': 'Geen verbinding',
 	'phone.noMachine': 'geen machine',
 	'phone.cameraAlt': 'Camerabeeld van het bed',
@@ -2297,10 +2332,24 @@ export const nl: Catalogue = {
 		'Dit is de machine waarop je werkt; verhuis het andere profiel juist hiernaartoe.',
 	'api.library.machine.mergeTwoReal':
 		'Beide profielen horen bij een machine die bestaat. Twee lasers zijn niet één, en samenvoegen zou de metingen van de ene onder de andere zetten.',
+	'api.library.preset.kerfRange':
+		'De catalogus houdt een kerf tussen 0 en {max} millimeter, en deze is {kerf}.',
 	'api.library.adopt.noMachine':
 		'Er is geen machine actief, dus er is niets om deze instellingen aan te hangen.',
 	'api.presetariat.share.noWatt':
 		'Deze instelling hoort bij een machine waarvan het buisvermogen niet vastligt, dus niemand anders kan zien of hij op zijn eigen laser van toepassing is.',
+	'api.presetariat.share.noKind':
+		'Deze instelling hoort bij een machine waarvan het soort laser niet vastligt, en een CO2-instelling is geen startwaarde voor een diode.',
+	'api.presetariat.share.badHandle':
+		'Een GitHub-handle bestaat uit letters en cijfers, met losse streepjes ertussen en geen aan het begin of het eind.',
+	'api.presetariat.share.materialNameTooShort':
+		'De catalogus zoekt op de materiaalnaam, dus die heeft minstens twee tekens nodig; geef dit materiaal een andere naam voordat je zijn instellingen aanbiedt.',
+	'api.presetariat.share.outOfRange':
+		'De catalogus houdt {field} tussen {low} en {high}, en deze instelling zegt {value}.',
+	'api.presetariat.share.needsCharring':
+		'Zeg hoe de rand eruit kwam, want een snelheid en een vermogen zonder uitkomst ernaast kan niemand anders beoordelen.',
+	'api.presetariat.share.handleNotKept':
+		'Je handle kon niet op deze computer worden bewaard, dus hij wordt opnieuw gevraagd.',
 	'api.presetariat.badShape': 'Dit bestand ziet niet uit als een instellingencatalogus.',
 	'api.presetariat.tooNew':
 		'Deze catalogus komt uit een nieuwere versie van OpenKerf. Werk eerst bij.',

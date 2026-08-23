@@ -4,13 +4,19 @@ Making an imported drawing workable.
 Three actions that together solve one complaint: an OpenSCAD export arrives as
 one path with dozens of subpaths (nothing to click separately), lands in a
 raster layer through `classify_black_as_raster`, and next to that layer sit ten
-empty layers that the engine creates on start-up.
+empty layers.
+
+Where those ten come from was long put down to the engine's start-up, and it is not:
+the engine opens with no layers at all. They are the previous session's list, read back
+out of `operations.cfg` — see the upstream row in CLAUDE.md and
+`_operations_of_its_own` in `conftest.py`, which is what stops this suite writing that
+file for the developer's own app.
 """
 
 import pytest
 from fastapi.testclient import TestClient
 
-from openkerf_api.drawing import LABEL_LAYER, Drawing
+from openkerf_api.drawing import BOARD_LAYERS, LABEL_LAYER, Drawing
 from openkerf_api.edits import DesignEditor, DesignError
 from openkerf_api.server import ApiServer
 
@@ -144,13 +150,28 @@ def test_the_selection_ends_up_in_a_cut_layer_and_nowhere_else(kernel, drawing):
 
 
 def test_one_cut_layer_reuses_the_layer_that_is_already_there(kernel, drawing):
-    shape = drawing.create("rect", x_mm=10, y_mm=10, width_mm=20, height_mm=20)
+    """
+    A second shape sent to cut joins the cut layer instead of getting one of its own.
+
+    The cut layer has to be *put* there for that to be the thing under test, and until
+    now it was not: a clean kernel opens with no layers at all (measured: `ops()` is
+    empty), the first rectangle brings an engrave layer with it, and so the assertion
+    passed only when a cut layer had leaked in from an earlier test through
+    `operations.cfg` — which it did, until `_operations_of_its_own` closed that door. So
+    the first call below is the setup and the second is the measurement.
+    """
+    first = drawing.create("rect", x_mm=10, y_mm=10, width_mm=20, height_mm=20)
+    made = drawing.single_layer(first["ids"], kind="cut")
+    assert made["created"] is True, "the design had no cut layer to begin with"
+
+    second = drawing.create("rect", x_mm=50, y_mm=10, width_mm=20, height_mm=20)
     before = len(list(kernel.elements.ops()))
 
-    result = drawing.single_layer(shape["ids"], kind="cut")
+    result = drawing.single_layer(second["ids"], kind="cut")
 
     assert len(list(kernel.elements.ops())) == before
     assert result["created"] is False
+    assert result["operation_id"] == made["operation_id"]
 
 
 def test_one_cut_layer_makes_one_when_the_design_has_none(kernel, drawing):
@@ -299,13 +320,14 @@ def test_the_three_routes_do_what_the_methods_do(client, kernel):
     pruned = client.post("/api/design/operations/prune")
     assert pruned.status_code == 200, pruned.text
     assert pruned.json()["removed"] >= 1
-    # What is left holds work. One exception stays: the label layer of a test
-    # board, which belongs to the board and not to the user.
+    # What is left holds work. One exception stays: a layer of a test board, which
+    # belongs to the board and not to the user — under every name the caption layer
+    # has had, because a board drawn before the rename still carries the old one.
     with_work = {op.id for op in layers_with_live_work(kernel)}
     empty = [
         op.label for op in kernel.elements.ops() if op.id not in with_work
     ]
-    assert all(label == LABEL_LAYER for label in empty), empty
+    assert all(label in BOARD_LAYERS for label in empty), empty
     assert len(with_work) == 1
 
 

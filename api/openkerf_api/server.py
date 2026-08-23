@@ -58,6 +58,7 @@ from .sheets import Sheets
 from .starter import Starter
 from .tilerun import TileRun
 from .testgrid import (
+    LABEL_LAYERS,
     TestGridGenerator,
     cutout_setting,
     is_cel_element,
@@ -272,7 +273,14 @@ class ApiServer:
         self.machines = MachineManager(kernel, self.commands)
         self.library = Library(library_path or default_path(kernel))
         self.presetariat = Presetariat(
-            self.library, Path(self.library.path).with_name("presetariat-cache.json")
+            self.library,
+            Path(self.library.path).with_name("presetariat-cache.json"),
+            # Beside the library like the sheets and the palette, and for the same
+            # reason: it is about this installation and not about this project. Not
+            # *inside* the library, because a library is a file you hand to a colleague
+            # and who you are is not part of it. No `was`: this file never had a Dutch
+            # name.
+            handle_path=self._beside("openkerf-contributor.json"),
         )
         # The offer a machine with no settings gets, and the staging that answers it. It
         # holds no state of its own: the coverage is six counts over the library and the
@@ -1665,7 +1673,7 @@ class ApiServer:
         @app.post("/api/design/palette", dependencies=write)
         def use_palette_color(body: dict):
             """
-            Eén klik op een paletvakje.
+            One click on a palette swatch.
 
             With a selection: it moves to the layer of that colour, which is created if
             need be on what that colour did before. Without a selection: the colour for new
@@ -2972,14 +2980,41 @@ class ApiServer:
 
         @app.get("/api/presetariat/contribution/{preset_id}")
         def preset_contribution(preset_id: int):
-            """One of your own presets in catalogue form, with a prefilled proposal."""
+            """
+            One of your own presets in catalogue form, and what it still needs.
+
+            A read, so it is the call the share panel opens with: `ready`, `needs`,
+            `tier` and `tier_reason` say what would go out and under what label before
+            anything is written or any tab is opened. `preset` is null until the offer
+            would validate — the repository's CI is not the place to find out that the
+            app has never asked for a GitHub handle.
+            """
             return manage(self.presetariat.as_contribution, preset_id)
+
+        @app.post("/api/presetariat/contribution/{preset_id}", dependencies=write)
+        def offer_preset(preset_id: int, body: dict | None = None):
+            """
+            The two answers a contribution needs, and then the contribution.
+
+            Writes twice: the handle beside the library, so it is asked once, and the
+            outcome onto the setting, so a second offer of the same row does not ask
+            again and a library handed on carries its own evidence. Both are the reader's
+            own words about their own machine, and both are behind the token for that
+            reason.
+            """
+            fields = body or {}
+            return manage(
+                self.presetariat.offer,
+                preset_id,
+                fields.get("by"),
+                fields.get("result"),
+            )
 
         # ---------------------------------------------------------- testrasters
 
         def grid_fields(body: dict) -> dict:
             """
-            Wat het board aan het formulier toevoegt: machine, datum, material.
+            What the board adds to the form of its own accord: machine, date, material.
 
             Preview and reality use the same lines here. They have to: the caption decides
             how wide the board becomes, so a preview without a date reports a narrower board
@@ -3099,9 +3134,8 @@ class ApiServer:
             Saved generator settings under a name.
 
             T3 remembers the previous grid per material; this is the same in the plural, so
-            that "cut birch" and "engrave birch" can sit beside
-            kunnen bestaan. Dezelfde sleutels, zodat de wizard beide op
-            fills in the same way.
+            that "cut birch" and "engrave birch" can sit beside each other. The same keys as
+            T3 uses, so the form fills itself in from either of them the same way.
             """
             return manage(self.library.grid_recipes, material_id)
 
@@ -3150,7 +3184,7 @@ class ApiServer:
                             node.remove_node(children=True, destroy=True)
                             removed["operations" if key == "operation_id" else "elements"] += 1
                 for op in list(self.kernel.elements.ops()):
-                    if getattr(op, "label", None) == "Raster-labels" and not list(op.children):
+                    if getattr(op, "label", None) in LABEL_LAYERS and not list(op.children):
                         op.remove_node()
                 self.library.set_grid_group(grid_id, None)
                 self.kernel.elements.signal("rebuild_tree", "all")
@@ -3184,10 +3218,10 @@ class ApiServer:
             block an honest photograph.
 
             The bytes of the **upload**, never a stored copy. Measured on a synthetic board
-            photograph, an 18 mm code on a 300 mm board: 1600 px across the frame decoded 6
-            of 20, 2400 px decoded 20 of 20 (`boardcode.read` carries the table). A
-            contribution's copy is 1600 px, so anything that decoded that would be reading
-            the one size that does not work.
+            photograph, an 18 mm code on a 300 mm board: 1600 px across the frame decoded 16
+            of 40, 2000 px and up decoded 40 of 40 (the module docstring of `boardcode`
+            carries the table and the harness). A contribution's copy is 1600 px, so
+            anything that decoded that would be reading the one size that half works.
             """
             known, strangers = [], []
             for uid in boardcode.read(data):

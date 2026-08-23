@@ -11,12 +11,16 @@ from openkerf_api.edits import DesignError
 from openkerf_api.library import Library
 from openkerf_api.server import ApiServer
 from openkerf_api.testgrid import (
+    BOARD_LABEL,
+    BOARD_LAYERS,
     CODE_GAP_MM,
     CODE_LAYER,
     CUTOUT_LAYER,
     CUTOUT_TAB_MM,
     CUTOUT_TABS,
     LABEL_FONTS,
+    LABEL_LAYER,
+    LABEL_LAYERS,
     cell_polygon,
     cutout_setting,
     plan_grid,
@@ -235,7 +239,7 @@ def test_the_axes_are_labelled(kernel, client):
     client.post("/api/library/testgrids", json=BASE)
 
     snapshot = DesignReader(kernel).snapshot()
-    labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"]
+    labels = [op for op in snapshot["operations"] if op["label"] == LABEL_LAYER]
 
     assert labels, "there is a layer holding the axis labels"
     # One per row, one per column, plus the caption lines on the board.
@@ -252,7 +256,7 @@ def test_labels_sit_outside_the_grid(kernel, client):
     label_ids = {
         e
         for op in snapshot["operations"]
-        if op["label"] == "Raster-labels"
+        if op["label"] == LABEL_LAYER
         for e in op["element_ids"]
     }
     cell_ids = {c["element_id"] for c in grid["cells"]}
@@ -473,12 +477,12 @@ def test_removing_a_grid_clears_the_design_but_keeps_the_record(kernel, client):
 
 
 def test_removing_a_grid_takes_the_label_layer_too(kernel, client):
-    """Otherwise every generated grid leaves a Raster-labels layer behind."""
+    """Otherwise every generated grid leaves an empty caption layer behind."""
     grid = client.post("/api/library/testgrids", json=BASE).json()
 
     client.post(f"/api/library/testgrids/{grid['id']}/remove-from-design")
 
-    labels = [o for o in kernel.elements.ops() if getattr(o, "label", None) == "Raster-labels"]
+    labels = [o for o in kernel.elements.ops() if getattr(o, "label", None) == LABEL_LAYER]
     assert labels == []
 
 
@@ -600,7 +604,7 @@ def test_the_board_carries_a_caption(kernel, client):
 
     snapshot = DesignReader(kernel).snapshot()
     perMm = snapshot["units_per_mm"]
-    labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"][0]
+    labels = [op for op in snapshot["operations"] if op["label"] == LABEL_LAYER][0]
     boxes = [
         [v / perMm for v in e["bounds"]]
         for e in snapshot["elements"]
@@ -1039,7 +1043,7 @@ def test_a_raster_grid_produces_cutcode_on_a_headless_engine(kernel, client):
     client.post("/api/library/testgrids", json=RASTER)
     # The label layer *does* burn (it is an engrave); measure only the sweep.
     for operation in kernel.elements.ops():
-        if getattr(operation, "label", None) == "Raster-labels":
+        if getattr(operation, "label", None) == LABEL_LAYER:
             operation.output = False
 
     exact = client.get("/api/job/estimate?exact=1").json()
@@ -1057,7 +1061,7 @@ def test_without_a_rasteriser_the_same_grid_burns_nothing(kernel, client):
     kernel.root.register("render-op/make_raster", None)
     client.post("/api/library/testgrids", json=RASTER)
     for operation in kernel.elements.ops():
-        if getattr(operation, "label", None) == "Raster-labels":
+        if getattr(operation, "label", None) == LABEL_LAYER:
             operation.output = False
 
     exact = client.get("/api/job/estimate?exact=1").json()
@@ -1070,7 +1074,7 @@ def test_a_vector_grid_does_produce_cutcode(kernel, client):
     """The counter-proof: cutting and vector engraving do burn, headless as well."""
     client.post("/api/library/testgrids", json=BASE)
     for operation in kernel.elements.ops():
-        if getattr(operation, "label", None) == "Raster-labels":
+        if getattr(operation, "label", None) == LABEL_LAYER:
             operation.output = False
 
     exact = client.get("/api/job/estimate?exact=1").json()
@@ -1345,7 +1349,7 @@ def test_text_can_be_switched_off(kernel, client):
     client.post("/api/library/testgrids", json={**BASE, "text": False})
 
     snapshot = DesignReader(kernel).snapshot()
-    assert [op for op in snapshot["operations"] if op["label"] == "Raster-labels"] == []
+    assert [op for op in snapshot["operations"] if op["label"] == LABEL_LAYER] == []
     assert len(snapshot["elements"]) == 9  # only the squares
 
 
@@ -1354,7 +1358,7 @@ def test_text_is_on_by_default(kernel, client):
     client.post("/api/library/testgrids", json=BASE)
 
     snapshot = DesignReader(kernel).snapshot()
-    assert [op for op in snapshot["operations"] if op["label"] == "Raster-labels"]
+    assert [op for op in snapshot["operations"] if op["label"] == LABEL_LAYER]
 
 
 def test_a_board_without_text_needs_no_room_beside_it():
@@ -1376,7 +1380,7 @@ def test_the_border_frames_the_whole_board(kernel, client):
 
     snapshot = DesignReader(kernel).snapshot()
     per_mm = snapshot["units_per_mm"]
-    labels = [op for op in snapshot["operations"] if op["label"] == "Raster-labels"][0]
+    labels = [op for op in snapshot["operations"] if op["label"] == LABEL_LAYER][0]
     boxes = [
         [v / per_mm for v in e["bounds"]]
         for e in snapshot["elements"]
@@ -1410,7 +1414,7 @@ def test_the_label_layer_can_be_set(kernel, client):
     )
 
     labels = next(
-        op for op in kernel.elements.ops() if getattr(op, "label", "") == "Raster-labels"
+        op for op in kernel.elements.ops() if getattr(op, "label", "") == LABEL_LAYER
     )
     assert labels.speed == 120
     assert labels.power == pytest.approx(180)  # 0-1000 in de engine
@@ -1420,7 +1424,7 @@ def test_the_label_layer_falls_back_to_what_it_always_was(kernel, client):
     client.post("/api/library/testgrids", json=BASE)
 
     labels = next(
-        op for op in kernel.elements.ops() if getattr(op, "label", "") == "Raster-labels"
+        op for op in kernel.elements.ops() if getattr(op, "label", "") == LABEL_LAYER
     )
     assert labels.speed == 80
     assert labels.power == pytest.approx(300)
@@ -1698,11 +1702,18 @@ def test_bringing_everything_back_onto_the_bed_keeps_the_cells_in_place(client):
 
 
 def test_the_group_carries_the_boards_name(kernel, client):
-    """A group called "Test grid" reads as one thing in the panel and the bar."""
+    """
+    One group, so a board reads as one thing in the panel and in the bar.
+
+    The name is `testgrid.BOARD_LABEL`, and it is still the Dutch "Testraster" — the last
+    Dutch word this feature puts on screen. Nothing looks the group up by that name
+    (`is_raster_group` asks the node its type), so it is one line to change; it is left
+    here rather than changed in a round about the caption layer.
+    """
     grid = client.post("/api/library/testgrids", json=BASE).json()
 
     group = kernel.elements.find_node(grid["group_id"])
-    assert group.label == "Testraster"
+    assert group.label == BOARD_LABEL
 
 
 def test_the_label_layer_never_catches_fresh_work(client):
@@ -1727,8 +1738,61 @@ def test_the_label_layer_never_catches_fresh_work(client):
     layers = [o for o in design["operations"] if o["id"] in shape["operation_ids"]]
 
     assert layers, "a fresh shape should land in a layer"
-    assert all(o["label"] != "Raster-labels" for o in layers)
+    assert all(o["label"] != LABEL_LAYER for o in layers)
     assert all(not o.get("grid") for o in layers)
+
+
+def test_a_board_from_before_the_rename_keeps_its_caption_layer(client, kernel):
+    """
+    The caption layer used to be called "Raster-labels", and old designs still say so.
+
+    Renaming a layer renames nothing that is already drawn: a board in a project file saved
+    before this round carries the old name, and every promise the app makes about that layer
+    is made by matching the name. So the old name is recognised — measured on a layer
+    relabelled by hand, exactly as reopening such a project produces it:
+
+    - it is still the board's, so a fresh shape does not land in it (without this the shape
+      burned at the caption's 80 mm/s at 30 %);
+    - a second board writes its captions into the layer that is already there, so a project
+      does not collect one caption layer per name it has had;
+    - and once it is empty, `remove-from-design` still sweeps it away.
+    """
+    first = client.post("/api/library/testgrids", json=BASE).json()
+    layer = next(
+        op for op in kernel.elements.ops() if getattr(op, "label", None) == LABEL_LAYER
+    )
+    layer.label = "Raster-labels"
+    assert "Raster-labels" in LABEL_LAYERS
+
+    client.delete("/api/design/operations")
+    made = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 5, "y_mm": 200, "width_mm": 10, "height_mm": 10},
+    ).json()["ids"][0]
+    design = client.get("/api/design").json()
+    shape = next(e for e in design["elements"] if e["id"] == made)
+    landed = [o for o in design["operations"] if o["id"] in shape["operation_ids"]]
+    assert landed, "a fresh shape should land in a layer"
+    assert all(o["label"] not in BOARD_LAYERS for o in landed), [
+        o["label"] for o in landed
+    ]
+
+    second = client.post("/api/library/testgrids", json=BASE)
+    assert second.status_code == 201, second.text
+    labels = [
+        op
+        for op in kernel.elements.ops()
+        if getattr(op, "label", None) in LABEL_LAYERS
+    ]
+    assert len(labels) == 1, [getattr(op, "label", None) for op in labels]
+    assert labels[0].label == "Raster-labels", "the layer that was there is the one used"
+    assert list(labels[0].children), "the second board's captions went in it"
+
+    for board in (second.json()["id"], first["id"]):
+        taken = client.post(f"/api/library/testgrids/{board}/remove-from-design")
+        assert taken.status_code == 200, taken.text
+    left = client.get("/api/design").json()["operations"]
+    assert [o for o in left if o["label"] in LABEL_LAYERS] == []
 
 
 def test_clearing_all_layers_leaves_the_board_intact(client):
@@ -1746,7 +1810,7 @@ def test_clearing_all_layers_leaves_the_board_intact(client):
         for e in voor["elements"]
         if e["operation_ids"]
         and all(
-            o["label"] == "Raster-labels"
+            o["label"] == LABEL_LAYER
             for o in voor["operations"]
             if o["id"] in e["operation_ids"]
         )
@@ -1756,7 +1820,7 @@ def test_clearing_all_layers_leaves_the_board_intact(client):
     client.delete("/api/design/operations")
 
     na = client.get("/api/design").json()
-    labellaag = [o for o in na["operations"] if o["label"] == "Raster-labels"]
+    labellaag = [o for o in na["operations"] if o["label"] == LABEL_LAYER]
     assert len(labellaag) == 1
     assert set(labellaag[0]["element_ids"]) >= captions
     # And the cells are still there, as they already were.
@@ -1768,8 +1832,8 @@ def test_the_colour_for_new_work_is_one_you_can_point_at(client):
     The active colour is in the strip under the canvas, or it does not exist.
 
     The engine starts at #0000ff, and that swatch does not exist. Because of that the bottom
-    edge reported "layer 1 · Grid labels" as the layer of your next shape: the only layer
-    carrying that colour was the test board's label layer.
+    edge named the test board's caption layer as the layer of your next shape: the only layer
+    carrying that colour was the board's own.
     """
     client.post("/api/library/testgrids", json=BASE)
 
@@ -1779,7 +1843,7 @@ def test_the_colour_for_new_work_is_one_you_can_point_at(client):
     # And the label layer carries no palette colour, so it can never turn out to be "the
     # layer of that swatch" either.
     design = client.get("/api/design").json()
-    labellaag = next(o for o in design["operations"] if o["label"] == "Raster-labels")
+    labellaag = next(o for o in design["operations"] if o["label"] == LABEL_LAYER)
     assert labellaag["color"] not in [c["color"] for c in palet["colors"]]
 
 
@@ -2080,7 +2144,7 @@ def test_the_board_prints_its_own_name_beside_the_code(kernel, client):
     assert " " in boardcode.human(grid["uid"])
     # And it really goes on the plank: the caption lines are drawn as vector text.
     design = client.get("/api/design").json()
-    labels = next(op for op in design["operations"] if op["label"] == "Raster-labels")
+    labels = next(op for op in design["operations"] if op["label"] == LABEL_LAYER)
     assert len(labels["element_ids"]) >= len(plan["caption_lines"])
 
 
@@ -2715,7 +2779,7 @@ def test_the_board_layers_never_catch_fresh_work(kernel, cutting):
 
     assert landed, "a fresh shape should land in a layer"
     assert all(
-        op["label"] not in (CODE_LAYER, CUTOUT_LAYER, "Raster-labels") for op in landed
+        op["label"] not in BOARD_LAYERS for op in landed
     ), [op["label"] for op in landed]
 
 

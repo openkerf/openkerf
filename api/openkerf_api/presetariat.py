@@ -22,17 +22,46 @@ Four things here are deliberate:
    flow.** That last one needs a registered OAuth app that does not exist yet;
    building a flow nobody can complete produces false certainty. This works today,
    without anybody having to arrange a token.
+5. **What we offer is shaped by the catalogue's own schema, and refused here rather
+   than there.** Measured against
+   `https://raw.githubusercontent.com/openkerf/presetariat/main/schema/preset.schema.json`
+   on 23 August 2026, with `jsonschema` 4.26 outside this venv: every contribution the
+   app wrote failed the repository's CI with `'by' is a required property` and
+   `'tier' is a required property`, because those two arrived in the schema and never
+   arrived here. The schema is `additionalProperties: false`, so a body of ours with one
+   extra key fails as hard as one with a field missing — which is why nothing about the
+   *state* of a contribution travels inside `preset`, only beside it.
+
+## The three things a contribution may not do
+
+- **It may not claim a tier the app cannot show evidence for.** `measured` means a board
+  with a name, on this machine, with an outcome recorded; anything else is a
+  `starting_point`, and `_evidence` below says in one word which of the two it is and
+  why. The schema agrees on the mechanics — `board` is "Required when the tier is
+  measured, and null otherwise" — so the rule is not ours alone.
+- **It may not wash a value out of the catalogue back in as evidence.** Measured on a
+  throwaway library: an imported 80 W starting point, re-parented to a 60 W profile, came
+  out as a brand-new `berkentriplex-3mm-graveren-raster-co2-60w` with
+  `source: {"kind": "handmatig"}` and nothing at all saying where those numbers had come
+  from. The row knew (`source = 'geimporteerd'`, `origin_id`), and now the contribution
+  says so too: `derived_from`, and a tier that stays a starting point.
+- **It may not go out unattributed.** `by` is a GitHub handle and the app has never had
+  one, so it asks once and remembers it beside the library. CC BY 4.0 is the licence of
+  the whole catalogue: the handle is the attribution somebody downstream has to be able
+  to give, so a contribution without one is not offerable at all — and saying that before
+  the work is better than a refusal from CI afterwards.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from .catalogue_schema import SUPPORTED_SCHEMA, check_board, check_preset
+from .catalogue_schema import BOARD_UID, SUPPORTED_SCHEMA, check_board, check_preset
 from .library import LibraryError
 from .matching import fits, power_match
 
@@ -47,6 +76,23 @@ CATALOGUE_URL = (
 )
 REPO_URL = "https://github.com/openkerf/presetariat"
 
+#: What GitHub itself accepts as a handle: letters and digits, single hyphens between
+#: them, none at either end, at most thirty-nine characters. Anchored, because a handle
+#: with a space in it is not a shorter handle but somebody else's.
+#:
+#: Stricter than the catalogue's schema on purpose. That pattern is
+#: `^[A-Za-z0-9-]{1,39}$`, which passes `-`, `-me` and `a--b`; measured before this, a
+#: single hyphen was kept as a handle and written to disk. Such a body clears the
+#: repository's CI and still fails the one thing `by` is for — CC BY 4.0 attribution that
+#: somebody downstream can follow — because it points at no account on GitHub. A field
+#: whose only job is to name a person may not hold something that names nobody.
+HANDLE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
+
+#: Where the handle is remembered, beside the library and not inside it. A library is
+#: exchangeable (`library.export_bundle`), and who *you* are is not part of a library you
+#: hand to a colleague — their contributions would go out under your name.
+HANDLE_FILE = "openkerf-contributor.json"
+
 #: How long a cached copy is used without asking the network again.
 CACHE_MAX_AGE = 6 * 3600
 
@@ -59,10 +105,23 @@ CACHE_STALE_AFTER = 30 * 24 * 3600
 
 
 class Presetariat:
-    def __init__(self, library, cache_path: Path | str, url: str = CATALOGUE_URL):
+    def __init__(
+        self,
+        library,
+        cache_path: Path | str,
+        url: str = CATALOGUE_URL,
+        handle_path: Path | str | None = None,
+    ):
         self.library = library
         self.cache_path = Path(cache_path)
         self.url = url
+        # Derived from the cache by default so that every caller gets the same directory
+        # without having to know about a second file.
+        self.handle_path = (
+            Path(handle_path)
+            if handle_path is not None
+            else self.cache_path.with_name(HANDLE_FILE)
+        )
 
     # ----------------------------------------------------------- the catalogue
 
@@ -322,8 +381,60 @@ class Presetariat:
 
     # -------------------------------------------------------------- sharing
 
+    def handle(self) -> str | None:
+        """
+        The GitHub handle this installation offers under, or None when nobody has said.
+
+        Read from disk on every call rather than cached: it is asked once in the life of
+        an install, the file holds one line, and a cached `None` would outlive the answer
+        by the whole session.
+        """
+        try:
+            payload = json.loads(self.handle_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        by = payload.get("by") if isinstance(payload, dict) else None
+        # An ordinary file in a directory the owner can open, so by the time we read it
+        # back it may hold anything. An unusable handle is the same situation as no
+        # handle at all: ask, rather than offer somebody's contribution under it.
+        return _as_handle(by, quiet=True)
+
+    def remember_handle(self, value) -> str:
+        """
+        The handle, kept, so that the question is asked once.
+
+        A failed write is refused rather than shrugged off. The whole promise of asking
+        is that it happens once; an app that cannot keep that promise has to say so,
+        because otherwise the reader answers the same question for ever and never learns
+        why.
+        """
+        handle = _as_handle(value)
+        try:
+            self.handle_path.parent.mkdir(parents=True, exist_ok=True)
+            self.handle_path.write_text(
+                json.dumps({"by": handle}, indent=1) + "\n", encoding="utf-8"
+            )
+        except OSError as error:  # pragma: no cover - a read-only settings directory
+            raise LibraryError(
+                "Your handle could not be saved on this computer, so it will be asked "
+                "for again.",
+                code="presetariat.share.handleNotKept",
+                values={"reason": str(error)},
+            ) from error
+        return handle
+
     def as_contribution(self, preset_id: int) -> dict:
-        """One of your own presets in the catalogue's format, ready to share."""
+        """
+        One of your own presets in the catalogue's format, and what it still needs.
+
+        Reads; writes nothing. `preset` is built only when it would validate against the
+        repository's schema, so there is no path here that hands back a body the
+        repository's CI would refuse — without a handle there is no `by`, and a
+        contribution without `by` is not a contribution. Everything about the *state* of
+        the offer travels beside `preset` and never inside it: the schema is
+        `additionalProperties: false`, so one extra key of ours fails as hard as one
+        missing field of theirs.
+        """
         preset = self.library.preset(preset_id)
         machine = None
         if preset.get("machine_id"):
@@ -337,41 +448,226 @@ class Presetariat:
                 "so nobody else can tell whether it applies to theirs.",
                 code="presetariat.share.noWatt",
             )
+        kind = machine.get("laser_type")
+        if not kind or kind == "unknown":
+            # `unknown` is the column's default (`library.py:30`) and it means nobody has
+            # been asked yet. Before this check the machine block claimed whatever was
+            # there and `_slug` fell back to `co2` regardless, so a contribution from an
+            # undescribed machine went out with `co2` in its file name — a claim about
+            # somebody's optics that nobody made.
+            raise LibraryError(
+                "This setting belongs to a machine whose kind of laser is not recorded, "
+                "and a CO2 setting is not a starting point for a diode.",
+                code="presetariat.share.noKind",
+            )
 
-        kind = "testraster" if preset["source"] == "testraster" else "handmatig"
+        # `material` carries `minLength: 2` in the catalogue's schema and nothing at all
+        # here: the library refuses only an empty name (`library.add_material`). Measured
+        # against the schema as fetched, a material called "A" produced `material: 'A' is
+        # too short` — a CI failure for a reason nobody had mentioned. It is asked here
+        # rather than in `_within_the_schema` because it is a fact about the row, like the
+        # two above, and those are all said before the reader is asked for a handle.
+        if len(str(preset["material_name"] or "").strip()) < 2:
+            raise LibraryError(
+                "The catalogue searches on the material name, so it needs at least two "
+                "characters; rename this material before offering its settings.",
+                code="presetariat.share.materialNameTooShort",
+                values={"material": str(preset["material_name"] or "")},
+            )
+
+        handle = self.handle()
+        evidence = self._evidence(preset)
         key = _slug(
             preset["material_name"],
             preset.get("thickness_mm"),
             preset["operation"],
             machine,
         )
-        body = {
-            "id": key,
-            "material": preset["material_name"],
-            "synonyms": [],
-            "thickness_mm": preset.get("thickness_mm"),
-            "operation": preset["operation"],
-            "machine": {
-                "laser_type": machine.get("laser_type") or "co2-glass",
-                "power_watt": machine["power_watt"],
-                "lens_mm": machine.get("lens_mm"),
-            },
-            "speed_mm_s": preset["speed_mm_s"],
-            "power_percent": preset["power_percent"],
-            "passes": preset.get("passes", 1),
-            "air_assist": bool(preset.get("air_assist", True)),
-            "focus_offset_mm": preset.get("focus_offset_mm", 0),
-            "note": preset.get("note", ""),
-            "source": {"kind": kind},
-            "verified": False,
-        }
+        body = None
+        if handle:
+            body = {
+                "id": key,
+                "material": preset["material_name"],
+                # The other names this board goes by. The catalogue searches on them, so
+                # a library that knows "birch plywood" is a "Berkentriplex" should hand
+                # that on rather than make the next reader look for it.
+                "synonyms": self._synonyms(preset["material_id"]),
+                "thickness_mm": preset.get("thickness_mm"),
+                "operation": preset["operation"],
+                "machine": {
+                    "laser_type": kind,
+                    "power_watt": machine["power_watt"],
+                    # `or None` because a lens of zero millimetres is a blank field and
+                    # not a lens. The machine form takes it (`library._number(...,
+                    # optional=True)` bounds nothing), the catalogue's schema refuses it
+                    # (`lens_mm`, `exclusiveMinimum: 0`) — measured against the schema as
+                    # fetched: "0.0 is less than or equal to the minimum of 0" — and
+                    # `[number, null]` is what that schema calls "not recorded". So the
+                    # blank goes over as a blank rather than as a claim about optics that
+                    # do not exist.
+                    "lens_mm": machine.get("lens_mm") or None,
+                },
+                "speed_mm_s": preset["speed_mm_s"],
+                "power_percent": preset["power_percent"],
+                "passes": int(preset.get("passes") or 1),
+                "air_assist": bool(preset.get("air_assist", True)),
+                "focus_offset_mm": preset.get("focus_offset_mm") or 0,
+                "note": preset.get("note", ""),
+                # `source` is what schema 1 had, and it stays because a reader on schema 1
+                # has nowhere else to look. The handle goes in it as well as at the top
+                # level for the same reason: `_note` below reads the credit out of
+                # `source.by`, and CC BY does not care which of the two a reader
+                # understands.
+                "source": {"kind": _kind_of(preset), "by": handle},
+                # Contributing is not verifying, and `verified_by` is a maintainer's
+                # field: neither is ours to write.
+                "verified": False,
+                "tier": evidence["tier"],
+                "board": evidence["board"],
+                "measured_at": evidence["measured_at"],
+                # The day it went *into* the catalogue. Not ours: it has not happened
+                # yet, and a date here would be the one claim in the file that nobody
+                # could check.
+                "catalogued_at": None,
+                "result": evidence["result"],
+                "derived_from": evidence["derived_from"],
+                "by": handle,
+            }
+            _within_the_schema(body)
         return {
             "preset": body,
             "filename": f"{key}.json",
-            "issue_url": _issue_url(body),
+            "issue_url": _issue_url(body) if body else None,
             "repo_url": REPO_URL,
+            "by": handle,
+            "ready": body is not None,
+            # What is missing, as a token to branch on rather than a sentence to print.
+            # One entry today; a list because the next thing the schema asks for should
+            # not have to change the shape of this answer.
+            "needs": [] if handle else ["handle"],
+            "tier": evidence["tier"],
+            # Why it is not measured, in one word — `None` when it is. This is beside the
+            # body and not in it on purpose: it is about the offer, not about the setting.
+            "tier_reason": evidence["tier_reason"],
+            "board": evidence["board"],
+            "measured_at": evidence["measured_at"],
+            "derived_from": evidence["derived_from"],
         }
 
+    def offer(self, preset_id: int, by=None, result=None) -> dict:
+        """
+        The two answers a contribution needs, taken together, and then the contribution.
+
+        One call because they belong to one press. Asked separately, a reader who fills
+        in both and then meets a refusal about the second fills in the first one twice.
+        """
+        if by is not None:
+            self.remember_handle(by)
+        if result is not None:
+            self._record_outcome(preset_id, result)
+        return self.as_contribution(preset_id)
+
+    def _record_outcome(self, preset_id: int, result) -> None:
+        """
+        What came out of the material, onto the row it came out of.
+
+        Kept rather than passed through, so that the second time this setting is offered
+        nobody is asked again — and so that a library handed to a colleague carries its
+        own evidence. `charring` is the one field the schema insists on, because a number
+        with no outcome beside it is not something anybody can judge; the other two are
+        genuinely unknown as often as not, and a guess in them would be worse than a gap.
+        """
+        if not isinstance(result, dict):
+            raise LibraryError(
+                "The outcome of a burn is a set of answers, not a single value.",
+                code="presetariat.share.badResult",
+            )
+        if not result.get("charring"):
+            raise LibraryError(
+                "Say how the edge came out, because a speed and a power with no outcome "
+                "beside them is not something anybody else can judge.",
+                code="presetariat.share.needsCharring",
+            )
+        fields = {"result_charring": result["charring"]}
+        if result.get("cut_through") is not None:
+            fields["result_cut_through"] = bool(result["cut_through"])
+        if result.get("kerf_mm") not in (None, ""):
+            fields["result_kerf_mm"] = result["kerf_mm"]
+        self.library.update_preset(preset_id, **fields)
+
+    def _evidence(self, preset: dict) -> dict:
+        """
+        What this row can prove, in the catalogue's own fields.
+
+        The order of the tests is the order of the answers, and it is the order of how
+        badly the row is placed: a value that came out of the catalogue does not become
+        measurable by recording an outcome for it, so `derived` is asked first.
+
+        `board`, `measured_at` and `result` are filled in only on the `measured` branch.
+        That is not caution, it is the schema: `board` is "Required when the tier is
+        measured, and null otherwise", so a starting point carrying a board would be
+        refused by the repository — and rightly, because it would look like evidence.
+        """
+        origin = str(preset.get("origin_id") or "")
+        derived = origin if origin and not origin.startswith("testgrid:") else None
+        guess = {
+            "tier": "starting_point",
+            "board": None,
+            "measured_at": None,
+            "result": None,
+            "derived_from": derived,
+        }
+        if derived:
+            # The laundering this closes, measured on a throwaway library: an imported
+            # 80 W starting point, re-parented to a 60 W profile, came out as a fresh
+            # `berkentriplex-3mm-graveren-raster-co2-60w` with `source.kind: handmatig`
+            # and no trace of the guess it was copied from.
+            return {**guess, "tier_reason": "derived"}
+        if preset.get("source") != "testraster":
+            return {**guess, "tier_reason": "notMeasured"}
+        board = f"OK1{preset.get('grid_uid') or ''}"
+        if not preset.get("grid_id") or not BOARD_UID.match(board):
+            # A board nobody can point at is, to the catalogue, a board that is not
+            # there: `board` is the name a maintainer follows to the evidence. Every
+            # board is given one on every open (`library._name_the_boards`), so what
+            # this really catches is the board that has since been deleted — which is
+            # the state the library already calls "the evidence is lost". The prefix is
+            # `boardcode.UID_PREFIX`, spelled out rather than imported because that
+            # module pulls the whole drawing layer in for three characters;
+            # `BOARD_UID` is what keeps the two the same, and
+            # `test_the_board_name_we_offer_is_the_one_the_board_carries` pins it.
+            return {**guess, "tier_reason": "boardGone"}
+        if preset.get("grid_machine_id") != preset.get("machine_id"):
+            # Re-parenting a row is one PATCH (`machine_id` is in
+            # `library.PRESET_FIELDS`), and it is the same move as the laundering above:
+            # the numbers stay and the laser underneath them changes. A measurement
+            # belongs to the machine it was burned on and to no other, so from here it
+            # is a starting point for the new one.
+            return {**guess, "tier_reason": "otherMachine"}
+        if not preset.get("result_charring"):
+            return {**guess, "tier_reason": "noOutcome"}
+        return {
+            "tier": "measured",
+            "tier_reason": None,
+            "board": board,
+            "measured_at": _day(preset.get("grid_date")),
+            "result": {
+                "charring": preset["result_charring"],
+                "cut_through": (
+                    None
+                    if preset.get("result_cut_through") is None
+                    else bool(preset["result_cut_through"])
+                ),
+                "kerf_mm": preset.get("result_kerf_mm"),
+            },
+            "derived_from": None,
+        }
+
+    def _synonyms(self, material_id) -> list[str]:
+        for row in self.library.materials():
+            if row["id"] == material_id:
+                return [str(word) for word in row.get("synonyms") or []]
+        return []  # pragma: no cover - a preset always has its material
 
     # -------------------------------------------------------------- internals
 
@@ -496,6 +792,89 @@ def _note(preset: dict) -> str:
     return " — ".join([", ".join(parts)] + ([note] if note else []))
 
 
+def _as_handle(value, *, quiet: bool = False) -> str | None:
+    """
+    A GitHub handle out of what somebody typed, or a refusal.
+
+    `@jelle`, `https://github.com/jelle` and `  jelle ` are all the same person, and all
+    three are what a reader hands over when asked for a handle — refusing them would be
+    pedantry about a prefix whose meaning we know. Anything else is refused rather than
+    trimmed into something plausible: a handle is an address, and the attribution CC BY
+    asks for is worthless if it points at somebody else.
+    """
+    text = str(value or "").strip()
+    for prefix in ("https://github.com/", "http://github.com/", "github.com/", "@"):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix) :]
+            break
+    text = text.strip("/").strip()
+    if HANDLE.match(text):
+        return text
+    if quiet:
+        return None
+    raise LibraryError(
+        "A GitHub handle is letters and digits, with single hyphens between them and "
+        "none at either end.",
+        code="presetariat.share.badHandle",
+        values={"handle": str(value or "")},
+    )
+
+
+def _kind_of(preset: dict) -> str:
+    """
+    The `source.kind` a schema-1 reader will see.
+
+    Three values exist and only two can be ours: `fabrikant` is a manufacturer's sheet
+    and nothing in this app records one. An imported row says `handmatig` here and
+    carries `derived_from` beside it, because "somebody typed this" is true of the row it
+    was copied from as well.
+    """
+    return "testraster" if preset.get("source") == "testraster" else "handmatig"
+
+
+def _day(value) -> str | None:
+    """
+    The date out of `2026-08-23 14:02:11`, or None when there is not one in there.
+
+    This is the day the board's row was made, which is the day it was laid out and
+    almost always the day it was burned — the closest thing the library records to
+    `measured_at`. The photograph, which is the moment the burn is actually judged, has
+    no date of its own in the row.
+    """
+    text = str(value or "")[:10]
+    return text if re.match(r"^\d{4}-\d{2}-\d{2}$", text) else None
+
+
+#: The bounds the catalogue's schema puts on the numbers a contribution carries, field by
+#: field. Every one of these is a number a reader typed into a form of ours, and only one
+#: of them is checked anywhere else in this app: `add_preset` bounds `power_percent` and
+#: nothing more, so a fibre marker at 5000 mm/s is an ordinary row in this library and a
+#: CI failure over there. The refusal belongs on this side, because "the repository
+#: refused your proposal" is not something a reader can act on.
+SCHEMA_BOUNDS = (
+    ("speed_mm_s", 0, 2000),
+    ("power_percent", 0, 100),
+    ("passes", 1, 20),
+    ("thickness_mm", 0, 100),
+    ("focus_offset_mm", -50, 50),
+)
+
+
+def _within_the_schema(body: dict) -> None:
+    """The numbers, against the bounds the repository will hold them to."""
+    for field, low, high in SCHEMA_BOUNDS:
+        value = body.get(field)
+        if value is None:
+            continue
+        if not low <= float(value) <= high:
+            raise LibraryError(
+                f"The catalogue holds {field} between {low} and {high}, and this "
+                f"setting says {value}.",
+                code="presetariat.share.outOfRange",
+                values={"field": field, "value": value, "low": low, "high": high},
+            )
+
+
 def _slug(material: str, thickness, operation: str, machine: dict) -> str:
     import re
     import unicodedata
@@ -504,7 +883,17 @@ def _slug(material: str, thickness, operation: str, machine: dict) -> str:
         text = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore")
         return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", text.decode().lower()))
 
-    kind = {"co2-glass": "co2", "co2-rf": "co2rf", "diode": "diode", "fiber": "fiber"}
+    # Every kind the catalogue knows, because the fallback used to be `co2` and that
+    # made the file name of a uv machine's contribution say `co2` while the machine block
+    # beside it said `uv` — one file contradicting itself. `unknown` is refused before
+    # this is reached, and a kind we have never heard of now spells itself out.
+    kind = {
+        "co2-glass": "co2",
+        "co2-rf": "co2rf",
+        "diode": "diode",
+        "fiber": "fiber",
+        "uv": "uv",
+    }
     parts = [clean(material)]
     if thickness:
         # SQLite hands back 3.0 where the catalogue writes 3; otherwise the same preset
@@ -513,7 +902,7 @@ def _slug(material: str, thickness, operation: str, machine: dict) -> str:
         text = str(int(number)) if number == int(number) else str(number)
         parts.append(f"{text.replace('.', 'p')}mm")
     parts.append(clean(operation))
-    parts.append(kind.get(machine.get("laser_type"), "co2"))
+    parts.append(kind.get(machine.get("laser_type")) or clean(machine.get("laser_type")))
     parts.append(f"{int(float(machine['power_watt']))}w")
     return "-".join(p.strip("-") for p in parts if p.strip("-"))
 

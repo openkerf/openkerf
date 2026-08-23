@@ -316,7 +316,7 @@ On a setting:
 | Provenance and evidence | Unfolds where the numbers came from, with the photo of the board — explanation "Where these values come from" |
 | Adjust the values | Speed, power, line spacing, passes, thickness, note and machine profile. Material, operation and source stay fixed. |
 | Make a test grid for {material} | Opens the test grid window with this material filled in |
-| Share with Presetariat | Opens a pre-filled proposal for the shared catalogue in a new tab |
+| Share with Presetariat | Unfolds what this setting would go into the catalogue as — a measurement or a starting point, and why — asks for your GitHub handle the first time, and then opens a pre-filled proposal in a new tab |
 | Remove setting | Red, and at the bottom. Asks under the row, and says when the setting was measured. |
 
 On a material:

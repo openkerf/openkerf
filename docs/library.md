@@ -460,13 +460,15 @@ goes to the network, and the line beside it says why it waits for you:
 
 > Nothing is fetched until you press this: the shared catalogue lives on the network, and opening a window should not wait for it.
 
-While it is fetching the button stays where it is and reads **Looking…**; once the list is
-up, the same button reads **Fold this list up again**.
+While it is fetching the button stays where it is and reads **Looking…**. Once the list is
+up the button is gone and the way back out, **Fold this list up again**, sits at the end of
+that line about your own materials — one line rather than a row of its own, which is what
+that row was: a control at the far right of an otherwise empty band.
 
 **Not now** puts the card away for good on this machine — the tooltip says so: *Put this
 away. It will not be offered again for this machine.*
 
-![The material library with the offer card at the top. The heading reads "This machine has no settings yet."; under it the machine name KH-5030, the values Kind of laser "CO2 with a glass tube" and Tube power 80 W, and the line about the materials in this library. Below that the button "Show what would suit this laser" has been pressed and the list is open: the source line naming the shared catalogue, the date this copy was fetched and the CC-BY credit; the sentence that every one of these is a number somebody typed; the count of materials that have a starting point for this laser; and then one block per material — "Berkentriplex" with an "Add these" button and two rows reading "3 mm · Cut", "12 mm/s at 65%" and "3 mm · Engrave (raster)", "350 mm/s at 25%", then "MDF" with its own "Add these" and one row. No row carries a tier mark: every entry in the catalogue today is a starting point, so that is said once in the sentence above rather than badged twenty-six times.](images/39-starter.png)
+![The material library with the offer card at the top. The heading reads "This machine has no settings yet."; under it the machine name KH-5030, the values Kind of laser "CO2 with a glass tube" and Tube power 80 W, and the line about the materials in this library. Below that the button "Show what would suit this laser" has been pressed, so at the end of the line about the materials in this library stands "Fold this list up again", and the list is open: the source line naming the shared catalogue, the date this copy was fetched and the CC-BY credit; the sentence that every one of these is a number somebody typed; the count of materials that have a starting point for this laser; and then one block per material — "Berkentriplex" with an "Add these" button and two rows reading "3 mm · Cut", "12 mm/s at 65%" and "3 mm · Engrave (raster)", "350 mm/s at 25%", then "MDF" with its own "Add these" and one row. No row carries a tier mark: every entry in the catalogue today is a starting point, so that is said once in the sentence above rather than badged twenty-six times.](images/39-starter.png)
 
 ### When the machine has not said what it is
 
@@ -604,16 +606,70 @@ you press, and a card you waved away stays away.
 
 ### Offering one of your own
 
-**Share with Presetariat** in a setting's menu goes the other way. It opens a pre-filled
-proposal on GitHub in a new tab, so you can read what you are about to share before anybody
-else does.
+**Share with Presetariat** in a setting's menu goes the other way. It opens a panel under
+the row, and the panel is the point: what goes into the catalogue is a public claim under
+your own name, so you see it before anybody else does. When you press
+**Open the proposal on GitHub** it fills in a proposal in a new tab — *It opens a
+pre-filled proposal in a new tab, so you can read what you are about to share before
+anybody else does.*
 
-It is refused when the machine behind the setting has no tube power recorded:
+**Your handle, once.** Every entry in the catalogue names who offered it, and the panel
+asks for that the first time:
+
+> The catalogue is shared under CC BY 4.0, so every entry names who offered it — that is the credit anybody reusing it has to be able to give. It is asked once and kept on this computer.
+
+`@jelle-t`, `jelle-t` and the address of your profile page are all read as the same
+handle. It is kept beside the library and not in it, so a library you hand to a colleague
+does not offer their settings under your name; afterwards the panel says
+*Offered as {by}.* with **Use another handle** beside it. Without a handle there is
+nothing to open: the tab would hold a file the catalogue's own checks refuse.
+
+**One of two labels, and never the wrong one.** The first line of the panel says which:
+
+> This goes in as a measurement, read off board {board}.
+
+or
+
+> This goes in as a starting point, not as a measurement.
+
+A measurement needs a board with a name, burned on *this* machine, with an outcome
+written down. Anything else is a starting point — a real answer, and the catalogue holds
+both — and the panel says which of the reasons applies:
+
+| The line you get | What it means |
+|---|---|
+| *Nobody read these numbers off a test board, so the catalogue takes them as a considered guess.* | You typed them, or extrapolated them. |
+| *These numbers came out of the catalogue itself, from {id}, so they go back as a guess that leans on that entry rather than as evidence.* | An imported setting, adjusted. See below. |
+| *The board is still here, but nobody wrote down what came out of the material, and a speed with no outcome beside it is not something anybody else can judge.* | The one question the app cannot answer for you. |
+| *The test board behind this setting is gone, and a measurement in the catalogue is followed back to its board.* | The board was removed after the setting was read off it. |
+| *This setting is filed under a different laser than the board it was burned on, so for this machine it is a starting point.* | The setting was moved to another machine profile. |
+
+**What came out of the material.** When the board is there and the outcome is not, the
+panel asks for it in three fields — **The edge** (*Clean, no charring*, *Lightly charred*
+or *Heavily charred*), **Cut through** and **Kerf** — and then this goes in as a
+measurement:
+
+> Say how it came out and this goes in as a measurement, with its board behind it. It is kept on the setting, so you are asked once.
+
+It is kept on the setting, so a second offer of the same row asks nothing, and it travels
+in an exported library along with the boards and their photographs.
+
+**Nothing that came out of the catalogue goes back in as evidence.** A starting point you
+fetched and then adjusted is still somebody else's guess, and moving it onto another
+machine profile does not make it a measurement of that machine. Such a setting is offered
+as a starting point that names the entry it leans on, whatever else is recorded about it.
+Without that rule an 80 W guess, re-parented to a 60 W profile, would arrive in the shared
+catalogue as a fresh entry for a laser nobody had ever measured.
+
+It is refused when the machine behind the setting is not described:
 
 > This setting belongs to a machine whose tube power is not recorded, so nobody else can tell whether it applies to theirs.
 
-Which is the point: a speed and a power without the strength of the tube they were measured
-on is not usable by anybody else.
+> This setting belongs to a machine whose kind of laser is not recorded, and a CO2 setting is not a starting point for a diode.
+
+Which is the point: a speed and a power without the tube they were measured on — its
+strength and its kind — is not usable by anybody else. Both are filled in under
+**Machine profiles** in this window, or at the end of the setup wizard.
 
 ### When it goes wrong
 

@@ -267,6 +267,31 @@ test('a refusal with a code is said in the reader’s language', async () => {
 	bindLanguage(() => 'en');
 });
 
+test('the one refusal a reader has to act on is not summarised away', () => {
+	// `apiError` only helps where somebody calls it. These two screens are the pair that
+	// did not: both upload a photograph of a test board, and the refusal on that route is
+	// the one the board code exists to make — "the code in this photograph says board
+	// FR5B R74F; you picked 6Y0Y JKS2" — where the answer is inside the sentence and the
+	// board is still on the bench. Measured in a browser against an engine of its own:
+	// before, the desktop panel said "Saving the photo failed." and the phone said "Photo
+	// saved. You get the preset out of it on the desktop."; after, both say the sentence
+	// above verbatim. Nothing in the suite noticed the difference — putting the summary
+	// back left all 73 tests green and svelte-check at 0 — so it is noticed here.
+	//
+	// Named files rather than a rule over every failed fetch: there are 49 such branches
+	// in the components and most of them refuse nothing a reader can act on. When the
+	// next one does, it belongs in this list.
+	for (const file of ['PhoneView.svelte', 'TestGridResult.svelte']) {
+		const source = readFileSync(join(SRC, 'lib', 'components', file), 'utf8');
+		const upload = source.slice(source.indexOf('/photo'));
+		assert.match(
+			upload.slice(0, 2000),
+			/apiError\(\s*response/,
+			`${file} reports its own summary of a refused photograph instead of the sentence the server sent`
+		);
+	}
+});
+
 test('a refusal may bring the number its sentence needs', async () => {
 	// For the number that is a constant of the engine layer, not a measurement: a code
 	// alone cannot carry it, so `MAX_COUNT` would have to be written down a second time

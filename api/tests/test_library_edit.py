@@ -369,6 +369,10 @@ def test_the_schema_is_what_this_suite_thinks_it_is(tmp_path):
             "power_percent", "passes", "interval_mm", "air_assist", "focus_offset_mm",
             "source", "origin_id", "note", "last_used_at", "import_batch",
             "origin_laser_type", "origin_power_watt", "origin_by", "verified_at",
+            # What came out of the material, in the three fields the shared catalogue's
+            # schema has room for. Nothing else in the app can work them out, and without
+            # them a row read off a board could only ever be offered as a guess.
+            "result_charring", "result_cut_through", "result_kerf_mm",
             "created_at",
         },
         "test_grid": {

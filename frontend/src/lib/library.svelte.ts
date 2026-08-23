@@ -574,6 +574,38 @@ export class LibraryStore {
 		return this.#request(`/api/library/suggest?${params}`);
 	}
 
+	/**
+	 * What offering this setting would say, before anything is written.
+	 *
+	 * A read, and the first thing the share panel does: the tier, the reason for it and
+	 * the missing handle are all knowable without touching the catalogue, and telling
+	 * the reader beforehand is better than a refusal from somebody else's CI afterwards.
+	 */
+	async contribution(id: number): Promise<Contribution | null> {
+		return (await this.#request(`/api/presetariat/contribution/${id}`)) as Contribution | null;
+	}
+
+	/**
+	 * The answers the panel collected, and then the contribution.
+	 *
+	 * Both answers are writes on this computer — the handle beside the library so it is
+	 * asked once, the outcome onto the row so a second offer does not ask again — which
+	 * is why this is a POST and the reading above is not.
+	 */
+	async offerContribution(
+		id: number,
+		answers: { by?: string; result?: { charring: string; cut_through?: boolean | null; kerf_mm?: number | null } }
+	): Promise<Contribution | null> {
+		const done = await this.#request(`/api/presetariat/contribution/${id}`, {
+			method: 'POST',
+			headers: this.#headers(true),
+			body: JSON.stringify(answers)
+		});
+		// The outcome now sits on the row, so the list is a version behind.
+		if (done) await this.load();
+		return done as Contribution | null;
+	}
+
 	async removePreset(id: number) {
 		const done = await this.#request(`/api/library/presets/${id}`, {
 			method: 'DELETE',
@@ -800,6 +832,37 @@ export function offerState(offer: StarterOffer | null | undefined): OfferView {
 		};
 	return { ...quiet, canFetch: true, powerUnknown };
 }
+
+/**
+ * What a setting of your own would look like in the shared catalogue, and what it still
+ * needs before it can go.
+ *
+ * `preset` is the body that would be offered, and it is `null` until the offer would
+ * pass the repository's own schema — the app had never asked for a GitHub handle, so
+ * every contribution file it wrote was refused by that repository's CI on
+ * `missing required: [by, tier]`. Everything about the *state* of the offer is out here
+ * beside the body and never inside it: the schema is `additionalProperties: false`, so
+ * one extra key of ours is refused as hard as one field of theirs that is missing.
+ */
+export type Contribution = {
+	ready: boolean;
+	/** What is missing, as tokens to branch on: `handle` is the only one today. */
+	needs: string[];
+	by: string | null;
+	/** `measured` needs a board, this machine, and an outcome; anything else is a guess. */
+	tier: 'measured' | 'starting_point';
+	/** Why it is not measured, in one word — `null` when it is. */
+	tier_reason: string | null;
+	/** The board it was read off, `OK1` and eight characters, or null. */
+	board: string | null;
+	measured_at: string | null;
+	/** The catalogue entry these numbers were adjusted from, if they came out of it. */
+	derived_from: string | null;
+	preset: Record<string, unknown> | null;
+	filename: string;
+	issue_url: string | null;
+	repo_url: string;
+};
 
 /** One row of the shared catalogue, as `GET /api/presetariat` hands it back. */
 export type StarterRow = {

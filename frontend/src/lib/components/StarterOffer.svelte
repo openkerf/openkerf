@@ -87,6 +87,16 @@
 	 */
 	let looking = $state(false);
 
+	/**
+	 * Whether the way back out is on screen — and therefore whether the fetch button is.
+	 *
+	 * One flag rather than the same three terms written twice, because the button and the
+	 * row it lives on are now decided in two places: with the list open the fold moves up
+	 * on to the line above, and the row it left would otherwise stay behind empty (see the
+	 * markup, where it was measured).
+	 */
+	let canFold = $derived(view.canFetch && looking && !starter.busy);
+
 	async function look(refresh = false) {
 		looking = true;
 		await starter.look(refresh);
@@ -149,6 +159,16 @@
 <!-- Two parts of the card that both branches below need: what a press has already
      done and can undo, and what the catalogue holds. Written once as snippets so the
      quiet door cannot drift away from the offer. -->
+{#snippet foldUp()}
+	<!-- The way back out. Without it the list is a one-way door: measured on a 900 px
+	     window, opening it put the card at 1086 x 558 and pushed the reader's own materials
+	     off the bottom of the library, with no control anywhere to fold it up again.
+	     One button written once, because it is rendered from two places: on the line above
+	     the list while the list is open, and on a row of its own where there is no such
+	     line. -->
+	<button class="btn subtle" onclick={() => (looking = false)}>{t('starter.hide')}</button>
+{/snippet}
+
 {#snippet tookLines()}
 	{#if starter.imports.length}
 		<!-- What this card just did, and the way back out of it — above the list and
@@ -320,21 +340,33 @@
 			</dl>
 		{/if}
 
+		<!-- What this machine has, and — while the list is open — the way to fold it up
+		     again, on that same line. The fold used to sit on a row of its own below this
+		     one, which measured as an empty band across the card: the row is 1050 px wide
+		     with a borderless 130 px control at its right end, 14 px under this line and
+		     16 px above the list, and the sentence that fills that area when the list is
+		     shut (`starter.look.hint`) is hidden while it is open. So 920 px of nothing with
+		     a faint word at the end of it, in the picture the handbook prints. Here it reads
+		     as what it is — a statement with its control at the end, the same shape as the
+		     heading with "Not now" and a material with "Add these". -->
 		{#if coverage}
-			<p class="has muted">
-				{#if view.state === 'unburned'}
-					{t('starter.has.unburned', { n: coverage.mine })}
-				{:else if !coverage.materials_known}
-					{t('starter.has.emptyLibrary')}
-				{:else if !coverage.materials_covered}
-					{t('starter.has.none', { n: coverage.materials_known })}
-				{:else}
-					{t('starter.has.some', {
-						n: coverage.materials_covered,
-						known: i18n.number(coverage.materials_known)
-					})}
-				{/if}
-			</p>
+			<div class="state">
+				<p class="has muted">
+					{#if view.state === 'unburned'}
+						{t('starter.has.unburned', { n: coverage.mine })}
+					{:else if !coverage.materials_known}
+						{t('starter.has.emptyLibrary')}
+					{:else if !coverage.materials_covered}
+						{t('starter.has.none', { n: coverage.materials_known })}
+					{:else}
+						{t('starter.has.some', {
+							n: coverage.materials_covered,
+							known: i18n.number(coverage.materials_known)
+						})}
+					{/if}
+				</p>
+				{#if canFold}{@render foldUp()}{/if}
+			</div>
 		{/if}
 
 		{#if view.state === 'askMachine'}
@@ -413,21 +445,18 @@
 		     button and said nothing at all for those seconds, the only thing left on it
 		     being "Not now". `starter.looking` existed for this and could never render,
 		     and the focus of a reader who pressed with the keyboard fell to the body. -->
-		{#if view.canFetch}
+		{#if view.canFetch && !canFold}
 			<div class="buttons">
-				{#if looking && !starter.busy}
-					<!-- The way back out. Without it the list is a one-way door: measured on a
-					     900 px window, opening it put the card at 1086 × 558 and pushed the
-					     reader's own materials off the bottom of the library, with no control
-					     anywhere to fold it up again. Same button, same place, other label. -->
-					<button class="btn subtle" onclick={() => (looking = false)}>{t('starter.hide')}</button>
-				{:else}
-					<button class="btn" onclick={() => look()} disabled={starter.busy}>
-						{starter.busy ? t('starter.looking') : t('starter.look')}
-					</button>
-				{/if}
+				<button class="btn" onclick={() => look()} disabled={starter.busy}>
+					{starter.busy ? t('starter.looking') : t('starter.look')}
+				</button>
 			</div>
 			{#if !looking && !starter.busy}<p class="muted why">{t('starter.look.hint')}</p>{/if}
+		{:else if canFold && !coverage}
+			<!-- No coverage line to hang the fold on — a machine the server described
+			     without one. Then it keeps its own row: an empty band is better than no way
+			     back out. -->
+			<div class="buttons">{@render foldUp()}</div>
 		{/if}
 
 		{@render catalogueRows()}
@@ -581,6 +610,19 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
 		color: var(--text-1);
+	}
+
+	/* The machine's state with its control at the end of the line, not on a line of its
+	   own — the shape `.head` and `.material` already have. */
+	.state {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+	.state .has {
+		min-width: 0;
 	}
 
 	/* Buttons on their own line, the primary one on the right (v4, form rule 6). */

@@ -33,21 +33,49 @@ Three measurements decided the code that is here:
    With `make_qr` the same payload is 1-Q: 21 modules, **29 with the 4-module quiet zone**,
    and 300 of 300 randomly minted uids gave exactly that, so the footprint of a board code
    never changes.
-2. **Which OpenCV detector.** On a synthetic photograph of a whole board — the code plus
-   sixteen grey squares, 5 degrees of rotation, blur and JPEG 85 —
-   `QRCodeDetector().detectAndDecode` read 1 of 10 at 8.3 px per module, while
-   `QRCodeDetectorAruco().detectAndDecodeMulti` read 9 of 10 at 5 px per module. The dark
-   squares of the board itself are what the plain detector loses the code in, and a board
-   photograph always has them. So `read` asks Aruco first and keeps the plain detector as
-   the fallback for an older OpenCV.
-3. **How big the code has to be in the frame.** Same synthetic board, an 18 mm code on a
-   300 mm board, counting the 2x retry `read` does: 1200 px wide 0/20, 1600 px **6/20**,
-   2000 px 20/20, 2400 px 20/20, 3200 px 20/20. In modules that is 2.5, 3.3, 4.1, 5.0 and
-   6.6 px per module. So about 4 px per module is where it starts working and 5 is where it
-   is comfortable — for an 18 mm code, a 300 mm board photographed at 2400 px across. Any
-   phone does that; **the 1600 px copy a contribution keeps does not**, at 6 of 20. Decode
-   the upload, never the downsized copy. On a clean render straight from `plan` the floor is
-   far lower, 2 px per module, which is the difference between a screen and a plank.
+2. **Which OpenCV detector, and what actually goes wrong.** One harness, named so it can
+   be repeated: `test_boardcode.on_a_board()` — this module's own millimetres rendered
+   nearest-neighbour, stamped on a grey plank beside sixteen grey squares — put through
+   `test_boardcode.photograph()`, which turns it 5 degrees, blurs it (Gaussian, sigma 1.1),
+   speckles it (sigma 5) and saves it as JPEG 85. Twenty freshly minted uids per rung, an
+   18 mm code on a 300 mm board:
+
+   | frame width | px per module | plain, one shot | plain, multi | Aruco | `read` |
+   |-------------|---------------|-----------------|--------------|-------|--------|
+   | 1600 px     | 3.3           | 0/20            | 0/20         | 0/20  | 6/20   |
+   | 2000 px     | 4.1           | 0/20            | 0/20         | 7/20  | 20/20  |
+   | 2400 px     | 5.0           | 1/20            | 0/20         | 19/20 | 20/20  |
+   | 3200 px     | 6.6           | 9/20            | 20/20        | 20/20 | 20/20  |
+   | 4000 px     | 8.3           | 5/20            | 20/20        | 20/20 | 20/20  |
+
+   So Aruco wins the first pass by a wide margin, which is why `read` asks it first. What
+   this table does **not** say is why, and the earlier version of this docstring said the
+   wrong thing: it blamed the board's own grid of dark squares. Measured against that, with
+   the sixteen squares taken out of the same picture and everything else identical: at
+   2400 px plain read 0/20 without them against 1/20 with them, Aruco 19/20 against 18/20.
+   The squares are worth nothing either way. Take the *photograph* away instead — the same
+   plank with its squares, unturned, unblurred, uncompressed — and plain reads 59 of 60 at
+   2400 px, and 20 of 20 at every width from 1200 px up. It is the photograph, and of its
+   four steps the blur is the one that decides (see the note under the table below). A board
+   photograph is exactly what this route gets, so the order stands; the plain detector stays
+   as the fallback for an OpenCV older than 4.7, where it is all there is.
+3. **How big the code has to be in the frame.** Same harness, forty freshly minted uids per
+   rung, through `read` (so counting its 2x retry): 1200 px 0/40, 1600 px **16/40**,
+   2000 px 40/40, 2400 px 40/40, 3200 px 40/40 — 2.5, 3.3, 4.1, 5.0 and 6.6 px per module.
+   So 4 px per module is where it starts working; 3.3 is the rung where it depends on the
+   uid (16/40 here, 6/20 and 10/20 in two smaller runs of the same harness), and that is
+   the one to distrust. For an 18 mm code that means a 300 mm board photographed at 2000 px
+   across or better. Any phone does that; **the 1600 px copy a contribution keeps does
+   not**. Decode the upload, never the downsized copy.
+
+   Two things the same harness says about the numbers themselves. The retry is what carries
+   the middle of the table: at 4.1 px per module Aruco alone read 7/20 and `read` 20/20.
+   And the pixel floor is a property of the *picture*, not of the code — drop only the blur
+   out of `photograph()` and 1200 px goes from 0/20 to 14/20 or better. An earlier round
+   quoted a far more forgiving pair for the two bottom rungs (1200 px 34/40, 1600 px 36/40)
+   in a commit message and in `docs/test-grid.md`; it is not reproducible with the blur on,
+   and both have been corrected to the table above. Anybody measuring this again: blur and
+   compress, or you are measuring a screen and not a plank.
 
 **How it burns.** As a raster layer at `CODE_DPI`, never an engrave layer:
 `op_engrave.as_cutobjects` (`meerk40t/core/node/op_engrave.py:358+`) takes
@@ -100,13 +128,18 @@ UID_LENGTH = 8
 CONFUSIONS = {"I": "1", "L": "1", "O": "0"}
 
 #: Four modules of empty material, the standard quiet zone, where the public QR generator
-#: draws two (`generators.QR_QUIET_DEFAULT`). Through a simulated photograph two decoded 16
-#: of 20 at 6 px per module against four at 20 of 20, and zero never decodes at all: 0 of
-#: 20 from 1 to 12 px per module. What the two extra modules a side cost, at the default
-#: module size, is 1.24 mm a side — 2.48 mm of board width, and 4.97 mm of the 18 mm
-#: footprint is quiet zone rather than pattern. Wood is not paper: char at the edge of the
-#: pattern eats into that margin, and that is exactly the direction no measurement covers
-#: yet.
+#: draws two (`generators.QR_QUIET_DEFAULT`). Re-measured, because what stood here was true
+#: of one harness and read as true of all of them: with the code rendered on its own, so the
+#: pattern runs to the edge of the picture, no quiet zone never decodes (0 of 20 at 3, 6 and
+#: 12 px per module) while two and four both read 20 of 20 at 6 — and at 3 px per module two
+#: read 16 of 20 against four's 13, which is the other way round from what was claimed.
+#: On a *plank*, which is what a photograph of a board is, even a quiet zone of zero read
+#: 20 of 20 at 6 px per module: the unburned material around the code is the quiet zone.
+#: So this default is not what makes a code readable in a frame — it is the margin that
+#: keeps the caption, the squares and the rim out of the pattern, which is why the code also
+#: gets `testgrid.CODE_GAP_MM` of board to itself. The cost at the default module size is 4.97 mm of
+#: the 18 mm footprint. Wood is not paper: char at the edge of the pattern eats into that
+#: margin, and that is exactly the direction no measurement covers yet.
 QUIET_MODULES = 4
 
 #: The line spacing the code burns at, in dots per inch — pinned here rather than settable.
@@ -309,12 +342,14 @@ def read(image) -> list[str]:
     errors (no decoder installed, a code naming a different board) are the caller's, where
     the caller knows what the user asked for.
 
-    Two decoders and one retry, all three measured on a synthetic board photograph (see the
-    module docstring): Aruco first because the plain detector loses the code among the
-    board's own dark squares (1 of 10 against 9 of 10), `detectAndDecodeMulti` because a
-    photograph of a board may hold more than one code, and a 2x cubic upscale when nothing
-    was found — that retry took 10 of 20 to 20 of 20 at 4.1 px per module and 18 of 20 to
-    20 of 20 at 5.0, and costs nothing when the first pass already read the code.
+    Two decoders and one retry, all three measured on the synthetic board photograph the
+    module docstring tabulates. Aruco first because it wins the first pass on a photograph
+    by a distance — 19 of 20 against 1 of 20 at 5.0 px per module — and not because of the
+    board's own dark squares, which measure the same with them and without them.
+    `detectAndDecodeMulti` because a photograph of a board may hold more than one code. And
+    a 2x cubic upscale when nothing was found, which is what carries the middle of that
+    table: at 4.1 px per module Aruco alone read 7 of 20 and this function 20 of 20. The
+    retry costs nothing when the first pass already read the code.
     """
     cv2 = _opencv()
     if cv2 is None:
@@ -356,8 +391,11 @@ def _detectors(cv2) -> list:
     The detectors to try, in the order that was measured.
 
     `QRCodeDetectorAruco` is OpenCV 4.7 and up; without it the plain detector is all there
-    is, which reads a clean render fine and a board photograph badly. Better than nothing,
-    and the printed line under the code is the answer for whoever is stuck with it.
+    is. On its own that one reads a clean render at any size and a board photograph only
+    from about 6.6 px per module — a 300 mm board at 3200 px across — but with the 2x retry
+    `read` does around it, it measured 20 of 20 at 4.1 px per module, so an older OpenCV is
+    a slower first pass rather than a broken feature. And the printed line under the code is
+    still there for whoever has neither.
     """
     detectors = []
     for name in ("QRCodeDetectorAruco", "QRCodeDetector"):

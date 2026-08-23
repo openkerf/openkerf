@@ -106,6 +106,17 @@ CREATE TABLE IF NOT EXISTS preset (
     -- maintainer can ever check, so it is recorded and shown — and deliberately not a
     -- gate on sharing, because nobody re-burns and a gate would simply close the door.
     verified_at   TEXT,
+    -- What came out of the material, in the three fields the shared catalogue's schema
+    -- has room for (`result.charring`, `result.cut_through`, `result.kerf_mm`). Its own
+    -- words for why they are there: "a number without an outcome is not something
+    -- anybody can judge". Until this round the app threw that answer away — a
+    -- contribution carried a speed and a power and not one word about whether the piece
+    -- fell out or came away black — so a measured row could not be offered as measured.
+    -- NULL everywhere else, and NULL is exactly what keeps a row a starting point: this
+    -- is the one field the app can never work out for itself.
+    result_charring TEXT,
+    result_cut_through INTEGER,
+    result_kerf_mm REAL,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -426,6 +437,9 @@ class Library:
                     ("origin_power_watt", "REAL"),
                     ("origin_by", "TEXT"),
                     ("verified_at", "TEXT"),
+                    ("result_charring", "TEXT"),
+                    ("result_cut_through", "INTEGER"),
+                    ("result_kerf_mm", "REAL"),
                 ),
             ),
             ("material", (("import_batch", "TEXT NOT NULL DEFAULT ''"),)),
@@ -1290,12 +1304,29 @@ class Library:
         return self.preset(preset_id)
 
     def preset(self, preset_id: int) -> dict:
+        """
+        One setting, with the board behind it if there is one.
+
+        The joins are the same ones `presets()` has, and they are here because the row
+        was the only way to reach a setting one at a time and it arrived without its
+        evidence: `presetariat.as_contribution` had the speed and the power and could not
+        see that a photographed board was hanging off the row, so it offered every
+        measurement it had as a guess. Two fields are new on both counts — `grid_uid`,
+        the board's own name, which is what the shared catalogue points at, and
+        `grid_machine_id`, which is the only way to notice that a measured row has since
+        been filed under a different laser than the one it was burned on.
+        """
         with self._connect() as db:
             row = db.execute(
-                """SELECT p.*, m.name AS material_name, mp.name AS machine_name
+                """SELECT p.*, m.name AS material_name, mp.name AS machine_name,
+                          g.id AS grid_id, g.uid AS grid_uid, g.photo_path AS grid_photo,
+                          g.created_at AS grid_date, g.cells AS grid_cells,
+                          g.machine_id AS grid_machine_id,
+                          (g.alignment IS NOT NULL) AS grid_aligned
                    FROM preset p
                    JOIN material m ON m.id = p.material_id
                    LEFT JOIN machine_profile mp ON mp.id = p.machine_id
+                   LEFT JOIN test_grid g ON p.origin_id = 'testgrid:' || g.id
                    WHERE p.id = ?""",
                 (preset_id,),
             ).fetchone()
@@ -1316,6 +1347,13 @@ class Library:
         "focus_offset_mm": lambda v: _number(v, "focus_offset_mm"),
         "note": lambda v: str(v or ""),
         "machine_id": lambda v: v,
+        # What came out of the material. Adjustable and not fixed like the source is: the
+        # source says how the numbers came about and that cannot change, while this is an
+        # observation about a piece of wood that somebody may well have got wrong the
+        # first time.
+        "result_charring": lambda v: _charring(v),
+        "result_cut_through": lambda v: 1 if v else 0,
+        "result_kerf_mm": lambda v: _kerf(v),
     }
 
     def update_preset(self, preset_id: int, **fields) -> dict:
@@ -2358,8 +2396,9 @@ class Library:
                         speed_mm_s, power_percent, passes, interval_mm, air_assist,
                         focus_offset_mm, source, origin_id, note, last_used_at, created_at,
                         import_batch, origin_laser_type, origin_power_watt, verified_at,
-                        origin_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        origin_by, result_charring, result_cut_through, result_kerf_mm)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?)""",
                 (
                     material_id,
                     machine_id.get(preset.get("machine_id")),
@@ -2384,6 +2423,13 @@ class Library:
                     # a preset that came out of the shared catalogue, and CC BY does not
                     # stop applying because the file went via somebody's laptop.
                     preset.get("origin_by"),
+                    # And so does what came out of the material. A bundle carries the
+                    # boards and their photographs, so leaving the outcome behind would
+                    # mean a restored library could no longer offer its own measurements
+                    # as measurements.
+                    preset.get("result_charring"),
+                    preset.get("result_cut_through"),
+                    preset.get("result_kerf_mm"),
                 ),
             )
             return cursor.lastrowid
@@ -2867,6 +2913,41 @@ def _percent(value):
             "power_percent cannot go above 100.",
             code="library.preset.powerRange",
             values={"max": 100},
+        )
+    return number
+
+
+#: The three words the shared catalogue's schema allows for how badly the edge burned
+#: (`result.charring`). English values, like everything this round writes: they are the
+#: catalogue's own enum, and a Dutch word here would be a row nobody could merge.
+CHARRING = ("none", "light", "heavy")
+
+
+def _charring(value) -> str:
+    """One of the catalogue's three words for the edge, or a refusal."""
+    text = str(value or "").strip().lower()
+    if text not in CHARRING:
+        raise LibraryError(
+            f"Charring is one of {', '.join(CHARRING)}, and not {value!r}.",
+            code="library.preset.charring",
+        )
+    return text
+
+
+def _kerf(value):
+    """
+    The width the beam took out, within the range the catalogue accepts.
+
+    The bound is the schema's own (`kerf_mm`, minimum 0 and maximum 5), checked here
+    rather than at the moment of offering: a kerf of 50 mm is a typo whichever way the
+    row is later used, and finding out at the proposal is finding out too late.
+    """
+    number = _number(value, "result_kerf_mm", optional=True)
+    if number is not None and not 0 <= number <= 5:
+        raise LibraryError(
+            "A kerf is measured in millimetres and this one is out of range.",
+            code="library.preset.kerfRange",
+            values={"kerf": number, "max": 5},
         )
     return number
 

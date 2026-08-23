@@ -228,6 +228,11 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # machine's disk, so it is gated exactly like the upload it replaces.
         "/api/presetariat/stage",
         "/api/presetariat/import",
+        # Offering one of your own settings. It writes the contributor's handle beside
+        # the library and the outcome of the burn onto the row, which is why a GET beside
+        # it does the looking: the panel asks what a contribution would say before
+        # anything is written.
+        "/api/presetariat/contribution/{preset_id}",
         "/api/library/testgrids",
         "/api/library/testgrids/{grid_id}/photo",
         # A photograph with no board id in the path: it reads the code on the plank and

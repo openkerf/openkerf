@@ -17,6 +17,7 @@
 		type MaterialUsage,
 		type PresetConflict,
 		type LibraryStore,
+		type Contribution,
 		type Preset
 	} from '$lib/library.svelte';
 	import { LASER_KINDS, laserKindLabel, type LaserKind } from '$lib/machines.svelte';
@@ -66,6 +67,21 @@
 	let herkomst = $state<number | null>(null);
 	let weghalen = $state<number | null>(null);
 	let shareError = $state<string | null>(null);
+	/**
+	 * The setting whose contribution is open, with what the API says it would be.
+	 *
+	 * Sharing used to be one press that opened a GitHub tab, and what went in that tab
+	 * was refused by the catalogue's own CI: no `by`, no `tier`. Both are answers only
+	 * the reader has, so the press now opens this panel instead — it says what would go
+	 * out and under which of the two labels, and asks for what is missing.
+	 */
+	let sharing = $state<{ preset: number; report: Contribution } | null>(null);
+	/** The handle, as typed. Prefilled with the remembered one, so it can be corrected. */
+	let handleDraft = $state('');
+	/** Whether the field is on screen even though a handle is already remembered. */
+	let changingHandle = $state(false);
+	/** What came out of the material, as the panel collects it. */
+	let outcome = $state({ charring: '', cutThrough: '', kerf: '' });
 	/** The field that appears when you press "New material", so it can take the caret. */
 	let newField = $state<HTMLInputElement | null>(null);
 
@@ -152,6 +168,7 @@
 					{
 						id: 'parts',
 						label: t('library.menu.share'),
+						on: sharing?.preset === preset.id,
 						off: canEdit ? undefined : t('reason.needsToken'),
 						run: () => share(preset)
 					}
@@ -534,18 +551,95 @@
 	/**
 	 * Offering one of your own presets to the shared catalogue.
 	 *
-	 * The API turns it into a catalogue entry and produces a pre-filled proposal on
-	 * GitHub; we open that, so the user sees for themselves what they are sharing.
+	 * This used to be the whole feature: one fetch and a GitHub tab. The tab held a file
+	 * the catalogue's own CI refused — `by` and `tier` are required over there and
+	 * neither was ever written — so the press now opens the panel below, which says what
+	 * would go out, under which label, and what is still missing.
 	 */
 	async function share(preset: Preset) {
 		shareError = null;
-		const response = await fetch(`/api/presetariat/contribution/${preset.id}`);
-		if (!response.ok) {
-			shareError = (await response.json().catch(() => null))?.detail ?? t('library.share.failed');
+		if (sharing?.preset === preset.id) {
+			sharing = null;
 			return;
 		}
-		const shared = await response.json();
-		window.open(shared.issue_url, '_blank', 'noopener');
+		const report = await library.contribution(preset.id);
+		if (!report) {
+			shareError = library.error ?? t('library.share.failed');
+			return;
+		}
+		sharing = { preset: preset.id, report };
+		handleDraft = report.by ?? '';
+		changingHandle = false;
+		outcome = { charring: '', cutThrough: '', kerf: '' };
+		herkomst = null;
+		editing = null;
+	}
+
+	/** The three answers the panel has collected, in the shape the route takes. */
+	function shareAnswers() {
+		const typed = handleDraft.trim();
+		const answers: {
+			by?: string;
+			result?: { charring: string; cut_through?: boolean | null; kerf_mm?: number | null };
+		} = {};
+		if (typed && typed !== sharing?.report.by) answers.by = typed;
+		if (outcome.charring) {
+			answers.result = { charring: outcome.charring };
+			// "Not saying" is a real answer and not a missing one: half the boards in a
+			// workshop are engraved, where cutting through is not a question at all.
+			if (outcome.cutThrough) answers.result.cut_through = outcome.cutThrough === 'yes';
+			if (outcome.kerf.trim()) answers.result.kerf_mm = Number(outcome.kerf);
+		}
+		return answers;
+	}
+
+	/**
+	 * Hand it over: write what the panel collected, then open the proposal.
+	 *
+	 * `window.open` right after the one await, because the tab is what the reader
+	 * pressed for — and the link stays on screen underneath it, so a blocked popup is a
+	 * link and not a dead end.
+	 */
+	async function offer(preset: Preset) {
+		shareError = null;
+		const answers = shareAnswers();
+		let report = sharing?.report ?? null;
+		if (Object.keys(answers).length > 0 || !report?.ready) {
+			report = await library.offerContribution(preset.id, answers);
+			if (!report) {
+				shareError = library.error ?? t('library.share.failed');
+				return;
+			}
+			sharing = { preset: preset.id, report };
+			handleDraft = report.by ?? '';
+			changingHandle = false;
+		}
+		if (report.issue_url) window.open(report.issue_url, '_blank', 'noopener');
+	}
+
+	/** How the edge came out, in the three words the catalogue's schema allows. */
+	function charrings(): { value: string; label: string }[] {
+		return [
+			{ value: 'none', label: t('library.share.charring.none') },
+			{ value: 'light', label: t('library.share.charring.light') },
+			{ value: 'heavy', label: t('library.share.charring.heavy') }
+		];
+	}
+
+	/** Why this contribution is not a measurement, in the reader's language. */
+	function shareWhy(report: Contribution): string {
+		switch (report.tier_reason) {
+			case 'derived':
+				return t('library.share.why.derived', { id: report.derived_from ?? '' });
+			case 'boardGone':
+				return t('library.share.why.boardGone');
+			case 'otherMachine':
+				return t('library.share.why.otherMachine');
+			case 'noOutcome':
+				return t('library.share.why.noOutcome');
+			default:
+				return t('library.share.why.notMeasured');
+		}
 	}
 
 	async function saveEdit(preset: Preset, fields: Record<string, unknown>) {
@@ -974,6 +1068,93 @@
 				<button class="mini danger" onclick={() => library.removePreset(preset.id)}>
 					{t('library.drop.confirm')}
 				</button>
+			</div>
+		{/if}
+
+		{#if sharing?.preset === preset.id}
+			{@const report = sharing.report}
+			<!-- Under the row like the other two panels, because it is about this one
+			     setting — and before the tab opens, because what goes in that tab is a
+			     public claim under the reader's own name. -->
+			<div class="delen">
+				<p class="kop">
+					{#if report.tier === 'measured' && report.board}
+						{t('library.share.tier.measured', { board: report.board })}
+					{:else}
+						{t('library.share.tier.startingPoint')}
+					{/if}
+				</p>
+				{#if report.tier !== 'measured'}
+					<p class="fine">{shareWhy(report)}</p>
+				{/if}
+
+				{#if report.tier_reason === 'noOutcome'}
+					<!-- The one thing the app cannot work out for itself. It is asked here
+					     rather than assumed, and kept on the setting, so the next offer of
+					     the same row does not ask again. -->
+					<div class="uitkomst">
+						<label class="veld">
+							<span>{t('library.share.charring')}</span>
+							<select bind:value={outcome.charring}>
+								<option value="">{t('library.share.charring.pick')}</option>
+								{#each charrings() as choice (choice.value)}
+									<option value={choice.value}>{choice.label}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="veld">
+							<span>{t('library.share.cutThrough')}</span>
+							<select bind:value={outcome.cutThrough}>
+								<option value="">{t('library.share.cutThrough.unsure')}</option>
+								<option value="yes">{t('library.share.cutThrough.yes')}</option>
+								<option value="no">{t('library.share.cutThrough.no')}</option>
+							</select>
+						</label>
+						<NumberField
+							label={t('library.share.kerf')}
+							unit="mm"
+							step={0.05}
+							min={0}
+							bind:value={outcome.kerf}
+						/>
+						<p class="fine wide">{t('library.share.outcome.why')}</p>
+					</div>
+				{/if}
+
+				{#if report.by && !changingHandle}
+					<p class="fine">
+						{t('library.share.by', { by: report.by })}
+						<button class="mini quiet" onclick={() => (changingHandle = true)}>
+							{t('library.share.handle.change')}
+						</button>
+					</p>
+				{:else}
+					<label class="veld">
+						<span>{t('library.share.handle')}</span>
+						<input
+							type="text"
+							bind:value={handleDraft}
+							placeholder={t('library.share.handle.placeholder')}
+						/>
+					</label>
+					<!-- Not bookkeeping: the catalogue is CC BY 4.0, so this is the credit
+					     somebody downstream has to be able to give. -->
+					<p class="fine">{t('library.share.handle.why')}</p>
+				{/if}
+
+				<div class="knoppen">
+					<button class="mini quiet" onclick={() => (sharing = null)}>
+						{t('library.share.close')}
+					</button>
+					<button
+						class="mini"
+						disabled={library.busy || !handleDraft.trim()}
+						onclick={() => offer(preset)}
+					>
+						{t('library.share.open')}
+					</button>
+				</div>
+				<p class="fine">{t('library.share.open.why')}</p>
 			</div>
 		{/if}
 
@@ -2605,6 +2786,27 @@
 
 	.stretch { flex: 1; min-width: var(--space-6); }
 	.zeker { font-size: var(--text-xs); color: var(--text-2); }
+
+	/* The share panel. Same shape as the two panels above it: under the row, a dashed
+	   rule to say it belongs to it, and the same field and button idiom as the material
+	   verbs so that nothing here has to be learned twice. */
+	.delen {
+		margin-top: var(--space-2);
+		padding-top: var(--space-2);
+		border-top: 1px dashed var(--line);
+	}
+	.delen .kop { margin: 0 0 var(--space-1); font-size: var(--text-xs); font-weight: 600; }
+	.delen .fine { margin: var(--space-1) 0; }
+	.delen .veld { display: grid; gap: 4px; font-size: var(--text-xs); color: var(--text-2); }
+	.delen .veld input,
+	.delen .veld select { width: 100%; }
+	.uitkomst {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+		margin: var(--space-2) 0;
+	}
+	.uitkomst .wide { grid-column: 1 / -1; }
 
 	.herkomst {
 		display: grid;

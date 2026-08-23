@@ -67,6 +67,11 @@ WRITE_ROUTES = [
     # holds bundles and machine profiles somebody else put there, which is the reason
     # `/api/library/import/upload` is in this list too.
     ("/api/presetariat/stage", {"json": {}}),
+    # Remembering who is offering, and what came out of the material. Both are writes on
+    # this computer — one beside the library, one on the row — and the handle is the
+    # attribution the whole catalogue is licensed on, so it may not be settable from the
+    # network without a token.
+    ("/api/presetariat/contribution/1", {"json": {"by": "somebody"}}),
 ]
 
 # And the same for DELETE, which had no list at all until this round — the guard test

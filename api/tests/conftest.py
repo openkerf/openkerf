@@ -5,12 +5,14 @@ Mirrors upstream `test/bootstrap.py`, trimmed to the plugins the API touches,
 and with our own plugin added so the console command is registered exactly as
 it would be through the entry point.
 
-It also fences the library off from the developer's own one — see
-`_library_of_its_own`, which is autouse and therefore the one place that has to be
-right.
+It also fences two of the developer's own files off — the library
+(`_library_of_its_own`) and the layer list the engine keeps between sessions
+(`_operations_of_its_own`). Both are autouse, because a fence with a gate per test
+only has to be forgotten once.
 """
 
 import pytest
+from meerk40t.core.elements import elements as elements_module
 from meerk40t.kernel import Kernel
 
 from openkerf_api import server as server_module
@@ -85,6 +87,42 @@ def _library_of_its_own(tmp_path, monkeypatch):
     library = tmp_path / "openkerf-library.db"
     monkeypatch.setattr(server_module, "default_path", lambda kernel: library)
     return library
+
+
+@pytest.fixture(autouse=True)
+def _operations_of_its_own(tmp_path, monkeypatch):
+    """
+    No test may write the layer list the developer's own app starts with.
+
+    `Elements` keeps that list in a file of its own (`core/elements/elements.py:764`:
+    `Settings(self.kernel.name, "operations.cfg", create_backup=True)`), reads it back at
+    boot (`:773`, `load_persistent_operations("previous")`) and writes it again at
+    shutdown (`:1526`). The directory comes from the **kernel name**, so neither our
+    `profile="OpenKerf_TEST"` nor `ignore_settings=True` reaches it — the same hole as the
+    library had, and the `-P/--profile` row in CLAUDE.md is the same hole a third time.
+
+    Measured, and not hypothetical: one run of `pytest api/tests/test_testgrid.py` took
+    `~/Library/Application Support/MeerK40t/operations.cfg` from 3 `[previous]` sections
+    to **20**, among them "Board code" and "Board labels" — a whole test board's worth of
+    layers, which is what the real app would then have offered as its layer list.
+
+    It is also why a green single-file run was not evidence. Every kernel writes the file
+    on teardown and the next kernel reads it, so tests handed each other layers *within*
+    one run: `test_import_hygiene.py` alone was 2 failed / 16 passed straight after a
+    `test_testgrid.py` run and 18 passed straight after itself. Redirecting the path
+    closes both directions at once — nothing is read in, nothing is written out.
+
+    `Settings(None, <name>)` keeps the name as the whole path (`kernel/settings.py:30-35`),
+    which is how an absolute one gets in. The wordlist follows it, because `elements.py:770`
+    takes its directory from this file's.
+    """
+    real = elements_module.Settings
+
+    def of_its_own(directory, filename, *args, **kwargs):
+        return real(None, str(tmp_path / filename), *args, **kwargs)
+
+    monkeypatch.setattr(elements_module, "Settings", of_its_own)
+    return tmp_path / "operations.cfg"
 
 
 @pytest.fixture

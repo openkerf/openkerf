@@ -193,6 +193,7 @@ def test_sharing_produces_a_catalogue_entry(shop, co2):
         power_percent=65,
         source="testraster",
     )
+    shop.remember_handle("somebody")
 
     shared = shop.as_contribution(preset["id"])
 
@@ -601,3 +602,595 @@ def test_a_cached_catalogue_still_wins_over_the_seed(tmp_path):
 
     assert answer["from_seed"] is False
     assert [row["id"] for row in answer["presets"]] == ["only-one"]
+
+
+# ------------------------------------------------------- what the catalogue demands
+#
+# Everything in this section is measured against the repository's own schema, fetched
+# on 23 August 2026 from
+# https://raw.githubusercontent.com/openkerf/presetariat/main/schema/preset.schema.json
+# and validated with `jsonschema` 4.26 (installed outside this venv on purpose: the
+# engine's install already asks for numpy, Pillow and pyusb, and one wheel for one
+# assertion is a wheel every user carries). What that measurement found, on a
+# contribution the app wrote that same day:
+#
+#     <root>: 'by' is a required property
+#     <root>: 'tier' is a required property
+#
+# So every contribution file the app had ever written failed the repository's CI. The
+# two sets below are that schema's `required` and its `properties`, and they are here
+# rather than in the module because they are somebody else's rules: a copy that is
+# allowed to drift is the whole reason this section exists.
+
+REQUIRED = {
+    "id",
+    "material",
+    "operation",
+    "machine",
+    "speed_mm_s",
+    "power_percent",
+    "tier",
+    "by",
+}
+
+#: The schema is `additionalProperties: false`, so this is a ceiling and not a wish
+#: list: one key of ours that is not in here fails as hard as one field of theirs that
+#: is missing.
+ALLOWED = REQUIRED | {
+    "synonyms",
+    "thickness_mm",
+    "passes",
+    "air_assist",
+    "focus_offset_mm",
+    "note",
+    "source",
+    "verified",
+    "board",
+    "measured_at",
+    "catalogued_at",
+    "result",
+    "derived_from",
+    "verified_by",
+}
+
+
+def _grid_plan(material_id, machine_id, **extra):
+    """A board of four squares, the smallest thing `add_test_grid` accepts."""
+    return {
+        "material_id": material_id,
+        "machine_id": machine_id,
+        "thickness_mm": 3,
+        "operation": "snijden",
+        "speed_min": 8, "speed_max": 20, "speed_steps": 2,
+        "power_min": 40, "power_max": 100, "power_steps": 2,
+        "cell_mm": 8, "gap_mm": 2, "origin_x_mm": 0, "origin_y_mm": 0,
+        **extra,
+    }
+
+
+@pytest.fixture
+def measured(shop, co2):
+    """
+    A setting read off a board, the way the photo route makes one.
+
+    Board first, then the preset that points at it with `origin_id`, then the cell
+    marked — `server.presets_from_cells` does exactly these three things, and it is the
+    only way a `testraster` row is ever created.
+    """
+    material = shop.library.add_material("Berkentriplex", ["birch plywood"])["id"]
+    grid = shop.library.add_test_grid(
+        _grid_plan(material, co2),
+        [{"row": 0, "column": 0, "speed_mm_s": 12, "power_percent": 65}],
+    )
+    preset = shop.library.add_preset(
+        material_id=material,
+        machine_id=co2,
+        thickness_mm=3,
+        operation="snijden",
+        speed_mm_s=12,
+        power_percent=65,
+        source="testraster",
+        origin_id=f"testgrid:{grid['id']}",
+    )
+    shop.library.mark_cell(grid["id"], 0, 0, preset["id"])
+    return grid, preset
+
+
+def test_a_contribution_carries_everything_the_catalogue_requires(shop, measured):
+    """
+    The gap this round closes, from the other side.
+
+    Measured before it was closed: the body held fourteen keys and neither `by` nor
+    `tier` was one of them, so the repository's CI refused every file the app had ever
+    written. Both sets are the schema's own; see the note above this section.
+    """
+    grid, preset = measured
+    shop.offer(preset["id"], by="Jelle-T", result={"charring": "light", "cut_through": True})
+
+    body = shop.as_contribution(preset["id"])["preset"]
+
+    assert REQUIRED <= set(body), f"missing required: {sorted(REQUIRED - set(body))}"
+    assert set(body) <= ALLOWED, f"the schema would refuse: {sorted(set(body) - ALLOWED)}"
+    assert body["by"] == "Jelle-T"
+    assert body["tier"] == "measured"
+    assert body["board"] == f"OK1{grid['uid']}"
+    assert body["result"] == {"charring": "light", "cut_through": True, "kerf_mm": None}
+    assert body["synonyms"] == ["birch plywood"]
+    # The maintainer's field, and empty because it has not happened.
+    assert body["catalogued_at"] is None
+
+
+def test_nothing_about_the_offer_travels_inside_the_preset(shop, measured):
+    """
+    `additionalProperties: false` is the trap here.
+
+    Whether a contribution is ready, what it still needs and why it is not measured are
+    all facts about the *offer* and would each be a refused key inside the body. So the
+    envelope carries them and the body never does — which is also why a new field on the
+    envelope cannot break CI.
+    """
+    _, preset = measured
+    shop.remember_handle("Jelle-T")
+
+    report = shop.as_contribution(preset["id"])
+
+    assert {"ready", "needs", "tier_reason", "by"} <= set(report)
+    assert not {"ready", "needs", "tier_reason"} & set(report["preset"])
+
+
+def test_without_a_handle_there_is_nothing_to_offer(shop, measured):
+    """
+    Better said before the work than by CI afterwards.
+
+    `by` is a GitHub handle and the app had never asked for one, so there is no honest
+    body to build: the report says what is missing and hands back no preset and no tab
+    to open.
+    """
+    _, preset = measured
+
+    report = shop.as_contribution(preset["id"])
+
+    assert report["ready"] is False
+    assert report["needs"] == ["handle"]
+    assert report["preset"] is None
+    assert report["issue_url"] is None
+    # And it can still say what the offer *would* be, which is what the panel shows.
+    assert report["tier"] == "starting_point"
+    assert report["tier_reason"] == "noOutcome"
+
+
+def test_the_handle_is_asked_once(shop, measured, tmp_path):
+    """Remembered beside the library, so the second offer of anything never asks."""
+    _, preset = measured
+
+    shop.offer(preset["id"], by="Jelle-T")
+
+    assert shop.handle() == "Jelle-T"
+    assert (tmp_path / "openkerf-contributor.json").exists()
+    assert shop.as_contribution(preset["id"])["ready"] is True
+
+
+def test_a_pasted_profile_link_is_the_same_person(shop):
+    """All three of these are what a reader hands over when asked for a handle."""
+    for typed in ("@Jelle-T", "https://github.com/Jelle-T", "  Jelle-T  "):
+        assert shop.remember_handle(typed) == "Jelle-T"
+
+
+def test_a_handle_that_is_not_a_handle_is_refused(shop):
+    """
+    A handle is an address, so it is refused rather than trimmed into something
+    plausible: the attribution CC BY asks for is worthless pointing at somebody else.
+    """
+    with pytest.raises(LibraryError) as refused:
+        shop.remember_handle("Jelle Tigchelaar")
+
+    assert refused.value.code == "presetariat.share.badHandle"
+    assert shop.handle() is None
+
+
+def test_a_handle_of_nothing_but_hyphens_is_not_a_person(shop):
+    """
+    The catalogue's own pattern is not tight enough to keep this out, so we are.
+
+    `by` in the schema is `^[A-Za-z0-9-]{1,39}$`, which passes `-`, `-me` and `a--b`.
+    Measured before this: `remember_handle("-")` returned `'-'` and wrote it to disk, and
+    a body carrying it validates against the fetched schema — CI would merge it. It still
+    fails the only thing `by` is for, because GitHub has no such account and CC BY 4.0
+    attribution that points nowhere cannot be given. GitHub's own rule is the one applied
+    here: single hyphens, never at either end.
+    """
+    for typed in ("-", "-jelle", "jelle-", "a--b", "-" * 5):
+        with pytest.raises(LibraryError) as refused:
+            shop.remember_handle(typed)
+        assert refused.value.code == "presetariat.share.badHandle", typed
+    assert shop.handle() is None
+    # And the ordinary handle with a hyphen in the middle is untouched.
+    assert shop.remember_handle("jelle-t") == "jelle-t"
+
+
+def test_a_lens_of_zero_goes_over_as_no_lens_at_all(shop, measured):
+    """
+    A blank field may not become a claim about optics.
+
+    The machine form takes `lens_mm = 0` — `library.update_machine` puts it through
+    `_number(..., optional=True)`, which bounds nothing — and the catalogue's schema
+    refuses it: measured against the schema as fetched, a body with that value answers
+    `machine/lens_mm: 0.0 is less than or equal to the minimum of 0`. Its type is
+    `[number, null]` and null is what it calls "not recorded", which is what a zero in
+    that field means.
+    """
+    _, preset = measured
+    shop.library.update_machine(preset["machine_id"], {"lens_mm": 0})
+    assert shop.library.machines()[0]["lens_mm"] == 0, "the library still takes a zero"
+
+    body = shop.offer(preset["id"], by="jelle-t")["preset"]
+
+    assert body["machine"]["lens_mm"] is None
+    # A real lens is passed on as it stands.
+    shop.library.update_machine(preset["machine_id"], {"lens_mm": 63.5})
+    assert shop.as_contribution(preset["id"])["preset"]["machine"]["lens_mm"] == 63.5
+
+
+def test_a_material_name_too_short_to_search_on_is_refused_here(shop, co2):
+    """
+    The schema's one string bound, checked on this side of the network.
+
+    `material` carries `minLength: 2` over there and nothing at all over here: the
+    library refuses only an empty name. Measured against the schema as fetched, a
+    material called "A" produced `material: 'A' is too short` — a CI failure a reader
+    cannot act on, for a reason nobody had told them. `SCHEMA_BOUNDS` beside this covers
+    the numbers; this is the string.
+
+    Asked without a handle on purpose: this is a fact about the row, so it is said when
+    the panel opens rather than after somebody has typed their handle and pressed.
+    """
+    material = shop.library.add_material("A")["id"]
+    preset = shop.library.add_preset(
+        material_id=material, machine_id=co2, thickness_mm=3,
+        operation="snijden", speed_mm_s=12, power_percent=65,
+    )
+    assert shop.handle() is None
+
+    with pytest.raises(LibraryError) as refused:
+        shop.as_contribution(preset["id"])
+
+    assert refused.value.code == "presetariat.share.materialNameTooShort"
+    assert refused.value.values["material"] == "A"
+
+
+def test_the_handle_file_is_not_trusted_when_it_is_read_back(shop, tmp_path):
+    """
+    An ordinary file in a directory the owner can open, so it may hold anything.
+
+    Rubbish in it is the same situation as no handle: ask again, rather than offer
+    somebody's work under whatever is in there.
+    """
+    (tmp_path / "openkerf-contributor.json").write_text('{"by": "not a handle"}')
+
+    assert shop.handle() is None
+
+
+# ------------------------------------------------- nothing washes back in as evidence
+
+
+def test_a_setting_that_came_out_of_the_catalogue_says_so(shop, co2):
+    """
+    The laundering, reproduced and then closed.
+
+    Measured on a throwaway library before this: an imported 80 W starting point,
+    re-parented to a 60 W profile, came out as a brand-new
+    `berkentriplex-3mm-graveren-raster-co2-60w` with `source: {"kind": "handmatig"}` —
+    somebody else's guess, laundered into a fresh entry for a machine nobody had
+    measured. The row knew (`source = 'geimporteerd'`, `origin_id`); the contribution
+    now says so too.
+    """
+    sixty = shop.library.add_machine(
+        name="Ours", laser_type="co2-glass", power_watt=60
+    )["id"]
+    shop.import_presets(["berken-3mm-snijden-co2-80w"], machine_id=co2)
+    row = shop.library.presets()[0]
+    shop.library.update_preset(row["id"], machine_id=sixty)
+    shop.remember_handle("Jelle-T")
+
+    report = shop.as_contribution(row["id"])
+
+    assert report["tier"] == "starting_point"
+    assert report["tier_reason"] == "derived"
+    assert report["preset"]["derived_from"] == "berken-3mm-snijden-co2-80w"
+    # The id still names the machine it is filed under, which is the whole point of
+    # saying where it came from: 60 W is what this row now claims to be about.
+    assert report["preset"]["id"] == "berkentriplex-3mm-snijden-co2-60w"
+    assert report["preset"]["board"] is None
+
+
+def test_an_import_cannot_be_dressed_up_as_a_measurement(shop, co2):
+    """
+    Not even by recording an outcome for it.
+
+    `derived` is asked before anything else, because a value that came out of the
+    catalogue does not become measurable by somebody looking at a piece of wood next to
+    it. Reproduced with the outcome written straight onto the row, which is the only way
+    to get there at all.
+    """
+    shop.import_presets(["berken-3mm-snijden-co2-80w"], machine_id=co2)
+    row = shop.library.presets()[0]
+    shop.library.update_preset(row["id"], result_charring="none", result_cut_through=True)
+    shop.remember_handle("Jelle-T")
+
+    report = shop.as_contribution(row["id"])
+
+    assert report["tier"] == "starting_point"
+    assert report["tier_reason"] == "derived"
+    assert report["preset"]["result"] is None
+
+
+def test_a_measurement_filed_under_another_laser_is_no_longer_a_measurement(shop, measured):
+    """
+    The same move as the laundering, one PATCH long.
+
+    `machine_id` is in `library.PRESET_FIELDS`, so re-parenting a measured row is one
+    call: the numbers stay and the laser underneath them changes. A measurement belongs
+    to the machine it was burned on, so from there it is a starting point.
+    """
+    _, preset = measured
+    other = shop.library.add_machine(
+        name="A different one", laser_type="co2-glass", power_watt=60
+    )["id"]
+    shop.offer(preset["id"], by="Jelle-T", result={"charring": "light"})
+    assert shop.as_contribution(preset["id"])["tier"] == "measured"
+
+    shop.library.update_preset(preset["id"], machine_id=other)
+    report = shop.as_contribution(preset["id"])
+
+    assert report["tier"] == "starting_point"
+    assert report["tier_reason"] == "otherMachine"
+    assert report["preset"]["board"] is None
+
+
+# ------------------------------------------------------- the evidence, and its absence
+
+
+def test_a_measurement_without_an_outcome_is_offered_as_a_starting_point(shop, measured):
+    """
+    Silently downgrading it would be the same lie the other way round.
+
+    The board is real, the numbers were read off it, and still nobody wrote down what
+    came out of the material — which is the one thing the app cannot work out for
+    itself. So the report says which of the two labels it is using and why, and the
+    panel can offer to fill the gap.
+    """
+    _, preset = measured
+    shop.remember_handle("Jelle-T")
+
+    report = shop.as_contribution(preset["id"])
+
+    assert report["tier_reason"] == "noOutcome"
+    assert report["preset"]["tier"] == "starting_point"
+    assert report["preset"]["result"] is None
+    assert report["preset"]["measured_at"] is None
+
+
+def test_the_outcome_is_kept_on_the_row_it_came_out_of(shop, measured):
+    """
+    Asked once, like the handle — and it travels in a bundle with the board.
+
+    Without keeping it, every offer of the same setting would ask again, and a library
+    handed to a colleague would arrive with its boards and photographs and none of the
+    judgements read off them.
+    """
+    _, preset = measured
+
+    shop.offer(
+        preset["id"],
+        by="Jelle-T",
+        result={"charring": "heavy", "cut_through": False, "kerf_mm": 0.22},
+    )
+    stored = shop.library.preset(preset["id"])
+
+    assert stored["result_charring"] == "heavy"
+    assert stored["result_cut_through"] == 0
+    assert stored["result_kerf_mm"] == 0.22
+    body = shop.as_contribution(preset["id"])["preset"]
+    assert body["result"] == {"charring": "heavy", "cut_through": False, "kerf_mm": 0.22}
+
+
+def test_an_outcome_without_a_word_about_the_edge_is_refused(shop, measured):
+    """The schema's own reason: a number with no outcome beside it is unjudgeable."""
+    _, preset = measured
+
+    with pytest.raises(LibraryError) as refused:
+        shop.offer(preset["id"], by="Jelle-T", result={"kerf_mm": 0.2})
+
+    assert refused.value.code == "presetariat.share.needsCharring"
+
+
+def test_a_word_the_catalogue_does_not_know_is_refused(shop, measured):
+    """`charring` is an enum over there, so it is an enum here."""
+    _, preset = measured
+
+    with pytest.raises(LibraryError) as refused:
+        shop.offer(preset["id"], by="Jelle-T", result={"charring": "quite a bit"})
+
+    assert refused.value.code == "library.preset.charring"
+
+
+def test_a_measurement_whose_board_is_gone_is_a_starting_point(shop, measured):
+    """
+    The state the library already calls "the evidence is lost".
+
+    `board` is the name a maintainer follows to the photograph, so a row that can no
+    longer name one has nothing to show — whatever its source column still says.
+    """
+    grid, preset = measured
+    shop.offer(preset["id"], by="Jelle-T", result={"charring": "light"})
+    shop.library.remove_test_grid(grid["id"])
+
+    report = shop.as_contribution(preset["id"])
+
+    assert report["tier_reason"] == "boardGone"
+    assert report["preset"]["board"] is None
+
+
+def test_the_board_name_we_offer_is_the_one_the_board_carries(shop, measured):
+    """
+    `presetariat` spells the prefix out rather than importing `boardcode`, which pulls
+    the whole drawing layer in for three characters. This is what keeps the two the
+    same, from both ends: the constant, and the pattern the catalogue matches on.
+    """
+    from openkerf_api.boardcode import UID_PREFIX
+    from openkerf_api.catalogue_schema import BOARD_UID
+
+    grid, preset = measured
+    shop.offer(preset["id"], by="Jelle-T", result={"charring": "none"})
+
+    board = shop.as_contribution(preset["id"])["preset"]["board"]
+
+    assert board == f"{UID_PREFIX}{grid['uid']}"
+    assert BOARD_UID.match(board)
+
+
+def test_the_day_on_the_offer_is_the_day_of_the_board(shop, measured):
+    """
+    Not today's date, which is what an offer would otherwise stamp on somebody's burn
+    from last month. The board's row is the only date the library keeps about it.
+    """
+    grid, preset = measured
+    shop.offer(preset["id"], by="Jelle-T", result={"charring": "light"})
+
+    body = shop.as_contribution(preset["id"])["preset"]
+
+    assert body["measured_at"] == str(grid["created_at"])[:10]
+
+
+# ------------------------------------------------------------- the machine underneath
+
+
+def test_a_machine_of_no_known_kind_cannot_be_shared(shop):
+    """
+    `unknown` is the column's default, from the moment a device is activated and before
+    anybody is asked anything. Before this refusal the file name said `co2` regardless —
+    `_slug` fell back to it — so an undescribed machine's contribution made a claim
+    about somebody's optics that nobody had made.
+    """
+    machine = shop.library.add_machine(name="Nobody asked", power_watt=80)["id"]
+    material = shop.library.add_material("Berkentriplex")["id"]
+    preset = shop.library.add_preset(
+        material_id=material,
+        machine_id=machine,
+        operation="snijden",
+        speed_mm_s=12,
+        power_percent=65,
+    )
+    shop.remember_handle("Jelle-T")
+
+    with pytest.raises(LibraryError) as refused:
+        shop.as_contribution(preset["id"])
+
+    assert refused.value.code == "presetariat.share.noKind"
+
+
+def test_a_uv_machine_does_not_get_a_co2_file_name(shop):
+    """
+    The other half of the same bug: `uv` was not in the map, so it fell through to the
+    default and one file said `uv` in its machine block and `co2` in its name.
+    """
+    machine = shop.library.add_machine(name="Marker", laser_type="uv", power_watt=5)["id"]
+    material = shop.library.add_material("Anodised aluminium")["id"]
+    preset = shop.library.add_preset(
+        material_id=material,
+        machine_id=machine,
+        operation="markeren",
+        speed_mm_s=800,
+        power_percent=40,
+    )
+    shop.remember_handle("Jelle-T")
+
+    body = shop.as_contribution(preset["id"])["preset"]
+
+    assert body["id"] == "anodised-aluminium-markeren-uv-5w"
+    assert body["machine"]["laser_type"] == "uv"
+
+
+def test_a_speed_the_catalogue_will_not_take_is_refused_here(shop):
+    """
+    `add_preset` bounds `power_percent` and nothing else, so a galvo marker at
+    5000 mm/s is an ordinary row in this library and a CI failure over there. The
+    schema's ceiling is 2000, and "the repository refused your proposal" is not
+    something a reader can act on.
+    """
+    machine = shop.library.add_machine(
+        name="Galvo", laser_type="fiber", power_watt=30
+    )["id"]
+    material = shop.library.add_material("Stainless steel")["id"]
+    preset = shop.library.add_preset(
+        material_id=material,
+        machine_id=machine,
+        operation="markeren",
+        speed_mm_s=5000,
+        power_percent=60,
+    )
+    shop.remember_handle("Jelle-T")
+
+    with pytest.raises(LibraryError) as refused:
+        shop.as_contribution(preset["id"])
+
+    assert refused.value.code == "presetariat.share.outOfRange"
+    assert refused.value.values["high"] == 2000
+
+
+def test_the_two_answers_go_over_http_and_the_report_comes_back(kernel, tmp_path, catalogue_file):
+    """The panel's two calls, end to end: what is missing, and then the offer."""
+    server = ApiServer(kernel, library_path=tmp_path / "api.db")
+    server.presetariat.url = catalogue_file.as_uri()
+    with TestClient(server.build_app()) as client:
+        machine = server.library.add_machine(
+            name="KH-5030", laser_type="co2-glass", power_watt=80
+        )["id"]
+        material = client.post(
+            "/api/library/materials", json={"name": "Berkentriplex"}
+        ).json()["id"]
+        preset = client.post(
+            "/api/library/presets",
+            json={
+                "material_id": material,
+                "machine_id": machine,
+                "thickness_mm": 3,
+                "operation": "snijden",
+                "speed_mm_s": 12,
+                "power_percent": 65,
+            },
+        ).json()
+
+        before = client.get(f"/api/presetariat/contribution/{preset['id']}")
+        assert before.status_code == 200
+        assert before.json()["ready"] is False
+        assert before.json()["needs"] == ["handle"]
+
+        offered = client.post(
+            f"/api/presetariat/contribution/{preset['id']}", json={"by": "@Jelle-T"}
+        )
+        assert offered.status_code == 200, offered.text
+        body = offered.json()["preset"]
+        assert body["by"] == "Jelle-T"
+        assert body["tier"] == "starting_point"
+        assert offered.json()["tier_reason"] == "notMeasured"
+        assert REQUIRED <= set(body)
+
+
+def test_the_outcome_travels_in_a_bundle(shop, measured, tmp_path):
+    """
+    A library is a file you hand to a colleague, and it carries the boards and the
+    photographs. The judgements read off them travel with it, or a restored library can
+    no longer offer its own measurements as measurements.
+    """
+    from openkerf_api.library import Library
+
+    _, preset = measured
+    shop.offer(preset["id"], by="Jelle-T", result={"charring": "light", "kerf_mm": 0.18})
+
+    elsewhere = Library(tmp_path / "colleague" / "library.db")
+    elsewhere.import_bundle(shop.library.export_bundle("mine"))
+
+    landed = elsewhere.presets()[0]
+    assert landed["result_charring"] == "light"
+    assert landed["result_kerf_mm"] == 0.18

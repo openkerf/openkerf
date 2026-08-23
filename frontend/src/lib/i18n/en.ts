@@ -1143,6 +1143,47 @@ export const en = {
 	'library.menu.share': 'Share with Presetariat',
 	'library.menu.remove': 'Remove setting',
 	'library.share.failed': 'Sharing did not work.',
+	// ── Offering one of your own ──────────────────────────────────────────────────
+	//
+	// Sharing was one press and a GitHub tab, and what went in that tab was refused by
+	// the catalogue's own CI: `by` and `tier` are required over there and neither was
+	// ever written. Both are answers only the reader has — a GitHub handle, and what
+	// came out of the material — so the press opens a panel that says what would go out
+	// and under which of the two labels, and asks for what is missing.
+	'library.share.tier.measured': 'This goes in as a measurement, read off board {board}.',
+	'library.share.tier.startingPoint': 'This goes in as a starting point, not as a measurement.',
+	'library.share.why.notMeasured':
+		'Nobody read these numbers off a test board, so the catalogue takes them as a considered guess.',
+	'library.share.why.derived':
+		'These numbers came out of the catalogue itself, from {id}, so they go back as a guess that leans on that entry rather than as evidence.',
+	'library.share.why.boardGone':
+		'The test board behind this setting is gone, and a measurement in the catalogue is followed back to its board.',
+	'library.share.why.otherMachine':
+		'This setting is filed under a different laser than the board it was burned on, so for this machine it is a starting point.',
+	'library.share.why.noOutcome':
+		'The board is still here, but nobody wrote down what came out of the material, and a speed with no outcome beside it is not something anybody else can judge.',
+	'library.share.charring': 'The edge',
+	'library.share.charring.pick': '— say how the edge came out —',
+	'library.share.charring.none': 'Clean, no charring',
+	'library.share.charring.light': 'Lightly charred',
+	'library.share.charring.heavy': 'Heavily charred',
+	'library.share.cutThrough': 'Cut through',
+	'library.share.cutThrough.unsure': 'Rather not say',
+	'library.share.cutThrough.yes': 'Yes, the piece came free',
+	'library.share.cutThrough.no': 'No, it stayed attached',
+	'library.share.kerf': 'Kerf',
+	'library.share.outcome.why':
+		'Say how it came out and this goes in as a measurement, with its board behind it. It is kept on the setting, so you are asked once.',
+	'library.share.handle': 'Your GitHub handle',
+	'library.share.handle.placeholder': 'e.g. jelle-t',
+	'library.share.handle.why':
+		'The catalogue is shared under CC BY 4.0, so every entry names who offered it — that is the credit anybody reusing it has to be able to give. It is asked once and kept on this computer.',
+	'library.share.by': 'Offered as {by}.',
+	'library.share.handle.change': 'Use another handle',
+	'library.share.open': 'Open the proposal on GitHub',
+	'library.share.open.why':
+		'It opens a pre-filled proposal in a new tab, so you can read what you are about to share before anybody else does.',
+	'library.share.close': 'Close this panel',
 	// ── What you can do to a material ─────────────────────────────────────────────
 	//
 	// Adding a material was the only thing possible here, which is why this library
@@ -1833,6 +1874,11 @@ export const en = {
 
 	// ── Phone view ────────────────────────────────────────────────────────────────
 	'phone.photoSaved': 'Photo saved. You get the preset out of it on the desktop.',
+	// The refusal itself comes from the API, which knows which two boards it is about.
+	// This is the fallback for the case where the answer carries no sentence at all — a
+	// network that went away mid-upload, or a 500 — and it says the one thing the phone
+	// can be sure of: the picture is not filed, so the plank is still wanted.
+	'phone.photoFailed': 'The photo was not saved. Keep the board and try again.',
 	'phone.noConnection': 'No connection',
 	'phone.noMachine': 'no machine',
 	'phone.cameraAlt': 'Camera image of the bed',
@@ -2422,10 +2468,24 @@ export const en = {
 		'This is the machine you are working on; move the other profile into this one instead.',
 	'api.library.machine.mergeTwoReal':
 		'Both of these profiles belong to a machine that exists. Two lasers are not one, and merging them would file one machine’s measurements under the other.',
+	'api.library.preset.kerfRange':
+		'The catalogue holds a kerf between 0 and {max} millimetres, and this one is {kerf}.',
 	'api.library.adopt.noMachine':
 		'There is no machine active, so there is nothing to attach these settings to.',
 	'api.presetariat.share.noWatt':
 		'This setting belongs to a machine whose tube power is not recorded, so nobody else can tell whether it applies to theirs.',
+	'api.presetariat.share.noKind':
+		'This setting belongs to a machine whose kind of laser is not recorded, and a CO2 setting is not a starting point for a diode.',
+	'api.presetariat.share.badHandle':
+		'A GitHub handle is letters and digits, with single hyphens between them and none at either end.',
+	'api.presetariat.share.materialNameTooShort':
+		'The catalogue searches on the material name, so it needs at least two characters; rename this material before offering its settings.',
+	'api.presetariat.share.outOfRange':
+		'The catalogue holds {field} between {low} and {high}, and this setting says {value}.',
+	'api.presetariat.share.needsCharring':
+		'Say how the edge came out, because a speed and a power with no outcome beside them is not something anybody else can judge.',
+	'api.presetariat.share.handleNotKept':
+		'Your handle could not be saved on this computer, so it will be asked for again.',
 	'api.presetariat.badShape': 'That file does not look like a preset catalogue.',
 	'api.presetariat.tooNew': 'This catalogue comes from a newer version of OpenKerf. Update first.',
 	'api.presetariat.unreachable':

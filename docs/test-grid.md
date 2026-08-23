@@ -114,8 +114,8 @@ Under **What else goes on the board** there are two switches:
   default. *The border is a line around the whole board; it makes aligning the photo
   easier.*
 
-The caption and the border are burned in a layer of their own, at a speed and power you
-set yourself: **Caption: speed** and **Caption: power** (or *Border:* when only the border
+The caption and the border are burned in a layer of their own, called **Board labels**, at
+a speed and power you set yourself: **Caption: speed** and **Caption: power** (or *Border:* when only the border
 is on). They start at 80 mm/s and 30%. That layer does not join the sweep — it has to stay
 readable whatever the trial does — and on a material other than plywood the default can
 burn straight through your board.
@@ -171,29 +171,40 @@ looks:
   of a code never changes.
 - 18 mm over 29 modules is a **0.62 mm module**, which clears the rule of thumb that a
   module wants to be at least three kerfs wide.
-- Of those 18 mm, 4.97 mm is quiet zone and the pattern itself is 13.03 mm. The quiet zone
-  is not decoration: through a simulated photograph, four modules of margin decoded 20 of
-  20 where two decoded 16 of 20 — and **zero never decoded at all**, at any resolution
-  from 1 to 12 pixels per module.
+- Of those 18 mm, 4.97 mm is quiet zone and the pattern itself is 13.03 mm. That margin is
+  what keeps the caption, the squares and the rim out of the pattern — and it is not what
+  makes the code readable in a frame, which an earlier version of this page claimed. On a
+  simulated photograph of a code with **nothing** around it, no quiet zone never decoded
+  (0 of 20 at 3, 6 and 12 pixels per module) while two modules and four both read 20 of 20;
+  on a photograph of the same code **on a plank**, even no quiet zone read 20 of 20,
+  because the unburned wood around it is the quiet zone.
 
-How big it has to be in the *photograph* was measured by reading back what the machine
-actually gets: the real rasteriser at 167 dpi, an 86 × 86 pixel bitmap, upscaled onto a
-300 mm plank, tilted 5°, blurred and saved as JPEG at quality 85, forty different names at
-each size.
+How big it has to be in the *photograph* was measured on a simulated one: the code rendered
+from the millimetres the laser gets, stamped on a 300 mm plank with the board's own sixteen
+squares beside it, turned 5°, blurred, speckled and saved as JPEG at quality 85 — forty
+different names at each size, read back through the same two decoders and the same retry the
+app uses. Rendering it instead through the 167 dpi bitmap the machine really rasterises
+moves none of the rows.
 
-| The photograph is | Names decoded |
-| --- | --- |
-| 1200 px across | 34 of 40 |
-| 1600 px across | 36 of 40 |
-| 2000 px across and up | 40 of 40 |
+| The photograph is | Pixels per module | Names decoded |
+| --- | --- | --- |
+| 1200 px across | 2.5 | 0 of 40 |
+| 1600 px across | 3.3 | 16 of 40 |
+| 2000 px across and up | 4.1 and up | 40 of 40 |
 
 Any phone takes a 2000 px picture. What does *not* work is the 1600 px copy that travels
 with a contribution — so a code is read off the upload, never off a downsized copy.
 
-Which decoder matters more than the size: on the same picture the plain OpenCV detector read
-1 of 10 where the Aruco detector read 9 of 10, because a board's own grid of dark squares is
-exactly what the plain one loses a code in. A board photograph always has those squares, so
-OpenKerf asks Aruco first.
+The blur is what decides those bottom two rows: leave it out and 1200 px decodes as well.
+That is worth saying because an earlier version of this page printed a far kinder pair for
+them (34 and 36 of 40), measured without it — which describes a screen and not a plank.
+
+Which decoder matters as much as the size: on the same photograph the plain OpenCV detector
+read 1 of 20 where the Aruco detector read 19 of 20, so OpenKerf asks Aruco first and keeps
+the plain one as the fallback for an older OpenCV. It is the photograph that defeats the
+plain detector and not the board's own dark squares — take the sixteen squares out of the
+picture and it reads no better; take the blur, the tilt and the JPEG out and it reads every
+one.
 
 Below 14 mm the code is drawn with a warning — *A 13 mm code has 0.45 mm modules;
 photograph the board from close by, or make the code bigger.* — and below 12 mm it is
@@ -322,7 +333,7 @@ photograph is the tile's own edge, roughly 20 mm outside the squares — and dra
 alignment handles onto *that* puts every square in the wrong place without a word of
 complaint. So a board you intend to cut loose is a board that wants a code on it.
 
-![The bed with a test board drawn on it and a rectangle around the whole board, four millimetres clear of it, with a small gap in the middle of each of its four sides. In the Layers tab beside it three layers, in burn order: the one holding the caption and the axis labels (named "Raster-labels" on screen), then "Board code", and last "Test board cut-out" at 12 mm/s and 65% — the cut setting looked up from the library rather than guessed.](images/42-board-tile.png)
+![The bed with a test board drawn on it and a rectangle around the whole board, four millimetres clear of it, with a small gap in the middle of each of its four sides. In the Layers tab beside it three layers, in burn order: the one holding the caption and the axis labels (named "Board labels" on screen), then "Board code", and last "Test board cut-out" at 12 mm/s and 65% — the cut setting looked up from the library rather than guessed.](images/42-board-tile.png)
 
 ## Where the board lies
 

@@ -23,7 +23,19 @@ MAX_CELLS = 400  # A 20x20 sweep is already more than anyone reads off a photo.
 # both the generator and the drawing part have to recognise it: it is a layer *of the
 # board* and not a layer of the user's, and so must never catch fresh work (see
 # Drawing._single_layer).
-LABEL_LAYER = "Raster-labels"
+#
+# It burns as an `op engrave` and it holds the caption and the axis labels, which is why
+# it may not be called after the raster: "Raster-labels" was Dutch — where *raster* means
+# grid, so it read "the grid's own labels" — and to an English reader of a laser
+# application it says raster engraving, which is the one thing this layer is not.
+LABEL_LAYER = "Board labels"
+
+# Every name this layer has ever had. Recognised everywhere, written nowhere but above: a
+# board burned before the rename carries the old name in the design, and a project file
+# saved then still does — and a layer of the board that is no longer recognised as the
+# board's starts catching the user's fresh work and is swept as theirs. So the old name
+# stays readable and nothing has to be migrated on disk.
+LABEL_LAYERS = (LABEL_LAYER, "Raster-labels")
 
 # The name of the group that holds one board together.
 BOARD_LABEL = "Testraster"
@@ -36,8 +48,9 @@ CODE_LAYER = "Board code"
 CUTOUT_LAYER = "Test board cut-out"
 
 # Every layer a board makes for itself. A layer in here is the board's and never catches
-# fresh work, and once its last shape is gone it is an empty layer nobody asked for.
-BOARD_LAYERS = (LABEL_LAYER, CODE_LAYER, CUTOUT_LAYER)
+# fresh work, and once its last shape is gone it is an empty layer nobody asked for. The
+# caption layer's old name is in here too, for the reason `LABEL_LAYERS` gives.
+BOARD_LAYERS = (*LABEL_LAYERS, CODE_LAYER, CUTOUT_LAYER)
 
 
 def _positive(value, name: str) -> float:
@@ -1747,10 +1760,13 @@ class TestGridGenerator:
             float(plan.get("label_power_percent") or DEFAULT_LABEL_POWER_PERCENT) * 10
         )
         for node in self.elements.op_branch.children:
-            if getattr(node, "label", None) == LABEL_LAYER:
-                # The layer is already there from a previous board. Anybody asking for a
-                # different label setting now gets it too: otherwise you set something in
-                # the form that silently does nothing.
+            if getattr(node, "label", None) in LABEL_LAYERS:
+                # The layer is already there from a previous board — under whichever name
+                # it was made with, so a board added to a project from before the rename
+                # keeps writing its captions into the layer that is already there instead
+                # of laying a second one beside it. Anybody asking for a different label
+                # setting now gets it too: otherwise you set something in the form that
+                # silently does nothing.
                 node.speed = speed
                 node.power = power
                 return node

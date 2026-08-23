@@ -8,9 +8,11 @@ the bugs that were measured while this was designed, kept as tests so they canno
 back: `segno.make` returning an undecodable Micro QR, and the plain OpenCV detector losing
 the code among a board's own dark squares.
 
-Numbers in this file were measured on this laptop with OpenCV 5.0.0, segno 1.6.6 and
-MeerK40t 0.9.9000. Nothing has been burned: no board with a code has been on a laser, so
-every millimetre here is arithmetic on top of pixels.
+Numbers in this file were measured on this laptop with OpenCV 5.0.0, segno 1.6.6 and the
+MeerK40t working copy at 0.9.9040 (`meerk40t/main.py:26` — not the 0.9.9000 floor of the
+pin in `api/pyproject.toml`, which is what an earlier version of this line quoted).
+Nothing has been burned: no board with a code has been on a laser, so every millimetre here
+is arithmetic on top of pixels.
 """
 
 import numpy as np
@@ -75,12 +77,21 @@ def photograph(picture, seed=0, angle=5.0, blur=1.1, noise=5, quality=85):
     return bytes(buffer)
 
 
-def on_a_board(code: dict, width_px: int, board_mm: float = 300.0, seed=0):
+def on_a_board(
+    code: dict,
+    width_px: int,
+    board_mm: float = 300.0,
+    seed=0,
+    squares=True,
+    photo=True,
+):
     """
     The code where it really is: a corner of a plank, with the board's own squares on it.
 
-    The squares matter. They are what the plain OpenCV detector loses the code in, and a
-    photograph of a test board always has sixteen of them.
+    The squares are here because a photograph of a test board always has sixteen of them —
+    not because they are what breaks the reading. They were long blamed for that, and they
+    measure the same either way; `squares=False` is how that was found out and is what
+    `test_it_is_the_photograph_and_not_the_boards_own_squares` uses.
     """
     import cv2
 
@@ -94,14 +105,16 @@ def on_a_board(code: dict, width_px: int, board_mm: float = 300.0, seed=0):
     margin = int(width_px * 0.1)
     plank[margin : margin + stamp.shape[0], margin : margin + stamp.shape[1]] = stamp
     step = int(width_px * 0.06)
-    for row in range(4):
+    for row in range(4) if squares else ():
         for column in range(4):
             top = int(width_px * 0.25) + row * step
             left = int(width_px * 0.35) + column * step
             plank[top : top + int(step * 0.8), left : left + int(step * 0.8)] = (
                 60 + row * 40 + column * 8
             )
-    return photograph(plank, seed=seed)
+    # `photo=False` hands back the plank as pixels rather than as a JPEG of a plank: the
+    # control arm, and the only way to tell the picture apart from what is in it.
+    return photograph(plank, seed=seed) if photo else plank
 
 
 # --------------------------------------------------------------- the identity
@@ -188,10 +201,12 @@ def test_the_footprint_is_the_size_asked_for_and_the_quiet_zone_is_inside_it():
     18 mm buys 29 modules of 0.6207 mm, of which 4 a side are empty material.
 
     Measured on the default: module 0.621 mm, quiet zone 2.483 mm a side, so 4.97 mm of the
-    18 mm is margin and the pattern itself is 13.03 mm. That is what the quiet zone costs,
-    and it is worth it: through a simulated photograph two modules of quiet decoded 16 of 20
-    at 6 px per module where four decoded 20 of 20, and no quiet zone at all never decodes
-    at any resolution.
+    18 mm is margin and the pattern itself is 13.03 mm. What that margin buys is measured in
+    `boardcode.QUIET_MODULES`, and it is not what an earlier version of this docstring said:
+    on a code rendered with nothing around it, no quiet zone never decodes (0 of 20 at 3, 6
+    and 12 px per module) where two and four both read 20 of 20 at 6 — and on a plank, even
+    no quiet zone reads 20 of 20, because the unburned wood is the quiet zone. It is the
+    margin that keeps the caption and the squares out of the pattern.
 
     The footprint is what the board reserves, so nothing may stick out of it: every square
     lies inside the size asked for, and none of them lies in the quiet zone.
@@ -245,7 +260,7 @@ def test_a_code_too_small_to_read_is_refused_and_a_small_one_says_so():
     """
     Under 12 mm: refused. Under 14 mm: drawn, with the numbers in a warning.
 
-    At 5 px per module — the resolution that read 20 of 20 on a simulated board photograph —
+    At 5 px per module — a resolution that read 40 of 40 on a simulated board photograph —
     an 18 mm code wants a 300 mm board photographed at 2400 px across, a 14 mm code 3100 px
     and a 12 mm code 3600. Below 12 mm the module is 0.41 mm, two kerfs, and the laser would
     be deciding where the module edges are. That is 7 s of burn time for a board that still
@@ -302,12 +317,16 @@ def test_a_code_photographed_on_a_plank_still_names_its_board():
     """
     The code where the failure was measured: on a board, with the board's own squares.
 
-    An 18 mm code on a 300 mm board, turned 5 degrees, blurred, noised and JPEG 85. With the
-    Aruco detector and the 2x retry `read` does, this is 20 of 20 at 2400 px across (5.0 px
-    per module) and 20 of 20 at 3200; at 1600 px — the size a shared contribution keeps — it
-    was 6 of 20, which is why the upload and not the copy is what gets decoded. The plain
-    `QRCodeDetector` read 1 of 10 on this same picture at 8.3 px per module, so the detector
-    order in `_detectors` is load bearing and not a preference.
+    An 18 mm code on a 300 mm board, turned 5 degrees, blurred, noised and JPEG 85. Through
+    `read` — Aruco first, then a 2x retry — this harness measured 40 of 40 at 2000, 2400 and
+    3200 px across (4.1, 5.0 and 6.6 px per module), 16 of 40 at 1600 px and 0 of 40 at
+    1200 px. So 1600 px, which is the size a shared contribution keeps, is the one rung that
+    half works: that is why the upload and never the stored copy is what gets decoded.
+
+    The detector order is load bearing on a photograph and only there — the plain detector
+    read 1 of 20 at 5.0 px per module where Aruco read 19 — and the reason is the photograph
+    and not the board's own squares, which
+    `test_it_is_the_photograph_and_not_the_boards_own_squares` measures.
     """
     uid = boardcode.mint_uid()
     code = boardcode.plan(uid)
@@ -316,6 +335,58 @@ def test_a_code_photographed_on_a_plank_still_names_its_board():
 
     tiny = boardcode.read(on_a_board(code, 900, seed=0))
     assert tiny == [], "a code this small in the frame must come back empty, not wrong"
+
+
+@needs_cv2
+def test_it_is_the_photograph_and_not_the_boards_own_squares():
+    """
+    The plain detector was blamed for losing the code among the board's own dark squares.
+
+    It does lose it — but not to the squares. Measured on this harness with twenty uids per
+    cell at 2400 px across (5.0 px per module), the plain detector read 1 of 20 with the
+    sixteen squares in frame and 0 of 20 with them taken out, while Aruco read 18 of 20 and
+    19 of 20. Take the *photograph* away instead — the same plank, unturned, unblurred,
+    uncompressed, squares and all — and the plain detector reads 59 of 60.
+
+    So the detector order in `_detectors` earns its place on a photograph and nowhere else,
+    and the module docstring may not explain it by the squares. Six uids here rather than
+    twenty, and thresholds rather than exact counts: at 1 in 20 and 59 in 60 a six-sample
+    run of a random uid legitimately lands one either way, and a test that fails one run in
+    thirty teaches people to rerun it.
+    """
+    plain, without, clean = 0, 0, 0
+    for seed in range(6):
+        uid = boardcode.mint_uid()
+        code = boardcode.plan(uid)
+        plain += uid in _with("QRCodeDetector", on_a_board(code, 2400, seed=seed))
+        without += uid in _with(
+            "QRCodeDetector", on_a_board(code, 2400, seed=seed, squares=False)
+        )
+        clean += uid in _with(
+            "QRCodeDetector", on_a_board(code, 2400, seed=seed, photo=False)
+        )
+        # And the detector that is asked first does read the photograph, which is the
+        # whole reason it is asked first.
+        assert boardcode.read(on_a_board(code, 2400, seed=seed)) == [uid], seed
+
+    assert clean >= 5, ("without the photograph the plain detector reads them", clean)
+    assert plain <= 2 and without <= 2, (plain, without)
+    # The claim itself: taking the squares out does not help the plain detector.
+    assert abs(plain - without) <= 2, (plain, without)
+
+
+def _with(name: str, image) -> list[str]:
+    """One named OpenCV detector on one picture, the way `_decode` asks it."""
+    import cv2
+
+    picture = boardcode._as_grey(cv2, image)
+    detector = getattr(cv2, name)()
+    ok, decoded = detector.detectAndDecodeMulti(picture)[:2]
+    texts = [str(t) for t in (decoded or []) if t] if ok else []
+    if not texts:
+        single = detector.detectAndDecode(picture)[0]
+        texts = [str(single)] if single else []
+    return [u for u in (boardcode.parse(t) for t in texts) if u]
 
 
 @needs_cv2
