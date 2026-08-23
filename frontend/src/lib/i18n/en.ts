@@ -2096,6 +2096,12 @@ export const en = {
 	// are the reader's, so they go through Intl; the sizes are millimetres and go
 	// through i18n.mm for the same reason.
 	'series.plate': 'On one plate',
+	'series.plate.sheet': '{name} is {size} mm',
+	'series.plate.materialThick': '{thickness} mm {name}',
+	'series.plate.width': 'Plate width',
+	'series.plate.height': 'Plate height',
+	'series.plate.material': 'Choose the material',
+	'series.plate.material.change': 'Change the material',
 	'series.plate.size': '{w} × {h}',
 	'series.plate.fits': 'A piece of {piece} mm goes {places} times on this plate: {across} across and {down} down.',
 	'series.plate.more': 'The whole list is {burns} plates of this one, and the last of them uses {last} of the places.',

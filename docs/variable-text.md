@@ -190,9 +190,16 @@ one plate**:
 
 > A piece of 110 × 60 mm goes 16 times on this plate: 4 across and 4 down.
 
-Two numbers decide it, and both are about the material rather than the list: **Between the
-pieces** is the gap where two cuts would otherwise become one, and **Free at the edge** is the
-margin where the clamps live. Press **Lay out 16 pieces** and the app moves the piece into the
+Above that sum stands the plate it was measured against — "Sheet 1 is 500 × 300 mm" plus the
+material when one is filled in — with the two numbers that make it: **Plate width** and **Plate
+height** write straight to the sheet, and **Choose the material** opens the same dialog the top
+bar does. The sheet is still the one place those live; this is a second door to it, next to the
+sum that depends on them. (The other door is the sheet tab: click the tab you are on and it
+opens for editing.)
+
+Two more numbers decide the layout, and both are about the material rather than the list:
+**Between the pieces** is the gap where two cuts would otherwise become one, and **Free at the
+edge** is the margin where the clamps live. Press **Lay out 16 pieces** and the app moves the piece into the
 corner of that margin, copies it across the plate, and gives every copy the next row — copy
 two reads `{name#+1}`, copy sixteen `{name#+15}`. It is one undo.
 
