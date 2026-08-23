@@ -76,9 +76,13 @@ cd frontend && OPENKERF_API=http://127.0.0.1:8092 npx vite dev --port 5200
 
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 41
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 42
+OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 43
 ```
 
-Without the flag the two shots are skipped and say so on the console. Two things
+Shot 43 is of the form and not of a board, so it writes no row itself; it needs the
+same expendable library because the cut-out has nothing to report without a material
+that has a cut setting. Without the flag the three shots are skipped and say so on
+the console. Two things
 that scratch engine does *not* get its own copy of, because MeerK40t has none:
 the machine list and the machine's own settings, which live in one
 `MeerK40t.cfg` for every instance (see CLAUDE.md, the `-P/--profile` row). So

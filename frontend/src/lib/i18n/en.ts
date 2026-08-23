@@ -1276,6 +1276,28 @@ export const en = {
 	'grid.extras.noText': 'Without a caption the board is a puzzling piece of wood in two weeks — and the axis values will not be on it either.',
 	'grid.extras.bothOn': 'The border runs around everything, caption included. Handy for aligning the photo later.',
 	'grid.extras.borderOnly': 'The border is a line around the whole board; it makes aligning the photo easier.',
+	// The board's own name on the plank, and the tile cut loose from the sheet. Both are
+	// values you set and read back, so they are on the test-grid form; see the placement
+	// rule in CLAUDE.md.
+	'grid.extras.code': 'Burn the board’s own name on it as a QR code',
+	'grid.extras.cutout': 'Cut the board loose from the sheet',
+	'grid.code.why':
+		'Two boards of the same material with the same squares are hard to tell apart once they are off the machine. With the code, a photograph of the board finds its own row on its own.',
+	'grid.code.name':
+		'This board is called {name}; the code says the same thing, and the caption prints it for anybody without a camera to hand.',
+	'grid.code.size': 'Code size',
+	'grid.code.cost':
+		'It takes a strip of {strip} below the squares, about {time} of burning, and modules of {module}.',
+	'grid.cutout.setting':
+		'The rim is cut at {speed} mm/s and {power}%, {passes}× — the cut setting your library has for this material and thickness.',
+	'grid.cutout.how': {
+		one: 'The cut runs {margin} outside everything else on the board, with one bridge of {tab} left uncut so the tile stays in the sheet until you break it out.',
+		other: 'The cut runs {margin} outside everything else on the board, with {n} bridges of {tab} left uncut so the tile stays in the sheet until you break it out.'
+	},
+	'grid.cutout.cost': 'Cutting it loose adds about {time} of burning.',
+	'grid.cutout.tile': 'The tile comes off the sheet at {size}.',
+	'grid.extras.untried':
+		'No board with a code or a cut-out has been burned yet, on any material: the millimetres and seconds above are arithmetic on the engine’s own cut plan, not measurements on wood.',
 	'grid.label.speed': '{layer}: speed',
 	'grid.label.power': '{layer}: power',
 	'grid.caption': 'Caption on the board',
@@ -1292,12 +1314,17 @@ export const en = {
 	'grid.extras.both': 'caption and border',
 	'grid.extras.captionOnly': 'caption',
 	'grid.extras.borderOnly2': 'border',
+	'grid.extras.codeOnly': 'code',
+	'grid.extras.captionAndCode': 'caption and code',
+	'grid.extras.borderAndCode': 'border and code',
+	'grid.extras.allThree': 'caption, border and code',
 	'grid.burnTime': 'Burn time roughly {time}, without the captions.',
 	'grid.cellTitle': '{row} by {column}',
 	'grid.tooFar': 'The board starts at {position}, and that is outside the bed.',
 	'grid.tooFar.labels': 'The row labels need roughly {mm} mm on the left.',
 	'grid.tooFar.move': 'Move the {anchor} to the right or downwards{orText}.',
 	'grid.tooFar.orText': ', or switch the caption off',
+	'grid.tooFar.cut': 'The cut itself runs {margin} outside the board.',
 	'grid.legend.rows': 'Rows: {axis} in {unit}.',
 	'grid.legend.columns': 'Columns: {axis}.',
 	'grid.legend.fixed': '{axis} fixed at {value}.',
@@ -1323,6 +1350,7 @@ export const en = {
 	'grid.error.refused': 'The engine refused the grid ({status}).',
 	'grid.labelLayer.caption': 'Caption',
 	'grid.labelLayer.border': 'Border',
+	'grid.labelLayer.code': 'Board code',
 	'grid.corner.left': 'left',
 	'grid.corner.right': 'right',
 	'grid.corner.top': 'top',
@@ -2462,6 +2490,8 @@ export const en = {
 	'api.library.material.nameTaken':
 		'There is already a material of that name. Merge the two instead of giving them the same name.',
 	'api.library.material.mergeSelf': 'A material cannot be merged into itself.',
+	'api.library.grid.cutoutNeedsMaterial':
+		'Cutting the tile loose needs a material, so its cut setting can be looked up.',
 	'api.library.machine.mergeSelf':
 		'Choose a different machine profile to move this one’s work into.',
 	'api.library.machine.mergeActive':

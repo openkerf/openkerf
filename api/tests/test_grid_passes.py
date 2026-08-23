@@ -1,5 +1,5 @@
 """
-Meerdere passes op one testbord.
+More than one pass on a single test board.
 
 The case this comes from: a material that almost cuts through at 5 mm/s, and that you want
 to try at 8 mm/s in two passes. One number for the whole board — passes as a third axis would

@@ -1646,7 +1646,9 @@ if (wanted('40')) {
  * drawing one writes a row into the library, mints the board a name and, for the
  * cut-out, needs a cut setting for the material. That is more than a screenshot
  * may do to somebody's real library, so these two only run against a library that
- * is expendable:
+ * is expendable. Shot 43 photographs the form rather than a board and so writes no
+ * row of its own, but it needs the same material with the same cut setting for the
+ * cut-out to have anything to report, so it goes with them:
  *
  *   OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 41
  *
@@ -1680,12 +1682,12 @@ const scratch = process.env.OK_SCRATCH_LIBRARY === '1';
  * The material is made once and reused: `POST /api/library/materials` refuses a
  * name it already has, and a second run then had no material to hang the board on.
  */
-async function boardOn(extra) {
+async function birchWithCutSetting() {
 	const materials = (await api('GET', '/api/library/materials')) ?? [];
 	const material =
 		materials.find((m) => m.name === 'Birch plywood') ??
 		(await api('POST', '/api/library/materials', { name: 'Birch plywood' }));
-	if (!material) throw new Error('41/42: could not make a material on the scratch library');
+	if (!material) throw new Error('41/42/43: could not make a material on the scratch library');
 	// A cut setting for the board's own rim: the cut-out is refused without one,
 	// and refused rather than guessed on purpose — see docs/test-grid.md. Idempotent
 	// in effect: a second identical row changes nothing the picture shows.
@@ -1697,6 +1699,11 @@ async function boardOn(extra) {
 		power_percent: 65,
 		source: 'handmatig'
 	});
+	return material;
+}
+
+async function boardOn(extra) {
+	const material = await birchWithCutSetting();
 	return api('POST', '/api/library/testgrids', {
 		operation: 'snijden',
 		material_id: material.id,
@@ -1719,9 +1726,11 @@ async function boardOn(extra) {
 	});
 }
 
-if (wanted('41') || wanted('42')) {
+if (wanted('41') || wanted('42') || wanted('43')) {
 	if (!scratch) {
-		console.log('  – 41-board-code.png and 42-board-tile.png skipped: set OK_SCRATCH_LIBRARY=1');
+		console.log(
+			'  – 41-board-code.png, 42-board-tile.png and 43-board-extras.png skipped: set OK_SCRATCH_LIBRARY=1'
+		);
 	} else {
 		if (wanted('41')) {
 			await clear();
@@ -1742,6 +1751,37 @@ if (wanted('41') || wanted('42')) {
 			await scene('42-board-tile.png', '/?tab=layers', {}, async (page) => {
 				await page.keyboard.press('3');
 				await page.waitForTimeout(900);
+			});
+		}
+		if (wanted('43')) {
+			// Same as 41 and 42: an autosaved design from an earlier run puts the recovery
+			// dialog over the rail, and then nothing on this form can be reached.
+			await clear();
+			// The two switches on the form, both on, with what each of them then says. On
+			// the scratch library for the same reason as 41 and 42: with a material that has
+			// no cut setting the cut-out answers with its refusal, which is the right
+			// behaviour and the wrong picture for this page — the refusal has its own
+			// paragraph in the handbook. Nothing here writes a board; the preview route only
+			// plans.
+			const material = await birchWithCutSetting();
+			await scene('43-board-extras.png', '/?tab=design', { selector: '.schakelaars' }, async (page) => {
+				await page.locator(TOOL.testgrid).click();
+				await page.waitForSelector(DIALOG, { timeout: 10000 });
+				const picker = page
+					.locator(`${DIALOG} label:has(span:text-is("Material")) select`)
+					.first();
+				await picker.selectOption(String(material.id));
+				await page.waitForTimeout(1200);
+				// `setChecked` and not `check`: 41 and 42 leave boards on this material whose
+				// settings the form adopts, so either switch may already be on.
+				await page.locator('.schakelaars label:has-text("QR code") input').setChecked(true);
+				await page
+					.locator('.schakelaars label:has-text("Cut the board loose") input')
+					.setChecked(true);
+				// The preview is debounced by 250 ms and then has to come back; every line
+				// under both switches is a number out of that answer.
+				await page.waitForTimeout(2500);
+				await page.locator('.schakelaars').scrollIntoViewIfNeeded();
 			});
 		}
 	}

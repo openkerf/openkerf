@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { axisLabel, AXIS_UNIT, type GridAxis } from '$lib/api';
 	import { i18n, t } from '$lib/i18n/index.svelte';
+	// Numbers in the reader's own notation, and a refusal in the reader's own language
+	// when the engine sent a code for it.
+	import { apiError, mm, number } from '$lib/i18n/core.ts';
 	import { operations, type LibraryStore } from '$lib/library.svelte';
 	import NumberField from './NumberField.svelte';
 
@@ -91,7 +94,18 @@
 	 * stays up with this notice above it.
 	 */
 	let previewError = $state<string | null>(null);
+	/**
+	 * Which refusal the preview came back with, when the engine named one.
+	 *
+	 * The code is what lets a refusal be shown where its cause is. "There is no cut
+	 * setting for this material at 3 mm" belongs under the cut-out switch that has just
+	 * been turned on, not in the notice above the picture with everything else that can
+	 * go wrong — a user who has to look for the reason reads it after the board is drawn.
+	 */
+	let previewErrorCode = $state<string | null>(null);
 	let done = $state<{ id: number; cellen: number } | null>(null);
+	/** One thing the engine says about the board that is nobody's refusal. */
+	type Warning = { code: string; text: string };
 	// The measures in the plan are numbers, row_axis/column_axis are words.
 	type Plan = Record<string, number> & {
 		row_axis?: As;
@@ -102,6 +116,19 @@
 		/** Whether the whole board — caption and border included — still starts on the bed. */
 		board_room?: boolean;
 		anchor?: 'corner' | 'center';
+		/** The board's own eight-character name, and the same in a form a person reads. */
+		uid?: string;
+		code_human?: string;
+		warnings?: Warning[];
+		/** On a board without a code or a cut-out these come back as null, not as 0. */
+		code_enabled?: boolean;
+		code_size_mm?: number | null;
+		code_x_mm?: number | null;
+		code_y_mm?: number | null;
+		cutout_enabled?: boolean;
+		cut_speed_mm_s?: number | null;
+		cut_power_percent?: number | null;
+		cut_passes?: number | null;
 	};
 	let preview = $state<{
 		plan: Plan;
@@ -148,9 +175,29 @@
 		// align the photo more easily.
 		text: true,
 		border: false,
+		// The board's own name burned on the plank, and the tile cut loose from the sheet.
+		// Both off, the same way the library's columns default (`code_enabled INTEGER NOT
+		// NULL DEFAULT 0`, library.py:183) — a board that has always been a rectangle of
+		// squares must not start costing burn time because the form learned two new tricks.
+		code: false,
+		code_size_mm: '18',
+		cutout: false,
 		label_speed_mm_s: '80',
 		label_power_percent: '30'
 	});
+
+	/**
+	 * The name of the board being previewed, sent back with every next preview.
+	 *
+	 * The planner mints a name when it is given none (`testgrid.py:437`), so a form that
+	 * previews on every keystroke gets a new one every 250 ms — and the name is printed in
+	 * the caption and burned in the code, so it would change under the reader's eyes
+	 * between looking at it and pressing the button. Measured: three previews in a row gave
+	 * `BF11HGMK`, `FB66KTY7` and `PBQ98RSY`. Holding it here makes the name a property of
+	 * the board on screen. It is dropped when a board has been drawn, so the next one is a
+	 * different plank with a different name.
+	 */
+	let boardUid = $state<string | null>(null);
 
 	/** Under which key the fixed value of a quantity goes to the API. */
 	const VAST_VELD: Record<As, 'speed_mm_s' | 'power_percent' | 'interval_mm'> = {
@@ -160,9 +207,22 @@
 	};
 
 	let intervalKan = $derived(INTERVAL_OPERATIONS.includes(form.operation));
-	/** What the label layer is about: caption, border, or both (T10). */
+	/**
+	 * What the label layer is about: caption, border, or both (T10).
+	 *
+	 * The code is on this list because it burns in that same layer's speed — see
+	 * `code_seconds` in `plan_grid`, which divides by `label_speed`. So a board that has
+	 * only a code still needs these two fields, and the label above them has to name the
+	 * thing they act on.
+	 */
 	let labelLayerName = $derived(
-		t(form.text ? 'grid.labelLayer.caption' : 'grid.labelLayer.border')
+		t(
+			form.text
+				? 'grid.labelLayer.caption'
+				: form.border
+					? 'grid.labelLayer.border'
+					: 'grid.labelLayer.code'
+		)
 	);
 	/** Raster chosen on an engine that cannot convert it into laser lines. */
 	let rasterImpossible = $derived(
@@ -209,6 +269,12 @@
 			anchor: form.anchor,
 			text: form.text,
 			border: form.border,
+			code_enabled: form.code,
+			code_size_mm: form.code_size_mm === '' ? null : Number(form.code_size_mm),
+			// Even with the code switched off: the name is printed in the caption of a board
+			// that carries one, and this is what keeps it still. See `boardUid`.
+			uid: boardUid,
+			cutout_enabled: form.cutout,
 			label_speed_mm_s: Number(form.label_speed_mm_s),
 			label_power_percent: Number(form.label_power_percent)
 		};
@@ -231,8 +297,10 @@
 		else busy = true;
 		// A quiet preview round does not touch `error`: that block sits at the bottom
 		// of the form and belongs to a failed action, not to a half-typed number.
-		if (quiet) previewError = null;
-		else error = null;
+		if (quiet) {
+			previewError = null;
+			previewErrorCode = null;
+		} else error = null;
 		try {
 			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 			const token =
@@ -245,12 +313,20 @@
 			});
 			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				const notice =
+				// Through `apiError`, so a refusal that carries a code is said in the reader's
+				// language; one that carries numbers keeps its English sentence, because the
+				// numbers do not travel in the header. The status line stays the last resort
+				// for a failure that says nothing at all.
+				const notice = apiError(
+					response,
 					typeof data?.detail === 'string'
 						? data.detail
-						: t('grid.error.refused', { status: response.status });
-				if (quiet) previewError = notice;
-				else error = notice;
+						: t('grid.error.refused', { status: response.status })
+				);
+				if (quiet) {
+					previewError = notice;
+					previewErrorCode = response.headers.get('X-OpenKerf-Error');
+				} else error = notice;
 				return null;
 			}
 			return data;
@@ -292,12 +368,23 @@
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
 		void [
+			// The material and the thickness were missing from this list, and they decide
+			// more than the caption: the cut-out's setting is looked up per material *and*
+			// thickness, and a refusal is the answer when there is none. Measured before
+			// adding them: switching from birch to glass — which has no cut setting at all —
+			// left "The rim is cut at 12 mm/s and 65%" from the previous material on screen,
+			// because nothing else on the form had changed and so no preview was asked for.
+			form.material_id, form.thickness_mm,
 			form.operation, form.row_axis, form.column_axis,
 			form.speed_min, form.speed_max, form.speed_steps, form.speed_mm_s,
 			form.power_min, form.power_max, form.power_steps, form.power_percent,
 			form.interval_min, form.interval_max, form.interval_steps, form.interval_mm,
 			form.cell_mm, form.gap_mm, form.passes, form.origin_x_mm, form.origin_y_mm,
 			form.anchor, form.text, form.border,
+			// The code and the cut-out belong in this list for the same reason as the two
+			// switches above them: they change the size of the board, where the bed check
+			// lands and what the burn costs. A field missing here is a preview that lies.
+			form.code, form.code_size_mm, form.cutout,
 			form.label_speed_mm_s, form.label_power_percent
 		];
 		if (timer) clearTimeout(timer);
@@ -306,7 +393,11 @@
 			// Only replace it when a valid board came out. Leaving the last valid image
 			// up is calmer than dropping a hole — and it is more honest too: *that* is
 			// still what you would burn if you stopped typing now.
-			if (verse) preview = verse;
+			if (verse) {
+				preview = verse;
+				// The name the board keeps for as long as this form is about this board.
+				if (typeof verse.plan?.uid === 'string') boardUid = verse.plan.uid;
+			}
 		}, 250);
 		return () => {
 			if (timer) clearTimeout(timer);
@@ -388,16 +479,28 @@
 		});
 	});
 
+	/**
+	 * A length with its unit, and without a trailing zero on a whole number.
+	 *
+	 * `mm()` writes one decimal always, which is right for a measured position and wrong
+	 * for a setting somebody typed: "a strip of 20.0 mm" for a code of 18 reads as a
+	 * measurement of something. Still through `number`, so it is a comma in Dutch.
+	 */
+	function lengte(value: number | null | undefined) {
+		if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+		return `${number(value)} mm`;
+	}
+
 	/** "3 min 20 s" — a time you can weigh against your coffee. */
-	let brandtijd = $derived.by(() => {
-		const s = preview?.plan.seconds ?? 0;
+	function duur(s: number | null | undefined) {
 		if (!s) return '—';
 		if (s < 60) return t('grid.time.seconds', { n: Math.round(s) });
 		const minuten = Math.floor(s / 60);
 		if (minuten < 60)
 			return t('grid.time.minutes', { minutes: minuten, seconds: Math.round(s % 60) });
 		return t('grid.time.hours', { hours: Math.floor(minuten / 60), minutes: minuten % 60 });
-	});
+	}
+	let brandtijd = $derived(duur(preview?.plan.seconds));
 
 	/** "0.05 mm", "60%", "12 mm/s" — the axis value as it ends up on the wood. */
 	function show(as: As, value: number | null | undefined) {
@@ -432,6 +535,75 @@
 				!library.materials.some((m) => m.id === form.material_id))
 	);
 	let step = $derived(done ? 2 : 1);
+
+	// ------------------------------------------ the code and the cut-out
+	//
+	// Both are values you set and read back, so they live on this form and not in a menu
+	// (CLAUDE.md, the placement rule). What follows is everything the two need to be
+	// honest about themselves: where their refusals belong, what they cost, and how big
+	// they draw in the preview.
+
+	/**
+	 * A refusal shown where the switch that caused it is.
+	 *
+	 * These four all arrive from the *preview*, which runs 250 ms after the switch goes
+	 * on — so they are on screen while the numbers that caused them are still in the
+	 * fields, and long before a plank is in the machine. Measured on the live library:
+	 * a cut-out on glass answers `library.grid.cutoutNeedsPreset` ("There is no cut
+	 * setting for this material at 3 mm; burn a cutting board first, or add the setting
+	 * by hand."), on no material `library.grid.cutoutNeedsMaterial`, an 11 mm code
+	 * `library.grid.codeTooSmall`, and an 18 mm code beside 11 mm of board
+	 * `library.grid.codeNoRoom`.
+	 */
+	const CODE_REFUSALS = ['library.grid.codeTooSmall', 'library.grid.codeNoRoom'];
+	const CUTOUT_REFUSALS = [
+		'library.grid.cutoutNeedsMaterial',
+		'library.grid.cutoutNeedsPreset',
+		'library.grid.cutoutNoSetting'
+	];
+	let codeRefusal = $derived(
+		previewErrorCode && CODE_REFUSALS.includes(previewErrorCode) ? previewError : null
+	);
+	let cutoutRefusal = $derived(
+		previewErrorCode && CUTOUT_REFUSALS.includes(previewErrorCode) ? previewError : null
+	);
+	/** What is left for the notice above the picture: everything that is nobody's switch. */
+	let looseRefusal = $derived(codeRefusal || cutoutRefusal ? null : previewError);
+
+	/** What the engine says about this board that is nobody's refusal — a code only just
+	 *  big enough to read, for instance. Its own sentence, because it names the numbers. */
+	let boardWarnings = $derived(preview?.plan.warnings ?? []);
+
+	/**
+	 * The strip of board the code stands in: its own size plus the gap above it.
+	 *
+	 * Read out of the plan rather than copied from `CODE_GAP_MM`, so a change on that side
+	 * cannot leave this sentence quietly wrong.
+	 */
+	let codeStripMm = $derived.by(() => {
+		const plan = preview?.plan;
+		if (!plan?.code_enabled) return null;
+		const size = Number(plan.code_size_mm);
+		const top = Number(plan.code_y_mm);
+		if (!Number.isFinite(size) || !Number.isFinite(top)) return null;
+		return size + (top - plan.origin_y_mm - plan.height_mm);
+	});
+	/** How far outside everything else the cut runs, from the plan's own two rectangles. */
+	let cutMarginMm = $derived.by(() => {
+		const plan = preview?.plan;
+		if (!plan?.cutout_enabled) return null;
+		return Math.round((plan.outer_x_mm - plan.cut_x_mm) * 1000) / 1000;
+	});
+	/** The cut setting the server looked up, so it is shown rather than asked for. */
+	let cutSetting = $derived.by(() => {
+		const plan = preview?.plan;
+		if (!plan?.cutout_enabled || !plan.cut_speed_mm_s) return null;
+		return {
+			speed: Number(plan.cut_speed_mm_s),
+			power: Number(plan.cut_power_percent),
+			passes: Number(plan.cut_passes ?? 1)
+		};
+	});
 
 	/**
 	 * Where the previous board came to lie.
@@ -480,6 +652,9 @@
 	 */
 	function again() {
 		done = null;
+		// A next board is a next plank, so it gets a name of its own; holding on to this one
+		// would burn the same code twice and send two photographs to one row.
+		boardUid = null;
 		naarMachine = null;
 		machineError = null;
 		machineLet = null;
@@ -545,6 +720,13 @@
 		if (vorige.anchor === 'center' || vorige.anchor === 'corner') form.anchor = vorige.anchor;
 		if (typeof vorige.text_enabled === 'boolean') form.text = vorige.text_enabled;
 		if (typeof vorige.border_enabled === 'boolean') form.border = vorige.border_enabled;
+		// Whether the board names itself and whether the tile comes loose are choices about
+		// how you work rather than about this material, which is why they are in
+		// `Library.GRID_DEFAULTS` (library.py:1629) with the two above them. The name itself
+		// is not: adopting the previous board's name would burn it on two planks.
+		if (typeof vorige.code_enabled === 'boolean') form.code = vorige.code_enabled;
+		if (typeof vorige.cutout_enabled === 'boolean') form.cutout = vorige.cutout_enabled;
+		if (vorige.code_size_mm != null) form.code_size_mm = String(vorige.code_size_mm);
 		const x = vorige.anchor_x_mm ?? vorige.origin_x_mm;
 		const y = vorige.anchor_y_mm ?? vorige.origin_y_mm;
 		if (x != null) form.origin_x_mm = String(x);
@@ -1119,9 +1301,117 @@
 							{t('grid.extras.borderOnly')}
 						{/if}
 					</p>
+
+					<!-- The board's own name on the plank, and the tile cut loose from the
+					     sheet. Both were built end to end and then had no control at all: the
+					     only way to ask for either was hand-written HTTP, and `docs/test-grid.md`
+					     said so out loud. They are values you set and read back, so this form is
+					     where they belong.
+
+					     Why the code is worth burn time is not what it *is* but what it is
+					     for: eleven of the author's thirty-two boards are physically
+					     indistinguishable from another one, so a photograph taken after the wood
+					     is off the machine is filed by guesswork. -->
+					<label class="vink">
+						<input type="checkbox" bind:checked={form.code} />
+						<span>{t('grid.extras.code')}</span>
+					</label>
+					{#if form.code}
+						<div class="uitleg">
+							<p class="hint">{t('grid.code.why')}</p>
+							{#if preview?.plan.code_human}
+								<!-- The name is in the sentence and not glued to the end of it: a
+								     language that puts it elsewhere has nowhere to put it otherwise. -->
+								<p class="hint">{t('grid.code.name', { name: preview.plan.code_human })}</p>
+							{/if}
+							<!-- Not clamped to the engine's own 12 and 14 mm: those two numbers
+							     live in `boardcode.MIN_SIZE_MM` and `SMALL_SIZE_MM`, and a copy of
+							     them here would be a second place to forget. The refusal and the
+							     warning below say them, in the sentence that measured them. -->
+							<NumberField
+								label={t('grid.code.size')}
+								unit="mm"
+								step={1}
+								min={1}
+								bind:value={form.code_size_mm}
+							/>
+							{#if codeRefusal}
+								<p class="krap" role="status">{codeRefusal}</p>
+							{:else}
+								{#if codeStripMm !== null}
+									<p class="hint">
+										{t('grid.code.cost', {
+											strip: lengte(codeStripMm),
+											time: duur(preview?.plan.code_seconds),
+											module: mm(preview?.plan.code_module_mm, 2)
+										})}
+									</p>
+								{/if}
+								{#each boardWarnings as warning (warning.code)}
+									<!-- The engine's own sentence: it carries the numbers this side
+									     cannot know, and it reaches curl and the logs in the same
+									     words. -->
+									<p class="krap" role="status">{warning.text}</p>
+								{/each}
+							{/if}
+						</div>
+					{/if}
+
+					<label class="vink">
+						<input type="checkbox" bind:checked={form.cutout} />
+						<span>{t('grid.extras.cutout')}</span>
+					</label>
+					{#if form.cutout}
+						<div class="uitleg">
+							{#if cutoutRefusal}
+								<!-- The refusal arrives from the preview, so it is on screen a
+								     quarter of a second after the switch goes on — with the
+								     numbers that caused it still in the fields, and before
+								     anybody has laid a plank in the machine. -->
+								<p class="krap" role="status">{cutoutRefusal}</p>
+							{:else}
+								{#if cutSetting}
+									<!-- Shown and not asked: the cut setting is looked up from the
+									     library by the server (`cutout_setting`, testgrid.py:1064),
+									     and it refuses rather than guesses, because the speed that
+									     cuts this material is the very thing a test board exists to
+									     find out. -->
+									<p class="hint">
+										{t('grid.cutout.setting', {
+											speed: number(cutSetting.speed),
+											power: number(cutSetting.power),
+											passes: number(cutSetting.passes)
+										})}
+									</p>
+								{/if}
+								{#if cutMarginMm !== null}
+									<p class="hint">
+										{t('grid.cutout.how', {
+											margin: lengte(cutMarginMm),
+											n: preview?.plan.cut_tabs ?? 0,
+											tab: lengte(preview?.plan.cut_tab_mm)
+										})}
+									</p>
+								{/if}
+								{#if preview?.plan.cut_seconds}
+									<p class="hint">
+										{t('grid.cutout.cost', { time: duur(preview.plan.cut_seconds) })}
+									</p>
+								{/if}
+							{/if}
+						</div>
+					{/if}
+
+					{#if form.code || form.cutout}
+						<!-- Said once, quietly, and not per switch: nobody has burned a board
+						     with either of these, on any material. Every millimetre and every
+						     second above is arithmetic on pixels and on the engine's own cut
+						     plan. -->
+						<p class="hint">{t('grid.extras.untried')}</p>
+					{/if}
 				</fieldset>
 
-				{#if form.text || form.border}
+				{#if form.text || form.border || form.code}
 					<!-- The label layer was hard-coded at 80 mm/s @30%. That works on birch and
 					     not on acrylic, and then the caption burns straight through your
 					     board. -->
@@ -1156,16 +1446,21 @@
 
 			{#if preview}
 				<aside class="preview" aria-label={t('grid.preview')}>
-					{#if previewError}
+					{#if looseRefusal}
 						<!-- While typing, an intermediate state is nearly always briefly
 						     invalid: you adjust "from" and it is then higher than "to" until you
 						     adjust that too. The preview stays, with the reason above it —
 						     dropping a hole teaches you nothing and makes half the wizard
 						     jump. -->
 						<p class="unfinished" role="status">
-							{previewError}<br />
+							{looseRefusal}<br />
 							<span class="quiet">{t('grid.preview.lastValid')}</span>
 						</p>
+					{:else if previewError}
+						<!-- The reason itself is up beside the switch that caused it, which is
+						     where it can be acted on. What still belongs here is that the picture
+						     below is one board behind. -->
+						<p class="unfinished" role="status">{t('grid.preview.lastValid')}</p>
 					{:else if botsing}
 						<!-- The previous board is still there, and Start X/Y is still in the same
 						     place. Two boards over each other you do not see on the canvas and do
@@ -1188,21 +1483,53 @@
 						     the border are burned just as much, and it was precisely those that
 						     stuck out on the left and top (T11). LightBurn reports the same as
 						     Output Size. -->
+						<!-- Through `number`, like every other measure in this panel. Beside the
+						     line about the tile it wrote 132.9 where that one wrote 120,2 — two
+						     notations for the same quantity, in one panel, for a Dutch reader. -->
 						<span class="mono"
-							>{preview.plan.outer_width_mm ?? preview.plan.width_mm} × {preview.plan
-								.outer_height_mm ?? preview.plan.height_mm} mm</span
+							>{number(preview.plan.outer_width_mm ?? preview.plan.width_mm)} × {number(
+								preview.plan.outer_height_mm ?? preview.plan.height_mm
+							)} mm</span
 						>
 					</div>
-					{#if (preview.plan.outer_width_mm ?? 0) > preview.plan.width_mm}
+					<!-- Either dimension, not only the width. A code grows the board downwards and
+					     not sideways, so a board whose only extra is a code was 20 mm taller than
+					     its squares with nothing on screen saying where those millimetres went. -->
+					{#if (preview.plan.outer_width_mm ?? 0) > preview.plan.width_mm || (preview.plan.outer_height_mm ?? 0) > preview.plan.height_mm}
 						<p class="kosten">
 							{t('grid.ofWhich', {
-								size: `${preview.plan.width_mm} × ${preview.plan.height_mm} mm`,
+								size: `${number(preview.plan.width_mm)} × ${number(preview.plan.height_mm)} mm`,
 								extras:
-									form.text && form.border
-										? t('grid.extras.both')
-										: form.text
-											? t('grid.extras.captionOnly')
-											: t('grid.extras.borderOnly2')
+									// One whole phrase per combination rather than a list glued together
+									// in the markup: "caption, border and code" is not the same three
+									// words in the same order in every language. Seven combinations,
+									// and the eighth cannot happen — with none of the three on there
+									// is no extra board to explain.
+									form.text && form.border && form.code
+										? t('grid.extras.allThree')
+										: form.text && form.border
+											? t('grid.extras.both')
+											: form.text && form.code
+												? t('grid.extras.captionAndCode')
+												: form.border && form.code
+													? t('grid.extras.borderAndCode')
+													: form.text
+														? t('grid.extras.captionOnly')
+														: form.border
+															? t('grid.extras.borderOnly2')
+															: t('grid.extras.codeOnly')
+							})}
+						</p>
+					{/if}
+					{#if cutMarginMm !== null}
+						<!-- With a cut-out the piece you carry away is not the board: it is the
+						     board plus the margin the cut runs in. That is the measure that has to
+						     fit the offcut in your hand. -->
+						<p class="kosten">
+							{t('grid.cutout.tile', {
+								size: `${number(preview.plan.cut_width_mm)} × ${number(
+									preview.plan.cut_height_mm
+								)} mm`
 							})}
 						</p>
 					{/if}
@@ -1218,6 +1545,14 @@
 					     number: switch the caption off and the axis values disappear from the
 					     preview too, because they do not go on the wood. The border is a line
 					     around the whole thing, exactly where it burns. -->
+					<!-- The cut runs outside everything else the board draws, so it is a ring
+					     around the board and not part of its grid. Dashed, because it is not one
+					     continuous cut: four bridges hold the tile in the sheet. -->
+					<div
+						class="tile"
+						class:cutting={cutMarginMm !== null}
+						style="--rim: {(cutMarginMm ?? 0) * scale}px;"
+					>
 					<div
 						class="board"
 						class:kaal={!form.text}
@@ -1264,6 +1599,21 @@
 								></span>
 							{/each}
 						</div>
+						{#if form.code && codeStripMm !== null}
+							<!-- Bottom right, in a strip the board grows for it: the only corner
+							     with nothing burning near the quiet zone, and outside the block of
+							     squares the four alignment handles get dragged onto. Drawn at the
+							     size it really is, so a code that eats a third of the board looks
+							     like it. -->
+							<div class="codestrip" class:naast={form.text}>
+								<div
+									class="qr"
+									style="--zij: {Number(preview.plan.code_size_mm) * scale}px;"
+									title={t('grid.code.name', { name: preview.plan.code_human ?? '' })}
+								></div>
+							</div>
+						{/if}
+					</div>
 					</div>
 
 					{#if preview.plan.board_room === false}
@@ -1272,9 +1622,20 @@
 						     grid and are as wide as their longest value. With the centre as the
 						     anchor you cannot work that out yourself, so the number is here. -->
 						<p class="krap">
+							<!-- The position the engine measured this on, and with a cut-out that is
+							     the *cut* rectangle and not the board (`board_room = cut_x >= 0 and
+							     cut_y >= 0`, testgrid.py:748). Measured on the default form with a
+							     cut-out: the board starts at 2.4 mm and fits, while the cut runs to
+							     −1.6 mm and does not — so naming the board's own corner here would
+							     be a warning pointing at a number that looks fine. -->
+							<!-- Both numbers carry their unit: in Dutch the decimal mark *is* a comma,
+							     and "−1,6, 3,5 mm" is two numbers that read as four. -->
 							{t('grid.tooFar', {
-								position: `${preview.plan.outer_x_mm}, ${preview.plan.outer_y_mm} mm`
+								position: `${mm(preview.plan.cut_x_mm)}, ${mm(preview.plan.cut_y_mm)}`
 							})}
+							{#if cutMarginMm !== null}
+								{t('grid.tooFar.cut', { margin: lengte(cutMarginMm) })}
+							{/if}
 							{#if preview.plan.label_room === false}
 								{t('grid.tooFar.labels', { mm: Math.ceil(preview.plan.label_margin_mm ?? 0) })}
 							{/if}
@@ -1384,9 +1745,9 @@
 					{:else if preview}
 						{t('grid.drawWith', {
 							cells: preview.cells.length,
-							size: `${preview.plan.outer_width_mm ?? preview.plan.width_mm} × ${
+							size: `${number(preview.plan.outer_width_mm ?? preview.plan.width_mm)} × ${number(
 								preview.plan.outer_height_mm ?? preview.plan.height_mm
-							} mm`
+							)} mm`
 						})}
 					{:else}
 						{t('grid.draw')}
@@ -1571,6 +1932,15 @@
 		color: var(--text-1);
 	}
 	.schakelaars .hint { margin: 0; max-width: 52ch; }
+	/* What a switch needs once it is on, indented under it so it reads as belonging to
+	   that switch and not to the fieldset. */
+	.uitleg {
+		display: grid;
+		gap: var(--space-1h);
+		margin-left: calc(var(--space-2) + 1em);
+		max-width: 52ch;
+	}
+	.schakelaars .krap { margin: 0; max-width: 52ch; }
 
 	/* Setting up and seeing what you set, side by side. Below 720px it stacks. The
 	   preview column has a fixed width instead of `auto`: with `auto` it followed the
@@ -1642,6 +2012,36 @@
 		padding: var(--space-2);
 		border: 1px solid var(--text-2);
 		border-radius: var(--radius-sharp);
+	}
+	/* The cut, drawn where it runs: `--rim` millimetres outside everything the board
+	   burns, in the preview's own scale. Dashed rather than solid, because the engraved
+	   frame is the solid line here and this one is interrupted for real — four bridges
+	   hold the tile in the sheet until you break it out. */
+	.tile { display: inline-block; }
+	.tile.cutting {
+		padding: var(--rim);
+		border: 1px dashed var(--text-2);
+		border-radius: var(--radius-sharp);
+	}
+	/* The strip the board grows below the squares for its code. Right-aligned with the
+	   squares, which is where the generator puts it. */
+	.codestrip { display: flex; justify-content: flex-end; }
+	.codestrip.naast { grid-column: 2; }
+	.qr {
+		width: var(--zij);
+		height: var(--zij);
+		/* Not an attempt at the pattern: at this scale a 29-module code is a grey smudge,
+		   and a fake pattern would suggest the preview knows what will be burned. What it
+		   does know is the footprint, and that is what is drawn. */
+		background:
+			repeating-conic-gradient(
+				from 0deg at 50% 50%,
+				var(--void) 0deg 90deg,
+				transparent 90deg 180deg
+			);
+		background-size: 25% 25%;
+		background-color: var(--mat-wood);
+		outline: 1px solid var(--line);
 	}
 	.koplabels, .zijlabels { display: grid; gap: var(--gat); }
 	.koplabels { grid-auto-flow: column; grid-auto-columns: var(--cel); }

@@ -12,6 +12,7 @@ write runs through the serialised CommandRunner.
 """
 
 import asyncio
+import inspect
 import json
 import shutil
 import tempfile
@@ -3023,6 +3024,18 @@ class ApiServer:
             from datetime import date
 
             fields = dict(body)
+            # `text`/`border` are the planner's spelling and `text_enabled`/
+            # `border_enabled` are the column's, and the two halves of this feature were
+            # written a round apart (see the comment on `code_enabled` in
+            # `testgrid.plan_grid`). So a caller that hands back a row it read from the
+            # database, or a stored recipe, used to reach `plan_grid` with a keyword it has
+            # no parameter for and get a bare **500**: measured on the live server,
+            # `text_enabled: true` and `border_enabled: false` each answered 500 where
+            # `text: true` answered 200. Accepting the column's spelling here costs one
+            # line and keeps the route's own database readable by the route.
+            for stored, planned in (("text_enabled", "text"), ("border_enabled", "border")):
+                if stored in fields:
+                    fields[planned] = bool(fields.pop(stored))
             # A grid is a trial on *this* machine; without that fact the presets that come
             # out of it cannot be placed back.
             if not fields.get("machine_id"):
@@ -3054,6 +3067,19 @@ class ApiServer:
             # keeps the number it sent.
             if fields.get("cutout_enabled") and not fields.get("cut_speed_mm_s"):
                 fields.update(cutout_setting(self.library, fields))
+            # Everything from here on is handed to `plan_grid` as keywords, so a field it
+            # has no parameter for is a `TypeError` and, through FastAPI, a 500 that names
+            # nothing. A misspelling must not be dropped in silence either — a board that
+            # burns without the cut-out you asked for is worse than one that refuses — so
+            # it is said out loud, with the name that was not understood.
+            takes = inspect.signature(plan_grid).parameters
+            strange = sorted(key for key in fields if key not in takes)
+            if strange:
+                raise LibraryError(
+                    f"A board has no field called {strange[0]}.",
+                    code="library.grid.unknownField",
+                    values={"field": strange[0]},
+                )
             return fields
 
         @app.post("/api/library/testgrids/preview")

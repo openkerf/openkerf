@@ -132,13 +132,25 @@ unreadable.
 
 ## A board that says who it is, and a tile you can keep
 
-Two more things a board can carry. Both were built this round, both are in the engine, and
-**neither is on the form yet** — today they are asked for through the API, on
-`POST /api/library/testgrids`, with `code_enabled` and `cutout_enabled`. And neither has
-ever been burned: not one board with a code or a cut-out has come out of a machine, on any
-material. The numbers below are measured on pixels and on the engine's own cut plan, not on
-wood. Read them as a starting point, exactly the way you would read somebody else's speed
-and power.
+Two more things a board can carry, and both are switches under **What else goes on the
+board**, below the caption and the border: **Burn the board’s own name on it as a QR code**
+and **Cut the board loose from the sheet**. Both start off, so a board that has always been
+squares and a caption stays exactly that until you ask for more.
+
+Neither has ever been burned: not one board with a code or a cut-out has come out of a
+machine, on any material. The form says so where you switch them on, and this page says it
+here. The numbers below are measured on pixels and on the engine's own cut plan, not on wood.
+Read them as a starting point, exactly the way you would read somebody else's speed and
+power.
+
+What each one costs is on the form before you press anything: the strip of plank the code
+takes, the seconds it adds and the module size it comes out at; and for the cut-out the
+setting it found in your library, the four bridges, the size the tile comes off the sheet at,
+and the seconds of cutting. What cannot be done is refused there too — a quarter of a second
+after the switch goes on, beside the field that has to change, rather than after the button
+with a plank already in the machine.
+
+![The lower part of the test-grid form: the fieldset What else goes on the board, with four switches. Engrave the caption and axis labels is on, Border around the board is off, and both Burn the board’s own name on it as a QR code and Cut the board loose from the sheet are on. Under the code switch: why it is there, the line This board is called 4MFN ER8P, a Code size field reading 18, and what it costs — a strip of 20 mm below the squares, about 14 s of burning, modules of 0.62 mm. Under the cut-out: the rim is cut at 12 mm/s and 65%, 1× from the library; the cut runs 4 mm outside everything else with four bridges of 2 mm; about 23 s of burning. At the bottom, that no board with a code or a cut-out has been burned yet on any material.](images/43-board-extras.png)
 
 ### The code, and what it is for
 
@@ -163,8 +175,8 @@ meant to be read back by a person.
 
 ### How big it has to be, and why
 
-The default is **18 mm** square, quiet zone included. That is not a round number picked for
-looks:
+**Code size** on the form is that number, and its default is **18 mm** square, quiet zone
+included. That is not a round number picked for looks:
 
 - A board name is always 21 modules of QR, **29 with the four-module quiet zone** the
   standard asks for — measured over 300 minted names, always exactly that, so the footprint

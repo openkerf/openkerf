@@ -1234,6 +1234,26 @@ export const nl: Catalogue = {
 	'grid.extras.noText': 'Zonder opschrift is het bord over twee weken een raadselachtig stuk hout — en de aswaarden staan er dan ook niet bij.',
 	'grid.extras.bothOn': 'Het kader loopt om alles heen, opschrift inbegrepen. Handig om de foto straks op uit te lijnen.',
 	'grid.extras.borderOnly': 'Het kader is een lijn om het hele bord; hij maakt het uitlijnen van de foto makkelijker.',
+	// De eigen naam van het bord op de plank, en de tegel los uit de plaat.
+	'grid.extras.code': 'Brand de eigen naam van het bord erop als QR-code',
+	'grid.extras.cutout': 'Snijd het bord los uit de plaat',
+	'grid.code.why':
+		'Twee borden van hetzelfde materiaal met dezelfde vakjes zijn nauwelijks van elkaar te onderscheiden zodra ze van de machine af zijn. Met de code vindt een foto van het bord zelf de bijbehorende regel.',
+	'grid.code.name':
+		'Dit bord heet {name}; de code zegt hetzelfde, en het opschrift zet het erbij voor wie geen camera bij de hand heeft.',
+	'grid.code.size': 'Maat van de code',
+	'grid.code.cost':
+		'Het kost een strook van {strip} onder de vakjes, ongeveer {time} branden, en modules van {module}.',
+	'grid.cutout.setting':
+		'De rand wordt gesneden op {speed} mm/s en {power}%, {passes}× — de snijinstelling die je bibliotheek voor dit materiaal en deze dikte heeft.',
+	'grid.cutout.how': {
+		one: 'De snede loopt {margin} buiten al het andere op het bord, met één brug van {tab} die blijft staan, zodat de tegel in de plaat blijft zitten tot je hem eruit breekt.',
+		other: 'De snede loopt {margin} buiten al het andere op het bord, met {n} bruggen van {tab} die blijven staan, zodat de tegel in de plaat blijft zitten tot je hem eruit breekt.'
+	},
+	'grid.cutout.cost': 'Het losmaken kost ongeveer {time} branden erbij.',
+	'grid.cutout.tile': 'De tegel komt als {size} uit de plaat.',
+	'grid.extras.untried':
+		'Er is nog geen enkel bord met een code of een uitsnede gebrand, op geen enkel materiaal: de millimeters en seconden hierboven zijn rekenwerk op het snijplan van de engine en geen metingen aan hout.',
 	'grid.label.speed': '{layer}: snelheid',
 	'grid.label.power': '{layer}: vermogen',
 	'grid.caption': 'Opschrift op het bord',
@@ -1250,12 +1270,17 @@ export const nl: Catalogue = {
 	'grid.extras.both': 'opschrift en kader',
 	'grid.extras.captionOnly': 'opschrift',
 	'grid.extras.borderOnly2': 'kader',
+	'grid.extras.codeOnly': 'code',
+	'grid.extras.captionAndCode': 'opschrift en code',
+	'grid.extras.borderAndCode': 'kader en code',
+	'grid.extras.allThree': 'opschrift, kader en code',
 	'grid.burnTime': 'Brandtijd ongeveer {time}, zonder de opschriften.',
 	'grid.cellTitle': '{row} bij {column}',
 	'grid.tooFar': 'Het bord begint op {position}, en dat ligt buiten het bed.',
 	'grid.tooFar.labels': 'De rijlabels hebben links ruwweg {mm} mm nodig.',
 	'grid.tooFar.move': 'Schuif het {anchor} naar rechts of naar beneden{orText}.',
 	'grid.tooFar.orText': ', of zet het opschrift uit',
+	'grid.tooFar.cut': 'De snede zelf loopt {margin} buiten het bord.',
 	'grid.legend.rows': 'Rijen: {axis} in {unit}.',
 	'grid.legend.columns': 'Kolommen: {axis}.',
 	'grid.legend.fixed': '{axis} vast op {value}.',
@@ -1281,6 +1306,7 @@ export const nl: Catalogue = {
 	'grid.error.refused': 'De engine weigerde het raster ({status}).',
 	'grid.labelLayer.caption': 'Opschrift',
 	'grid.labelLayer.border': 'Kader',
+	'grid.labelLayer.code': 'Bordcode',
 	'grid.corner.left': 'links',
 	'grid.corner.right': 'rechts',
 	'grid.corner.top': 'boven',
@@ -2326,6 +2352,8 @@ export const nl: Catalogue = {
 	'api.library.material.nameTaken':
 		'Er bestaat al een materiaal met die naam. Voeg de twee samen in plaats van ze dezelfde naam te geven.',
 	'api.library.material.mergeSelf': 'Een materiaal kan niet met zichzelf samengevoegd worden.',
+	'api.library.grid.cutoutNeedsMaterial':
+		'Om de tegel los te snijden is een materiaal nodig, zodat de snijinstelling opgezocht kan worden.',
 	'api.library.machine.mergeSelf':
 		'Kies een ander machineprofiel om het werk van dit profiel naartoe te verhuizen.',
 	'api.library.machine.mergeActive':

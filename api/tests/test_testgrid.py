@@ -2823,3 +2823,41 @@ def test_a_cut_out_tab_sits_in_the_middle_of_a_side_and_never_across_a_corner(ke
         )
         # And it really is the middle of that side, not merely inside it.
         assert abs((start + end) / 2 - (side[0] + side[1]) / 2) < 0.01
+
+
+def test_a_board_read_back_from_the_database_can_be_previewed_again(client):
+    """
+    The row says `text_enabled`, the planner says `text`, and the route understood one.
+
+    Both halves are ours and they were written a round apart, so the spelling drifted:
+    `Library.GRID_DEFAULTS` and every stored recipe carry `text_enabled` and
+    `border_enabled`, while `plan_grid` has parameters called `text` and `border`. A
+    caller handing back a row it had just read — which is what re-previewing a saved
+    recipe is — therefore reached `plan_grid` with a keyword it has no parameter for, and
+    a `TypeError` in a route is a bare **500** that names nothing. Measured on the live
+    server before this was closed: `text_enabled: true` answered 500 and `text: true`
+    answered 200, on bodies identical in every other field.
+
+    And the general case underneath it, which is the reason this is a refusal and not a
+    filter: a field nobody recognises may not be dropped in silence. A board that burns
+    without the cut-out you asked for, because you typed `cutout` instead of
+    `cutout_enabled`, is worse than a board that refuses to be planned.
+    """
+    stored = {**BASE, "text_enabled": True, "border_enabled": False}
+    both = client.post("/api/library/testgrids/preview", json=stored)
+    assert both.status_code == 200, both.text
+    assert both.json()["plan"]["text"] is True
+    assert both.json()["plan"]["border"] is False
+
+    # The planner's own spelling keeps working, and both give the same board.
+    planner = client.post(
+        "/api/library/testgrids/preview", json={**BASE, "text": True, "border": False}
+    )
+    assert planner.status_code == 200
+    assert planner.json()["plan"]["outer_width_mm"] == both.json()["plan"]["outer_width_mm"]
+
+    # A name nobody knows is said out loud, with the name in it.
+    typo = client.post("/api/library/testgrids/preview", json={**BASE, "cutout": True})
+    assert typo.status_code == 409
+    assert typo.headers["X-OpenKerf-Error"] == "library.grid.unknownField"
+    assert "cutout" in typo.json()["detail"]
