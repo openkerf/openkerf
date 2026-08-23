@@ -12,6 +12,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import StarterOffer from '$components/StarterOffer.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
@@ -39,15 +40,15 @@
 	);
 	let bed = $state<{ w: number; h: number } | null>(null);
 	/** Answered (adjusted or left as it was): then the question is gone. */
-	let sheetAnswer = $state<'aangepast' | 'gelaten' | null>(null);
+	let sheetAnswer = $state<'adjusted' | 'kept' | null>(null);
 
 	let sheetQuestion = $derived.by(() => {
 		const sheet = sheets.active;
 		if (!bed || !sheet || sheetAnswer) return null;
 		// A tenth of a millimetre difference is rounding, not a mismatch.
-		const afwijkt =
+		const differs =
 			Math.abs(sheet.width_mm - bed.w) > 0.5 || Math.abs(sheet.height_mm - bed.h) > 0.5;
-		return afwijkt ? { sheet, bed } : null;
+		return differs ? { sheet, bed } : null;
 	});
 
 	function size(value: number) {
@@ -58,7 +59,7 @@
 		const ask = sheetQuestion;
 		if (!ask) return;
 		if (await sheets.update(ask.sheet.id, { width_mm: bed!.w, height_mm: bed!.h }))
-			sheetAnswer = 'aangepast';
+			sheetAnswer = 'adjusted';
 	}
 
 	onMount(async () => {
@@ -71,9 +72,9 @@
 			const response = await fetch('/api/status');
 			if (!response.ok) return;
 			const state = await response.json();
-			const pad = $page.url.searchParams.get('machine') ?? '';
+			const wanted = $page.url.searchParams.get('machine') ?? '';
 			const dev =
-				(state.devices ?? []).find((d: { path: string }) => d.path === pad) ??
+				(state.devices ?? []).find((d: { path: string }) => d.path === wanted) ??
 				(state.devices ?? []).find((d: { active: boolean }) => d.active);
 			if (dev?.bed?.width_mm > 0 && dev?.bed?.height_mm > 0)
 				bed = { w: dev.bed.width_mm, h: dev.bed.height_mm };
@@ -82,7 +83,7 @@
 		}
 	});
 
-	const STAPPEN = [
+	const STEPS = [
 		{ head: t('setup.done.draw.title'), hint: t('setup.done.draw.body') },
 		{ head: t('setup.done.layer.title'), hint: t('setup.done.layer.body') },
 		{ head: t('job.frame'), hint: t('setup.done.frame.body') },
@@ -107,7 +108,7 @@
 		<p class="muted">{t('setup.firstJob')}</p>
 
 		{#if sheetQuestion}
-			<div class="velvraag">
+			<div class="sheetask">
 				<h2 class="head">{t('setup.sheetFits')}</h2>
 				<p>
 					{t('setup.sheetFits.body', {
@@ -121,18 +122,18 @@
 				<p class="muted">
 					{t('setup.sheetFits.offcut', { width: size(sheetQuestion.sheet.width_mm) })}
 				</p>
-				<div class="velknoppen">
+				<div class="sheetbuttons">
 					<button class="btn primary" disabled={sheets.busy} onclick={useBedSize}>
 						{t('setup.sheetToBed')}
 					</button>
-					<button class="btn subtle" onclick={() => (sheetAnswer = 'gelaten')}>
+					<button class="btn subtle" onclick={() => (sheetAnswer = 'kept')}>
 						{t('setup.sheetLeave')}
 					</button>
 				</div>
 				{#if sheets.error}<p class="failure" role="alert">{sheets.error}</p>{/if}
 			</div>
-		{:else if sheetAnswer === 'aangepast' && sheets.active}
-			<p class="velgoed" role="status">
+		{:else if sheetAnswer === 'adjusted' && sheets.active}
+			<p class="sheetdone" role="status">
 				{t('setup.sheetNow', {
 					sheet: sheets.active.name,
 					size: `${size(sheets.active.width_mm)} × ${size(sheets.active.height_mm)} mm`
@@ -140,9 +141,17 @@
 			</p>
 		{/if}
 
+		<!-- The moment the whole preset story exists for: a machine has just been
+		     defined and there is not one setting for it. This is the same card the
+		     material library carries at its top, fed by the same function, so the offer
+		     is made once and reads the same in both places. It sits above the four
+		     steps because step two of them is choosing a layer's settings, and this is
+		     where those come from. -->
+		<StarterOffer />
+
 		<h2>{t('setup.firstCut')}</h2>
 		<ol class="gone">
-			{#each STAPPEN as step, index (step.head)}
+			{#each STEPS as step, index (step.head)}
 				<li>
 					<span class="number mono">{index + 1}</span>
 					<span class="text">
@@ -202,7 +211,7 @@
 
 	/* A question, not a warning: nothing is broken, there is something to choose. Hence
 	   the accent in the border and not amber. */
-	.velvraag {
+	.sheetask {
 		margin-top: var(--space-6);
 		padding: var(--space-4);
 		border: 1px solid var(--line);
@@ -210,14 +219,14 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-2);
 	}
-	.velvraag .head {
+	.sheetask .head {
 		margin: 0 0 var(--space-2);
 	}
-	.velvraag p {
+	.sheetask p {
 		margin: 0 0 var(--space-2);
 		font-size: var(--text-xs);
 	}
-	.velknoppen {
+	.sheetbuttons {
 		display: flex;
 		flex-wrap: wrap;
 		/* Two outcomes that exclude each other: far enough apart not to bad-aim with a
@@ -228,11 +237,11 @@
 	/* With a glove on, 37px is too little; the buttons in the setup are otherwise mouse
 	   buttons, so this lives here and not in the layout. */
 	@media (max-width: 1199px), (pointer: coarse) {
-		.velknoppen :global(.btn) {
+		.sheetbuttons :global(.btn) {
 			min-height: 44px;
 		}
 	}
-	.velgoed {
+	.sheetdone {
 		margin-top: var(--space-6);
 		font-size: var(--text-xs);
 		color: var(--ok);

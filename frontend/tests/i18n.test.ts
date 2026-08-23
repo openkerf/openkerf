@@ -338,3 +338,47 @@ test('a number in a refusal is written the way the rest of the app writes number
 	assert.match(named, /1000/, `a column called "1000" was rewritten: ${named}`);
 	bindLanguage(() => 'en');
 });
+
+test('a label the interface reads follows a language switch', async () => {
+	// Measured in the browser: with the material library open, switching to Dutch turned
+	// every sentence in the window Dutch — "Materiaalbibliotheek", "Er is nog geen
+	// laag…" — and left the four source badges reading "Manual" and "Verified". The
+	// table they came from called `t()` in its own initialiser, so it was built once, in
+	// whichever language happened to load first, and no switch could reach it. This is
+	// the same trap the catalogue's confidence table fell into, and it survived the
+	// deletion of that file because it lives in another one.
+	const { bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const { sourceLabel } = await import('../src/lib/library.svelte.ts');
+	bindLanguage(() => 'en');
+	const english = sourceLabel('testraster');
+	bindLanguage(() => 'nl');
+	const dutch = sourceLabel('testraster');
+	bindLanguage(() => 'en');
+	assert.notEqual(dutch.text, english.text, 'the badge did not follow the language');
+	assert.notEqual(dutch.means, english.means, 'the explanation did not follow the language');
+});
+
+test('no message is resolved once and kept', () => {
+	// The general form of the bug above, so the next one is caught where it is written
+	// rather than in a browser: a module-level `const` whose value calls `t()` freezes
+	// the language of the first import. Anything the reader sees has to be resolved
+	// while it is being drawn — a function, a getter, or a `$derived`.
+	for (const path of sources(join(SRC, 'lib'), [], /\.ts$/)) {
+		const text = readFileSync(path, 'utf8');
+		// Walk the top-level declarations only: an indented `t(` sits inside a function
+		// or a class method and is therefore called when it is read.
+		const frozen: string[] = [];
+		let declaring: string | null = null;
+		for (const line of text.split('\n')) {
+			const opens = line.match(/^export (?:const|let) (\w+)/);
+			if (opens) declaring = opens[1];
+			else if (/^\S/.test(line) && !/^\s/.test(line) && !line.startsWith('\t')) {
+				// A new top-level statement: the previous declaration is finished, unless
+				// this line is its own closing brace.
+				if (!/^[)}\]];?$/.test(line.trim())) declaring = null;
+			}
+			if (declaring && /(?<![A-Za-z0-9_.])t\(/.test(line)) frozen.push(`${declaring} in ${path}`);
+		}
+		assert.deepEqual(frozen, [], `resolved at import instead of at render: ${frozen.join(', ')}`);
+	}
+});

@@ -68,10 +68,50 @@ async function open(path) {
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
 	await page.waitForSelector('.statusbar, .setup', { timeout: 20000 }).catch(() => {});
 	await page.waitForTimeout(900);
-	const later = page.getByRole('button', { name: /^(Later|Not now|Niet nu|Seen|Gezien)$/ });
+	// A notification banner lies over the screen and has to go before anything can be
+	// measured. But it is not the only thing that says "Not now" any more: the offer of
+	// starting settings carries the same words, and pressing that one *writes*
+	// `starter_state = 'dismissed'` on the machine that is active. Measured: one run of
+	// this script turned the active profile's state from '' into 'dismissed', so the
+	// offer was gone from the reader's own library and this script never measured it at
+	// all. Hence `:not(.away)`, the class that button alone carries.
+	const later = page
+		.locator('button:not(.away)')
+		.filter({ hasText: /^(Later|Not now|Niet nu|Seen|Gezien)$/ });
 	if (await later.count()) await later.first().click().catch(() => {});
 	await page.waitForTimeout(300);
 	return page;
+}
+
+/**
+ * Open the material library, which is where the offer of starting settings lives.
+ *
+ * It is a window, so it needs a hand like Series does. Worth its own screen because
+ * this round put two new things in it — the offer at the top and the ⋯ on every
+ * material row — and because the offer's sentences are the longest in the app: they
+ * name a machine, a wattage and a licence in one line.
+ */
+async function openLibrary(page) {
+	const rail = page.locator('button[title^="Material library"], button[title^="Materiaal"]').first();
+	if (!(await rail.count())) return;
+	await rail.click();
+	await page.waitForTimeout(1200);
+	// And ask it to look, because the sentences worth measuring — where the rows come
+	// from, under which licence, and who gets the credit — only exist after the press.
+	// A read and nothing else: no import happens until a per-material button is used.
+	//
+	// The selector is narrow on purpose. A direct child of the card, and not `.primary`:
+	// the buttons inside the fieldset *write* the machine's kind and wattage, and the
+	// primary one opens the test-grid window. Neither belongs in a measurement that may
+	// be pointed at somebody's real library.
+	const look = page.locator('section.offer > .buttons > button.btn:not(.primary)').first();
+	if (await look.count()) {
+		await look.click().catch(() => {});
+		await page
+			.waitForSelector('section.offer ul.materials, section.offer p.advice', { timeout: 20000 })
+			.catch(() => {});
+		await page.waitForTimeout(500);
+	}
 }
 
 async function measure(page, byDesign) {
@@ -134,6 +174,7 @@ const SCREENS = [
 	['layers', '/?tab=layers'],
 	['job', '/?tab=job'],
 	['series', '/?tab=design', openSeries],
+	['library', '/?tab=design', openLibrary],
 	['setup', '/setup'],
 	['setup-kind', '/setup/kind'],
 	['setup-model', '/setup/type'],

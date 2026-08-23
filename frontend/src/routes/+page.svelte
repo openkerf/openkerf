@@ -25,7 +25,6 @@
 	import ToolRail from '$components/ToolRail.svelte';
 	import Dialog from '$components/Dialog.svelte';
 	import MaterialLibrary from '$components/MaterialLibrary.svelte';
-	import Presetariat from '$components/Presetariat.svelte';
 	import Generators from '$components/Generators.svelte';
 	import CameraCalibration from '$components/CameraCalibration.svelte';
 	import Clipart from '$components/Clipart.svelte';
@@ -36,7 +35,6 @@ import Series from '$components/Series.svelte';
 	import JobStart from '$components/JobStart.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
 	import { CameraStore } from '$lib/camera.svelte';
-	import { PresetariatStore } from '$lib/presetariat.svelte';
 	import { TilingStore } from '$lib/tiling.svelte';
 import { SeriesStore } from '$lib/series.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
@@ -180,14 +178,12 @@ import { SeriesStore } from '$lib/series.svelte';
 		await loadImageState();
 	}
 	let libraryOpen = $state(false);
-	let catalogueOpen = $state(false);
 	let generatorsOpen = $state(false);
 	let clipartOpen = $state(false);
 	let seriesOpen = $state(false);
 	const sheets = new SheetStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let calibrateOpen = $state(false);
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
-	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const tiling = new TilingStore(token);
 	// The list a series burns from. Beside the other stores, because three surfaces
 	// read it — this window, the context panel and the run block in the Job panel —
@@ -1410,7 +1406,6 @@ import { SeriesStore } from '$lib/series.svelte';
 		{canEdit}
 		onOpenGrid={() => (gridOpen = true)}
 		onOpenLibrary={() => (libraryOpen = true)}
-		onOpenCatalogue={() => (catalogueOpen = true)}
 		onOpenGenerators={() => (generatorsOpen = true)}
 		onOpenClipart={() => (clipartOpen = true)}
 		onOpenSeries={() => (seriesOpen = true)}
@@ -1897,8 +1892,6 @@ import { SeriesStore } from '$lib/series.svelte';
 		if ((await edits.offset(design.selectedIds, distance)).ok) await design.load();
 	}}
 />
-
-<Presetariat bind:open={catalogueOpen} {catalogue} {library} {canEdit} />
 
 <CameraCalibration bind:open={calibrateOpen} {camera} />
 

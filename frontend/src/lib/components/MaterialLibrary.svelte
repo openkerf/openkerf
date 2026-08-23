@@ -3,18 +3,23 @@
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import NumberField from './NumberField.svelte';
 	import Menu from './Menu.svelte';
+	import StarterOffer from './StarterOffer.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
 	import {
 		OPERATION_LAYER,
-		OPERATIONS,
-		SOURCE_LABEL,
+		operations as operationChoices,
+		sourceLabel,
 		operationName,
+		wouldGoWith,
 		type ImportPreview,
 		type ImportResult,
+		type ImportUndone,
+		type MaterialUsage,
 		type PresetConflict,
 		type LibraryStore,
 		type Preset
 	} from '$lib/library.svelte';
+	import { LASER_KINDS, laserKindLabel, type LaserKind } from '$lib/machines.svelte';
 	import type { DesignOperation } from '$lib/design.svelte';
 
 	let {
@@ -46,7 +51,7 @@
 	// this is open, the filter should not slide out from under your hands — hence
 	// untrack.
 	let materialId = $state<number | null>(untrack(() => sheetMaterialId));
-	let zoek = $state('');
+	let query = $state('');
 	let adding = $state(false);
 	let newMaterial = $state('');
 	let draft = $state({
@@ -60,9 +65,37 @@
 	let editing = $state<number | null>(null);
 	let herkomst = $state<number | null>(null);
 	let weghalen = $state<number | null>(null);
-	let addingMachine = $state(false);
 	let shareError = $state<string | null>(null);
-	let machineDraft = $state({ name: '', power_watt: '', lens_mm: '' });
+	/** The field that appears when you press "New material", so it can take the caret. */
+	let newField = $state<HTMLInputElement | null>(null);
+
+	// ---------------------------------------------- the three verbs on a material
+	//
+	// A material could be added and nothing else: no rename, no merge, no removal. That
+	// is why this library holds both `Multiplex berken` and `Berkentriplex` for one
+	// board, and why a reader concluded that removing a material was impossible — the
+	// route was there and nothing ever called it. All three now sit behind the same ⋯
+	// the setting rows already have, because two lists in one window disagreeing about
+	// where verbs live is precisely what made that conclusion reasonable.
+
+	/** Which material is being renamed, and what it is being renamed to. */
+	let renaming = $state<number | null>(null);
+	let renameTo = $state('');
+	let alsoCalled = $state('');
+	/** Which material is being merged away, and into which one. */
+	let merging = $state<number | null>(null);
+	let mergeInto = $state<number | null>(null);
+	/**
+	 * Which material the removal question is about, with what hangs off it.
+	 *
+	 * The counts are fetched before the question is asked, never guessed from what is on
+	 * screen: the list here is filtered by machine and by search, so a material that
+	 * looks empty can still carry six settings of another laser.
+	 */
+	let removing = $state<number | null>(null);
+	let usage = $state<MaterialUsage | null>(null);
+	/** What taking an import back actually took, said once and then dismissed. */
+	let undone = $state<ImportUndone | null>(null);
 
 	/**
 	 * The menu on a setting.
@@ -151,6 +184,199 @@
 		};
 	}
 
+	/**
+	 * The menu on a material.
+	 *
+	 * Same shape and same order as the one on a setting: first what you came to do, then
+	 * what you can do to this material, and the removal last and alone in red — so
+	 * whoever misses has hit "Show only this material" and not the delete.
+	 */
+	function materialMenu(group: Groep): MenuList {
+		return [
+			{
+				items: [
+					{
+						id: 'only',
+						label: t('library.onlyThis'),
+						on: materialId === group.materialId,
+						run: () => (materialId = group.materialId)
+					},
+					{
+						id: 'grid',
+						label: t('library.makeGrid'),
+						off: canEdit ? undefined : t('reason.needsToken'),
+						run: () => onMakeGrid?.(group.materialId)
+					}
+				]
+			},
+			{
+				items: [
+					{
+						id: 'rename',
+						label: t('library.material.menu.rename'),
+						off: canEdit ? undefined : t('reason.needsToken'),
+						run: () => startRename(group)
+					},
+					{
+						id: 'merge',
+						label: t('library.material.menu.merge'),
+						// One material cannot be merged into itself, and with one material
+						// there is nothing else to merge into. Saying so beats a select
+						// with nothing in it.
+						off: !canEdit
+							? t('reason.needsToken')
+							: library.materials.length < 2
+								? t('library.material.merge.needsTwo')
+								: undefined,
+						run: () => startMerge(group)
+					}
+				]
+			},
+			{
+				items: [
+					{
+						id: 'gone',
+						label: t('library.material.menu.remove'),
+						off: canEdit ? undefined : t('reason.needsToken'),
+						danger: true,
+						run: () => askRemove(group)
+					}
+				]
+			}
+		];
+	}
+
+	/** The ⋯ hangs under its button; the right-click opens at the cursor. */
+	function openMaterialMenu(event: MouseEvent, group: Groep) {
+		event.preventDefault();
+		const target = event.currentTarget as HTMLElement | null;
+		const box = target?.getBoundingClientRect();
+		rowMenu = {
+			list: materialMenu(group),
+			x: event.type === 'contextmenu' || !box ? event.clientX : box.left - 180,
+			y: event.type === 'contextmenu' || !box ? event.clientY : box.bottom + 4
+		};
+	}
+
+	/**
+	 * Every one of the three verbs shows its question in the right-hand pane, under the
+	 * name of the material it is about — and never two at once. The left-hand row is
+	 * 232 px wide, so the question cannot stand there, and a window over a window would
+	 * hide the very list the answer changes.
+	 */
+	function askAbout(group: Groep) {
+		materialId = group.materialId;
+		renaming = merging = removing = null;
+		usage = null;
+		undone = null;
+	}
+
+	function startRename(group: Groep) {
+		askAbout(group);
+		renameTo = group.name;
+		alsoCalled = (library.materials.find((m) => m.id === group.materialId)?.synonyms ?? []).join(
+			', '
+		);
+		renaming = group.materialId;
+	}
+
+	async function saveRename() {
+		if (renaming === null || !renameTo.trim()) return;
+		const words = alsoCalled
+			.split(',')
+			.map((word) => word.trim())
+			.filter(Boolean);
+		const saved = await library.renameMaterial(renaming, {
+			name: renameTo.trim(),
+			synonyms: words
+		});
+		if (saved) renaming = null;
+	}
+
+	function startMerge(group: Groep) {
+		askAbout(group);
+		mergeInto = null;
+		merging = group.materialId;
+	}
+
+	async function doMerge() {
+		if (merging === null || mergeInto === null) return;
+		const target = mergeInto;
+		const done = await library.mergeMaterial(merging, target);
+		if (done) {
+			merging = null;
+			// Land on the material everything moved to: that list is the answer to
+			// whether the merge did what you meant.
+			materialId = target;
+		}
+	}
+
+	async function askRemove(group: Groep) {
+		askAbout(group);
+		removing = group.materialId;
+		usage = await library.materialUsage(group.materialId);
+	}
+
+	async function doRemove() {
+		if (removing === null) return;
+		const carries = !!usage && !!(usage.presets || usage.test_grids || usage.grid_recipes);
+		const done = await library.removeMaterial(removing, carries);
+		if (done) {
+			removing = null;
+			usage = null;
+			materialId = null;
+		}
+	}
+
+	async function undoImport(batch: string) {
+		const done = await library.removeImport(batch);
+		if (done) {
+			undone = done;
+			herkomst = null;
+		}
+	}
+
+	// A material that is no longer there cannot stay chosen: after a merge or a removal
+	// the right-hand pane would otherwise be blank with nothing saying why. Only once
+	// there is a list to judge by — an empty one means the first load has not landed
+	// yet, and clearing then would throw away the sheet's own material filter before
+	// anybody saw it.
+	$effect(() => {
+		const known = library.materials.some((m) => m.id === materialId);
+		if (materialId !== null && library.materials.length > 0 && !known)
+			untrack(() => (materialId = null));
+	});
+
+	// The field is the whole point of pressing the button, so it takes the caret. Without
+	// this the reader presses "New material" and then has to find the field that appeared.
+	$effect(() => {
+		if (adding) newField?.focus();
+	});
+
+	/**
+	 * The question a verb asks takes the caret, and Escape answers it with "no".
+	 *
+	 * Same rule as the field above, and measured to be missing on all three: choosing
+	 * *Rename this material…* left `document.activeElement` on `<body>`, so a reader who
+	 * had come this far with the keyboard had nothing to type into. Worse, Escape then
+	 * did nothing at all — the window's own Escape handler sits on its panel and a
+	 * keystroke on the body never reaches it — and once the caret *was* in the field,
+	 * Escape closed the whole material library and threw the half-typed name away with
+	 * it. So the block stops that key here and closes only itself.
+	 */
+	let askEl = $state<HTMLElement | null>(null);
+	$effect(() => {
+		if (!askEl) return;
+		// The first focusable is the safe one in all three: the name field when renaming,
+		// the target list when merging, and "Keep it" in front of the red button.
+		askEl.querySelector<HTMLElement>('input, select, button')?.focus();
+	});
+
+	function closeQuestion() {
+		renaming = merging = removing = null;
+		usage = null;
+	}
+
 	let chosenOperation = $derived(
 		operations.find((o) => o.id === targetOperation) ?? operations[0] ?? null
 	);
@@ -174,7 +400,7 @@
 			preset.operation,
 			preset.note,
 			preset.machine_name ?? '',
-			SOURCE_LABEL[preset.source].text
+			sourceLabel(preset.source).text
 		]
 			.join(' ')
 			.toLowerCase();
@@ -194,7 +420,7 @@
 	 * be no way on to the next material. Narrowing by material happens in
 	 * `zichtbarePresets`, on the right-hand side.
 	 */
-	let visible = $derived(library.presetsFor(null).filter((p) => raakt(p, zoek.trim())));
+	let visible = $derived(library.presetsFor(null).filter((p) => raakt(p, query.trim())));
 
 	function gebruikt(preset: Preset) {
 		return preset.last_used_at ? Date.parse(`${preset.last_used_at.replace(' ', 'T')}Z`) : 0;
@@ -268,7 +494,7 @@
 		// nowhere that "make a test grid" sits logically.
 		for (const material of library.materials) {
 			if (card.has(material.id)) continue;
-			if (zoek.trim() && !material.name.toLowerCase().includes(zoek.trim().toLowerCase()))
+			if (query.trim() && !material.name.toLowerCase().includes(query.trim().toLowerCase()))
 				continue;
 			card.set(material.id, {
 				name: material.name,
@@ -326,17 +552,19 @@
 		await library.updatePreset(preset.id, fields);
 	}
 
-	async function createMachine() {
-		if (!machineDraft.name.trim()) return;
-		const created = await library.addMachineProfile({
-			name: machineDraft.name.trim(),
-			power_watt: machineDraft.power_watt === '' ? null : Number(machineDraft.power_watt),
-			lens_mm: machineDraft.lens_mm === '' ? null : Number(machineDraft.lens_mm)
-		});
-		if (created) {
-			machineDraft = { name: '', power_watt: '', lens_mm: '' };
-			addingMachine = false;
-		}
+	/**
+	 * What the machine is, changed where the machine is listed.
+	 *
+	 * This replaces a form that could *create* a profile with a wattage and no device —
+	 * the only writer in the app that could, and therefore the only thing that can have
+	 * made the phantom `5030 CO2` that carries twenty-seven settings for a machine
+	 * nobody runs. What is left is the half that was actually needed: every live profile
+	 * here has `power_watt: null`, so somebody who is already past the wizard needs a
+	 * door to fill the two fields in. Each field writes on change, like the values on a
+	 * setting do, because there is nothing to weigh up in between.
+	 */
+	function saveMachine(id: number, fields: Record<string, unknown>) {
+		return library.updateMachineProfile(id, fields);
 	}
 
 	async function apply(preset: Preset) {
@@ -489,16 +717,23 @@
 	}
 
 	/** "3 settings" — and "1 setting", because that is what a person reads too. */
-	function count(n: number, what: 'materials' | 'presets' | 'machines' | 'testGrids' | 'photos' | 'grids') {
+	function count(n: number, what: 'materials' | 'presets' | 'machines' | 'testGrids' | 'photos') {
 		return t(`count.${what}` as never, { n });
 	}
 
-	/** What hangs off a machine profile; only what is really there. */
-	function bewijs(machine: { presets: number; test_grids: number }) {
+	/**
+	 * What hangs off a machine profile; only what is really there.
+	 *
+	 * `count.grids` used to stand here and that key is in neither catalogue, so the
+	 * words `count.grids` were printed on the screen beside every profile that carries a
+	 * board. The key is `count.testGrids`, and it is the same one the import screen uses
+	 * for the same thing.
+	 */
+	function evidence(machine: { presets: number; test_grids: number }) {
 		const parts = [];
 		if (machine.presets) parts.push(count(machine.presets, 'presets'));
-		if (machine.test_grids) parts.push(count(machine.test_grids, 'grids'));
-		return parts.join(' · ');
+		if (machine.test_grids) parts.push(count(machine.test_grids, 'testGrids'));
+		return i18n.list(parts);
 	}
 
 	/**
@@ -554,8 +789,59 @@
 	</svg>
 {/snippet}
 
+{#snippet addMaterial(label: string, big: boolean)}
+	<!--
+		The trigger and the field it summons, in one place.
+
+		They were 1,020 px apart: the button sat at the right-hand end of the search bar
+		at x=1197 and the field it opened appeared at x=177, under two paragraphs, so
+		pressing it looked as though nothing had happened. Now the field takes the
+		button's own place and the caret with it, and both live in the column where
+		materials live.
+	-->
+	{#if adding}
+		<div class="addrow">
+			<input
+				type="text"
+				bind:this={newField}
+				bind:value={newMaterial}
+				aria-label={t('library.material.name')}
+				placeholder={t('library.material.placeholder')}
+				onkeydown={(e) => {
+					if (e.key === 'Enter') createMaterial();
+					// Escape is the way out of a field you opened by accident, and it must
+					// not close the whole window on the way.
+					if (e.key === 'Escape') {
+						e.stopPropagation();
+						adding = false;
+						newMaterial = '';
+					}
+				}}
+			/>
+			<div class="addbuttons">
+				<button
+					class="mini quiet"
+					onclick={() => {
+						adding = false;
+						newMaterial = '';
+					}}>{t('common.cancel')}</button
+				>
+				<button
+					class={big ? 'btn primary' : 'mini'}
+					disabled={library.busy || !newMaterial.trim()}
+					onclick={createMaterial}>{t('common.save')}</button
+				>
+			</div>
+		</div>
+	{:else}
+		<button class={big ? 'btn primary' : 'mini add'} onclick={() => (adding = true)}>
+			{label}
+		</button>
+	{/if}
+{/snippet}
+
 {#snippet card(preset: Preset, showMaterial: boolean)}
-	{@const source = SOURCE_LABEL[preset.source]}
+	{@const source = sourceLabel(preset.source)}
 	{@const past = !canEdit || pastBij(preset, chosenOperation)}
 	{@const off = herkomst === preset.id || editing === preset.id}
 	<article
@@ -719,6 +1005,33 @@
 						<dt>{t('library.note')}</dt>
 						<dd>{preset.note}</dd>
 					{/if}
+					{#if preset.source === 'geimporteerd'}
+						<!-- Where an imported setting was really measured, which is not the machine
+						     it is filed under: an import files a stranger's 80 W measurement under
+						     your laser. A NULL wattage on an imported row means the origin is
+						     unknown, and that is what the twenty-six prefilled rows carry — their
+						     note records no machine at all. -->
+						<dt>{t('library.origin')}</dt>
+						<dd>
+							{#if preset.origin_laser_type && preset.origin_power_watt}
+								{t('library.origin.laser', {
+									kind: laserKindLabel(preset.origin_laser_type),
+									watt: i18n.number(preset.origin_power_watt)
+								})}
+							{:else if preset.origin_laser_type}
+								{laserKindLabel(preset.origin_laser_type)}
+							{:else}
+								{t('library.origin.unknown')}
+							{/if}
+						</dd>
+						{#if preset.origin_by}
+							<dt>{t('library.credit')}</dt>
+							<!-- The shared catalogue is CC BY, so the credit is a condition of the
+							     copy and it belongs wherever the row is read. A contributor's handle
+							     is their own data and goes on screen as it stands. -->
+							<dd>{preset.origin_by}</dd>
+						{/if}
+					{/if}
 					<dt>{t('library.air')}</dt>
 					<dd>{preset.air_assist ? t('library.on') : t('library.off')}</dd>
 					{#if preset.last_used_at}
@@ -794,6 +1107,19 @@
 						<button class="mini" onclick={() => share(preset)}>{t('library.menu.share')}</button>
 					{/if}
 				</div>
+				{#if canEdit && preset.import_batch}
+					<!-- The import this row came in on, and one press back out of it. Twenty-six
+					     of the thirty-five settings in this library arrived in one such batch, for
+					     a machine nobody runs, and until now not one of them could be removed
+					     again. It takes the settings of that batch and the materials the batch
+					     created that nothing else uses — the rest stays. -->
+					<div class="batch">
+						<button class="mini danger" disabled={library.busy} onclick={() => undoImport(preset.import_batch ?? '')}>
+							{t('library.batch.undo')}
+						</button>
+						<span class="fine">{t('library.batch.undo.why')}</span>
+					</div>
+				{/if}
 			</div>
 		{/if}
 
@@ -1026,7 +1352,7 @@
 									<span class="beter">
 										{t('import.strongerEvidence', {
 											source:
-												SOURCE_LABEL[clash.mine.source as Preset['source']]?.text.toLowerCase() ??
+												sourceLabel(clash.mine.source as Preset['source'])?.text.toLowerCase() ??
 												clash.mine.source
 										})}
 									</span>
@@ -1100,6 +1426,55 @@
 	</div>
 {/if}
 
+<!--
+	The one moment this whole part of the app exists for, at the top of the body and
+	above the search bar: a machine with no settings, and the offer to fetch some that
+	match the kind of laser and its tube power.
+
+	The same component the last step of the wizard renders, reading the same function —
+	where two surfaces have to know one thing, it is written once. It fetches nothing
+	when it appears, so opening this window still costs what it cost.
+
+	`door` keeps one quiet line here when there is nothing to offer — a machine with
+	settings of its own, or a reader who waved the offer away. Without it the shared
+	catalogue is unreachable from anywhere in the app, and that is the state every
+	machine ends up in: measured on the author's library, the active laser carries three
+	settings it measured itself, so the card is gone and there is no other way in.
+-->
+<StarterOffer door onTestGrid={() => onMakeGrid?.(null)} onChanged={() => library.load()} />
+
+{#if canEdit && library.activeMachine && library.coverage && library.coverage.unattached > 0}
+	<!-- Settings that belong to no machine show up under every machine, because the
+	     query that fetches them reads `machine_id = ? OR machine_id IS NULL`. Attaching
+	     them to this one says they were measured here, and only the reader knows whether
+	     that is true — so this is a count and a button, never a step that runs by
+	     itself. -->
+	<div class="strays">
+		<p>
+			{t('library.strays', { n: library.coverage.unattached })}
+			{#if library.coverage.unattached_grids}
+				{t('library.strays.grids', { n: library.coverage.unattached_grids })}
+			{/if}
+		</p>
+		<p class="fine">{t('library.strays.why', { machine: library.activeMachine.name })}</p>
+		<button class="mini" disabled={library.busy} onclick={() => library.adoptStrays()}>
+			{t('library.strays.adopt', { machine: library.activeMachine.name })}
+		</button>
+	</div>
+{/if}
+
+{#if undone}
+	<!-- What taking an import back actually took. One press made it and one press undid
+	     it, and neither of the two is silent. -->
+	<div class="ready" role="status">
+		<span>{t('library.batch.undone', { n: undone.presets })}</span>
+		{#if undone.kept_materials.length}
+			<span class="fine">{t('library.batch.kept', { n: undone.kept_materials.length })}</span>
+		{/if}
+		<button class="mini" onclick={() => (undone = null)}>{t('common.close')}</button>
+	</div>
+{/if}
+
 <!-- Filters over an empty collection are furniture: three controls with nothing
      to control, above a window saying there is nothing. With an empty library they
      disappear and the invitation has the floor. -->
@@ -1107,21 +1482,20 @@
 <div class="kopblok">
 	<div class="bar">
 	<input
-		class="zoek"
+		class="search"
 		type="search"
-		bind:value={zoek}
+		bind:value={query}
 		placeholder={t('library.search')}
 		aria-label={t('library.searchAria')}
 	/>
 	<!-- There used to be an "All materials" dropdown here. It did exactly what the
 	     list on the left does, and two controls for one choice mainly raises the
 	     question which of the two is the real one. The list won: it also shows how
-	     many settings a material has, and which material is on the sheet. -->
-	{#if canEdit}
-		<button class="btn" onclick={() => (adding = !adding)}>
-			{adding ? t('common.cancel') : t('library.newMaterial')}
-		</button>
-	{/if}
+	     many settings a material has, and which material is on the sheet.
+
+	     "New material" used to stand here too, at the far right of this bar, while the
+	     field it opened appeared at the far left of the body. It now sits at the foot of
+	     the list of materials, with its field in the same spot. -->
 </div>
 
 <div class="context">
@@ -1196,15 +1570,6 @@
 	<p class="error" role="alert">{library.error}</p>
 {/if}
 
-{#if adding}
-	<div class="row">
-		<input type="text" bind:value={newMaterial} placeholder={t('library.material.placeholder')} />
-		<button class="btn primary" disabled={library.busy || !newMaterial.trim()} onclick={createMaterial}>
-			{t('common.save')}
-		</button>
-	</div>
-{/if}
-
 {#if library.materials.length === 0}
 	<!-- An empty library used to be one grey paragraph at the bottom of a window
 	     full of filters with nothing to filter. This is the first thing a new user
@@ -1215,20 +1580,27 @@
 		<p>{t('library.welcome.body')}</p>
 		<div class="wegen">
 			{#if canEdit}
-				<button class="btn primary" onclick={() => (adding = true)}>
-					{t('library.welcome.first')}
-				</button>
+				{@render addMaterial(t('library.welcome.first'), true)}
 			{/if}
-			<p class="fine">{t('library.welcome.presetariat')}</p>
+			{#if library.activeMachine}
+				<!-- It points at the offer at the top of this window, and only when there is
+				     a machine for that offer to be about. Measured before this: the sentence
+				     said "Or fetch one from the Presetariat" 275 px below the button that
+				     does exactly that, and named a window that no longer exists — the last
+				     place in the interface that still treated the catalogue as somewhere you
+				     go. With no machine active neither surface renders, and then the sentence
+				     would point at nothing. -->
+				<p class="fine">{t('library.welcome.presetariat')}</p>
+			{/if}
 		</div>
 	</div>
 {:else if groepen.length === 0}
 	<!-- Nothing found is not a dead end as long as you can throw the search away
 	     without having to look for the field. -->
 	<div class="welcome narrow">
-		<h2>{t('library.nothingFound', { query: zoek })}</h2>
+		<h2>{t('library.nothingFound', { query })}</h2>
 		<p>{t('library.nothingFound.body', { materials: count(library.materials.length, 'materials') })}</p>
-		<button class="btn" onclick={() => (zoek = '')}>{t('library.clearSearch')}</button>
+		<button class="btn" onclick={() => (query = '')}>{t('library.clearSearch')}</button>
 	</div>
 {:else}
 	<!--
@@ -1250,10 +1622,10 @@
 					<li>
 						<button
 							class="matrij"
-							class:on={materialId === null && !zoek.trim()}
+							class:on={materialId === null && !query.trim()}
 							onclick={() => {
 								materialId = null;
-								zoek = '';
+								query = '';
 							}}
 						>
 							<span class="matname">{t('library.recent')}</span>
@@ -1262,36 +1634,12 @@
 					</li>
 				{/if}
 				{#each groepen as group (group.materialId)}
-					<li>
+					<li class="matregel">
 						<button
 							class="matrij"
 							class:on={materialId === group.materialId}
 							onclick={() => (materialId = group.materialId)}
-							oncontextmenu={(e) => {
-								e.preventDefault();
-								rowMenu = {
-									x: e.clientX,
-									y: e.clientY,
-									list: [
-										{
-											items: [
-												{
-													id: 'alleen',
-													label: t('library.onlyThis'),
-													on: materialId === group.materialId,
-													run: () => (materialId = group.materialId)
-												},
-												{
-													id: 'grid',
-													label: t('library.makeGrid'),
-													off: canEdit ? undefined : t('reason.needsToken'),
-													run: () => onMakeGrid?.(group.materialId)
-												}
-											]
-										}
-									]
-								};
-							}}
+							oncontextmenu={(e) => openMaterialMenu(e, group)}
 						>
 							<span class="matname">{group.name}</span>
 							{#if group.materialId === sheetMaterialId}
@@ -1301,9 +1649,31 @@
 							{/if}
 							<span class="mataantal mono">{group.presets.length}</span>
 						</button>
+						{#if canEdit}
+							<!-- The same ⋯ a setting row has, in the same place on the row. Renaming,
+							     merging and removing a material had no button anywhere, and one of
+							     the two lists in this window did have a menu — which is why a reader
+							     could reasonably conclude that a material could not be removed at
+							     all. Beside the button, not inside it: a button in a button is not a
+							     button. -->
+							<button
+								class="meer"
+								aria-label={t('library.material.more.aria', { material: group.name })}
+								aria-haspopup="menu"
+								title={t('library.more.title')}
+								onclick={(e) => openMaterialMenu(e, group)}
+							>
+								<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
+							</button>
+						{/if}
 					</li>
 				{/each}
 			</ul>
+			{#if canEdit}
+				<!-- Adding a material at the foot of the list of materials: the one place
+				     where a reader looking for "one more material" is already looking. -->
+				{@render addMaterial(t('library.newMaterial'), false)}
+			{/if}
 		</nav>
 
 		<div class="settings">
@@ -1332,6 +1702,146 @@
 							</button>
 						{/if}
 					</div>
+
+					{#if renaming === group.materialId}
+						<!-- Renaming where the name is read, with the settings it belongs to still
+						     below it: this is the difference between a typo you can correct and a
+						     second material beside the first, which is how this library came to
+						     hold two names for one board. -->
+						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+						<div
+							class="vraag"
+							role="group"
+							bind:this={askEl}
+							onkeydown={(e) => {
+								if (e.key !== 'Escape') return;
+								// Not up to the window: Escape here means "never mind this question".
+								// Without the stop it reaches the dialog's panel and closes the whole
+								// library, half-typed answer and all. The block is a container and not a
+								// control, which is what the a11y note above is about.
+								e.stopPropagation();
+								closeQuestion();
+							}}
+						>
+							<label class="veld">
+								<span>{t('library.material.name')}</span>
+								<input
+									type="text"
+									bind:value={renameTo}
+									onkeydown={(e) => e.key === 'Enter' && saveRename()}
+								/>
+							</label>
+							<label class="veld">
+								<span>{t('library.material.synonyms')}</span>
+								<input
+									type="text"
+									bind:value={alsoCalled}
+									placeholder={t('library.material.synonyms.placeholder')}
+								/>
+							</label>
+							<p class="fine">{t('library.material.synonyms.why')}</p>
+							<div class="knoppen">
+								<button class="mini quiet" onclick={() => (renaming = null)}>
+									{t('common.cancel')}
+								</button>
+								<button
+									class="mini"
+									disabled={library.busy || !renameTo.trim()}
+									onclick={saveRename}>{t('common.save')}</button
+								>
+							</div>
+						</div>
+					{/if}
+
+					{#if merging === group.materialId}
+						<!-- A merge keeps both sides' work: the settings, the boards, the recipes
+						     and the photographs move over, and the old name stays as a name the
+						     other material answers to — so the next import that still uses it lands
+						     on the right board. -->
+						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+						<div
+							class="vraag"
+							role="group"
+							bind:this={askEl}
+							onkeydown={(e) => {
+								if (e.key !== 'Escape') return;
+								// Not up to the window: Escape here means "never mind this question".
+								e.stopPropagation();
+								closeQuestion();
+							}}
+						>
+							<p>{t('library.material.merge.body', { material: group.name })}</p>
+							<label class="veld">
+								<span>{t('library.material.merge.pick')}</span>
+								<select bind:value={mergeInto}>
+									<option value={null}>{t('library.material.merge.choose')}</option>
+									{#each library.materials.filter((m) => m.id !== group.materialId) as other (other.id)}
+										<option value={other.id}>{other.name}</option>
+									{/each}
+								</select>
+							</label>
+							<div class="knoppen">
+								<button class="mini quiet" onclick={() => (merging = null)}>
+									{t('common.cancel')}
+								</button>
+								<button
+									class="mini"
+									disabled={library.busy || mergeInto === null}
+									onclick={doMerge}>{t('library.material.merge.confirm')}</button
+								>
+							</div>
+						</div>
+					{/if}
+
+					{#if removing === group.materialId}
+						<!-- The counts are read before the question is asked. Removing a material
+						     is `preset` CASCADE, `grid_recipe` CASCADE and `test_grid.material_id`
+						     SET NULL: measured on a copy of this library, one press took six
+						     settings — two of them measured, with photographs — orphaned two boards
+						     and answered "removed: 6". So the question names what would go, and the
+						     button says that it takes all of it. -->
+						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+						<div
+							class="vraag weg"
+							role="alert"
+							bind:this={askEl}
+							onkeydown={(e) => {
+								if (e.key !== 'Escape') return;
+								e.stopPropagation();
+								closeQuestion();
+							}}
+						>
+							{#if !usage}
+								<p>{t('common.busy')}</p>
+							{:else if wouldGoWith(usage).length}
+								<p>
+									{t('library.material.remove.carries', {
+										material: group.name,
+										what: i18n.list(wouldGoWith(usage))
+									})}
+								</p>
+							{:else}
+								<p>{t('library.material.remove.empty', { material: group.name })}</p>
+							{/if}
+							{#if usage?.sheets}
+								<p class="fine">{t('library.material.remove.sheet', { n: usage.sheets })}</p>
+							{/if}
+							<div class="knoppen">
+								<button
+									class="mini quiet"
+									onclick={() => {
+										removing = null;
+										usage = null;
+									}}>{t('library.material.remove.keep')}</button
+								>
+								<button class="mini danger" disabled={library.busy || !usage} onclick={doRemove}>
+									{usage && wouldGoWith(usage).length
+										? t('library.material.remove.confirmAll')
+										: t('library.material.remove.confirm')}
+								</button>
+							</div>
+						</div>
+					{/if}
 
 					{#if thicknesses.length > 1}
 						<!-- Thickness is the second question everyone asks and the first you can
@@ -1367,6 +1877,17 @@
 							{@render card(preset, false)}
 						{/each}
 					{/if}
+				{:else}
+					<!-- A material is chosen and the search hides everything it has. There used
+					     to be no `{:else}` here at all, so the pane was simply blank: no list, no
+					     reason, and the search field far above with a term in it. -->
+					{@const chosen = library.materials.find((m) => m.id === materialId)}
+					<p class="empty">
+						{chosen
+							? t('library.filteredOut', { material: chosen.name, query })
+							: t('library.pickMaterial')}
+					</p>
+					<button class="btn" onclick={() => (query = '')}>{t('library.clearSearch')}</button>
 				{/if}
 			{/if}
 		</div>
@@ -1393,7 +1914,7 @@
 			<label>
 				<span>{t('library.operation')}</span>
 				<select bind:value={draft.operation}>
-					{#each OPERATIONS as op (op.value)}
+					{#each operationChoices() as op (op.value)}
 						<option value={op.value}>{op.label}</option>
 					{/each}
 				</select>
@@ -1442,63 +1963,118 @@
 				{#each library.machines as machine (machine.id)}
 					{@const empty = machine.presets + machine.test_grids === 0}
 					{@const active = machine.id === library.activeMachine?.id}
-					<li class:verweesd={machine.orphaned}>
-						<span>{machine.name}</span>
-						<span class="mono">{machine.power_watt ? `${machine.power_watt} W` : ''}</span>
-						{#if machine.orphaned}
-							<!-- No configured machine belongs to this profile any more. -->
-							<span class="mark" title={t('library.profile.orphaned.title')}>
-								{t('library.profile.orphaned')}
-							</span>
-						{/if}
-						{#if !empty}
-							<!-- What hangs off it, because that decides whether it can go: a profile
-							     with settings or grids is evidence, a profile without is clutter.
-							     Only naming what is there — "0 settings" next to a profile that
-							     does carry a test grid is a half truth. -->
-							<span class="fine">{bewijs(machine)}</span>
-						{:else if canEdit && !active}
-							<button
-								class="mini"
-								disabled={library.busy}
-								onclick={() => library.removeMachineProfile(machine.id)}
-								>{t('library.profile.tidy')}</button
-							>
+					<li class:orphan={machine.orphaned}>
+						<div class="profielrij">
+							<span class="profielnaam">{machine.name}</span>
+							<span class="mono">{machine.power_watt ? `${machine.power_watt} W` : ''}</span>
+							{#if machine.orphaned}
+								<!-- Two states, told apart, because the answer differs: a machine that
+								     is not here may come back when you plug it in, while a profile
+								     that points at no machine at all is one somebody typed or one this
+								     library let go of when its slot went to another laser — and its
+								     way out is a merge, not a wait. -->
+								{#if machine.orphaned_because === 'no-device'}
+									<span class="mark" title={t('library.profile.noDevice.title')}>
+										{t('library.profile.noDevice')}
+									</span>
+								{:else}
+									<span class="mark" title={t('library.profile.deviceGone.title')}>
+										{t('library.profile.deviceGone')}
+									</span>
+								{/if}
+							{/if}
+							{#if !empty}
+								<!-- What hangs off it, because that decides whether it can go: a profile
+								     with settings or grids is evidence, a profile without is clutter.
+								     Only naming what is there — "0 settings" next to a profile that
+								     does carry a test grid is a half truth. -->
+								<span class="fine">{evidence(machine)}</span>
+							{:else if canEdit && !active}
+								<button
+									class="mini"
+									disabled={library.busy}
+									onclick={() => library.removeMachineProfile(machine.id)}
+									>{t('library.profile.tidy')}</button
+								>
+							{/if}
+							{#if canEdit && !empty && machine.orphaned_because === 'no-device' && library.activeMachine && !active}
+								<!-- Both halves of one laser, joined into the one you are working on.
+								     The case is measured rather than imagined: a device-less profile
+								     with sixty watts and twenty-seven settings sits beside the
+								     device-bound one with three settings and no wattage, and they are
+								     one machine. -->
+								<button
+									class="mini"
+									disabled={library.busy}
+									title={t('library.profile.mergeInto.why', {
+										machine: library.activeMachine.name
+									})}
+									onclick={() =>
+										library.activeMachine &&
+										library.mergeMachineProfile(machine.id, library.activeMachine.id)}
+									>{t('library.profile.mergeInto', { machine: library.activeMachine.name })}</button
+								>
+							{/if}
+						</div>
+
+						{#if canEdit && active}
+							<!-- The machine you are working on, described. Every profile in this
+							     library carries `power_watt: null`, so somebody who is already past
+							     the wizard has no other door — and without the kind and the wattage
+							     nothing can match: an 80 W catalogue showed all twenty-six of its rows
+							     to a machine nobody had described. The wizard asks these two once;
+							     this is the same two fields for the machine you already have, writing
+							     through the same route. There is deliberately no form here that
+							     *creates* a profile: that form was the only thing in the app that
+							     could make a profile with a wattage and no machine behind it. -->
+							<fieldset class="laser">
+								<legend>{t('setup.laser')}</legend>
+								<div class="paar">
+									<label class="veld">
+										<span>{t('setup.laser.kind')}</span>
+										<select
+											value={machine.laser_type || 'unknown'}
+											onchange={(e) =>
+												saveMachine(machine.id, {
+													laser_type: e.currentTarget.value as LaserKind
+												})}
+										>
+											<option value="unknown">{t('laser.kind.unknown')}</option>
+											{#each LASER_KINDS as one (one)}
+												<option value={one}>{laserKindLabel(one)}</option>
+											{/each}
+										</select>
+									</label>
+									<NumberField
+										label={t('setup.laser.watt')}
+										unit="W"
+										step={10}
+										min={1}
+										max={1000}
+										value={machine.power_watt === null ? '' : String(machine.power_watt)}
+										onchange={(v) =>
+											saveMachine(machine.id, { power_watt: v === '' ? null : Number(v) })}
+									/>
+								</div>
+								<!-- On its own line, and half a line wide: one field over the full width
+								     of a fieldset lines up with nothing (v4, form rule 5). -->
+								<div class="halve">
+									<NumberField
+										label={t('setup.laser.lens')}
+										unit="mm"
+										step={0.5}
+										min={0}
+										value={machine.lens_mm === null ? '' : String(machine.lens_mm)}
+										onchange={(v) =>
+											saveMachine(machine.id, { lens_mm: v === '' ? null : Number(v) })}
+									/>
+								</div>
+								<p class="fine">{t('setup.laser.watt.why')}</p>
+							</fieldset>
 						{/if}
 					</li>
 				{/each}
 			</ul>
-		{/if}
-		{#if addingMachine}
-			<div class="grid">
-				<label class="wide"
-					><span>{t('panel.name')}</span><input
-						bind:value={machineDraft.name}
-						placeholder={t('library.machine.placeholder')}
-					/></label
-				>
-				<NumberField
-					label={t('library.power')}
-					unit="W"
-					step={5}
-					min={0}
-					bind:value={machineDraft.power_watt}
-				/>
-				<NumberField
-					label={t('library.lens')}
-					unit="mm"
-					step={0.5}
-					min={0}
-					bind:value={machineDraft.lens_mm}
-				/>
-			</div>
-			<button class="btn" disabled={library.busy || !machineDraft.name.trim()} onclick={createMachine}>
-				{t('common.save')}
-			</button>
-		{:else}
-			<button class="mini" onclick={() => (addingMachine = true)}
-				>{t('library.profile.add')}</button
-			>
 		{/if}
 	</details>
 {/if}
@@ -1555,7 +2131,7 @@
 		gap: var(--space-2);
 		align-items: center;
 	}
-	.zoek { flex: 1; min-width: 0; }
+	.search { flex: 1; min-width: 0; }
 	.context {
 		display: flex;
 		align-items: center;
@@ -1698,6 +2274,128 @@
 		font-weight: 500;
 	}
 	.matname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	/* The row and its ⋯ side by side: the menu button is a sibling of the row button and
+	   not a child, because a button inside a button is not a button. */
+	.matregel { display: flex; align-items: center; gap: 2px; }
+	.matregel .matrij { flex: 1; min-width: 0; }
+	/* The field for a new material where the button that summons it stands. */
+	.addrow {
+		display: grid;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+	}
+	.addbuttons {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-2);
+	}
+	.mini.add { align-self: start; margin-top: var(--space-2); }
+	/* A question about one material, in the pane that carries that material's name. The
+	   left-hand row is 232 px wide, so it cannot stand there, and a window over a window
+	   would hide the list the answer changes. */
+	.vraag {
+		display: grid;
+		gap: var(--space-2);
+		margin: 0 0 var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--line);
+		border-left: 3px solid var(--accent);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+		font-size: var(--text-sm);
+	}
+	.vraag.weg { border-left-color: var(--danger); }
+	.vraag p { margin: 0; }
+	/* One field on a line keeps the width of half a line (v4, form rule 5), and its
+	   label stands above it (rule 3). */
+	.veld { display: grid; gap: 4px; max-width: 32ch; }
+	.veld > span { font-size: var(--text-xs); color: var(--text-2); }
+	/* A pair is one statement about one thing and stays on one line (rule 2). */
+	.paar {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+		align-items: end;
+	}
+	.paar .veld { max-width: none; }
+	/* Buttons at the foot, the one that acts on the right (rule 6). */
+	.knoppen {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: var(--space-2);
+	}
+	/* A question is answered with buttons, not with words.
+	   `.mini` is the borderless style of a row action — Apply, Make a test grid — and
+	   these three blocks borrowed it, so the last step before four settings and their
+	   photographs are gone read as two grey words in a corner. Every other question in
+	   the app (the sheet question in setup, the offer card above) answers with a bordered
+	   button, and this is a heavier question than either. */
+	.vraag .knoppen button {
+		min-height: 32px;
+		padding: 6px 12px;
+		border: 1px solid var(--line);
+		background: var(--surface-1);
+	}
+	.vraag .knoppen button:hover {
+		background: var(--surface-2);
+	}
+	.vraag .knoppen button.danger {
+		border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+		background: color-mix(in srgb, var(--danger) 8%, transparent);
+	}
+	/* With a glove on, 32 px is too little, and this window is on the tablet too. */
+	@media (max-width: 1199px), (pointer: coarse) {
+		.vraag .knoppen button {
+			min-height: 44px;
+		}
+	}
+	/* Settings that hang off no machine: a count, a reason and one button. */
+	.strays {
+		display: grid;
+		justify-items: start;
+		gap: var(--space-1h);
+		margin: 0 0 var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--line);
+		border-left: 3px solid var(--warn);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+		font-size: var(--text-sm);
+	}
+	.strays p { margin: 0; }
+	/* The import a setting came in on spans both columns of the provenance, under them. */
+	.batch {
+		grid-column: 1 / -1;
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		padding-top: var(--space-2);
+		border-top: 1px dashed var(--line);
+	}
+	.batch .fine { margin: 0; flex: 1; min-width: 14em; }
+	/* A profile is a row plus, for the machine you are on, the two fields that describe
+	   it. So the row itself is a line of its own inside the item. */
+	.profielrij {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+	.profielnaam { font-weight: 500; }
+	.laser {
+		display: grid;
+		gap: var(--space-2);
+		margin: var(--space-2) 0 0;
+		padding: var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+	}
+	.laser legend { padding: 0 4px; font-size: var(--text-xs); color: var(--text-2); }
+	.laser .fine { margin: 0; max-width: 68ch; }
+	.halve { max-width: calc(50% - var(--space-2)); }
 	.mataantal { flex: none; font-size: var(--text-xs); color: var(--text-2); }
 	.matrij.on .mataantal { color: inherit; }
 	/* What is in the machine: one word, not a second colour. */
@@ -1809,7 +2507,13 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 3px;
-		width: 7.6em;
+		/* A floor and not a fixed width: the four badges line up under each other in
+		   every language that fits, and the one that does not fit grows instead of
+		   spilling over its neighbour. Measured in Dutch: "Geverifieerd" needed 3 px
+		   more than 7.6em and "Geëxtrapoleerd" is two letters longer again, and
+		   `white-space: nowrap` with a hard width puts those letters on the row beside
+		   it. Alignment is worth a fixed width; a word that reads wrong is not. */
+		min-width: 7.6em;
 		font-size: var(--text-xs);
 		font-weight: 600;
 		padding: 1px 6px;
@@ -1967,10 +2671,9 @@
 		margin-bottom: var(--space-2);
 	}
 	.profiles { list-style: none; margin: var(--space-2) 0; padding: 0; }
+	/* A block and no longer a flex row: the machine you are working on carries the two
+	   fields that describe it underneath its own line. */
 	.profiles li {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
 		padding: 8px 8px;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
@@ -1979,10 +2682,10 @@
 	}
 	/* The name pushes the rest to the right; that way the power and the badge line up,
 	   even when one profile has a badge and the other does not. */
-	.profiles li > span:first-child { flex: 1; min-width: 0; }
+	.profielrij > .profielnaam { flex: 1; min-width: 0; }
 	/* Orphaned is not an error but is worth knowing: muted, not red. */
-	.profiles li.verweesd { border-style: dashed; }
-	.profiles li.verweesd > span:first-child { color: var(--text-2); }
+	.profiles li.orphan { border-style: dashed; }
+	.profiles li.orphan .profielnaam { color: var(--text-2); }
 	.profiles .mark {
 		flex: none;
 		padding: 2px 8px;

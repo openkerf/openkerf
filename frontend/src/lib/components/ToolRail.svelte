@@ -17,7 +17,6 @@
 		onOpenProject,
 		onNewProject,
 		onSaved,
-		onOpenCatalogue,
 		onOpenGenerators,
 		onOpenClipart,
 		onOpenSeries
@@ -44,7 +43,6 @@
 		onNewProject?: () => void;
 		/** After a successful download: the page fetches its "changed" flag. */
 		onSaved?: () => void;
-		onOpenCatalogue?: () => void;
 		onOpenGenerators?: () => void;
 		onOpenClipart?: () => void;
 		onOpenSeries?: () => void;
@@ -210,10 +208,12 @@
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
 				<span>{t('rail.series.short')}</span>
 			</button>
-			<button class="row" role="menuitem" onclick={() => { moreOpen = false; onOpenCatalogue?.(); }}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
-				<span>{t('rail.presetariat.short')}</span>
-			</button>
+			<!-- The shared catalogue had a row here, under ADD, and it does not belong in
+			     either: browsing somebody else's speeds and powers adds nothing to the
+			     drawing, and it is consulted once per machine rather than once per design.
+			     It now stands where the settings it is about live — at the top of the
+			     material library, and on a tablet that is one of the visible buttons on
+			     the rail rather than a row in here. -->
 
 			{#if files}
 				<p class="head">{t('rail.group.file')}</p>
@@ -285,9 +285,11 @@
 		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => onOpenGrid?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>
 		</button>
-		<button class="tool" title={t('rail.presetariat')} onclick={() => onOpenCatalogue?.()}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
-		</button>
+		<!-- The shared catalogue used to have a button of its own here, the fifteenth on
+		     this rail and the same size and weight as Rectangle. A rail is where the
+		     modes live — what the next click on the bed does — plus the workspaces you
+		     design in; a catalogue you consult once per machine is neither. It is now a
+		     card at the top of the material library, one button along. -->
 		<button class="tool" title={t('library.title')} onclick={() => onOpenLibrary?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
 		</button>

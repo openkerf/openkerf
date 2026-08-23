@@ -91,8 +91,6 @@ export const nl: Catalogue = {
 	'rail.clipart.short': 'Clipart zoeken',
 	'rail.series': 'Serie — één ontwerp, één brandbeurt per rij van een lijst',
 	'rail.series.short': 'Serie',
-	'rail.presetariat': 'Presetariat — gedeelde instellingen',
-	'rail.presetariat.short': 'Presetariat',
 	'rail.library.short': 'Materiaal',
 	'rail.more': 'Meer',
 	'rail.group.tools': 'Gereedschap',
@@ -319,8 +317,8 @@ export const nl: Catalogue = {
 
 	// ── Wat een handeling betekent ─────────────────────────────────────────────
 	'explain.group': 'De vormen bewegen voortaan samen',
-	'explain.mirrorH': 'Om de verticale as. Nog een keer klikken set het terug.',
-	'explain.mirrorV': 'Om de horizontale as. Nog een keer klikken set het terug.',
+	'explain.mirrorH': 'Om de verticale as. Nog een keer klikken zet het terug.',
+	'explain.mirrorV': 'Om de horizontale as. Nog een keer klikken zet het terug.',
 	'explain.combine': 'Het resultaat is één pad; de vormen verdwijnen',
 	'explain.nest': 'Leg de selectie dicht op elkaar om materiaal te sparen',
 	'explain.corners': 'Afronden of afschuinen, met het voorbeeld erbij',
@@ -903,7 +901,7 @@ export const nl: Catalogue = {
 	'panel.grid.cell': 'rij {row}, kolom {column}',
 	'panel.grid.remove': 'Raster uit ontwerp verwijderen',
 	'panel.addLayer': 'Laag toevoegen',
-	'panel.assign.hint': '“{into}” set de huidige selectie in die laag.',
+	'panel.assign.hint': '“{into}” zet de huidige selectie in die laag.',
 	'panel.assign.hintNone': 'Selecteer een vorm op het canvas; dan kun je hem hier met één tik in een laag zetten.',
 	'panel.moved.rotated': 'gedraaid naar {angle}°',
 	'panel.moved.mirrored': 'gespiegeld',
@@ -933,7 +931,7 @@ export const nl: Catalogue = {
 	'notify.switch.title': 'Melden als een job klaar is of vastloopt',
 	'notify.switch.body': 'Ook als dit tabblad op de achtergrond staat.',
 	'notify.askPermission': 'Toestemming vragen',
-	'notify.blocked.howto': 'Klik links in de adresbalk op het slotje of het ⓘ-teken, set Meldingen op Toestaan en ververs deze pagina. Op een telefoon staat het onder de site-instellingen van de browser.',
+	'notify.blocked.howto': 'Klik links in de adresbalk op het slotje of het ⓘ-teken, zet Meldingen op Toestaan en ververs deze pagina. Op een telefoon staat het onder de site-instellingen van de browser.',
 	'notify.sendTest': 'Testmelding sturen',
 	'notify.last': 'Laatste melding {time} — “{title}”',
 	'notify.last.notShown': '(niet als pop-up getoond: het scherm stond aan, of meldingen staan uit)',
@@ -972,6 +970,7 @@ export const nl: Catalogue = {
 	'count.rasters': { one: '1 raster', other: '{n} rasters' },
 	'count.burns': { one: '1 brandbeurt', other: '{n} brandbeurten' },
 	'count.rows': { one: '1 rij', other: '{n} rijen' },
+	'count.recipes': { one: '1 recept', other: '{n} recepten' },
 	'import.title': 'Dit gaat er gebeuren',
 	'import.exportedAt': 'geëxporteerd {when}',
 	'import.yoursNow': 'Je bibliotheek nu: {materials} · {presets} · {grids}',
@@ -994,7 +993,7 @@ export const nl: Catalogue = {
 	'import.addedMachines': { one: '1 machineprofiel erbij', other: '{n} machineprofielen erbij' },
 	'import.nothingNew': 'Er komt niets bij: dit bestand staat al helemaal in je bibliotheek.',
 	'import.sameBoard': 'Zelfde plank, andere naam?',
-	'import.sameBoard.body': 'Deze materialen uit het bestand lijken op iets wat je al hebt. Samenvoegen set hun instellingen bij het materiaal dat je al kent; laat je het staan, dan komen er twee.',
+	'import.sameBoard.body': 'Deze materialen uit het bestand lijken op iets wat je al hebt. Samenvoegen zet hun instellingen bij het materiaal dat je al kent; laat je het staan, dan komen er twee.',
 	'import.mergeWith': '{name} samenvoegen met {match}',
 	'import.conflicts': { one: '1 instelling botst', other: '{n} instellingen botsen' },
 	'import.conflicts.body': 'Dezelfde plank, dezelfde snede, andere getallen. Kies wie wint — je eigen waarden zijn op jouw machine gemeten.',
@@ -1007,13 +1006,13 @@ export const nl: Catalogue = {
 	'import.wipe.body': '{materials}, {presets} en {grids} verdwijnen, met de foto\'s die erbij horen. Dat is niet terug te draaien.',
 	'import.wipe.backup': 'Wil je hem nog kunnen terughalen?',
 	'import.wipe.export': 'Exporteer hem eerst',
-	'import.wipe.confirm': 'Ja, wis mijn bibliotheek en set dit bestand ervoor in de plaats.',
+	'import.wipe.confirm': 'Ja, wis mijn bibliotheek en zet dit bestand ervoor in de plaats.',
 	'import.doReplace': 'Wissen en importeren',
 	'import.done.replaced': 'Bibliotheek vervangen',
 	'import.done.merged': 'Bibliotheek samengevoegd',
 	'import.done.updated': '{n} bijgewerkt',
 	'import.done.skipped': '{n} ongewijzigd gelaten',
-	'import.done.hidden': 'Een deel hoort bij een andere machine; set “Alleen {machine}” uit om het te zien.',
+	'import.done.hidden': 'Een deel hoort bij een andere machine; zet “Alleen {machine}” uit om het te zien.',
 	'library.evidence.lost': 'Deze instelling zegt dat hij gemeten is, maar er hangt geen testraster aan — bijvoorbeeld omdat hij uit een import komt. Het bewijs is er dus niet meer bij.',
 	'library.evidence.none': 'Geen testraster: deze waarden zijn niet gemeten maar ingevoerd.',
 	'library.makeGrid': 'Testraster maken',
@@ -1028,12 +1027,13 @@ export const nl: Catalogue = {
 	'library.onlyMachine': 'Alleen {machine}',
 	'library.applyTo': 'Toepassen op',
 	'library.layerOption': 'Laag {n} · {label}',
-	'library.noLayer': 'Er is nog geen laag om een instelling op te zetten. Maak er een aan in de tab Lagen; daarna set één tik de snelheid en het vermogen erop.',
+	'library.noLayer': 'Er is nog geen laag om een instelling op te zetten. Maak er een aan in de tab Lagen; daarna zet één tik de snelheid en het vermogen erop.',
 	'library.material.placeholder': 'bijv. Multiplex berken',
 	'library.welcome.title': 'Nog geen materialen',
 	'library.welcome.body': 'Hier leg je vast wat op jóuw laser werkt: per materiaal en dikte een snelheid en een vermogen, met de foto van het testraster waar ze uit komen. De volgende keer 3 mm berk is daarmee één tik werk in plaats van opnieuw uitzoeken.',
 	'library.welcome.first': 'Eerste materiaal toevoegen',
-	'library.welcome.presetariat': 'Of haal er een op uit het Presetariat — dat is de gedeelde catalogus van andere lasers.',
+	'library.welcome.presetariat':
+		'Of neem een startpunt uit de gedeelde catalogus — dat is het aanbod bovenaan dit venster.',
 	'library.nothingFound': 'Niets gevonden voor “{query}”',
 	'library.nothingFound.body': 'De bibliotheek bevat {materials}. Zoek op de materiaalnaam zelf — “berk” vindt meer dan “berken 3mm snijden”.',
 	'library.clearSearch': 'Zoekopdracht wissen',
@@ -1055,12 +1055,17 @@ export const nl: Catalogue = {
 	'library.manual.note': 'Met de hand ingevoerd betekent: niet gemeten. Deze instelling krijgt daarom de badge “Handmatig”.',
 	'library.profiles': 'Machineprofielen ({n})',
 	'library.profiles.why': 'Een instelling is pas herbruikbaar als je weet op welke machine hij gemaakt is — daarom staat het profiel los van de instelling.',
-	'library.profile.orphaned': 'geen machine',
-	'library.profile.orphaned.title': 'Er is geen ingestelde machine (meer) die bij dit profiel hoort',
+	'library.profile.deviceGone': 'machine niet aanwezig',
+	'library.profile.deviceGone.title':
+		'Er is geen machine die de engine kent bij dit profiel. Sluit de laser aan, of zijn instellingen zijn gewist.',
+	'library.profile.noDevice': 'geen machine',
+	'library.profile.noDevice.title':
+		'Dit profiel wijst naar geen enkele machine. Voeg het samen met de machine waar het bij hoort.',
 	'library.profile.tidy': 'Opruimen',
-	'library.profile.add': 'Profiel toevoegen',
 	'library.machine.placeholder': 'bijv. 5030 CO2',
-	'library.lens': 'Lens',
+	'library.profile.mergeInto': 'Samenvoegen met {machine}',
+	'library.profile.mergeInto.why':
+		'Twee profielen voor één laser: de instellingen, de borden en het vermogen gaan naar {machine}, en deze regel verdwijnt.',
 	'library.exchange': 'Bibliotheek uitwisselen',
 	'library.exchange.body': 'Eén bestand met je materialen, instellingen, machineprofielen en de foto\'s van je testrasters — voor een back-up of een andere computer.',
 	'library.export': 'Bibliotheek exporteren',
@@ -1112,6 +1117,63 @@ export const nl: Catalogue = {
 	'library.menu.share': 'Delen met Presetariat',
 	'library.menu.remove': 'Instelling verwijderen',
 	'library.share.failed': 'Delen lukte niet.',
+	'library.material.more.aria': 'Meer voor {material}',
+	'library.material.menu.rename': 'Dit materiaal een andere naam geven…',
+	'library.material.menu.merge': 'Samenvoegen met een ander materiaal…',
+	'library.material.menu.remove': 'Dit materiaal weghalen',
+	'library.material.name': 'Naam van dit materiaal',
+	'library.material.synonyms': 'Heet ook',
+	'library.material.synonyms.placeholder': 'bijv. berkentriplex, multiplex berken',
+	'library.material.synonyms.why':
+		'Namen die anderen voor dezelfde plaat gebruiken, met komma\'s ertussen. Een geïmporteerde bibliotheek die er een van gebruikt, komt op dit materiaal terecht in plaats van een tweede aan te maken.',
+	'library.material.merge.needsTwo': 'Er is maar één materiaal om samen te voegen',
+	'library.material.merge.body':
+		'Alles wat op {material} staat gaat mee: de instellingen, de testborden, de recepten en de foto\'s. De naam blijft bestaan als naam waar het andere materiaal ook op reageert, zodat een import die hem nog gebruikt op de juiste plaat landt.',
+	'library.material.merge.pick': 'Samenvoegen met',
+	'library.material.merge.choose': '— kies een materiaal —',
+	'library.material.merge.confirm': 'Samenvoegen',
+	// Het materiaal is het onderwerp, niet {what}: "Op X staat 4 instellingen" was fout
+	// (gemeten op een materiaal met vier instellingen), en "staan" zou het bij één weer
+	// fout maken. Met het materiaal ervoor klopt het getal er altijd achter.
+	'library.material.remove.carries':
+		'{material} heeft {what}. Het materiaal weghalen neemt dat allemaal mee, de foto\'s inbegrepen.',
+	'library.material.remove.empty': 'Er hangt niets aan {material}, dus weghalen kost geen werk.',
+	'library.material.remove.sheet': {
+		one: 'Eén vel op tafel noemt dit materiaal; die verwijzing wordt gewist, het vel zelf blijft.',
+		other: '{n} vellen noemen dit materiaal; die verwijzingen worden gewist, de vellen zelf blijven.'
+	},
+	'library.material.remove.keep': 'Laten staan',
+	'library.material.remove.confirm': 'Weghalen',
+	'library.material.remove.confirmAll': 'Weghalen met alles wat erop staat',
+	'library.filteredOut':
+		'De zoekterm “{query}” verbergt elke instelling voor {material}. Wis hem om ze weer te zien.',
+	'library.origin': 'Gemeten op',
+	'library.origin.laser': '{kind}, {watt} W',
+	'library.origin.unknown':
+		'Niet vastgelegd. Deze instelling kwam binnen met een import die niet zei op welke laser hij gemeten is.',
+	'library.credit': 'Met dank aan',
+	'library.batch.undo': 'Deze import terugnemen',
+	'library.batch.undo.why':
+		'Haalt elke instelling weg die met deze import binnenkwam, en de materialen die hij meebracht en die niets anders gebruikt.',
+	'library.batch.undone': {
+		one: 'Eén instelling weggehaald, met de materialen die ermee binnenkwamen.',
+		other: '{n} instellingen weggehaald, met de materialen die ermee binnenkwamen.'
+	},
+	'library.batch.kept': {
+		one: 'Eén materiaal blijft staan: iets anders gebruikt het.',
+		other: '{n} materialen blijven staan: iets anders gebruikt ze.'
+	},
+	'library.strays': {
+		one: 'Eén instelling hoort bij geen enkele machine en duikt dus op welke machine je ook aan hebt.',
+		other: '{n} instellingen horen bij geen enkele machine en duiken dus op welke machine je ook aan hebt.'
+	},
+	'library.strays.grids': {
+		one: 'Eén testbord hoort ook bij geen enkele machine.',
+		other: '{n} testborden horen ook bij geen enkele machine.'
+	},
+	'library.strays.why':
+		'Alleen jij weet of deze op {machine} gemeten zijn. Ze eraan hangen zegt dat het zo is.',
+	'library.strays.adopt': 'Hang ze aan {machine}',
 
 	// ── Test grid ─────────────────────────────────────────────────────────────────
 	'grid.passes.unit': '× per vakje',
@@ -1159,7 +1221,7 @@ export const nl: Catalogue = {
 	'grid.tooFar': 'Het bord begint op {position}, en dat ligt buiten het bed.',
 	'grid.tooFar.labels': 'De rijlabels hebben links ruwweg {mm} mm nodig.',
 	'grid.tooFar.move': 'Schuif het {anchor} naar rechts of naar beneden{orText}.',
-	'grid.tooFar.orText': ', of set het opschrift uit',
+	'grid.tooFar.orText': ', of zet het opschrift uit',
 	'grid.legend.rows': 'Rijen: {axis} in {unit}.',
 	'grid.legend.columns': 'Kolommen: {axis}.',
 	'grid.legend.fixed': '{axis} vast op {value}.',
@@ -1480,6 +1542,25 @@ export const nl: Catalogue = {
 	'setup.bedAria': 'Het bed is {width} bij {height} millimeter',
 	'setup.zeroOnDot': '0,0 ligt op de stip.',
 	'setup.zeroByMachine': 'De machine bepaalt zelf waar 0,0 ligt.',
+	'setup.laser': 'De laser zelf',
+	'setup.laser.body':
+		'Wat voor licht deze machine maakt, en hoeveel. OpenKerf heeft beide nodig om te kunnen zeggen welke instellingen van anderen bij jouw laser passen.',
+	'setup.laser.kind': 'Soort laser',
+	'setup.laser.kind.hint':
+		'Ingevuld op grond van het model dat je koos. Een glazen buis en een RF-metaalbuis zijn daaraan niet te onderscheiden, dus verbeter het als je het beter weet.',
+	'setup.laser.watt': 'Buisvermogen',
+	'setup.laser.watt.why':
+		'Het getal op de buis of op de factuur. Het bepaalt welke instellingen een startpunt voor deze laser kunnen zijn: hetzelfde percentage op het dubbele vermogen verkoolt en brandt door.',
+	'setup.laser.wattUnknown': 'Ik weet niet zeker hoe sterk mijn buis is',
+	'setup.laser.wattUnknown.then':
+		'Dan zoekt OpenKerf alleen op het soort laser, en zegt dat bij elke instelling die het je aanbiedt.',
+	'setup.laser.lens': 'Lens',
+	'laser.kind.co2Glass': 'CO2 met een glazen buis',
+	'laser.kind.co2Rf': 'CO2 met een RF-metaalbuis',
+	'laser.kind.diode': 'Diode',
+	'laser.kind.fiber': 'Fiber',
+	'laser.kind.uv': 'UV',
+	'laser.kind.unknown': 'Ik weet het niet',
 	'setup.capabilities': 'Wat heeft deze machine?',
 	'setup.hasZ': 'Een Z-as (in hoogte verstelbaar bed of kop)',
 	'setup.hasAutofocus': 'Autofocus',
@@ -1519,6 +1600,78 @@ export const nl: Catalogue = {
 	'setup.sheetToBed': 'Vel op bedmaat zetten',
 	'setup.sheetLeave': 'Laten staan',
 	'setup.sheetNow': '{sheet} staat nu op {size}.',
+	'starter.region': 'Instellingen voor deze machine',
+	'starter.title.nothing': 'Deze machine heeft nog geen instellingen.',
+	'starter.title.unburned': 'Op deze machine is nog niets gebrand.',
+	'starter.title.askMachine': 'Wat voor laser is dit?',
+	'starter.title.askWatt': 'Hoe sterk is deze laser?',
+	'starter.away': 'Niet nu',
+	'starter.away.why': 'Leg dit weg. Voor deze machine wordt het niet opnieuw aangeboden.',
+	'starter.machine.none': 'Er is geen machine actief, dus er is niets om instellingen voor te halen.',
+	'starter.unrecorded': 'staat niet vast',
+	'starter.has.emptyLibrary': 'Er staan ook nog geen materialen in deze bibliotheek.',
+	'starter.has.none': {
+		one: 'Het ene materiaal in deze bibliotheek heeft er geen instelling voor.',
+		other: 'Geen van de {n} materialen in deze bibliotheek heeft er een instelling voor.'
+	},
+	'starter.has.some': {
+		one: 'Eén van de {known} materialen in deze bibliotheek heeft er een instelling voor.',
+		other: '{n} van de {known} materialen in deze bibliotheek hebben er een instelling voor.'
+	},
+	'starter.has.unburned': {
+		one: 'Zijn ene instelling komt uit een catalogus en is hier nooit gebrand.',
+		other: 'Zijn {n} instellingen komen uit een catalogus en geen ervan is hier gebrand.'
+	},
+	'starter.ask.body':
+		'Zonder deze twee kan OpenKerf niet zeggen welke instellingen bij deze laser passen: een CO2-instelling op een diode is geen startpunt, en hetzelfde percentage op het dubbele vermogen verkoolt en brandt door.',
+	'starter.ask.record': 'Opslaan en kijken',
+	'starter.ask.notSure': 'Ik weet het niet zeker',
+	'starter.ask.kindFirst':
+		'Kies eerst het soort laser: zonder dat valt er niets te vergelijken, wat het buisvermogen ook zegt.',
+	'starter.ask.notSure.body':
+		'Het buisvermogen niet weten is een eerlijk antwoord: dan zoekt OpenKerf alleen op het soort laser, en zegt elke aangeboden instelling dat erbij.',
+	'starter.unburned.body':
+		'Een instelling uit een catalogus is het getal van iemand anders op de laser van iemand anders. Eén bord gebrand op deze laser maakt er een eigen meting van.',
+	'starter.unburned.grid': 'Testraster branden',
+	'starter.look': 'Laat zien wat bij deze laser past',
+	'starter.hide': 'Vouw deze lijst weer dicht',
+	'starter.looking': 'Kijken…',
+	'starter.look.hint':
+		'Er wordt niets gehaald tot je hierop drukt: de gedeelde catalogus staat op het netwerk, en het openen van een venster hoort daar niet op te wachten.',
+	'starter.from.seed': 'Deze startpunten worden met OpenKerf zelf meegeleverd.',
+	'starter.from.seedOffline':
+		'De gedeelde catalogus was niet te bereiken, dus dit zijn de startpunten die met OpenKerf zelf worden meegeleverd.',
+	'starter.from.shared': 'Uit de gedeelde catalogus, op {when} naar deze computer gehaald.',
+	'starter.from.sharedUndated': 'Uit de gedeelde catalogus, van een onbekende datum.',
+	'starter.from.old': 'Deze kopie is meer dan een maand oud.',
+	'starter.refresh': 'Verse kopie halen',
+	'starter.licence': 'Gedeeld onder {license} door {who}, en de vermelding reist mee.',
+	'starter.powerUnknown.note':
+		'Het buisvermogen van deze machine staat niet vast, dus deze passen alleen op het soort laser.',
+	'starter.skipped': {
+		one: 'Eén regel in deze catalogus was niet te begrijpen en is weggelaten.',
+		other: '{n} regels in deze catalogus waren niet te begrijpen en zijn weggelaten.'
+	},
+	'starter.rows.count': {
+		one: 'Eén materiaal heeft een startpunt voor deze laser.',
+		other: '{n} materialen hebben een startpunt voor deze laser.'
+	},
+	'starter.allStartingPoints':
+		'Dit zijn allemaal getallen die iemand heeft ingetypt, niet gemeten van een bord. Brand een testraster voordat je er een vertrouwt.',
+	'starter.take': 'Deze erbij',
+	'starter.take.why': 'Zet de instellingen voor {material} in deze bibliotheek, voor deze machine.',
+	'starter.tier.measured': 'gebrand',
+	'starter.tier.startingPoint': 'startpunt',
+	'starter.row.values': '{speed} mm/s op {power}%',
+	'starter.row.unmatched': 'vermogen niet vergeleken',
+	'starter.rows.none': 'De catalogus heeft nog geen startpunt voor deze laser.',
+	'starter.took': {
+		one: 'Eén instelling voor {material} is erbij gekomen.',
+		other: '{n} instellingen voor {material} zijn erbij gekomen.'
+	},
+	'starter.undo': 'Dit terugnemen',
+	'starter.door': 'Kijk in de gedeelde catalogus',
+	'starter.door.body': 'Wat anderen op een laser als {machine} gemeten hebben, één materiaal per keer.',
 	'setup.step.kind': 'Soort',
 	'setup.step.model': 'Model',
 	'setup.step.name': 'Naam',
@@ -1576,7 +1729,6 @@ export const nl: Catalogue = {
 	'error.materialFailed': 'Materiaal aanmaken mislukte.',
 	'error.photoFailed': 'Foto opslaan is mislukt.',
 	'error.presetFailed': 'Preset maken mislukte.',
-	'error.fetchFailed': 'Ophalen mislukte.',
 	'error.noToken': 'Geen of onjuiste token — bewerken is geblokkeerd.',
 	'error.network': 'Netwerkfout: {message}',
 	'error.editRefused': 'De engine weigerde de bewerking ({status}).',
@@ -1759,35 +1911,10 @@ export const nl: Catalogue = {
 	'sheets.materialNotFilled': 'niet ingevuld',
 	'sheets.removeSheet': 'Vel verwijderen',
 	'sheets.needsOne': 'Een project heeft minstens één vel',
-	'sheets.removeAsk': 'Op {sheet} staat {what}. Verwijderen gooit dat werk weg — dit is niet terug te halen.',
+	// Zelfde reden als bij library.material.remove.carries: het vel is het onderwerp,
+	// zodat het getal erachter geen enkelvoud van het werkwoord kan afdwingen.
+	'sheets.removeAsk': '{sheet} draagt {what}. Verwijderen gooit dat werk weg — dit is niet terug te halen.',
 	'sheets.removeConfirm': 'Vel en {what} verwijderen',
-
-	// ── Presetariat ───────────────────────────────────────────────────────────────
-	'presetariat.fromCopy': 'Uit de lokale kopie: {error}',
-	'presetariat.title': 'Presetariat',
-	'presetariat.lead': 'Instellingen die anderen deelden. Ze komen van andermans machine: neem ze als startpunt, niet als waarheid. Wat met een testraster gemeten is, staat bovenaan.',
-	'presetariat.allMachines': 'Alle machines',
-	'presetariat.allOperations': 'Alle',
-	'presetariat.materialPlaceholder': 'bijv. berken of acrylaat',
-	'presetariat.refresh': 'Verversen',
-	'presetariat.stale': 'Uit de lokale kopie — de catalogus was niet bereikbaar.',
-	'presetariat.imported': '{n} geïmporteerd.',
-	'presetariat.imported.skipped': '{n} geïmporteerd, {skipped} overgeslagen (had je al).',
-	'presetariat.allOf.manual': 'Alles hieronder is {kind}: niet gemeten. Brand een testraster voordat je erop vertrouwt.',
-	'presetariat.allOf.grid': 'Alles hieronder is {kind}: op andermans machine gemeten.',
-	'presetariat.allOf.maker': 'Alles hieronder is {kind}: opgave van de fabrikant.',
-	'presetariat.verified': 'Nagebrand',
-	'presetariat.verified.title': 'Door een tweede persoon nagebrand',
-	'presetariat.inLibrary': 'In bibliotheek',
-	'presetariat.fetching': 'Ophalen…',
-	'presetariat.nothing': 'Niets gevonden voor deze machine en filters.',
-	'presetariat.count': '{shown} van {total}',
-	'presetariat.count.version': '{shown} van {total} · versie {version}',
-	'presetariat.import': 'Importeren',
-	'presetariat.importN': '{n} importeren',
-	'presetariat.confidence.measured': 'Gemeten',
-	'presetariat.confidence.maker': 'Fabrikant',
-	'presetariat.confidence.starting': 'Startwaarde',
 
 	// ── Camera calibration & fonts ────────────────────────────────────────────────
 	'calibrate.title': 'Camera ijken',
@@ -2152,6 +2279,33 @@ export const nl: Catalogue = {
 	'api.layer.gridCell': 'Dit is een cel van een testraster; het soort bewerking is de test.',
 	'api.layer.noAirAssist': 'Deze machine kent geen commando voor air assist, dus een schakelaar hier zou niets doen. Stel eerst bij de machine in welke methode de blazer aanstuurt.',
 	'api.layer.noZAxis': 'Deze machine heeft geen Z-as die de driver kan bewegen, dus een stap per pass zou niets doen. Zet de Z-as aan bij de machine, of laat dit veld leeg.',
+	'api.library.machine.wattRange': 'Een buisvermogen tussen {min} en {max} watt, graag.',
+	'api.library.starter.needsKind':
+		'OpenKerf weet niet wat voor laser {machine} is. Een CO2-instelling op een diode is geen startpunt.',
+	'api.library.starter.needsWatt':
+		'OpenKerf weet niet hoe sterk {machine} is, en kan dus niet zeggen welke instellingen erbij passen. Vul het buisvermogen in, of zeg dat je het niet zeker weet en zie alles voor dit soort laser.',
+	'api.library.starter.noMachine':
+		'Er is geen machine actief, dus er is niets om instellingen voor te halen.',
+	'api.library.starter.dismissNoMachine':
+		'Er is geen machine actief, dus er is geen aanbod om weg te leggen.',
+	'api.library.material.nameTaken':
+		'Er bestaat al een materiaal met die naam. Voeg de twee samen in plaats van ze dezelfde naam te geven.',
+	'api.library.material.mergeSelf': 'Een materiaal kan niet met zichzelf samengevoegd worden.',
+	'api.library.machine.mergeSelf':
+		'Kies een ander machineprofiel om het werk van dit profiel naartoe te verhuizen.',
+	'api.library.machine.mergeActive':
+		'Dit is de machine waarop je werkt; verhuis het andere profiel juist hiernaartoe.',
+	'api.library.machine.mergeTwoReal':
+		'Beide profielen horen bij een machine die bestaat. Twee lasers zijn niet één, en samenvoegen zou de metingen van de ene onder de andere zetten.',
+	'api.library.adopt.noMachine':
+		'Er is geen machine actief, dus er is niets om deze instellingen aan te hangen.',
+	'api.presetariat.share.noWatt':
+		'Deze instelling hoort bij een machine waarvan het buisvermogen niet vastligt, dus niemand anders kan zien of hij op zijn eigen laser van toepassing is.',
+	'api.presetariat.badShape': 'Dit bestand ziet niet uit als een instellingencatalogus.',
+	'api.presetariat.tooNew':
+		'Deze catalogus komt uit een nieuwere versie van OpenKerf. Werk eerst bij.',
+	'api.presetariat.unreachable':
+		'De gedeelde catalogus was niet op te halen, en er staat geen eerdere kopie op deze computer.',
 	'api.nest.needsTwo': 'Kies minstens twee vormen om te nesten.',
 	'api.nodes.notEditable': 'Van deze vorm zijn geen knooppunten te bewerken.',
 	'api.project.noDesign': 'Het project bevat geen ontwerp.',

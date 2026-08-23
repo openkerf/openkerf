@@ -97,8 +97,6 @@ export const en = {
 	'rail.clipart.short': 'Search clipart',
 	'rail.series': 'Series — one design burned once per row of a list',
 	'rail.series.short': 'Series',
-	'rail.presetariat': 'Presetariat — shared settings',
-	'rail.presetariat.short': 'Presetariat',
 	'rail.library.short': 'Material',
 	'rail.more': 'More',
 	'rail.group.tools': 'Tools',
@@ -991,6 +989,7 @@ export const en = {
 	'count.rasters': { one: '1 grid', other: '{n} grids' },
 	'count.burns': { one: '1 burn', other: '{n} burns' },
 	'count.rows': { one: '1 row', other: '{n} rows' },
+	'count.recipes': { one: '1 recipe', other: '{n} recipes' },
 	'import.title': 'This is what is going to happen',
 	'import.exportedAt': 'exported {when}',
 	'import.yoursNow': 'Your library now: {materials} · {presets} · {grids}',
@@ -1052,7 +1051,8 @@ export const en = {
 	'library.welcome.title': 'No materials yet',
 	'library.welcome.body': 'Here you record what works on your own laser: a speed and a power per material and thickness, with the photo of the test grid they come from. Next time 3 mm birch is one tap instead of working it out again.',
 	'library.welcome.first': 'Add the first material',
-	'library.welcome.presetariat': 'Or fetch one from the Presetariat — the shared catalogue of other lasers.',
+	'library.welcome.presetariat':
+		'Or take a starting point from the shared catalogue — that is the offer at the top of this window.',
 	'library.nothingFound': 'Nothing found for “{query}”',
 	'library.nothingFound.body': 'The library holds {materials}. Search on the material name itself — “birch” finds more than “birch 3mm cut”.',
 	'library.clearSearch': 'Clear the search',
@@ -1074,12 +1074,24 @@ export const en = {
 	'library.manual.note': 'Entered by hand means: not measured. This setting therefore gets the “Manual” badge.',
 	'library.profiles': 'Machine profiles ({n})',
 	'library.profiles.why': 'A setting is only reusable when you know which machine it was made on — which is why the profile stands apart from the setting.',
-	'library.profile.orphaned': 'no machine',
-	'library.profile.orphaned.title': 'There is no configured machine (any more) that belongs to this profile',
+	// Two states, not one. A machine that is not here may come back when you plug it in;
+	// a profile that points at no machine at all is one somebody typed or one this
+	// library let go of when its slot went to another laser, and its way out is a merge.
+	'library.profile.deviceGone': 'machine not here',
+	'library.profile.deviceGone.title':
+		'No machine the engine knows about belongs to this profile. Plug the laser in, or its settings were wiped.',
+	'library.profile.noDevice': 'no machine',
+	'library.profile.noDevice.title':
+		'This profile points at no machine at all. Merge it into the machine it belongs to.',
 	'library.profile.tidy': 'Clear out',
-	'library.profile.add': 'Add a profile',
+	// Still the placeholder in the wizard's name step, where naming a machine is the
+	// whole point. It is no longer offered here: a form in this window that could create
+	// a profile with a tube power and no machine behind it is exactly how a phantom
+	// called `5030 CO2` — the app's own example — came to hold twenty-seven settings.
 	'library.machine.placeholder': 'e.g. 5030 CO2',
-	'library.lens': 'Lens',
+	'library.profile.mergeInto': 'Merge into {machine}',
+	'library.profile.mergeInto.why':
+		'Two profiles for one laser: the settings, the boards and the tube power move to {machine}, and this row goes.',
 	'library.exchange': 'Exchange the library',
 	'library.exchange.body': 'One file with your materials, settings, machine profiles and the photos of your test grids — for a backup or another computer.',
 	'library.export': 'Export the library',
@@ -1131,6 +1143,72 @@ export const en = {
 	'library.menu.share': 'Share with Presetariat',
 	'library.menu.remove': 'Remove setting',
 	'library.share.failed': 'Sharing did not work.',
+	// ── What you can do to a material ─────────────────────────────────────────────
+	//
+	// Adding a material was the only thing possible here, which is why this library
+	// holds both `Multiplex berken` and `Berkentriplex` for one board, and why a reader
+	// concluded that removing a material could not be done: the route existed and
+	// nothing ever called it. All three verbs sit behind the same ⋯ the settings have.
+	'library.material.more.aria': 'More for {material}',
+	'library.material.menu.rename': 'Rename this material…',
+	'library.material.menu.merge': 'Merge into another material…',
+	'library.material.menu.remove': 'Remove this material',
+	'library.material.name': 'Name of this material',
+	'library.material.synonyms': 'Also called',
+	'library.material.synonyms.placeholder': 'e.g. birch plywood, multiplex birch',
+	'library.material.synonyms.why':
+		'Names other people use for the same board, separated by commas. An imported library that calls it by one of these lands on this material instead of making a second one.',
+	'library.material.merge.needsTwo': 'There is only one material to merge',
+	'library.material.merge.body':
+		'Everything on {material} moves over: the settings, the test boards, the recipes and the photographs. The name stays as a name the other material also answers to, so an import that still uses it lands in the right place.',
+	'library.material.merge.pick': 'Merge into',
+	'library.material.merge.choose': '— pick a material —',
+	'library.material.merge.confirm': 'Merge',
+	'library.material.remove.carries':
+		'{material} carries {what}. Removing the material takes all of that with it, photographs included.',
+	'library.material.remove.empty': 'Nothing hangs off {material}, so removing it loses no work.',
+	'library.material.remove.sheet': {
+		one: 'One sheet on the table names this material; that link is cleared, the sheet itself stays.',
+		other: '{n} sheets name this material; those links are cleared, the sheets themselves stay.'
+	},
+	'library.material.remove.keep': 'Keep it',
+	'library.material.remove.confirm': 'Remove',
+	'library.material.remove.confirmAll': 'Remove it with everything on it',
+	'library.filteredOut':
+		'The search “{query}” hides every setting for {material}. Clear it to see them again.',
+	// ── Where an imported setting comes from ──────────────────────────────────────
+	//
+	// The catalogue these come from is CC BY, so the credit is a condition of the copy
+	// and belongs wherever the row is read. And the batch is the way back out: an import
+	// you can undo is not a dump.
+	'library.origin': 'Measured on',
+	'library.origin.laser': '{kind}, {watt} W',
+	'library.origin.unknown':
+		'Not recorded. This setting came in on an import that did not say which laser it was measured on.',
+	'library.credit': 'Credit',
+	'library.batch.undo': 'Take this import back',
+	'library.batch.undo.why':
+		'Removes every setting that came in with this import, and the materials it brought along that nothing else uses.',
+	'library.batch.undone': {
+		one: 'One setting removed, with the materials that came in with it.',
+		other: '{n} settings removed, with the materials that came in with them.'
+	},
+	'library.batch.kept': {
+		one: 'One material stays behind: something else uses it.',
+		other: '{n} materials stay behind: something else uses them.'
+	},
+	// ── Settings that belong to no machine ────────────────────────────────────────
+	'library.strays': {
+		one: 'One setting belongs to no machine, so it turns up whatever machine you are on.',
+		other: '{n} settings belong to no machine, so they turn up whatever machine you are on.'
+	},
+	'library.strays.grids': {
+		one: 'One test board belongs to no machine either.',
+		other: '{n} test boards belong to no machine either.'
+	},
+	'library.strays.why':
+		'Only you know whether these were measured on {machine}. Attaching them says they were.',
+	'library.strays.adopt': 'Attach these to {machine}',
 
 	// ── Test grid ─────────────────────────────────────────────────────────────────
 	'grid.passes.unit': '× per square',
@@ -1503,6 +1581,35 @@ export const en = {
 	'setup.bedAria': 'The bed is {width} by {height} millimetres',
 	'setup.zeroOnDot': '0,0 is on the dot.',
 	'setup.zeroByMachine': 'The machine decides where 0,0 is itself.',
+	// ── The laser itself ──────────────────────────────────────────────────────────
+	//
+	// The kind of laser and the tube power. Both are asked once, in the wizard, because
+	// they are facts about the machine and not about a drawing — and because without
+	// them nothing can tell which of somebody else's settings would suit this laser.
+	// MeerK40t's registry carries no wattage anywhere, so the power has to be asked;
+	// the kind is derived from the catalogue line the machine was made from and shown
+	// prefilled, because a reader should not have to translate a driver name.
+	'setup.laser': 'The laser itself',
+	'setup.laser.body':
+		'What kind of light this machine makes, and how much of it. OpenKerf needs both before it can tell which settings other people have measured would suit your laser.',
+	'setup.laser.kind': 'Kind of laser',
+	'setup.laser.kind.hint':
+		'Filled in from the model you picked. A glass tube and an RF metal tube cannot be told apart from that, so correct it if you know better.',
+	'setup.laser.watt': 'Tube power',
+	'setup.laser.watt.why':
+		'The number on the tube or on the invoice. It decides which settings can be a starting point for this laser: the same percentage on twice the power chars and burns through.',
+	'setup.laser.wattUnknown': 'I am not sure how powerful my tube is',
+	'setup.laser.wattUnknown.then':
+		'Then OpenKerf matches on the kind of laser alone, and says so on every setting it offers you.',
+	'setup.laser.lens': 'Lens',
+	// The six kinds. Values of `catalogue_schema.LASER_KINDS`, so a preset from the
+	// shared catalogue and a machine of ours speak of the same thing.
+	'laser.kind.co2Glass': 'CO2 with a glass tube',
+	'laser.kind.co2Rf': 'CO2 with an RF metal tube',
+	'laser.kind.diode': 'Diode',
+	'laser.kind.fiber': 'Fibre',
+	'laser.kind.uv': 'UV',
+	'laser.kind.unknown': 'I do not know',
 	'setup.capabilities': 'What does this machine have?',
 	'setup.hasZ': 'A Z axis (height-adjustable bed or head)',
 	'setup.hasAutofocus': 'Autofocus',
@@ -1542,6 +1649,97 @@ export const en = {
 	'setup.sheetToBed': 'Set the sheet to the bed size',
 	'setup.sheetLeave': 'Leave it',
 	'setup.sheetNow': '{sheet} is now {size}.',
+	// ── The offer of starting points ──────────────────────────────────────────────
+	//
+	// One card, two surfaces: the top of the material library and the last step of
+	// setup. It exists for one moment — a machine has just been defined and there is
+	// not one setting for it — and everything in it is measured on the author's own
+	// library, where the active laser had three settings of its own and a phantom
+	// profile beside it carried twenty-six.
+	'starter.region': 'Settings for this machine',
+	'starter.title.nothing': 'This machine has no settings yet.',
+	'starter.title.unburned': 'Nothing has been burned on this machine yet.',
+	'starter.title.askMachine': 'What kind of laser is this?',
+	// Two headings for one state, because it has two causes. The wizard fills the kind
+	// in from the entry the machine was made from, so on most machines the wattage is
+	// the only thing missing — and heading that card "What kind of laser is this?" asks
+	// a question the two lines below it already answer.
+	'starter.title.askWatt': 'How powerful is this laser?',
+	'starter.away': 'Not now',
+	'starter.away.why': 'Put this away. It will not be offered again for this machine.',
+	'starter.machine.none': 'No machine is active, so there is nothing to fetch settings for.',
+	// One word for both values, because a machine that has not said what kind of laser
+	// it is and one that has not said how strong it is are the same silence.
+	'starter.unrecorded': 'not recorded',
+	'starter.has.emptyLibrary': 'There are no materials in this library yet either.',
+	'starter.has.none': {
+		one: 'The one material in this library has no setting for it.',
+		other: 'Not one of the {n} materials in this library has a setting for it.'
+	},
+	'starter.has.some': {
+		one: 'One material of the {known} in this library has a setting for it.',
+		other: '{n} materials of the {known} in this library have a setting for it.'
+	},
+	'starter.has.unburned': {
+		one: 'Its one setting came out of a catalogue and has never been burned here.',
+		other: 'Its {n} settings came out of a catalogue and not one of them has been burned here.'
+	},
+	'starter.ask.body':
+		'Without these two OpenKerf cannot tell which settings would suit this laser: a CO2 setting on a diode is not a starting point, and the same percentage on twice the power chars and burns through.',
+	'starter.ask.record': 'Save and look',
+	'starter.ask.notSure': 'I am not sure',
+	'starter.ask.kindFirst':
+		'Choose the kind of laser first: without it nothing can be matched, whatever the tube power says.',
+	'starter.ask.notSure.body':
+		'Not knowing the tube power is a fair answer: then the match is on the kind of laser alone, and every setting offered says so.',
+	'starter.unburned.body':
+		'A setting out of a catalogue is somebody else’s number on somebody else’s laser. One board burned on this one turns it into a measurement of your own.',
+	'starter.unburned.grid': 'Burn a test grid',
+	'starter.look': 'Show what would suit this laser',
+	'starter.hide': 'Fold this list up again',
+	'starter.looking': 'Looking…',
+	'starter.look.hint':
+		'Nothing is fetched until you press this: the shared catalogue lives on the network, and opening a window should not wait for it.',
+	'starter.from.seed': 'These starting points ship with OpenKerf itself.',
+	'starter.from.seedOffline':
+		'The shared catalogue could not be reached, so these are the starting points that ship with OpenKerf itself.',
+	'starter.from.shared': 'From the shared catalogue, copied to this computer on {when}.',
+	'starter.from.sharedUndated': 'From the shared catalogue, of an unknown date.',
+	'starter.from.old': 'This copy is more than a month old.',
+	'starter.refresh': 'Fetch a fresh copy',
+	// CC BY is not decoration: a row copied without its credit cannot lawfully be
+	// passed on again, so the credit is on screen at the moment of copying.
+	'starter.licence': 'Shared under {license} by {who}, and the credit travels with them.',
+	'starter.powerUnknown.note':
+		'The tube power of this machine is not recorded, so these match on the kind of laser alone.',
+	'starter.skipped': {
+		one: 'One entry in this catalogue was not understood and has been left out.',
+		other: '{n} entries in this catalogue were not understood and have been left out.'
+	},
+	'starter.rows.count': {
+		one: 'One material has a starting point for this laser.',
+		other: '{n} materials have a starting point for this laser.'
+	},
+	'starter.allStartingPoints':
+		'Every one of these is a number somebody typed, not one measured off a board. Burn a test grid before you trust one of them.',
+	'starter.take': 'Add these',
+	'starter.take.why': 'Add the settings for {material} to this library, for this machine.',
+	'starter.tier.measured': 'burned',
+	'starter.tier.startingPoint': 'starting point',
+	'starter.row.values': '{speed} mm/s at {power}%',
+	'starter.row.unmatched': 'power not matched',
+	'starter.rows.none': 'The catalogue holds no starting point for this laser yet.',
+	'starter.took': {
+		one: 'One setting for {material} came in.',
+		other: '{n} settings for {material} came in.'
+	},
+	'starter.undo': 'Take this back',
+	// The door for when there is nothing to offer: a machine with settings of its own,
+	// or one whose reader waved the offer away. Without it the shared catalogue has no
+	// way in at all, which is measured — on the author's own library the active laser
+	// carries three settings it measured itself, so the card never appears.
+	'starter.door': 'Look in the shared catalogue',
+	'starter.door.body': 'What other people measured on a laser like {machine}, one material at a time.',
 	'setup.step.kind': 'Kind',
 	'setup.step.model': 'Model',
 	'setup.step.name': 'Name',
@@ -1599,7 +1797,6 @@ export const en = {
 	'error.materialFailed': 'Creating the material failed.',
 	'error.photoFailed': 'Saving the photo failed.',
 	'error.presetFailed': 'Making the preset failed.',
-	'error.fetchFailed': 'Fetching it failed.',
 	'error.noToken': 'No token, or the wrong one — editing is blocked.',
 	'error.network': 'Network error: {message}',
 	'error.editRefused': 'The engine refused the edit ({status}).',
@@ -1785,33 +1982,6 @@ export const en = {
 	'sheets.needsOne': 'A project has at least one sheet',
 	'sheets.removeAsk': '{sheet} holds {what}. Removing it throws that work away — this cannot be undone.',
 	'sheets.removeConfirm': 'Remove the sheet and {what}',
-
-	// ── Presetariat ───────────────────────────────────────────────────────────────
-	'presetariat.fromCopy': 'From the local copy: {error}',
-	'presetariat.title': 'Presetariat',
-	'presetariat.lead': 'Settings other people shared. They come from someone else\'s machine: take them as a starting point, not as truth. What was measured with a test grid is at the top.',
-	'presetariat.allMachines': 'All machines',
-	'presetariat.allOperations': 'All',
-	'presetariat.materialPlaceholder': 'e.g. birch or acrylic',
-	'presetariat.refresh': 'Refresh',
-	'presetariat.stale': 'From the local copy — the catalogue was unreachable.',
-	'presetariat.imported': '{n} imported.',
-	'presetariat.imported.skipped': '{n} imported, {skipped} skipped (you had them already).',
-	'presetariat.allOf.manual': 'Everything below is {kind}: not measured. Burn a test grid before you trust it.',
-	'presetariat.allOf.grid': 'Everything below is {kind}: measured on someone else\'s machine.',
-	'presetariat.allOf.maker': 'Everything below is {kind}: the manufacturer\'s figure.',
-	'presetariat.verified': 'Re-burned',
-	'presetariat.verified.title': 'Burned again by a second person',
-	'presetariat.inLibrary': 'In the library',
-	'presetariat.fetching': 'Fetching…',
-	'presetariat.nothing': 'Nothing found for this machine and these filters.',
-	'presetariat.count': '{shown} of {total}',
-	'presetariat.count.version': '{shown} of {total} · version {version}',
-	'presetariat.import': 'Import',
-	'presetariat.importN': 'Import {n}',
-	'presetariat.confidence.measured': 'Measured',
-	'presetariat.confidence.maker': 'Manufacturer',
-	'presetariat.confidence.starting': 'Starting value',
 
 	// ── Camera calibration & fonts ────────────────────────────────────────────────
 	'calibrate.title': 'Calibrate the camera',
@@ -2225,6 +2395,41 @@ export const en = {
 	'api.layer.gridCell': 'This is a cell of a test grid; the kind of operation is the test.',
 	'api.layer.noAirAssist': 'This machine has no command for air assist, so a switch here would do nothing. Set up at the machine first which method drives the blower.',
 	'api.layer.noZAxis': 'This machine has no Z axis the driver can move, so a step per pass would do nothing. Switch the Z axis on at the machine, or leave this field empty.',
+	// The refusals around starting points. Only the ones whose sentence carries no
+	// number measured per call: "{machine} already has 3 settings of its own" keeps its
+	// English, because the numbers do not travel in a header and a translated sentence
+	// without them says less than the English one with them.
+	'api.library.machine.wattRange': 'A tube power between {min} and {max} watt, please.',
+	'api.library.starter.needsKind':
+		'OpenKerf does not know what kind of laser {machine} is. A CO2 setting on a diode is not a starting point.',
+	'api.library.starter.needsWatt':
+		'OpenKerf does not know how powerful {machine} is, so it cannot tell which settings would suit it. Fill in the tube power, or say you are not sure and see everything for this kind of laser.',
+	'api.library.starter.noMachine':
+		'There is no machine active, so there is nothing to fetch settings for.',
+	'api.library.starter.dismissNoMachine':
+		'There is no machine active, so there is no offer to put away.',
+	// The refusals the material library's own verbs can produce. Every one of these is
+	// the answer to a button a reader just pressed, so it has to be in the language the
+	// button was in. The plan left `nameTaken` English because it carries a name; that
+	// name is in the field the reader typed it into, one line above the refusal, so a
+	// Dutch sentence without it loses nothing and an English one loses the reader.
+	'api.library.material.nameTaken':
+		'There is already a material of that name. Merge the two instead of giving them the same name.',
+	'api.library.material.mergeSelf': 'A material cannot be merged into itself.',
+	'api.library.machine.mergeSelf':
+		'Choose a different machine profile to move this one’s work into.',
+	'api.library.machine.mergeActive':
+		'This is the machine you are working on; move the other profile into this one instead.',
+	'api.library.machine.mergeTwoReal':
+		'Both of these profiles belong to a machine that exists. Two lasers are not one, and merging them would file one machine’s measurements under the other.',
+	'api.library.adopt.noMachine':
+		'There is no machine active, so there is nothing to attach these settings to.',
+	'api.presetariat.share.noWatt':
+		'This setting belongs to a machine whose tube power is not recorded, so nobody else can tell whether it applies to theirs.',
+	'api.presetariat.badShape': 'That file does not look like a preset catalogue.',
+	'api.presetariat.tooNew': 'This catalogue comes from a newer version of OpenKerf. Update first.',
+	'api.presetariat.unreachable':
+		'The shared catalogue could not be fetched, and there is no earlier copy on this computer.',
 	'api.nest.needsTwo': 'Choose at least two shapes to nest.',
 	'api.nodes.notEditable': 'The nodes of this shape cannot be edited.',
 	'api.project.noDesign': 'The project holds no design.',

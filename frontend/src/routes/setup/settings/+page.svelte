@@ -19,7 +19,13 @@
 	import NumberField from '$components/NumberField.svelte';
 	import { t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
-	import type { SettingField } from '$lib/machines.svelte';
+	import {
+		LASER_KINDS,
+		laserKindLabel,
+		laserKindOfMachine,
+		type LaserKind,
+		type SettingField
+	} from '$lib/machines.svelte';
 
 	const store = createStore();
 
@@ -38,29 +44,29 @@
 	 * connection; that happens on the first job.
 	 */
 	let connection = $derived.by(() => {
-		const rauw = $page.url.searchParams.get('connection');
-		if (!rauw) return null;
+		const raw = $page.url.searchParams.get('connection');
+		if (!raw) return null;
 		try {
-			const off = JSON.parse(rauw);
-			return off && typeof off === 'object' ? (off as Record<string, string>) : null;
+			const parsed = JSON.parse(raw);
+			return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : null;
 		} catch {
 			return null;
 		}
 	});
 
-	const VERBINDINGSWOORD: Record<string, MessageKey> = {
+	const CONNECTION_WORD: Record<string, MessageKey> = {
 		interface: 'setup.connection.word.interface',
 		address: 'setup.connection.word.address',
 		serial_port: 'setup.connection.word.port'
 	};
 	/** "udp" is the engine's key, not a word for the screen. */
-	const VERBINDINGSWAARDE: Record<string, MessageKey> = {
+	const CONNECTION_VALUE: Record<string, MessageKey> = {
 		udp: 'setup.connection.value.udp',
 		usb: 'setup.connection.value.usb'
 	};
 
 	/** The engine's key in words, or the key itself when we have no word for it. */
-	function woord(map: Record<string, MessageKey>, key: string): string {
+	function inWords(map: Record<string, MessageKey>, key: string): string {
 		return key in map ? t(map[key]) : key;
 	}
 
@@ -90,13 +96,13 @@
 	 * by 16 millimetres: a canvas the size of a postage stamp, and nobody able to see
 	 * why.
 	 */
-	const NAAR_MM: Record<string, number> = { mm: 1, cm: 10, in: 25.4, mil: 0.0254 };
+	const TO_MM: Record<string, number> = { mm: 1, cm: 10, in: 25.4, mil: 0.0254 };
 
 	function asNumber(value: unknown): string {
 		const text = String(value ?? '').trim();
 		const found = text.match(/^\s*(-?\d+(?:\.\d+)?)\s*([a-zA-Z]*)/);
 		if (!found) return '0';
-		const factor = NAAR_MM[found[2].toLowerCase()] ?? 1;
+		const factor = TO_MM[found[2].toLowerCase()] ?? 1;
 		const mm = Number(found[1]) * factor;
 		// No trail of floating-point digits behind a measure in millimetres.
 		return String(Math.round(mm * 100) / 100);
@@ -116,7 +122,7 @@
 	// Where the head goes when you say "home". The engine calls this "Force Declared
 	// Home"; in the workshop it is simply the corner the head creeps to when you
 	// switch it on.
-	const HOEKEN = [
+	const CORNERS = [
 		{ id: 'auto', label: t('setup.corner.auto') },
 		{ id: 'top-left', label: t('setup.corner.topLeft') },
 		{ id: 'top-right', label: t('setup.corner.topRight') },
@@ -128,7 +134,7 @@
 	let corner = $derived(String(values.home_corner ?? 'auto'));
 
 	/** Position of the origin dot in the drawing, in per cent. */
-	let stip = $derived(
+	let originDot = $derived(
 		{
 			'top-left': { x: 0, y: 0 },
 			'top-right': { x: 100, y: 0 },
@@ -144,13 +150,13 @@
 	const DRAWING = { w: 200, h: 130 };
 	/** Margin around it, so the bed reads as a surface *inside* a workspace. */
 	const ROOM = { w: 176, h: 108 };
-	let verhouding = $derived(
+	let ratio = $derived(
 		Math.max(0.2, Math.min(4, (Number(width) || 1) / (Number(height) || 1)))
 	);
 	let bedBox = $derived(
-		verhouding >= ROOM.w / ROOM.h
-			? { w: ROOM.w, h: ROOM.w / verhouding }
-			: { w: ROOM.h * verhouding, h: ROOM.h }
+		ratio >= ROOM.w / ROOM.h
+			? { w: ROOM.w, h: ROOM.w / ratio }
+			: { w: ROOM.h * ratio, h: ROOM.h }
 	);
 
 	/**
@@ -161,13 +167,13 @@
 	 * identical "Swap XY" rows but, in one list, a duplicate key as well — at which
 	 * Svelte dropped the whole block and there was nothing left to see.
 	 */
-	let restVelden = $derived.by(() => {
-		const gezien = new Set(OURS);
+	let otherFields = $derived.by(() => {
+		const seen = new Set(OURS);
 		const fields: SettingField[] = [];
 		for (const sheet of store.settings) {
 			for (const field of sheet.fields) {
-				if (gezien.has(field.attr)) continue;
-				gezien.add(field.attr);
+				if (seen.has(field.attr)) continue;
+				seen.add(field.attr);
 				fields.push(field);
 			}
 		}
@@ -183,39 +189,105 @@
 		if (Object.keys(values).length) {
 			if (!(await store.updateSettings(machinePath, values))) return;
 		}
-		await bewaarProfiel();
-		await goto(`/setup/ready?machine=${encodeURIComponent(machinePath)}`);
+		await saveProfile();
+		// `/setup/ready` never existed. The layout registers `/setup/done` as the fifth
+		// step, so finishing the wizard landed on SvelteKit's 404 — and with it on
+		// nothing: no first-cut route, no sheet question, and no offer of settings for
+		// the machine that had just been created.
+		await goto(`/setup/done?machine=${encodeURIComponent(machinePath)}`);
 	}
 
-	// The library profile belongs to this device; the checkboxes below live there,
-	// not in the engine.
-	let heeftZ = $state(false);
-	let heeftAutofocus = $state(false);
-	let profielId = $state<number | null>(null);
+	// The library profile belongs to this device; the fields below live there, not in
+	// the engine. Two of them decide whether this machine can ever be offered a setting
+	// that suits it: MeerK40t's own registry carries no wattage anywhere — grepped, in
+	// all 46 catalogue entries — so the tube power is the one thing that has to be
+	// asked, and here is where machine-wide facts belong (CLAUDE.md's placement rule).
+	let hasZ = $state(false);
+	let hasAutofocus = $state(false);
+	let profileId = $state<number | null>(null);
+	/** The kind of laser: derived from the catalogue entry, and changeable. */
+	let laserKind = $state<LaserKind>('unknown');
+	let watt = $state('');
+	let lens = $state('');
+	/**
+	 * "I am not sure what my tube is" — a legitimate answer, and the one the whole
+	 * feature needs to survive.
+	 *
+	 * There is nothing to default a wattage from, so refusing without one would leave
+	 * every reader who does not know their tube with a dead end. Ticked, it records
+	 * `starter_state = 'power_unknown'`: the catalogue then matches on the kind of laser
+	 * alone and says so on every row it shows.
+	 */
+	let wattUnknown = $state(false);
+	let profileRead = $state(false);
+	/** What the profile already said about the offer, so saving does not undo it. */
+	let starterState = $state('');
 
 	$effect(() => {
-		if (!machinePath) return;
+		if (!machinePath || profileRead) return;
 		(async () => {
 			const response = await fetch('/api/library/active-machine');
 			if (!response.ok) return;
-			const profiel = await response.json();
-			if (profiel.device_path !== machinePath) return;
-			profielId = profiel.id;
-			heeftZ = Boolean(profiel.has_z);
-			heeftAutofocus = Boolean(profiel.has_autofocus);
+			const profile = await response.json();
+			if (profile.device_path !== machinePath) return;
+			profileRead = true;
+			profileId = profile.id;
+			hasZ = Boolean(profile.has_z);
+			hasAutofocus = Boolean(profile.has_autofocus);
+			if (profile.power_watt) watt = String(profile.power_watt);
+			if (profile.lens_mm) lens = String(profile.lens_mm);
+			starterState = String(profile.starter_state ?? '');
+			wattUnknown = starterState === 'power_unknown';
+			// What the library already says wins over the derivation: a reader who has
+			// corrected a glass tube to an RF one must not have it corrected back on the
+			// next visit. `co2-glass` is the column's default for a profile nobody has
+			// described, so it counts as unsaid and the catalogue decides.
+			const said = String(profile.laser_type ?? '');
+			if (said && said !== 'unknown' && said !== 'co2-glass') laserKind = said as LaserKind;
+			else await deriveKind();
 		})();
 	});
 
-	async function bewaarProfiel() {
-		if (profielId === null) return;
+	/**
+	 * Which kind of laser this is, from the catalogue line the machine was made from.
+	 *
+	 * Derived and never asked as free text: the entry says it, and a reader standing in
+	 * their workshop should not have to translate "co2-glass" out of a driver name. It
+	 * is prefilled and changeable, because a glass tube and an RF metal tube cannot be
+	 * told apart from this data at all.
+	 */
+	async function deriveKind() {
+		if (!store.catalog.length) await store.loadCatalog();
+		if (!store.machines.length) await store.loadMachines();
+		const info = await store.infoKey(machinePath);
+		const device = store.machines.find((m) => m.path === machinePath) ?? null;
+		laserKind = laserKindOfMachine(store.catalog, { info, provider: device?.provider ?? null });
+	}
+
+	async function saveProfile() {
+		if (profileId === null) return;
 		const token = localStorage.getItem('openkerf.token') ?? '';
-		await fetch(`/api/library/machines/${profielId}`, {
+		const fields: Record<string, unknown> = {
+			has_z: hasZ,
+			has_autofocus: hasAutofocus,
+			laser_type: laserKind,
+			// Empty on purpose when the reader does not know: a wattage nobody typed must
+			// not be invented, and the state below is what says so out loud.
+			power_watt: wattUnknown || watt.trim() === '' ? null : Number(watt),
+			lens_mm: lens.trim() === '' ? null : Number(lens)
+		};
+		// Only ever touched when this page has something to say about it. Writing an
+		// empty state unasked would bring a card back that the reader had waved away on
+		// another screen, and that is the one thing an offer must not do.
+		if (wattUnknown) fields.starter_state = 'power_unknown';
+		else if (starterState === 'power_unknown') fields.starter_state = '';
+		await fetch(`/api/library/machines/${profileId}`, {
 			method: 'PATCH',
 			headers: {
 				'Content-Type': 'application/json',
 				...(token ? { Authorization: `Bearer ${token}` } : {})
 			},
-			body: JSON.stringify({ has_z: heeftZ, has_autofocus: heeftAutofocus })
+			body: JSON.stringify(fields)
 		});
 	}
 </script>
@@ -231,15 +303,15 @@
 		<div class="actions"><a class="btn primary" href="/setup">{t('setup.toOverview')}</a></div>
 	{:else}
 		{#if connection}
-			{@const ingevuld = Object.entries(connection).filter(([attr]) => attr in values)}
+			{@const filled = Object.entries(connection).filter(([attr]) => attr in values)}
 			<p class="connection">
 				<strong>{t('setup.connection.filled')}</strong>
-				{#if ingevuld.length}
+				{#if filled.length}
 					<span class="mono">
-						{ingevuld
+						{filled
 							.map(
 								([attr, value]) =>
-									`${woord(VERBINDINGSWOORD, attr)}: ${woord(VERBINDINGSWAARDE, value)}`
+									`${inWords(CONNECTION_WORD, attr)}: ${inWords(CONNECTION_VALUE, value)}`
 							)
 							.join(' · ')}
 					</span>
@@ -253,7 +325,7 @@
 		<h1>{t('setup.bedSize')}</h1>
 		<p class="muted">{t('setup.bedSize.body')}</p>
 
-		<div class="werkgebied">
+		<div class="workarea">
 			<div class="fields">
 				{#if 'bedwidth' in values}
 					<NumberField label={t('gen.width')} unit="mm" bind:value={width} step={10} min={1} />
@@ -269,8 +341,8 @@
 							value={corner}
 							onchange={(e) => (values.home_corner = e.currentTarget.value)}
 						>
-							{#each HOEKEN as optie (optie.id)}
-								<option value={optie.id}>{optie.label}</option>
+							{#each CORNERS as option (option.id)}
+								<option value={option.id}>{option.label}</option>
 							{/each}
 						</select>
 						<span class="hint">{t('setup.corner.hint')}</span>
@@ -291,10 +363,10 @@
 							<rect width={bedBox.w} height={bedBox.h} class="bed" />
 							<rect width={bedBox.w} height={bedBox.h} fill="url(#bedgrid)" />
 							<rect width={bedBox.w} height={bedBox.h} class="edge" />
-							{#if stip}
+							{#if originDot}
 								<circle
-									cx={(bedBox.w * stip.x) / 100}
-									cy={(bedBox.h * stip.y) / 100}
+									cx={(bedBox.w * originDot.x) / 100}
+									cy={(bedBox.h * originDot.y) / 100}
 									r="3.5"
 									class="originMark"
 								/>
@@ -303,33 +375,78 @@
 				</svg>
 				<figcaption>
 					<span class="size mono">{width} × {height} mm</span>
-					{#if stip}{t('setup.zeroOnDot')}{:else}{t('setup.zeroByMachine')}{/if}
+					{#if originDot}{t('setup.zeroOnDot')}{:else}{t('setup.zeroByMachine')}{/if}
 				</figcaption>
 			</figure>
 		</div>
 
+		<!-- What kind of light this machine makes, and how much of it. Neither is in the
+		     engine's registry, and without them the shared catalogue cannot tell which
+		     settings would suit this laser: measured before this, an 80 W catalogue
+		     showed all 26 of its rows to a machine nobody had described. Asked once,
+		     here, because machine-wide facts belong to the setup flow. -->
+		<fieldset class="laser">
+			<legend>{t('setup.laser')}</legend>
+			<p class="muted hint">{t('setup.laser.body')}</p>
+			<div class="fields">
+				<label class="choice">
+					<span>{t('setup.laser.kind')}</span>
+					<select bind:value={laserKind}>
+						<option value="unknown">{t('laser.kind.unknown')}</option>
+						{#each LASER_KINDS as kind (kind)}
+							<option value={kind}>{laserKindLabel(kind)}</option>
+						{/each}
+					</select>
+					<span class="hint">{t('setup.laser.kind.hint')}</span>
+				</label>
+				<NumberField
+					label={t('setup.laser.watt')}
+					unit="W"
+					bind:value={watt}
+					step={10}
+					min={1}
+					max={1000}
+					disabled={wattUnknown}
+				/>
+				<label class="toggle">
+					<input type="checkbox" bind:checked={wattUnknown} />
+					<span>{t('setup.laser.wattUnknown')}</span>
+				</label>
+				<p class="muted hint">
+					{wattUnknown ? t('setup.laser.wattUnknown.then') : t('setup.laser.watt.why')}
+				</p>
+				<NumberField
+					label={t('setup.laser.lens')}
+					unit="mm"
+					bind:value={lens}
+					step={5}
+					min={1}
+				/>
+			</div>
+		</fieldset>
+
 		<!-- What the machine *can* do. This is not in the engine — it is a statement by
 		     the user about their own device, and it decides what appears in the jog
 		     controls. -->
-		<fieldset class="kunnen">
+		<fieldset class="capabilities">
 			<legend>{t('setup.capabilities')}</legend>
 			<label class="toggle">
-				<input type="checkbox" bind:checked={heeftZ} />
+				<input type="checkbox" bind:checked={hasZ} />
 				<span>{t('setup.hasZ')}</span>
 			</label>
 			<label class="toggle">
-				<input type="checkbox" bind:checked={heeftAutofocus} />
+				<input type="checkbox" bind:checked={hasAutofocus} />
 				<span>{t('setup.hasAutofocus')}</span>
 			</label>
 		</fieldset>
 
-		{#if restVelden.length}
+		{#if otherFields.length}
 			<details class="rest" bind:open={restOpen}>
 				<summary>
 					{t('setup.more')}
 					<span class="muted">{t('setup.more.what')}</span>
 				</summary>
-				<p class="muted waarschuwing">{t('setup.more.warning')}</p>
+				<p class="muted warning">{t('setup.more.warning')}</p>
 				<label class="toggle">
 					<input
 						type="checkbox"
@@ -342,7 +459,7 @@
 					/>
 					<span>{t('setup.showHidden')}</span>
 				</label>
-				{#each restVelden as field (field.attr)}
+				{#each otherFields as field (field.attr)}
 					<SettingFieldInput {field} bind:value={values[field.attr]} />
 				{/each}
 			</details>
@@ -371,7 +488,7 @@
 	.connection .muted {
 		color: var(--text-2);
 	}
-	.werkgebied {
+	.workarea {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		gap: var(--space-6);
@@ -448,7 +565,30 @@
 		color: var(--text-1);
 	}
 
-	.kunnen {
+	/* The same block as the capabilities below it: a set of related fields with a
+	   heading, which is what DESIGN-SYSTEM v4's form rule 7 asks for as soon as there
+	   are more than two of them. */
+	.laser {
+		margin: var(--space-4) 0;
+		padding: var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		display: grid;
+		gap: var(--space-3);
+	}
+	.laser legend {
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		padding: 0 4px;
+	}
+	.laser .fields {
+		max-width: 320px;
+	}
+	.laser .hint {
+		margin: 0;
+	}
+
+	.capabilities {
 		margin: var(--space-4) 0;
 		padding: var(--space-3);
 		border: 1px solid var(--line);
@@ -456,7 +596,7 @@
 		display: grid;
 		gap: var(--space-2);
 	}
-	.kunnen legend { font-size: var(--text-xs); color: var(--text-2); padding: 0 4px; }
+	.capabilities legend { font-size: var(--text-xs); color: var(--text-2); padding: 0 4px; }
 
 	.rest {
 		border: 1px solid var(--line);
@@ -473,7 +613,7 @@
 		gap: var(--space-1h);
 		flex-wrap: wrap;
 	}
-	.rest .waarschuwing {
+	.rest .warning {
 		font-size: var(--text-xs);
 		margin: var(--space-3) 0 0;
 	}
@@ -500,7 +640,7 @@
 		.toggle input { width: 22px; height: 22px; }
 	}
 	@media (max-width: 767px) {
-		.werkgebied {
+		.workarea {
 			grid-template-columns: minmax(0, 1fr);
 		}
 		.drawing {
