@@ -133,6 +133,31 @@ export type SeriesState = SeriesCheck & {
 };
 
 /** `GET /api/series`, which is the only place the rows themselves travel. */
+/** What filling the plate with one piece per row would do, or has just done. */
+export type PlatePlan = {
+	columns: number;
+	rows: number;
+	/** How many pieces this plate takes, capped at the number of rows there are. */
+	places: number;
+	/** How many it would take if the list were longer. */
+	fit: number;
+	margin_mm: number;
+	gap_mm: number;
+	piece_mm: [number, number];
+	block_mm: [number, number];
+	shapes: number;
+	row_count: number;
+	/** How many plates the whole list is, at this many places. */
+	burns: number;
+	/** How many places the last plate uses; the rest of it stays empty. */
+	last_places: number;
+	attached: boolean;
+	/** How many rows the piece already reads: more than one means it is already laid out. */
+	already: number;
+	filled?: number;
+	pieces?: number;
+};
+
 export type SeriesList = SeriesState & { rows: Row[] };
 
 /** Something the reader's file survived rather than was refused for. */
@@ -536,6 +561,64 @@ export class SeriesStore {
 	 */
 	setRow(row: number) {
 		return this.#write('/api/series/row', { row });
+	}
+
+	// ------------------------------------------------------- filling the plate
+	//
+	// One piece per row of the list, as many as the material holds. The sum is a read
+	// and the filling is a write, and they are the same numbers — the window asks for
+	// the sum on every change of a field, so the sentence above the button and the
+	// button itself cannot promise different things.
+
+	/** What filling would do. Null while it cannot be answered — nothing on the bed. */
+	plate = $state<PlatePlan | null>(null);
+	/** Why the plate cannot be filled, in the words the server used. */
+	plateError = $state<string | null>(null);
+
+	async plan(ids: string[], marginMm: number, gapMm: number): Promise<PlatePlan | null> {
+		const query = new URLSearchParams({
+			margin_mm: String(marginMm),
+			gap_mm: String(gapMm)
+		});
+		if (ids.length) query.set('ids', ids.join(','));
+		try {
+			const response = await fetch(`/api/series/plate?${query}`);
+			const body = await response.json().catch(() => null);
+			if (!response.ok) {
+				// Its own field and not `error`: a piece that does not fit yet is not a
+				// failed action, and it must not put a red banner over the window while
+				// somebody is still typing the gap. Same split as `previewError`.
+				this.plateError = apiError(response, body?.detail);
+				this.plate = null;
+				return null;
+			}
+			this.plateError = null;
+			this.plate = body as PlatePlan;
+			return this.plate;
+		} catch (e) {
+			this.plateError = t('error.network', {
+				message: e instanceof Error ? e.message : String(e)
+			});
+			return null;
+		}
+	}
+
+	/** Lay the piece out over the plate. Answers with what it did. */
+	async fill(ids: string[], marginMm: number, gapMm: number): Promise<PlatePlan | null> {
+		const data = (await this.#send('/api/series/plate', {
+			method: 'POST',
+			headers: this.#headers(true),
+			body: JSON.stringify({
+				ids: ids.length ? ids : undefined,
+				margin_mm: marginMm,
+				gap_mm: gapMm
+			})
+		})) as PlatePlan | null;
+		if (!data) return null;
+		// The list itself did not change, but how many rows one burn eats did — and that
+		// is the number the burn list, the run and the pre-flight all read.
+		await this.load();
+		return data;
 	}
 
 	// ----------------------------------------------------------------- the run

@@ -2092,6 +2092,19 @@ export const en = {
 	'series.skipBlank': 'Skip a row with an empty cell',
 	'series.skipBlank.cannot':
 		'This design takes {n} rows per burn, and a sheetful cannot skip a row: the engine reads the rows next to each other.',
+	// Filling the plate: one piece per row, as many as the material holds. The numbers
+	// are the reader's, so they go through Intl; the sizes are millimetres and go
+	// through i18n.mm for the same reason.
+	'series.plate': 'On one plate',
+	'series.plate.size': '{w} × {h}',
+	'series.plate.fits': 'A piece of {piece} mm goes {places} times on this plate: {across} across and {down} down.',
+	'series.plate.more': 'The whole list is {burns} plates of this one, and the last of them uses {last} of the places.',
+	'series.plate.done': 'This plate is laid out with {n} pieces, one per row of the list.',
+	'series.plate.gap': 'Between the pieces',
+	'series.plate.margin': 'Free at the edge',
+	'series.plate.fill': 'Lay out {n} pieces',
+	'series.plate.fillPlain': 'Lay the pieces out',
+	'series.plate.already': 'This plate is already laid out: its pieces read further down the list than the first row.',
 	'series.startAt': 'Start at row',
 	'series.startAt.hint': 'Which row the first burn takes. The rest follow in the order of the file.',
 	'series.attach': 'Use this list',
@@ -2225,6 +2238,27 @@ export const en = {
 	// built in an expression, so the test that keeps these honest cannot find it — and
 	// the run block says both sentences itself (`series.stale.*`) with the button
 	// already off, so that refusal is unreachable from the interface.
+	// Filling a plate with one piece per row. The two with numbers in them carry the
+	// numbers the layer measured, through the values header.
+	'api.plate.alreadyFilled':
+		'This plate is already laid out: its pieces read further down the list than the first row. Undo that first, or lay out the single piece you started from.',
+	'api.plate.badGap': 'A negative gap makes two pieces overlap, and then it is one cut.',
+	'api.plate.badMargin': 'A negative margin lays the work over the edge of the plate.',
+	'api.plate.fixedRow':
+		'This piece names a fixed row, so its copies would all engrave that one row. Take the row number out of the placeholder first.',
+	'api.plate.noList':
+		'No list is attached, so every copy would say the same thing. Import a list in the Series window first, or use Repeat if you want plain copies.',
+	'api.plate.noSize':
+		'This piece has no size on the plate, so there is nothing to lay out. A text that reads a column the list has not got is the usual reason.',
+	'api.plate.nothing': 'There is nothing on the plate to lay out. Draw the piece first.',
+	'api.plate.nothingReads':
+		'Nothing in this piece reads from the list, so the copies would all be the same. Put a column into a text first.',
+	'api.plate.onlyOne':
+		'Only one of these fits on the plate, so there is nothing to lay out. The series burns them one plate at a time.',
+	'api.plate.tooBig':
+		'This piece is {piece_w}×{piece_h} mm and the plate has {room_w}×{room_h} mm free inside its margin, so not even one fits. Make the piece smaller, the margin narrower, or the sheet bigger.',
+	'api.plate.tooMany':
+		'{places} pieces on one plate is more than this app lays out; keep it under {max}. Above that the plan takes longer to build than the job takes to burn.',
 	'api.series.badColumnName':
 		'A column name cannot contain a curly bracket, because that is what marks a placeholder. Rename the column in your file.',
 	'api.series.needsColumnName':

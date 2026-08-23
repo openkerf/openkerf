@@ -27,6 +27,7 @@ from .design import DesignReader
 from .document import Document
 from .duplicates import Duplicates
 from .focus import FocusBoard
+from .plating import Plating
 from .printcut import PrintCut
 from .drawing import Drawing
 from .edits import DesignEditor, DesignError
@@ -337,6 +338,12 @@ class ApiServer:
             kernel, self.commands, self.drawing, self.sheets, self.series
         )
         self.nesting = Nesting(kernel, self.editor)
+        # Filling a plate with one piece per row of the list. It borrows the repeat from
+        # `generators` rather than copying its own way: one way of copying, and one way
+        # of giving a copy the next name.
+        self.plating = Plating(
+            kernel, self.drawing, self.sheets, self.generators, self.series, self.editor
+        )
         self.duplicates = Duplicates(kernel, self.drawing)
         self.focus = FocusBoard(kernel, self.drawing)
         self.printcut = PrintCut(kernel, self.drawing, self.motion)
@@ -2396,6 +2403,32 @@ class ApiServer:
         def detach_series():
             """Take the list away, and stop the bed showing names it no longer has."""
             return manage(self.series.detach)
+
+        @app.get("/api/series/plate")
+        def plate_plan(
+            ids: str | None = None,
+            margin_mm: float | None = None,
+            gap_mm: float | None = None,
+        ):
+            """
+            How many of this piece fit on the plate, and what the rest of the list does.
+
+            A read: the window asks it again on every change of a number, and it must
+            never put a copy on the bed by being looked at.
+            """
+            picked = [part for part in (ids or "").split(",") if part]
+            return manage(self.plating.plan, picked, margin_mm, gap_mm)
+
+        @app.post("/api/series/plate", dependencies=write, status_code=201)
+        def plate_fill(body: dict | None = None):
+            """Lay the piece out over the plate, each copy taking the next row."""
+            body = body or {}
+            return manage(
+                self.plating.fill,
+                body.get("ids") or [],
+                body.get("margin_mm"),
+                body.get("gap_mm"),
+            )
 
         @app.post("/api/series/row", dependencies=write)
         def series_row(body: dict):

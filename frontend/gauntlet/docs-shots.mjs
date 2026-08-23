@@ -1341,6 +1341,87 @@ if (wanted('37')) {
 	await api('POST', '/api/series/stop');
 }
 
+/**
+ * Shot 38: a plate laid out by the app.
+ *
+ * Its own list and not the five-name one the other three share: the point of the
+ * picture is what happens when the list is *longer* than the plate holds, and five
+ * names on a 500 × 300 plate fit twice over. Twenty-three rows on a 110 × 60 piece is
+ * sixteen places and two plates, so the burn list shows both and the second one says
+ * how many places have no row left — which is the sentence the page quotes.
+ *
+ * The piece is bigger than the tag of shots 35 to 37 for the same reason: a 90 × 40 tag
+ * fits thirty times on this plate and the picture would be a wall of small words. This
+ * is the one shot in the file that presses a button that changes the drawing, so it
+ * runs last and `clear()` at the head of the next one puts everything back.
+ */
+if (wanted('38')) {
+	await clear();
+	const names = [
+		'Anna', 'Bram', 'Cees', 'Daan', 'Eva', 'Fien', 'Gijs', 'Hanna',
+		'Ids', 'Joke', 'Kees', 'Lotte', 'Mees', 'Niek', 'Olga', 'Pim',
+		'Ria', 'Sam', 'Tess', 'Ute', 'Vera', 'Wim', 'Xander'
+	];
+	const csv = `name\n${names.join('\n')}\n`;
+	const form = new FormData();
+	form.append('file', new Blob([csv], { type: 'text/csv' }), 'names.csv');
+	const upload = await fetch(BASE + '/api/series/upload', { method: 'POST', body: form })
+		.then((r) => (r.ok ? r.json() : null))
+		.catch(() => null);
+	if (!upload?.file) throw new Error('series: the upload was refused');
+	await api('POST', '/api/series/attach', { kind: 'file', file: upload.file });
+	const cut = await api('POST', '/api/design/operations', {
+		type: 'cut',
+		label: 'Tag outline',
+		speed: 11.5,
+		power_percent: 70
+	});
+	const outline = await api('POST', '/api/design/elements', {
+		type: 'rect',
+		x_mm: 150,
+		y_mm: 100,
+		width_mm: 110,
+		height_mm: 60,
+		corner_radius_mm: 8
+	});
+	const name = await api('POST', '/api/design/elements', {
+		type: 'text',
+		x_mm: 162,
+		y_mm: 142,
+		text: '{name}',
+		font_size_mm: 18
+	});
+	const ids = [...(outline?.ids ?? []), ...(name?.ids ?? [])];
+	if (cut?.id) await api('POST', '/api/design/assign', { ids, operation_id: cut.id });
+	await api('POST', '/api/design/group', { ids });
+	await api('POST', '/api/design/operations/prune');
+
+	await scene(
+		'38-series-plate.png',
+		'/?tab=design',
+		{},
+		async (page) => {
+			await page.locator(TOOL.series).click();
+			await page.waitForSelector(DIALOG, { timeout: 10000 });
+			// The sum is a debounced read, so it is on screen a moment after the window.
+			await page.waitForTimeout(1200);
+			await page.getByRole('button', { name: /^Lay out/ }).click();
+			await page.waitForTimeout(2000);
+			// And then out of the way: the window itself is already shot 35, and what
+			// this section is about is the plate it produced — sixteen tags, sixteen
+			// names, laid out from the corner of the margin.
+			//
+			// By its own close button and not by Escape: after the fill the focus sits on
+			// a button that has just been re-rendered, and the key then reaches nothing
+			// (measured — the window stayed open and the picture was of the window again).
+			await page.locator(`${DIALOG} button.close`).click();
+			await page.waitForTimeout(500);
+			await page.keyboard.press('3');
+			await page.waitForTimeout(900);
+		}
+	);
+}
+
 // ──────────────────────────────────────────────────────────────── leaving tidy
 //
 // Back to the drawing of section 3. A run ends the way it began, so opening the app
