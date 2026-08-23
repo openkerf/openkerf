@@ -314,7 +314,7 @@ def _fill(canvas, draw, areas) -> None:
 
 def _polylines(geometry):
     """
-    De geometrie als polylijnen in scene-eenheden.
+    The geometry as polylines, in scene units.
 
     `as_interpolated_points` supplies the points of the whole geomstr in sequence, with a
     `None` at every break between subpaths.

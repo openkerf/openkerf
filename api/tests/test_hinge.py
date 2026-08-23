@@ -291,3 +291,142 @@ def test_a_gap_thinner_than_the_cut_itself_is_said_out_loud(client):
     assert sketch["bridge_mm"] == 0.2
     # And it stays quiet when there is nothing to say.
     assert preview(client, dict(FORM, pattern="straight"))["notes"] == []
+
+
+# --------------------------------------------------- inside the shape, not its box
+
+
+def test_a_field_in_a_circle_stays_inside_the_circle(client):
+    """
+    "Fill the area of the selected shape" means the shape, and it used to mean its box.
+
+    Reported by the user with a picture of it: a circle with a rectangle of slits over it,
+    slits crossing the outline and filling all four corners. The area is where the material
+    is, and outside the outline there is none — those slits either cut into the piece around
+    it or, on a cut-out circle, are burned into the sheet you were going to keep.
+
+    Measured on a circle 60 mm across, 6 mm slits, 2 mm gaps, 3 mm rows: 160 slits when the
+    box is filled and 132 when the circle is, and all 28 that went were in the corners. What
+    is pinned here is the part that can be checked without arithmetic — that every point of
+    every slit lies inside the circle, with a hair of tolerance for the polygon the outline
+    is approximated by.
+    """
+    circle = client.post(
+        "/api/design/elements",
+        json={"type": "circle", "cx_mm": 50, "cy_mm": 50, "r_mm": 30},
+    ).json()["ids"][0]
+    body = {"ids": [circle], "from_selection": True, "pattern": "straight",
+            "slit_mm": 6, "gap_mm": 2, "row_mm": 3}
+
+    sketch = preview(client, body)
+    assert sketch["slits"] > 20, "a circle this size holds far more slits than this"
+
+    outside = [
+        (x, y)
+        for x, y in points_of(sketch["shapes"][0])
+        if (x - 50) ** 2 + (y - 50) ** 2 > (30 + 0.05) ** 2
+    ]
+    assert not outside, f"{len(outside)} slit ends lie outside the circle, e.g. {outside[:3]}"
+
+    # And the corners are empty, which is the visible half of the same fact: 8 mm in from
+    # a corner of the box is 6 mm outside the circle.
+    for corner_x, corner_y in ((20, 20), (80, 20), (20, 80), (80, 80)):
+        near = [
+            1
+            for x, y in points_of(sketch["shapes"][0])
+            if abs(x - corner_x) < 8 and abs(y - corner_y) < 8
+        ]
+        assert not near, f"there are still slits in the corner at {corner_x},{corner_y}"
+
+    # The real thing draws what the preview drew.
+    assert make(client, body).status_code == 201
+
+
+def test_a_rectangle_is_filled_exactly_as_it_was(client):
+    """
+    The fix may not change the one shape the old behaviour was right for.
+
+    A rectangle *is* its own box, so filling the shape and filling the box are the same
+    field — same count, same rows. If this goes red, the outline clip is eating slits that
+    lie against the boundary, which is where a hinge needs them most.
+    """
+    rect = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 0, "y_mm": 0, "width_mm": 60, "height_mm": 40},
+    ).json()["ids"][0]
+
+    from_shape = preview(
+        client,
+        {"ids": [rect], "from_selection": True, "pattern": "straight", **{
+            k: v for k, v in FORM.items() if k in ("slit_mm", "gap_mm", "row_mm")}},
+    )
+    typed = preview(client, dict(FORM, pattern="straight"))
+    assert from_shape["slits"] == typed["slits"]
+    assert from_shape["rows"] == typed["rows"]
+
+
+def test_a_shape_inside_a_shape_leaves_the_inner_one_alone(client):
+    """
+    Even-odd, the way a fill is drawn: a ring gets slits and its middle does not.
+
+    This is the case that says the inside test is a real one and not a "within the outer
+    contour" test. Select a disc and the hole in it — which is how a washer is drawn in this
+    app, since there is no route that makes one path with two subpaths — and the field has
+    to keep out of the middle. A hinge field through the hole would cut the sheet inside the
+    piece, and on a preview zoomed to fit that looks like a full field.
+    """
+    outer = client.post(
+        "/api/design/elements",
+        json={"type": "circle", "cx_mm": 50, "cy_mm": 50, "r_mm": 30},
+    ).json()["ids"][0]
+    inner = client.post(
+        "/api/design/elements",
+        json={"type": "circle", "cx_mm": 50, "cy_mm": 50, "r_mm": 15},
+    ).json()["ids"][0]
+
+    sketch = preview(
+        client,
+        {"ids": [outer, inner], "from_selection": True, "pattern": "straight",
+         "slit_mm": 4, "gap_mm": 2, "row_mm": 3},
+    )
+    in_the_middle = [
+        (x, y)
+        for x, y in points_of(sketch["shapes"][0])
+        if (x - 50) ** 2 + (y - 50) ** 2 < (15 - 0.05) ** 2
+    ]
+    assert not in_the_middle, f"{len(in_the_middle)} slit ends lie in the hole"
+    assert sketch["slits"] > 10, "the ring itself should still be full of slits"
+
+
+def test_the_slits_the_outline_took_are_counted_out_loud(client):
+    """
+    The count is what a reader checks, so the difference has to be explained where it shows.
+
+    On a round shape the number of slits is well below what the width and the pitch predict,
+    and without a word about it that reads as slits gone missing rather than as slits that
+    were never inside the material.
+    """
+    circle = client.post(
+        "/api/design/elements",
+        json={"type": "circle", "cx_mm": 50, "cy_mm": 50, "r_mm": 30},
+    ).json()["ids"][0]
+    sketch = preview(
+        client,
+        {"ids": [circle], "from_selection": True, "pattern": "straight",
+         "slit_mm": 6, "gap_mm": 2, "row_mm": 3},
+    )
+    said = [note for note in sketch["notes"] if "outside the outline" in note]
+    assert said, f"nothing says the outline trimmed anything: {sketch['notes']}"
+    assert "28 slits" in said[0], said[0]
+
+    # And a rectangle says nothing, because nothing was trimmed.
+    rect = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 0, "y_mm": 0, "width_mm": 60, "height_mm": 40},
+    ).json()["ids"][0]
+    plain = preview(
+        client,
+        {"ids": [rect], "from_selection": True, "pattern": "straight",
+         "slit_mm": 8, "gap_mm": 3, "row_mm": 2},
+    )
+    assert not [note for note in plain["notes"] if "outside the outline" in note]

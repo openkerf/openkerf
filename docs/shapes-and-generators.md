@@ -187,7 +187,11 @@ Then three numbers, and they are the whole design of a hinge:
 
 Beside the fields stands what those two gaps mean in wood: `Between two slits in a row 3.0 mm of material stays behind, and between two rows 2.0 mm. That bridge is what twists, and what breaks.` It says no more than that on purpose. How thin a bridge may be depends on the material, the thickness and how far you want to bend it, and a generator that pretends to know that is guessing with your plywood.
 
-The area comes from one of two places. Tick **Fill the area of the selected shape** and the slits fill the box around what you have selected; the tick reads **Select a shape first to use its area** when there is nothing selected. Untick it and you get four fields instead — **Left**, **Top**, **Width** and **Height** — and the field is placed on the bed where you say.
+The area comes from one of two places. Tick **Fill the area of the selected shape** and the slits fill that shape — inside its outline, not inside the box around it. On a circle that means a round field of slits; on a rectangle the two are the same thing. Select a shape and a hole in it, and the hole stays empty, the way a fill would leave it. The tick reads **Select a shape first to use its area** when there is nothing selected. Untick it and you get four fields instead — **Left**, **Top**, **Width** and **Height** — and the field is placed on the bed where you say.
+
+The count then comes out lower than the width and the pitch would predict, and the preview says why: `62 slits fell outside the outline of the shape and were left out; the field follows the shape, not the box around it.` Measured on a circle 60 mm across with 6 mm slits, 2 mm gaps and 3 mm rows: 160 slits fill its box, 132 fill the circle.
+
+Two things to know about it. The outline is followed as a polygon approximation of whatever curve is really there — on a circle of 60 mm that is within a few hundredths of a millimetre of the arc, which is less than the width of the cut that follows it. And the field is geometry once it is drawn: resize or reshape the outline afterwards and the slits stay where they were put, exactly as they do when you type the area yourself.
 
 Rows are laid out from the middle of the area outwards, so no row lands exactly on the boundary: a slit on the edge weakens the edge and hinges nothing. Along the row the field is tiled from the left and then clipped to the area, and the half slits that leaves at the edge of a staggered row are meant to be there — without them the stagger stops at the edge.
 

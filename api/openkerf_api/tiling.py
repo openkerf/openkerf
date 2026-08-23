@@ -489,3 +489,83 @@ def clip_geometry(geom, rect_units: Rect):
         ):
             inside.append_segment(*pieces.segments[index])
     return inside
+
+
+def _inside_outline(point, outlines) -> bool:
+    """
+    Is this point inside the outlines, counting the way a fill counts?
+
+    Even-odd, over *all* the contours together, so a shape with a hole in it gets its hole
+    for free: a point in the hole crosses two boundaries and is therefore outside. That is
+    the same rule a filled shape is drawn with, and the living hinge is asked to fill an
+    area — if the eye sees no material there, no slit belongs there.
+
+    Every contour is treated as closed, whether it says so or not. An unclosed polyline has
+    no inside of its own, but a fill closes it implicitly, and answering "nothing is inside
+    this" for a shape somebody can see the inside of would be the wrong kind of correct.
+    """
+    x, y = point.real, point.imag
+    crossings = 0
+    for polygon in outlines:
+        if len(polygon) < 3:
+            continue
+        previous = polygon[-1]
+        for current in polygon:
+            y0, y1 = previous.imag, current.imag
+            # A horizontal edge is crossed by nothing; the half-open comparison below also
+            # keeps a vertex from counting twice.
+            if (y0 > y) != (y1 > y):
+                t = (y - y0) / (y1 - y0)
+                if x < previous.real + t * (current.real - previous.real):
+                    crossings += 1
+            previous = current
+    return crossings % 2 == 1
+
+
+def clip_to_outline(geom, outlines):
+    """
+    The geometry that falls inside these contours, as a new Geomstr.
+
+    The same two steps as `clip_geometry` and for the same reasons — split every segment at
+    its crossings, then keep the pieces whose middle is inside — but the window is a shape
+    instead of a rectangle. The crossings are found with the engine's own `intersections`
+    against the contour edges, so a straight slit meeting a circle is cut where it really
+    meets it and not where a sample happened to fall.
+
+    `outlines` is a list of point lists (complex, in the same space as `geom`), which is what
+    `as_interpolated_points` gives per subpath. The contour is therefore a polygon
+    approximation of a curve, and that is the one inaccuracy here: on a circle of 60 mm at
+    the engine's default interpolation the boundary is within a few hundredths of a
+    millimetre of the true arc — smaller than the kerf of the cut that follows it.
+    """
+    from meerk40t.core.geomstr import Geomstr
+
+    edges = Geomstr()
+    for polygon in outlines:
+        if len(polygon) < 2:
+            continue
+        for start, end in zip(polygon, list(polygon[1:]) + [polygon[0]]):
+            if abs(end - start) > 1e-12:
+                edges.line(start, end)
+                edges.end()
+
+    carrying = _carrying_types()
+    pieces = Geomstr()
+    for index in range(geom.index):
+        if int(geom.segments[index][2].real) not in carrying:
+            continue
+        crossings = set()
+        for edge in range(edges.index):
+            if int(edges.segments[edge][2].real) not in carrying:
+                continue
+            for t, _other in geom.intersections(index, edges.segments[edge]):
+                if 1e-9 < float(t) < 1 - 1e-9:
+                    crossings.add(round(float(t), 9))
+        for piece in _pieces(geom, index, sorted(crossings)):
+            pieces.append_segment(*piece)
+
+    inside = Geomstr()
+    for index in range(pieces.index):
+        if _inside_outline(pieces.position(index, 0.5), outlines):
+            inside.append_segment(*pieces.segments[index])
+    return inside
