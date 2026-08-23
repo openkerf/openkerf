@@ -77,12 +77,16 @@ cd frontend && OPENKERF_API=http://127.0.0.1:8092 npx vite dev --port 5200
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 41
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 42
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 43
+OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 44
 ```
 
 Shot 43 is of the form and not of a board, so it writes no row itself; it needs the
 same expendable library because the cut-out has nothing to report without a material
-that has a cut setting. Without the flag the three shots are skipped and say so on
-the console. Two things
+that has a cut setting. Shot 44 writes a board, because it is a picture of the line
+that names one — and it wants an *empty* scratch library, since a name already taken
+is minted afresh (correctly: two planks may never share a name) and the picture then
+shows a different word every run. Without the flag the four shots are skipped and say
+so on the console. Two things
 that scratch engine does *not* get its own copy of, because MeerK40t has none:
 the machine list and the machine's own settings, which live in one
 `MeerK40t.cfg` for every instance (see CLAUDE.md, the `-P/--profile` row). So

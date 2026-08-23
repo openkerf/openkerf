@@ -1132,6 +1132,8 @@ export const en = {
 	'library.caption.approximate': 'The alignment of this photo has not been set, so the outline is approximate — align the grid for an exact mark.',
 	'library.caption.grid': 'The burned grid these values come from.',
 	'library.caption.noPhoto': 'There is no photo of this grid yet. Without a photo there is nothing to read the choice off.',
+	'library.readBoard': 'Read a burned board from a photograph',
+	'library.readBoard.how': 'The code on the plank names its own board, so you do not have to look for it.',
 	'library.addPhoto': 'Add a photo',
 	'library.menu.applyTo': 'Apply to layer {n}',
 	'library.menu.apply': 'Apply',
@@ -1992,6 +1994,18 @@ export const en = {
 	'result.noMaterial': 'no material',
 	'result.withPhoto': '· with photo',
 	'result.waitingPhoto': '· waiting for a photo',
+	// Step 3 starts with the photograph: the code on the plank names its own board, so
+	// the reader does not have to find it in a list. The four ways this can fail each send
+	// the reader somewhere else, so the server's own sentence stands and this only adds the
+	// way out that is on screen anyway.
+	'result.read': 'Read a board from a photograph',
+	'result.read.how': 'The board names itself: OpenKerf reads the code on the plank and opens that board. Photograph it straight from above, with the code in frame.',
+	'result.read.busy': 'Reading the code…',
+	'result.read.found': 'This is board {name}; the photograph is filed under it.',
+	'result.read.failed': 'Reading this photograph failed.',
+	'result.read.orPick': 'Choose the board from the list instead.',
+	'result.sift': 'Name, material, thickness',
+	'result.sift.none': 'No board here matches {what}.',
 	'result.noGrids': 'No test grids yet. As soon as you draw and burn one above, you can photograph it here and point at the best square.',
 	'result.saved': {
 		one: '1 preset saved with {material}. You will find it in the material library.',

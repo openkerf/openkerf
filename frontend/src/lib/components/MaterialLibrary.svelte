@@ -31,6 +31,7 @@
 		sheetMaterialName = null,
 		onApplied,
 		onMakeGrid,
+		onReadBoard,
 		token = ''
 	}: {
 		library: LibraryStore;
@@ -44,6 +45,8 @@
 		onApplied?: () => void;
 		/** Opens the test grid dialog for this material. */
 		onMakeGrid?: (materialId: number | null) => void;
+		/** Opens the test grid dialog at the half that reads a burned board back. */
+		onReadBoard?: () => void;
 		token?: string;
 	} = $props();
 
@@ -1624,6 +1627,17 @@
 -->
 <StarterOffer door onTestGrid={() => onMakeGrid?.(null)} onChanged={() => library.load()} />
 
+{#if canEdit}
+	<!-- The way back in from this window. A reader who has just burned a board comes here
+	     first — this is where settings live — and until now there was nothing here at all:
+	     the photograph could only be handed over from inside the test-grid window, and only
+	     against a board picked by hand from a list of every board ever burned. -->
+	<button class="doorway" onclick={() => onReadBoard?.()}>
+		<strong>{t('library.readBoard')}</strong>
+		<span>{t('library.readBoard.how')}</span>
+	</button>
+{/if}
+
 {#if canEdit && library.activeMachine && library.coverage && library.coverage.unattached > 0}
 	<!-- Settings that belong to no machine show up under every machine, because the
 	     query that fetches them reads `machine_id = ? OR machine_id IS NULL`. Attaching
@@ -2532,6 +2546,26 @@
 		}
 	}
 	/* Settings that hang off no machine: a count, a reason and one button. */
+	/* A door, so it reads as somewhere to go and not as a notice about something. */
+	.doorway {
+		display: grid;
+		justify-items: start;
+		gap: 2px;
+		width: 100%;
+		margin: 0 0 var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+		color: var(--text-1);
+		font: inherit;
+		font-size: var(--text-sm);
+		text-align: left;
+		cursor: pointer;
+	}
+	.doorway:hover { border-color: var(--accent); }
+	.doorway span { color: var(--text-2); font-size: var(--text-xs); }
+
 	.strays {
 		display: grid;
 		justify-items: start;

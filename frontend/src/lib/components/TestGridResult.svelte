@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import { apiError } from '$lib/i18n/core.ts';
+	import { operationName } from '$lib/library.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 
 	type Point = { x: number; y: number };
@@ -37,6 +38,9 @@
 		rows: number | null;
 		columns: number | null;
 		photo_path: string | null;
+		/** The board's own name, burned on the plank as a QR code when it was asked for. */
+		uid: string | null;
+		code_enabled?: boolean;
 		/** The four corners of the board on the photo; stored in the database (T4). */
 		alignment: Point[] | null;
 		cells: Cell[];
@@ -66,12 +70,15 @@
 	let {
 		library,
 		canEdit = false,
-		focusGrid = null
+		focusGrid = null,
+		scrollTo = null
 	}: {
 		library: LibraryStore;
 		canEdit?: boolean;
 		/** Net gegenereerd grid: daar wil je meteen naartoe. */
 		focusGrid?: number | null;
+		/** A stamp: somebody came in here to read a board, so put that way in in view. */
+		scrollTo?: number | null;
 	} = $props();
 
 	let grids = $state<Grid[]>([]);
@@ -113,6 +120,58 @@
 	function key(cell: Cell) {
 		return `${cell.row}-${cell.column}`;
 	}
+
+	/**
+	 * "7X4MQB2K" → "7X4M QB2K", the way it is engraved on the plank.
+	 *
+	 * The same halving as `boardcode.human` (api/openkerf_api/boardcode.py), because this
+	 * is the one string a reader compares by eye: they hold a board with `7X4M QB2K` in
+	 * its caption and have to find that line in a list. Written differently on the two
+	 * sides, the comparison is work.
+	 */
+	function nameOf(uid: string | null | undefined) {
+		if (!uid || uid.length !== 8) return null;
+		return `${uid.slice(0, 4)} ${uid.slice(4)}`;
+	}
+
+	/** One line per board, and the board's own name first when it has one. */
+	function lineFor(g: Grid) {
+		const name = nameOf(g.uid);
+		// `operationName` and not the raw value: `snijden` is a value in the database and
+		// not a word for a reader, and this list printed it as-is in an English
+		// interface. The translation already existed one import away.
+		const rest = [
+			dateOf(g.created_at),
+			g.material_name ?? t('result.noMaterial'),
+			operationName(g.operation)
+		].join(' · ');
+		const photo = g.photo_path ? t('result.withPhoto') : t('result.waitingPhoto');
+		return name ? `${name} · ${rest} ${photo}` : `${rest} ${photo}`;
+	}
+
+	// A list of thirty-two boards is not a choice. What a reader has in hand is one of
+	// four things — the name off the caption, the material, the thickness, or roughly
+	// when they burned it — so all four narrow the list, and the board that is open
+	// stays open even when the filter no longer matches it.
+	let filter = $state('');
+
+	let shown = $derived.by(() => {
+		const needle = filter.trim().toLowerCase().replace(/\s+/g, '');
+		if (!needle) return grids;
+		return grids.filter((g) => {
+			const haystack = [
+				g.uid ?? '',
+				g.material_name ?? '',
+				g.operation,
+				g.thickness_mm === null ? '' : `${g.thickness_mm}mm`,
+				dateOf(g.created_at)
+			]
+				.join(' ')
+				.toLowerCase()
+				.replace(/\s+/g, '');
+			return haystack.includes(needle) || g.id === openId;
+		});
+	});
 
 	async function load() {
 		const response = await fetch('/api/library/testgrids');
@@ -324,6 +383,74 @@
 		return out;
 	}
 
+	/**
+	 * The photograph first, the board after: the picture says which plank it is of.
+	 *
+	 * This is what the board code is *for*, and until now the app never asked. The engine
+	 * has answered `POST /api/library/testgrids/photo` — no id in the path — since the
+	 * code shipped, and `grep` found no caller in `frontend/src`: the feature was
+	 * reachable by hand-written HTTP only, while the reader was handed a picker of
+	 * thirty-two lines reading `date · material · operation`, in which two boards of the
+	 * same material on the same day are the same line. So: drop the photograph here, and
+	 * the app finds the row and opens it aligned.
+	 *
+	 * When it cannot — no code in the frame, a code from somebody else's library, two
+	 * boards in one picture, or an OpenCV that is not installed — the server's own
+	 * sentence stands, because those four send the reader four different ways, and the
+	 * list below is then exactly the fallback they need.
+	 */
+	// The way in has to be *seen* to be a way in. This panel sits under the drawing form
+	// in one long dialog, so a reader arriving from the material library would otherwise
+	// land on the form for a board they have already burned.
+	let doorway = $state<HTMLElement | null>(null);
+	$effect(() => {
+		if (scrollTo === null || !doorway) return;
+		// `start` rather than `center`, because this panel is the last thing in a long
+		// dialog: centring asks for a scroll past the end, and what you get is whatever
+		// the end happens to be. Measured with the scroll settled (it is smooth, so a
+		// measurement taken straight after the click reads the animation and not the
+		// result): the block lands at 707-793 in a scrolling area of 144-809, whole.
+		doorway.scrollIntoView({ block: 'start', behavior: 'smooth' });
+	});
+
+	let reading = $state(false);
+	let readError = $state<string | null>(null);
+	let readFound = $state<string | null>(null);
+
+	async function readBoardFromPhoto(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		reading = true;
+		readError = null;
+		readFound = null;
+		try {
+			const form = new FormData();
+			form.append('file', file);
+			const response = await fetch('/api/library/testgrids/photo', {
+				method: 'POST',
+				headers: headers(),
+				body: form
+			});
+			const body = await response.json().catch(() => null);
+			if (!response.ok) {
+				const detail = typeof body?.detail === 'string' ? body.detail : null;
+				readError = apiError(response, detail ?? t('result.read.failed'));
+				return;
+			}
+			await load();
+			openId = body?.id ?? null;
+			readFound = nameOf(body?.uid) ?? null;
+			photoStamp = Date.now();
+			// A photograph that has just arrived is not under the overlay yet, and the
+			// alignment is the step between "this is the board" and "that square".
+			aligning = true;
+		} finally {
+			reading = false;
+		}
+	}
+
 	async function uploadPhoto(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
@@ -399,19 +526,59 @@
 	<div class="head">
 		<h2 class="title">{t('result.title')}</h2>
 		{#if grids.length}
-			<select class="picker" bind:value={openId} aria-label={t('result.pickGrid')}>
-				<option value={null}>{t('result.pickGrid.option')}</option>
-				{#each grids as g (g.id)}
-					<!-- The date with it: whoever has done three tests on the same material
-					     otherwise sees three identical lines. -->
-					<option value={g.id}>
-						{dateOf(g.created_at)} · {g.material_name ?? t('result.noMaterial')} · {g.operation}
-						{g.photo_path ? t('result.withPhoto') : t('result.waitingPhoto')}
-					</option>
-				{/each}
-			</select>
+			<div class="finding">
+				<!-- The filter before the list, because a list of thirty-two boards is not a
+				     choice: type the name off the caption, or the material. -->
+				<input
+					class="sift"
+					type="search"
+					bind:value={filter}
+					placeholder={t('result.sift')}
+					aria-label={t('result.sift')}
+				/>
+				<select class="picker" bind:value={openId} aria-label={t('result.pickGrid')}>
+					<option value={null}>{t('result.pickGrid.option')}</option>
+					{#each shown as g (g.id)}
+						<!-- The board's own name first when it has one, and it is the one thing a
+						     reader can compare with what is in their hand. The date with it: three
+						     trials on the same material would otherwise be three identical lines. -->
+						<option value={g.id}>{lineFor(g)}</option>
+					{/each}
+				</select>
+			</div>
+			{#if filter.trim() && shown.length === 0}
+				<p class="muted">{t('result.sift.none', { what: filter.trim() })}</p>
+			{/if}
 		{/if}
 	</div>
+
+	{#if canEdit}
+		<!-- Step 3 begins with a photograph, not with a list: the code on the plank says
+		     which board it is, so the reader should not have to. -->
+		<div class="reading" bind:this={doorway}>
+			<label class="btn primary file">
+				{t('result.read')}
+				<input
+					type="file"
+					accept="image/*"
+					capture="environment"
+					disabled={reading}
+					onchange={readBoardFromPhoto}
+				/>
+			</label>
+			<p class="hint">{t('result.read.how')}</p>
+		</div>
+		{#if reading}<p class="muted" role="status">{t('result.read.busy')}</p>{/if}
+		{#if readFound}
+			<p class="notice good" role="status">{t('result.read.found', { name: readFound })}</p>
+		{/if}
+		{#if readError}
+			<p class="notice failure" role="alert">
+				{readError}
+				<span class="muted">{t('result.read.orPick')}</span>
+			</p>
+		{/if}
+	{/if}
 
 	{#if grids.length === 0}
 		<p class="muted">{t('result.noGrids')}</p>
@@ -634,6 +801,33 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
+
+	/* The filter and the list are one control: narrowing and choosing in that order. */
+	.finding { display: flex; align-items: center; gap: var(--space-2); flex: 1; flex-wrap: wrap; }
+	.sift {
+		font: inherit;
+		font-size: var(--text-sm);
+		width: 11rem;
+		padding: 8px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		color: var(--text-1);
+	}
+
+	/* The way in that comes before the list, so it reads as the first step and not as
+	   an alternative to choosing. */
+	.reading {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+		padding: var(--space-3);
+		border: 1px dashed var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-2);
+	}
+	.reading .hint { margin: 0; max-width: 52ch; font-size: var(--text-xs); color: var(--text-2); }
 
 	.geenfoto {
 		display: grid;

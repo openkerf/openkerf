@@ -1726,10 +1726,11 @@ async function boardOn(extra) {
 	});
 }
 
-if (wanted('41') || wanted('42') || wanted('43')) {
+if (wanted('41') || wanted('42') || wanted('43') || wanted('44')) {
 	if (!scratch) {
 		console.log(
-			'  – 41-board-code.png, 42-board-tile.png and 43-board-extras.png skipped: set OK_SCRATCH_LIBRARY=1'
+			'  – 41-board-code.png, 42-board-tile.png, 43-board-extras.png and ' +
+				'44-board-readback.png skipped: set OK_SCRATCH_LIBRARY=1'
 		);
 	} else {
 		if (wanted('41')) {
@@ -1783,6 +1784,49 @@ if (wanted('41') || wanted('42') || wanted('43')) {
 				await page.waitForTimeout(2500);
 				await page.locator('.schakelaars').scrollIntoViewIfNeeded();
 			});
+		}
+		if (wanted('44')) {
+			// Coming back with a plank in your hand: the way in, and the list that leads
+			// with the board's own name. The board is written for this shot because the
+			// picture is *about* that line — a library with no boards shows an empty
+			// picker, which is the one state this page does not need explaining.
+			//
+			// No photograph is handed over here, deliberately: doing that needs a JPEG
+			// with a real code in it, and a synthetic board photograph in `docs/images`
+			// would be half a megabyte of evidence for a plank nobody burned. What the
+			// answer looks like is a sentence in the handbook instead, quoted from the
+			// catalogue.
+			await clear();
+			await boardOn({ code_enabled: true, uid: '7X4MQB2K' });
+			// A taller window, so the whole panel is inside the dialog: at 900 px the panel
+			// runs past the dialog's bottom edge, and a clip in page coordinates then
+			// photographs the page behind it (measured — the first take carried the status
+			// bar's "Machine not connected" under a picture about finding a board).
+			await scene(
+				'44-board-readback.png',
+				'/?tab=design',
+				{ selector: '.resultaat', height: 1250 },
+				async (page) => {
+					await page.locator(TOOL.testgrid).click();
+					await page.waitForSelector(DIALOG, { timeout: 10000 });
+					// The panel loads its list on mount and the board was made a moment
+					// ago; 800 ms is the round trip, not a guess about rendering.
+					await page.waitForTimeout(800);
+					// The board is chosen, because a closed `<select>` reading "Choose a
+					// grid…" hides the one thing this picture is of: the line leads with
+					// the name that is engraved on the plank. A select cannot be
+					// photographed open, so the chosen state is the only way to show it.
+					await page.locator('.picker').selectOption({ index: 1 });
+					await page.waitForTimeout(400);
+					// Scrolled last, and to the panel rather than to the way in: choosing
+					// a board makes the panel taller, and a clip is in page coordinates —
+					// scroll first and the picture catches the page *behind* the dialog
+					// (measured: the status bar's "Machine not connected" under a picture
+					// about finding a board).
+					await page.locator('.resultaat').scrollIntoViewIfNeeded();
+					await page.waitForTimeout(600);
+				}
+			);
 		}
 	}
 }

@@ -205,6 +205,9 @@ import { SeriesStore } from '$lib/series.svelte';
 	let estimate = $state<number | null>(null);
 	let gridOpen = $state(false);
 	let freshGrid = $state<number | null>(null);
+	// A stamp rather than a flag: coming back a second time has to scroll again, and a
+	// boolean that is already true says nothing happened.
+	let readBoard = $state<number | null>(null);
 	/** Changing the current sheet's material (decision B1). */
 	let materialOpen = $state(false);
 	let sheetMaterial = $derived(
@@ -1981,6 +1984,14 @@ import { SeriesStore } from '$lib/series.svelte';
 			gridMaterial = id;
 			gridOpen = true;
 		}}
+		onReadBoard={() => {
+			// The same window, but the reader is coming back with a plank in their hand
+			// rather than going out to burn one — so it opens at the half that reads a
+			// board back, and the drawing form above it is not what they are looking at.
+			libraryOpen = false;
+			gridOpen = true;
+			readBoard = Date.now();
+		}}
 	/>
 </Dialog>
 
@@ -1997,7 +2008,7 @@ import { SeriesStore } from '$lib/series.svelte';
 			design.load();
 		}}
 	/>
-	<TestGridResult {library} {canEdit} focusGrid={freshGrid} />
+	<TestGridResult {library} {canEdit} focusGrid={freshGrid} scrollTo={readBoard} />
 </Dialog>
 
 <style>

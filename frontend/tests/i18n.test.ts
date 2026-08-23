@@ -278,16 +278,28 @@ test('the one refusal a reader has to act on is not summarised away', () => {
 	// above verbatim. Nothing in the suite noticed the difference — putting the summary
 	// back left all 73 tests green and svelte-check at 0 — so it is noticed here.
 	//
-	// Named files rather than a rule over every failed fetch: there are 49 such branches
-	// in the components and most of them refuse nothing a reader can act on. When the
-	// next one does, it belongs in this list.
-	for (const file of ['PhoneView.svelte', 'TestGridResult.svelte']) {
+	// Named handlers rather than a rule over every failed fetch: there are 49 such
+	// branches in the components and most of them refuse nothing a reader can act on.
+	// When the next one does, it belongs in this list.
+	//
+	// Anchored on the function and not on "the first /photo in the file": there are now
+	// two uploads in TestGridResult — the one that files a picture under a board you
+	// picked, and the one that lets the code name its own board — and both carry a
+	// refusal a reader has to act on. Anchoring on the string made the test read whichever
+	// happened to come first in the file, which is how a third one could slip in unread.
+	const handlers: [string, string][] = [
+		['PhoneView.svelte', 'async function upload'],
+		['TestGridResult.svelte', 'async function uploadPhoto'],
+		['TestGridResult.svelte', 'async function readBoardFromPhoto']
+	];
+	for (const [file, handler] of handlers) {
 		const source = readFileSync(join(SRC, 'lib', 'components', file), 'utf8');
-		const upload = source.slice(source.indexOf('/photo'));
+		const at = source.indexOf(handler);
+		assert.ok(at > 0, `${file} no longer has ${handler}; this test is measuring nothing`);
 		assert.match(
-			upload.slice(0, 2000),
+			source.slice(at, at + 2200),
 			/apiError\(\s*response/,
-			`${file} reports its own summary of a refused photograph instead of the sentence the server sent`
+			`${file}: ${handler} reports its own summary of a refused photograph instead of the sentence the server sent`
 		);
 	}
 });

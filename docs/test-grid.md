@@ -290,10 +290,6 @@ characters of that alphabet is not a rare thing for a stranger's QR sticker to s
 blocking a perfectly good picture over one in the corner of the frame would be worse than
 ignoring it.
 
-One thing the printed name cannot do yet: the board picker in step 3 does not search on it,
-so with no camera and no OpenCV you are still choosing the board off its date, material and
-operation the way you always did.
-
 ![The bed with a test board drawn on it: four rows of four squares with the power percentages above the columns and the speeds beside the rows, and the caption across the top — "Cut trial", the material, the thickness, the operation, which way the two axes run, the date, and on its own last line the board name 7X4M QB2K. Below the squares, at the bottom right of the board, a QR code.](images/41-board-code.png)
 
 ### Cutting the tile loose
@@ -465,11 +461,35 @@ layers off the sheet; the stored grid stays, with its photo and everything that 
 it. Throwing all layers away leaves the board alone as well — the confirmation says
 *Test grids stay.*
 
-## Photographing the board
+## Photographing the board, and finding it back
 
-Step 3 and 4 are in the block below the wizard. Pick the board from the list — each line
-carries the date, the material and the operation, followed by *· with photo* or
-*· waiting for a photo*, so three trials on the same material stay apart.
+Steps 3 and 4 are in the block below the wizard, and the way in is the photograph rather
+than the list:
+
+> **Read a board from a photograph** — The board names itself: OpenKerf reads the code on
+> the plank and opens that board. Photograph it straight from above, with the code in frame.
+
+Hand over the picture and that is the whole of it: the code says which plank it is, the
+photograph is filed against that board, and the board opens with its corners ready to be
+aligned. It answers by name, so you can see it took the one you meant:
+
+> This is board {name}; the photograph is filed under it.
+
+The same door stands in the material library — **Read a burned board from a photograph** —
+because that is where somebody with a freshly burned plank goes first, looking for the
+settings it was burned for.
+
+![The top of the reading panel: a search box reading "Name, material, thickness", a list showing a board by its own name followed by the date, the material and the operation, and below it a "Read a board from a photograph" button with the sentence explaining that the board names itself. Under that, the block for a board with no photograph yet: "Burn this grid and photograph the board", an "Add a photo" button, and the line about using a phone.](images/44-board-readback.png)
+
+**When there is no code to read.** A board burned before this existed, a code photographed
+too small, or an installation without OpenCV: then pick the board from the list, and the
+refusal on screen says which of those it was and adds *Choose the board from the list
+instead.* Each line in that list leads with the board's own name when it has one, followed
+by the date, the material and the operation, and then *· with photo* or *· waiting for a
+photo*. Type into the box above it to narrow the list — the name off the caption, the
+material, the thickness or the date all work, and a name is the quickest of the four:
+*7X4M* is enough. Nothing matching says so — *No board here matches walnut.* — and the
+board you have open stays in the list even while the filter would hide it.
 
 A board without a photo says:
 
