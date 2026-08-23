@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from openkerf_api.design import DesignReader
+from openkerf_api.drawing import Drawing
 from openkerf_api.server import ApiServer
 
 
@@ -65,7 +66,18 @@ def test_operations_reference_their_elements(drawing):
 
 
 def test_unused_operations_are_left_out(drawing):
-    """The engine keeps a stack of default operations; they are not layers."""
+    """
+    A layer with nothing in it is not a layer the canvas has to draw.
+
+    The empty one is made here, and until now it was not. The docstring said "the engine
+    keeps a stack of default operations" and that was true only of a kernel that had
+    inherited one: a clean kernel opens with no operations at all (measured: `ops()` is
+    empty, and this fixture's two shapes bring exactly two layers, both filled). The stack
+    came in through `operations.cfg` from whichever test ran before — so this assertion
+    was measuring the leak that `_operations_of_its_own` has since closed, and it passed
+    or failed by the order of the suite.
+    """
+    Drawing(drawing).create_operation("raster")
     total_ops = len(list(drawing.elements.ops()))
     reported = len(DesignReader(drawing).snapshot()["operations"])
 

@@ -17,8 +17,16 @@ from openkerf_api.server import ApiServer
 
 
 @pytest.fixture
-def client(kernel):
-    with TestClient(ApiServer(kernel).build_app()) as c:
+def client(kernel, tmp_path):
+    # A library of its own. Without a path this server opens
+    # `~/Library/Application Support/MeerK40t/openkerf-library.db` — the developer's
+    # *real* 204 KB file, sheets and all — because `default_path` keys the file to
+    # `kernel.name` and never to the profile (`library.py`, and the upstream `-P` row in
+    # CLAUDE.md). Since the library grew a migration, a test run without this line is the
+    # first thing to touch somebody's real database.
+    server = ApiServer(kernel, library_path=tmp_path / "machines.db")
+    with TestClient(server.build_app()) as c:
+        c.server = server
         yield c
 
 
@@ -136,6 +144,284 @@ def test_remove_deletes_an_inactive_machine(kernel, manager):
 
 def test_unknown_machine_is_a_409(client):
     assert client.post("/api/machines/nietbestaand/activate").status_code == 409
+
+
+# ------------------------------------------------------- who a laser is (step 8)
+#
+# The plan files these under test_machine_profiles.py. They sit here because the thing
+# they test is `MachineManager`'s stamp: the library half is pinned in test_library.py by
+# the agent who wrote `profile_for_device`, and what is left to prove is that a device
+# carries an identity at all, whichever route created it.
+
+
+def test_a_machine_is_stamped_with_an_identity_of_its_own(kernel, manager):
+    """
+    A device path is a slot. `MK1` plus eight Crockford characters is the machine.
+
+    Two machines created one after the other take the same slot in turn (measured: both
+    got `ruida`), so a library that recognises a machine by its path cannot tell them
+    apart at all.
+    """
+    first = manager.create("ruida-beta", "First")
+    uid = manager.machine_uid_for(first["path"])
+
+    assert uid.startswith("MK1")
+    assert len(uid) == 11
+    # Asked twice is the same machine, not a second one: the mint is once and it is
+    # written to disk, because MeerK40t only saves its settings on a clean shutdown.
+    assert manager.machine_uid_for(first["path"]) == uid
+
+
+def test_a_machine_from_the_console_gets_an_identity_the_first_time_we_look(
+    kernel, manager
+):
+    """
+    `service device start ruida` never passes through our wizard.
+
+    That is the case the stamp in `create` cannot cover and it is not hypothetical: it is
+    how the engine's own console adds a device, and how five of the seven profiles in the
+    author's library came to exist. Without a lazily minted uid such a machine falls back
+    on the path, which is exactly the inheritance this column exists to stop.
+    """
+    kernel.console("service device start ruida -i\n")
+    device = kernel.device
+
+    uid = manager.machine_uid(device)
+
+    assert uid.startswith("MK1")
+    assert device.openkerf_machine_uid == uid
+
+
+def test_the_wizards_replacement_machine_inherits_nothing(kernel, client):
+    """
+    Remove a laser, add a different one, and the newcomer got everything.
+
+    The kernel allocates device paths first-free-slot (kernel.py:3433-3437), so the
+    second machine is handed `ruida` back — and `profile_for_device` then found the dead
+    machine's row, renamed it after the newcomer and handed over every preset and every
+    board. Measured on the author's library: 3 presets and 20 boards would change owner
+    that way, without a word.
+
+    The evidence is not thrown away either. It is a measurement of a machine that
+    existed, so the old profile keeps it and lets go of the slot instead.
+    """
+    library = client.server.library
+    first = client.post(
+        "/api/machines", json={"info": "ruida-beta", "label": "First laser"}
+    ).json()
+    profile = client.get("/api/library/active-machine").json()
+    material = library.add_material("Berkentriplex")["id"]
+    library.add_preset(
+        material_id=material,
+        machine_id=profile["id"],
+        operation="snijden",
+        speed_mm_s=12,
+        power_percent=70,
+        source="testraster",
+    )
+
+    client.post("/api/machines/dummy/activate")
+    assert client.delete(f"/api/machines/{first['path']}").status_code == 200
+    second = client.post(
+        "/api/machines", json={"info": "ruida-beta", "label": "Second laser"}
+    ).json()
+    assert second["path"] == first["path"], "the kernel recycles the slot"
+
+    fresh = client.get("/api/library/active-machine").json()
+    profiles = {p["id"]: p for p in client.get("/api/library/machines").json()}
+
+    assert fresh["id"] != profile["id"]
+    assert profiles[fresh["id"]]["presets"] == 0
+    assert profiles[profile["id"]]["presets"] == 1
+    assert profiles[profile["id"]]["device_path"] is None
+    # And the old row is presented as what it is, rather than as a live machine.
+    assert profiles[profile["id"]]["orphaned"] is True
+    assert profiles[profile["id"]]["orphaned_because"] == "no-device"
+
+
+def test_a_library_from_before_the_identity_keeps_everything_on_the_first_open(
+    kernel, client
+):
+    """
+    Adopting a uid onto an existing row must move nothing.
+
+    Every profile in a library from before this column reads `machine_uid = ''`, so the
+    first read after the upgrade has to recognise the machine by its path and write the
+    uid onto that row — not detach it and mint a second profile beside it. Getting this
+    wrong would orphan every preset the author has, on the first open.
+    """
+    library = client.server.library
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "KH-5030"})
+    device = kernel.device
+    profile = client.get("/api/library/active-machine").json()
+    material = library.add_material("MDF")["id"]
+    library.add_preset(
+        material_id=material,
+        machine_id=profile["id"],
+        operation="snijden",
+        speed_mm_s=10,
+        power_percent=80,
+    )
+    # Back to the state a library from before this round is in: a row that knows the
+    # path and nothing else.
+    library.update_machine(profile["id"], {"name": "KH-5030"})
+    with library._connect() as db:
+        db.execute("UPDATE machine_profile SET machine_uid = ''")
+    device.openkerf_machine_uid = ""
+
+    again = client.get("/api/library/active-machine").json()
+
+    assert again["id"] == profile["id"]
+    assert again["machine_uid"].startswith("MK1")
+    assert len(client.get("/api/library/machines").json()) == 1
+    assert len(client.get("/api/library/presets").json()) == 1
+
+
+def test_a_profile_that_never_had_a_machine_is_not_a_live_machine(client):
+    """
+    `orphaned` read `bool(device_path) and device_path not in paths`, so a row with no
+    device path could not fail it.
+
+    That is how the author's `5030 CO2` — 27 presets, 60 W, `device_path: null` — sits in
+    the list as a machine you could file a measurement under. The two states are told
+    apart because the answers differ: a machine that is gone may come back, while a
+    profile pointing at no device is merged into the machine it belongs to. `no-device`
+    and not "never attached": a row this library let go of when its slot went to another
+    laser looks exactly the same, and nothing records which it was.
+    """
+    library = client.server.library
+    library.add_machine(name="5030 CO2", power_watt=60)
+    library.add_machine(name="An old laser", device_path="ruida7")
+
+    listed = {p["name"]: p for p in client.get("/api/library/machines").json()}
+
+    assert listed["5030 CO2"]["orphaned"] is True
+    assert listed["5030 CO2"]["orphaned_because"] == "no-device"
+    assert listed["An old laser"]["orphaned_because"] == "device-gone"
+
+
+# ------------------------------------------ joining two profiles for one laser (step 9)
+
+
+def test_the_merge_route_joins_a_phantom_profile_to_the_active_machine(kernel, client):
+    """
+    The case in the author's library, and the one `_dedupe_machines` cannot reach: it
+    only merges rows that share a device path, and the unique index it creates keeps that
+    from arising. Here one row has 27 presets and 60 W with no device, and the other is
+    the laser the engine is on with 3 presets and no wattage. They are one machine.
+
+    The target's own words win; only what it has nothing in is filled. That is how the
+    60 W finally reaches the profile the engine uses without a merge overwriting anything
+    somebody typed.
+    """
+    library = client.server.library
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "KH-5030"})
+    target = client.get("/api/library/active-machine").json()
+    ghost = library.add_machine(name="5030 CO2", power_watt=60, laser_type="co2-glass")
+    material = library.add_material("Berkentriplex")["id"]
+    for _ in range(27):
+        library.add_preset(
+            material_id=material,
+            machine_id=ghost["id"],
+            operation="snijden",
+            speed_mm_s=12,
+            power_percent=70,
+            source="geimporteerd",
+        )
+
+    merged = client.post(
+        f"/api/library/machines/{ghost['id']}/merge-into/{target['id']}"
+    )
+
+    assert merged.status_code == 200, merged.text
+    assert merged.json()["moved"]["presets"] == 27
+    assert merged.json()["machine"]["power_watt"] == 60
+    profiles = client.get("/api/library/machines").json()
+    assert [p["name"] for p in profiles] == ["KH-5030"]
+    assert profiles[0]["presets"] == 27
+
+
+def test_the_machine_you_are_working_on_is_not_merged_away(kernel, client):
+    """
+    Merging the active profile *into* the other one would leave you working on a row
+    that no longer exists — and the next read route would create a third. The refusal
+    mirrors the one already on DELETE.
+    """
+    library = client.server.library
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "KH-5030"})
+    active = client.get("/api/library/active-machine").json()
+    other = library.add_machine(name="5030 CO2", power_watt=60)
+
+    refused = client.post(
+        f"/api/library/machines/{active['id']}/merge-into/{other['id']}"
+    )
+
+    assert refused.status_code == 409
+    assert refused.headers["X-OpenKerf-Error"] == "library.machine.mergeActive"
+
+
+def test_two_profiles_that_both_have_a_machine_are_two_lasers(kernel, client):
+    """
+    Two lasers are not one. Which slots hold a machine that exists is a fact about the
+    engine, so it goes in from the route — without it this refusal can never fire and a
+    merge would file one machine's measurements under the other.
+    """
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "First"})
+    first = client.get("/api/library/active-machine").json()
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "Second"})
+    second = client.get("/api/library/active-machine").json()
+
+    refused = client.post(
+        f"/api/library/machines/{first['id']}/merge-into/{second['id']}"
+    )
+
+    assert refused.status_code == 409
+    assert refused.headers["X-OpenKerf-Error"] == "library.machine.mergeTwoReal"
+
+
+def test_settings_that_belong_to_no_machine_are_adopted_only_when_asked(kernel, client):
+    """
+    Four presets and eleven boards in the author's library carry `machine_id IS NULL` —
+    the fingerprint of the lhystudios-fallback state, measured on a machine nobody can
+    name. `Library.presets()` shows them on every machine, which is visible but wrong;
+    adopting them says they were measured here, which is a different kind of wrong. So
+    nothing happens until somebody presses it.
+    """
+    library = client.server.library
+    client.post("/api/machines", json={"info": "ruida-beta", "label": "KH-5030"})
+    profile = client.get("/api/library/active-machine").json()
+    material = library.add_material("MDF")["id"]
+    for _ in range(4):
+        library.add_preset(
+            material_id=material,
+            machine_id=None,
+            operation="snijden",
+            speed_mm_s=10,
+            power_percent=80,
+        )
+    assert client.get("/api/library/machines").json()[0]["presets"] == 0
+
+    adopted = client.post("/api/library/presets/adopt")
+
+    assert adopted.status_code == 200, adopted.text
+    assert adopted.json() == {
+        "machine_id": profile["id"],
+        "presets": 4,
+        "test_grids": 0,
+    }
+    assert client.get("/api/library/machines").json()[0]["presets"] == 4
+
+
+def test_adopting_with_no_machine_active_is_refused_with_a_reason(client):
+    """
+    A fresh install has MeerK40t's stand-in and nothing else. Attaching measurements to
+    it would file them under a machine nobody chose — the same lie `_configured` exists
+    to prevent.
+    """
+    refused = client.post("/api/library/presets/adopt")
+
+    assert refused.status_code == 409
+    assert refused.headers["X-OpenKerf-Error"] == "library.adopt.noMachine"
 
 
 # ------------------------------------------------------------------ settings

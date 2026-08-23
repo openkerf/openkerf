@@ -474,7 +474,7 @@ class TileRun:
                 een, twee = marker_spots(zone, blokkade, settings.marker_size_mm)
             except TilingError as e:
                 raise DesignError(
-                    f"Tussen tile {left.index + 1} and {right.index + 1}: {e}"
+                    f"Between tile {left.index + 1} and {right.index + 1}: {e}"
                 ) from e
             marks.append(
                 {

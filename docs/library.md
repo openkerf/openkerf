@@ -6,8 +6,9 @@ off. It is the difference between working out 3 mm birch again every time and ta
 it once.
 
 This page covers what a setting is worth, how you find one and put it on a layer, where
-its numbers came from, why a setting belongs to one machine, and how you move a whole
-library to another computer or take settings from other people.
+its numbers came from, why a setting belongs to one machine, how you rename, merge and
+remove what is in the library, how you move a whole library to another computer, and how
+you take a starting point from the catalogue other people share.
 
 ## What a setting is, and what it is not
 
@@ -56,6 +57,11 @@ number before you can work.
 The tool rail on the left opens the window **Material library**. Materials are the list
 on the left, with the number of settings behind each name; the settings for the material
 you pick are on the right, thin to thick, and within a thickness the measured ones first.
+
+Above the search field sits one card about the machine you are on — whether it has any
+settings at all, and what the shared catalogue could offer it. On a laser that already
+carries settings of its own it shrinks to one line. It is described under
+[Starting points from the shared catalogue](#starting-points-from-the-shared-catalogue).
 
 ![The Material library window. On the left a list of materials with a count behind each name; at the top a search field and New material; above the list two narrowing controls and an Apply to dropdown reading "Layer 1 · Outline". On the right, under the heading RECENTLY USED, two setting rows: 3 mm Acrylaat (geëxtrudeerd) · Cut at 30 mm/s and 80% with a grey Manual badge, and 3 mm Testmateriaal 204350 · Cut at 15 mm/s and 80% with a green Verified badge, each with an Apply button and a three-dot menu.](images/14-library.png)
 
@@ -163,6 +169,14 @@ And a setting that was never measured at all:
 
 with **Make a test grid** beside it.
 
+A setting that came in on an import carries two more lines in the same fold.
+**Measured on** names the laser it was measured on — *CO2 with a glass tube, 80 W* — or, when
+the import did not say, *Not recorded. This setting came in on an import that did not say
+which laser it was measured on.* **Credit** names whoever wrote the numbers down, because the
+catalogue they come from is shared under CC BY and the credit is a condition of the copy, not
+a courtesy. Under those sits **Take this import back** — see
+[Taking an import back](#taking-an-import-back).
+
 Removing a setting asks under the row it concerns — *Throw away
 {thickness}{operation} of {material}?* — with **Keep** and **Throw away**. When the
 setting was measured, the question adds **This one was measured on a test grid.**
@@ -203,8 +217,101 @@ power, line spacing (for rastering), passes, thickness, note and machine profile
 Material, operation and source stay fixed — those are the identity of the setting, not
 values on it. Changing a number does not turn a hand-typed setting into a measured one.
 
-**When it goes wrong.** A material name that is already in use is refused:
-*Material '{name}' already exists.*
+**When it goes wrong.** A material name that is already in use is refused. Adding one
+says *Material '{name}' already exists.*; renaming one to a name another material has says
+*There is already a material of that name. Merge the two instead of giving them the same
+name.*, which is the repair rather than the complaint.
+
+## Changing the library itself
+
+A library nobody can tidy fills up. This one held both *Multiplex berken* and
+*Berkentriplex* for the same board, because adding a material was for a long time the only
+thing you could do to one.
+
+Every material row in the list on the left now carries the same **⋯** the setting rows have,
+in the same place, and a right-click on the row opens the same menu. Its rows, in order:
+
+| Row | What it does |
+| --- | --- |
+| **Show only this material** | The same narrowing as the checkbox in the header |
+| **Make a test grid** | Opens the test grid window with this material filled in |
+| **Rename this material…** | The name, and the other names it answers to |
+| **Merge into another material…** | Moves everything onto another material |
+| **Remove this material** | Red, last, and it counts before it acts |
+
+![The material library with the ⋯ menu open on the material row Berkentriplex. The menu shows "Show only this material" and "Make a test grid", then "Rename this material…" and "Merge into another material…", and at the bottom in red "Remove this material". Behind it the whole list of materials, each with the number of settings behind its name, and above the list the search box with "Only KH-5030" unticked so that all twenty are in it. Higher still, the two lines this library really shows: the quiet door into the shared catalogue, and the strip about the four settings and eleven test boards that belong to no machine.](images/40-material-verbs.png)
+
+**Adding one** is at the foot of the list of materials, where you are already looking:
+**New material**, which turns into a field in the same place. It used to be a button at the
+far right of the search bar that summoned a field at the far left of the window, a thousand
+pixels away, so pressing it looked as though nothing had happened.
+
+### Rename
+
+**Rename this material…** opens two fields on the right, under the material's own heading
+and above its settings — where you read the name is where you change it. **Name of this
+material** is the one on screen. **Also called** is the rest: the names other people use for
+the same board, separated by commas.
+
+> Names other people use for the same board, separated by commas. An imported library that calls it by one of these lands on this material instead of making a second one.
+
+That second field is what stops the next import making a duplicate. Escape closes the field
+and nothing else; the caret starts in it, so you can type straight away.
+
+A name that another material already has is refused: *There is already a material of that
+name. Merge the two instead of giving them the same name.*
+
+### Merge
+
+**Merge into another material…** is the repair for the two names you already have.
+
+> Everything on {material} moves over: the settings, the test boards, the recipes and the photographs. The name stays as a name the other material also answers to, so an import that still uses it lands in the right place.
+
+Pick the target under **Merge into** — the list starts on **— pick a material —** — and press
+**Merge**. The name you merged away is kept as an alias on the material you merged into, so
+an import or a project that still uses the old name lands in the right place instead of
+recreating it.
+
+With only one material in the library the row is greyed out, reason **There is only one
+material to merge**. A material cannot be merged into itself: *A material cannot be merged
+into itself.*
+
+### Remove, after counting
+
+Removing a material takes its settings, its recipes and its test boards with it, and the
+photographs of those boards are files that no database rule can reach. So the question is
+asked in the same place, and the counting happens before the question rather than after the
+answer:
+
+> {material} carries {what}. Removing the material takes all of that with it, photographs included.
+
+where *{what}* is the tally — *6 settings, 2 test grids, 1 recipe, 2 photos*. A material with
+nothing behind it says so instead: **Nothing hangs off {material}, so removing it loses no
+work.** And a sheet in your project that names this material is mentioned separately,
+because that link is cleared and the sheet stays: *2 sheets name this material; those links
+are cleared, the sheets themselves stay.*
+
+The buttons are **Keep it** and, when there is something to lose, **Remove it with
+everything on it** — which is the one that says out loud what it does. With nothing hanging
+off the material it is simply **Remove**.
+
+> **Why the counting matters.** Measured on a copy of this library, removing
+> *Berkentriplex* without a guard took six settings — two of them measured, with their
+> photographs — left two test boards without a material and reported nothing but the number
+> six.
+
+### Settings that belong to no machine
+
+A setting with no machine on it turns up under every machine, because that is how the query
+reads. When there are any, a strip appears at the top of the window with the count —
+*4 settings belong to no machine, so they turn up whatever machine you are on.* and, where
+there are boards too, *11 test boards belong to no machine either.*
+
+Attaching them is a claim, so it stays a button and never runs by itself:
+
+> Only you know whether these were measured on {machine}. Attaching them says they were.
+
+The button is **Attach these to {machine}**.
 
 ## Machine profiles and why a setting belongs to one machine
 
@@ -214,14 +321,33 @@ stands apart from the setting, in the panel **Machine profiles ({n})**:
 > A setting is only reusable when you know which machine it was made on — which is why the profile stands apart from the setting.
 
 Each profile shows its name, its wattage where known, and what hangs off it in settings
-and test grids. A profile you can add yourself takes a **Name**, a **Power** in watts
-and a **Lens** in mm.
+and test grids. There is no form here for making one up: a profile with a wattage and no
+machine behind it is exactly how a phantom called *5030 CO2* — the app's own example name —
+came to hold twenty-seven settings for a laser nobody owns.
+
+The profile of the machine you are working on can be described here instead, under **The
+laser itself**: **Kind of laser**, **Tube power** in watts and **Lens** in mm. Those are the
+same three fields the wizard asks on its **Set up** screen and they write the same place, so
+this is the door for anybody who is already past the wizard. What they are for is under
+[Starting points from the shared catalogue](#starting-points-from-the-shared-catalogue).
 
 The library sits beside the engine and does not follow along when a machine is thrown
-away. A profile with nothing behind it any more is tagged **no machine**, tooltip
-*There is no configured machine (any more) that belongs to this profile*, and an empty
-one that is not the active machine gets a **Clear out** button. A profile carrying
-settings or test grids is evidence and stays.
+away, and the two ways that can happen now read differently, because the answers differ:
+
+- **machine not here** — *No machine the engine knows about belongs to this profile. Plug
+  the laser in, or its settings were wiped.* It may come back.
+- **no machine** — *This profile points at no machine at all. Merge it into the machine it
+  belongs to.* It will not.
+
+An empty profile that is not the active machine gets a **Clear out** button. A profile
+carrying settings or test grids is evidence and stays — but when it points at no machine,
+**Merge into {machine}** joins it to the laser you are on:
+
+> Two profiles for one laser: the settings, the boards and the tube power move to {machine}, and this row goes.
+
+That is not offered between two profiles that both have a machine behind them: *Both of
+these profiles belong to a machine that exists. Two lasers are not one, and merging them
+would file one machine's measurements under the other.*
 
 This is also what the **Only {machine}** checkbox in the header is narrowing on. Switch
 it off to see the settings of your other lasers.
@@ -299,33 +425,269 @@ not reassurance, so OpenKerf checks whether what arrived is actually visible and
 With an empty library **Export the library** is off, tooltip *There is nothing to export
 yet*.
 
-## Presetariat — settings other people shared
+## Starting points from the shared catalogue
 
-The tool rail also opens **Presetariat**, the shared catalogue. It is a different kind
-of thing from your own library and says so at the top:
+The Presetariat is a catalogue of settings other people wrote down. It lives in a public
+repository, [openkerf/presetariat](https://github.com/openkerf/presetariat), under the
+Creative Commons licence **CC-BY-4.0** — free to use, on the condition that the credit
+travels with the numbers. OpenKerf reads a *tagged release* of that repository rather than
+whatever is on its main branch, so a row reaches you only after somebody merged it and then
+decided it was worth shipping. Twenty-six starting points also travel inside OpenKerf
+itself, so the offer works on a laptop with no network and on a day when the repository has
+no release yet.
 
-> Settings other people shared. They come from someone else's machine: take them as a starting point, not as truth. What was measured with a test grid is at the top.
+It is not a window and it has no button on the tool rail. It used to be both. Both are
+gone: browsing somebody else's speeds adds nothing to a drawing, and a catalogue you
+consult once per machine has no business sitting beside Rectangle. What is left is one
+card, in two places — at the top of this window, above the search field, and on the last
+screen of the machine wizard.
 
-You filter it by machine profile (or **All machines**), by operation (or **All**) and by
-material name, and **Refresh** fetches the catalogue again. Each row shows the material,
-the thickness and operation, the wattage and type of the laser it came off, the speed,
-power and passes, and how much confidence it deserves: **Measured**, **Manufacturer** or
-**Starting value**. A setting that a second person burned again carries **Re-burned**;
-one you already have carries **In the library** and cannot be ticked twice.
+### What the card says
 
-Where a whole list shares one kind, the warning is said once above it rather than on
-twenty-six identical rows — for example *Everything below is starting value: not
-measured. Burn a test grid before you trust it.*
+The card is for one moment: a laser has just been described and there is not one setting
+for it. Then the heading is
 
-Tick what you want and **Import {n}** puts it in your library. It always lands with the
-**Imported** badge, never as measured: it was not burned on your machine. The result
-line says *{n} imported.*, or *{n} imported, {skipped} skipped (you had them already).*
+> This machine has no settings yet.
 
-Going the other way, **Share with Presetariat** in a setting's menu offers one of your
-own to the catalogue. It opens a pre-filled proposal in a new tab so you can see for
-yourself what you are sharing.
+with the machine's name under it and two values read back, **Kind of laser** and **Tube
+power**, so you can see what the match is being made on. A value nobody has filled in reads
+**not recorded**. Under those, what your library holds for this laser — *Not one of the 20
+materials in this library has a setting for it.*, or *3 materials of the 20 in this library
+have a setting for it.*
 
-**When it goes wrong.** The catalogue lives on the internet. Without it you get what was
-fetched last time, with the reason on screen: *From the local copy — the catalogue was
-unreachable.* Filters that match nothing say *Nothing found for this machine and these
-filters.* A failed share says *Sharing did not work.*
+Nothing is fetched while the card sits there. **Show what would suit this laser** is what
+goes to the network, and the line beside it says why it waits for you:
+
+> Nothing is fetched until you press this: the shared catalogue lives on the network, and opening a window should not wait for it.
+
+While it is fetching the button stays where it is and reads **Looking…**. Once the list is
+up the button is gone and the way back out, **Fold this list up again**, sits at the end of
+that line about your own materials — one line rather than a row of its own, which is what
+that row was: a control at the far right of an otherwise empty band.
+
+**Not now** puts the card away for good on this machine — the tooltip says so: *Put this
+away. It will not be offered again for this machine.*
+
+![The material library with the offer card at the top. The heading reads "This machine has no settings yet."; under it the machine name KH-5030, the values Kind of laser "CO2 with a glass tube" and Tube power 80 W, and the line about the materials in this library. Below that the button "Show what would suit this laser" has been pressed, so at the end of the line about the materials in this library stands "Fold this list up again", and the list is open: the source line naming the shared catalogue, the date this copy was fetched and the CC-BY credit; the sentence that every one of these is a number somebody typed; the count of materials that have a starting point for this laser; and then one block per material — "Berkentriplex" with an "Add these" button and two rows reading "3 mm · Cut", "12 mm/s at 65%" and "3 mm · Engrave (raster)", "350 mm/s at 25%", then "MDF" with its own "Add these" and one row. No row carries a tier mark: every entry in the catalogue today is a starting point, so that is said once in the sentence above rather than badged twenty-six times.](images/39-starter.png)
+
+### When the machine has not said what it is
+
+Without the kind of laser and the tube power nothing can be matched, so the card asks. The
+heading is **How powerful is this laser?** when the kind is already filled in from the model
+you picked in the wizard, and **What kind of laser is this?** when it is not. The reason is
+underneath:
+
+> Without these two OpenKerf cannot tell which settings would suit this laser: a CO2 setting on a diode is not a starting point, and the same percentage on twice the power chars and burns through.
+
+Two fields, **Kind of laser** and **Tube power**, and two buttons. **Save and look** records
+them and fetches in one go. **I am not sure** is the other honest answer:
+
+> Not knowing the tube power is a fair answer: then the match is on the kind of laser alone, and every setting offered says so.
+
+Both buttons need the kind. Without it they are greyed out with the reason *Choose the kind
+of laser first: without it nothing can be matched, whatever the tube power says.* — because
+an unknown kind matches nothing, and a fetch that then reports an empty catalogue would be
+lying about the catalogue.
+
+The same two fields are in the wizard, on the **Set up** screen, under **The laser itself**
+— see [Getting started](getting-started.md#setting-up-the-machine). Both write the same
+place, so filling one in fills the other.
+
+> **This is why a machine that used to see everything now sees nothing.** Before this,
+> the match skipped the power test whenever either side was silent, which is how an 80 W
+> catalogue came to show all twenty-six of its rows to a machine nobody had described. A
+> laser that has not said how strong it is now matches nothing at all until you fill the
+> tube power in, or say you are not sure.
+
+### When there are settings, but nothing has been burned
+
+A machine can be full of settings and still have nothing to show for it, because every one
+of them came out of a catalogue. Then the heading is
+
+> Nothing has been burned on this machine yet.
+
+with *Its 27 settings came out of a catalogue and not one of them has been burned here.* and
+the only answer that helps:
+
+> A setting out of a catalogue is somebody else’s number on somebody else’s laser. One board burned on this one turns it into a measurement of your own.
+
+The button is **Burn a test grid**, not another fetch. On the last screen of the wizard that
+sentence stands on its own, because the test grid window is not reachable from there.
+
+### Fetching, one material at a time
+
+The list is grouped by material, with an **Add these** button per material and no button for
+all of it. That is deliberate: one bulk tick-list is what put fourteen unwanted materials
+into this library, every one of them bound to a machine nobody runs. The tooltip says what
+one press does — *Add the settings for {material} to this library, for this machine.*
+
+Each row under a material shows the thickness and the operation, the values as
+*16 mm/s at 55%*, and how much it is worth:
+
+| Tag | What it means |
+| --- | --- |
+| **burned** | Somebody burned a board and read this off it |
+| **starting point** | Somebody typed it. Nothing was measured. |
+| **power not matched** | One of the two lasers never said how strong it is, so only the kind was compared |
+
+Which rows are on offer at all is decided by the strength of the two tubes, and the band is
+deliberately lopsided: up to **twice** your wattage, but no lower than **0.7** of it. A
+setting off a stronger laser under-burns, and that costs you a plate. One off a weaker laser
+puts the same percentage into more energy than it was measured with, and that is char,
+burn-through and flame.
+
+Where every row on offer is a guess, the warning is said once above the list rather than
+tagged onto every row:
+
+> Every one of these is a number somebody typed, not one measured off a board. Burn a test grid before you trust one of them.
+
+That is the honest state of the catalogue today: **no preset in it has been measured by
+anybody.** All twenty-six are starting points.
+
+When the machine has answered "I am not sure" to the tube power, the same thing happens with
+the power tag — said once, above the list: *The tube power of this machine is not recorded,
+so these match on the kind of laser alone.*
+
+### Where the rows come from, and who gets the credit
+
+Above the list, one line says which of the two sources you are looking at, and it never
+guesses:
+
+- **These starting points ship with OpenKerf itself.** — the set inside the app.
+- *From the shared catalogue, copied to this computer on 22 Aug 2026.* — a copy fetched from
+  the release.
+- **The shared catalogue could not be reached, so these are the starting points that ship
+  with OpenKerf itself.** — it tried and failed, and fell back.
+
+A copy older than a month says **This copy is more than a month old.** with a **Fetch a
+fresh copy** button beside it. That is a button and not something the app decides for you:
+going to the network costs up to ten seconds.
+
+On the same line stands the credit, because CC BY means the credit is a condition of the
+copy and not a footnote:
+
+> Shared under {license} by {who}, and the credit travels with them.
+
+The names in it are the handles on the rows themselves — every entry in the catalogue
+carries the handle of whoever wrote it down. That handle comes along on the way in: an
+imported setting keeps it, and you can read it back in **Provenance and evidence** under
+**Credit**. Attribution dropped on the way in cannot be given back afterwards, and nobody
+can see that it was dropped.
+
+An entry OpenKerf does not understand is skipped and counted rather than thrown at you:
+*2 entries in this catalogue were not understood and have been left out.*
+
+### Taking an import back
+
+Every press of **Add these** is stamped as one import, and every import can be undone. Right
+after the press the card says what came in — *4 settings for Berkentriplex came in.* — with
+**Take this back** beside it. Later, the same way out is in the provenance fold of any
+imported setting: **Take this import back**, with
+
+> Removes every setting that came in with this import, and the materials it brought along that nothing else uses.
+
+Afterwards the window reports both halves — *4 settings removed, with the materials that
+came in with them.* and, where a material had to stay, *2 materials stay behind: something
+else uses them.*
+
+An import you can undo is not a dump, and that is the whole reason a one-press fetch is
+offered at all.
+
+### When there is nothing to offer
+
+A machine with settings it measured itself gets no card — and then, with the old window
+gone, there would be no way to the catalogue at all. So one quiet line stays at the top of
+this window:
+
+**Look in the shared catalogue**, with *What other people measured on a laser like
+{machine}, one material at a time.* beside it. Pressing it opens the same list, with the same
+per-material buttons. It is a door and not the offer coming back: nothing is fetched until
+you press, and a card you waved away stays away.
+
+### Offering one of your own
+
+**Share with Presetariat** in a setting's menu goes the other way. It opens a panel under
+the row, and the panel is the point: what goes into the catalogue is a public claim under
+your own name, so you see it before anybody else does. When you press
+**Open the proposal on GitHub** it fills in a proposal in a new tab — *It opens a
+pre-filled proposal in a new tab, so you can read what you are about to share before
+anybody else does.*
+
+**Your handle, once.** Every entry in the catalogue names who offered it, and the panel
+asks for that the first time:
+
+> The catalogue is shared under CC BY 4.0, so every entry names who offered it — that is the credit anybody reusing it has to be able to give. It is asked once and kept on this computer.
+
+`@jelle-t`, `jelle-t` and the address of your profile page are all read as the same
+handle. It is kept beside the library and not in it, so a library you hand to a colleague
+does not offer their settings under your name; afterwards the panel says
+*Offered as {by}.* with **Use another handle** beside it. Without a handle there is
+nothing to open: the tab would hold a file the catalogue's own checks refuse.
+
+**One of two labels, and never the wrong one.** The first line of the panel says which:
+
+> This goes in as a measurement, read off board {board}.
+
+or
+
+> This goes in as a starting point, not as a measurement.
+
+A measurement needs a board with a name, burned on *this* machine, with an outcome
+written down. Anything else is a starting point — a real answer, and the catalogue holds
+both — and the panel says which of the reasons applies:
+
+| The line you get | What it means |
+|---|---|
+| *Nobody read these numbers off a test board, so the catalogue takes them as a considered guess.* | You typed them, or extrapolated them. |
+| *These numbers came out of the catalogue itself, from {id}, so they go back as a guess that leans on that entry rather than as evidence.* | An imported setting, adjusted. See below. |
+| *The board is still here, but nobody wrote down what came out of the material, and a speed with no outcome beside it is not something anybody else can judge.* | The one question the app cannot answer for you. |
+| *The test board behind this setting is gone, and a measurement in the catalogue is followed back to its board.* | The board was removed after the setting was read off it. |
+| *This setting is filed under a different laser than the board it was burned on, so for this machine it is a starting point.* | The setting was moved to another machine profile. |
+
+**What came out of the material.** When the board is there and the outcome is not, the
+panel asks for it in three fields — **The edge** (*Clean, no charring*, *Lightly charred*
+or *Heavily charred*), **Cut through** and **Kerf** — and then this goes in as a
+measurement:
+
+> Say how it came out and this goes in as a measurement, with its board behind it. It is kept on the setting, so you are asked once.
+
+It is kept on the setting, so a second offer of the same row asks nothing, and it travels
+in an exported library along with the boards and their photographs.
+
+**Nothing that came out of the catalogue goes back in as evidence.** A starting point you
+fetched and then adjusted is still somebody else's guess, and moving it onto another
+machine profile does not make it a measurement of that machine. Such a setting is offered
+as a starting point that names the entry it leans on, whatever else is recorded about it.
+Without that rule an 80 W guess, re-parented to a 60 W profile, would arrive in the shared
+catalogue as a fresh entry for a laser nobody had ever measured.
+
+It is refused when the machine behind the setting is not described:
+
+> This setting belongs to a machine whose tube power is not recorded, so nobody else can tell whether it applies to theirs.
+
+> This setting belongs to a machine whose kind of laser is not recorded, and a CO2 setting is not a starting point for a diode.
+
+Which is the point: a speed and a power without the tube they were measured on — its
+strength and its kind — is not usable by anybody else. Both are filled in under
+**Machine profiles** in this window, or at the end of the setup wizard.
+
+### When it goes wrong
+
+The catalogue lives on the internet, and the fallbacks are stacked: the copy on this
+computer first, the set inside OpenKerf after that. Only when there is neither does it
+refuse:
+
+> The shared catalogue could not be fetched, and there is no earlier copy on this computer.
+
+A file that is not a catalogue at all gives *That file does not look like a preset
+catalogue.*, and one written by a newer OpenKerf gives *This catalogue comes from a newer
+version of OpenKerf. Update first.* — refused whole rather than half understood.
+
+A laser that has said nothing about itself gets told so by name: *OpenKerf does not know how
+powerful {machine} is, so it cannot tell which settings would suit it. Fill in the tube
+power, or say you are not sure and see everything for this kind of laser.* And when the kind
+is what is missing: *OpenKerf does not know what kind of laser {machine} is. A CO2 setting
+on a diode is not a starting point.*
+
+With nothing on offer for this laser the list says so plainly: **The catalogue holds no
+starting point for this laser yet.**

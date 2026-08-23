@@ -267,6 +267,31 @@ test('a refusal with a code is said in the reader’s language', async () => {
 	bindLanguage(() => 'en');
 });
 
+test('the one refusal a reader has to act on is not summarised away', () => {
+	// `apiError` only helps where somebody calls it. These two screens are the pair that
+	// did not: both upload a photograph of a test board, and the refusal on that route is
+	// the one the board code exists to make — "the code in this photograph says board
+	// FR5B R74F; you picked 6Y0Y JKS2" — where the answer is inside the sentence and the
+	// board is still on the bench. Measured in a browser against an engine of its own:
+	// before, the desktop panel said "Saving the photo failed." and the phone said "Photo
+	// saved. You get the preset out of it on the desktop."; after, both say the sentence
+	// above verbatim. Nothing in the suite noticed the difference — putting the summary
+	// back left all 73 tests green and svelte-check at 0 — so it is noticed here.
+	//
+	// Named files rather than a rule over every failed fetch: there are 49 such branches
+	// in the components and most of them refuse nothing a reader can act on. When the
+	// next one does, it belongs in this list.
+	for (const file of ['PhoneView.svelte', 'TestGridResult.svelte']) {
+		const source = readFileSync(join(SRC, 'lib', 'components', file), 'utf8');
+		const upload = source.slice(source.indexOf('/photo'));
+		assert.match(
+			upload.slice(0, 2000),
+			/apiError\(\s*response/,
+			`${file} reports its own summary of a refused photograph instead of the sentence the server sent`
+		);
+	}
+});
+
 test('a refusal may bring the number its sentence needs', async () => {
 	// For the number that is a constant of the engine layer, not a measurement: a code
 	// alone cannot carry it, so `MAX_COUNT` would have to be written down a second time
@@ -337,4 +362,48 @@ test('a number in a refusal is written the way the rest of the app writes number
 	const named = apiError(refusal('series.unknownColumn', { column: '1000' }), 'English.');
 	assert.match(named, /1000/, `a column called "1000" was rewritten: ${named}`);
 	bindLanguage(() => 'en');
+});
+
+test('a label the interface reads follows a language switch', async () => {
+	// Measured in the browser: with the material library open, switching to Dutch turned
+	// every sentence in the window Dutch — "Materiaalbibliotheek", "Er is nog geen
+	// laag…" — and left the four source badges reading "Manual" and "Verified". The
+	// table they came from called `t()` in its own initialiser, so it was built once, in
+	// whichever language happened to load first, and no switch could reach it. This is
+	// the same trap the catalogue's confidence table fell into, and it survived the
+	// deletion of that file because it lives in another one.
+	const { bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const { sourceLabel } = await import('../src/lib/library.svelte.ts');
+	bindLanguage(() => 'en');
+	const english = sourceLabel('testraster');
+	bindLanguage(() => 'nl');
+	const dutch = sourceLabel('testraster');
+	bindLanguage(() => 'en');
+	assert.notEqual(dutch.text, english.text, 'the badge did not follow the language');
+	assert.notEqual(dutch.means, english.means, 'the explanation did not follow the language');
+});
+
+test('no message is resolved once and kept', () => {
+	// The general form of the bug above, so the next one is caught where it is written
+	// rather than in a browser: a module-level `const` whose value calls `t()` freezes
+	// the language of the first import. Anything the reader sees has to be resolved
+	// while it is being drawn — a function, a getter, or a `$derived`.
+	for (const path of sources(join(SRC, 'lib'), [], /\.ts$/)) {
+		const text = readFileSync(path, 'utf8');
+		// Walk the top-level declarations only: an indented `t(` sits inside a function
+		// or a class method and is therefore called when it is read.
+		const frozen: string[] = [];
+		let declaring: string | null = null;
+		for (const line of text.split('\n')) {
+			const opens = line.match(/^export (?:const|let) (\w+)/);
+			if (opens) declaring = opens[1];
+			else if (/^\S/.test(line) && !/^\s/.test(line) && !line.startsWith('\t')) {
+				// A new top-level statement: the previous declaration is finished, unless
+				// this line is its own closing brace.
+				if (!/^[)}\]];?$/.test(line.trim())) declaring = null;
+			}
+			if (declaring && /(?<![A-Za-z0-9_.])t\(/.test(line)) frozen.push(`${declaring} in ${path}`);
+		}
+		assert.deepEqual(frozen, [], `resolved at import instead of at render: ${frozen.join(', ')}`);
+	}
 });

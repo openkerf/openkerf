@@ -166,7 +166,7 @@ class MachineControl:
         if not self.runner.supports(command):
             raise DesignError(
                 f"This device does not know '{command}'; movement is handled by the "
-                "device-service geleverd."
+                "device service itself."
             )
 
     def home(self, physical: bool = False, force: bool = False) -> dict:

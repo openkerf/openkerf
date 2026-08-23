@@ -5,7 +5,13 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from openkerf_api.generators import JOINTS, PHASE, box_panels, teeth_count
+from openkerf_api.generators import (
+    JOINTS,
+    PHASE,
+    box_panels,
+    qr_squares,
+    teeth_count,
+)
 from openkerf_api.server import ApiServer
 
 
@@ -519,6 +525,65 @@ def test_a_qr_code_becomes_a_path(client):
 def test_an_empty_qr_code_is_refused(client):
     response = client.post("/api/design/generate/qrcode", json={"text": "  "})
     assert response.status_code == 409
+
+
+def test_a_short_code_is_a_full_qr_and_a_scanner_reads_it():
+    """
+    The measured bug: `segno.make` hands back a Micro QR that nothing can read.
+
+    A serial number or a board code is a short payload, and that is exactly where `make`
+    switches to a micro variant: measured with segno 1.6.6, `'OK-G:32'` gives M3-M and
+    `'OK1:7X4MQB2K'` gives M4-Q. OpenCV 5.0.0 decodes both as the empty string from a
+    noise-free render at 12 px per module with a 4-module quiet zone — the format, not the
+    resolution — and Chromium's `BarcodeDetector` lists no micro variant either. So a code
+    the engraver could see was a code no phone could read. `segno.make_qr` gives 1-H and
+    1-Q for the same two payloads and both decode.
+
+    A longer text hid it: `'https://openkerf.nl'` is 19 characters and comes out of `make`
+    as a full code anyway, which is why every existing test here stayed green.
+    """
+    cv2 = pytest.importorskip("cv2")
+    import numpy as np
+    import segno
+
+    for payload in ("OK-G:32", "OK1:7X4MQB2K"):
+        assert segno.make(payload, error="m").designator.startswith("M")
+
+        squares, modules = qr_squares(payload, 0.0, 0.0, 30.0, 4)
+        step = 30.0 / modules
+        px = 12
+        side = modules * px
+        picture = np.full((side, side), 255, dtype=np.uint8)
+        for square in squares:
+            left = int(round(min(x for x, _ in square) / step * px))
+            top = int(round(min(y for _, y in square) / step * px))
+            picture[top : top + px, left : left + px] = 0
+        assert cv2.QRCodeDetector().detectAndDecode(picture)[0] == payload
+
+
+def test_the_caller_chooses_the_quiet_zone(client):
+    """
+    Two modules of quiet for the public generator, four for a board code.
+
+    Two is what this generator has always drawn and what the form still sends; the standard
+    asks for four, and `boardcode` takes four because wood is not paper. Measured through a
+    simulated photograph, four decoded 20 of 20 at 6 px per module where two decoded 16 of
+    20. The quiet zone lives inside `size_mm` either way — the footprint is what the user
+    asked for and the modules get smaller — so a 30 mm code stays 30 mm wide on the bed.
+    """
+    short = {"text": "OK-G:32", "size_mm": 30}
+    default = client.post("/api/design/generate/qrcode", json=short)
+    wider = client.post(
+        "/api/design/generate/qrcode", json={**short, "border": 4}
+    )
+    assert default.json()["modules"] == 21 + 2 * 2
+    assert wider.json()["modules"] == 21 + 2 * 4
+
+    design = client.get("/api/design").json()
+    per_mm = design["units_per_mm"]
+    for element in design["elements"]:
+        x0, _, x1, _ = (v / per_mm for v in element["bounds"])
+        assert x1 - x0 <= 30.0 + 0.01
 
 
 def test_box_panels_stay_on_the_bed(client):

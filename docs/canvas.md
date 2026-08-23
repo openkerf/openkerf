@@ -49,8 +49,8 @@ The rail on the left holds eight tools; one is active at a time.
 
 Below the tools sit **Place image** and the buttons that open a window of their own:
 **Generators — grid, circle, polygon, box, QR**, **Search clipart in public collections**,
-**Test grid**, **Series — one design burned once per row of a list**, **Presetariat — shared
-settings** and the material library.
+**Test grid**, **Series — one design burned once per row of a list** and the material
+library.
 
 Placing a shape snaps just as dragging does, so a new rectangle lands on the grid line you
 put it on and not 3.7 mm beside it.

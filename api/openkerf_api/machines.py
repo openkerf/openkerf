@@ -9,6 +9,7 @@ show up in our setup flow without a code change on our side.
 """
 
 import ipaddress
+import secrets
 import socket
 import time
 
@@ -32,7 +33,34 @@ ESSENTIAL_ATTRS = (
 
 TYPE_NAMES = {bool: "bool", int: "int", float: "float", str: "str"}
 
-# ------------------------------------------------- machineprofiel uitwisselen
+# ------------------------------------------------------------- who a laser is
+#
+# A device path is a slot, not an identity. The kernel hands out the first free one
+# (`meerk40t/kernel/kernel.py:3433-3437`), so removing a Ruida and adding a different one
+# gives the newcomer "ruida" back — and the library's `profile_for_device` then found the
+# dead machine's row, renamed it after the newcomer and handed over every preset and every
+# test board. Measured on the author's library: 3 presets and 20 boards would change owner
+# that way, silently.
+#
+# So every machine gets a name of its own that no slot can recycle. `MK1` says which
+# scheme it is, so a second one can exist later without a reader having to guess; the
+# eight characters come from `secrets` and not from a clock, because two machines created
+# in the same second are exactly the pair that must not collide.
+UID_PREFIX = "MK1"
+#: Crockford base32: no I, L, O or U, so nothing a human reads back over the phone can
+#: turn into a different uid. Same alphabet as the board codes, for the same reason.
+UID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+UID_LENGTH = 8
+
+
+def _mint_uid() -> str:
+    """A fresh machine uid. 40 bits of `secrets`, spelled in Crockford base32."""
+    return UID_PREFIX + "".join(
+        secrets.choice(UID_ALPHABET) for _ in range(UID_LENGTH)
+    )
+
+
+# ------------------------------------------------------ exchanging a profile
 #
 # Gap E5: LightBurn has `.lbdev`, so that a manufacturer can supply a ready-made profile
 # and you type nothing over on a second computer. The same shape as B7's library —
@@ -170,6 +198,41 @@ class MachineManager:
         device.setting(bool, "openkerf_configured", False)
         device.openkerf_configured = True
 
+    def machine_uid(self, device) -> str:
+        """
+        Who this machine is — minted the first time anybody asks.
+
+        Stamped when our wizard creates a machine, but minted lazily here as well, and
+        that second half is the one that earns its keep. A machine started from the
+        console (`service device start ruida`) never passes through `create`, and so
+        would carry no uid at all; the library then falls back on the device path, which
+        is precisely the recycled-slot inheritance this column exists to stop. Asking for
+        the uid on the way to the library means every device has one by the time it
+        matters, whichever route created it.
+
+        A machine from before this column gets a uid too, and the library adopts it onto
+        the profile that already matches by path — so nothing is detached and no
+        measurement changes owner. Detaching only happens when a *different* uid turns up
+        on a slot that is already spoken for, which is the recycle case and nothing else.
+
+        Straight to disk, because the alternative is worse than the cost: MeerK40t only
+        writes its settings on a clean shutdown (see `_remember_active`), so a headless
+        server that is killed would mint a *new* uid for the same laser after the restart
+        and its own profile would look like a stranger's.
+        """
+        device.setting(str, "openkerf_machine_uid", "")
+        if not device.openkerf_machine_uid:
+            device.openkerf_machine_uid = _mint_uid()
+            try:
+                self.flush()
+            except Exception:  # pragma: no cover - a read route must not fail on this
+                pass
+        return device.openkerf_machine_uid
+
+    def machine_uid_for(self, path: str) -> str:
+        """The same, for a caller that has a path rather than the device itself."""
+        return self.machine_uid(self._find(path))
+
     def _find(self, path):
         for device in self.kernel.services("device"):
             if device.path == path:
@@ -209,6 +272,10 @@ class MachineManager:
         # this a profile (E5) cannot be recreated elsewhere.
         device.setting(str, "openkerf_info_key", "")
         device.openkerf_info_key = info_key
+        # And who this machine is, beside what kind it is. See UID_PREFIX: without it the
+        # library can only recognise a machine by the slot the kernel gave it, and a slot
+        # outlives the laser that had it.
+        self.machine_uid(device)
         self._mark_configured(device)
         # `device add` makes it active straight away; that choice should survive the
         # restart. See `_remember_active`.
@@ -262,6 +329,19 @@ class MachineManager:
         return {"path": device.path, "label": label}
 
     def remove(self, path: str) -> dict:
+        """
+        Throw a machine away. Its library profile stays, and stays attached.
+
+        Nothing is detached here on purpose. The profile carries the presets and the test
+        boards measured on that laser, and those are evidence about a machine that
+        existed; the profile is what makes them readable. It shows as orphaned in the
+        list from this moment (`orphaned` in server.py), which is true — the machine is
+        gone — and if the same slot is handed to a *different* laser later, the library
+        detaches this row itself, because the newcomer arrives with a uid of its own and
+        this row's uid does not match it. `Service.destroy` calls `clear_persistent`
+        (`meerk40t/kernel/service.py`), so the uid dies with the device and no successor
+        can inherit it.
+        """
         device = self._find(path)
         if self.kernel.device is device:
             # Destroying the active service leaves the kernel without a device.
@@ -373,7 +453,7 @@ class MachineManager:
 
     def _claim_coolant(self, device) -> None:
         """
-        De air-assistmethode meteen laten aanhaken (besluit B11).
+        Let the air-assist method attach at once (decision B11).
 
         The engine only claims the method when the device service starts. Without this the
         setting is on the machine but the coolant registration does not know the device yet,
@@ -445,7 +525,7 @@ class MachineManager:
         """Persist settings so a machine survives a restart of the engine."""
         self.runner.run("flush")
 
-    # --------------------------------------------- profile uitwisselen (E5)
+    # ------------------------------------------------ exchanging a profile (E5)
 
     def _info_key(self, device) -> str | None:
         """
@@ -460,13 +540,13 @@ class MachineManager:
         if device.openkerf_info_key:
             return device.openkerf_info_key
         provider = getattr(device, "registered_path", None)
-        kandidaten = [
+        candidates = [
             entry
             for family in self.catalog()
             for entry in family["machines"]
             if entry["provider"] == provider
         ]
-        return kandidaten[0]["key"] if kandidaten else None
+        return candidates[0]["key"] if candidates else None
 
     def export_profile(self, path: str) -> dict:
         """The whole profile of one machine, as one readable file."""
@@ -482,8 +562,8 @@ class MachineManager:
                 if field["attr"] == "label":
                     continue
                 values[field["attr"]] = field["value"]
-        sleutel = self._info_key(device)
-        if sleutel is None:
+        info_key = self._info_key(device)
+        if info_key is None:
             raise MachineError(
                 "It cannot be traced which type this machine comes from; "
                 "a profile made from it could not be created elsewhere."
@@ -493,7 +573,7 @@ class MachineManager:
             "version": PROFILE_VERSION,
             "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "machine": {
-                "info": sleutel,
+                "info": info_key,
                 "provider": getattr(device, "registered_path", None),
                 "label": getattr(device, "label", device.path),
                 "settings": values,
@@ -529,7 +609,7 @@ class MachineManager:
 
     def preview_profile(self, data) -> dict:
         """
-        Wat er gaat gebeuren, vóórdat het gebeurt.
+        What is going to happen, before it happens.
 
         A machine profile decides where the head goes. Blindly loading what somebody emailed
         you is exactly one step from a head running into its end stop, so this says first what
@@ -537,12 +617,12 @@ class MachineManager:
         """
         data = self.read_profile(data)
         machine = data["machine"]
-        bekend = {
+        known = {
             entry["key"]: entry
             for family in self.catalog()
             for entry in family["machines"]
         }
-        line = bekend.get(machine["info"])
+        line = known.get(machine["info"])
         values = machine.get("settings") or {}
         # Only what is really filled in. The engine sets unused fields to "UNCONFIGURED";
         # showing those as "check this" on a USB machine is a warning about nothing, and that

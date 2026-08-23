@@ -86,12 +86,39 @@ becomes the bed on your canvas — if it is wrong, OpenKerf thinks there is room
 where the head does not go." Width and height in millimetres, and a preview of the
 bed beside the fields.
 
-![The wizard's fourth screen, "How big is the bed?", with Width (mm) 500 and Height (mm) 300, a drop-down "Where is 0,0?" set to "As the machine says itself", checkboxes for a Z axis and Autofocus, a collapsed section "More of this machine", and the buttons "Skip" and "Save and finish".](images/04-setup-settings.png)
+![The wizard's fourth screen, "How big is the bed?", with Width (mm) 500 and Height (mm) 300 and a drop-down "Where is 0,0?" set to "As the machine says itself"; under it the fieldset "The laser itself" with Kind of laser set to "CO2 with a glass tube", Tube power 80 W, the tick box "I am not sure how powerful my tube is" and Lens 50.8 mm; then "What does this machine have?" with the boxes for a Z axis and Autofocus, a collapsed section "More of this machine", and the buttons "Skip" and "Save and finish".](images/04-setup-settings.png)
 
 Then "Where is 0,0?" — the choices are "As the machine says itself", "Top left",
 "Top right", "Bottom left", "Bottom right" and "Centre", with the explanation "The
 corner the head goes to when you send it home. If you do not know, leave what the
 machine says itself."
+
+Then **The laser itself**, which is two facts about the machine that are nowhere in the
+engine and that OpenKerf cannot work out for you:
+
+> What kind of light this machine makes, and how much of it. OpenKerf needs both before it can tell which settings other people have measured would suit your laser.
+
+**Kind of laser** arrives filled in — worked out from the model you picked a screen ago —
+with the six answers "CO2 with a glass tube", "CO2 with an RF metal tube", "Diode",
+"Fibre", "UV" and "I do not know". The hint says how far to trust the prefill:
+
+> Filled in from the model you picked. A glass tube and an RF metal tube cannot be told apart from that, so correct it if you know better.
+
+**Tube power** in watts is the one nobody else can know:
+
+> The number on the tube or on the invoice. It decides which settings can be a starting point for this laser: the same percentage on twice the power chars and burns through.
+
+If you do not know it, say so. The tick box **I am not sure how powerful my tube is**
+is a real answer, not a way of skipping the question, and it says what it costs:
+"Then OpenKerf matches on the kind of laser alone, and says so on every setting it offers
+you." Below 1 W or above 1000 the field is refused: *A tube power between {min} and {max} watt,
+please.* **Lens** in mm is optional.
+
+These two are what decide whether a setting somebody else measured can be a starting
+point for your laser — see [The material
+library](library.md#starting-points-from-the-shared-catalogue). You can fill them in later
+in the material library, under the machine profile you are working on, but this is the
+cheapest moment.
 
 Then "What does this machine have?" with two boxes: "A Z axis (height-adjustable
 bed or head)" and "Autofocus". Below that a folded section, "More of this
@@ -106,6 +133,23 @@ the head moves as you expect without anything being able to burn."
 If the sheet you have does not match the new bed, it offers "Does your sheet come
 along to this bed?" with **Set the sheet to the bed size** or **Leave it** — and
 the reminder that a sheet is the piece of material you put in, not the bed itself.
+
+**And an offer, on the same screen.** A machine that has just been created has no settings,
+so the last step says so and offers to fetch some that would suit it:
+
+> This machine has no settings yet.
+
+with the machine's name, the kind of laser and the tube power read back, a count of what
+your library holds for it, and a **Show what would suit this laser** button. Nothing goes to
+the network until you press it. **Not now** puts the offer away for good on this machine.
+
+The same card is at the top of the material library, and the whole of it — what the
+catalogue is, what the tags on a row mean, how the credit travels and how to take an import
+back — is on [The material
+library](library.md#starting-points-from-the-shared-catalogue). It is worth two minutes
+here: the second step of the list below this one is giving your drawing a speed and a power,
+and this is where those can come from if you have not burned a board yet.
+
 Out of the wizard: **Another machine** or **To the work area**.
 
 ## Your sheet and its material

@@ -127,6 +127,126 @@ export function kindOfMachine(machine: {
 }
 
 /**
+ * What kind of light the machine makes.
+ *
+ * A different question from `Kind` above, and both are needed. `Kind` is the
+ * silhouette you recognise in your own workshop — a tall glass-tube cabinet, a blue
+ * K40, an open diode frame — and it exists to get you through step 1 of the wizard.
+ * This is the physics, and it is the axis along which a setting may travel: a CO2
+ * setting on a diode is not a starting point, whatever the two cabinets look like.
+ * The values are `catalogue_schema.LASER_KINDS` in the engine layer, so a preset
+ * from the shared catalogue and a machine profile of ours speak of the same thing.
+ */
+export type LaserKind = 'co2-glass' | 'co2-rf' | 'diode' | 'fiber' | 'uv' | 'unknown';
+
+/** The kinds a reader may choose from, in the order the wizard offers them. */
+export const LASER_KINDS: LaserKind[] = ['co2-glass', 'co2-rf', 'diode', 'fiber', 'uv'];
+
+/**
+ * The kind in words.
+ *
+ * A function and not a table of labels built at import time: a module-level `t()`
+ * resolves once, so a language switch would leave these six words in whichever
+ * language happened to load first.
+ */
+export function laserKindLabel(kind: LaserKind | string): string {
+	switch (kind) {
+		case 'co2-glass':
+			return t('laser.kind.co2Glass');
+		case 'co2-rf':
+			return t('laser.kind.co2Rf');
+		case 'diode':
+			return t('laser.kind.diode');
+		case 'fiber':
+			return t('laser.kind.fiber');
+		case 'uv':
+			return t('laser.kind.uv');
+		default:
+			return t('laser.kind.unknown');
+	}
+}
+
+/**
+ * `defaults.source` in a catalogue entry, to the kind of laser it means.
+ *
+ * A copy of `KIND_BY_SOURCE` in `api/openkerf_api/matching.py`, and a deliberate
+ * one: the engine layer derives the kind from the same registry but exposes no route
+ * that says so, so the wizard — which has to *prefill* the field before anything is
+ * written — has no other way to ask. `frontend/tests/starter.test.ts` reads the
+ * Python and fails when the two tables drift apart, which is the only thing that
+ * makes a second copy safe.
+ *
+ * `Older CO2` is upstream's own label for the thirty g3v8 brands, a string with a
+ * space in it rather than a slug, and is copied verbatim for the same reason it is
+ * there: normalising it is how a rename upstream becomes a silent `unknown`.
+ */
+export const KIND_BY_SOURCE: Record<string, LaserKind> = {
+	co2: 'co2-glass',
+	'Older CO2': 'co2-glass',
+	diode: 'diode',
+	fiber: 'fiber',
+	uv: 'uv'
+};
+
+/**
+ * When the source says nothing usable, the family name does. Ordered, matched as a
+ * substring, both spellings of fibre — same list as `KIND_BY_FAMILY` in `matching.py`.
+ */
+export const KIND_BY_FAMILY: [string, LaserKind][] = [
+	['CO2', 'co2-glass'],
+	['Diode', 'diode'],
+	['Fibre', 'fiber'],
+	['Fiber', 'fiber'],
+	['UV', 'uv']
+];
+
+/**
+ * Which kind of laser one catalogue entry describes.
+ *
+ * `unknown` is a real answer and not a failure: exactly one entry in the live
+ * registry (`grbl-fluidnc`, family `Generic`, source `generic`) lands there, and a
+ * FluidNC board really does drive whatever is bolted to it. A glass tube and an RF
+ * metal tube cannot be told apart from this data at all, so this writes `co2-glass`
+ * and the wizard shows it prefilled and changeable.
+ */
+export function laserKindFor(
+	entry: { family?: string | null; defaults?: Record<string, unknown> | null } | null | undefined
+): LaserKind {
+	if (!entry) return 'unknown';
+	const source = entry.defaults?.source;
+	if (typeof source === 'string' && source in KIND_BY_SOURCE) return KIND_BY_SOURCE[source];
+	const family = String(entry.family ?? '');
+	for (const [needle, kind] of KIND_BY_FAMILY) if (family.includes(needle)) return kind;
+	return 'unknown';
+}
+
+/**
+ * Which kind of laser a machine that already exists is.
+ *
+ * The catalogue key it was made from is the precise answer, so it is asked first.
+ * Without one — a machine from before we started stamping the key on the device —
+ * the driver is what is left, and that is only an answer when every entry running
+ * that driver agrees: `balor` drives a fibre, a CO2 and a UV galvo, so it says
+ * nothing and the field is left for the reader to fill in. The same order of
+ * preference as `MachineManager._info_key` uses for the key itself.
+ */
+export function laserKindOfMachine(
+	catalog: CatalogFamily[],
+	where: { info?: string | null; provider?: string | null }
+): LaserKind {
+	const entries = catalog.flatMap((family) => family.machines);
+	if (where.info) {
+		const found = entries.find((entry) => entry.key === where.info);
+		if (found) return laserKindFor(found);
+	}
+	if (!where.provider) return 'unknown';
+	const agreed = new Set(
+		entries.filter((entry) => entry.provider === where.provider).map(laserKindFor)
+	);
+	return agreed.size === 1 ? [...agreed][0] : 'unknown';
+}
+
+/**
  * What a search turns up (decision B6).
  *
  * A finding is a *proposal*, not a machine: it exists only in this answer until
@@ -241,6 +361,34 @@ export class MachineStore {
 			return null;
 		} finally {
 			this.busy = false;
+		}
+	}
+
+	/**
+	 * Which catalogue line a machine that exists was made from.
+	 *
+	 * Read through the export route, because that is the only route that answers this
+	 * question: `machines.py` stamps the key on the device when it creates it and
+	 * `export_profile` is the one place that hands it back. A GET, so nothing is
+	 * written, and no `.openkerf-machine` file is ever saved — `fetch` ignores the
+	 * attachment header.
+	 *
+	 * Deliberately outside `#request`: a machine from before we stamped the key, and
+	 * whose driver runs no catalogue entry at all, is refused here with 409, and that
+	 * is not a fault worth a red line across the wizard. The caller gets null and asks
+	 * the reader instead.
+	 */
+	async infoKey(path: string): Promise<string | null> {
+		try {
+			const response = await fetch(
+				`/api/machines/${encodeURIComponent(path)}/export.openkerf-machine`
+			);
+			if (!response.ok) return null;
+			const profile = await response.json();
+			const info = profile?.machine?.info;
+			return typeof info === 'string' && info ? info : null;
+		} catch {
+			return null;
 		}
 	}
 

@@ -22,7 +22,7 @@
  * at the foot of this file.
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -221,7 +221,7 @@ async function open(path = '/', { width = 1440, height = 900, route = null } = {
 
 const done = [];
 
-async function shot(name, page, { selector = null, pad = 0 } = {}) {
+async function shot(name, page, { selector = null, pad = 0, fullPage = false } = {}) {
 	// An alarm from the machine, dismissed at the last moment. It outranks every dialog
 	// on purpose (the backdrop sits below it), so a real laser that is not answering
 	// puts a red card over the top-left of the canvas and over the cut-path drawing —
@@ -243,7 +243,11 @@ async function shot(name, page, { selector = null, pad = 0 } = {}) {
 			height: Math.min(view.height - y, box.height + 2 * pad)
 		};
 	}
-	await page.screenshot({ path: join(OUT, name), clip });
+	// `fullPage` is offered but is not what the tall setup step needed: the wizard
+	// scrolls *inside* a full-height layout, so the document itself is 900 px and a
+	// full-page shot comes back the same size as the window (measured). What works
+	// there is a taller window — see shot 04.
+	await page.screenshot({ path: join(OUT, name), clip, fullPage: fullPage && !clip });
 	done.push(name);
 	if (page.problems?.length) console.log('  !', name, page.problems.slice(0, 2));
 	console.log('  ✓', name);
@@ -320,7 +324,31 @@ await scene('03-setup-name.png', '/setup/name?type=ruida-beta', {}, async (page)
 });
 // The settings step is shown for the machine that is really there. It changes
 // nothing until its own save button is pressed, and the script does not press it.
-await scene('04-setup-settings.png', '/setup/settings?machine=ruida');
+// A taller window than the rest of the set, and the only one: since the fieldset
+// about the laser was added this step does not fit in 900 px, and at 900 px the
+// picture stopped just under "Tube power" — leaving the answer for a tube whose
+// power you do not know, the lens, both tick boxes and both buttons out of a
+// picture the page describes in full. `fullPage` cannot fix that: the wizard
+// scrolls inside a full-height layout, so the document is exactly one window tall
+// and a full-page shot comes back at 1440 × 900 (measured).
+await scene(
+	'04-setup-settings.png',
+	'/setup/settings?machine=ruida',
+	{ height: 1250 },
+	async (page) => {
+		// The two new fields answered rather than left blank, the way shot 03 types a
+		// name: the picture is about what you tell the app here, and this laser has
+		// never been asked, so it arrives empty. Typing changes nothing — the step
+		// writes only when its own button is pressed, and the script does not press it.
+		await page.getByLabel(/^Tube power/).fill('80');
+		await page.getByLabel(/^Lens/).fill('50.8');
+		// And the focus put down again: the field typed into last keeps its focus ring,
+		// which in a still picture reads as "this one is special" rather than "this one
+		// was typed a moment ago".
+		await page.evaluate(() => document.activeElement?.blur());
+		await page.waitForTimeout(300);
+	}
+);
 
 // ═════════════════════════════════════════════════════ 2. the empty work area
 
@@ -1420,6 +1448,303 @@ if (wanted('38')) {
 			await page.waitForTimeout(900);
 		}
 	);
+}
+
+// ══════════════════════════ 8. the offer, the material verbs, the board's extras
+
+/**
+ * Shot 39 needs a machine with no settings at all, and the machine on this laptop
+ * has three it measured itself — so the card never appears here. Rather than
+ * emptying somebody's library to take a photograph, the offer route and the
+ * catalogue route are answered from this script for the length of this one page,
+ * exactly as shot 01 answers the machine list. Everything the picture shows is
+ * the app's own rendering of those two answers.
+ *
+ * Nothing is pressed but "Show what would suit this laser". **Add these** writes
+ * to the library, and a documentation script does not write to somebody's
+ * library.
+ *
+ * Three details that each cost a run.
+ *
+ * **The rows are not invented.** They are three entries of the catalogue the app
+ * ships with (`api/openkerf_api/starter_seed.json`), copied out of that file with
+ * their own speeds, powers, tiers and handle. Typing plausible numbers instead put
+ * "16 mm/s at 55%" on screen under the id `berkentriplex-3mm-snijden-co2-80w`,
+ * which really carries 12 mm/s at 65% — a handbook picture quoting a setting that
+ * does not exist, under the name of one that does.
+ *
+ * **The machine is the one that is really there.** Its id and name are read off the
+ * live offer, because the top bar and the "Only …" checkbox beside the card read
+ * the real machine and anything else puts two names for one laser in one picture —
+ * measured twice: a pinned "KH-5030" over a top bar reading "Bench 5030", and then
+ * "the first profile that has a device" over the same bar, which is a leftover
+ * called "Dummy Device". Only the two facts the picture is *about* are made up: the
+ * kind of laser and the wattage.
+ *
+ * **The bed is cleared first**, for the reason `open()` gives: a recovery file left
+ * behind by an engine that was killed puts a modal over the screen, and the rail
+ * button underneath it cannot be pressed at all.
+ */
+if (wanted('39')) {
+	await clear();
+	const live = await api('GET', '/api/library/starter');
+	const active = live?.machine ?? null;
+	const offer = {
+		machine: {
+			id: active?.id ?? 1,
+			name: active?.name ?? 'KH-5030',
+			laser_type: 'co2-glass',
+			power_watt: 80,
+			starter_state: ''
+		},
+		state: 'nothing',
+		needed: true,
+		coverage: {
+			mine: 0,
+			mine_measured: 0,
+			materials_covered: 0,
+			materials_known: 20,
+			unattached: 0,
+			unattached_grids: 0
+		}
+	};
+	// Three rows over two materials: enough for the list to show a material block,
+	// its Add button and a row's own values, and few enough to fit in the card
+	// without a scroll bar across the picture. Which three is fixed by id, so the
+	// picture is the same next month; what each one says comes out of the file.
+	const seed = JSON.parse(
+		readFileSync(join(dirname(OUT), '..', 'api', 'openkerf_api', 'starter_seed.json'), 'utf8')
+	);
+	const wantedRows = [
+		'berkentriplex-3mm-snijden-co2-80w',
+		'berkentriplex-3mm-graveren-raster-co2-80w',
+		'mdf-3mm-snijden-co2-80w'
+	];
+	const presets = wantedRows.map((id) => {
+		const entry = seed.presets.find((p) => p.id === id);
+		if (!entry) throw new Error(`39: ${id} is no longer in starter_seed.json`);
+		return {
+			...entry,
+			// The two fields the catalogue route adds per machine and the seed file
+			// cannot carry: whether this library already holds the row, and whether the
+			// wattage matched. Both false here — that is the state the card is about.
+			imported: false,
+			power_unmatched: false
+		};
+	});
+	const catalogue = {
+		version: seed.version,
+		count: presets.length,
+		total: seed.presets.length,
+		stale: false,
+		very_stale: false,
+		fetched_at: Math.floor(Date.now() / 1000) - 3600,
+		skipped: 0,
+		error: null,
+		from_seed: false,
+		license: seed.license,
+		attribution: seed.attribution,
+		machine_id: offer.machine.id,
+		matched_on: 'kind+power',
+		presets
+	};
+	const json = (body) => ({
+		status: 200,
+		contentType: 'application/json',
+		body: JSON.stringify(body)
+	});
+	await scene(
+		'39-starter.png',
+		'/?tab=design',
+		{
+			route: async (page) => {
+				await page.route('**/api/library/starter', (r) => r.fulfill(json(offer)));
+				// By the path and not by a glob with a `?` in it: the app asks for
+				// `/api/presetariat?machine_id=5`, and whether `?` is a wildcard or a
+				// literal in Playwright's globs has changed between versions. A
+				// predicate cannot go stale that way.
+				await page.route(
+					(url) => url.pathname === '/api/presetariat',
+					(r) => r.fulfill(json(catalogue))
+				);
+			}
+		},
+		async (page) => {
+			await page.locator(TOOL.library).click();
+			await page.waitForSelector(DIALOG, { timeout: 10000 });
+			await page.waitForTimeout(2600);
+			await page.getByRole('button', { name: 'Show what would suit this laser' }).click();
+			await page.waitForTimeout(1200);
+		}
+	);
+}
+
+/**
+ * Shot 40: the ⋯ on a material row, open. Read-only — the menu is a menu, and
+ * none of its five rows is pressed.
+ *
+ * The offer route is answered here as well, and for once *to get the card out of
+ * the way*. This laptop's machine has no wattage recorded, so the real answer is
+ * the two-field `askMachine` card — 330 px of it, which is shot 39's other state
+ * and pushed the list this picture is about off the bottom of the window
+ * (measured: the menu opened at y=730 with not one material row visible behind
+ * it). The one fabricated fact is the wattage, exactly as in shot 39; the machine,
+ * the coverage and the strays are this library's own, so what stands above the
+ * list is the quiet door that a library with settings in it really shows.
+ *
+ * The drawing is seeded first for the same reason: an empty bed puts "There is no
+ * layer to put a setting on yet." above the list, which is a true sentence about
+ * an empty bed and not about materials.
+ */
+if (wanted('40')) {
+	await seed();
+	const live = await api('GET', '/api/library/starter');
+	const settled = {
+		...(live ?? {}),
+		machine: { ...(live?.machine ?? {}), power_watt: live?.machine?.power_watt ?? 80 },
+		state: 'none',
+		needed: false
+	};
+	await scene(
+		'40-material-verbs.png',
+		'/?tab=design',
+		{
+			route: async (page) => {
+				await page.route('**/api/library/starter', (r) =>
+					r.fulfill({
+						status: 200,
+						contentType: 'application/json',
+						body: JSON.stringify(settled)
+					})
+				);
+			}
+		},
+		async (page) => {
+			await page.locator(TOOL.library).click();
+			await page.waitForSelector(DIALOG, { timeout: 10000 });
+			await page.waitForTimeout(2600);
+			// Every material and not only those with a setting for this laser: the
+			// checkbox is on by default, and with it on this library shows two rows out
+			// of twenty. The verbs on the menu are about the material itself, so the
+			// list they belong to is the whole list.
+			await page.locator(`${DIALOG} label.bereik input[type="checkbox"]`).first().click();
+			await page.waitForTimeout(1200);
+			const rows = page.locator(`${DIALOG} .materials li.matregel`);
+			if (!(await rows.count())) throw new Error('40: no materials in the library to open');
+			// Berkentriplex by name, because it is the material the handbook uses on
+			// every other page; the first row of the list if this library has none.
+			const named = rows.filter({ has: page.locator('.matname', { hasText: /Berken/ }) });
+			const row = (await named.count()) ? named.first() : rows.first();
+			await row.locator('.meer').click();
+			await page.waitForTimeout(600);
+		}
+	);
+}
+
+/**
+ * Shots 41 and 42 draw a real test board with a code and with a cut-out — and
+ * drawing one writes a row into the library, mints the board a name and, for the
+ * cut-out, needs a cut setting for the material. That is more than a screenshot
+ * may do to somebody's real library, so these two only run against a library that
+ * is expendable:
+ *
+ *   OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 41
+ *
+ * Start an engine of its own for it — `openkerf -p 8092 -l <path>`, which is the
+ * flag that exists; the harness has none — and point OK_BASE at a dev server in
+ * front of it (`OPENKERF_API=http://127.0.0.1:8092 npx vite dev --port 5200`).
+ * Without the flag both are skipped and say so, because a silent skip is how a
+ * picture goes stale.
+ *
+ * One thing that engine does *not* get a copy of: the machine list and the
+ * machine's own settings live in one `MeerK40t.cfg` for every instance, so a
+ * scratch engine comes up with whatever bed and name the file happens to hold —
+ * measured: 609.6 × 406.4 mm and a leftover name, where every other picture in
+ * this set shows 500 × 300 and KH-5030. Set those before photographing, or the
+ * two board pictures disagree with the rest of the handbook.
+ */
+const scratch = process.env.OK_SCRATCH_LIBRARY === '1';
+
+/**
+ * The board both pictures are of, drawn through the API.
+ *
+ * `uid` is given rather than left to the server, and that is the whole reason these
+ * two pictures are worth reprinting: a minted name is eight random characters, so
+ * every run burned a different word into the caption and a different pattern into
+ * the code, and no page could ever point at either. `7X4MQB2K` is the name the
+ * handbook's own prose uses, so the picture and the text now say the same thing.
+ * On a library that already holds that name the server mints a fresh one instead —
+ * deliberately, so that two planks never carry one name — which is a second reason
+ * these shots want a library of their own.
+ *
+ * The material is made once and reused: `POST /api/library/materials` refuses a
+ * name it already has, and a second run then had no material to hang the board on.
+ */
+async function boardOn(extra) {
+	const materials = (await api('GET', '/api/library/materials')) ?? [];
+	const material =
+		materials.find((m) => m.name === 'Birch plywood') ??
+		(await api('POST', '/api/library/materials', { name: 'Birch plywood' }));
+	if (!material) throw new Error('41/42: could not make a material on the scratch library');
+	// A cut setting for the board's own rim: the cut-out is refused without one,
+	// and refused rather than guessed on purpose — see docs/test-grid.md. Idempotent
+	// in effect: a second identical row changes nothing the picture shows.
+	await api('POST', '/api/library/presets', {
+		material_id: material.id,
+		operation: 'snijden',
+		thickness_mm: 3,
+		speed_mm_s: 12,
+		power_percent: 65,
+		source: 'handmatig'
+	});
+	return api('POST', '/api/library/testgrids', {
+		operation: 'snijden',
+		material_id: material.id,
+		thickness_mm: 3,
+		row_axis: 'speed',
+		column_axis: 'power',
+		speed_min: 8,
+		speed_max: 20,
+		speed_steps: 4,
+		power_min: 40,
+		power_max: 90,
+		power_steps: 4,
+		cell_mm: 8,
+		gap_mm: 2,
+		origin_x_mm: 40,
+		origin_y_mm: 30,
+		caption: 'Cut trial',
+		uid: '7X4MQB2K',
+		...extra
+	});
+}
+
+if (wanted('41') || wanted('42')) {
+	if (!scratch) {
+		console.log('  – 41-board-code.png and 42-board-tile.png skipped: set OK_SCRATCH_LIBRARY=1');
+	} else {
+		if (wanted('41')) {
+			await clear();
+			await boardOn({ code_enabled: true, code_size_mm: 18 });
+			await scene('41-board-code.png', '/?tab=design', {}, async (page) => {
+				await page.keyboard.press('3');
+				await page.waitForTimeout(900);
+			});
+		}
+		if (wanted('42')) {
+			await clear();
+			// Its own name, because it is its own plank. Left to the server the second
+			// board of a run got a minted name (measured: `BYMH HXVP`), which is the
+			// right behaviour — two planks never share a name — and the wrong thing for
+			// a picture, since the caption then read something different every time.
+			// The cut-out brings the code with it; asking for both says so out loud.
+			await boardOn({ code_enabled: true, cutout_enabled: true, uid: '5NKD8W3Q' });
+			await scene('42-board-tile.png', '/?tab=layers', {}, async (page) => {
+				await page.keyboard.press('3');
+				await page.waitForTimeout(900);
+			});
+		}
+	}
 }
 
 // ──────────────────────────────────────────────────────────────── leaving tidy

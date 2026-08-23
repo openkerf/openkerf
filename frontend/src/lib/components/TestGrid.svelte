@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { axisLabel, AXIS_UNIT, type GridAxis } from '$lib/api';
 	import { i18n, t } from '$lib/i18n/index.svelte';
-	import { OPERATIONS, type LibraryStore } from '$lib/library.svelte';
+	import { operations, type LibraryStore } from '$lib/library.svelte';
 	import NumberField from './NumberField.svelte';
 
 	let {
@@ -891,7 +891,7 @@
 				<label class="field">
 					<span class="name">{t('library.operation')}</span>
 					<select bind:value={form.operation}>
-						{#each OPERATIONS as op (op.value)}
+						{#each operations() as op (op.value)}
 							<option value={op.value}>{op.label}</option>
 						{/each}
 					</select>

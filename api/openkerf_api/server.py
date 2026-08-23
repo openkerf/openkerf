@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .auth import extract_token, generate_token, is_loopback, token_matches
+from . import boardcode
 from .commands import CommandError, CommandRunner
 from .design import DesignReader
 from .document import Document
@@ -54,9 +55,12 @@ from .series import (
     rows_in,
 )
 from .sheets import Sheets
+from .starter import Starter
 from .tilerun import TileRun
 from .testgrid import (
+    LABEL_LAYERS,
     TestGridGenerator,
+    cutout_setting,
     is_cel_element,
     is_cel_operatie,
     is_raster_group,
@@ -269,8 +273,19 @@ class ApiServer:
         self.machines = MachineManager(kernel, self.commands)
         self.library = Library(library_path or default_path(kernel))
         self.presetariat = Presetariat(
-            self.library, Path(self.library.path).with_name("presetariat-cache.json")
+            self.library,
+            Path(self.library.path).with_name("presetariat-cache.json"),
+            # Beside the library like the sheets and the palette, and for the same
+            # reason: it is about this installation and not about this project. Not
+            # *inside* the library, because a library is a file you hand to a colleague
+            # and who you are is not part of it. No `was`: this file never had a Dutch
+            # name.
+            handle_path=self._beside("openkerf-contributor.json"),
         )
+        # The offer a machine with no settings gets, and the staging that answers it. It
+        # holds no state of its own: the coverage is six counts over the library and the
+        # staged bundle is a file in the upload directory.
+        self.starter = Starter(self.library, self.presetariat)
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
         self.motion = MachineControl(kernel, self.commands)
@@ -411,10 +426,27 @@ class ApiServer:
             return None
         try:
             return self.library.profile_for_device(
-                str(path), str(getattr(device, "label", "") or path)
+                str(path),
+                str(getattr(device, "label", "") or path),
+                machine_uid=self.machines.machine_uid(device),
             )
         except Exception:
             return None
+
+    def _live_device_paths(self) -> set[str]:
+        """
+        The slots that a machine somebody set up is sitting in right now.
+
+        Only configured machines, exactly as the profile list counts them: MeerK40t always
+        keeps an lhystudios stand-in alive so the kernel has something to talk to, and
+        counting that as "a machine that exists" would let it block a merge between two
+        profiles of the user's own laser.
+        """
+        return {
+            device.path
+            for device in self.kernel.services("device")
+            if self.machines._configured(device)
+        }
 
     def _palette_machine(self):
         """
@@ -1641,7 +1673,7 @@ class ApiServer:
         @app.post("/api/design/palette", dependencies=write)
         def use_palette_color(body: dict):
             """
-            Eén klik op een paletvakje.
+            One click on a palette swatch.
 
             With a selection: it moves to the layer of that colour, which is created if
             need be on what that colour did before. Without a selection: the colour for new
@@ -1815,9 +1847,56 @@ class ApiServer:
         def add_material(body: dict):
             return manage(self.library.add_material, body.get("name"), body.get("synonyms"))
 
+        @app.get("/api/library/materials/{material_id}/usage")
+        def material_usage(material_id: int):
+            """
+            What hangs off this material, before anybody presses Remove.
+
+            The dialog has to be able to name the count. Removing `Berkentriplex` from a
+            copy of the author's library took six settings with it — two of them measured,
+            with photographs — orphaned two boards and answered `{"removed": 6}`; a
+            confirmation that says "remove?" and nothing else is what made that possible.
+            """
+            return manage(self.library.material_usage, material_id)
+
+        @app.patch("/api/library/materials/{material_id}", dependencies=write)
+        def update_material(material_id: int, body: dict):
+            """
+            Rename a material, or give it another word people call it by.
+
+            There was no PATCH here at all, which is why the live library holds both
+            `Multiplex berken` and `Berkentriplex` for one board: the only way to fix a
+            typo was to add a second material beside the first.
+            """
+            return manage(
+                self.library.update_material,
+                material_id,
+                body.get("name"),
+                body.get("synonyms"),
+            )
+
+        @app.post(
+            "/api/library/materials/{material_id}/merge-into/{target_id}",
+            dependencies=write,
+        )
+        def merge_material(material_id: int, target_id: int):
+            """Two names for one board, joined — settings, boards and recipes with them."""
+            return manage(self.library.merge_material, material_id, target_id)
+
         @app.delete("/api/library/materials/{material_id}", dependencies=write)
-        def remove_material(material_id: int):
-            return manage(self.library.remove_material, material_id)
+        def remove_material(material_id: int, with_everything: bool = False):
+            """
+            Remove a material — refused while work hangs off it, unless you say so.
+
+            `with_everything` is a deliberate second word and not a default, because the
+            cascade behind it is `preset` CASCADE, `grid_recipe` CASCADE and
+            `test_grid.material_id` SET NULL: the bare DELETE this route used to be was a
+            data-loss button with a one-word label. The flag is a query parameter rather
+            than a body because DELETE bodies do not survive every client.
+            """
+            return manage(
+                self.library.remove_material, material_id, with_everything=with_everything
+            )
 
         @app.get("/api/library/presets")
         def list_presets(
@@ -1847,7 +1926,44 @@ class ApiServer:
             profile = self._active_profile()
             if profile is None:
                 raise HTTPException(status_code=409, detail="There is no active machine.")
-            return profile
+            # The offer rides along, so no surface needs a second call to find out
+            # whether this machine has anything at all. It costs six COUNT(*)s over the
+            # library and no network at all — see Starter.offer.
+            offer = self.starter.offer(profile)
+            return {
+                **profile,
+                "starter": {k: v for k, v in offer.items() if k != "machine"},
+            }
+
+        @app.get("/api/library/starter")
+        def starter_offer():
+            """
+            Whether this machine should be offered a set of starting points.
+
+            Its own route as well as a field on `/api/library/active-machine`, because
+            two surfaces ask it — the material library on opening and `/setup/done` at
+            the end of the wizard — and the second one has no reason to fetch a profile
+            it has just written. A machine that is not active answers `needed: false`
+            rather than a refusal: that is a normal state, not a fault.
+            """
+            return self.starter.offer(self._active_profile())
+
+        @app.post("/api/library/starter/dismiss", dependencies=write)
+        def dismiss_starter(body: dict | None = None):
+            """
+            What the user said about starting points for this machine: not now, or
+            "I don't know what my tube is".
+
+            One route for both, because both are the same column and the card offers
+            them side by side. `power_unknown` is not a dismissal — it keeps the offer
+            and drops the wattage half of the match — but it is the same fact being
+            recorded, and a second route would let the two get out of step.
+            """
+            return manage(
+                self.starter.dismiss,
+                self._active_profile(),
+                (body or {}).get("state") or "dismissed",
+            )
 
         @app.patch("/api/library/machines/{machine_id}", dependencies=write)
         def update_machine(machine_id: int, body: dict):
@@ -1894,19 +2010,43 @@ class ApiServer:
             Only configured machines count. Profiles the old version created for MeerK40t's
             lhystudios stand-in otherwise sit there as a live machine while nobody chose
             them — precisely the names that polluted the list.
+
+            A profile with no device path at all is orphaned too, and that half was
+            missing: the rule read `bool(device_path) and device_path not in paths`, so a
+            row that never had a device could not fail it. Measured on the author's
+            library, that is how `5030 CO2` — 27 presets, 60 W, `device_path: null` — was
+            presented as a live machine attached to nothing, and it is one of the four
+            mechanisms behind "the machines it names are not the machines I defined".
+
+            The two states are told apart rather than merged, because the answer differs:
+            a profile whose device is not here may get it back (plug it in, or the engine's
+            settings were wiped), while one that points at no device at all is either a row
+            somebody typed or one this library let go of when its slot was handed to a
+            different laser, and its way out is a merge into the machine it belongs to.
+            `no-device` says exactly that and no more — nothing records which of the two it
+            was, so naming it "never attached" would claim a history the database does not
+            hold.
             """
-            levend = {
+            live = {
                 device.path: str(getattr(device, "label", "") or device.path)
                 for device in self.kernel.services("device")
                 if self.machines._configured(device)
             }
-            self.library.refresh_names(levend)
-            paths = set(levend)
+            self.library.refresh_names(live)
+            paths = set(live)
+
+            def attachment(profile) -> str | None:
+                if not profile["device_path"]:
+                    return "no-device"
+                if profile["device_path"] not in paths:
+                    return "device-gone"
+                return None
+
             return [
                 {
                     **profile,
-                    "orphaned": bool(profile["device_path"])
-                    and profile["device_path"] not in paths,
+                    "orphaned": attachment(profile) is not None,
+                    "orphaned_because": attachment(profile),
                     **self.library.machine_usage(profile["id"]),
                 }
                 for profile in self.library.machines()
@@ -1917,17 +2057,65 @@ class ApiServer:
             # The machine you are working on now keeps its profile. It would not be gone
             # anyway: the next read route creates it again, and then the only difference is
             # that all the presets that hung off it have come loose.
-            actief = self._active_profile()
-            if actief and actief["id"] == machine_id:
+            active = self._active_profile()
+            if active and active["id"] == machine_id:
                 raise HTTPException(
                     status_code=409,
                     detail="This is the machine you are working on; it cannot go.",
                 )
             return manage(self.library.remove_machine, machine_id)
 
+        @app.post(
+            "/api/library/machines/{machine_id}/merge-into/{target_id}",
+            dependencies=write,
+        )
+        def merge_machine_profile(machine_id: int, target_id: int):
+            """
+            Two profiles for one laser, joined into the one you are working on.
+
+            The case this exists for is measured: the author's library holds a device-less
+            `5030 CO2` with 60 W and 27 presets beside the device-bound `KH-5030` with 3
+            presets and no wattage, and they are one machine. `_dedupe_machines` cannot
+            reach it — it only merges rows that share a device path, and the unique index
+            it creates keeps that case from ever arising.
+
+            Which slots hold a real machine, and which one is active, are facts about the
+            engine that the library has no way to know, so they go in from here. Both
+            refusals depend on them: two profiles that each belong to a machine that
+            exists are two lasers, and merging the machine you are working on *away* would
+            leave you working on the row that no longer exists.
+            """
+            device = getattr(self.kernel, "device", None)
+            return manage(
+                self.library.merge_machine,
+                machine_id,
+                target_id,
+                live_paths=self._live_device_paths(),
+                active_path=getattr(device, "path", None),
+            )
+
         @app.post("/api/library/machines", dependencies=write, status_code=201)
         def add_machine_profile(body: dict):
             return manage(lambda: self.library.add_machine(**body))
+
+        @app.post("/api/library/presets/adopt", dependencies=write)
+        def adopt_presets(body: dict | None = None):
+            """
+            The settings and boards that belong to no machine, onto the active one.
+
+            Never by itself. Four presets and eleven boards in the author's library carry
+            `machine_id IS NULL` — measured on a machine nobody can name, the fingerprint
+            of the lhystudios-fallback state — and `Library.presets()` shows them on every
+            machine because its WHERE reads `machine_id = ? OR machine_id IS NULL`.
+            Adopting them says they were measured here, which may be false; leaving them
+            says they hold everywhere, which is false too. Only the user knows, so this is
+            a button and the interface states the count beside it.
+            """
+            machine_id = (body or {}).get("machine_id")
+            if not machine_id:
+                profile = self._active_profile()
+                machine_id = profile["id"] if profile else None
+            return manage(self.library.adopt_presets, machine_id)
 
         # ------------------------------------------------ library exchange (B7)
 
@@ -1986,19 +2174,43 @@ class ApiServer:
                 body.get("mode") or "merge",
                 body.get("merge_materials"),
                 body.get("on_conflict") or "mine",
+                # The batch this import belongs to, if it is one that can be taken back.
+                # `POST /api/presetariat/stage` mints the name and the client hands it
+                # straight back here; a plain restore-from-backup sends nothing, because
+                # there is nothing to undo about your own library arriving.
+                str(body.get("import_batch") or ""),
             )
             again = {m["name"]: m["id"] for m in self.library.materials()}
             for sheet_id, name in sheet_names.items():
                 if name and again.get(name) is not None:
                     self.sheets.update(sheet_id, material_id=again[name])
-            return result
+            # And back out again, so the answer itself names the way to undo it. A client
+            # that has to remember a string it sent two requests ago is a client that
+            # will lose it.
+            return {**result, "import_batch": str(body.get("import_batch") or "")}
+
+        @app.delete("/api/library/imports/{batch}", dependencies=write)
+        def remove_import_batch(batch: str):
+            """
+            Take one import back: its settings, and the materials it brought with them.
+
+            This is the answer to the state the author is actually in — 26 imported
+            presets that created 14 materials for a machine he does not run, and no way
+            back. An import you can undo is not a dump, which is why the batch stamp and
+            this route are the first line of defence and not a check in another repository.
+
+            Materials the batch created that something else now uses stay; the answer
+            names both lists, because "3 removed, 1 kept" is a sentence a reader can check
+            and "done" is not.
+            """
+            return manage(self.library.remove_import_batch, batch)
 
         @app.post("/api/library/presets/{preset_id}/apply", dependencies=write)
         def apply_preset(preset_id: int, body: dict):
             """Write a preset's speed, power and passes onto an operation."""
             operation_id = body.get("operation_id")
             if not operation_id:
-                raise HTTPException(status_code=422, detail="'operation_id' ontbreekt.")
+                raise HTTPException(status_code=422, detail="'operation_id' is missing.")
 
             def run():
                 preset = self.library.preset(preset_id)
@@ -2725,6 +2937,39 @@ class ApiServer:
                 self.presetariat.browse, machine_id, material, operation, refresh
             )
 
+        @app.post("/api/presetariat/stage", dependencies=write)
+        def stage_catalogue_presets(body: dict | None = None):
+            """
+            Write the chosen starting points as a library file and say what it would do.
+
+            The catalogue stops having an importer of its own here. What comes back is
+            what `/api/library/import/upload` answers — the same preview, the same
+            wording, the same "this is what is going to happen" screen — and the client
+            hands the bundle and the batch straight to `/api/library/import`. That one
+            call is a transaction, maps materials, detects clashes on `_preset_key` and
+            re-points sheets, none of which the old importer did.
+
+            With `ids` this is the per-material drawer taking over one row; without them
+            it is the offer fetching the set that suits this machine. `Starter.stage`
+            holds the difference, including which refusals apply to which.
+            """
+            def run():
+                staged = self.starter.stage(
+                    self._active_profile(),
+                    self._upload_dir_for_stage(),
+                    (body or {}).get("ids"),
+                )
+                target = self._upload_path(staged["bundle"])
+                return {**staged, **self.library.preview_import(target)}
+
+            return manage(run)
+
+        # Superseded by the route above and kept only until its two callers go with it:
+        # `frontend/src/lib/presetariat.svelte.ts` (deleted with the Presetariat window)
+        # and `api/tests/test_presetariat.py`. It is the importer this round set out to
+        # remove: `_material_id` creates the material before `add_preset` can refuse, so
+        # `[good, bad]` leaves materials written and raises, in a library that until now
+        # had no way to remove a material.
         @app.post("/api/presetariat/import", dependencies=write)
         def import_catalogue_presets(body: dict):
             return manage(
@@ -2735,14 +2980,41 @@ class ApiServer:
 
         @app.get("/api/presetariat/contribution/{preset_id}")
         def preset_contribution(preset_id: int):
-            """One of your own presets in catalogue form, with a prefilled proposal."""
+            """
+            One of your own presets in catalogue form, and what it still needs.
+
+            A read, so it is the call the share panel opens with: `ready`, `needs`,
+            `tier` and `tier_reason` say what would go out and under what label before
+            anything is written or any tab is opened. `preset` is null until the offer
+            would validate — the repository's CI is not the place to find out that the
+            app has never asked for a GitHub handle.
+            """
             return manage(self.presetariat.as_contribution, preset_id)
+
+        @app.post("/api/presetariat/contribution/{preset_id}", dependencies=write)
+        def offer_preset(preset_id: int, body: dict | None = None):
+            """
+            The two answers a contribution needs, and then the contribution.
+
+            Writes twice: the handle beside the library, so it is asked once, and the
+            outcome onto the setting, so a second offer of the same row does not ask
+            again and a library handed on carries its own evidence. Both are the reader's
+            own words about their own machine, and both are behind the token for that
+            reason.
+            """
+            fields = body or {}
+            return manage(
+                self.presetariat.offer,
+                preset_id,
+                fields.get("by"),
+                fields.get("result"),
+            )
 
         # ---------------------------------------------------------- testrasters
 
         def grid_fields(body: dict) -> dict:
             """
-            Wat het board aan het formulier toevoegt: machine, datum, material.
+            What the board adds to the form of its own accord: machine, date, material.
 
             Preview and reality use the same lines here. They have to: the caption decides
             how wide the board becomes, so a preview without a date reports a narrower board
@@ -2769,6 +3041,19 @@ class ApiServer:
                 )
                 if material:
                     fields["material_name"] = material["name"]
+            # The cut setting the rim is cut with, looked up here rather than asked of
+            # whoever fills in the form. `cutout_setting` is the half of the cut-out that
+            # needs a library, which is why it cannot live in the planner — and until this
+            # line nothing called it at all: a board posted with `cutout_enabled` and
+            # nothing else reached `_cutout` with no speed and was refused with
+            # `library.grid.cutoutNoSetting`, which names no way out. Measured before this
+            # line, every cut-out asked for through this route refused, so the feature was
+            # unreachable and the two refusals that *are* actionable — no material, and no
+            # cut setting for this thickness — could not be reached either. Only when the
+            # caller brought no setting of its own, so a script that knows its own speed
+            # keeps the number it sent.
+            if fields.get("cutout_enabled") and not fields.get("cut_speed_mm_s"):
+                fields.update(cutout_setting(self.library, fields))
             return fields
 
         @app.post("/api/library/testgrids/preview")
@@ -2794,7 +3079,24 @@ class ApiServer:
                 # The caption goes into the planning: it is aligned left on the board and
                 # runs to the right, so it helps decide how wide the board becomes. Adding it
                 # afterwards gave a reported measure narrower than what burns.
-                plan, cells = plan_grid(**grid_fields(body))
+                fields = grid_fields(body)
+                plan, cells = plan_grid(**fields)
+                # A name already burned on another plank must not be burned onto this one.
+                # `add_test_grid` mints a fresh name for the *row* when the one it is given
+                # is taken (`_fresh_grid_uid`), but by then the code is drawn: the row would
+                # say one name and the wood another, and a photograph of that wood would be
+                # filed under the older board — precisely the mix-up the code exists to
+                # prevent. Reachable through this route, and measured: posting the same
+                # `uid` twice gave a second plank burned `7X4M QB2K` under a row named
+                # `45E0JKKA`, with `test_grid_for_uid("7X4MQB2K")` answering board 1. The
+                # trigger is ordinary rather than exotic — a client that previews, gets a
+                # name, and then creates twice from that one preview.
+                #
+                # Planned again rather than patched, because the name is on the plank in two
+                # places: the code and the printed line in the caption, and `caption_text`
+                # is worked out inside `plan_grid`.
+                if plan.get("uid") and self.library.test_grid_for_uid(plan["uid"]):
+                    plan, cells = plan_grid(**{**fields, "uid": None})
                 # The grid is one object on the canvas — squares, axis labels,
                 # caption and frame in one group, in one action. The cells keep their own
                 # operations, because those *are* the sweep.
@@ -2832,9 +3134,8 @@ class ApiServer:
             Saved generator settings under a name.
 
             T3 remembers the previous grid per material; this is the same in the plural, so
-            that "cut birch" and "engrave birch" can sit beside
-            kunnen bestaan. Dezelfde sleutels, zodat de wizard beide op
-            fills in the same way.
+            that "cut birch" and "engrave birch" can sit beside each other. The same keys as
+            T3 uses, so the form fills itself in from either of them the same way.
             """
             return manage(self.library.grid_recipes, material_id)
 
@@ -2883,7 +3184,7 @@ class ApiServer:
                             node.remove_node(children=True, destroy=True)
                             removed["operations" if key == "operation_id" else "elements"] += 1
                 for op in list(self.kernel.elements.ops()):
-                    if getattr(op, "label", None) == "Raster-labels" and not list(op.children):
+                    if getattr(op, "label", None) in LABEL_LAYERS and not list(op.children):
                         op.remove_node()
                 self.library.set_grid_group(grid_id, None)
                 self.kernel.elements.signal("rebuild_tree", "all")
@@ -2895,14 +3196,164 @@ class ApiServer:
         def remove_test_grid(grid_id: int):
             return manage(self.library.remove_test_grid, grid_id)
 
-        @app.post("/api/library/testgrids/{grid_id}/photo", dependencies=write)
-        async def upload_grid_photo(grid_id: int, file: UploadFile):
-            """The photo of the burned grid — usually taken on a phone."""
+        # ------------------------------------------- a photograph and its board
+        #
+        # Eleven of the author's thirty-two boards are physically indistinguishable from
+        # another one: same material, same square size, same sweep, burned minutes apart.
+        # By the time the wood is off the machine, filing the picture under the right row
+        # is guesswork, and a preset carrying the wrong board's photograph is evidence for
+        # something nobody burned. The code on the plank is what takes the guess out, and
+        # these two routes are its two halves — one that names the board from the picture,
+        # one that refuses a picture filed under the wrong board.
+
+        def boards_that_named_themselves(data: bytes):
+            """
+            The boards whose code is in this picture: ours, and strangers.
+
+            Two lists rather than one, because the difference between them is a different
+            sentence. `known` are rows in this library. `strangers` are codes that read
+            back as board names but name nothing here — somebody else's library, or a QR
+            that happened to be in shot. A stranger is not automatically an error: see
+            `upload_grid_photo`, where refusing on one would let a sticker on the bench
+            block an honest photograph.
+
+            The bytes of the **upload**, never a stored copy. Measured on a synthetic board
+            photograph, an 18 mm code on a 300 mm board: 1600 px across the frame decoded 16
+            of 40, 2000 px and up decoded 40 of 40 (the module docstring of `boardcode`
+            carries the table and the harness). A contribution's copy is 1600 px, so
+            anything that decoded that would be reading the one size that half works.
+            """
+            known, strangers = [], []
+            for uid in boardcode.read(data):
+                board = self.library.test_grid_for_uid(uid)
+                if board is None:
+                    strangers.append(uid)
+                else:
+                    known.append(board)
+            return known, strangers
+
+        def a_decoder_or_a_refusal():
+            """OpenCV, or the refusal that says what to do instead."""
+            if boardcode.available():
+                return
+            raise LibraryError(
+                f"{boardcode.NO_DECODER_HINT} Choose the board yourself for now.",
+                code="library.photo.noDecoder",
+            )
+
+        @app.post("/api/library/testgrids/photo", dependencies=write)
+        async def upload_photo_of_its_own_board(file: UploadFile):
+            """
+            A photograph with no board id: it decodes the code and names its own board.
+
+            Four ways this can go, four sentences, because each one sends the reader
+            somewhere else: no OpenCV in this copy (install it, or pick the board by hand),
+            no code in the picture (photograph it more squarely, or pick the board by
+            hand), a code this library does not know (it is not this library's board), and
+            two boards in one frame (photograph one at a time). One sentence covering all
+            four would send three of those four readers the wrong way.
+
+            The board is not created here and nothing is guessed: this route only files a
+            photograph against a row that already exists, which is why it answers with the
+            same grid the id route does — one code path for the caller.
+            """
             suffix = Path(file.filename or "").suffix
             data = await file.read()
             if not data:
                 raise HTTPException(status_code=422, detail="Empty photo.")
-            return manage(self.library.set_grid_photo, grid_id, suffix, data)
+
+            def run():
+                a_decoder_or_a_refusal()
+                known, strangers = boards_that_named_themselves(data)
+                if not known and not strangers:
+                    raise LibraryError(
+                        "No code was found in this photograph. Choose the board it "
+                        "belongs to yourself, or photograph the code more squarely.",
+                        code="library.photo.noCode",
+                    )
+                if not known:
+                    found = boardcode.human(strangers[0])
+                    raise LibraryError(
+                        f"The code in this photograph says board {found}, and this "
+                        "library holds no board of that name. It belongs to another "
+                        "library, or the picture caught a code that is not a board.",
+                        code="library.photo.unknownBoard",
+                        values={"found": found},
+                    )
+                if len(known) > 1:
+                    named = " and ".join(boardcode.human(b["uid"]) for b in known[:2])
+                    raise LibraryError(
+                        f"This photograph holds the codes of more than one board "
+                        f"({named}). Photograph one board at a time, so the picture is "
+                        "evidence for the board it is filed under.",
+                        code="library.photo.manyBoards",
+                        values={"found": named, "n": len(known)},
+                    )
+                return self.library.set_grid_photo(known[0]["id"], suffix, data)
+
+            return manage(run)
+
+        @app.post("/api/library/testgrids/{grid_id}/photo", dependencies=write)
+        async def upload_grid_photo(grid_id: int, file: UploadFile):
+            """
+            The photo of the burned grid — usually taken on a phone — filed by hand.
+
+            The code is still read, for one purpose: to refuse a photograph whose code
+            names a *different* board of this library. That is the mix-up this feature
+            exists to prevent, and it is the only thing here that cannot be recovered
+            later — the picture would sit under a row it is not of, and every preset drawn
+            from it would carry it as evidence.
+
+            Only a code naming a board this library actually holds refuses. A code that
+            reads back but names nothing here is left alone deliberately: `boardcode.parse`
+            accepts eight characters of Crockford base32, and plenty of ordinary words
+            survive that folding (`notacode` reads back as `N0TAC0DE`), so a stranger's QR
+            in the corner of the frame would otherwise block a picture that is perfectly
+            right. Without a code, or without OpenCV, this route does exactly what it did
+            before: it stores what the user gave it.
+            """
+            suffix = Path(file.filename or "").suffix
+            data = await file.read()
+            if not data:
+                raise HTTPException(status_code=422, detail="Empty photo.")
+
+            def run():
+                picked = self.library.test_grid(grid_id)
+                known, _ = boards_that_named_themselves(data)
+                # Every code that named a board of this library, and none of them is the
+                # one the user picked. Two boards in one frame is fine here as long as the
+                # picked one is among them — it named itself, which is all that was asked.
+                if known and not any(b["id"] == picked["id"] for b in known):
+                    found = boardcode.human(known[0]["uid"])
+                    # A board with no name cannot happen: the migration back-filled the
+                    # thirty-two that predate this and every insert mints one. The number
+                    # is here because a refusal with a dash in it is not a sentence.
+                    mine = (
+                        boardcode.human(picked["uid"])
+                        if picked.get("uid")
+                        else f"number {picked['id']}"
+                    )
+                    raise LibraryError(
+                        f"The code in this photograph says board {found}; you picked "
+                        f"{mine}. File it under {found}, or pick that board here.",
+                        code="library.photo.codeMismatch",
+                        values={
+                            "found": found,
+                            "picked": mine,
+                            # The row the picture really belongs to, so the interface can
+                            # offer "File it under {found}" as a button rather than as a
+                            # sentence the reader has to act on themselves. It stays a
+                            # number safely because this refusal keeps its English
+                            # sentence — the codes in it are per-call data, not a constant
+                            # of ours — so it never passes through `values()` in core.ts,
+                            # which would write it through `Intl` and turn 1234 into
+                            # "1.234" for a Dutch reader.
+                            "found_id": known[0]["id"],
+                        },
+                    )
+                return self.library.set_grid_photo(grid_id, suffix, data)
+
+            return manage(run)
 
         @app.put("/api/library/testgrids/{grid_id}/alignment", dependencies=write)
         def set_grid_alignment(grid_id: int, body: dict):
@@ -3019,10 +3470,10 @@ class ApiServer:
         def machine_create(body: dict):
             info = body.get("info")
             if not info:
-                raise HTTPException(status_code=422, detail="'info' ontbreekt.")
+                raise HTTPException(status_code=422, detail="'info' is missing.")
             return manage(self.machines.create, info, body.get("label"))
 
-        # ------------------------------------- machineprofiel uitwisselen (E5)
+        # --------------------------------------- exchanging a machine profile (E5)
         #
         # Before `/machines/{path}`, otherwise that one reads "import" as a path.
 
@@ -3082,15 +3533,17 @@ class ApiServer:
         def machine_rename(path: str, body: dict):
             label = (body.get("label") or "").strip()
             if not label:
-                raise HTTPException(status_code=422, detail="'label' ontbreekt.")
+                raise HTTPException(status_code=422, detail="'label' is missing.")
             result = manage(self.machines.rename, path, label)
             # The library carries a copy of the name. It catches up by itself as soon as
             # somebody asks for the active profile, but until that moment an old name is in
             # the list — and right after a rename is exactly when you look at it. The event
             # is here, so it happens here.
             try:
-                self.library.profile_for_device(path, label)
-            except LibraryError:
+                self.library.profile_for_device(
+                    path, label, machine_uid=self.machines.machine_uid_for(path)
+                )
+            except (LibraryError, MachineError):
                 pass
             return result
 
@@ -3223,6 +3676,16 @@ class ApiServer:
             self._upload_dir = Path(tempfile.mkdtemp(prefix="openkerf-uploads-"))
         return self._upload_dir / Path(filename).name
 
+    def _upload_dir_for_stage(self) -> Path:
+        """
+        The same directory, for a file this server writes rather than receives.
+
+        A staged catalogue bundle goes exactly where an uploaded one goes, so that the
+        import routes that follow need no idea which of the two it was — and so that it
+        is cleaned up with the rest when the server stops.
+        """
+        return self._upload_path("stage").parent
+
     def stop(self):
         self._detach_signals()
         job = getattr(self, "_camera_job", None)
@@ -3345,8 +3808,8 @@ _DEV_PAGE = """<!doctype html>
 </style>
 <h1><span class="dot" id="dot"></span>OpenKerf API — live status</h1>
 <h2>Snapshot</h2>
-<pre id="snapshot">verbinden…</pre>
-<h2>Laatste signalen</h2>
+<pre id="snapshot">connecting…</pre>
+<h2>Latest signals</h2>
 <pre id="events">—</pre>
 <script>
   const events = [];

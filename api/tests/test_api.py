@@ -173,8 +173,21 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/undo",
         "/api/design/redo",
         "/api/library/materials",
+        # Two names for one board, joined. Moves every setting, board and recipe onto one
+        # material and deletes the other, so it writes more than a rename does.
+        "/api/library/materials/{material_id}/merge-into/{target_id}",
         "/api/library/presets",
+        # The settings that belong to no machine, onto the active one. Writes
+        # `machine_id` on rows the user did not name one by one, so it is behind the gate
+        # with the rest of the library.
+        "/api/library/presets/adopt",
         "/api/library/machines",
+        # The other half of the same story: two profiles for one laser. Deletes a profile
+        # and re-parents its presets and boards.
+        "/api/library/machines/{machine_id}/merge-into/{target_id}",
+        # Waving the starting-points offer away, or saying the tube power is not known.
+        # One column on the machine profile, but a write on the library all the same.
+        "/api/library/starter/dismiss",
         "/api/library/presets/{preset_id}/apply",
         # Decision B7: exchanging the library. Upload and preview are POSTs too — they write
         # a file in the upload directory and so belong behind the same gate as the import
@@ -209,9 +222,25 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # Gap H4: a focus test. Draws a board and its heights ride along in the plan as
         # `z_move` steps, so it writes on the tree like any other generator.
         "/api/design/generate/focus",
+        # Writes a real .openkerf-lib in the upload directory out of catalogue rows, and
+        # answers with the same preview as an uploaded library. It writes no database row
+        # itself — `/api/library/import` does that — but it does write a file on this
+        # machine's disk, so it is gated exactly like the upload it replaces.
+        "/api/presetariat/stage",
         "/api/presetariat/import",
+        # Offering one of your own settings. It writes the contributor's handle beside
+        # the library and the outcome of the burn onto the row, which is why a GET beside
+        # it does the looking: the panel asks what a contribution would say before
+        # anything is written.
+        "/api/presetariat/contribution/{preset_id}",
         "/api/library/testgrids",
         "/api/library/testgrids/{grid_id}/photo",
+        # A photograph with no board id in the path: it reads the code on the plank and
+        # names its own board. A write like the id route beside it — it stores a file and
+        # points a row at it — and it is in this list separately because a route that
+        # writes without being told *which* row to write on is exactly the kind of thing
+        # this list exists to make somebody type out on purpose.
+        "/api/library/testgrids/photo",
         "/api/library/testgrids/{grid_id}/remove-from-design",
         "/api/library/testgrids/{grid_id}/presets",
         # Gap T7: named generator settings. Writes only in the library — no machine, no
@@ -271,6 +300,87 @@ def test_write_routes_are_limited_to_the_known_set(client):
     # it is the only PUT in an API where every other change is a PATCH — the choice belongs to
     # that surface's owner, not to this test.
     assert methods <= {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
+
+
+# ------------------------------------------- the library's own verbs, at the route
+#
+# The library functions behind these are pinned in test_library_edit.py. What is checked
+# here is the wiring, which is where a verb the interface cannot reach comes from: a body
+# key nobody sends, or a flag spelled differently on the two sides.
+
+
+def test_a_material_can_be_renamed_merged_and_counted_over_http(client):
+    """
+    None of these three verbs existed as a route until this round, which is why the live
+    library holds both `Multiplex berken` and `Berkentriplex` for one board: with no
+    PATCH, correcting a name meant adding a second material beside the first.
+    """
+    library = client.server.library
+    keep = client.post(
+        "/api/library/materials", json={"name": "Berkentriplex"}
+    ).json()
+    spare = library.add_material("Multiplex berken")
+    library.add_preset(
+        material_id=spare["id"],
+        operation="snijden",
+        speed_mm_s=12,
+        power_percent=70,
+    )
+
+    renamed = client.patch(
+        f"/api/library/materials/{keep['id']}",
+        json={"name": "Birch plywood", "synonyms": ["berkentriplex"]},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Birch plywood"
+    assert "berkentriplex" in renamed.json()["synonyms"]
+
+    usage = client.get(f"/api/library/materials/{spare['id']}/usage").json()
+    assert usage["presets"] == 1
+
+    merged = client.post(
+        f"/api/library/materials/{spare['id']}/merge-into/{keep['id']}"
+    )
+    assert merged.status_code == 200, merged.text
+    assert [m["name"] for m in client.get("/api/library/materials").json()] == [
+        "Birch plywood"
+    ]
+    assert len(client.get("/api/library/presets").json()) == 1
+
+
+def test_removing_a_material_that_carries_work_needs_a_second_word(client):
+    """
+    Measured on a copy of the live library: deleting `Berkentriplex` silently took six
+    settings, two of them measured with photographs, orphaned two boards — and the route
+    answered `{"removed": 6}`. That was a data-loss button with a one-word label.
+
+    The flag is a query parameter, so this is also the check that the two sides spell it
+    the same way: a body on a DELETE does not survive every client, and a flag that never
+    arrives makes the refusal permanent.
+    """
+    library = client.server.library
+    material = library.add_material("MDF")
+    library.add_preset(
+        material_id=material["id"],
+        operation="snijden",
+        speed_mm_s=10,
+        power_percent=80,
+    )
+
+    refused = client.delete(f"/api/library/materials/{material['id']}")
+
+    assert refused.status_code == 409
+    assert refused.headers["X-OpenKerf-Error"] == "library.material.inUse"
+    assert "1" in refused.json()["detail"]
+
+    gone = client.delete(
+        f"/api/library/materials/{material['id']}?with_everything=true"
+    )
+
+    assert gone.status_code == 200, gone.text
+    assert gone.json()["presets"] == 1
+    assert client.get("/api/library/materials").json() == []
+    assert client.get("/api/library/presets").json() == []
 
 
 def test_a_refusal_of_ours_inside_a_command_route_is_a_409_and_not_a_500(client):

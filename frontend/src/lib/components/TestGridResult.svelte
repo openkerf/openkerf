@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
+	import { apiError } from '$lib/i18n/core.ts';
 	import type { LibraryStore } from '$lib/library.svelte';
 
 	type Point = { x: number; y: number };
@@ -339,7 +340,18 @@
 				body: form
 			});
 			if (!response.ok) {
-				error = t('error.photoFailed');
+				// The server's own sentence, not a summary of it: the refusal that matters
+				// here is the one the board code exists to make — "the code in this
+				// photograph says board 7X4M QB2K; you picked 5NKD 8W3Q" — and it was being
+				// replaced by "Saving the photo failed.", which sends the reader to look for
+				// a disk or a network fault. Measured before this: a photograph of the wrong
+				// plank was refused by the API with 409 and
+				// `X-OpenKerf-Error: library.photo.codeMismatch`, and the panel said nothing
+				// about a code at all. `apiError` keeps the English sentence when the refusal
+				// carries board names, because a translation without them says less.
+				const body = await response.json().catch(() => null);
+				const detail = typeof body?.detail === 'string' ? body.detail : null;
+				error = apiError(response, detail ?? t('error.photoFailed'));
 				return;
 			}
 			await load();

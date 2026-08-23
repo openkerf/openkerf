@@ -17,6 +17,7 @@
 	 *    remaining time — the one number you are waiting for — not at all.
 	 */
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
+	import { apiError } from '$lib/i18n/core.ts';
 	import {
 		currentJob,
 		gridSummary,
@@ -177,6 +178,8 @@
 	let busy = $state<number | null>(null);
 	/** A row that disappears is too quiet; this says what has just happened. */
 	let done = $state<string | null>(null);
+	/** And this says what did not happen, which the phone used to keep to itself. */
+	let refused = $state<string | null>(null);
 
 	/** Many material names already carry the thickness ("Birch plywood 4 mm"); then do
 	    not stick another "4 mm" on the end. */
@@ -258,18 +261,41 @@
 		};
 	});
 
+	/**
+	 * The photograph in, or the reason it did not go in.
+	 *
+	 * The answer was thrown away here and "Photo saved." said either way. That is the
+	 * worst place in the app to do it: the one refusal this route makes is that the code
+	 * on the plank names a *different* board, and the person holding the phone is the
+	 * only one who can walk back to the machine and fetch the right plank. Measured
+	 * before this, against a photograph of board 5NKD 8W3Q filed under 7X4M QB2K: the API
+	 * refused with 409 and `library.photo.codeMismatch`, the row disappeared out of the
+	 * "waiting for a photo" list because the list was refetched, and the screen said
+	 * "Photo saved. You get the preset out of it on the desktop."
+	 *
+	 * The refusal keeps its English sentence when it carries board names — the numbers in
+	 * it cannot travel in a header, and a translated sentence without them says less.
+	 */
 	async function uploadPhoto(gridId: number, file: File) {
 		busy = gridId;
+		refused = null;
 		try {
 			const form = new FormData();
 			form.append('file', file);
 			const token = localStorage.getItem('openkerf.token') ?? '';
-			await fetch(`/api/library/testgrids/${gridId}/photo`, {
+			const response = await fetch(`/api/library/testgrids/${gridId}/photo`, {
 				method: 'POST',
 				headers: token ? { Authorization: `Bearer ${token}` } : {},
 				body: form
 			});
 			await haalRasters();
+			if (!response.ok) {
+				const body = await response.json().catch(() => null);
+				const detail = typeof body?.detail === 'string' ? body.detail : null;
+				refused = apiError(response, detail ?? t('phone.photoFailed'));
+				done = null;
+				return;
+			}
 			done = t('phone.photoSaved');
 		} finally {
 			busy = null;
@@ -657,6 +683,9 @@
 	{#snippet fotolijst()}
 		{#if done}
 			<p class="good" role="status">{done}</p>
+		{/if}
+		{#if refused}
+			<p class="failure" role="alert">{refused}</p>
 		{/if}
 		{#if list.length}
 			<section class="grids">

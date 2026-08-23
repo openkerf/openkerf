@@ -194,7 +194,7 @@ class Fonts:
             font.save(str(target))
         except Exception as e:
             target.unlink(missing_ok=True)
-            raise DesignError(f"Omzetten mislukte: {e}") from e
+            raise DesignError(f"Converting failed: {e}") from e
 
     @staticmethod
     def _build_glyf(font, pens) -> None:

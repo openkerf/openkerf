@@ -46,7 +46,11 @@ async function open(path = '/') {
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
 	await page.waitForSelector('.statusbar, .setup', { timeout: 20000 }).catch(() => {});
 	await page.waitForTimeout(900);
-	const later = page.getByRole('button', { name: /^(Later|Not now)$/ });
+	// Not the offer's own "Not now": that one writes `starter_state = 'dismissed'` on
+	// the active machine, so a photograph session would take the offer away from the
+	// reader's library — and photograph the place where it used to be. `.away` is the
+	// class that button alone carries.
+	const later = page.locator('button:not(.away)').filter({ hasText: /^(Later|Not now)$/ });
 	if (await later.count()) await later.first().click().catch(() => {});
 	await page.waitForTimeout(300);
 	page.problems = problems;

@@ -306,7 +306,7 @@ class Clipart:
         try:
             body = self.fetch(address, timeout=DOWNLOAD_TIMEOUT)
         except Exception as error:
-            raise DesignError(f"Ophalen mislukte: {self._reason(error)}") from error
+            raise DesignError(f"Fetching failed: {self._reason(error)}") from error
         if len(body) > MAX_BYTES:
             raise DesignError("This drawing is too large to process.")
 

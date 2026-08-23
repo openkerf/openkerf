@@ -56,13 +56,64 @@ def test_material_needs_a_name(library):
             library.add_material(empty)
 
 
-def test_removing_a_material_takes_its_presets(library, stocked):
+def test_removing_a_material_with_everything_takes_its_presets(library, stocked):
+    """
+    The cascade is still the cascade — but only when the caller asked for it.
+
+    This test used to call `remove_material(id)` bare and pin the silent cascade as
+    intended. It was not: measured on a copy of the live library, removing Berkentriplex
+    that way took six settings, two of them measured with photographs, orphaned two
+    boards, and the route answered `{"removed": 6}`. So the flag is the word for "yes,
+    all of it" and the sibling below pins what happens without it.
+    """
     material, _ = stocked
     assert library.presets()
 
-    library.remove_material(material["id"])
+    gone = library.remove_material(material["id"], with_everything=True)
 
     assert library.presets() == []
+    assert gone["presets"] == 1
+
+
+def test_removing_a_material_that_carries_work_is_refused_and_names_the_count(library):
+    """
+    A bare remove of a material that carries work is a data-loss button with a label on
+    it. The refusal has to say what would go, in the numbers the user can recognise.
+    """
+    material = library.add_material("Berkentriplex")
+    for thickness in (3, 4, 6, 8, 10, 12):
+        library.add_preset(
+            material_id=material["id"],
+            thickness_mm=thickness,
+            operation="snijden",
+            speed_mm_s=12,
+            power_percent=65,
+        )
+    for _ in range(2):
+        library.add_test_grid(_grid_plan(material["id"]), [])
+    library.save_grid_recipe("cut birch", {"operation": "snijden"}, material["id"])
+
+    with pytest.raises(LibraryError) as refusal:
+        library.remove_material(material["id"])
+
+    assert refusal.value.code == "library.material.inUse"
+    assert "6 setting(s)" in str(refusal.value)
+    assert "2 test board(s)" in str(refusal.value)
+    assert "1 recipe(s)" in str(refusal.value)
+    # Nothing went.
+    assert len(library.presets()) == 6
+    assert len(library.test_grids()) == 2
+
+
+def _grid_plan(material_id):
+    """The smallest board `add_test_grid` accepts, for tests that only count them."""
+    return {
+        "material_id": material_id,
+        "operation": "snijden",
+        "speed_min": 8, "speed_max": 20, "speed_steps": 2,
+        "power_min": 40, "power_max": 100, "power_steps": 2,
+        "cell_mm": 8, "gap_mm": 2, "origin_x_mm": 0, "origin_y_mm": 0,
+    }
 
 
 # ---------------------------------------------------------------- presets
