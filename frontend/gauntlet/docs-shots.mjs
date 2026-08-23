@@ -24,7 +24,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const BASE = process.env.OK_BASE ?? 'http://localhost:5199';
 const OUT = '/Users/Jelle.Tigchelaar/git/openkerf/docs/images';
@@ -76,6 +76,15 @@ async function useTheHandbookMachine() {
  */
 async function clear() {
 	await fetch(BASE + '/api/design/autosave', { method: 'DELETE' }).catch(() => {});
+	// A list attached for the series pictures would still be attached for every
+	// picture after them: the names stay on the bed, the Job tab keeps its block
+	// about a series nobody started here, and the next person to open the app in
+	// this browser inherits somebody else's afternoon. The run goes first because
+	// the list may not be taken away while one is going — the app's own refusal,
+	// and not something to work around. Both are idempotent, so this costs two
+	// requests on a run where no series was ever attached.
+	await api('POST', '/api/series/stop');
+	await api('DELETE', '/api/series');
 	await api('POST', '/api/project/new');
 	// The engine starts up with the layer list the previous session left behind, so
 	// an empty layer from somebody else's afternoon turns up in the list with "One
@@ -263,6 +272,7 @@ const TOOL = {
 	generators: `${RAIL}[title^="Generators"]`,
 	clipart: `${RAIL}[title^="Search clipart"]`,
 	testgrid: `${RAIL}[title="Test grid"]`,
+	series: `${RAIL}[title^="Series"]`,
 	library: `${RAIL}[title="Material library"]`
 };
 const DIALOG = '[role="dialog"]';
@@ -1059,6 +1069,276 @@ if (wanted('34')) {
 			await page.waitForTimeout(900);
 		}
 	);
+}
+
+// ══════════════════════════════════════════ 10. a series: one design, many names
+
+/**
+ * The list the three series pictures are burned from.
+ *
+ * Five plainly fictional names and a second column the design does not read, so the
+ * columns table can show both states at once: "In use" beside `name` and nothing
+ * beside `room`. Deliberately no date column and no counter — either would put a
+ * different value in the picture every time it is taken, against the promise beside
+ * this script that a picture shows the same thing next month.
+ *
+ * It is written to a directory of its own because the basename is what the reader
+ * sees: the window says "These rows came from the file names.csv." and a temporary
+ * name with a prefix on it would be in the handbook for good.
+ */
+const SERIES_CSV = `name,room
+Anna,Kitchen
+Bram,Studio
+Cees,Workshop
+Daan,Loft
+Eva,Cellar
+`;
+const SERIES_FILE = join(tmpdir(), 'openkerf-docs-series', 'names.csv');
+
+/**
+ * A keyring tag that reads its name out of the list, with the list attached.
+ *
+ * The order is not free. A text holding `{name}` is refused while nothing is
+ * attached — "No list is attached, so a text with a placeholder in it cannot become
+ * anything." — so the list goes on first and the tag is drawn against it. That
+ * refusal is the feature working, not something to work around.
+ *
+ * One tag and nothing else on the bed, because two of these three pictures are
+ * about a single word: the name has to be legible at the zoom the picture is taken
+ * at, and a bed with a drawing on it as well would put it at a tenth of the width.
+ *
+ * The upload is an ordinary multipart POST and Node can make one, so the seeding
+ * needs no browser. Shot 35 chooses the same file again *in the window*, because
+ * what the app read out of a file is only on screen for a file that window session
+ * has read — see there.
+ */
+async function seedSeries() {
+	await clear();
+	mkdirSync(dirname(SERIES_FILE), { recursive: true });
+	writeFileSync(SERIES_FILE, SERIES_CSV);
+
+	const form = new FormData();
+	form.append('file', new Blob([SERIES_CSV], { type: 'text/csv' }), 'names.csv');
+	const upload = await fetch(BASE + '/api/series/upload', { method: 'POST', body: form })
+		.then((r) => (r.ok ? r.json() : null))
+		.catch(() => null);
+	if (!upload?.file) throw new Error('series: the upload was refused');
+	await api('POST', '/api/series/attach', {
+		kind: 'file',
+		file: upload.file,
+		has_header: true,
+		skip_blank: true
+	});
+
+	// 11.5 mm/s and not a round 14: the page quotes the clock this design comes out at
+	// — "Estimated time 0:24", and three of those in the line under it — so the speed is
+	// picked to give that, the way shot 26 sizes its rectangle and shot 28 leaves the
+	// hinge on its defaults. Measured through `/api/job/estimate`: 14 gives 19.9 s, 12
+	// gives 23.1 s, 11.5 gives 24.0 s. A cut of 11.5 mm/s at 70 % is an ordinary setting
+	// for a tag in 3 mm ply, so nothing about the picture is odd to read.
+	const cut = await api('POST', '/api/design/operations', {
+		type: 'cut',
+		label: 'Tag outline',
+		speed: 11.5,
+		power_percent: 70
+	});
+	const engrave = await api('POST', '/api/design/operations', {
+		type: 'engrave',
+		label: 'Name',
+		speed: 280,
+		power_percent: 22
+	});
+	const put = async (shape, layer) => {
+		const made = await api('POST', '/api/design/elements', shape);
+		const id = made?.ids?.[0];
+		if (id && layer?.id) {
+			// New shapes are filed by colour, so out of both layers first and then into
+			// the one this picture needs — the same dance as `seed()`.
+			for (const op of [cut?.id, engrave?.id])
+				if (op) await api('POST', '/api/design/unassign', { ids: [id], operation_id: op });
+			await api('POST', '/api/design/assign', { ids: [id], operation_id: layer.id });
+		}
+		return id;
+	};
+	await put(
+		{ type: 'rect', x_mm: 40, y_mm: 40, width_mm: 90, height_mm: 40, corner_radius_mm: 8 },
+		cut
+	);
+	await put({ type: 'circle', cx_mm: 51, cy_mm: 60, r_mm: 3 }, cut);
+	// The text last, so it is the newest shape and its id is the one the two pictures
+	// that need a selection point at.
+	// `font_size_mm` and not `height_mm`: the latter is quietly ignored for text and the
+	// name then comes out 3.8 mm tall on a 40 mm tag — legible on the bed and four pixels
+	// high in a handbook. The anchor is the left end of the baseline, so these two
+	// numbers put the word beside the hole and on the tag's own centre line.
+	const text = await put(
+		{ type: 'text', x_mm: 69, y_mm: 66, text: '{name}', font_size_mm: 14 },
+		engrave
+	);
+	await api('POST', '/api/design/operations/prune');
+	return text;
+}
+
+/**
+ * Shot 35: the window with a list on it.
+ *
+ * Two halves and both have to be filled, and they are filled by two different
+ * things. The burn list on the left is there because a list is *attached* — that is
+ * server state, and the seeding above put it there. The block on the right is what
+ * this app read out of a *file*, and that only exists for a file the open window has
+ * read: it is not kept with the list, on purpose, because it is a report on a
+ * reading and not a property of the rows. So the same file is handed to the window's
+ * own field here, the way shot 22 hands the importer a drawing.
+ *
+ * Nothing is pressed afterwards. The button says "Use this list instead" because a
+ * list is already on; pressing it would attach the very same rows again.
+ */
+if (wanted('35')) {
+	await seedSeries();
+	await scene(
+		'35-series.png',
+		'/?tab=design',
+		{
+			// The whole of the right-hand pane does not fit — the dialog is capped at
+			// min(80vh, 760px) and the pane is two tables, a tick and a row field — so
+			// this is the top of the window, which is what the page beside it walks
+			// through. What *is* in the picture is the action row: it sat below the fold
+			// at every window height until the round that took this shot made it stick to
+			// the foot of the pane, which is exactly the sort of thing a photograph finds
+			// and a measurement does not.
+			//
+			// 1000 px and not the usual 900: at 900 the cap is 80vh = 720 and the fold
+			// climbs another 40 px, taking "Start at row" with it. Above 950 the 760 px
+			// half of the cap wins and nothing more is gained by going taller.
+			height: 1000
+		},
+		async (page) => {
+			await page.locator(TOOL.series).click();
+			await page.waitForSelector(DIALOG, { timeout: 10000 });
+			await page.locator(`${DIALOG} input[type="file"]`).setInputFiles(SERIES_FILE);
+			// The upload answers with the reading, and every change after that waits
+			// 200 ms and asks the server again.
+			await page.waitForTimeout(2500);
+		}
+	);
+}
+
+/**
+ * Shot 36: the bed showing the row that is about to burn.
+ *
+ * The whole feature has to be trusted about one thing — that the name on the bed is
+ * the name the next plate gets — so this picture has to carry both halves at once:
+ * the tag with `Anna` cut into it, and the panel saying that the text itself reads
+ * `{name}`. Without the second half the picture reads as a bug.
+ *
+ * Zoomed to the drawing ("3", the app's own key), because the point of the picture
+ * is a single word and a 90 mm tag on a 500 mm bed prints it four pixels tall.
+ */
+if (wanted('36')) {
+	const text = await seedSeries();
+	await scene('36-series-text.png', `/?tab=design&select=${encodeURIComponent(text ?? '')}`, {}, async (page) => {
+		await page.keyboard.press('3');
+		await page.waitForTimeout(1200);
+	});
+}
+
+/**
+ * Shot 37: the Job tab with a run going.
+ *
+ * The run itself is real. `POST /api/series/start` writes the count of plates and
+ * sends nothing to the machine — its own tooltip says so in as many words — and
+ * `advance` moves the pointer on without burning, which is what the button "Burned,
+ * next one" does. So "Burn 3 of 5" and "This one engraves Cees." are the app's own
+ * state, arrived at by the two presses an operator makes.
+ *
+ * The two plates behind it are not, and cannot be. A burn is only ever marked done
+ * by `POST /api/series/burn`, and that builds the plan and hands it to the spooler
+ * of the machine that is really there — a Ruida over the network that reopens its
+ * connection by itself. Nothing in a documentation script is worth setting a laser
+ * going in an empty room, which is the same reason 13-queue.png is not in this file
+ * at all.
+ *
+ * So the count of what has been burned is answered from the script, the way shot 01
+ * answers the machine list and shot 34 answers the print-and-cut pose: two burns
+ * done, in the three places that read that one fact — the socket the run block
+ * lives on, the window's own route, and the estimate, which counts the plates still
+ * due on the server. All three or none: patch one and the picture shows a bar at
+ * two fifths above a line promising five more plates, which is worse than no
+ * picture. What is invented is a number of our own bookkeeping — "two of these were
+ * counted" — and not a state of the machine; nothing here claims the laser did
+ * anything.
+ */
+if (wanted('37')) {
+	const text = await seedSeries();
+	if (!text) throw new Error('37: no text on the bed to read the list');
+	await api('POST', '/api/series/start');
+	// Twice, because the picture is of a run in the middle and not of one that has
+	// just begun: the third plate is the first that has a before and an after.
+	await api('POST', '/api/series/advance');
+	await api('POST', '/api/series/advance');
+
+	/** Two burns behind us, said the same way wherever it is read. */
+	const DONE = [[0, 1]];
+	const counted = (state) =>
+		state?.run ? { ...state, run: { ...state.run, done: DONE } } : state;
+
+	await scene(
+		'37-series-run.png',
+		'/?tab=job',
+		{
+			// Tall enough for the run block *and* everything the page quotes under it: the
+			// clock, the line counting the afternoon, the layer table and the checklist,
+			// down to the start button. Measured: at 900 px the picture stopped above the
+			// clock, and below 1120 the checklist is cut in half.
+			height: 1120,
+			route: async (page) => {
+				await page.route('**/api/series', async (r) => {
+					const response = await r.fetch();
+					await r.fulfill({ response, json: counted(await response.json()) });
+				});
+				await page.route('**/api/job/estimate**', async (r) => {
+					const response = await r.fetch();
+					const answer = await response.json();
+					// The route multiplies this plate's own time by the plates still due, so
+					// the two numbers on screen always multiply. Doing the same here keeps
+					// that true.
+					const left = 3;
+					await r.fulfill({
+						response,
+						json: {
+							...answer,
+							burns_left: left,
+							seconds_total: Math.round(answer.seconds * left * 10) / 10
+						}
+					});
+				});
+				// The run block reads the live socket and nothing else — one fact, one
+				// source, so the top bar and the phone view cannot drift from it. Which
+				// means the socket is where this has to be said too.
+				await page.routeWebSocket('**/api/ws', (ws) => {
+					const server = ws.connectToServer();
+					server.onMessage((message) => {
+						let payload = null;
+						try {
+							payload = JSON.parse(String(message));
+						} catch {
+							// Not JSON: hand it on untouched.
+						}
+						if (payload?.type === 'snapshot' && payload.data?.series)
+							payload.data.series = counted(payload.data.series);
+						ws.send(payload ? JSON.stringify(payload) : message);
+					});
+				});
+			}
+		},
+		async (page) => {
+			// The pre-flight builds a whole cut plan before it can say anything.
+			await page.waitForTimeout(4000);
+		}
+	);
+	// A run left going would refuse the ordinary Burn button in the next person's
+	// browser, with a sentence about a series they never started.
+	await api('POST', '/api/series/stop');
 }
 
 // ──────────────────────────────────────────────────────────────── leaving tidy

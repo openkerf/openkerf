@@ -21,6 +21,18 @@ The font list is the useful part. The name sits on the left in the interface typ
 
 Text is placed as geometry, but the engine keeps the wording, so you can come back to it: right-click the text and choose **Edit text…**. The same window opens with your values filled in and the button reads **Update** instead of **Place**.
 
+### Variables in text
+
+A text can take its wording from a list instead of from you. Put a column name in curly brackets — `{name}` — and that text reads a different value on every plate the machine makes: fifty keyrings with fifty names on them is one drawing and fifty burns. The list is a CSV out of your spreadsheet, or a counted range of numbers for parts 001 to 250.
+
+You do not have to type the brackets. Right-click the text and the menu offers **Insert a column**, with a row per column of the list; with exactly one column that row *is* the column and reads **Insert {column}**. Without a list attached the row is greyed and says why: `No list is attached in the Series window`.
+
+With a placeholder in it, the panel on the right shows two lines instead of one — the text as you typed it, and what it comes out as for the plate that is next: `For the burn now on the bed this reads “Anna”.`
+
+Two brackets are refused as you type them, because neither can be burned: a bracket that does not open and close once around a name (`A curly bracket has to open and close once around a column name, and a bracket cannot be burned as a bracket.`) and one that counts backwards (`A placeholder cannot count backwards. It would read the list's own bookkeeping instead of a row.`).
+
+The whole of it — the list, the window, the run at the machine, and a jig frame that burns only on the first plate — is on [Variable text](variable-text.md).
+
 ### Fonts the app cannot see
 
 The engine reads `.ttf` and keeps its list in a cache, so a freshly installed font — or an `.otf` — is not in the list. The link **Font not in the list?** opens a second list of fonts that are on your computer but unseen, with the explanation: `The engine only reads .ttf files. These are on your computer but are not seen; importing makes a usable copy of one.` Clicking one makes a usable copy and picks it. Fonts whose file has since been deleted are dropped from the list rather than shown, because they can only fail.
@@ -120,6 +132,8 @@ The primary button carries the outcome, so you can read what is coming before yo
 Copies the selection in rows and columns. Select the shapes first; without a selection the tab says `Select what should be repeated first.`
 
 Fields: **Columns**, **Rows**, **Space X** and **Space Y**. The spacing is the gap *between* the shapes, not the pitch from one to the next — `The distance is the space between the shapes, because that is where the cut goes.`
+
+Under them a tick: **Each copy takes the next name from the list**. Repeating a tag that reads `{name}` gives you twelve identical Annas otherwise, because a copy is a copy. With this on, copy one reads the next row, copy two the one after that, in reading order — which is how you fill a plank with twelve different tags and lay them out yourself. It needs a list; without one the tick is greyed with the reason, and asking anyway comes back as `No list is attached, so there is no next name to take. Import a list in the Series window first.` With a list but nothing variable in what you picked: `None of the shapes you are repeating has a placeholder in its text, so there is no name for the copies to take. Put a column into a text first.` See [Variable text](variable-text.md#more-than-one-on-a-sheet).
 
 ### Circle
 

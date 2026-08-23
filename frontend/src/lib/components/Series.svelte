@@ -1064,11 +1064,24 @@
 		flex-direction: column;
 		gap: var(--space-2);
 	}
+	/* The buttons stay on screen while the right-hand pane scrolls.
+	
+	   Measured before this: the pane is 749 px of tables, ticks and fields inside a
+	   body of 705, and the dialog is capped at min(80vh, 760px) — so at *every* window
+	   height the primary button sat below the fold and the one thing this window is for
+	   was reached by scrolling past two tables. A sticky foot costs 44 px of the pane
+	   and takes the scroll away from the action. */
 	.knoppen {
+		position: sticky;
+		bottom: calc(-1 * var(--space-4));
+		z-index: 2;
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-2);
-		margin-top: var(--space-2);
+		margin: var(--space-2) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+		padding: var(--space-2) var(--space-4) var(--space-4);
+		background: var(--surface-1);
+		border-top: 1px solid var(--line);
 	}
 
 	/* A wide table scrolls inside its own box; the window itself never scrolls
