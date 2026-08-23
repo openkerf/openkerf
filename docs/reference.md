@@ -225,6 +225,9 @@ Under "Edit path" (`path`).
 | Fill — for rastering | A raster layer then burns the area instead of just the outline | `fill` |
 | Remove fill | The same row on a shape that already has a fill: without a fill a shape only rasters its outline | `fill` |
 | Edit text… | Only on text: change the words, the font and the size | `text` |
+| Insert a column | Only on text: a submenu with a row per column of the attached list, each labelled with the column's own name; picking one appends its placeholder to the text. With exactly one column there is no submenu and the row is that column, reading "Insert {column}". Greyed without a list. | `insert-column` |
+| Burn only once | In a series this shape burns on the first plate only — a jig frame, or the pockets the pieces sit in | `burn-once` |
+| Burn on every plate | The same row on a shape already marked: it goes onto every plate of the series again | `burn-once` |
 | Crop | Only on an image: then drag a frame over the image | `crop` |
 | Undo crop | Only on an image you cropped: the whole picture back | `uncrop` |
 | Vectorise | Only on an image: turns the image into paths | `vectorise` |
@@ -264,6 +267,7 @@ This menu is about the view and the whole design, not about one shape.
 | Layer numbers next to the shapes | On or off; the small numbers beside each shape | `layerNumbers` |
 | Put everything on the bed | Pulls the whole design back inside the bed, "Including what lies off screen and cannot be clicked" | `rescue` |
 | Show cut path | Opens the **Cut path** window: in what order the machine burns, where it travels without burning, and how the time builds up (⌥P) | `cut-path` |
+| Set up a series | Opens the **Series** window: "Attach a list, see what every burn engraves, and choose where to start". The same door as the button on the tool rail; no shortcut. See [Variable text](variable-text.md) | `series` |
 | Remove duplicates… | The same operation as in the shape menu, over the whole bed: opens **Shapes lying on top of each other** with the count in it | `canvas-duplicates` |
 
 ## Right-click on a node
@@ -317,6 +321,7 @@ A grey button always says why, in its tooltip. These are all the reasons:
 | This layer already burns last | It cannot move down |
 | This layer belongs to a test grid | A test grid's layers are evidence; they are locked |
 | A line, text or an image carries no bridges | Bridges work on a rectangle, an ellipse, a polyline or a path |
+| No list is attached in the Series window | Inserting a column needs a list to take it from — attach one first, see [Variable text](variable-text.md#the-list) |
 | Click a node on the shape first | The node operations act on one point; click a knot to take it in hand |
 | This is the last node; there is no piece after it | The end of an open line has nothing leaving it to bend or divide |
 | A closed shape needs three nodes | Removing this one would leave no shape behind |

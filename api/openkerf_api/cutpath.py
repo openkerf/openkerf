@@ -156,10 +156,13 @@ class CutPath:
     an HTTP request that takes seconds is a request the browser gives up on.
     """
 
-    def __init__(self, kernel, runner, drawing):
+    def __init__(self, kernel, runner, drawing, series=None):
         self.kernel = kernel
         self.runner = runner
         self.drawing = drawing
+        #: Set by the server once both exist. The window draws what the machine will do,
+        #: and with a list attached that is not the whole drawing: see `_build`.
+        self.series = series
         self._lock = threading.Lock()
         self._ready: dict | None = None
         self._building: str | None = None
@@ -250,6 +253,12 @@ class CutPath:
         device = getattr(self.kernel, "device", None)
         digest.update(str(getattr(device, "path", "")).encode())
         digest.update(repr(self.drawing.bed_mm()).encode())
+        # Which plate of a series this is. The shapes alone cannot say it: a jig frame
+        # marked "burn only once" is in the first plate of a run and not in the second,
+        # and re-burning the same rows (a redo after a spoiled plate) leaves every text
+        # rendering exactly what it rendered before. Without this the window would then
+        # serve the earlier plate's path, frame and all.
+        digest.update(repr(self._series_key()).encode())
         digest.update(
             repr(
                 (
@@ -340,6 +349,25 @@ class CutPath:
             digest.update(repr(getattr(node, "bounds", None)).encode())
             return 1
 
+    def _series_key(self):
+        """
+        What about the series changes the path, and nothing else.
+
+        Deliberately not the whole state: this runs on every poll (0.017 s is the budget
+        for the whole fingerprint), and most of what a series knows — its columns, its
+        rows, which ones are done — cannot change the path of *this* plate. What can is
+        whether a `mkonce` shape belongs to it, which is "has anything been burned in
+        this run yet".
+        """
+        if self.series is None:
+            return None
+        try:
+            state = self.series.check()
+            run = self.series.state().get("run") or {}
+        except Exception:  # pragma: no cover - a poll must not fall over on this
+            return None
+        return (state.get("current_row"), bool(run.get("done")))
+
     # ---------------------------------------------------------------- building
 
     def _build(self, key: str, origin) -> None:
@@ -348,8 +376,14 @@ class CutPath:
             # The zero point moves the work into the machine (gap J12), so the
             # preview has to see it too — otherwise it draws a path beside the one
             # the machine walks. Exactly what `/api/job/start` does.
+            # What this burn leaves out, exactly as the burn and the pre-flight read
+            # it — the places the list has no names left for, and a jig frame that is
+            # already cut. Without it the window drew the literal `{name#+2}` as nine
+            # characters of real path, in the order the machine would supposedly walk
+            # them.
+            leaves_out = self.series.burn_mutators() if self.series is not None else []
             with self.drawing.shifted(origin):
-                payload = self.runner.preview_plan(self.harvest)
+                payload = self.runner.preview_plan(self.harvest, leaves_out)
             payload["state"] = "ready"
             payload["fingerprint"] = key
             # The whole build, not only the harvesting: what the window reports is

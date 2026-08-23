@@ -15,6 +15,7 @@
 	import { screen } from '$lib/screen.svelte';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import type { Controller, Position } from '$lib/control.svelte';
+	import type { SeriesStore } from '$lib/series.svelte';
 	import { connection } from '$lib/connection.svelte';
 	import { inkOn, layerNumber, type Design } from '$lib/design.svelte';
 	import JobPreview from './JobPreview.svelte';
@@ -26,6 +27,7 @@
 	let {
 		control,
 		device,
+		series,
 		job,
 		revision = 0,
 		preflight = $bindable(),
@@ -41,6 +43,15 @@
 	}: {
 		control: Controller;
 		device: Device | null;
+		/**
+		 * The series, for the two things the pre-flight has to say about one.
+		 *
+		 * A run going means this button burns one plate and counts nothing — the API
+		 * refuses it (`Series.vet_plain_job`), and a refusal you only meet after
+		 * pressing is a poor way to learn that. And the clock above it is about one
+		 * plate while the afternoon is fifty, which is the line below the estimate.
+		 */
+		series: SeriesStore;
 		job: Job | null;
 		/** Increases on every change in the design; the estimate follows it. */
 		revision?: number;
@@ -118,7 +129,24 @@
 		material_name: string | null;
 		thickness_mm: number | null;
 	};
-	let estimate = $state<{ seconds: number; parts: number } | null>(null);
+	/**
+	 * The clock, and with a series the whole afternoon.
+	 *
+	 * `burns_left` and `seconds_total` come from `/api/job/estimate` and are not worked
+	 * out here: the route knows which burns are still due (the ones whose rows are not
+	 * all in `done`, the same partition the run verbs act on) and it measures the plate
+	 * with the mutator the burn itself uses, so the places the list has no rows left for
+	 * and a jig frame already cut are out of the sum. Multiplying here instead would be
+	 * a second place counting plates, and the moment the two disagree the number on the
+	 * screen is nobody's. Without a series `burns_left` is 1 and `seconds_total` equals
+	 * `seconds`, so there is no branch to keep in step.
+	 */
+	let estimate = $state<{
+		seconds: number;
+		parts: number;
+		burns_left?: number;
+		seconds_total?: number;
+	} | null>(null);
 	/**
 	 * What gets burned, separate from how long it takes.
 	 *
@@ -220,6 +248,31 @@
 			: t('job.rotary.chuck', { diameter: i18n.number(state.diameter_mm), factor });
 	});
 	let blindLayers = $derived(layers.filter((l) => l.burns === false));
+	/**
+	 * The afternoon behind the plate: what is still to come, in one sentence.
+	 *
+	 * Only when more than one burn is due. With one it would say the same number twice
+	 * — the estimate above it — and a line that repeats the line above it teaches you
+	 * to stop reading both.
+	 */
+	let seriesLeft = $derived.by(() => {
+		const left = estimate?.burns_left ?? 1;
+		const total = estimate?.seconds_total;
+		if (left <= 1 || total === null || total === undefined) return null;
+		return t('job.seriesLeft', {
+			burns: t('count.burns', { n: left }),
+			time: formatDuration(total)
+		});
+	});
+	/**
+	 * A series is going, so the ordinary Burn button is not the button to press.
+	 *
+	 * It would burn one plate and count nothing, and the operator would find out by
+	 * counting plates against the burn list. The API refuses it, and this is the same
+	 * sentence it refuses with — one fact, one wording, whether you read it in the
+	 * tooltip before pressing or get it back after.
+	 */
+	let seriesRunning = $derived(series.running);
 	// Whole millimetres where it can be; 0.5 mm stays 0.5 mm. Written in the
 	// reader's own notation, because these numbers get typed into a machine.
 	function size(value: number): string {
@@ -573,6 +626,12 @@
 						{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
 					</span>
 				</div>
+				{#if seriesLeft}
+					<!-- The clock above is one plate; a series of fifty must never show the
+					     time of one. Both numbers come off the estimate itself — see
+					     `seriesLeft` — so this line and that one cannot disagree. -->
+					<p class="pf-row series">{seriesLeft}</p>
+				{/if}
 				<!-- *What* is being burned, right above the settings it is burned
 				     with. Without it there is a table of numbers with no subject. -->
 				<!-- Always a line, even without material. Saying nothing reads as
@@ -765,8 +824,12 @@
 					<button
 						class="btn primary big"
 						onclick={confirmStart}
-						disabled={control.busy !== null || !connection.online}
-						title={connection.online ? undefined : blockedReason}
+						disabled={control.busy !== null || !connection.online || seriesRunning}
+						title={seriesRunning
+							? t('api.series.runGoing')
+							: connection.online
+								? undefined
+								: blockedReason}
 					>
 						{control.busy === 'start' ? t('job.starting') : t('job.startNow')}
 					</button>
@@ -785,8 +848,8 @@
 					{/if}
 					<button
 						class="btn primary big"
-						disabled={!actions?.start || blocked}
-						title={blockedReason}
+						disabled={!actions?.start || blocked || seriesRunning}
+						title={seriesRunning ? t('api.series.runGoing') : blockedReason}
 						onclick={() => (preflight = true)}
 					>
 						<!-- The last known time stays while a new one is being worked out.
@@ -1462,6 +1525,12 @@
 		color: var(--text-2);
 		font-size: var(--text-xs);
 		padding: var(--space-1) 0;
+	}
+	/* The afternoon behind the plate is not an aside: it is the number somebody plans
+	   their evening around, so it reads as text and not as fine print. */
+	.pf-row.series {
+		color: var(--text-1);
+		margin: 0;
 	}
 	.pf-warn {
 		margin: var(--space-2) 0;

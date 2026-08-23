@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from .auth import extract_token, generate_token, is_loopback, token_matches
@@ -43,6 +44,14 @@ from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
 from .rotary import RotaryControl
+from .series import (
+    OverrunMutator,
+    Series,
+    burn_rows,
+    read_rows,
+    rows_from_numbers,
+    rows_in,
+)
 from .sheets import Sheets
 from .tilerun import TileRun
 from .testgrid import (
@@ -80,10 +89,65 @@ SIGNALS = (
 
 HEARTBEAT_SECONDS = 2.0
 
+#: The largest list we will take in. A list of names is a few kilobytes, so anything
+#: past this is a spreadsheet with the photographs still in it or simply the wrong file
+#: — and streaming it into a temp directory before saying so costs the disk and buys
+#: nothing. Counted while reading, so the refusal comes before the whole body is on
+#: disk.
+SERIES_UPLOAD_LIMIT = 5 * 1024 * 1024
+
+#: How many rows a preview shows. Enough to recognise your own file by, few enough that
+#: the answer stays small; the row count beside it says how many there really are.
+SERIES_PREVIEW_ROWS = 10
+
 # Who this server is, in this process (gap E2). New at every start; the client compares it
 # on reconnecting and so knows whether it is talking to the same engine as before the
 # silence.
 INSTANCE_ID = uuid.uuid4().hex
+
+
+#: Everything this layer raises when it refuses what somebody asked for, as opposed to
+#: the engine failing under it (that is `CommandError`). One tuple, because both route
+#: helpers below have to catch the same set: the day a module grows a fourth error of
+#: its own, adding it here is the whole change instead of a 500 out of whichever helper
+#: was forgotten.
+OUR_REFUSALS = (MachineError, DesignError, LibraryError)
+
+
+def refuse(e):
+    """
+    Our own refusal, as the 409 a client can act on. Returns the exception to raise.
+
+    Returning rather than raising keeps `raise refuse(e) from e` at the call site, so a
+    reader of a route helper sees the control flow and the traceback keeps the refusal
+    that caused it.
+
+    Our own refusals carry an optional code, and it travels in a header rather than in
+    the body: `detail` is a string everywhere in this API and every client reads it that
+    way. A header adds the machine-readable half without breaking the human-readable
+    one, so the web app can say the refusal in the reader's language while curl still
+    shows a sentence.
+
+    A refusal may also carry the numbers its sentence needs, and those go in a second
+    header as JSON. That is for the number that is a constant of ours — "at most 200
+    bridges" — which a code alone cannot carry, so the translated sentence used to be
+    impossible and the panel showed English.
+
+    One function and not a branch in each helper, because `manage()` had this from
+    the start while `act()` caught `CommandError` only — so a refusal of ours raised
+    inside `/api/job/start` (`act(run)`, below) came out of FastAPI as a 500 with no
+    sentence and no code, on the one button every client presses to burn.
+    """
+    # fastapi lives inside `build_app` in this module and this helper keeps to that, so
+    # importing the module still does not pull the web framework in.
+    from fastapi import HTTPException
+
+    code = getattr(e, "code", None)
+    headers = {"X-OpenKerf-Error": code} if code else None
+    values = getattr(e, "values", None)
+    if headers and values:
+        headers["X-OpenKerf-Error-Values"] = json.dumps(values)
+    return HTTPException(status_code=409, detail=str(e), headers=headers)
 
 
 class EventBridge:
@@ -233,6 +297,28 @@ class ApiServer:
             self.commands,
             self._beside("openkerf-tiles.json", "openkerf-tegelreeks.json"),
         )
+        # One design, burned once per row of a list. It needs the runner to spool a
+        # burn, the sheets to record which sheet a run belongs to, and the tile run
+        # because that is the other thing in this app that decides what the next burn
+        # is — the two refuse each other. No `was`: this file never had a Dutch name.
+        self.series = Series(
+            kernel,
+            self._beside("openkerf-series.json"),
+            runner=self.commands,
+            tiles=self.tiles,
+            sheets=self.sheets,
+        )
+        # Bound on the drawing rather than passed to it, because the drawing is built
+        # first: the series spools through the command runner it already owns. Two things
+        # need it there — the refusal when a text asks for a column the list has not got,
+        # which has to be said at the text field and not at the machine, and the list
+        # riding along in a project bundle. Same idiom as `self.commands.rotary` above.
+        self.drawing.series = self.series
+        # And the cut-path window, for the same reason in a different room: it draws what
+        # the machine does and in what order, so it has to leave out what the next plate
+        # leaves out. One sum (`Series.burn_mutators`) is read by the burn, the pre-flight
+        # and this window.
+        self.cutpath.series = self.series
         # Where a layer's settings come from. Beside the library, because it is about
         # presets; not *in* it, because it is about this project.
         self.provenance = Provenance(
@@ -244,7 +330,12 @@ class ApiServer:
         self.palette = Palette(
             self._beside("openkerf-palette.json", "openkerf-palet.json")
         )
-        self.generators = Generators(kernel, self.commands, self.drawing, self.sheets)
+        # `series` for the Repeat tab's "each copy takes the next name": the
+        # generator needs to know whether a list is attached and how many rows it
+        # has, and one answer to that in the app is one answer.
+        self.generators = Generators(
+            kernel, self.commands, self.drawing, self.sheets, self.series
+        )
         self.nesting = Nesting(kernel, self.editor)
         self.duplicates = Duplicates(kernel, self.drawing)
         self.focus = FocusBoard(kernel, self.drawing)
@@ -413,23 +504,171 @@ class ApiServer:
         except Exception:  # pragma: no cover - status mag nooit omvallen
             return None
 
+    def _series_state(self):
+        """
+        The series, or nothing — and the bed put right on the way past.
+
+        Beside the tile run and for the same reason: top bar, canvas, context panel and
+        phone view all read the live socket, and four separate requests for one fact
+        drift apart. `Series.state()` also re-primes the engine when something has moved
+        the row behind our back, which is why it is called even on the way to answering
+        `None`.
+
+        Nothing attached means nothing to say. The rows themselves never ride here —
+        `GET /api/series` is where a thousand of them belong, not every heartbeat.
+        """
+        try:
+            state = self.series.state()
+        except Exception:  # pragma: no cover - status must never fall over
+            return None
+        return state if state.get("attached") else None
+
+    def _series_burn(self) -> tuple:
+        """
+        The burn the pre-flight is about: what it leaves out, and how many are still due.
+
+        The pre-flight has to describe the button that is going to burn. While a series
+        runs, that button is `POST /api/series/burn`, and it hands the plan an
+        `OverrunMutator` (`series.py`): out come the places the list has no rows left
+        for, and out comes a `mkonce` jig frame on every plate after the first. Without
+        that same mutator the estimate is a number for a job nobody is going to run.
+        Measured on the design of `api/tests/test_series_estimate.py` — three places on
+        the sheet, five names, the pointer on the last sheetful, one frame marked burn
+        once — the real cut plan held **409 cut objects and 37.3 s** as this route used
+        to build it, against **172 objects and 9.8 s** as the burn builds it: 26 of those
+        37 seconds were the frame (15.0 s) and the literal `{name#+2}` (11.3 s), neither
+        of which the machine was going to touch. The interface multiplies that by the
+        plates still to come, so a near-fourfold error over one plate was about to become
+        a near-fourfold error over an afternoon.
+
+        With no run going there is deliberately no mutator: the button that burns is
+        then the plain one, and `/api/job/start` composes only the print-and-cut pose —
+        so a plain Burn on the last sheetful really does engrave the nine characters
+        `{name#+2}`, and really does cut the jig again. Whether *that* should be refused
+        or mutated is a question about the burn and not about the clock, and it is not
+        this route's to answer by understating the work the button will do. An estimate
+        that leaves out what the machine is going to do is the same bug pointing the
+        other way.
+
+        `Series.state()` is asked rather than `Series.check()`, and not only for `run`:
+        it re-primes the bed if anything has moved the row behind our back, so what is
+        measured below is the row that is about to burn and not the one before it.
+
+        The second half of the answer is how many burns are still due, and it is here
+        rather than in the interface for the reason the plan gives in one line: a job of
+        fifty burns must never show the time of one. Leaving the multiplication to the
+        frontend means two places counting plates — this one, and whatever the panel
+        derives from `burns` and `current_burn` — and the moment they disagree the
+        number on the screen is nobody's. So the count comes off the same partition the
+        run verbs act on: the burns whose rows are not all in `done`, which is exactly
+        how many times the operator still has to press Burn (`Series.advance` walks that
+        same set). Not `burns - current_burn + 1`: after a redo of row 12 in a list
+        burned to row 18 that says three plates where one is left.
+
+        The partition itself is `burn_rows` — the very function `Series._burns` calls —
+        fed only from fields `Series.state()` publishes, so there is one rule about how
+        rows fall into burns and this reads it rather than restating it.
+
+        Returns `(mutator or None, burns_left)`.
+        """
+        try:
+            state = self.series.state()
+        except Exception:  # pragma: no cover - a pre-flight has to answer with something
+            # The refusals belong to the burn (`Series.vet`), not to the clock. An
+            # estimate that raises leaves the operator with no number at all, which is
+            # worse than the number they had before this method existed.
+            return None, 1
+        run = state.get("run")
+        if not state.get("attached"):
+            return None, 1
+        if not run:
+            # No run going, but a list attached: the button above this number is the
+            # plain one, and it composes the same sum through `Series.plain_mutators()`.
+            # One burn left, because pressing Burn once is all that is due.
+            return (self.series.burn_mutators() or [None])[0], 1
+        burns = burn_rows(
+            self.series.rows(),
+            state["used_columns"],
+            state["step"],
+            state["skip_blank"],
+        )
+        done = rows_in(run.get("done"))
+        left = sum(1 for group in burns if not set(group) <= done)
+        # Through `Series.burn_mutators()`, which is the same sum the burn itself, the
+        # plain Burn button and the cut-path window read. Its `first` is "the first plate
+        # of *this run*", not burn number one of the list: somebody who starts at row 12
+        # puts the jig on the bed at that moment.
+        return (self.series.burn_mutators() or [None])[0], left
+
+    @contextmanager
+    def _as_it_burns(self, mutator):
+        """
+        The design as the next burn will see it, for as long as it takes to measure it.
+
+        Both estimate routes read the drawing itself — the geometry route walks the
+        element tree (`Drawing._geometry_estimate`), the exact one builds the real cut
+        plan — and neither has a seam a plan mutator can be handed to. What both *do*
+        honour is `hidden`, and honour it identically to a shape not being there at all:
+        every operation skips a hidden child on its way to cutcode
+        (`core/node/op_cut.py:458`, `op_engrave.py:411`, `op_dots.py:313`, and
+        `op_raster.py:492` where the bitmap is made),
+        and `Drawing._burnable` skips it for the geometry sum. So this hides exactly what
+        the mutator would remove and lets both routes answer about one design.
+
+        That it really is the same answer and not merely a similar one was measured on
+        the design in `api/tests/test_series_estimate.py`: the cut plan built with the
+        mutator held 172 cut objects and 9.8 s, and the plan built with those same shapes
+        hidden instead held **172 cut objects and 9.8 s** — equal to the digit, against
+        409 objects and 37.3 s for the design as it stands.
+        `test_the_estimate_and_the_burn_agree_to_the_second` keeps it that way.
+
+        Two things this deliberately does not do. It does not touch a shape the user has
+        hidden themselves — that shape is not burned either way, and switching it back on
+        afterwards would be this route changing their drawing. And it restores in a
+        `finally`, because a request that fell over halfway would otherwise leave two
+        shapes hidden on somebody's canvas and in the next thing that saves.
+
+        The window is as short as the measurement: 1.2 ms for the geometry route on the
+        design above. During it a `GET /api/design` would report those shapes as hidden,
+        which is why nothing here signals the canvas — with `exact=1`, which builds the
+        whole plan and is for calibration rather than for the UI, that window is minutes.
+        """
+        if mutator is None:
+            yield
+            return
+        hidden = []
+        for node in self.kernel.elements.elems():
+            if getattr(node, "hidden", False):
+                continue
+            # The mutator's own name, on purpose. Whether this burn leaves a shape out is
+            # one decision; a second reading of it in the pre-flight is precisely the
+            # drift this route was guilty of.
+            if mutator._leave_out(node):
+                node.hidden = True
+                hidden.append(node)
+        try:
+            yield
+        finally:
+            for node in hidden:
+                node.hidden = False
+
     def _status_payload(self) -> dict:
         """
-        Eén snapshot, overal hetzelfde.
+        One snapshot, the same everywhere.
 
-        `reader.snapshot()` alone was the kernel and device status; the tile series was
-        missing on the WebSocket (`/api/ws`, used by the
-        running app) while `/api/status` already sent it along. Top bar, canvas and phone
-        view all three read the live socket, so without this field here a running tile
-        series never arrived there — exactly what `_tiling_state`'s docstring promised to
-        prevent.
+        `reader.snapshot()` alone was the kernel and the device status; the tile run was
+        missing on the WebSocket (`/api/ws`, which the running app uses) while
+        `/api/status` already sent it along. Top bar, canvas and phone view all three
+        read the live socket, so without these fields here a running series never
+        arrived there — exactly what `_tiling_state`'s docstring promised to prevent.
         """
         payload = self.reader.snapshot()
         payload["tiling"] = self._tiling_state()
+        payload["series"] = self._series_state()
         return payload
 
     def build_app(self):
-        from contextlib import asynccontextmanager
+        from contextlib import asynccontextmanager, contextmanager
 
         from fastapi import (
             Depends,
@@ -457,9 +696,19 @@ class ApiServer:
         write = [Depends(require_write)]
 
         def act(action, *args):
-            """Run a write action and turn engine-side failure into a 409."""
+            """
+            Run a write action and turn failure into a 409.
+
+            Engine-side failure keeps its own shape: `detail` is then the command and
+            its output, because that is what a developer needs to see. A refusal of
+            ours goes through `refuse()` with its code in the header, the same as in
+            `manage()`: a route being wrapped in `act()` says the action is a
+            command, not that our layer never says no before sending it.
+            """
             try:
                 return {"ok": True, "output": action(*args)}
+            except OUR_REFUSALS as e:
+                raise refuse(e) from e
             except CommandError as e:
                 raise HTTPException(
                     status_code=409,
@@ -470,34 +719,45 @@ class ApiServer:
             """
             Same for machine management, where failures are our own.
 
-            Our own refusals carry an optional code, and it travels in a header
-            rather than in the body: `detail` is a string everywhere in this API and
-            every client reads it that way. A header adds the machine-readable half
-            without breaking the human-readable one, so the web app can say the
-            refusal in the reader's language while curl still shows a sentence.
-
-            A refusal may also carry the numbers its sentence needs, and those go in
-            a second header as JSON. That is for the number that is a constant of
-            ours — "at most 200 bridges" — which a code alone cannot carry, so the
-            translated sentence used to be impossible and the panel showed English.
+            The difference from `act()` is the answer on success: this one hands back
+            what the action returned, because these routes are asked for state — where
+            the head is, what the library holds — and not for whether a command ran.
+            The refusal half is `refuse()`, shared with `act()`.
             """
             try:
                 return action(*args, **kwargs)
-            except (MachineError, DesignError, LibraryError) as e:
-                code = getattr(e, "code", None)
-                headers = {"X-OpenKerf-Error": code} if code else None
-                values = getattr(e, "values", None)
-                if headers and values:
-                    headers["X-OpenKerf-Error-Values"] = json.dumps(values)
-                raise HTTPException(
-                    status_code=409,
-                    detail=str(e),
-                    headers=headers,
-                ) from e
+            except OUR_REFUSALS as e:
+                raise refuse(e) from e
             except CommandError as e:
                 raise HTTPException(
                     status_code=409, detail={"command": e.command, "output": e.output}
                 ) from e
+
+        @contextmanager
+        def spooling():
+            """
+            What every burn of ours passes through on its way to the spooler.
+
+            Gap J12: when a zero point is set, the work goes into the machine from
+            there. The shift lives only while the plan is being built; after that the
+            drawing is back where it was.
+
+            Print and cut goes on top of that as a mutator, and only when the sheet was
+            actually aligned — otherwise this is the same single line it always was.
+            With an alignment the zero point stays out of it: the pose is measured on
+            the material and says where the work goes, which is the same job the zero
+            point does by hand. Doing both would shift twice, and you would only see
+            that on the workpiece.
+
+            Shared by the ordinary Burn button and a series burn, because a series adds
+            no placement of its own — it changes what a text says. Two copies of this
+            would be two chances to leave one of the two out, and both of them are
+            mistakes you can only see on material.
+            """
+            pose = self.printcut.mutators()
+            origin = None if pose else self.motion.origin()
+            with self.drawing.shifted(origin):
+                yield pose
 
         @asynccontextmanager
         async def lifespan(app):
@@ -597,20 +857,24 @@ class ApiServer:
             sheet = self._active_sheet() or {}
 
             def run():
-                # Gap J12: when a zero point is set, the work goes into the machine from
-                # there. The shift lives only while the plan is being built; after that the
-                # drawing is back where it was.
-                #
-                # Print and cut goes on top of that as a mutator, and only when the sheet
-                # was actually aligned — otherwise this is the same single line it always
-                # was. With an alignment the zero point stays out of it: the pose is
-                # measured on the material and says where the work goes, which is the same
-                # job the zero point does by hand. Doing both would shift twice, and you
-                # would only see that on the workpiece.
-                pose = self.printcut.mutators()
-                origin = None if pose else self.motion.origin()
-                with self.drawing.shifted(origin):
-                    return self.commands.start_job(sheet.get("name"), mutators=pose)
+                # The same gate a series burn passes, and first of all: with a series
+                # going this button burns one plate and counts nothing, and it also
+                # refuses a text that asks the list for a column it has not got — which
+                # today burns a plate with a frame and no name and says nothing at all.
+                self.series.vet_plain_job()
+                with spooling() as pose:
+                    # A list attached without a run going is still a list: the places
+                    # this row has no names for read the literal `{name#+2}`, and the
+                    # engine engraves those nine characters (`core/wordlist.py:597`
+                    # only substitutes when there is a value). So the plain button gets
+                    # the same mutator the series burn gets, and the pre-flight can go
+                    # on describing the button it is above — measured on one plate of
+                    # the last sheetful: 409 cut objects without it, 172 with.
+                    #
+                    # `first=True` here on purpose: with no run there is no earlier
+                    # plate, so a jig marked "burn only once" belongs to this one.
+                    mutators = list(pose) + self.series.plain_mutators()
+                    return self.commands.start_job(sheet.get("name"), mutators=mutators)
 
             return act(run)
 
@@ -674,6 +938,10 @@ class ApiServer:
         def clear_design():
             """Empty the design — what opening does before it reads a file."""
             def run():
+                # The same gate as opening a project, and for the same reason: a run
+                # counts plates made from *this* drawing, and emptying the bed leaves that
+                # count about nothing. Asked before one shape is touched.
+                self.series.vet_new_design()
                 # Before `clean()`, because that erases the very answer: if this design was
                 # already safely on disk, there is nothing left to recover after the
                 # clearing and the recovery dialog need not bring it up next time.
@@ -700,6 +968,9 @@ class ApiServer:
             """
 
             def run():
+                # See `/api/design/clear`: a running series may not have its drawing
+                # replaced, and the refusal comes before anything is emptied.
+                self.series.vet_new_design()
                 # Before `clean()`: that erases the answer to whether there is anything
                 # left to recover. See `/api/design/clear`.
                 self.autosave.forget_if_saved()
@@ -916,6 +1187,15 @@ class ApiServer:
                     # is on and by how much Y is scaled. A job that silently comes out
                     # stretched costs a workpiece, and there is only one of those.
                     "rotary": self._rotary_state(sheet),
+                    # The series, for the same reason as `bounds` and `engine`: that a
+                    # text asks the list for a column it has not got is a blockage and
+                    # not a clock fact, so it must not have to queue behind the clock.
+                    # The clock's own half of a series — the time of this plate and how
+                    # many plates are left — rides on `/api/job/estimate` instead, where
+                    # the seconds are, and this route says nothing about it: two places
+                    # answering "how many burns still to go" is how the panel comes to
+                    # show a number that is nobody's. `check()` never raises.
+                    "series": self.series.check(),
                 }
             )
 
@@ -928,15 +1208,45 @@ class ApiServer:
             `exact=1` computes along the full cut plan, as this route always used to. On a
             heavy design that costs minutes and is only meant for calibrating the fast
             estimate against.
+
+            With a series running, the answer is about the plate now on the bed and about
+            nothing else: measured through `_as_it_burns`, so the places the list has no
+            rows left for and a jig frame already cut are out of the sum instead of in it
+            — see `_series_burn` for the numbers and for why the plain Burn button gets
+            no such treatment.
+
+            `burns_left` and `seconds_total` are the whole answer to "how long is this
+            afternoon". `seconds_total` is `seconds` — the rounded one, so that a client
+            showing both cannot show two numbers that do not multiply — times the burns
+            still due. It is this plate's time and not the afternoon's exactly, and it
+            cannot be: the names differ in length (measured, one tag per plate over
+            Anna/Bram/Cees/Daan/Eva: 4.9, 5.5, 5.2, 5.4 and 3.9 s — 41 % between the
+            shortest and the longest), the last sheetful is short and the first plate
+            carries the jig. Measuring every plate for real would mean re-rendering the
+            list row by row on a GET, which moves the bed the operator is looking at.
+            What this number can be trusted about is the thing it exists for — that a
+            list of fifty never shows the time of one.
+
+            Without a series `burns_left` is 1 and `seconds_total` equals `seconds`, so
+            the pre-flight has one field to draw and no branch of its own.
             """
-            return manage(
-                lambda: self.drawing.estimate(
-                    self.library,
-                    self.provenance,
-                    self._active_sheet(),
-                    exact=exact,
-                )
-            )
+            mutator, burns_left = self._series_burn()
+
+            def measure():
+                with self._as_it_burns(mutator):
+                    answer = self.drawing.estimate(
+                        self.library,
+                        self.provenance,
+                        self._active_sheet(),
+                        exact=exact,
+                    )
+                return {
+                    **answer,
+                    "burns_left": burns_left,
+                    "seconds_total": round(answer["seconds"] * burns_left, 1),
+                }
+
+            return manage(measure)
 
         @app.get("/api/job/path")
         def job_path():
@@ -1239,6 +1549,19 @@ class ApiServer:
         def update_text(element_id: str, body: dict):
             """Update existing text instead of throwing it away and placing it again."""
             return manage(lambda: self.drawing.update_text(element_id, **body))
+
+        @app.post("/api/design/elements/{element_id}/once", dependencies=write)
+        def element_once(element_id: str, body: dict | None = None):
+            """
+            Burn this shape only once in a series, or on every plate again.
+
+            One shape per call, because that is what the menu row acts on: the flag is
+            about a jig frame or a set of pockets, not about a selection of fifty. Absent
+            `once` means switching it on — the row that turns it off says so and sends
+            false.
+            """
+            want = True if body is None else bool(body.get("once", True))
+            return manage(lambda: self.drawing.once([element_id], want))
 
         @app.post("/api/design/elements/delete", dependencies=write)
         def delete_elements(body: dict):
@@ -1836,7 +2159,20 @@ class ApiServer:
 
         @app.post("/api/tiling/start", dependencies=write)
         def tiling_start():
-            return manage(self.tiles.start)
+            """
+            Begin a tile run — unless a series is already deciding what the next burn is.
+
+            The mirror of the refusal `Series._refuse_other_run` makes from the other
+            side. One half of that promise was here already and the other half was not,
+            so the two runs could be begun in either order and only one order was
+            refused.
+            """
+
+            def run():
+                self.series.vet_tile_run()
+                return self.tiles.start()
+
+            return manage(run)
 
         @app.post("/api/tiling/align", dependencies=write)
         def tiling_align(body: dict):
@@ -1861,8 +2197,22 @@ class ApiServer:
 
         @app.post("/api/tiling/burn", dependencies=write)
         def tiling_burn(body: dict | None = None):
+            """
+            Burn one tile — through the same gate as every other burn in this app.
+
+            `TileRun.burn` is the third and last caller of `CommandRunner.start_job`,
+            and it was the one that passed no series gate: a text asking the list for a
+            column it has not got came off the machine as a frame with the name missing,
+            without a word, on the one route that did not vet. See
+            `Series.vet_tile_burn`.
+            """
             confirm = bool((body or {}).get("confirm"))
-            return manage(lambda: self.tiles.burn(confirm_reburn=confirm))
+
+            def run():
+                self.series.vet_tile_burn()
+                return self.tiles.burn(confirm_reburn=confirm)
+
+            return manage(run)
 
         @app.post("/api/tiling/advance", dependencies=write)
         def tiling_advance():
@@ -1871,6 +2221,230 @@ class ApiServer:
         @app.post("/api/tiling/cancel", dependencies=write)
         def tiling_cancel():
             return manage(self.tiles.cancel)
+
+        # ---------------------------------------------------------------- series
+        #
+        # One design, burned once per row of a list. The reading of the list is ours —
+        # see the head of series.py for the four kinds of file the engine's own loader
+        # mishandles — while the substitution stays the engine's.
+
+        def _series_read(body: dict) -> tuple:
+            """
+            One body, one reading, for the preview and for attaching alike.
+
+            The preview and the button must not be able to ask different things: that is
+            exactly the bug where the screen shows a header row and the burn reads it as
+            data. So both routes come through here and the only difference between them
+            is whether the answer is written down.
+
+            Numbers are not a second kind of series, only a second way of filling the
+            rows in. `first`/`last`/`step`/`padding` build the very shape `read_rows`
+            returns, so everything after this function is the same for both doors: one
+            attach path, one refusal set, and `source.kind` to tell them apart
+            afterwards. A field on the same body rather than a route of its own, because
+            a second route family would be a second place for the two to drift.
+            """
+            body = body or {}
+            kind = str(body.get("kind") or ("file" if body.get("file") else "numbers"))
+            if kind == "numbers":
+                read = rows_from_numbers(
+                    body.get("first"),
+                    body.get("last"),
+                    body.get("step", 1),
+                    body.get("padding", 0),
+                    str(body.get("column") or "number"),
+                )
+                return read, {
+                    "kind": "numbers",
+                    "first": body.get("first"),
+                    "last": body.get("last"),
+                    "step": body.get("step", 1),
+                    "padding": body.get("padding", 0),
+                }
+            name = Path(str(body.get("file") or "")).name
+            if not name:
+                # A refusal of ours and not a bare 422: every other no in this API is a
+                # 409 with its code in `X-OpenKerf-Error`, and the window reads that
+                # header to say the sentence in the reader's own language. A 422 here
+                # would be the one refusal in the family that only speaks English.
+                raise DesignError(
+                    "No file has been chosen, so there is no list to read. Pick a "
+                    "file, or fill in the numbers to count from.",
+                    code="series.noFileChosen",
+                )
+            target = self._upload_path(name)
+            if not target.exists():
+                # Uploads live in a temp directory that is wiped when the server stops,
+                # so a page left open across a restart holds a name that means nothing
+                # any more. Saying so beats a preview of an empty list.
+                raise DesignError(
+                    "That file is no longer on the server. Pick it again.",
+                    code="series.uploadGone",
+                )
+            return read_rows(target.read_bytes(), body.get("has_header")), {
+                "kind": "file",
+                "name": name,
+            }
+
+        def _series_preview(read: dict, source: dict) -> dict:
+            """
+            What the window shows before anything is written down.
+
+            `has_header` beside `header_guess`, and the delimiter and the encoding as
+            well: every one of those is a decision this app took about somebody's file,
+            and a decision taken silently is one they cannot overrule.
+            """
+            rows = read["rows"]
+            return {
+                "source": source,
+                "columns": read["columns"],
+                "row_count": len(rows),
+                "rows": rows[:SERIES_PREVIEW_ROWS],
+                "has_header": read["has_header"],
+                "header_guess": read["header_guess"],
+                "delimiter": read["delimiter"],
+                "encoding": read["encoding"],
+                "blanks": read["blanks"],
+                "warnings": read["warnings"],
+            }
+
+        @app.get("/api/series")
+        def series_state():
+            """
+            The list, the row the bed is showing, and what the design asks of the list.
+
+            The rows themselves ride along here and nowhere else. This is the window's
+            own route; `state()` also goes into the status payload every couple of
+            seconds, and a thousand rows in there is a thousand rows down every open
+            socket for a number that fits in a word.
+            """
+            return manage(lambda: {**self.series.state(), "rows": self.series.rows()})
+
+        @app.post("/api/series/upload", dependencies=write)
+        async def upload_series(file: UploadFile):
+            """
+            Accept the file and say what is in it — nothing is attached yet.
+
+            It keeps its own name in the upload directory so that the header question
+            can be answered again without uploading again. Two steps, like the library
+            bundle and the machine profile.
+            """
+            target = self._upload_path(file.filename or "list.csv")
+            written = 0
+            with target.open("wb") as handle:
+                while True:
+                    chunk = await file.read(64 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > SERIES_UPLOAD_LIMIT:
+                        break
+                    handle.write(chunk)
+            if written > SERIES_UPLOAD_LIMIT:
+                target.unlink(missing_ok=True)
+                limit = SERIES_UPLOAD_LIMIT // (1024 * 1024)
+                raise refuse(
+                    DesignError(
+                        f"This file is larger than {limit} MB. "
+                        "A list of names is a few kilobytes; this is probably not the "
+                        "file you meant.",
+                        code="series.fileTooBig",
+                        values={"max_mb": limit},
+                    )
+                )
+
+            def run():
+                read, source = _series_read({"kind": "file", "file": target.name})
+                return {"file": target.name, **_series_preview(read, source)}
+
+            return manage(run)
+
+        @app.post("/api/series/preview", dependencies=write)
+        def preview_series(body: dict):
+            """
+            The same reading again, with a different answer to the header question.
+
+            It computes and writes nothing, and it is still behind the write gate —
+            unlike the two other previews in this API. It reads a file off this
+            machine's disk by name, and that upload directory also holds library bundles
+            and machine profiles somebody else put there, so this is not a read of the
+            caller's own data alone.
+            """
+
+            def run():
+                read, source = _series_read(body or {})
+                return _series_preview(read, source)
+
+            return manage(run)
+
+        @app.post("/api/series/attach", dependencies=write)
+        def attach_series(body: dict):
+            """
+            Take this list as the one the design burns from, and show its first row.
+
+            The same body as the preview, so the window builds one request and decides
+            only where to send it.
+            """
+
+            def run():
+                read, source = _series_read(body or {})
+                return self.series.attach(read, source, (body or {}).get("skip_blank"))
+
+            return manage(run)
+
+        @app.delete("/api/series", dependencies=write)
+        def detach_series():
+            """Take the list away, and stop the bed showing names it no longer has."""
+            return manage(self.series.detach)
+
+        @app.post("/api/series/row", dependencies=write)
+        def series_row(body: dict):
+            """
+            Point the bed at one row, without starting anything.
+
+            The window's burn list is a list of rows, and looking at row twelve is
+            reading and not burning. Without this route the only way to see another
+            name was to press Start, which writes a run — an operator looking around
+            would be starting one.
+            """
+            return manage(lambda: self.series.set_row((body or {}).get("row")))
+
+        @app.post("/api/series/start", dependencies=write)
+        def series_start(body: dict | None = None):
+            """Begin the run. `row` counts from nought; absent is where the bed is."""
+            return manage(lambda: self.series.start((body or {}).get("row")))
+
+        @app.post("/api/series/burn", dependencies=write)
+        def series_burn(body: dict | None = None):
+            """
+            Burn the row the bed is showing.
+
+            Through the same `spooling()` context as the ordinary Burn button: a series
+            adds no placement of its own, so a zero point and a print-and-cut pose apply
+            to it exactly as they do to any other job.
+            """
+            confirm = bool((body or {}).get("confirm"))
+
+            def run():
+                with spooling() as pose:
+                    return self.series.burn(confirm=confirm, mutators=pose)
+
+            return manage(run)
+
+        @app.post("/api/series/advance", dependencies=write)
+        def series_advance():
+            """Move on to the next burn that still has to happen."""
+            return manage(self.series.advance)
+
+        @app.post("/api/series/redo", dependencies=write)
+        def series_redo(body: dict):
+            """Burn one of these again: point at its burn and mark that burn undone."""
+            return manage(lambda: self.series.redo((body or {}).get("row")))
+
+        @app.post("/api/series/stop", dependencies=write)
+        def series_stop():
+            """End the run and keep the list."""
+            return manage(self.series.stop)
 
         # --------------------------------------------------------------- clipart
 
@@ -1981,6 +2555,9 @@ class ApiServer:
                 body.get("rows"),
                 body.get("gap_x_mm", 5.0),
                 body.get("gap_y_mm", 5.0),
+                # Gap: a repeated `{name}` gave the same name every time. With this on
+                # each copy reads the next row of the attached list.
+                body.get("follow_list", False),
             )
 
         @app.post("/api/design/generate/radial", dependencies=write)
@@ -2582,7 +3159,7 @@ class ApiServer:
         else:
             self.channel(f"Write actions need this token: {self.token}")
 
-    def _beside(self, name: str, was: str) -> Path:
+    def _beside(self, name: str, was: str | None = None) -> Path:
         """
         A state file next to the library, moved along if it still has its old name.
 
@@ -2591,8 +3168,14 @@ class ApiServer:
         what every palette colour last did — so renaming them without moving them
         would quietly throw that away. Moving only happens when the new name is not
         taken yet; anything else would overwrite newer state with older.
+
+        `was` is optional because a file that never had a Dutch name has nothing to be
+        moved from, and passing its own name twice would mean "rename this onto itself"
+        — true today, and a trap for whoever reads it next.
         """
         target = Path(self.library.path).with_name(name)
+        if was is None:
+            return target
         legacy = Path(self.library.path).with_name(was)
         if legacy.exists() and not target.exists():
             try:

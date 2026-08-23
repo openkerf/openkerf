@@ -2,6 +2,7 @@ import { t, type MessageKey } from './i18n/core.ts';
 /** Types mirroring the openkerf-api snapshot (api/openkerf_api/status.py). */
 
 import type { TileRun } from './tiling.svelte';
+import type { SeriesState } from './series.svelte';
 
 export type Position = {
 	native: [number, number] | null;
@@ -105,6 +106,20 @@ export type Snapshot = {
 	devices: Device[];
 	/** The running tile run, or nothing. See `$lib/tiling.svelte` (`TileRun`). */
 	tiling?: TileRun | null;
+	/**
+	 * The series, or nothing at all when no list is attached.
+	 *
+	 * `_series_state()` in `api/openkerf_api/server.py`, beside the tile run and for
+	 * the same reason: the top bar, the canvas, the context panel and the run block in
+	 * the Job panel all read the live socket, and four requests for one fact drift
+	 * apart. The rows themselves are deliberately not in here — a thousand rows down
+	 * every socket a few times a minute for a number that fits in a word — so a surface
+	 * that needs them calls `GET /api/series` (`SeriesStore.load`).
+	 *
+	 * A type import, like `TileRun` above: it is erased at compile time, so `api.ts`
+	 * stays free of runes and `node --test` can still reach it.
+	 */
+	series?: SeriesState | null;
 };
 
 export type SignalEvent = {

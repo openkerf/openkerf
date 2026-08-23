@@ -69,6 +69,15 @@ deliberate:
 to get it. While it does, the field reads *calculating…*, and the last known time
 stays on the start button so the button does not change width under your cursor.
 
+**With a series attached** the clock above is one plate, and a line under it counts
+the afternoon: "This is the plate now on the bed; the 3 burns still to go take about
+1:12 together." Both numbers come off the same estimate, so the two cannot drift
+apart, and the line only appears when there is more than one plate to go — with one
+it would say the same number twice. It also describes the plate that is coming and
+not the drawing as it stands: on the last plate of a sheetful, the places the list
+has no rows left for are already taken out of it. See
+[Variable text](variable-text.md#the-run).
+
 **Material** shows the material and thickness of the sheet you are burning on, or
 *not filled in for this sheet*. The line is always there, because saying nothing
 reads as "not needed" — and then you run a birch preset on acrylic.
@@ -309,6 +318,40 @@ the one in the top bar, which is always there.
 When the job goes out, one flash crosses the bed with the words **Job started**.
 That happens once, and only when something really starts.
 
+## A series: one plate per press
+
+When a list is attached — one design burned once per row, the keyrings with fifty
+names on them — a block appears at the head of the Job tab, above the pre-flight
+and everything under it. It is the only place a series is burned from: the Series window sets
+the list up, and this is where somebody standing at the machine works it.
+
+Before the first plate it reads "A list is attached and it makes 5 burns. Nothing
+has been burned yet." with "The first one engraves Anna." under it and one button,
+**Start the series**. That button sends nothing anywhere — "This only starts the
+count of plates. Nothing goes to the machine until you press Burn this one."
+
+Once it is going the block is the run: the heading "Burn 3 of 5", what this one
+engraves, a bar with "2 of 5 burns have been made." spelled out under it, and three
+controls.
+
+- **Burn this one** sends this plate to the machine and ticks it off.
+- **Burned, next one** moves the bed on without burning — "This burns nothing. It
+  moves the bed on to the next burn that still has to happen."
+- **Stop the series** ends the count and keeps the list: "The list stays and so does
+  the row; only the count of what has been burned goes."
+
+**When it goes wrong.** The ordinary **Start job** button in the pre-flight is off
+while a series is going, and so is **Start now** after arming, both with the same
+reason on them: "A series is going, so this button would burn one plate and count
+nothing. Press Burn this one instead: that is the button that counts the plates."
+The engine refuses the same thing whatever sends it, so a second tab or a script
+does not get past it either. A drawing that has changed since the
+run began turns the block amber and takes the burn button off until you stop and
+start again. A tile run and a series refuse each other, in both directions.
+
+Everything else — the list, the placeholder, a plate that came out wrong, a jig
+frame that burns only once — is on [Variable text](variable-text.md).
+
 ## While it runs
 
 The heading changes from GETTING READY to **THE JOB**, and the block at the top
@@ -483,6 +526,11 @@ degrees. Pick two marks as far apart as the sheet allows.
 
 This is the same measurement a tile of a large job uses, where the plate has to go
 back in the machine between tiles — see [Bigger than the bed](tiling.md).
+
+It also goes with a series. A series changes what a text says and moves nothing on
+the bed, so a measured pose applies to every plate of it exactly as it does to any
+other job — unlike a tile run, which keeps a count of its own and is refused while
+a series is going. See [Variable text](variable-text.md#a-series-with-print-and-cut-and-not-with-tiles).
 
 **When it goes wrong.**
 

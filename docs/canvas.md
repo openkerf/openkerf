@@ -49,7 +49,8 @@ The rail on the left holds eight tools; one is active at a time.
 
 Below the tools sit **Place image** and the buttons that open a window of their own:
 **Generators — grid, circle, polygon, box, QR**, **Search clipart in public collections**,
-**Test grid**, **Presetariat — shared settings** and the material library.
+**Test grid**, **Series — one design burned once per row of a list**, **Presetariat — shared
+settings** and the material library.
 
 Placing a shape snaps just as dragging does, so a new rectangle lands on the grid line you
 put it on and not 3.7 mm beside it.
@@ -165,6 +166,34 @@ Two more things worth knowing:
 
 The flag is the engine's own, so a design locked here opens locked in MeerK40t's own
 interface as well.
+
+## What a shape does in a series
+
+A **series** burns one design once per row of a list — fifty keyrings with fifty names on
+them. Two things a shape on the bed can carry belong to that, and both are on the shape
+rather than in the list, because they are properties of your drawing.
+
+**A text can read from the list.** Put a column name in curly brackets — `{name}` — and the
+text says something different on every plate. Right-click the text and the menu has **Insert
+a column**: one row per column of the list, labelled with the column's own name. With exactly
+one column there is no submenu and the row *is* that column, reading **Insert {column}**;
+with no list attached the row is greyed and says why — "No list is attached in the Series
+window".
+
+The panel on the right then carries two lines instead of one: the text as you typed it, in
+quotation marks, and under it what it comes out as for the plate that is next — "For the burn
+now on the bed this reads “Anna”." The two are different facts. The first says which column
+the tag reads; the second says what the machine is about to cut.
+
+**A shape can burn only once.** A jig frame is cut on the first plate and then holds the rest
+of them in turn, so right-click it and choose **Burn only once** — "In a series this shape
+burns on the first plate only — a jig frame, or the pockets the pieces sit in". The same row
+reads **Burn on every plate** on a shape that already carries the mark: "This shape goes onto
+every plate of the series again". The mark can be set before there is any list, it travels in
+the project file, and outside a series it withholds nothing.
+
+The window itself, the list and the run at the machine are on [Variable
+text](variable-text.md).
 
 ## Shapes lying on top of each other
 
@@ -381,10 +410,14 @@ everything on the bed**, which pulls the whole design back inside the bed, "Incl
 clicked". That last one is the only way to reach a shape you have dragged out of
 sight and can no longer click.
 
-One row on that menu is not about the view at all: **Show cut path** (⌥P) opens
+Two rows on that menu are not about the view at all. **Show cut path** (⌥P) opens
 the window that walks through the job in the order the machine will burn it. It is
 here as well as in the pre-flight because this is where you are while you are
-still drawing — see [Burning](job.md#the-cut-path).
+still drawing — see [Burning](job.md#the-cut-path). And **Set up a series** opens
+the Series window — "Attach a list, see what every burn engraves, and choose where
+to start" — which is the other door to the button on the tool rail, and the one you
+find while you are already right-clicking the bed; see [Variable
+text](variable-text.md#the-series-window).
 
 Every row, with its shortcut and the reason it can be greyed out, is in
 [Reference](reference.md#right-click-on-the-canvas).

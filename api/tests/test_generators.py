@@ -11,7 +11,12 @@ from openkerf_api.server import ApiServer
 
 @pytest.fixture
 def client(kernel, tmp_path):
-    with TestClient(ApiServer(kernel, library_path=tmp_path / "g.db").build_app()) as c:
+    # The server itself hangs on the client, because the repeat that follows a list is
+    # about two of its parts agreeing (`generators` and `series`) and one test below
+    # reaches for them directly.
+    server = ApiServer(kernel, library_path=tmp_path / "g.db")
+    with TestClient(server.build_app()) as c:
+        c.server = server
         yield c
 
 
@@ -107,6 +112,228 @@ def test_a_radial_copy_carries_its_own_bounds(client):
     )
 
     assert_bounds_follow_the_shape(client)
+
+
+# ------------------------------------------------- herhalen langs een lijst
+#
+# "Each copy takes the next name from the list". The measured gap it closes:
+# `core/elements/grid.py:237-241` copies with a plain `copy(node)` and knows nothing
+# about a wordlist, so a repeated `{name}` gives the same name as many times as you
+# asked for — three plates all reading Anna.
+
+FIVE = ("Anna", "Bram", "Cees", "Daan", "Eva")
+
+
+def a_list(client, names=FIVE, column="name"):
+    """Attach a list the way the Series window does: upload, then attach."""
+    data = (column + "\n" + "\n".join(names) + "\n").encode("utf-8")
+    uploaded = client.post(
+        "/api/series/upload", files={"file": ("names.csv", data, "text/csv")}
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    attached = client.post(
+        "/api/series/attach", json={"file": uploaded.json()["file"]}
+    )
+    assert attached.status_code == 200, attached.text
+
+
+def a_text(client, template, x_mm=10.0, y_mm=20.0):
+    """
+    A text on the bed, placed *after* the list is attached.
+
+    In that order deliberately: a text placed while nothing is attached renders as the
+    empty string, so its bounding box comes back `(nan, nan, nan, nan)` and it belongs
+    to no layer at all. That ghost is its own subject; a repeat test has to start from a
+    shape that is really there.
+    """
+    response = client.post(
+        "/api/design/elements",
+        json={
+            "type": "text",
+            "x_mm": x_mm,
+            "y_mm": y_mm,
+            "text": template,
+            "font_size_mm": 8,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["ids"][0]
+
+
+def repeat(client, ids, columns=3, rows=1, **body):
+    return client.post(
+        "/api/design/generate/grid",
+        json={"ids": ids, "columns": columns, "rows": rows, "gap_x_mm": 5, **body},
+    )
+
+
+#: How wide a row is when reading the bed. Not nought: these texts hold different
+#: names once they are rendered, and different letters are different heights — measured,
+#: half a millimetre between `Anna` and `Bram` — so a row is a band and not a line. Five
+#: millimetres is far under the gap between two rows of a grid and far over that.
+ROW_BAND_MM = 5.0
+
+
+def in_reading_order(kernel):
+    """Every text on the bed, top to bottom and left to right, as (template, burned)."""
+    from meerk40t.core.units import UNITS_PER_MM
+
+    nodes = [n for n in kernel.elements.elems() if getattr(n, "mktext", None)]
+    nodes.sort(
+        key=lambda n: (
+            round(n.bounds[1] / UNITS_PER_MM / ROW_BAND_MM),
+            round(n.bounds[0] / UNITS_PER_MM, 2),
+        )
+    )
+    return [(str(n.mktext), getattr(n, "_translated_text", None)) for n in nodes]
+
+
+def test_a_repeat_gives_each_copy_the_next_name(client, kernel):
+    """
+    Three copies read Anna, Bram and Cees — the whole point of the option.
+
+    The names are the engine's own rendering (`_translated_text`), not our arithmetic,
+    which is what makes this the same answer the burn gives. Fails on the engine's plain
+    `copy(node)`: measured, three copies all reading Anna, in one undo scope, with
+    nothing anywhere saying why.
+    """
+    a_list(client)
+    text = a_text(client, "{name}")
+
+    response = repeat(client, [text], follow_list=True)
+
+    assert response.status_code == 200, response.text
+    assert in_reading_order(kernel) == [
+        ("{name}", "Anna"),
+        ("{name#+1}", "Bram"),
+        ("{name#+2}", "Cees"),
+    ]
+
+
+def test_without_the_option_every_copy_reads_the_same_row(client, kernel):
+    """
+    The counter-proof, and the behaviour anybody who does not tick the box still gets.
+
+    Also the guard on the default: `follow_list` absent must mean off, because a repeat
+    of a text that is *meant* to be the same on every piece — a logo's wordmark — must
+    not start walking a list.
+    """
+    a_list(client)
+    text = a_text(client, "{name}")
+
+    assert repeat(client, [text]).status_code == 200
+
+    assert in_reading_order(kernel) == [("{name}", "Anna")] * 3
+
+
+def test_a_repeat_across_two_rows_follows_reading_order(client, kernel):
+    """
+    Two by two: left to right, then down. Nobody hands out plates in another order.
+
+    A 2x2 grid is also where the cells stop being one row of the tree, so this is the
+    test that the order is *place* and not a happy accident of how many copies there are.
+    """
+    a_list(client)
+    text = a_text(client, "{name}")
+
+    answer = repeat(client, [text], columns=2, rows=2, gap_y_mm=5, follow_list=True)
+    assert answer.status_code == 200, answer.text
+
+    assert [burned for _, burned in in_reading_order(kernel)] == [
+        "Anna",
+        "Bram",
+        "Cees",
+        "Daan",
+    ]
+
+
+def test_the_copies_take_their_row_from_where_they_lie_and_not_from_the_tree(client):
+    """
+    The rule stated on its own: reading order decides, tree order does not.
+
+    Three texts placed by hand from right to left, so the tree order is the reverse of
+    the reading order. The one on the left is the first plate whatever the tree says.
+    Through `_follow_list` directly, because there is no way to make the engine's own
+    `grid` build a tree in the wrong order — which is exactly why the rule needs a test
+    of its own rather than resting on the shape of one generator's output.
+    """
+    a_list(client)
+    right = a_text(client, "{name}", x_mm=90)
+    middle = a_text(client, "{name}", x_mm=50)
+    left = a_text(client, "{name}", x_mm=10)
+    generators = client.server.generators
+    kernel = generators.kernel
+    nodes = {i: kernel.elements.find_node(i) for i in (right, middle, left)}
+
+    # As `grid` calls it: the selection is one cell and everything new is the others.
+    generators._follow_list([nodes[right]], {id(nodes[right])})
+
+    assert [str(nodes[i].mktext) for i in (left, middle, right)] == [
+        "{name}",
+        "{name#+1}",
+        "{name#+2}",
+    ]
+
+
+def test_a_sheetful_from_a_repeat_eats_its_rows_in_one_burn(client):
+    """
+    Three copies on the sheet make one burn take three rows, and the run agrees.
+
+    This is the payoff of adding to the offset rather than overwriting it: `step_of`
+    reads the same templates the repeat wrote, so five names come out as two burns and
+    not five. Fails on any implementation that gives every copy offset nought — then the
+    operator burns the same plate five times over.
+    """
+    a_list(client)
+    text = a_text(client, "{name}")
+    assert repeat(client, [text], follow_list=True).status_code == 200
+
+    state = client.get("/api/series").json()
+
+    assert state["step"] == 3
+    assert state["burns"] == 2
+
+
+def test_a_repeat_that_follows_the_list_needs_a_list(client, kernel):
+    """
+    Nothing attached: a sentence, and not a single copy made.
+
+    The refusal comes before the engine's `grid` runs, deliberately. Refusing afterwards
+    would leave three copies standing under an answer that says nothing happened, and an
+    undo scope that has to be pressed to clear up a failure is a worse dead end than the
+    failure.
+    """
+    text = a_text(client, "{name}")
+
+    response = repeat(client, [text], follow_list=True)
+
+    assert response.status_code == 409
+    # `gen.noList` and not `series.noList`: `Series.vet()` uses that code for another
+    # sentence about the same fact ("a text with a placeholder cannot become anything"),
+    # and one code carries one translated sentence.
+    assert response.headers["X-OpenKerf-Error"] == "gen.noList"
+    # Counted in the tree and not in the snapshot: this text asks for a column no list
+    # has, so it renders as nothing and drops out of the snapshot altogether — the ghost
+    # `Series._ghosts` is about. What matters here is that no copy was made.
+    assert len(list(kernel.elements.elems())) == 1
+
+
+def test_a_repeat_that_follows_the_list_needs_something_that_reads_it(client):
+    """
+    A list, but nothing on the shapes to fill in: refused by name.
+
+    Silently making identical copies is the failure this whole option exists to end, so
+    it may not be this option's own behaviour when the box is ticked over a plain
+    rectangle.
+    """
+    a_list(client)
+    rect = a_rect(client)
+
+    response = repeat(client, [rect], follow_list=True)
+
+    assert response.status_code == 409
+    assert response.headers["X-OpenKerf-Error"] == "gen.nothingToFollow"
+    assert len(elements(client)) == 1
 
 
 # -------------------------------------------------------------------- vormen

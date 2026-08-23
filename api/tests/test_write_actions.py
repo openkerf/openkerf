@@ -21,6 +21,23 @@ WRITE_ROUTES = [
     # Gap E5: reading a machine profile in creates a machine with a bed, an interface and an
     # address. That decides where the head goes.
     ("/api/machines/import", {"json": {}}),
+    # A series. The upload writes a file in the upload directory, attaching decides what
+    # fifty plates will say, and the five run verbs keep the bookkeeping of which plates
+    # are burned and hand jobs to the spooler. `preview` is in here too although it
+    # computes only: it reads a file off this machine's disk by name.
+    ("/api/series/upload", {"files": {"file": ("n.csv", b"name\nAnna\n", "text/csv")}}),
+    ("/api/series/attach", {"json": {}}),
+    ("/api/series/preview", {"json": {}}),
+    ("/api/series/row", {"json": {"row": 0}}),
+    ("/api/series/start", {"json": {}}),
+    ("/api/series/burn", {"json": {}}),
+    ("/api/series/advance", {"json": {}}),
+    ("/api/series/redo", {"json": {}}),
+    ("/api/series/stop", {"json": {}}),
+    # "Burn only once" decides whether a jig frame is in every plate of a series or in
+    # the first one, so it decides what the laser does and belongs behind the gate with
+    # the rest of the family.
+    ("/api/design/elements/x/once", {"json": {"once": True}}),
 ]
 
 # The same requirement for the other verbs. A grid photo's alignment is a PUT and would
@@ -57,6 +74,14 @@ READ_ONLY_POSTS = {
     # hanging it on the drawing. Proved by test_the_preview_leaves_the_drawing_alone.
     "/api/design/generate/preview",
 }
+
+# `/api/series/preview` belongs to that family by what it does — it re-reads an uploaded
+# file with a different answer to the header question and changes nothing — and it is
+# deliberately *not* listed above. Being in this set means this test asks nothing of the
+# route, and that route reads a file off this machine's disk by name: the upload
+# directory it reads from also holds library bundles and machine profiles somebody else
+# put there, so off localhost it must stay behind the token. It is in WRITE_ROUTES
+# instead, where the guard is exercised rather than excused.
 
 
 def test_every_mutating_route_requires_the_write_guard(local_client):

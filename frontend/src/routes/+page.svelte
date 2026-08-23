@@ -29,6 +29,7 @@
 	import Generators from '$components/Generators.svelte';
 	import CameraCalibration from '$components/CameraCalibration.svelte';
 	import Clipart from '$components/Clipart.svelte';
+import Series from '$components/Series.svelte';
 	import SheetTabs from '$components/SheetTabs.svelte';
 	import SheetMaterial from '$components/SheetMaterial.svelte';
 	import PhoneView from '$components/PhoneView.svelte';
@@ -37,6 +38,7 @@
 	import { CameraStore } from '$lib/camera.svelte';
 	import { PresetariatStore } from '$lib/presetariat.svelte';
 	import { TilingStore } from '$lib/tiling.svelte';
+import { SeriesStore } from '$lib/series.svelte';
 	import TestGrid from '$components/TestGrid.svelte';
 	import TestGridResult from '$components/TestGridResult.svelte';
 	import TextDialog from '$components/TextDialog.svelte';
@@ -181,11 +183,16 @@
 	let catalogueOpen = $state(false);
 	let generatorsOpen = $state(false);
 	let clipartOpen = $state(false);
+	let seriesOpen = $state(false);
 	const sheets = new SheetStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let calibrateOpen = $state(false);
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const catalogue = new PresetariatStore(() => localStorage.getItem('openkerf.token') ?? '');
 	const tiling = new TilingStore(token);
+	// The list a series burns from. Beside the other stores, because three surfaces
+	// read it — this window, the context panel and the run block in the Job panel —
+	// and one of them gets it from the status payload rather than from its own load.
+	const series = new SeriesStore(token);
 	/** An action that replaces the current work, awaiting a yes. */
 	type Replacement = { kind: 'project'; file: File } | { kind: 'fresh' };
 	let pending = $state<Replacement | null>(null);
@@ -496,11 +503,12 @@
 		bridgeNotice = null;
 		const outcome = await edits.setBridges(design.selectedIds, fields);
 		if (!outcome) {
-			// The refusal goes beside the field that caused it. `edits.error` also lands at
-			// the top of the panel, and measured with the selection card open that sits 700 px
-			// above the bridge fields — off screen, so you type a length that cannot work and
-			// nothing at all seems to happen.
+			// The refusal goes beside the field that caused it — a length that cannot work
+			// is answered where the length is typed. It is taken *out* of the general
+			// notice at the same time: the sentence has a better home here, and the same
+			// fact twice on one screen is one fact too many.
 			bridgeNotice = edits.error;
+			edits.error = null;
 			// Nothing changed on the shapes, so the panel's summary is the same object and its
 			// fields would keep the refused numbers — a read-back of a state that is not
 			// there. This tells the panel to fetch them from the shapes again.
@@ -525,6 +533,7 @@
 		const outcome = await edits.clearBridges(design.selectedIds);
 		if (!outcome) {
 			bridgeNotice = edits.error;
+			edits.error = null;
 			bridgeRevision += 1;
 			return;
 		}
@@ -733,6 +742,12 @@
 		camera.load();
 		sheets.load();
 		library.load();
+		// The list a series burns from. Fetched here and not only by its own window,
+		// because two surfaces outside it read it the moment somebody right-clicks: the
+		// Insert-column rows in the menu and the read-back line under a text in the
+		// panel. Without this the menu would say "no list is attached" while one is,
+		// which is the one thing a greyed row may never do.
+		series.load();
 		leesKlembord();
 		if (window.innerWidth < 850) panelOpen = false;
 		const wantedTab = $page.url.searchParams.get('tab');
@@ -801,6 +816,13 @@
 	// canvas and the phone all read this one source.
 	$effect(() => {
 		tiling.adopt(status.snapshot?.tiling ?? null);
+	});
+	// And the series, from the same socket and for the same reason: the run block in
+	// the Job panel, the context panel's read-back line and this page all have to say
+	// the same thing about which row is next. The rows themselves never ride here —
+	// `series.load()` in `onMount` brings those once.
+	$effect(() => {
+		series.adopt(status.snapshot?.series ?? null);
 	});
 	/**
 	 * Fetching the division, and again as soon as something about it changes.
@@ -939,6 +961,44 @@
 		groups?: string[][];
 	} | null>(null);
 
+	/**
+	 * Put a column of the list into the selected text.
+	 *
+	 * Appended and never replacing: a tag normally reads "No. {serial}", so what is
+	 * already there is the half somebody typed. It goes out through the ordinary text
+	 * route, which is what re-renders the path and what refuses a bracket that does not
+	 * close — one road in, so this menu cannot make a text the text field would refuse.
+	 */
+	async function insertColumn(column: string) {
+		const id = design.selectedId;
+		// No name to insert. The row is greyed in that state and carries no shortcut, so
+		// this is the belt to that brace rather than a case anybody can reach.
+		if (!id || !column.trim()) return;
+		const was = design.elements.find((element) => element.id === id)?.text?.text ?? '';
+		if ((await edits.updateText(id, { text: `${was}{${column}}` })).ok) {
+			await design.load();
+			// The list has to be asked again, because what a placeholder renders is
+			// computed for the row the bed shows and this text has a placeholder it did
+			// not have a moment ago. Without it the panel's read-back line would quote
+			// the run instead of the name.
+			await series.load();
+		}
+	}
+
+	/**
+	 * "Burn only once" on the selection, or on every plate of the series again.
+	 *
+	 * One request per shape, because that is what the route takes: the mark is about a
+	 * jig frame or the pockets the pieces sit in, and those are a handful of shapes.
+	 */
+	async function setBurnOnce(once: boolean) {
+		const ids = design.selectedIds;
+		if (!ids.length) return;
+		for (const id of ids)
+			await post(`/api/design/elements/${encodeURIComponent(id)}/once`, { once });
+		await design.load();
+	}
+
 	let handlers: Handlers = {
 		cut: () => klembordActie('cut', design.selectedIds),
 		copy: () => klembordActie('copy', design.selectedIds),
@@ -975,6 +1035,9 @@
 			editingText = design.selectedId;
 			textOpen = true;
 		},
+		insertColumn: (column) => insertColumn(column),
+		burnOnce: (once) => setBurnOnce(once),
+		series: () => (seriesOpen = true),
 		crop: () => (cropping = true),
 		uncrop: async () => {
 			const id = design.selectedId;
@@ -1075,7 +1138,17 @@
 					id: e.id,
 					label: shapeLine(e, index + 1),
 					selected: design.isSelected(e.id)
-				}))
+				})),
+			// The columns of the list a series burns from, so the menu can offer to put one
+			// into a text. Empty when nothing is attached, and the row then says so.
+			columns: series.state?.attached ? series.state.columns : [],
+			// `mkonce` rides every snapshot (`design.py`), but the shared element type in
+			// `$lib/design.svelte` does not name it yet and that file belongs to another
+			// surface this round. One narrow read, so the row knows which of its two
+			// wordings to show; the cast goes when the type grows.
+			once:
+				chosen.length > 0 &&
+				chosen.every((e) => Boolean((e as { once?: boolean }).once))
 		};
 	});
 
@@ -1340,6 +1413,7 @@
 		onOpenCatalogue={() => (catalogueOpen = true)}
 		onOpenGenerators={() => (generatorsOpen = true)}
 		onOpenClipart={() => (clipartOpen = true)}
+		onOpenSeries={() => (seriesOpen = true)}
 		onPlaceImage={placeImage}
 		onOpenFile={openFile}
 		onOpenProject={openProject}
@@ -1532,6 +1606,7 @@
 					{design}
 					{edits}
 					{canEdit}
+					{series}
 					onRotate={rotate}
 					onAssign={assign}
 					onLayerChange={() => design.load()}
@@ -1562,6 +1637,7 @@
 				<JobPanel
 					{device}
 					{tiling}
+					{series}
 					events={status.events}
 					{control}
 					activeJob={status.activeJob}
@@ -1637,6 +1713,7 @@
 	job={status.activeJob}
 	connected={status.connected}
 	{control}
+	{edits}
 	actions={!tablet}
 />
 {/if}
@@ -1827,12 +1904,27 @@
 
 <Clipart bind:open={clipartOpen} {canEdit} onInserted={() => design.load()} />
 
+<!-- One design burned once per row of a list. Every verb in here either reads or
+     moves the pointer; the burning is the Job panel's button, at the machine. -->
+<Series
+	bind:open={seriesOpen}
+	{series}
+	{canEdit}
+	onChanged={() => design.load()}
+	onDeleteShape={async (id) => {
+		// `.ok` and not the result itself: an EditResult is an object and therefore
+		// always truthy, so `if (await …)` would reload the design after a refusal too.
+		if ((await edits.remove([id])).ok) await design.load();
+	}}
+/>
+
 <Generators
 	bind:open={generatorsOpen}
 	hasSelection={design.selectedIds.length > 0}
 	selectedIds={design.selectedIds}
 	busy={edits.busy}
 	hasZAxis={design.layerCapabilities.z_step}
+	listAttached={series.attached}
 	onGenerate={async (what, body) => {
 		const response = await post(`/api/design/generate/${what}`, {
 			...body,

@@ -19,7 +19,8 @@
 		onSaved,
 		onOpenCatalogue,
 		onOpenGenerators,
-		onOpenClipart
+		onOpenClipart,
+		onOpenSeries
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
@@ -46,6 +47,7 @@
 		onOpenCatalogue?: () => void;
 		onOpenGenerators?: () => void;
 		onOpenClipart?: () => void;
+		onOpenSeries?: () => void;
 	} = $props();
 
 	// Every tool draws on a click on the bed; selecting is the resting state.
@@ -200,6 +202,14 @@
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
 				<span>{t('rail.clipart.short')}</span>
 			</button>
+			<!-- Series has to be here as well, and not only in the wide rail: on a tablet
+			     the canvas menu is the only other door to it, and there is no long press
+			     on the canvas — so without this row the window has no door at all on a
+			     touch screen, while all four of its neighbours have one. -->
+			<button class="row" role="menuitem" disabled={!canEdit} onclick={() => { moreOpen = false; onOpenSeries?.(); }}>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
+				<span>{t('rail.series.short')}</span>
+			</button>
 			<button class="row" role="menuitem" onclick={() => { moreOpen = false; onOpenCatalogue?.(); }}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 18v2h16v-2"/></svg>
 				<span>{t('rail.presetariat.short')}</span>
@@ -265,6 +275,12 @@
 		</button>
 		<button class="tool" title={t('rail.clipart')} disabled={!canEdit} onclick={() => onOpenClipart?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
+		</button>
+		<!-- One design burned once per row of a list: a workspace you search and
+		     compare in, so a window of its own — like the four beside it. No shortcut:
+		     none of those four has one either, and keys are scarce. -->
+		<button class="tool" title={t('rail.series')} disabled={!canEdit} onclick={() => onOpenSeries?.()}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
 		</button>
 		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => onOpenGrid?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>

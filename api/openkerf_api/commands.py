@@ -235,7 +235,7 @@ class CommandRunner:
     def plan_claims(self) -> int:
         return self._plan_claims
 
-    def preview_plan(self, harvest):
+    def preview_plan(self, harvest, mutators=()):
         """
         Build the plan for looking at, and hand it to `harvest` before letting go.
 
@@ -243,6 +243,12 @@ class CommandRunner:
         included, because a preview that skips our own workarounds shows something
         the machine will not do — with `spool` left off and the lock released
         between the phases.
+
+        `mutators` is what the burn would add and this must add too. It exists for the
+        series: on the last plate the places the list has no names left for hold the
+        literal `{name#+2}`, and a cut-path window that drew those nine characters — and
+        a jig frame on every plate after the first — would be answering "what does the
+        machine do, when" about a job nobody is going to run.
 
         `harvest` runs while the lock is still held: after this method there is no
         plan any more (`plan clear` in the `finally`), and a caller holding a
@@ -252,9 +258,9 @@ class CommandRunner:
         error but the answer: whoever is burning wins.
         """
         with self.rotary_applied():
-            return self._preview_plan_locked(harvest)
+            return self._preview_plan_locked(harvest, mutators)
 
-    def _preview_plan_locked(self, harvest):
+    def _preview_plan_locked(self, harvest, mutators=()):
         # Split off only so that the rotary wraps the whole build; `preprocess` is the
         # phase that reads `device.rotary`, and it is one of the phases below.
         multi = self._multi_pass_layers()
@@ -274,6 +280,11 @@ class CommandRunner:
             with self._plan_lock:
                 self._give_way(claims)
                 self.run(PLAN_COPY)
+                # In the burn's own order: what a plate leaves out first, and only then
+                # the passes of what is left. The other way round the passes of a place
+                # that is not burned at all would be unfolded and then removed.
+                if mutators:
+                    self._apply_mutators(list(mutators))
                 if multi:
                     from meerk40t.core.node.util_console import ConsoleOperation
 

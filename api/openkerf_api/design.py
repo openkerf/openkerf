@@ -17,6 +17,31 @@ from meerk40t.core.units import UNITS_PER_MM
 OPERATION_PREFIX = ("op ", "effect ")
 
 
+def _finite(values):
+    """
+    A bounding box, or None when it is not a box at all.
+
+    A node can carry `(nan, nan, nan, nan)`: the engine writes a text whose whole
+    content is a placeholder into an SVG as `<path d="">` (nothing rendered, because
+    there was no list to render it from), and reading that file back gives an
+    `elem point` with no geometry and no bounds. `nan` is not JSON — FastAPI serialises
+    strictly — so a snapshot carrying one answered **500** and the canvas could not be
+    drawn at all. The project was then unopenable, and the shape at fault could not be
+    clicked away because nothing of it renders.
+
+    So the box becomes None and the element says `broken`. Reporting it beats dropping
+    it: something has to be able to name the shape that has to go.
+    """
+    if not values:
+        return None
+    numbers = [_plain(v) for v in values]
+    if any(
+        not isinstance(v, (int, float)) or not math.isfinite(v) for v in numbers
+    ):
+        return None
+    return numbers
+
+
 def _plain(value):
     """numpy scalars and Color objects must survive JSON."""
     if value is None or isinstance(value, (str, bool)):
@@ -463,6 +488,12 @@ class DesignReader:
             # handles on a locked shape and the panel offers the way out, so the
             # flag has to travel with every snapshot rather than be asked for.
             "locked": bool(getattr(node, "lock", False)),
+            # "Burn only once": in a series this shape is on the first plate and not on
+            # the forty-nine after it. The engine knows nothing about it; it is our own
+            # `mkonce`, which rides the SVG because of the `mk` prefix (see
+            # `Drawing.once`). The menu row needs to know which of its two wordings to
+            # show, so the flag travels with every snapshot rather than being asked for.
+            "once": bool(getattr(node, "mkonce", None)),
             "group_id": _group_of(node),
             "text": _text_of(node),
             "line": _line_of(node),
@@ -471,7 +502,11 @@ class DesignReader:
             "bridges": _bridges_of(node, geometry),
             "stroke": _color(getattr(node, "stroke", None)),
             "fill": _color(getattr(node, "fill", None)),
-            "bounds": [_plain(v) for v in (node.bounds or [])] or None,
+            "bounds": _finite(getattr(node, "bounds", None)),
+            # A shape with no box is a shape the canvas cannot draw and nobody can
+            # click. It is in the snapshot so that something can offer to delete it —
+            # see `_finite` for how one gets made.
+            "broken": _finite(getattr(node, "bounds", None)) is None,
             # How many separate pieces the shape consists of. A CAD export is often one path
             # with dozens of panels in it, and the panel has to be able to say how many shapes
             # splitting produces. Free to read off: in the path data every piece starts with

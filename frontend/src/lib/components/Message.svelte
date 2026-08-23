@@ -9,34 +9,88 @@
 	 *
 	 * It stays up until you click it away. A message that disappears by itself is one you
 	 * miss precisely when you glanced at the machine.
+	 *
+	 * The refusal of an *edit* comes here for the same reason. It used to live only at the
+	 * top of the design panel, and you draw from the tool rail, the right-click menu and
+	 * the text window — from every tab, in other words. Placing a text with a placeholder
+	 * no column fills while the Job tab was open therefore closed the window, put no shape
+	 * on the bed and said nothing at all. Same complaint as the import, so the same answer,
+	 * and the panel no longer says it a second time.
+	 *
+	 * `role="alert"` and not `status`: this is the answer to something you have just done,
+	 * and the thing you asked for did not happen. That is worth interrupting for.
 	 */
 	import { t } from '$lib/i18n/index.svelte';
 	import type { Controller } from '$lib/control.svelte';
 
-	let { control }: { control: Controller } = $props();
+	let {
+		control,
+		edits = null
+	}: {
+		control: Controller;
+		/** A refused edit — drawing, moving, a layer. Anything with a sentence to clear. */
+		edits?: { error: string | null } | null;
+	} = $props();
+
+	// Two senders, two sentences, and neither may push the other off the screen: a
+	// machine that complains and a refused edit are separate facts. One below the other,
+	// each with its own cross.
+	let notices = $derived(
+		[
+			{
+				key: 'control',
+				text: control.error,
+				clear: () => {
+					control.error = null;
+				}
+			},
+			{
+				key: 'edits',
+				text: edits?.error ?? null,
+				clear: () => {
+					if (edits) edits.error = null;
+				}
+			}
+		].filter((notice) => Boolean(notice.text))
+	);
 </script>
 
-{#if control.error}
-	<div class="notice" role="alert">
-		<span class="stip" aria-hidden="true"></span>
-		<p>{control.error}</p>
-		<button aria-label={t('message.close')} onclick={() => (control.error = null)}>×</button>
+{#if notices.length}
+	<div class="notices">
+		{#each notices as notice (notice.key)}
+			<div class="notice" role="alert">
+				<span class="stip" aria-hidden="true"></span>
+				<p>{notice.text}</p>
+				<button aria-label={t('message.close')} onclick={notice.clear}>×</button>
+			</div>
+		{/each}
 	</div>
 {/if}
 
 <style>
-	.notice {
+	.notices {
 		position: fixed;
 		/* Top right, below the top bar. At first it was in the bottom right and covered
 		   the zoom buttons; besides, most of these errors come from the top bar (open,
 		   import, export) and that is where the answer should appear. */
 		right: var(--space-4);
-		top: calc(var(--topbar-height) + var(--space-3));
+		/* Below the bars above the canvas, not over them (DESIGN-SYSTEM v4, "a message
+		   does not cover a control"): at the old offset the card lay across the right
+		   end of the action bar. `--topedge-height` is measured in `+page.svelte` and is
+		   zero where there are no bars. The alarm card hangs from the same line. */
+		top: calc(var(--topbar-height) + var(--topedge-height, 0px) + var(--space-3));
 		z-index: 60;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: var(--space-2);
+		max-width: min(420px, calc(100vw - 2 * var(--space-4)));
+	}
+	.notice {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-2);
-		max-width: min(420px, calc(100vw - 2 * var(--space-4)));
+		width: 100%;
 		padding: var(--space-3);
 		border: 1px solid var(--danger-solid);
 		border-radius: var(--radius-card);

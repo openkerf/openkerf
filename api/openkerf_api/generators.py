@@ -25,12 +25,15 @@ from .edits import DesignError, _finite, _positive
 
 
 class Generators:
-    def __init__(self, kernel, runner, drawing=None, sheets=None):
+    def __init__(self, kernel, runner, drawing=None, sheets=None, series=None):
         self.kernel = kernel
         self.runner = runner
         self.drawing = drawing
         # For a box that does not fit on one sheet; see box().
         self.sheets = sheets
+        # For "each copy takes the next name from the list"; see grid(). Optional,
+        # because a repeat without a list is the ordinary case and must not need one.
+        self.series = series
 
     @property
     def elements(self):
@@ -38,12 +41,20 @@ class Generators:
 
     # ------------------------------------------------------------ herhalen
 
-    def grid(self, ids, columns, rows, gap_x_mm=5.0, gap_y_mm=5.0) -> dict:
+    def grid(
+        self, ids, columns, rows, gap_x_mm=5.0, gap_y_mm=5.0, follow_list=False
+    ) -> dict:
         """
         Repeating the selection in rows and columns.
 
         The spacing is a **gap** between the shapes, not centre to centre: that is what you
         want to be able to choose on material, because that is where the cut goes.
+
+        With `follow_list` every copy takes the next row of the attached list instead of
+        the same one. Without it a repeated `{name}` gives the same name as many times as
+        you asked for — measured: three copies all reading `Anna`, because
+        `core/elements/grid.py:237-241` copies with a plain `copy(node)` and knows nothing
+        about a wordlist. Two ways of copying that disagree is worse than either.
         """
         columns, rows = self._count(columns, "columns"), self._count(rows, "rows")
         if columns * rows <= 1:
@@ -53,11 +64,116 @@ class Generators:
         if gap_x < 0 or gap_y < 0:
             raise DesignError("A negative gap makes the shapes overlap.")
 
-        with self._selection(ids), self.elements.undoscope("Grid repeat"):
+        with self._selection(ids) as chosen, self.elements.undoscope("Grid repeat"):
+            if follow_list:
+                # Before anything is copied. Refusing afterwards would leave the copies
+                # standing while the answer says nothing happened.
+                self._can_follow(chosen)
+            before = set(map(id, self.elements.elems()))
             self.runner.run(
                 f"grid {columns} {rows} {gap_x:.4f}mm {gap_y:.4f}mm --relative"
             )
+            if follow_list:
+                self._follow_list(chosen, before)
         return self._added("grid", columns * rows)
+
+    def _can_follow(self, chosen) -> None:
+        """
+        The two things a repeat that follows the list needs, said in whole sentences.
+
+        Both are refusals and not silent no-ops. A ticked box that quietly does nothing
+        leaves you with fifty identical plates and no idea why — which is the very bug
+        this option exists to end.
+        """
+        if self.series is None or not self.series.rows():
+            # Its own code and not `series.noList`, which `Series.vet()` already uses for
+            # a different sentence about the same fact: there it is "a text with a
+            # placeholder in it cannot become anything", here it is "there is no next
+            # name to take". One code carries one translated sentence, so two sentences
+            # need two codes — otherwise one of the two surfaces says the wrong thing as
+            # soon as the catalogue is written.
+            raise DesignError(
+                "No list is attached, so there is no next name to take. Import a list "
+                "in the Series window first.",
+                code="gen.noList",
+            )
+        if not any(getattr(node, "mktext", None) for node in chosen):
+            raise DesignError(
+                "None of the shapes you are repeating has a placeholder in its text, so "
+                "there is no name for the copies to take. Put a column into a text "
+                "first.",
+                code="gen.nothingToFollow",
+            )
+
+    def _follow_list(self, chosen, before) -> None:
+        """
+        Give every copy the next row: cell 1 reads `{name#+1}`, cell 2 `{name#+2}`.
+
+        **The copies are found by node identity and not by id.** The ids are handed out
+        by `validate_ids()` inside the generator, so a diff of ids finds nothing useful;
+        `set(map(id, elems()))` before and after, inside the one undoscope, does.
+
+        **The bounding boxes have to be asked for again before they can be sorted on.**
+        `grid` shifts each copy with a raw `e.matrix *= …`, which reports nothing to the
+        node, so every copy still carries the box it inherited from the original.
+        Measured over three cells 23 mm apart: all three said x0 = 9.99 mm before
+        `_recalculate_bounds()` and 9.99 / 33.34 / 56.70 after. Said plainly, because no
+        test can tell the difference here: with every cell reporting the same place the
+        sort is a stable no-op and falls back to tree order, which is the order `grid`
+        creates its copies in anyway (row by row, `core/elements/grid.py:232-241`). The
+        call is what makes "reading order" the rule rather than a coincidence of one
+        generator — and the coincidence is the thing that quietly stops being true.
+
+        **A cell is the unit, not a shape.** One row per copy of the selection, so two
+        texts in the same cell — a name and a serial number, say — take the *same* row.
+        The cells come out of the tree in the order the engine made them, which is why
+        they are chunked by the size of the selection first and sorted by place second.
+
+        The original counts as a cell and gets offset nought, so a repeat of a repeat
+        does not shift what is already there. The re-render is the engine's own
+        `path_updater/linetext` (`extra/hershey.py:837`), the same call
+        `Drawing.update_text` and `Series._render` make.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        from .series import shift_placeholders
+
+        self._recalculate_bounds()
+        fresh = [node for node in self.elements.elems() if id(node) not in before]
+        size = len(chosen)
+        cells = [list(chosen)] + [
+            fresh[start : start + size] for start in range(0, len(fresh), size)
+        ]
+
+        def where(cell):
+            # A shape asking for a column the list has not got renders as nothing and
+            # its bounding box comes back `(nan, nan, nan, nan)` — the ghost in
+            # `Series._ghosts`. A nan in a sort key makes the whole order undefined, so
+            # such a cell is placed last rather than allowed to shuffle the rest.
+            corners = [
+                node.bounds
+                for node in cell
+                if node.bounds and all(math.isfinite(value) for value in node.bounds)
+            ]
+            if not corners:
+                return (math.inf, math.inf)
+            # A hundredth of a millimetre: finer than any laser and coarser than the
+            # noise a matrix multiply leaves behind, so a row of cells sorts as a row.
+            return (
+                round(min(box[1] for box in corners) / UNITS_PER_MM, 2),
+                round(min(box[0] for box in corners) / UNITS_PER_MM, 2),
+            )
+
+        for offset, cell in enumerate(sorted(cells, key=where)):
+            if not offset:
+                continue
+            for node in cell:
+                template = getattr(node, "mktext", None)
+                if not template:
+                    continue
+                node.mktext = shift_placeholders(template, offset)
+                for updater in self.kernel.lookup_all("path_updater/.*"):
+                    updater(self.kernel.root, node)
 
     def radial(self, ids, repeats, radius_mm, start_deg=0.0, end_deg=360.0, rotate=True) -> dict:
         """Repeat the selection around a centre point."""
@@ -716,7 +832,10 @@ class Generators:
 
         registry = getattr(self.kernel.root, "fonts", None)
         if registry is None:
-            raise DesignError("Geen lettertype-ondersteuning beschikbaar.")
+            # The same sentence and the same code as its twin in drawing.py:514: one
+            # refusal for one situation, so the reader gets the same words wherever the
+            # missing font engine is met. A leftover from the language round.
+            raise DesignError("No font support available.", code="draw.noFonts")
         registry.context.setting(str, "last_font", "")
         name, path = registry.retrieve_font(font or None)
         if not name:

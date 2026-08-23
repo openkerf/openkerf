@@ -5,12 +5,18 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from openkerf_api.edits import DesignError
 from openkerf_api.server import ApiServer
 
 
 @pytest.fixture
-def client(kernel):
-    server = ApiServer(kernel)
+def client(kernel, tmp_path):
+    # A library of its own, and therefore state files of its own. Without a path this
+    # server reads and writes in the developer's *real* settings directory — their
+    # sheets, and since this round the list a series is attached to. `/api/job/start`
+    # below vets that list, so a series left attached in the running app would decide
+    # what this test file measures. The same trap CLAUDE.md records for `-P/--profile`.
+    server = ApiServer(kernel, library_path=tmp_path / "api.db")
     with TestClient(server.build_app()) as c:
         c.server = server
         yield c
@@ -76,6 +82,10 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # repairing one that was imported.
         "/api/design/elements/{element_id}/nodes",
         "/api/design/elements/{element_id}/crop",
+        # "Burn only once": a jig frame is cut once and then fifty pieces go through it.
+        # Writes our own `mkonce` on the shape, so it is a write on the tree like a lock
+        # or a colour — and it decides what a series leaves off forty-nine plates.
+        "/api/design/elements/{element_id}/once",
         "/api/project/open",
         # Starting over. Throws the design and the sheets away, so it belongs behind the same
         # gate as opening; the frontend asks first.
@@ -226,6 +236,26 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/printcut/marks",
         "/api/printcut/measure",
         "/api/printcut/clear",
+        # A series: one design burned once per row of a list. The upload writes a file
+        # in the upload directory; attach writes the list beside the library and
+        # re-renders the bed; start/burn/advance/redo/stop keep a run's bookkeeping and
+        # drive the spooler. All six change something.
+        "/api/series/upload",
+        "/api/series/attach",
+        # Pointing the bed at one row is reading, but it writes the run file's pointer
+        # and re-renders the drawing, so it is gated like the rest of the family.
+        "/api/series/row",
+        "/api/series/start",
+        "/api/series/burn",
+        "/api/series/advance",
+        "/api/series/redo",
+        "/api/series/stop",
+        # Calculates only — it reads the uploaded file again with a different answer to
+        # the header question and writes nothing. Behind the gate all the same, because
+        # it reads a file off this machine's disk by name and that directory also holds
+        # what other import routes put there. See READ_ONLY_POSTS in
+        # test_write_actions.py for why it is deliberately not listed as exempt.
+        "/api/series/preview",
     }
 
     methods = {
@@ -238,6 +268,64 @@ def test_write_routes_are_limited_to_the_known_set(client):
     # it is the only PUT in an API where every other change is a PATCH — the choice belongs to
     # that surface's owner, not to this test.
     assert methods <= {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
+
+
+def test_a_refusal_of_ours_inside_a_command_route_is_a_409_and_not_a_500(client):
+    """
+    A route wrapped in act() must answer our own refusals, not fall over on them.
+
+    act() caught CommandError only, so a DesignError raised anywhere inside
+    /api/job/start — the one button every client presses to burn — left FastAPI to
+    answer 500 with no sentence and no code, and the panel could then only say that
+    something went wrong. Anything that vets a job before it goes to the spooler
+    raises exactly that, so this is the contract of the route and not a detail of one
+    caller.
+
+    The refusal is raised from the first thing the route does with the drawing, which
+    is also why this test is safe to run with a machine reachable: no plan is built
+    and nothing reaches the spooler.
+    """
+
+    def no_burn_while_something_else_counts():
+        raise DesignError(
+            "A series is going, so this button would burn one plate and count "
+            "nothing. Burn from the Series panel.",
+            code="series.runGoing",
+        )
+
+    client.server.printcut.mutators = no_burn_while_something_else_counts
+
+    response = client.post("/api/job/start")
+    assert response.status_code == 409
+    assert response.headers["X-OpenKerf-Error"] == "series.runGoing"
+    # A string, not the {command, output} shape act() gives an engine failure: every
+    # client in this API reads `detail` as the sentence to show.
+    assert response.json()["detail"].startswith("A series is going")
+
+
+def test_burn_only_once_is_one_route_with_two_answers(client):
+    """
+    The route that marks a jig frame, and the same route that unmarks it.
+
+    Absent `once` means switching it on, because that is what the menu row does the
+    first time it is pressed; the other wording sends false. Both go through `manage()`,
+    so a shape that is not there answers 409 with a sentence rather than 500 — the
+    right-click menu is built from a snapshot that can be a second old.
+    """
+    element = client.post(
+        "/api/design/elements",
+        json={"type": "rect", "x_mm": 10, "y_mm": 10, "width_mm": 40, "height_mm": 20},
+    ).json()["ids"][0]
+
+    assert client.post(f"/api/design/elements/{element}/once").status_code == 200
+    assert client.get("/api/design").json()["elements"][0]["once"] is True
+
+    off = client.post(f"/api/design/elements/{element}/once", json={"once": False})
+
+    assert off.status_code == 200
+    assert off.json()["changed"] == 1
+    assert client.get("/api/design").json()["elements"][0]["once"] is False
+    assert client.post("/api/design/elements/nope/once").status_code == 409
 
 
 def test_console_command_is_registered(kernel):
