@@ -6,7 +6,7 @@
  * never as something measured on your machine.
  */
 
-import { t } from './i18n/core.ts';
+import { t, type MessageKey } from './i18n/core.ts';
 
 export type CataloguePreset = {
 	id: string;
@@ -25,10 +25,60 @@ export type CataloguePreset = {
 	imported?: boolean;
 };
 
+/**
+ * How much a row's numbers are worth, as a badge.
+ *
+ * The keys are the catalogue's own `source.kind` values and stay Dutch: they are
+ * stored data, not text for a reader — the same carve-out as `preset.source` in the
+ * database. What a reader sees is the message, and that is looked up here.
+ */
+const BADGES: Record<string, { key: MessageKey; tone: string }> = {
+	testraster: { key: 'presetariat.confidence.measured', tone: 'ok' },
+	fabrikant: { key: 'presetariat.confidence.maker', tone: 'neutral' },
+	handmatig: { key: 'presetariat.confidence.starting', tone: 'warn' }
+};
+
+/**
+ * The badge for one row, translated at the moment it is read.
+ *
+ * This used to be a module-scope object literal holding the results of three `t()`
+ * calls, and that resolves once, at import. Measured against `core.ts`: with the
+ * language bound to a variable, the object kept saying `Starting value` after the
+ * switch to Dutch while a call-time lookup gave `Startwaarde`. So the three badges
+ * froze in whichever language happened to load first and never followed a switch —
+ * the one row in the window that is a value judgement, in the wrong language.
+ *
+ * A function and not a `$derived`: derived state cannot be exported from a module,
+ * and it does not need to be. `t()` reads the language through the getter
+ * `index.svelte.ts` hands over, so calling this while a component renders makes
+ * Svelte see the dependency and re-render on a switch — the same way every other
+ * message in the app works.
+ *
+ * The unknown kind falls back to `handmatig` here rather than at each call site: an
+ * unlabelled row is a guess until somebody says otherwise, and that is the honest
+ * badge for it.
+ */
+export function confidence(kind: string | null | undefined): { text: string; tone: string } {
+	const badge = BADGES[kind ?? ''] ?? BADGES.handmatig;
+	return { text: t(badge.key), tone: badge.tone };
+}
+
+/**
+ * The old shape, for `Presetariat.svelte` while that window still stands.
+ *
+ * Getters and not values, so each read translates afresh — the freeze above is in the
+ * evaluation moment, not in the shape. This goes when the window does.
+ */
 export const CONFIDENCE: Record<string, { text: string; tone: string }> = {
-	testraster: { text: t('presetariat.confidence.measured'), tone: 'ok' },
-	fabrikant: { text: t('presetariat.confidence.maker'), tone: 'neutral' },
-	handmatig: { text: t('presetariat.confidence.starting'), tone: 'warn' }
+	get testraster() {
+		return confidence('testraster');
+	},
+	get fabrikant() {
+		return confidence('fabrikant');
+	},
+	get handmatig() {
+		return confidence('handmatig');
+	}
 };
 
 export class PresetariatStore {

@@ -62,7 +62,12 @@ def test_opening_a_project_restores_both(kernel, client, tmp_path):
     stocked(client)
     data = client.get("/api/project/export.openkerf").content
     client.post("/api/design/clear")
-    client.delete("/api/library/materials/1")
+    # `with_everything` because this material carries the preset the project is about to
+    # restore, and a bare DELETE is now refused rather than cascading in silence
+    # (`library.material.inUse`, pinned in test_library.py by
+    # test_removing_a_material_that_carries_work_is_refused_and_names_the_count).
+    # Emptying the library is the point of this line, so it says so.
+    assert client.delete("/api/library/materials/1?with_everything=true").status_code == 200
     assert client.get("/api/library/materials").json() == []
 
     response = client.post(

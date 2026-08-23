@@ -39,6 +39,32 @@ WRITE_ROUTES = [
     # the first one, so it decides what the laser does and belongs behind the gate with
     # the rest of the family.
     ("/api/design/elements/x/once", {"json": {"once": True}}),
+    # Joining two names for one board, and two profiles for one laser. Both delete a row
+    # and re-parent everything that hung off it; from outside this computer that must
+    # never happen without a token.
+    ("/api/library/materials/1/merge-into/2", {}),
+    ("/api/library/machines/1/merge-into/2", {}),
+    # Adopting the settings that belong to no machine claims they were measured on this
+    # one. That is a statement about somebody's measurements, so it is gated.
+    ("/api/library/presets/adopt", {"json": {}}),
+    # Waving the starting-points offer away writes on the machine profile, and a machine
+    # that has been told to stop offering never asks again.
+    ("/api/library/starter/dismiss", {"json": {}}),
+    # Staging writes a library file into the upload directory — the same directory that
+    # holds bundles and machine profiles somebody else put there, which is the reason
+    # `/api/library/import/upload` is in this list too.
+    ("/api/presetariat/stage", {"json": {}}),
+]
+
+# And the same for DELETE, which had no list at all until this round — the guard test
+# above walks the app and would have caught a missing dependency, but nothing proved that
+# an unauthenticated *call* is refused. These three are the round's destructive verbs: a
+# material with everything on it, a whole import, and a test board with its photograph.
+WRITE_ROUTES_DELETE = [
+    ("/api/library/materials/1", {}),
+    ("/api/library/materials/1?with_everything=true", {}),
+    ("/api/library/imports/presetariat-20260823-000000", {}),
+    ("/api/library/testgrids/1", {}),
 ]
 
 # The same requirement for the other verbs. A grid photo's alignment is a PUT and would
@@ -120,6 +146,8 @@ def test_writes_are_rejected_without_token_off_localhost(lan_server):
             assert client.post(path, **body).status_code == 401, path
         for path, body in WRITE_ROUTES_PUT:
             assert client.put(path, **body).status_code == 401, path
+        for path, body in WRITE_ROUTES_DELETE:
+            assert client.delete(path, **body).status_code == 401, path
 
 
 def test_writes_accept_bearer_token(lan_server):

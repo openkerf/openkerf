@@ -291,7 +291,7 @@ class Camera:
         cleaned = []
         for point in points or []:
             if not isinstance(point, (list, tuple)) or len(point) != 2:
-                raise DesignError("Elk hoekpunt is [x, y] in beeldpixels.")
+                raise DesignError("Every corner is [x, y] in image pixels.")
             cleaned.append([float(point[0]), float(point[1])])
         if len(cleaned) != 4:
             raise DesignError("A bed has four corners; give exactly four.")

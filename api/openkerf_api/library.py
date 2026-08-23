@@ -33,6 +33,16 @@ CREATE TABLE IF NOT EXISTS machine_profile (
     -- What this machine *can* do. Decides what appears in the jog.
     has_z        INTEGER NOT NULL DEFAULT 0,
     has_autofocus INTEGER NOT NULL DEFAULT 0,
+    -- Who this laser is, as opposed to which slot it happens to sit in. The kernel hands
+    -- out device paths first-free-slot (kernel.py:3433-3437), so "ruida" is recycled the
+    -- moment a machine is removed, and the next machine inherited the dead one's presets
+    -- and boards. The uid is minted once by machines.py and never changes; empty means a
+    -- profile from before this column, which still matches on device_path alone.
+    machine_uid  TEXT NOT NULL DEFAULT '',
+    -- '' | 'dismissed' | 'power_unknown'. One column rather than a boolean beside a
+    -- boolean: "I do not know my tube power" is a third answer to the starting-values
+    -- offer, not a second flag.
+    starter_state TEXT NOT NULL DEFAULT '',
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -40,6 +50,11 @@ CREATE TABLE IF NOT EXISTS material (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     name      TEXT NOT NULL UNIQUE,
     synonyms  TEXT NOT NULL DEFAULT '',
+    -- The import that created this material, so `remove_import_batch` can tell a board
+    -- the user added themselves from one an import invented. Empty for everything a
+    -- person typed in. Fourteen of the twenty materials in the author's library were
+    -- created by one bulk import and none of them could be removed again.
+    import_batch TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -63,8 +78,28 @@ CREATE TABLE IF NOT EXISTS preset (
     note          TEXT NOT NULL DEFAULT '',
     -- When this setting was last put on a layer. Anybody who cut 3 mm birch yesterday is
     -- not searching alphabetically today; they are looking for
-    -- wat hij gisteren gebruikte.
+    -- what they used yesterday.
     last_used_at  TEXT,
+    -- The import this row came in on. An import you can take back in one call is the
+    -- difference between a catalogue and a junk drawer, and it is the only defence that
+    -- works on a library that already holds twenty-six rows nobody wanted.
+    import_batch  TEXT NOT NULL DEFAULT '',
+    -- The machine the values were *measured* on, which is not always the machine the row
+    -- is filed under: an import files a stranger's 80 W measurement under your laser.
+    -- NULL on an imported row means the origin is unknown, and that is what the
+    -- twenty-six prefilled rows get, because their note records no machine at all.
+    origin_laser_type TEXT,
+    origin_power_watt REAL,
+    -- Who offered the row to the shared catalogue. Not decoration: that catalogue is
+    -- CC BY 4.0, so the credit is a condition of the copy and it has to survive the
+    -- import — a preset whose attribution was dropped on the way in cannot be passed on
+    -- lawfully, and nobody can see that it was dropped. NULL for everything that was
+    -- measured or typed here, which needs no credit from anybody.
+    origin_by     TEXT,
+    -- When somebody last burned this setting again and it still held. The only claim one
+    -- maintainer can ever check, so it is recorded and shown — and deliberately not a
+    -- gate on sharing, because nobody re-burns and a gate would simply close the door.
+    verified_at   TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -111,8 +146,8 @@ CREATE TABLE IF NOT EXISTS test_grid (
 
 -- Named generator settings (gap T7).
 --
--- T3 onthoudt één setting per material: het vórige grid. Dat dekt "ik
--- test elke week 3 mm berk" but not "berk snijden" náást "berk graveren" —
+-- T3 remembers one setting per material: the previous grid. That covers "I test 3 mm
+-- birch every week" but not "cut birch" beside "engrave birch" —
 -- two recipes for the same material cannot sit side by side there. This is the same
 -- content under a name, and deliberately in the same shape: one row with exactly the keys
 -- `Library.GRID_DEFAULTS` describes, so that a recipe and a previous grid are
@@ -127,7 +162,19 @@ CREATE TABLE IF NOT EXISTS grid_recipe (
 );
 
 CREATE INDEX IF NOT EXISTS preset_material ON preset(material_id);
+
+-- The unique index on machine_profile(device_path) is deliberately *not* here. It is
+-- created at the end of `_dedupe_machines`, because a database from before that rule can
+-- hold two rows for one device and creating the index first refuses outright — measured:
+-- `UNIQUE constraint failed: machine_profile.device_path` on the very first open. A fresh
+-- database reads user_version 0, so it runs the migration once and gets the index there.
 """
+
+# What `PRAGMA user_version` reads once a database is at head. Everything from before this
+# constant existed reads 0, which is why `_migrate` still sniffs columns rather than
+# stepping version by version: it has to be able to carry a database from any of those
+# unversioned days. The gate is only about *when* it runs, not about what it does.
+SCHEMA_VERSION = 1
 
 OPERATIONS = ("snijden", "graveren-vector", "graveren-raster", "markeren")
 SOURCES = ("handmatig", "geextrapoleerd", "testraster", "geimporteerd")
@@ -174,15 +221,36 @@ class LibraryError(RuntimeError):
     the reader's language. The message is English — the source language of this
     layer — and is what a client without a catalogue shows: curl, a script, a log.
     A raise without a code is one whose message only a developer reads.
+
+    `values` carries the numbers the sentence needs, for the refusal whose only variable
+    is a constant of ours: the interface then has the number and can put it in its own
+    sentence. `refuse()` reads it off any exception (server.py:150-152), so nothing else
+    has to change. A refusal whose numbers are *measured* per call keeps its English
+    sentence — a translated sentence without the numbers says less than an English one
+    with them.
     """
 
-    def __init__(self, message: str, code: str | None = None):
+    def __init__(
+        self, message: str, code: str | None = None, values: dict | None = None
+    ):
         super().__init__(message)
         self.code = code
+        self.values = values
 
 
 def default_path(kernel) -> Path:
-    """Beside MeerK40t's settings, so a profile keeps its own library."""
+    """
+    In MeerK40t's settings directory — one library per computer, not per profile.
+
+    The name reads like a per-profile path and is not one. `get_safe_path` takes a bare
+    directory name (kernel/functions.py:21-48) and `kernel.name` is the application name,
+    fixed at construction (kernel.py:146); `-P/--profile` never reaches either, because
+    main.py:227-230 hands `APPLICATION_NAME` in as the profile as well. So every instance
+    on this machine — the app, a test server, the gauntlet — opens the *same* file. That
+    is how five of the seven profiles in the author's library came to be debris from our
+    own test runs, and it is why the gauntlet harness takes `--library <path>`: the first
+    run of new migration code must not happen against somebody's real 204 KB file.
+    """
     from meerk40t.kernel.functions import get_safe_path
 
     directory = Path(get_safe_path(kernel.name, create=True))
@@ -198,66 +266,171 @@ class Library:
         self.photos = self.path.parent / "openkerf-photos"
         self.photos.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
+            # Cheap and idempotent, so it runs every time: it is the one thing that puts
+            # a missing table back.
             db.executescript(SCHEMA)
-            self._migrate(db)
+            # And so does the column sniffing, for the same reason and against a sharper
+            # trap. Gating it on the version number moved the old silent fault instead of
+            # removing it: a column added to `SCHEMA` and `_add_missing_columns` without
+            # anybody remembering to raise `SCHEMA_VERSION` would reach every *fresh*
+            # database and no existing one, so the whole suite stays green and only
+            # somebody with a library ever meets the missing column. Measured: with a
+            # column added to both and the version left alone, an already-stamped database
+            # did not get it. Sniffing costs one `PRAGMA table_info` per table.
+            self._add_missing_columns(db)
+            if db.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+                # What is *not* idempotent, or is expensive, stays behind the gate: the
+                # back-fills and the one-time relabel.
+                self._migrate(db)
+                # PRAGMA takes no bound parameters, hence the interpolation; the value is
+                # our own integer constant and never comes from outside. Stamped *after*
+                # the migration, so a failure halfway means the next open tries again.
+                db.execute(f"PRAGMA user_version = {int(SCHEMA_VERSION)}")
+            elif not self._has_device_lock(db):
+                # A database at head cannot hold two profiles for one device *while* the
+                # unique index is there — that is what the index is for. So the index
+                # itself, and not the version number, is the honest question to ask before
+                # running a step that DELETEs rows: gone means somebody's database predates
+                # the rule (or lost it), and the duplicates it was allowed to grow are
+                # still in there.
+                self._dedupe_machines(db)
+
+    @staticmethod
+    @staticmethod
+    def _add_missing_columns(db):
+        """
+        Every column that came later, put back on any database that is missing it.
+
+        Runs on **every** open, because it is cheap (one `PRAGMA table_info` per table)
+        and because the alternative is a silent fault: a column has to be written twice,
+        once in `SCHEMA` and once here, and a version gate over the pair means forgetting
+        to raise the version hides the omission from every existing database while the
+        fresh-database suite stays green.
+
+        It sniffs rather than stepping version by version, because every database in the
+        wild reads `user_version` 0 whatever it actually holds; sniffing is the only thing
+        that can carry all of them to head.
+
+        Every definition carries a default, and that is not a style rule: measured on
+        SQLite 3.50.4, `ADD COLUMN ... NOT NULL` with no default is *accepted* on an empty
+        table and refused on a populated one. Such a migration passes a suite that builds
+        fresh databases and breaks the first user who has data.
+        `test_no_column_is_not_null_without_a_default` pins it.
+        """
+        for table, columns in (
+            (
+                "test_grid",
+                (
+                    ("group_id", "TEXT"),
+                    ("alignment", "TEXT"),
+                    ("interval_min", "REAL"),
+                    ("interval_max", "REAL"),
+                    ("interval_steps", "INTEGER"),
+                    ("row_axis", "TEXT NOT NULL DEFAULT 'speed'"),
+                    ("column_axis", "TEXT NOT NULL DEFAULT 'power'"),
+                    ("rows", "INTEGER"),
+                    ("columns", "INTEGER"),
+                    # T9/T10: what the board hangs off and what else gets burned on it.
+                    # Grids from before this version always started from the corner, with
+                    # captions and without a frame — which is exactly these defaults.
+                    ("anchor", "TEXT NOT NULL DEFAULT 'corner'"),
+                    ("text_enabled", "INTEGER NOT NULL DEFAULT 1"),
+                    ("border_enabled", "INTEGER NOT NULL DEFAULT 0"),
+                    ("label_speed_mm_s", "REAL"),
+                    ("label_power_percent", "REAL"),
+                    # Boards from before this version burned over each square once.
+                    ("passes", "INTEGER NOT NULL DEFAULT 1"),
+                ),
+            ),
+            (
+                "preset",
+                (
+                    ("last_used_at", "TEXT"),
+                    ("interval_mm", "REAL"),
+                    ("import_batch", "TEXT NOT NULL DEFAULT ''"),
+                    ("origin_laser_type", "TEXT"),
+                    ("origin_power_watt", "REAL"),
+                    ("origin_by", "TEXT"),
+                    ("verified_at", "TEXT"),
+                ),
+            ),
+            ("material", (("import_batch", "TEXT NOT NULL DEFAULT ''"),)),
+            (
+                "machine_profile",
+                (
+                    ("device_path", "TEXT"),
+                    ("has_z", "INTEGER NOT NULL DEFAULT 0"),
+                    ("has_autofocus", "INTEGER NOT NULL DEFAULT 0"),
+                    ("machine_uid", "TEXT NOT NULL DEFAULT ''"),
+                    ("starter_state", "TEXT NOT NULL DEFAULT ''"),
+                ),
+            ),
+        ):
+            existing = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
+            for column, definition in columns:
+                if column not in existing:
+                    db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     @staticmethod
     def _migrate(db):
-        """Columns that came later, for databases from before that version."""
-        existing = {row["name"] for row in db.execute("PRAGMA table_info(test_grid)")}
-        for column, definition in (
-            ("group_id", "TEXT"),
-            ("alignment", "TEXT"),
-            ("interval_min", "REAL"),
-            ("interval_max", "REAL"),
-            ("interval_steps", "INTEGER"),
-            ("row_axis", "TEXT NOT NULL DEFAULT 'speed'"),
-            ("column_axis", "TEXT NOT NULL DEFAULT 'power'"),
-            ("rows", "INTEGER"),
-            ("columns", "INTEGER"),
-            # T9/T10: what the board hangs off and what else gets burned on it. Grids from
-            # before this version always started from the corner, with captions and without
-            # a frame — which is exactly these defaults.
-            ("anchor", "TEXT NOT NULL DEFAULT 'corner'"),
-            ("text_enabled", "INTEGER NOT NULL DEFAULT 1"),
-            ("border_enabled", "INTEGER NOT NULL DEFAULT 0"),
-            ("label_speed_mm_s", "REAL"),
-            ("label_power_percent", "REAL"),
-            # Boards from before this version burned over each square once.
-            ("passes", "INTEGER NOT NULL DEFAULT 1"),
-        ):
-            if column not in existing:
-                db.execute(f"ALTER TABLE test_grid ADD COLUMN {column} {definition}")
-        # Rasters van vóór B12 hadden altijd speed × power.
-        db.execute(
-            "UPDATE test_grid SET rows = speed_steps WHERE rows IS NULL"
-        )
-        db.execute(
-            "UPDATE test_grid SET columns = power_steps WHERE columns IS NULL"
-        )
+        """
+        The one-time work on a database from before this version.
 
-        presets = {row["name"] for row in db.execute("PRAGMA table_info(preset)")}
-        if "last_used_at" not in presets:
-            db.execute("ALTER TABLE preset ADD COLUMN last_used_at TEXT")
-        if "interval_mm" not in presets:
-            db.execute("ALTER TABLE preset ADD COLUMN interval_mm REAL")
-
-        profile = {row["name"] for row in db.execute("PRAGMA table_info(machine_profile)")}
-        for column, definition in (
-            ("device_path", "TEXT"),
-            ("has_z", "INTEGER NOT NULL DEFAULT 0"),
-            ("has_autofocus", "INTEGER NOT NULL DEFAULT 0"),
-        ):
-            if column not in profile:
-                db.execute(f"ALTER TABLE machine_profile ADD COLUMN {column} {definition}")
+        The columns themselves are not here — `_add_missing_columns` puts those back on
+        every open, for the reason its docstring gives. What is left is what may only
+        happen once, or is expensive: the two back-fills for boards that predate B12, the
+        relabel of the Presetariat prefill, and the machine de-duplication.
+        """
+        # Boards from before B12 were always speed by power.
+        db.execute("UPDATE test_grid SET rows = speed_steps WHERE rows IS NULL")
+        db.execute("UPDATE test_grid SET columns = power_steps WHERE columns IS NULL")
+        Library._relabel_prefill(db)
         Library._dedupe_machines(db)
+
+    @staticmethod
+    def _relabel_prefill(db):
+        """
+        The rows the Presetariat prefill left behind, said in English.
+
+        Twenty-six rows in the author's library carry a Dutch note in an English
+        interface, written by `presetariat._note`. They cannot be back-filled — the note
+        records `presetariat-prefill` and no machine — so they are relabelled and not
+        dropped: they are usable values, and with `origin_power_watt` NULL beside
+        `source = 'geimporteerd'` they now read as what they are, an import whose origin
+        machine is unknown. That NULL needs no statement of its own; the column is new, so
+        every existing row already has it.
+
+        Only this one shape is rewritten. A note somebody typed themselves is theirs, and
+        after the rewrite nothing starts with the Dutch opening any more, so running it
+        twice changes nothing.
+        """
+        db.execute(
+            """UPDATE preset
+                  SET note = replace(replace(replace(note,
+                        'Uit Presetariat (', 'From the Presetariat ('),
+                        ', door ', ', by '),
+                        'Startwaarde, niet gemeten. Brand een testraster voordat je hier op vertrouwt.',
+                        'Starting value, not measured. Burn a test grid before you rely on it.')
+                WHERE source = 'geimporteerd' AND note LIKE 'Uit Presetariat (%'"""
+        )
+
+    @staticmethod
+    def _has_device_lock(db) -> bool:
+        """Whether one-profile-per-device is actually locked down in this file."""
+        return (
+            db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+                "AND name = 'machine_profile_device'"
+            ).fetchone()
+            is not None
+        )
 
     @staticmethod
     def _dedupe_machines(db):
         """
         One profile per device, and after that a lock on that rule.
 
-        `profile_for_device` deed eerst een SELECT en daarna een INSERT. De
+        `profile_for_device` did a SELECT and then an INSERT. The
         library loads `/api/library/presets`, `/api/library/machines` and
         `/api/library/active-machine` at the same time, and several of those ask for the
         active profile — so three requests drove through that gap and three profiles for the
@@ -306,28 +479,35 @@ class Library:
     def add_machine(self, **fields) -> dict:
         name = str(fields.get("name") or "").strip()
         if not name:
-            raise LibraryError("A machine profile needs a name.")
+            raise LibraryError(
+                "A machine profile needs a name.", code="library.machine.needsName"
+            )
         with self._connect() as db:
             cursor = db.execute(
                 """INSERT INTO machine_profile
                    (name, laser_type, power_watt, lens_mm, bed_width_mm,
-                    bed_height_mm, device_path, has_z, has_autofocus)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    bed_height_mm, device_path, has_z, has_autofocus,
+                    machine_uid, starter_state)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     name,
                     fields.get("laser_type") or "co2-glass",
-                    _number(fields.get("power_watt"), "power_watt", optional=True),
+                    _watt(fields.get("power_watt")),
                     _number(fields.get("lens_mm"), "lens_mm", optional=True),
                     _number(fields.get("bed_width_mm"), "bed_width_mm", optional=True),
                     _number(fields.get("bed_height_mm"), "bed_height_mm", optional=True),
                     str(fields.get("device_path") or "") or None,
                     1 if fields.get("has_z") else 0,
                     1 if fields.get("has_autofocus") else 0,
+                    str(fields.get("machine_uid") or "").strip(),
+                    _starter_state(fields.get("starter_state")),
                 ),
             )
             return self._one(db, "machine_profile", cursor.lastrowid)
 
-    def profile_for_device(self, device_path: str, label: str | None = None) -> dict:
+    def profile_for_device(
+        self, device_path: str, label: str | None = None, machine_uid: str | None = None
+    ) -> dict:
         """
         The profile of the machine that is active now, freshly created if need be.
 
@@ -341,25 +521,70 @@ class Library:
         CO2", and on a fresh installation that is the internal name of MeerK40t's default
         device ("lihuiyu-device"). Then nobody can tell their machines apart. Renaming
         happens at the machine itself; here it is only followed up.
+
+        `machine_uid` is who the laser *is*, and it is looked up before the device path,
+        because a path is a slot and slots are recycled: the kernel allocates the first
+        free one (kernel.py:3433-3437), so removing a Ruida and adding a different one
+        hands the newcomer "ruida" back — and this function then found the dead machine's
+        row, renamed it after the newcomer and handed over every preset and every board.
+        A path whose row carries a *different*, non-empty uid is therefore detached
+        (device_path NULL, all its evidence kept) and a fresh profile minted. A row with
+        an empty uid is one from before this column and still matches on the path alone,
+        which is the only thing there is to go on.
         """
         path = str(device_path or "").strip()
         if not path:
-            raise LibraryError("There is no active machine to attach to.")
+            raise LibraryError(
+                "There is no active machine to attach to.",
+                code="library.machine.noneActive",
+            )
         name = str(label or "").strip() or path
+        uid = str(machine_uid or "").strip()
         with self._connect() as db:
-            row = db.execute(
-                "SELECT * FROM machine_profile WHERE device_path = ?", (path,)
-            ).fetchone()
-            if row is not None:
-                if row["name"] != name:
+            row = None
+            if uid:
+                row = db.execute(
+                    "SELECT * FROM machine_profile WHERE machine_uid = ?", (uid,)
+                ).fetchone()
+            if row is None:
+                row = db.execute(
+                    "SELECT * FROM machine_profile WHERE device_path = ?", (path,)
+                ).fetchone()
+                if row is not None and uid and row["machine_uid"] not in ("", uid):
+                    # Same slot, different laser. Let go of the slot and keep the row:
+                    # its presets and boards are measurements of a machine that existed.
                     db.execute(
-                        "UPDATE machine_profile SET name = ? WHERE id = ?",
-                        (name, row["id"]),
+                        "UPDATE machine_profile SET device_path = NULL WHERE id = ?",
+                        (row["id"],),
+                    )
+                    row = None
+            if row is not None:
+                changes = {}
+                if row["name"] != name:
+                    changes["name"] = name
+                if uid and row["machine_uid"] != uid:
+                    changes["machine_uid"] = uid
+                if row["device_path"] != path:
+                    # Found by uid on another slot: the machine moved and its evidence
+                    # moves with it. Anything else holding this slot lets go first, or the
+                    # unique index refuses the update.
+                    db.execute(
+                        "UPDATE machine_profile SET device_path = NULL "
+                        "WHERE device_path = ? AND id <> ?",
+                        (path, row["id"]),
+                    )
+                    changes["device_path"] = path
+                if changes:
+                    db.execute(
+                        "UPDATE machine_profile SET "
+                        + ", ".join(f"{key} = ?" for key in changes)
+                        + " WHERE id = ?",
+                        (*changes.values(), row["id"]),
                     )
                     return self._one(db, "machine_profile", row["id"])
                 return dict(row)
         try:
-            return self.add_machine(name=name, device_path=path)
+            return self.add_machine(name=name, device_path=path, machine_uid=uid)
         except sqlite3.IntegrityError:
             # A simultaneous request beat us to it; the lock on device_path does its work
             # and we take what is there now.
@@ -405,7 +630,7 @@ class Library:
 
     def remove_machine(self, machine_id: int) -> dict:
         """
-        Een profile opruimen.
+        Clearing a profile away.
 
         Only when nothing hangs off it. A preset without a machine is a speed without a
         laser beside it, and that is precisely the statement-about-nothing this table is
@@ -417,24 +642,164 @@ class Library:
                 "SELECT * FROM machine_profile WHERE id = ?", (machine_id,)
             ).fetchone()
         if row is None:
-            raise LibraryError(f"Machine profile {machine_id} does not exist.")
-        gebruik = self.machine_usage(machine_id)
-        if gebruik["presets"] or gebruik["test_grids"]:
             raise LibraryError(
-                f"'{row['name']}' still carries {gebruik['presets']} setting(s) and "
-                f"{gebruik['test_grids']} test grid(s). Remove or move those first."
+                f"Machine profile {machine_id} does not exist.",
+                code="library.machine.unknown",
+            )
+        usage = self.machine_usage(machine_id)
+        if usage["presets"] or usage["test_grids"]:
+            raise LibraryError(
+                f"'{row['name']}' still carries {usage['presets']} setting(s) and "
+                f"{usage['test_grids']} test grid(s). Remove or move those first.",
+                code="library.machine.inUse",
             )
         with self._connect() as db:
             db.execute("DELETE FROM machine_profile WHERE id = ?", (machine_id,))
         return {"removed": machine_id}
 
+    def merge_machine(
+        self,
+        source_id: int,
+        target_id: int,
+        live_paths=None,
+        active_path: str | None = None,
+    ) -> dict:
+        """
+        Two profiles for one laser, joined into the one you are working on.
+
+        `_dedupe_machines` structurally cannot do this: it only merges rows that share a
+        device_path, and the unique index it creates prevents that case from arising. The
+        case that actually exists is the other one — the author's library holds a
+        device-less `5030 CO2` with 60 W and 27 presets beside a device-bound `KH-5030`
+        with no wattage and 3, and they are one physical laser.
+
+        The target keeps everything it already says about itself; only the fields it has
+        nothing in are filled from the source. That is how the 60 W finally reaches the
+        profile the engine actually uses, without a merge ever overwriting something the
+        user typed.
+
+        `live_paths` and `active_path` are facts about the engine, which this module has
+        no way to know, so they come in from the caller. Both refusals below need them and
+        neither can be guessed from the database.
+        """
+        if source_id == target_id:
+            raise LibraryError(
+                "Choose a different machine profile to move this one's work into.",
+                code="library.machine.mergeSelf",
+            )
+        alive = {str(p) for p in (live_paths or []) if p}
+        moved = {}
+        with self._connect() as db:
+            source = db.execute(
+                "SELECT * FROM machine_profile WHERE id = ?", (source_id,)
+            ).fetchone()
+            target = db.execute(
+                "SELECT * FROM machine_profile WHERE id = ?", (target_id,)
+            ).fetchone()
+            for missing, row in ((source_id, source), (target_id, target)):
+                if row is None:
+                    raise LibraryError(
+                        f"Machine profile {missing} does not exist.",
+                        code="library.machine.unknown",
+                    )
+            if active_path and source["device_path"] == active_path:
+                raise LibraryError(
+                    "This is the machine you are working on; move the other profile "
+                    "into this one instead.",
+                    code="library.machine.mergeActive",
+                )
+            if source["device_path"] in alive and target["device_path"] in alive:
+                raise LibraryError(
+                    "Both of these profiles belong to a machine that exists. Two lasers "
+                    "are not one, and merging them would file one machine's measurements "
+                    "under the other.",
+                    code="library.machine.mergeTwoReal",
+                )
+            moved["presets"] = db.execute(
+                "UPDATE preset SET machine_id = ? WHERE machine_id = ?",
+                (target_id, source_id),
+            ).rowcount
+            moved["test_grids"] = db.execute(
+                "UPDATE test_grid SET machine_id = ? WHERE machine_id = ?",
+                (target_id, source_id),
+            ).rowcount
+            filled = {}
+            for column in (
+                "power_watt", "lens_mm", "bed_width_mm", "bed_height_mm", "machine_uid"
+            ):
+                if not target[column] and source[column]:
+                    filled[column] = source[column]
+            # 'co2-glass' used to be the column default, so a profile nobody described
+            # claims to be a CO2 glass tube. That claim is not worth keeping over a real
+            # one from the other row.
+            if target["laser_type"] in ("", "unknown", None) and source["laser_type"]:
+                filled["laser_type"] = source["laser_type"]
+            if not target["device_path"] and source["device_path"]:
+                # The source row goes in the same transaction, so the unique index on
+                # device_path never sees two rows holding this path at once.
+                filled["device_path"] = source["device_path"]
+            db.execute("DELETE FROM machine_profile WHERE id = ?", (source_id,))
+            if filled:
+                db.execute(
+                    "UPDATE machine_profile SET "
+                    + ", ".join(f"{key} = ?" for key in filled)
+                    + " WHERE id = ?",
+                    (*filled.values(), target_id),
+                )
+            merged = self._one(db, "machine_profile", target_id)
+        return {
+            "machine": merged,
+            "removed": source_id,
+            "moved": moved,
+            "filled": sorted(filled),
+        }
+
+    def adopt_presets(self, machine_id) -> dict:
+        """
+        The settings and boards that belong to no machine, onto one that does.
+
+        Four presets and eleven boards in the author's library carry `machine_id IS NULL`
+        — the fingerprint of the lhystudios-fallback state, measured on a machine nobody
+        can name. `presets()` shows them on every machine (its WHERE is
+        `machine_id = ? OR machine_id IS NULL`), which is visible but wrong; adopting them
+        claims they were measured here, which is a different kind of wrong. So this is a
+        button the user presses, never a step that runs by itself.
+        """
+        if not machine_id:
+            raise LibraryError(
+                "There is no machine active, so there is nothing to attach these "
+                "settings to.",
+                code="library.adopt.noMachine",
+            )
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT id FROM machine_profile WHERE id = ?", (machine_id,)
+            ).fetchone()
+            if row is None:
+                raise LibraryError(
+                    f"Machine profile {machine_id} does not exist.",
+                    code="library.machine.unknown",
+                )
+            presets = db.execute(
+                "UPDATE preset SET machine_id = ? WHERE machine_id IS NULL",
+                (machine_id,),
+            ).rowcount
+            grids = db.execute(
+                "UPDATE test_grid SET machine_id = ? WHERE machine_id IS NULL",
+                (machine_id,),
+            ).rowcount
+        return {"machine_id": machine_id, "presets": presets, "test_grids": grids}
+
     def update_machine(self, machine_id: int, fields: dict) -> dict:
-        toegestaan = (
+        allowed = (
             "name", "laser_type", "power_watt", "lens_mm",
             "bed_width_mm", "bed_height_mm", "has_z", "has_autofocus",
+            # The wizard writes the first two; the offer card writes starter_state when
+            # somebody says they do not know their tube power, or waves the card away.
+            "starter_state",
         )
         parts, values = [], []
-        for key in toegestaan:
+        for key in allowed:
             if key not in fields:
                 continue
             parts.append(f"{key} = ?")
@@ -442,10 +807,14 @@ class Library:
                 values.append(1 if fields[key] else 0)
             elif key in ("name", "laser_type"):
                 values.append(str(fields[key]))
+            elif key == "starter_state":
+                values.append(_starter_state(fields[key]))
+            elif key == "power_watt":
+                values.append(_watt(fields[key]))
             else:
                 values.append(_number(fields[key], key, optional=True))
         if not parts:
-            raise LibraryError("Nothing to update.")
+            raise LibraryError("Nothing to update.", code="library.machine.nothingToUpdate")
         with self._connect() as db:
             db.execute(
                 f"UPDATE machine_profile SET {', '.join(parts)} WHERE id = ?",
@@ -462,28 +831,246 @@ class Library:
             row["synonyms"] = [s for s in row["synonyms"].split("|") if s]
         return rows
 
-    def add_material(self, name: str, synonyms=None) -> dict:
+    def add_material(self, name: str, synonyms=None, import_batch: str = "") -> dict:
         name = str(name or "").strip()
         if not name:
-            raise LibraryError("A material needs a name.")
+            raise LibraryError("A material needs a name.", code="library.material.needsName")
         joined = "|".join(str(s).strip() for s in (synonyms or []) if str(s).strip())
         try:
             with self._connect() as db:
                 cursor = db.execute(
-                    "INSERT INTO material (name, synonyms) VALUES (?, ?)", (name, joined)
+                    "INSERT INTO material (name, synonyms, import_batch) "
+                    "VALUES (?, ?, ?)",
+                    (name, joined, str(import_batch or "")),
                 )
                 row = self._one(db, "material", cursor.lastrowid)
         except sqlite3.IntegrityError as e:
-            raise LibraryError(f"Material '{name}' already exists.") from e
+            # Its own code, not `nameTaken`: that one belongs to the rename in
+            # `update_material` and its sentence ends "merge the two instead", which is
+            # advice about two materials. Here there is one, and the answer is to use it.
+            # A code has to answer to exactly one sentence or the interface can only ever
+            # show one of the two translated.
+            raise LibraryError(
+                f"Material '{name}' already exists.", code="library.material.exists"
+            ) from e
         row["synonyms"] = [s for s in row["synonyms"].split("|") if s]
         return row
 
-    def remove_material(self, material_id: int) -> dict:
+    def material_usage(self, material_id: int) -> dict:
+        """
+        What would go with this material, counted before anybody presses anything.
+
+        Read by the confirm dialog and by the refusal below, from one place, so the
+        sentence on screen and the sentence in the log cannot disagree about the number.
+        """
         with self._connect() as db:
-            cursor = db.execute("DELETE FROM material WHERE id = ?", (material_id,))
-            if not cursor.rowcount:
-                raise LibraryError(f"Material {material_id} does not exist.")
-        return {"removed": material_id}
+            row = db.execute(
+                "SELECT * FROM material WHERE id = ?", (material_id,)
+            ).fetchone()
+            if row is None:
+                raise LibraryError(
+                    f"Material {material_id} does not exist.",
+                    code="library.material.unknown",
+                )
+
+            def count(table, extra=""):
+                return db.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE material_id = ?{extra}",
+                    (material_id,),
+                ).fetchone()[0]
+
+            return {
+                "material_id": material_id,
+                "name": row["name"],
+                "presets": count("preset"),
+                "test_grids": count("test_grid"),
+                "grid_recipes": count("grid_recipe"),
+                "photos": count("test_grid", " AND photo_path IS NOT NULL"),
+                "sheets": sum(
+                    1
+                    for sheet in self._read_sheets()
+                    if sheet.get("material_id") == material_id
+                ),
+            }
+
+    def update_material(self, material_id: int, name=None, synonyms=None) -> dict:
+        """
+        Renaming a material, and adjusting the names it also answers to.
+
+        There was no way to do this at all, which is why the author's library holds both
+        `Multiplex berken` and `Berkentriplex` for one board. Renaming onto a name that is
+        taken is refused rather than quietly merged: merging is a different verb with a
+        different confirmation, and joining two sets of measurements nobody asked to join
+        is exactly the kind of help nobody wants.
+
+        The check is case-insensitive where the UNIQUE constraint on the column is not:
+        `Acrylaat` beside `acrylaat` is the same rot under a different spelling.
+        """
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM material WHERE id = ?", (material_id,)
+            ).fetchone()
+            if row is None:
+                raise LibraryError(
+                    f"Material {material_id} does not exist.",
+                    code="library.material.unknown",
+                )
+            fields = {}
+            if name is not None:
+                clean = str(name).strip()
+                if not clean:
+                    raise LibraryError(
+                        "A material needs a name.", code="library.material.needsName"
+                    )
+                taken = db.execute(
+                    "SELECT id FROM material WHERE name = ? COLLATE NOCASE AND id <> ?",
+                    (clean, material_id),
+                ).fetchone()
+                if taken is not None:
+                    raise LibraryError(
+                        f"There is already a material called '{clean}'. Merge the two "
+                        "instead of giving them the same name.",
+                        code="library.material.nameTaken",
+                    )
+                fields["name"] = clean
+            if synonyms is not None:
+                fields["synonyms"] = "|".join(
+                    str(word).strip() for word in synonyms if str(word).strip()
+                )
+            if not fields:
+                raise LibraryError(
+                    "Nothing to update.", code="library.material.nothingToUpdate"
+                )
+            db.execute(
+                "UPDATE material SET "
+                + ", ".join(f"{key} = ?" for key in fields)
+                + " WHERE id = ?",
+                (*fields.values(), material_id),
+            )
+            updated = self._one(db, "material", material_id)
+        updated["synonyms"] = [w for w in updated["synonyms"].split("|") if w]
+        return updated
+
+    def merge_material(self, source_id: int, target_id: int) -> dict:
+        """
+        Two names for one board, joined into one — without losing either side's work.
+
+        A merge implemented as remove-and-add would throw away exactly what makes the
+        library worth having: the presets, the boards, the photographs and the recipes.
+        So nothing is deleted but the row itself, everything that pointed at the source
+        now points at the target, and the source's name joins the target's synonyms — so
+        that the next import of a bundle calling it by the old name still lands on the
+        right board (`_same_material` reads those synonyms).
+
+        Presets that become duplicates are kept, both of them. They are two measurements
+        of the same thing and deciding which is right is not a merge's business.
+        """
+        if source_id == target_id:
+            raise LibraryError(
+                "A material cannot be merged into itself.",
+                code="library.material.mergeSelf",
+            )
+        with self._connect() as db:
+            rows = {}
+            for material_id in (source_id, target_id):
+                row = db.execute(
+                    "SELECT * FROM material WHERE id = ?", (material_id,)
+                ).fetchone()
+                if row is None:
+                    raise LibraryError(
+                        f"Material {material_id} does not exist.",
+                        code="library.material.unknown",
+                    )
+                rows[material_id] = row
+            source, target = rows[source_id], rows[target_id]
+            words = _union_synonyms(target, source)
+            moved = {
+                "presets": db.execute(
+                    "UPDATE preset SET material_id = ? WHERE material_id = ?",
+                    (target_id, source_id),
+                ).rowcount,
+                "test_grids": db.execute(
+                    "UPDATE test_grid SET material_id = ? WHERE material_id = ?",
+                    (target_id, source_id),
+                ).rowcount,
+                "grid_recipes": db.execute(
+                    "UPDATE grid_recipe SET material_id = ? WHERE material_id = ?",
+                    (target_id, source_id),
+                ).rowcount,
+            }
+            db.execute(
+                "UPDATE material SET synonyms = ? WHERE id = ?",
+                ("|".join(words), target_id),
+            )
+            db.execute("DELETE FROM material WHERE id = ?", (source_id,))
+            merged = self._one(db, "material", target_id)
+        merged["synonyms"] = [w for w in merged["synonyms"].split("|") if w]
+        sheets = self._repoint_sheets(source_id, target_id)
+        return {
+            "material": merged,
+            "removed": source_id,
+            "moved": moved,
+            "sheets": sheets,
+        }
+
+    def remove_material(self, material_id: int, with_everything: bool = False) -> dict:
+        """
+        Removing a material, and only knowingly removing the work that hangs off it.
+
+        This used to be a bare DELETE against `PRAGMA foreign_keys = ON`, which is a
+        data-loss button with a label on it: measured on a copy of the live library,
+        removing `Berkentriplex` took six settings — two of them measured, with
+        photographs — orphaned two boards and answered `{"removed": 6}`. So the count
+        comes first and the refusal names it, and `with_everything` is the word for
+        "yes, all of it".
+
+        The cascade does four things the foreign keys cannot, and each of them was a
+        dangler somebody would have met: the squares in `test_grid.cells` name presets by
+        id inside a JSON string, `preset.origin_id` names a board as the text
+        `"testgrid:12"`, the photographs are files beside the database (only `clear()`
+        ever unlinked one), and the sheet on the table names a material in a JSON file.
+
+        All the SQL is one transaction. The file work happens after it commits, because
+        an unlink cannot be rolled back and a photograph deleted for a delete that then
+        failed is evidence lost for nothing.
+        """
+        usage = self.material_usage(material_id)
+        carries = usage["presets"] or usage["test_grids"] or usage["grid_recipes"]
+        if carries and not with_everything:
+            raise LibraryError(
+                f"'{usage['name']}' still carries {usage['presets']} setting(s), "
+                f"{usage['test_grids']} test board(s) and {usage['grid_recipes']} "
+                "recipe(s). Remove it with everything on it, or move those first.",
+                code="library.material.inUse",
+            )
+        with self._connect() as db:
+            preset_ids = [
+                row[0]
+                for row in db.execute(
+                    "SELECT id FROM preset WHERE material_id = ?", (material_id,)
+                )
+            ]
+            grids = db.execute(
+                "SELECT id, photo_path FROM test_grid WHERE material_id = ?",
+                (material_id,),
+            ).fetchall()
+            photos = [row["photo_path"] for row in grids]
+            # Boards first, so `_forget_presets` afterwards only has to walk the boards
+            # that survive.
+            db.execute("DELETE FROM test_grid WHERE material_id = ?", (material_id,))
+            self._forget_grids(db, [row["id"] for row in grids])
+            db.execute("DELETE FROM preset WHERE material_id = ?", (material_id,))
+            db.execute("DELETE FROM grid_recipe WHERE material_id = ?", (material_id,))
+            self._forget_presets(db, preset_ids)
+            db.execute("DELETE FROM material WHERE id = ?", (material_id,))
+        return {
+            "removed": material_id,
+            "presets": len(preset_ids),
+            "test_grids": len(grids),
+            "grid_recipes": usage["grid_recipes"],
+            "photos": len(self._unlink_photos(photos)),
+            "sheets": self._repoint_sheets(material_id, None),
+        }
 
     # ---------------------------------------------------------------- presets
 
@@ -526,26 +1113,39 @@ class Library:
     def add_preset(self, **fields) -> dict:
         material_id = fields.get("material_id")
         if material_id is None:
-            raise LibraryError("A preset belongs to a material.")
+            raise LibraryError(
+                "A preset belongs to a material.", code="library.preset.needsMaterial"
+            )
         operation = str(fields.get("operation") or "").strip()
         if operation not in OPERATIONS:
-            raise LibraryError(f"Unknown operation: {operation or '(empty)'}")
+            raise LibraryError(
+                f"Unknown operation: {operation or '(empty)'}",
+                code="library.preset.unknownOperation",
+            )
         source = str(fields.get("source") or "handmatig")
         if source not in SOURCES:
-            raise LibraryError(f"Unknown source: {source}")
+            raise LibraryError(
+                f"Unknown source: {source}", code="library.preset.unknownSource"
+            )
 
         speed = _number(fields.get("speed_mm_s"), "speed_mm_s", positive=True)
         power = _number(fields.get("power_percent"), "power_percent", positive=True)
         if power > 100:
-            raise LibraryError("power_percent cannot go above 100.")
+            raise LibraryError(
+                "power_percent cannot go above 100.",
+                code="library.preset.powerRange",
+                values={"max": 100},
+            )
 
         try:
             with self._connect() as db:
                 cursor = db.execute(
                     """INSERT INTO preset (material_id, machine_id, thickness_mm, operation,
                             speed_mm_s, power_percent, passes, interval_mm, air_assist,
-                            focus_offset_mm, source, origin_id, note)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            focus_offset_mm, source, origin_id, note,
+                            import_batch, origin_laser_type, origin_power_watt,
+                            origin_by)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         material_id,
                         fields.get("machine_id"),
@@ -560,11 +1160,25 @@ class Library:
                         source,
                         fields.get("origin_id"),
                         str(fields.get("note") or ""),
+                        str(fields.get("import_batch") or ""),
+                        str(fields.get("origin_laser_type") or "") or None,
+                        # Deliberately not range-checked the way our own profile's
+                        # wattage is: this records what a stranger's machine was, and a
+                        # nonsense figure in a shared catalogue is a row to skip and
+                        # count, not a 409 that takes the whole import down.
+                        _number(
+                            fields.get("origin_power_watt"),
+                            "origin_power_watt",
+                            optional=True,
+                        ),
+                        str(fields.get("origin_by") or "") or None,
                     ),
                 )
                 preset_id = cursor.lastrowid
         except sqlite3.IntegrityError as e:
-            raise LibraryError("That material does not exist.") from e
+            raise LibraryError(
+                "That material does not exist.", code="library.preset.unknownMaterial"
+            ) from e
         return self.preset(preset_id)
 
     def preset(self, preset_id: int) -> dict:
@@ -578,7 +1192,9 @@ class Library:
                 (preset_id,),
             ).fetchone()
         if row is None:
-            raise LibraryError(f"Preset {preset_id} does not exist.")
+            raise LibraryError(
+                f"Preset {preset_id} does not exist.", code="library.preset.unknown"
+            )
         return _preset_row(row)
 
     # What you may adjust on an existing preset.
@@ -607,7 +1223,8 @@ class Library:
         if rejected:
             raise LibraryError(
                 f"Cannot be changed: {', '.join(rejected)}. Material, operation and "
-                "source belong to the identity of a preset."
+                "source belong to the identity of a preset.",
+                code="library.preset.fixedField",
             )
         if not updates:
             return self.preset(preset_id)
@@ -661,12 +1278,97 @@ class Library:
                 (preset_id,),
             )
 
+    def verify_preset(self, preset_id: int) -> dict:
+        """
+        Somebody burned this setting again and it still held.
+
+        The only claim about a shared setting that one maintainer can ever check, so it is
+        worth recording — and deliberately *not* a condition on sharing. A share button
+        that demands a re-burn is a share button nobody presses, and then the catalogue
+        stays empty for a reason that sounds like rigour.
+        """
+        self.preset(preset_id)
+        with self._connect() as db:
+            db.execute(
+                "UPDATE preset SET verified_at = ? WHERE id = ?", (_now(), preset_id)
+            )
+        return self.preset(preset_id)
+
     def remove_preset(self, preset_id: int) -> dict:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM preset WHERE id = ?", (preset_id,))
             if not cursor.rowcount:
-                raise LibraryError(f"Preset {preset_id} does not exist.")
+                raise LibraryError(
+                    f"Preset {preset_id} does not exist.",
+                    code="library.preset.unknown",
+                )
+            # The square that produced it names it by id inside a JSON string, where no
+            # constraint reaches. Without this the result window keeps offering a setting
+            # that is not there any more.
+            self._forget_presets(db, [preset_id])
         return {"removed": preset_id}
+
+    def remove_import_batch(self, batch: str) -> dict:
+        """
+        Taking one import back, in one call.
+
+        This is the strongest defence there is against a library turning into a junk
+        drawer, and the reason is arithmetic: one bulk tick-list produced fourteen of the
+        author's twenty materials and twenty-six of the thirty-five presets, all bound to
+        a machine nobody had described, and until now not one of them could be removed
+        again. An import you can undo is not a dump.
+
+        The materials go too, but only the ones this import created (`material.import_batch`)
+        *and* that nothing else uses any more. A board the user typed in themselves keeps
+        its own presets and its own name whatever an import did around it.
+        """
+        key = str(batch or "").strip()
+        if not key:
+            raise LibraryError(
+                "An import needs a name to be taken back by.",
+                code="library.import.needsBatch",
+            )
+        with self._connect() as db:
+            preset_ids = [
+                row[0]
+                for row in db.execute(
+                    "SELECT id FROM preset WHERE import_batch = ?", (key,)
+                )
+            ]
+            material_ids = [
+                row[0]
+                for row in db.execute(
+                    "SELECT id FROM material WHERE import_batch = ?", (key,)
+                )
+            ]
+            if not preset_ids and not material_ids:
+                raise LibraryError(
+                    f"There is no import called '{key}' in this library.",
+                    code="library.import.unknownBatch",
+                )
+            db.execute("DELETE FROM preset WHERE import_batch = ?", (key,))
+            self._forget_presets(db, preset_ids)
+            gone = []
+            for material_id in material_ids:
+                left = sum(
+                    db.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE material_id = ?",
+                        (material_id,),
+                    ).fetchone()[0]
+                    for table in ("preset", "test_grid", "grid_recipe")
+                )
+                if left:
+                    continue
+                db.execute("DELETE FROM material WHERE id = ?", (material_id,))
+                gone.append(material_id)
+        sheets = sum(self._repoint_sheets(material_id, None) for material_id in gone)
+        return {
+            "batch": key,
+            "presets": len(preset_ids),
+            "materials": gone,
+            "kept_materials": [m for m in material_ids if m not in gone],
+            "sheets": sheets,
+        }
 
     # ------------------------------------------------------------ testrasters
 
@@ -676,7 +1378,7 @@ class Library:
                 """SELECT g.*, m.name AS material_name
                    FROM test_grid g
                    LEFT JOIN material m ON m.id = g.material_id
-                   ORDER BY g.created_at DESC, g.id DESC"""  # created_at heeft secondenresolutie
+                   ORDER BY g.created_at DESC, g.id DESC"""  # created_at is accurate to the second
             ).fetchall()
         return [_grid_row(r) for r in rows]
 
@@ -690,7 +1392,9 @@ class Library:
                 (grid_id,),
             ).fetchone()
         if row is None:
-            raise LibraryError(f"Test grid {grid_id} does not exist.")
+            raise LibraryError(
+                f"Test grid {grid_id} does not exist.", code="library.grid.unknown"
+            )
         return _grid_row(row)
 
     def set_grid_group(self, grid_id: int, group_id: str | None) -> None:
@@ -714,11 +1418,15 @@ class Library:
             clean = _alignment(corners)
             if clean is None:
                 raise LibraryError(
-                    "An alignment consists of four points with an x and a y."
+                    "An alignment consists of four points with an x and a y.",
+                    code="library.grid.badAlignment",
                 )
             for point in clean:
                 if not (0 <= point["x"] <= 1 and 0 <= point["y"] <= 1):
-                    raise LibraryError("A corner lies outside the photo.")
+                    raise LibraryError(
+                        "A corner lies outside the photo.",
+                        code="library.grid.cornerOutside",
+                    )
         with self._connect() as db:
             db.execute(
                 "UPDATE test_grid SET alignment = ? WHERE id = ?",
@@ -765,7 +1473,7 @@ class Library:
 
     def grid_recipes(self, material_id=None) -> list[dict]:
         """
-        De bewaarde generatorinstellingen.
+        The generator settings you saved.
 
         Without a material you get everything; with a material the recipes of *that*
         material plus the material-less ones — those last are the general ones ("quick
@@ -800,18 +1508,30 @@ class Library:
         """
         name = str(name or "").strip()
         if not name:
-            raise LibraryError("A recipe needs a name.")
+            raise LibraryError("A recipe needs a name.", code="library.recipe.needsName")
         if len(name) > 60:
-            raise LibraryError("Keep the name under 60 characters.")
+            raise LibraryError(
+                "Keep the name under 60 characters.",
+                code="library.recipe.nameTooLong",
+                values={"max": 60},
+            )
         if not isinstance(settings, dict):
-            raise LibraryError("A recipe consists of settings.")
+            raise LibraryError(
+                "A recipe consists of settings.", code="library.recipe.needsSettings"
+            )
         clean = _recipe_settings(settings)
         if not clean:
-            raise LibraryError("There were no usable settings in this recipe.")
+            raise LibraryError(
+                "There were no usable settings in this recipe.",
+                code="library.recipe.emptySettings",
+            )
         if material_id is not None and not any(
             m["id"] == material_id for m in self.materials()
         ):
-            raise LibraryError(f"Material {material_id} does not exist.")
+            raise LibraryError(
+                f"Material {material_id} does not exist.",
+                code="library.material.unknown",
+            )
         with self._connect() as db:
             existing = db.execute(
                 """SELECT id FROM grid_recipe
@@ -837,13 +1557,18 @@ class Library:
         for recipe in self.grid_recipes():
             if recipe["id"] == recipe_id:
                 return recipe
-        raise LibraryError(f"Recipe {recipe_id} does not exist.")
+        raise LibraryError(
+            f"Recipe {recipe_id} does not exist.", code="library.recipe.unknown"
+        )
 
     def remove_grid_recipe(self, recipe_id: int) -> dict:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM grid_recipe WHERE id = ?", (recipe_id,))
             if not cursor.rowcount:
-                raise LibraryError(f"Recipe {recipe_id} does not exist.")
+                raise LibraryError(
+                    f"Recipe {recipe_id} does not exist.",
+                    code="library.recipe.unknown",
+                )
         return {"removed": recipe_id}
 
     def grid_operations(self) -> dict:
@@ -913,18 +1638,40 @@ class Library:
         return self.test_grid(grid_id)
 
     def remove_test_grid(self, grid_id: int) -> dict:
+        """
+        Removing a board, and the two things that would otherwise be left behind.
+
+        `preset.origin_id` is the text `"testgrid:12"`, so no foreign key reaches it: a
+        preset made from this board would go on claiming evidence that is gone, and the
+        card would offer a photograph that is not there. And the photograph is a file
+        beside the database — until now only `clear()` ever unlinked one, so every board
+        removed left its picture on disk for ever.
+        """
         with self._connect() as db:
-            cursor = db.execute("DELETE FROM test_grid WHERE id = ?", (grid_id,))
-            if not cursor.rowcount:
-                raise LibraryError(f"Test grid {grid_id} does not exist.")
-        return {"removed": grid_id}
+            row = db.execute(
+                "SELECT photo_path FROM test_grid WHERE id = ?", (grid_id,)
+            ).fetchone()
+            if row is None:
+                raise LibraryError(
+                    f"Test grid {grid_id} does not exist.",
+                    code="library.grid.unknown",
+                )
+            db.execute("DELETE FROM test_grid WHERE id = ?", (grid_id,))
+            self._forget_grids(db, [grid_id])
+        return {
+            "removed": grid_id,
+            "photos": len(self._unlink_photos([row["photo_path"]])),
+        }
 
     def set_grid_photo(self, grid_id: int, suffix: str, data: bytes) -> dict:
         """Store the photo of a burned grid and remember where it went."""
         grid = self.test_grid(grid_id)
         safe = (suffix or "").lower()
         if safe not in (".jpg", ".jpeg", ".png", ".webp", ".heic"):
-            raise LibraryError(f"Unknown photo format: {suffix or '(none)'}")
+            raise LibraryError(
+                f"Unknown photo format: {suffix or '(none)'}",
+                code="library.photo.unknownFormat",
+            )
         target = self.photos / f"grid-{grid['id']}{safe}"
         target.write_bytes(data)
         with self._connect() as db:
@@ -943,7 +1690,10 @@ class Library:
                 cell["preset_id"] = preset_id
                 break
         else:
-            raise LibraryError(f"Cell {row},{column} does not belong to grid {grid_id}.")
+            raise LibraryError(
+                f"Cell {row},{column} does not belong to grid {grid_id}.",
+                code="library.grid.unknownCell",
+            )
         with self._connect() as db:
             db.execute(
                 "UPDATE test_grid SET cells = ? WHERE id = ?",
@@ -1014,26 +1764,39 @@ class Library:
 
         source = Path(path)
         if not source.exists():
-            raise LibraryError("That file is not there (any more).")
+            raise LibraryError(
+                "That file is not there (any more).", code="library.bundle.missingFile"
+            )
         if not zipfile.is_zipfile(source):
             raise LibraryError(
                 "This is not an OpenKerf library. A library file ends "
-                f"in {BUNDLE_SUFFIX}."
+                f"in {BUNDLE_SUFFIX}.",
+                code="library.bundle.notALibrary",
+                values={"suffix": BUNDLE_SUFFIX},
             )
         with zipfile.ZipFile(source) as bundle:
             names = bundle.namelist()
             index = BUNDLE_INDEX if BUNDLE_INDEX in names else LEGACY_BUNDLE_INDEX
             if index not in names:
-                raise LibraryError("This file holds no library.")
+                raise LibraryError(
+                    "This file holds no library.", code="library.bundle.noIndex"
+                )
             try:
                 data = json.loads(bundle.read(index))
             except ValueError as e:
-                raise LibraryError("The library in this file is damaged.") from e
+                raise LibraryError(
+                    "The library in this file is damaged.",
+                    code="library.bundle.damaged",
+                ) from e
         if not isinstance(data, dict) or data.get("format") != BUNDLE_FORMAT:
-            raise LibraryError("This file did not come from an OpenKerf library.")
+            raise LibraryError(
+                "This file did not come from an OpenKerf library.",
+                code="library.bundle.wrongFormat",
+            )
         if int(data.get("version") or 0) > BUNDLE_VERSION:
             raise LibraryError(
-                "This file comes from a newer version of OpenKerf. Update first."
+                "This file comes from a newer version of OpenKerf. Update first.",
+                code="library.bundle.tooNew",
             )
         return data
 
@@ -1137,6 +1900,7 @@ class Library:
         mode: str = "merge",
         merge_materials: dict | None = None,
         on_conflict: str = "mine",
+        import_batch: str = "",
     ) -> dict:
         """
         Actually reading the file in.
@@ -1149,13 +1913,20 @@ class Library:
         another computer — rewriting "testgrid" to "imported" would throw away exactly the
         evidence this function is meant to preserve. The photos come along for the same
         reason.
+
+        `import_batch` stamps everything this call creates with one name, so that
+        `remove_import_batch` can take exactly this import back later. Empty for a plain
+        restore-from-backup: there is nothing to undo about your own library arriving.
         """
         import zipfile
 
         if mode not in ("merge", "replace"):
-            raise LibraryError(f"Unknown choice: {mode}")
+            raise LibraryError(f"Unknown choice: {mode}", code="library.bundle.unknownMode")
         if on_conflict not in ("mine", "file"):
-            raise LibraryError(f"Unknown choice on a clash: {on_conflict}")
+            raise LibraryError(
+                f"Unknown choice on a clash: {on_conflict}",
+                code="library.bundle.unknownConflict",
+            )
         data = self.read_bundle(path)
         linked = _merge_map(merge_materials)
         removed = self._counts() if mode == "replace" else None
@@ -1173,7 +1944,9 @@ class Library:
             match = next((m for m in mine if m["id"] == pointed_at), None) if pointed_at else None
             match = match or _same_material(name, material.get("synonyms"), mine)
             if match is None:
-                match = self.add_material(name, material.get("synonyms"))
+                match = self.add_material(
+                    name, material.get("synonyms"), import_batch=import_batch
+                )
             material_id[material.get("id")] = match["id"]
 
         # 2. Machine profiles, by name.
@@ -1250,7 +2023,7 @@ class Library:
                 updated += 1
                 continue
             preset_id[preset.get("id")] = self._insert_preset(
-                preset, target, machine_id, grid_id
+                preset, target, machine_id, grid_id, import_batch
             )
             added += 1
 
@@ -1368,7 +2141,14 @@ class Library:
             )
             return cursor.lastrowid
 
-    def _insert_preset(self, preset: dict, material_id: int, machine_id: dict, grid_id: dict) -> int:
+    def _insert_preset(
+        self,
+        preset: dict,
+        material_id: int,
+        machine_id: dict,
+        grid_id: dict,
+        import_batch: str = "",
+    ) -> int:
         origin = preset.get("origin_id")
         if isinstance(origin, str) and origin.startswith("testgrid:"):
             old = origin.split(":", 1)[1]
@@ -1379,8 +2159,10 @@ class Library:
             cursor = db.execute(
                 """INSERT INTO preset (material_id, machine_id, thickness_mm, operation,
                         speed_mm_s, power_percent, passes, interval_mm, air_assist,
-                        focus_offset_mm, source, origin_id, note, last_used_at, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        focus_offset_mm, source, origin_id, note, last_used_at, created_at,
+                        import_batch, origin_laser_type, origin_power_watt, verified_at,
+                        origin_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     material_id,
                     machine_id.get(preset.get("machine_id")),
@@ -1397,6 +2179,14 @@ class Library:
                     str(preset.get("note") or ""),
                     preset.get("last_used_at"),
                     preset.get("created_at") or _now(),
+                    import_batch,
+                    preset.get("origin_laser_type"),
+                    preset.get("origin_power_watt"),
+                    preset.get("verified_at"),
+                    # The credit travels with the row. A bundle from a colleague may carry
+                    # a preset that came out of the shared catalogue, and CC BY does not
+                    # stop applying because the file went via somebody's laptop.
+                    preset.get("origin_by"),
                 ),
             )
             return cursor.lastrowid
@@ -1409,18 +2199,141 @@ class Library:
                 grid = self.test_grid(fresh)
             except LibraryError:
                 continue
-            veranderd = False
-            for cel in grid["cells"]:
-                target = preset_id.get(cel.get("preset_id"))
-                if target is not None and target != cel.get("preset_id"):
-                    cel["preset_id"] = target
-                    veranderd = True
-            if veranderd:
+            changed = False
+            for cell in grid["cells"]:
+                target = preset_id.get(cell.get("preset_id"))
+                if target is not None and target != cell.get("preset_id"):
+                    cell["preset_id"] = target
+                    changed = True
+            if changed:
                 with self._connect() as db:
                     db.execute(
                         "UPDATE test_grid SET cells = ? WHERE id = ?",
                         (json.dumps(grid["cells"]), fresh),
                     )
+
+    # ------------------------------------------------- the four danglers ----
+    #
+    # Everything below cleans up after a delete in a place SQLite's own constraints
+    # cannot reach. Each of them was measured on a copy of the live library, and each of
+    # them is the kind of damage you only see weeks later, on the screen, in front of a
+    # laser.
+
+    @staticmethod
+    def _forget_presets(db, preset_ids) -> int:
+        """
+        Take removed presets out of the squares that produced them.
+
+        `test_grid.cells` is JSON, so `preset.id` sits in there as a plain number that no
+        foreign key knows about. A removed preset therefore leaves its id in a square, and
+        the result window then offers a setting that does not exist. Walks every board
+        because a board of one material can perfectly well have produced a preset filed
+        under another.
+        """
+        wanted = {int(i) for i in preset_ids}
+        if not wanted:
+            return 0
+        touched = 0
+        for row in db.execute("SELECT id, cells FROM test_grid").fetchall():
+            try:
+                cells = json.loads(row["cells"] or "[]")
+            except ValueError:  # pragma: no cover - a board written by hand
+                continue
+            hit = False
+            for cell in cells:
+                if cell.get("preset_id") in wanted:
+                    cell["preset_id"] = None
+                    hit = True
+            if hit:
+                db.execute(
+                    "UPDATE test_grid SET cells = ? WHERE id = ?",
+                    (json.dumps(cells), row["id"]),
+                )
+                touched += 1
+        return touched
+
+    @staticmethod
+    def _forget_grids(db, grid_ids) -> int:
+        """
+        Let go of a board that is gone.
+
+        `origin_id` is a string ("testgrid:12") rather than a foreign key, so nothing
+        nulls it by itself. The preset keeps its `source = 'testraster'` — it *was*
+        measured, and rewriting that would be a bigger lie than a missing photograph.
+        """
+        forgotten = 0
+        for grid_id in grid_ids:
+            forgotten += db.execute(
+                "UPDATE preset SET origin_id = NULL WHERE origin_id = ?",
+                (f"testgrid:{grid_id}",),
+            ).rowcount
+        return forgotten
+
+    def _unlink_photos(self, paths) -> list[str]:
+        """
+        The photo files, after the database has committed.
+
+        Deliberately outside the transaction: an unlink cannot be rolled back, and a
+        photograph deleted for a delete that then failed is evidence lost for nothing.
+        Only files inside our own photo directory are touched, because `photo_path` is
+        just a string in a database and an imported bundle can put anything in it.
+        """
+        gone = []
+        for raw in paths:
+            if not raw:
+                continue
+            path = Path(raw)
+            try:
+                if not path.resolve().is_relative_to(self.photos.resolve()):
+                    continue
+                path.unlink(missing_ok=True)
+            except OSError:  # pragma: no cover - a photo directory we cannot read
+                continue
+            gone.append(str(path))
+        return gone
+
+    @property
+    def _sheets_index(self) -> Path:
+        """
+        Where the sheets on the table are listed.
+
+        `Sheets` is built with `_beside("openkerf-sheets", "openkerf-vellen")`
+        (server.py:292), which is `library.path.with_name(...)`, and its index inside that
+        directory is still called `vellen.json` (sheets.py:57) — the state file kept its
+        name when the interface became English, so that live work was not thrown away.
+        Only the new directory name is looked for: by the time anything here runs, the
+        server has already moved the old one.
+        """
+        return self.path.with_name("openkerf-sheets") / "vellen.json"
+
+    def _read_sheets(self) -> list[dict]:
+        try:
+            sheets = json.loads(self._sheets_index.read_text())
+        except (OSError, ValueError):
+            return []
+        return sheets if isinstance(sheets, list) else []
+
+    def _repoint_sheets(self, old_material_id: int, new_material_id: int | None) -> int:
+        """
+        The sheet on the table names its material by id, in a file the database cannot see.
+
+        Without this, removing a material leaves the top bar naming a material that is
+        gone, and merging two names leaves the sheet on the one that was merged away —
+        which is how `drawing.py`'s comparison ends up saying "this sheet is this sheet".
+        `Sheets` re-reads its index on every call, so writing it here is picked up at
+        once.
+        """
+        sheets = self._read_sheets()
+        touched = 0
+        for sheet in sheets:
+            if sheet.get("material_id") == old_material_id:
+                sheet["material_id"] = new_material_id
+                touched += 1
+        if touched:
+            self._sheets_index.write_text(
+                json.dumps(sheets, indent=1, ensure_ascii=False)
+            )
+        return touched
 
     # ---------------------------------------------------------------- helpers
 
@@ -1444,7 +2357,7 @@ def _grid_row(row) -> dict:
 # The values of the quantities that are *not* on an axis. They belong to a recipe —
 # otherwise "engrave birch at 40%" is not a recipe but half a recipe — but not to
 # GRID_DEFAULTS, because there they appear as min == max in the series.
-_VASTE_VELDEN = ("speed_mm_s", "power_percent", "interval_mm")
+_FIXED_FIELDS = ("speed_mm_s", "power_percent", "interval_mm")
 
 
 def _recipe_settings(raw: dict) -> dict:
@@ -1454,21 +2367,21 @@ def _recipe_settings(raw: dict) -> dict:
     A recipe is a JSON blob in the database, and that is exactly where rubbish gets in. Here
     what does not belong goes out, so that the wizard can trust it blindly.
     """
-    uit = {}
-    for key in tuple(Library.GRID_DEFAULTS) + _VASTE_VELDEN:
+    kept = {}
+    for key in tuple(Library.GRID_DEFAULTS) + _FIXED_FIELDS:
         if key not in raw or raw[key] is None:
             continue
         value = raw[key]
         if key in ("text_enabled", "border_enabled"):
-            uit[key] = bool(value)
+            kept[key] = bool(value)
         elif key in ("operation", "row_axis", "column_axis", "anchor"):
-            uit[key] = str(value)
+            kept[key] = str(value)
         else:
             try:
-                uit[key] = float(value)
+                kept[key] = float(value)
             except (TypeError, ValueError):
                 continue
-    return uit
+    return kept
 
 
 def _with_anchor(setting: dict) -> dict:
@@ -1540,9 +2453,9 @@ def _preset_row(row) -> dict:
     cells = data.pop("grid_cells", None)
     data["grid_cell"] = None
     if cells:
-        for cel in json.loads(cells):
-            if cel.get("preset_id") == data["id"]:
-                data["grid_cell"] = {"row": cel["row"], "column": cel["column"]}
+        for cell in json.loads(cells):
+            if cell.get("preset_id") == data["id"]:
+                data["grid_cell"] = {"row": cell["row"], "column": cell["column"]}
                 break
     return data
 
@@ -1656,10 +2569,72 @@ def _grid_key(grid: dict) -> tuple:
     )
 
 
+def _union_synonyms(target, source) -> list[str]:
+    """
+    Both materials' other names, plus the name that is being merged away.
+
+    The old name has to survive as a synonym or the merge quietly breaks the next import:
+    a bundle calling the board `Multiplex berken` would create it again beside
+    `Berkentriplex` and we would be back where we started. Compared without accents or
+    capitals, but the first spelling is the one that is kept — it is what somebody typed.
+    """
+    words: list[str] = []
+    seen = {_norm(target["name"])}
+    for text in (
+        *(target["synonyms"] or "").split("|"),
+        source["name"],
+        *(source["synonyms"] or "").split("|"),
+    ):
+        word = str(text).strip()
+        if not word or _norm(word) in seen:
+            continue
+        seen.add(_norm(word))
+        words.append(word)
+    return words
+
+
+# What a laser can plausibly be. Ours, not measured, so the numbers travel in
+# X-OpenKerf-Error-Values and the sentence can be translated.
+WATT_MIN, WATT_MAX = 1, 1000
+
+# The three answers to the starting-values offer: not asked yet, waved away, and "I do not
+# know what my tube is" — which is a legitimate answer and not a dead end, because
+# `dev_info` carries no wattage anywhere to default from.
+STARTER_STATES = ("", "dismissed", "power_unknown")
+
+
+def _starter_state(value) -> str:
+    state = str(value or "")
+    if state not in STARTER_STATES:
+        raise LibraryError(
+            f"Unknown state for the starting-values offer: {state}",
+            code="library.machine.unknownStarterState",
+        )
+    return state
+
+
+def _watt(value):
+    """A tube power, or nothing at all — but never a number no laser has."""
+    number = _number(value, "power_watt", optional=True)
+    if number is None:
+        return None
+    if not (WATT_MIN <= number <= WATT_MAX):
+        raise LibraryError(
+            f"A tube power between {WATT_MIN} and {WATT_MAX} watt, please.",
+            code="library.machine.wattRange",
+            values={"min": WATT_MIN, "max": WATT_MAX},
+        )
+    return number
+
+
 def _percent(value):
     number = _number(value, "power_percent", positive=True)
     if number > 100:
-        raise LibraryError("power_percent cannot go above 100.")
+        raise LibraryError(
+            "power_percent cannot go above 100.",
+            code="library.preset.powerRange",
+            values={"max": 100},
+        )
     return number
 
 
@@ -1667,11 +2642,21 @@ def _number(value, name: str, positive: bool = False, optional: bool = False):
     if value is None or value == "":
         if optional:
             return None
-        raise LibraryError(f"{name} is verplicht.")
+        raise LibraryError(
+            f"{name} is required.", code="library.value.required", values={"field": name}
+        )
     try:
         number = float(value)
     except (TypeError, ValueError) as e:
-        raise LibraryError(f"{name} has to be a number.") from e
+        raise LibraryError(
+            f"{name} has to be a number.",
+            code="library.value.notANumber",
+            values={"field": name},
+        ) from e
     if positive and number <= 0:
-        raise LibraryError(f"{name} has to be greater than zero.")
+        raise LibraryError(
+            f"{name} has to be greater than zero.",
+            code="library.value.notPositive",
+            values={"field": name},
+        )
     return number

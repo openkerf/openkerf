@@ -54,6 +54,7 @@ from .series import (
     rows_in,
 )
 from .sheets import Sheets
+from .starter import Starter
 from .tilerun import TileRun
 from .testgrid import (
     TestGridGenerator,
@@ -271,6 +272,10 @@ class ApiServer:
         self.presetariat = Presetariat(
             self.library, Path(self.library.path).with_name("presetariat-cache.json")
         )
+        # The offer a machine with no settings gets, and the staging that answers it. It
+        # holds no state of its own: the coverage is six counts over the library and the
+        # staged bundle is a file in the upload directory.
+        self.starter = Starter(self.library, self.presetariat)
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
         self.motion = MachineControl(kernel, self.commands)
@@ -411,10 +416,27 @@ class ApiServer:
             return None
         try:
             return self.library.profile_for_device(
-                str(path), str(getattr(device, "label", "") or path)
+                str(path),
+                str(getattr(device, "label", "") or path),
+                machine_uid=self.machines.machine_uid(device),
             )
         except Exception:
             return None
+
+    def _live_device_paths(self) -> set[str]:
+        """
+        The slots that a machine somebody set up is sitting in right now.
+
+        Only configured machines, exactly as the profile list counts them: MeerK40t always
+        keeps an lhystudios stand-in alive so the kernel has something to talk to, and
+        counting that as "a machine that exists" would let it block a merge between two
+        profiles of the user's own laser.
+        """
+        return {
+            device.path
+            for device in self.kernel.services("device")
+            if self.machines._configured(device)
+        }
 
     def _palette_machine(self):
         """
@@ -1815,9 +1837,56 @@ class ApiServer:
         def add_material(body: dict):
             return manage(self.library.add_material, body.get("name"), body.get("synonyms"))
 
+        @app.get("/api/library/materials/{material_id}/usage")
+        def material_usage(material_id: int):
+            """
+            What hangs off this material, before anybody presses Remove.
+
+            The dialog has to be able to name the count. Removing `Berkentriplex` from a
+            copy of the author's library took six settings with it — two of them measured,
+            with photographs — orphaned two boards and answered `{"removed": 6}`; a
+            confirmation that says "remove?" and nothing else is what made that possible.
+            """
+            return manage(self.library.material_usage, material_id)
+
+        @app.patch("/api/library/materials/{material_id}", dependencies=write)
+        def update_material(material_id: int, body: dict):
+            """
+            Rename a material, or give it another word people call it by.
+
+            There was no PATCH here at all, which is why the live library holds both
+            `Multiplex berken` and `Berkentriplex` for one board: the only way to fix a
+            typo was to add a second material beside the first.
+            """
+            return manage(
+                self.library.update_material,
+                material_id,
+                body.get("name"),
+                body.get("synonyms"),
+            )
+
+        @app.post(
+            "/api/library/materials/{material_id}/merge-into/{target_id}",
+            dependencies=write,
+        )
+        def merge_material(material_id: int, target_id: int):
+            """Two names for one board, joined — settings, boards and recipes with them."""
+            return manage(self.library.merge_material, material_id, target_id)
+
         @app.delete("/api/library/materials/{material_id}", dependencies=write)
-        def remove_material(material_id: int):
-            return manage(self.library.remove_material, material_id)
+        def remove_material(material_id: int, with_everything: bool = False):
+            """
+            Remove a material — refused while work hangs off it, unless you say so.
+
+            `with_everything` is a deliberate second word and not a default, because the
+            cascade behind it is `preset` CASCADE, `grid_recipe` CASCADE and
+            `test_grid.material_id` SET NULL: the bare DELETE this route used to be was a
+            data-loss button with a one-word label. The flag is a query parameter rather
+            than a body because DELETE bodies do not survive every client.
+            """
+            return manage(
+                self.library.remove_material, material_id, with_everything=with_everything
+            )
 
         @app.get("/api/library/presets")
         def list_presets(
@@ -1847,7 +1916,44 @@ class ApiServer:
             profile = self._active_profile()
             if profile is None:
                 raise HTTPException(status_code=409, detail="There is no active machine.")
-            return profile
+            # The offer rides along, so no surface needs a second call to find out
+            # whether this machine has anything at all. It costs six COUNT(*)s over the
+            # library and no network at all — see Starter.offer.
+            offer = self.starter.offer(profile)
+            return {
+                **profile,
+                "starter": {k: v for k, v in offer.items() if k != "machine"},
+            }
+
+        @app.get("/api/library/starter")
+        def starter_offer():
+            """
+            Whether this machine should be offered a set of starting points.
+
+            Its own route as well as a field on `/api/library/active-machine`, because
+            two surfaces ask it — the material library on opening and `/setup/done` at
+            the end of the wizard — and the second one has no reason to fetch a profile
+            it has just written. A machine that is not active answers `needed: false`
+            rather than a refusal: that is a normal state, not a fault.
+            """
+            return self.starter.offer(self._active_profile())
+
+        @app.post("/api/library/starter/dismiss", dependencies=write)
+        def dismiss_starter(body: dict | None = None):
+            """
+            What the user said about starting points for this machine: not now, or
+            "I don't know what my tube is".
+
+            One route for both, because both are the same column and the card offers
+            them side by side. `power_unknown` is not a dismissal — it keeps the offer
+            and drops the wattage half of the match — but it is the same fact being
+            recorded, and a second route would let the two get out of step.
+            """
+            return manage(
+                self.starter.dismiss,
+                self._active_profile(),
+                (body or {}).get("state") or "dismissed",
+            )
 
         @app.patch("/api/library/machines/{machine_id}", dependencies=write)
         def update_machine(machine_id: int, body: dict):
@@ -1894,19 +2000,43 @@ class ApiServer:
             Only configured machines count. Profiles the old version created for MeerK40t's
             lhystudios stand-in otherwise sit there as a live machine while nobody chose
             them — precisely the names that polluted the list.
+
+            A profile with no device path at all is orphaned too, and that half was
+            missing: the rule read `bool(device_path) and device_path not in paths`, so a
+            row that never had a device could not fail it. Measured on the author's
+            library, that is how `5030 CO2` — 27 presets, 60 W, `device_path: null` — was
+            presented as a live machine attached to nothing, and it is one of the four
+            mechanisms behind "the machines it names are not the machines I defined".
+
+            The two states are told apart rather than merged, because the answer differs:
+            a profile whose device is not here may get it back (plug it in, or the engine's
+            settings were wiped), while one that points at no device at all is either a row
+            somebody typed or one this library let go of when its slot was handed to a
+            different laser, and its way out is a merge into the machine it belongs to.
+            `no-device` says exactly that and no more — nothing records which of the two it
+            was, so naming it "never attached" would claim a history the database does not
+            hold.
             """
-            levend = {
+            live = {
                 device.path: str(getattr(device, "label", "") or device.path)
                 for device in self.kernel.services("device")
                 if self.machines._configured(device)
             }
-            self.library.refresh_names(levend)
-            paths = set(levend)
+            self.library.refresh_names(live)
+            paths = set(live)
+
+            def attachment(profile) -> str | None:
+                if not profile["device_path"]:
+                    return "no-device"
+                if profile["device_path"] not in paths:
+                    return "device-gone"
+                return None
+
             return [
                 {
                     **profile,
-                    "orphaned": bool(profile["device_path"])
-                    and profile["device_path"] not in paths,
+                    "orphaned": attachment(profile) is not None,
+                    "orphaned_because": attachment(profile),
                     **self.library.machine_usage(profile["id"]),
                 }
                 for profile in self.library.machines()
@@ -1917,17 +2047,65 @@ class ApiServer:
             # The machine you are working on now keeps its profile. It would not be gone
             # anyway: the next read route creates it again, and then the only difference is
             # that all the presets that hung off it have come loose.
-            actief = self._active_profile()
-            if actief and actief["id"] == machine_id:
+            active = self._active_profile()
+            if active and active["id"] == machine_id:
                 raise HTTPException(
                     status_code=409,
                     detail="This is the machine you are working on; it cannot go.",
                 )
             return manage(self.library.remove_machine, machine_id)
 
+        @app.post(
+            "/api/library/machines/{machine_id}/merge-into/{target_id}",
+            dependencies=write,
+        )
+        def merge_machine_profile(machine_id: int, target_id: int):
+            """
+            Two profiles for one laser, joined into the one you are working on.
+
+            The case this exists for is measured: the author's library holds a device-less
+            `5030 CO2` with 60 W and 27 presets beside the device-bound `KH-5030` with 3
+            presets and no wattage, and they are one machine. `_dedupe_machines` cannot
+            reach it — it only merges rows that share a device path, and the unique index
+            it creates keeps that case from ever arising.
+
+            Which slots hold a real machine, and which one is active, are facts about the
+            engine that the library has no way to know, so they go in from here. Both
+            refusals depend on them: two profiles that each belong to a machine that
+            exists are two lasers, and merging the machine you are working on *away* would
+            leave you working on the row that no longer exists.
+            """
+            device = getattr(self.kernel, "device", None)
+            return manage(
+                self.library.merge_machine,
+                machine_id,
+                target_id,
+                live_paths=self._live_device_paths(),
+                active_path=getattr(device, "path", None),
+            )
+
         @app.post("/api/library/machines", dependencies=write, status_code=201)
         def add_machine_profile(body: dict):
             return manage(lambda: self.library.add_machine(**body))
+
+        @app.post("/api/library/presets/adopt", dependencies=write)
+        def adopt_presets(body: dict | None = None):
+            """
+            The settings and boards that belong to no machine, onto the active one.
+
+            Never by itself. Four presets and eleven boards in the author's library carry
+            `machine_id IS NULL` — measured on a machine nobody can name, the fingerprint
+            of the lhystudios-fallback state — and `Library.presets()` shows them on every
+            machine because its WHERE reads `machine_id = ? OR machine_id IS NULL`.
+            Adopting them says they were measured here, which may be false; leaving them
+            says they hold everywhere, which is false too. Only the user knows, so this is
+            a button and the interface states the count beside it.
+            """
+            machine_id = (body or {}).get("machine_id")
+            if not machine_id:
+                profile = self._active_profile()
+                machine_id = profile["id"] if profile else None
+            return manage(self.library.adopt_presets, machine_id)
 
         # ------------------------------------------------ library exchange (B7)
 
@@ -1986,19 +2164,43 @@ class ApiServer:
                 body.get("mode") or "merge",
                 body.get("merge_materials"),
                 body.get("on_conflict") or "mine",
+                # The batch this import belongs to, if it is one that can be taken back.
+                # `POST /api/presetariat/stage` mints the name and the client hands it
+                # straight back here; a plain restore-from-backup sends nothing, because
+                # there is nothing to undo about your own library arriving.
+                str(body.get("import_batch") or ""),
             )
             again = {m["name"]: m["id"] for m in self.library.materials()}
             for sheet_id, name in sheet_names.items():
                 if name and again.get(name) is not None:
                     self.sheets.update(sheet_id, material_id=again[name])
-            return result
+            # And back out again, so the answer itself names the way to undo it. A client
+            # that has to remember a string it sent two requests ago is a client that
+            # will lose it.
+            return {**result, "import_batch": str(body.get("import_batch") or "")}
+
+        @app.delete("/api/library/imports/{batch}", dependencies=write)
+        def remove_import_batch(batch: str):
+            """
+            Take one import back: its settings, and the materials it brought with them.
+
+            This is the answer to the state the author is actually in — 26 imported
+            presets that created 14 materials for a machine he does not run, and no way
+            back. An import you can undo is not a dump, which is why the batch stamp and
+            this route are the first line of defence and not a check in another repository.
+
+            Materials the batch created that something else now uses stay; the answer
+            names both lists, because "3 removed, 1 kept" is a sentence a reader can check
+            and "done" is not.
+            """
+            return manage(self.library.remove_import_batch, batch)
 
         @app.post("/api/library/presets/{preset_id}/apply", dependencies=write)
         def apply_preset(preset_id: int, body: dict):
             """Write a preset's speed, power and passes onto an operation."""
             operation_id = body.get("operation_id")
             if not operation_id:
-                raise HTTPException(status_code=422, detail="'operation_id' ontbreekt.")
+                raise HTTPException(status_code=422, detail="'operation_id' is missing.")
 
             def run():
                 preset = self.library.preset(preset_id)
@@ -2725,6 +2927,39 @@ class ApiServer:
                 self.presetariat.browse, machine_id, material, operation, refresh
             )
 
+        @app.post("/api/presetariat/stage", dependencies=write)
+        def stage_catalogue_presets(body: dict | None = None):
+            """
+            Write the chosen starting points as a library file and say what it would do.
+
+            The catalogue stops having an importer of its own here. What comes back is
+            what `/api/library/import/upload` answers — the same preview, the same
+            wording, the same "this is what is going to happen" screen — and the client
+            hands the bundle and the batch straight to `/api/library/import`. That one
+            call is a transaction, maps materials, detects clashes on `_preset_key` and
+            re-points sheets, none of which the old importer did.
+
+            With `ids` this is the per-material drawer taking over one row; without them
+            it is the offer fetching the set that suits this machine. `Starter.stage`
+            holds the difference, including which refusals apply to which.
+            """
+            def run():
+                staged = self.starter.stage(
+                    self._active_profile(),
+                    self._upload_dir_for_stage(),
+                    (body or {}).get("ids"),
+                )
+                target = self._upload_path(staged["bundle"])
+                return {**staged, **self.library.preview_import(target)}
+
+            return manage(run)
+
+        # Superseded by the route above and kept only until its two callers go with it:
+        # `frontend/src/lib/presetariat.svelte.ts` (deleted with the Presetariat window)
+        # and `api/tests/test_presetariat.py`. It is the importer this round set out to
+        # remove: `_material_id` creates the material before `add_preset` can refuse, so
+        # `[good, bad]` leaves materials written and raises, in a library that until now
+        # had no way to remove a material.
         @app.post("/api/presetariat/import", dependencies=write)
         def import_catalogue_presets(body: dict):
             return manage(
@@ -2895,6 +3130,14 @@ class ApiServer:
         def remove_test_grid(grid_id: int):
             return manage(self.library.remove_test_grid, grid_id)
 
+        # Seam for step 25 of the preset round, deliberately not opened here: the
+        # id-less `POST /api/library/testgrids/photo`, which reads the code in the
+        # picture and names its own board. It needs two things that do not exist yet —
+        # `boardcode.read` (its own phase) and a library lookup by board uid — and a
+        # route that answers 500 is worse than a route that is not there. When they land,
+        # this route also gains the refusal `library.photo.codeMismatch`: eleven of the
+        # author's thirty-two boards are physically indistinguishable from another, so a
+        # photograph filed under the wrong one is the failure this catches.
         @app.post("/api/library/testgrids/{grid_id}/photo", dependencies=write)
         async def upload_grid_photo(grid_id: int, file: UploadFile):
             """The photo of the burned grid — usually taken on a phone."""
@@ -3019,10 +3262,10 @@ class ApiServer:
         def machine_create(body: dict):
             info = body.get("info")
             if not info:
-                raise HTTPException(status_code=422, detail="'info' ontbreekt.")
+                raise HTTPException(status_code=422, detail="'info' is missing.")
             return manage(self.machines.create, info, body.get("label"))
 
-        # ------------------------------------- machineprofiel uitwisselen (E5)
+        # --------------------------------------- exchanging a machine profile (E5)
         #
         # Before `/machines/{path}`, otherwise that one reads "import" as a path.
 
@@ -3082,15 +3325,17 @@ class ApiServer:
         def machine_rename(path: str, body: dict):
             label = (body.get("label") or "").strip()
             if not label:
-                raise HTTPException(status_code=422, detail="'label' ontbreekt.")
+                raise HTTPException(status_code=422, detail="'label' is missing.")
             result = manage(self.machines.rename, path, label)
             # The library carries a copy of the name. It catches up by itself as soon as
             # somebody asks for the active profile, but until that moment an old name is in
             # the list — and right after a rename is exactly when you look at it. The event
             # is here, so it happens here.
             try:
-                self.library.profile_for_device(path, label)
-            except LibraryError:
+                self.library.profile_for_device(
+                    path, label, machine_uid=self.machines.machine_uid_for(path)
+                )
+            except (LibraryError, MachineError):
                 pass
             return result
 
@@ -3223,6 +3468,16 @@ class ApiServer:
             self._upload_dir = Path(tempfile.mkdtemp(prefix="openkerf-uploads-"))
         return self._upload_dir / Path(filename).name
 
+    def _upload_dir_for_stage(self) -> Path:
+        """
+        The same directory, for a file this server writes rather than receives.
+
+        A staged catalogue bundle goes exactly where an uploaded one goes, so that the
+        import routes that follow need no idea which of the two it was — and so that it
+        is cleaned up with the rest when the server stops.
+        """
+        return self._upload_path("stage").parent
+
     def stop(self):
         self._detach_signals()
         job = getattr(self, "_camera_job", None)
@@ -3345,8 +3600,8 @@ _DEV_PAGE = """<!doctype html>
 </style>
 <h1><span class="dot" id="dot"></span>OpenKerf API — live status</h1>
 <h2>Snapshot</h2>
-<pre id="snapshot">verbinden…</pre>
-<h2>Laatste signalen</h2>
+<pre id="snapshot">connecting…</pre>
+<h2>Latest signals</h2>
 <pre id="events">—</pre>
 <script>
   const events = [];

@@ -1,0 +1,944 @@
+{
+ "schema_version": 2,
+ "version": "8c289c02516c",
+ "released_at": "2026-08-23",
+ "license": "CC-BY-4.0",
+ "license_url": "https://creativecommons.org/licenses/by/4.0/",
+ "attribution": "The Presetariat contributors (openkerf/presetariat)",
+ "counts": {
+  "measured": 0,
+  "starting_point": 26
+ },
+ "starter": [
+  "berkentriplex-3mm-snijden-co2-80w",
+  "berkentriplex-3mm-graveren-raster-co2-80w",
+  "berkentriplex-6mm-snijden-co2-80w",
+  "populieren-triplex-3mm-snijden-co2-80w",
+  "mdf-3mm-snijden-co2-80w",
+  "mdf-3mm-graveren-vector-co2-80w",
+  "acrylaat-gegoten-3mm-snijden-co2-80w",
+  "acrylaat-gegoten-3mm-graveren-vector-co2-80w",
+  "karton-2mm-snijden-co2-80w",
+  "papier-0p3mm-snijden-co2-80w",
+  "leer-plantaardig-gelooid-2mm-snijden-co2-80w",
+  "vilt-wol-3mm-snijden-co2-80w"
+ ],
+ "boards": [],
+ "presets": [
+  {
+   "id": "acrylaat-geextrudeerd-3mm-snijden-co2-80w",
+   "material": "Acrylaat (geëxtrudeerd)",
+   "synonyms": [
+    "extruded acrylic",
+    "XT"
+   ],
+   "thickness_mm": 3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 16,
+   "power_percent": 55,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "acrylaat-gegoten-3mm-graveren-vector-co2-80w",
+   "material": "Acrylaat (gegoten)",
+   "synonyms": [
+    "plexiglas",
+    "PMMA",
+    "cast acrylic"
+   ],
+   "thickness_mm": 3,
+   "operation": "graveren-vector",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 300,
+   "power_percent": 25,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "acrylaat-gegoten-3mm-snijden-co2-80w",
+   "material": "Acrylaat (gegoten)",
+   "synonyms": [
+    "plexiglas",
+    "PMMA",
+    "cast acrylic"
+   ],
+   "thickness_mm": 3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 14,
+   "power_percent": 60,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "acrylaat-gegoten-5mm-snijden-co2-80w",
+   "material": "Acrylaat (gegoten)",
+   "synonyms": [
+    "plexiglas",
+    "PMMA",
+    "cast acrylic"
+   ],
+   "thickness_mm": 5,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 8,
+   "power_percent": 75,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "acrylaat-gegoten-8mm-snijden-co2-80w",
+   "material": "Acrylaat (gegoten)",
+   "synonyms": [
+    "plexiglas",
+    "PMMA",
+    "cast acrylic"
+   ],
+   "thickness_mm": 8,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 4,
+   "power_percent": 90,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "berkentriplex-3mm-graveren-raster-co2-80w",
+   "material": "Berkentriplex",
+   "synonyms": [
+    "berken multiplex",
+    "birch plywood"
+   ],
+   "thickness_mm": 3,
+   "operation": "graveren-raster",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 350,
+   "power_percent": 25,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "berkentriplex-3mm-graveren-vector-co2-80w",
+   "material": "Berkentriplex",
+   "synonyms": [
+    "berken multiplex",
+    "birch plywood"
+   ],
+   "thickness_mm": 3,
+   "operation": "graveren-vector",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 250,
+   "power_percent": 20,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "berkentriplex-3mm-snijden-co2-80w",
+   "material": "Berkentriplex",
+   "synonyms": [
+    "berken multiplex",
+    "birch plywood"
+   ],
+   "thickness_mm": 3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 12,
+   "power_percent": 65,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "berkentriplex-4mm-snijden-co2-80w",
+   "material": "Berkentriplex",
+   "synonyms": [
+    "berken multiplex",
+    "birch plywood"
+   ],
+   "thickness_mm": 4,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 9,
+   "power_percent": 70,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "berkentriplex-6mm-snijden-co2-80w",
+   "material": "Berkentriplex",
+   "synonyms": [
+    "berken multiplex",
+    "birch plywood"
+   ],
+   "thickness_mm": 6,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 6,
+   "power_percent": 80,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "geanodiseerd-aluminium-markeren-co2-80w",
+   "material": "Geanodiseerd aluminium",
+   "synonyms": [
+    "anodised aluminium"
+   ],
+   "thickness_mm": null,
+   "operation": "markeren",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 400,
+   "power_percent": 60,
+   "passes": 1,
+   "air_assist": false,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "glas-markeren-co2-80w",
+   "material": "Glas",
+   "synonyms": [
+    "glass"
+   ],
+   "thickness_mm": null,
+   "operation": "markeren",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 300,
+   "power_percent": 35,
+   "passes": 1,
+   "air_assist": false,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "karton-2mm-snijden-co2-80w",
+   "material": "Karton",
+   "synonyms": [
+    "cardboard",
+    "grijsbord"
+   ],
+   "thickness_mm": 2,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 30,
+   "power_percent": 35,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "kurk-3mm-snijden-co2-80w",
+   "material": "Kurk",
+   "synonyms": [
+    "cork"
+   ],
+   "thickness_mm": 3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 18,
+   "power_percent": 50,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "leer-plantaardig-gelooid-2mm-graveren-vector-co2-80w",
+   "material": "Leer (plantaardig gelooid)",
+   "synonyms": [
+    "leather",
+    "veg-tan",
+    "veg-tan leather"
+   ],
+   "thickness_mm": 2,
+   "operation": "graveren-vector",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 300,
+   "power_percent": 18,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "leer-plantaardig-gelooid-2mm-snijden-co2-80w",
+   "material": "Leer (plantaardig gelooid)",
+   "synonyms": [
+    "leather",
+    "veg-tan",
+    "veg-tan leather"
+   ],
+   "thickness_mm": 2,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 20,
+   "power_percent": 45,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "massief-eiken-6mm-graveren-vector-co2-80w",
+   "material": "Massief eiken",
+   "synonyms": [
+    "oak",
+    "eikenhout",
+    "solid oak"
+   ],
+   "thickness_mm": 6,
+   "operation": "graveren-vector",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 180,
+   "power_percent": 30,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "massief-eiken-6mm-snijden-co2-80w",
+   "material": "Massief eiken",
+   "synonyms": [
+    "oak",
+    "eikenhout",
+    "solid oak"
+   ],
+   "thickness_mm": 6,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 4,
+   "power_percent": 90,
+   "passes": 2,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "mdf-3mm-graveren-vector-co2-80w",
+   "material": "MDF",
+   "synonyms": [
+    "medium density fibreboard",
+    "mdf"
+   ],
+   "thickness_mm": 3,
+   "operation": "graveren-vector",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 220,
+   "power_percent": 22,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "mdf-3mm-snijden-co2-80w",
+   "material": "MDF",
+   "synonyms": [
+    "medium density fibreboard",
+    "mdf"
+   ],
+   "thickness_mm": 3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 10,
+   "power_percent": 70,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "mdf-6mm-snijden-co2-80w",
+   "material": "MDF",
+   "synonyms": [
+    "medium density fibreboard",
+    "mdf"
+   ],
+   "thickness_mm": 6,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 5,
+   "power_percent": 85,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "papier-0p3mm-snijden-co2-80w",
+   "material": "Papier",
+   "synonyms": [
+    "paper",
+    "kaartpapier"
+   ],
+   "thickness_mm": 0.3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 60,
+   "power_percent": 20,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "populieren-triplex-3mm-snijden-co2-80w",
+   "material": "Populieren triplex",
+   "synonyms": [
+    "poplar plywood"
+   ],
+   "thickness_mm": 3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 14,
+   "power_percent": 60,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "rubber-lasergraveerbaar-2p3mm-graveren-raster-co2-80w",
+   "material": "Rubber (lasergraveerbaar)",
+   "synonyms": [
+    "laser rubber",
+    "stempelrubber"
+   ],
+   "thickness_mm": 2.3,
+   "operation": "graveren-raster",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 200,
+   "power_percent": 60,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "steen-leisteen-graveren-vector-co2-80w",
+   "material": "Steen (leisteen)",
+   "synonyms": [
+    "slate",
+    "leisteen"
+   ],
+   "thickness_mm": null,
+   "operation": "graveren-vector",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 250,
+   "power_percent": 45,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  },
+  {
+   "id": "vilt-wol-3mm-snijden-co2-80w",
+   "material": "Vilt (wol)",
+   "synonyms": [
+    "felt",
+    "wolvilt",
+    "wool felt"
+   ],
+   "thickness_mm": 3,
+   "operation": "snijden",
+   "machine": {
+    "laser_type": "co2-glass",
+    "power_watt": 80,
+    "lens_mm": 50.8,
+    "tube_hours": null
+   },
+   "speed_mm_s": 25,
+   "power_percent": 40,
+   "passes": 1,
+   "air_assist": true,
+   "focus_offset_mm": 0,
+   "note": "A starting point, not a measurement. Burn a test grid before you trust it: a tube, a lens and a sheet of plywood all differ.",
+   "source": {
+    "kind": "handmatig",
+    "by": "presetariat-prefill"
+   },
+   "verified": false,
+   "tier": "starting_point",
+   "by": "RespawnDespair",
+   "board": null,
+   "measured_at": null,
+   "catalogued_at": "2026-08-23",
+   "result": null,
+   "derived_from": null,
+   "verified_by": []
+  }
+ ]
+}
