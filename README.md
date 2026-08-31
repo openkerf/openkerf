@@ -9,8 +9,9 @@ to the engine as an ordinary plugin. Nothing in the engine is forked or patched 
 whole of OpenKerf hangs off MeerK40t's own `meerk40t.extension` entry point, so the
 engine can be updated without a merge.
 
-The machine it was written for is a 5030 CO₂ laser with a Ruida controller. Anything
-MeerK40t drives should work; only Ruida has been used in earnest.
+The machine it was written for is a 5030 CO₂ laser with a Ruida controller, and that is
+the machine it has cut and engraved on. Anything MeerK40t drives should work; only Ruida
+has been used in earnest.
 
 ## What it does today
 
@@ -33,18 +34,6 @@ MeerK40t drives should work; only Ruida has been used in earnest.
 
 The handbook is in [`docs/`](docs/README.md), in English, and every screen in it is a
 screenshot taken by a script so the pages cannot quietly drift from the app.
-
-## What it does not do yet, plainly
-
-- **No board with a QR code or a cut-out has ever been burned.** Those numbers are
-  measurements on cut plans and synthetic photographs, not on wood.
-- **The shared settings catalogue holds 26 starting points and zero measurements.** See
-  [presetariat](https://github.com/openkerf/presetariat).
-- **Rotary and print-and-cut are built but unverified against a machine.**
-- **Tablet, phone and dark theme work but have not been measured** the way the desktop
-  light theme has.
-- Sending a job to a Ruida's own memory (upload without cutting) is not implemented: the
-  opcodes exist in MeerK40t but nothing calls them.
 
 ## Running it
 
