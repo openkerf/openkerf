@@ -24,3 +24,7 @@ frontend/build/
 .idea/
 .vscode/
 *.swp
+
+# The working record, screenshots and process notes live in a private repository
+# of their own; keep them out of the public history.
+workshop/
