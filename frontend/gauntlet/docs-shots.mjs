@@ -27,7 +27,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 const BASE = process.env.OK_BASE ?? 'http://localhost:5199';
-const OUT = '/Users/Jelle.Tigchelaar/git/openkerf/docs/images';
+// Relative to this script, so it works from `frontend/` and on somebody else's
+// machine. It was an absolute path with a home directory in it, which in a public
+// repository is both a name nobody needs and a script that only runs here.
+const OUT = new URL('../../docs/images', import.meta.url).pathname;
 const only = process.argv[2] ?? null;
 
 mkdirSync(OUT, { recursive: true });

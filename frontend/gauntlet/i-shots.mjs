@@ -16,7 +16,13 @@ import { mkdirSync } from 'node:fs';
 const BASE = process.env.OK_BASE ?? 'http://localhost:8090';
 const language = process.argv[2] ?? 'en';
 const only = process.argv[3] ?? null;
-const OUT = `/Users/Jelle.Tigchelaar/git/openkerf/screenshots/i18n/${language}`;
+// Into the working record, not into this repository: this set is an archive of a
+// measuring round and not a deliverable, and it is where the LightBurn and xTool
+// comparison shots live too. `workshop/` is a private repository of its own, ignored
+// here — see the note in `.gitignore`. An absolute path was in this line before; a
+// relative one works from `frontend/` and on somebody else's machine.
+const OUT = new URL('../../workshop/screenshots/i18n/' + language + '/', import.meta.url)
+	.pathname;
 mkdirSync(OUT, { recursive: true });
 
 async function ids() {

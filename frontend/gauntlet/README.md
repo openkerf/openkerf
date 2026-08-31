@@ -17,7 +17,7 @@ Every script takes its origin from `OK_BASE` and falls back to
 |---|---|
 | `harness.mjs` | shared: browser, themes, widths, a clean slate, `survey()` for boxes and computed styles, `report()` for findings |
 | `seed.mjs` | puts a design with four layers, work in each of them and two awkward states (no burn along, passes) on the bed. Pure API, so it survives interface changes |
-| `i-shots.mjs` | the screenshot set per language: `node gauntlet/i-shots.mjs en\|nl` → `screenshots/i18n/<language>/` |
+| `i-shots.mjs` | the screenshot set per language: `node gauntlet/i-shots.mjs en\|nl` → `workshop/screenshots/i18n/<language>/` |
 | `i-overflow.mjs` | measures text that does not fit its box, per language. Elements that clip by design are listed in the script itself. Twelve screens, the material library among them — that is where the offer of starting settings lives, and its sentences are the longest in the app |
 | `docs-shots.mjs` | the pictures for the handbook: `node gauntlet/docs-shots.mjs [name-fragment]` → `docs/images/`. English, light theme, desktop 1440×900 and phone 390×844. Seeds its own drawing through the API, so a rerun gives the same picture; it does not start the laser, so there is no shot of the queue |
 | `preview-check.mjs` | the cut-path window, measured: overlapping numbers, the reachable end of the scrubber, the false "server is away" on the way in, what lies over the drawing, and where Tab goes. What of it fits in a test is in `tests/cutpath-window.test.ts`; the stacking and the focus ring are here |
@@ -37,4 +37,5 @@ and it does not clean them up.
 The one-off scripts of the earlier usability and accessibility rounds are gone.
 They asked for Dutch selectors and Dutch button labels that no longer exist, so
 they measured nothing; what they found is in `CLAUDE.md`, in the commits of those
-rounds, and in `screenshots/`.
+rounds, and in `workshop/screenshots/` — the working record, a private repository
+of its own that hangs in this one as `workshop/`.
