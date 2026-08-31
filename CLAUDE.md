@@ -3,7 +3,8 @@
 House rules for this codebase. They are short because each one cost something to learn;
 the reasoning behind them is in the working record — a private repository with the round
 logs, the design system, the numbered decisions (`B1`, `L3`, `T4` …) and the screenshot
-archive. Older comments in the code point at documents that live there
+archive. It hangs in this checkout as `workshop/` (ignored here, `RECORD.md` is its
+centre) and is not needed to work on the code. Older comments in the code point at documents that live there
 (`DESIGN-SYSTEM.md`, `BESLISSINGEN.md`, `GAUNTLET-LOG.md`); the measurements they rely on
 are repeated below.
 
