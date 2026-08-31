@@ -106,6 +106,117 @@ async function clear() {
  * pointer" only appears where there is genuinely more than one shape to choose
  * between.
  */
+/**
+ * The picture at the top of the README.
+ *
+ * A hero shot has one job the handbook's pictures do not: it has to look like the work
+ * somebody would do here. So the bed carries a real composition rather than the sparse set
+ * of outlines the documentation needs — box panels with finger joints, a living hinge
+ * filling a circle, text as geometry, a QR code — spread over four layers so the colours
+ * on the bed and in the panel are the ones a laser operator recognises.
+ *
+ * The Layers tab is the one that is open, and that is a choice: the Job tab is the more
+ * impressive panel but it carries the state of a machine, and a hero image saying "the
+ * machine is not responding" is a picture of a fault. The layer list says speed, power and
+ * burn order, which is what the app is *for*.
+ */
+async function seedHero() {
+	await clear();
+
+	// Named for what they do to material, not for the shapes in them: it is the first
+	// thing a stranger reads off the panel. Made in burn order, coarse to fine.
+	const wanted = [
+		{ type: 'cut', label: 'Cut through', speed: 12, power_percent: 70, passes: 2 },
+		{ type: 'engrave', label: 'Score lines', speed: 220, power_percent: 20 },
+		{ type: 'engrave', label: 'Lettering', speed: 300, power_percent: 25 },
+		{ type: 'raster', label: 'Code', speed: 180, power_percent: 35 }
+	];
+	const layers = [];
+	for (const layer of wanted) {
+		const made = await api('POST', '/api/design/operations', layer);
+		layers.push(made?.id ?? made?.operations?.at(-1)?.id);
+	}
+
+	// Every shape is put in its layer by the id it came back with, and not by guessing
+	// from its position or its subpath count: the engine files a fresh shape under the
+	// layer its stroke colour claims, so a shape has to come out of every layer before it
+	// goes into the one that was meant, or the counts in the panel do not add up. The
+	// first version of this guessed, and it put a box panel in the lettering layer.
+	async function put(ids, index) {
+		// Out of *every* layer, not only out of the four made here: the engine files a
+		// fresh shape under the layer its stroke colour claims, and creates that layer if
+		// it has to. Unassigning from ours alone left the box panels in both "Cut through"
+		// and an engine-made "Cut", so the panel showed six layers where four were meant
+		// and two counts of 7 for the same seven shapes.
+		for (const id of ids ?? []) {
+			const now = await api('GET', '/api/design');
+			for (const op of (now?.operations ?? []).filter((o) => !o.grid)) {
+				await api('POST', '/api/design/unassign', { ids: [id], operation_id: op.id });
+			}
+			if (layers[index]) {
+				await api('POST', '/api/design/assign', { ids: [id], operation_id: layers[index] });
+			}
+		}
+	}
+
+	// Panels with finger joints: the most recognisable thing a laser cuts, and the shape
+	// that says "this is not a drawing program" without a caption.
+	const box = await api('POST', '/api/design/generate/box', {
+		width_mm: 74,
+		depth_mm: 54,
+		height_mm: 38,
+		thickness_mm: 3,
+		finger_mm: 11,
+		x_mm: 16,
+		y_mm: 18
+	});
+	await put(box?.ids, 0);
+
+	// The hinge inside a circle: the picture of the thing that took two rounds to get
+	// right, since the field follows the outline and not the box around it.
+	const circle = await api('POST', '/api/design/elements', {
+		type: 'circle',
+		cx_mm: 86,
+		cy_mm: 210,
+		r_mm: 62
+	});
+	await put(circle?.ids, 0);
+	const hinge = await api('POST', '/api/design/generate/hinge', {
+		ids: circle?.ids,
+		from_selection: true,
+		pattern: 'staggered',
+		slit_mm: 10,
+		gap_mm: 3.5,
+		row_mm: 3.5
+	});
+	await put(hinge?.ids, 1);
+
+	// `font_size_mm`, not `height_mm`: the text route reads the first and ignores the
+	// second, so a hero picture asking for 34 mm of lettering got the default and drew it
+	// six millimetres tall.
+	const text = await api('POST', '/api/design/elements', {
+		type: 'text',
+		x_mm: 205,
+		y_mm: 175,
+		text: 'OpenKerf',
+		font_size_mm: 38
+	});
+	await put(text?.ids, 2);
+
+	const code = await api('POST', '/api/design/generate/qrcode', {
+		text: 'https://github.com/openkerf/openkerf',
+		size_mm: 52,
+		x_mm: 404,
+		y_mm: 196
+	});
+	await put(code?.ids, 3);
+
+	// The layer list of the previous session comes back at start-up, so a hero picture
+	// would show four empty layers and the app's own offer to clear them out. Ours are
+	// full; anybody else's are not.
+	await api('POST', '/api/design/operations/prune');
+}
+
 async function seed() {
 	await clear();
 
@@ -285,6 +396,18 @@ const TOOL = {
 const DIALOG = '[role="dialog"]';
 
 // ══════════════════════════════════════════════════ 1. the cold start and setup
+
+if (wanted('00')) {
+	await seedHero();
+	await scene('00-openkerf.png', '/?tab=layers', {}, async (page) => {
+		// Zoom to fit, so the composition fills the bed instead of sitting in a corner of
+		// it, and give the drawing a moment to render before the shutter.
+		await page.keyboard.press('3');
+		await page.waitForTimeout(1200);
+	});
+	// The bed goes back to the drawing the rest of this script expects.
+	await seed();
+}
 
 /**
  * Shot 01 needs the state a first-time user is in: no machine set up yet. On this

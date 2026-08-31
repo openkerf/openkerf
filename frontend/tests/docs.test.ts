@@ -154,7 +154,12 @@ test('every picture a page points at exists', () => {
 });
 
 test('every picture in docs/images is used by a page', () => {
-	const all = pages.map(read).join('\n');
+	// The root README counts as a page here, and only here: it is not part of the handbook
+	// — it quotes no interface sentences and names no operations — but it does carry the
+	// picture at the top of the repository, and a picture nothing uses is a picture nobody
+	// refreshes when the screen changes.
+	const readme = readFileSync(join(here, '..', '..', 'README.md'), 'utf8');
+	const all = [...pages.map(read), readme].join('\n');
 	const unused = readdirSync(IMAGES).filter((file) => !all.includes(`images/${file}`));
 	assert.deepEqual(unused, []);
 });

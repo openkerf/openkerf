@@ -3,6 +3,8 @@
 A modern interface for a laser cutter, built on top of the
 [MeerK40t](https://github.com/meerk40t/meerk40t) engine.
 
+![OpenKerf with a job on the bed: across the top the six panels of a finger-jointed box, below them a circle filled with a staggered field of hinge slits, the word OpenKerf as outlined lettering, and a QR code. On the right the Layers panel lists four layers in burn order — Cut through at 12 mm/s and 70% over two passes, Score lines at 220 mm/s and 20%, Lettering at 300 mm/s and 25%, and Code at 180 mm/s and 35% — each with the number of shapes in it.](docs/images/00-openkerf.png)
+
 MeerK40t drives the machine and does it well. OpenKerf is the part in front of it: a
 browser interface for drawing, laying out and burning, and a small API layer that talks
 to the engine as an ordinary plugin. Nothing in the engine is forked or patched — the
