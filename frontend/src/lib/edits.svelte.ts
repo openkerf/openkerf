@@ -432,6 +432,50 @@ export class EditController {
 		}
 	}
 
+	/**
+	 * The stencil, and its own preview.
+	 *
+	 * One route with a `preview` flag rather than two: the measurement and the doing are
+	 * the same arithmetic on the same shapes, and a preview that is a second code path is a
+	 * preview that can disagree with what happens.
+	 */
+	async stencil(
+		ids: string[],
+		bridgeMm: number,
+		perIsland: number,
+		preview = false
+	): Promise<{
+		islands: number;
+		bridges: number;
+		shortest_mm: number | null;
+		skipped: number;
+	} | null> {
+		if (!preview) this.busy = true;
+		this.error = null;
+		try {
+			const response = await fetch('/api/design/stencil', {
+				method: 'POST',
+				headers: this.#headers(),
+				body: JSON.stringify({
+					ids,
+					bridge_mm: bridgeMm,
+					per_island: perIsland,
+					preview
+				})
+			});
+			if (!response.ok) {
+				this.error = await describe(response);
+				return null;
+			}
+			return await response.json();
+		} catch (e) {
+			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
+			return null;
+		} finally {
+			if (!preview) this.busy = false;
+		}
+	}
+
 	effect(ids: string[], effect: string) {
 		return this.#post('/api/design/effect', { ids, effect });
 	}

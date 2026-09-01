@@ -260,6 +260,7 @@ export type Handlers = {
 	split: () => void;
 	fill: (on: boolean) => void;
 	corners: () => void;
+	stencil: () => void;
 	/** Bridges on the selection; `false` takes them away again. */
 	bridges: (on: boolean) => void;
 	onlyLayer: (kind: 'cut' | 'engrave' | 'raster') => void;
@@ -629,6 +630,18 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 						needsOne ??
 						(ctx.bridges.carries ? undefined : t('reason.noBridges')),
 					run: () => h.bridges(!ctx.bridges.has)
+				},
+				{
+					// Beside the bridges row, because it is the same mechanism with the
+					// thinking done for you: bridges you place, a stencil works out where
+					// they have to go. A verb with two settings, so it opens the window that
+					// holds them rather than doing something on one click — the same shape
+					// as Round the corners two rows up.
+					id: 'stencil',
+					label: t('action.stencil'),
+					explain: t('explain.stencil'),
+					off: needsOne ?? (ctx.bridges.carries ? undefined : t('reason.noBridges')),
+					run: h.stencil
 				},
 				{
 					id: 'fill',

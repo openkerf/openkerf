@@ -268,6 +268,24 @@ export const nl: Catalogue = {
 	'action.corners': 'CornersDialog…',
 	'action.bridges': 'Bruggen erin (4 × 2 mm)',
 	'action.bridgesOff': 'Bruggen weghalen',
+	'stencil.title': 'Een stencil maken',
+	'stencil.why': 'Een spuitstencil is het ontwerp uit een plaat gesneden, dus de binnenkant van een O is een eiland materiaal waar niets aan vastzit. OpenKerf zoekt die op en verbindt ze met de plaat.',
+	'stencil.looking': 'De vorm wordt bekeken…',
+	'stencil.found': {
+		one: '1 eiland zou eruit vallen; het krijgt {bridges} bruggen.',
+		other: '{islands} eilanden zouden eruit vallen; ze krijgen samen {bridges} bruggen.'
+	},
+	'stencil.crossing': 'De kortste brug moet {mm} overbruggen — dat is de dikte van het materiaal op zijn smalst.',
+	'stencil.wide': 'De brug is breder dan de opening die hij overspant, dus hij wordt eerder een blok dan een brug.',
+	'stencil.bridge': 'Brugbreedte',
+	'stencil.per': 'Bruggen per eiland',
+	'stencil.untried': 'Er is nog geen stencil uit deze app gesneden: 3 mm is een startpunt en geen meting. Probeer er een op een restje van het karton dat je gaat spuiten.',
+	'stencil.apply': {
+		one: 'Deze vorm overbruggen',
+		other: 'Deze {n} vormen overbruggen'
+	},
+	'action.stencil': 'Een stencil maken…',
+	'explain.stencil': 'Zoekt de delen die een uitsnede zou lossnijden en verbindt ze met de plaat',
 	'action.fill': 'Vullen — voor rasteren',
 	'action.unfill': 'Vulling weghalen',
 	'action.burnOnce': 'Alleen de eerste keer branden',

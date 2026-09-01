@@ -273,6 +273,25 @@ export const en = {
 	'action.corners': 'Corners…',
 	'action.bridges': 'Add bridges (4 × 2 mm)',
 	'action.bridgesOff': 'Remove bridges',
+	// Making a stencil: the two settings, and what the app found before you choose them.
+	'stencil.title': 'Make a stencil',
+	'stencil.why': 'A spray stencil is the design cut out of a sheet, so the inside of an O is an island of material with nothing holding it. OpenKerf finds those and bridges them to the sheet.',
+	'stencil.looking': 'Looking at the shape…',
+	'stencil.found': {
+		one: '1 island would fall out; it gets {bridges} bridges.',
+		other: '{islands} islands would fall out; they get {bridges} bridges in all.'
+	},
+	'stencil.crossing': 'The shortest bridge has to span {mm} — that is the thickness of the material at its narrowest.',
+	'stencil.wide': 'The bridge is wider than the gap it spans, so it will look like a solid block rather than a bridge.',
+	'stencil.bridge': 'Bridge width',
+	'stencil.per': 'Bridges per island',
+	'stencil.untried': 'No stencil has been cut out of this app yet: 3 mm is a starting point, not a measurement. Try one on a scrap of the cardboard you will spray.',
+	'stencil.apply': {
+		one: 'Bridge this shape',
+		other: 'Bridge these {n} shapes'
+	},
+	'action.stencil': 'Make a stencil…',
+	'explain.stencil': 'Finds the parts a cut-out would set loose and bridges them to the sheet',
 	'action.fill': 'Fill — for rastering',
 	'action.unfill': 'Remove fill',
 	// "Burn only once": one row, two wordings, for a jig frame in a series. The word is

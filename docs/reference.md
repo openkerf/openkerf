@@ -220,6 +220,7 @@ Under "Edit path" (`path`).
 | Row | What it does | |
 |---|---|---|
 | Corners… | Round or chamfer, with the preview beside it | `corners` |
+| Make a stencil… | Finds the parts a cut-out would set loose — the inside of an O — and bridges them to the sheet. Two settings, and the window says how many islands it found and how far the shortest bridge has to reach | `stencil` |
 | Add bridges (4 × 2 mm) | Small gaps in the cut, so the part stays in the sheet instead of dropping into the machine | `bridges` |
 | Remove bridges | The same row on a shape that has them: the cut closes again and the part comes loose | `bridges` |
 | Fill — for rastering | A raster layer then burns the area instead of just the outline | `fill` |

@@ -44,6 +44,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	import ActionBar from '$components/ActionBar.svelte';
 	import Menu from '$components/Menu.svelte';
 	import CornersDialog from '$components/CornersDialog.svelte';
+	import StencilDialog from '$components/StencilDialog.svelte';
 	import Offset from '$components/Offset.svelte';
 	import {
 		KEYS,
@@ -930,6 +931,9 @@ import { SeriesStore } from '$lib/series.svelte';
 	});
 
 	let cornersOpen = $state(false);
+	let stencilOpen = $state(false);
+	let stencilReport = $state<Awaited<ReturnType<typeof edits.stencil>> | null>(null);
+	let stencilError = $state<string | null>(null);
 	/**
 	 * The cut-path window (gap S1).
 	 *
@@ -1021,6 +1025,13 @@ import { SeriesStore } from '$lib/series.svelte';
 		split: splitSelection,
 		fill: (on) => setFill(on),
 		corners: () => (cornersOpen = true),
+		stencil: () => {
+			// The window measures on opening, so the last answer of a previous shape does
+			// not stand over a new one.
+			stencilReport = null;
+			stencilError = null;
+			stencilOpen = true;
+		},
 		// `DEFAULT_BRIDGES` and not the two numbers again: the panel's switch offers the same
 		// default, and the menu label names it ("Add bridges (4 × 2 mm)"). Written twice they
 		// drift, and then the row promises one thing and does another.
@@ -1900,6 +1911,30 @@ import { SeriesStore } from '$lib/series.svelte';
 	onToepassen={async (stijl, size) => {
 		await corners(stijl, size);
 		if (!cornerNotice) cornersOpen = false;
+	}}
+/>
+
+<StencilDialog
+	bind:open={stencilOpen}
+	count={design.selectedIds.length}
+	busy={edits.busy}
+	report={stencilReport}
+	error={stencilError}
+	onLook={async (bridgeMm, perIsland) => {
+		const answer = await edits.stencil(design.selectedIds, bridgeMm, perIsland, true);
+		stencilReport = answer;
+		// The refusal *is* the answer here — "these are single strokes" is what the reader
+		// needs — so it is shown where the count would have been, and not swallowed.
+		stencilError = answer ? null : edits.error;
+	}}
+	onApply={async (bridgeMm, perIsland) => {
+		const answer = await edits.stencil(design.selectedIds, bridgeMm, perIsland);
+		if (!answer) {
+			stencilError = edits.error;
+			return;
+		}
+		stencilOpen = false;
+		await design.load();
 	}}
 />
 

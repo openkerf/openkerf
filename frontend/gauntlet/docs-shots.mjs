@@ -1852,6 +1852,44 @@ async function boardOn(extra) {
 	});
 }
 
+if (wanted('45')) {
+	// A stencil of real lettering, because the point is only visible on letters: the
+	// counters of O, p and both e's hang on two bridges each, and n, K, r and f are
+	// untouched because nothing in them would fall out.
+	await clear();
+	// An outline typeface by name, not the default: the engine's own Hershey fonts draw
+	// letters with single strokes, and a single stroke has no inside to bridge. The picture
+	// would then be of the refusal instead of the feature.
+	const OUTLINE = '/System/Library/Fonts/Supplemental/Arial.ttf';
+	const written = await api('POST', '/api/design/elements', {
+		type: 'text',
+		x_mm: 40,
+		y_mm: 120,
+		text: 'OpenKerf',
+		font_size_mm: 60,
+		font: OUTLINE
+	});
+	const made = await api('POST', '/api/design/stencil', {
+		ids: written?.ids,
+		bridge_mm: 3,
+		per_island: 2
+	});
+	if (!made) {
+		console.log('  – 45-stencil.png skipped: no outline typeface at ' + OUTLINE);
+	} else {
+		// A short window on purpose: the lettering is 256 x 56 mm on a bed of 500 x 300, so
+		// on a full-height window "fit" leaves two thirds of the picture as empty bed. At
+		// 640 the bed area is about as wide as the text is, and the bridges — which are
+		// millimetre gaps — are big enough to see.
+		await scene('45-stencil.png', '/?tab=design', { selector: '.bed', height: 640 }, async (page) => {
+			await page.keyboard.press('Escape');
+			await page.keyboard.press('3');
+			await page.waitForTimeout(1000);
+		});
+	}
+	await seed();
+}
+
 if (wanted('41') || wanted('42') || wanted('43') || wanted('44')) {
 	if (!scratch) {
 		console.log(

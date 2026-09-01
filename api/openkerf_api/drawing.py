@@ -824,6 +824,135 @@ class Drawing:
             "positions_percent": spots,
         }
 
+    #: How wide a bridge is when nobody says. Three millimetres holds a cardboard island
+    #: and still lets a spray edge look deliberate — but it is a starting point and not a
+    #: measurement: no stencil out of this app has been cut yet.
+    STENCIL_BRIDGE_MM = 3.0
+
+    #: Two per island, because one is a hinge: an island on a single bridge swings aside
+    #: under the air assist and under a spray can. A third is offered and rarely needed.
+    STENCIL_PER_ISLAND = 2
+
+    def make_stencil(
+        self, element_ids, bridge_mm=None, per_island=None, preview=False
+    ) -> dict:
+        """
+        Bridge the parts of a cut-out shape that would otherwise fall out.
+
+        A spray stencil is the design cut *out* of a sheet, so the inside of an **O** is an
+        island of material floating in the opening. `stencil.plan_stencil` finds those by
+        nesting depth and picks the shortest crossings; here they are turned into the same
+        `mktabpositions` an ordinary bridge uses, so the plan, the burn time and the RD
+        stream need nothing new.
+
+        `preview=True` measures and reports without writing, which is what the window
+        beside the canvas reads while you turn the two numbers.
+        """
+        from meerk40t.core.units import UNITS_PER_MM
+
+        from .bridges import MAX_FRACTION, format_positions, path_length
+        from .stencil import MIN_BRIDGE_MM, TAB_TYPES_NOTE, plan_stencil
+
+        width = self.STENCIL_BRIDGE_MM if bridge_mm is None else _positive(bridge_mm, "bridge_mm")
+        count = self.STENCIL_PER_ISLAND if per_island is None else int(per_island)
+        if count < 1:
+            raise DesignError(
+                "A stencil needs at least one bridge per island, or the island falls out.",
+                code="stencil.needsBridge",
+            )
+        if width < MIN_BRIDGE_MM:
+            raise DesignError(
+                f"A bridge of {width:g} mm is narrower than {MIN_BRIDGE_MM:g} mm, and a "
+                "CO2 cut is 0.1 to 0.3 mm wide itself: it would burn away and the island "
+                "would fall out anyway.",
+                code="stencil.bridgeTooThin",
+                values={"n": width, "min": MIN_BRIDGE_MM},
+            )
+
+        nodes = self._nodes(element_ids)
+        shapes, skipped = [], 0
+        for node in nodes:
+            if str(node.type) not in TAB_TYPES_NOTE:
+                skipped += 1
+                continue
+            shapes.append(node)
+        if not shapes:
+            raise DesignError(
+                "None of the selected shapes is one a stencil can be made of. Choose a "
+                "closed shape, or text in an outline typeface.",
+                code="stencil.nothingToDo",
+            )
+
+        reports, total_islands, total_bridges, open_ones = [], 0, 0, 0
+        for node in shapes:
+            geometry = node.as_geometry()
+            plan = plan_stencil(geometry, width, count, UNITS_PER_MM)
+            total_islands += plan["islands"]
+            total_bridges += plan["bridges"]
+            open_ones += plan["open_contours"]
+            reports.append((node, plan))
+
+        if total_islands == 0:
+            # The commonest way to arrive here is a single-stroke typeface, and that is a
+            # different problem from a shape that simply has no holes — so it gets its own
+            # sentence rather than a shrug. Measured: 'Stencil' in the engine's own Hershey
+            # font is ten contours of which nine are open; in Arial it is nine closed ones.
+            if open_ones:
+                raise DesignError(
+                    f"{open_ones} of these contours are open lines rather than outlines, "
+                    "so nothing in them can fall out. A stencil needs an outline typeface; "
+                    "a single-stroke one draws letters with strokes and has no inside.",
+                    code="stencil.singleStroke",
+                    values={"n": open_ones},
+                )
+            raise DesignError(
+                "Nothing in this shape would fall out: there is no part of it that the cut "
+                "would set loose. It needs no bridges.",
+                code="stencil.noIslands",
+            )
+
+        # The same bound the ordinary bridges use, and for the same reason: a contour that is
+        # more gap than cut is not a cut.
+        for node, plan in reports:
+            length = path_length(node.as_geometry()) / UNITS_PER_MM
+            taken = len(plan["positions"]) * width
+            if taken > length * MAX_FRACTION:
+                raise DesignError(
+                    f"{len(plan['positions'])} gaps of {width:g} mm take {taken:g} mm of a "
+                    f"contour that is {length:.1f} mm long; at most half of it may be "
+                    "bridge. Use a narrower bridge, or fewer per island.",
+                    code="stencil.tooMuchBridge",
+                    values={"n": taken, "length": round(length, 1)},
+                )
+
+        shortest = [p["shortest_mm"] for _n, p in reports if p["shortest_mm"] is not None]
+        answer = {
+            "ids": [node.id for node, _p in reports],
+            "islands": total_islands,
+            "bridges": total_bridges,
+            "bridge_mm": width,
+            "per_island": count,
+            "skipped": skipped,
+            # What the bridge has to span. Worth reporting because it is the number that
+            # decides whether the setting is sane: on 40 mm Arial the stroke of an 'O' is
+            # 3.2 mm, so a 3 mm bridge is very nearly the whole thickness of the letter.
+            "shortest_mm": min(shortest) if shortest else None,
+        }
+        if preview:
+            return answer
+
+        with self.elements.undoscope("Stencil"):
+            for node, plan in reports:
+                if not plan["positions"]:
+                    continue
+                node.mktablength = width * UNITS_PER_MM
+                node.mktabpositions = format_positions(None, plan["positions"])
+                # A raw assignment tells the node nothing, so the cached bounds and the
+                # scene would keep the version without gaps.
+                node.altered()
+        self._refresh()
+        return answer
+
     def clear_bridges(self, element_ids) -> dict:
         """
         Take the bridges away — the cut closes again.

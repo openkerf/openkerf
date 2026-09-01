@@ -42,3 +42,31 @@ test('placing points does not fall back to Select after every one', () => {
 	const page = src('routes', '+page.svelte');
 	assert.match(page, /if \(shape\.type !== 'point'\) tool = 'select';/);
 });
+
+
+test('the stencil is reachable, and the window reads the route that measures', () => {
+	// The rule this file's neighbours were written for: a route with no caller is not a
+	// feature. `POST /api/design/stencil` is the whole of the stencil, and it is reached
+	// from exactly one place — the menu row — through one client method.
+	const actions = src('lib', 'actions.ts');
+	assert.match(actions, /id: 'stencil'/, 'the menu has no way to make a stencil');
+	assert.match(actions, /action\.stencil/);
+
+	const edits = src('lib', 'edits.svelte.ts');
+	assert.match(edits, /'\/api\/design\/stencil'/, 'nothing calls the stencil route');
+
+	// The window measures before it acts, and it measures on the same route with a flag
+	// rather than on a second code path: a preview that is its own arithmetic is a preview
+	// that can disagree with what happens.
+	const dialog = src('lib', 'components', 'StencilDialog.svelte');
+	assert.match(dialog, /onLook\(width, each\)/);
+	assert.match(dialog, /onApply\(numbers\.bridge, numbers\.per\)/);
+	const page = src('routes', '+page.svelte');
+	assert.match(page, /edits\.stencil\(design\.selectedIds, bridgeMm, perIsland, true\)/);
+
+	// And the crossing is written the way every other number in this app is written. `n` is
+	// the plural selector and is the one value that does not go through `Intl`, so a
+	// millimetre figure named `n` would print 3.6 to a reader whose canvas says 3,6.
+	assert.match(dialog, /mm: i18n\.mm\(report\.shortest_mm\)/);
+	assert.doesNotMatch(dialog, /crossing', \{ n:/);
+});

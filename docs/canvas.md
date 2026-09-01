@@ -369,6 +369,62 @@ notches in its outline is not what happens.
   them: "These shapes have different bridges. Setting a number here gives them all the
   same."
 
+## Stencils: bridging what would fall out
+
+Cut a design **out** of a sheet and the material and the opening swap places. The inside of
+an **O** is then no longer part of the letter but an island of cardboard floating in the
+opening, held by nothing: it drops on the bench, or into the machine halfway through the
+job. That is what a stencil font solves by drawing the letters with the bridges already in
+them — and it is what **Make a stencil…** does to any shape.
+
+Select the shape and take **Make a stencil…** from the right-click menu. The window says
+what it found before you set anything, because the numbers only mean something together:
+
+> 4 islands would fall out; they get 8 bridges in all.
+> The shortest bridge has to span 3.6 mm — that is the thickness of the material at its
+> narrowest.
+
+![The word OpenKerf on the bed as outlined lettering, with gaps in the outlines: the counter of the O, of the p and of both e's each hang on two bridges, visible as breaks in the inner and the outer line at the same place. The n, K, r and f are untouched, because nothing in them would fall out.](images/45-stencil.png)
+
+Two settings, and both are worth understanding rather than accepting:
+
+- **Bridge width** — how much of the cut is left uncut, in millimetres. The default is 3 mm.
+- **Bridges per island** — two by default, because one is a hinge: an island on a single
+  bridge swings aside under the air assist and under a spray can.
+
+The crossing figure beside them is the one that decides whether the width is sane. On 60 mm
+Arial lettering the stroke of an **O** is 3.6 mm, so a 3 mm bridge is very nearly the whole
+thickness of the letter — and the window says so: *The bridge is wider than the gap it
+spans, so it will look like a solid block rather than a bridge.*
+
+**What it does underneath** is exactly what the bridges above do: it leaves gaps in the cut,
+so the plan, the burn time and what goes to the machine need nothing new. The difference is
+that a bridge here is a **pair** of gaps — one in the island's outline and one in the
+contour around it, at the same place — because a gap in the island alone would join it to
+the opening, and an opening is a void. The strip of material between the two gaps is what
+holds. That is why the app looks for the shortest crossing: it is the strongest bridge and
+it costs the least of the sprayed edge.
+
+**When it goes wrong.**
+
+- A single-stroke typeface has no inside, so nothing in it can fall out and there is nothing
+  to bridge: *"9 of these contours are open lines rather than outlines, so nothing in them
+  can fall out. A stencil needs an outline typeface; a single-stroke one draws letters with
+  strokes and has no inside."* Place the text again in an outline typeface from the font
+  picker. (Measured: the word "Stencil" is ten contours in the engine's built-in Hershey
+  font, of which nine are open; in Arial it is nine closed ones.)
+- A shape with no holes needs no bridges, and says a different thing: *"Nothing in this
+  shape would fall out: there is no part of it that the cut would set loose. It needs no
+  bridges."*
+- A bridge under 0.6 mm is refused — a CO₂ cut is 0.1 to 0.3 mm wide itself, so it would
+  burn away and the island would fall out anyway.
+- Too much bridge for the contour is refused with the arithmetic, exactly as it is for
+  ordinary bridges.
+
+**Nothing has been cut out of cardboard yet.** The geometry is exact and the window says so
+too: 3 mm is a starting point, not a measurement. How narrow a bridge may be before it tears
+under a spray can is a thing you find on a scrap.
+
 ## Snapping, and what Alt does to it
 
 While you move, scale, draw or drag a point, things lock onto their surroundings: the grid,

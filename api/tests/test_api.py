@@ -135,6 +135,11 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # travel in the body.
         "/api/design/bridges",
         "/api/design/bridges/clear",
+        # A stencil sets the same two attributes as a bridge does, on the same shapes, and
+        # is behind the same gate for the same reason. It carries a `preview` flag that
+        # writes nothing, which is why it is not in READ_ONLY_POSTS: one route with two
+        # behaviours belongs on the strict side of that line.
+        "/api/design/stencil",
         "/api/design/mirror",
         "/api/design/boolean",
         "/api/design/group",

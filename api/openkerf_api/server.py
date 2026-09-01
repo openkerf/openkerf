@@ -1370,6 +1370,24 @@ class ApiServer:
                 )
             )
 
+        @app.post("/api/design/stencil", dependencies=write)
+        def make_stencil(body: dict):
+            """
+            Bridge the parts that a cut-out would set loose — a spray stencil.
+
+            The same node attributes an ordinary bridge uses, so nothing downstream needs to
+            know about stencils. `preview` measures and reports without writing, which is
+            what the window reads while the two numbers are turned.
+            """
+            return manage(
+                lambda: self.drawing.make_stencil(
+                    body.get("ids"),
+                    bridge_mm=body.get("bridge_mm"),
+                    per_island=body.get("per_island"),
+                    preview=bool(body.get("preview")),
+                )
+            )
+
         # A POST and not a DELETE: the ids are in the body, and this API sends a body only
         # on POST and PATCH — `element delete` does it the same way.
         @app.post("/api/design/bridges/clear", dependencies=write)
