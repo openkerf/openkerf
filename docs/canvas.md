@@ -383,7 +383,7 @@ looked at together, because whether a ring is one path with two contours or two 
 inside one another is a drawing decision and not a stencil one. The window says what it found
 before you set anything, because the numbers only mean something together:
 
-> 4 islands would fall out; they get 8 bridges in all.
+> 4 islands would fall out. 8 bridges go in.
 > The shortest bridge has to span 3.6 mm — that is the thickness of the material at its
 > narrowest.
 

@@ -79,7 +79,8 @@
 		<p class="notice failure" role="alert">{error}</p>
 	{:else if report}
 		<p class="found" role="status">
-			{t('stencil.found', { islands: report.islands, bridges: report.bridges })}
+			{t('stencil.found.islands', { n: report.islands })}
+			{t('stencil.found.bridges', { n: report.bridges })}
 		</p>
 		{#if report.shortest_mm != null}
 			<!-- `mm` and not `n`: `n` is the plural selector and is deliberately the one
@@ -116,11 +117,13 @@
 			<!-- The numbers on the button, because it is the last thing read before the
 			     shape changes. `bridges` is a plain count and `mm` a measurement, so the
 			     measurement goes through `Intl` and the count does not. -->
-			{t('stencil.apply', {
-				n: count,
-				bridges: report?.bridges ?? 0,
-				mm: i18n.number(numbers.bridge)
-			})}
+			{report?.bridges
+				? t('stencil.apply', {
+						n: count,
+						bridges: report.bridges,
+						mm: i18n.number(numbers.bridge)
+					})
+				: t('stencil.apply.plain', { n: count })}
 		</button>
 	</div>
 </Dialog>

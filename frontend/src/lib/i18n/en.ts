@@ -277,9 +277,17 @@ export const en = {
 	'stencil.title': 'Make a stencil',
 	'stencil.why': 'A spray stencil is the design cut out of a sheet, so the inside of an O is an island of material with nothing holding it. OpenKerf finds those and bridges them to the sheet.',
 	'stencil.looking': 'Looking at the shape…',
-	'stencil.found': {
-		one: '1 island would fall out; it gets {bridges} bridges.',
-		other: '{islands} islands would fall out; they get {bridges} bridges in all.'
+	// Two counts, and `t()` has one plural slot — it reads `n`. So two whole sentences, each
+	// with its own count, rather than one sentence that says "1 islands" or "1 bridges".
+	// Measured before this: with the island count passed as `{islands}` the selector saw no
+	// `n` at all, read it as zero, and put every single island in the plural.
+	'stencil.found.islands': {
+		one: 'One island would fall out.',
+		other: '{n} islands would fall out.'
+	},
+	'stencil.found.bridges': {
+		one: 'One bridge goes in.',
+		other: '{n} bridges go in.'
 	},
 	'stencil.crossing': 'The shortest bridge has to span {mm} — that is the thickness of the material at its narrowest.',
 	'stencil.wide': 'The bridge is wider than the gap it spans, so it will look like a solid block rather than a bridge.',
@@ -288,6 +296,13 @@ export const en = {
 	'stencil.untried': 'No stencil has been cut out of this app yet: 3 mm is a starting point, not a measurement. Try one on a scrap of the cardboard you will spray.',
 	// The button repeats what you asked for, the way the corners and the offset buttons do,
 	// in the idiom the bridges row already uses: "(4 × 2 mm)".
+	// Without a report there is no count to name, and "(0 × 3 mm)" on a button that is
+	// switched off reads as a promise of nothing. The plain wording stands until the
+	// measurement comes back.
+	'stencil.apply.plain': {
+		one: 'Bridge this shape',
+		other: 'Bridge these {n} shapes'
+	},
 	'stencil.apply': {
 		one: 'Bridge this shape ({bridges} × {mm} mm)',
 		other: 'Bridge these {n} shapes ({bridges} × {mm} mm)'
@@ -2458,6 +2473,20 @@ export const en = {
 	// keeps every number and every name the English one had. A refusal that bakes a
 	// number into its sentence and sends no values has no entry here: half a sentence
 	// with the number missing is worse than the English one with it.
+	// The stencil's refusals. Four of the six carry numbers, and those numbers are ours —
+	// the width somebody typed and a constant of this app — so they travel in
+	// `X-OpenKerf-Error-Values` and the sentence can be said in the reader's language. A
+	// refusal whose numbers are *measured* on the shape keeps its English sentence, which is
+	// why `tooMuchBridge` names its own contour length rather than a rule.
+	'api.stencil.needsBridge': 'A stencil needs at least one bridge per island, or the island falls out.',
+	'api.stencil.bridgeTooThin': 'A bridge of {mm} mm is narrower than {min} mm, and a CO2 cut is 0.1 to 0.3 mm wide itself: it would burn away and the island would fall out anyway.',
+	'api.stencil.nothingToDo': 'None of the selected shapes is one a stencil can be made of. Choose a closed shape, or text in an outline typeface.',
+	'api.stencil.singleStroke': {
+		one: '1 of these contours is an open line rather than an outline, so nothing in it can fall out. A stencil needs an outline typeface; a single-stroke one draws letters with strokes and has no inside.',
+		other: '{n} of these contours are open lines rather than outlines, so nothing in them can fall out. A stencil needs an outline typeface; a single-stroke one draws letters with strokes and has no inside.'
+	},
+	'api.stencil.noIslands': 'Nothing in this shape would fall out: there is no part of it that the cut would set loose. It needs no bridges.',
+	'api.stencil.tooMuchBridge': 'The gaps would take {taken} mm of a contour that is {length} mm long; at most half of it may be bridge. Use a narrower bridge, or fewer per island.',
 	'api.bridges.notSupported': 'Bridges only work on a rectangle, an ellipse, a polyline or a path.',
 	'api.bridges.needsCount': 'Ask for at least one bridge, or clear them instead.',
 	'api.bridges.needsLength': 'A bridge needs a length greater than zero.',

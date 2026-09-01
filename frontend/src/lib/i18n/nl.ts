@@ -271,15 +271,23 @@ export const nl: Catalogue = {
 	'stencil.title': 'Een stencil maken',
 	'stencil.why': 'Een spuitstencil is het ontwerp uit een plaat gesneden, dus de binnenkant van een O is een eiland materiaal waar niets aan vastzit. OpenKerf zoekt die op en verbindt ze met de plaat.',
 	'stencil.looking': 'De vorm wordt bekeken…',
-	'stencil.found': {
-		one: '1 eiland zou eruit vallen; het krijgt {bridges} bruggen.',
-		other: '{islands} eilanden zouden eruit vallen; ze krijgen samen {bridges} bruggen.'
+	'stencil.found.islands': {
+		one: 'Er zou één eiland uit vallen.',
+		other: 'Er zouden {n} eilanden uit vallen.'
+	},
+	'stencil.found.bridges': {
+		one: 'Er komt één brug in.',
+		other: 'Er komen {n} bruggen in.'
 	},
 	'stencil.crossing': 'De kortste brug moet {mm} overbruggen — dat is de dikte van het materiaal op zijn smalst.',
 	'stencil.wide': 'De brug is breder dan de opening die hij overspant, dus hij wordt eerder een blok dan een brug.',
 	'stencil.bridge': 'Brugbreedte',
 	'stencil.per': 'Bruggen per eiland',
 	'stencil.untried': 'Er is nog geen stencil uit deze app gesneden: 3 mm is een startpunt en geen meting. Probeer er een op een restje van het karton dat je gaat spuiten.',
+	'stencil.apply.plain': {
+		one: 'Deze vorm overbruggen',
+		other: 'Deze {n} vormen overbruggen'
+	},
 	'stencil.apply': {
 		one: 'Deze vorm overbruggen ({bridges} × {mm} mm)',
 		other: 'Deze {n} vormen overbruggen ({bridges} × {mm} mm)'
@@ -2328,6 +2336,15 @@ export const nl: Catalogue = {
 		'Stop de serie en begin opnieuw om verder te branden met de tekening zoals die nu is. Wat gebrand is blijft gebrand.',
 
 	// ── Refusals the API can name ─────────────────────────────────────────────────
+	'api.stencil.needsBridge': 'Een stencil heeft minstens één brug per eiland nodig, anders valt het eiland eruit.',
+	'api.stencil.bridgeTooThin': 'Een brug van {mm} mm is smaller dan {min} mm, en een CO2-snede is zelf al 0,1 tot 0,3 mm breed: hij brandt weg en het eiland valt er alsnog uit.',
+	'api.stencil.nothingToDo': 'Geen van de gekozen vormen is er een waar een stencil van te maken is. Kies een gesloten vorm, of tekst in een omtreklettertype.',
+	'api.stencil.singleStroke': {
+		one: '1 van deze contouren is een open lijn en geen omtrek, dus er kan niets uit vallen. Een stencil heeft een omtreklettertype nodig; een eenlijnslettertype tekent letters met streken en heeft geen binnenkant.',
+		other: '{n} van deze contouren zijn open lijnen en geen omtrekken, dus er kan niets uit vallen. Een stencil heeft een omtreklettertype nodig; een eenlijnslettertype tekent letters met streken en heeft geen binnenkant.'
+	},
+	'api.stencil.noIslands': 'Er valt niets uit deze vorm: er is geen deel dat de snede zou lossnijden. Er zijn geen bruggen nodig.',
+	'api.stencil.tooMuchBridge': 'De gaten zouden {taken} mm van een contour van {length} mm opeten; hooguit de helft mag brug zijn. Neem een smallere brug, of minder per eiland.',
 	'api.bridges.notSupported': 'Bruggen werken alleen op een rechthoek, een ellips, een polylijn of een pad.',
 	'api.bridges.needsCount': 'Vraag om minstens één brug, of haal ze juist weg.',
 	'api.bridges.needsLength': 'Een brug heeft een lengte groter dan nul nodig.',

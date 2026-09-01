@@ -866,7 +866,11 @@ class Drawing:
                 "CO2 cut is 0.1 to 0.3 mm wide itself: it would burn away and the island "
                 "would fall out anyway.",
                 code="stencil.bridgeTooThin",
-                values={"n": width, "min": MIN_BRIDGE_MM},
+                # `mm` and not `n`: `n` is the plural selector on the interface side and is
+                # the one value that deliberately does not go through `Intl`, so a
+                # millimetre figure called `n` reaches a Dutch reader as 0.2 beside a canvas
+                # that writes 0,2.
+                values={"mm": width, "min": MIN_BRIDGE_MM},
             )
 
         nodes = self._nodes(element_ids)
@@ -927,7 +931,7 @@ class Drawing:
                     f"{length:.1f} mm long; at most half of it may be bridge. Use a "
                     "narrower bridge, or fewer per island.",
                     code="stencil.tooMuchBridge",
-                    values={"n": taken, "length": round(length, 1)},
+                    values={"taken": taken, "length": round(length, 1)},
                 )
 
         answer = {
