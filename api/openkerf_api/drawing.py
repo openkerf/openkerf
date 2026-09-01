@@ -850,8 +850,8 @@ class Drawing:
         """
         from meerk40t.core.units import UNITS_PER_MM
 
-        from .bridges import MAX_FRACTION, format_positions, path_length
-        from .stencil import MIN_BRIDGE_MM, TAB_TYPES_NOTE, plan_stencil
+        from .bridges import MAX_FRACTION, path_length
+        from .stencil import MIN_BRIDGE_MM, TAB_TYPES_NOTE, plan_many
 
         width = self.STENCIL_BRIDGE_MM if bridge_mm is None else _positive(bridge_mm, "bridge_mm")
         count = self.STENCIL_PER_ISLAND if per_island is None else int(per_island)
@@ -883,27 +883,29 @@ class Drawing:
                 code="stencil.nothingToDo",
             )
 
-        reports, total_islands, total_bridges, open_ones = [], 0, 0, 0
-        for node in shapes:
-            geometry = node.as_geometry()
-            plan = plan_stencil(geometry, width, count, UNITS_PER_MM)
-            total_islands += plan["islands"]
-            total_bridges += plan["bridges"]
-            open_ones += plan["open_contours"]
-            reports.append((node, plan))
+        # The whole selection at once, and that is not a nicety: nesting is a property of
+        # the drawing and not of one shape. Measured on three rectangles drawn inside one
+        # another — an outer rounded square, an inner one and a little square in the middle
+        # — each shape on its own has one contour at depth 0 and no island, so per-shape
+        # analysis answered "nothing would fall out" for a design that is nothing but
+        # islands. Whether that is one path with three contours or three shapes on top of
+        # each other is a drawing decision, not a stencil one.
+        pairs = [(node.id, node.as_geometry()) for node in shapes]
+        plan = plan_many(pairs, width, count, UNITS_PER_MM)
 
-        if total_islands == 0:
+        if plan["islands"] == 0:
             # The commonest way to arrive here is a single-stroke typeface, and that is a
             # different problem from a shape that simply has no holes — so it gets its own
             # sentence rather than a shrug. Measured: 'Stencil' in the engine's own Hershey
             # font is ten contours of which nine are open; in Arial it is nine closed ones.
-            if open_ones:
+            if plan["open_contours"]:
                 raise DesignError(
-                    f"{open_ones} of these contours are open lines rather than outlines, "
-                    "so nothing in them can fall out. A stencil needs an outline typeface; "
-                    "a single-stroke one draws letters with strokes and has no inside.",
+                    f"{plan['open_contours']} of these contours are open lines rather than "
+                    "outlines, so nothing in them can fall out. A stencil needs an outline "
+                    "typeface; a single-stroke one draws letters with strokes and has no "
+                    "inside.",
                     code="stencil.singleStroke",
-                    values={"n": open_ones},
+                    values={"n": plan["open_contours"]},
                 )
             raise DesignError(
                 "Nothing in this shape would fall out: there is no part of it that the cut "
@@ -913,44 +915,71 @@ class Drawing:
 
         # The same bound the ordinary bridges use, and for the same reason: a contour that is
         # more gap than cut is not a cut.
-        for node, plan in reports:
-            length = path_length(node.as_geometry()) / UNITS_PER_MM
-            taken = len(plan["positions"]) * width
+        for key, geometry in pairs:
+            gaps = len(plan["per_shape"].get(key) or [])
+            if not gaps:
+                continue
+            length = path_length(geometry) / UNITS_PER_MM
+            taken = gaps * width
             if taken > length * MAX_FRACTION:
                 raise DesignError(
-                    f"{len(plan['positions'])} gaps of {width:g} mm take {taken:g} mm of a "
-                    f"contour that is {length:.1f} mm long; at most half of it may be "
-                    "bridge. Use a narrower bridge, or fewer per island.",
+                    f"{gaps} gaps of {width:g} mm take {taken:g} mm of a contour that is "
+                    f"{length:.1f} mm long; at most half of it may be bridge. Use a "
+                    "narrower bridge, or fewer per island.",
                     code="stencil.tooMuchBridge",
                     values={"n": taken, "length": round(length, 1)},
                 )
 
-        shortest = [p["shortest_mm"] for _n, p in reports if p["shortest_mm"] is not None]
         answer = {
-            "ids": [node.id for node, _p in reports],
-            "islands": total_islands,
-            "bridges": total_bridges,
+            "ids": [node.id for node in shapes],
+            "islands": plan["islands"],
+            "bridges": plan["bridges"],
             "bridge_mm": width,
             "per_island": count,
             "skipped": skipped,
             # What the bridge has to span. Worth reporting because it is the number that
             # decides whether the setting is sane: on 40 mm Arial the stroke of an 'O' is
             # 3.2 mm, so a 3 mm bridge is very nearly the whole thickness of the letter.
-            "shortest_mm": min(shortest) if shortest else None,
+            "shortest_mm": plan["shortest_mm"],
         }
         if preview:
             return answer
 
+        # Written as geometry and not as the engine's tab attributes, and that is the whole
+        # difference between a stencil that works and one that only looks like it. A tab can
+        # take a piece *out* of a contour; it cannot add the two cuts across the opening
+        # that make the sides of the bridge, and those belong to no contour. Measured on the
+        # attribute version: zero segments ran from the outer contour to the inner one, so
+        # the ring between them stayed attached to the sheet at one gap and to the island at
+        # the other and nothing came out at all. The user found that on the first shape they
+        # tried.
+        from meerk40t.svgelements import Matrix
+
+        from .stencil import stencil_paths
+
+        cuts = stencil_paths(pairs, plan, width * UNITS_PER_MM)
         with self.elements.undoscope("Stencil"):
-            for node, plan in reports:
-                if not plan["positions"]:
+            fresh = []
+            for node in shapes:
+                cut = cuts.get(node.id)
+                if cut is None or cut.index == 0:
+                    fresh.append(node)
                     continue
-                node.mktablength = width * UNITS_PER_MM
-                node.mktabpositions = format_positions(None, plan["positions"])
-                # A raw assignment tells the node nothing, so the cached bounds and the
-                # scene would keep the version without gaps.
-                node.altered()
+                # Any tabs the shape carried go with the old node, which is right: the gaps
+                # are in the path now, and applying both would take them out twice.
+                fresh.append(
+                    node.replace_node(
+                        type="elem path",
+                        geometry=cut,
+                        matrix=Matrix(),
+                        stroke=getattr(node, "stroke", None),
+                        fill=getattr(node, "fill", None),
+                        label=getattr(node, "label", None),
+                    )
+                )
+        self.elements.validate_ids()
         self._refresh()
+        answer["ids"] = [node.id for node in fresh]
         return answer
 
     def clear_bridges(self, element_ids) -> dict:

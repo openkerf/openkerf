@@ -377,14 +377,17 @@ opening, held by nothing: it drops on the bench, or into the machine halfway thr
 job. That is what a stencil font solves by drawing the letters with the bridges already in
 them — and it is what **Make a stencil…** does to any shape.
 
-Select the shape and take **Make a stencil…** from the right-click menu. The window says
-what it found before you set anything, because the numbers only mean something together:
+Select the shape — or all the shapes, if the design is drawn as separate outlines nested in
+one another — and take **Make a stencil…** from the right-click menu. The whole selection is
+looked at together, because whether a ring is one path with two contours or two shapes drawn
+inside one another is a drawing decision and not a stencil one. The window says what it found
+before you set anything, because the numbers only mean something together:
 
 > 4 islands would fall out; they get 8 bridges in all.
 > The shortest bridge has to span 3.6 mm — that is the thickness of the material at its
 > narrowest.
 
-![The word OpenKerf on the bed as outlined lettering, with gaps in the outlines: the counter of the O, of the p and of both e's each hang on two bridges, visible as breaks in the inner and the outer line at the same place. The n, K, r and f are untouched, because nothing in them would fall out.](images/45-stencil.png)
+![The word OpenKerf on the bed as outlined lettering, cut as a stencil: the counter of the O, of the p and of both e's each hang on two bridges. Each bridge is a break in the inner line, a break in the outer line at the same place, and two short cuts across the letter's stroke joining their ends, so the bridge stands out as a little tongue of material. The n, K, r and f are untouched, because nothing in them would fall out.](images/45-stencil.png)
 
 Two settings, and both are worth understanding rather than accepting:
 
@@ -397,13 +400,27 @@ Arial lettering the stroke of an **O** is 3.6 mm, so a 3 mm bridge is very nearl
 thickness of the letter — and the window says so: *The bridge is wider than the gap it
 spans, so it will look like a solid block rather than a bridge.*
 
-**What it does underneath** is exactly what the bridges above do: it leaves gaps in the cut,
-so the plan, the burn time and what goes to the machine need nothing new. The difference is
-that a bridge here is a **pair** of gaps — one in the island's outline and one in the
-contour around it, at the same place — because a gap in the island alone would join it to
-the opening, and an opening is a void. The strip of material between the two gaps is what
-holds. That is why the app looks for the shortest crossing: it is the strongest bridge and
+**What a bridge is here, and why it is four cuts.** A gap in the island's own outline would
+join it to the opening, and an opening is a void — so a bridge starts as a *pair* of gaps,
+one in the island and one in the contour around it, facing each other. That is not enough on
+its own: with only those two, the ring between the contours is still attached to the sheet at
+one gap and to the island at the other, and nothing comes out at all. So the bridge is
+completed by **two short cuts across the opening**, joining the ends of the two gaps. Those
+are the sides of the bridge. With them the ring is bounded all round and drops out, and the
+strip between the two crossing cuts — cut on neither long side — holds the island to the
+sheet.
+
+That is also why the app looks for the shortest crossing: a short bridge is the strongest and
 it costs the least of the sprayed edge.
+
+**A stencil makes the cut longer**, which is the opposite of what ordinary bridges do.
+Measured on "OpenKerf" at 40 mm with 2.5 mm bridges: 970.4 mm of contour before, 980.0 mm
+after — 40 mm of gaps taken out, and sixteen crossing cuts of about 3 mm put in.
+
+**It is written into the shape**, not kept as a setting on it. Rounding a corner works the
+same way: the path is replaced, one undo puts it back, and what you see on the bed is what
+the machine cuts. Bridges the shape already carried disappear with it, because the gaps are
+in the path now and applying both would take them out twice.
 
 **When it goes wrong.**
 

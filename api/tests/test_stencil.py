@@ -220,35 +220,119 @@ def test_a_bridge_thinner_than_the_cut_is_refused(client, kernel):
 
 
 @pytest.mark.skipif(not has_arial(), reason="no outline typeface on this machine")
+def test_the_ring_between_the_contours_really_comes_free(client, kernel):
+    """
+    The test the first version needed and did not have, and the user found it instead.
+
+    Gaps facing each other are not a bridge. The ring between the two contours is the paint
+    opening: with a gap on each side it stays attached to the sheet at one gap and to the
+    island at the other, so nothing falls out and the stencil is a sheet with notches in it.
+    Measured on that version: **zero** segments ran from the outer contour to the inner one.
+
+    What makes it a bridge is the two cuts across the opening that join the ends of the two
+    gaps. So: two per bridge, no more and no fewer, each about as long as the crossing.
+    """
+    from meerk40t.core.geomstr import TYPE_END
+    from meerk40t.core.units import UNITS_PER_MM
+
+    node, before = lettering(client, kernel, "O")
+    plan = plan_stencil(before, 3.0, 2, UNITS_PER_MM)
+    outer = next(c for c in contours(before) if c["depth"] == 0)["points"]
+    inner = next(c for c in contours(before) if c["depth"] == 1)["points"]
+
+    answer = client.post("/api/design/stencil", json={"ids": [node.id], "bridge_mm": 3.0})
+    assert answer.status_code == 200, answer.text
+    fresh = [n for n in kernel.elements.elems()][0]
+    cut = fresh.as_geometry()
+
+    # Counted at the source rather than by proximity: the contours here are a walk of 240
+    # points, so on a curve a real endpoint can sit 0.65 mm from the nearest sample — a
+    # measurement with a 0.1 mm slack then reports three crossings out of four and the fault
+    # is in the ruler. What `stencil_geometry` adds on top of the gapped contours *is* the
+    # set of crossing cuts, so that is what gets counted.
+    from openkerf_api.bridges import bridged_geometry
+    from openkerf_api.stencil import plan_many, stencil_paths
+
+    many = plan_many([("one", before)], 3.0, 2, UNITS_PER_MM)
+    gapped = bridged_geometry(before, many["per_shape"]["one"], 3.0 * UNITS_PER_MM)
+    whole = stencil_paths([("one", before)], many, 3.0 * UNITS_PER_MM)["one"]
+    added = []
+    for index in range(gapped.index, whole.index):
+        if int(whole.segments[index][2].real) == TYPE_END:
+            continue
+        a, b = whole.segments[index][0], whole.segments[index][4]
+        added.append(abs(a - b) / UNITS_PER_MM)
+
+    assert len(added) == 2 * plan["bridges"], (
+        f"{len(added)} cuts run across the opening and there should be "
+        f"{2 * plan['bridges']} — two per bridge, or the ring stays attached"
+    )
+    for span in added:
+        assert span < plan["shortest_mm"] * 2, (
+            f"a crossing cut of {span:.2f} mm on a crossing of {plan['shortest_mm']} mm: "
+            "the ends are paired the long way round, which crosses the two cuts in the "
+            "middle of the bridge and turns the strip into two loose triangles"
+        )
+
+    # And they really do touch both contours — with a slack that admits the sampling, since
+    # this half of the check is about *where* they run and not about how many there are.
+    slack = 1.0 * UNITS_PER_MM
+    cut = fresh.as_geometry()
+    touching = 0
+    for index in range(cut.index):
+        if int(cut.segments[index][2].real) == TYPE_END:
+            continue
+        a, b = cut.segments[index][0], cut.segments[index][4]
+        ends = (
+            min(abs(a - q) for q in outer) < slack and min(abs(b - q) for q in inner) < slack
+        ) or (
+            min(abs(a - q) for q in inner) < slack and min(abs(b - q) for q in outer) < slack
+        )
+        if ends:
+            touching += 1
+    assert touching == 2 * plan["bridges"], (
+        f"{touching} of the cuts join the two contours; every crossing cut has to"
+    )
+
+
+@pytest.mark.skipif(not has_arial(), reason="no outline typeface on this machine")
 def test_the_stencil_lands_on_the_shape_and_the_preview_does_not(client, kernel):
     """
-    The preview measures and writes nothing; the real thing writes the same two attributes
-    an ordinary bridge writes, so the cut plan, the burn time and the RD stream need
-    nothing new.
+    The preview measures and writes nothing; the real thing writes the finished geometry.
+
+    Geometry and not the engine's tab attributes: a tab can take a piece out of a contour,
+    and it cannot add the cuts across the opening that make the sides of a bridge.
     """
     node, _geometry = lettering(client, kernel, "OpenKerf")
+    plain = path_length(node.as_geometry())
 
-    look = client.post(
-        "/api/design/stencil", json={"ids": [node.id], "preview": True}
-    )
+    look = client.post("/api/design/stencil", json={"ids": [node.id], "preview": True})
     assert look.status_code == 200, look.text
     assert look.json()["islands"] == 4
     assert look.json()["bridges"] == 8
-    assert getattr(node, "mktabpositions", None) in (None, "", "*0")
+    assert [n.id for n in kernel.elements.elems()] == [node.id], "the preview drew something"
+    assert path_length(node.as_geometry()) == plain, "the preview changed the shape"
 
     done = client.post("/api/design/stencil", json={"ids": [node.id], "bridge_mm": 2.5})
     assert done.status_code == 200, done.text
-    assert done.json() == {**look.json(), "bridge_mm": 2.5}
+    for key in ("islands", "bridges", "shortest_mm"):
+        assert done.json()[key] == look.json()[key]
 
+    # The shape is a new node — the path is replaced, the way rounding a corner replaces it.
+    fresh = [n for n in kernel.elements.elems()][0]
+    assert done.json()["ids"] == [fresh.id]
+    assert str(fresh.type) == "elem path"
+
+    # A stencil makes the cut **longer**, and that is worth pinning because it is the
+    # opposite of what an ordinary bridge does. Measured on this shape: 970.4 mm before,
+    # 980.0 mm after — sixteen gaps of 2.5 mm taken out (40 mm) and sixteen crossing cuts
+    # put in, and the crossings here are about 3 mm each. An implementation that only
+    # removed gaps would come out shorter, and it would cut nothing loose.
     from meerk40t.core.units import UNITS_PER_MM
 
-    assert node.mktabpositions.count(",") == 15, "sixteen gaps for eight bridges"
-    assert abs(node.mktablength / UNITS_PER_MM - 2.5) < 1e-6
-
-    # And the engine really takes it out of the contour: `final_geometry` is what the cut
-    # plan uses for a cut layer.
-    plain = path_length(node.as_geometry())
-    gapped = path_length(node.final_geometry())
-    assert gapped < plain, "the gaps are not in the geometry the machine gets"
-    taken = (plain - gapped) / UNITS_PER_MM
-    assert 30 < taken < 50, f"sixteen gaps of 2.5 mm should take about 40 mm, took {taken:.1f}"
+    after = path_length(fresh.as_geometry())
+    grew = (after - plain) / UNITS_PER_MM
+    assert 5 < grew < 20, (
+        f"the contour changed by {grew:+.1f} mm; 40 mm of gaps out and sixteen crossings "
+        "in should leave it about 10 mm longer"
+    )

@@ -24,17 +24,30 @@ contour's centroid. The centroid of the outer ring of an **O** lies inside the c
 every contour came back at depth 1 and an O looked like two islands. A vertex of the contour
 is the right probe.
 
-**What a bridge is here.** Not a gap in the island's own outline — that would join it to the
-opening, which is a void. A bridge is a *pair* of gaps, one in the island contour and one in
-the contour around it, at the same place: the strip of material between them is cut by
-neither, so it holds the island to the sheet. Its length is the stroke width of the letter,
-which is why the crossing is chosen where the two contours are closest.
+**What a bridge is here, and the mistake worth keeping written down.** The first version left
+a gap in the island contour and a gap in the contour around it, facing each other, and called
+that a bridge. It is not. The ring between the two contours is the paint opening and has to
+come *out*, and with a gap on each side it stays attached to the sheet at one gap and to the
+island at the other: nothing falls out at all, and the stencil is a sheet of cardboard with
+some notches in it. The user found it on the first shape they tried, with a picture.
 
-**Why the existing bridges action cannot do this.** It spreads its positions over the
-*concatenated* length of every contour in the shape. Measured on "OO" — four contours, 318
-mm of path in total — `*4` gave 12.5/37.5/62.5/87.5 %, which can put all four bridges on one
-letter and none on the other. The mechanism is right and the arithmetic is not, so this
-module computes explicit percentages and hands them to the same machinery.
+A bridge is four cuts: the two gaps, **and the two short cuts across the opening that join
+their ends**. Those two are the sides of the bridge. With them the ring is bounded all round
+by cut lines and drops out; the strip between them is cut on neither long side and holds the
+island to the sheet. Measured on the version without them: zero segments ran from the outer
+contour to the inner one, which is exactly as many as the reasoning above predicts.
+
+The crossing is chosen where the two contours are closest, so the bridge is short: it is the
+strongest that way, and it costs the least of the sprayed edge.
+
+**Why this cannot ride on the engine's own tabs.** Two reasons, and the second is the one
+that decides it. The ordinary bridges action spreads its positions over the *concatenated*
+length of every contour in the shape — measured on "OO", four contours and 318 mm of path,
+`*4` gives 12.5/37.5/62.5/87.5 %, which can put all four bridges on one letter. That one is
+only arithmetic and could be fixed with explicit percentages. But the engine's tabs can only
+ever *remove* pieces of a contour, and a stencil bridge has to *add* two cuts that belong to
+no contour. So the finished stencil is geometry: the gapped contours plus the crossing cuts,
+written back over the shape the way rounding a corner is.
 
 Nothing here has been cut in cardboard yet. The geometry is exact; how narrow a bridge may
 be before it burns away or tears under a spray can is a measurement on material.
@@ -246,6 +259,7 @@ def plan_stencil(geom, bridge_mm: float, per_island: int, units_per_mm: float) -
 
     before, rulers, total = _cumulative(geom)
     positions: list[float] = []
+    pairs: list[tuple[float, float]] = []
     shortest = None
     bridged = 0
     for index in loose:
@@ -254,8 +268,13 @@ def plan_stencil(geom, bridge_mm: float, per_island: int, units_per_mm: float) -
         if parent is None:
             continue
         for gap, i, j in _crossings(island, parent, per_island):
-            positions.append(_percent(before, rulers, total, island["places"][i]))
-            positions.append(_percent(before, rulers, total, parent["places"][j]))
+            here = _percent(before, rulers, total, island["places"][i])
+            there = _percent(before, rulers, total, parent["places"][j])
+            positions.extend((here, there))
+            # Kept as a pair, and not only as two numbers in a list: the two crossing cuts
+            # of a bridge join *these* two gaps, and a sorted list of positions no longer
+            # says which gap belongs to which.
+            pairs.append((here, there))
             bridged += 1
             span = gap / units_per_mm
             shortest = span if shortest is None else min(shortest, span)
@@ -267,9 +286,162 @@ def plan_stencil(geom, bridge_mm: float, per_island: int, units_per_mm: float) -
         "islands": len(loose),
         "bridges": bridged,
         "positions": positions[:MAX_COUNT],
+        "pairs": pairs,
         "open_contours": len(open_ones),
         "contours": len(found),
         "shortest_mm": None if shortest is None else round(shortest, 3),
         "bridge_mm": bridge_mm,
         "length_mm": round(total / units_per_mm, 3),
     }
+
+
+def plan_many(shapes, bridge_mm: float, per_island: int, units_per_mm: float) -> dict:
+    """
+    The same analysis over a whole selection, because nesting is not a property of one shape.
+
+    Measured on the case that found this: three separate rectangles drawn inside one another
+    — an outer rounded square, an inner one and a little square in the middle — gave "nothing
+    would fall out". Each shape on its own has one contour at depth 0 and no island; the ring
+    that has to come out lies *between* two shapes. Whether a design is one path with three
+    contours or three shapes on top of each other is a drawing decision, not a stencil one.
+
+    `shapes` is a list of `(key, geometry)`. The answer carries, per key, the gap positions
+    for that shape's own path, and the crossing cuts as absolute points — a bridge can join
+    two contours that live in different shapes, and then the two cuts belong to neither more
+    than the other. They are drawn into the island's shape, since that is the one whose
+    holding they are.
+    """
+    tagged = []
+    rulers = {}
+    for key, geom in shapes:
+        before, ruler, total = _cumulative(geom)
+        rulers[key] = (before, ruler, total)
+        for contour in contours(geom):
+            contour["key"] = key
+            tagged.append(contour)
+
+    if not tagged:
+        return {"islands": 0, "bridges": 0, "per_shape": {}, "crossings": [], "shortest_mm": None}
+
+    # Depths again, now across everything: a contour of shape A can sit inside one of shape B.
+    for i, contour in enumerate(tagged):
+        probe = contour["points"][0]
+        inside = [
+            (other["depth_own"] if False else j)
+            for j, other in enumerate(tagged)
+            if j != i and _inside_outline(probe, [other["points"]])
+        ]
+        contour["depth"] = len(inside)
+        contour["holders"] = inside
+    for contour in tagged:
+        # The parent is the deepest contour containing this one, wherever it lives.
+        holders = [(tagged[j]["depth"], j) for j in contour["holders"]]
+        contour["parent"] = max(holders)[1] if holders else None
+
+    loose = [i for i, c in enumerate(tagged) if c["depth"] % 2 == 1]
+    per_shape: dict = {key: [] for key, _g in shapes}
+    crossings: list[tuple] = []
+    shortest = None
+    bridged = 0
+    for index in loose:
+        island = tagged[index]
+        if island["parent"] is None:
+            continue
+        parent = tagged[island["parent"]]
+        for gap, i, j in _crossings(island, parent, per_island):
+            i_before, i_ruler, i_total = rulers[island["key"]]
+            p_before, p_ruler, p_total = rulers[parent["key"]]
+            here = _percent(i_before, i_ruler, i_total, island["places"][i])
+            there = _percent(p_before, p_ruler, p_total, parent["places"][j])
+            per_shape[island["key"]].append(here)
+            per_shape[parent["key"]].append(there)
+            crossings.append((island["key"], here, parent["key"], there))
+            bridged += 1
+            span = gap / units_per_mm
+            shortest = span if shortest is None else min(shortest, span)
+
+    return {
+        "islands": len(loose),
+        "bridges": bridged,
+        "per_shape": {
+            key: sorted(float(round(float(v), 6)) for v in values)[:MAX_COUNT]
+            for key, values in per_shape.items()
+        },
+        "crossings": crossings,
+        "contours": len(tagged),
+        "open_contours": sum(1 for c in tagged if not c["closed"]),
+        "shortest_mm": None if shortest is None else round(shortest, 3),
+        "bridge_mm": bridge_mm,
+    }
+
+
+def point_at(geom, percent: float):
+    """The point at a percentage along a path — the inverse of `_percent`."""
+    before, rulers, total = _cumulative(geom)
+    if total <= 0 or not before:
+        return None
+    want = percent / 100.0 * total
+    last = max(before)
+    for index in sorted(before):
+        if before[index] + rulers[index].length >= want or index == last:
+            return geom.position(index, rulers[index].t_at(max(0.0, want - before[index])))
+    return None
+
+
+def stencil_paths(shapes, plan: dict, bridge_units: float) -> dict:
+    """
+    The finished stencil, per shape: contours with their gaps, plus the crossing cuts.
+
+    Two steps, and the second is the one the first version was missing. `bridged_geometry`
+    takes the gaps out on the parameter, so an arc stays an arc and the letters keep their
+    curves. Then, per bridge, two straight cuts join the ends of the two gaps: those are the
+    sides of the bridge, and without them the ring between the contours is still attached to
+    the sheet at one gap and to the island at the other, so nothing comes out.
+
+    The ends are paired the short way round. Taken the other way the two cuts cross in the
+    middle of the bridge, which turns the strip that should hold the island into two loose
+    triangles.
+
+    The crossings are drawn into the island's shape. Which of the two shapes carries them
+    matters only for tidiness — they are the same cut in the same layer either way — but a
+    cut has to belong to something, and the island is the thing the bridge exists for.
+    """
+    from meerk40t.core.geomstr import Geomstr
+
+    from .bridges import bridged_geometry
+
+    geoms = dict(shapes)
+    lengths = {key: path_length(geom) for key, geom in shapes}
+    out: dict = {}
+    for key, geom in shapes:
+        positions = plan["per_shape"].get(key) or []
+        opened = bridged_geometry(geom, positions, bridge_units) if positions else None
+        if opened is None:
+            opened = Geomstr()
+            for index in range(geom.index):
+                opened.append_segment(*geom.segments[index])
+        out[key] = opened
+
+    for island_key, here, parent_key, there in plan.get("crossings", []):
+        island, parent = geoms.get(island_key), geoms.get(parent_key)
+        if island is None or parent is None:
+            continue
+        if lengths[island_key] <= 0 or lengths[parent_key] <= 0:
+            continue
+        # A gap is centred on its position — the rule `gap_spans` follows — so its ends are
+        # half a bridge either side, in the percentage of *that* shape's own path.
+        i_half = 100.0 * (bridge_units / 2.0) / lengths[island_key]
+        p_half = 100.0 * (bridge_units / 2.0) / lengths[parent_key]
+        a1, a2 = point_at(island, here - i_half), point_at(island, here + i_half)
+        b1, b2 = point_at(parent, there - p_half), point_at(parent, there + p_half)
+        if None in (a1, a2, b1, b2):
+            continue
+        straight = abs(a1 - b1) + abs(a2 - b2)
+        crossed = abs(a1 - b2) + abs(a2 - b1)
+        first, second = (b1, b2) if straight <= crossed else (b2, b1)
+        target = out[island_key]
+        target.line(a1, first)
+        target.end()
+        target.line(a2, second)
+        target.end()
+    return out
