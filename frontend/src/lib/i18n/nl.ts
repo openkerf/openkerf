@@ -281,8 +281,8 @@ export const nl: Catalogue = {
 	'stencil.per': 'Bruggen per eiland',
 	'stencil.untried': 'Er is nog geen stencil uit deze app gesneden: 3 mm is een startpunt en geen meting. Probeer er een op een restje van het karton dat je gaat spuiten.',
 	'stencil.apply': {
-		one: 'Deze vorm overbruggen',
-		other: 'Deze {n} vormen overbruggen'
+		one: 'Deze vorm overbruggen ({bridges} × {mm} mm)',
+		other: 'Deze {n} vormen overbruggen ({bridges} × {mm} mm)'
 	},
 	'action.stencil': 'Een stencil maken…',
 	'explain.stencil': 'Zoekt de delen die een uitsnede zou lossnijden en verbindt ze met de plaat',

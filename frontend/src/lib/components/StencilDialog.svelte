@@ -101,13 +101,26 @@
 
 	<p class="hint">{t('stencil.untried')}</p>
 
-	<div class="buttons">
+	<!-- `ask-actions` and not a wrapper of our own: that class is what gives a dialog's
+	     buttons their padding, border and radius, and it carries the extra spacing on a
+	     touch screen. Written locally the button came out flat and unbordered beside every
+	     other dialog in the app. And a way out beside the way on: every other dialog here
+	     offers Cancel first, so the primary button is never the only thing to press. -->
+	<div class="ask-actions">
+		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button
 			class="btn primary"
 			disabled={busy || !usable || !!error || !report?.bridges}
 			onclick={() => onApply(numbers.bridge, numbers.per)}
 		>
-			{t('stencil.apply', { n: count })}
+			<!-- The numbers on the button, because it is the last thing read before the
+			     shape changes. `bridges` is a plain count and `mm` a measurement, so the
+			     measurement goes through `Intl` and the count does not. -->
+			{t('stencil.apply', {
+				n: count,
+				bridges: report?.bridges ?? 0,
+				mm: i18n.number(numbers.bridge)
+			})}
 		</button>
 	</div>
 </Dialog>
@@ -133,5 +146,4 @@
 		gap: var(--space-3);
 		margin: var(--space-3) 0;
 	}
-	.buttons { display: flex; justify-content: flex-end; }
 </style>

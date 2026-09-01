@@ -286,9 +286,11 @@ export const en = {
 	'stencil.bridge': 'Bridge width',
 	'stencil.per': 'Bridges per island',
 	'stencil.untried': 'No stencil has been cut out of this app yet: 3 mm is a starting point, not a measurement. Try one on a scrap of the cardboard you will spray.',
+	// The button repeats what you asked for, the way the corners and the offset buttons do,
+	// in the idiom the bridges row already uses: "(4 × 2 mm)".
 	'stencil.apply': {
-		one: 'Bridge this shape',
-		other: 'Bridge these {n} shapes'
+		one: 'Bridge this shape ({bridges} × {mm} mm)',
+		other: 'Bridge these {n} shapes ({bridges} × {mm} mm)'
 	},
 	'action.stencil': 'Make a stencil…',
 	'explain.stencil': 'Finds the parts a cut-out would set loose and bridges them to the sheet',
