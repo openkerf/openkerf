@@ -265,7 +265,7 @@ export const nl: Catalogue = {
 	'action.splitInto': 'Splitsen in {n} vormen',
 	'action.hatch': 'Arcering',
 	'action.wobble': 'Wobble',
-	'action.corners': 'CornersDialog…',
+	'action.corners': 'Hoeken…',
 	'action.bridges': 'Bruggen erin (4 × 2 mm)',
 	'action.bridgesOff': 'Bruggen weghalen',
 	'stencil.title': 'Een stencil maken',
@@ -2044,15 +2044,15 @@ export const nl: Catalogue = {
 	'clipart.more': 'Meer resultaten',
 
 	// ── Corners & offset ──────────────────────────────────────────────────────────
-	'corners.title': 'CornersDialog',
+	'corners.title': 'Hoeken',
 	'corners.styleAria': 'Hoekstijl',
 	'corners.round': 'Rond',
 	'corners.chamfer': 'Schuin',
 	'corners.size': 'Maat',
 	'corners.chamferWarning': 'Hiervan wordt de vorm een pad: breedte en hoogte zijn daarna niet meer los te wijzigen. Ongedaan maken brengt hem terug.',
 	'corners.roundKeeps': 'Een rechthoek blijft een rechthoek, dus je kunt de radius later bijstellen.',
-	'corners.doRound': 'CornersDialog afronden',
-	'corners.doChamfer': 'CornersDialog afschuinen',
+	'corners.doRound': 'Hoeken afronden',
+	'corners.doChamfer': 'Hoeken afschuinen',
 	'corners.shapes': {
 		one: '1 vorm',
 		other: '{n} vormen'

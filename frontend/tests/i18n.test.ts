@@ -249,6 +249,42 @@ test('keys are semantic and not the English text', () => {
 	}
 });
 
+test('no message carries the name of a thing in the code', () => {
+	// Found by the user, who read "CornersDialog…" in their own context menu. The Dutch
+	// catalogue had it four times, in the menu row, the window title and both buttons: a
+	// rename of the component had been done with a blunt search and replace, and "Hoeken"
+	// — the Dutch for corners — was the word it replaced. Nothing noticed for a month,
+	// because every check here compares a translation with its English original and
+	// "CornersDialog…" is not "Corners…".
+	//
+	// A token with a capital inside it is never a word in either language. The real names
+	// that do look like that — OpenKerf, MeerK40t, LightBurn, GitHub, LibUSB — are the
+	// same in both catalogues, so the rule is: a camel-cased word may appear in a
+	// translation only if the English catalogue uses it too.
+	const camel = /\b[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*\b/g;
+	const names = (source: string) => {
+		const found = new Set<string>();
+		for (const line of source.split('\n')) {
+			const at = line.indexOf(':');
+			if (at < 0) continue;
+			for (const word of line.slice(at).match(camel) ?? []) found.add(word);
+		}
+		return found;
+	};
+	const catalogue = (language: string) =>
+		readFileSync(join(SRC, 'lib', 'i18n', `${language}.ts`), 'utf8');
+	const english = names(catalogue('en'));
+	for (const language of Object.keys(TRANSLATIONS)) {
+		const strange = [...names(catalogue(language))].filter((word) => !english.has(word));
+		assert.deepEqual(
+			strange,
+			[],
+			`${language}.ts uses ${strange.join(', ')}, which the English catalogue does not: ` +
+				'that is the name of something in the code, not a word'
+		);
+	}
+});
+
 test('a refusal with a code is said in the reader’s language', async () => {
 	// The header is the whole mechanism, so it is worth one test end to end: a
 	// known code becomes a catalogue message, an unknown one falls back to the
