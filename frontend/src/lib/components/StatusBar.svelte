@@ -2,7 +2,6 @@
 	import {
 		formatDuration,
 		formatMm,
-		isStalled,
 		remainingSeconds,
 		totalSeconds,
 		type Device,
@@ -52,12 +51,10 @@
 
 	let mm = $derived(device?.position.mm ?? null);
 
-	// Pausing had to work from *every* tab. Living only in the Job panel it cost a
-	// tab switch plus a click — exactly when you do not want a second action. So
-	// here, beside the stop.
-	let paused = $derived(isStalled(job));
-	let canPause = $derived(control.capabilities?.actions.pause ?? false);
-	let canResume = $derived(control.capabilities?.actions.resume ?? false);
+	// Pausing and stopping moved to the top bar (see the comment further down), and
+	// the three derivations that fed the buttons here stayed behind — a fourth answer
+	// to "may I pause now" that no template read. `transportAllowed` in `$lib/api` is
+	// the one that counts.
 	let remaining = $derived(remainingSeconds(job));
 	// From the same source as `remaining` — that is the whole fix for gap B1. With
 	// `job.estimate_seconds` here the bar read "0:00 left of 13:45:04": a remainder

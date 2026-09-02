@@ -28,6 +28,7 @@
 		events,
 		control,
 		activeJob,
+		nothingBurns = false,
 		revision = 0,
 		preflight = $bindable(),
 		onJog,
@@ -53,6 +54,10 @@
 		events: SignalEvent[];
 		control: Controller;
 		activeJob: Job | null;
+		/** Nothing on the bed that will burn — `burnsNothing` in `$lib/design.svelte`,
+		 *  worked out once by the page so that this panel and the top bar cannot answer
+		 *  the question differently. */
+		nothingBurns?: boolean;
 		/** Revision of the drawing; the time estimate in the preflight follows it. */
 		revision?: number;
 		preflight: boolean;
@@ -89,7 +94,7 @@
      now is the thing you came to this panel for. `SeriesRun` decides that for itself
      off the run in the status payload, the same way `TileRun` does. -->
 <SeriesRun {series} />
-<JobControls {control} {device} {series} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
+<JobControls {control} {device} {series} job={activeJob} {revision} {nothingBurns} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->

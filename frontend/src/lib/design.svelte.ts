@@ -310,6 +310,25 @@ function computeReadable(colour: string): string {
  * hangs on the colour and not on the theme, because the chip shows the layer colour
  * unchanged in both themes.
  */
+/**
+ * Is there nothing here that will burn?
+ *
+ * The question the app means by "empty", and it is not `elements.length === 0`:
+ * shapes can lie on the bed with every layer switched off, or all of them in a layer
+ * that does not go along. The top bar asked it that first way and the Job panel asked
+ * the estimate (`parts === 0`), while the comment above both calls to `jobPhase` said
+ * they were the same source. On a bed with the layers off, one said "ready" and the
+ * other "nothing".
+ *
+ * Asked of the design rather than of the estimate, so it needs nothing fetched and
+ * cannot change its mind halfway through a recalculation.
+ */
+export function burnsNothing(
+	operations: { output: boolean; element_ids: string[] }[]
+): boolean {
+	return !operations.some((op) => op.output && op.element_ids.length > 0);
+}
+
 export function inkOn(colour: string): string {
 	const own = parseColour(colour);
 	if (!own) return 'var(--on-color)';
@@ -495,6 +514,11 @@ export class DesignStore {
 
 	get isEmpty() {
 		return this.elements.length === 0;
+	}
+
+	/** Nothing that will burn — see `burnsNothing`. Not the same as `isEmpty`. */
+	get burnsNothing() {
+		return burnsNothing(this.operations);
 	}
 
 	get selected(): DesignElement | null {

@@ -7,6 +7,7 @@
 		jobPhase,
 		isStalled,
 		remainingSeconds,
+		transportAllowed,
 		PAUSE_KEY,
 		STOP_KEY,
 		type Device,
@@ -29,6 +30,7 @@
 		device,
 		series,
 		job,
+		nothingBurns = false,
 		revision = 0,
 		preflight = $bindable(),
 		onJog,
@@ -53,6 +55,9 @@
 		 */
 		series: SeriesStore;
 		job: Job | null;
+		/** Nothing on the bed that will burn. Comes from the page, from the same
+		 *  `burnsNothing` the top bar reads. */
+		nothingBurns?: boolean;
 		/** Increases on every change in the design; the estimate follows it. */
 		revision?: number;
 		preflight: boolean;
@@ -308,8 +313,7 @@
 	let estimating = $state(false);
 	let estimateSlow = $state(false);
 	/** Has an estimate ever come in? Before that neither verdict is honest. */
-	let estimated = $state(false);
-
+	
 	// The engine builds the whole cut plan for this estimate. On a heavy design that
 	// took more than three minutes here, and meanwhile the pre-flight sat on a dot. An
 	// estimate must never be the reason you cannot start, so after ten seconds we
@@ -347,7 +351,6 @@
 			estimate = null;
 		} finally {
 			clearTimeout(slow);
-			estimated = true;
 			estimating = false;
 			estimateSlow = false;
 		}
@@ -509,7 +512,13 @@
 	 * swapped to the full checklist and back on every recalculation. What we knew a
 	 * moment ago stays on screen until the new answer replaces it.
 	 */
-	let empty = $derived(estimated && estimate !== null && estimate.parts === 0);
+	// One question, asked of the design and not of the estimate: see `burnsNothing` in
+	// `$lib/design.svelte`. It used to be `estimate.parts === 0` here and
+	// `elements.length === 0` in the top bar, and on a bed with every layer switched off
+	// the bar said "ready" while this panel said "nothing". Asking the design also
+	// settles what the comment below used to guard against — there is no recalculation
+	// that could briefly undo the verdict.
+	let empty = $derived(nothingBurns);
 
 	/**
 	 * The phase, from one source (`jobPhase` in `$lib/api.ts`).
@@ -916,7 +925,7 @@
 				{#if paused}
 					<button
 						class="btn primary"
-						disabled={!actions?.resume || blocked}
+						disabled={!transportAllowed('resume', { able: actions, phase, blocked })}
 						title="{blockedReason ?? t('job.pause.keepGoing')} · {PAUSE_KEY}"
 						onclick={() => control.resume()}
 					>{t('job.resume')}</button>
@@ -927,7 +936,7 @@
 					     command; it lands the moment the machine starts. -->
 					<button
 						class="btn"
-						disabled={!actions?.pause || !busyWithWork || blocked}
+						disabled={!transportAllowed('pause', { able: actions, phase, blocked })}
 						title={busyWithWork
 							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}`
 							: t('transport.pause.nothing')}

@@ -433,6 +433,40 @@ export function jobBusy(phase: JobPhase): boolean {
 }
 
 /**
+ * May this transport command be offered right now?
+ *
+ * Four surfaces asked this in four ways. The page asked the capabilities and the
+ * token; the Job panel asked the capabilities, the phase and its own `blocked`; the
+ * phone asked whether a job existed, the token and the connection — and never the
+ * capabilities, so a driver that cannot pause still got a pause button on the phone.
+ * The status bar kept a fourth copy that its template no longer read at all.
+ *
+ * `blocked` is what each surface already knows about itself: no token, no connection,
+ * a refusal on its way. The rest is the same everywhere.
+ *
+ * Stopping is deliberately the odd one out: it stays allowed as long as the machine
+ * can do it, whatever the phase says. If our reading of the phase is wrong, that must
+ * not be what costs somebody the emergency stop.
+ */
+export function transportAllowed(
+	what: 'pause' | 'resume' | 'stop',
+	{
+		able,
+		phase,
+		blocked
+	}: {
+		able: { pause: boolean; resume: boolean; stop: boolean } | undefined;
+		phase: JobPhase;
+		blocked: boolean;
+	}
+): boolean {
+	if (!able?.[what] || blocked) return false;
+	if (what === 'stop') return true;
+	if (what === 'resume') return phase === 'paused';
+	return jobBusy(phase) && phase !== 'paused';
+}
+
+/**
  * May the app take you away from the work area right now?
  *
  * The stop button and its shortcut hang on the top bar, and the top bar is the work

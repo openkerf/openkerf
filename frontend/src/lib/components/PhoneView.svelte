@@ -25,6 +25,8 @@
 		jobLabel,
 		remainingSeconds,
 		machineStateLabel,
+		jobPhase,
+		transportAllowed,
 		type Device,
 		type GridAxis,
 		type Job,
@@ -88,6 +90,13 @@
 	 * things about one job.
 	 */
 	let quiet = $derived(machineState === 'paused');
+	/**
+	 * The phase, from the same function the desktop uses.
+	 *
+	 * Only for the transport buttons below: this screen shows its own words for what
+	 * is happening, but whether pausing is possible may not be a second opinion.
+	 */
+	let phase = $derived(jobPhase(device, current, design ? design.burnsNothing : false));
 
 	/**
 	 * The pause button has to do something you can see.
@@ -866,7 +875,18 @@
 					{t('phone.resume')}
 				</button>
 			{:else}
-				<button class="brake pause" disabled={!current || control.needsToken || !connected} onclick={pauzeer}>
+				<!-- The same question the desktop asks — `transportAllowed` in `$lib/api`.
+				     This button used never to look at the capabilities, so a driver that
+				     cannot pause was offered a pause here and nowhere else. -->
+				<button
+					class="brake pause"
+					disabled={!transportAllowed('pause', {
+						able: control.capabilities?.actions,
+						phase,
+						blocked: control.needsToken || !connected
+					})}
+					onclick={pauzeer}
+				>
 					{pauzeGevraagd ? t('phone.pausing') : t('job.pause')}
 				</button>
 			{/if}

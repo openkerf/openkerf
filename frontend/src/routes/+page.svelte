@@ -2,7 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { jobBusy, jobPhase, machineState, mayLeaveWorkArea } from '$lib/api';
+	import { jobBusy, jobPhase, machineState, mayLeaveWorkArea, transportAllowed } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import {
 		DEFAULT_BRIDGES,
@@ -742,7 +742,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	 * with a machine that does not answer: the bar disabled starting, the panel left it
 	 * on. One function, one answer.
 	 */
-	let phase = $derived(jobPhase(device, status.activeJob, design.isEmpty));
+	let phase = $derived(jobPhase(device, status.activeJob, design.burnsNothing));
 	let workUnderWay = $derived(jobBusy(phase));
 
 	onMount(() => {
@@ -1391,13 +1391,13 @@ import { SeriesStore } from '$lib/series.svelte';
 	canStart={(control.capabilities?.actions.start ?? false) &&
 		!control.needsToken &&
 		!workUnderWay}
-	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
+	canStop={transportAllowed('stop', { able: control.capabilities?.actions, phase, blocked: control.needsToken })}
 	stopArmed={workUnderWay}
-		mayLeave={mayLeaveWorkArea(phase)}
+	mayLeave={mayLeaveWorkArea(phase)}
 	canEdit={canEdit && design.preview === null}
 	{narrow}
-	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
-	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
+	canPause={transportAllowed('pause', { able: control.capabilities?.actions, phase, blocked: control.needsToken })}
+	canResume={transportAllowed('resume', { able: control.capabilities?.actions, phase, blocked: control.needsToken })}
 	paused={phase === 'paused'}
 	onPause={() => control.pause()}
 	onResume={() => control.resume()}
@@ -1668,6 +1668,7 @@ import { SeriesStore } from '$lib/series.svelte';
 					events={status.events}
 					{control}
 					activeJob={status.activeJob}
+					nothingBurns={design.burnsNothing}
 					revision={design.revision}
 					selectedIds={design.selectedIds}
 					bind:preflight

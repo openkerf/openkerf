@@ -14,13 +14,15 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { burnsNothing } from '../src/lib/design.svelte.ts';
 import {
 	jobBusy,
 	jobPhase,
 	jobStatusLabel,
 	mayLeaveWorkArea,
 	phaseBody,
-	phaseTitle
+	phaseTitle,
+	transportAllowed
 } from '../src/lib/api.ts';
 
 function job(over: Record<string, unknown> = {}) {
@@ -132,4 +134,74 @@ test('the route out of the work area closes while the machine is burning', () =>
 	for (const phase of ['idle', 'ready', 'nothing', 'done'] as const) {
 		assert.equal(mayLeaveWorkArea(phase), true, `${phase} kept the user in`);
 	}
+});
+
+test('"nothing to burn" is one question, asked of the design', () => {
+	// The top bar and the Job panel both call `jobPhase`, and the comment above each
+	// call says it is the same source. It was not: the page passed `design.isEmpty`
+	// (`elements.length === 0`) and the panel passed `estimate.parts === 0`. Those two
+	// differ exactly when shapes are lying there that will not burn — every layer
+	// switched off, or everything in a layer that does not go along. The bar then said
+	// "ready" while the panel said "nothing", about one bed.
+	//
+	// `burnsNothing` asks the design itself, so it needs no estimate and cannot flip
+	// while one is being recalculated.
+	const op = (over: Record<string, unknown> = {}) => ({
+		output: true,
+		element_ids: ['a'],
+		...over
+	});
+	assert.equal(burnsNothing([]), true, 'no layers at all');
+	assert.equal(burnsNothing([op({ element_ids: [] })]), true, 'a layer with nothing in it');
+	assert.equal(burnsNothing([op({ output: false })]), true, 'work in a layer that stays behind');
+	assert.equal(burnsNothing([op()]), false, 'work in a layer that burns');
+	assert.equal(
+		burnsNothing([op({ output: false }), op()]),
+		false,
+		'one layer that burns is enough'
+	);
+});
+
+test('may I pause, resume or stop — one answer for four surfaces', () => {
+	// Four formulas for this existed. `+page.svelte` asked the capabilities and the
+	// token; `JobControls` asked the capabilities, the phase and its own `blocked`;
+	// `PhoneView` asked whether there was a job, the token and the connection — and not
+	// the capabilities at all, so a driver that cannot pause was offered a pause button
+	// on the phone. `StatusBar` had a fourth that the template never read.
+	//
+	// The three questions differ in exactly one way, and it is worth writing down:
+	// stopping stays allowed wherever the machine can do it. If our reading of the
+	// phase is wrong you must not lose the emergency stop over it.
+	const able = { pause: true, resume: true, stop: true };
+	assert.equal(transportAllowed('pause', { able, phase: 'burning', blocked: false }), true);
+	assert.equal(
+		transportAllowed('pause', { able, phase: 'ready', blocked: false }),
+		false,
+		'nothing is running, so there is nothing to pause'
+	);
+	assert.equal(
+		transportAllowed('pause', { able, phase: 'paused', blocked: false }),
+		false,
+		'already paused'
+	);
+	assert.equal(
+		transportAllowed('pause', { able: { ...able, pause: false }, phase: 'burning', blocked: false }),
+		false,
+		'this driver cannot pause — the phone used not to ask'
+	);
+	assert.equal(transportAllowed('pause', { able, phase: 'burning', blocked: true }), false);
+
+	assert.equal(transportAllowed('resume', { able, phase: 'paused', blocked: false }), true);
+	assert.equal(transportAllowed('resume', { able, phase: 'burning', blocked: false }), false);
+
+	assert.equal(
+		transportAllowed('stop', { able, phase: 'ready', blocked: false }),
+		true,
+		'the stop stays available: a wrong reading of the phase may not cost it'
+	);
+	assert.equal(
+		transportAllowed('stop', { able: { ...able, stop: false }, phase: 'burning', blocked: false }),
+		false,
+		'a machine that cannot be stopped from here must not pretend'
+	);
 });
