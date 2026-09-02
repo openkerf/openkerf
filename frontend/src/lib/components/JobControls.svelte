@@ -804,15 +804,6 @@
 			     warnings in a row of the same colour devalue each other: the routine
 			     check made the real message invisible. Neutral now, and as a list,
 			     because you work down it. -->
-			<div class="pf-check">
-				<span class="pf-head">{t('job.checklist.title')}</span>
-				<ul>
-					<li>{t('job.checklist.lid')}</li>
-					<li>{t('job.checklist.air')}</li>
-					<li>{t('job.checklist.workpiece')}</li>
-				</ul>
-			</div>
-
 			<!--
 				The buttons stick to the bottom of the panel.
 
@@ -825,6 +816,24 @@
 				same button, so it belongs beside it and not three blocks higher.
 			-->
 			<div class="pf-stick">
+				<!-- The checklist travels with the button.
+
+				     It used to stand in the column above this footer, and with four
+				     layers the column is longer than the panel is high: measured at
+				     1440 x 900, "Extraction and air assist on" answered `DIV.pf-stick`
+				     under `elementFromPoint` and "Workpiece is clamped and flat"
+				     answered the start button itself. Three lines to work down, two of
+				     them under the thing you press. Here they cannot be scrolled away
+				     from the button they belong to. -->
+				<div class="pf-check">
+					<span class="pf-head">{t('job.checklist.title')}</span>
+					<ul>
+						<li>{t('job.checklist.lid')}</li>
+						<li>{t('job.checklist.air')}</li>
+						<li>{t('job.checklist.workpiece')}</li>
+					</ul>
+				</div>
+				<div class="pf-actions">
 				{#if preflight}
 					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
 					     no single click burns. The first arms, the second fires — and unlike
@@ -870,6 +879,7 @@
 							>{/if}
 					</button>
 				{/if}
+				</div>
 			</div>
 			{/if}
 		</div>
@@ -1851,18 +1861,31 @@
 		position: sticky;
 		bottom: calc(-1 * var(--space-4));
 		z-index: 2;
+		/* A column now: the checklist above the buttons. Both travel with the footer,
+		   because the three lines are the last thing you read before you press and
+		   they used to scroll out from under the button they belong to. */
 		display: flex;
+		flex-direction: column;
 		gap: var(--space-2);
 		margin: var(--space-3) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
 		padding: var(--space-3) var(--space-4);
 		background: var(--surface-1);
 		border-top: 1px solid var(--line);
 	}
+	.pf-actions {
+		display: flex;
+		gap: var(--space-2);
+	}
+	/* Inside the footer the checklist carries no margin of its own: the footer's gap
+	   already sets the distance to the buttons. */
+	.pf-stick .pf-check {
+		margin: 0;
+	}
 	/* The secondary button keeps its word on one line; the primary gets the rest. With
 	   `flex: 1` on both, "Show frame" broke over two lines and the row became
 	   twee keer zo high. */
-	.pf-stick .btn { flex: none; white-space: nowrap; }
-	.pf-stick .btn.primary { flex: 1; }
+	.pf-actions .btn { flex: none; white-space: nowrap; }
+	.pf-actions .btn.primary { flex: 1; }
 
 	/* The start button says what it is going to do, with the time in it. */
 	.btn.big { min-height: 44px; font-size: var(--text-md); }

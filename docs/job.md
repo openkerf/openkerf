@@ -136,6 +136,12 @@ Three lines under the heading **Run through this**: *Lid closed*, *Extraction an
 air assist on*, *Workpiece is clamped and flat*. There is nothing to tick. A
 checklist you get used to ticking off protects nobody.
 
+It sits in the strip at the bottom of the panel, directly above **Start job**, and
+stays there while the rest of the panel scrolls. It used to stand higher up in the
+column, and with four layers the column is longer than the panel is high: measured
+at 1440 by 900, two of the three lines lay behind that strip — the last one behind
+the start button itself.
+
 ### Nothing to burn
 
 On an empty bed there is no clock, no checklist and no start button — only

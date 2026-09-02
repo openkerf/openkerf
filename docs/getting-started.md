@@ -289,7 +289,8 @@ From top to bottom it holds:
 - a table of the layers with their speed, power, passes and where those numbers
   came from;
 - the list **Run through this**: "Lid closed", "Extraction and air assist on",
-  "Workpiece is clamped and flat".
+  "Workpiece is clamped and flat" — in the strip at the bottom of the panel, above
+  the start button, where it cannot scroll away from it.
 
 Read the source column. A setting that was not measured on a test grid says so,
 and the panel adds it up: "3 layers use settings that were not measured with a
