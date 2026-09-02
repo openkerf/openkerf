@@ -510,7 +510,7 @@
 	-->
 	<AlarmCard {watchdog} large />
 	<header>
-		<span class="dot {machineState}" aria-hidden="true"></span>
+		<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 		<span class="staat"
 			>{connected ? machineStateLabel(machineState) : t('phone.noConnection')}</span
 		>
@@ -747,7 +747,7 @@
 						aria-expanded={bedOpen}
 						onclick={() => (bedOpen = !bedOpen)}
 					>
-						<span class="dot {machineState}" aria-hidden="true"></span>
+						<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 						<span class="name">{t('phone.notBurning')}</span>
 						<span class="state mono">{position}</span>
 						<span class="pijl" aria-hidden="true">{bedOpen ? '▴' : '▾'}</span>
@@ -903,17 +903,11 @@
 	}
 	.staat { font-weight: 600; font-size: var(--text-md); }
 	.machine { margin-left: auto; color: var(--text-2); font-size: var(--text-xs); }
-	.dot { width: 10px; height: 10px; border-radius: var(--radius-dot); background: var(--text-2); }
-	.dot.ready { background: var(--ok); }
-	/* Was `.dot.running`, and that class did not exist: MachineState is called
-	   `busy`. The dot therefore stayed grey while the machine was burning. */
-	.dot.busy { background: var(--accent); }
-	.dot.paused { background: var(--warn-solid); }
-	/* `unplugged` did not exist yet when this dot was written; without a rule it
-	   fell back to grey and a dead port read as "nothing wrong". */
-	.dot.unplugged { background: var(--warn-solid); }
-	.dot.alarm { background: var(--danger-solid); }
-	.dot.unplugged { background: var(--warn-solid); }
+	/* Bigger than in a bar, because this one is read at arm's length. The colours are
+	   shared: `.machinedot` in `tokens.css`. Two earlier repairs live there now — the
+	   class that was called `running` while the state is `busy`, and `unplugged`, which
+	   was missing on the desktop and made a dead port look like nothing at all. */
+	.dot { width: 10px; height: 10px; }
 	.again {
 		display: block;
 		width: 100%;

@@ -269,7 +269,7 @@
 		href={mayLeave ? '/setup' : undefined}
 		title={mayLeave ? machineTitle : t('topbar.machine.busy')}
 	>
-		<span class="dot {machineState}" aria-hidden="true"></span>
+		<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 		<span class="name">{device?.label ?? t('topbar.machine.setup')}</span>
 		<!-- The word beside the state was here for a third time: the status bar in the
 		     bottom right says it in full, and the coloured dot already says it here.
@@ -780,17 +780,12 @@
 	   weigh as much as the name. */
 	.thickness { color: var(--text-2); font-size: var(--text-xs); }
 	.toestand { display: none; }
+	/* Size only. The colour of a state is one rule for the whole app, in
+	   `tokens.css` under `.machinedot`. */
 	.dot {
 		width: 8px;
 		height: 8px;
-		border-radius: var(--radius-dot);
-		flex: none;
-		background: var(--text-2);
 	}
-	.dot.ready { background: var(--ok); }
-	.dot.busy { background: var(--accent); }
-	.dot.paused { background: var(--warn-solid); }
-	.dot.alarm { background: var(--danger-solid); }
 	.spacer { flex: 1; }
 	.btn {
 		display: inline-flex;

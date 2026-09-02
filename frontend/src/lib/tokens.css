@@ -687,3 +687,31 @@ input[type='radio']:focus-visible::before {
 		animation-iteration-count: infinite !important;
 	}
 }
+
+/*
+ * The machine's state, as a colour, once.
+ *
+ * Three surfaces show this dot — the top bar, the status bar and the phone view — and
+ * each kept a list of states by hand. The lists drifted: `unplugged` was amber on the
+ * phone and grey on the desktop for the same dead port, `busy` was written `.running`
+ * in one of them and matched nothing, and the status bar had one of the six. A state
+ * with no rule falls back to grey, which reads as "nothing wrong" — the one thing a
+ * machine state may not say when something is.
+ *
+ * Size stays with the surface (8px in a bar, 10px in your hand); only the meaning is
+ * shared. `tests/machine-dot.test.ts` reads the states out of `MachineState` and
+ * refuses a surface that starts its own list again.
+ */
+.machinedot {
+	border-radius: var(--radius-dot);
+	flex: none;
+	/* Offline is grey on purpose: there is no machine to report on. Every other state
+	   below says something, and says it in colour. */
+	background: var(--text-2);
+}
+.machinedot.offline { background: var(--text-2); }
+.machinedot.unplugged { background: var(--warn-solid); }
+.machinedot.ready { background: var(--ok); }
+.machinedot.busy { background: var(--accent); }
+.machinedot.paused { background: var(--warn-solid); }
+.machinedot.alarm { background: var(--danger-solid); }
