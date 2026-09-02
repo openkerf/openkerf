@@ -280,6 +280,10 @@ export const nl: Catalogue = {
 		other: 'Er komen {n} bruggen in.'
 	},
 	'stencil.crossing': 'De kortste brug moet {mm} overbruggen — dat is de dikte van het materiaal op zijn smalst.',
+	'stencil.unbridged': {
+		one: 'Eén eiland is te klein voor een brug van deze breedte en valt eruit. Probeer een smallere brug.',
+		other: '{n} eilanden zijn te klein voor een brug van deze breedte en vallen eruit. Probeer een smallere brug.'
+	},
 	'stencil.wide': 'De brug is breder dan de opening die hij overspant, dus hij wordt eerder een blok dan een brug.',
 	'stencil.bridge': 'Brugbreedte',
 	'stencil.per': 'Bruggen per eiland',

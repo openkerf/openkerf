@@ -422,6 +422,20 @@ same way: the path is replaced, one undo puts it back, and what you see on the b
 the machine cuts. Bridges the shape already carried disappear with it, because the gaps are
 in the path now and applying both would take them out twice.
 
+**One thing a bridge cannot be, and where the app says so.** A gap has to fit inside the
+contour it sits on, because the engine's gap machinery measures along the whole path of a
+shape and wraps at its end — it has no notion of a separate contour. A gap centred a
+millimetre and a half from the end of one contour therefore spills onto the next one, and in
+a word the next contour is the next letter: the crossing cut is then drawn across the word
+and a nick is taken out of a letter that was never part of the bridge. So a bridge keeps one
+bridge width clear of both ends of its contour, and a counter smaller than about two bridge
+widths has nowhere to put one. When that happens the window says it, because it is the one
+fault here that cannot be seen on the drawing — the shape looks finished and the island
+still drops out:
+
+> One island is too small for a bridge of this width and will fall out. Try a narrower
+> bridge.
+
 **When it goes wrong.**
 
 - A single-stroke typeface has no inside, so nothing in it can fall out and there is nothing

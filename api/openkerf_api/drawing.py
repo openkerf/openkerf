@@ -945,6 +945,11 @@ class Drawing:
             # decides whether the setting is sane: on 40 mm Arial the stroke of an 'O' is
             # 3.2 mm, so a 3 mm bridge is very nearly the whole thickness of the letter.
             "shortest_mm": plan["shortest_mm"],
+            # An island that got no bridge falls out, and that is the one thing here that
+            # cannot be seen on the drawing: the shape looks finished. A gap has to fit
+            # inside its own contour (see `stencil._room`), so a counter smaller than about
+            # two bridge widths has nowhere to put one.
+            "unbridged": plan["unbridged"],
         }
         if preview:
             return answer

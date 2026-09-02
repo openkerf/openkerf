@@ -109,17 +109,19 @@ def _walk(geom, indices: list[int]):
     """
     Points along one contour, each with where it came from.
 
-    Returns `(points, places)` where `places[i]` is `(segment index, t)` for `points[i]`.
-    Keeping the provenance is the point: a crossing found here has to become a percentage
-    along the whole path, and going back from a bare coordinate would mean searching for it.
+    Returns `(points, places, along, length)`: the point, its `(segment index, t)`, how far
+    it lies along *this contour*, and how long the contour is. The provenance is needed to
+    turn a crossing into a percentage of the whole path; the distance along the contour is
+    needed to keep a gap off the contour's own seam — see `_crossings`.
     """
     lengths = [abs(float(geom.length(i))) for i in indices]
     lengths = [value if math.isfinite(value) else 0.0 for value in lengths]
     total = sum(lengths)
     if total <= 0:
-        return [], []
-    per = max(2, int(SAMPLES * 1))
-    points, places = [], []
+        return [], [], [], 0.0
+    per = max(2, int(SAMPLES))
+    points, places, along = [], [], []
+    walked = 0.0
     for index, length in zip(indices, lengths):
         if length <= 0:
             continue
@@ -130,7 +132,9 @@ def _walk(geom, indices: list[int]):
             t = step / count
             points.append(geom.position(index, t))
             places.append((index, t))
-    return points, places
+            along.append(walked + t * length)
+        walked += length
+    return points, places, along, total
 
 
 def _closed(points) -> bool:
@@ -149,7 +153,7 @@ def contours(geom) -> list[dict]:
     """
     found = []
     for indices in _subpaths(geom):
-        points, places = _walk(geom, indices)
+        points, places, along, length = _walk(geom, indices)
         if len(points) < 3:
             continue
         found.append(
@@ -157,6 +161,8 @@ def contours(geom) -> list[dict]:
                 "indices": indices,
                 "points": points,
                 "places": places,
+                "along": along,
+                "length": length,
                 "closed": _closed(points + [geom.position(indices[-1], 1.0)]),
             }
         )
@@ -210,20 +216,47 @@ def _percent(before, rulers, total, place) -> float:
     return max(0.0, min(100.0, 100.0 * along / total))
 
 
-def _crossings(island: dict, parent: dict, count: int) -> list[tuple]:
+def _room(contour: dict, index: int, keep_out: float) -> bool:
+    """
+    Does a gap centred on this sample fit inside the contour it belongs to?
+
+    It has to, and this is the reason: the engine's gap machinery measures along the *whole*
+    path of a shape and wraps at its end, with no notion of a subpath. A gap centred 1.5 mm
+    from the end of one contour therefore spills onto the next one — on a word, that is the
+    next letter. Measured on "Bo88ie" at 50 mm before this check existed: five of the
+    sixteen bridges had an end outside their own contour, which drew crossing cuts of 19.5
+    to 32.5 mm straight across the word (the honest ones are 3.6 to 5.5 mm, the stroke
+    width) and nicked 1.5 mm out of a neighbouring letter's outline.
+
+    The cost is a forbidden strip one bridge wide at each end of a contour. On the counter of
+    an O — 48 mm round, with a 3 mm bridge — that is six per cent of the choices, and the
+    seam of a closed contour is not a place a bridge has to be.
+    """
+    along = contour["along"][index]
+    return keep_out <= along <= contour["length"] - keep_out
+
+
+def _crossings(island: dict, parent: dict, count: int, keep_out: float = 0.0) -> list[tuple]:
     """
     Where to bridge: the shortest crossings from the island to the contour around it.
 
     Shortest, because the bridge spans the opening and a short bridge wastes less of the
-    paint edge. Spread, because the two shortest are usually neighbours — see `APART`.
+    paint edge. Spread, because the two shortest are usually neighbours — see `APART`. And
+    both ends have to have room for the gap inside their own contour — see `_room`.
     """
     pairs = []
     for i, point in enumerate(island["points"]):
+        if keep_out and not _room(island, i, keep_out):
+            continue
         best = None
         for j, other in enumerate(parent["points"]):
+            if keep_out and not _room(parent, j, keep_out):
+                continue
             gap = abs(point - other)
             if best is None or gap < best[0]:
                 best = (gap, j)
+        if best is None:
+            continue
         pairs.append((best[0], i, best[1]))
     pairs.sort()
 
@@ -244,54 +277,20 @@ def _crossings(island: dict, parent: dict, count: int) -> list[tuple]:
 
 def plan_stencil(geom, bridge_mm: float, per_island: int, units_per_mm: float) -> dict:
     """
-    The bridge positions for one shape, as percentages along its whole path.
+    One shape's bridge positions — `plan_many` with a selection of one.
 
-    Everything is measured here and nothing is drawn: the caller hands the positions to the
-    same node attributes the ordinary bridges use, so the plan, the burn time and the RD
-    stream come out of the engine as they always did.
+    It was a second implementation of the same arithmetic, and it drifted the moment
+    `plan_many` learned to keep a gap off its contour's seam: the same word came back with
+    crossing cuts across it here and correct ones there. Written twice, they drift; so this
+    is a wrapper, and the fields it hands back are the ones its callers read.
     """
-    found = contours(geom)
-    loose = islands(found)
-    open_ones = [c for c in found if not c["closed"]]
-
-    if not found:
-        return {"islands": 0, "bridges": 0, "positions": [], "open_contours": 0, "shortest_mm": None}
-
-    before, rulers, total = _cumulative(geom)
-    positions: list[float] = []
-    pairs: list[tuple[float, float]] = []
-    shortest = None
-    bridged = 0
-    for index in loose:
-        island = found[index]
-        parent = found[island["parent"]] if island["parent"] is not None else None
-        if parent is None:
-            continue
-        for gap, i, j in _crossings(island, parent, per_island):
-            here = _percent(before, rulers, total, island["places"][i])
-            there = _percent(before, rulers, total, parent["places"][j])
-            positions.extend((here, there))
-            # Kept as a pair, and not only as two numbers in a list: the two crossing cuts
-            # of a bridge join *these* two gaps, and a sorted list of positions no longer
-            # says which gap belongs to which.
-            pairs.append((here, there))
-            bridged += 1
-            span = gap / units_per_mm
-            shortest = span if shortest is None else min(shortest, span)
-
-    # Plain floats: `round()` on a numpy scalar hands back a numpy scalar, and one of those
-    # in the answer is a 500 from the JSON encoder rather than a number.
-    positions = sorted(float(round(float(value), 6)) for value in positions)
+    plan = plan_many([("one", geom)], bridge_mm, per_island, units_per_mm)
+    total = path_length(geom)
     return {
-        "islands": len(loose),
-        "bridges": bridged,
-        "positions": positions[:MAX_COUNT],
-        "pairs": pairs,
-        "open_contours": len(open_ones),
-        "contours": len(found),
-        "shortest_mm": None if shortest is None else round(shortest, 3),
-        "bridge_mm": bridge_mm,
-        "length_mm": round(total / units_per_mm, 3),
+        **plan,
+        "positions": plan["per_shape"].get("one") or [],
+        "pairs": [(here, there) for _k, here, _p, there in plan.get("crossings", [])],
+        "length_mm": round(total / units_per_mm, 3) if total else 0.0,
     }
 
 
@@ -343,12 +342,20 @@ def plan_many(shapes, bridge_mm: float, per_island: int, units_per_mm: float) ->
     crossings: list[tuple] = []
     shortest = None
     bridged = 0
+    unbridged = 0
+    keep_out = bridge_mm * units_per_mm
     for index in loose:
         island = tagged[index]
         if island["parent"] is None:
+            unbridged += 1
             continue
         parent = tagged[island["parent"]]
-        for gap, i, j in _crossings(island, parent, per_island):
+        chosen = _crossings(island, parent, per_island, keep_out)
+        if not chosen:
+            # An island that gets no bridge falls out, and saying nothing about it is how a
+            # stencil comes off the machine in pieces.
+            unbridged += 1
+        for gap, i, j in chosen:
             i_before, i_ruler, i_total = rulers[island["key"]]
             p_before, p_ruler, p_total = rulers[parent["key"]]
             here = _percent(i_before, i_ruler, i_total, island["places"][i])
@@ -363,6 +370,7 @@ def plan_many(shapes, bridge_mm: float, per_island: int, units_per_mm: float) ->
     return {
         "islands": len(loose),
         "bridges": bridged,
+        "unbridged": unbridged,
         "per_shape": {
             key: sorted(float(round(float(v), 6)) for v in values)[:MAX_COUNT]
             for key, values in per_shape.items()

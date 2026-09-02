@@ -20,6 +20,7 @@
 		bridges: number;
 		shortest_mm: number | null;
 		skipped: number;
+		unbridged: number;
 	};
 
 	let {
@@ -87,6 +88,12 @@
 			     value that does *not* go through `Intl`, so a crossing named `n` would
 			     print 3.594 to a reader whose canvas writes 3,594 everywhere else. -->
 			<p class="hint">{t('stencil.crossing', { mm: i18n.mm(report.shortest_mm) })}</p>
+		{/if}
+		{#if report.unbridged}
+			<!-- The one thing here that cannot be seen on the drawing: the shape looks
+			     finished and that island still drops out. A narrower bridge is the way out,
+			     because a gap has to fit inside the contour it sits on. -->
+			<p class="hint warn">{t('stencil.unbridged', { n: report.unbridged })}</p>
 		{/if}
 		{#if tight}
 			<p class="hint warn">{t('stencil.wide')}</p>

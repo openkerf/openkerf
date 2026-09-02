@@ -290,6 +290,10 @@ export const en = {
 		other: '{n} bridges go in.'
 	},
 	'stencil.crossing': 'The shortest bridge has to span {mm} — that is the thickness of the material at its narrowest.',
+	'stencil.unbridged': {
+		one: 'One island is too small for a bridge of this width and will fall out. Try a narrower bridge.',
+		other: '{n} islands are too small for a bridge of this width and will fall out. Try a narrower bridge.'
+	},
 	'stencil.wide': 'The bridge is wider than the gap it spans, so it will look like a solid block rather than a bridge.',
 	'stencil.bridge': 'Bridge width',
 	'stencil.per': 'Bridges per island',

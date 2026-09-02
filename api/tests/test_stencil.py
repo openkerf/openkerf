@@ -336,3 +336,91 @@ def test_the_stencil_lands_on_the_shape_and_the_preview_does_not(client, kernel)
         f"the contour changed by {grew:+.1f} mm; 40 mm of gaps out and sixteen crossings "
         "in should leave it about 10 mm longer"
     )
+
+
+@pytest.mark.skipif(not has_arial(), reason="no outline typeface on this machine")
+def test_no_crossing_cut_runs_across_the_word(client, kernel):
+    """
+    Found by the user on "Bo88ie": five cuts ran diagonally across the whole word.
+
+    A gap is centred on its position, and the engine's gap machinery measures along the
+    *whole* path of a shape and wraps at its end — it has no notion of a subpath. So a gap
+    centred a millimetre and a half from the end of one contour spills onto the next, and on
+    a word the next contour is the next letter. Two damages from one cause: the end of the
+    gap lands on that letter, so the crossing cut is drawn 30 mm across the word, and 1.5 mm
+    is nicked out of that letter's own outline.
+
+    Measured on "Bo88ie" at 50 mm before the fix: 27 of the 32 crossing cuts were 3.6 to
+    5.5 mm — the stroke width, honest — and five were 19.5, 30.4, 30.6, 32.1 and 32.5 mm.
+    Exactly five gaps had an end outside their own contour.
+
+    What this pins is the property, not the five numbers: no crossing cut may be much longer
+    than the crossings the plan reports. A stencil bridge spans the stroke of a letter, and
+    nothing in a word is thirty millimetres of stroke.
+    """
+    from meerk40t.core.geomstr import TYPE_END
+    from meerk40t.core.units import UNITS_PER_MM
+
+    from openkerf_api.bridges import bridged_geometry
+    from openkerf_api.stencil import plan_many, stencil_paths
+
+    _node, geometry = lettering(client, kernel, "Bo88ie", size=50)
+    plan = plan_many([("one", geometry)], 3.0, 2, UNITS_PER_MM)
+    assert plan["islands"] == 8, "the B, both eights and the o and e carry the islands"
+    assert plan["bridges"] == 16
+    assert plan["unbridged"] == 0, "an island with no bridge falls out"
+
+    gapped = bridged_geometry(geometry, plan["per_shape"]["one"], 3.0 * UNITS_PER_MM)
+    whole = stencil_paths([("one", geometry)], plan, 3.0 * UNITS_PER_MM)["one"]
+    crossings = []
+    for index in range(gapped.index, whole.index):
+        if int(whole.segments[index][2].real) == TYPE_END:
+            continue
+        a, b = whole.segments[index][0], whole.segments[index][4]
+        crossings.append(abs(a - b) / UNITS_PER_MM)
+
+    assert len(crossings) == 2 * plan["bridges"]
+    worst = max(crossings)
+    assert worst < plan["shortest_mm"] * 3, (
+        f"the longest crossing cut is {worst:.1f} mm where the shortest crossing is "
+        f"{plan['shortest_mm']} mm: a gap has spilled off its own contour and the cut runs "
+        "to another letter"
+    )
+
+
+@pytest.mark.skipif(not has_arial(), reason="no outline typeface on this machine")
+def test_a_gap_stays_inside_the_contour_it_belongs_to(client, kernel):
+    """
+    The same fault measured at its source, so a change in the engine's gap machinery cannot
+    quietly bring it back.
+
+    Every gap has to sit far enough from the ends of its own contour for its whole width to
+    fit, because a gap that straddles the seam is removed from two contours at once.
+    """
+    from meerk40t.core.units import UNITS_PER_MM
+
+    from openkerf_api.bridges import path_length
+    from openkerf_api.stencil import _cumulative, plan_many
+
+    _node, geometry = lettering(client, kernel, "Bo88ie", size=50)
+    plan = plan_many([("one", geometry)], 3.0, 2, UNITS_PER_MM)
+
+    total = path_length(geometry)
+    before, rulers, _ = _cumulative(geometry)
+    spans = []
+    for contour in contours(geometry):
+        low = min(before[i] for i in contour["indices"])
+        high = max(before[i] + rulers[i].length for i in contour["indices"])
+        spans.append((low, high))
+
+    half = 3.0 * UNITS_PER_MM / 2.0
+    for position in plan["per_shape"]["one"]:
+        at = position / 100.0 * total
+        owner = next(((low, high) for low, high in spans if low <= at <= high), None)
+        assert owner, f"a gap at {position:.2f}% belongs to no contour"
+        low, high = owner
+        assert low <= at - half and at + half <= high, (
+            f"a gap at {(at / UNITS_PER_MM):.1f} mm runs from "
+            f"{((at - half) / UNITS_PER_MM):.1f} to {((at + half) / UNITS_PER_MM):.1f} mm, "
+            f"outside its own contour ({low / UNITS_PER_MM:.1f} to {high / UNITS_PER_MM:.1f})"
+        )

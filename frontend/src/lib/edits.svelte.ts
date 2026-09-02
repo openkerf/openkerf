@@ -449,6 +449,8 @@ export class EditController {
 		bridges: number;
 		shortest_mm: number | null;
 		skipped: number;
+		/** Islands with nowhere to put a bridge of this width. They fall out. */
+		unbridged: number;
 	} | null> {
 		if (!preview) this.busy = true;
 		this.error = null;
