@@ -715,3 +715,19 @@ input[type='radio']:focus-visible::before {
 .machinedot.busy { background: var(--accent); }
 .machinedot.paused { background: var(--warn-solid); }
 .machinedot.alarm { background: var(--danger-solid); }
+
+/*
+ * A refusal in a window.
+ *
+ * The stencil window wore `class="notice failure"` and defined neither, so the one
+ * sentence saying the thing cannot be done was measured at `rgb(27, 31, 36)` — the
+ * colour of the explanation above it, in light and in dark. Its neighbours colour
+ * theirs with `--danger`, each from a copy of its own: eight components define an
+ * `.error` of their own today, three of them byte for byte the same. This is the one
+ * they can move to; until they do, their own rule wins and nothing changes for them.
+ */
+.refusal {
+	margin: 0 0 var(--space-2);
+	font-size: var(--text-xs);
+	color: var(--danger);
+}

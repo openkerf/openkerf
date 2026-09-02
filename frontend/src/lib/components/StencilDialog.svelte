@@ -77,7 +77,7 @@
 	<p class="why">{t('stencil.why')}</p>
 
 	{#if error}
-		<p class="notice failure" role="alert">{error}</p>
+		<p class="refusal" role="alert">{error}</p>
 	{:else if report}
 		<p class="found" role="status">
 			{t('stencil.found.islands', { n: report.islands })}
