@@ -12,7 +12,7 @@
 	 * palette knows what you last did, a preset knows what has been burned. Hence
 	 * it says "remembered", never "verified".
 	 */
-	import { inkOn, LAYER_COLORS, type DesignStore } from '$lib/design.svelte';
+	import { inkOn, LAYER_COLORS, stripColours, type DesignStore } from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 
@@ -31,8 +31,11 @@
 	/** Where the pointer or the keyboard is now; otherwise the active colour. */
 	let pointed = $state<string | null>(null);
 
+	// The palette, plus every layer colour it does not know: see `stripColours`. A
+	// layer whose colour comes from an imported file had no swatch here, while the
+	// swatches beside it were carrying layer numbers and speeds.
 	let colours = $derived(
-		(design.palette?.colors.map((c) => c.color) ?? LAYER_COLORS).map((c) => c.toLowerCase())
+		stripColours(design.palette?.colors.map((c) => c.color) ?? LAYER_COLORS, design.operations)
 	);
 	let active = $derived((design.palette?.default_color ?? '').toLowerCase());
 	let shown = $derived(pointed ?? active ?? null);

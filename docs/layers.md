@@ -85,6 +85,11 @@ There are four ways, and they are not the same verb.
   colour: those shapes move to the layer of that colour, and out of the layers
   they were in. Without a selection the same click sets the colour for what you
   draw next.
+
+  The strip is the ten palette colours, and behind them any layer colour that is
+  not one of the ten — a file you import brings its own colours along. Those extra
+  swatches sit at the end, so a layer in an imported colour keeps its own swatch
+  with its layer number on it, and the ten stay where you learned them.
 - **The row itself.** With something selected, every layer row grows an **into
   this** button at the end of its value line. A tick means the whole selection is
   already in that layer, a dash means part of it. Clicking adds, clicking again

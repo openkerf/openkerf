@@ -329,6 +329,34 @@ export function burnsNothing(
 	return !operations.some((op) => op.output && op.element_ids.length > 0);
 }
 
+/**
+ * The colours the strip under the canvas shows.
+ *
+ * The palette first, in its own order — those ten are what you draw in — and behind
+ * it every layer colour the palette does not know. An imported SVG brings its own
+ * colours, and a layer in one of those had no swatch at all while the swatches beside
+ * it were carrying layer numbers and speeds. A strip that says which layer it is
+ * about may not leave a layer out.
+ *
+ * The cells of a test grid are left out on purpose: they are layers in the engine,
+ * but not layers you draw in.
+ */
+export function stripColours(
+	palette: string[],
+	operations: { color?: string | null; grid?: unknown }[]
+): string[] {
+	const shown = palette.map((c) => c.trim().toLowerCase());
+	const seen = new Set(shown);
+	for (const op of operations) {
+		if (op.grid) continue;
+		const colour = (op.color ?? '').trim().toLowerCase();
+		if (!colour || seen.has(colour)) continue;
+		seen.add(colour);
+		shown.push(colour);
+	}
+	return shown;
+}
+
 export function inkOn(colour: string): string {
 	const own = parseColour(colour);
 	if (!own) return 'var(--on-color)';
