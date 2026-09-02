@@ -982,6 +982,11 @@ export const en = {
 	'notify.permission.default': 'The browser has not been asked yet.',
 	'notify.permission.granted': 'The browser may show notifications.',
 	'notify.permission.denied': 'The browser blocks notifications for this site.',
+	// The same three states as a chip, for the phone: the whole sentence above does not
+	// fit beside a title, and a word that is also a CSS class cannot be translated.
+	'notify.state.on': 'On',
+	'notify.state.off': 'Off',
+	'notify.state.blocked': 'Blocked',
 	'notify.refused': 'The browser refused to show the notification. With an installed app it often helps to open it again.',
 	'notify.test.title': 'Test notification',
 	'notify.test.body': 'This is what a notification looks like. Done or fault arrives the same way.',
@@ -1418,7 +1423,7 @@ export const en = {
 	'grid.step.photograph': 'Photograph',
 	'grid.step.bestCell': 'Best square → preset',
 	'grid.needsToken': 'Generating a test grid requires a token.',
-	'grid.lead': 'You burn a board of squares: {columns} increases to the right, {rows} downwards. Afterwards you photograph the board — with a phone beside the machine is fine — and tap the square that turned out best. OpenKerf makes a preset out of that.',
+	'grid.lead': 'You burn a board of squares: {columns}, {rows}. Afterwards you photograph the board — with a phone beside the machine is fine — and tap the square that turned out best. OpenKerf makes a preset out of that.',
 	'grid.lead.right': '{axis} increases to the right',
 	'grid.lead.down': '{axis} downwards',
 	'grid.recipe': 'Recipe',

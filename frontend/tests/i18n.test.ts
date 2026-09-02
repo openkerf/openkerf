@@ -93,7 +93,7 @@ test('every key is used somewhere', () => {
 	// their keys never appear as a literal. Those are listed here by prefix, and the
 	// prefix itself has to be built somewhere, otherwise a whole family could go
 	// unnoticed.
-	const DYNAMIC = ['machine.state.', 'machine.hint.', 'job.phase.', 'axis.', 'panel.type.', 'notify.permission.', 'count.'];
+	const DYNAMIC = ['machine.state.', 'machine.hint.', 'job.phase.', 'axis.', 'panel.type.', 'notify.permission.', 'notify.state.', 'count.'];
 	for (const prefix of DYNAMIC)
 		assert.ok(CODE.includes(`${prefix}$`), `nothing composes ${prefix}… any more — drop it here`);
 	const unused = Object.keys(en).filter(
@@ -199,6 +199,25 @@ test('no message is half a sentence', () => {
 			assert.ok(
 				!/^\s|\s$/.test(text),
 				`${key} starts or ends with whitespace ("${text}") — that is layout, not text`
+			);
+		}
+	}
+});
+
+test('a message that is filled with another message does not say its words twice', () => {
+	// `TestGrid` fills {columns} and {rows} of `grid.lead` with `grid.lead.right` and
+	// `grid.lead.down`, so the direction lives in those two fragments. A frame that
+	// carries the direction as well says it twice, and nothing in the types or in the
+	// other tests can see that: both halves are valid sentences on their own.
+	// Measured on the first screen of the test-grid window: "power increases to the
+	// right increases to the right, speed downwards downwards".
+	for (const [name, catalogue] of Object.entries({ en, ...TRANSLATIONS })) {
+		const frame = String(catalogue['grid.lead']);
+		for (const part of ['grid.lead.right', 'grid.lead.down']) {
+			const words = String(catalogue[part]).replace('{axis}', '').trim();
+			assert.ok(
+				!frame.includes(words),
+				`${name}: ${part} already says "${words}", and grid.lead says it again`
 			);
 		}
 	}
@@ -429,6 +448,26 @@ test('a label the interface reads follows a language switch', async () => {
 	bindLanguage(() => 'en');
 	assert.notEqual(dutch.text, english.text, 'the badge did not follow the language');
 	assert.notEqual(dutch.means, english.means, 'the explanation did not follow the language');
+});
+
+test('the notification state says its word in the reader’s language', async () => {
+	// Measured on the phone view at 390 wide with the app in English: the chip beside
+	// "Notifications" read "geblokkeerd". `PhoneView` chose between 'geblokkeerd', 'aan'
+	// and 'uit' itself and used that same value as a CSS class, so the word could not be
+	// translated without breaking the styling. The desktop said a whole sentence through
+	// `permissionText()` at the same moment. One state, two surfaces, one function.
+	const { bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const { notifyState } = await import('../src/lib/notifications.svelte.ts');
+	bindLanguage(() => 'en');
+	const english = notifyState('denied', false);
+	bindLanguage(() => 'nl');
+	const dutch = notifyState('denied', false);
+	bindLanguage(() => 'en');
+	assert.equal(english.name, 'blocked', 'the class name is not a word on screen');
+	assert.equal(dutch.name, english.name, 'the class name followed the language');
+	assert.notEqual(dutch.text, english.text, 'the word on screen did not follow the language');
+	assert.equal(notifyState('granted', true).name, 'on');
+	assert.equal(notifyState('granted', false).name, 'off');
 });
 
 test('no message is resolved once and kept', () => {
