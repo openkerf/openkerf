@@ -13,7 +13,7 @@
 	 * it says "remembered", never "verified".
 	 */
 	import { inkOn, LAYER_COLORS, type DesignStore } from '$lib/design.svelte';
-	import { t } from '$lib/i18n/index.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 
 	let {
@@ -50,11 +50,11 @@
 		const found = layerOf(colour);
 		if (found?.op.speed != null) {
 			const power = found.op.power == null ? null : Math.round(found.op.power / 10);
-			return `${found.op.speed} mm/s${power == null ? '' : ` · ${power}%`}`;
+			return `${i18n.number(found.op.speed)} mm/s${power == null ? '' : ` · ${power}%`}`;
 		}
 		const remembered = design.memoryFor(colour);
 		if (!remembered?.speed_mm_s) return null;
-		return `${remembered.speed_mm_s} mm/s${
+		return `${i18n.number(remembered.speed_mm_s)} mm/s${
 			remembered.power_percent == null ? '' : ` · ${Math.round(remembered.power_percent)}%`
 		}`;
 	}

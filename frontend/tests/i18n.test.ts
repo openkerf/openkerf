@@ -470,6 +470,22 @@ test('the notification state says its word in the reader’s language', async ()
 	assert.equal(notifyState('granted', false).name, 'off');
 });
 
+test('a measurement on screen is written the way the reader writes numbers', async () => {
+	// `formatMm` was `value.toFixed(1)` — an English full stop, whatever the language.
+	// It feeds the head position and the mouse position in the status bar, so with the
+	// app in Dutch the bar read "241.2, 108.4 mm" ten pixels away from a top bar
+	// saying "3,5mm". A laser user reads that number off the screen and types it into a
+	// machine; 3,5 against 3.5 is two different values.
+	const { bindLanguage } = await import('../src/lib/i18n/core.ts');
+	const { formatMm } = await import('../src/lib/api.ts');
+	bindLanguage(() => 'en');
+	assert.equal(formatMm(241.24), '241.2');
+	bindLanguage(() => 'nl');
+	assert.equal(formatMm(241.24), '241,2');
+	bindLanguage(() => 'en');
+	assert.equal(formatMm(null), '—');
+});
+
 test('no message is resolved once and kept', () => {
 	// The general form of the bug above, so the next one is caught where it is written
 	// rather than in a browser: a module-level `const` whose value calls `t()` freezes

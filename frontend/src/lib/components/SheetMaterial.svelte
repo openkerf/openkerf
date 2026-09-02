@@ -69,7 +69,7 @@
 	<p class="hint">
 		{t('sheetMat.applies', {
 			sheet: sheet.name,
-			size: `${sheet.width_mm} × ${sheet.height_mm} mm`
+			size: `${i18n.number(sheet.width_mm)} × ${i18n.number(sheet.height_mm)} mm`
 		})}
 	</p>
 

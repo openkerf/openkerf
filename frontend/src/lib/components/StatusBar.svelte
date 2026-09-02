@@ -193,7 +193,7 @@
 	<span class="what pointerpart">{t('status.mouse')}</span>
 	<span class="pointer pointerpart">
 		{#if pointerMm}
-			<b>{pointerMm.x.toFixed(1)}</b>, <b>{pointerMm.y.toFixed(1)}</b> mm
+			<b>{formatMm(pointerMm.x)}</b>, <b>{formatMm(pointerMm.y)}</b> mm
 		{:else}
 			—
 		{/if}

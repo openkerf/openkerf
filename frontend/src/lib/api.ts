@@ -1,4 +1,4 @@
-import { t, type MessageKey } from './i18n/core.ts';
+import { number, t, type MessageKey } from './i18n/core.ts';
 /** Types mirroring the openkerf-api snapshot (api/openkerf_api/status.py). */
 
 import type { TileRun } from './tiling.svelte';
@@ -499,9 +499,17 @@ export function machineStateHint(state: MachineState): string | undefined {
 	return undefined;
 }
 
+/**
+ * A measurement without its unit, in the reader's notation.
+ *
+ * `toFixed(1)` wrote an English full stop whatever the language, and this feeds the
+ * head position and the mouse position in the status bar: with the app in Dutch the
+ * bar read "241.2, 108.4 mm" ten pixels from a top bar saying "3,5mm". Somebody at a
+ * laser reads that off the screen and types it into a machine.
+ */
 export function formatMm(value: number | null | undefined): string {
 	if (value === null || value === undefined || Number.isNaN(value)) return '—';
-	return value.toFixed(1);
+	return number(value, 1);
 }
 
 export function formatDuration(seconds: number | null | undefined): string {

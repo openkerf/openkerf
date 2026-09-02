@@ -2419,7 +2419,7 @@
 								text-anchor="middle"
 								style="font-size: {labelSize}px"
 							>
-								{Math.abs(outline.width).toFixed(1)} × {Math.abs(outline.height).toFixed(1)} mm
+								{i18n.number(Math.abs(outline.width), 1)} × {i18n.number(Math.abs(outline.height), 1)} mm
 							</text>
 						</g>
 					{/if}
@@ -2475,10 +2475,13 @@
 						text-anchor="middle"
 						style="font-size: {labelSize}px"
 					>
-						{Math.hypot(
-							endpointPreview.x2_mm - endpointPreview.x1_mm,
-							endpointPreview.y2_mm - endpointPreview.y1_mm
-						).toFixed(1)} mm
+						{i18n.number(
+							Math.hypot(
+								endpointPreview.x2_mm - endpointPreview.x1_mm,
+								endpointPreview.y2_mm - endpointPreview.y1_mm
+							),
+							1
+						)} mm
 					</text>
 				{/if}
 
@@ -2626,7 +2629,7 @@
 						text-anchor="middle"
 						style="font-size: {labelSize}px"
 					>
-						{Math.hypot(to.x - measureFrom.x, to.y - measureFrom.y).toFixed(1)} mm
+						{i18n.number(Math.hypot(to.x - measureFrom.x, to.y - measureFrom.y), 1)} mm
 					</text>
 				{/if}
 

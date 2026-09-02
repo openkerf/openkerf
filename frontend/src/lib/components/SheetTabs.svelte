@@ -124,7 +124,7 @@
 			class="sheet"
 			aria-pressed={sheet.active}
 			disabled={sheets.busy}
-			title="{sheet.name} — {sheet.width_mm} × {sheet.height_mm} mm{materialName(
+			title="{sheet.name} — {i18n.number(sheet.width_mm)} × {i18n.number(sheet.height_mm)} mm{materialName(
 				sheet.material_id
 			)
 				? ` · ${materialName(sheet.material_id)}`
@@ -132,7 +132,7 @@
 			onclick={() => go(sheet.id)}
 		>
 			<span class="name">{sheet.name}</span>
-			<span class="size mono">{sheet.width_mm}×{sheet.height_mm}</span>
+			<span class="size mono">{i18n.number(sheet.width_mm)}×{i18n.number(sheet.height_mm)}</span>
 		</button>
 	{/each}
 

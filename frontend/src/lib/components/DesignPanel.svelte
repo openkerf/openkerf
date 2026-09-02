@@ -732,7 +732,7 @@
 
 	function describe(op: { speed: number | null; power: number | null }) {
 		const parts: string[] = [];
-		if (op.speed !== null) parts.push(`${op.speed} mm/s`);
+		if (op.speed !== null) parts.push(`${i18n.number(op.speed)} mm/s`);
 		if (op.power !== null) parts.push(`${Math.round((op.power / 1000) * 100)}%`);
 		return parts;
 	}
@@ -1699,7 +1699,7 @@
 					<p class="memory wide">
 						{#if onthouden?.speed_mm_s}
 							{t('panel.memory.remembered', {
-								values: `${onthouden.speed_mm_s} mm/s${
+								values: `${i18n.number(onthouden.speed_mm_s)} mm/s${
 									onthouden.power_percent == null
 										? ''
 										: ` · ${Math.round(onthouden.power_percent)}%`
