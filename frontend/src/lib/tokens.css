@@ -235,6 +235,25 @@
 	   them back so that they sit on their point. */
 	--grip: 44px;
 
+	/*
+	 * What lies over what, when it matters for safety.
+	 *
+	 * Only the top of the stack is named here; a card that lifts itself one step above
+	 * its neighbour stays a number in its own file. These three had to be one source,
+	 * because they were being compared across three files that could not see each
+	 * other: the cut-path window opened over the top bar and put its backdrop
+	 * (`0 0 1440 900`) over the middle of Stop, measured with `elementFromPoint`. The
+	 * reasoning was already in `Dialog.svelte` — the alarm outranks whatever you are
+	 * reading — and it holds one step harder for the button that stops the machine.
+	 *
+	 * The order, low to high: a dialog covers the app, the transport covers the dialog,
+	 * an alarm covers everything. `tests/stop-reach.test.ts` measures the middle one in
+	 * the running app.
+	 */
+	--z-dialog: 100;
+	--z-transport: 150;
+	--z-alarm: 200;
+
 	--shadow-float: 0 8px 24px rgb(0 0 0 / 0.12);
 	/*
 	 * v3.3: duration and easing are now separate as well, and `--transition` is built from

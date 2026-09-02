@@ -74,9 +74,9 @@
 		left: calc(var(--rail-width) + var(--space-3));
 		width: min(620px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		border-radius: var(--radius-card);
-		/* Above everything: dialogs sit at 60, the scrim at 50. An alarm belongs
-		   behind nothing. */
-		z-index: 200;
+		/* An alarm belongs behind nothing — not behind a dialog, and not behind the
+		   transport either. The three that have to be compared are in `tokens.css`. */
+		z-index: var(--z-alarm);
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-3);

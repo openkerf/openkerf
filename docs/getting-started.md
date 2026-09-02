@@ -365,6 +365,12 @@ dot beside the machine's name; the word itself is in the chip's tooltip, togethe
 with the bed size — **Offline**, **Not connected**, **Ready**, **Busy**,
 **Paused** or **Alarm**. Hover the chip to read it.
 
+Clicking the chip takes you to the machine setup — except while a job is under
+way. Then it is not a link, and says so: "The machine is burning. The setup opens
+once the job is done — the stop button stays here." The setup screens carry no
+stop button and no shortcut, so leaving the work area during a job would take both
+off the screen at the one moment you might need them.
+
 You can start a job anyway. The pre-flight warns what will happen: "The machine is
 not responding. This job goes into the queue and only starts once the connection
 is there — switch it on or check the cable." So a silent machine after pressing

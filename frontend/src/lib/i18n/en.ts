@@ -28,6 +28,7 @@ export const en = {
 
 	// ── Top bar ────────────────────────────────────────────────────────────────
 	'topbar.machine.setup': 'Set up machine',
+	'topbar.machine.busy': 'The machine is burning. The setup opens once the job is done — the stop button stays here.',
 	'topbar.material.choose': 'Choose material',
 	'topbar.material.short': 'Material',
 	'topbar.material.none': 'No material chosen for this sheet yet — click to fill it in',

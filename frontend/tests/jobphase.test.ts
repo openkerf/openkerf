@@ -14,7 +14,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { jobBusy, jobPhase, jobStatusLabel, phaseBody, phaseTitle } from '../src/lib/api.ts';
+import {
+	jobBusy,
+	jobPhase,
+	jobStatusLabel,
+	mayLeaveWorkArea,
+	phaseBody,
+	phaseTitle
+} from '../src/lib/api.ts';
 
 function job(over: Record<string, unknown> = {}) {
 	return {
@@ -108,4 +115,21 @@ test('Waiting is not passed through as the engine wrote it', () => {
 	assert.equal(jobStatusLabel(job({ status: 'Queued' })), 'In the queue');
 	assert.equal(jobStatusLabel(job({ status: 'Running', running: true })), 'Busy');
 	assert.equal(jobStatusLabel(job({ status: 'Paused' })), 'Paused');
+});
+
+test('the route out of the work area closes while the machine is burning', () => {
+	// The machine chip in the top left is a link to the setup, and `routes/setup/` has
+	// no stop button and no key handler: `Stop`, `transport` and `onStop` give zero
+	// hits there. So one click on your own machine name during a job took away both
+	// the button and the shortcut, and the way back is a second click.
+	//
+	// The phases where something is really under way are the phases where you must
+	// stay. `jobBusy` already knows which those are; this is the same list, read as a
+	// question about leaving rather than about stopping.
+	for (const phase of ['burning', 'paused', 'queued'] as const) {
+		assert.equal(mayLeaveWorkArea(phase), false, `${phase} let the user walk away from the stop`);
+	}
+	for (const phase of ['idle', 'ready', 'nothing', 'done'] as const) {
+		assert.equal(mayLeaveWorkArea(phase), true, `${phase} kept the user in`);
+	}
 });

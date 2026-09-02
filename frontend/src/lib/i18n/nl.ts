@@ -20,6 +20,7 @@ export const nl: Catalogue = {
 
 	// ── Bovenbalk ──────────────────────────────────────────────────────────────
 	'topbar.machine.setup': 'Machine instellen',
+	'topbar.machine.busy': 'De machine brandt. De inrichting gaat open zodra de job klaar is — de stopknop blijft hier staan.',
 	'topbar.material.choose': 'Materiaal kiezen',
 	'topbar.material.short': 'Materiaal',
 	'topbar.material.none': 'Nog geen materiaal gekozen voor dit vel — klik om het in te vullen',

@@ -2,7 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { jobBusy, jobPhase, machineState } from '$lib/api';
+	import { jobBusy, jobPhase, machineState, mayLeaveWorkArea } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import {
 		DEFAULT_BRIDGES,
@@ -1393,6 +1393,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		!workUnderWay}
 	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
 	stopArmed={workUnderWay}
+		mayLeave={mayLeaveWorkArea(phase)}
 	canEdit={canEdit && design.preview === null}
 	{narrow}
 	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}

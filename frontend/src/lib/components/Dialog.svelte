@@ -146,7 +146,7 @@
 		   490 x 130 px of the cut-path drawing and hid contour number 1 entirely
 		   (measured, twice). Every other dialog holds text that reflows; this one is one
 		   picture, and half a picture is a wrong picture. */
-		z-index: 100;
+		z-index: var(--z-dialog);
 		display: grid;
 		place-items: center;
 		padding: var(--space-6);

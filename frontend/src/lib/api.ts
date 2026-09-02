@@ -433,6 +433,22 @@ export function jobBusy(phase: JobPhase): boolean {
 }
 
 /**
+ * May the app take you away from the work area right now?
+ *
+ * The stop button and its shortcut hang on the top bar, and the top bar is the work
+ * area's. `routes/setup/` has neither: `Stop`, `transport` and `onStop` give zero hits
+ * in that whole folder. The machine chip in the top left is a plain link to it, so one
+ * click on your own machine name during a job took the stop off the screen — and you
+ * only find that out at the moment you need it.
+ *
+ * The same three phases as `jobBusy`, asked as a different question, so that whoever
+ * adds a fourth way out reads one rule instead of writing a second.
+ */
+export function mayLeaveWorkArea(phase: JobPhase): boolean {
+	return !jobBusy(phase);
+}
+
+/**
  * What a phase is called, and what it means.
  *
  * The explanation is not decoration: "in the queue" is indistinguishable from
