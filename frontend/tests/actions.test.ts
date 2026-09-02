@@ -15,6 +15,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	barMenu,
+	bridgesRefusal,
 	KEYS,
 	alignActions,
 	arrangeActions,
@@ -516,4 +518,85 @@ test('without a node in hand every row says to pick one', () => {
 test('a read-only session cannot edit nodes either', () => {
 	const menu = nodeMenu(nodeCtx({ may: false }), HANDLERS);
 	for (const row of rows(menu)) assert.match(row.off, /token/);
+});
+
+test('the bridge control in the panel refuses in the same words as the menu row', () => {
+	// `actions.ts` says it itself: "A grey button without a reason is a riddle", and
+	// `a disabled row always says why` above enforces it — but only for rows that come
+	// out of `actions.ts`. The panel has its own control for this same verb, and it
+	// switched off on three conditions (`!canEdit || !bridges.carries || edits.busy`)
+	// without one word. Measured in the panel: a checkbox that goes pale and says
+	// nothing, six pixels from a menu that explains itself.
+	//
+	// So the reason is a function now, and this pins that both readers get the same
+	// sentence. Whoever adds a third reader adds it here.
+	for (const over of [
+		{},
+		{ may: false },
+		{ busy: true },
+		{ count: 0 },
+		{ lockedCount: 1 },
+		{ bridges: { carries: false, has: false } }
+	] as Partial<Context>[]) {
+		const ctx = context(over);
+		const row = rows(objectMenu(ctx, HANDLERS)).find((r) => r.id === 'bridges');
+		assert.equal(
+			bridgesRefusal(ctx),
+			row.off,
+			`the panel and the menu disagree about ${JSON.stringify(over)}`
+		);
+	}
+	// And it really does say something in the case the panel used to keep quiet about.
+	assert.equal(
+		bridgesRefusal(context({ bridges: { carries: false, has: false } })),
+		'A line, text or an image carries no bridges'
+	);
+	assert.equal(bridgesRefusal(context()), undefined, 'nothing in the way, nothing to say');
+});
+
+test('"More" opens what a right-click would open in the same situation', () => {
+	// The button's tooltip promises "All operations — or right-click a shape", and it
+	// opened `objectMenu` whatever the state. Measured with nothing selected: 19 rows,
+	// 19 of them grey. Right-clicking the bed at that same moment gave 13 rows of which
+	// 10 worked — Select all, the four zoom rows, Show cut path, Series, Snap, Remove
+	// duplicates, Put everything on the bed. None of those ten was reachable from the
+	// bar, from a button that says it has them all.
+	//
+	// So the bar asks the same question the canvas asks: is anything selected?
+	const nothing = rows(barMenu(context({ count: 0 }), HANDLERS));
+	assert.ok(
+		nothing.some((r) => !r.off),
+		'with nothing selected the bar still offers nothing that can be done'
+	);
+	assert.ok(
+		nothing.some((r) => r.id === 'selectAll'),
+		'the rows about the whole design are missing'
+	);
+
+	// With a selection it is the menu for that selection, exactly as before.
+	const chosen = rows(barMenu(context({ count: 2 }), HANDLERS)).map((r) => r.id);
+	const direct = rows(objectMenu(context({ count: 2 }), HANDLERS)).map((r) => r.id);
+	assert.deepEqual(chosen, direct);
+});
+
+test('every workspace has a door in the menu, not only two of the five', () => {
+	// `actions.ts` is where a handling is described once, and the menu, the bar and the
+	// keyboard read from it. Two of the five workspaces were in there — the cut path and
+	// the series — and the material library, the test grid, the generators and the
+	// clipart were reachable from the tool rail alone. So the same kind of door was in
+	// two places for two of them and in one place for four.
+	const ids = rows(canvasMenu(context({ count: 0 }), HANDLERS, null)).map((r) => r.id);
+	for (const id of ['cut-path', 'series', 'library', 'test-grid', 'generators', 'clipart']) {
+		assert.ok(ids.includes(id), `no row for ${id}`);
+	}
+});
+
+test('a workspace that writes says so when this session may not', () => {
+	// The same rule the series row already had: everything worth opening those windows
+	// for is a write, and the rail greys its button on the same condition. Two doors to
+	// one room that disagree about whether it is open is worse than either.
+	const off = rows(canvasMenu(context({ count: 0, may: false }), HANDLERS, null));
+	for (const id of ['library', 'test-grid', 'generators', 'clipart', 'series']) {
+		assert.equal(off.find((r) => r.id === id).off, 'Requires a token', `${id} stayed open`);
+	}
 });

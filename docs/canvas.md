@@ -498,14 +498,16 @@ everything on the bed**, which pulls the whole design back inside the bed, "Incl
 clicked". That last one is the only way to reach a shape you have dragged out of
 sight and can no longer click.
 
-Two rows on that menu are not about the view at all. **Show cut path** (⌥P) opens
-the window that walks through the job in the order the machine will burn it. It is
-here as well as in the pre-flight because this is where you are while you are
-still drawing — see [Burning](job.md#the-cut-path). And **Set up a series** opens
-the Series window — "Attach a list, see what every burn engraves, and choose where
-to start" — which is the other door to the button on the tool rail, and the one you
-find while you are already right-clicking the bed; see [Variable
-text](variable-text.md#the-series-window).
+A group of rows on that menu is not about the view at all: the doors to the five
+workspaces. **Show cut path** (⌥P) opens the window that walks through the job in
+the order the machine will burn it — here as well as in the pre-flight, because
+this is where you are while you are still drawing; see
+[Burning](job.md#the-cut-path). Under it stand **Set up a series** (see [Variable
+text](variable-text.md#the-series-window)), **Material library**, **Test grid**,
+**Generators** and **Search clipart**. Each of them is the second door to a button
+on the tool rail, and the one you find while you are already right-clicking the
+bed. What you do in those windows is a write, so all five are greyed out with
+"Requires a token" when this session may not write.
 
 Every row, with its shortcut and the reason it can be greyed out, is in
 [Reference](reference.md#right-click-on-the-canvas).

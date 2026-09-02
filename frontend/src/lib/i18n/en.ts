@@ -314,6 +314,8 @@ export const en = {
 	},
 	'action.stencil': 'Make a stencil…',
 	'explain.stencil': 'Finds the parts a cut-out would set loose and bridges them to the sheet',
+	'explain.library': 'What works on your own laser: a speed and a power per material and thickness.',
+	'explain.testGrid': 'Burn a board of squares, photograph it, and turn the best square into a setting.',
 	'action.fill': 'Fill — for rastering',
 	'action.unfill': 'Remove fill',
 	// "Burn only once": one row, two wordings, for a jig frame in a series. The word is

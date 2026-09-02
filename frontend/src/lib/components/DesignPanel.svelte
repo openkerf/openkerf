@@ -15,7 +15,7 @@
 	import Menu from './Menu.svelte';
 	import { en } from '$lib/i18n/en';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
-	import { layerMenu, type Menu as MenuList } from '$lib/actions';
+	import { bridgesRefusal, layerMenu, type Menu as MenuList } from '$lib/actions';
 	import { placeholders, resolve } from '$lib/series';
 	import type { SeriesStore } from '$lib/series.svelte';
 	import { untrack } from 'svelte';
@@ -236,6 +236,23 @@
 	});
 
 	let bridges = $derived(bridgeSummary(chosen));
+	/**
+	 * Why the bridge control is off, in the same words as the menu row for this verb.
+	 *
+	 * `bridgesRefusal` in `$lib/actions` decides it. The control used to work the same
+	 * thing out again — `!canEdit || !bridges.carries || edits.busy` — and then went pale
+	 * without saying anything, while the row in the right-click menu carried the
+	 * sentence. One verb, one reason.
+	 */
+	let bridgeOff = $derived(
+		bridgesRefusal({
+			may: canEdit,
+			busy: edits.busy,
+			count: chosen.length,
+			lockedCount: chosen.filter((element) => element.locked).length,
+			bridges: { carries: bridges.carries, has: bridges.has }
+		})
+	);
 	/** The two numbers as typed, so a half-typed "1." does not jump away. */
 	let bridgeFields = $state({ count: '', length: '' });
 	$effect(() => {
@@ -1017,11 +1034,12 @@
 			     concludes the app cannot do them. It says where it is true instead. -->
 			<div class="bridges">
 				<span class="rot-label">{t('panel.bridges')}</span>
-				<label class="check">
+				<label class="check" title={bridgeOff}>
 					<input
 						type="checkbox"
 						checked={bridges.has}
-						disabled={!canEdit || !bridges.carries || edits.busy}
+						disabled={Boolean(bridgeOff)}
+						title={bridgeOff}
 						onchange={(e) =>
 							e.currentTarget.checked
 								? applyBridges({

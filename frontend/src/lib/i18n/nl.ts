@@ -299,6 +299,8 @@ export const nl: Catalogue = {
 	},
 	'action.stencil': 'Een stencil maken…',
 	'explain.stencil': 'Zoekt de delen die een uitsnede zou lossnijden en verbindt ze met de plaat',
+	'explain.library': 'Wat op jouw laser werkt: een snelheid en een vermogen per materiaal en dikte.',
+	'explain.testGrid': 'Brand een bord met vakjes, fotografeer het, en maak van het beste vakje een instelling.',
 	'action.fill': 'Vullen — voor rasteren',
 	'action.unfill': 'Vulling weghalen',
 	'action.burnOnce': 'Alleen de eerste keer branden',

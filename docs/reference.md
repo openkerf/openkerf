@@ -148,7 +148,7 @@ what is selected — "Pick a shape on the bed", "1 shape selected" or
 | Ungroup | Undo a group, so the shapes move on their own again | `ungroup` |
 | Mirror horizontally | About the vertical axis. Clicking again puts it back. | `mirrorH` |
 | Mirror vertically | About the horizontal axis. Clicking again puts it back. | `mirrorV` |
-| More | Opens the same menu as a right-click on a shape; its tooltip reads "All operations — or right-click a shape" | — |
+| More | Opens the menu a right-click would open in the same state: the selection's rows when something is selected, the design's rows when nothing is. Its tooltip reads "All operations — or right-click a shape" | — |
 
 The eight alignment buttons also sit together in the right-click menu, under
 "Align and distribute" (`align`), as two rows of four.

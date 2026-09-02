@@ -49,7 +49,8 @@ import { SeriesStore } from '$lib/series.svelte';
 	import {
 		KEYS,
 		comboOf,
-		canvasMenu,
+		barMenu,
+	canvasMenu,
 		keyLabel,
 		nodeMenu,
 		objectMenu,
@@ -1057,6 +1058,11 @@ import { SeriesStore } from '$lib/series.svelte';
 		insertColumn: (column) => insertColumn(column),
 		burnOnce: (once) => setBurnOnce(once),
 		series: () => (seriesOpen = true),
+		// The other four workspaces, so the menu has the same doors the rail has.
+		library: () => (libraryOpen = true),
+		testGrid: () => (gridOpen = true),
+		generators: () => (generatorsOpen = true),
+		clipart: () => (clipartOpen = true),
 		crop: () => (cropping = true),
 		uncrop: async () => {
 			const id = design.selectedId;
@@ -1463,7 +1469,11 @@ import { SeriesStore } from '$lib/series.svelte';
 				const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
 				menuPoint = null;
 				menu = {
-					list: objectMenu(actionContext, handlers),
+					// `barMenu` picks the same menu a right-click would give in this state:
+					// the selection's rows when there is one, the design's rows when there
+					// is not. It used to be `objectMenu` always, and with nothing selected
+					// that is nineteen grey rows under a button that says "All operations".
+					list: barMenu(actionContext, handlers),
 					x: box.left,
 					y: box.bottom + 4
 				};
