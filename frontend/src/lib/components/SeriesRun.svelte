@@ -377,26 +377,6 @@
 	.sent {
 		color: var(--text-1);
 	}
-	.btn {
-		padding: 8px 12px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-		transition: background var(--transition);
-	}
-	.btn:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.btn:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
 	.btn.warn {
 		border-color: var(--warn);
 		color: var(--warn);

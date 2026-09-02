@@ -154,27 +154,6 @@
 		justify-content: flex-end;
 		flex-wrap: wrap;
 	}
-	.btn {
-		min-height: 36px;
-		padding: 0 var(--space-4);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		font-weight: 500;
-		justify-self: start;
-	}
-	.btn:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
-	.btn:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
 
 	/* Toggle: on/off per item, in line with the pattern guide. */
 	.toggle {

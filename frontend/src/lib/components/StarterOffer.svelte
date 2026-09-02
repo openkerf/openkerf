@@ -633,36 +633,10 @@
 		gap: var(--space-3);
 		margin-top: var(--space-1h);
 	}
-	.btn {
-		font: inherit;
-		font-size: var(--text-xs);
-		min-height: 32px;
-		padding: 6px 12px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
-		cursor: pointer;
-	}
-	.btn:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
 	.btn.subtle {
 		background: none;
 		border-color: transparent;
 		color: var(--text-2);
-	}
-	.btn.mini {
-		min-height: 28px;
-		padding: 4px 10px;
-	}
-	.btn:disabled {
-		cursor: not-allowed;
 	}
 	.away {
 		flex: none;
@@ -749,12 +723,6 @@
 
 	/* With a glove on, 32px is too little, and this card lives on a tablet too. */
 	@media (max-width: 1199px), (pointer: coarse) {
-		.btn {
-			min-height: 44px;
-		}
-		.btn.mini {
-			min-height: 40px;
-		}
 		.choice select {
 			min-height: 44px;
 		}

@@ -232,18 +232,4 @@
 		display: flex;
 		justify-content: flex-end;
 	}
-	.btn {
-		padding: 8px 16px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-	}
-	.btn:hover:not(:disabled) { background: var(--surface-2); }
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
-	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>

@@ -669,21 +669,6 @@
 	/* The twelfth component to define its own `.btn` (X1 in FEATURE-GAPS.md); the
 	   same eight lines as the eleven before it, because a bare `.btn` in tokens.css
 	   cannot outweigh a component selector. */
-	.btn {
-		padding: 8px 12px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-		transition: background var(--transition);
-	}
-	.btn:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.btn:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
 	.transport {
 		display: flex;
 		align-items: center;

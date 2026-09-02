@@ -787,27 +787,8 @@
 		height: 8px;
 	}
 	.spacer { flex: 1; }
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 16px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-		transition: background var(--transition);
-	}
-	.btn { text-decoration: none; color: inherit; }
 	.btn.file { cursor: pointer; }
 	.btn.file input { display: none; }
-	.btn:hover:not(:disabled) { background: var(--surface-2); }
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
-	.btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.06); }
 	/*
 	 * Stopping and pausing lie over an open window.
 	 *
@@ -877,7 +858,6 @@
 	}
 	.btn.danger.dood svg { color: var(--text-2); }
 
-	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	/* This button *carries* its own explanation; the default fading makes it unreadable
 	   and that explanation is now the only thing the button still does. */
 	.btn.danger.dood:disabled { opacity: 1; }

@@ -731,3 +731,83 @@ input[type='radio']:focus-visible::before {
 	font-size: var(--text-xs);
 	color: var(--danger);
 }
+
+/*
+ * The button.
+ *
+ * One definition, after fifteen. The components agreed on the border, the radius, the
+ * surface and the weight and disagreed on the size — `8px 12px` in six, `8px 16px` in
+ * five, the same 8/16 as tokens in two, `6px 12px` in the starter offer and
+ * `0 var(--space-4)` in a notification. On screen that was 32.0, 36.0, 36.8 and 40.0
+ * px, with the first two side by side, because the offer sits inside the library
+ * window.
+ *
+ * The note further up this file says a single source is impossible here, because
+ * Svelte hangs a class on every component selector and `.btn.svelte-x` (0,2,0) beats a
+ * bare `.btn` (0,1,0). That is true only while a component *has* a `.btn` of its own.
+ * They no longer do, so this one applies — and the safety net above it now has nothing
+ * left to catch.
+ *
+ * 8/16 is what the buttons you see most already had: the top bar, the dialogs and the
+ * test grid. Named exceptions below, and only two: where the room is really gone, and
+ * where a button starts a burn.
+ *
+ * `tests/one-button.test.ts` refuses a sixteenth.
+ */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2);
+	/* Deliberately no `min-height`: the touch-target net further up is written as a bare
+	   `button` (0,0,1), so a `.btn` with a height of its own (0,1,0) would beat it and
+	   every button on a tablet would drop from 44 back to 36. The height comes from the
+	   padding, the way fourteen of the fifteen had it. */
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-field);
+	background: var(--surface-1);
+	color: var(--text-1);
+	font: inherit;
+	font-weight: 500;
+	text-decoration: none;
+	cursor: pointer;
+	transition: background var(--transition);
+}
+.btn:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+.btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+.btn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-ink);
+}
+.btn.primary:hover:not(:disabled) {
+	background: var(--accent);
+	filter: brightness(1.06);
+}
+/* Where the room really is gone: a row in the starter offer, inside the library
+   window. The touch-target net further up still lifts it to 44 on a coarse pointer. */
+.btn.mini {
+	min-height: 32px;
+	padding: var(--space-1h) var(--space-3);
+	font-size: var(--text-xs);
+}
+/* And this is why `mini` has to say it again: `.btn.mini` (0,2,0) beats the bare
+   `button` of the net, so without this line the small button would stay 32 px under a
+   glove. It is the fault the starter offer had — 40 px there, against the 44 the net
+   lays down — now written where it can be seen. */
+@media (max-width: 1199px), (pointer: coarse) {
+	.btn.mini {
+		min-height: 44px;
+	}
+}
+/* The button that starts a burn is bigger than the rest, on purpose. */
+.btn.big {
+	min-height: 44px;
+	font-size: var(--text-md);
+}
