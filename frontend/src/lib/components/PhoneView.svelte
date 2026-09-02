@@ -36,6 +36,7 @@
 	import { connection } from '$lib/connection.svelte';
 	import AlarmCard from './AlarmCard.svelte';
 	import NotificationCard from './NotificationCard.svelte';
+	import { notifyState } from '$lib/notifications.svelte';
 	import type { Notifications, Watchdog } from '$lib/notifications.svelte';
 	import type { DesignStore } from '$lib/design.svelte';
 
@@ -334,13 +335,9 @@
 	let stateInOneLine = $derived(photoFirst && connected && machineState === 'ready');
 	/** The bed drawing under that one line. Closed, because you came for the photo. */
 	let bedOpen = $state(false);
-	let noticeState = $derived(
-		notifications.permission === 'denied'
-			? 'geblokkeerd'
-			: notifications.active
-				? 'aan'
-				: 'uit'
-	);
+	// The name styles the chip, the text is read. `notifyState` decides both, so this
+	// row and the card behind it cannot disagree about what the browser allows.
+	let notice = $derived(notifyState(notifications.permission, notifications.active));
 
 	let bedW = $derived(device?.bed.width_mm ?? 0);
 	let bedH = $derived(device?.bed.height_mm ?? 0);
@@ -832,7 +829,7 @@
 				onclick={() => (settingsOpen = !settingsOpen)}
 			>
 				<span class="name">{t('notifications.title')}</span>
-				<span class="state {noticeState}">{noticeState}</span>
+				<span class="state {notice.name}">{notice.text}</span>
 				<span class="pijl" aria-hidden="true">{settingsOpen ? '▴' : '▾'}</span>
 			</button>
 			{#if settingsOpen}
@@ -1183,7 +1180,7 @@
 	.noticerow .state.on { color: var(--ok); }
 	/* Blocked is not the user's mistake but is something you have to see: amber,
 	   because there is something to put right. */
-	.noticerow .state.geblokkeerd { color: var(--warn); }
+	.noticerow .state.blocked { color: var(--warn); }
 	.noticerow .pijl { flex: none; color: var(--text-2); }
 	.meldbody {
 		padding: var(--space-3);

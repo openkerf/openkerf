@@ -18,7 +18,7 @@
  * the laser.
  */
 
-import { currentJob, formatDuration, type Device, type SignalEvent } from './api';
+import { currentJob, formatDuration, type Device, type SignalEvent } from './api.ts';
 import { locale, t, type MessageKey } from './i18n/core.ts';
 
 export type NotifyPermission = 'unsupported' | 'default' | 'granted' | 'denied';
@@ -29,6 +29,22 @@ const ASKED_KEY = 'openkerf.notifications.asked';
 /** What the browser makes of it, in plain words. Shown, not logged. */
 export function permissionText(permission: NotifyPermission): string {
 	return t(`notify.permission.${permission}` as never);
+}
+
+/**
+ * The same state as a chip: a name for the styling and a word for the reader.
+ *
+ * The phone used to work this out itself and used the one value for both, so the
+ * chip read "geblokkeerd" in an English app — the class could not change without
+ * the word changing with it. Whoever needs the state in a third place reads it
+ * here; the desktop says the whole sentence above at the same moment.
+ */
+export function notifyState(
+	permission: NotifyPermission,
+	active: boolean
+): { name: 'on' | 'off' | 'blocked'; text: string } {
+	const name = permission === 'denied' ? 'blocked' : active ? 'on' : 'off';
+	return { name, text: t(`notify.state.${name}` as never) };
 }
 
 export class Notifications {
