@@ -187,25 +187,91 @@ class CommandRunner:
 
         `mutators` are operations on the copied plan (tiles, Z steps). See `_plan_and_spool`.
         """
-        elements = self.kernel.elements
+        burnable = self._require_something_to_burn()
+        output = self._plan_and_spool(mutators)
+        self._name_job(name, burnable)
+        return output
+
+    def _require_something_to_burn(self) -> int:
+        """De telling die `start_job` ook doet, apart zodat beide hem lezen."""
+        from .edits import DesignError
+
         burnable = 0
-        for operation in elements.ops():
+        for operation in self.kernel.elements.ops():
             if not str(operation.type).startswith("op "):
                 continue
             if not getattr(operation, "output", True):
                 continue
             burnable += sum(1 for child in operation.children)
         if not burnable:
-            raise CommandError(
-                "start",
-                [
-                    "There is nothing ready to burn. Draw or load something, and "
-                    "put it in a layer that burns — a layer with 'burn along' off "
-                    "is skipped."
-                ],
+            raise DesignError(
+                "There is nothing ready to burn. Draw or load something, and put it "
+                "in a layer that burns — a layer with 'burn along' off is skipped.",
+                code="upload.nothingToBurn",
             )
-        output = self._plan_and_spool(mutators)
-        self._name_job(name, burnable)
+        return burnable
+
+    def build_job_bytes(self, mutators=()) -> bytes:
+        """
+        De job als bestand, zonder hem te spoolen.
+
+        Dezelfde pijplijn als `start_job` tot en met `optimize`, en dan niet `spool`
+        maar de RuidaDriver zelf: die schrijft zijn opdrachten in `controller.job`, een
+        `RDJob`, en `get_contents()` is precies de inhoud van een `.rd`-bestand —
+        inclusief de staart met SET_FILE_SUM en END_OF_FILE uit `write_tail`.
+
+        Waarom niet `save_job` uit de engine: die zet `controller.write` op `f.write` en
+        voert de RDJob daarna uit, terwijl de bytes juist in de buffer belanden.
+        Gemeten (CLAUDE.md): 4 bytes in het bestand, 623 in de buffer.
+
+        De mutators zijn dezelfde als bij een gewone job — tegels, Z-stappen,
+        series — inclusief `_share_pass_settings` erna. Zonder die laatste krijgt elke
+        pass zijn eigen RD-laag en zegt de controller "file invalid".
+        """
+        from meerk40t.core.laserjob import LaserJob
+
+        device = getattr(self.kernel, "device", None)
+        driver = getattr(device, "driver", None)
+        controller = getattr(driver, "controller", None)
+        if controller is None or not hasattr(controller, "job"):
+            raise DesignError(
+                "This machine does not keep files in memory; that is a Ruida thing.",
+                code="upload.notRuida",
+            )
+
+        self._require_something_to_burn()
+        with self.claim_plan():
+            with self.rotary_applied():
+                self._plan_without_spooling(mutators)
+                plan = self.kernel.planner.get_or_make_plan("0")
+                steps = [step for step in plan.plan if hasattr(step, "__iter__")]
+                job = LaserJob("upload", list(steps), driver=driver)
+                # De buffer leegmaken vóór de job: wat er nog in staat is van een
+                # eerdere job en zou er zo tussen komen te staan.
+                controller.job.buffer.clear()
+                driver.job_start(job)
+                while not job.execute():
+                    pass
+                driver.job_finish(job)
+                return controller.job.get_contents()
+
+    def _plan_without_spooling(self, mutators=()) -> list[str]:
+        """`_plan_and_spool_locked`, maar zonder de laatste stap."""
+        all_mutators = list(mutators)
+        after = []
+        if self._focus_layers():
+            from meerk40t.core.node.util_console import ConsoleOperation
+
+            all_mutators.append(lambda steps: self._with_focus_moves(steps, ConsoleOperation))
+        if self._multi_pass_layers():
+            from meerk40t.core.node.util_console import ConsoleOperation
+
+            all_mutators.append(lambda steps: self._with_passes(steps, ConsoleOperation))
+            after.append(self._share_pass_settings)
+        output = self.run(PLAN_COPY)
+        self._apply_mutators(all_mutators)
+        output += self.run(PLAN_BLOB)
+        self._apply_mutators(after)
         return output
 
     # ------------------------------------------------------ zakken per pass

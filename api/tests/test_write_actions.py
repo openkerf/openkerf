@@ -378,13 +378,17 @@ def test_starting_an_empty_design_is_refused(local_client):
     """
     This used to report "succeeded": you press start, the app says yes, and nothing
     happens at the machine. Then you stand there waiting.
+
+    This refusal is `_require_something_to_burn`, shared with `build_job_bytes`
+    (the Ruida upload), so it is our own `DesignError` — a plain-string `detail`,
+    not `{"command", "output"}` like an engine-side `CommandError`.
     """
     local_client.post("/api/design/clear")
 
     response = local_client.post("/api/job/start")
 
     assert response.status_code == 409
-    message = " ".join(response.json()["detail"]["output"])
+    message = response.json()["detail"]
     assert "nothing ready to burn" in message
     # And it says what to do about it.
     assert "layer" in message
