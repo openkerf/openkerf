@@ -2,7 +2,7 @@
 A job as a file: the bytes, the conversation, and what goes wrong.
 
 Never against a laser. The end-to-end test talks to the engine's own Ruida
-emulator, which accepts this conversation and writes the file out.
+emulator, which takes this conversation and reads the file back off it.
 """
 
 import threading
@@ -12,6 +12,7 @@ import pytest
 
 from openkerf_api.commands import CommandRunner, _AlwaysConnected
 from openkerf_api.edits import DesignError
+from openkerf_api.ruida_upload import RuidaUpload
 
 
 @pytest.fixture
@@ -530,3 +531,153 @@ def test_a_reply_on_the_shared_channel_writes_the_live_driver_only_once(ruida, m
     recv_channel(reply)
 
     assert writes == [12345], f"native_x written {len(writes)} time(s): {writes}"
+
+
+def test_the_name_goes_over_the_line_in_eight_capitals(ruida):
+    """
+    The machine keeps eight characters, in capitals — the engine's own emulator
+    truncates to eight and upper-cases them itself (`ruida/emulator.py:749-753`
+    reads until the NUL; the panel shows what a Ruida keeps). So we send what
+    arrives, and the screen says the same thing the panel does.
+    """
+    upload = RuidaUpload(ruida)
+
+    frames = upload.frames("kastje-groot", b"\x00")
+
+    name = frames[1]
+    assert name.startswith(b"\xe7\x01")
+    assert name[2:-1] == b"KASTJE-G"
+    assert name.endswith(b"\x00")
+
+
+def test_the_conversation_opens_with_a_file_transfer(ruida):
+    upload = RuidaUpload(ruida)
+
+    frames = upload.frames("BORD", b"\x11" * 2500)
+
+    assert frames[0] == b"\xe8\x02"
+    # The payload goes out in blocks of at most 1000 bytes.
+    payload = b"".join(frames[2:])
+    assert payload == b"\x11" * 2500
+    assert all(len(f) <= 1000 for f in frames[2:])
+
+
+def test_a_nameless_file_refuses_with_a_sentence(ruida):
+    """
+    A name of nothing but spaces and control characters leaves nothing for the
+    panel to show, and `E7 01 00` is a file the user cannot find back. That is a
+    refusal with a sentence, not an empty name sent anyway.
+    """
+    upload = RuidaUpload(ruida)
+
+    with pytest.raises(DesignError) as error:
+        upload.frames("  \t ", b"\x00")
+
+    assert error.value.code == "upload.needsName"
+
+
+def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch):
+    """
+    End to end without a laser and without a socket: the engine's own Ruida
+    emulator takes this conversation and reads the name off it. What we hand it
+    is what `build_job_bytes` built, byte for byte.
+
+    Deliberately not what the spec asked for ("a second engine with
+    `ruidacontrol`"): that opens UDP ports in a test suite, and a test that needs
+    a port fails the day something else has it. The emulator is an ordinary class
+    with `write(data, unswizzle=False)`; feeding it directly exercises the same
+    conversation and depends on no network. Talking to a real `ruidacontrol`
+    belongs to task 7, with the user present.
+
+    The emulator gets a stand-in device, and that is not tidiness. Every command
+    it does *not* recognise as realtime ends in
+    `self.device.spooler.send(self.job, prevent_duplicate=True)`
+    (`ruida/emulator.py:160`) — the spooler of the live Ruida device this fixture
+    started, whose own thread executes what lands in it through the live
+    `RuidaDriver`. And a handful of commands it *does* recognise reach
+    `self.device.driver` directly (`_home_device`, `ruida/emulator.py:164-170`;
+    `move_abs`, `:341`). Measured with the stand-ins counting what the real ones
+    would have been asked for: this rectangle's 433-byte payload reaches
+    `spooler.send` 61 times, always with the same `RDJob` — so
+    `prevent_duplicate` leaves one job in the queue, and the spooler's own thread
+    executes it, through the live `RuidaDriver`. The driver itself is asked for
+    nothing by this particular payload (0 calls), but it stays a stand-in all the
+    same: whether the live one is touched must not depend on which design
+    somebody built. On this fixture the interface is `usb` and nothing is
+    connected, so nothing left the process today — a kernel pointed at a real
+    machine would have moved a head from that thread, and this project does not
+    start jobs to test something.
+    """
+    from meerk40t.ruida.emulator import RuidaEmulator
+
+    class _InertSpooler:
+        """Takes jobs and runs none. See the docstring."""
+
+        def __init__(self):
+            self.jobs = []
+
+        def send(self, job, prevent_duplicate=False):
+            self.jobs.append(job)
+
+    class _RecordingDriver:
+        """Answers to anything and does nothing, so a motion command shows up as
+        a name in `calls` instead of as a move."""
+
+        def __init__(self):
+            self.calls = []
+
+        def __getattr__(self, name):
+            def record(*args, **kwargs):
+                self.calls.append(name)
+
+            return record
+
+    class _StandInDevice:
+        """The live device for everything the emulator reads, with the two
+        attributes it can act through replaced."""
+
+        def __init__(self, device, spooler, driver):
+            self._device = device
+            self.spooler = spooler
+            self.driver = driver
+
+        def __getattr__(self, name):
+            return getattr(self._device, name)
+
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    payload = upload.runner.build_job_bytes()
+
+    spooler = _InertSpooler()
+    driver = _RecordingDriver()
+    said = []
+    emulator = RuidaEmulator(ruida.device, ruida.device.view.matrix)
+    emulator.channel = said.append
+    monkeypatch.setattr(
+        emulator, "device", _StandInDevice(ruida.device, spooler, driver)
+    )
+    packets = upload.frames("BORD", payload)
+
+    emulator.write(packets[0], unswizzle=False)
+    emulator.write(packets[1], unswizzle=False)
+    named = emulator.filename
+    for frame in packets[2:]:
+        emulator.write(frame, unswizzle=False)
+
+    assert named == "BORD"
+    # And then it read the file all the way to its end: END_OF_FILE (`\xD7`, the
+    # last byte `build_job_bytes` writes) is what puts the name back to `None`
+    # and closes program mode (`ruida/emulator.py:354-358`). Checking the name
+    # after the payload — which the plan's version of this test did — measures
+    # that reset, not the transfer: it is `None` there for a *complete* file.
+    assert emulator.filename is None and emulator.program_mode is False, (
+        "the emulator never reached END_OF_FILE, so it did not read the whole file"
+    )
+    failures = [line for line in said if "Process Failure" in line]
+    assert not failures, (
+        f"the emulator could not parse {len(failures)} command(s): {failures[:3]}"
+    )
+    assert not list(ruida.device.spooler.queue), (
+        "a job reached the live device's spooler while a file was being described"
+    )
+    assert not driver.calls, f"the live driver would have been asked for {driver.calls}"
