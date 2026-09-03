@@ -1134,7 +1134,7 @@
 									if (e.key === 'Escape') saving = false;
 								}}
 							/>
-							<button class="rot" onclick={save} disabled={!newName.trim()}>
+							<button class="rot" onclick={save} disabled={!newName.trim()} title={t('reason.needsName')}>
 								{t('job.keep')}
 							</button>
 							<button class="rot" onclick={() => (saving = false)}>{t('common.cancel')}</button>

@@ -16,6 +16,7 @@
 	let {
 		tool = $bindable(),
 		canEdit = false,
+		writeOff = undefined,
 		compact = false,
 		files = false,
 		projectInRail = false,
@@ -32,6 +33,9 @@
 	}: {
 		tool: Tool;
 		canEdit?: boolean;
+		/** Why a write cannot be sent now — `writeRefusal` in `$lib/actions`, worked out
+		 *  once by the page so the rail, the bar and the menu say the same thing. */
+		writeOff?: string;
 		/** Tablet: the rail carries the tablet tasks, the rest lives in the menu. */
 		compact?: boolean;
 		/** Narrow tablet: the file buttons do not fit in the top bar and live here
@@ -60,6 +64,17 @@
 	// Every tool draws on a click on the bed; selecting is the resting state.
 	// The label comes from the catalogue at read time, not at module load, so it
 	// follows the language.
+	/**
+	 * Which tools make something, and which only look.
+	 *
+	 * A mode is free to choose; what costs a write is what the mode then does. With no
+	 * server behind the app, choosing "rectangle" leads to a drag that cannot arrive —
+	 * so those go dead and say why. Selecting, dragging a node and measuring need
+	 * nothing from the server and stay, because an app that greys everything looks
+	 * broken when only the connection is.
+	 */
+	const MAKES: Tool[] = ['rect', 'circle', 'line', 'point', 'pen', 'text'];
+
 	let TOOLS = $derived<{ id: Tool; label: string; path: string }[]>([
 		{ id: 'select', label: t('rail.tool.select'), path: 'M4 3l7 18 2.5-7.5L21 11z' },
 		{
@@ -143,10 +158,15 @@
 		<button
 			class="tool"
 			aria-pressed={tool === item.id}
-			title={item.id === 'select' || canEdit
+			title={item.id === 'select'
 				? item.label
-				: t('rail.needsToken', { label: item.label })}
-			disabled={item.id !== 'select' && !canEdit}
+				: !canEdit
+					? t('rail.needsToken', { label: item.label })
+					: MAKES.includes(item.id) && writeOff
+						? `${item.label} — ${writeOff}`
+						: item.label}
+			disabled={item.id !== 'select' &&
+				(!canEdit || (MAKES.includes(item.id) && Boolean(writeOff)))}
 			onclick={() => (tool = item.id)}
 		>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -160,11 +180,11 @@
 		<!-- The two tablet tasks from DESIGN-SYSTEM are here directly, not in the
 		     menu: on the tablet beside the machine *this* is the work. -->
 		<hr />
-		<button class="tool" title={t('library.title')} onclick={() => { moreOpen = false; onOpenLibrary?.(); }}>
+		<button class="tool" title={writeOff ? `${t('library.title')} — ${writeOff}` : t('library.title')} disabled={Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenLibrary?.(); }}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
 			<span class="name">{t('rail.library.short')}</span>
 		</button>
-		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => { moreOpen = false; onOpenGrid?.(); }}>
+		<button class="tool" title={writeOff ? `${t('testgrid.title')} — ${writeOff}` : t('testgrid.title')} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenGrid?.(); }}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>
 			<span class="name">{t('testgrid.title')}</span>
 		</button>
@@ -209,11 +229,11 @@
 				<input type="file" aria-label={t('rail.placeImage')} accept=".png,.jpg,.jpeg,.gif,.bmp,.webp" disabled={!canEdit}
 					onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; moreOpen = false; if (f) onPlaceImage?.(f); }} />
 			</label>
-			<button class="row" role="menuitem" disabled={!canEdit} onclick={() => { moreOpen = false; onOpenGenerators?.(); }}>
+			<button class="row" role="menuitem" title={writeOff} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenGenerators?.(); }}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
 				<span>{t('rail.generators.short')}</span>
 			</button>
-			<button class="row" role="menuitem" disabled={!canEdit} onclick={() => { moreOpen = false; onOpenClipart?.(); }}>
+			<button class="row" role="menuitem" title={writeOff} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenClipart?.(); }}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
 				<span>{t('rail.clipart.short')}</span>
 			</button>
@@ -221,7 +241,7 @@
 			     the canvas menu is the only other door to it, and there is no long press
 			     on the canvas — so without this row the window has no door at all on a
 			     touch screen, while all four of its neighbours have one. -->
-			<button class="row" role="menuitem" disabled={!canEdit} onclick={() => { moreOpen = false; onOpenSeries?.(); }}>
+			<button class="row" role="menuitem" title={writeOff} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenSeries?.(); }}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
 				<span>{t('rail.series.short')}</span>
 			</button>
@@ -287,19 +307,19 @@
 		<hr />
 		<!-- Tools start on the left; a tool that can only be found on the right is
 		     found by nobody. -->
-		<button class="tool" title={t('rail.generators')} disabled={!canEdit} onclick={() => onOpenGenerators?.()}>
+		<button class="tool" title={writeOff ? `${t('rail.generators')} — ${writeOff}` : t('rail.generators')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenGenerators?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
 		</button>
-		<button class="tool" title={t('rail.clipart')} disabled={!canEdit} onclick={() => onOpenClipart?.()}>
+		<button class="tool" title={writeOff ? `${t('rail.clipart')} — ${writeOff}` : t('rail.clipart')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenClipart?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
 		</button>
 		<!-- One design burned once per row of a list: a workspace you search and
 		     compare in, so a window of its own — like the four beside it. No shortcut:
 		     none of those four has one either, and keys are scarce. -->
-		<button class="tool" title={t('rail.series')} disabled={!canEdit} onclick={() => onOpenSeries?.()}>
+		<button class="tool" title={writeOff ? `${t('rail.series')} — ${writeOff}` : t('rail.series')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenSeries?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
 		</button>
-		<button class="tool" title={t('testgrid.title')} disabled={!canEdit} onclick={() => onOpenGrid?.()}>
+		<button class="tool" title={writeOff ? `${t('testgrid.title')} — ${writeOff}` : t('testgrid.title')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenGrid?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>
 		</button>
 		<!-- The shared catalogue used to have a button of its own here, the fifteenth on
@@ -307,7 +327,7 @@
 		     modes live — what the next click on the bed does — plus the workspaces you
 		     design in; a catalogue you consult once per machine is neither. It is now a
 		     card at the top of the material library, one button along. -->
-		<button class="tool" title={t('library.title')} onclick={() => onOpenLibrary?.()}>
+		<button class="tool" title={writeOff ? `${t('library.title')} — ${writeOff}` : t('library.title')} disabled={Boolean(writeOff)} onclick={() => onOpenLibrary?.()}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
 		</button>
 	{/if}

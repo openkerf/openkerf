@@ -268,6 +268,7 @@
 					class:empty={kind.count === 0}
 					href={kind.count ? `/setup/type?kind=${kind.id}` : undefined}
 					aria-disabled={kind.count === 0}
+					title={kind.count === 0 ? t('reason.noneYet') : undefined}
 				>
 					<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 						<path d={kind.icon} />

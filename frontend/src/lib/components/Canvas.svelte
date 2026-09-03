@@ -2960,6 +2960,7 @@
 					class="btn subtle"
 					type="button"
 					disabled={tiling?.busy || !sheetId}
+					title={tiling?.busy ? t('reason.busy') : sheetId ? undefined : t('reason.noneYet')}
 					onclick={() => sheetId && tiling?.enableAndStart(sheetId)}
 				>
 					{t('canvas.burnInTiles')}

@@ -281,6 +281,7 @@ export const nl: Catalogue = {
 		other: 'Er komen {n} bruggen in.'
 	},
 	'stencil.crossing': 'De kortste brug moet {mm} overbruggen — dat is de dikte van het materiaal op zijn smalst.',
+	'stencil.nothingToBridge': 'Er valt niets uit deze vorm, dus er is niets te overbruggen',
 	'stencil.unbridged': {
 		one: 'Eén eiland is te klein voor een brug van deze breedte en valt eruit. Probeer een smallere brug.',
 		other: '{n} eilanden zijn te klein voor een brug van deze breedte en vallen eruit. Probeer een smallere brug.'
@@ -334,6 +335,13 @@ export const nl: Catalogue = {
 	// ── Waarom iets nu niet kan ────────────────────────────────────────────────
 	'reason.needsToken': 'Vereist een token',
 	'reason.busy': 'Er loopt nog een bewerking',
+	'reason.needsName': 'Typ eerst een naam',
+	'reason.needsText': 'Typ eerst de tekst',
+	'reason.needsQuery': 'Typ minstens twee letters om te zoeken',
+	'reason.needsMaterial': 'Kies eerst een materiaal',
+	'reason.noneYet': 'Hier staat nog niets',
+	'reason.stillReading': 'De foto wordt nog gelezen',
+	'reason.notLoaded': 'Er is nog niets opgehaald',
 	'reason.pickShape': 'Kies eerst een vorm',
 	'reason.needsTwo': 'Selecteer minstens twee vormen',
 	'reason.needsThree': 'Verdelen heeft minstens drie vormen nodig',
@@ -1092,6 +1100,7 @@ export const nl: Catalogue = {
 	'library.filteredMaterial': 'Gefilterde materiaal',
 	'library.operation': 'Bewerking',
 	'library.manual.note': 'Met de hand ingevoerd betekent: niet gemeten. Deze preset krijgt daarom de badge “Handmatig”.',
+	'library.manual.needsNumbers': 'Vul eerst een snelheid en een vermogen in',
 	'library.profiles': 'Machineprofielen ({n})',
 	'library.profiles.why': 'Een preset is pas herbruikbaar als je weet op welke machine hij gemaakt is — daarom staat het profiel los van de preset.',
 	'library.profile.deviceGone': 'machine niet aanwezig',

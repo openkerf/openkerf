@@ -236,7 +236,12 @@
 				</p>
 			{/if}
 			<div class="uitknoppen">
-				<button class="btn primary" disabled={profileBusy || !preview.known} onclick={neemProfiel}>
+				<button
+					class="btn primary"
+					disabled={profileBusy || !preview.known}
+					title={profileBusy ? t('common.busy') : t('reason.notLoaded')}
+					onclick={neemProfiel}
+				>
 					{profileBusy ? t('common.busy') : t('setup.profile.create')}
 				</button>
 				<button class="btn subtle" onclick={() => (preview = null)}

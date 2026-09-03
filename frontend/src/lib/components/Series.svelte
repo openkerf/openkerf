@@ -642,7 +642,7 @@
 						<input
 							type="file"
 							accept=".csv,.txt,.tsv"
-							disabled={!canEdit}
+							disabled={!canEdit} title={canEdit ? undefined : t('reason.needsToken')}
 							onchange={(e) => {
 								const input = e.currentTarget as HTMLInputElement;
 								const file = input.files?.[0];
@@ -983,6 +983,7 @@
 						type="checkbox"
 						bind:checked={skipBlank}
 						disabled={(sum?.step ?? 1) > 1}
+						title={(sum?.step ?? 1) > 1 ? t('series.skipBlank.cannot', { n: sum?.step ?? 1 }) : undefined}
 					/>
 					<span>
 						{t('series.skipBlank')}

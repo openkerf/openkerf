@@ -1002,6 +1002,7 @@
 				<select
 					value={pickedRecipe}
 					disabled={recepten.length === 0}
+					title={recepten.length === 0 ? t('grid.recipe.none') : undefined}
 					onchange={(e) =>
 						pickRecipe(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
 				>
@@ -1022,7 +1023,7 @@
 					{saving ? t('grid.recipe.dontSave') : t('grid.recipe.save')}
 				</button>
 				{#if pickedRecipe !== null}
-					<button class="btn quiet" disabled={recipeBusy} onclick={wipeRecipe}
+					<button class="btn quiet" disabled={recipeBusy} title={recipeBusy ? t('reason.busy') : undefined} onclick={wipeRecipe}
 						>{t('common.remove')}</button
 					>
 				{/if}
@@ -1045,6 +1046,7 @@
 					<button
 						class="btn"
 						disabled={recipeBusy || recipeName.trim() === ''}
+						title={recipeBusy ? t('reason.busy') : t('reason.needsName')}
 						onclick={saveRecipe}>{t('common.save')}</button
 					>
 				</div>
@@ -1107,7 +1109,7 @@
 							/>
 							<button
 								class="btn"
-								disabled={library.busy || newMaterial.trim() === ''}
+								disabled={library.busy || newMaterial.trim() === ''} title={library.busy ? t('reason.busy') : t('reason.needsName')}
 								onclick={makeMaterial}>{t('grid.newMaterial.create')}</button
 							>
 						</div>
@@ -1691,6 +1693,7 @@
 					<button
 						class="btn"
 						disabled={naarMachine === 'frame'}
+						title={naarMachine === 'frame' ? t('reason.busy') : undefined}
 						onclick={() => machineActie('/api/machine/frame', 'frame', 'frame-ready')}
 					>
 						{naarMachine === 'frame' ? t('grid.frameRunning') : t('job.frame')}
@@ -1698,6 +1701,7 @@
 					<button
 						class="btn primary"
 						disabled={naarMachine === 'start'}
+						title={naarMachine === 'start' ? t('reason.busy') : undefined}
 						onclick={() => machineActie('/api/job/start', 'start', 'start-ready')}
 					>
 						{naarMachine === 'start' ? t('grid.starting') : t('job.startJob')}
@@ -1714,7 +1718,7 @@
 		{/if}
 
 		<div class="actions">
-			<button class="btn" disabled={busy} onclick={suggest}>{t('grid.suggestRange')}</button>
+			<button class="btn" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={suggest}>{t('grid.suggestRange')}</button>
 			<!-- Form rule v4: the primary button is on the right, the helper on the left.
 			     They used to sit next to each other on the left, and then the button that
 			     goes into the wood is as prominent as the one that suggests a number. -->
@@ -1734,6 +1738,7 @@
 					class="btn"
 					class:primary={!noMaterial}
 					disabled={busy || !preview || previewError !== null}
+				title={busy ? t('reason.busy') : (previewError ?? t('reason.noneYet'))}
 					onclick={generate}
 				>
 					{#if busy}

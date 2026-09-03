@@ -57,6 +57,7 @@
 		<button
 			class="btn primary"
 			disabled={busy || !geldig || !count}
+			title={busy ? t('reason.busy') : !count ? t('reason.pickShape') : undefined}
 			onclick={() => onToepassen(value)}
 		>
 			{#if !count}

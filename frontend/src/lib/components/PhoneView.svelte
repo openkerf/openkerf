@@ -691,7 +691,7 @@
 			<p class="hint">{t('phone.cameraNoImage')}</p>
 		{/if}
 		{#if camera.state.available && !camOn}
-			<button class="camknop" onclick={() => camera.start()} disabled={camera.busy}>
+			<button class="camknop" onclick={() => camera.start()} disabled={camera.busy} title={camera.busy ? t('reason.busy') : undefined}>
 				{camera.busy
 					? t('phone.cameraStarting')
 					: imagePiece
@@ -891,7 +891,16 @@
 		{/if}
 		<div class="buttons">
 			{#if quiet}
-				<button class="brake resume" disabled={control.needsToken || !connected} onclick={() => control.resume()}>
+				<button
+					class="brake resume"
+					disabled={control.needsToken || !connected}
+					title={control.needsToken
+						? t('reason.needsToken')
+						: connected
+							? undefined
+							: t('transport.noServer')}
+					onclick={() => control.resume()}
+				>
 					{t('transport.resume')}
 				</button>
 			{:else}
@@ -905,6 +914,11 @@
 						phase,
 						blocked: control.needsToken || !connected
 					})}
+					title={control.needsToken
+						? t('reason.needsToken')
+						: !connected
+							? t('transport.noServer')
+							: t('transport.pause.nothing')}
 					onclick={pauzeer}
 				>
 					{pauzeGevraagd ? t('phone.pausing') : t('transport.pause')}
@@ -917,6 +931,7 @@
 				class="brake stop"
 				class:scherp={Boolean(current) && connected}
 				disabled={control.needsToken || !connected}
+				title={control.needsToken ? t('reason.needsToken') : t('transport.noServer.stop')}
 				onclick={() => control.stop()}
 			>
 				{t('transport.stop')}

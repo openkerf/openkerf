@@ -17,6 +17,7 @@
 	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
+	import { connection } from '$lib/connection.svelte';
 	import Canvas from '$components/Canvas.svelte';
 	import DesignPanel from '$components/DesignPanel.svelte';
 	import CutPath from '$components/CutPath.svelte';
@@ -50,6 +51,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		KEYS,
 		comboOf,
 		barMenu,
+		writeRefusal,
 	canvasMenu,
 		keyLabel,
 		nodeMenu,
@@ -1138,6 +1140,9 @@ import { SeriesStore } from '$lib/series.svelte';
 			clipboard: clipboard,
 			busy: edits.busy,
 			may: canEdit,
+			// No server outranks no token: with the engine gone nothing arrives, whatever
+			// the token says. `writeRefusal` puts them in that order.
+			offline: !connection.online,
 			layers: design.operations
 				.filter((op) => !op.grid)
 				.map((op) => ({
@@ -1431,6 +1436,7 @@ import { SeriesStore } from '$lib/series.svelte';
 
 <div class="main">
 	<ToolRail
+		writeOff={writeRefusal(actionContext)}
 		compact={tablet}
 		files={narrow}
 		{projectInRail}

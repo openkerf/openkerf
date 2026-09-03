@@ -136,6 +136,7 @@
 		<button
 			class="btn primary"
 			disabled={busy || query.trim().length < 2}
+			title={busy ? t('reason.busy') : t('reason.needsQuery')}
 			onclick={() => search()}
 		>
 			{busy ? t('clipart.searching') : t('clipart.search')}
@@ -208,7 +209,12 @@
 		<div class="more">
 			<span class="count mono">{t('clipart.shown', { n: results.length })}</span>
 			{#if hasMore}
-				<button class="btn" disabled={loadingMore} onclick={() => search(true)}>
+				<button
+					class="btn"
+					disabled={loadingMore}
+					title={loadingMore ? t('reason.busy') : undefined}
+					onclick={() => search(true)}
+				>
 					{loadingMore ? t('clipart.fetching') : t('clipart.more')}
 				</button>
 			{:else}

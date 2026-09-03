@@ -101,7 +101,7 @@
 
 	<div class="actions">
 		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
-		<button class="btn primary" disabled={!text.trim()} onclick={confirm}>
+		<button class="btn primary" disabled={!text.trim()} title={t('reason.needsName')} onclick={confirm}>
 			{initial ? t('text.update') : t('text.place')}
 		</button>
 	</div>

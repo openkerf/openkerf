@@ -333,7 +333,13 @@ On a material:
 
 ## When an operation is greyed out
 
-A grey button always says why, in its tooltip. These are all the reasons:
+A grey button always says why, in its tooltip — and that is now true of every control in
+the app and not only of the rows in the menus. It was true of 91 of the 180 before this
+round; the other 89 went pale and said nothing, which the code itself calls a riddle.
+
+Two of the reasons below carry most of them: "Another operation is still running" while
+an edit is on its way back, and "Requires a token" for a session that may not write.
+These are all of them:
 
 | Message | What to do |
 |---|---|
@@ -357,7 +363,17 @@ A grey button always says why, in its tooltip. These are all the reasons:
 | This is the last node; there is no piece after it | The end of an open line has nothing leaving it to bend or divide |
 | A closed shape needs three nodes | Removing this one would leave no shape behind |
 | A line needs two nodes | The same, for an open line |
-| Make a layer in the Layers tab first | Applying a setting needs a layer to put it on |
+| Make a layer in the Layers tab first | Applying a preset needs a layer to put it on |
+| No connection to OpenKerf — this button will not arrive. | The app cannot reach its own server. Everything that would write is off until it is back; selecting, dragging a node, measuring and zooming keep working, because they need nothing from it |
+| Type a name first | The field above it is empty |
+| Type the text first | A QR code, a barcode and arc text are made out of a text |
+| Type at least two letters to search | For the clipart search |
+| Pick a material first | Merging needs the material to merge into |
+| There is nothing here yet | The list, the choice or the picture it works on is still empty |
+| The photograph is still being read | The board is being looked up from its code |
+| Nothing has been fetched yet | The answer this button acts on has not come back |
+| Fill in a speed and a power first | A preset by hand needs both numbers |
+| Nothing in this shape would fall out, so there is nothing to bridge | For the stencil window |
 | There is only one material to merge | Merging needs a second material to merge into |
 
 On the tool rail the same rule applies with its own wording: a tool you cannot

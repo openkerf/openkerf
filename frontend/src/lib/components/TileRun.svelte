@@ -156,7 +156,7 @@
 			<!-- This button says what it records too: with two circles in front of
 			     you, "Here" on its own is not enough to know which of the two you
 			     are confirming. -->
-			<button class="btn primary" type="button" onclick={here} disabled={tiling.busy}>
+			<button class="btn primary" type="button" onclick={here} disabled={tiling.busy} title={tiling.busy ? t('reason.busy') : undefined}>
 				{#if first}
 					{t('tiles.hereCorner')}
 				{:else}
@@ -178,16 +178,16 @@
 				{/if}
 			</p>
 			<div class="actions">
-				<button class="btn primary" type="button" onclick={() => tiling.burn()} disabled={tiling.busy}>
+				<button class="btn primary" type="button" onclick={() => tiling.burn()} disabled={tiling.busy} title={tiling.busy ? t('reason.busy') : undefined}>
 					{t('tiles.burnThis')}
 				</button>
-				<button class="btn" type="button" onclick={next} disabled={tiling.busy}>
+				<button class="btn" type="button" onclick={next} disabled={tiling.busy} title={tiling.busy ? t('reason.busy') : undefined}>
 					{t('tiles.next')}
 				</button>
 				{#if mayRetry}
 					<!-- The exception, not the ordinary route: only visible after the
 					     refusal, and deliberately not the primary button. -->
-					<button class="btn warn" type="button" onclick={burnAgain} disabled={tiling.busy}>
+					<button class="btn warn" type="button" onclick={burnAgain} disabled={tiling.busy} title={tiling.busy ? t('reason.busy') : undefined}>
 						{t('tiles.burnAgain')}
 					</button>
 				{/if}

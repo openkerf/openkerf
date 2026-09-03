@@ -16,6 +16,7 @@
 		max = null,
 		unit = null,
 		disabled = false,
+		why = undefined,
 		onchange
 	}: {
 		label: string;
@@ -26,6 +27,9 @@
 		max?: number | null;
 		unit?: string | null;
 		disabled?: boolean;
+		/** Why it is off. A stepper that greys without a word is the same riddle as a
+		 *  grey button, and there is more of it here: three controls go dead at once. */
+		why?: string;
 		/** For fields that have to go straight to the machine rather than to a form that
 		 *  is saved later. Does not fire while typing. */
 		onchange?: (value: string) => void;
@@ -77,7 +81,7 @@
 	}
 </script>
 
-<div class="field">
+<div class="field" title={disabled ? why : undefined}>
 	<label class="name" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
 	<span class="stepper">
 		<button
@@ -94,6 +98,7 @@
 			inputmode="decimal"
 			bind:value
 			{disabled}
+			title={disabled ? why : undefined}
 			onkeydown={onKey}
 			onchange={() => onchange?.(value)}
 		/>

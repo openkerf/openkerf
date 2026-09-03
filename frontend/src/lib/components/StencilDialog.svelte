@@ -128,6 +128,13 @@
 		<button
 			class="btn primary"
 			disabled={busy || !usable || !!error || !report?.bridges}
+			title={busy
+				? t('reason.busy')
+				: error
+					? error
+					: report?.bridges
+						? undefined
+						: t('stencil.nothingToBridge')}
 			onclick={() => onApply(numbers.bridge, numbers.per)}
 		>
 			<!-- The numbers on the button, because it is the last thing read before the

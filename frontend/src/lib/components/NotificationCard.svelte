@@ -52,7 +52,7 @@
 			<button class="btn" onclick={() => { notifications.notNow(); onDone?.(); }}
 				>{t('notify.ask.notNow')}</button
 			>
-			<button class="btn primary" disabled={busy} onclick={turnOn}>
+			<button class="btn primary" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={turnOn}>
 				{busy ? t('common.busy') : t('notify.ask.turnOn')}
 			</button>
 		</div>
@@ -70,6 +70,7 @@
 				type="checkbox"
 				checked={notifications.on && notifications.permission === 'granted'}
 				disabled={notifications.permission !== 'granted'}
+				title={permissionText(notifications.permission)}
 				onchange={(e) => notifications.set(e.currentTarget.checked)}
 			/>
 			<span class="track" aria-hidden="true"><span class="knob"></span></span>
@@ -89,7 +90,7 @@
 		</p>
 
 		{#if notifications.permission === 'default'}
-			<button class="btn primary" disabled={busy} onclick={turnOn}>
+			<button class="btn primary" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={turnOn}>
 				{busy ? t('common.busy') : t('notify.askPermission')}
 			</button>
 		{:else if notifications.permission === 'denied'}

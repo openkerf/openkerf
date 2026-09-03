@@ -105,7 +105,7 @@
 			<!-- Whoever got here via the search button chose no model in step 2; going
 			     back to the model list would show a step they never saw. -->
 			<a class="btn" href={found ? '/setup/kind' : '/setup/type'}>{t('common.back')}</a>
-			<button class="btn primary" onclick={create} disabled={store.busy || !label.trim()}>
+			<button class="btn primary" onclick={create} disabled={store.busy || !label.trim()} title={store.busy ? t('reason.busy') : t('reason.needsName')}>
 				{store.busy ? t('common.busy') : t('setup.create')}
 			</button>
 		</div>

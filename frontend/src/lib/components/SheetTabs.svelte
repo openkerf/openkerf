@@ -250,7 +250,7 @@
 			<p>{t('sheets.removeAsk', { sheet: sheet.name, what: telling(toRemove) })}</p>
 			<div class="buttons">
 				<button class="annuleer" onclick={() => (bevestigen = null)}>{t('common.cancel')}</button>
-				<button class="gone" disabled={sheets.busy} onclick={() => verwijder(sheet.id)}>
+				<button class="gone" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={() => verwijder(sheet.id)}>
 					{sheets.busy
 						? t('common.busy')
 						: t('sheets.removeConfirm', { what: telling(toRemove) })}

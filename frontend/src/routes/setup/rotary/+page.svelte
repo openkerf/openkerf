@@ -246,7 +246,7 @@
 			</fieldset>
 
 			<div class="actions">
-				<button class="btn primary" disabled={rotary.busy} onclick={save}>
+				<button class="btn primary" disabled={rotary.busy} title={rotary.busy ? t('reason.busy') : undefined} onclick={save}>
 					{rotary.busy ? t('common.busy') : t('rotary.save')}
 				</button>
 			</div>
@@ -277,7 +277,12 @@
 					</p>
 				{/if}
 				<div class="actions">
-					<button class="btn" disabled={!previewUsable || rotary.busy} onclick={useFactor}>
+					<button
+						class="btn"
+						disabled={!previewUsable || rotary.busy}
+						title={rotary.busy ? t('reason.busy') : t('api.rotary.needsMeasurement')}
+						onclick={useFactor}
+					>
 						{t('rotary.calibrate.apply')}
 					</button>
 				</div>

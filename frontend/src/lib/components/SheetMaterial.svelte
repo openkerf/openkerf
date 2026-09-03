@@ -77,7 +77,7 @@
 		<span>{t('library.material')}</span>
 		<select
 			value={sheet.material_id === null ? '' : String(sheet.material_id)}
-			disabled={sheets.busy}
+			disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined}
 			onchange={(e) => pickMaterial(e.currentTarget.value)}
 		>
 			<option value="">{t('sheetMat.notFilled')}</option>
@@ -95,7 +95,12 @@
 				placeholder={t('library.material.placeholder')}
 				aria-label={t('gen.text')}
 			/>
-			<button class="btn primary" disabled={!fresh.trim() || library.busy} onclick={makeMaterial}>
+			<button
+				class="btn primary"
+				disabled={!fresh.trim() || library.busy}
+				title={library.busy ? t('reason.busy') : t('reason.needsName')}
+				onclick={makeMaterial}
+			>
 				{t('sheetMat.add')}
 			</button>
 			<button class="btn" onclick={() => (adding = false)}>{t('common.cancel')}</button>
@@ -113,7 +118,7 @@
 				<button
 					class="chip"
 					aria-pressed={thickness === mm}
-					disabled={sheets.busy}
+					disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined}
 					onclick={() => pickThickness(thickness === mm ? null : mm)}
 				>{mm}</button>
 			{/each}

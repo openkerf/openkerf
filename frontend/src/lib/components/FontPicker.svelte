@@ -184,7 +184,12 @@
 		{#if importError}<p class="err">{importError}</p>{/if}
 		<div class="fonts">
 			{#each shownImportable as item (item.file)}
-				<button class="font" disabled={busy !== null} onclick={() => bring(item)}>
+				<button
+					class="font"
+					disabled={busy !== null}
+					title={busy === null ? undefined : t('reason.busy')}
+					onclick={() => bring(item)}
+				>
 					{busy === item.file ? t('common.busy') : item.name}
 				</button>
 			{:else}

@@ -95,7 +95,7 @@
 		<label class="pick">
 			<span>{t('calibrate.which')}</span>
 			<select
-				disabled={camera.busy}
+				disabled={camera.busy} title={camera.busy ? t('reason.busy') : undefined}
 				onchange={(e) => camera.start(e.currentTarget.value)}
 			>
 				{#each camera.list as one (one.path)}
@@ -158,7 +158,7 @@
 	<div class="actions">
 		<button class="btn" onclick={() => camera.resetCalibration()}>{t('calibrate.clear')}</button>
 		<button class="btn" onclick={cancel}>{t('common.cancel')}</button>
-		<button class="btn primary" disabled={camera.busy} onclick={save}>{t('common.save')}</button>
+		<button class="btn primary" disabled={camera.busy} title={camera.busy ? t('reason.busy') : undefined} onclick={save}>{t('common.save')}</button>
 	</div>
 </Dialog>
 

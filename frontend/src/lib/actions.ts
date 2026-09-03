@@ -200,6 +200,9 @@ export type Context = {
 	clipboard: number;
 	/** Is a write action still in flight? */
 	busy: boolean;
+	/** Is the app cut off from its own server? Then no write arrives at all, whatever
+	 *  the token says. */
+	offline?: boolean;
 	/** May this session write (token)? */
 	may: boolean;
 	/** The layers the selection can be put into. */
@@ -317,10 +320,32 @@ function needsThree(ctx: Context): string | undefined {
 	return undefined;
 }
 
-function mayWrite(ctx: Context): string | undefined {
+/**
+ * Why a write cannot be sent right now.
+ *
+ * Three reasons in one order, and the order is the point: **no server outranks no
+ * token**. With the engine gone "requires a token" is true and useless — there is
+ * nothing to send the token to.
+ *
+ * Measured before this existed, with the engine killed under a running page: the tool
+ * rail stayed 0 of 14 disabled and the action bar 12 of 15 — and those twelve were grey
+ * for want of a selection, not for want of a server. Every drawing control stayed live
+ * while nothing it did could arrive.
+ *
+ * The sentence is the one the top bar has used since gap E1 about its own stop button.
+ * One text, one key.
+ */
+export function writeRefusal(
+	ctx: Pick<Context, 'may' | 'busy' | 'offline'>
+): string | undefined {
+	if (ctx.offline) return t('transport.noServer');
 	if (!ctx.may) return t('reason.needsToken');
 	if (ctx.busy) return t('reason.busy');
 	return undefined;
+}
+
+function mayWrite(ctx: Context): string | undefined {
+	return writeRefusal(ctx);
 }
 
 /**
@@ -336,10 +361,10 @@ function mayWrite(ctx: Context): string | undefined {
  * only then the reason particular to bridges.
  */
 export function bridgesRefusal(
-	ctx: Pick<Context, 'may' | 'busy' | 'count' | 'lockedCount' | 'bridges'>
+	ctx: Pick<Context, 'may' | 'busy' | 'offline' | 'count' | 'lockedCount' | 'bridges'>
 ): string | undefined {
-	if (!ctx.may) return t('reason.needsToken');
-	if (ctx.busy) return t('reason.busy');
+	const cannot = writeRefusal(ctx);
+	if (cannot) return cannot;
 	if (ctx.lockedCount > 0) {
 		return ctx.lockedCount === ctx.count && ctx.count === 1
 			? t('reason.locked')

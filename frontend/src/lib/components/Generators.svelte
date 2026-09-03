@@ -510,7 +510,12 @@
 			     through `opdracht()` with everything else, so the preview and the button
 			     cannot ask different things. -->
 			<label class="check listfollow" title={listAttached ? undefined : t('api.gen.noList')}>
-				<input type="checkbox" bind:checked={grid.follow_list} disabled={!listAttached} />
+				<input
+					type="checkbox"
+					bind:checked={grid.follow_list}
+					disabled={!listAttached}
+					title={listAttached ? undefined : t('api.gen.noList')}
+				/>
 				<span>{t('gen.followList')}</span>
 			</label>
 			{#if !listAttached}
@@ -519,7 +524,8 @@
 				<p class="hint">{t('api.gen.noList')}</p>
 			{/if}
 		</div>
-		<button class="btn primary go" disabled={blocked || busy} onclick={() => run(opdracht())}>
+		<button class="btn primary go" disabled={blocked || busy}
+			title={busy ? t('reason.busy') : blocked ? t('reason.pickShape') : undefined} onclick={() => run(opdracht())}>
 			{t('gen.grid.go', { n: n(grid.columns) * n(grid.rows), tail: buttonTail })}
 		</button>
 	{:else if tab === 'radial'}
@@ -534,7 +540,8 @@
 				></label
 			>
 		</div>
-		<button class="btn primary go" disabled={blocked || busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={blocked || busy}
+			title={busy ? t('reason.busy') : blocked ? t('reason.pickShape') : undefined} onclick={() => run(opdracht())}
 			>{t('gen.radial.go', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'polygon'}
@@ -552,7 +559,7 @@
 				<NumberField label={t('gen.centreY')} unit="mm" step={1} bind:value={polygon.cy_mm} />
 			</div>
 		</div>
-		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
 			>{t('gen.draw', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'box'}
@@ -585,7 +592,7 @@
 				<span>{t('gen.spreadSheets')}</span>
 			</label>
 		</div>
-		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
 			>{t('gen.makePanels', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'qrcode'}
@@ -602,7 +609,7 @@
 				<NumberField label={t('gen.size')} unit="mm" step={1} bind:value={qr.size_mm} />
 			</div>
 		</div>
-		<button class="btn primary go" disabled={busy || !qr.text.trim()} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy || !qr.text.trim()} title={busy ? t('reason.busy') : t('reason.needsText')} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'barcode'}
@@ -628,7 +635,7 @@
 				<NumberField label={t('gen.height')} unit="mm" step={1} bind:value={bar.height_mm} />
 			</div>
 		</div>
-		<button class="btn primary go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy || !bar.text.trim()} title={busy ? t('reason.busy') : t('reason.needsText')} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'arctext'}
@@ -672,7 +679,7 @@
 				<FontPicker bind:font={arc.font} bind:fontName={arc.fontName} sample={arc.text} />
 			{/if}
 		</div>
-		<button class="btn primary go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy || !arc.text.trim()} title={busy ? t('reason.busy') : t('reason.needsText')} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'focus'}
@@ -706,7 +713,7 @@
 				><input type="checkbox" bind:checked={focus.text} /><span>{t('gen.focus.text')}</span></label
 			>
 		</div>
-		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
 			>{t('gen.focus.go', { tail: buttonTail })}</button
 		>
 	{:else}
@@ -737,7 +744,12 @@
 				<p class="bridgeline">{bridges}</p>
 			{/if}
 			<label class="check areatoggle">
-				<input type="checkbox" bind:checked={hinge.from_selection} disabled={!hasSelection} />
+				<input
+					type="checkbox"
+					bind:checked={hinge.from_selection}
+					disabled={!hasSelection}
+					title={hasSelection ? undefined : t('reason.pickShape')}
+				/>
 				<span>{hasSelection ? t('gen.hinge.fromSelection') : t('gen.hinge.noSelection')}</span>
 			</label>
 			{#if !hinge.from_selection}
@@ -751,7 +763,7 @@
 				</div>
 			{/if}
 		</div>
-		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
 			>{t('gen.hinge.go', { tail: buttonTail })}</button
 		>
 	{/if}

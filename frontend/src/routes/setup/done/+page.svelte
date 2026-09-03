@@ -123,7 +123,7 @@
 					{t('setup.sheetFits.offcut', { width: size(sheetQuestion.sheet.width_mm) })}
 				</p>
 				<div class="sheetbuttons">
-					<button class="btn primary" disabled={sheets.busy} onclick={useBedSize}>
+					<button class="btn primary" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={useBedSize}>
 						{t('setup.sheetToBed')}
 					</button>
 					<button class="btn subtle" onclick={() => (sheetAnswer = 'kept')}>

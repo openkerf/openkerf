@@ -291,6 +291,7 @@ export const en = {
 		other: '{n} bridges go in.'
 	},
 	'stencil.crossing': 'The shortest bridge has to span {mm} — that is the thickness of the material at its narrowest.',
+	'stencil.nothingToBridge': 'Nothing in this shape would fall out, so there is nothing to bridge',
 	'stencil.unbridged': {
 		one: 'One island is too small for a bridge of this width and will fall out. Try a narrower bridge.',
 		other: '{n} islands are too small for a bridge of this width and will fall out. Try a narrower bridge.'
@@ -353,6 +354,13 @@ export const en = {
 	// ── Why an operation cannot run now ────────────────────────────────────────
 	'reason.needsToken': 'Requires a token',
 	'reason.busy': 'Another operation is still running',
+	'reason.needsName': 'Type a name first',
+	'reason.needsText': 'Type the text first',
+	'reason.needsQuery': 'Type at least two letters to search',
+	'reason.needsMaterial': 'Pick a material first',
+	'reason.noneYet': 'There is nothing here yet',
+	'reason.stillReading': 'The photograph is still being read',
+	'reason.notLoaded': 'Nothing has been fetched yet',
 	'reason.pickShape': 'Pick a shape first',
 	'reason.needsTwo': 'Select at least two shapes',
 	'reason.needsThree': 'Distributing needs at least three shapes',
@@ -1123,6 +1131,7 @@ export const en = {
 	'library.filteredMaterial': 'Filtered material',
 	'library.operation': 'Operation',
 	'library.manual.note': 'Entered by hand means: not measured. This preset therefore gets the “Manual” badge.',
+	'library.manual.needsNumbers': 'Fill in a speed and a power first',
 	'library.profiles': 'Machine profiles ({n})',
 	'library.profiles.why': 'A preset is only reusable when you know which machine it was made on — which is why the profile stands apart from the preset.',
 	// Two states, not one. A machine that is not here may come back when you plug it in;

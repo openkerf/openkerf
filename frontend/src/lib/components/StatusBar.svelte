@@ -230,6 +230,7 @@
 				<button
 					class="verbind"
 					disabled={control.busy === 'disconnect'}
+					title={control.busy === 'disconnect' ? t('reason.busy') : undefined}
 					onclick={() => {
 						zekerVerbreken = false;
 						control.disconnect();

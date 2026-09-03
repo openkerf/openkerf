@@ -184,7 +184,7 @@
 			{#each starter.imports as done (done.batch)}
 				<li>
 					<span>{t('starter.took', { n: done.presets, material: done.material })}</span>
-					<button class="btn subtle mini" onclick={() => undo(done.batch)} disabled={starter.busy}>
+					<button class="btn subtle mini" onclick={() => undo(done.batch)} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
 						{t('starter.undo')}
 					</button>
 				</li>
@@ -214,7 +214,7 @@
 		{#if starter.catalogue.very_stale}
 			<p class="muted why">
 				{t('starter.from.old')}
-				<button class="btn subtle mini" onclick={() => look(true)} disabled={starter.busy}>
+				<button class="btn subtle mini" onclick={() => look(true)} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
 					{t('starter.refresh')}
 				</button>
 			</p>
@@ -447,7 +447,7 @@
 		     and the focus of a reader who pressed with the keyboard fell to the body. -->
 		{#if view.canFetch && !canFold}
 			<div class="buttons">
-				<button class="btn" onclick={() => look()} disabled={starter.busy}>
+				<button class="btn" onclick={() => look()} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
 					{starter.busy ? t('starter.looking') : t('starter.look')}
 				</button>
 			</div>
@@ -483,7 +483,7 @@
 			{#if looking && !starter.busy}
 				<button class="btn subtle" onclick={() => (looking = false)}>{t('starter.hide')}</button>
 			{:else}
-				<button class="btn subtle" onclick={() => look()} disabled={starter.busy}>
+				<button class="btn subtle" onclick={() => look()} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
 					{starter.busy ? t('starter.looking') : t('starter.door')}
 				</button>
 			{/if}

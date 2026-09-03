@@ -563,6 +563,7 @@
 					accept="image/*"
 					capture="environment"
 					disabled={reading}
+					title={reading ? t('reason.stillReading') : undefined}
 					onchange={readBoardFromPhoto}
 				/>
 			</label>
@@ -726,6 +727,13 @@
 					<button
 						class="btn primary"
 						disabled={busy || picked.length === 0 || grid.material_id === null}
+						title={busy
+							? t('reason.busy')
+							: grid.material_id === null
+								? t('result.gridNoMaterial')
+								: picked.length === 0
+									? t('reason.noneYet')
+									: undefined}
 						onclick={makePresets}
 					>
 						{#if busy}

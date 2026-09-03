@@ -11,13 +11,17 @@
 		value = $bindable(),
 		label,
 		mono = false,
-		disabled = false
+		disabled = false,
+		why = undefined
 	}: {
 		options: { value: T; label: string; title?: string }[];
 		value: T;
 		label: string;
 		mono?: boolean;
 		disabled?: boolean;
+		/** Why the whole row is off. The options keep their own titles; this is the one
+		 *  the reader needs when none of them can be pressed. */
+		why?: string;
 	} = $props();
 </script>
 
@@ -27,7 +31,7 @@
 			role="radio"
 			aria-checked={value === option.value}
 			class:on={value === option.value}
-			title={option.title}
+			title={disabled ? why : option.title}
 			{disabled}
 			onclick={() => (value = option.value)}
 		>{option.label}</button>

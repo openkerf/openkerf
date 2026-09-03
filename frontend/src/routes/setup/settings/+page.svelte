@@ -407,6 +407,7 @@
 					min={1}
 					max={1000}
 					disabled={wattUnknown}
+					why={t('setup.laser.wattUnknown')}
 				/>
 				<label class="toggle">
 					<input type="checkbox" bind:checked={wattUnknown} />
@@ -467,7 +468,7 @@
 
 		<div class="actions">
 			<a class="btn" href="/setup">{t('setup.skip')}</a>
-			<button class="btn primary" onclick={save} disabled={store.busy}>
+			<button class="btn primary" onclick={save} disabled={store.busy} title={store.busy ? t('reason.busy') : undefined}>
 				{store.busy ? t('setup.saving') : t('setup.saveAndFinish')}
 			</button>
 		</div>

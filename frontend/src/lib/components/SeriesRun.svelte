@@ -192,7 +192,7 @@
 			<!-- The exception and not the ordinary route: only after the refusal, and
 			     deliberately not the primary button. Going over work that is already
 			     there is only ever right when the last attempt was spoiled. -->
-			<button class="btn warn" type="button" disabled={series.busy} onclick={() => burn(true)}>
+			<button class="btn warn" type="button" disabled={series.busy} title={series.busy ? t('reason.busy') : undefined} onclick={() => burn(true)}>
 				{t('series.burnAgain')}
 			</button>
 		{/if}

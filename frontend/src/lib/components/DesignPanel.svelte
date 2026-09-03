@@ -762,7 +762,7 @@
 		     differently makes the reader think there are two problems. -->
 		<p>{t('canvas.outsideBed', { n: strays.length })}</p>
 		{#if canEdit}
-			<button class="rot" disabled={edits.busy} onclick={() => onArrange?.('rescue')}>
+			<button class="rot" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onArrange?.('rescue')}>
 				{t('action.rescue')}
 			</button>
 		{/if}
@@ -1019,7 +1019,7 @@
 					<p class="hint">{t('panel.locked.body')}</p>
 					<button
 						class="rot"
-						disabled={!canEdit || edits.busy}
+						disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
 						onclick={() => onUnlock?.()}>{t('action.unlock')}</button
 					>
 				</div>
@@ -1062,6 +1062,7 @@
 							min={1}
 							max={200}
 							disabled={!canEdit || edits.busy}
+							why={bridgeOff}
 							onchange={(v) => applyBridges({ count: Number(v) })}
 						/>
 						<NumberField
@@ -1071,6 +1072,7 @@
 							step={0.5}
 							min={0.1}
 							disabled={!canEdit || edits.busy}
+							why={bridgeOff}
 							onchange={(v) => applyBridges({ length_mm: Number(v) })}
 						/>
 					</div>
@@ -1150,6 +1152,7 @@
 						<button
 							class="rot"
 							disabled={edits.busy || !image?.adjustments.some((a) => a.enabled)}
+							title={edits.busy ? t('reason.busy') : t('reason.noneYet')}
 							onclick={() => onImageClear?.()}
 						>{t('panel.image.clearAll')}</button>
 					</div>
@@ -1160,7 +1163,7 @@
 								<input
 									type="checkbox"
 									checked={item.enabled}
-									disabled={edits.busy}
+									disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
 									onchange={(e) => onImageSet?.(item.name, e.currentTarget.checked, null)}
 								/>
 								<span>{item.label}</span>
@@ -1176,7 +1179,7 @@
 												max={item.ranges[key][1]}
 												step={key === 'radius' || key === 'factor' ? 0.1 : 1}
 												{value}
-												disabled={edits.busy}
+												disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
 												onchange={(e) =>
 													onImageSet?.(item.name, true, {
 														[key]: Number(e.currentTarget.value)
@@ -1188,7 +1191,7 @@
 										<label class="fx-value">
 											<span>{t('panel.image.kind')}</span>
 											<select
-												disabled={edits.busy}
+												disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
 												onchange={(e) =>
 													onImageSet?.(item.name, true, { type: e.currentTarget.value })}
 											>
@@ -1344,7 +1347,7 @@
 				     only there when it means something, and then it says how many. -->
 				<p class="tidyrow">
 					{t('panel.empties', { n: emptyLayers.length })}
-					<button class="alsLink" disabled={edits.busy} onclick={() => onPrune?.()}
+					<button class="alsLink" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onPrune?.()}
 						>{t('panel.tidyUp')}</button
 					>
 				</p>
@@ -1369,7 +1372,7 @@
 					{/if}
 				</span>
 				<button class="rot" onclick={() => (confirmDropAll = false)}>{t('common.cancel')}</button>
-				<button class="rot drop" disabled={edits.busy} onclick={dropAllLayers}>
+				<button class="rot drop" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={dropAllLayers}>
 					{t('panel.dropAll.confirm')}
 				</button>
 			</div>
@@ -1748,6 +1751,7 @@
 							label={t('panel.kindOf', { label: op.label })}
 							options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
 							disabled={edits.busy}
+							why={t('reason.busy')}
 							bind:value={() => kindOf(op.type), (value) => retypeLayer(op.id, value)}
 						/>
 						<p class="hint">{t('panel.kind.hint')}</p>
@@ -1776,7 +1780,7 @@
 							<input
 								type="checkbox"
 								checked={op.air_assist}
-								disabled={edits.busy}
+								disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
 								onchange={(e) => patchLayer(op.id, { air_assist: e.currentTarget.checked })}
 							/>
 							<span>{t('panel.airDuring')}</span>
@@ -1800,6 +1804,7 @@
 								min={-20}
 								max={20}
 								disabled={edits.busy}
+								why={t('reason.busy')}
 								onchange={(v) => patchLayer(op.id, { z_step_mm: Number(v) })}
 							/>
 							<p class="hint">
@@ -1831,6 +1836,7 @@
 							min={10}
 							max={2000}
 							disabled={edits.busy}
+							why={t('reason.busy')}
 							onchange={(v) => patchLayer(op.id, { dpi: Number(v) })}
 						/>
 						<NumberField
@@ -1841,6 +1847,7 @@
 							min={0}
 							max={50}
 							disabled={edits.busy}
+							why={t('reason.busy')}
 							onchange={(v) => patchLayer(op.id, { overscan_mm: Number(v) })}
 						/>
 						</div>
@@ -1916,7 +1923,7 @@
 							<input
 								type="checkbox"
 								checked={op.output}
-								disabled={!canEdit || edits.busy}
+								disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
 								onchange={(e) => patchLayer(op.id, { output: e.currentTarget.checked })}
 							/>
 							<span class="mono">{op.grid?.speed_mm_s}·{op.grid?.power_percent}%</span>
@@ -1948,7 +1955,7 @@
 			<button
 				class="add"
 				aria-haspopup="menu"
-				disabled={edits.busy}
+				disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
 				onclick={(e) => {
 					const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
 					rowMenu = {

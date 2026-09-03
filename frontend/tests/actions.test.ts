@@ -16,6 +16,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	barMenu,
+	writeRefusal,
 	bridgesRefusal,
 	KEYS,
 	alignActions,
@@ -57,6 +58,7 @@ function context(over: Partial<Context> = {}): Context {
 		clipboard: 0,
 		busy: false,
 		may: true,
+		offline: false,
 		layers: [],
 		sheets: [],
 		snap: true,
@@ -599,4 +601,28 @@ test('a workspace that writes says so when this session may not', () => {
 	for (const id of ['library', 'test-grid', 'generators', 'clipart', 'series']) {
 		assert.equal(off.find((r) => r.id === id).off, 'Requires a token', `${id} stayed open`);
 	}
+});
+
+test('with no server behind it, a write says so before you press it', () => {
+	// Measured with the engine killed under a running page: the tool rail stayed 0 of 14
+	// disabled and the action bar stayed 12 of 15 — and those twelve were grey because
+	// nothing was selected, not because the server had gone. So every drawing control
+	// stayed live while nothing it did could arrive; the only sign was a card in the
+	// corner.
+	//
+	// The top bar has had the sentence for this since gap E1, about its own stop button:
+	// "No connection to OpenKerf — this button will not arrive." One text, one key, and
+	// now every write reads it.
+	//
+	// The order matters. No server outranks no token: with the engine gone, "requires a
+	// token" is true and useless — there is nothing to send the token to.
+	assert.equal(writeRefusal({ may: true, busy: false, offline: true }), 'No connection to OpenKerf — this button will not arrive.');
+	assert.equal(writeRefusal({ may: false, busy: false, offline: true }), 'No connection to OpenKerf — this button will not arrive.');
+	assert.equal(writeRefusal({ may: false, busy: false, offline: false }), 'Requires a token');
+	assert.equal(writeRefusal({ may: true, busy: true, offline: false }), 'Another operation is still running');
+	assert.equal(writeRefusal({ may: true, busy: false, offline: false }), undefined);
+
+	// And the menu rows carry it, because they read the same function.
+	const row = rows(objectMenu(context({ offline: true }), HANDLERS)).find((r) => r.id === 'bridges');
+	assert.equal(row.off, 'No connection to OpenKerf — this button will not arrive.');
 });

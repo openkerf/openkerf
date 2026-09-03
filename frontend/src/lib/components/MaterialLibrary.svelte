@@ -938,7 +938,7 @@
 				>
 				<button
 					class={big ? 'btn primary' : 'mini'}
-					disabled={library.busy || !newMaterial.trim()}
+					disabled={library.busy || !newMaterial.trim()} title={library.busy ? t('reason.busy') : t('reason.needsName')}
 					onclick={createMaterial}>{t('common.save')}</button
 				>
 			</div>
@@ -1164,7 +1164,7 @@
 					</button>
 					<button
 						class="mini"
-						disabled={library.busy || !handleDraft.trim()}
+						disabled={library.busy || !handleDraft.trim()} title={library.busy ? t('reason.busy') : t('reason.needsName')}
 						onclick={() => offer(preset)}
 					>
 						{t('library.share.open')}
@@ -1311,7 +1311,7 @@
 					     again. It takes the settings of that batch and the materials the batch
 					     created that nothing else uses — the rest stays. -->
 					<div class="batch">
-						<button class="mini danger" disabled={library.busy} onclick={() => undoImport(preset.import_batch ?? '')}>
+						<button class="mini danger" disabled={library.busy} title={library.busy ? t('reason.busy') : undefined} onclick={() => undoImport(preset.import_batch ?? '')}>
 							{t('library.batch.undo')}
 						</button>
 						<span class="fine">{t('library.batch.undo.why')}</span>
@@ -1594,6 +1594,7 @@
 				class="btn primary"
 				class:danger={mode === 'replace'}
 				disabled={library.busy || (mode === 'replace' && !wipeConfirmed)}
+				title={library.busy ? t('reason.busy') : wipeConfirmed ? undefined : t('import.wipe.confirm')}
 				onclick={importeren}
 			>
 				{mode === 'replace' ? t('import.doReplace') : t('import.merge')}
@@ -1665,7 +1666,7 @@
 			{/if}
 		</p>
 		<p class="fine">{t('library.strays.why', { machine: library.activeMachine.name })}</p>
-		<button class="mini" disabled={library.busy} onclick={() => library.adoptStrays()}>
+		<button class="mini" disabled={library.busy} title={library.busy ? t('reason.busy') : undefined} onclick={() => library.adoptStrays()}>
 			{t('library.strays.adopt', { machine: library.activeMachine.name })}
 		</button>
 	</div>
@@ -1954,7 +1955,7 @@
 								</button>
 								<button
 									class="mini"
-									disabled={library.busy || !renameTo.trim()}
+									disabled={library.busy || !renameTo.trim()} title={library.busy ? t('reason.busy') : t('reason.needsName')}
 									onclick={saveRename}>{t('common.save')}</button
 								>
 							</div>
@@ -1995,6 +1996,7 @@
 								<button
 									class="mini"
 									disabled={library.busy || mergeInto === null}
+									title={library.busy ? t('reason.busy') : t('reason.needsMaterial')}
 									onclick={doMerge}>{t('library.material.merge.confirm')}</button
 								>
 							</div>
@@ -2042,7 +2044,12 @@
 										usage = null;
 									}}>{t('library.material.remove.keep')}</button
 								>
-								<button class="mini danger" disabled={library.busy || !usage} onclick={doRemove}>
+								<button
+									class="mini danger"
+									disabled={library.busy || !usage}
+									title={library.busy ? t('reason.busy') : t('reason.notLoaded')}
+									onclick={doRemove}
+								>
 									{usage && wouldGoWith(usage).length
 										? t('library.material.remove.confirmAll')
 										: t('library.material.remove.confirm')}
@@ -2157,6 +2164,11 @@
 				!draft.speed_mm_s ||
 				!draft.power_percent ||
 				(draft.material_id ?? materialId) === null}
+			title={library.busy
+				? t('reason.busy')
+				: (draft.material_id ?? materialId) === null
+					? t('reason.needsMaterial')
+					: t('library.manual.needsNumbers')}
 			onclick={createPreset}
 		>
 			{t('common.save')}
@@ -2200,7 +2212,7 @@
 							{:else if canEdit && !active}
 								<button
 									class="mini"
-									disabled={library.busy}
+									disabled={library.busy} title={library.busy ? t('reason.busy') : undefined}
 									onclick={() => library.removeMachineProfile(machine.id)}
 									>{t('library.profile.tidy')}</button
 								>

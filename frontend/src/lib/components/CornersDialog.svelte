@@ -96,6 +96,7 @@
 		<button
 			class="btn primary"
 			disabled={busy || !count}
+			title={busy ? t('reason.busy') : count ? undefined : t('reason.pickShape')}
 			onclick={() => onToepassen(stijl, Number(size))}>{button}</button
 		>
 	</div>
