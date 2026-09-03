@@ -22,17 +22,42 @@ def ruida(kernel):
 
 
 def a_rectangle(kernel):
-    """Something to burn: one rectangle in a cut layer."""
+    """Something to burn: one rectangle in a cut layer.
+
+    Clears the element tree first, not only the operations: called a second
+    time after a different design (see `a_different_design`), the previous
+    shape would otherwise still be sitting there and `element* classify`
+    would pick it up too, alongside the new rectangle.
+    """
+    kernel.elements.clear_all()
     kernel.console("rect 20mm 20mm 40mm 30mm\n")
     kernel.console("operation* delete\n")
     kernel.console("op cut\n")
     kernel.console("element* classify\n")
 
 
+def a_different_design(kernel):
+    """
+    A different shape with different cut settings — deliberately as unlike
+    `a_rectangle` as reasonably possible. A state leak between builds
+    (`_reset_upload_driver_state` forgetting a field, or `driver.settings`
+    keeping an old key `.update()` never overwrites) is invisible between two
+    builds of the *same* design, since there is nothing for the old state to
+    disagree with; it only shows up between two different ones.
+    """
+    kernel.elements.clear_all()
+    kernel.console("circle 30mm 30mm 15mm\n")
+    kernel.console("operation* delete\n")
+    kernel.console("op cut\n")
+    kernel.console("element* classify\n")
+    layer = next(iter(kernel.elements.ops()))
+    layer.speed = 25.0
+    layer.power = 700
+
+
 def a_parked_driver(device):
     """
-    A `RuidaDriver` built for a test to inspect, shielded the same way
-    `_upload_driver_for` shields the one it builds for real.
+    A `RuidaDriver` built for a test to inspect, not to build anything with.
 
     A bare `RuidaDriver(device)` starts a status thread that tries
     `service.connect()` five times a second for the rest of the run
@@ -43,6 +68,19 @@ def a_parked_driver(device):
     which fails locally and reaches no real machine today — but a kernel
     pointed at a real UDP address would send actual packets from that same
     line, and a test has no business depending on today's harmlessness.
+
+    Unlike `_upload_driver_for`, this does *not* call `resume_monitor()` — and
+    that omission, not the `_AlwaysConnected` wrap, is what actually parks the
+    thread here. `__init__` acquires `_job_lock` and this driver never releases
+    it, so once the status thread's first check takes the "connected and idle"
+    branch (`_AlwaysConnected` makes sure it does), its own
+    `self._job_lock.acquire()` (`ruida/controller.py:173`) blocks forever —
+    measured: `Thread-3 (_status_monitor)` still alive 3.6 s later, never
+    having reached `connect()` or anything past that first acquire. Adding
+    `resume_monitor()` "for parity" with `_upload_driver_for` would let that
+    thread through to real work — including, eventually, writing on the real
+    `<device>/send` channel — for a driver this helper promises is inert. It
+    stays out on purpose.
     """
     from meerk40t.ruida.driver import RuidaDriver
 
@@ -314,33 +352,54 @@ def test_ten_builds_do_not_leave_ten_threads(ruida):
     )
 
 
-def test_three_builds_of_the_same_design_are_byte_identical(ruida):
+def test_a_design_built_before_and_after_a_different_one_is_byte_identical(ruida):
     """
     Reusing the driver reuses its state as well as its controller.
     `RuidaDriver.__init__` sets `power_dirty`/`speed_dirty` true
     (`ruida/driver.py:51,55`); `_move` (`:555-559`) writes `speed_laser_1` and the
     min/max power once and then sets both false. On a driver kept around across
-    calls, only the first build ever wrote them again — measured, on this same
-    rectangle, this same runner, before `_reset_upload_driver_state` existed:
-    `433, 418, 418` bytes, the second and third missing exactly `SPEED_LASER_1`
-    (`c9 02 00 00 00 4e 10`) and the min/max power pair (`c6 02 7f 7f`/
-    `c6 01 7f 7f`). `CommandRunner` lives for the life of an `ApiServer`
-    (`server.py:273`), so only the first upload of a session would have been
-    right. With the reset: `433, 433, 433` — verified by hand against the code
-    before this fix by disabling the reset call (see the fix-4 report).
+    calls, only the first build ever wrote them again — measured, on the same
+    rectangle built three times in a row, before `_reset_upload_driver_state`
+    existed: `433, 418, 418` bytes, the second and third missing exactly
+    `SPEED_LASER_1` (`c9 02 00 00 00 4e 10`) and the min/max power pair
+    (`c6 02 7f 7f`/`c6 01 7f 7f`). `CommandRunner` lives for the life of an
+    `ApiServer` (`server.py:273`), so only the first upload of a session would
+    have been right.
 
-    The thread tests (above) count threads; this is the gap they left — a thread
-    count says nothing about what ended up in the file.
+    Three builds of the *same* design cannot catch every version of this bug,
+    though: `driver.settings` (`Parameters`'s own dict) is *updated*, not
+    replaced, from each plot's own settings (`self.settings.update(p_set
+    .settings)`, `ruida/driver.py:285`), so a forgotten `.clear()` leaves an old
+    key sitting underneath — invisible unless a later build's design actually
+    reads that key differently. So: build A, then a deliberately different
+    design B (a circle, its own speed and power), then A again, and require
+    the two A builds to match byte for byte, not just in length — a leftover
+    key does not change how long the file is.
+
+    Measured (this rectangle and this circle, this runner): A is 433 bytes, B
+    is 1349, and with `driver.settings.clear()` in place the second A is 433
+    bytes too, identical to the first. With that line removed from
+    `_reset_upload_driver_state`: the second A is *also* 433 bytes — same
+    length, different content. First difference at byte 351:
+    `c9 02 00 00 00 4e 10` (first A: `SPEED_LASER_1`, 10 mm/s, the rectangle's
+    own default speed) against `c9 02 00 00 01 43 28` (second A: still B's
+    `25.0`) — B's speed, left over in `driver.settings`, outliving the design
+    that set it.
     """
     a_rectangle(ruida)
     runner = CommandRunner(ruida)
+    first_a = runner.build_job_bytes()
 
-    first = runner.build_job_bytes()
-    second = runner.build_job_bytes()
-    third = runner.build_job_bytes()
+    a_different_design(ruida)
+    runner.build_job_bytes()
 
-    lengths = (len(first), len(second), len(third))
-    assert first == second == third, f"lengths {lengths}, not identical"
+    a_rectangle(ruida)
+    second_a = runner.build_job_bytes()
+
+    assert first_a == second_a, (
+        f"the first and second build of A differ ({len(first_a)} vs "
+        f"{len(second_a)} bytes) after building a different design (B) in between"
+    )
 
 
 def test_the_reset_covers_every_field_ruidadriver_init_sets(ruida):

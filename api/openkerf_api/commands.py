@@ -401,6 +401,16 @@ class CommandRunner:
             # this controller is never asked to wait for or resync anything.
             driver.controller.wait_idle = lambda: None
             driver.controller.sync = lambda: None
+            # `physical_home` (`ruida/driver.py:392`) calls `sync` and, either
+            # side of it, `gross_timeout`/`normal_timeout` (`ruida/controller.py
+            # :108,115`) — both just `self.service.set_timeout(...)`, which
+            # through `__getattr__` reaches `RuidaDevice.set_timeout`
+            # (`ruida/device.py:689`) and so `active_session.set_timeout(...)`
+            # on the *real*, shared session. Same neighbourhood as `sync`, same
+            # reason: this controller is never asked to home, so screened off
+            # rather than left to reach a session it has no business touching.
+            driver.controller.gross_timeout = lambda: None
+            driver.controller.normal_timeout = lambda: None
             self._upload_driver = driver
             self._upload_device = device
         driver = self._upload_driver
