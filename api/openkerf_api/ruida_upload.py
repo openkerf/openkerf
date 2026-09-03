@@ -103,6 +103,18 @@ class RuidaUpload:
     is hundreds of blocks. So: one block at a time, wait for the line to be
     free, and stop **with numbers** when it will not clear.
 
+    What "free" means took a measurement to get right, because writing and
+    arriving are two different moments on a real session. `RuidaSession.write`
+    is `send_q.put` and nothing else (`ruida/ruidasession.py:188`); a separate
+    handshaker thread pops the packet, hands it to the transport, and only then
+    sets `_ack_pending` (`:345-347`) — the half of `is_busy` that our own blocks
+    ever touch. Waiting on `is_busy` alone therefore waits on nothing: the line
+    still looks free straight after our own write. Measured, six blocks and two
+    headers against a session that acknowledges in 0.05 s: the whole upload
+    returned in **0.019 s with 0 of 8 packets acknowledged and all eight still
+    in the queue**. So `_line_is_busy` asks the queue as well, and
+    `_wait_for_the_line` runs once more after the last block — see `upload`.
+
     What it deliberately does not do is start anything. That happens on the
     machine's own panel.
     """
@@ -179,6 +191,40 @@ class RuidaUpload:
             values={"sent": sent, "chunks": chunks},
         )
 
+    def _line_is_busy(self, session) -> bool:
+        """Whether the line still holds something of ours.
+
+        Two questions, because a real session answers only half of it. The
+        packet sits in `send_q` from `write` until the handshaker thread takes
+        it (`ruida/ruidasession.py:188`, `:322-330`), and `_ack_pending` is set
+        only *after* that thread has handed it to the transport — and only on a
+        `udp` interface (`:345-347`). So on `is_busy` alone there is a window
+        after every write in which the line looks free while our packet has not
+        moved, and on a `usb` interface `_ack_pending` is never set at all, which
+        leaves `is_busy` reporting `_reply_pending` — set by `0xDA` commands, so
+        by the status polls and never by our blocks.
+
+        Asking the queue first closes the window and gives `usb` an answer that
+        is about our own packets: empty queue means the handshaker has taken
+        everything we handed it. On `udp` the acknowledgement is on top of that;
+        on `usb` "taken and written to the transport" is all the engine can tell
+        anybody, and this does not pretend otherwise.
+        """
+        pending = getattr(session, "send_q", None)
+        if pending is not None and not pending.empty():
+            return True
+        return bool(getattr(session, "is_busy", False))
+
+    def _wait_for_the_line(self, session, sent: int, chunks: int) -> None:
+        """Wait until the line is free again, or refuse saying how far it got."""
+        deadline = time.monotonic() + self.per_chunk_seconds
+        while self._line_is_busy(session):
+            if time.monotonic() > deadline:
+                raise self._interrupted(
+                    sent, chunks, "stopped taking the file", "upload.stalled"
+                )
+            time.sleep(self.poll_seconds)
+
     def upload(self, name: str) -> dict:
         """The file to the machine, and left standing there.
 
@@ -191,8 +237,10 @@ class RuidaUpload:
           promise about another function, and this is what it costs if it ever
           stops holding.
         * **A block over `CHUNK`.** `_blocks` never cuts inside a command, so a
-          single command longer than `CHUNK` gets an oversized block of its own
-          (measured: `\x88` plus 1200 bytes gives 1201 and 1). Measured on a
+          single command longer than `CHUNK` gets an oversized block of its own.
+          Measured: `_blocks(b"\\x88" + b"\\x11" * 1200)` gives **one** block,
+          of 1201 bytes; put a second command behind it and the answer is
+          `[1201, 2]`. Measured on a
           pair of loopback UDP sockets: a 1201-byte datagram read by a receiver
           calling `recvfrom(1024)` — which is every receiver in the engine,
           `ruida/udp_transport.py:62` among them — arrives as 1024 bytes, with
@@ -205,13 +253,19 @@ class RuidaUpload:
 
         The engine's status monitor keeps polling the machine over this same
         session while we send, and its packets land between our blocks. That is
-        left alone on purpose: measured against the engine's own emulator, the
-        same six blocks with a `GET_SETTING` written between every pair give a
-        job of 5455 bytes, byte for byte identical to the clean one, 0 parse
-        failures — the poll is answered as realtime and never reaches the file.
-        Pausing the monitor would mean taking `_job_lock`, which is released in
-        exactly one place in the engine (`ruida/device.py:415`), and that has two
-        ways to hang the app for the rest of the session.
+        left alone on purpose, and the emulator says why it can be: measured,
+        the same six blocks (`[996, 1000, 1000, 1000, 1000, 466]` of a 5462-byte
+        payload) with a `GET_SETTING` written between every pair give a job of
+        5455 bytes, byte for byte identical to the clean one, 0 parse failures —
+        the poll is answered as realtime (`emulator.py:157`) and never reaches
+        the file. So there is nothing here to protect against.
+
+        Which is the whole argument, because the alternative can hang the app.
+        `pause_monitor()` is a bare `acquire()` with no timeout on a lock that
+        four places release (`controller.py:98`, `:132`, `:183`, `:393`) — so it
+        blocks for as long as `_data_sender` holds it, which is exactly the
+        stalled case this method exists for, and forever if `resume_monitor`
+        never ran (it has one caller, `ruida/device.py:415`).
         """
         session = self._session()
         payload = self.runner.build_job_bytes()
@@ -234,17 +288,15 @@ class RuidaUpload:
             )
         for index, packet in enumerate(packets):
             sent = max(0, index - 2)
-            deadline = time.monotonic() + self.per_chunk_seconds
-            while getattr(session, "is_busy", False):
-                if time.monotonic() > deadline:
-                    raise self._interrupted(
-                        sent, chunks, "stopped taking the file", "upload.stalled"
-                    )
-                time.sleep(self.poll_seconds)
+            self._wait_for_the_line(session, sent, chunks)
             try:
                 self._write(packet)
             except (ConnectionError, OSError) as e:
                 raise self._interrupted(
                     sent, chunks, "broke the connection", "upload.interrupted"
                 ) from e
+        # And once more after the last one, which is the block holding
+        # `SET_FILE_SUM` and `END_OF_FILE`. Every other block is confirmed by the
+        # wait in front of the block after it; this one has no block after it.
+        self._wait_for_the_line(session, chunks - 1, chunks)
         return {"name": machine_name(name), "bytes": len(payload), "chunks": chunks}

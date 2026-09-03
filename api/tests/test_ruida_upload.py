@@ -5,6 +5,7 @@ Never against a laser. The end-to-end test talks to the engine's own Ruida
 emulator, which takes this conversation and reads the file back off it.
 """
 
+import queue
 import threading
 import time
 
@@ -907,9 +908,9 @@ def test_the_upload_waits_for_a_busy_line_instead_of_writing_over_it(
     `is_busy` here reports busy for the first three reads and free after that,
     and the poll interval is turned down so the wait costs a few milliseconds
     rather than the 0.02 s the real one uses. Measured on this rectangle: one
-    block, so four reads of `is_busy` for two headers and one block would mean
-    no waiting at all; with three busy reads to get through, the count comes out
-    at six.
+    block, so two headers and one block are three waits, plus the fourth after
+    the last block — four free reads if nothing ever waits. With three busy
+    reads to get through first, the count comes out at seven.
     """
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
@@ -918,7 +919,7 @@ def test_the_upload_waits_for_a_busy_line_instead_of_writing_over_it(
 
     result = upload.upload("BORD")
 
-    assert session.busy_reads == 6, session.busy_reads
+    assert session.busy_reads == 7, session.busy_reads
     assert len(session.written) == result["chunks"] + 2
 
 
@@ -952,9 +953,12 @@ def test_a_command_longer_than_a_block_refuses_before_anything_goes_out(
 ):
     """
     `_blocks` cuts on command boundaries and never inside one, so a single
-    command longer than `CHUNK` goes into a block of its own, oversized —
-    measured in the round before this one: `\\x88` followed by 1200 bytes gives
-    blocks of 1201 and 1. Building that is right; sending it is not.
+    command longer than `CHUNK` goes into a block of its own, oversized.
+    Measured: `_blocks(b"\\x88" + b"\\x11" * 1200)` gives **one** block, of 1201
+    bytes — the payload is one command and there is nothing to cut it against.
+    (The round before this one recorded "1201 and 1"; there is no block of 1.
+    Put a second command after it and the answer is `[1201, 2]`.) Building that
+    block is right; sending it is not.
 
     Measured on a pair of loopback UDP sockets, which is what the line to the
     machine is: a datagram of 1201 bytes read by a receiver that calls
@@ -1072,22 +1076,28 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
 
     `RuidaController._status_monitor` (`ruida/controller.py:160`) sends a
     `GET_SETTING` every 0.2 s for as long as the device is connected, over the
-    same session our blocks go out on, and it holds `_job_lock` only against the
-    engine's own `_data_sender`. So while we are sending, its packets land
-    between ours. The engine's answer to that is `pause_monitor()`, which
-    acquires a lock that is released in exactly one place
-    (`ruida/device.py:415`) — taking it and failing to give it back stops the
-    machine's status for the rest of the session, and taking it when it was
-    never released deadlocks the request thread.
+    same session our blocks go out on. So while we are sending, its packets land
+    between ours. The engine's answer to that is `pause_monitor()`, and the
+    measurement below is why we do not use it.
 
     Measured against the engine's own emulator before deciding: the same eight
-    circles sent as six blocks, once clean and once with a status poll
-    (`DA 00 04 00`, `GET_SETTING MEM_MACHINE_STATUS`) written between every pair
-    of blocks. Both give a job of 5455 bytes, byte for byte identical, with 0
-    `Process Failure`s. The poll is handled as realtime (`emulator.py:157`,
+    circles, a 5462-byte payload in six blocks of `[996, 1000, 1000, 1000, 1000,
+    466]`, once clean and once with a status poll (`DA 00 04 00`,
+    `GET_SETTING MEM_MACHINE_STATUS`) written between every pair of blocks. Both
+    give a job of 5455 bytes, byte for byte identical, with 0 `Process
+    Failure`s. The poll is handled as realtime (`emulator.py:157`,
     `_process_realtime` → `mem_lookup`) and answered; it never reaches the job
-    buffer. So interleaved status does not damage the file, and the lock — with
-    its two ways to hang the app — stays untouched.
+    buffer. So interleaved status does not damage the file: there is nothing
+    here to protect against.
+
+    Which matters, because the protection costs more than the risk.
+    `pause_monitor()` is a bare `acquire()` with no timeout
+    (`ruida/controller.py:102`) on a lock four places release — `:98`
+    (`resume_monitor`, whose one caller is `ruida/device.py:415`), `:132`
+    (`_data_sender`), `:183` (`_status_monitor`, so every poll, every 0.2 s) and
+    `:393` (`wait_for_position`). It therefore blocks for as long as
+    `_data_sender` holds the lock — which is exactly the stalled case this
+    module exists for — and forever if `resume_monitor` never ran.
     """
     import meerk40t.ruida.emulator as emulator_module
     from meerk40t.ruida.emulator import RuidaEmulator
@@ -1132,3 +1142,154 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
         f"{len(polled)} bytes arrived with the status poll interleaved against "
         f"{len(clean)} without it"
     )
+
+
+class DeferringSession:
+    """A connection where writing and acknowledging come apart, as they really do.
+
+    `FakeSession` cannot catch what this catches, because there writing *is*
+    arriving. On a real session `RuidaSession.write` is `send_q.put` and nothing
+    else (`ruida/ruidasession.py:188`); a separate handshaker thread pops the
+    packet, hands it to the transport, and only then — and only on a `udp`
+    interface (`:345-347`) — sets `_ack_pending`, the half of `is_busy` our own
+    blocks ever touch. So there is a window after every write in which the line
+    still looks free, and there is no window at all after the last one, because
+    nobody looks again.
+
+    This models exactly that: `write` queues, a daemon thread takes from the
+    queue, marks the line busy, and clears it `ack_seconds` later. With
+    `stops_before=n` the thread takes the nth packet, marks the line busy and
+    never clears it — the machine switched off, or the cable out, with a packet
+    already handed to the transport. Nothing here reaches a machine: it is a
+    queue and a thread in this process.
+    """
+
+    connected = True
+
+    def __init__(self, ack_seconds=0.01, stops_before=None):
+        self.send_q = queue.Queue()
+        self.written = []
+        self.acknowledged = []
+        self.ack_seconds = ack_seconds
+        self.stops_before = stops_before
+        self._ack_pending = False
+        self._shutdown = False
+        self._thread = threading.Thread(target=self._handshake, daemon=True)
+        self._thread.start()
+
+    @property
+    def is_busy(self):
+        return self._ack_pending
+
+    def write(self, data):
+        self.written.append(data)
+        self.send_q.put(data)
+
+    def _handshake(self):
+        while not self._shutdown:
+            try:
+                data = self.send_q.get(timeout=0.01)
+            except queue.Empty:
+                continue
+            self._ack_pending = True
+            time.sleep(self.ack_seconds)
+            if (
+                self.stops_before is not None
+                and len(self.acknowledged) >= self.stops_before
+            ):
+                return  # Handed to the transport, and no acknowledgement ever.
+            self.acknowledged.append(data)
+            self._ack_pending = False
+
+    def stop(self):
+        self._shutdown = True
+        self._thread.join(timeout=2)
+
+
+@pytest.fixture
+def deferring():
+    """`DeferringSession`s, all of them stopped again when the test ends."""
+    made = []
+
+    def make(upload, monkeypatch, **kwargs):
+        session = DeferringSession(**kwargs)
+        made.append(session)
+        monkeypatch.setattr(upload, "_session", lambda: session)
+        monkeypatch.setattr(upload, "_write", session.write)
+        return session
+
+    yield make
+    for session in made:
+        session.stop()
+
+
+def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
+    ruida, monkeypatch, deferring
+):
+    """
+    The last block is the one that closes the file: `SET_FILE_SUM` and
+    `END_OF_FILE` are in it. Waiting before each block means every block but that
+    one is confirmed by the wait in front of the next; after the last one there
+    is no next, so without a final wait `upload()` returns `{"chunks": 6}` on a
+    file whose closing block the machine never took. That is the failure this
+    whole module exists to prevent, with reassurance attached — the worst of the
+    two.
+
+    Measured on this setup before the final wait existed: the connection dies on
+    the eighth packet (the sixth and last block), and `upload("BORD")` returned
+    `{'name': 'BORD', 'bytes': 5462, 'chunks': 6}` — six of six sent — with
+    `session.acknowledged` seven packets long, the last block among the missing.
+    """
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    # Two headers and six blocks; the eighth packet is the last block, and it is
+    # the one that goes out and is never acknowledged.
+    session = deferring(upload, monkeypatch, stops_before=7)
+    upload.per_chunk_seconds = 0.5
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    assert error.value.code == "upload.stalled"
+    assert error.value.values == {"sent": 5, "chunks": 6}
+    assert "5 of 6" in str(error.value), str(error.value)
+    assert len(session.written) == 8, "not every packet was handed over"
+    assert len(session.acknowledged) == 7, "the count of acknowledgements moved"
+
+
+def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
+    ruida, monkeypatch, deferring
+):
+    """
+    "One block at a time" has to be true of the writes, not only of the loop.
+
+    `RuidaSession.write` returns the moment the packet is in the queue, and
+    `_ack_pending` is set by another thread afterwards, so a loop that waits only
+    on `is_busy` finds the line free straight after its own write and puts the
+    next block in the queue immediately. Measured on this setup with an
+    acknowledgement that takes 0.05 s and six blocks plus two headers: waiting on
+    `is_busy` alone, the whole upload returned in **0.019 s with 0 of 8 packets
+    acknowledged and all eight still in the queue** — it had sent nothing and
+    said it was done. Asking the queue as well (`_line_is_busy`): 0.63, 0.57 and
+    0.59 s over three runs, 8 of 8 acknowledged, queue empty. The wall clock is
+    the measurement, and the floor under it is real work — 8 × 0.05 s of
+    acknowledgement plus a 0.02 s poll interval per packet.
+
+    The bound below is deliberately loose (0.32 s, well under the 0.57 s
+    measured) because it has to survive a slow machine; what it is there to
+    catch is the 0.019 s, which is two orders of magnitude away.
+    """
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    session = deferring(upload, monkeypatch, ack_seconds=0.05)
+
+    started = time.monotonic()
+    result = upload.upload("BORD")
+    took = time.monotonic() - started
+
+    packets = result["chunks"] + 2
+    assert len(session.acknowledged) == packets, (
+        f"{len(session.acknowledged)} of {packets} packets were acknowledged "
+        f"before the upload said it was done"
+    )
+    assert took > packets * 0.05 * 0.8, f"the upload returned after only {took:.3f}s"
