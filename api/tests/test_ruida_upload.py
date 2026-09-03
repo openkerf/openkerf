@@ -368,3 +368,82 @@ def test_the_reset_covers_every_field_ruidadriver_init_sets(ruida):
         "not list among the fields it deliberately keeps — add it to one or the "
         "other."
     )
+
+
+def test_the_build_driver_is_off_the_shared_recv_channel(ruida):
+    """
+    `RuidaDriver.__init__` puts `controller.recv` on the shared `<device>/recv`
+    channel (`ruida/driver.py:47,48`) — the same channel the live driver's own
+    controller watches. `_upload_driver_for` takes it straight back off
+    (`driver.recv.unwatch(driver.controller.recv)`): a build driver never needs
+    an answer, so there is nothing this watcher is for, only a real reply it
+    would needlessly react to.
+    """
+    a_rectangle(ruida)
+    runner = CommandRunner(ruida)
+
+    runner.build_job_bytes()
+
+    build_driver = runner._upload_driver
+    assert build_driver.controller.recv not in build_driver.recv.watchers, (
+        "the build driver's controller is still watching the shared recv channel"
+    )
+
+
+def test_a_reply_on_the_shared_channel_writes_the_live_driver_only_once(ruida, monkeypatch):
+    """
+    Measured what staying on the channel would cost: `update_x`
+    (`ruida/controller.py:259-268`) writes `self.service.driver.native_x` — and
+    `self.service` for a build controller is `_AlwaysConnected`, whose
+    `__getattr__` still resolves `.driver` to `device.driver`, the *live* driver.
+    So a build controller left on the shared channel writes the live driver's
+    position a second time for every reply that arrives while it exists — not a
+    path toward the machine, but a needless second write to state the app reads
+    to show where the head is.
+
+    No real machine is involved: a reply is exactly five bytes of 7-bit-encoded
+    value after a header (`RDJob.decode_reply`), so one is built by hand here and
+    played onto the channel both drivers watch. `native_x` is turned into a
+    counting property for the one instance under test (`monkeypatch`, reverted
+    automatically) so "written twice" and "written once" are told apart by count,
+    not by two writes of the same number looking like one.
+    """
+    from meerk40t.ruida.driver import RuidaDriver
+    from meerk40t.ruida.rdjob import MEM_CURRENT_X
+
+    def encode35(value):
+        return bytes(
+            [
+                (value >> 28) & 0x7F,
+                (value >> 21) & 0x7F,
+                (value >> 14) & 0x7F,
+                (value >> 7) & 0x7F,
+                value & 0x7F,
+            ]
+        )
+
+    a_rectangle(ruida)
+    runner = CommandRunner(ruida)
+    runner.build_job_bytes()
+
+    writes = []
+
+    def _set_native_x(self, value):
+        writes.append(value)
+        self.__dict__["native_x"] = value
+
+    monkeypatch.setattr(
+        RuidaDriver,
+        "native_x",
+        property(lambda self: self.__dict__.get("native_x", 0), _set_native_x),
+        raising=False,  # `native_x` is only ever an instance attribute, set in
+        # `__init__`, so the class itself has none yet to check against.
+    )
+
+    reply = bytes([0xDA, 0x01]) + MEM_CURRENT_X + encode35(12345)
+    name = ruida.device.safe_label
+    recv_channel = ruida.device.channel(f"{name}/recv", pure=True)
+
+    recv_channel(reply)
+
+    assert writes == [12345], f"native_x written {len(writes)} time(s): {writes}"

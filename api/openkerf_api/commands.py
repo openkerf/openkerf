@@ -361,6 +361,18 @@ class CommandRunner:
 
         if self._upload_driver is None or self._upload_device is not device:
             driver = RuidaDriver(device)
+            # `__init__` puts `controller.recv` on the shared `<device>/recv`
+            # channel (`ruida/driver.py:47,48`) — the same channel the live
+            # driver's own controller watches. A build driver never needs an
+            # answer (it talks to a no-op `write` and only ever assembles bytes),
+            # but a real reply arriving while this driver still exists would be
+            # decoded twice: `update_x`/`update_y` (`ruida/controller.py:259-277`)
+            # write `self.service.driver.native_x/native_y` — through
+            # `_AlwaysConnected.__getattr__` that is still `device.driver`, the
+            # *live* driver, so the same value would land there a second time for
+            # no reason. No path toward the machine either way, but there is
+            # nothing this watcher is for, so it comes straight off.
+            driver.recv.unwatch(driver.controller.recv)
             # Neutralise the thread before anything else — the 3 s startup sleep
             # (`ruida/controller.py:170`) is slack, not something to rely on.
             driver.controller.service = _AlwaysConnected(device)
