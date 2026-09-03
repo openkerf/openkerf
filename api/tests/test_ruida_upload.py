@@ -339,10 +339,17 @@ def test_the_reset_covers_every_field_ruidadriver_init_sets(ruida):
     reset. `_reset_upload_driver_state` itself decides the second list — run
     against a stand-in object and read back what it touched — so this test
     breaks the moment the two lists drift apart, not a version behind.
-    """
-    from meerk40t.ruida.driver import RuidaDriver
 
-    fresh = RuidaDriver(ruida.device)
+    Built through `_upload_driver_for`, not `RuidaDriver(...)` directly: a bare
+    `RuidaDriver` starts the same unguarded status thread `_AlwaysConnected`
+    exists to stop — measured against this fixture, `usb`/`localhost`, so
+    today it only fails a local `_open()` and reaches no real machine, but it
+    is still the construction this project's own `CLAUDE.md` row warns is
+    unsafe to leave standing, and a suite pointed at a real UDP address would
+    make that row's warning literal. `_upload_driver_for` builds the same
+    `RuidaDriver` and shields it the same way `build_job_bytes` always does.
+    """
+    fresh = CommandRunner(ruida)._upload_driver_for(ruida.device)
     fresh_fields = set(vars(fresh).keys())
 
     # The expensive, stateful half `_upload_driver_for` deliberately keeps across
