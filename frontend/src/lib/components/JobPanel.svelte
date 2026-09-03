@@ -28,11 +28,13 @@
 		events,
 		control,
 		activeJob,
+		nothingBurns = false,
 		revision = 0,
 		preflight = $bindable(),
 		onJog,
 		onHome,
 		onUnlock,
+		onLock,
 		onFocus,
 		onFrame,
 		onCutPath,
@@ -53,6 +55,10 @@
 		events: SignalEvent[];
 		control: Controller;
 		activeJob: Job | null;
+		/** Nothing on the bed that will burn — `burnsNothing` in `$lib/design.svelte`,
+		 *  worked out once by the page so that this panel and the top bar cannot answer
+		 *  the question differently. */
+		nothingBurns?: boolean;
 		/** Revision of the drawing; the time estimate in the preflight follows it. */
 		revision?: number;
 		preflight: boolean;
@@ -61,6 +67,8 @@
 		 *  here, otherwise confirming does nothing and the API refuses again. */
 		onHome?: (force?: boolean) => void;
 		onUnlock?: () => void;
+		/** Hold the motors again — the other half of the pair. */
+		onLock?: () => void;
 		onFocus?: (distanceMm: number) => void;
 		onFrame?: () => void;
 		/** Opening the cut-path window; the pre-flight is where you want it (gap S1). */
@@ -89,7 +97,7 @@
      now is the thing you came to this panel for. `SeriesRun` decides that for itself
      off the run in the status payload, the same way `TileRun` does. -->
 <SeriesRun {series} />
-<JobControls {control} {device} {series} job={activeJob} {revision} bind:preflight {onJog} {onHome} {onUnlock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
+<JobControls {control} {device} {series} job={activeJob} {revision} {nothingBurns} bind:preflight {onJog} {onHome} {onUnlock} {onLock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->

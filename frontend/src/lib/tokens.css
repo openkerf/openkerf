@@ -235,6 +235,25 @@
 	   them back so that they sit on their point. */
 	--grip: 44px;
 
+	/*
+	 * What lies over what, when it matters for safety.
+	 *
+	 * Only the top of the stack is named here; a card that lifts itself one step above
+	 * its neighbour stays a number in its own file. These three had to be one source,
+	 * because they were being compared across three files that could not see each
+	 * other: the cut-path window opened over the top bar and put its backdrop
+	 * (`0 0 1440 900`) over the middle of Stop, measured with `elementFromPoint`. The
+	 * reasoning was already in `Dialog.svelte` — the alarm outranks whatever you are
+	 * reading — and it holds one step harder for the button that stops the machine.
+	 *
+	 * The order, low to high: a dialog covers the app, the transport covers the dialog,
+	 * an alarm covers everything. `tests/stop-reach.test.ts` measures the middle one in
+	 * the running app.
+	 */
+	--z-dialog: 100;
+	--z-transport: 150;
+	--z-alarm: 200;
+
 	--shadow-float: 0 8px 24px rgb(0 0 0 / 0.12);
 	/*
 	 * v3.3: duration and easing are now separate as well, and `--transition` is built from
@@ -667,4 +686,128 @@ input[type='radio']:focus-visible::before {
 		animation-duration: 2s !important;
 		animation-iteration-count: infinite !important;
 	}
+}
+
+/*
+ * The machine's state, as a colour, once.
+ *
+ * Three surfaces show this dot — the top bar, the status bar and the phone view — and
+ * each kept a list of states by hand. The lists drifted: `unplugged` was amber on the
+ * phone and grey on the desktop for the same dead port, `busy` was written `.running`
+ * in one of them and matched nothing, and the status bar had one of the six. A state
+ * with no rule falls back to grey, which reads as "nothing wrong" — the one thing a
+ * machine state may not say when something is.
+ *
+ * Size stays with the surface (8px in a bar, 10px in your hand); only the meaning is
+ * shared. `tests/machine-dot.test.ts` reads the states out of `MachineState` and
+ * refuses a surface that starts its own list again.
+ */
+.machinedot {
+	border-radius: var(--radius-dot);
+	flex: none;
+	/* Offline is grey on purpose: there is no machine to report on. Every other state
+	   below says something, and says it in colour. */
+	background: var(--text-2);
+}
+.machinedot.offline { background: var(--text-2); }
+.machinedot.unplugged { background: var(--warn-solid); }
+.machinedot.ready { background: var(--ok); }
+.machinedot.busy { background: var(--accent); }
+.machinedot.paused { background: var(--warn-solid); }
+.machinedot.alarm { background: var(--danger-solid); }
+
+/*
+ * A refusal in a window.
+ *
+ * The stencil window wore `class="notice failure"` and defined neither, so the one
+ * sentence saying the thing cannot be done was measured at `rgb(27, 31, 36)` — the
+ * colour of the explanation above it, in light and in dark. Its neighbours colour
+ * theirs with `--danger`, each from a copy of its own: eight components define an
+ * `.error` of their own today, three of them byte for byte the same. This is the one
+ * they can move to; until they do, their own rule wins and nothing changes for them.
+ */
+.refusal {
+	margin: 0 0 var(--space-2);
+	font-size: var(--text-xs);
+	color: var(--danger);
+}
+
+/*
+ * The button.
+ *
+ * One definition, after fifteen. The components agreed on the border, the radius, the
+ * surface and the weight and disagreed on the size — `8px 12px` in six, `8px 16px` in
+ * five, the same 8/16 as tokens in two, `6px 12px` in the starter offer and
+ * `0 var(--space-4)` in a notification. On screen that was 32.0, 36.0, 36.8 and 40.0
+ * px, with the first two side by side, because the offer sits inside the library
+ * window.
+ *
+ * The note further up this file says a single source is impossible here, because
+ * Svelte hangs a class on every component selector and `.btn.svelte-x` (0,2,0) beats a
+ * bare `.btn` (0,1,0). That is true only while a component *has* a `.btn` of its own.
+ * They no longer do, so this one applies — and the safety net above it now has nothing
+ * left to catch.
+ *
+ * 8/16 is what the buttons you see most already had: the top bar, the dialogs and the
+ * test grid. Named exceptions below, and only two: where the room is really gone, and
+ * where a button starts a burn.
+ *
+ * `tests/one-button.test.ts` refuses a sixteenth.
+ */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2);
+	/* Deliberately no `min-height`: the touch-target net further up is written as a bare
+	   `button` (0,0,1), so a `.btn` with a height of its own (0,1,0) would beat it and
+	   every button on a tablet would drop from 44 back to 36. The height comes from the
+	   padding, the way fourteen of the fifteen had it. */
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-field);
+	background: var(--surface-1);
+	color: var(--text-1);
+	font: inherit;
+	font-weight: 500;
+	text-decoration: none;
+	cursor: pointer;
+	transition: background var(--transition);
+}
+.btn:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+.btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+.btn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-ink);
+}
+.btn.primary:hover:not(:disabled) {
+	background: var(--accent);
+	filter: brightness(1.06);
+}
+/* Where the room really is gone: a row in the starter offer, inside the library
+   window. The touch-target net further up still lifts it to 44 on a coarse pointer. */
+.btn.mini {
+	min-height: 32px;
+	padding: var(--space-1h) var(--space-3);
+	font-size: var(--text-xs);
+}
+/* And this is why `mini` has to say it again: `.btn.mini` (0,2,0) beats the bare
+   `button` of the net, so without this line the small button would stay 32 px under a
+   glove. It is the fault the starter offer had — 40 px there, against the 44 the net
+   lays down — now written where it can be seen. */
+@media (max-width: 1199px), (pointer: coarse) {
+	.btn.mini {
+		min-height: 44px;
+	}
+}
+/* The button that starts a burn is bigger than the rest, on purpose. */
+.btn.big {
+	min-height: 44px;
+	font-size: var(--text-md);
 }

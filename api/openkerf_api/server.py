@@ -976,7 +976,16 @@ class ApiServer:
 
         @app.post("/api/design/clear", dependencies=write)
         def clear_design():
-            """Empty the design — what opening does before it reads a file."""
+            """
+            Empty the design — what opening does before it reads a file.
+
+            No screen presses this, and that is on purpose: for a user, emptying the bed
+            is `POST /api/project/new`, which also gives back a fresh sheet and a clean
+            undo stack. What does use it is `frontend/tests/`, ten times, to get to a
+            known bed without going through the project machinery. Kept for that, and
+            named here so the next count of routes without a caller does not go looking
+            for the screen that presses it.
+            """
             def run():
                 # The same gate as opening a project, and for the same reason: a run
                 # counts plates made from *this* drawing, and emptying the bed leaves that
@@ -1155,11 +1164,6 @@ class ApiServer:
         def vectorise_image(element_id: str, body: dict | None = None):
             method = (body or {}).get("method") or "vectrace"
             return manage(self.images.vectorise, element_id, method)
-
-        @app.get("/api/design/vectorisers")
-        def list_vectorisers():
-            """Which tracers are loaded — potrace may be missing."""
-            return {"methods": self.images.vectorisers()}
 
         @app.get("/api/design/fonts")
         def list_fonts(refresh: bool = False):
@@ -2983,19 +2987,6 @@ class ApiServer:
 
             return manage(run)
 
-        # Superseded by the route above and kept only until its two callers go with it:
-        # `frontend/src/lib/presetariat.svelte.ts` (deleted with the Presetariat window)
-        # and `api/tests/test_presetariat.py`. It is the importer this round set out to
-        # remove: `_material_id` creates the material before `add_preset` can refuse, so
-        # `[good, bad]` leaves materials written and raises, in a library that until now
-        # had no way to remove a material.
-        @app.post("/api/presetariat/import", dependencies=write)
-        def import_catalogue_presets(body: dict):
-            return manage(
-                self.presetariat.import_presets,
-                body.get("ids") or [],
-                body.get("machine_id"),
-            )
 
         @app.get("/api/presetariat/contribution/{preset_id}")
         def preset_contribution(preset_id: int):

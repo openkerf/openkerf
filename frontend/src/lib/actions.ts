@@ -294,6 +294,12 @@ export type Handlers = {
 	rescue: () => void;
 	/** Open the cut-path window: the order, the travel and the clock (gap S1). */
 	cutPath: () => void;
+	/** The other four workspaces. The tool rail has the same doors; these are the ones
+	 *  you find while right-clicking the bed you are looking at. */
+	library: () => void;
+	testGrid: () => void;
+	generators: () => void;
+	clipart: () => void;
 };
 
 const K = (id: string) => keyLabel(KEYS[id]);
@@ -315,6 +321,32 @@ function mayWrite(ctx: Context): string | undefined {
 	if (!ctx.may) return t('reason.needsToken');
 	if (ctx.busy) return t('reason.busy');
 	return undefined;
+}
+
+/**
+ * Why bridges cannot be placed or taken away right now.
+ *
+ * Two surfaces ask this: the row in the right-click menu and the control in the
+ * context panel. The panel used to work it out again — `!canEdit || !bridges.carries
+ * || edits.busy` — and said nothing at all, while the menu row six pixels away
+ * carried the sentence. `actions.ts` is the place that knows why something cannot be
+ * done; this makes that reachable for a control that is not a menu row.
+ *
+ * The order is the order of the menu: no token, busy, locked, nothing selected, and
+ * only then the reason particular to bridges.
+ */
+export function bridgesRefusal(
+	ctx: Pick<Context, 'may' | 'busy' | 'count' | 'lockedCount' | 'bridges'>
+): string | undefined {
+	if (!ctx.may) return t('reason.needsToken');
+	if (ctx.busy) return t('reason.busy');
+	if (ctx.lockedCount > 0) {
+		return ctx.lockedCount === ctx.count && ctx.count === 1
+			? t('reason.locked')
+			: t('reason.someLocked', { n: ctx.lockedCount });
+	}
+	if (!ctx.count) return t('reason.pickShape');
+	return ctx.bridges.carries ? undefined : t('reason.noBridges');
 }
 
 /**
@@ -626,9 +658,7 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 					// The panel has the two numbers; this row is the one-click default, because a
 					// field nobody finds is not a feature. Four of 2 mm: one per side of a
 					// rectangle, so the part hangs on four corners instead of tipping on one.
-					off:
-						needsOne ??
-						(ctx.bridges.carries ? undefined : t('reason.noBridges')),
+					off: bridgesRefusal(ctx),
 					run: () => h.bridges(!ctx.bridges.has)
 				},
 				{
@@ -775,6 +805,22 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 }
 
 /**
+ * What the "More" button in the action bar opens.
+ *
+ * The bar is a shortcut to the menu, so it asks the menu's own question: is anything
+ * selected? It used to open `objectMenu` come what may, and with nothing selected that
+ * is nineteen rows of which nineteen are grey — under a button whose tooltip says "All
+ * operations". At that same moment the canvas menu had ten rows that worked, and not
+ * one of them was reachable from the bar.
+ *
+ * No point is passed on: a button in a bar is not a place on the bed, so this is
+ * "Paste" and not "Paste here".
+ */
+export function barMenu(ctx: Context, h: Handlers): Menu {
+	return ctx.count ? objectMenu(ctx, h) : canvasMenu(ctx, h, null);
+}
+
+/**
  * The menu on the canvas itself.
  *
  * This is about the view and the whole design, not about one shape. "Paste here"
@@ -857,8 +903,8 @@ export function canvasMenu(
 					// A workspace of its own, like the cut path above — a place you search and
 					// compare in — but a group of its own, because it is not about the view. The
 					// tool rail has the same door; this is the one you find while right-clicking
-					// the bed you are looking at. No shortcut: none of the five workspaces has
-					// one and keys are scarce.
+					// the bed you are looking at. No shortcut: of the five workspaces only the
+					// cut path has one (`alt+p`), and keys are scarce.
 					id: 'series',
 					label: t('series.show'),
 					explain: t('series.show.title'),
@@ -867,6 +913,39 @@ export function canvasMenu(
 					// that disagree about whether it is open is worse than either.
 					off: ctx.may ? undefined : t('reason.needsToken'),
 					run: h.series
+				},
+				// The other four doors to a workspace. They were in the tool rail and
+				// nowhere else, while the two above were in both places — the same kind of
+				// thing found in two ways depending on which one you wanted. Each of them
+				// is a place you search and compare in; what you do *in* them is a write,
+				// so they carry the same refusal as the series row.
+				{
+					id: 'library',
+					label: t('library.title'),
+					explain: t('explain.library'),
+					off: ctx.may ? undefined : t('reason.needsToken'),
+					run: h.library
+				},
+				{
+					id: 'test-grid',
+					label: t('testgrid.title'),
+					explain: t('explain.testGrid'),
+					off: ctx.may ? undefined : t('reason.needsToken'),
+					run: h.testGrid
+				},
+				{
+					id: 'generators',
+					label: t('rail.generators.short'),
+					explain: t('rail.generators'),
+					off: ctx.may ? undefined : t('reason.needsToken'),
+					run: h.generators
+				},
+				{
+					id: 'clipart',
+					label: t('rail.clipart.short'),
+					explain: t('rail.clipart'),
+					off: ctx.may ? undefined : t('reason.needsToken'),
+					run: h.clipart
 				}
 			]
 		},

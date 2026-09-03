@@ -25,6 +25,8 @@
 		jobLabel,
 		remainingSeconds,
 		machineStateLabel,
+		jobPhase,
+		transportAllowed,
 		type Device,
 		type GridAxis,
 		type Job,
@@ -36,6 +38,7 @@
 	import { connection } from '$lib/connection.svelte';
 	import AlarmCard from './AlarmCard.svelte';
 	import NotificationCard from './NotificationCard.svelte';
+	import { notifyState } from '$lib/notifications.svelte';
 	import type { Notifications, Watchdog } from '$lib/notifications.svelte';
 	import type { DesignStore } from '$lib/design.svelte';
 
@@ -87,6 +90,13 @@
 	 * things about one job.
 	 */
 	let quiet = $derived(machineState === 'paused');
+	/**
+	 * The phase, from the same function the desktop uses.
+	 *
+	 * Only for the transport buttons below: this screen shows its own words for what
+	 * is happening, but whether pausing is possible may not be a second opinion.
+	 */
+	let phase = $derived(jobPhase(device, current, design ? design.burnsNothing : false));
 
 	/**
 	 * The pause button has to do something you can see.
@@ -113,6 +123,19 @@
 	 * disappears. An unplugged USB cable should not cost half a screen.
 	 */
 	let imagePiece = $state(false);
+	/**
+	 * The still refreshes itself while the stream is out.
+	 *
+	 * Every two seconds, and only while there is something to show: a picture of the
+	 * bed that is a minute old is worse than none, and a timer that runs when nobody is
+	 * looking is a request per two seconds for nothing.
+	 */
+	let stillTick = $state(0);
+	$effect(() => {
+		if (!imagePiece || !camera.state.running) return;
+		const timer = setInterval(() => (stillTick += 1), 2000);
+		return () => clearInterval(timer);
+	});
 	$effect(() => {
 		camera.generation;
 		imagePiece = false;
@@ -334,13 +357,9 @@
 	let stateInOneLine = $derived(photoFirst && connected && machineState === 'ready');
 	/** The bed drawing under that one line. Closed, because you came for the photo. */
 	let bedOpen = $state(false);
-	let noticeState = $derived(
-		notifications.permission === 'denied'
-			? 'geblokkeerd'
-			: notifications.active
-				? 'aan'
-				: 'uit'
-	);
+	// The name styles the chip, the text is read. `notifyState` decides both, so this
+	// row and the card behind it cannot disagree about what the browser allows.
+	let notice = $derived(notifyState(notifications.permission, notifications.active));
 
 	let bedW = $derived(device?.bed.width_mm ?? 0);
 	let bedH = $derived(device?.bed.height_mm ?? 0);
@@ -513,7 +532,7 @@
 	-->
 	<AlarmCard {watchdog} large />
 	<header>
-		<span class="dot {machineState}" aria-hidden="true"></span>
+		<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 		<span class="staat"
 			>{connected ? machineStateLabel(machineState) : t('phone.noConnection')}</span
 		>
@@ -537,7 +556,14 @@
 	{#snippet beeld()}
 		<!-- Camera: if you can look, you look. -->
 		<div class="podium">
-			<img src={camera.src} alt={t('phone.cameraAlt')} onerror={() => (imagePiece = true)} />
+			<!-- A dropped stream falls back to a still that refreshes, instead of to the
+			     browser's broken-image icon. `frame.png` says in the engine layer that it
+			     is there for exactly this, and nothing used it. -->
+			{#if imagePiece}
+				<img src={camera.still(stillTick)} alt={t('phone.cameraAlt')} />
+			{:else}
+				<img src={camera.src} alt={t('phone.cameraAlt')} onerror={() => (imagePiece = true)} />
+			{/if}
 		</div>
 	{/snippet}
 
@@ -750,7 +776,7 @@
 						aria-expanded={bedOpen}
 						onclick={() => (bedOpen = !bedOpen)}
 					>
-						<span class="dot {machineState}" aria-hidden="true"></span>
+						<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 						<span class="name">{t('phone.notBurning')}</span>
 						<span class="state mono">{position}</span>
 						<span class="pijl" aria-hidden="true">{bedOpen ? '▴' : '▾'}</span>
@@ -832,7 +858,7 @@
 				onclick={() => (settingsOpen = !settingsOpen)}
 			>
 				<span class="name">{t('notifications.title')}</span>
-				<span class="state {noticeState}">{noticeState}</span>
+				<span class="state {notice.name}">{notice.text}</span>
 				<span class="pijl" aria-hidden="true">{settingsOpen ? '▴' : '▾'}</span>
 			</button>
 			{#if settingsOpen}
@@ -866,11 +892,22 @@
 		<div class="buttons">
 			{#if quiet}
 				<button class="brake resume" disabled={control.needsToken || !connected} onclick={() => control.resume()}>
-					{t('phone.resume')}
+					{t('transport.resume')}
 				</button>
 			{:else}
-				<button class="brake pause" disabled={!current || control.needsToken || !connected} onclick={pauzeer}>
-					{pauzeGevraagd ? t('phone.pausing') : t('job.pause')}
+				<!-- The same question the desktop asks — `transportAllowed` in `$lib/api`.
+				     This button used never to look at the capabilities, so a driver that
+				     cannot pause was offered a pause here and nowhere else. -->
+				<button
+					class="brake pause"
+					disabled={!transportAllowed('pause', {
+						able: control.capabilities?.actions,
+						phase,
+						blocked: control.needsToken || !connected
+					})}
+					onclick={pauzeer}
+				>
+					{pauzeGevraagd ? t('phone.pausing') : t('transport.pause')}
 				</button>
 			{/if}
 			<!-- Without a connection this tap arrives nowhere. A red button that looks
@@ -882,7 +919,7 @@
 				disabled={control.needsToken || !connected}
 				onclick={() => control.stop()}
 			>
-				{t('job.stop')}
+				{t('transport.stop')}
 			</button>
 		</div>
 	</div>
@@ -906,17 +943,11 @@
 	}
 	.staat { font-weight: 600; font-size: var(--text-md); }
 	.machine { margin-left: auto; color: var(--text-2); font-size: var(--text-xs); }
-	.dot { width: 10px; height: 10px; border-radius: var(--radius-dot); background: var(--text-2); }
-	.dot.ready { background: var(--ok); }
-	/* Was `.dot.running`, and that class did not exist: MachineState is called
-	   `busy`. The dot therefore stayed grey while the machine was burning. */
-	.dot.busy { background: var(--accent); }
-	.dot.paused { background: var(--warn-solid); }
-	/* `unplugged` did not exist yet when this dot was written; without a rule it
-	   fell back to grey and a dead port read as "nothing wrong". */
-	.dot.unplugged { background: var(--warn-solid); }
-	.dot.alarm { background: var(--danger-solid); }
-	.dot.unplugged { background: var(--warn-solid); }
+	/* Bigger than in a bar, because this one is read at arm's length. The colours are
+	   shared: `.machinedot` in `tokens.css`. Two earlier repairs live there now — the
+	   class that was called `running` while the state is `busy`, and `unplugged`, which
+	   was missing on the desktop and made a dead port look like nothing at all. */
+	.dot { width: 10px; height: 10px; }
 	.again {
 		display: block;
 		width: 100%;
@@ -1183,7 +1214,7 @@
 	.noticerow .state.on { color: var(--ok); }
 	/* Blocked is not the user's mistake but is something you have to see: amber,
 	   because there is something to put right. */
-	.noticerow .state.geblokkeerd { color: var(--warn); }
+	.noticerow .state.blocked { color: var(--warn); }
 	.noticerow .pijl { flex: none; color: var(--text-2); }
 	.meldbody {
 		padding: var(--space-3);

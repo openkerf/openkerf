@@ -1,20 +1,20 @@
-# Test grids: finding the settings for a material
+# Test grids: finding the presets for a material
 
 A test grid is a board of small squares, each burned at a slightly different speed and
 power. You burn one, look at which square came out right, and OpenKerf turns that square
-into a saved setting for that material. This page follows the whole loop: planning the
+into a saved preset for that material. This page follows the whole loop: planning the
 board, what lands on the bed, burning it, photographing it, aligning the photo, and
 reading off the square you want to keep.
 
 ## Why you burn one
 
 Speed and power are not properties of a material, they are properties of your machine on
-that material: the same 3 mm birch cuts at one setting on a tired tube and at another on
+that material: the same 3 mm birch cuts at one preset on a tired tube and at another on
 a fresh one. A number somebody else wrote down is a starting point, not an answer.
 
 The board is also evidence. Two weeks later you no longer remember what "25 at 60" was
 about, but a plank with the values engraved beside the squares still tells you. That is
-why the caption is on by default, and why the photo stays attached to the setting it
+why the caption is on by default, and why the photo stays attached to the preset it
 produced.
 
 ## Opening the window
@@ -22,7 +22,7 @@ produced.
 The **Test grid** window opens from the tool rail on the left, from the button of the same
 name. Coming from the material library it opens with the material already filled in: each
 material heading there carries a **Make a test grid** link, and the row menu of a single
-setting has **Make a test grid for {material}**.
+preset has **Make a test grid for {material}**.
 
 If the sheet you are working on already has a material and a thickness, both fields start
 filled in — the board is about the plank that is in the machine, so those two are not a
@@ -33,7 +33,7 @@ The window shows the four steps of the loop across the top: **Set up**, **Burn**
 window; steps 3 and 4 are the block underneath it, headed **Steps 3 and 4 — photo and
 preset**.
 
-![The Test grid window over the canvas: the four numbered steps across the top, the form on the left with Material, Operation, Thickness, Square, Passes and the two axis choices, and on the right a preview of a four-by-four board with power percentages above it and speeds beside it, above the button "Draw the grid — 16 squares, 57.9 × 58.3 mm"](images/16-testgrid.png)
+![The Test grid window over the canvas: the four numbered steps across the top, the form on the left with Material, Operation, Thickness, Square, Passes and the two axis choices, and on the right a preview of a four-by-four board with power percentages above it and speeds beside it, above the button "Draw the grid", which carries the number of squares and the size the board will be](images/16-testgrid.png)
 
 **Without a token.** A read-only session cannot draw a board. The window then says:
 
@@ -145,12 +145,12 @@ power.
 
 What each one costs is on the form before you press anything: the strip of plank the code
 takes, the seconds it adds and the module size it comes out at; and for the cut-out the
-setting it found in your library, the four bridges, the size the tile comes off the sheet at,
+preset it found in your library, the four bridges, the size the tile comes off the sheet at,
 and the seconds of cutting. What cannot be done is refused there too — a quarter of a second
 after the switch goes on, beside the field that has to change, rather than after the button
 with a plank already in the machine.
 
-![The lower part of the test-grid form: the fieldset What else goes on the board, with four switches. Engrave the caption and axis labels is on, Border around the board is off, and both Burn the board’s own name on it as a QR code and Cut the board loose from the sheet are on. Under the code switch: why it is there, the line This board is called 4MFN ER8P, a Code size field reading 18, and what it costs — a strip of 20 mm below the squares, about 14 s of burning, modules of 0.62 mm. Under the cut-out: the rim is cut at 12 mm/s and 65%, 1× from the library; the cut runs 4 mm outside everything else with four bridges of 2 mm; about 23 s of burning. At the bottom, that no board with a code or a cut-out has been burned yet on any material.](images/43-board-extras.png)
+![The lower part of the test-grid form: the fieldset What else goes on the board, with four switches. Engrave the caption and axis labels is on, Border around the board is off, and both Burn the board’s own name on it as a QR code and Cut the board loose from the sheet are on. Under the code switch: why it is there, the line naming the board (the name is minted per board, so it differs from yours), a Code size field reading 18, and what it costs — a strip of 20 mm below the squares, about 14 s of burning, modules of 0.62 mm. Under the cut-out: the rim is cut at 12 mm/s and 65%, 1× from the library; the cut runs 4 mm outside everything else with four bridges of 2 mm; about 23 s of burning. At the bottom, that no board with a code or a cut-out has been burned yet on any material.](images/43-board-extras.png)
 
 ### The code, and what it is for
 
@@ -165,7 +165,7 @@ so a board whose code is scuffed or badly lit can still be identified by eye.
 The reason is a repair, not a feature. Of the thirty-two boards in the author's own library,
 **eleven are physically indistinguishable from another one** — same material, same square
 size, same sweep, burned minutes apart. By the time the wood is off the machine, filing the
-photograph is guesswork, and guessing wrong writes somebody else's numbers into a setting
+photograph is guesswork, and guessing wrong writes somebody else's numbers into a preset
 that then carries the wrong photograph as its evidence. A board that says who it is takes
 the guess out: photograph it, and the picture finds its own row.
 
@@ -269,7 +269,7 @@ photograph whose code names a *different* board of your library:
 > The code in this photograph says board 7X4M QB2K; you picked R8KA C1HX. File it under 7X4M QB2K, or pick that board here.
 
 That is the mix-up the whole thing exists for, and it is the one mistake that cannot be
-repaired later: the picture would sit under a row it is not of, and every setting drawn from
+repaired later: the picture would sit under a row it is not of, and every preset drawn from
 it would carry it as evidence.
 
 Three more answers, because each sends you somewhere else: no code in the picture — *No code
@@ -320,18 +320,18 @@ the end again every time another board asks for one, because creation order alon
 *second* board wrong: board one's tile would come free while board two is still being
 engraved.
 
-The rim is cut with a cut setting from your own library, for this material, this thickness
+The rim is cut with a cut preset from your own library, for this material, this thickness
 and this machine — the one you used most recently. It is refused when there is none, rather
 than guessed:
 
-> There is no cut setting for this material
+> There is no cut preset for this material
 
 with the thickness named when there is one, and the thicknesses you *do* have listed after
 it. Guessing here would cut the rim at a speed nobody has ever burned, on the very plank
-whose purpose is to find out what that speed is. A cut setting for another thickness is not
+whose purpose is to find out what that speed is. A cut preset for another thickness is not
 offered either: half-cutting the rim leaves the tile in the sheet with a crack line through
 it, which is worse than not cutting at all. Cutting loose also needs a material at all:
-*Cutting the tile loose needs a material, so its cut setting can be looked up.*
+*Cutting the tile loose needs a material, so its cut preset can be looked up.*
 
 Measured on the same four-by-four board: **109.9 s and 19 layers** with both the code and
 the cut-out, against 73.8 s with the code alone and 56.9 s with neither. A rim is not free.
@@ -341,7 +341,7 @@ photograph is the tile's own edge, roughly 20 mm outside the squares — and dra
 alignment handles onto *that* puts every square in the wrong place without a word of
 complaint. So a board you intend to cut loose is a board that wants a code on it.
 
-![The bed with a test board drawn on it and a rectangle around the whole board, four millimetres clear of it, with a small gap in the middle of each of its four sides. In the Layers tab beside it three layers, in burn order: the one holding the caption and the axis labels (named "Board labels" on screen), then "Board code", and last "Test board cut-out" at 12 mm/s and 65% — the cut setting looked up from the library rather than guessed.](images/42-board-tile.png)
+![The bed with a test board drawn on it and a rectangle around the whole board, four millimetres clear of it, with a small gap in the middle of each of its four sides. In the Layers tab beside it three layers, in burn order: the one holding the caption and the axis labels (named "Board labels" on screen), then "Board code", and last "Test board cut-out" at 12 mm/s and 65% — the cut preset looked up from the library rather than guessed.](images/42-board-tile.png)
 
 ## Where the board lies
 
@@ -390,17 +390,17 @@ The burn time is worth a look before you press the button:
 With line spacing on an axis that number can multiply quietly: a row at 0.05 mm lays six
 times as many lines as a row at 0.3 mm, and nothing else on the form shows that.
 
-## Recipes: settings you keep
+## Recipes: presets you keep
 
 Two ways of not filling the same form in every week.
 
-**Last time.** Choose a material and OpenKerf fills the form with the settings of your
+**Last time.** Choose a material and OpenKerf fills the form with the presets of your
 previous board for that material:
 
-> Settings carried over from your previous grid for this material (20 Aug, #32). Feel free
+> Presets carried over from your previous grid for this material (20 Aug, #32). Feel free
 > to adjust them.
 
-**Recipes**, at the top of the window, are named settings — for the case where one material
+**Recipes**, at the top of the window, are named presets — for the case where one material
 needs two of them, cutting beside engraving. Pick one from the **Recipe** list and the form
 fills; **Save this…** opens a name field (*Name, e.g. birch 3 mm cut*) and **Remove**
 throws the chosen one away. A recipe holds everything on the form except the caption, which
@@ -433,7 +433,7 @@ board is going to be, and **Start job** puts the board in the queue.
 
 > The job is in the queue. Stay with it until the board comes out of the machine.
 
-**Set up another grid** puts you back at the settings for the next board — it does not draw
+**Set up another grid** puts you back at the presets for the next board — it does not draw
 straight away, because a second board would fall on the first.
 
 **When it goes wrong.** Starting is refused when part of the board is off the bed:
@@ -451,7 +451,7 @@ material:
 The board is one group on your sheet, with each square in a layer of its own — that is what
 makes the sweep possible, because every square needs its own speed and power.
 
-![The bed with a burned-in test board drawn on it: four rows of four red squares, the power percentages 40%, 55%, 75% and 90% engraved above the columns, the speeds 8, 12, 16 and 20 mm/s beside the rows, and above it the caption "Acrylaat (gegoten) — cut speed v / power > 2026-08-21"](images/17-testgrid-board.png)
+![The bed with a burned-in test board drawn on it: four rows of four red squares, the power percentages 40%, 55%, 75% and 90% engraved above the columns, the speeds 8, 12, 16 and 20 mm/s beside the rows, and above it the caption: the material, the operation, which way the two axes run, and the date the board was drawn](images/17-testgrid-board.png)
 
 In the **Layers** tab the whole board is one row, **Test grid #33**, with
 *16 cells · speed and power are fixed* underneath. The **+** beside it unfolds the
@@ -466,7 +466,7 @@ it. Throwing all layers away leaves the board alone as well — the confirmation
 Steps 3 and 4 are in the block below the wizard, and the way in is the photograph rather
 than the list:
 
-> **Read a board from a photograph** — The board names itself: OpenKerf reads the code on
+> **Read a burned board from a photograph** — The board names itself: OpenKerf reads the code on
 > the plank and opens that board. Photograph it straight from above, with the code in frame.
 
 Hand over the picture and that is the whole of it: the code says which plank it is, the
@@ -477,9 +477,9 @@ aligned. It answers by name, so you can see it took the one you meant:
 
 The same door stands in the material library — **Read a burned board from a photograph** —
 because that is where somebody with a freshly burned plank goes first, looking for the
-settings it was burned for.
+presets it was burned for.
 
-![The top of the reading panel: a search box reading "Name, material, thickness", a list showing a board by its own name followed by the date, the material and the operation, and below it a "Read a board from a photograph" button with the sentence explaining that the board names itself. Under that, the block for a board with no photograph yet: "Burn this grid and photograph the board", an "Add a photo" button, and the line about using a phone.](images/44-board-readback.png)
+![The top of the reading panel: a search box reading "Name, material, thickness", a list showing a board by its own name followed by the date, the material and the operation, and below it a "Read a burned board from a photograph" button with the sentence explaining that the board names itself. Under that, the block for a board with no photograph yet: "Burn this grid and photograph the board", an "Add a photo" button, and the line about using a phone.](images/44-board-readback.png)
 
 **When there is no code to read.** A board burned before this existed, a code photographed
 too small, or an installation without OpenCV: then pick the board from the list, and the
@@ -544,7 +544,7 @@ square**.
 
 > 2 presets saved with Acrylaat (geëxtrudeerd). You will find them in the material library.
 
-The squares a setting has already come out of stay marked on the photo, with the line
+The squares a preset has already come out of stay marked on the photo, with the line
 **Became a preset:** and a chip per square underneath. Pointing at a chip lights the square
 up on the photo — *— pointing at it highlights the square on the photo.*
 
@@ -557,15 +557,15 @@ A failure on the way out gives *Making the preset failed.*
 
 ## What the preset carries with it
 
-The setting that comes out of a square is not a bare speed and power. It carries the
+The preset that comes out of a square is not a bare speed and power. It carries the
 material, the thickness, the operation, the machine it was burned on, the number of passes
 and the line spacing — burn it again with one pass where the square had two and you notice
 that on material.
 
 It also carries where it came from. In the material library it wears a green **Verified**
 badge, and its detail lines read *Verified — burned and judged on a test grid*, the machine
-it was made on, and the board itself: *Test grid #16 · burned last week*. Beside that sits
-the photo of that board with the square outlined:
+it was made on, and the board itself: its number, when it was burned, and which square was
+picked. Beside that sits the photo of that board with the square outlined:
 
 > The outline marks the square at row 2, column 2 — that is where these values come from.
 
@@ -574,7 +574,7 @@ photo has not been set, so the outline is approximate — align the grid for an 
 Without a photo there is nothing to show: *There is no photo of this grid yet. Without a
 photo there is nothing to read the choice off.*
 
-![The material library with a setting unfolded: 3 mm, Cut, 125 mm/s, 45%, a green Verified badge, the lines Source "Verified — burned and judged on a test grid", Machine KH-5030, Test grid "#16 · burned last week", Air assist on, and to the right the photo of the burned board with one square outlined](images/15-library-preset.png)
+![The material library with a preset unfolded: 3 mm, Cut, 16 mm/s, 75%, a green Verified badge, the lines Source "Verified — burned and judged on a test grid", Machine KH-5030, Test grid with the board's number and the square that was picked, Air assist on, and to the right, in place of the photograph, the line that there is no photo of this grid yet with "Add a photo" under it](images/15-library-preset.png)
 
 The other badges say the opposite in one word, and what each of them means is in
 [The material library](library.md#where-the-numbers-come-from). That is the point

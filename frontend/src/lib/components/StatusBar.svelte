@@ -2,7 +2,6 @@
 	import {
 		formatDuration,
 		formatMm,
-		isStalled,
 		remainingSeconds,
 		totalSeconds,
 		type Device,
@@ -52,12 +51,10 @@
 
 	let mm = $derived(device?.position.mm ?? null);
 
-	// Pausing had to work from *every* tab. Living only in the Job panel it cost a
-	// tab switch plus a click — exactly when you do not want a second action. So
-	// here, beside the stop.
-	let paused = $derived(isStalled(job));
-	let canPause = $derived(control.capabilities?.actions.pause ?? false);
-	let canResume = $derived(control.capabilities?.actions.resume ?? false);
+	// Pausing and stopping moved to the top bar (see the comment further down), and
+	// the three derivations that fed the buttons here stayed behind — a fourth answer
+	// to "may I pause now" that no template read. `transportAllowed` in `$lib/api` is
+	// the one that counts.
 	let remaining = $derived(remainingSeconds(job));
 	// From the same source as `remaining` — that is the whole fix for gap B1. With
 	// `job.estimate_seconds` here the bar read "0:00 left of 13:45:04": a remainder
@@ -193,7 +190,7 @@
 	<span class="what pointerpart">{t('status.mouse')}</span>
 	<span class="pointer pointerpart">
 		{#if pointerMm}
-			<b>{pointerMm.x.toFixed(1)}</b>, <b>{pointerMm.y.toFixed(1)}</b> mm
+			<b>{formatMm(pointerMm.x)}</b>, <b>{formatMm(pointerMm.y)}</b> mm
 		{:else}
 			—
 		{/if}
@@ -275,7 +272,7 @@
 		class:offline={!connected}
 		title={connected ? t('status.openkerf.live.title') : t('status.openkerf.away.title')}
 	>
-		<span class="dot {connected ? 'ready' : 'offline'}" aria-hidden="true"></span>
+		<span class="dot machinedot {connected ? 'ready' : 'offline'}" aria-hidden="true"></span>
 		{connected ? t('status.openkerf.live') : t('status.openkerf.away')}
 	</span>
 </footer>
@@ -403,11 +400,11 @@
 		gap: 8px;
 		color: var(--text-1);
 	}
+	/* Size only; the colour per state is shared — `.machinedot` in `tokens.css`. This
+	   bar had a rule for one of the six states, so the other five were grey here while
+	   the top bar coloured them. */
 	.dot {
 		width: 8px;
 		height: 8px;
-		border-radius: var(--radius-dot);
-		background: var(--text-2);
 	}
-	.dot.ready { background: var(--ok); }
 </style>

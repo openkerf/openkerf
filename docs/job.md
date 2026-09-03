@@ -35,7 +35,7 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", "Material — not filled in for this sheet", an amber box saying the machine is not responding, a three-row layer table with speed, power, passes and source, an amber note that three layers use unmeasured settings, and the checklist "RUN THROUGH THIS: Lid closed / Extraction and air assist on / Workpiece is clamped and flat". At the bottom of the panel a "Show frame" button beside a green "Start job 1:19".](images/12-job-preflight.png)
+![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", "Material — not filled in for this sheet", an amber box saying the machine is not responding, a three-row layer table with speed, power, passes and a Source column reading "not verified" three times, and an amber note that three layers use presets that were not verified. At the foot of the panel the strip that stays put while the rest scrolls: the checklist "RUN THROUGH THIS: Lid closed / Extraction and air assist on / Workpiece is clamped and flat", and under it a "Show frame" button beside a green "Start job 1:19".](images/12-job-preflight.png)
 
 ### The drawing
 
@@ -99,7 +99,7 @@ laser cutter checks before putting material in the machine: **mm/s**, **%**, **�
 
 Source says where those numbers came from, in two words: *measured*, *not
 measured*, *extrapolated — not measured*, *set by hand*, *from someone else's
-machine*. If the setting was measured but on a different board, it says *other
+machine*. If the preset was measured but on a different board, it says *other
 material* or *other thickness* instead — because "measured" above a number that
 was measured on something else reassures where it should not.
 
@@ -108,7 +108,7 @@ instead of speed and power.
 
 Under the table, the objections. One line per layer, heaviest first, and when the
 top one really outweighs the bottom one it is tagged **First**. Below those, if
-any layer's numbers were never measured: "3 layers use settings that were not
+any layer's numbers were never measured: "3 layers use presets that were not
 measured with a test grid. On unknown material: try a scrap first."
 
 **When it goes wrong.** Raster layers do not burn on this server. The pre-flight
@@ -135,6 +135,12 @@ its own page: [The rotary](rotary.md).
 Three lines under the heading **Run through this**: *Lid closed*, *Extraction and
 air assist on*, *Workpiece is clamped and flat*. There is nothing to tick. A
 checklist you get used to ticking off protects nobody.
+
+It sits in the strip at the bottom of the panel, directly above **Start job**, and
+stays there while the rest of the panel scrolls. It used to stand higher up in the
+column, and with four layers the column is longer than the panel is high: measured
+at 1440 by 900, two of the three lines lay behind that strip — the last one behind
+the start button itself.
 
 ### Nothing to burn
 
@@ -397,7 +403,7 @@ designed* until you touch it, then +10 %, −1 % and so on. Buttons: −10 %, �
 +1 %, +10 % and **Reset**.
 
 The note under it: "This scales what the machine is doing right now. The layer
-keeps its own setting — which may come from a preset, and then it is evidence."
+keeps its own preset — which may come from a preset, and then it is evidence."
 
 **When it goes wrong.** Most machines have no realtime channel for this and the
 block is simply absent. Asking anyway is refused with: "This machine cannot adjust
@@ -436,7 +442,10 @@ with **Home** beside it. On a machine with a Z axis there are two more buttons i
 the same pad, **Z ↑** and **Z ↓**, for focusing. Every button follows the **Step
 size** below the pad: 0.1 mm, 1 mm, 10 mm or 50 mm.
 
-**Unlock** releases the motors so you can push the head by hand.
+**Unlock** releases the motors so you can push the head by hand, and **Hold** takes
+them back — the pair, so laying material down by hand does not end in homing the
+machine to make it hold again. Both are only there when the driver reports it can do
+them; hovering says what each one does.
 
 ### Homing with a rotary in the bed
 

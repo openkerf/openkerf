@@ -1,4 +1,5 @@
 <script lang="ts">
+	import NumberField from './NumberField.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { SheetStore } from '$lib/sheets.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
@@ -124,7 +125,7 @@
 			class="sheet"
 			aria-pressed={sheet.active}
 			disabled={sheets.busy}
-			title="{sheet.name} — {sheet.width_mm} × {sheet.height_mm} mm{materialName(
+			title="{sheet.name} — {i18n.number(sheet.width_mm)} × {i18n.number(sheet.height_mm)} mm{materialName(
 				sheet.material_id
 			)
 				? ` · ${materialName(sheet.material_id)}`
@@ -132,7 +133,7 @@
 			onclick={() => go(sheet.id)}
 		>
 			<span class="name">{sheet.name}</span>
-			<span class="size mono">{sheet.width_mm}×{sheet.height_mm}</span>
+			<span class="size mono">{i18n.number(sheet.width_mm)}×{i18n.number(sheet.height_mm)}</span>
 		</button>
 	{/each}
 
@@ -183,6 +184,44 @@
 				onchange={(e) => sheets.update(sheet.id, { height_mm: Number(e.currentTarget.value) })}
 			/>
 		</label>
+		<!--
+			What a plate larger than the bed costs in room.
+
+			The engine layer has validated these three since tiling existed, and refuses
+			with sentences like "Make the overlap at least 12 mm" — an instruction for
+			something no screen offered. They belong here, beside the size they are about:
+			a value you set and read back, on the sheet it applies to.
+
+			Steppers, not bare number inputs: DESIGN-SYSTEM, "number input is a stepper
+			everywhere" — you set these standing at a machine.
+		-->
+		<p class="head wide">{t('sheets.tiling.head')}</p>
+		<p class="why wide">{t('sheets.tiling.why')}</p>
+		<div class="wide three">
+			<NumberField
+				label={t('sheets.tiling.margin')}
+				value={String(sheet.tiling?.margin_mm ?? 10)}
+				step={1}
+				min={0}
+				max={100}
+				onchange={(v) => sheets.update(sheet.id, { tiling: { margin_mm: Number(v) } })}
+			/>
+			<NumberField
+				label={t('sheets.tiling.overlap')}
+				value={String(sheet.tiling?.overlap_mm ?? 25)}
+				step={1}
+				min={0}
+				onchange={(v) => sheets.update(sheet.id, { tiling: { overlap_mm: Number(v) } })}
+			/>
+			<NumberField
+				label={t('sheets.tiling.marker')}
+				value={String(sheet.tiling?.marker_size_mm ?? 8)}
+				step={1}
+				min={1}
+				onchange={(v) => sheets.update(sheet.id, { tiling: { marker_size_mm: Number(v) } })}
+			/>
+		</div>
+
 		<!-- Material is not filled in a second time here. It is in the top bar, because
 		     everything downstream reads it there; two places to choose the same thing
 		     only raises the question which is the real one. -->
@@ -294,6 +333,24 @@
 		text-align: left;
 	}
 	.editor .material:hover { background: var(--surface-2); }
+	/* The tiling row: a heading, a sentence and the three fields in a line. `wide`
+	   breaks the flex row, so each of the three parts starts on its own. */
+	.editor .wide { flex-basis: 100%; }
+	.editor .head {
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-2);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.editor .why {
+		margin: 0 0 var(--space-1);
+		max-width: 62ch;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.editor .three { display: flex; gap: var(--space-2); }
 	.editor input[type='text'] { width: 9em; }
 	.editor input[type='number'] { width: 5em; }
 	.drop,

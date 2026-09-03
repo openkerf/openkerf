@@ -2,7 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { jobBusy, jobPhase, machineState } from '$lib/api';
+	import { jobBusy, jobPhase, machineState, mayLeaveWorkArea, transportAllowed } from '$lib/api';
 	import { Controller } from '$lib/control.svelte';
 	import {
 		DEFAULT_BRIDGES,
@@ -49,7 +49,8 @@ import { SeriesStore } from '$lib/series.svelte';
 	import {
 		KEYS,
 		comboOf,
-		canvasMenu,
+		barMenu,
+	canvasMenu,
 		keyLabel,
 		nodeMenu,
 		objectMenu,
@@ -742,13 +743,15 @@ import { SeriesStore } from '$lib/series.svelte';
 	 * with a machine that does not answer: the bar disabled starting, the panel left it
 	 * on. One function, one answer.
 	 */
-	let phase = $derived(jobPhase(device, status.activeJob, design.isEmpty));
+	let phase = $derived(jobPhase(device, status.activeJob, design.burnsNothing));
 	let workUnderWay = $derived(jobBusy(phase));
 
 	onMount(() => {
 		status.connect();
 		control.refreshCapabilities();
 		camera.load();
+		// Which cameras there are, so a second one can be chosen rather than guessed at.
+		camera.loadList();
 		sheets.load();
 		library.load();
 		// The list a series burns from. Fetched here and not only by its own window,
@@ -1057,6 +1060,11 @@ import { SeriesStore } from '$lib/series.svelte';
 		insertColumn: (column) => insertColumn(column),
 		burnOnce: (once) => setBurnOnce(once),
 		series: () => (seriesOpen = true),
+		// The other four workspaces, so the menu has the same doors the rail has.
+		library: () => (libraryOpen = true),
+		testGrid: () => (gridOpen = true),
+		generators: () => (generatorsOpen = true),
+		clipart: () => (clipartOpen = true),
 		crop: () => (cropping = true),
 		uncrop: async () => {
 			const id = design.selectedId;
@@ -1391,12 +1399,13 @@ import { SeriesStore } from '$lib/series.svelte';
 	canStart={(control.capabilities?.actions.start ?? false) &&
 		!control.needsToken &&
 		!workUnderWay}
-	canStop={(control.capabilities?.actions.stop ?? false) && !control.needsToken}
+	canStop={transportAllowed('stop', { able: control.capabilities?.actions, phase, blocked: control.needsToken })}
 	stopArmed={workUnderWay}
+	mayLeave={mayLeaveWorkArea(phase)}
 	canEdit={canEdit && design.preview === null}
 	{narrow}
-	canPause={(control.capabilities?.actions.pause ?? false) && !control.needsToken}
-	canResume={(control.capabilities?.actions.resume ?? false) && !control.needsToken}
+	canPause={transportAllowed('pause', { able: control.capabilities?.actions, phase, blocked: control.needsToken })}
+	canResume={transportAllowed('resume', { able: control.capabilities?.actions, phase, blocked: control.needsToken })}
 	paused={phase === 'paused'}
 	onPause={() => control.pause()}
 	onResume={() => control.resume()}
@@ -1462,7 +1471,11 @@ import { SeriesStore } from '$lib/series.svelte';
 				const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
 				menuPoint = null;
 				menu = {
-					list: objectMenu(actionContext, handlers),
+					// `barMenu` picks the same menu a right-click would give in this state:
+					// the selection's rows when there is one, the design's rows when there
+					// is not. It used to be `objectMenu` always, and with nothing selected
+					// that is nineteen grey rows under a button that says "All operations".
+					list: barMenu(actionContext, handlers),
 					x: box.left,
 					y: box.bottom + 4
 				};
@@ -1667,6 +1680,7 @@ import { SeriesStore } from '$lib/series.svelte';
 					events={status.events}
 					{control}
 					activeJob={status.activeJob}
+					nothingBurns={design.burnsNothing}
 					revision={design.revision}
 					selectedIds={design.selectedIds}
 					bind:preflight
@@ -1680,6 +1694,9 @@ import { SeriesStore } from '$lib/series.svelte';
 					}}
 					onUnlock={async () => {
 						await edits.unlock();
+					}}
+					onLock={async () => {
+						await edits.lock();
 					}}
 					profile={library.activeMachine}
 					onFrame={() => control.frame()}

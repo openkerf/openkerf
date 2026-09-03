@@ -4,7 +4,7 @@ OpenKerf is a laser-cutter interface that runs in a browser and drives your
 machine through the MeerK40t engine. You draw or import a design on a bed drawn
 to scale, put the shapes into layers that carry a speed and a power, and check
 one screen before the head moves. What makes it different from a bare engine is
-the bookkeeping around those numbers: a library of settings measured on your own
+the bookkeeping around those numbers: a library of presets measured on your own
 laser, on your own material, with the photo of the test board they came off.
 
 ## Starting it
@@ -43,8 +43,8 @@ order or looked up when you need them.
 | [Layers](layers.md) | What the machine does with a shape: the four kinds of layer, speed, power and passes, the colour strip, burn order, raster settings, drop per pass and air assist. |
 | [Burning](job.md) | The Job tab from top to bottom: the pre-flight, the cut path you can walk through before anything moves, the two taps that start a job, progress and adjustment while it burns, the queue, jogging the head, connecting, and the phone screen. |
 | [The rotary](rotary.md) | Burning on a cylinder: where the settings live, calibrating from a burned line, what changes on the machine while a rotary is fitted, and the ten steps to work through standing at the laser. |
-| [Test grids](test-grid.md) | Burning a board of squares to find the settings for a material, photographing it, aligning the photo and turning the best square into a saved setting — plus the code that lets a photograph find its own board, and cutting the board loose as a tile. |
-| [The material library](library.md) | Keeping those settings: where a number came from and how far to trust it, applying one to a layer, renaming, merging and removing what is in the library, machine profiles, moving a library between computers, and taking a starting point from the catalogue other people share. |
+| [Test grids](test-grid.md) | Burning a board of squares to find the presets for a material, photographing it, aligning the photo and turning the best square into a saved preset — plus the code that lets a photograph find its own board, and cutting the board loose as a tile. |
+| [The material library](library.md) | Keeping those presets: where a number came from and how far to trust it, applying one to a layer, renaming, merging and removing what is in the library, machine profiles, moving a library between computers, and taking a starting point from the catalogue other people share. |
 | [Plates larger than the bed](tiling.md) | Burning a plate that does not fit, in tiles: alignment marks, sliding the plate along, and the two taps that tell the machine where it now lies. |
 | [Reference](reference.md) | Every keyboard shortcut, every operation in the menus and the action bar, every reason a button is greyed out, and the app-wide settings — language, theme, notifications, the token and the camera. |
 
@@ -66,7 +66,7 @@ the KH-5030 if some other machine happens to be active. The files land in
 
 Two of them are held back on purpose. The pictures of a test board with a code
 and with a cut-out have to *draw* a board, which writes a row into the library and
-needs a cut setting for the material, so they only run against a library that is
+needs a cut preset for the material, so they only run against a library that is
 expendable:
 
 ```bash

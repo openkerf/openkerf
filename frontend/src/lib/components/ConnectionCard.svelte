@@ -112,7 +112,12 @@
 		   but above the canvas and not above the right-hand panel. Centred, on a
 		   tablet it lay straight across the panel tabs — and that is exactly where
 		   what you wanted to operate at that moment sits. */
-		top: calc(var(--topbar-height, 46px) + var(--space-3));
+		/* Below the bars above the canvas, not over them, the way the alarm and the
+		   message stack already did it. At the old offset this card stood at y 60 while
+		   the action bar runs 48-86: `elementFromPoint` in the middle of all fifteen
+		   action-bar buttons answered with this card. `--topedge-height` is measured in
+		   `+page.svelte` and is zero where there are no bars (phone). */
+		top: calc(var(--topbar-height) + var(--topedge-height, 0px) + var(--space-3));
 		left: calc(var(--rail-width) + var(--space-3));
 		z-index: 60;
 		display: flex;

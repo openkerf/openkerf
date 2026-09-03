@@ -14,7 +14,7 @@
 	import { goto } from '$app/navigation';
 	import Segmented from '$components/Segmented.svelte';
 	import { KINDS, kindOfMachine, type CatalogFamily, type ScanResult, type Finding } from '$lib/machines.svelte';
-	import { t, type MessageKey } from '$lib/i18n/index.svelte';
+	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 
 	const store = createStore();
@@ -249,7 +249,7 @@
 					<p class="muted herkomst mono">
 						{t('setup.searchedIn', {
 							where: resultaat.searched.join(', ') || t('setup.searchedIn.nothing'),
-							seconds: (resultaat.duration_ms / 1000).toFixed(1)
+							seconds: i18n.number(resultaat.duration_ms / 1000, 1)
 						})}
 					</p>
 				</div>

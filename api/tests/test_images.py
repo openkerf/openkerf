@@ -133,10 +133,28 @@ def a_shape_png():
     return buffer.getvalue()
 
 
-def test_vectorisers_are_reported(client):
-    """potrace needs an external library, so what is available is a question."""
-    methods = client.get("/api/design/vectorisers").json()["methods"]
-    assert "vectrace" in methods
+def test_an_unknown_tracer_says_which_ones_there_are(client, images):
+    """
+    potrace needs an external library, so which tracers exist is a question — and the
+    answer reaches the user through the refusal, not through a route of its own.
+
+    `GET /api/design/vectorisers` used to be that route and had no caller anywhere: the
+    app sends `vectrace` and nothing else, so nobody could pick potrace even where it
+    was installed. The route is gone; what mattered about it is this sentence.
+    """
+    assert "vectrace" in images.vectorisers()
+
+    client.post("/api/job/load", files={"file": ("t.png", a_png(), "image/png")})
+    image = next(
+        e for e in client.get("/api/design").json()["elements"] if e["type"] == "elem image"
+    )
+    response = client.post(
+        f"/api/design/elements/{image['id']}/vectorise", json={"method": "kwast"}
+    )
+
+    assert response.status_code == 409
+    assert "available: " in response.json()["detail"]
+    assert "vectrace" in response.json()["detail"]
 
 
 def test_vectorising_turns_pixels_into_paths(client):

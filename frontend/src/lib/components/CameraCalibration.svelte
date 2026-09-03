@@ -86,6 +86,27 @@
 		<p class="error" role="alert">{camera.error}</p>
 	{/if}
 
+	<!-- Which camera. Only with more than one, because a choice of one is not a choice.
+	     `GET /api/camera/list` and the `uri` that `start()` takes have both been there
+	     all along with nothing to call them: with two cameras plugged in you got
+	     whichever the engine happened to pick, and calibrating the wrong one is an
+	     afternoon. -->
+	{#if camera.list.length > 1}
+		<label class="pick">
+			<span>{t('calibrate.which')}</span>
+			<select
+				disabled={camera.busy}
+				onchange={(e) => camera.start(e.currentTarget.value)}
+			>
+				{#each camera.list as one (one.path)}
+					<option value={one.uri} selected={one.uri === camera.state.uri}>
+						{one.label || one.uri}
+					</option>
+				{/each}
+			</select>
+		</label>
+	{/if}
+
 	<div
 		class="stage"
 		role="application"
@@ -143,6 +164,8 @@
 
 <style>
 	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
+	.pick { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
+	.pick span { font-size: var(--text-xs); color: var(--text-2); }
 	.error { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--danger); }
 	.stage {
 		position: relative;
@@ -203,19 +226,5 @@
 		justify-content: flex-end;
 		gap: var(--space-2);
 		margin-top: var(--space-4);
-	}
-	.btn {
-		padding: 8px 16px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-	}
-	.btn:hover:not(:disabled) { background: var(--surface-2); }
-	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
 	}
 </style>

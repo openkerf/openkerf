@@ -59,11 +59,11 @@ selection in this layer**, **Burns along**, **Visible on the canvas**, **Burn
 earlier**, **Burn later**, **Settings…**, **Choose a material setting…** and
 **Remove layer**.
 
-**Choose a material setting…** is the short way to the question this panel raises:
+**Choose a material preset…** is the short way to the question this panel raises:
 this shape has to be cut — what is it made of? It opens the material library with
-**Apply to** already pointing at this layer, so finding the setting and pressing
+**Apply to** already pointing at this layer, so finding the preset and pressing
 **Apply** is all that is left. The other direction still works, and is the one to
-use when you are comparing settings rather than dressing one layer: open the
+use when you are comparing presets rather than dressing one layer: open the
 library yourself and pick the layer there. Greyed out without a token, and on a
 test board's own layers, whose speeds are the trial.
 
@@ -85,6 +85,11 @@ There are four ways, and they are not the same verb.
   colour: those shapes move to the layer of that colour, and out of the layers
   they were in. Without a selection the same click sets the colour for what you
   draw next.
+
+  The strip is the ten palette colours, and behind them any layer colour that is
+  not one of the ten — a file you import brings its own colours along. Those extra
+  swatches sit at the end, so a layer in an imported colour keeps its own swatch
+  with its layer number on it, and the ten stay where you learned them.
 - **The row itself.** With something selected, every layer row grows an **into
   this** button at the end of its value line. A tick means the whole selection is
   already in that layer, a dash means part of it. Clicking adds, clicking again
@@ -129,7 +134,7 @@ remembered nothing on this machine yet. As soon as you adjust speed or power, a
 next layer in this colour starts from that.**
 
 That distinction matters. The memory is habit — what you last did. A preset from
-the material library is evidence — settings that were measured on a test grid for
+the material library is evidence — presets that were measured on a test grid for
 a material and a thickness. The strip never says "verified".
 
 On a narrow window the memory line and the hint under it disappear first; the

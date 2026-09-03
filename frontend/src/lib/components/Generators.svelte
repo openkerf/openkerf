@@ -519,7 +519,7 @@
 				<p class="hint">{t('api.gen.noList')}</p>
 			{/if}
 		</div>
-		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}>
+		<button class="btn primary go" disabled={blocked || busy} onclick={() => run(opdracht())}>
 			{t('gen.grid.go', { n: n(grid.columns) * n(grid.rows), tail: buttonTail })}
 		</button>
 	{:else if tab === 'radial'}
@@ -534,7 +534,7 @@
 				></label
 			>
 		</div>
-		<button class="go" disabled={blocked || busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={blocked || busy} onclick={() => run(opdracht())}
 			>{t('gen.radial.go', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'polygon'}
@@ -552,7 +552,7 @@
 				<NumberField label={t('gen.centreY')} unit="mm" step={1} bind:value={polygon.cy_mm} />
 			</div>
 		</div>
-		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
 			>{t('gen.draw', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'box'}
@@ -585,7 +585,7 @@
 				<span>{t('gen.spreadSheets')}</span>
 			</label>
 		</div>
-		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
 			>{t('gen.makePanels', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'qrcode'}
@@ -602,7 +602,7 @@
 				<NumberField label={t('gen.size')} unit="mm" step={1} bind:value={qr.size_mm} />
 			</div>
 		</div>
-		<button class="go" disabled={busy || !qr.text.trim()} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy || !qr.text.trim()} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'barcode'}
@@ -628,7 +628,7 @@
 				<NumberField label={t('gen.height')} unit="mm" step={1} bind:value={bar.height_mm} />
 			</div>
 		</div>
-		<button class="go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy || !bar.text.trim()} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'arctext'}
@@ -672,7 +672,7 @@
 				<FontPicker bind:font={arc.font} bind:fontName={arc.fontName} sample={arc.text} />
 			{/if}
 		</div>
-		<button class="go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy || !arc.text.trim()} onclick={() => run(opdracht())}
 			>{t('gen.place', { tail: buttonTail })}</button
 		>
 	{:else if tab === 'focus'}
@@ -706,7 +706,7 @@
 				><input type="checkbox" bind:checked={focus.text} /><span>{t('gen.focus.text')}</span></label
 			>
 		</div>
-		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
 			>{t('gen.focus.go', { tail: buttonTail })}</button
 		>
 	{:else}
@@ -751,7 +751,7 @@
 				</div>
 			{/if}
 		</div>
-		<button class="go" disabled={busy} onclick={() => run(opdracht())}
+		<button class="btn primary go" disabled={busy} onclick={() => run(opdracht())}
 			>{t('gen.hinge.go', { tail: buttonTail })}</button
 		>
 	{/if}
@@ -880,14 +880,12 @@
 	/* Form rule v4: the primary button sits bottom right, not across the full width.
 	   A 500px button for one action reads as a banner, and it lined up with no other
 	   form in the app. */
+	/* The button that makes the thing is a `btn primary` like every other main button;
+	   `.go` says only where it stands. It used to carry its own colour and padding, so
+	   the repair in `tokens.css` that keeps a filled button filled when you point at it
+	   never reached it: disabled it measured the accent at opacity 0.45 while the
+	   stencil window beside it measured rgb(238, 240, 242). */
 	.go {
 		align-self: flex-end;
-		padding: 8px 20px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--accent);
-		background: var(--accent);
-		color: var(--accent-ink);
-		font-weight: 500;
 	}
-	.go:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>

@@ -11,7 +11,7 @@
 	 * position from the status), and only the second tap goes to the server, which
 	 * adds its own head position to it.
 	 */
-	import { t } from '$lib/i18n/index.svelte';
+	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { TilingStore } from '$lib/tiling.svelte';
 
 	// No `device` prop any more: since the two-sources bug the head position comes
@@ -146,7 +146,7 @@
 					{t('tiles.layPlate')}
 				{:else}
 					{#if shift}
-						{t('tiles.shift', { mm: shift.mm.toFixed(0), direction: shift.direction })}
+						{t('tiles.shift', { mm: i18n.number(shift.mm, 0), direction: shift.direction })}
 					{:else}
 						{t('tiles.shiftUnknown')}
 					{/if}
@@ -172,9 +172,9 @@
 		{:else}
 			<p class="uitgelijnd">
 				{t('tiles.aligned')}
-				{#if run.angle_deg != null}· {t('tiles.skew', { degrees: run.angle_deg.toFixed(2) })}{/if}
+				{#if run.angle_deg != null}· {t('tiles.skew', { degrees: i18n.number(run.angle_deg, 2) })}{/if}
 				{#if run.distance_error_mm != null}
-					· {t('tiles.distanceError', { mm: run.distance_error_mm.toFixed(1) })}
+					· {t('tiles.distanceError', { mm: i18n.number(run.distance_error_mm, 1) })}
 				{/if}
 			</p>
 			<div class="actions">
@@ -250,26 +250,6 @@
 	}
 	.notice.stale {
 		color: var(--warn);
-	}
-	.btn {
-		padding: 8px 12px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-		transition: background var(--transition);
-	}
-	.btn:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.btn:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
 	}
 	.btn.warn {
 		border-color: var(--warn);

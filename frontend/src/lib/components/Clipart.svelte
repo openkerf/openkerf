@@ -293,13 +293,4 @@
 	}
 	.more .btn { margin-left: auto; }
 	.count { font-size: var(--text-xs); color: var(--text-2); }
-	.btn {
-		padding: 8px 16px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-	}
-	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-	.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 </style>

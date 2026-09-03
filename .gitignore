@@ -28,3 +28,8 @@ frontend/build/
 # The working record, screenshots and process notes live in a private repository
 # of their own; keep them out of the public history.
 workshop/
+
+# Belt and braces for the same rule: a test or a script that writes its evidence into
+# the tree writes it into somebody's commit. `curves.test.ts` did, from `../../` — twice
+# five PNGs were swept in by a `git add -A` before anybody noticed.
+/screenshots/

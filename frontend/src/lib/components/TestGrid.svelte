@@ -1906,7 +1906,6 @@
 	.recepten .hint,
 	.recepten .failure { grid-column: 1 / -1; }
 	.receptknoppen { display: flex; gap: var(--space-2); }
-	.receptknoppen .btn { min-height: 38px; padding: var(--space-1h) var(--space-3); }
 	/* Deleting is quiet: it is there in case you need it, not as a suggestion beside
 	   the button you actually have to use. */
 	.btn.quiet { border-color: transparent; background: transparent; color: var(--text-2); }
@@ -2106,24 +2105,9 @@
 		background: var(--surface-1);
 		border-top: 1px solid var(--line);
 	}
-	.btn {
-		min-height: 40px;
-		padding: var(--space-2) var(--space-4);
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font: inherit;
-		font-size: var(--text-sm);
-		font-weight: 500;
-		color: var(--text-1);
-	}
-	.btn:hover:not(:disabled) { background: var(--surface-2); }
 	/* Without this rule the general hover beats .primary: on hover the button went
 	   light grey with white text. Same specificity, later in the stylesheet — a
 	   classic. */
-	.btn.primary:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--accent) 88%, var(--text-1));
-	}
 	/* A disabled primary button must not look like a button that works: 45% accent
 	   still reads as "click me" in the dark theme. */
 	.btn.primary:disabled {
@@ -2131,14 +2115,6 @@
 		border-color: var(--line);
 		color: var(--text-2);
 		opacity: 1;
-	}
-	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-		flex: 1;
-		min-width: 16rem;
 	}
 	.error, .done {
 		margin: 0;

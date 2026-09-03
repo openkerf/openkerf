@@ -7,6 +7,7 @@
 		jobPhase,
 		isStalled,
 		remainingSeconds,
+		transportAllowed,
 		PAUSE_KEY,
 		STOP_KEY,
 		type Device,
@@ -29,11 +30,13 @@
 		device,
 		series,
 		job,
+		nothingBurns = false,
 		revision = 0,
 		preflight = $bindable(),
 		onJog,
 		onHome,
 		onUnlock,
+		onLock,
 		onFocus,
 		onFrame,
 		onCutPath,
@@ -53,6 +56,9 @@
 		 */
 		series: SeriesStore;
 		job: Job | null;
+		/** Nothing on the bed that will burn. Comes from the page, from the same
+		 *  `burnsNothing` the top bar reads. */
+		nothingBurns?: boolean;
 		/** Increases on every change in the design; the estimate follows it. */
 		revision?: number;
 		preflight: boolean;
@@ -60,6 +66,9 @@
 		/** `force` presses through the rotary guard — see the dialog below. */
 		onHome?: (force?: boolean) => void;
 		onUnlock?: () => void;
+		/** Hold the motors again. The engine layer has had this as long as `unlock`;
+		 *  the app offered only half the pair. */
+		onLock?: () => void;
 		onFocus?: (distanceMm: number) => void;
 		/** Sending the head around the outline, without burning. */
 		onFrame?: () => void;
@@ -308,8 +317,7 @@
 	let estimating = $state(false);
 	let estimateSlow = $state(false);
 	/** Has an estimate ever come in? Before that neither verdict is honest. */
-	let estimated = $state(false);
-
+	
 	// The engine builds the whole cut plan for this estimate. On a heavy design that
 	// took more than three minutes here, and meanwhile the pre-flight sat on a dot. An
 	// estimate must never be the reason you cannot start, so after ten seconds we
@@ -347,7 +355,6 @@
 			estimate = null;
 		} finally {
 			clearTimeout(slow);
-			estimated = true;
 			estimating = false;
 			estimateSlow = false;
 		}
@@ -509,7 +516,13 @@
 	 * swapped to the full checklist and back on every recalculation. What we knew a
 	 * moment ago stays on screen until the new answer replaces it.
 	 */
-	let empty = $derived(estimated && estimate !== null && estimate.parts === 0);
+	// One question, asked of the design and not of the estimate: see `burnsNothing` in
+	// `$lib/design.svelte`. It used to be `estimate.parts === 0` here and
+	// `elements.length === 0` in the top bar, and on a bed with every layer switched off
+	// the bar said "ready" while this panel said "nothing". Asking the design also
+	// settles what the comment below used to guard against — there is no recalculation
+	// that could briefly undo the verdict.
+	let empty = $derived(nothingBurns);
 
 	/**
 	 * The phase, from one source (`jobPhase` in `$lib/api.ts`).
@@ -795,15 +808,6 @@
 			     warnings in a row of the same colour devalue each other: the routine
 			     check made the real message invisible. Neutral now, and as a list,
 			     because you work down it. -->
-			<div class="pf-check">
-				<span class="pf-head">{t('job.checklist.title')}</span>
-				<ul>
-					<li>{t('job.checklist.lid')}</li>
-					<li>{t('job.checklist.air')}</li>
-					<li>{t('job.checklist.workpiece')}</li>
-				</ul>
-			</div>
-
 			<!--
 				The buttons stick to the bottom of the panel.
 
@@ -816,6 +820,24 @@
 				same button, so it belongs beside it and not three blocks higher.
 			-->
 			<div class="pf-stick">
+				<!-- The checklist travels with the button.
+
+				     It used to stand in the column above this footer, and with four
+				     layers the column is longer than the panel is high: measured at
+				     1440 x 900, "Extraction and air assist on" answered `DIV.pf-stick`
+				     under `elementFromPoint` and "Workpiece is clamped and flat"
+				     answered the start button itself. Three lines to work down, two of
+				     them under the thing you press. Here they cannot be scrolled away
+				     from the button they belong to. -->
+				<div class="pf-check">
+					<span class="pf-head">{t('job.checklist.title')}</span>
+					<ul>
+						<li>{t('job.checklist.lid')}</li>
+						<li>{t('job.checklist.air')}</li>
+						<li>{t('job.checklist.workpiece')}</li>
+					</ul>
+				</div>
+				<div class="pf-actions">
 				{#if preflight}
 					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
 					     no single click burns. The first arms, the second fires — and unlike
@@ -861,6 +883,7 @@
 							>{/if}
 					</button>
 				{/if}
+				</div>
 			</div>
 			{/if}
 		</div>
@@ -916,10 +939,10 @@
 				{#if paused}
 					<button
 						class="btn primary"
-						disabled={!actions?.resume || blocked}
+						disabled={!transportAllowed('resume', { able: actions, phase, blocked })}
 						title="{blockedReason ?? t('job.pause.keepGoing')} · {PAUSE_KEY}"
 						onclick={() => control.resume()}
-					>{t('job.resume')}</button>
+					>{t('transport.resume')}</button>
 				{:else}
 					<!-- On the phase and not on `job.running`: a job that has been spooled
 					     but not picked up sits at `running: false`, and then the top bar
@@ -927,12 +950,12 @@
 					     command; it lands the moment the machine starts. -->
 					<button
 						class="btn"
-						disabled={!actions?.pause || !busyWithWork || blocked}
+						disabled={!transportAllowed('pause', { able: actions, phase, blocked })}
 						title={busyWithWork
 							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}`
 							: t('transport.pause.nothing')}
 						onclick={() => control.pause()}
-					>{t('job.pause')}</button>
+					>{t('transport.pause')}</button>
 				{/if}
 				<span class="now-stretch"></span>
 				<!-- Stop keeps its own space, away to the left of pause: a bad-tap here
@@ -943,12 +966,14 @@
 					class:dood={!connection.online}
 					disabled={!actions?.stop || control.tokenProbleem || !connection.online}
 					title={!connection.online
-						? t('job.stop.noServer')
+						? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
 						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}`}
 					onclick={() => control.stop()}
 				>
-					{#if connection.online}{t('job.stop')}{:else}{t('job.stop')}
-						<strong>{t('job.stop.onMachine')}</strong>{/if}
+					<!-- One key, not two glued together: "Stop" plus "on the machine" only
+					     works in a language with this word order, and the top bar has had
+					     the whole sentence all along. -->
+					{connection.online ? t('transport.stop') : t('transport.stop.onMachine')}
 				</button>
 			</div>
 
@@ -1031,8 +1056,24 @@
 					bind:value={step}
 					options={[0.1, 1, 10, 50].map((size) => ({ value: size, label: `${size} mm` }))}
 				/>
-				<button class="rot" disabled={movingOff} title={movingBlocked} onclick={() => onUnlock?.()}>
+				<!-- The pair, not half of it: unlocking lets you push the head aside to lay
+				     material down, and until now the only way to make it hold again was to
+				     home the machine. Both hang on the same capability the driver reports. -->
+				<button
+					class="rot"
+					disabled={movingOff || !control.capabilities?.motion?.unlock}
+					title={movingBlocked ?? t('job.unlock.why')}
+					onclick={() => onUnlock?.()}
+				>
 					{t('job.unlock')}
+				</button>
+				<button
+					class="rot"
+					disabled={movingOff || !control.capabilities?.motion?.lock}
+					title={movingBlocked ?? t('job.lock.why')}
+					onclick={() => onLock?.()}
+				>
+					{t('job.lock')}
 				</button>
 			</div>
 
@@ -1375,26 +1416,6 @@
 	   against nothing. This one does.) Introduced by the tablet agent, widened here to
 	   both axes. */
 	@media (pointer: coarse) {
-	}
-	.btn {
-		padding: 8px 12px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-		transition: background var(--transition);
-	}
-	.btn:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.btn:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
 	}
 	.btn.danger {
 		background: var(--danger-solid);
@@ -1842,18 +1863,31 @@
 		position: sticky;
 		bottom: calc(-1 * var(--space-4));
 		z-index: 2;
+		/* A column now: the checklist above the buttons. Both travel with the footer,
+		   because the three lines are the last thing you read before you press and
+		   they used to scroll out from under the button they belong to. */
 		display: flex;
+		flex-direction: column;
 		gap: var(--space-2);
 		margin: var(--space-3) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
 		padding: var(--space-3) var(--space-4);
 		background: var(--surface-1);
 		border-top: 1px solid var(--line);
 	}
+	.pf-actions {
+		display: flex;
+		gap: var(--space-2);
+	}
+	/* Inside the footer the checklist carries no margin of its own: the footer's gap
+	   already sets the distance to the buttons. */
+	.pf-stick .pf-check {
+		margin: 0;
+	}
 	/* The secondary button keeps its word on one line; the primary gets the rest. With
 	   `flex: 1` on both, "Show frame" broke over two lines and the row became
 	   twee keer zo high. */
-	.pf-stick .btn { flex: none; white-space: nowrap; }
-	.pf-stick .btn.primary { flex: 1; }
+	.pf-actions .btn { flex: none; white-space: nowrap; }
+	.pf-actions .btn.primary { flex: 1; }
 
 	/* The start button says what it is going to do, with the time in it. */
 	.btn.big { min-height: 44px; font-size: var(--text-md); }

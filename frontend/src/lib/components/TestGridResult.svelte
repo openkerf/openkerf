@@ -557,7 +557,7 @@
 		     which board it is, so the reader should not have to. -->
 		<div class="reading" bind:this={doorway}>
 			<label class="btn primary file">
-				{t('result.read')}
+				{t('library.readBoard')}
 				<input
 					type="file"
 					accept="image/*"
@@ -974,24 +974,9 @@
 		color: var(--text-1);
 	}
 
-	.btn {
-		min-height: 40px;
-		padding: var(--space-2) var(--space-4);
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font: inherit;
-		font-size: var(--text-sm);
-		font-weight: 500;
-		color: var(--text-1);
-	}
-	.btn:hover:not(:disabled) { background: var(--surface-2); }
 	/* Without this rule the general hover beats .primary: on hover the button went
 	   light grey with white text. Same specificity, later in the stylesheet — a
 	   classic. */
-	.btn.primary:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--accent) 88%, var(--text-1));
-	}
 	/* A disabled primary button must not look like a button that works: 45% accent
 	   still reads as "click me" in the dark theme. */
 	.btn.primary:disabled {
@@ -1000,16 +985,10 @@
 		color: var(--text-2);
 		opacity: 1;
 	}
-	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	.btn[aria-pressed='true'] {
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
 		border-color: var(--accent);
 		color: var(--accent);
-	}
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
 	}
 	.btn.big { min-height: 48px; padding: 12px 20px; font-size: var(--text-md); }
 	.btn.file { cursor: pointer; display: inline-grid; place-items: center; }

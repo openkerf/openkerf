@@ -1,4 +1,4 @@
-import { t, type MessageKey } from './i18n/core.ts';
+import { number, t, type MessageKey } from './i18n/core.ts';
 /** Types mirroring the openkerf-api snapshot (api/openkerf_api/status.py). */
 
 import type { TileRun } from './tiling.svelte';
@@ -433,6 +433,56 @@ export function jobBusy(phase: JobPhase): boolean {
 }
 
 /**
+ * May this transport command be offered right now?
+ *
+ * Four surfaces asked this in four ways. The page asked the capabilities and the
+ * token; the Job panel asked the capabilities, the phase and its own `blocked`; the
+ * phone asked whether a job existed, the token and the connection — and never the
+ * capabilities, so a driver that cannot pause still got a pause button on the phone.
+ * The status bar kept a fourth copy that its template no longer read at all.
+ *
+ * `blocked` is what each surface already knows about itself: no token, no connection,
+ * a refusal on its way. The rest is the same everywhere.
+ *
+ * Stopping is deliberately the odd one out: it stays allowed as long as the machine
+ * can do it, whatever the phase says. If our reading of the phase is wrong, that must
+ * not be what costs somebody the emergency stop.
+ */
+export function transportAllowed(
+	what: 'pause' | 'resume' | 'stop',
+	{
+		able,
+		phase,
+		blocked
+	}: {
+		able: { pause: boolean; resume: boolean; stop: boolean } | undefined;
+		phase: JobPhase;
+		blocked: boolean;
+	}
+): boolean {
+	if (!able?.[what] || blocked) return false;
+	if (what === 'stop') return true;
+	if (what === 'resume') return phase === 'paused';
+	return jobBusy(phase) && phase !== 'paused';
+}
+
+/**
+ * May the app take you away from the work area right now?
+ *
+ * The stop button and its shortcut hang on the top bar, and the top bar is the work
+ * area's. `routes/setup/` has neither: `Stop`, `transport` and `onStop` give zero hits
+ * in that whole folder. The machine chip in the top left is a plain link to it, so one
+ * click on your own machine name during a job took the stop off the screen — and you
+ * only find that out at the moment you need it.
+ *
+ * The same three phases as `jobBusy`, asked as a different question, so that whoever
+ * adds a fourth way out reads one rule instead of writing a second.
+ */
+export function mayLeaveWorkArea(phase: JobPhase): boolean {
+	return !jobBusy(phase);
+}
+
+/**
  * What a phase is called, and what it means.
  *
  * The explanation is not decoration: "in the queue" is indistinguishable from
@@ -483,9 +533,17 @@ export function machineStateHint(state: MachineState): string | undefined {
 	return undefined;
 }
 
+/**
+ * A measurement without its unit, in the reader's notation.
+ *
+ * `toFixed(1)` wrote an English full stop whatever the language, and this feeds the
+ * head position and the mouse position in the status bar: with the app in Dutch the
+ * bar read "241.2, 108.4 mm" ten pixels from a top bar saying "3,5mm". Somebody at a
+ * laser reads that off the screen and types it into a machine.
+ */
 export function formatMm(value: number | null | undefined): string {
 	if (value === null || value === undefined || Number.isNaN(value)) return '—';
-	return value.toFixed(1);
+	return number(value, 1);
 }
 
 export function formatDuration(seconds: number | null | undefined): string {

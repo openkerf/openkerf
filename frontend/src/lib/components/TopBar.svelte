@@ -13,6 +13,7 @@
 		canStart,
 		canStop,
 		stopArmed = false,
+		mayLeave = true,
 		canEdit = false,
 		narrow = false,
 		canPause = false,
@@ -41,6 +42,9 @@
 		 *  detection is wrong you must not lose the emergency stop — but it only shouts
 		 *  when it matters. */
 		stopArmed?: boolean;
+		/** May the app take you off the work area right now? `mayLeaveWorkArea` in
+		 *  `api.ts` decides it, from the same phase `jobBusy` reads. */
+		mayLeave?: boolean;
 		canEdit?: boolean;
 		/**
 		 * @deprecated Ignored; the agreement lives in `$lib/screen.svelte`.
@@ -140,6 +144,12 @@
 	 * button.
 	 */
 	let gone = $derived(!connection.online);
+	let machineTitle = $derived(
+		`${device?.label ?? t('topbar.machine.setup')} — ${machineStateLabel(machineState)}` +
+			(device?.bed?.width_mm && device?.bed?.height_mm
+				? ` · bed ${Math.round(device.bed.width_mm)} × ${Math.round(device.bed.height_mm)} mm`
+				: '')
+	);
 	let stopTitle = $derived(
 		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
@@ -247,15 +257,19 @@
 	     which machine you are touching. What the question underneath *does* deserve —
 	     "which machine and how big" — is here in the tooltip and beside the bed on the
 	     canvas, without making the bar wider (B6 measured that the room is gone). -->
-	<a
+	<!-- While something is burning this is not a link: the setup has no stop button and
+	     no shortcut, so one click on your own machine name took both off the screen.
+	     `mayLeaveWorkArea` decides that, beside `jobBusy`, so a second way out reads the
+	     same rule. The chip keeps saying what it said; only the door is shut, with the
+	     reason where the tooltip was. -->
+	<svelte:element
+		this={mayLeave ? 'a' : 'span'}
 		class="machine"
-		href="/setup"
-		title="{device?.label ?? t('topbar.machine.setup')} — {machineStateLabel(machineState)}{device
-			?.bed?.width_mm && device?.bed?.height_mm
-			? ` · bed ${Math.round(device.bed.width_mm)} × ${Math.round(device.bed.height_mm)} mm`
-			: ''}"
+		class:shut={!mayLeave}
+		href={mayLeave ? '/setup' : undefined}
+		title={mayLeave ? machineTitle : t('topbar.machine.busy')}
 	>
-		<span class="dot {machineState}" aria-hidden="true"></span>
+		<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 		<span class="name">{device?.label ?? t('topbar.machine.setup')}</span>
 		<!-- The word beside the state was here for a third time: the status bar in the
 		     bottom right says it in full, and the coloured dot already says it here.
@@ -263,7 +277,7 @@
 		     start button slides off the screen. On a tablet this was already hidden for
 		     the same reason. -->
 		<span class="muted toestand">{machineStateLabel(machineState)}</span>
-	</a>
+	</svelte:element>
 
 	<!-- What with (machine) and what into (material) belong beside each other: together
 	     they decide every setting that follows. Until now the material hung in a filter
@@ -536,7 +550,10 @@
 		/* 44px: this is the route to the setup and at 38px was the only target in the
 		   bar that did not make the glove size. Tablet only: on the desktop it sits
 		   beside 37px buttons and would stick out. */
-		.machine {
+		/* Shut: the chip says exactly what it said, it is only no longer a door. Not grey —
+	   the machine's state is the one thing that must stay readable while it burns. */
+	.machine.shut { cursor: default; }
+	.machine {
 			min-height: 44px;
 			padding: 0 var(--space-2);
 		}
@@ -763,39 +780,34 @@
 	   weigh as much as the name. */
 	.thickness { color: var(--text-2); font-size: var(--text-xs); }
 	.toestand { display: none; }
+	/* Size only. The colour of a state is one rule for the whole app, in
+	   `tokens.css` under `.machinedot`. */
 	.dot {
 		width: 8px;
 		height: 8px;
-		border-radius: var(--radius-dot);
-		flex: none;
-		background: var(--text-2);
 	}
-	.dot.ready { background: var(--ok); }
-	.dot.busy { background: var(--accent); }
-	.dot.paused { background: var(--warn-solid); }
-	.dot.alarm { background: var(--danger-solid); }
 	.spacer { flex: 1; }
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 16px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-		transition: background var(--transition);
-	}
-	.btn { text-decoration: none; color: inherit; }
 	.btn.file { cursor: pointer; }
 	.btn.file input { display: none; }
-	.btn:hover:not(:disabled) { background: var(--surface-2); }
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
+	/*
+	 * Stopping and pausing lie over an open window.
+	 *
+	 * A dialog covers the whole screen, its backdrop included, and that backdrop used
+	 * to take the middle of these two buttons: measured with `elementFromPoint` at
+	 * (1147, 24) with the cut-path window open, the answer was `DIV.backdrop` and not
+	 * the button. `Ctrl/⌘ .` came through, but the argument for this button two
+	 * hundred lines up is the tablet, and a tablet has no Ctrl.
+	 *
+	 * They stay *below* the alarm: something wrong with the machine outranks the
+	 * button you were about to press. The three numbers are in `tokens.css`, and
+	 * `tests/stop-reach.test.ts` measures this one in the running app.
+	 */
+	.btn.danger,
+	.btn.pause,
+	.btn.resume {
+		position: relative;
+		z-index: var(--z-transport);
 	}
-	.btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.06); }
 	.btn.danger {
 		background: var(--danger-solid);
 		border-color: var(--danger-solid);
@@ -846,7 +858,6 @@
 	}
 	.btn.danger.dood svg { color: var(--text-2); }
 
-	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	/* This button *carries* its own explanation; the default fading makes it unreadable
 	   and that explanation is now the only thing the button still does. */
 	.btn.danger.dood:disabled { opacity: 1; }
