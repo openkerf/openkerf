@@ -78,12 +78,15 @@ class _AlwaysConnected:
     `RuidaController.__init__` unconditionally starts a daemon thread
     (`ruida/controller.py:50`); its loop (`:162`) sleeps 3 s and then, every 0.2 s
     forever, calls `service.connect()` whenever
-    `service.connected and not service.is_busy` is false (`:172`, `:189`). Measured
-    against a `build_job_bytes` driver, isolated from the live driver's own
-    identical thread (see `task-1-report-fix-3.md`): 10 calls in the four seconds
-    after the sleep ends, before this wrapper existed; 0 with it. A build driver
-    that lived for the rest of the process would otherwise have this app quietly
-    redialling a laser that is off or unplugged, forever, once per build.
+    `service.connected and not service.is_busy` is false (`:172`, `:189`) — five
+    times a second, for as long as the service reports itself not connected.
+    Measured against a `build_job_bytes` driver, isolated from the live driver's
+    own identical thread (see `task-1-report-fix-4.md`): 6 calls in a 4.2 s wait
+    that started right after construction — the first roughly 3 s of that window
+    is the startup sleep, so this is 5/s over the ~1.2 s of it that is actually
+    active — before this wrapper existed; 0 in the same window with it. A build
+    driver that lived for the rest of the process would otherwise have this app
+    quietly redialling a laser that is off or unplugged, forever, once per build.
 
     Both halves matter: reporting only `connected` as true and leaving `is_busy`
     proxied through to the real, shared device left a real gap — the device's

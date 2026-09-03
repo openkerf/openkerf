@@ -222,12 +222,14 @@ def test_building_the_bytes_does_not_pile_up_connect_attempts(ruida):
     `RuidaController.__init__` starts a daemon thread unconditionally
     (`ruida/controller.py:50`); its loop sleeps 3 s and then, every 0.2 s forever,
     calls `service.connect()` on a service that reports itself not connected and
-    not busy (`:172`, `:189`). Before `_AlwaysConnected` existed, a
-    `build_job_bytes` driver on this same test kernel took that branch: measured,
-    10 calls in the four seconds after the sleep ended (isolated from the live
-    driver's own identical thread, which does the same thing independently of
-    this feature — see CLAUDE.md's row on the Ruida's connection lifecycle).
-    With `_AlwaysConnected`: 0.
+    not busy (`:172`, `:189`) — five times a second, for as long as it does.
+    Before `_AlwaysConnected` existed, a `build_job_bytes` driver on this same
+    test kernel took that branch: measured, 5 calls in the 4 s this test waits
+    (the first ~3 s of that wait is the startup sleep; the calls land in the ~1 s
+    left, at the 0.2 s cadence), isolated from the live driver's own identical
+    thread, which does the same thing independently of this feature — see
+    CLAUDE.md's row on the Ruida's connection lifecycle. With `_AlwaysConnected`:
+    0 in the same 4 s.
 
     The live driver's own thread is neutralised the same way here, on purpose:
     without that, this test would still see calls from a thread this feature does
