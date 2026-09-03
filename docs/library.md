@@ -63,7 +63,7 @@ presets at all, and what the shared catalogue could offer it. On a laser that al
 carries presets of its own it shrinks to one line. It is described under
 [Starting points from the shared catalogue](#starting-points-from-the-shared-catalogue).
 
-![The Material library window. On the left a list of materials with a count behind each name; at the top a search field and New material; above the list two narrowing controls and an Apply to dropdown reading "Layer 1 · Outline". On the right, under the heading RECENTLY USED, two preset rows: 3 mm Acrylaat (geëxtrudeerd) · Cut at 30 mm/s and 80% with a grey Manual badge, and 3 mm Testmateriaal 204350 · Cut at 15 mm/s and 80% with a green Verified badge, each with an Apply button and a three-dot menu.](images/14-library.png)
+![The Material library window. Across the top the quiet door into the shared catalogue and the strip "Read a burned board from a photograph"; under them a search field, the tick box "Only KH-5030" and an Apply to dropdown reading "Layer 1 · Outline". On the left the materials, each with the number of presets behind its name — Acrylaat (geëxtrudeerd) 3, Berkentriplex 5, MDF 2, and several at 0. On the right the preset rows for those materials with their thickness, operation, speed, power and a badge each: green Verified, grey Manual, amber Extrapolated, amber Imported. The engrave rows carry a small amber "other kind", because the layer they would land on cuts.](images/14-library.png)
 
 Two checkboxes narrow the list, and both are starting points rather than walls:
 **Only {machine}** shows the presets of the laser that is switched on now, and
@@ -144,7 +144,7 @@ these numbers came off ringed, captioned:
 
 > The outline marks the square at row {row}, column {column} — that is where these values come from.
 
-![The Material library with one preset unfolded. The row reads 3 mm Cut, 125 mm/s, 45%, badge Verified. Under it a list: Source — "Verified — burned and judged on a test grid", Machine — KH-5030, Test grid — "#16 · burned last week", Air assist — on. To the right the photo of the burned test board with one square outlined and the caption about row 2, column 2, and a "Share with Presetariat" link. Below it two more presets for the same material.](images/15-library-preset.png)
+![The Material library with one preset unfolded, on Berkentriplex. The row reads 3 mm Cut, 16 mm/s, 75%, badge Verified. Under it the provenance: Source — "Verified — burned and judged on a test grid", Machine — KH-5030, Test grid — the board's number with when it was burned and which square was picked, Air assist — on. To the right, where the photograph of that board would be: "There is no photo of this grid yet. Without a photo there is nothing to read the choice off.", with "Add a photo" and "Share with Presetariat" under it. Below the fold three more presets for the same material.](images/15-library-preset.png)
 
 The circle follows the alignment of the photo. If that alignment was never set, the
 caption admits it: *The alignment of this photo has not been set, so the outline is
@@ -195,7 +195,7 @@ precedence: **other material** and **other thickness**, spelled out under the ta
 *This preset is for {material}; this sheet is {material}.* and *This preset is for
 {n} mm; this sheet is {n} mm.*
 
-![The Job panel in the pre-flight. Under Estimated time 1:19 and "Material — not filled in for this sheet" sits a table of three layers with their speed, power and passes, and a Source column reading "from someone else's machine", "not measured", "not measured". Below it a warning: "3 layers use presets that were not measured with a test grid. On unknown material: try a scrap first." Under that a checklist headed RUN THROUGH THIS: lid closed, extraction and air assist on, workpiece clamped and flat.](images/12-job-preflight.png)
+![The Job panel in the pre-flight. Under Estimated time 1:19 and "Material — not filled in for this sheet" sits a table of three layers with their speed, power and passes, and a Source column reading "not verified" for all three. Below it a warning: "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first." Under that, in the strip at the foot of the panel, a checklist headed RUN THROUGH THIS: lid closed, extraction and air assist on, workpiece clamped and flat.](images/12-job-preflight.png)
 
 The summary underneath counts them:
 
@@ -239,7 +239,7 @@ in the same place, and a right-click on the row opens the same menu. Its rows, i
 | **Merge into another material…** | Moves everything onto another material |
 | **Remove this material** | Red, last, and it counts before it acts |
 
-![The material library with the ⋯ menu open on the material row Berkentriplex. The menu shows "Show only this material" and "Make a test grid", then "Rename this material…" and "Merge into another material…", and at the bottom in red "Remove this material". Behind it the whole list of materials, each with the number of presets behind its name, and above the list the search box with "Only KH-5030" unticked so that all twenty are in it. Higher still, the two lines this library really shows: the quiet door into the shared catalogue, and the strip about the four presets and eleven test boards that belong to no machine.](images/40-material-verbs.png)
+![The material library with the ⋯ menu open on the material row Berkentriplex. The menu shows "Show only this material" and "Make a test grid", then "Rename this material…" and "Merge into another material…", and at the bottom in red "Remove this material". Behind it the list of materials, each with the number of presets behind its name, and above the list the search box with "Only KH-5030" unticked, so rows that belong to no machine are in the list too. On the right the presets of the first materials with their four kinds of badge side by side: Imported, Manual, Extrapolated and, on the two rows that came off a board, Verified.](images/40-material-verbs.png)
 
 **Adding one** is at the foot of the list of materials, where you are already looking:
 **New material**, which turns into a field in the same place. It used to be a button at the

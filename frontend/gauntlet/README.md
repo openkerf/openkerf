@@ -39,3 +39,34 @@ They asked for Dutch selectors and Dutch button labels that no longer exist, so
 they measured nothing; what they found is in `CLAUDE.md`, in the commits of those
 rounds, and in `workshop/screenshots/` — the working record, a private repository
 of its own that hangs in this one as `workshop/`.
+
+## The library the handbook's pictures are of
+
+`docs-library.mjs` writes it: twenty materials, presets of all four kinds, and a test
+grid with two presets picked off it. Until this round the library screenshots were taken
+against whoever ran `docs-shots.mjs` — the pictures showed the author's own materials —
+and that only came out when the words in the app changed and they had to be taken again.
+
+```bash
+# an engine with a library of its own; -P/--profile isolates nothing, the path does
+meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/lib/library.db -f frontend/build"
+cd frontend
+OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-library.mjs
+OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs
+```
+
+Two locks keep it off a real library: the flag, and a library that has to be empty. It
+makes no machine — that list lives in one `MeerK40t.cfg` for every instance, so creating
+one would put a machine in yours — and it expects the handbook's KH-5030 to be there.
+
+Three things worth knowing before you run it:
+
+- **A row that says it was measured needs a board behind it.** Give a preset
+  `source: 'testraster'` without one and the provenance panel says so ("no test grid
+  hangs off it"), and the picture of that panel is then a picture of a fault. The seeder
+  picks squares off a real grid instead.
+- **Shot 15 needs a preset in the library**, and takes it from what this seeds. Before,
+  it depended on a row shot 41 makes later, so on an empty library the run stopped there.
+- **The set can trip over its own dialogs.** Measured on one run: shot 39 could not click
+  the tool rail because the window from shot 38 was still open and its backdrop swallowed
+  the click. Taking the last few by name (`node gauntlet/docs-shots.mjs 39`) gets round it.

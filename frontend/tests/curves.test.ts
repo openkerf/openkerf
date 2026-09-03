@@ -16,10 +16,17 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
 import { chromium, type Browser, type Page } from 'playwright';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
-const SHOTS = new URL('../../screenshots/parity/', import.meta.url).pathname;
+// The working record, not the repository: this writes five PNGs on every run with a
+// live server, and at the old path they landed in the public tree — twice they were
+// swept into a commit by a `git add -A`. `workshop/` is ignored here and is where the
+// evidence of a round belongs. It is made if it is not there, so a checkout without the
+// record still runs.
+const SHOTS = new URL('../../workshop/screenshots/parity/', import.meta.url).pathname;
+mkdirSync(SHOTS, { recursive: true });
 
 let reachable = false;
 let browser: Browser | null = null;

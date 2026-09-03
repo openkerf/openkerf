@@ -33,7 +33,7 @@ The window shows the four steps of the loop across the top: **Set up**, **Burn**
 window; steps 3 and 4 are the block underneath it, headed **Steps 3 and 4 — photo and
 preset**.
 
-![The Test grid window over the canvas: the four numbered steps across the top, the form on the left with Material, Operation, Thickness, Square, Passes and the two axis choices, and on the right a preview of a four-by-four board with power percentages above it and speeds beside it, above the button "Draw the grid — 16 squares, 57.9 × 58.3 mm"](images/16-testgrid.png)
+![The Test grid window over the canvas: the four numbered steps across the top, the form on the left with Material, Operation, Thickness, Square, Passes and the two axis choices, and on the right a preview of a four-by-four board with power percentages above it and speeds beside it, above the button "Draw the grid", which carries the number of squares and the size the board will be](images/16-testgrid.png)
 
 **Without a token.** A read-only session cannot draw a board. The window then says:
 
@@ -150,7 +150,7 @@ and the seconds of cutting. What cannot be done is refused there too — a quart
 after the switch goes on, beside the field that has to change, rather than after the button
 with a plank already in the machine.
 
-![The lower part of the test-grid form: the fieldset What else goes on the board, with four switches. Engrave the caption and axis labels is on, Border around the board is off, and both Burn the board’s own name on it as a QR code and Cut the board loose from the sheet are on. Under the code switch: why it is there, the line This board is called 4MFN ER8P, a Code size field reading 18, and what it costs — a strip of 20 mm below the squares, about 14 s of burning, modules of 0.62 mm. Under the cut-out: the rim is cut at 12 mm/s and 65%, 1× from the library; the cut runs 4 mm outside everything else with four bridges of 2 mm; about 23 s of burning. At the bottom, that no board with a code or a cut-out has been burned yet on any material.](images/43-board-extras.png)
+![The lower part of the test-grid form: the fieldset What else goes on the board, with four switches. Engrave the caption and axis labels is on, Border around the board is off, and both Burn the board’s own name on it as a QR code and Cut the board loose from the sheet are on. Under the code switch: why it is there, the line naming the board (the name is minted per board, so it differs from yours), a Code size field reading 18, and what it costs — a strip of 20 mm below the squares, about 14 s of burning, modules of 0.62 mm. Under the cut-out: the rim is cut at 12 mm/s and 65%, 1× from the library; the cut runs 4 mm outside everything else with four bridges of 2 mm; about 23 s of burning. At the bottom, that no board with a code or a cut-out has been burned yet on any material.](images/43-board-extras.png)
 
 ### The code, and what it is for
 
@@ -451,7 +451,7 @@ material:
 The board is one group on your sheet, with each square in a layer of its own — that is what
 makes the sweep possible, because every square needs its own speed and power.
 
-![The bed with a burned-in test board drawn on it: four rows of four red squares, the power percentages 40%, 55%, 75% and 90% engraved above the columns, the speeds 8, 12, 16 and 20 mm/s beside the rows, and above it the caption "Acrylaat (gegoten) — cut speed v / power > 2026-08-21"](images/17-testgrid-board.png)
+![The bed with a burned-in test board drawn on it: four rows of four red squares, the power percentages 40%, 55%, 75% and 90% engraved above the columns, the speeds 8, 12, 16 and 20 mm/s beside the rows, and above it the caption: the material, the operation, which way the two axes run, and the date the board was drawn](images/17-testgrid-board.png)
 
 In the **Layers** tab the whole board is one row, **Test grid #33**, with
 *16 cells · speed and power are fixed* underneath. The **+** beside it unfolds the
@@ -466,7 +466,7 @@ it. Throwing all layers away leaves the board alone as well — the confirmation
 Steps 3 and 4 are in the block below the wizard, and the way in is the photograph rather
 than the list:
 
-> **Read a board from a photograph** — The board names itself: OpenKerf reads the code on
+> **Read a burned board from a photograph** — The board names itself: OpenKerf reads the code on
 > the plank and opens that board. Photograph it straight from above, with the code in frame.
 
 Hand over the picture and that is the whole of it: the code says which plank it is, the
@@ -479,7 +479,7 @@ The same door stands in the material library — **Read a burned board from a ph
 because that is where somebody with a freshly burned plank goes first, looking for the
 presets it was burned for.
 
-![The top of the reading panel: a search box reading "Name, material, thickness", a list showing a board by its own name followed by the date, the material and the operation, and below it a "Read a board from a photograph" button with the sentence explaining that the board names itself. Under that, the block for a board with no photograph yet: "Burn this grid and photograph the board", an "Add a photo" button, and the line about using a phone.](images/44-board-readback.png)
+![The top of the reading panel: a search box reading "Name, material, thickness", a list showing a board by its own name followed by the date, the material and the operation, and below it a "Read a burned board from a photograph" button with the sentence explaining that the board names itself. Under that, the block for a board with no photograph yet: "Burn this grid and photograph the board", an "Add a photo" button, and the line about using a phone.](images/44-board-readback.png)
 
 **When there is no code to read.** A board burned before this existed, a code photographed
 too small, or an installation without OpenCV: then pick the board from the list, and the
@@ -564,8 +564,8 @@ that on material.
 
 It also carries where it came from. In the material library it wears a green **Verified**
 badge, and its detail lines read *Verified — burned and judged on a test grid*, the machine
-it was made on, and the board itself: *Test grid #16 · burned last week*. Beside that sits
-the photo of that board with the square outlined:
+it was made on, and the board itself: its number, when it was burned, and which square was
+picked. Beside that sits the photo of that board with the square outlined:
 
 > The outline marks the square at row 2, column 2 — that is where these values come from.
 
@@ -574,7 +574,7 @@ photo has not been set, so the outline is approximate — align the grid for an 
 Without a photo there is nothing to show: *There is no photo of this grid yet. Without a
 photo there is nothing to read the choice off.*
 
-![The material library with a preset unfolded: 3 mm, Cut, 125 mm/s, 45%, a green Verified badge, the lines Source "Verified — burned and judged on a test grid", Machine KH-5030, Test grid "#16 · burned last week", Air assist on, and to the right the photo of the burned board with one square outlined](images/15-library-preset.png)
+![The material library with a preset unfolded: 3 mm, Cut, 16 mm/s, 75%, a green Verified badge, the lines Source "Verified — burned and judged on a test grid", Machine KH-5030, Test grid with the board's number and the square that was picked, Air assist on, and to the right, in place of the photograph, the line that there is no photo of this grid yet with "Add a photo" under it](images/15-library-preset.png)
 
 The other badges say the opposite in one word, and what each of them means is in
 [The material library](library.md#where-the-numbers-come-from). That is the point
