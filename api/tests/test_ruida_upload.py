@@ -5,9 +5,12 @@ Nooit tegen een laser. De end-to-end-toets praat tegen de Ruida-emulator van de
 engine zelf, die dit gesprek aanneemt en het bestand wegschrijft.
 """
 
+import threading
+import time
+
 import pytest
 
-from openkerf_api.commands import CommandRunner
+from openkerf_api.commands import CommandRunner, _AlwaysConnected
 from openkerf_api.edits import DesignError
 
 
@@ -211,4 +214,67 @@ def test_building_the_bytes_restores_the_merge_settings(ruida):
     assert seen["during"] == (False, False), "the flags were not off while building"
     assert (root.opt_merge_ops, root.opt_merge_passes) == (True, True), (
         "the flags were not put back"
+    )
+
+
+def test_building_the_bytes_does_not_pile_up_connect_attempts(ruida):
+    """
+    `RuidaController.__init__` starts a daemon thread unconditionally
+    (`ruida/controller.py:50`); its loop sleeps 3 s and then, every 0.2 s forever,
+    calls `service.connect()` on a service that reports itself not connected and
+    not busy (`:172`, `:189`). Before `_AlwaysConnected` existed, a
+    `build_job_bytes` driver on this same test kernel took that branch: measured,
+    10 calls in the four seconds after the sleep ended (isolated from the live
+    driver's own identical thread, which does the same thing independently of
+    this feature — see CLAUDE.md's row on the Ruida's connection lifecycle).
+    With `_AlwaysConnected`: 0.
+
+    The live driver's own thread is neutralised the same way here, on purpose:
+    without that, this test would still see calls from a thread this feature does
+    not control, and "assert none" would be false regardless of what
+    `build_job_bytes` does.
+
+    Slow on purpose (a bit over 4 s) — that is the price of proving a thread
+    never dials, rather than assuming it from the code.
+    """
+    a_rectangle(ruida)
+    ruida.device.driver.controller.service = _AlwaysConnected(ruida.device)
+    calls = []
+    ruida.device.connect = lambda *a, **kw: calls.append(True)
+    runner = CommandRunner(ruida)
+
+    runner.build_job_bytes()
+    time.sleep(4)
+
+    assert not calls, f"{len(calls)} connect() call(s) in the 4s after building"
+
+
+def test_ten_builds_do_not_leave_ten_threads(ruida):
+    """
+    A fresh `RuidaDriver` per call — the state before `_upload_driver_for` reused
+    one — left two threads behind per build: a status monitor
+    (`ruida/controller.py:50`) and, once `_AlwaysConnected` closed the connect
+    storm, a `_data_sender` (`ruida/driver.py:301` → `controller.py:76`) blocked
+    forever on `_job_lock`, never released. Measured on that code: `before=5`,
+    `after one build=7`, `after ten builds=25` — climbing by two every call, still
+    all alive 3 s later.
+
+    With the driver reused and `_job_lock` released once (`resume_monitor`, see
+    `_upload_driver_for`): measured `before=5`, `after one build=6`,
+    `after ten builds=6` — the one thread the reused driver's own status monitor
+    adds, and nothing more.
+    """
+    a_rectangle(ruida)
+    runner = CommandRunner(ruida)
+
+    before = threading.active_count()
+    runner.build_job_bytes()
+    after_one = threading.active_count()
+    for _ in range(9):
+        runner.build_job_bytes()
+    after_ten = threading.active_count()
+
+    assert after_one - before == 1, f"{after_one - before} new thread(s) for one build"
+    assert after_ten == after_one, (
+        f"{after_ten - after_one} extra thread(s) after nine more builds"
     )

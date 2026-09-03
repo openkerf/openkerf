@@ -70,6 +70,53 @@ class CommandError(RuntimeError):
         self.output = output
 
 
+class _AlwaysConnected:
+    """
+    Reports a Ruida service as always connected and never busy, to keep its
+    status-monitor thread from redialling the machine.
+
+    `RuidaController.__init__` unconditionally starts a daemon thread
+    (`ruida/controller.py:50`); its loop (`:162`) sleeps 3 s and then, every 0.2 s
+    forever, calls `service.connect()` whenever
+    `service.connected and not service.is_busy` is false (`:172`, `:189`). Measured
+    against a `build_job_bytes` driver, isolated from the live driver's own
+    identical thread (see `task-1-report-fix-3.md`): 10 calls in the four seconds
+    after the sleep ends, before this wrapper existed; 0 with it. A build driver
+    that lived for the rest of the process would otherwise have this app quietly
+    redialling a laser that is off or unplugged, forever, once per build.
+
+    Both halves matter: reporting only `connected` as true and leaving `is_busy`
+    proxied through to the real, shared device left a real gap — the device's
+    `is_busy` reads a session shared with the live driver, and a build that leaves
+    it transiently true (measured: right at job completion) still sent the thread
+    down the "keep dialling" branch on its very next check, once, before the busy
+    state cleared. Overriding both closes it regardless of that shared state.
+
+    With both true, the thread instead takes the *other* branch of that `if`,
+    which only calls `job.get_setting(..., output=self.write)` (our own no-op) —
+    harmless, and it never reaches `connect()`. That branch acquires and releases
+    `_job_lock` each time (`:173`/`:182`), the same lock every `_data_sender`
+    started by a later build's `stop_record()` (`ruida/driver.py:301`) needs; see
+    `_upload_driver_for` for why that lock has to be released once, up front.
+    Wraps rather than patches the real service, so everything else it is asked
+    for (`setting`, `channel`, ...) still reaches the genuine object.
+    """
+
+    def __init__(self, service):
+        self._service = service
+
+    @property
+    def connected(self):
+        return True
+
+    @property
+    def is_busy(self):
+        return False
+
+    def __getattr__(self, name):
+        return getattr(self._service, name)
+
+
 class CommandRunner:
     def __init__(self, kernel, document=None):
         self.kernel = kernel
@@ -88,6 +135,11 @@ class CommandRunner:
         # built (see rotary.py). None means "no rotary layer at all", which is what a test
         # or a script that builds a runner of its own gets.
         self.rotary = None
+        # `build_job_bytes`'s own driver, reused across calls; see there. `None` until
+        # first asked for, and thrown away the moment the active device no longer
+        # matches `_upload_device` — it belongs to one device, not to this runner.
+        self._upload_driver = None
+        self._upload_device = None
 
     def run(self, command: str) -> list[str]:
         """Execute one console line and return its output. Raises CommandError."""
@@ -221,18 +273,20 @@ class CommandRunner:
         an `.rd` file — the tail with SET_FILE_SUM and END_OF_FILE from `write_tail`
         included.
 
-        A *fresh* driver, not `self.kernel.device.driver` — the one actually attached
-        to the machine. `RuidaDriver.plot_start` ends on `controller.stop_record()`,
-        which is literally `start_sending()`: on a connected Ruida, finishing the job
-        against the live driver would ship the file to the machine the moment
-        somebody asks for its bytes, with nobody having pressed "send". The engine
-        hits the same problem in `save_job` (`ruida/device.py:603`) and solves it the
-        same way: a `RuidaDriver(service)` of its own, with its own `RuidaController`
-        and an empty `RDJob` buffer — no connection, no send thread reaching the
-        machine. We do the same, and additionally park `controller.write` on
-        something inert: the status-monitor thread the fresh controller starts on
-        construction polls the machine on its own schedule and would otherwise still
-        try to write through whatever `write` was left at.
+        Not `self.kernel.device.driver` — the one actually attached to the machine.
+        `RuidaDriver.plot_start` ends on `controller.stop_record()`, which is
+        literally `start_sending()`: on a connected Ruida, finishing the job against
+        the live driver would ship the file to the machine the moment somebody asks
+        for its bytes, with nobody having pressed "send". The engine hits the same
+        problem in `save_job` (`ruida/device.py:603`) and solves it the same way: a
+        `RuidaDriver(service)` of its own, with its own `RuidaController` and its own
+        `RDJob` buffer — no connection, no send thread reaching the machine.
+
+        `_upload_driver_for` builds that driver once per device and reuses it: a
+        fresh `RuidaController` per call starts a daemon thread that, unless parked,
+        redials the machine forever (see `_AlwaysConnected`) — ten calls to this
+        method must not leave ten such threads running. Its buffer is cleared before
+        every build instead.
 
         Why not `save_job` itself: it sets `controller.write` to `f.write` and then
         *executes* the RDJob, while the bytes we want are the ones that land in the
@@ -245,7 +299,6 @@ class CommandRunner:
         """
         from .edits import DesignError
         from meerk40t.core.laserjob import LaserJob
-        from meerk40t.ruida.driver import RuidaDriver
 
         device = getattr(self.kernel, "device", None)
         live_driver = getattr(device, "driver", None)
@@ -267,16 +320,65 @@ class CommandRunner:
                 # readily as it runs cutcode. Dropping them here would silently flatten
                 # every pass onto one height.
                 steps = list(plan.plan)
-                driver = RuidaDriver(device)
-                # Nothing from here may reach a socket, whatever the fresh
-                # controller's own background threads try in the meantime.
-                driver.controller.write = lambda data: None
+                driver = self._upload_driver_for(device)
                 job = LaserJob("upload", steps, driver=driver)
                 driver.job_start(job)
                 while not job.execute():
                     pass
                 driver.job_finish(job)
                 return driver.controller.job.get_contents()
+
+    def _upload_driver_for(self, device):
+        """
+        The `build_job_bytes` driver for `device`, made once and reused.
+
+        `RuidaController.__init__` unconditionally starts a daemon thread
+        (`ruida/controller.py:50`) that, left alone, redials the machine forever —
+        see `_AlwaysConnected`. A fresh `RuidaDriver` per call would leave one more
+        such thread behind every time somebody builds a file: measured, 10 calls to
+        `build_job_bytes` before this method existed left 20 extra threads running
+        (a status monitor and a `_data_sender` per call, `task-1-report-fix-3.md`).
+        One driver per device instead, emptied (`controller.job.buffer.clear()`)
+        before each build; thrown away only when the active device changes, since a
+        build driver belongs to one device and not to this runner.
+
+        `resume_monitor()` releases `_job_lock` (`ruida/controller.py:95`), held
+        since `__init__` (`:49`) to keep the status thread paused until something
+        starts it for real. Left held, it is not just that thread that blocks on
+        it forever: every `stop_record()` at the end of a job (`ruida/driver.py:301`)
+        starts a `_data_sender` that also opens with `_job_lock.acquire()`
+        (`:141`) — so *even with the driver reused*, every build left one more
+        thread stuck on that same lock, forever. Measured: 10 builds, 10 blocked
+        `_data_sender` threads, still alive 3 s later. Releasing the lock once,
+        here, lets the status thread and every `_data_sender` take their turn on
+        it normally instead — measured after: 10 builds, one extra thread total
+        (the reused driver's own status monitor), the same as after one.
+        """
+        from meerk40t.ruida.driver import RuidaDriver
+
+        if self._upload_driver is None or self._upload_device is not device:
+            driver = RuidaDriver(device)
+            # Neutralise the thread before anything else — the 3 s startup sleep
+            # (`ruida/controller.py:170`) is slack, not something to rely on.
+            driver.controller.service = _AlwaysConnected(device)
+            # Nothing from here may reach a socket either.
+            driver.controller.write = lambda data: None
+            # `__init__` acquires `_job_lock` and never releases it
+            # (`ruida/controller.py:49`) — meant to hold the status thread until
+            # something calls `resume_monitor` (`:95`), once a real connection is
+            # ready. Left unreleased, every `stop_record` at the end of a job
+            # (`ruida/driver.py:301`) starts a `_data_sender` that also blocks on
+            # this same lock forever, one more leaked, permanently blocked thread
+            # per build (measured: 10 builds, 10 stuck `_data_sender` threads,
+            # still alive 3 s later — see `task-1-report-fix-3.md`). Releasing it
+            # once here lets the status thread and every `_data_sender` take turns
+            # on it normally instead.
+            driver.controller.resume_monitor()
+            self._upload_driver = driver
+            self._upload_device = device
+        driver = self._upload_driver
+        driver.controller.job.buffer.clear()
+        return driver
 
     def _plan_without_spooling(self, mutators=()) -> list[str]:
         """
