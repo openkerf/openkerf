@@ -1479,11 +1479,14 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
     below existed: `{'chunks': 6}` — six of six — with the last block never
     written through and the session already dropped.
 
-    What the engine does have is the drop itself: a failed transport write sets
-    `_responding = False` (`ruidasession.py:345-346`), which is one of the three
-    things `connected` is made of (`:154`), and every `write` after it raises
-    (`:186`). So the wait asks that too, and asks it first, because "the
-    connection broke" is a more specific answer than "it is taking too long".
+    What the engine does have is `_responding`: a failed transport write clears
+    it (`ruidasession.py:346`), it is one of the three things `connected` is made
+    of (`:154`), and every `write` after it raises (`:186`). So the wait asks
+    that too, and asks it first, because a session that is not answering is a
+    more specific answer than "it is taking too long". What the flag does *not*
+    say is why — see
+    `test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it`, and the
+    sentence it produces reports only what was seen.
     """
     a_design_over_one_block(ruida)
     upload = RuidaUpload(ruida)
@@ -1499,3 +1502,41 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
     assert error.value.values == {"sent": 5, "chunks": 6}
     assert "5 of 6" in str(error.value), str(error.value)
     assert not session.connected
+
+
+def test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it(
+    ruida, monkeypatch, deferring
+):
+    """
+    `upload.interrupted` is raised off `session.connected`, and the flag under
+    it does not carry a cause.
+
+    `_responding` — one of the three things `connected` is made of
+    (`ruidasession.py:154`) — is cleared in seven places, and only three of them
+    are a broken link. `:366` is the ACK read running out of tries, which at
+    `normal_timeout()` is four reads of 0.25 s: **about one second of silence**.
+    The engine's own comment right above it (`:359-360`) says when that happens:
+    "This will occur while the controller is executing a physical home." The
+    handshaker then goes back to `connect()` and can set the flag to `True`
+    again (`:258`), so the machine was never gone.
+
+    A refusal that names a cause the flag cannot carry is worse than one that
+    only reports what was seen: it sends somebody to check a cable while their
+    machine was homing. So the sentence says the machine stopped answering,
+    which is exactly what was observed on either story, and the advice — look at
+    the panel, delete the file — is right on both.
+    """
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    session = deferring(
+        upload, monkeypatch, ack_seconds=0.02, acknowledges=False, stops_before=7
+    )
+    upload.per_chunk_seconds = 0.5
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    said = str(error.value)
+    assert "stopped answering" in said, said
+    assert "connection" not in said.lower(), said
+    assert "5 of 6" in said and "panel" in said, said

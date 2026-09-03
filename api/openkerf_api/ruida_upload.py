@@ -254,12 +254,37 @@ class RuidaUpload:
         and the queue is empty — so a wait that asks only "is anything still
         out?" sees a clear line. Measured, with the connection dropping on the
         eighth packet of eight: `upload()` returned `{'chunks': 6}` on the block
-        that closes the file. What the engine does leave is the drop itself, a
-        failed transport write setting `_responding = False`
-        (`ruidasession.py:345-346`), which is one of the three things `connected`
-        is made of (`:154`). So that is what is asked, and asked first, because
-        "the connection broke" is a more specific answer than "it is taking too
-        long".
+        that closes the file. What the engine does leave is `_responding`, one
+        of the three things `connected` is made of (`ruidasession.py:154`), and
+        that is asked first, because a session that is not answering is a more
+        specific answer than "it is taking too long".
+
+        What it is **not** is a diagnosis, which is why the refusal says the
+        machine stopped answering rather than that the connection broke.
+        `_responding` is cleared in seven places and only three are a broken
+        link: a failed transport write (`:346`), a failed resend after a NAK
+        (`:381`), and an `OSError` escaping the loop (`:418`). The others are
+        silence: a purge that failed while connecting (`:281`), the handshaker
+        starting up (`:314`), a reply that never arrived (`:409`) — and `:366`,
+        the ACK read running out of tries, which at `normal_timeout()` is four
+        reads of 0.25 s, about **one second**. The engine's own comment above it
+        (`:359-360`) says when that happens: "This will occur while the
+        controller is executing a physical home." After it the handshaker
+        returns to `connect()` and can set the flag back to `True` (`:258`).
+
+        So this can fire on a machine that is homing rather than gone. It is
+        left that way deliberately, because nothing available here tells the two
+        apart. `is_open` does not: a UDP socket stays open through both, and a
+        failed write closes nothing. Neither do `sends`, `acks` or `enqs`: the
+        handshaker probes with an ENQ in both stories. The one thing that would
+        is waiting for `_responding` to come back — which is what the engine
+        does, and which turns a ten-second refusal into a wait of unknown length
+        with nothing to tell the user meanwhile. The app the engine's own
+        `gross_timeout()` protects is only the one that started the home itself
+        (`driver.py:392-403`, its single caller); a home somebody presses on the
+        panel gets the one second. Whichever it was, the file on the machine is
+        incomplete and the advice — look at the panel, delete it — holds, and an
+        upload that was refused can simply be sent again.
 
         The shared queue costs one thing, and it is worth writing down where the
         refusal is raised. Because `_line_is_busy` cannot tell our packets from
@@ -281,7 +306,7 @@ class RuidaUpload:
         while True:
             if not getattr(session, "connected", True):
                 raise self._interrupted(
-                    sent, chunks, "broke the connection", "upload.interrupted"
+                    sent, chunks, "stopped answering", "upload.interrupted"
                 )
             if not self._line_is_busy(session):
                 return
@@ -377,7 +402,7 @@ class RuidaUpload:
                 self._write(packet)
             except (ConnectionError, OSError) as e:
                 raise self._interrupted(
-                    sent, chunks, "broke the connection", "upload.interrupted"
+                    sent, chunks, "stopped answering", "upload.interrupted"
                 ) from e
         # And once more after the last one, which is the block holding
         # `SET_FILE_SUM` and `END_OF_FILE`. Every other block is confirmed by the
