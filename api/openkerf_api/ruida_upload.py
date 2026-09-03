@@ -375,8 +375,10 @@ class RuidaUpload:
         What comes out is a function of the drawing as it stands, and not of
         when it is sent: measured, ten builds of one drawing gave the same
         bytes ten times, with the runner kept and with a fresh one for every
-        call. So pressing this twice on the same drawing puts the same file on
-        the machine twice.
+        call. So pressing this twice on the same drawing, in the same session,
+        puts the same file on the machine twice — the qualifier belongs in the
+        sentence, because a server restarted in between has made the drawing
+        again, and that is the case just below.
 
         What does move it is making the shapes again. Ten redraws of the same
         eight circles gave 5462 or 5463 bytes in no order — two different, both

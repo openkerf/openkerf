@@ -939,15 +939,22 @@ def test_the_upload_waits_for_a_busy_line_instead_of_writing_over_it(
     assert len(session.written) == result["chunks"] + 2
 
 
-def test_a_connection_lost_halfway_says_how_far_it_got(ruida, monkeypatch):
+def test_a_write_that_is_refused_halfway_says_how_far_it_got(ruida, monkeypatch):
     """
-    `RuidaSession.write` raises `ConnectionError` as soon as the session is not
-    connected (`ruida/ruidasession.py:186`) — the machine switched off, the cable
-    out, the Ruida's own habit of dropping and silently reopening (CLAUDE.md's
-    row on the connection lifecycle). Unhandled that is a 500 with a stack trace,
-    which tells the person at the laser nothing about the half file now sitting
-    in the machine. It has to be the same sentence with the same two numbers as a
-    stall.
+    `RuidaSession.write` refuses to queue anything the moment the session is not
+    connected, raising `ConnectionError` (`ruida/ruidasession.py:186`).
+    Unhandled that is a 500 with a stack trace, which tells the person at the
+    laser nothing about the half file now sitting in the machine. It has to be
+    the same sentence with the same two numbers as a stall.
+
+    Named for the refused write and not for a lost connection, because the flag
+    behind it does not say that much. `connected` is `_responding` and two
+    others (`:154`), and `_responding` is cleared by silence as readily as by a
+    break — about a second of it, at `normal_timeout()`. See
+    `test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it`: the same
+    ambiguity, and the same answer, which is that the sentence reports what was
+    observed. Three names in this task promised more than their source carried;
+    this is the third.
     """
     a_design_over_one_block(ruida)
     upload = RuidaUpload(ruida)
