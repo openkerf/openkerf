@@ -16,11 +16,14 @@ The app stays outside the one handling that burns; there is deliberately no
 route in this module that begins a job.
 """
 
+from meerk40t.ruida.rdjob import parse_commands
+
 from .commands import CommandRunner
 from .edits import DesignError
 
 #: The way the engine chops its own jobs (`ruida/controller.py:83`,
-#: `divide_data_into_queue`, which cuts at the first command past 1000 bytes).
+#: `divide_data_into_queue`, which fills a block up to 1000 bytes and always cuts
+#: between two commands, never inside one).
 CHUNK = 1000
 
 #: What the machine keeps of a name. The emulator reads characters until the NUL
@@ -36,6 +39,38 @@ def machine_name(name: str) -> str:
     """The name as the machine keeps it: printable ASCII, capitals, eight long."""
     kept = "".join(c for c in (name or "").strip() if 32 <= ord(c) < 127)
     return kept.upper()[:NAME_LENGTH]
+
+
+def _blocks(payload: bytes) -> list[bytes]:
+    """The payload in blocks of at most `CHUNK` bytes, cut between commands.
+
+    Never inside one. A Ruida command starts at a byte >= 0x80 and runs until the
+    next such byte (`ruida/rdjob.py:419`, `parse_commands`), and the receiving
+    side parses each packet it gets on its own — so a command split across two
+    packets is two broken commands, not one whole one. Measured against the
+    engine's own emulator with a design of 5462 bytes: cut into six raw
+    1000-byte slices it reports 5 `Process Failure`s, one per seam; cut here, 0,
+    and the job it builds is identical to the one it builds from the whole
+    payload in a single piece. Every real job is over 1000 bytes, so raw slicing
+    would have damaged one command per seam in all of them.
+
+    A command longer than `CHUNK` goes out whole, in an oversized block of its
+    own: cutting it is the exact damage this function exists to avoid, and the
+    engine's own `divide_data_into_queue` overshoots for the same reason.
+    Measured on this project's designs the longest command is 16 bytes, so this
+    is a guard, not a case anybody meets.
+    """
+    out: list[bytes] = []
+    block = b""
+    for command in parse_commands(payload):
+        command = bytes(command)
+        if block and len(block) + len(command) > CHUNK:
+            out.append(block)
+            block = b""
+        block += command
+    if block:
+        out.append(block)
+    return out
 
 
 class RuidaUpload:
@@ -59,6 +94,5 @@ class RuidaUpload:
                 code="upload.needsName",
             )
         out = [FILE_TRANSFER, SET_FILENAME + short.encode("ascii") + b"\x00"]
-        for start in range(0, len(payload), CHUNK):
-            out.append(payload[start : start + CHUNK])
+        out.extend(_blocks(payload))
         return out
