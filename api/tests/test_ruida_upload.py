@@ -106,6 +106,61 @@ def a_parked_driver(device):
     return driver
 
 
+class _InertSpooler:
+    """Takes jobs and runs none.
+
+    Every command the emulator does not treat as realtime ends in
+    `self.device.spooler.send(self.job, prevent_duplicate=True)`
+    (`ruida/emulator.py:159`) — the spooler of the live Ruida device, whose own
+    thread executes what lands in it through the live `RuidaDriver`. Standing in
+    for it is what keeps a test that describes a file from starting one.
+    """
+
+    def __init__(self):
+        self.jobs = []
+
+    def send(self, job, prevent_duplicate=False):
+        self.jobs.append(job)
+
+
+class _RecordingDriver:
+    """Answers to anything and does nothing, so a motion command shows up as
+    a name in `calls` instead of as a move.
+
+    `status()` is the one exception, because it has to return something the
+    caller can unpack: `mem_lookup` (`ruida/emulator.py:1363`) does
+    `pos, state, minor = self.device.driver.status()` when the machine is asked
+    for its position or its state, which is exactly what a status poll asks.
+    A recorder returning `None` there raises `TypeError` instead of answering.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def status(self):
+        self.calls.append("status")
+        return (0, 0), "idle", "idle"
+
+    def __getattr__(self, name):
+        def record(*args, **kwargs):
+            self.calls.append(name)
+
+        return record
+
+
+class _StandInDevice:
+    """The live device for everything the emulator reads, with the two
+    attributes it can act through replaced."""
+
+    def __init__(self, device, spooler, driver):
+        self._device = device
+        self.spooler = spooler
+        self.driver = driver
+
+    def __getattr__(self, name):
+        return getattr(self._device, name)
+
+
 def test_the_job_becomes_bytes_that_end_like_a_file(ruida):
     """
     The engine's own `save_job` writes 4 bytes and leaves 623 in the buffer
@@ -688,40 +743,6 @@ def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch, tmp_path):
     from meerk40t.ruida.emulator import RuidaEmulator
     from meerk40t.ruida.rdjob import parse_commands
 
-    class _InertSpooler:
-        """Takes jobs and runs none. See the docstring."""
-
-        def __init__(self):
-            self.jobs = []
-
-        def send(self, job, prevent_duplicate=False):
-            self.jobs.append(job)
-
-    class _RecordingDriver:
-        """Answers to anything and does nothing, so a motion command shows up as
-        a name in `calls` instead of as a move."""
-
-        def __init__(self):
-            self.calls = []
-
-        def __getattr__(self, name):
-            def record(*args, **kwargs):
-                self.calls.append(name)
-
-            return record
-
-    class _StandInDevice:
-        """The live device for everything the emulator reads, with the two
-        attributes it can act through replaced."""
-
-        def __init__(self, device, spooler, driver):
-            self._device = device
-            self.spooler = spooler
-            self.driver = driver
-
-        def __getattr__(self, name):
-            return getattr(self._device, name)
-
     monkeypatch.setattr(
         emulator_module,
         "get_safe_path",
@@ -783,3 +804,331 @@ def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch, tmp_path):
     # The redirect worked, and the engine wrote nothing to the stream it opened.
     written = tmp_path / "BORD.rd"
     assert written.exists() and written.read_bytes() == b""
+
+
+class FakeSession:
+    """A connection that records what it is handed, and can misbehave on cue.
+
+    Stands in for `RuidaSession` in the three ways the flow control cares about:
+    `is_busy` (`ruida/ruidasession.py:161`, `_reply_pending or _ack_pending`),
+    `connected`, and `write`, which on the real one raises `ConnectionError` the
+    moment the session is not connected (`:167`).
+    """
+
+    connected = True
+
+    def __init__(self, busy_forever=False, busy_for=0, fail_after=None):
+        self.written = []
+        self.busy_forever = busy_forever
+        self.busy_for = busy_for
+        self.fail_after = fail_after
+        self.busy_reads = 0
+
+    @property
+    def is_busy(self):
+        self.busy_reads += 1
+        if self.busy_forever:
+            return True
+        return self.busy_reads <= self.busy_for
+
+    def write(self, data):
+        if self.fail_after is not None and len(self.written) >= self.fail_after:
+            raise ConnectionError("Not connected to the Ruida controller.")
+        self.written.append(data)
+
+
+def a_fake_session(upload, monkeypatch, **kwargs):
+    """Put a `FakeSession` in the place of both ways out of `RuidaUpload`.
+
+    Both, not one: `_session` is what the flow control reads `is_busy` off and
+    `_write` is what puts bytes on the line, and on a real device they are two
+    faces of the same session (`ruida/device.py:410` binds `controller.write` to
+    `active_session.write`). Patching only one would leave the other pointed at
+    the live controller of the device this fixture started — which is a path
+    toward a machine, and this suite has none.
+    """
+    session = FakeSession(**kwargs)
+    monkeypatch.setattr(upload, "_session", lambda: session)
+    monkeypatch.setattr(upload, "_write", session.write)
+    return session
+
+
+def test_a_transfer_that_stalls_says_how_far_it_got(ruida, monkeypatch):
+    """
+    The engine gives up after about four seconds in silence — `RuidaSession.write`
+    (`ruida/ruidasession.py:167`) retries a full queue twelve times at 0.25 s and
+    then falls out of its own `while _tries:` loop without raising, and
+    `_data_sender` (`ruida/controller.py:118`) never looks at whether a write
+    landed and says "File Sent." at the end regardless. Its own source carries the
+    TODO: "What does the calling method do in the case of timeout? How to inform
+    the calling method a timeout occurred?"
+
+    A half upload that says nothing is the worse of the two failures: then there
+    is half a file in the machine and everybody thinks it went well. So the
+    refusal carries the two numbers that say how bad it is.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch, busy_forever=True)
+    upload.per_chunk_seconds = 0.2
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    said = str(error.value)
+    assert "of" in said and any(ch.isdigit() for ch in said), said
+    assert "incomplete" in said.lower()
+    assert error.value.code == "upload.stalled"
+    assert not session.written, "bytes went out while the line was never free"
+
+
+def test_a_transfer_that_flows_reports_what_went(ruida, monkeypatch):
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+
+    result = upload.upload("bord-1")
+
+    assert result["name"] == "BORD-1"
+    assert result["chunks"] == len(session.written) - 2  # without the two headers
+    assert result["bytes"] > 100
+    assert session.written[0] == b"\xe8\x02"
+    assert session.written[1].startswith(b"\xe7\x01")
+    assert sum(len(block) for block in session.written[2:]) == result["bytes"]
+
+
+def test_the_upload_waits_for_a_busy_line_instead_of_writing_over_it(
+    ruida, monkeypatch
+):
+    """
+    Waiting is the whole point of the flow control, so it has to be visible that
+    it happens — a loop that never waits passes every test above this one.
+
+    `is_busy` here reports busy for the first three reads and free after that,
+    and the poll interval is turned down so the wait costs a few milliseconds
+    rather than the 0.02 s the real one uses. Measured on this rectangle: one
+    block, so four reads of `is_busy` for two headers and one block would mean
+    no waiting at all; with three busy reads to get through, the count comes out
+    at six.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch, busy_for=3)
+    upload.poll_seconds = 0.001
+
+    result = upload.upload("BORD")
+
+    assert session.busy_reads == 6, session.busy_reads
+    assert len(session.written) == result["chunks"] + 2
+
+
+def test_a_connection_lost_halfway_says_how_far_it_got(ruida, monkeypatch):
+    """
+    `RuidaSession.write` raises `ConnectionError` as soon as the session is not
+    connected (`ruida/ruidasession.py:167`) — the machine switched off, the cable
+    out, the Ruida's own habit of dropping and silently reopening (CLAUDE.md's
+    row on the connection lifecycle). Unhandled that is a 500 with a stack trace,
+    which tells the person at the laser nothing about the half file now sitting
+    in the machine. It has to be the same sentence with the same two numbers as a
+    stall.
+    """
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    # Two headers and three blocks land; the fourth block is where it breaks.
+    session = a_fake_session(upload, monkeypatch, fail_after=5)
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    said = str(error.value)
+    assert error.value.code == "upload.interrupted"
+    assert "3 of" in said, said
+    assert "incomplete" in said.lower()
+    assert len(session.written) == 5
+
+
+def test_a_command_longer_than_a_block_refuses_before_anything_goes_out(
+    ruida, monkeypatch
+):
+    """
+    `_blocks` cuts on command boundaries and never inside one, so a single
+    command longer than `CHUNK` goes into a block of its own, oversized —
+    measured in the round before this one: `\\x88` followed by 1200 bytes gives
+    blocks of 1201 and 1. Building that is right; sending it is not.
+
+    Measured on a pair of loopback UDP sockets, which is what the line to the
+    machine is: a datagram of 1201 bytes read by a receiver that calls
+    `recvfrom(1024)` arrives as 1024 bytes, with no error on either side — the
+    tail is simply gone. And `recvfrom(1024)` is what *every* receiver in the
+    engine uses (`ruida/udp_transport.py:62`, `udp_connection.py:174`,
+    `network/udp_server.py:96`, `ruida/tcp_connection.py:156`). Add the two
+    checksum bytes UDP packaging puts in front (`ruidasession.py:_package`) and
+    the real ceiling on a block is 1022 bytes; `CHUNK` at 1000 sits under it with
+    room to spare.
+
+    So an oversized block would be truncated silently — the same damage
+    `_blocks` exists to avoid, one layer further down and past the point where
+    anyone can see it. It is refused before the first byte goes out, so nothing
+    half-written is left on the panel. Measured on this project's designs the
+    longest command is 16 bytes, so this is a guard against a payload nobody has
+    made yet, not a case anybody meets.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    monkeypatch.setattr(
+        upload.runner, "build_job_bytes", lambda *a, **kw: b"\x88" + b"\x11" * 1200
+    )
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    assert error.value.code == "upload.commandTooLong"
+    said = str(error.value)
+    assert "1201" in said and "1000" in said, said
+    assert not session.written, "an oversized block went out anyway"
+
+
+def test_an_empty_file_is_never_announced(ruida, monkeypatch):
+    """
+    `frames(name, b"")` is two headers and no blocks: a file announced with
+    nothing in it. `build_job_bytes` refuses an empty bed itself
+    (`job.nothingToBurn`) so nothing reaches this today, but "the payload is
+    never empty" is a promise about another function, and the cost of it being
+    wrong is a name on the machine's panel that burns nothing. Announcing costs
+    the user a file to find and delete; refusing costs a sentence.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    monkeypatch.setattr(upload.runner, "build_job_bytes", lambda *a, **kw: b"")
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    assert error.value.code == "upload.emptyFile"
+    assert not session.written, "the file was announced before it was found empty"
+
+
+def test_a_machine_that_is_not_connected_refuses_with_a_sentence(ruida):
+    """
+    The `ruida` fixture starts the service with `-i`, so no session was ever
+    opened and `device.active_session` is `None` — the state a user is in before
+    they press connect. That is a sentence saying nothing has been sent, not an
+    `AttributeError` on `None`.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    assert error.value.code == "upload.notConnected"
+    assert "nothing has been sent" in str(error.value).lower()
+
+
+def test_a_session_that_is_open_but_not_connected_refuses_too(ruida, monkeypatch):
+    """
+    `RuidaSession.connected` is more than "an object exists": it wants the
+    transport open *and* the controller answering (`ruida/ruidasession.py:150`).
+    A session that exists while the machine is off is exactly the case where
+    `write` raises `ConnectionError` on the first byte, so it is caught here
+    instead, before a file is announced.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = FakeSession()
+    session.connected = False
+    monkeypatch.setattr(ruida.device, "active_session", session, raising=False)
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    assert error.value.code == "upload.notConnected"
+    assert not session.written
+
+
+def test_uploading_leaves_the_live_spooler_empty(ruida, monkeypatch):
+    """
+    Sending a file is not starting one. Whatever else an upload does, nothing may
+    reach the queue that the live device's own thread executes — that is the one
+    difference between this button and the one that burns, and there is
+    deliberately no route in this module that begins a job.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    a_fake_session(upload, monkeypatch)
+
+    upload.upload("BORD")
+
+    assert not list(ruida.device.spooler.queue), "a job was spooled by an upload"
+
+
+def test_a_status_poll_between_blocks_does_not_damage_the_file(
+    ruida, monkeypatch, tmp_path
+):
+    """
+    Why the upload does *not* pause the engine's status monitor while it sends.
+
+    `RuidaController._status_monitor` (`ruida/controller.py:160`) sends a
+    `GET_SETTING` every 0.2 s for as long as the device is connected, over the
+    same session our blocks go out on, and it holds `_job_lock` only against the
+    engine's own `_data_sender`. So while we are sending, its packets land
+    between ours. The engine's answer to that is `pause_monitor()`, which
+    acquires a lock that is released in exactly one place
+    (`ruida/device.py:415`) — taking it and failing to give it back stops the
+    machine's status for the rest of the session, and taking it when it was
+    never released deadlocks the request thread.
+
+    Measured against the engine's own emulator before deciding: the same eight
+    circles sent as six blocks, once clean and once with a status poll
+    (`DA 00 04 00`, `GET_SETTING MEM_MACHINE_STATUS`) written between every pair
+    of blocks. Both give a job of 5455 bytes, byte for byte identical, with 0
+    `Process Failure`s. The poll is handled as realtime (`emulator.py:157`,
+    `_process_realtime` → `mem_lookup`) and answered; it never reaches the job
+    buffer. So interleaved status does not damage the file, and the lock — with
+    its two ways to hang the app — stays untouched.
+    """
+    import meerk40t.ruida.emulator as emulator_module
+    from meerk40t.ruida.emulator import RuidaEmulator
+    from meerk40t.ruida.rdjob import GET_SETTING, MEM_MACHINE_STATUS
+
+    monkeypatch.setattr(
+        emulator_module,
+        "get_safe_path",
+        lambda name, *args, **kwargs: str(tmp_path / name),
+    )
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    packets = upload.frames("BORD", upload.runner.build_job_bytes())
+    assert len(packets) - 2 >= 2, "the payload went out in one block after all"
+    poll = bytes(GET_SETTING) + bytes(MEM_MACHINE_STATUS)
+
+    def received(interleaved):
+        said = []
+        driver = _RecordingDriver()
+        emulator = RuidaEmulator(
+            _StandInDevice(ruida.device, _InertSpooler(), driver),
+            ruida.device.view.matrix,
+        )
+        emulator.channel = said.append
+        emulator.write(packets[0], unswizzle=False)
+        emulator.write(packets[1], unswizzle=False)
+        for index, frame in enumerate(packets[2:]):
+            if interleaved and index:
+                emulator.write(poll, unswizzle=False)
+            emulator.write(frame, unswizzle=False)
+        if emulator.filestream is not None:
+            emulator.filestream.close()
+        failures = [line for line in said if "Process Failure" in line]
+        assert not failures, failures[:3]
+        return b"".join(emulator.job.buffer), driver.calls
+
+    clean, _ = received(False)
+    polled, calls = received(True)
+
+    assert calls.count("status") == len(packets) - 3, calls
+    assert polled == clean, (
+        f"{len(polled)} bytes arrived with the status poll interleaved against "
+        f"{len(clean)} without it"
+    )
