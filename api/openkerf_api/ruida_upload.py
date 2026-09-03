@@ -78,7 +78,9 @@ def _blocks(payload: bytes) -> list[bytes]:
     next such byte (`ruida/rdjob.py:419`, `parse_commands`), and the receiving
     side parses each packet it gets on its own — so a command split across two
     packets is two broken commands, not one whole one. Measured against the
-    engine's own emulator with a design of 5462 bytes: cut into six raw
+    engine's own emulator with a design of 5462 bytes (that design does not
+    always build to the same length — see `a_design_over_one_block` in the
+    tests): cut into six raw
     1000-byte slices it reports 5 `Process Failure`s, one per seam; cut here, 0,
     and the job it builds is identical to the one it builds from the whole
     payload in a single piece. Every real job is over 1000 bytes, so raw slicing
@@ -206,7 +208,13 @@ class RuidaUpload:
         )
 
     def _line_is_busy(self, session) -> bool:
-        """Whether the line still holds something of ours.
+        """Whether the line still holds anything — ours or not.
+
+        Not "anything of ours": `send_q` is shared, and the engine's status
+        monitor puts a `GET_SETTING` in it every 0.2 s (`controller.py:162`).
+        There is no marker on a packet to tell them apart, so a poll of somebody
+        else's makes this say busy. See `_wait_for_the_line` for what that costs
+        and why the cost only ever falls on the safe side.
 
         Two questions, because a real session answers only half of it. The
         packet sits in `send_q` from `write` (`ruida/ruidasession.py:188`) until
@@ -215,12 +223,14 @@ class RuidaUpload:
         interface (`:349`). So on `is_busy` alone there is a window after every
         write in which the line looks free while our packet has not moved.
 
-        On `usb` there is no such moment at all: the only other `_ack_pending`
-        is in `connect()` (`:248`), while a session is being established, never
-        per packet. The engine says why in its own comment two lines above —
-        "When comms is via USB there are no ACK responses" (`:240-241`) — so
-        there `is_busy` reports `_reply_pending`, which `0xDA` commands set: the
-        status polls, never our blocks.
+        On `usb` no packet of ours ever sets it. The one other place that does
+        is `connect()` (`:248`, cleared at `:256` and `:313`), which is not
+        interface-specific but runs only while `connected` is false — and a
+        session in that state is refused by `_session()` before any of this. The
+        engine says why in its own comment a few lines above: "When comms is via
+        USB there are no ACK responses" (`:240-241`). So on `usb` `is_busy`
+        reports `_reply_pending`, which `0xDA` commands set: the status polls,
+        never our blocks.
 
         Asking the queue first closes the `udp` window and gives `usb` an answer
         that is about our own packets at all: an empty queue means the
@@ -235,9 +245,46 @@ class RuidaUpload:
         return bool(getattr(session, "is_busy", False))
 
     def _wait_for_the_line(self, session, sent: int, chunks: int) -> None:
-        """Wait until the line is free again, or refuse saying how far it got."""
+        """Wait until the line is free again, or refuse saying how far it got.
+
+        The connection is asked first, and not only for tidiness. On `udp` a
+        machine that goes away leaves `_ack_pending` set for ever and the
+        deadline below catches it. On `usb` there is no acknowledgement to be
+        missing: the handshaker takes our last block, the transport write fails,
+        and the queue is empty — so a wait that asks only "is anything still
+        out?" sees a clear line. Measured, with the connection dropping on the
+        eighth packet of eight: `upload()` returned `{'chunks': 6}` on the block
+        that closes the file. What the engine does leave is the drop itself, a
+        failed transport write setting `_responding = False`
+        (`ruidasession.py:345-346`), which is one of the three things `connected`
+        is made of (`:154`). So that is what is asked, and asked first, because
+        "the connection broke" is a more specific answer than "it is taking too
+        long".
+
+        The shared queue costs one thing, and it is worth writing down where the
+        refusal is raised. Because `_line_is_busy` cannot tell our packets from
+        the status monitor's, any stretch in which the queue is not *seen* empty
+        for `per_chunk_seconds` comes out as `upload.stalled` — naming a block
+        number for a file that may well have arrived whole. One poll every 0.2 s
+        answered in milliseconds makes ten seconds of that unlikely, but nothing
+        rules it out: a spell of slow replies does it as readily as the 40-second
+        `gross_timeout()` around a physical home (`controller.py:108`).
+
+        The error only ever falls on the safe side, though, and that is why it is
+        left standing. A packet that is not ours can only *add* to the queue, so
+        the sharing can make this wait longer than it needs to, or refuse a
+        transfer that was fine — never let one through that was not. The
+        refusal's advice, to look at the panel and delete the file before
+        burning, is right either way.
+        """
         deadline = time.monotonic() + self.per_chunk_seconds
-        while self._line_is_busy(session):
+        while True:
+            if not getattr(session, "connected", True):
+                raise self._interrupted(
+                    sent, chunks, "broke the connection", "upload.interrupted"
+                )
+            if not self._line_is_busy(session):
+                return
             if time.monotonic() > deadline:
                 raise self._interrupted(
                     sent, chunks, "stopped taking the file", "upload.stalled"
@@ -288,9 +335,8 @@ class RuidaUpload:
         The engine's status monitor keeps polling the machine over this same
         session while we send, and its packets land between our blocks. That is
         left alone on purpose, and the emulator says why it can be: measured,
-        the same six blocks (`[996, 1000, 1000, 1000, 1000, 466]` of a 5462-byte
-        payload) with a `GET_SETTING` written between every pair give a job of
-        5455 bytes, byte for byte identical to the clean one, 0 parse failures —
+        the same six blocks with a `GET_SETTING` written between every pair give
+        a job byte for byte identical to the clean one, 0 parse failures —
         the poll is answered as realtime (`emulator.py:157`) and never reaches
         the file. So there is nothing here to protect against.
 
@@ -336,5 +382,13 @@ class RuidaUpload:
         # And once more after the last one, which is the block holding
         # `SET_FILE_SUM` and `END_OF_FILE`. Every other block is confirmed by the
         # wait in front of the block after it; this one has no block after it.
+        #
+        # What "confirmed" is worth differs by interface, and neither is a
+        # promise about the material. On `udp` it is the machine's own
+        # acknowledgement. On `usb` there is none to be had, so it is "the
+        # engine took every block and none of them failed on the way out" — the
+        # last one can still be at the transport when this returns. Measured on
+        # a session that never acknowledges: 7 or 8 of 8 packets written through
+        # at the moment `upload()` returns, run to run.
         self._wait_for_the_line(session, chunks - 1, chunks)
         return {"name": short, "bytes": len(payload), "chunks": chunks}

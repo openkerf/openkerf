@@ -62,7 +62,12 @@ def a_design_over_one_block(kernel):
 
     A rectangle is 433 bytes and fits in a single `CHUNK`, which hides every
     question about where one block ends and the next begins. Measured, these
-    eight circles come to 5462 bytes — five full blocks and a tail.
+    eight circles come to 5462 or 5463 bytes — five full blocks and a tail
+    either way. Not one number: `build_job_bytes` is byte-deterministic on the
+    rectangle (lines) but not on this design, and over six builds it alternated
+    between the two, differing from byte 1112 on in the coordinate bytes of the
+    circle interpolation. Nothing here asserts the length, only that it needs
+    more than one block.
     """
     kernel.elements.clear_all()
     for step in range(8):
@@ -690,7 +695,8 @@ def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch, tmp_path):
     conversation and depends on no network. Talking to a real `ruidacontrol`
     belongs to task 7, with the user present.
 
-    The design is eight circles on purpose: at 5462 bytes it is five blocks and a
+    The design is eight circles on purpose: at 5462 or 5463 bytes (see
+    `a_design_over_one_block`) it is five blocks and a
     tail rather than the single block a rectangle (433 bytes) fits in, so the
     seams between blocks are actually under test here. Measured on this payload:
     cut into six raw 1000-byte slices the emulator reports 5 `Process Failure`s —
@@ -700,7 +706,8 @@ def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch, tmp_path):
 
     What the emulator keeps is the payload minus one command: `SET_FILE_SUM`
     (`E5 05`, seven bytes) it answers itself instead of putting it in the job.
-    Measured: 5462 bytes sent, 5455 in the buffer, and the difference is exactly
+    Measured on one such build: 5462 bytes sent, 5455 in the buffer, and the
+    difference is exactly
     that one command — so the comparison below is against everything else, and
     it is against the payload we built, not against what we sent, which is what
     makes it notice bytes going missing on the way.
@@ -1094,11 +1101,14 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
     measurement below is why we do not use it.
 
     Measured against the engine's own emulator before deciding: the same eight
-    circles, a 5462-byte payload in six blocks of `[996, 1000, 1000, 1000, 1000,
-    466]`, once clean and once with a status poll (`DA 00 04 00`,
-    `GET_SETTING MEM_MACHINE_STATUS`) written between every pair of blocks. Both
-    give a job of 5455 bytes, byte for byte identical, with 0 `Process
-    Failure`s. The poll is handled as realtime (`emulator.py:157`,
+    circles in six blocks, once clean and once with a status poll
+    (`DA 00 04 00`, `GET_SETTING MEM_MACHINE_STATUS`) written between every pair
+    of blocks. Both give the same job, byte for byte, with 0 `Process Failure`s
+    — which is what the test asserts, rather than a length, because
+    `build_job_bytes` is not byte-deterministic on this design (measured over
+    six builds: 5462 or 5463 bytes, differing in the coordinate bytes of the
+    circle interpolation from byte 1112 on). The comparison is between two runs
+    of the same payload, so that variation cannot reach it. The poll is handled as realtime (`emulator.py:157`,
     `_process_realtime` → `mem_lookup`) and answered; it never reaches the job
     buffer. So interleaved status does not damage the file: there is nothing
     here to protect against.
@@ -1177,9 +1187,9 @@ class DeferringSession:
     queue and a thread in this process.
     """
 
-    connected = True
-
-    def __init__(self, ack_seconds=0.01, stops_before=None):
+    def __init__(self, ack_seconds=0.01, stops_before=None, acknowledges=True):
+        self.connected = True
+        self.acknowledges = acknowledges
         self.send_q = queue.Queue()
         self.written = []
         self.acknowledged = []
@@ -1211,13 +1221,26 @@ class DeferringSession:
                 data = self.send_q.get(timeout=0.01)
             except queue.Empty:
                 continue
-            self._ack_pending = True
-            time.sleep(self.ack_seconds)
             if (
                 self.stops_before is not None
                 and len(self.acknowledged) >= self.stops_before
             ):
-                return  # Handed to the transport, and no acknowledgement ever.
+                # This is where the packet stops, and the two interfaces show it
+                # differently. On `udp` it went out and the acknowledgement never
+                # comes, so `_ack_pending` stays set. On `usb` the transport
+                # write itself fails, which sets `_responding = False`
+                # (`ruidasession.py:345-346`) — one of the three things
+                # `connected` is made of (`:154`) — and every later `write`
+                # raises (`:186`). Both happen at once, with no wait in front of
+                # them, which is why this is before the sleep.
+                if self.acknowledges:
+                    self._ack_pending = True
+                else:
+                    self.connected = False
+                return
+            if self.acknowledges:
+                self._ack_pending = True
+            time.sleep(self.ack_seconds)
             self.acknowledged.append(data)
             self._ack_pending = False
 
@@ -1257,7 +1280,7 @@ def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
 
     Measured on this setup before the final wait existed: the connection dies on
     the eighth packet (the sixth and last block), and `upload("BORD")` returned
-    `{'name': 'BORD', 'bytes': 5462, 'chunks': 6}` — six of six sent — with
+    `{'chunks': 6}` — six of six sent — with
     `session.acknowledged` seven packets long, the last block among the missing.
     """
     a_design_over_one_block(ruida)
@@ -1385,3 +1408,94 @@ def test_a_nameless_upload_never_asks_the_design_for_bytes(ruida, monkeypatch):
         upload.upload("")
 
     assert not builds, "the job was built for an upload that could never be sent"
+
+
+def test_on_usb_the_queue_alone_still_bounds_what_is_in_flight(
+    ruida, monkeypatch, deferring
+):
+    """
+    The `usb` branch, which is the one every run of this suite actually uses.
+
+    `_ack_pending` is set only on `udp` (`ruidasession.py:349`), so on `usb`
+    `is_busy` never says anything about our blocks and the send queue is all
+    that is left. It still bounds what is out at once, but at two rather than
+    one: the queue goes empty the moment the handshaker takes a packet, while
+    that packet is still being written to the transport, so the next block can
+    be queued behind one still in the engine's hands. Measured over six runs at
+    two different write speeds, deepest **2** every time, with the queue itself
+    never deeper than 1 — against **8** with the wait inside the loop removed.
+
+    Two is the floor here, not a defect to fix: nothing in the engine marks the
+    moment a `usb` write completes, so nobody outside it can wait for one.
+    """
+    def upload_once(only_at_the_end):
+        a_design_over_one_block(ruida)
+        upload = RuidaUpload(ruida)
+        session = deferring(
+            upload, monkeypatch, ack_seconds=0.02, acknowledges=False
+        )
+        if only_at_the_end:
+            waited = []
+            real = upload._wait_for_the_line
+
+            def only_the_ninth(*args):
+                waited.append(1)
+                if len(waited) > 8:
+                    real(*args)
+
+            monkeypatch.setattr(upload, "_wait_for_the_line", only_the_ninth)
+        return upload.upload("BORD"), session
+
+    result, session = upload_once(only_at_the_end=False)
+    packets = result["chunks"] + 2
+    assert packets == 8, packets
+    assert session._ack_pending is False, "this was supposed to model usb"
+    assert session.deepest == 2, session.deepest
+    assert session.deepest_queue == 1, session.deepest_queue
+    # Seven or eight, run to run: the last block can still be at the transport
+    # when `upload()` returns, and on `usb` there is nothing to wait for that
+    # would say otherwise. See the note at the final wait in `upload()`.
+    assert len(session.acknowledged) >= packets - 1, len(session.acknowledged)
+
+    _, without = upload_once(only_at_the_end=True)
+    assert without.deepest == packets, (
+        f"removing the wait inside the loop left the depth at {without.deepest}, "
+        f"so the assertion above would not have caught its removal"
+    )
+
+
+def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
+    ruida, monkeypatch, deferring
+):
+    """
+    And the hole that branch had until this test was written.
+
+    On `udp` a machine that goes away leaves `_ack_pending` set for ever, and
+    the wait after the last block catches it. On `usb` there is no
+    acknowledgement to be missing: the handshaker takes our last block, the
+    transport write fails, and the queue is empty — so a wait that asks only
+    "is anything still out?" sees a clear line and `upload()` reports **6 of 6**
+    on the block that closes the file. Measured before the `connected` check
+    below existed: `{'chunks': 6}` — six of six — with the last block never
+    written through and the session already dropped.
+
+    What the engine does have is the drop itself: a failed transport write sets
+    `_responding = False` (`ruidasession.py:345-346`), which is one of the three
+    things `connected` is made of (`:154`), and every `write` after it raises
+    (`:186`). So the wait asks that too, and asks it first, because "the
+    connection broke" is a more specific answer than "it is taking too long".
+    """
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    session = deferring(
+        upload, monkeypatch, ack_seconds=0.02, acknowledges=False, stops_before=7
+    )
+    upload.per_chunk_seconds = 0.5
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    assert error.value.code == "upload.interrupted"
+    assert error.value.values == {"sent": 5, "chunks": 6}
+    assert "5 of 6" in str(error.value), str(error.value)
+    assert not session.connected
