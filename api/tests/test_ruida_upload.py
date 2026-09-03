@@ -565,6 +565,19 @@ def test_the_name_goes_over_the_line_in_eight_capitals(ruida):
     assert name.endswith(b"\x00")
 
 
+def test_a_space_never_reaches_the_panel(ruida):
+    """
+    Eight characters is little enough without spending them on gaps, and the
+    refusal below promises "letters or digits". So `my box` goes out as `MYBOX`,
+    not as `MY BOX` — one thing to say about the name, not two.
+    """
+    upload = RuidaUpload(ruida)
+
+    frames = upload.frames("my box", b"\x00")
+
+    assert frames[1][2:-1] == b"MYBOX"
+
+
 def test_the_conversation_opens_with_a_file_transfer(ruida):
     """
     The header, and then the payload in blocks that never cut a command in two.
@@ -656,7 +669,7 @@ def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch, tmp_path):
     The emulator gets a stand-in device, and that is not tidiness either. Every
     command it does not treat as realtime ends in
     `self.device.spooler.send(self.job, prevent_duplicate=True)`
-    (`ruida/emulator.py:160`) — the spooler of the live Ruida device this fixture
+    (`ruida/emulator.py:159`) — the spooler of the live Ruida device this fixture
     started, whose own thread executes what lands in it through the live
     `RuidaDriver`. And a few commands it does treat as realtime reach
     `self.device.driver` directly (`_home_device`, `:164-170`; `move_abs`,
@@ -722,11 +735,16 @@ def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch, tmp_path):
     spooler = _InertSpooler()
     driver = _RecordingDriver()
     said = []
-    emulator = RuidaEmulator(ruida.device, ruida.device.view.matrix)
+    stand_in = _StandInDevice(ruida.device, spooler, driver)
+    # Built *with* the stand-in, not patched onto it afterwards: `__init__` hands
+    # `device.driver` to its own `RDJob` (`ruida/emulator.py:57-58`), and
+    # `RDJob.process` calls `self._driver.plot(...)` (`rdjob.py:741`). Patched
+    # after construction, that job holds the live driver, and whether it is ever
+    # asked to plot then depends on who runs the job — exactly the "it depends on
+    # who calls what" this test refuses everywhere else.
+    emulator = RuidaEmulator(stand_in, ruida.device.view.matrix)
+    assert emulator.job._driver is driver
     emulator.channel = said.append
-    monkeypatch.setattr(
-        emulator, "device", _StandInDevice(ruida.device, spooler, driver)
-    )
     packets = upload.frames("BORD", payload)
     assert len(packets) - 2 >= 2, "the payload went out in one block after all"
 

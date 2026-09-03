@@ -27,8 +27,9 @@ from .edits import DesignError
 CHUNK = 1000
 
 #: What the machine keeps of a name. The emulator reads characters until the NUL
-#: (`ruida/emulator.py:749-753`) and a Ruida's panel shows eight; we cut and
-#: upper-case here, before it goes out, so the screen says what the panel says.
+#: (`ruida/emulator.py:749-753`) and hands back eight capitals when asked for a
+#: document's name (`:791`, `name.upper()[:8]`) — that is what a panel shows. We
+#: cut and upper-case here, before it goes out, so the screen says the same.
 NAME_LENGTH = 8
 
 FILE_TRANSFER = b"\xe8\x02"
@@ -36,8 +37,15 @@ SET_FILENAME = b"\xe7\x01"
 
 
 def machine_name(name: str) -> str:
-    """The name as the machine keeps it: printable ASCII, capitals, eight long."""
-    kept = "".join(c for c in (name or "").strip() if 32 <= ord(c) < 127)
+    """The name as the machine keeps it: printable ASCII, capitals, eight long.
+
+    The space goes too, and not only at the ends: eight characters is little
+    enough without spending them on gaps, and a name is already silently cut to
+    fit — `MY BOX` becomes `MYBOX`. One sentence about what is left over reads
+    better than two about what is left out, and the screen (task 5) shows what
+    will actually stand on the panel.
+    """
+    kept = "".join(c for c in (name or "") if 32 < ord(c) < 127)
     return kept.upper()[:NAME_LENGTH]
 
 
@@ -54,11 +62,15 @@ def _blocks(payload: bytes) -> list[bytes]:
     payload in a single piece. Every real job is over 1000 bytes, so raw slicing
     would have damaged one command per seam in all of them.
 
-    A command longer than `CHUNK` goes out whole, in an oversized block of its
-    own: cutting it is the exact damage this function exists to avoid, and the
-    engine's own `divide_data_into_queue` overshoots for the same reason.
-    Measured on this project's designs the longest command is 16 bytes, so this
-    is a guard, not a case anybody meets.
+    The block is closed *before* the limit rather than on it, so "at most
+    `CHUNK` bytes" stays literally true — the engine lets its own block run just
+    past 1000 instead (`controller.py:83`), which would work as well, but then
+    nothing bounds a packet and the tests could not say what a block is.
+
+    The single exception: a command longer than `CHUNK` all by itself goes out
+    whole, in an oversized block. Cutting it is the exact damage this function
+    exists to avoid. Measured on this project's designs the longest command is
+    16 bytes, so this is a guard, not a case anybody meets.
     """
     out: list[bytes] = []
     block = b""
