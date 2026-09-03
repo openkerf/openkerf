@@ -557,7 +557,7 @@
 		     which board it is, so the reader should not have to. -->
 		<div class="reading" bind:this={doorway}>
 			<label class="btn primary file">
-				{t('result.read')}
+				{t('library.readBoard')}
 				<input
 					type="file"
 					accept="image/*"

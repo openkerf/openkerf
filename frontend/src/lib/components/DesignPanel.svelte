@@ -1862,7 +1862,7 @@
 						<button
 							class="rot"
 							disabled={edits.busy || index === 0}
-							title={index === 0 ? t('reason.alreadyFirst') : t('panel.order.burnEarlier')}
+							title={index === 0 ? t('reason.alreadyFirst') : t('layerMenu.earlier')}
 							onclick={() => moveLayer(op.id, 'up')}
 						>↑ {t('panel.order.earlier')}</button>
 						<button
@@ -1870,7 +1870,7 @@
 							disabled={edits.busy || index === plainLayers.length - 1}
 							title={index === plainLayers.length - 1
 								? t('reason.alreadyLast')
-								: t('panel.order.burnLater')}
+								: t('layerMenu.later')}
 							onclick={() => moveLayer(op.id, 'down')}
 						>↓ {t('panel.order.later')}</button>
 					</div>

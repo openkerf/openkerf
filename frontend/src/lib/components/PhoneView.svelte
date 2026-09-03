@@ -123,6 +123,19 @@
 	 * disappears. An unplugged USB cable should not cost half a screen.
 	 */
 	let imagePiece = $state(false);
+	/**
+	 * The still refreshes itself while the stream is out.
+	 *
+	 * Every two seconds, and only while there is something to show: a picture of the
+	 * bed that is a minute old is worse than none, and a timer that runs when nobody is
+	 * looking is a request per two seconds for nothing.
+	 */
+	let stillTick = $state(0);
+	$effect(() => {
+		if (!imagePiece || !camera.state.running) return;
+		const timer = setInterval(() => (stillTick += 1), 2000);
+		return () => clearInterval(timer);
+	});
 	$effect(() => {
 		camera.generation;
 		imagePiece = false;
@@ -543,7 +556,14 @@
 	{#snippet beeld()}
 		<!-- Camera: if you can look, you look. -->
 		<div class="podium">
-			<img src={camera.src} alt={t('phone.cameraAlt')} onerror={() => (imagePiece = true)} />
+			<!-- A dropped stream falls back to a still that refreshes, instead of to the
+			     browser's broken-image icon. `frame.png` says in the engine layer that it
+			     is there for exactly this, and nothing used it. -->
+			{#if imagePiece}
+				<img src={camera.still(stillTick)} alt={t('phone.cameraAlt')} />
+			{:else}
+				<img src={camera.src} alt={t('phone.cameraAlt')} onerror={() => (imagePiece = true)} />
+			{/if}
 		</div>
 	{/snippet}
 
@@ -872,7 +892,7 @@
 		<div class="buttons">
 			{#if quiet}
 				<button class="brake resume" disabled={control.needsToken || !connected} onclick={() => control.resume()}>
-					{t('phone.resume')}
+					{t('transport.resume')}
 				</button>
 			{:else}
 				<!-- The same question the desktop asks — `transportAllowed` in `$lib/api`.
@@ -887,7 +907,7 @@
 					})}
 					onclick={pauzeer}
 				>
-					{pauzeGevraagd ? t('phone.pausing') : t('job.pause')}
+					{pauzeGevraagd ? t('phone.pausing') : t('transport.pause')}
 				</button>
 			{/if}
 			<!-- Without a connection this tap arrives nowhere. A red button that looks
@@ -899,7 +919,7 @@
 				disabled={control.needsToken || !connected}
 				onclick={() => control.stop()}
 			>
-				{t('job.stop')}
+				{t('transport.stop')}
 			</button>
 		</div>
 	</div>

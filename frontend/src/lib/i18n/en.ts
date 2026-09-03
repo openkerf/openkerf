@@ -295,7 +295,11 @@ export const en = {
 		one: 'One island is too small for a bridge of this width and will fall out. Try a narrower bridge.',
 		other: '{n} islands are too small for a bridge of this width and will fall out. Try a narrower bridge.'
 	},
-	'stencil.wide': 'The bridge is wider than the gap it spans, so it will look like a solid block rather than a bridge.',
+		'stencil.open': {
+		one: 'One line in this shape does not close, so what would fall out of it is not certain. Close it, or leave it out of the stencil.',
+		other: '{n} lines in this shape do not close, so what would fall out of them is not certain. Close them, or leave them out of the stencil.'
+	},
+'stencil.wide': 'The bridge is wider than the gap it spans, so it will look like a solid block rather than a bridge.',
 	'stencil.bridge': 'Bridge width',
 	'stencil.per': 'Bridges per island',
 	'stencil.untried': 'No stencil has been cut out of this app yet: 3 mm is a starting point, not a measurement. Try one on a scrap of the cardboard you will spray.',
@@ -315,7 +319,7 @@ export const en = {
 	'action.stencil': 'Make a stencil…',
 	'explain.stencil': 'Finds the parts a cut-out would set loose and bridges them to the sheet',
 	'explain.library': 'What works on your own laser: a speed and a power per material and thickness.',
-	'explain.testGrid': 'Burn a board of squares, photograph it, and turn the best square into a setting.',
+	'explain.testGrid': 'Burn a board of squares, photograph it, and turn the best square into a preset.',
 	'action.fill': 'Fill — for rastering',
 	'action.unfill': 'Remove fill',
 	// "Burn only once": one row, two wordings, for a jig frame in a series. The word is
@@ -406,7 +410,7 @@ export const en = {
 	'layerMenu.visible': 'Visible on the canvas',
 	'layerMenu.earlier': 'Burn earlier',
 	'layerMenu.later': 'Burn later',
-	'layerMenu.material': 'Choose a material setting…',
+	'layerMenu.material': 'Choose a material preset…',
 	'layerMenu.settings': 'Settings…',
 	'layerMenu.remove': 'Remove layer',
 
@@ -444,8 +448,8 @@ export const en = {
 		one: 'Opening replaces the whole project: the design, the sheet and the material come from the file.',
 		other: 'Opening replaces the whole project: the design, all {n} sheets and the material come from the file.'
 	},
-	'replace.emptiesBed': 'Starting over empties the bed. Your materials and settings stay.',
-	'replace.emptiesSheets': 'Starting over empties the bed and removes all {n} sheets. Your materials and settings stay.',
+	'replace.emptiesBed': 'Starting over empties the bed. Your materials and presets stay.',
+	'replace.emptiesSheets': 'Starting over empties the bed and removes all {n} sheets. Your materials and presets stay.',
 	'replace.recoverable': 'An automatically saved version of this sheet from {when} stays; it is offered at the next start. The other sheets are not.',
 	'replace.saveAndStart': 'Save and start',
 	'replace.saveAndOpen': 'Save and open',
@@ -598,6 +602,9 @@ export const en = {
 	'job.toPoint': 'Go to a point',
 	'job.keep': 'Keep',
 	'job.unlock': 'Unlock',
+	'job.lock': 'Hold',
+	'job.lock.why': 'Hold the motors again, so the head stays where it is.',
+	'job.unlock.why': 'Release the motors, so you can push the head aside by hand.',
 	'job.toZero': 'To zero point',
 	'job.clearZero': 'Clear',
 	'job.material': 'Material',
@@ -631,16 +638,12 @@ export const en = {
 		other: 'There are already {n} jobs in the queue; this one goes behind them.'
 	},
 	'job.risky': {
-		one: 'One layer uses settings that were not measured with a test grid. On unknown material: try a scrap first.',
-		other: '{n} layers use settings that were not measured with a test grid. On unknown material: try a scrap first.'
+		one: 'One layer uses presets that were not verified on a test grid. On unknown material: try a scrap first.',
+		other: '{n} layers use presets that were not verified on a test grid. On unknown material: try a scrap first.'
 	},
 	'job.nothing.body': 'The bed is empty, or everything on it sits in a layer that does not burn. Draw or import something, give it a layer, and come back here.',
 	'job.startJob': 'Start job',
 	'job.starting': 'Working…',
-	'job.resume': 'Resume',
-	'job.pause': 'Pause',
-	'job.stop': 'Stop',
-	'job.stop.onMachine': 'on the machine',
 	'job.stepSize': 'Step size',
 	'job.startNow': 'Start now',
 	'job.steps': '{done} / {total} steps',
@@ -671,16 +674,15 @@ export const en = {
 	'job.pause.keepGoing': 'Carry on where the head left off',
 	'job.pause.stopHead': 'Stop the head without losing the job',
 	'job.stop.now': 'Abort the job right away',
-	'job.stop.noServer': 'No connection to OpenKerf — this button will not arrive. Stopping is only possible with the emergency stop on the machine now.',
 	'job.blocked.noServer': 'No connection to OpenKerf — the command will not arrive',
 	'job.blocked.token': 'Fill in a valid token first',
 	'job.blocked.noServerMove': 'No connection to OpenKerf — the head will not move from here',
 	'job.blocked.duringJob': 'Not possible while a job is running',
 	'job.adjust.power': 'Power',
 	'job.adjust.speed': 'Speed',
-	'preset.source.measured': 'measured',
-	'preset.source.unmeasured': 'not measured',
-	'preset.source.extrapolated': 'extrapolated — not measured',
+	'preset.source.measured': 'verified',
+	'preset.source.unmeasured': 'not verified',
+	'preset.source.extrapolated': 'extrapolated — not verified',
 	'preset.source.manual': 'set by hand',
 	'preset.source.someoneElse': 'from someone else\'s machine',
 	'preset.source.otherMaterial': 'other material',
@@ -955,8 +957,6 @@ export const en = {
 	'panel.order': 'Order · {kind}',
 	'panel.order.earlier': 'Earlier',
 	'panel.order.later': 'Later',
-	'panel.order.burnEarlier': 'Burn earlier',
-	'panel.order.burnLater': 'Burn later',
 	'panel.drop.ask': 'Throw away “{label}”? The shapes stay, the settings do not.',
 	'panel.drop.confirm': 'Remove',
 	'panel.drop.layer': 'Remove layer…',
@@ -1063,7 +1063,7 @@ export const en = {
 	'import.addedMachines': { one: '1 machine profile added', other: '{n} machine profiles added' },
 	'import.nothingNew': 'Nothing is added: this file is already entirely in your library.',
 	'import.sameBoard': 'Same board, different name?',
-	'import.sameBoard.body': 'These materials from the file look like something you already have. Merging puts their settings with the material you already know; leave it and you get two.',
+	'import.sameBoard.body': 'These materials from the file look like something you already have. Merging puts their presets with the material you already know; leave it and you get two.',
 	'import.mergeWith': 'Merge {name} with {match}',
 	'import.conflicts': { one: '1 setting clashes', other: '{n} settings clash' },
 	'import.conflicts.body': 'Same board, same cut, different numbers. Choose which wins — your own values were measured on your machine.',
@@ -1083,7 +1083,7 @@ export const en = {
 	'import.done.updated': '{n} updated',
 	'import.done.skipped': '{n} left unchanged',
 	'import.done.hidden': 'Some of it belongs to another machine; switch off “Only {machine}” to see it.',
-	'library.evidence.lost': 'This setting says it was measured, but no test grid hangs off it — because it came from an import, for instance. So the evidence is no longer with it.',
+	'library.evidence.lost': 'This preset says it was measured, but no test grid hangs off it — because it came from an import, for instance. So the evidence is no longer with it.',
 	'library.evidence.none': 'No test grid: these values were not measured but entered.',
 	'library.makeGrid': 'Make a test grid',
 	'library.thickness': 'Thickness',
@@ -1097,7 +1097,7 @@ export const en = {
 	'library.onlyMachine': 'Only {machine}',
 	'library.applyTo': 'Apply to',
 	'library.layerOption': 'Layer {n} · {label}',
-	'library.noLayer': 'There is no layer to put a setting on yet. Make one in the Layers tab; after that one tap puts the speed and power on it.',
+	'library.noLayer': 'There is no layer to put a preset on yet. Make one in the Layers tab; after that one tap puts the speed and power on it.',
 	'library.material.placeholder': 'e.g. birch plywood',
 	'library.welcome.title': 'No materials yet',
 	'library.welcome.body': 'Here you record what works on your own laser: a speed and a power per material and thickness, with the photo of the test grid they come from. Next time 3 mm birch is one tap instead of working it out again.',
@@ -1115,22 +1115,22 @@ export const en = {
 	'library.pickMaterial': 'Pick a material on the left for everything that goes with it.',
 	'library.allThicknesses': 'All thicknesses',
 	'library.noThickness': 'no thickness',
-	'library.noPresets': 'No settings for {material} yet. A test grid burns a series of squares on this material; from the best square you make a setting that ends up here.',
-	'library.noneForThickness': 'No setting for {thickness} mm. Pick another thickness, or burn a test grid for it.',
-	'library.manual': 'Add a setting by hand',
+	'library.noPresets': 'No presets for {material} yet. A test grid burns a series of squares on this material; from the best square you make a preset that ends up here.',
+	'library.noneForThickness': 'No preset for {thickness} mm. Pick another thickness, or burn a test grid for it.',
+	'library.manual': 'Add a preset by hand',
 	'library.material': 'Material',
 	'library.pickMaterialOption': 'Pick a material',
 	'library.filteredMaterial': 'Filtered material',
 	'library.operation': 'Operation',
-	'library.manual.note': 'Entered by hand means: not measured. This setting therefore gets the “Manual” badge.',
+	'library.manual.note': 'Entered by hand means: not measured. This preset therefore gets the “Manual” badge.',
 	'library.profiles': 'Machine profiles ({n})',
-	'library.profiles.why': 'A setting is only reusable when you know which machine it was made on — which is why the profile stands apart from the setting.',
+	'library.profiles.why': 'A preset is only reusable when you know which machine it was made on — which is why the profile stands apart from the preset.',
 	// Two states, not one. A machine that is not here may come back when you plug it in;
 	// a profile that points at no machine at all is one somebody typed or one this
 	// library let go of when its slot went to another laser, and its way out is a merge.
 	'library.profile.deviceGone': 'machine not here',
 	'library.profile.deviceGone.title':
-		'No machine the engine knows about belongs to this profile. Plug the laser in, or its settings were wiped.',
+		'No machine the engine knows about belongs to this profile. Plug the laser in, or its presets were wiped.',
 	'library.profile.noDevice': 'no machine',
 	'library.profile.noDevice.title':
 		'This profile points at no machine at all. Merge it into the machine it belongs to.',
@@ -1142,9 +1142,9 @@ export const en = {
 	'library.machine.placeholder': 'e.g. 5030 CO2',
 	'library.profile.mergeInto': 'Merge into {machine}',
 	'library.profile.mergeInto.why':
-		'Two profiles for one laser: the settings, the boards and the tube power move to {machine}, and this row goes.',
+		'Two profiles for one laser: the presets, the boards and the tube power move to {machine}, and this row goes.',
 	'library.exchange': 'Exchange the library',
-	'library.exchange.body': 'One file with your materials, settings, machine profiles and the photos of your test grids — for a backup or another computer.',
+	'library.exchange.body': 'One file with your materials, presets, machine profiles and the photos of your test grids — for a backup or another computer.',
 	'library.export': 'Export the library',
 	'library.export.nothing': 'There is nothing to export yet',
 	'library.import': 'Import a library…',
@@ -1156,10 +1156,10 @@ export const en = {
 	'library.interval': 'Line spacing',
 	'library.photoAria': 'Photo of the test grid',
 	'library.photo.circled': 'The test grid, with the square at row {row}, column {column} circled',
-	'library.photo.title': 'Photo of the test grid these settings come from',
+	'library.photo.title': 'Photo of the test grid these presets come from',
 	'library.apply.title': 'Put speed and power on layer {n}',
 	'library.apply.mismatch': 'Careful: these are values for {operation}, and layer {n} is not meant for that',
-	'library.more.aria': 'More for this setting',
+	'library.more.aria': 'More for this preset',
 	'library.more.title': 'More — or right-click the row',
 	'library.drop.ask': 'Throw away {thickness}{operation} of {material}?',
 	'library.drop.measured': 'This one was measured on a test grid.',
@@ -1194,7 +1194,7 @@ export const en = {
 	'library.menu.adjust': 'Adjust the values',
 	'library.menu.makeGrid': 'Make a test grid for {material}',
 	'library.menu.share': 'Share with Presetariat',
-	'library.menu.remove': 'Remove setting',
+	'library.menu.remove': 'Remove preset',
 	'library.share.failed': 'Sharing did not work.',
 	// ── Offering one of your own ──────────────────────────────────────────────────
 	//
@@ -1210,9 +1210,9 @@ export const en = {
 	'library.share.why.derived':
 		'These numbers came out of the catalogue itself, from {id}, so they go back as a guess that leans on that entry rather than as evidence.',
 	'library.share.why.boardGone':
-		'The test board behind this setting is gone, and a measurement in the catalogue is followed back to its board.',
+		'The test board behind this preset is gone, and a measurement in the catalogue is followed back to its board.',
 	'library.share.why.otherMachine':
-		'This setting is filed under a different laser than the board it was burned on, so for this machine it is a starting point.',
+		'This preset is filed under a different laser than the board it was burned on, so for this machine it is a starting point.',
 	'library.share.why.noOutcome':
 		'The board is still here, but nobody wrote down what came out of the material, and a speed with no outcome beside it is not something anybody else can judge.',
 	'library.share.charring': 'The edge',
@@ -1226,7 +1226,7 @@ export const en = {
 	'library.share.cutThrough.no': 'No, it stayed attached',
 	'library.share.kerf': 'Kerf',
 	'library.share.outcome.why':
-		'Say how it came out and this goes in as a measurement, with its board behind it. It is kept on the setting, so you are asked once.',
+		'Say how it came out and this goes in as a measurement, with its board behind it. It is kept on the preset, so you are asked once.',
 	'library.share.handle': 'Your GitHub handle',
 	'library.share.handle.placeholder': 'e.g. jelle-t',
 	'library.share.handle.why':
@@ -1254,7 +1254,7 @@ export const en = {
 		'Names other people use for the same board, separated by commas. An imported library that calls it by one of these lands on this material instead of making a second one.',
 	'library.material.merge.needsTwo': 'There is only one material to merge',
 	'library.material.merge.body':
-		'Everything on {material} moves over: the settings, the test boards, the recipes and the photographs. The name stays as a name the other material also answers to, so an import that still uses it lands in the right place.',
+		'Everything on {material} moves over: the presets, the test boards, the recipes and the photographs. The name stays as a name the other material also answers to, so an import that still uses it lands in the right place.',
 	'library.material.merge.pick': 'Merge into',
 	'library.material.merge.choose': '— pick a material —',
 	'library.material.merge.confirm': 'Merge',
@@ -1269,7 +1269,7 @@ export const en = {
 	'library.material.remove.confirm': 'Remove',
 	'library.material.remove.confirmAll': 'Remove it with everything on it',
 	'library.filteredOut':
-		'The search “{query}” hides every setting for {material}. Clear it to see them again.',
+		'The search “{query}” hides every preset for {material}. Clear it to see them again.',
 	// ── Where an imported setting comes from ──────────────────────────────────────
 	//
 	// The catalogue these come from is CC BY, so the credit is a condition of the copy
@@ -1278,11 +1278,11 @@ export const en = {
 	'library.origin': 'Measured on',
 	'library.origin.laser': '{kind}, {watt} W',
 	'library.origin.unknown':
-		'Not recorded. This setting came in on an import that did not say which laser it was measured on.',
+		'Not recorded. This preset came in on an import that did not say which laser it was measured on.',
 	'library.credit': 'Credit',
 	'library.batch.undo': 'Take this import back',
 	'library.batch.undo.why':
-		'Removes every setting that came in with this import, and the materials it brought along that nothing else uses.',
+		'Removes every preset that came in with this import, and the materials it brought along that nothing else uses.',
 	'library.batch.undone': {
 		one: 'One setting removed, with the materials that came in with it.',
 		other: '{n} settings removed, with the materials that came in with them.'
@@ -1342,7 +1342,7 @@ export const en = {
 	'grid.code.cost':
 		'It takes a strip of {strip} below the squares, about {time} of burning, and modules of {module}.',
 	'grid.cutout.setting':
-		'The rim is cut at {speed} mm/s and {power}%, {passes}× — the cut setting your library has for this material and thickness.',
+		'The rim is cut at {speed} mm/s and {power}%, {passes}× — the cut preset your library has for this material and thickness.',
 	'grid.cutout.how': {
 		one: 'The cut runs {margin} outside everything else on the board, with one bridge of {tab} left uncut so the tile stays in the sheet until you break it out.',
 		other: 'The cut runs {margin} outside everything else on the board, with {n} bridges of {tab} left uncut so the tile stays in the sheet until you break it out.'
@@ -1430,8 +1430,8 @@ export const en = {
 	'grid.lead.right': '{axis} increases to the right',
 	'grid.lead.down': '{axis} downwards',
 	'grid.recipe': 'Recipe',
-	'grid.recipe.none': '— no saved settings yet —',
-	'grid.recipe.pick': '— pick a saved setting —',
+	'grid.recipe.none': '— no saved recipes yet —',
+	'grid.recipe.pick': '— pick a saved recipe —',
 	'grid.recipe.allMaterials': 'all materials',
 	'grid.recipe.dontSave': 'Do not save',
 	'grid.recipe.save': 'Save this…',
@@ -1713,16 +1713,16 @@ export const en = {
 	// prefilled, because a reader should not have to translate a driver name.
 	'setup.laser': 'The laser itself',
 	'setup.laser.body':
-		'What kind of light this machine makes, and how much of it. OpenKerf needs both before it can tell which settings other people have measured would suit your laser.',
+		'What kind of light this machine makes, and how much of it. OpenKerf needs both before it can tell which presets other people have measured would suit your laser.',
 	'setup.laser.kind': 'Kind of laser',
 	'setup.laser.kind.hint':
 		'Filled in from the model you picked. A glass tube and an RF metal tube cannot be told apart from that, so correct it if you know better.',
 	'setup.laser.watt': 'Tube power',
 	'setup.laser.watt.why':
-		'The number on the tube or on the invoice. It decides which settings can be a starting point for this laser: the same percentage on twice the power chars and burns through.',
+		'The number on the tube or on the invoice. It decides which presets can be a starting point for this laser: the same percentage on twice the power chars and burns through.',
 	'setup.laser.wattUnknown': 'I am not sure how powerful my tube is',
 	'setup.laser.wattUnknown.then':
-		'Then OpenKerf matches on the kind of laser alone, and says so on every setting it offers you.',
+		'Then OpenKerf matches on the kind of laser alone, and says so on every preset it offers you.',
 	'setup.laser.lens': 'Lens',
 	// The six kinds. Values of `catalogue_schema.LASER_KINDS`, so a preset from the
 	// shared catalogue and a machine of ours speak of the same thing.
@@ -1778,8 +1778,8 @@ export const en = {
 	// not one setting for it — and everything in it is measured on the author's own
 	// library, where the active laser had three settings of its own and a phantom
 	// profile beside it carried twenty-six.
-	'starter.region': 'Settings for this machine',
-	'starter.title.nothing': 'This machine has no settings yet.',
+	'starter.region': 'Presets for this machine',
+	'starter.title.nothing': 'This machine has no presets yet.',
 	'starter.title.unburned': 'Nothing has been burned on this machine yet.',
 	'starter.title.askMachine': 'What kind of laser is this?',
 	// Two headings for one state, because it has two causes. The wizard fills the kind
@@ -1789,33 +1789,33 @@ export const en = {
 	'starter.title.askWatt': 'How powerful is this laser?',
 	'starter.away': 'Not now',
 	'starter.away.why': 'Put this away. It will not be offered again for this machine.',
-	'starter.machine.none': 'No machine is active, so there is nothing to fetch settings for.',
+	'starter.machine.none': 'No machine is active, so there is nothing to fetch presets for.',
 	// One word for both values, because a machine that has not said what kind of laser
 	// it is and one that has not said how strong it is are the same silence.
 	'starter.unrecorded': 'not recorded',
 	'starter.has.emptyLibrary': 'There are no materials in this library yet either.',
 	'starter.has.none': {
 		one: 'The one material in this library has no setting for it.',
-		other: 'Not one of the {n} materials in this library has a setting for it.'
+		other: 'Not one of the {n} materials in this library has a preset for it.'
 	},
 	'starter.has.some': {
-		one: 'One material of the {known} in this library has a setting for it.',
-		other: '{n} materials of the {known} in this library have a setting for it.'
+		one: 'One material of the {known} in this library has a preset for it.',
+		other: '{n} materials of the {known} in this library have a preset for it.'
 	},
 	'starter.has.unburned': {
 		one: 'Its one setting came out of a catalogue and has never been burned here.',
 		other: 'Its {n} settings came out of a catalogue and not one of them has been burned here.'
 	},
 	'starter.ask.body':
-		'Without these two OpenKerf cannot tell which settings would suit this laser: a CO2 setting on a diode is not a starting point, and the same percentage on twice the power chars and burns through.',
+		'Without these two OpenKerf cannot tell which presets would suit this laser: a CO2 preset on a diode is not a starting point, and the same percentage on twice the power chars and burns through.',
 	'starter.ask.record': 'Save and look',
 	'starter.ask.notSure': 'I am not sure',
 	'starter.ask.kindFirst':
 		'Choose the kind of laser first: without it nothing can be matched, whatever the tube power says.',
 	'starter.ask.notSure.body':
-		'Not knowing the tube power is a fair answer: then the match is on the kind of laser alone, and every setting offered says so.',
+		'Not knowing the tube power is a fair answer: then the match is on the kind of laser alone, and every preset offered says so.',
 	'starter.unburned.body':
-		'A setting out of a catalogue is somebody else’s number on somebody else’s laser. One board burned on this one turns it into a measurement of your own.',
+		'A preset out of a catalogue is somebody else’s number on somebody else’s laser. One board burned on this one turns it into a measurement of your own.',
 	'starter.unburned.grid': 'Burn a test grid',
 	'starter.look': 'Show what would suit this laser',
 	'starter.hide': 'Fold this list up again',
@@ -1845,8 +1845,8 @@ export const en = {
 	'starter.allStartingPoints':
 		'Every one of these is a number somebody typed, not one measured off a board. Burn a test grid before you trust one of them.',
 	'starter.take': 'Add these',
-	'starter.take.why': 'Add the settings for {material} to this library, for this machine.',
-	'starter.tier.measured': 'burned',
+	'starter.take.why': 'Add the presets for {material} to this library, for this machine.',
+	'starter.tier.measured': 'verified',
 	'starter.tier.startingPoint': 'starting point',
 	'starter.row.values': '{speed} mm/s at {power}%',
 	'starter.row.unmatched': 'power not matched',
@@ -2007,7 +2007,6 @@ export const en = {
 	'phone.stopOnMachine': 'No connection — stopping is only possible with the button on the machine.',
 	'phone.retry': 'Try again',
 	'phone.retry.auto': 'Try again (automatically in {seconds} s)',
-	'phone.resume': 'Resume',
 	'phone.pausing': 'Pausing…',
 	'phone.operation.cut': 'cut',
 	'phone.operation.engrave': 'engrave',
@@ -2049,7 +2048,6 @@ export const en = {
 	// the reader does not have to find it in a list. The four ways this can fail each send
 	// the reader somewhere else, so the server's own sentence stands and this only adds the
 	// way out that is on screen anyway.
-	'result.read': 'Read a board from a photograph',
 	'result.read.how': 'The board names itself: OpenKerf reads the code on the plank and opens that board. Photograph it straight from above, with the code in frame.',
 	'result.read.busy': 'Reading the code…',
 	'result.read.found': 'This is board {name}; the photograph is filed under it.',
@@ -2100,8 +2098,8 @@ export const en = {
 	'sheetMat.thickness': 'Thickness in millimetres',
 	'sheetMat.other': 'other',
 	'sheetMat.otherAria': 'Another thickness in millimetres',
-	'sheetMat.noMaterial': 'Without a material the library shows everything and the preflight cannot see whether a setting belongs to this sheet.',
-	'sheetMat.noPresets': 'No settings in the library for this material yet. A test grid is the shortest way there.',
+	'sheetMat.noMaterial': 'Without a material the library shows everything and the preflight cannot see whether a preset belongs to this sheet.',
+	'sheetMat.noPresets': 'No presets in the library for this material yet. A test grid is the shortest way there.',
 	'sheetMat.presets': {
 		one: '1 setting in the library for this material.',
 		other: '{n} settings in the library for this material.'
@@ -2117,6 +2115,11 @@ export const en = {
 		other: '{n} elements'
 	},
 	'sheets.materialNotFilled': 'not filled in',
+	'sheets.tiling.head': 'Larger than the bed',
+	'sheets.tiling.why': 'A plate that does not fit is burned in tiles: the app leaves a margin free, lets the tiles overlap, and puts alignment markers in that overlap. These three decide how much room that takes.',
+	'sheets.tiling.margin': 'Margin (mm)',
+	'sheets.tiling.overlap': 'Overlap (mm)',
+	'sheets.tiling.marker': 'Marker (mm)',
 	'sheets.removeSheet': 'Remove the sheet',
 	'sheets.needsOne': 'A project has at least one sheet',
 	'sheets.removeAsk': '{sheet} holds {what}. Removing it throws that work away — this cannot be undone.',
@@ -2125,6 +2128,7 @@ export const en = {
 	// ── Camera calibration & fonts ────────────────────────────────────────────────
 	'calibrate.title': 'Calibrate the camera',
 	'calibrate.lead': 'Drag the four points to the corners of the bed, starting top left and going clockwise. After that the app knows where every point in the image lies on the bed, and your design lands in the right place.',
+	'calibrate.which': 'Camera',
 	'calibrate.stageAria': 'Camera image with four draggable corner points',
 	'calibrate.rawAlt': 'Unprocessed camera image',
 	'font.label': 'Font ({n} available)',
@@ -2554,11 +2558,11 @@ export const en = {
 	// without them says less than the English one with them.
 	'api.library.machine.wattRange': 'A tube power between {min} and {max} watt, please.',
 	'api.library.starter.needsKind':
-		'OpenKerf does not know what kind of laser {machine} is. A CO2 setting on a diode is not a starting point.',
+		'OpenKerf does not know what kind of laser {machine} is. A CO2 preset on a diode is not a starting point.',
 	'api.library.starter.needsWatt':
-		'OpenKerf does not know how powerful {machine} is, so it cannot tell which settings would suit it. Fill in the tube power, or say you are not sure and see everything for this kind of laser.',
+		'OpenKerf does not know how powerful {machine} is, so it cannot tell which presets would suit it. Fill in the tube power, or say you are not sure and see everything for this kind of laser.',
 	'api.library.starter.noMachine':
-		'There is no machine active, so there is nothing to fetch settings for.',
+		'There is no machine active, so there is nothing to fetch presets for.',
 	'api.library.starter.dismissNoMachine':
 		'There is no machine active, so there is no offer to put away.',
 	// The refusals the material library's own verbs can produce. Every one of these is
@@ -2570,7 +2574,7 @@ export const en = {
 		'There is already a material of that name. Merge the two instead of giving them the same name.',
 	'api.library.material.mergeSelf': 'A material cannot be merged into itself.',
 	'api.library.grid.cutoutNeedsMaterial':
-		'Cutting the tile loose needs a material, so its cut setting can be looked up.',
+		'Cutting the tile loose needs a material, so its cut preset can be looked up.',
 	'api.library.machine.mergeSelf':
 		'Choose a different machine profile to move this one’s work into.',
 	'api.library.machine.mergeActive':
@@ -2580,17 +2584,17 @@ export const en = {
 	'api.library.preset.kerfRange':
 		'The catalogue holds a kerf between 0 and {max} millimetres, and this one is {kerf}.',
 	'api.library.adopt.noMachine':
-		'There is no machine active, so there is nothing to attach these settings to.',
+		'There is no machine active, so there is nothing to attach these presets to.',
 	'api.presetariat.share.noWatt':
-		'This setting belongs to a machine whose tube power is not recorded, so nobody else can tell whether it applies to theirs.',
+		'This preset belongs to a machine whose tube power is not recorded, so nobody else can tell whether it applies to theirs.',
 	'api.presetariat.share.noKind':
-		'This setting belongs to a machine whose kind of laser is not recorded, and a CO2 setting is not a starting point for a diode.',
+		'This preset belongs to a machine whose kind of laser is not recorded, and a CO2 preset is not a starting point for a diode.',
 	'api.presetariat.share.badHandle':
 		'A GitHub handle is letters and digits, with single hyphens between them and none at either end.',
 	'api.presetariat.share.materialNameTooShort':
-		'The catalogue searches on the material name, so it needs at least two characters; rename this material before offering its settings.',
+		'The catalogue searches on the material name, so it needs at least two characters; rename this material before offering its presets.',
 	'api.presetariat.share.outOfRange':
-		'The catalogue holds {field} between {low} and {high}, and this setting says {value}.',
+		'The catalogue holds {field} between {low} and {high}, and this preset says {value}.',
 	'api.presetariat.share.needsCharring':
 		'Say how the edge came out, because a speed and a power with no outcome beside them is not something anybody else can judge.',
 	'api.presetariat.share.handleNotKept':

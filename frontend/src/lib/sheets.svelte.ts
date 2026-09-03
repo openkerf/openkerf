@@ -18,6 +18,20 @@ export type Sheet = {
 	material_id: number | null;
 	thickness_mm: number | null;
 	active: boolean;
+	/**
+	 * What a plate larger than the bed costs in room.
+	 *
+	 * The engine layer has validated these three all along (`sheets.py`), and refused
+	 * with sentences like "Make the overlap at least 12 mm" — while no screen had a
+	 * field for any of them. They are in the sheet editor now, beside the size they
+	 * belong to.
+	 */
+	tiling?: {
+		enabled: boolean;
+		margin_mm: number;
+		overlap_mm: number;
+		marker_size_mm: number;
+	};
 };
 
 export class SheetStore {

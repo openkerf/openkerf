@@ -21,6 +21,9 @@
 		shortest_mm: number | null;
 		skipped: number;
 		unbridged: number;
+		/** Contours that do not close. A stencil is a statement about what falls out of a
+		 *  closed shape; an open one has no inside, so nothing about it is certain. */
+		open_contours: number;
 	};
 
 	let {
@@ -94,6 +97,12 @@
 			     finished and that island still drops out. A narrower bridge is the way out,
 			     because a gap has to fit inside the contour it sits on. -->
 			<p class="hint warn">{t('stencil.unbridged', { n: report.unbridged })}</p>
+		{/if}
+		{#if report.open_contours}
+			<!-- The engine layer has counted these since the first version and the window
+			     never said so. An open contour has no inside, so "what falls out" is a
+			     guess there — and this is the one screen where that matters. -->
+			<p class="hint warn">{t('stencil.open', { n: report.open_contours })}</p>
 		{/if}
 		{#if tight}
 			<p class="hint warn">{t('stencil.wide')}</p>

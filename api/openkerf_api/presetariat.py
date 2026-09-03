@@ -444,7 +444,7 @@ class Presetariat:
             # printed it to the screen verbatim in an English interface, for all three
             # of the user's own KH-5030 presets.
             raise LibraryError(
-                "This setting belongs to a machine whose tube power is not recorded, "
+                "This preset belongs to a machine whose tube power is not recorded, "
                 "so nobody else can tell whether it applies to theirs.",
                 code="presetariat.share.noWatt",
             )
@@ -456,8 +456,8 @@ class Presetariat:
             # undescribed machine went out with `co2` in its file name — a claim about
             # somebody's optics that nobody made.
             raise LibraryError(
-                "This setting belongs to a machine whose kind of laser is not recorded, "
-                "and a CO2 setting is not a starting point for a diode.",
+                "This preset belongs to a machine whose kind of laser is not recorded, "
+                "and a CO2 preset is not a starting point for a diode.",
                 code="presetariat.share.noKind",
             )
 
@@ -470,7 +470,7 @@ class Presetariat:
         if len(str(preset["material_name"] or "").strip()) < 2:
             raise LibraryError(
                 "The catalogue searches on the material name, so it needs at least two "
-                "characters; rename this material before offering its settings.",
+                "characters; rename this material before offering its presets.",
                 code="presetariat.share.materialNameTooShort",
                 values={"material": str(preset["material_name"] or "")},
             )
@@ -869,7 +869,7 @@ def _within_the_schema(body: dict) -> None:
         if not low <= float(value) <= high:
             raise LibraryError(
                 f"The catalogue holds {field} between {low} and {high}, and this "
-                f"setting says {value}.",
+                f"preset says {value}.",
                 code="presetariat.share.outOfRange",
                 values={"field": field, "value": value, "low": low, "high": high},
             )

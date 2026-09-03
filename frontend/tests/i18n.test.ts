@@ -240,7 +240,8 @@ test('the translation is not accidentally still the source language', () => {
 		'status.openkerf.live', // a product name and a word Dutch borrowed whole
 		'canvas.bedSize', // "bed … mm": a unit, and a noun Dutch spells the same way
 		'setup.head.machines', // "OpenKerf — machines", a window title around the product name
-		'rotary.head' // "Rotary — OpenKerf", the same, and a rotary is a rotary in the workshop
+		'rotary.head', // "Rotary — OpenKerf", the same, and a rotary is a rotary in the workshop
+		'sheets.tiling.overlap' // "Overlap (mm)": Dutch borrowed the word whole, and mm is mm
 	]);
 	for (const [language, catalogue] of Object.entries(TRANSLATIONS)) {
 		for (const [key, value] of Object.entries(en)) {
@@ -484,6 +485,50 @@ test('a measurement on screen is written the way the reader writes numbers', asy
 	assert.equal(formatMm(241.24), '241,2');
 	bindLanguage(() => 'en');
 	assert.equal(formatMm(null), '—');
+});
+
+test('one English word does not quietly become two Dutch ones', () => {
+	// The translation may not split what the source language keeps together: two keys
+	// with the same English text and two different Dutch texts means the same button
+	// says something else depending on the screen. Measured before this round: sixteen
+	// such groups, among them "Resume" as *Hervatten* twice and *Hervat* on the phone,
+	// and "Paused" as *Pauze* in the top bar and *Gepauzeerd* in the panel.
+	//
+	// Eight of the sixteen are right, because English is the ambiguous one there: "Cut"
+	// is the clipboard and the operation, "Group" is a verb and a thing, "up" is a
+	// direction and a place. Those are listed here by their English text with the reason,
+	// so the next round does not open them again — and so a *new* divergence, which is
+	// what this test is for, stands out.
+	const DELIBERATE: Record<string, string> = {
+		Cut: 'the clipboard (Knippen) and the operation (Snijden) — English is the ambiguous one',
+		Group: 'a verb (Groeperen) and a thing (Groep)',
+		Design: 'a verb (Ontwerpen) and a thing (Ontwerp)',
+		Burning: 'a phase you are in (Aan het branden) and a column heading (Branden)',
+		'Leave it': 'a connection you leave hanging, a sheet you leave standing',
+		Size: 'the format of a generated shape (Formaat) and the measure of a corner (Maat)',
+		up: 'a direction to move in (naar boven) and an axis to raise (omhoog)',
+		left: 'a direction to shift in (naar links) and which corner (links)'
+	};
+	const byText = new Map<string, string[]>();
+	for (const [key, value] of Object.entries(en)) {
+		if (typeof value !== 'string') continue;
+		byText.set(value, [...(byText.get(value) ?? []), key]);
+	}
+	const split: string[] = [];
+	for (const [text, keys] of byText) {
+		if (keys.length < 2 || DELIBERATE[text]) continue;
+		const dutch = new Set(keys.map((key) => nl[key]));
+		if (dutch.size > 1) split.push(`"${text}" → ${[...dutch].join(' / ')} (${keys.join(', ')})`);
+	}
+	assert.deepEqual(split, [], `one English word, two Dutch ones: ${split.join(' | ')}`);
+	// And the list stays honest: an entry for a text that no longer has two keys is a
+	// leftover, and would hide a real divergence later.
+	for (const text of Object.keys(DELIBERATE)) {
+		assert.ok(
+			(byText.get(text) ?? []).length > 1,
+			`"${text}" is on the deliberate list but no longer sits under two keys`
+		);
+	}
 });
 
 test('no message is resolved once and kept', () => {

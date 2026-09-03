@@ -36,6 +36,7 @@
 		onJog,
 		onHome,
 		onUnlock,
+		onLock,
 		onFocus,
 		onFrame,
 		onCutPath,
@@ -65,6 +66,9 @@
 		/** `force` presses through the rotary guard — see the dialog below. */
 		onHome?: (force?: boolean) => void;
 		onUnlock?: () => void;
+		/** Hold the motors again. The engine layer has had this as long as `unlock`;
+		 *  the app offered only half the pair. */
+		onLock?: () => void;
 		onFocus?: (distanceMm: number) => void;
 		/** Sending the head around the outline, without burning. */
 		onFrame?: () => void;
@@ -938,7 +942,7 @@
 						disabled={!transportAllowed('resume', { able: actions, phase, blocked })}
 						title="{blockedReason ?? t('job.pause.keepGoing')} · {PAUSE_KEY}"
 						onclick={() => control.resume()}
-					>{t('job.resume')}</button>
+					>{t('transport.resume')}</button>
 				{:else}
 					<!-- On the phase and not on `job.running`: a job that has been spooled
 					     but not picked up sits at `running: false`, and then the top bar
@@ -951,7 +955,7 @@
 							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}`
 							: t('transport.pause.nothing')}
 						onclick={() => control.pause()}
-					>{t('job.pause')}</button>
+					>{t('transport.pause')}</button>
 				{/if}
 				<span class="now-stretch"></span>
 				<!-- Stop keeps its own space, away to the left of pause: a bad-tap here
@@ -962,12 +966,14 @@
 					class:dood={!connection.online}
 					disabled={!actions?.stop || control.tokenProbleem || !connection.online}
 					title={!connection.online
-						? t('job.stop.noServer')
+						? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
 						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}`}
 					onclick={() => control.stop()}
 				>
-					{#if connection.online}{t('job.stop')}{:else}{t('job.stop')}
-						<strong>{t('job.stop.onMachine')}</strong>{/if}
+					<!-- One key, not two glued together: "Stop" plus "on the machine" only
+					     works in a language with this word order, and the top bar has had
+					     the whole sentence all along. -->
+					{connection.online ? t('transport.stop') : t('transport.stop.onMachine')}
 				</button>
 			</div>
 
@@ -1050,8 +1056,24 @@
 					bind:value={step}
 					options={[0.1, 1, 10, 50].map((size) => ({ value: size, label: `${size} mm` }))}
 				/>
-				<button class="rot" disabled={movingOff} title={movingBlocked} onclick={() => onUnlock?.()}>
+				<!-- The pair, not half of it: unlocking lets you push the head aside to lay
+				     material down, and until now the only way to make it hold again was to
+				     home the machine. Both hang on the same capability the driver reports. -->
+				<button
+					class="rot"
+					disabled={movingOff || !control.capabilities?.motion?.unlock}
+					title={movingBlocked ?? t('job.unlock.why')}
+					onclick={() => onUnlock?.()}
+				>
 					{t('job.unlock')}
+				</button>
+				<button
+					class="rot"
+					disabled={movingOff || !control.capabilities?.motion?.lock}
+					title={movingBlocked ?? t('job.lock.why')}
+					onclick={() => onLock?.()}
+				>
+					{t('job.lock')}
 				</button>
 			</div>
 

@@ -521,6 +521,18 @@ export class EditController {
 	}
 
 	/**
+	 * Hold the motors again after an unlock.
+	 *
+	 * The engine layer has had this as long as `unlock`, and the app offered only half
+	 * of the pair: you could let the head go by hand and not take it back. Whoever
+	 * pushed the head aside to lay down material had to home the machine to get it
+	 * holding again.
+	 */
+	lock() {
+		return this.#post('/api/machine/lock');
+	}
+
+	/**
 	 * Lock or unlock the selection.
 	 *
 	 * The wanted state travels in the body rather than being toggled per shape: a

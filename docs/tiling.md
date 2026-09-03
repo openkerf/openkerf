@@ -50,8 +50,14 @@ middle of a shape is avoided when there is room to avoid it. What still crosses 
 is genuinely cut in half and burned as two halves that meet.
 
 The overlap is 25 mm, the margin kept free along the bed edges 10 mm, and a mark 8 mm
-across. Those are the values a sheet starts with; the interface has no field for them
-at the moment.
+across. Those are the values a sheet starts with, and all three are on the sheet
+itself: click the sheet tab under the top bar a second time and the sheet editor
+opens, with **Larger than the bed** under the width and the height — *Margin (mm)*,
+*Overlap (mm)*, *Marker (mm)*. They belong to that one sheet, like its size and its
+material.
+
+The refusals below are about those three numbers, which is why they ask you to make
+the overlap larger: that is now something you can do.
 
 **When it goes wrong.** An image cannot be cut in half, so it has to fall inside one
 tile: "… lies across the seam between two tiles. An image cannot be cut in half: move

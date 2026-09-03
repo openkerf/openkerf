@@ -890,7 +890,7 @@ class Library:
         if not machine_id:
             raise LibraryError(
                 "There is no machine active, so there is nothing to attach these "
-                "settings to.",
+                "presets to.",
                 code="library.adopt.noMachine",
             )
         with self._connect() as db:

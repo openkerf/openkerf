@@ -96,7 +96,7 @@ machine says itself."
 Then **The laser itself**, which is two facts about the machine that are nowhere in the
 engine and that OpenKerf cannot work out for you:
 
-> What kind of light this machine makes, and how much of it. OpenKerf needs both before it can tell which settings other people have measured would suit your laser.
+> What kind of light this machine makes, and how much of it. OpenKerf needs both before it can tell which presets other people have measured would suit your laser.
 
 **Kind of laser** arrives filled in — worked out from the model you picked a screen ago —
 with the six answers "CO2 with a glass tube", "CO2 with an RF metal tube", "Diode",
@@ -114,7 +114,7 @@ is a real answer, not a way of skipping the question, and it says what it costs:
 you." Below 1 W or above 1000 the field is refused: *A tube power between {min} and {max} watt,
 please.* **Lens** in mm is optional.
 
-These two are what decide whether a setting somebody else measured can be a starting
+These two are what decide whether a preset somebody else measured can be a starting
 point for your laser — see [The material
 library](library.md#starting-points-from-the-shared-catalogue). You can fill them in later
 in the material library, under the machine profile you are working on, but this is the
@@ -183,7 +183,7 @@ project." — and takes a material and a thickness in millimetres.
 
 Fill it in. Without it, "Without a material the library shows everything and the
 preflight cannot see whether a setting belongs to this sheet." If the library has
-nothing for that material yet it says so: "No settings in the library for this
+nothing for that material yet it says so: "No presets in the library for this
 material yet. A test grid is the shortest way there."
 
 ## Getting a design onto the bed
@@ -276,7 +276,7 @@ again.
 **Start job** in the top bar does not start anything. It switches to that tab and
 arms the job — see "Burning" below.
 
-![The Job tab showing a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", "Material  not filled in for this sheet", a yellow warning that the machine is not responding, a table of layers with mm/s, % , passes and source, a second warning that three layers use unmeasured settings, the list "Run through this" with Lid closed, Extraction and air assist on, Workpiece is clamped and flat, and the buttons "Show frame" and "Start job 1:19".](images/12-job-preflight.png)
+![The Job tab showing a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", "Material  not filled in for this sheet", a yellow warning that the machine is not responding, a table of layers with mm/s, % , passes and source, a second warning that three layers use unmeasured presets, the list "Run through this" with Lid closed, Extraction and air assist on, Workpiece is clamped and flat, and the buttons "Show frame" and "Start job 1:19".](images/12-job-preflight.png)
 
 From top to bottom it holds:
 
@@ -292,8 +292,8 @@ From top to bottom it holds:
   "Workpiece is clamped and flat" — in the strip at the bottom of the panel, above
   the start button, where it cannot scroll away from it.
 
-Read the source column. A setting that was not measured on a test grid says so,
-and the panel adds it up: "3 layers use settings that were not measured with a
+Read the source column. A preset that was not measured on a test grid says so,
+and the panel adds it up: "3 layers use presets that were not measured with a
 test grid. On unknown material: try a scrap first."
 
 Each part of the panel, and what it does while a job is running, is in

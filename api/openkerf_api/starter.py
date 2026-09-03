@@ -196,7 +196,7 @@ class Starter:
         """
         if profile is None:
             raise LibraryError(
-                "There is no machine active, so there is nothing to fetch settings "
+                "There is no machine active, so there is nothing to fetch presets "
                 "for.",
                 code="library.starter.noMachine",
             )
@@ -204,7 +204,7 @@ class Starter:
         kind = str(profile.get("laser_type") or "unknown")
         if kind == "unknown":
             raise LibraryError(
-                f"OpenKerf does not know what kind of laser {name} is. A CO2 setting "
+                f"OpenKerf does not know what kind of laser {name} is. A CO2 preset "
                 "on a diode is not a starting point.",
                 code="library.starter.needsKind",
                 values={"machine": name},
@@ -214,7 +214,7 @@ class Starter:
         ):
             raise LibraryError(
                 f"OpenKerf does not know how powerful {name} is, so it cannot tell "
-                "which settings would suit it. Fill in the tube power, or say you are "
+                "which presets would suit it. Fill in the tube power, or say you are "
                 "not sure and see everything for this kind of laser.",
                 code="library.starter.needsWatt",
                 values={"machine": name},

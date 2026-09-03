@@ -1084,7 +1084,7 @@ def cutout_setting(library, fields: dict) -> dict:
     material_id = fields.get("material_id")
     if not material_id:
         raise DesignError(
-            "Cutting the tile loose needs a material, so its cut setting can be looked up.",
+            "Cutting the tile loose needs a material, so its cut preset can be looked up.",
             code="library.grid.cutoutNeedsMaterial",
         )
     presets = [

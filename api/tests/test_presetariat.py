@@ -224,14 +224,42 @@ def test_the_routes_work_end_to_end(kernel, tmp_path, catalogue_file):
     server = ApiServer(kernel, library_path=tmp_path / "api.db")
     server.presetariat.url = catalogue_file.as_uri()
     with TestClient(server.build_app()) as client:
+        # `stage` fetches for the machine that is active, and asks what kind of laser it
+        # is: a CO2 preset on a diode is not a starting point but a scorch mark. The
+        # route it replaced never asked, which is part of why it was replaced. So this
+        # is a machine set up the way a user sets one up.
+        made = client.post("/api/machines", json={"info": "ruida-beta", "label": "5030"})
+        assert made.status_code == 201, made.text
+        # Reading the library through a route creates the profile for the active
+        # machine; that is `_active_profile`, and it is deliberately not created by a
+        # write.
+        client.get("/api/library/presets")
+        profiles = client.get("/api/library/machines").json()
+        assert profiles, "no profile for the machine that was just set up"
+        profile = profiles[0]
+        client.patch(
+            f"/api/library/machines/{profile['id']}",
+            json={"laser_type": "co2-glass", "power_watt": 80},
+        )
         listing = client.get("/api/presetariat")
         assert listing.status_code == 200
         assert listing.json()["count"] == 3
 
-        response = client.post(
-            "/api/presetariat/import", json={"ids": ["mdf-3mm-snijden-co2-80w"]}
+        # The catalogue has no importer of its own: `stage` writes a library file and
+        # says what it would do, and `/api/library/import` is the transaction that does
+        # it. `POST /api/presetariat/import` was the old way round and is gone — it
+        # created the material before it could refuse, so a half-good batch left
+        # materials behind and raised.
+        staged = client.post(
+            "/api/presetariat/stage", json={"ids": ["mdf-3mm-snijden-co2-80w"]}
         )
-        assert response.status_code == 200
+        assert staged.status_code == 200, staged.text
+        body = staged.json()
+        done = client.post(
+            "/api/library/import",
+            json={"bundle": body["bundle"], "import_batch": body.get("import_batch", "")},
+        )
+        assert done.status_code == 200, done.text
         assert len(client.get("/api/library/presets").json()) == 1
 
 

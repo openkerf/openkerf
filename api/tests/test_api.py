@@ -232,7 +232,6 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # itself — `/api/library/import` does that — but it does write a file on this
         # machine's disk, so it is gated exactly like the upload it replaces.
         "/api/presetariat/stage",
-        "/api/presetariat/import",
         # Offering one of your own settings. It writes the contributor's handle beside
         # the library and the outcome of the burn onto the row, which is why a GET beside
         # it does the looking: the panel asks what a contribution would say before

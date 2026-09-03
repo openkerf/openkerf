@@ -299,7 +299,7 @@ The same menu opens from the "…" button on a layer row in the Layers tab.
 | Burn earlier | One place up in the burn order | `layer-up` |
 | Burn later | One place down in the burn order | `layer-down` |
 | Settings… | "Name, speed, power, passes, colour" | `layer-settings` |
-| Choose a material setting… | Opens the material library with this layer as the target of **Apply**: "Opens the material library with this layer as the target, so one tap puts the speed and power on it." | `layer-material` |
+| Choose a material preset… | Opens the material library with this layer as the target of **Apply**: "Opens the material library with this layer as the target, so one tap puts the speed and power on it." | `layer-material` |
 | Remove layer | Red. "The shapes stay on the bed." | `layer-remove` |
 
 ## Right-click on a row in the material library
@@ -318,8 +318,8 @@ On a setting:
 | Provenance and evidence | Unfolds where the numbers came from, with the photo of the board — explanation "Where these values come from" |
 | Adjust the values | Speed, power, line spacing, passes, thickness, note and machine profile. Material, operation and source stay fixed. |
 | Make a test grid for {material} | Opens the test grid window with this material filled in |
-| Share with Presetariat | Unfolds what this setting would go into the catalogue as — a measurement or a starting point, and why — asks for your GitHub handle the first time, and then opens a pre-filled proposal in a new tab |
-| Remove setting | Red, and at the bottom. Asks under the row, and says when the setting was measured. |
+| Share with Presetariat | Unfolds what this preset would go into the catalogue as — a measurement or a starting point, and why — asks for your GitHub handle the first time, and then opens a pre-filled proposal in a new tab |
+| Remove preset | Red, and at the bottom. Asks under the row, and says when the preset was measured. |
 
 On a material:
 
@@ -328,7 +328,7 @@ On a material:
 | Show only this material | The same narrowing as the checkbox in the header |
 | Make a test grid | Opens the test grid window with this material filled in |
 | Rename this material… | The name, and the other names it answers to |
-| Merge into another material… | Moves the settings, boards, recipes and photographs onto another material |
+| Merge into another material… | Moves the presets, boards, recipes and photographs onto another material |
 | Remove this material | Red, and at the bottom. Counts what would go before it asks. |
 
 ## When an operation is greyed out
@@ -466,7 +466,7 @@ watts, with the tick box "I am not sure how powerful my tube is" as a real answe
 **Lens** in mm. The wizard asks all three on its **Set up** screen; the material library
 offers the same three for the machine you are on.
 
-They decide one thing: which settings measured on somebody else's laser can be a starting
+They decide one thing: which presets measured on somebody else's laser can be a starting
 point for yours. Without them nothing matches at all. See [Getting
 started](getting-started.md#setting-up-the-machine) and [The material
 library](library.md#starting-points-from-the-shared-catalogue).
@@ -479,6 +479,13 @@ clicking it again stops it. Two more controls appear while it is running:
 
 - A slider, "Camera image opacity", from a faint overlay to the full picture.
 - "Calibrate", or "Recalibrate" once it has been calibrated before.
+
+With more than one camera attached, the calibration window has a **Camera**
+drop-down at the top: choosing another one switches the picture over. With one
+camera there is no chooser, because a choice of one is not a choice.
+
+If the picture stops arriving while the camera is running, the phone falls back to a
+still that refreshes every two seconds rather than to a broken picture.
 
 Calibrating opens the window "Calibrate the camera" over the raw picture:
 "Drag the four points to the corners of the bed, starting top left and going

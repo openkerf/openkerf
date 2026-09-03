@@ -750,6 +750,8 @@ import { SeriesStore } from '$lib/series.svelte';
 		status.connect();
 		control.refreshCapabilities();
 		camera.load();
+		// Which cameras there are, so a second one can be chosen rather than guessed at.
+		camera.loadList();
 		sheets.load();
 		library.load();
 		// The list a series burns from. Fetched here and not only by its own window,
@@ -1692,6 +1694,9 @@ import { SeriesStore } from '$lib/series.svelte';
 					}}
 					onUnlock={async () => {
 						await edits.unlock();
+					}}
+					onLock={async () => {
+						await edits.lock();
 					}}
 					profile={library.activeMachine}
 					onFrame={() => control.frame()}
