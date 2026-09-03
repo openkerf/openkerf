@@ -61,6 +61,34 @@ def test_building_the_bytes_does_not_spool_anything(ruida):
     assert not list(spooler.queue), "a job was spooled while only bytes were asked for"
 
 
+def test_building_the_bytes_never_starts_sending_on_the_live_controller(ruida):
+    """
+    `RuidaDriver.plot_start` ends on `controller.stop_record()`, which is literally
+    `start_sending()` (`ruida/controller.py:325`): on a connected Ruida that ships the
+    buffer over the open connection. `build_job_bytes` must build against a *fresh*
+    driver and controller of its own — the live one, with the actual connection, must
+    never be asked to send anything just because somebody wanted the bytes.
+
+    Spied directly on `start_sending` rather than on the connection itself: the send
+    is asynchronous (a background thread drains the queue), so a spy on the write
+    would race it. `start_sending` is called synchronously, from the same thread that
+    runs `job.execute()`, so there is nothing to race — it either was called or not.
+
+    On the driver from before this fix round (the live driver, handed straight to
+    `LaserJob`), this fails: `calls == [True]`, confirmed by hand before writing this
+    test (see the fix-2 report).
+    """
+    a_rectangle(ruida)
+    live_controller = ruida.device.driver.controller
+    calls = []
+    live_controller.start_sending = lambda: calls.append(True)
+    runner = CommandRunner(ruida)
+
+    runner.build_job_bytes()
+
+    assert not calls, "the live controller was asked to start sending a file"
+
+
 def test_an_empty_bed_refuses_with_a_sentence(ruida):
     runner = CommandRunner(ruida)
 
@@ -68,6 +96,92 @@ def test_an_empty_bed_refuses_with_a_sentence(ruida):
         runner.build_job_bytes()
 
     assert "nothing" in str(error.value).lower()
+
+
+def test_a_non_ruida_machine_refuses_with_a_sentence(kernel):
+    """
+    The plain `kernel` fixture's active device is the dummy from `conftest.py`
+    (`service device start dummy 0`), which keeps no `RDJob` anywhere. This is the
+    `upload.notRuida` refusal — `DesignError` was raised in `build_job_bytes` without
+    ever being imported into that scope, so this used to be a 500, not a sentence.
+    """
+    runner = CommandRunner(kernel)
+
+    with pytest.raises(DesignError) as error:
+        runner.build_job_bytes()
+
+    assert error.value.code == "upload.notRuida"
+    assert "Ruida" in str(error.value)
+
+
+def test_a_z_step_per_pass_reaches_the_job_unfiltered(ruida, monkeypatch):
+    """
+    `_plan_without_spooling` turns a layer with a Z step per pass into
+    `ConsoleOperation` items among the cutcode (`_with_passes`). An earlier version
+    of `build_job_bytes` filtered the plan with
+    `[step for step in plan.plan if hasattr(step, "__iter__")]`, which throws away
+    every `ConsoleOperation` — precisely the Z-move steps — before the `LaserJob`
+    ever sees them; the job would come out with every pass at the same height, the
+    kind of mistake you only find on material. `build_job_bytes` must hand the
+    unfiltered plan to `LaserJob`.
+
+    A Ruida has no Z axis (`_focus_layers` needs both `supports_z_axis` and a
+    registered `z_move` command, neither true here), but `_multi_pass_layers` and
+    `_with_passes` do not gate on that — they just read `z_step_mm` off the
+    operation, whatever the device. Setting it directly on the node, the way
+    `drawing.py`'s guarded route would after its own device check, is enough to
+    exercise this path without a GRBL kernel.
+    """
+    a_rectangle(ruida)
+    layer = next(iter(ruida.elements.ops()))
+    layer.passes_custom = True
+    layer.passes = 2
+    layer.z_step_mm = 0.5
+
+    from meerk40t.core.laserjob import LaserJob
+
+    captured = {}
+    original_init = LaserJob.__init__
+
+    def spy_init(self, label, items, **kwargs):
+        captured["items"] = list(items)
+        original_init(self, label, items, **kwargs)
+
+    monkeypatch.setattr(LaserJob, "__init__", spy_init)
+    runner = CommandRunner(ruida)
+
+    runner.build_job_bytes()
+
+    from meerk40t.core.node.util_console import ConsoleOperation
+
+    assert any(isinstance(item, ConsoleOperation) for item in captured["items"]), (
+        "the Z step's ConsoleOperation never reached the job"
+    )
+
+
+def test_two_passes_share_one_rd_layer(ruida):
+    """
+    The ⚠️ the reviewer named: measure the layers, don't read the code.
+
+    `_share_pass_settings` gives every pass's copy of the settings dict the same
+    identity, so the RD writer's layers-by-identity grouping
+    (`ruida/rdjob.py:1434`, `write_header`) does not turn one cut layer into two.
+    `LAYER_COLOR_PART` (`\\xCA\\x06`) is written exactly once per RD layer in
+    `write_header`, so counting it counts the layers. CLAUDE.md has the measurement
+    this guards against: a board of four squares went from 4 layers at one pass to
+    8 at two, and a board of sixteen went to 33 and the controller said "file
+    invalid".
+    """
+    a_rectangle(ruida)
+    layer = next(iter(ruida.elements.ops()))
+    layer.passes_custom = True
+    layer.passes = 2
+    runner = CommandRunner(ruida)
+
+    data = runner.build_job_bytes()
+
+    layers = data.count(b"\xca\x06")
+    assert layers == 1, f"{layers} RD layer(s) for one cut layer with two passes"
 
 
 def test_building_the_bytes_restores_the_merge_settings(ruida):

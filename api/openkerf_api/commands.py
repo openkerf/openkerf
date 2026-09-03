@@ -193,7 +193,7 @@ class CommandRunner:
         return output
 
     def _require_something_to_burn(self) -> int:
-        """De telling die `start_job` ook doet, apart zodat beide hem lezen."""
+        """The count `start_job` does too, split out so both read it."""
         from .edits import DesignError
 
         burnable = 0
@@ -213,27 +213,44 @@ class CommandRunner:
 
     def build_job_bytes(self, mutators=()) -> bytes:
         """
-        De job als bestand, zonder hem te spoolen.
+        The job as a file, without spooling it.
 
-        Dezelfde pijplijn als `start_job` tot en met `optimize`, en dan niet `spool`
-        maar de RuidaDriver zelf: die schrijft zijn opdrachten in `controller.job`, een
-        `RDJob`, en `get_contents()` is precies de inhoud van een `.rd`-bestand —
-        inclusief de staart met SET_FILE_SUM en END_OF_FILE uit `write_tail`.
+        Same pipeline as `start_job` up to and including `optimize`, and then not
+        `spool` but a `RuidaDriver` of our own: it writes its commands into
+        `controller.job`, an `RDJob`, and `get_contents()` is exactly the contents of
+        an `.rd` file — the tail with SET_FILE_SUM and END_OF_FILE from `write_tail`
+        included.
 
-        Waarom niet `save_job` uit de engine: die zet `controller.write` op `f.write` en
-        voert de RDJob daarna uit, terwijl de bytes juist in de buffer belanden.
-        Gemeten (CLAUDE.md): 4 bytes in het bestand, 623 in de buffer.
+        A *fresh* driver, not `self.kernel.device.driver` — the one actually attached
+        to the machine. `RuidaDriver.plot_start` ends on `controller.stop_record()`,
+        which is literally `start_sending()`: on a connected Ruida, finishing the job
+        against the live driver would ship the file to the machine the moment
+        somebody asks for its bytes, with nobody having pressed "send". The engine
+        hits the same problem in `save_job` (`ruida/device.py:603`) and solves it the
+        same way: a `RuidaDriver(service)` of its own, with its own `RuidaController`
+        and an empty `RDJob` buffer — no connection, no send thread reaching the
+        machine. We do the same, and additionally park `controller.write` on
+        something inert: the status-monitor thread the fresh controller starts on
+        construction polls the machine on its own schedule and would otherwise still
+        try to write through whatever `write` was left at.
 
-        De mutators zijn dezelfde als bij een gewone job — tegels, Z-stappen,
-        series — inclusief `_share_pass_settings` erna. Zonder die laatste krijgt elke
-        pass zijn eigen RD-laag en zegt de controller "file invalid".
+        Why not `save_job` itself: it sets `controller.write` to `f.write` and then
+        *executes* the RDJob, while the bytes we want are the ones that land in the
+        buffer before anything is sent. Measured (CLAUDE.md): 4 bytes in the file, 623
+        left in the buffer.
+
+        The mutators are the same as an ordinary job — tiles, Z steps, series —
+        including `_share_pass_settings` afterwards. Without that last one every pass
+        gets its own RD layer and the controller says "file invalid".
         """
+        from .edits import DesignError
         from meerk40t.core.laserjob import LaserJob
+        from meerk40t.ruida.driver import RuidaDriver
 
         device = getattr(self.kernel, "device", None)
-        driver = getattr(device, "driver", None)
-        controller = getattr(driver, "controller", None)
-        if controller is None or not hasattr(controller, "job"):
+        live_driver = getattr(device, "driver", None)
+        live_controller = getattr(live_driver, "controller", None)
+        if live_controller is None or not hasattr(live_controller, "job"):
             raise DesignError(
                 "This machine does not keep files in memory; that is a Ruida thing.",
                 code="upload.notRuida",
@@ -244,26 +261,33 @@ class CommandRunner:
             with self.rotary_applied():
                 self._plan_without_spooling(mutators)
                 plan = self.kernel.planner.get_or_make_plan("0")
-                steps = [step for step in plan.plan if hasattr(step, "__iter__")]
-                job = LaserJob("upload", list(steps), driver=driver)
-                # De buffer leegmaken vóór de job: wat er nog in staat is van een
-                # eerdere job en zou er zo tussen komen te staan.
-                controller.job.buffer.clear()
+                # Unfiltered: a Z step per pass and a focus board's height changes are
+                # `ConsoleOperation` items among the cutcode, not iterable themselves,
+                # and `LaserJob.execute_item` runs them through `generate()` just as
+                # readily as it runs cutcode. Dropping them here would silently flatten
+                # every pass onto one height.
+                steps = list(plan.plan)
+                driver = RuidaDriver(device)
+                # Nothing from here may reach a socket, whatever the fresh
+                # controller's own background threads try in the meantime.
+                driver.controller.write = lambda data: None
+                job = LaserJob("upload", steps, driver=driver)
                 driver.job_start(job)
                 while not job.execute():
                     pass
                 driver.job_finish(job)
-                return controller.job.get_contents()
+                return driver.controller.job.get_contents()
 
     def _plan_without_spooling(self, mutators=()) -> list[str]:
         """
-        `_plan_and_spool_locked`, maar zonder de laatste stap.
+        `_plan_and_spool_locked`, but without the last step.
 
-        Zelfde `opt_merge_ops`/`opt_merge_passes`-behandeling als `_plan_with_mutators`,
-        en om dezelfde reden: met die vlaggen aan lijmt de optimalisatie de stukken aan
-        elkaar en schuift consolestappen naar achteren, zodat een Z pas zakt nadat er al
-        gebrand is. Voor een bestand in het geheugen van de machine is dat net zo'n fout
-        als bij een gewone job — het risico staat op het werkstuk en op de lens.
+        Same `opt_merge_ops`/`opt_merge_passes` treatment as `_plan_with_mutators`, and
+        for the same reason: left on, the optimisation glues pieces together and
+        pushes console steps to the back, so a Z step would drop after burning
+        instead of between passes. For a file headed into the machine's memory that
+        is as much a mistake as for an ordinary job — the risk lands on the
+        workpiece and on the lens.
         """
         all_mutators = list(mutators)
         after = []
@@ -279,7 +303,7 @@ class CommandRunner:
         root = self.kernel.root
         root.setting(bool, "opt_merge_ops", True)
         root.setting(bool, "opt_merge_passes", True)
-        eerder = (root.opt_merge_ops, root.opt_merge_passes)
+        previous = (root.opt_merge_ops, root.opt_merge_passes)
         root.opt_merge_ops = False
         root.opt_merge_passes = False
         try:
@@ -289,7 +313,7 @@ class CommandRunner:
             self._apply_mutators(after)
             return output
         finally:
-            root.opt_merge_ops, root.opt_merge_passes = eerder
+            root.opt_merge_ops, root.opt_merge_passes = previous
 
     # ------------------------------------------------------ zakken per pass
 
