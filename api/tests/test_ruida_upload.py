@@ -68,3 +68,33 @@ def test_an_empty_bed_refuses_with_a_sentence(ruida):
         runner.build_job_bytes()
 
     assert "nothing" in str(error.value).lower()
+
+
+def test_building_the_bytes_restores_the_merge_settings(ruida):
+    """
+    `_plan_without_spooling` turns `opt_merge_ops`/`opt_merge_passes` off while it
+    works — same reason as `_plan_with_mutators`: on, the optimisation glues pieces
+    together and pushes console steps to the back, so a Z would drop after burning
+    instead of between passes. A mutator run during the build sees them off; once
+    `build_job_bytes` returns, they are back to whatever they were before —
+    the user's settings, not ours to leave changed.
+    """
+    a_rectangle(ruida)
+    root = ruida.root
+    root.setting(bool, "opt_merge_ops", True)
+    root.setting(bool, "opt_merge_passes", True)
+    root.opt_merge_ops = True
+    root.opt_merge_passes = True
+    runner = CommandRunner(ruida)
+    seen = {}
+
+    def spy(steps):
+        seen["during"] = (root.opt_merge_ops, root.opt_merge_passes)
+        return steps
+
+    runner.build_job_bytes(mutators=[spy])
+
+    assert seen["during"] == (False, False), "the flags were not off while building"
+    assert (root.opt_merge_ops, root.opt_merge_passes) == (True, True), (
+        "the flags were not put back"
+    )

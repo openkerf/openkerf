@@ -207,7 +207,7 @@ class CommandRunner:
             raise DesignError(
                 "There is nothing ready to burn. Draw or load something, and put it "
                 "in a layer that burns — a layer with 'burn along' off is skipped.",
-                code="upload.nothingToBurn",
+                code="job.nothingToBurn",
             )
         return burnable
 
@@ -256,7 +256,15 @@ class CommandRunner:
                 return controller.job.get_contents()
 
     def _plan_without_spooling(self, mutators=()) -> list[str]:
-        """`_plan_and_spool_locked`, maar zonder de laatste stap."""
+        """
+        `_plan_and_spool_locked`, maar zonder de laatste stap.
+
+        Zelfde `opt_merge_ops`/`opt_merge_passes`-behandeling als `_plan_with_mutators`,
+        en om dezelfde reden: met die vlaggen aan lijmt de optimalisatie de stukken aan
+        elkaar en schuift consolestappen naar achteren, zodat een Z pas zakt nadat er al
+        gebrand is. Voor een bestand in het geheugen van de machine is dat net zo'n fout
+        als bij een gewone job — het risico staat op het werkstuk en op de lens.
+        """
         all_mutators = list(mutators)
         after = []
         if self._focus_layers():
@@ -268,11 +276,20 @@ class CommandRunner:
 
             all_mutators.append(lambda steps: self._with_passes(steps, ConsoleOperation))
             after.append(self._share_pass_settings)
-        output = self.run(PLAN_COPY)
-        self._apply_mutators(all_mutators)
-        output += self.run(PLAN_BLOB)
-        self._apply_mutators(after)
-        return output
+        root = self.kernel.root
+        root.setting(bool, "opt_merge_ops", True)
+        root.setting(bool, "opt_merge_passes", True)
+        eerder = (root.opt_merge_ops, root.opt_merge_passes)
+        root.opt_merge_ops = False
+        root.opt_merge_passes = False
+        try:
+            output = self.run(PLAN_COPY)
+            self._apply_mutators(all_mutators)
+            output += self.run(PLAN_BLOB)
+            self._apply_mutators(after)
+            return output
+        finally:
+            root.opt_merge_ops, root.opt_merge_passes = eerder
 
     # ------------------------------------------------------ zakken per pass
 
