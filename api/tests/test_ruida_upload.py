@@ -1622,3 +1622,138 @@ def test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it(
     assert "stopped answering" in said, said
     assert "connection" not in said.lower(), said
     assert f"{blocks - 1} of {blocks}" in said and "panel" in said, said
+
+
+def a_server_with_a_fake_line(kernel, tmp_path, monkeypatch, **kwargs):
+    """An `ApiServer` whose upload writes into a `FakeSession`, not onto a line.
+
+    The same two patches `a_fake_session` makes, on the server's own
+    `RuidaUpload` — which is the object the route reaches, and which was built
+    with the live kernel. Patching one of the two would leave `_write` pointed
+    at `device.driver.controller.write`, the live controller of the device the
+    fixture started: a path toward a machine, opened by a test about a route.
+    """
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "u.db")
+    session = a_fake_session(server.upload, monkeypatch, **kwargs)
+    return server, session
+
+
+def test_the_route_refuses_without_a_connection(kernel, tmp_path):
+    """Een route die zwijgt over een ontbrekende verbinding stuurt naar een dood paneel."""
+    from fastapi.testclient import TestClient
+
+    from openkerf_api.server import ApiServer
+
+    kernel.console("service device start ruida -i\n")
+    server = ApiServer(kernel, library_path=tmp_path / "u.db")
+    with TestClient(server.build_app()) as client:
+        client.post("/api/design/elements", json={
+            "type": "rect", "x_mm": 20, "y_mm": 20, "width_mm": 40, "height_mm": 30,
+        })
+
+        response = client.post("/api/machine/upload", json={"name": "BORD"})
+
+        assert response.status_code == 409
+        assert "connection" in response.json()["detail"].lower()
+        assert response.headers["X-OpenKerf-Error"] == "upload.notConnected"
+
+
+def test_the_route_answers_with_the_name_the_panel_will_show(
+    ruida, tmp_path, monkeypatch
+):
+    """
+    What comes back is what stands on the machine, not what was typed.
+
+    `machine_name` cuts to eight capitals and drops the space, so a client that
+    echoed its own input would tell the user to look for a file that is not
+    there. The route hands `upload()`'s answer through unchanged; this is the
+    test that says so from outside.
+    """
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    server, session = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch)
+    with TestClient(server.build_app()) as client:
+        response = client.post("/api/machine/upload", json={"name": "my box 12345"})
+
+    assert response.status_code == 200, response.text
+    answer = response.json()
+    assert answer["name"] == "MYBOX123"
+    assert answer["chunks"] == len(session.written) - 2
+    assert answer["bytes"] == sum(len(block) for block in session.written[2:])
+
+
+def test_the_route_puts_the_file_there_and_starts_nothing(
+    ruida, tmp_path, monkeypatch
+):
+    """
+    The one difference between this button and the one that burns.
+
+    Starting is done on the machine's own panel; nothing this route does may
+    reach the queue the live device's thread executes. Measured from outside the
+    module, because the route is where a second path to the spooler would be
+    added — `manage(self.upload.upload, ...)` and nothing else beside it.
+    """
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    server, _ = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch)
+    with TestClient(server.build_app()) as client:
+        response = client.post("/api/machine/upload", json={"name": "BORD"})
+
+    assert response.status_code == 200, response.text
+    assert not list(ruida.device.spooler.queue), "a job was spooled by the route"
+
+
+def test_the_route_refuses_a_nameless_upload(ruida, tmp_path, monkeypatch):
+    """
+    A body with no name is a refusal the caller can act on, not a 500.
+
+    `str(body.get("name") or "")` makes `{}`, `{"name": null}` and `{"name": "
+    "}` one case, and `_checked_name` answers it before the job is built.
+    """
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    server, session = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch)
+    with TestClient(server.build_app()) as client:
+        response = client.post("/api/machine/upload", json={})
+
+    assert response.status_code == 409, response.text
+    assert response.headers["X-OpenKerf-Error"] == "upload.needsName"
+    assert not session.written, "a nameless upload announced a file anyway"
+
+
+def test_the_numbers_of_a_half_upload_reach_the_client(
+    ruida, tmp_path, monkeypatch
+):
+    """
+    Half a file on the machine has to say how far it got, in the reader's own
+    language — so the two numbers travel beside the code, in
+    `X-OpenKerf-Error-Values`, and not only inside the English sentence.
+
+    Measured on this rectangle, whose job is one block: with the line busy for
+    ever, the stall is at the first packet and the answer is
+    `{"sent": 0, "chunks": 1}`. `sent` is 0 and not 1 because the wait that fails
+    is the one *in front of* the first block — nothing has gone out, which is
+    what the sentence says. The block count is read off the frames rather than
+    written down here; how many blocks a drawing makes is a property of the
+    drawing.
+    """
+    import json
+
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    server, _ = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch, busy_forever=True)
+    server.upload.per_chunk_seconds = 0.2
+    blocks = len(server.upload.frames("BORD", server.upload.runner.build_job_bytes())) - 2
+    with TestClient(server.build_app()) as client:
+        response = client.post("/api/machine/upload", json={"name": "BORD"})
+
+    assert response.status_code == 409, response.text
+    assert response.headers["X-OpenKerf-Error"] == "upload.stalled"
+    values = json.loads(response.headers["X-OpenKerf-Error-Values"])
+    assert values == {"sent": 0, "chunks": blocks}

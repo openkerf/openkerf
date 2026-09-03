@@ -47,6 +47,7 @@ from .palette import Palette, machine_key
 from .presetariat import Presetariat
 from .provenance import Provenance
 from .rotary import RotaryControl
+from .ruida_upload import RuidaUpload
 from .series import (
     OverrunMutator,
     Series,
@@ -290,6 +291,10 @@ class ApiServer:
         self.editor = DesignEditor(kernel, self.commands)
         self.drawing = Drawing(kernel, self.commands)
         self.motion = MachineControl(kernel, self.commands)
+        # The job as a file in the machine's memory. It builds through the same runner
+        # as the burn does, so what is sent is what would have been burned; what it
+        # deliberately has not got is a way to start it — that stays on the panel.
+        self.upload = RuidaUpload(kernel, self.commands)
         # The rotary. Machine-wide, stored on the device service, and applied while the
         # plan is being built — so the runner needs to know about it, not the routes: a
         # job, a tile run, the preview and the exact estimate all go through there.
@@ -1606,6 +1611,24 @@ class ApiServer:
         @app.post("/api/machine/lock", dependencies=write)
         def machine_lock():
             return manage(self.motion.lock)
+
+        @app.post("/api/machine/upload", dependencies=write)
+        def machine_upload(body: dict | None = None):
+            """
+            Put the job in the machine's memory as a file.
+
+            Only put it there. Starting is done by the user on the panel — the app
+            stays outside the handling that burns, and there is deliberately no route
+            here or in `ruida_upload.py` that begins a job.
+
+            `manage` and not `act`: what the caller wants back is the answer —
+            the name the panel will show, and how much went — not whether a
+            command ran. Its refusals carry a code and, for the two that break
+            off halfway, the numbers saying how far the file got; `refuse()`
+            puts both in the headers, so an upload that half arrived can say so
+            in the reader's own language.
+            """
+            return manage(self.upload.upload, str((body or {}).get("name") or ""))
 
         @app.patch("/api/design/elements/{element_id}/text", dependencies=write)
         def update_text(element_id: str, body: dict):

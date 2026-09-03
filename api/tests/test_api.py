@@ -165,6 +165,10 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # to the driver; that is touching the machine.
         "/api/job/adjust",
         "/api/machine/unlock",
+        # The job as a file in the machine's memory. It sends bytes down the open
+        # connection, which is touching the machine — the most literal write in this
+        # list. It starts nothing: that stays on the panel.
+        "/api/machine/upload",
         "/api/machine/connect",
         "/api/machine/disconnect",
         "/api/machine/lock",
