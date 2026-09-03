@@ -960,15 +960,22 @@ def test_a_command_longer_than_a_block_refuses_before_anything_goes_out(
     Put a second command after it and the answer is `[1201, 2]`.) Building that
     block is right; sending it is not.
 
-    Measured on a pair of loopback UDP sockets, which is what the line to the
-    machine is: a datagram of 1201 bytes read by a receiver that calls
-    `recvfrom(1024)` arrives as 1024 bytes, with no error on either side — the
-    tail is simply gone. And `recvfrom(1024)` is what *every* receiver in the
-    engine uses (`ruida/udp_transport.py:62`, `udp_connection.py:174`,
-    `network/udp_server.py:96`, `ruida/tcp_connection.py:156`). Add the two
-    checksum bytes UDP packaging puts in front (`ruidasession.py:_package`) and
-    the real ceiling on a block is 1022 bytes; `CHUNK` at 1000 sits under it with
-    room to spare.
+    Measured on a pair of loopback UDP sockets: 996, 1000 and 1024 bytes arrive
+    whole, and 1201 and 1203 both arrive as **1024**, with no error on either
+    side — the tail is simply gone. That settles what happens to anything the
+    *engine* receives, because every UDP receiver in it reads with
+    `recvfrom(1024)` (`ruida/udp_transport.py:62`, `udp_connection.py:174`,
+    `network/udp_server.py:96`), the last of which is the emulator a
+    `ruidacontrol` stand-in listens on.
+
+    What a real Ruida's firmware accepts as a datagram is **not** measured here
+    and does not follow from those lines — they are our side of the wire. The
+    assumption is that it has the same 1024-byte ceiling, leaving 1022 for a
+    block once `_package` has put its two checksum bytes in front; the ground
+    under it is that the engine cuts its own jobs at 1000 (`controller.py:83`),
+    a limit reverse-engineered against real machines. `CHUNK` at 1000 is under
+    either reading, and this guard refuses only what is over `CHUNK`, so nothing
+    here turns on the assumption being right.
 
     So an oversized block would be truncated silently — the same damage
     `_blocks` exists to avoid, one layer further down and past the point where
@@ -1044,6 +1051,12 @@ def test_a_session_that_is_open_but_not_connected_refuses_too(ruida, monkeypatch
     session = FakeSession()
     session.connected = False
     monkeypatch.setattr(ruida.device, "active_session", session, raising=False)
+    # `_write` too, and not for tidiness: without it this test is safe only
+    # because `_session()` happens to refuse before the first write. Move that
+    # check one line and the test writes on the live controller of the device
+    # this fixture started — a path toward a machine, opened by a test that is
+    # about a machine being unreachable.
+    monkeypatch.setattr(upload, "_write", session.write)
 
     with pytest.raises(DesignError) as error:
         upload.upload("BORD")
@@ -1293,3 +1306,48 @@ def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
         f"before the upload said it was done"
     )
     assert took > packets * 0.05 * 0.8, f"the upload returned after only {took:.3f}s"
+
+
+def test_a_nameless_upload_says_so_before_it_says_anything_about_the_job(
+    ruida, monkeypatch
+):
+    """
+    Two things can be wrong at once, and the order of the sentences matters.
+
+    A name of nothing but spaces on a design that builds no bytes used to answer
+    `upload.emptyFile`, because the payload was built before `frames()` ever
+    looked at the name. Both are refusals, but the name is the one the user can
+    fix on the spot — the empty job is a design problem somewhere else. So the
+    name is checked first, and the sentence the user gets back is the one they
+    can act on.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    monkeypatch.setattr(upload.runner, "build_job_bytes", lambda *a, **kw: b"")
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("  \t ")
+
+    assert error.value.code == "upload.needsName"
+    assert not session.written
+
+
+def test_a_nameless_upload_never_asks_the_design_for_bytes(ruida, monkeypatch):
+    """
+    And it refuses before building, not after: `build_job_bytes` plans the whole
+    job and runs it through a driver, which is seconds of work on a real design
+    for an answer that was known from the argument.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    a_fake_session(upload, monkeypatch)
+    builds = []
+    monkeypatch.setattr(
+        upload.runner, "build_job_bytes", lambda *a, **kw: builds.append(True) or b"x"
+    )
+
+    with pytest.raises(DesignError):
+        upload.upload("")
+
+    assert not builds, "the job was built for an upload that could never be sent"

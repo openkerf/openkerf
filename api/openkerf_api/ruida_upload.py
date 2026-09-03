@@ -51,6 +51,26 @@ def machine_name(name: str) -> str:
     return kept.upper()[:NAME_LENGTH]
 
 
+def _checked_name(name: str) -> str:
+    """`machine_name`, and a refusal when nothing is left of it.
+
+    Here rather than inside `frames()` because both `frames()` and `upload()`
+    need the answer, and `upload()` needs it *first*: a name of nothing but
+    spaces on a design that builds no bytes used to come back as
+    `upload.emptyFile`, since the payload was built before anything looked at
+    the name. Both are true, but the name is the one the caller can fix on the
+    spot.
+    """
+    short = machine_name(name)
+    if not short:
+        raise DesignError(
+            "Give the file a name of up to eight letters or digits; that is "
+            "what the machine's panel shows.",
+            code="upload.needsName",
+        )
+    return short
+
+
 def _blocks(payload: bytes) -> list[bytes]:
     """The payload in blocks of at most `CHUNK` bytes, cut between commands.
 
@@ -133,13 +153,7 @@ class RuidaUpload:
 
     def frames(self, name: str, payload: bytes) -> list[bytes]:
         """The whole conversation as a list of packets, in order."""
-        short = machine_name(name)
-        if not short:
-            raise DesignError(
-                "Give the file a name of up to eight letters or digits; that is "
-                "what the machine's panel shows.",
-                code="upload.needsName",
-            )
+        short = _checked_name(name)
         out = [FILE_TRANSFER, SET_FILENAME + short.encode("ascii") + b"\x00"]
         out.extend(_blocks(payload))
         return out
@@ -240,16 +254,31 @@ class RuidaUpload:
           single command longer than `CHUNK` gets an oversized block of its own.
           Measured: `_blocks(b"\\x88" + b"\\x11" * 1200)` gives **one** block,
           of 1201 bytes; put a second command behind it and the answer is
-          `[1201, 2]`. Measured on a
-          pair of loopback UDP sockets: a 1201-byte datagram read by a receiver
-          calling `recvfrom(1024)` — which is every receiver in the engine,
-          `ruida/udp_transport.py:62` among them — arrives as 1024 bytes, with
-          no error on either side. With the two checksum bytes UDP packaging
-          adds in front (`ruidasession.py:_package`) the real ceiling is 1022,
-          so `CHUNK` at 1000 sits under it. Truncating a command silently is the
-          exact damage `_blocks` exists to avoid, so an oversized block is
-          refused rather than sent; on this project's designs the longest
-          command is 16 bytes, so it is a guard, not a case anybody meets.
+          `[1201, 2]`.
+
+          What such a block costs is measured on one side and assumed on the
+          other. Measured, on a pair of loopback UDP sockets: 996, 1000 and 1024
+          bytes arrive whole, and 1201 and 1203 both arrive as **1024**, with no
+          error on either side — the tail is simply gone. That is what happens
+          to anything *the engine* receives, since every receiver in it reads
+          with `recvfrom(1024)` (`ruida/udp_transport.py:62`,
+          `udp_connection.py:174`, `network/udp_server.py:96`), the last of
+          which is the emulator a `ruidacontrol` stand-in listens on.
+
+          **Assumed**, because nobody here has measured a Ruida's firmware: that
+          a real machine has the same 1024-byte ceiling, which with the two
+          checksum bytes `_package` puts in front leaves 1022 for a block. It
+          rests on the engine cutting its own jobs at 1000 bytes
+          (`controller.py:83`), a limit reverse-engineered against real
+          machines — not on anything measured here. `CHUNK` at 1000 sits under
+          either reading, and the guard below only refuses what is over `CHUNK`
+          anyway, so the assumption decides nothing; it is written down so the
+          number is not read as a measurement.
+
+          Truncating a command silently is the exact damage `_blocks` exists to
+          avoid, so an oversized block is refused rather than sent; on this
+          project's designs the longest command is 16 bytes, so it is a guard,
+          not a case anybody meets.
 
         The engine's status monitor keeps polling the machine over this same
         session while we send, and its packets land between our blocks. That is
@@ -268,6 +297,10 @@ class RuidaUpload:
         never ran (it has one caller, `ruida/device.py:415`).
         """
         session = self._session()
+        # Before the job is built, not after: building plans the whole design and
+        # runs it through a driver, and the answer to a nameless upload was known
+        # from the argument.
+        short = _checked_name(name)
         payload = self.runner.build_job_bytes()
         if not payload:
             raise DesignError(
@@ -275,7 +308,7 @@ class RuidaUpload:
                 "has been sent.",
                 code="upload.emptyFile",
             )
-        packets = self.frames(name, payload)
+        packets = self.frames(short, payload)
         chunks = len(packets) - 2
         oversized = next((len(p) for p in packets[2:] if len(p) > CHUNK), None)
         if oversized is not None:
@@ -299,4 +332,4 @@ class RuidaUpload:
         # `SET_FILE_SUM` and `END_OF_FILE`. Every other block is confirmed by the
         # wait in front of the block after it; this one has no block after it.
         self._wait_for_the_line(session, chunks - 1, chunks)
-        return {"name": machine_name(name), "bytes": len(payload), "chunks": chunks}
+        return {"name": short, "bytes": len(payload), "chunks": chunks}
