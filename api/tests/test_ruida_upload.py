@@ -318,3 +318,53 @@ def test_three_builds_of_the_same_design_are_byte_identical(ruida):
 
     lengths = (len(first), len(second), len(third))
     assert first == second == third, f"lengths {lengths}, not identical"
+
+
+def test_the_reset_covers_every_field_ruidadriver_init_sets(ruida):
+    """
+    `_reset_upload_driver_state` is a line-by-line mirror of `RuidaDriver.__init__`
+    as it reads today — nothing enforces that it stays one. A field the engine
+    adds there tomorrow, that this test does not also add to
+    `_reset_upload_driver_state` (or to the deliberately-kept construction half,
+    `service`/`events`/`controller`/`recv`/`name`), would silently start leaking
+    state between builds again exactly the way `power_dirty`/`speed_dirty` did:
+    measured, `433, 418, 418` bytes across three otherwise identical builds, the
+    second and third missing `SPEED_LASER_1` and the min/max power pair entirely
+    (see `test_three_builds_of_the_same_design_are_byte_identical`). A forgotten
+    field is not a style nitpick; it is a job that goes out wrong the second time
+    somebody uses the button.
+
+    So: build a real fresh `RuidaDriver`, read the names in its `__dict__`, and
+    require every one of them to be either kept across builds on purpose or
+    reset. `_reset_upload_driver_state` itself decides the second list — run
+    against a stand-in object and read back what it touched — so this test
+    breaks the moment the two lists drift apart, not a version behind.
+    """
+    from meerk40t.ruida.driver import RuidaDriver
+
+    fresh = RuidaDriver(ruida.device)
+    fresh_fields = set(vars(fresh).keys())
+
+    # The expensive, stateful half `_upload_driver_for` deliberately keeps across
+    # builds instead of resetting — see its docstring.
+    kept_on_construction = {"service", "events", "controller", "recv", "name"}
+
+    class _BlankDriver:
+        """Enough of a driver for the reset to run against: just `settings`,
+        the one field it mutates in place (`.clear()`) rather than reassigns."""
+
+        def __init__(self):
+            self.settings = {}
+
+    stand_in = _BlankDriver()
+    CommandRunner._reset_upload_driver_state(stand_in)
+    reset_touches = set(vars(stand_in).keys())
+
+    accounted_for = kept_on_construction | reset_touches
+    forgotten = fresh_fields - accounted_for
+    assert not forgotten, (
+        f"RuidaDriver.__init__ now sets {sorted(forgotten)}, which "
+        "_reset_upload_driver_state does not reset and _upload_driver_for does "
+        "not list among the fields it deliberately keeps — add it to one or the "
+        "other."
+    )
