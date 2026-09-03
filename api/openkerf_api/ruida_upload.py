@@ -371,6 +371,22 @@ class RuidaUpload:
         blocks for as long as `_data_sender` holds it, which is exactly the
         stalled case this method exists for, and forever if `resume_monitor`
         never ran (it has one caller, `ruida/device.py:415`).
+
+        What comes out is a function of the drawing as it stands, and not of
+        when it is sent: measured, ten builds of one drawing gave the same
+        bytes ten times, with the runner kept and with a fresh one for every
+        call. So pressing this twice on the same drawing puts the same file on
+        the machine twice.
+
+        What does move it is making the shapes again. Ten redraws of the same
+        eight circles gave 5462 or 5463 bytes in no order — two different, both
+        valid, polygon approximations of the same arc, with vertices up to about
+        half a millimetre apart (measured separately: the cutcode is pointwise
+        identical, so the difference appears in the encoding, not in the plan).
+        Reopen a project, or run a generator again, and the file you send can
+        differ from the one before it. Both are the right shape; what the bytes
+        are not is a fingerprint of a design, so nothing should compare two
+        uploads to decide whether anything changed.
         """
         session = self._session()
         # Before the job is built, not after: building plans the whole design and

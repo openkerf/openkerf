@@ -61,13 +61,22 @@ def a_design_over_one_block(kernel):
     """Something whose job bytes need more than one block: eight circles.
 
     A rectangle is 433 bytes and fits in a single `CHUNK`, which hides every
-    question about where one block ends and the next begins. Measured, these
-    eight circles come to 5462 or 5463 bytes — five full blocks and a tail
-    either way. Not one number: `build_job_bytes` is byte-deterministic on the
-    rectangle (lines) but not on this design, and over six builds it alternated
-    between the two, differing from byte 1112 on in the coordinate bytes of the
-    circle interpolation. Nothing here asserts the length, only that it needs
-    more than one block.
+    question about where one block ends and the next begins. These eight circles
+    come to 5462 or 5463 bytes — five full blocks and a tail either way, which
+    is the whole of what this helper promises.
+
+    Which of the two, and why it is not a warning about `build_job_bytes`:
+    building is stable. Measured, ten builds of one drawing gave 5462 ten times,
+    both with the runner kept and with a fresh one for every call. It is *this
+    function* that moves the answer — ten redraws of the same eight circles gave
+    `[5463, 5462, 5463, 5463, 5462, 5462, 5462, 5462, 5463, 5463]`, in no order,
+    so "varies" and not "alternates". Measured separately, the difference is not
+    a rounded coordinate: the cutcode is pointwise identical (all 192 points) and
+    the two encodings are two different, both valid, polygon approximations of
+    the same arc, their vertices up to about half a millimetre apart.
+
+    Nothing here asserts a length, only that the design needs more than one
+    block; and no test builds a payload twice and compares the two.
     """
     kernel.elements.clear_all()
     for step in range(8):
@@ -1107,8 +1116,11 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
     — which is what the test asserts, rather than a length, because
     `build_job_bytes` is not byte-deterministic on this design (measured over
     six builds: 5462 or 5463 bytes, differing in the coordinate bytes of the
-    circle interpolation from byte 1112 on). The comparison is between two runs
-    of the same payload, so that variation cannot reach it. The poll is handled as realtime (`emulator.py:157`,
+    circle interpolation from byte 1112 on, when the drawing is made again). The
+    comparison is between two runs
+    of the same payload, so that variation cannot reach it. (Two builds of the
+    same drawing agree anyway — see `a_design_over_one_block` — but the test
+    does not need that to be true.) The poll is handled as realtime (`emulator.py:157`,
     `_process_realtime` → `mem_lookup`) and answered; it never reaches the job
     buffer. So interleaved status does not damage the file: there is nothing
     here to protect against.
@@ -1210,6 +1222,15 @@ class DeferringSession:
         return self._ack_pending
 
     def write(self, data):
+        # Raising here is not decoration: `RuidaSession.write` checks `connected`
+        # before it queues anything and raises on a session that has dropped
+        # (`ruidasession.py:186`). No test in this file reaches it — the drop is
+        # arranged on the last packet, so nothing is written after it — but this
+        # is what a later test that drops the line halfway would run into, and a
+        # stand-in that quietly accepts what the real one refuses measures the
+        # wrong thing.
+        if not self.connected:
+            raise ConnectionError("Not connected to the Ruida controller.")
         self.written.append(data)
         self.send_q.put(data)
         self.deepest = max(self.deepest, len(self.written) - len(self.acknowledged))
@@ -1285,19 +1306,27 @@ def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
     """
     a_design_over_one_block(ruida)
     upload = RuidaUpload(ruida)
-    # Two headers and six blocks; the eighth packet is the last block, and it is
-    # the one that goes out and is never acknowledged.
-    session = deferring(upload, monkeypatch, stops_before=7)
+    # Both the packet the line dies on and the numbers expected back are derived
+    # from the frames, not counted out: how many blocks a drawing makes is a
+    # property of the drawing (see `a_design_over_one_block`). Building twice to
+    # get them is safe — two builds of one drawing agree, measured there.
+    total = len(upload.frames("BORD", upload.runner.build_job_bytes()))
+    blocks = total - 2
+    assert blocks > 1, "the design fitted in one block after all"
+    # The last packet is the last block: it goes out and is never acknowledged.
+    session = deferring(upload, monkeypatch, stops_before=total - 1)
     upload.per_chunk_seconds = 0.5
 
     with pytest.raises(DesignError) as error:
         upload.upload("BORD")
 
     assert error.value.code == "upload.stalled"
-    assert error.value.values == {"sent": 5, "chunks": 6}
-    assert "5 of 6" in str(error.value), str(error.value)
-    assert len(session.written) == 8, "not every packet was handed over"
-    assert len(session.acknowledged) == 7, "the count of acknowledgements moved"
+    assert error.value.values == {"sent": blocks - 1, "chunks": blocks}
+    assert f"{blocks - 1} of {blocks}" in str(error.value), str(error.value)
+    assert len(session.written) == total, "not every packet was handed over"
+    assert len(session.acknowledged) == total - 1, (
+        "the count of acknowledgements moved"
+    )
 
 
 def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
@@ -1335,21 +1364,26 @@ def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
         upload = RuidaUpload(ruida)
         session = deferring(upload, monkeypatch, ack_seconds=0.05)
         if only_at_the_end:
-            waited = []
             real = upload._wait_for_the_line
 
-            def only_the_ninth(*args):
-                waited.append(1)
-                if len(waited) > 8:  # eight in the loop, then the one after it
-                    real(*args)
+            def only_after_the_last_write(session_arg, sent, chunks):
+                # The wait after the loop is the one that runs when every packet
+                # has already been written — two headers and `chunks` blocks.
+                # Derived from the code under test rather than counted out to a
+                # literal, because the number of blocks is a property of a
+                # drawing (see `a_design_over_one_block`), not a constant.
+                if len(session.written) == chunks + 2:
+                    real(session_arg, sent, chunks)
 
-            monkeypatch.setattr(upload, "_wait_for_the_line", only_the_ninth)
+            monkeypatch.setattr(
+                upload, "_wait_for_the_line", only_after_the_last_write
+            )
         result = upload.upload("BORD")
         return result, session
 
     result, session = upload_once(only_at_the_end=False)
     packets = result["chunks"] + 2
-    assert packets == 8, packets
+    assert result["chunks"] > 1, "the design fitted in one block after all"
     assert session.deepest == 1, (
         f"{session.deepest} packets were out at once; one block at a time means one"
     )
@@ -1435,20 +1469,20 @@ def test_on_usb_the_queue_alone_still_bounds_what_is_in_flight(
             upload, monkeypatch, ack_seconds=0.02, acknowledges=False
         )
         if only_at_the_end:
-            waited = []
             real = upload._wait_for_the_line
 
-            def only_the_ninth(*args):
-                waited.append(1)
-                if len(waited) > 8:
-                    real(*args)
+            def only_after_the_last_write(session_arg, sent, chunks):
+                if len(session.written) == chunks + 2:
+                    real(session_arg, sent, chunks)
 
-            monkeypatch.setattr(upload, "_wait_for_the_line", only_the_ninth)
+            monkeypatch.setattr(
+                upload, "_wait_for_the_line", only_after_the_last_write
+            )
         return upload.upload("BORD"), session
 
     result, session = upload_once(only_at_the_end=False)
     packets = result["chunks"] + 2
-    assert packets == 8, packets
+    assert result["chunks"] > 1, "the design fitted in one block after all"
     assert session._ack_pending is False, "this was supposed to model usb"
     assert session.deepest == 2, session.deepest
     assert session.deepest_queue == 1, session.deepest_queue
@@ -1490,8 +1524,18 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
     """
     a_design_over_one_block(ruida)
     upload = RuidaUpload(ruida)
+    # Both the packet the line dies on and the numbers expected back are derived
+    # from the frames, not counted out: how many blocks a drawing makes is a
+    # property of the drawing (see `a_design_over_one_block`). Building twice to
+    # get them is safe — two builds of one drawing agree, measured there.
+    total = len(upload.frames("BORD", upload.runner.build_job_bytes()))
+    blocks = total - 2
     session = deferring(
-        upload, monkeypatch, ack_seconds=0.02, acknowledges=False, stops_before=7
+        upload,
+        monkeypatch,
+        ack_seconds=0.02,
+        acknowledges=False,
+        stops_before=total - 1,
     )
     upload.per_chunk_seconds = 0.5
 
@@ -1499,8 +1543,8 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
         upload.upload("BORD")
 
     assert error.value.code == "upload.interrupted"
-    assert error.value.values == {"sent": 5, "chunks": 6}
-    assert "5 of 6" in str(error.value), str(error.value)
+    assert error.value.values == {"sent": blocks - 1, "chunks": blocks}
+    assert f"{blocks - 1} of {blocks}" in str(error.value), str(error.value)
     assert not session.connected
 
 
@@ -1528,8 +1572,18 @@ def test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it(
     """
     a_design_over_one_block(ruida)
     upload = RuidaUpload(ruida)
+    # Both the packet the line dies on and the numbers expected back are derived
+    # from the frames, not counted out: how many blocks a drawing makes is a
+    # property of the drawing (see `a_design_over_one_block`). Building twice to
+    # get them is safe — two builds of one drawing agree, measured there.
+    total = len(upload.frames("BORD", upload.runner.build_job_bytes()))
+    blocks = total - 2
     session = deferring(
-        upload, monkeypatch, ack_seconds=0.02, acknowledges=False, stops_before=7
+        upload,
+        monkeypatch,
+        ack_seconds=0.02,
+        acknowledges=False,
+        stops_before=total - 1,
     )
     upload.per_chunk_seconds = 0.5
 
@@ -1539,4 +1593,4 @@ def test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it(
     said = str(error.value)
     assert "stopped answering" in said, said
     assert "connection" not in said.lower(), said
-    assert "5 of 6" in said and "panel" in said, said
+    assert f"{blocks - 1} of {blocks}" in said and "panel" in said, said
