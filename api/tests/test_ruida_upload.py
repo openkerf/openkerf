@@ -813,7 +813,7 @@ class FakeSession:
     Stands in for `RuidaSession` in the three ways the flow control cares about:
     `is_busy` (`ruida/ruidasession.py:161`, `_reply_pending or _ack_pending`),
     `connected`, and `write`, which on the real one raises `ConnectionError` the
-    moment the session is not connected (`:167`).
+    moment the session is not connected (`:186`).
     """
 
     connected = True
@@ -857,9 +857,9 @@ def a_fake_session(upload, monkeypatch, **kwargs):
 def test_a_transfer_that_stalls_says_how_far_it_got(ruida, monkeypatch):
     """
     The engine gives up after about four seconds in silence — `RuidaSession.write`
-    (`ruida/ruidasession.py:167`) retries a full queue twelve times at 0.25 s and
+    (`ruida/ruidasession.py:186`) retries a full queue twelve times at 0.25 s and
     then falls out of its own `while _tries:` loop without raising, and
-    `_data_sender` (`ruida/controller.py:118`) never looks at whether a write
+    `_data_sender` (`ruida/controller.py:119`) never looks at whether a write
     landed and says "File Sent." at the end regardless. Its own source carries the
     TODO: "What does the calling method do in the case of timeout? How to inform
     the calling method a timeout occurred?"
@@ -926,7 +926,7 @@ def test_the_upload_waits_for_a_busy_line_instead_of_writing_over_it(
 def test_a_connection_lost_halfway_says_how_far_it_got(ruida, monkeypatch):
     """
     `RuidaSession.write` raises `ConnectionError` as soon as the session is not
-    connected (`ruida/ruidasession.py:167`) — the machine switched off, the cable
+    connected (`ruida/ruidasession.py:186`) — the machine switched off, the cable
     out, the Ruida's own habit of dropping and silently reopening (CLAUDE.md's
     row on the connection lifecycle). Unhandled that is a 500 with a stack trace,
     which tells the person at the laser nothing about the half file now sitting
@@ -1041,7 +1041,7 @@ def test_a_machine_that_is_not_connected_refuses_with_a_sentence(ruida):
 def test_a_session_that_is_open_but_not_connected_refuses_too(ruida, monkeypatch):
     """
     `RuidaSession.connected` is more than "an object exists": it wants the
-    transport open *and* the controller answering (`ruida/ruidasession.py:150`).
+    transport open *and* the controller answering (`ruida/ruidasession.py:154`).
     A session that exists while the machine is off is exactly the case where
     `write` raises `ConnectionError` on the first byte, so it is caught here
     instead, before a file is announced.
@@ -1087,7 +1087,7 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
     """
     Why the upload does *not* pause the engine's status monitor while it sends.
 
-    `RuidaController._status_monitor` (`ruida/controller.py:160`) sends a
+    `RuidaController._status_monitor` (`ruida/controller.py:162`) sends a
     `GET_SETTING` every 0.2 s for as long as the device is connected, over the
     same session our blocks go out on. So while we are sending, its packets land
     between ours. The engine's answer to that is `pause_monitor()`, and the
@@ -1164,7 +1164,7 @@ class DeferringSession:
     arriving. On a real session `RuidaSession.write` is `send_q.put` and nothing
     else (`ruida/ruidasession.py:188`); a separate handshaker thread pops the
     packet, hands it to the transport, and only then — and only on a `udp`
-    interface (`:345-347`) — sets `_ack_pending`, the half of `is_busy` our own
+    interface (`:349`) — sets `_ack_pending`, the half of `is_busy` our own
     blocks ever touch. So there is a window after every write in which the line
     still looks free, and there is no window at all after the last one, because
     nobody looks again.
@@ -1187,6 +1187,11 @@ class DeferringSession:
         self.stops_before = stops_before
         self._ack_pending = False
         self._shutdown = False
+        #: The most packets ever out at once — written and not yet acknowledged,
+        #: read at the moment of each write. One is the whole point; more than
+        #: one means blocks were handed over without waiting for the one before.
+        self.deepest = 0
+        self.deepest_queue = 0
         self._thread = threading.Thread(target=self._handshake, daemon=True)
         self._thread.start()
 
@@ -1197,6 +1202,8 @@ class DeferringSession:
     def write(self, data):
         self.written.append(data)
         self.send_q.put(data)
+        self.deepest = max(self.deepest, len(self.written) - len(self.acknowledged))
+        self.deepest_queue = max(self.deepest_queue, self.send_q.qsize())
 
     def _handshake(self):
         while not self._shutdown:
@@ -1274,38 +1281,65 @@ def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
     ruida, monkeypatch, deferring
 ):
     """
-    "One block at a time" has to be true of the writes, not only of the loop.
+    The flow control is per block, and only a count of packets in flight can
+    say so.
 
-    `RuidaSession.write` returns the moment the packet is in the queue, and
-    `_ack_pending` is set by another thread afterwards, so a loop that waits only
-    on `is_busy` finds the line free straight after its own write and puts the
-    next block in the queue immediately. Measured on this setup with an
-    acknowledgement that takes 0.05 s and six blocks plus two headers: waiting on
-    `is_busy` alone, the whole upload returned in **0.019 s with 0 of 8 packets
-    acknowledged and all eight still in the queue** — it had sent nothing and
-    said it was done. Asking the queue as well (`_line_is_busy`): 0.63, 0.57 and
-    0.59 s over three runs, 8 of 8 acknowledged, queue empty. The wall clock is
-    the measurement, and the floor under it is real work — 8 × 0.05 s of
-    acknowledgement plus a 0.02 s poll interval per packet.
+    The wall clock cannot. The wait after the last block already forces the
+    whole file to be acknowledged before `upload()` returns, so "wait before
+    every block" and "wait once at the end" finish in the same time with the
+    same number of acknowledgements. Measured, eight packets acknowledged at
+    0.05 s each: **0.625 s and 8 of 8** with the wait in the loop, **0.481 s and
+    8 of 8** with only the final wait. An earlier version of this test asserted
+    on those two numbers and passed with the loop's wait removed — it was
+    guarding half of what it is named after. (The 0.019 s in the round before
+    that was measured on code with *neither* mechanism, which is why it looked
+    like evidence.)
 
-    The bound below is deliberately loose (0.32 s, well under the 0.57 s
-    measured) because it has to survive a slow machine; what it is there to
-    catch is the 0.019 s, which is two orders of magnitude away.
+    What does separate them is how many packets are out at once — written and
+    not yet acknowledged, read at the moment of each write. One block at a time
+    means never more than one. Measured on the same two runs: **1** with the
+    wait in the loop, **8** without it, and the send queue never deeper than
+    those same numbers.
+
+    So this runs both. The B half neutralises exactly the line under test — the
+    first eight calls to `_wait_for_the_line` are the ones inside the loop, the
+    ninth is the one after it — and requires the depth to blow out, because a
+    test that cannot fail on the broken code is not evidence about the working
+    code.
     """
-    a_design_over_one_block(ruida)
-    upload = RuidaUpload(ruida)
-    session = deferring(upload, monkeypatch, ack_seconds=0.05)
+    def upload_once(only_at_the_end):
+        a_design_over_one_block(ruida)
+        upload = RuidaUpload(ruida)
+        session = deferring(upload, monkeypatch, ack_seconds=0.05)
+        if only_at_the_end:
+            waited = []
+            real = upload._wait_for_the_line
 
-    started = time.monotonic()
-    result = upload.upload("BORD")
-    took = time.monotonic() - started
+            def only_the_ninth(*args):
+                waited.append(1)
+                if len(waited) > 8:  # eight in the loop, then the one after it
+                    real(*args)
 
+            monkeypatch.setattr(upload, "_wait_for_the_line", only_the_ninth)
+        result = upload.upload("BORD")
+        return result, session
+
+    result, session = upload_once(only_at_the_end=False)
     packets = result["chunks"] + 2
-    assert len(session.acknowledged) == packets, (
-        f"{len(session.acknowledged)} of {packets} packets were acknowledged "
-        f"before the upload said it was done"
+    assert packets == 8, packets
+    assert session.deepest == 1, (
+        f"{session.deepest} packets were out at once; one block at a time means one"
     )
-    assert took > packets * 0.05 * 0.8, f"the upload returned after only {took:.3f}s"
+    assert session.deepest_queue == 1, session.deepest_queue
+    assert len(session.acknowledged) == packets
+
+    # And the same run with the loop's wait taken out, to show the assertion
+    # above is about that wait and not about the one after the loop.
+    _, without = upload_once(only_at_the_end=True)
+    assert without.deepest == packets, (
+        f"removing the wait inside the loop left the depth at {without.deepest}, "
+        f"so the assertion above would not have caught its removal"
+    )
 
 
 def test_a_nameless_upload_says_so_before_it_says_anything_about_the_job(

@@ -114,9 +114,9 @@ class RuidaUpload:
     The upload conversation: the packets, and putting them on the line.
 
     The flow control is ours. The engine's is `_data_sender`
-    (`ruida/controller.py:118`), a thread that pops its whole queue into
+    (`ruida/controller.py:119`), a thread that pops its whole queue into
     `RuidaSession.write` and says "File Sent." when the queue is empty — and
-    `write` (`ruida/ruidasession.py:167`) gives up after twelve tries at 0.25 s
+    `write` (`ruida/ruidasession.py:186`) gives up after twelve tries at 0.25 s
     on a full queue and falls out of its own loop without raising, carrying the
     TODO "How to inform the calling method a timeout occurred?". Nothing between
     those two ever finds out that a packet did not go. On an engraving job that
@@ -127,7 +127,7 @@ class RuidaUpload:
     arriving are two different moments on a real session. `RuidaSession.write`
     is `send_q.put` and nothing else (`ruida/ruidasession.py:188`); a separate
     handshaker thread pops the packet, hands it to the transport, and only then
-    sets `_ack_pending` (`:345-347`) — the half of `is_busy` that our own blocks
+    sets `_ack_pending` (`:349`) — the half of `is_busy` that our own blocks
     ever touch. Waiting on `is_busy` alone therefore waits on nothing: the line
     still looks free straight after our own write. Measured, six blocks and two
     headers against a session that acknowledges in 0.05 s: the whole upload
@@ -170,7 +170,7 @@ class RuidaUpload:
     def _session(self):
         """The live session, or a refusal that says nothing has been sent.
 
-        `RuidaSession.connected` (`ruida/ruidasession.py:150`) wants three things
+        `RuidaSession.connected` (`ruida/ruidasession.py:154`) wants three things
         at once: not shut down, the controller answering, and the transport open.
         Anything less and the very first `write` raises `ConnectionError` — so it
         is asked here, before a file is announced on the panel, rather than found
@@ -209,20 +209,25 @@ class RuidaUpload:
         """Whether the line still holds something of ours.
 
         Two questions, because a real session answers only half of it. The
-        packet sits in `send_q` from `write` until the handshaker thread takes
-        it (`ruida/ruidasession.py:188`, `:322-330`), and `_ack_pending` is set
-        only *after* that thread has handed it to the transport — and only on a
-        `udp` interface (`:345-347`). So on `is_busy` alone there is a window
-        after every write in which the line looks free while our packet has not
-        moved, and on a `usb` interface `_ack_pending` is never set at all, which
-        leaves `is_busy` reporting `_reply_pending` — set by `0xDA` commands, so
-        by the status polls and never by our blocks.
+        packet sits in `send_q` from `write` (`ruida/ruidasession.py:188`) until
+        the handshaker thread takes it (`:330`), and `_ack_pending` is set only
+        *after* that thread has handed it to the transport — and only on a `udp`
+        interface (`:349`). So on `is_busy` alone there is a window after every
+        write in which the line looks free while our packet has not moved.
 
-        Asking the queue first closes the window and gives `usb` an answer that
-        is about our own packets: empty queue means the handshaker has taken
-        everything we handed it. On `udp` the acknowledgement is on top of that;
-        on `usb` "taken and written to the transport" is all the engine can tell
-        anybody, and this does not pretend otherwise.
+        On `usb` there is no such moment at all: the only other `_ack_pending`
+        is in `connect()` (`:248`), while a session is being established, never
+        per packet. The engine says why in its own comment two lines above —
+        "When comms is via USB there are no ACK responses" (`:240-241`) — so
+        there `is_busy` reports `_reply_pending`, which `0xDA` commands set: the
+        status polls, never our blocks.
+
+        Asking the queue first closes the `udp` window and gives `usb` an answer
+        that is about our own packets at all: an empty queue means the
+        handshaker has taken everything we handed it. On `udp` the
+        acknowledgement sits on top of that; on `usb` "taken and written to the
+        transport" is the most the engine can tell anybody, and this does not
+        pretend otherwise.
         """
         pending = getattr(session, "send_q", None)
         if pending is not None and not pending.empty():
