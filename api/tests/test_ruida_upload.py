@@ -29,6 +29,29 @@ def a_rectangle(kernel):
     kernel.console("element* classify\n")
 
 
+def a_parked_driver(device):
+    """
+    A `RuidaDriver` built for a test to inspect, shielded the same way
+    `_upload_driver_for` shields the one it builds for real.
+
+    A bare `RuidaDriver(device)` starts a status thread that tries
+    `service.connect()` five times a second for the rest of the run
+    (`ruida/controller.py:50,162,189` — the construction `CLAUDE.md`'s own row
+    warns against leaving unguarded). Measured against the `ruida` fixture
+    (`interface` `usb`, `address` `localhost`, `connected` `False`):
+    `RuidaDevice.connect` reaches `active_session.connect()` -> `_open()`,
+    which fails locally and reaches no real machine today — but a kernel
+    pointed at a real UDP address would send actual packets from that same
+    line, and a test has no business depending on today's harmlessness.
+    """
+    from meerk40t.ruida.driver import RuidaDriver
+
+    driver = RuidaDriver(device)
+    driver.controller.service = _AlwaysConnected(device)
+    driver.recv.unwatch(driver.controller.recv)
+    return driver
+
+
 def test_the_job_becomes_bytes_that_end_like_a_file(ruida):
     """
     The engine's own `save_job` writes 4 bytes and leaves 623 in the buffer
@@ -340,16 +363,10 @@ def test_the_reset_covers_every_field_ruidadriver_init_sets(ruida):
     against a stand-in object and read back what it touched — so this test
     breaks the moment the two lists drift apart, not a version behind.
 
-    Built through `_upload_driver_for`, not `RuidaDriver(...)` directly: a bare
-    `RuidaDriver` starts the same unguarded status thread `_AlwaysConnected`
-    exists to stop — measured against this fixture, `usb`/`localhost`, so
-    today it only fails a local `_open()` and reaches no real machine, but it
-    is still the construction this project's own `CLAUDE.md` row warns is
-    unsafe to leave standing, and a suite pointed at a real UDP address would
-    make that row's warning literal. `_upload_driver_for` builds the same
-    `RuidaDriver` and shields it the same way `build_job_bytes` always does.
+    Built through `a_parked_driver`, not `RuidaDriver(...)` directly — see its
+    own docstring for why a bare one has no business existing even in a test.
     """
-    fresh = CommandRunner(ruida)._upload_driver_for(ruida.device)
+    fresh = a_parked_driver(ruida.device)
     fresh_fields = set(vars(fresh).keys())
 
     # The expensive, stateful half `_upload_driver_for` deliberately keeps across
