@@ -374,11 +374,78 @@ class CommandRunner:
             # once here lets the status thread and every `_data_sender` take turns
             # on it normally instead.
             driver.controller.resume_monitor()
+            # `wait_idle` (`ruida/controller.py:401`) is
+            # `while not self._idle and self.service.connected: sleep(...)` — with
+            # `_AlwaysConnected` the second half is always true, so once anything
+            # ever sets `_idle` false (`:212-218`, on a home or move step; nothing
+            # today's plain cut layer produces reaches that) this would spin
+            # forever instead of returning once real status updates stop arriving.
+            # Its caller `sync` (`:407`) then calls
+            # `self.service.active_session.close()` — through `__getattr__`, so the
+            # *real*, shared session. Screened off rather than merely explained:
+            # this controller is never asked to wait for or resync anything.
+            driver.controller.wait_idle = lambda: None
+            driver.controller.sync = lambda: None
             self._upload_driver = driver
             self._upload_device = device
         driver = self._upload_driver
         driver.controller.job.buffer.clear()
+        self._reset_upload_driver_state(driver)
         return driver
+
+    @staticmethod
+    def _reset_upload_driver_state(driver) -> None:
+        """
+        Put a reused build driver back in the state a fresh one starts in.
+
+        Reusing the driver (not just its controller) reuses whatever a previous
+        build left on it too. Measured: `power_dirty`/`speed_dirty` (`ruida/driver.py
+        :51,55`) start `True` and `_move` (`:555-559`) sets them `False` the moment
+        it writes `speed_laser_1`/`max_power_1`/`min_power_1` once — after that,
+        every further build on the same driver skipped those commands entirely.
+        On the same rectangle, the same runner: build 1 was 433 bytes; builds 2 and
+        3 were 418, missing exactly `SPEED_LASER_1` (`c9 02 ...`) and the min/max
+        power pair (`c6 02 .../c6 01 ...`). `CommandRunner` lives for the life of an
+        `ApiServer` (`server.py:273`), so this was not theoretical: the first upload
+        of a session would be right and every one after it would go to the machine
+        without speed or power.
+
+        So every field `RuidaDriver.__init__` sets *other than* the construction
+        of `service`/`events`/`controller`/`recv`/`name` (`:35-48`) — the expensive,
+        stateful half we deliberately keep — goes back to its `__init__` value here,
+        one line per field, in the same order, so the next build starts exactly as
+        fresh as the first:
+        """
+        driver.native_x = 0  # `:37` — a fresh job always starts its own move deltas at 0.
+        driver.native_y = 0  # `:38` — same.
+        driver.on_value = 0  # `:50` — laser on/off state from the previous job.
+        driver.power_dirty = True  # `:51` — the flag this bug was found on.
+        driver._current_power = -1.0  # `:52` — its sentinel, "no power written yet".
+        driver._jog_speed = 600.0  # `:54` — constant default; reset for parity.
+        driver.speed_dirty = True  # `:55` — the other flag this bug was found on.
+        driver.absolute_dirty = True  # `:56` — same shape, same risk, untested by the
+        # reviewer's measurement but identical to the two that were wrong.
+        driver._absolute = True  # `:57`
+        driver.paused = False  # `:58`
+        driver.is_relative = False  # `:59`
+        driver.laser = False  # `:60`
+        driver._shutdown = False  # `:62` — a previous build's abort must not reach this one.
+        driver.queue = []  # `:64` — `plot_start` clears this at the end of a normal run;
+        # reset here too in case a previous build raised before reaching that point.
+        driver._queue_current = 0  # `:65`
+        driver._queue_total = 0  # `:66`
+        from meerk40t.core.plotplanner import PlotPlanner
+
+        driver.plot_planner = PlotPlanner(  # `:67-69`
+            dict(), single=True, ppi=False, shift=False, group=True
+        )
+        driver._aborting = False  # `:70`
+        driver._signal_updates = False  # `:72` — constant; reset for parity.
+        # `settings` is `Parameters`' own dict (`core/parameters.py`), populated as the
+        # design's cut settings are read; a fresh driver always starts with an empty
+        # one (`Parameters.__init__`, guarded so a second real `__init__` call would
+        # not reach it — this is not that call, so it is safe to clear directly).
+        driver.settings.clear()
 
     def _plan_without_spooling(self, mutators=()) -> list[str]:
         """

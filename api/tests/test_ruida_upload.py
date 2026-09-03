@@ -1,8 +1,8 @@
 """
-Een job als bestand: de bytes, het gesprek en wat er misgaat.
+A job as a file: the bytes, the conversation, and what goes wrong.
 
-Nooit tegen een laser. De end-to-end-toets praat tegen de Ruida-emulator van de
-engine zelf, die dit gesprek aanneemt en het bestand wegschrijft.
+Never against a laser. The end-to-end test talks to the engine's own Ruida
+emulator, which accepts this conversation and writes the file out.
 """
 
 import threading
@@ -16,13 +16,13 @@ from openkerf_api.edits import DesignError
 
 @pytest.fixture
 def ruida(kernel):
-    """Een echte Ruida-service, zoals test_machine_connect die ook maakt."""
+    """A real Ruida service, the way test_machine_connect also makes one."""
     kernel.console("service device start ruida -i\n")
     return kernel
 
 
 def a_rectangle(kernel):
-    """Iets om te branden: één rechthoek in een snijlaag."""
+    """Something to burn: one rectangle in a cut layer."""
     kernel.console("rect 20mm 20mm 40mm 30mm\n")
     kernel.console("operation* delete\n")
     kernel.console("op cut\n")
@@ -31,9 +31,9 @@ def a_rectangle(kernel):
 
 def test_the_job_becomes_bytes_that_end_like_a_file(ruida):
     """
-    `save_job` in de engine schrijft 4 bytes en laat 623 in de buffer staan
-    (gemeten, zie CLAUDE.md). Wij halen ze uit de buffer, en dan hoort er een
-    compleet bestand uit te komen: het eindigt op SET_FILE_SUM gevolgd door
+    The engine's own `save_job` writes 4 bytes and leaves 623 in the buffer
+    (measured, see CLAUDE.md). We take them out of the buffer instead, and then a
+    complete file should come out: it ends on SET_FILE_SUM followed by
     END_OF_FILE.
     """
     a_rectangle(ruida)
@@ -42,18 +42,18 @@ def test_the_job_becomes_bytes_that_end_like_a_file(ruida):
     data = runner.build_job_bytes()
 
     assert len(data) > 100, f"only {len(data)} bytes — the buffer was not drained"
-    # `\xD7` is END_OF_FILE; `\xCC` staat er niet in dit stadium.
+    # `\xD7` is END_OF_FILE; `\xCC` is not there at this stage.
     assert data.endswith(b"\xd7"), data[-8:].hex(" ")
-    # SET_FILE_SUM staat er vlak voor. Let op: dat is `E5 05`
-    # (`meerk40t/ruida/rdjob.py:173`), niet D8 11 — het plan had het mis en de
-    # controller heeft dat vóór de uitvoering rechtgezet.
+    # SET_FILE_SUM sits right before it. Note: that is `E5 05`
+    # (`meerk40t/ruida/rdjob.py:173`), not D8 11 — the plan had that wrong and the
+    # controller corrected it before this was built.
     assert b"\xe5\x05" in data[-16:], data[-16:].hex(" ")
 
 
 def test_building_the_bytes_does_not_spool_anything(ruida):
     """
-    Bouwen is niet branden. Wie deze route aanroept mag geen job in de wachtrij
-    krijgen — dat is het hele verschil met `start_job`.
+    Building is not burning. Whoever calls this route must not get a job in the
+    queue — that is the whole difference from `start_job`.
     """
     a_rectangle(ruida)
     runner = CommandRunner(ruida)
@@ -267,14 +267,52 @@ def test_ten_builds_do_not_leave_ten_threads(ruida):
     a_rectangle(ruida)
     runner = CommandRunner(ruida)
 
-    before = threading.active_count()
+    # Named threads, not `active_count()`: this suite runs many kernels in one
+    # process, and their own daemon threads dying at the wrong instant makes a raw
+    # count flaky — a thread that was already in `before` vanishing from a later
+    # `enumerate()` cannot register as "new", so this is immune to that noise.
+    before = set(threading.enumerate())
     runner.build_job_bytes()
-    after_one = threading.active_count()
+    new_after_one = set(threading.enumerate()) - before
     for _ in range(9):
         runner.build_job_bytes()
-    after_ten = threading.active_count()
+    new_after_ten = set(threading.enumerate()) - before
 
-    assert after_one - before == 1, f"{after_one - before} new thread(s) for one build"
-    assert after_ten == after_one, (
-        f"{after_ten - after_one} extra thread(s) after nine more builds"
+    assert len(new_after_one) == 1, (
+        f"{len(new_after_one)} new thread(s) for one build: "
+        f"{[t.name for t in new_after_one]}"
     )
+    assert new_after_ten == new_after_one, (
+        f"threads differ after nine more builds: "
+        f"+{[t.name for t in new_after_ten - new_after_one]} "
+        f"-{[t.name for t in new_after_one - new_after_ten]}"
+    )
+
+
+def test_three_builds_of_the_same_design_are_byte_identical(ruida):
+    """
+    Reusing the driver reuses its state as well as its controller.
+    `RuidaDriver.__init__` sets `power_dirty`/`speed_dirty` true
+    (`ruida/driver.py:51,55`); `_move` (`:555-559`) writes `speed_laser_1` and the
+    min/max power once and then sets both false. On a driver kept around across
+    calls, only the first build ever wrote them again — measured, on this same
+    rectangle, this same runner, before `_reset_upload_driver_state` existed:
+    `433, 418, 418` bytes, the second and third missing exactly `SPEED_LASER_1`
+    (`c9 02 00 00 00 4e 10`) and the min/max power pair (`c6 02 7f 7f`/
+    `c6 01 7f 7f`). `CommandRunner` lives for the life of an `ApiServer`
+    (`server.py:273`), so only the first upload of a session would have been
+    right. With the reset: `433, 433, 433` — verified by hand against the code
+    before this fix by disabling the reset call (see the fix-4 report).
+
+    The thread tests (above) count threads; this is the gap they left — a thread
+    count says nothing about what ended up in the file.
+    """
+    a_rectangle(ruida)
+    runner = CommandRunner(ruida)
+
+    first = runner.build_job_bytes()
+    second = runner.build_job_bytes()
+    third = runner.build_job_bytes()
+
+    lengths = (len(first), len(second), len(third))
+    assert first == second == third, f"lengths {lengths}, not identical"
