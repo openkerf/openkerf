@@ -1315,9 +1315,16 @@ def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
     upload = RuidaUpload(ruida)
     # Both the packet the line dies on and the numbers expected back are derived
     # from the frames, not counted out: how many blocks a drawing makes is a
-    # property of the drawing (see `a_design_over_one_block`). Building twice to
-    # get them is safe — two builds of one drawing agree, measured there.
-    total = len(upload.frames("BORD", upload.runner.build_job_bytes()))
+    # property of the drawing (see `a_design_over_one_block`). The job is built
+    # once and pinned, so the bytes measured here and the bytes `upload()` sends
+    # are the same object. Two builds of one drawing do agree today — but a test
+    # that leans on that fails, when it stops being true, by aiming
+    # `stops_before` at the wrong packet and reading numbers it did not expect:
+    # a red result pointing at the flow control for something that happened in
+    # the building. There is nothing left here to compare.
+    payload = upload.runner.build_job_bytes()
+    monkeypatch.setattr(upload.runner, "build_job_bytes", lambda *a, **kw: payload)
+    total = len(upload.frames("BORD", payload))
     blocks = total - 2
     assert blocks > 1, "the design fitted in one block after all"
     # The last packet is the last block: it goes out and is never acknowledged.
@@ -1533,9 +1540,16 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
     upload = RuidaUpload(ruida)
     # Both the packet the line dies on and the numbers expected back are derived
     # from the frames, not counted out: how many blocks a drawing makes is a
-    # property of the drawing (see `a_design_over_one_block`). Building twice to
-    # get them is safe — two builds of one drawing agree, measured there.
-    total = len(upload.frames("BORD", upload.runner.build_job_bytes()))
+    # property of the drawing (see `a_design_over_one_block`). The job is built
+    # once and pinned, so the bytes measured here and the bytes `upload()` sends
+    # are the same object. Two builds of one drawing do agree today — but a test
+    # that leans on that fails, when it stops being true, by aiming
+    # `stops_before` at the wrong packet and reading numbers it did not expect:
+    # a red result pointing at the flow control for something that happened in
+    # the building. There is nothing left here to compare.
+    payload = upload.runner.build_job_bytes()
+    monkeypatch.setattr(upload.runner, "build_job_bytes", lambda *a, **kw: payload)
+    total = len(upload.frames("BORD", payload))
     blocks = total - 2
     session = deferring(
         upload,
@@ -1581,9 +1595,16 @@ def test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it(
     upload = RuidaUpload(ruida)
     # Both the packet the line dies on and the numbers expected back are derived
     # from the frames, not counted out: how many blocks a drawing makes is a
-    # property of the drawing (see `a_design_over_one_block`). Building twice to
-    # get them is safe — two builds of one drawing agree, measured there.
-    total = len(upload.frames("BORD", upload.runner.build_job_bytes()))
+    # property of the drawing (see `a_design_over_one_block`). The job is built
+    # once and pinned, so the bytes measured here and the bytes `upload()` sends
+    # are the same object. Two builds of one drawing do agree today — but a test
+    # that leans on that fails, when it stops being true, by aiming
+    # `stops_before` at the wrong packet and reading numbers it did not expect:
+    # a red result pointing at the flow control for something that happened in
+    # the building. There is nothing left here to compare.
+    payload = upload.runner.build_job_bytes()
+    monkeypatch.setattr(upload.runner, "build_job_bytes", lambda *a, **kw: payload)
+    total = len(upload.frames("BORD", payload))
     blocks = total - 2
     session = deferring(
         upload,
