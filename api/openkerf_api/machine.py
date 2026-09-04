@@ -62,9 +62,15 @@ DISCONNECTS = ("ruida_disconnect", "usb_disconnect")
 # attempt at this scored twice, once for a catalogue entry "the API no longer sends"
 # and once for a refusal that had become unreadable. Sentence and code belong in the
 # same call.
+#
+# Both carry a code. This one went without for as long as it was the only refusal
+# here, and that stopped being defensible the moment `machine.motorsWhileBurning`
+# stood beside it: the same situation, one arm answering in Dutch and the other in
+# English, decided by which button you pressed.
 def _moving_while_burning() -> DesignError:
     return DesignError(
-        "A job is running. Stop it first; moving while burning ruins the job."
+        "A job is running. Stop it first; moving while burning ruins the job.",
+        code="machine.movingWhileBurning",
     )
 
 

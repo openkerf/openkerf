@@ -2521,7 +2521,10 @@ export const en = {
 		other: '{n} of these contours are open lines rather than outlines, so nothing in them can fall out. A stencil needs an outline typeface; a single-stroke one draws letters with strokes and has no inside.'
 	},
 	'api.stencil.noIslands': 'Nothing in this shape would fall out: there is no part of it that the cut would set loose. It needs no bridges.',
-	'api.stencil.tooMuchBridge': '{gaps} gaps of {width} mm take {taken} mm of a contour that is {length} mm long; at most half of it may be bridge. Use a narrower bridge, or fewer per island.',
+	'api.stencil.tooMuchBridge': {
+		one: '1 gap of {width} mm takes {taken} mm of a contour that is {length} mm long; at most half of it may be bridge. Use a narrower bridge, or fewer per island.',
+		other: '{gaps} gaps of {width} mm take {taken} mm of a contour that is {length} mm long; at most half of it may be bridge. Use a narrower bridge, or fewer per island.'
+	},
 	'api.bridges.notSupported': 'Bridges only work on a rectangle, an ellipse, a polyline or a path.',
 	'api.bridges.needsCount': 'Ask for at least one bridge, or clear them instead.',
 	'api.bridges.needsLength': 'A bridge needs a length greater than zero.',
@@ -2586,9 +2589,10 @@ export const en = {
 		'There is no machine active, so there is no offer to put away.',
 	// The refusals the material library's own verbs can produce. Every one of these is
 	// the answer to a button a reader just pressed, so it has to be in the language the
-	// button was in. The plan left `nameTaken` English because it carries a name; that
-	// name is in the field the reader typed it into, one line above the refusal, so a
-	// Dutch sentence without it loses nothing and an English one loses the reader.
+	// button was in. `nameTaken` was once left English on the grounds that it carries a
+	// name and the name is in the field one line above — but the name travels in
+	// `values` now, so the sentence says it in either language and that reasoning went
+	// with the code it described.
 	'api.library.material.nameTaken':
 		'There is already a material called \'{name}\'. Merge the two instead of giving them the same name.',
 	'api.library.material.mergeSelf': 'A material cannot be merged into itself.',
@@ -2750,6 +2754,8 @@ export const en = {
 	// The other direction of `upload.whileBurning`: a move, a burn, a pause or a resume
 	// while a file is going out. One sentence for all of them — which button was pressed
 	// is already in front of the reader, and the remedy is the same everywhere.
+	'api.machine.movingWhileBurning':
+		'A job is running. Stop it first; moving while burning ruins the job.',
 	'api.machine.motorsWhileBurning':
 		'A job is running. Stop it first: releasing the motors during a burn takes the drive out from under a head that is following a path, and the job is lost.',
 	'api.machine.sendingAFile':

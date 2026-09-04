@@ -931,6 +931,14 @@ class Drawing:
                 # would take" while the English one counted them — two halves of one
                 # refusal telling the reader different amounts of the same thing, and
                 # which you saw depended on whether your client knew the code.
+                # One gap is reachable — `if not gaps: continue` above rules out only
+                # zero — and the catalogue says it with `{one, other}`. This half stays
+                # one plural sentence, the way `stencil.singleStroke` does a few lines
+                # up: an f-string has no plural, and branching here would hide the
+                # sentence from the guard that pairs it with `en.ts` (it reads literal
+                # `DesignError(...)` calls). So a client with no catalogue reads "1 gaps"
+                # in that one case, and every client that knows the code — which is what
+                # the app is — reads "1 gap of 3 mm takes".
                 raise DesignError(
                     f"{gaps} gaps of {width:g} mm take {taken:g} mm of a contour that is "
                     f"{length:.1f} mm long; at most half of it may be bridge. Use a "

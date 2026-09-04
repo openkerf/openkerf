@@ -2374,7 +2374,10 @@ export const nl: Catalogue = {
 		other: '{n} van deze contouren zijn open lijnen en geen omtrekken, dus er kan niets uit vallen. Een stencil heeft een omtreklettertype nodig; een eenlijnslettertype tekent letters met streken en heeft geen binnenkant.'
 	},
 	'api.stencil.noIslands': 'Er valt niets uit deze vorm: er is geen deel dat de snede zou lossnijden. Er zijn geen bruggen nodig.',
-	'api.stencil.tooMuchBridge': '{gaps} gaten van {width} mm eten {taken} mm van een contour van {length} mm op; hooguit de helft mag brug zijn. Neem een smallere brug, of minder per eiland.',
+	'api.stencil.tooMuchBridge': {
+		one: '1 gat van {width} mm eet {taken} mm van een contour van {length} mm op; hooguit de helft mag brug zijn. Neem een smallere brug, of minder per eiland.',
+		other: '{gaps} gaten van {width} mm eten {taken} mm van een contour van {length} mm op; hooguit de helft mag brug zijn. Neem een smallere brug, of minder per eiland.'
+	},
 	'api.bridges.notSupported': 'Bruggen werken alleen op een rechthoek, een ellips, een polylijn of een pad.',
 	'api.bridges.needsCount': 'Vraag om minstens één brug, of haal ze juist weg.',
 	'api.bridges.needsLength': 'Een brug heeft een lengte groter dan nul nodig.',
@@ -2571,6 +2574,8 @@ export const nl: Catalogue = {
 	'api.upload.needsName':
 		'Geef het bestand een naam van hoogstens acht letters of cijfers; dat is wat het paneel van de machine laat zien.',
 	'api.upload.noMachine': 'Er is geen actieve machine om het bestand naartoe te sturen.',
+	'api.machine.movingWhileBurning':
+		'Er loopt een job. Stop die eerst; bewegen tijdens het branden verpest de job.',
 	'api.machine.motorsWhileBurning':
 		'Er loopt een job. Stop die eerst: de motoren loslaten tijdens een brand haalt de aandrijving weg onder een kop die een pad volgt, en de job is verloren.',
 	'api.machine.sendingAFile':
