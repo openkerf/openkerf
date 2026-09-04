@@ -152,15 +152,6 @@ leaves it standing there. The line under the heading says so, and it is also the
 tooltip on the button: "The file goes into the machine and stays there. You start
 it on the machine’s own panel — nothing burns from here."
 
-One caveat about finding it, measured rather than promised: the fold sits in the
-part of the panel that scrolls, and the strip with the checklist lies over the
-foot of that. On a full pre-flight — four layers, the note about the machine not
-responding, the note about unverified presets — the fold ends up underneath that
-strip and there is nothing you can scroll to bring it out. Measured on a window of
-1440 × 900: the fold begins at 738 px and the strip at 705, and a click where the
-fold is opens a line of the checklist instead. At 1440 × 1000 and above it stands
-clear and opens normally. So if the heading is not there, make the window taller.
-
 That is the point of it. Once the file is in the machine, nothing has to stay
 attached while it burns — no laptop on a stool beside the machine, no cable to
 trip over, no sleeping screen halfway through an hour of engraving. You walk to
