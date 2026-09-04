@@ -35,6 +35,23 @@ OpenKerf writes the one that matches the keyboard you are on.
 | ⌘S / Ctrl+S | Save the open project | `save` |
 | ⌘⇧S / Ctrl+Shift+S | Save the project under another name | `saveAs` |
 
+The project button in the top bar opens the same six rows, in this order, with a
+line after the first four:
+
+| Row | What it does | |
+|---|---|---|
+| New project | Empties the bed and forgets the current project — sheets, design and machine profiles start over | `project.new` |
+| Open… | Opens the **Projects** window, listing every project on this server, newest first (⌘O) | `project.open` |
+| Save project | Saves under the current name, or opens **Save as…** the first time (⌘S) | `project.save` |
+| Save as… | Opens the **Projects** window in its save mode, to save under a chosen name (⌘⇧S) | `project.saveAs` |
+| — line — | | |
+| Download | Downloads the current project as a file | `project.download` |
+| Upload… | Reads a project file back in, under its own name | `project.upload` |
+
+**New project**, **Open…** and **Upload…** all replace the whole project, so each
+one asks first when there are changes that are not saved: a window titled
+"Unsaved changes", with **Save**, **Discard** and **Cancel**.
+
 ### Selecting
 
 | Keys | What it does | |

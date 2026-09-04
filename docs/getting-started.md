@@ -214,16 +214,45 @@ says how much came in: "4 shapes imported and selected — drag them into place.
 
 ![The bed just after an import: four black shapes selected inside a dashed selection box marked 150.0 × 90.0 mm, with the right-hand panel showing W 150.0, H 90.0, X 5.0, Y 5.0 and the note "4 shapes imported and selected — drag them into place."](images/22-import.png)
 
-Note the difference from **Project → Open project…**, which is the other thing
-entirely: "Opening replaces the whole project: the design, all {n} sheets and the
-material come from the file." That one asks before it throws work away. Import
-never has to.
+Note the difference from **Project → Open…**, which is the other thing entirely:
+that replaces the whole project — design, sheets and material together — with
+what is saved on the server, and it asks first when there is work that would be
+lost. Import never has to.
 
 ### Keeping the work
 
-**Project → Save project** writes the lot into one file — "Design, sheets,
-materials and machine profiles in one file." That is the file **Open project…**
-reads back.
+**Project → Save project** writes the lot to the server, under the name in the
+top bar — "Design, sheets, materials and machine profiles in one file." The
+first time, and every time you choose **Save as…**, a window asks for the name;
+after that **Save project** (⌘S) just saves. The top bar reads "Project ·
+{name}", and a dot in front of the name means there are changes that are not
+saved.
+
+**Project → Open…** (⌘O) shows every project on this server, newest first, the
+open one marked "(current)". Open one with its **Open** button or a double
+click. Behind ⋮ on a row sit **Rename** and **Delete**; deleting asks first:
+"Delete "{name}"? This cannot be undone."
+
+![The Projects window: the title Projects, a Name and Saved column heading, and
+two rows below it — Kastje, marked (current), and Box panels, saved a moment
+earlier — each with an Open button and a ⋮ button.](images/47-projects.png)
+
+If the work has changes that are not saved, **New project**, **Open…** and
+**Upload…** ask first, in a window titled "Unsaved changes": "The changes in
+"{name}" are not saved. What do you want to do with them?", with **Save**,
+**Discard** and **Cancel**. Closing the browser tab asks too.
+
+Projects live in a folder on the server; in Docker that is `/data/projects` on
+the data volume, so they survive a restart and an update and go with the
+volume's backup.
+
+**Download** and **Upload…**, below the line in the same menu, are the way to
+another device: the download is the same file the server keeps, and an
+uploaded file becomes a project here under its own name.
+
+![The top bar with the project button reading Project · Kastje, a dot in front
+of the name, and its menu open underneath, over the sheet tab and canvas: New
+project, Open…, Save project, Save as…, a line, Download and Upload….](images/48-topbar-project.png)
 
 **Export** beside it does something narrower: "Save this sheet as SVG" — one
 sheet, as a drawing, for another program. It does not carry the layers, the

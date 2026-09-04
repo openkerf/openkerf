@@ -16,8 +16,9 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      # Settings, the chosen machine, the layer list, the material library and the
-      # autosave all live under /data. Back it up and you have everything.
+      # Settings, the chosen machine, the layer list, the material library, the
+      # autosave and the projects all live under /data. Back it up and you have
+      # everything.
       - openkerf-data:/data
     devices:
       # The camera over the bed. `ls /dev/video*` on the host shows what is there; a
