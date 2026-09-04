@@ -2153,6 +2153,13 @@
 	}
 	.pf-actions {
 		display: flex;
+		/* The row may fold. Measured with the panel as it opens: the row is 221 px wide
+		   and its two buttons need 243 px in English and 264 px in Dutch, so the start
+		   button ran 9 px past the panel in English — unseen — and 30 px in Dutch, which
+		   cut the time off the end of "Job starten". Folding puts the start button on a
+		   line of its own, at the full width of the row, and the time stays on it.
+		   `tests/footer-fit.test.ts` measures this in both languages. */
+		flex-wrap: wrap;
 		gap: var(--space-2);
 	}
 	/* Inside the footer the checklist carries no margin of its own: the footer's gap
@@ -2160,11 +2167,11 @@
 	.pf-stick .pf-check {
 		margin: 0;
 	}
-	/* The secondary button keeps its word on one line; the primary gets the rest. With
-	   `flex: 1` on both, "Show frame" broke over two lines and the row became
-	   twee keer zo high. */
-	.pf-actions .btn { flex: none; white-space: nowrap; }
-	.pf-actions .btn.primary { flex: 1; }
+	/* Neither button breaks its words; both stretch to the line they are on. Measured
+	   after the fold: the row is 221 px and the pair needs 243 px (English) or 264 px
+	   (Dutch), so they always land on two lines here — "Show frame" above, the start
+	   button below, each the full width of the row. */
+	.pf-actions .btn { flex: 1 1 auto; white-space: nowrap; }
 
 	/* The start button says what it is going to do, with the time in it. */
 	.btn.big { min-height: 44px; font-size: var(--text-md); }
