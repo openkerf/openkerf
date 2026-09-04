@@ -231,8 +231,16 @@ function quoted(haystack: string[], quotation: string): boolean {
 	// quotation does. Without this the splitting undoes the QUOTE_MIN above it, and a
 	// short invention rides along behind a faithful sentence: measured, ". Send."
 	// appended to a true quotation kept the test green, because `Send` is a label in the
-	// catalogue. A part too short to be checked means the quotation is not a run of
-	// messages, and then it has to be found whole or not at all.
+	// catalogue.
+	//
+	// What a short part means is that we cannot tell — not that the quotation is no run
+	// of messages. The screen with nothing to burn is a real run of two, and the first
+	// of them is 24 characters ("There is nothing to burn" + "The bed is empty, or
+	// everything on it sits in a layer that does not burn. …"), so a page quoting both
+	// inside one pair of quotation marks would be turned down here. It is turned down
+	// as a false alarm and not as a wrong answer: a page that is honest gets a line to
+	// look at, and a page that invented something does not get through. That is the
+	// cheap end of this mistake, and the reason for choosing it over the other end.
 	if (parts.some((part) => part.replace(/\.$/, '').trim().length < QUOTE_MIN)) return false;
 	return parts.every((part) => attempt(part) || attempt(part.replace(/\.$/, '')));
 }
@@ -358,42 +366,41 @@ test('every link between the pages resolves', () => {
 });
 
 /**
- * The paragraphs of a page, with pictures, links, code blocks and blockquote marks
- * removed.
+ * The words of a page: its paragraphs, the alt text of its pictures, and neither its
+ * links, its code blocks nor its blockquote marks.
  *
- * The pictures go whole, alt text and all, and that is a hole worth knowing about
- * rather than a decision to be proud of: an alt text may quote the app and nothing
- * here checks it. It is where the contradiction in `library.md` sat out a year — the
- * alt text had "not verified on a test grid" right while the prose beside it said
- * "not measured with a test grid".
+ * The alt text is in here since this round, and it was a hole before: an alt text may
+ * quote the app, and nothing checked it. That is where the contradiction in
+ * `library.md` sat out a year — the alt text of the picture said "not verified on a
+ * test grid" while the prose beside it said "not measured with a test grid", on the
+ * same page, about the same screen.
  *
- * Measured before leaving it: turn the stripping into `$1` and ten quotations in alt
- * texts come back as unfound, of which at most one is drift. Eight are what an alt
- * text is for and no message ever was — "RUN THROUGH THIS: Lid closed / Extraction
- * and air assist on / Workpiece is clamped and flat" is four labels glued with
- * slashes, "Material  not filled in for this sheet" is a row of two, "Verified —
- * burned and judged on a test grid" is a label and its explanation, and two more are
- * captions the app composes out of numbers. The tenth, "Openclipart did not answer in
- * time. The rest is there.", is a *faithful* quotation of `clipart.unavailable` that
- * `fits` turns down, because that message is "{source} {reason}. The rest is there."
- * and its own words are less than half of what the page writes.
+ * Switching it on cost ten quotations, and eight of them were the same mistake rather
+ * than eight different ones: a row the screen composes out of two messages, written
+ * as one quoted string. "Material — not filled in for this sheet" is a label and a
+ * value; "Verified — burned and judged on a test grid" is a badge and its
+ * explanation; "RUN THROUGH THIS: Lid closed / Extraction and air assist on /
+ * Workpiece is clamped and flat" is a heading and three lines glued with slashes.
+ * Quoting each message on its own is both what the guard can check and what a reader
+ * of the alt text actually hears, so that is what those pages do now.
  *
- * So checking alt text needs both a rule for what an alt text may compose and a
- * looser floor in `fits`, and either of those is a round of its own with the
- * measurements to go with it. Until then: do not quote the app word for word in an
- * alt text — describe the picture instead — because nothing here will tell you when
- * it goes stale.
+ * The ninth was worth the whole exercise: the alt text of the phone picture described
+ * a screen that is not in the picture — "28 TEST GRIDS ARE WAITING FOR A PHOTO" where
+ * it says one, a different material, a different preset, a different date. Nothing
+ * caught that for as long as alt text was invisible here, and no guard catches it now
+ * either; it took reading the alt text against the picture. It is written down so the
+ * next person knows that is a thing that has to be done by a person.
  *
- * The code blocks are the newest of those, and they were a false alarm rather than a
- * nicety: a fenced command line carries quotation marks of its own — `meerk40t -e
- * "openkerf -p 8092 -l /tmp/scratch/openkerf-library.db"` — and read as a quotation of
- * the interface it is a sentence no catalogue will ever hold. What is inside a fence is
- * something you type, not something the app said.
+ * The tenth stays a limit: "Openclipart did not answer in time. The rest is there."
+ * is a faithful quotation of "{source} {reason}. The rest is there.", and `fits` turns
+ * it down because the message's own words are less than half of what the page writes.
+ * That page now quotes only the half that can be checked. Lowering that floor is a
+ * change to the matcher with its own measurements, and it is not this round.
  */
 function paragraphs(page: string): string[] {
 	return read(page)
 		.replace(/^```[\s\S]*?^```/gm, '')
-		.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+		.replace(/!\[([^\]]*)\]\([^)]*\)/g, ' $1 ')
 		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
 		.split(/\n\s*\n/)
 		.map((block) =>

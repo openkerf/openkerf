@@ -18,7 +18,7 @@ appears: "Just checking which machine is there…".
 
 Then the welcome card:
 
-![The welcome card in the middle of an empty window, headed "No machine has been set up yet.", with the four numbered steps Kind, Model, Name and Work area, the teal button "Set up a machine", the line "After that: Design → Show frame → Cut", and a text link "Look around without a machine".](images/01-welcome.png)
+![The welcome card in the middle of an empty window, headed "No machine has been set up yet.", with the four numbered steps Kind, Model, Name and Work area, the teal button "Set up a machine", the line reading After that: Design → Show frame → Cut, and a text link "Look around without a machine".](images/01-welcome.png)
 
 The heading is "No machine has been set up yet." and the lead explains why this
 comes first: "Without a machine the canvas does not know how big your bed is.
@@ -276,7 +276,7 @@ again.
 **Start job** in the top bar does not start anything. It switches to that tab and
 arms the job — see "Burning" below.
 
-![The Job tab showing a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", "Material  not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, below it the table of layers with mm/s, %, passes and source running on under the foot of the panel, and there the strip that carries a folded-shut "Send to the machine" above the list "Run through this" — Lid closed, Extraction and air assist on, Workpiece is clamped and flat — above the buttons "Show frame" and "Start job 1:19".](images/12-job-preflight.png)
+![The Job tab showing a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, below it the table of layers with mm/s, %, passes and source running on under the foot of the panel, and there the strip that carries a folded-shut "Send to the machine" above the list "Run through this" — Lid closed, Extraction and air assist on, Workpiece is clamped and flat — above the buttons "Show frame" and "Start job 1:19".](images/12-job-preflight.png)
 
 From top to bottom it holds:
 

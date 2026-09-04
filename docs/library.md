@@ -144,7 +144,7 @@ these numbers came off ringed, captioned:
 
 > The outline marks the square at row {row}, column {column} — that is where these values come from.
 
-![The Material library with one preset unfolded, on Berkentriplex. The row reads 3 mm Cut, 16 mm/s, 75%, badge Verified. Under it the provenance: Source — "Verified — burned and judged on a test grid", Machine — KH-5030, Test grid — the board's number with when it was burned and which square was picked, Air assist — on. To the right, where the photograph of that board would be: "There is no photo of this grid yet. Without a photo there is nothing to read the choice off.", with "Add a photo" and "Share with Presetariat" under it. Below the fold three more presets for the same material.](images/15-library-preset.png)
+![The Material library with one preset unfolded, on Berkentriplex. The row reads 3 mm Cut, 16 mm/s, 75%, badge Verified. Under it the provenance: Source — "Verified", "Burned and judged on a test grid", Machine — KH-5030, Test grid — the board's number with when it was burned and which square was picked, Air assist — on. To the right, where the photograph of that board would be: "There is no photo of this grid yet. Without a photo there is nothing to read the choice off.", with "Add a photo" and "Share with Presetariat" under it. Below the fold three more presets for the same material.](images/15-library-preset.png)
 
 The circle follows the alignment of the photo. If that alignment was never set, the
 caption admits it: *The alignment of this photo has not been set, so the outline is
@@ -195,7 +195,7 @@ precedence: **other material** and **other thickness**, spelled out under the ta
 *This preset is for {material}; this sheet is {material}.* and *This preset is for
 {n} mm; this sheet is {n} mm.*
 
-![The Job panel in the pre-flight. Under Estimated time 1:19 and "Material — not filled in for this sheet" stands the warning "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the table of layers with their speed, power and passes and a Source column reading "not verified". Below it, in the strip at the foot of the panel, a folded-shut "Send to the machine" and a checklist headed RUN THROUGH THIS: lid closed, extraction and air assist on, workpiece clamped and flat.](images/12-job-preflight.png)
+![The Job panel in the pre-flight. Under Estimated time 1:19 and the row "Material" reading "not filled in for this sheet" stands the warning "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the table of layers with their speed, power and passes and a Source column reading "not verified". Below it, in the strip at the foot of the panel, a folded-shut "Send to the machine" and a checklist headed RUN THROUGH THIS: lid closed, extraction and air assist on, workpiece clamped and flat.](images/12-job-preflight.png)
 
 The summary underneath counts them:
 

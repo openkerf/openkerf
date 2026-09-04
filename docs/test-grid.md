@@ -574,7 +574,7 @@ photo has not been set, so the outline is approximate — align the grid for an 
 Without a photo there is nothing to show: *There is no photo of this grid yet. Without a
 photo there is nothing to read the choice off.*
 
-![The material library with a preset unfolded: 3 mm, Cut, 16 mm/s, 75%, a green Verified badge, the lines Source "Verified — burned and judged on a test grid", Machine KH-5030, Test grid with the board's number and the square that was picked, Air assist on, and to the right, in place of the photograph, the line that there is no photo of this grid yet with "Add a photo" under it](images/15-library-preset.png)
+![The material library with a preset unfolded: 3 mm, Cut, 16 mm/s, 75%, a green Verified badge, the lines Source "Verified", "Burned and judged on a test grid", Machine KH-5030, Test grid with the board's number and the square that was picked, Air assist on, and to the right, in place of the photograph, the line that there is no photo of this grid yet with "Add a photo" under it](images/15-library-preset.png)
 
 The other badges say the opposite in one word, and what each of them means is in
 [The material library](library.md#where-the-numbers-come-from). That is the point

@@ -88,7 +88,7 @@ Right-click the image and choose **Vectorise** — `Turns the image into paths`.
 
 **Search clipart** in the tool rail opens a search across three collections: Iconify, Wikimedia Commons and Openclipart. Icons are the most usable material on a laser — closed outlines, no gradients — which is why Iconify comes first.
 
-![The Search for clipart window: a search field holding "star", a Width (mm) field set to 60 and a Search button, three ticked source boxes for Iconify (iconen), Wikimedia Commons and Openclipart, a warning line "Openclipart did not answer in time. The rest is there.", and a grid of star thumbnails. Each carries its title and licence — several "Apache 2.0 · source", one "CC BY-SA 4.0 · source", one "Public domain · source".](images/19-clipart.png)
+![The Search for clipart window: a search field holding "star", a Width (mm) field set to 60 and a Search button, three ticked source boxes for Iconify (iconen), Wikimedia Commons and Openclipart, a warning line saying Openclipart did not answer in time, with "The rest is there.", and a grid of star thumbnails. Each carries its title and licence — several "Apache 2.0 · source", one "CC BY-SA 4.0 · source", one "Public domain · source".](images/19-clipart.png)
 
 Type at least two letters and press Enter or **Search**. **Width (mm)** is the size the drawing gets when you insert it; the tooltip on a result reads `Insert at {width} mm wide`. Clicking a thumbnail fetches it, scales it to that width and puts it on the bed.
 
