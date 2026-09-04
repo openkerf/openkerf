@@ -40,7 +40,7 @@ line after the first four:
 
 | Row | What it does | |
 |---|---|---|
-| New project | Empties the bed and forgets the current project — sheets, design and machine profiles start over | `project.new` |
+| New project | Empties the bed and forgets the current project — sheets and design start over; the library stays | `project.new` |
 | Open… | Opens the **Projects** window, listing every project on this server, newest first (⌘O) | `project.open` |
 | Save project | Saves under the current name, or opens **Save as…** the first time (⌘S) | `project.save` |
 | Save as… | Opens the **Projects** window in its save mode, to save under a chosen name (⌘⇧S) | `project.saveAs` |

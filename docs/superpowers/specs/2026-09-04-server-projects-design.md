@@ -45,8 +45,9 @@ upload stay as the second way, for moving a project to another device.
 - `clean_name(raw) -> str`: the rule above; returns `''` when nothing survives.
 
 Refusals are `ProjectError` (a `DesignError` subclass) with codes `project.badName`,
-`project.exists`, `project.missing`, `project.busy` (a job is running — same guard the
-other write routes use).
+`project.exists`, `project.missing`. A running series is not a fourth code here: Open,
+which is the route that would replace the drawing, ends in `import_project`, and that
+call already refuses on its own when a series is running.
 
 Routes in `server.py`, all write routes except the first, all in `WRITE_ROUTES`:
 
