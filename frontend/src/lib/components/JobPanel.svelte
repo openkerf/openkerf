@@ -29,6 +29,7 @@
 		control,
 		activeJob,
 		nothingBurns = false,
+		sheetName = '',
 		revision = 0,
 		preflight = $bindable(),
 		onJog,
@@ -59,6 +60,9 @@
 		 *  worked out once by the page so that this panel and the top bar cannot answer
 		 *  the question differently. */
 		nothingBurns?: boolean;
+		/** The name of the sheet on the bed. The pre-flight fills the name the machine
+		 *  will keep from it — see `JobControls`. */
+		sheetName?: string;
 		/** Revision of the drawing; the time estimate in the preflight follows it. */
 		revision?: number;
 		preflight: boolean;
@@ -97,7 +101,7 @@
      now is the thing you came to this panel for. `SeriesRun` decides that for itself
      off the run in the status payload, the same way `TileRun` does. -->
 <SeriesRun {series} />
-<JobControls {control} {device} {series} job={activeJob} {revision} {nothingBurns} bind:preflight {onJog} {onHome} {onUnlock} {onLock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
+<JobControls {control} {device} {series} job={activeJob} {revision} {nothingBurns} {sheetName} bind:preflight {onJog} {onHome} {onUnlock} {onLock} {onFocus} {onFrame} {onCutPath} {colorFor} {profile} {selectedIds} />
 
 <!-- Only when there is something to report. "Spooler — nothing in the queue"
      under a block that already says nothing is running says it twice. -->

@@ -1687,6 +1687,7 @@ import { SeriesStore } from '$lib/series.svelte';
 					{control}
 					activeJob={status.activeJob}
 					nothingBurns={design.burnsNothing}
+					sheetName={sheets.active?.name ?? ''}
 					revision={design.revision}
 					selectedIds={design.selectedIds}
 					bind:preflight

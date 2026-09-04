@@ -47,12 +47,22 @@ rmSync(work, { recursive: true, force: true });
 /** The other languages, by name. Grows as soon as one is added. */
 const TRANSLATIONS: Record<string, Record<string, unknown>> = { nl };
 
-/** Every file the app is built from, so a key can be looked for in all of them. */
+/**
+ * Every file the app is built from, so a key can be looked for in all of them.
+ *
+ * The two catalogues are left out and nothing else in `i18n/`: a key is written down in
+ * `en.ts` and `nl.ts`, so reading those would let every key count as its own user. The
+ * machinery beside them is ordinary app code — `core.ts` picks one of four sentences for
+ * an upload that broke off halfway, and those four are as used as anything a component
+ * calls. Leaving the whole folder out made them look like keys nobody wanted.
+ */
+const CATALOGUES = new Set(['en.ts', 'nl.ts']);
 function sources(dir: string, found: string[] = [], match = /\.(svelte|ts)$/): string[] {
 	for (const entry of readdirSync(dir)) {
 		const path = join(dir, entry);
 		if (statSync(path).isDirectory()) sources(path, found, match);
-		else if (match.test(entry) && !path.includes(`${'i18n'}/`)) found.push(path);
+		else if (match.test(entry) && !(path.includes(`${'i18n'}/`) && CATALOGUES.has(entry)))
+			found.push(path);
 	}
 	return found;
 }

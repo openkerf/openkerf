@@ -249,8 +249,58 @@ function sqlToIso(value: string): string {
 export function apiError(response: Response, detail: string | null | undefined): string {
 	const code = response.headers.get('X-OpenKerf-Error');
 	const key = `api.${code}` as MessageKey;
-	if (code && key in en) return t(key, values(response));
-	return detail ?? t('notice.failed');
+	if (!code || !(key in en)) return detail ?? t('notice.failed');
+	const carried = brought(response);
+	// A `{what}` in the message is the second sentence of a refusal that broke off
+	// halfway, and it is chosen from the values rather than written in the catalogue.
+	// Without them there is nothing to choose it from, and a sentence with a hole where
+	// its advice was says less than the English one the API sent, so that one wins.
+	if (!String(en[key]).includes('{what}')) return t(key, written(carried));
+	if (typeof carried?.announced !== 'boolean') return detail ?? t('notice.failed');
+	return t(key, { ...written(carried), what: whatIsLeft(carried) });
+}
+
+/**
+ * What an upload that broke off has left on the machine — one of four sentences.
+ *
+ * The same four the API layer picks between in `ruida_upload._interrupted`, and the
+ * same order, because the difference between the first two is the thing this whole
+ * refusal exists to say. `sent` counts blocks and `sent === 0` is true at two moments:
+ * before the name went out, and after it. From the second one onwards the receiver has
+ * opened a file on the panel under that name (`ruida/emulator.py:757`), so a reader who
+ * is told there is nothing to clean up leaves an empty file of their own name behind.
+ *
+ * Which is why this reads `announced` and not the counter. The engine layer got this
+ * wrong twice before it split the flag off from the count; branching on the numbers
+ * here would make the same mistake once more, in the reader's own language.
+ */
+function whatIsLeft(carried: Record<string, unknown>): string {
+	const sent = Number(carried.sent ?? 0);
+	const chunks = Number(carried.chunks ?? 0);
+	if (sent === 0 && carried.announced !== true) return t('upload.left.none');
+	if (sent === 0) return t('upload.left.named');
+	if (sent < chunks) return t('upload.left.partial');
+	return t('upload.left.whole');
+}
+
+/**
+ * The values a coded refusal brings along, exactly as they were sent.
+ *
+ * Split from `written` below because two of them are not for reading: `announced`
+ * decides which sentence is said, and `sent` and `chunks` are compared with each other
+ * to do it. Once through `Intl` a block count is the string "1.200", and comparing that
+ * with another string is not the comparison the API made.
+ */
+function brought(response: Response): Record<string, unknown> | undefined {
+	const raw = response.headers.get('X-OpenKerf-Error-Values');
+	if (!raw) return undefined;
+	try {
+		const parsed = JSON.parse(raw);
+		if (!parsed || typeof parsed !== 'object') return undefined;
+		return parsed as Record<string, unknown>;
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -262,28 +312,21 @@ export function apiError(response: Response, detail: string | null | undefined):
  * copy of it here would be a second source of truth. A refusal whose numbers are measured
  * per call still keeps its English sentence.
  */
-function values(response: Response): Record<string, unknown> | undefined {
-	const raw = response.headers.get('X-OpenKerf-Error-Values');
-	if (!raw) return undefined;
-	try {
-		const parsed = JSON.parse(raw);
-		if (!parsed || typeof parsed !== 'object') return undefined;
-		// Numbers go through `Intl`, here as everywhere else. A refusal is not a place
-		// where the app may write in another notation than the panel behind it: measured
-		// with a Dutch reader, "Deze lijst heeft 1001 rijen en deze app draagt er hooguit
-		// 1000" beside a canvas that writes 1.001 everywhere. Anything that is not a
-		// number — a column name, a file name, the token that says which end of a range
-		// was wrong — is the reader's own data or a key, and is left exactly as it came.
-		const written: Record<string, unknown> = {};
-		for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) {
-			// `n` and `count` are left as they came: `t()` picks the singular or the
-			// plural from them, and it reads them with `Number()`. A Dutch "1.000" would
-			// parse back as 1 and put a refusal about a thousand rows in the singular.
-			const selects = name === 'n' || name === 'count';
-			written[name] = typeof value === 'number' && !selects ? number(value) : value;
-		}
-		return written;
-	} catch {
-		return undefined;
+function written(carried: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+	if (!carried) return undefined;
+	// Numbers go through `Intl`, here as everywhere else. A refusal is not a place
+	// where the app may write in another notation than the panel behind it: measured
+	// with a Dutch reader, "Deze lijst heeft 1001 rijen en deze app draagt er hooguit
+	// 1000" beside a canvas that writes 1.001 everywhere. Anything that is not a
+	// number — a column name, a file name, the token that says which end of a range
+	// was wrong — is the reader's own data or a key, and is left exactly as it came.
+	const said: Record<string, unknown> = {};
+	for (const [name, value] of Object.entries(carried)) {
+		// `n` and `count` are left as they came: `t()` picks the singular or the
+		// plural from them, and it reads them with `Number()`. A Dutch "1.000" would
+		// parse back as 1 and put a refusal about a thousand rows in the singular.
+		const selects = name === 'n' || name === 'count';
+		said[name] = typeof value === 'number' && !selects ? number(value) : value;
 	}
+	return said;
 }

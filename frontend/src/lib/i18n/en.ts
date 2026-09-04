@@ -617,6 +617,16 @@ export const en = {
 	'job.clearZero': 'Clear',
 	'job.material': 'Material',
 	'job.frame': 'Show frame',
+	// Sending the job to the machine's memory instead of burning it: one tap, not two.
+	// VEILIGHEID.md asks for two taps for what burns; this puts a file down and moves
+	// nothing, and a confirmation in front of that only teaches clicking through them.
+	'job.upload': 'Send to the machine',
+	'job.upload.why':
+		'The file goes into the machine and stays there. You start it on the machine’s own panel — nothing burns from here.',
+	'job.upload.name': 'Name on the machine',
+	'job.upload.send': 'Send',
+	'job.upload.sending': 'Sending…',
+	'job.upload.done': '{name} is in the machine. Start it on the panel.',
 	'job.adjust.reset': 'Reset',
 	'job.checklist.lid': 'Lid closed',
 	'job.calculating': 'calculating…',
@@ -2730,5 +2740,37 @@ export const en = {
 	'api.sheet.nothingSelected': 'Choose what should come along first.',
 	'api.sheet.sameSheet': 'That is the sheet you are already working on.',
 	'api.sheet.tooThick': 'A sheet more than 500 mm thick does not go in.',
+	// Sending the job to the machine's own memory (`ruida_upload.py`). Every refusal on
+	// that route is one a reader can act on standing at the machine, so all of them are
+	// here — including the one it shares with starting a job.
+	'api.job.nothingToBurn':
+		'There is nothing ready to burn. Draw or load something, and put it in a layer that burns — a layer with burn along switched off is skipped.',
+	'api.upload.needsName':
+		'Give the file a name of up to eight letters or digits; that is what the machine’s panel shows.',
+	'api.upload.noMachine': 'There is no active machine to send the file to.',
+	'api.upload.notConnected':
+		'There is no connection to the machine, so the file cannot be sent. Connect first; nothing has been sent.',
+	'api.upload.notRuida': 'This machine does not keep files in its memory; that is a Ruida thing.',
+	'api.upload.whileBurning':
+		'A job is running. Wait until it is done, or stop it: the file would go down the same connection the machine is burning from. Nothing has been sent.',
+	'api.upload.busy':
+		'This machine is already being sent a file. Wait until that one is done and press again; nothing has been sent.',
+	'api.upload.emptyFile': 'The job came out empty, so there is nothing to send. Nothing has been sent.',
+	'api.upload.commandTooLong':
+		'This job holds a single command of {block} bytes, and a block may be at most {limit}. The machine would silently keep only the first part of it, so nothing has been sent.',
+	// `{what}` is one of the four `upload.left.*` sentences below, chosen in `core.ts`
+	// from the flag the refusal carries — never from the two numbers in front of it.
+	'api.upload.stalled': 'The machine stopped taking the file after {sent} of {chunks} blocks. {what}',
+	'api.upload.interrupted': 'The machine stopped answering after {sent} of {chunks} blocks. {what}',
+	// What is left on the machine, which is the part you act on. The first two are both
+	// "0 of 6 blocks" and they ask for opposite things.
+	'upload.left.none':
+		'Nothing had gone out, so there is no file on the panel to clean up; send it again.',
+	'upload.left.named':
+		'The name went out but no part of the job followed it, so the panel may be showing an empty file under that name: delete it there if it is. None of the job itself was sent.',
+	'upload.left.partial':
+		'What is on it now is incomplete: delete the file on the panel before you burn anything.',
+	'upload.left.whole':
+		'Every block went out, including the one that closes the file, but the last one was not acknowledged. The file on the panel may be whole and may be missing its end: look at it there, and send it again if you are in any doubt.',
 	'api.sheet.marginTooBig': 'A margin of more than 100 mm leaves no bed.'
 } as const;

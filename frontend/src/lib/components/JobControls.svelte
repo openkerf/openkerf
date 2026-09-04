@@ -8,6 +8,7 @@
 		isStalled,
 		remainingSeconds,
 		transportAllowed,
+		machineName,
 		PAUSE_KEY,
 		STOP_KEY,
 		type Device,
@@ -31,6 +32,7 @@
 		series,
 		job,
 		nothingBurns = false,
+		sheetName = '',
 		revision = 0,
 		preflight = $bindable(),
 		onJog,
@@ -59,6 +61,14 @@
 		/** Nothing on the bed that will burn. Comes from the page, from the same
 		 *  `burnsNothing` the top bar reads. */
 		nothingBurns?: boolean;
+		/**
+		 * The name of the sheet on the bed, as the name to put on the machine.
+		 *
+		 * `profile` in this file is the *machine* profile, not the sheet, so this comes
+		 * in as a prop along the same road as `nothingBurns`: the page reads it off the
+		 * sheet store and hands it down through `JobPanel`.
+		 */
+		sheetName?: string;
 		/** Increases on every change in the design; the estimate follows it. */
 		revision?: number;
 		preflight: boolean;
@@ -543,6 +553,57 @@
 		return phase === 'done' ? 1 : Math.min(1, Math.max(0, part));
 	});
 	let remaining = $derived(phase === 'done' ? 0 : remainingSeconds(job));
+
+	// ------------------------------------------------ sending it to the machine
+
+	/**
+	 * The name the machine will keep, ready-made from the name of the sheet.
+	 *
+	 * `typed` and not one `$state` seeded once: this panel is not rebuilt when you
+	 * switch sheets, so a field filled at mount goes on offering the name of the sheet
+	 * you have left. Whoever has typed a name keeps it; whoever has not follows the
+	 * sheet. Either way it goes through `machineName` first, so what stands in the
+	 * field is what will stand on the panel of the machine — eight characters,
+	 * capitals, no spaces — and not something that turns into that on the way.
+	 */
+	let typed = $state<string | null>(null);
+	let uploadName = $derived(machineName(typed ?? sheetName));
+	let uploaded = $state<string | null>(null);
+	$effect(() => {
+		// The confirmation is about one name. The moment the field says something else —
+		// because you typed, or because you are on another sheet — it would be a green
+		// line about a file nobody just sent, so it goes.
+		uploadName;
+		uploaded = null;
+	});
+	/**
+	 * Why sending is off, in a sentence.
+	 *
+	 * The first three are the ones that stop starting as well; the fourth is about the
+	 * machine itself and comes from the same check that refuses the route
+	 * (`CommandRunner.keeps_files`), so the button is not offered where it could only
+	 * fail. What is deliberately *not* here: whether the machine is a Ruida that is
+	 * merely busy with somebody else's file. That is not knowable from here, and the
+	 * refusal for it is a whole sentence.
+	 */
+	let uploadOff = $derived(
+		!connection.online
+			? t('transport.noServer')
+			: actions?.upload === false
+				? t('api.upload.notRuida')
+				: busyWithWork
+					? t('job.blocked.duringJob')
+					: empty
+						? t('job.nothing.title')
+						: undefined
+	);
+	async function sendToMachine() {
+		// The name that comes back, not the one that went in: the machine's copy of the
+		// rule is the one that counts, and reporting our own would be a screen agreeing
+		// with itself.
+		const result = await control.upload(uploadName);
+		uploaded = result?.name ?? null;
+	}
 </script>
 
 <div class="section">
@@ -819,6 +880,63 @@
 				Showing the frame is on the same line: it is the last check before that
 				same button, so it belongs beside it and not three blocks higher.
 			-->
+			<!--
+				Sending the job to the machine's memory instead of burning it.
+
+				What LightBurn calls "send": the file goes down the cable, the machine
+				keeps it, and you start it there. So this is not a second start button
+				and it is not on the sticky footer beside one — it is the other thing
+				you can do with a job that is ready, folded shut until you want it.
+
+				One tap, not two. VEILIGHEID.md asks for two deliberate taps for
+				everything that burns; this puts a file down and moves nothing, and a
+				confirmation in front of something that sets nothing in motion only
+				teaches people to click through confirmations.
+			-->
+			<details class="pf-upload">
+				<summary>{t('job.upload')}</summary>
+				<p class="pf-row">{t('job.upload.why')}</p>
+				<div class="pf-uploadrow">
+					<label class="name">
+						<span>{t('job.upload.name')}</span>
+						<!-- Cut to what the machine keeps while you type, not afterwards:
+						     the panel of the machine shows eight capitals without spaces,
+						     and the first place to find that out is the keyboard, not the
+						     machine. -->
+						<input
+							class="mono"
+							type="text"
+							maxlength="8"
+							value={uploadName}
+							disabled={Boolean(uploadOff)}
+							title={uploadOff ?? t('job.upload.name')}
+							oninput={(e) => {
+								typed = machineName(e.currentTarget.value);
+								e.currentTarget.value = typed;
+							}}
+						/>
+					</label>
+					<button
+						class="btn"
+						disabled={Boolean(uploadOff) || control.busy !== null || uploadName === ''}
+						title={uploadOff ??
+							(control.busy !== null
+								? t('reason.busy')
+								: uploadName === ''
+									? t('reason.needsName')
+									: t('job.upload.why'))}
+						onclick={sendToMachine}
+					>
+						{control.busy === 'upload' ? t('job.upload.sending') : t('job.upload.send')}
+					</button>
+				</div>
+				{#if uploaded}
+					<!-- `role="status"` and not `alert`: this is the answer to something
+					     that went well, and it says where the job is now — on the machine,
+					     waiting for a hand on its own panel. -->
+					<p class="pf-row good" role="status">{t('job.upload.done', { name: uploaded })}</p>
+				{/if}
+			</details>
 			<div class="pf-stick">
 				<!-- The checklist travels with the button.
 
@@ -1552,6 +1670,62 @@
 	.pf-row.series {
 		color: var(--text-1);
 		margin: 0;
+	}
+	/* ── Sending it to the machine ─────────────────────────────────────────── */
+	/* Folded shut: it is the other thing you can do with a ready job, not a second
+	   start button, so it must not compete with the one on the footer below it. */
+	.pf-upload {
+		margin: var(--space-3) 0 0;
+		border-top: 1px solid var(--line);
+		padding-top: var(--space-2);
+	}
+	.pf-upload > summary {
+		cursor: pointer;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-2);
+		list-style: none;
+	}
+	.pf-upload > summary::-webkit-details-marker { display: none; }
+	.pf-upload > summary::before {
+		content: '▸';
+		display: inline-block;
+		width: 1em;
+		color: var(--text-2);
+	}
+	.pf-upload[open] > summary::before { content: '▾'; }
+	.pf-upload > summary:hover { color: var(--text-1); }
+	.pf-uploadrow {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-2);
+		margin-top: var(--space-1h);
+	}
+	.pf-uploadrow .name {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* The eight characters as the machine writes them: a fixed pitch, spaced out, so
+	   that what stands here reads as one label on a panel and not as a word. */
+	.pf-uploadrow input {
+		width: 11ch;
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		padding: var(--space-1) var(--space-1h);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-1);
+		color: var(--text-1);
+	}
+	.pf-row.good {
+		color: var(--ok);
 	}
 	.pf-warn {
 		margin: var(--space-2) 0;

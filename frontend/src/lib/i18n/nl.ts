@@ -590,6 +590,13 @@ export const nl: Catalogue = {
 	'job.clearZero': 'Wissen',
 	'job.material': 'Materiaal',
 	'job.frame': 'Kader tonen',
+	'job.upload': 'Naar de machine sturen',
+	'job.upload.why':
+		'Het bestand komt in de machine te staan en blijft daar. Starten doe je op het paneel van de machine zelf — hiervandaan brandt er niets.',
+	'job.upload.name': 'Naam op de machine',
+	'job.upload.send': 'Versturen',
+	'job.upload.sending': 'Bezig met versturen…',
+	'job.upload.done': '{name} staat in de machine. Start hem op het paneel.',
 	'job.adjust.reset': 'Terug',
 	'job.checklist.lid': 'Deksel dicht',
 	'job.calculating': 'rekent…',
@@ -2559,5 +2566,34 @@ export const nl: Catalogue = {
 	'api.sheet.nothingSelected': 'Kies eerst wat er mee moet.',
 	'api.sheet.sameSheet': 'Dat is het vel waar je al op werkt.',
 	'api.sheet.tooThick': 'Een vel van meer dan 500 mm dik gaat er niet in.',
+	'api.job.nothingToBurn':
+		'Er staat niets klaar om te branden. Teken of laad iets, en zet het in een laag die brandt — een laag met meebranden uit wordt overgeslagen.',
+	'api.upload.needsName':
+		'Geef het bestand een naam van hoogstens acht letters of cijfers; dat is wat het paneel van de machine laat zien.',
+	'api.upload.noMachine': 'Er is geen actieve machine om het bestand naartoe te sturen.',
+	'api.upload.notConnected':
+		'Er is geen verbinding met de machine, dus het bestand kan niet verstuurd worden. Maak eerst verbinding; er is niets verstuurd.',
+	'api.upload.notRuida':
+		'Deze machine bewaart geen bestanden in haar geheugen; dat is iets van een Ruida.',
+	'api.upload.whileBurning':
+		'Er loopt een job. Wacht tot die klaar is, of stop hem: het bestand zou over dezelfde verbinding gaan waar de machine nu uit brandt. Er is niets verstuurd.',
+	'api.upload.busy':
+		'Naar deze machine wordt al een bestand gestuurd. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
+	'api.upload.emptyFile':
+		'De job kwam leeg uit, dus er is niets om te versturen. Er is niets verstuurd.',
+	'api.upload.commandTooLong':
+		'Deze job bevat één commando van {block} bytes, en een blok mag er hoogstens {limit} zijn. De machine zou er stilzwijgend alleen het eerste stuk van bewaren, dus er is niets verstuurd.',
+	'api.upload.stalled':
+		'De machine nam het bestand niet meer aan na {sent} van {chunks} blokken. {what}',
+	'api.upload.interrupted':
+		'De machine antwoordde niet meer na {sent} van {chunks} blokken. {what}',
+	'upload.left.none':
+		'Er was nog niets verstuurd, dus er staat geen bestand op het paneel dat je hoeft op te ruimen; stuur het opnieuw.',
+	'upload.left.named':
+		'De naam ging eruit maar er kwam geen enkel stuk van de job achteraan, dus op het paneel kan een leeg bestand onder die naam staan: verwijder het daar als dat zo is. Van de job zelf is niets verstuurd.',
+	'upload.left.partial':
+		'Wat er nu op staat is onvolledig: verwijder het bestand op het paneel voordat je iets brandt.',
+	'upload.left.whole':
+		'Alle blokken zijn eruit gegaan, ook het blok dat het bestand afsluit, maar het laatste is niet bevestigd. Het bestand op het paneel kan compleet zijn en kan zijn einde missen: kijk daar hoe het erbij staat, en stuur het opnieuw als je twijfelt.',
 	'api.sheet.marginTooBig': 'Een marge van meer dan 100 mm laat geen bed over.'
 };

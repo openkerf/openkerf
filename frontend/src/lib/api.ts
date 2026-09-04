@@ -73,6 +73,10 @@ export type Capabilities = {
 		stop: boolean;
 		clear_queue: boolean;
 		load: boolean;
+		/** Whether this machine keeps a job in its own memory as a file — a Ruida
+		 *  thing. `CommandRunner.keeps_files` answers it, and the route that sends the
+		 *  file asks the same question, so the button and the refusal cannot drift. */
+		upload?: boolean;
 	};
 	/** What *this* device can move. It differs per machine: a Ruida knows focusing,
 	 *  a K40 board does not. */
@@ -544,6 +548,28 @@ export function machineStateHint(state: MachineState): string | undefined {
 export function formatMm(value: number | null | undefined): string {
 	if (value === null || value === undefined || Number.isNaN(value)) return '—';
 	return number(value, 1);
+}
+
+/**
+ * The name as the Ruida keeps it: printable ASCII without spaces, capitals, eight long.
+ *
+ * The screen does this before the file goes out and not after, so that what you type is
+ * what the panel of the machine will say. Otherwise you meet your real file name for the
+ * first time on the machine, standing in front of it, with a list of eight-character
+ * names that all begin the same way.
+ *
+ * `ruida_upload.machine_name` does exactly this on the other side and its answer is the
+ * one that counts; these two are one rule in two languages, and
+ * `tests/upload-name.test.ts` runs them against each other rather than trusting the
+ * resemblance. The space goes too — the engine layer explains why: eight characters is
+ * little enough without spending them on gaps.
+ */
+export function machineName(name: string): string {
+	return [...(name ?? '')]
+		.filter((c) => c.charCodeAt(0) > 32 && c.charCodeAt(0) < 127)
+		.join('')
+		.toUpperCase()
+		.slice(0, 8);
 }
 
 export function formatDuration(seconds: number | null | undefined): string {

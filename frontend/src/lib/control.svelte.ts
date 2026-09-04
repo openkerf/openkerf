@@ -206,6 +206,43 @@ export class Controller {
 		}
 	}
 
+	/**
+	 * The job as a file in the machine's memory. It puts it there and starts nothing.
+	 *
+	 * What comes back is the name the panel will show, which is not always the name
+	 * that went in: eight characters, capitals, no spaces. The screen has already
+	 * worked that out with `machineName` so the two agree, and it is the answer that
+	 * gets shown — a name computed twice and reported from the wrong copy is exactly
+	 * the sort of thing this pair exists to prevent.
+	 *
+	 * Every refusal of this route is a 409 with a code, so `describeFailure` says it
+	 * in the reader's language along with all the others; the two that break off
+	 * halfway bring the numbers and the flag their sentence needs.
+	 */
+	async upload(name: string): Promise<{ name: string; bytes: number; chunks: number } | null> {
+		this.busy = 'upload';
+		this.error = null;
+		try {
+			const response = await fetch('/api/machine/upload', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', ...this.#headers() },
+				body: JSON.stringify({ name })
+			});
+			if (response.status === 401) this.rejected = true;
+			if (!response.ok) {
+				this.error = await describeFailure(response, this.token !== '');
+				return null;
+			}
+			this.rejected = false;
+			return (await response.json()) as { name: string; bytes: number; chunks: number };
+		} catch (e) {
+			this.error = onbereikbaar(e);
+			return null;
+		} finally {
+			this.busy = null;
+		}
+	}
+
 	/** Called on a successful start — the wow moment hangs off this. */
 	onStarted: (() => void) | null = null;
 
