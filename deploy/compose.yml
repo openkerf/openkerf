@@ -1,0 +1,32 @@
+# OpenKerf beside a laser, on a Linux box in the same network.
+#
+#   cp .env.example .env      # and fill in OPENKERF_TOKEN
+#   docker compose up -d
+#
+# Host networking is deliberate: the Ruida listens on UDP 50200 and answers from 40200,
+# and finding a machine is a broadcast. Neither crosses a Docker bridge reliably, so the
+# container is given the host's network and there is no `ports:` block — the app is on
+# the host's OPENKERF_PORT directly. (Docker Desktop on Mac or Windows has no host
+# network; there discovery does not work and the machine's address is typed by hand.)
+services:
+  openkerf:
+    image: ghcr.io/openkerf/openkerf:latest
+    container_name: openkerf
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Settings, the chosen machine, the layer list, the material library and the
+      # autosave all live under /data. Back it up and you have everything.
+      - openkerf-data:/data
+    devices:
+      # The camera over the bed. `ls /dev/video*` on the host shows what is there; a
+      # Pi camera often makes two nodes, and the even one carries the picture.
+      - /dev/video0:/dev/video0
+    # A laser on USB (a K40 and the like) is not covered by this version. This is the
+    # line that would give the container the USB bus; untested here:
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb
+
+volumes:
+  openkerf-data:

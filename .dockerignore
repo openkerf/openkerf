@@ -1,0 +1,20 @@
+# The engine's working copy is for exploration and tests; the image installs MeerK40t from
+# upstream git at a pinned revision (see deploy/Dockerfile), not from this checkout.
+meerk40t/
+# The private working record.
+workshop/
+# Build products and dependency trees are made inside the build.
+**/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+**/.venv/
+**/__pycache__/
+**/*.egg-info/
+# Not needed to run.
+docs/
+api/tests/
+frontend/tests/
+frontend/gauntlet/
+.git/
+.github/
+screenshots/

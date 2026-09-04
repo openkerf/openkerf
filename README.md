@@ -61,6 +61,9 @@ To reach it from a tablet next to the machine, start the engine with
 anything experimental: the library lives beside the engine's settings and is shared by
 every instance on the machine.
 
+To run it in Docker instead — one image with the engine, the API and the interface, for
+a Linux box beside the laser — see [Running in Docker](docs/running-in-docker.md).
+
 ## Tests
 
 ```bash

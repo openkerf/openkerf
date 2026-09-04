@@ -143,13 +143,22 @@ def plugin(kernel, lifecycle=None):
             if server.local_only:
                 channel(_("Write actions are open (localhost only)."))
             else:
-                # The machine is now controllable from the network. Say so, and
-                # say what the token is — it is the only thing standing in front.
-                channel(
-                    _("Reachable from the network. Token for write actions: {token}").format(
-                        token=server.token
+                # The machine is now controllable from the network. Only print the
+                # token itself when the engine generated it — a token the caller
+                # already knows (the `-t` option, as in a Docker deployment) has no
+                # business ending up in a log a caller does not otherwise control.
+                if token is None:
+                    channel(
+                        _(
+                            "Reachable from the network. Token for write actions: {token}"
+                        ).format(token=server.token)
                     )
-                )
+                else:
+                    channel(
+                        _(
+                            "Reachable from the network. Write actions need the token given with -t."
+                        )
+                    )
 
     elif lifecycle == "shutdown":
         if _server is not None:
