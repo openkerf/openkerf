@@ -6,6 +6,7 @@ quotes one nobody measured is worse than one that says nothing.
 """
 import errno
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -134,7 +135,9 @@ def test_the_list_is_read_from_the_folder_every_time(projects, client, tmp_path)
     names = [e["name"] for e in projects.list()]
     assert set(names) == {"Mine", "Copied in by hand"}
     mine = next(e for e in projects.list() if e["name"] == "Mine")
-    assert mine["current"] is True and mine["bytes"] > 0 and mine["saved_at"].endswith("Z") is False
+    assert mine["current"] is True and mine["bytes"] > 0
+    when = datetime.fromisoformat(mine["saved_at"])
+    assert when.tzinfo is not None, mine["saved_at"]
 
 
 def test_dirty_falls_after_save_and_open(projects, client):
@@ -157,6 +160,25 @@ def test_adopting_an_upload_moves_it_in_under_a_free_name(projects, client, tmp_
     assert entry["name"] == "Board 2" and projects.current == "Board 2"
     assert not stray.exists()
     assert sorted(p.name for p in projects.folder.iterdir()) == ["Board 2.openkerf", "Board.openkerf"]
+
+
+def test_adopting_a_sixty_character_name_leaves_room_to_number_it(projects, client, tmp_path):
+    """
+    Before the fix, numbering a taken name at the full 60 characters wrote a file at 62
+    — past `MAX_NAME` — which `open()` and `delete()` (both through `_valid`) then
+    refused: an unopenable, undeletable row in the list.
+    """
+    sixty = "x" * 60
+    _draw_two_rects(client)
+    projects.save(sixty)
+    stray = tmp_path / f"{sixty}.openkerf"
+    stray.write_bytes((projects.folder / f"{sixty}.openkerf").read_bytes())
+    entry = projects.adopt(stray, sixty)
+    assert len(entry["name"]) <= 60, entry["name"]
+    assert entry["name"] != sixty
+    reopened = projects.open(entry["name"])
+    assert reopened["project"]["name"] == entry["name"]
+    projects.delete(entry["name"])
 
 
 def test_saving_survives_a_filesystem_boundary_between_temp_and_the_folder(projects, client, monkeypatch):

@@ -192,6 +192,10 @@ class Projects:
         the same way rather than a bare `os.replace`.
         """
         base = clean_name(Path(wanted).stem) or "Project"
+        # Leave room for the numbering: a base already at MAX_NAME plus " 2" is a
+        # name `_valid` (which `open()` and `delete()` both call) refuses on sight —
+        # a row nothing on the interface can open or remove again.
+        base = base[: MAX_NAME - 3].strip() or "Project"
         name, n = base, 2
         self.folder.mkdir(parents=True, exist_ok=True)
         while self._path(name).exists():
