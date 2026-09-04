@@ -77,3 +77,30 @@ test('Open… lists it, and Cancel in the question leaves the work alone', async
 	const afterCount = (await (await fetch(`${BASE}/api/design`)).json()).elements.length;
 	assert.equal(afterCount, beforeCount, 'Cancel changed the design');
 });
+
+test('New still asks on untitled, imported work — importing into an empty bed does not mark it saved', async (t) => {
+	if (!reachable) return noServer(t, BASE);
+	// A fresh, untitled project, then an import — the one case `design.dirty` alone
+	// gets wrong: `/api/job/load` calls `document.clean()` when the bed was empty,
+	// because the result equals the file on disk. It does not equal anything this
+	// screen can get back to, since nothing offers that upload again.
+	await fetch(`${BASE}/api/project/new`, { method: 'POST' });
+	const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm"><rect width="10" height="10"/></svg>';
+	const form = new FormData();
+	form.append('file', new Blob([svg], { type: 'image/svg+xml' }), 'import.svg');
+	const uploaded = await fetch(`${BASE}/api/job/load`, { method: 'POST', body: form });
+	assert.ok(uploaded.ok, `import failed: ${uploaded.status}`);
+	const before = (await (await fetch(`${BASE}/api/design`)).json()) as { dirty: boolean; elements: unknown[] };
+	assert.equal(before.dirty, false, 'importing into an empty bed should leave the design clean');
+	assert.ok(before.elements.length > 0, 'the import produced no elements');
+
+	await page.goto(`${BASE}/?tab=design`, { waitUntil: 'domcontentloaded' });
+	await page.waitForTimeout(2500);
+	await openProjectMenu();
+	await page.getByRole('menuitem', { name: 'New project' }).click();
+	await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
+	await page.getByRole('button', { name: 'Cancel' }).click();
+	await page.waitForTimeout(800);
+	const after = (await (await fetch(`${BASE}/api/design`)).json()) as { elements: unknown[] };
+	assert.equal(after.elements.length, before.elements.length, 'Cancel changed the design');
+});

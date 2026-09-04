@@ -322,14 +322,20 @@ import { SeriesStore } from '$lib/series.svelte';
 	 * The question used to fire on any work at all, saved or not — reasonable before
 	 * there was a server to save to, since nothing on the bed had a second copy
 	 * anywhere. Now that a project can be saved and reopened, a design that matches
-	 * what is saved (`design.dirty` is false) loses nothing by being replaced: it is
-	 * still there, under its name, in the Projects window. Only unsaved changes are
-	 * worth a question, and the question is the ordinary Save / Discard / Cancel
-	 * triptych every desktop app uses (`UnsavedChanges.svelte`).
+	 * what is saved (`design.dirty` is false) loses nothing by being replaced — *if*
+	 * it is a named project: it is still there, under its name, in the Projects
+	 * window. Untitled work on the bed is never known to be saved, even when
+	 * `dirty` is false — importing into an empty bed is exactly that (`server.py`
+	 * marks it clean because it equals the file on disk, not because it has a
+	 * second copy anywhere reachable from this screen) — so the question is asked
+	 * whenever there is work *and* either it is dirty or it belongs to no project.
+	 * The question itself is the ordinary Save / Discard / Cancel triptych every
+	 * desktop app uses (`UnsavedChanges.svelte`).
 	 */
 	async function maybeAskFirst(action: Replacement) {
 		const thereIsWork = !design.isEmpty || sheets.sheets.length > 1;
-		if (!thereIsWork || !design.dirty) {
+		const untitled = (projects.current?.name ?? null) === null;
+		if (!thereIsWork || (!design.dirty && !untitled)) {
 			await runIt(action);
 			return;
 		}
