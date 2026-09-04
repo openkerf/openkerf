@@ -26,10 +26,10 @@ LABEL org.opencontainers.image.title="OpenKerf" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="MIT"
 
-# libusb for pyusb (a laser on USB, later); libGL/glib for opencv-python-headless; git only
-# to fetch the engine below, purged again in the same layer once installed.
+# libusb for pyusb (a laser on USB, later); libGL/glib for opencv-python-headless. Kept in
+# their own layer since they are runtime libraries, not build-time tools.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libusb-1.0-0 libgl1 libglib2.0-0 git \
+ && apt-get install -y --no-install-recommends libusb-1.0-0 libgl1 libglib2.0-0 \
  && rm -rf /var/lib/apt/lists/*
 
 # The repo is measured against upstream git at this revision (version string 0.9.9040),
@@ -40,16 +40,22 @@ RUN apt-get update \
 # Bump this together with the working copy in meerk40t/, not independently.
 ARG MEERK40T_REV=5f68a45
 
-# Installing the engine first lets pip see the pyproject.toml range (>=0.9.9000,<0.10)
-# already satisfied by the git install below, so it does not also fetch PyPI. The engine's
-# own non-GUI requirements that it does not declare: Pillow (the rasteriser and images)
-# and ezdxf (DXF import). numpy, pyserial and pyusb come with meerk40t itself. `[camera]`
-# is opencv-python-headless.
+# git is a build-time tool only, needed to fetch the engine below. Installing it, using
+# it, and purging it all happen in this one RUN so its bytes never land in a shipped
+# layer — a purge in a later layer only hides the package from the final filesystem view,
+# it does not shrink the layer that installed it. Installing the engine before the API
+# lets pip see the pyproject.toml range (>=0.9.9000,<0.10) already satisfied by the git
+# install, so it does not also fetch PyPI. The engine's own non-GUI requirements that it
+# does not declare: Pillow (the rasteriser and images) and ezdxf (DXF import). numpy,
+# pyserial and pyusb come with meerk40t itself. `[camera]` is opencv-python-headless.
 COPY api/ /app/api/
-RUN pip install --no-cache-dir "meerk40t @ git+https://github.com/meerk40t/meerk40t.git@${MEERK40T_REV}" \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && pip install --no-cache-dir "meerk40t @ git+https://github.com/meerk40t/meerk40t.git@${MEERK40T_REV}" \
  && pip install --no-cache-dir "/app/api[camera]" "Pillow>=10" "ezdxf>=1.1" \
- && rm -rf /app/api \
- && apt-get purge -y git && apt-get autoremove -y
+ && apt-get purge -y git \
+ && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/* /app/api
 
 COPY --from=frontend /src/build /app/frontend
 COPY deploy/entrypoint.sh /app/entrypoint.sh
