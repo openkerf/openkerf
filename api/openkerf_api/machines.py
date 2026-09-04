@@ -8,6 +8,8 @@ Both are read here rather than hardcoded, so new upstream devices and settings
 show up in our setup flow without a code change on our side.
 """
 
+from __future__ import annotations
+
 import ipaddress
 import secrets
 import socket
