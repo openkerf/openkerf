@@ -18,6 +18,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 // The working record, not the repository: this writes five PNGs on every run with a
@@ -93,7 +94,7 @@ after(async () => {
 });
 
 test('a drag with the pen pulls a curve out of the point', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await page.getByRole('button', { name: /^Pen/ }).click();
 	await page.waitForTimeout(500);
 	await remeasure();
@@ -132,7 +133,7 @@ test('a drag with the pen pulls a curve out of the point', async (t) => {
 });
 
 test('Backspace takes back the last point instead of throwing the line away', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const before = (await design()).elements.length;
 	const one = at(60, 200);
 	const two = at(140, 200);
@@ -217,7 +218,7 @@ async function pickWithNodes(id: string, read: NodeRead) {
 }
 
 test('a double-click on the line puts a node there, and Delete takes it away', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const id = await seedCorners();
 	const read = await nodesOf(id);
 	await pickWithNodes(id, read);
@@ -247,7 +248,7 @@ test('a double-click on the line puts a node there, and Delete takes it away', a
 });
 
 test('a piece can be curved, and then it has a handle to pull', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const id = await seedCorners();
 	const read = await nodesOf(id);
 	await pickWithNodes(id, read);
@@ -307,7 +308,7 @@ test('a piece can be curved, and then it has a handle to pull', async (t) => {
 });
 
 test('the menu on a node offers the verbs, and says why one cannot run', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const id = await seedCorners();
 	const read = await nodesOf(id);
 	await pickWithNodes(id, read);
@@ -343,7 +344,7 @@ test('the menu on a node offers the verbs, and says why one cannot run', async (
 });
 
 test('a path of several subpaths opens in the node tool', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	// Text turned into outlines: the shape the node tool exists for, and the one it could
 	// not open. Measured before this: `GET .../nodes` answered HTTP 500 (`nan` is not
 	// JSON), the bed showed 0 knots and the line under it advised making it a path first —
@@ -383,7 +384,7 @@ test('a path of several subpaths opens in the node tool', async (t) => {
 });
 
 test('a drag on the contour with the node tool keeps the selection', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const id = await seedCorners();
 	const read = await nodesOf(id);
 	await pickWithNodes(id, read);
@@ -410,7 +411,7 @@ test('a drag on the contour with the node tool keeps the selection', async (t) =
 });
 
 test('a node can be taken in hand from the keyboard, and then the verbs work', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const id = await seedCorners();
 	const read = await nodesOf(id);
 	await pickWithNodes(id, read);

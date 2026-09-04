@@ -16,6 +16,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -106,7 +107,7 @@ after(async () => {
 });
 
 test('a locked shape shows no handles and cannot be dragged', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await freshBed();
 	await post('/api/design/elements', {
 		type: 'rect',
@@ -150,7 +151,7 @@ test('a locked shape shows no handles and cannot be dragged', async (t) => {
 });
 
 test('the bed menu counts what lies on top of what, and removing says how many went', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await freshBed();
 	// Three of one rectangle and two of one circle: two stacks, three shapes too many.
 	for (let i = 0; i < 3; i++) {

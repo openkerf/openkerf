@@ -18,6 +18,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -83,7 +84,7 @@ async function open(selected: string[] = []) {
 }
 
 test('without two shapes picked, the button says why it cannot', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await open();
 
 	const button = page.getByRole('button', { name: 'Use the two selected shapes' });
@@ -96,7 +97,7 @@ test('without two shapes picked, the button says why it cannot', async (t) => {
 });
 
 test('two marks picked, and it asks for the second point after the first', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await open(marks);
 
 	await page.getByRole('button', { name: 'Use the two selected shapes' }).click();
@@ -115,7 +116,7 @@ test('two marks picked, and it asks for the second point after the first', async
 });
 
 test('with both points it reads back an offset you can check', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await post('/api/printcut/measure', { index: 1, x_mm: 232.5, y_mm: 41.2 });
 	await open(marks);
 
@@ -128,7 +129,7 @@ test('with both points it reads back an offset you can check', async (t) => {
 });
 
 test('forgetting the alignment gives the ordinary job back', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await open(marks);
 
 	await page.getByRole('button', { name: 'Forget the alignment' }).click();

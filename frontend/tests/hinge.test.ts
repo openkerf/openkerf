@@ -18,6 +18,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -76,7 +77,7 @@ after(async () => {
 });
 
 test('the window says how many slits it will cut, and how wide the bridge is', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await openHinge();
 
 	// The defaults: 60 x 40 mm, slits of 8 mm with 3 mm between them, rows 2 mm apart.
@@ -99,7 +100,7 @@ test('the window says how many slits it will cut, and how wide the bridge is', a
 });
 
 test('the pattern changes the field, not just the label', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await page.getByRole('radio', { name: 'Wavy slits' }).click();
 	await page.waitForTimeout(700);
 
@@ -123,7 +124,7 @@ test('the pattern changes the field, not just the label', async (t) => {
 });
 
 test('a bridge thinner than the cut itself is said out loud, under the drawing', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await set('Gap in a row (mm)', '0.2');
 
 	const lines = await caption();
@@ -139,7 +140,7 @@ test('a bridge thinner than the cut itself is said out loud, under the drawing',
 });
 
 test('a slit as long as the area is wide is refused where you are looking', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await set('Slit length (mm)', '60');
 
 	const said = await page.evaluate(
@@ -152,7 +153,7 @@ test('a slit as long as the area is wide is refused where you are looking', asyn
 });
 
 test('every field is reachable with the keyboard', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	// The steppers are deliberately out of the tab order (see NumberField); what has to be
 	// reachable is the seven fields and the checkbox.
 	const wanted = [
@@ -180,7 +181,7 @@ test('every field is reachable with the keyboard', async (t) => {
 });
 
 test('the field lands on the bed as one shape in a cut layer', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await page.getByRole('button', { name: /^Make the hinge/ }).click();
 	await page.waitForTimeout(1500);
 
@@ -203,7 +204,7 @@ test('the field lands on the bed as one shape in a cut layer', async (t) => {
 });
 
 test('the area can be the selected shape', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await fetch(`${BASE}/api/design/clear`, { method: 'POST' });
 	await post('/api/design/elements', {
 		type: 'rect',

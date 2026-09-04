@@ -26,6 +26,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -67,7 +68,7 @@ after(async () => {
 });
 
 test('on an empty bed the key obeys the row that says why not', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' });
 	await post('/api/project/new');
 	await page.goto(`${BASE}/?tab=design`, { waitUntil: 'domcontentloaded' });
@@ -96,7 +97,7 @@ test('on an empty bed the key obeys the row that says why not', async (t) => {
 });
 
 test('the way in never claims the server is away', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	// A design with passes on its layer: the case that numbered one rectangle three
 	// times, and the case a preview is opened for most often.
 	await post('/api/design/elements', { type: 'rect', x_mm: 20, y_mm: 20, width_mm: 60, height_mm: 40 });
@@ -136,7 +137,7 @@ test('the way in never claims the server is away', async (t) => {
 });
 
 test('every contour is numbered once, and no number lies on another', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await page.waitForTimeout(500);
 	const numbers = await page.$$eval('[role="dialog"] text.order', (nodes) =>
 		nodes.map((n) => {
@@ -168,7 +169,7 @@ test('every contour is numbered once, and no number lies on another', async (t) 
 });
 
 test('the scrubber reaches the end, and Play there starts over', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const clock = () =>
 		page.$eval('[role="dialog"] .clock', (n) => (n.textContent ?? '').trim());
 	const range = (await page.$('[role="dialog"] input[type=range]'))!;

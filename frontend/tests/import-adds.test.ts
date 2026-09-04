@@ -21,6 +21,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -92,7 +93,7 @@ const dialogues = () =>
 	);
 
 test('a second import lays its shapes beside the first', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await startClean();
 
 	await importFile('five.svg');
@@ -111,12 +112,12 @@ test('a second import lays its shapes beside the first', async (t) => {
 });
 
 test('nothing is asked, because nothing goes away', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	assert.deepEqual(await dialogues(), []);
 });
 
 test('what came in is selected, so it can be dragged into place', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	// One shape from the last file: the selection is exactly that one, not the six.
 	const chosen = await page.evaluate(() => {
 		const marks = document.querySelectorAll('.selected, [data-selected="true"]');
@@ -128,14 +129,14 @@ test('what came in is selected, so it can be dragged into place', async (t) => {
 });
 
 test('an import onto work counts as unsaved', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	// An empty bed plus a file is that file; a mixture exists nowhere on disk, and
 	// then the recovery file has something to keep.
 	assert.equal((await design()).dirty, true);
 });
 
 test('on an empty bed an import is simply the drawing', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await startClean();
 	await importFile('five.svg');
 	const state = await design();

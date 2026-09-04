@@ -22,6 +22,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -104,7 +105,7 @@ after(async () => {
 });
 
 test('the inside of an outline is not a surface you can click', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const empty = at(45, 95); // inside the big rectangle, on nothing
 	await page.mouse.click(empty.x, empty.y);
 	await page.waitForTimeout(600);
@@ -112,7 +113,7 @@ test('the inside of an outline is not a surface you can click', async (t) => {
 });
 
 test('a shape inside another is picked up by its own contour', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const onCircle = at(70, 85); // the bottom of the circle, inside the rectangle
 	await page.mouse.click(onCircle.x, onCircle.y);
 	await page.waitForTimeout(700);
@@ -124,7 +125,7 @@ test('a shape inside another is picked up by its own contour', async (t) => {
 });
 
 test('Alt+click walks down a pile of contours', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const crossing = at(60, 40); // the two rectangles' edges cross here
 	await page.mouse.click(crossing.x, crossing.y);
 	await page.waitForTimeout(600);
@@ -151,7 +152,7 @@ test('Alt+click walks down a pile of contours', async (t) => {
 });
 
 test('the right-click menu lists what lies under the pointer', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const crossing = at(60, 40);
 	await page.mouse.click(crossing.x, crossing.y, { button: 'right' });
 	await page.waitForTimeout(700);
@@ -178,7 +179,7 @@ test('the right-click menu lists what lies under the pointer', async (t) => {
 });
 
 test('a click on nothing at all clears the selection', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const outside = at(200, 200);
 	await page.mouse.click(outside.x, outside.y);
 	await page.waitForTimeout(600);

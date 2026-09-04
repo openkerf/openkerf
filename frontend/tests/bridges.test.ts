@@ -19,6 +19,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -132,7 +133,7 @@ async function pickRectangle() {
 }
 
 test('a shape without bridges says so, in the panel', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await pickRectangle();
 
 	const text = await panel();
@@ -141,7 +142,7 @@ test('a shape without bridges says so, in the panel', async (t) => {
 });
 
 test('the right-click menu puts sensible bridges on in one go', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await pickRectangle();
 	const p = at(50, 20);
 	await page.mouse.click(p.x, p.y, { button: 'right' });
@@ -161,7 +162,7 @@ test('the right-click menu puts sensible bridges on in one go', async (t) => {
 });
 
 test('the canvas draws the gaps, and keeps the whole contour for clicking', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const rect = (await snapshot()).elements.find((e) => e.id === shapes[0])!;
 
 	// Four gaps in a closed contour leave five pieces; the ideal path is one.
@@ -193,7 +194,7 @@ test('the canvas draws the gaps, and keeps the whole contour for clicking', asyn
 });
 
 test('the two numbers are independent: a length does not reset the count', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await pickRectangle();
 
 	const count = page.locator('.bridges .stepper input').first();
@@ -211,7 +212,7 @@ test('the two numbers are independent: a length does not reset the count', async
 });
 
 test('a refusal appears beside the field that caused it', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await pickRectangle();
 
 	// Six of 30 mm is 180 mm of a 200 mm contour: at most half of it may be bridge.
@@ -229,7 +230,7 @@ test('a refusal appears beside the field that caused it', async (t) => {
 });
 
 test('after a refusal the two fields show the shape again, not the refused numbers', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await post('/api/design/bridges', { ids: [shapes[0]], count: 12, length_mm: 2 });
 	await page.waitForTimeout(1200);
 	await pickRectangle();
@@ -252,7 +253,7 @@ test('after a refusal the two fields show the shape again, not the refused numbe
 });
 
 test('the shortcut obeys the reason the menu row gives', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await clearAlarm();
 	const p = at(70, 100); // the line, which carries no bridges
 	await page.mouse.click(p.x, p.y);
@@ -273,7 +274,7 @@ test('the shortcut obeys the reason the menu row gives', async (t) => {
 });
 
 test('a shape whose type carries no bridges says that, and the menu row says why', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await clearAlarm();
 	const p = at(70, 100); // the line
 	await page.mouse.click(p.x, p.y);
@@ -297,7 +298,7 @@ test('a shape whose type carries no bridges says that, and the menu row says why
 });
 
 test('the switch and the two numbers are reachable and usable from the keyboard', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await pickRectangle();
 
 	await page.focus('.bridges input[type=checkbox]');
@@ -328,7 +329,7 @@ test('the switch and the two numbers are reachable and usable from the keyboard'
 });
 
 test('the shortcut puts them on and takes them off again', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	// The circle, so this does not lean on whatever the rectangle ended up with. ⌘⇧B is
 	// Chrome's bookmarks-bar toggle and *is* interceptable — this is where that is verified.
 	await clearAlarm();
@@ -353,7 +354,7 @@ test('the shortcut puts them on and takes them off again', async (t) => {
 });
 
 test('a selection with a line in it says how many shapes got them', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await post('/api/design/bridges/clear', { ids: shapes });
 	const answer = await post('/api/design/bridges', { ids: shapes, count: 4, length_mm: 2 });
 	const outcome = await answer.json();

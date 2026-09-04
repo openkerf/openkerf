@@ -23,6 +23,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -72,7 +73,7 @@ after(async () => {
 });
 
 test('in Dutch no measurement on screen is written with a full stop', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 
 	const offenders = await page.evaluate((surfaces) => {
 		const found: string[] = [];

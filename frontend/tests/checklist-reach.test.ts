@@ -21,6 +21,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8184';
 
@@ -88,7 +89,7 @@ after(async () => {
 });
 
 test('every line of the checklist is readable where it stands', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 
 	const items = await page.evaluate(() => {
 		const found = [...document.querySelectorAll('li')].filter((n) =>

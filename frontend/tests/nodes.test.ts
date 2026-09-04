@@ -16,6 +16,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
+import { noServer } from './no-server.ts';
 
 const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8181';
 
@@ -78,7 +79,7 @@ after(async () => {
 const onScreen = () => page.evaluate(() => document.body.innerText);
 
 test('with no selection the tool says what it needs', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	await page.waitForTimeout(2500);
 	const box = await page.$eval('.bed > svg', (n) => {
 		const r = n.getBoundingClientRect();
@@ -115,7 +116,7 @@ test('with no selection the tool says what it needs', async (t) => {
 });
 
 test('with two shapes selected it says how many too many there are', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const size = (await (await fetch(`${BASE}/api/devices`)).json()).find(
 		(d: { active: boolean }) => d.active
 	).bed;
@@ -137,7 +138,7 @@ test('with two shapes selected it says how many too many there are', async (t) =
 });
 
 test('with exactly one shape the explanation goes quiet and the points are there', async (t) => {
-	if (!reachable) return t.skip(`no server on ${BASE}`);
+	if (!reachable) return noServer(t, BASE);
 	const size = (await (await fetch(`${BASE}/api/devices`)).json()).find(
 		(d: { active: boolean }) => d.active
 	).bed;
