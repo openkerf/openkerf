@@ -226,7 +226,15 @@ function quoted(haystack: string[], quotation: string): boolean {
 		.split(/(?<=\.)\s+/)
 		.map((part) => part.trim())
 		.filter(Boolean);
-	return parts.length > 1 && parts.every((part) => attempt(part) || attempt(part.replace(/\.$/, '')));
+	if (parts.length < 2) return false;
+	// Every part has to be long enough to be a claim of its own, exactly as the whole
+	// quotation does. Without this the splitting undoes the QUOTE_MIN above it, and a
+	// short invention rides along behind a faithful sentence: measured, ". Send."
+	// appended to a true quotation kept the test green, because `Send` is a label in the
+	// catalogue. A part too short to be checked means the quotation is not a run of
+	// messages, and then it has to be found whole or not at all.
+	if (parts.some((part) => part.replace(/\.$/, '').trim().length < QUOTE_MIN)) return false;
+	return parts.every((part) => attempt(part) || attempt(part.replace(/\.$/, '')));
 }
 
 /**
@@ -278,6 +286,13 @@ test('the quotation check stops a reworded sentence and lets a faithful one thro
 	assert.ok(
 		!asks('The extraction fan spins up before the head moves and stops ten seconds after.'),
 		'a sentence the app never said at all'
+	);
+	assert.ok(
+		!asks(
+			'Nothing had gone out, so there is no file on the panel to clean up; send it ' +
+				'again. Send.'
+		),
+		'a short invention riding behind a faithful sentence — the splitting must not undo QUOTE_MIN'
 	);
 
 	// And the shape of the leak itself: a message that is only a placeholder answers
@@ -345,6 +360,29 @@ test('every link between the pages resolves', () => {
 /**
  * The paragraphs of a page, with pictures, links, code blocks and blockquote marks
  * removed.
+ *
+ * The pictures go whole, alt text and all, and that is a hole worth knowing about
+ * rather than a decision to be proud of: an alt text may quote the app and nothing
+ * here checks it. It is where the contradiction in `library.md` sat out a year — the
+ * alt text had "not verified on a test grid" right while the prose beside it said
+ * "not measured with a test grid".
+ *
+ * Measured before leaving it: turn the stripping into `$1` and ten quotations in alt
+ * texts come back as unfound, of which at most one is drift. Eight are what an alt
+ * text is for and no message ever was — "RUN THROUGH THIS: Lid closed / Extraction
+ * and air assist on / Workpiece is clamped and flat" is four labels glued with
+ * slashes, "Material  not filled in for this sheet" is a row of two, "Verified —
+ * burned and judged on a test grid" is a label and its explanation, and two more are
+ * captions the app composes out of numbers. The tenth, "Openclipart did not answer in
+ * time. The rest is there.", is a *faithful* quotation of `clipart.unavailable` that
+ * `fits` turns down, because that message is "{source} {reason}. The rest is there."
+ * and its own words are less than half of what the page writes.
+ *
+ * So checking alt text needs both a rule for what an alt text may compose and a
+ * looser floor in `fits`, and either of those is a round of its own with the
+ * measurements to go with it. Until then: do not quote the app word for word in an
+ * alt text — describe the picture instead — because nothing here will tell you when
+ * it goes stale.
  *
  * The code blocks are the newest of those, and they were a false alarm rather than a
  * nicety: a fenced command line carries quotation marks of its own — `meerk40t -e

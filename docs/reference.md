@@ -463,7 +463,7 @@ The field is in the Job tab, at the top, labelled "Token for write actions",
 with the hint "The engine logs the token when the API starts." Paste it, press
 Save, and the tools come to life.
 
-![The Job tab with the job getting ready: a thumbnail of the sheet, "Estimated time 1:19", the layers with their speed, power and passes, and the checklist "Lid closed", "Extraction and air assist on", "Workpiece is clamped and flat".](images/12-job-preflight.png)
+![The Job tab with the job getting ready: a thumbnail of the sheet, "Estimated time 1:19", the first row of the layer table with its speed, power and passes, and the checklist "Lid closed", "Extraction and air assist on", "Workpiece is clamped and flat".](images/12-job-preflight.png)
 
 **When it goes wrong.** A token the server does not accept turns the label into
 "This token is being refused" and the hint into "Look in the window the engine

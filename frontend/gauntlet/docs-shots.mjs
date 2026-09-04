@@ -345,8 +345,9 @@ async function seed() {
  * script had not seeded, and the run wrote its own layers back into the reader's app.
  *
  * `openkerf -o <path>` gives the server a layer list of its own; `/api/health` says
- * which it got. Measured with the fence in place: the same shot twice differs in 41 of
- * 1,296,000 pixels, all of them in the top bar's own animation, and
+ * which it got. Measured with the fence in place: two runs of the same shot differed
+ * in 41 of 1,296,000 pixels, all of them in the top bar's own animation, and three
+ * runs after that came out identical to one another. And
  * `~/Library/Application Support/MeerK40t/operations.cfg` came through a full run and a
  * tidy shutdown byte for byte identical — same md5, same 34 sections.
  */

@@ -71,9 +71,10 @@ the `[_default …]` sections of the developer's own `operations.cfg`, which is 
 the engine files a new shape under when its colour has no layer yet.
 
 `docs-shots.mjs` therefore asks `/api/health` first and refuses unless it answers
-`"operations": "own"`. With the fence in place, and measured: the same shot twice differs
-in 41 of 1,296,000 pixels — all of them in the animation in the top bar — and the real
-`operations.cfg` came through a full run and a tidy shutdown byte for byte identical.
+`"operations": "own"`. With the fence in place, and measured: two runs of the same shot
+differed in 41 of 1,296,000 pixels — all of them in the animation in the top bar — three
+runs after that were identical to one another, and the real `operations.cfg` came through
+a full run and a tidy shutdown byte for byte identical.
 
 The same run also showed the script's own half of the fault. `seed()` took its layers
 from the *positions* in the list after the drawing was done, and the engine makes a layer

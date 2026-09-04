@@ -188,21 +188,30 @@ that was typed: "{name} is in the machine. Start it on the panel." That line goe
 as soon as the name in the field changes, because it is about one file under one
 name.
 
-![The fold Send to the machine, opened, in the strip at the foot of the pre-flight: the heading SEND TO THE MACHINE with the triangle turned down, under it the line "The file goes into the machine and stays there. You start it on the machine's own panel — nothing burns from here.", and under that a field labelled "Name on the machine" holding SHEET1 in a typewriter face, with a "Send" button beside it.](images/46-job-upload.png)
+![The fold Send to the machine, opened, in the strip at the foot of the pre-flight: the heading with its triangle turned down, under it the line about the file going into the machine and being started on the machine's own panel, and under that the name field holding SHEET1 in a typewriter face, with the send button beside it.](images/46-job-upload.png)
 
 #### When it will not go
 
-Two things it will not do at all, each with a whole sentence and nothing sent:
+Two things stop it before you can press at all, and the fold says which in the
+tooltip on its greyed-out button: **while a job is running** ("Not possible while a
+job is running" — the file would go down the same cable the machine is burning
+from), and **on a machine that is not a Ruida** ("This machine does not keep files
+in memory; that is a Ruida thing"). The same for an empty bed and for a server that
+cannot be reached.
 
-- while the machine is burning — "A job is running. Wait until it is done, or stop
-  it: the file would go down the same connection the machine is burning from.
-  Nothing has been sent." The file and the job would share one cable.
-- while another file of yours is already on its way — "This machine is already
-  being sent a file. Wait until that one is done and press again; nothing has been
-  sent." Two at once interleave into one file made of two jobs.
+One thing you can press and it will still refuse, because the screen cannot see it:
+another file of yours is already on its way to the same machine. "This machine is
+already being sent a file. Wait until that one is done and press again; nothing has
+been sent." Two at once interleave into one file made of two jobs.
 
 And it needs the machine on the other end: "There is no connection to the machine,
 so the file cannot be sent. Connect first; nothing has been sent."
+
+The refusal for a running job is written out as a whole sentence as well — "A job is
+running. Wait until it is done, or stop it: the file would go down the same
+connection the machine is burning from. Nothing has been sent." — but you will meet
+it through the API rather than on this screen, because the button is already grey by
+then. It is the same answer, said to whoever asked.
 
 One more can only turn up after you have pressed, because nothing on the screen can
 see it coming: "This job holds a single command of 1201 bytes, and a block may be at
