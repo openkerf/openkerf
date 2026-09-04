@@ -1095,7 +1095,17 @@ import { SeriesStore } from '$lib/series.svelte';
 		cutPath: () => (cutPathOpen = true),
 		selectOne: (id) => design.select(id),
 		setLocked: (locked) => lockSelection(locked),
-		duplicates: () => lookForDuplicates()
+		duplicates: () => lookForDuplicates(),
+		// The project verbs themselves — the button, the menu and the dialogs behind
+		// them — are built in the next round; `projectActions` is not offered from this
+		// page yet, so these six are unreachable. They exist only so `Handlers` (which
+		// every verb must satisfy) type-checks here too.
+		newProject: () => {},
+		openProjects: () => {},
+		saveProject: () => {},
+		saveProjectAs: () => {},
+		downloadProject: () => {},
+		uploadProject: () => {}
 	};
 
 	/**

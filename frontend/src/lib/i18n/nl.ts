@@ -35,7 +35,14 @@ export const nl: Catalogue = {
 	'topbar.project.new': 'Nieuw project',
 	'topbar.project.open': 'Project openen…',
 	'topbar.project.save': 'Project opslaan',
+	'topbar.project.saveAs': 'Opslaan als…',
+	'topbar.project.download': 'Downloaden',
+	'topbar.project.upload': 'Uploaden…',
 	'topbar.project.hint': 'Ontwerp, vellen, materialen en machineprofielen in één bestand.',
+	'api.project.badName':
+		'Een projectnaam mag letters, cijfers, spaties, punten, streepjes en liggende streepjes bevatten, hoogstens 60, en mag niet met een punt beginnen.',
+	'api.project.exists': 'Er is al een project met die naam. Kies een andere, of zeg dat het vervangen mag worden.',
+	'api.project.missing': 'Er is geen project meer met die naam.',
 	'topbar.import': 'Importeren',
 	'topbar.import.title':
 		'Bestand in dit vel importeren — SVG, DXF, RD, G-code of een afbeelding',

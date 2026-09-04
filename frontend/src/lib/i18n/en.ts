@@ -42,7 +42,15 @@ export const en = {
 	'topbar.project.new': 'New project',
 	'topbar.project.open': 'Open project…',
 	'topbar.project.save': 'Save project',
+	'topbar.project.saveAs': 'Save as…',
+	'topbar.project.download': 'Download',
+	'topbar.project.upload': 'Upload…',
 	'topbar.project.hint': 'Design, sheets, materials and machine profiles in one file.',
+	'api.project.badName':
+		'A project name may hold letters, digits, spaces, dots, hyphens and underscores, at most 60 of them, and may not start with a dot.',
+	'api.project.exists':
+		'There is already a project with that name. Choose another, or say that it may be replaced.',
+	'api.project.missing': 'There is no project with that name any more.',
 	'topbar.import': 'Import',
 	'topbar.import.title':
 		'Import a file into this sheet — SVG, DXF, RD, G-code or an image',

@@ -27,6 +27,14 @@ OpenKerf writes the one that matches the keyboard you are on.
 | ⌘D / Ctrl+D | Duplicate the selection | `duplicate` |
 | ⌫ / Del | Delete the selection | `delete` |
 
+### Project
+
+| Keys | What it does | |
+|---|---|---|
+| ⌘O / Ctrl+O | Open a project from the server | `open` |
+| ⌘S / Ctrl+S | Save the open project | `save` |
+| ⌘⇧S / Ctrl+Shift+S | Save the project under another name | `saveAs` |
+
 ### Selecting
 
 | Keys | What it does | |
