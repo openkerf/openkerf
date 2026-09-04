@@ -1,5 +1,5 @@
 /**
- * "Send to the machine" is where a hand can reach it.
+ * "Send to the machine" is where a hand can reach it, over the whole scroll.
  *
  * Running against a live server:
  *   OK_BASE=http://127.0.0.1:8184 node --test frontend/tests/upload-reach.test.ts
@@ -14,19 +14,34 @@
  * footer's top at y=705, `elementFromPoint` in the middle of the summary answering `LI`,
  * a line of the checklist, and a real mouse click on those coordinates leaving
  * `details.open` false. At 1280 x 800 the same click landed on `DIV.pf-actions`; only at
- * 1920 x 1080 did it answer `SUMMARY` and open. Scrolling reached it — the summary is on
- * top from 60 px of scroll onwards, over 600 of the 763 px the panel scrolls — but a
- * control nobody can see at rest is a control nobody scrolls for, and the route behind it
- * then has a caller that does not exist for the user.
+ * 1920 x 1080 did it answer `SUMMARY` and open.
  *
- * **`locator.click()` cannot measure this**, and that is why nothing saw it: Playwright
- * scrolls the element into view before clicking, so it clicks a control under a sticky
- * footer perfectly happily. The click here is `page.mouse.click` on the coordinates the
- * summary actually occupies — the same thing a hand does.
+ * The footer is `position: sticky`, so it is bounded by its own containing block,
+ * `.preflight`, and it travels with that block once the block leaves the bottom of the
+ * scrollport. Measured on the layout as it stands, `.preflight`'s bottom against the
+ * footer's top and the summary's own y:
  *
- * What this pins is the property and not the place: at every size this project measures,
- * the summary of the fold is the topmost thing at its own middle, a real click opens it,
- * and the button that burns is still reachable beside it.
+ *   1440 x 900, with a raster layer (range 750)   without one (range 728)
+ *     scrollTop   0: bottom 925, strip 681, summary 694   903 / 681 / 694
+ *     halfway     : bottom 550, strip 363, summary 376   539 / 352 / 365
+ *     scrollTop max: bottom 175, strip -12, summary   1   175 / -12 /   1
+ *   1280 x 800, with a raster layer (range 850)   without one (range 828)
+ *     scrollTop   0: bottom 925, strip 581, summary 594   903 / 581 / 594
+ *     halfway     : bottom 500, strip 313, summary 326   489 / 302 / 315
+ *     scrollTop max: bottom  75, strip -112, summary -99    75 / -112 / -99
+ *
+ * At the end of the range the pre-flight has scrolled off the top and takes the footer
+ * with it — the summary is above the scrollport, not behind anything, which is what all
+ * of that card does and what the sections below it are for. What matters is the rest:
+ * over the whole range, at both sizes and in both states, the summary is the topmost
+ * thing at its own middle at **every** offset where it lies inside the scrollport. That
+ * is what the second test below measures, offset by offset, and it is the property the
+ * first one only checks at rest.
+ *
+ * **`locator.click()` cannot measure any of this**, and that is why nothing saw it:
+ * Playwright scrolls the element into view before clicking, so it clicks a control under
+ * a sticky footer perfectly happily. The click here is `page.mouse.click` on the
+ * coordinates the summary actually occupies — the same thing a hand does.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -128,7 +143,7 @@ async function whatIsOnTop(selector: string) {
 for (const withRaster of [true, false]) {
 	for (const [width, height] of SIZES) {
 		const state = withRaster ? 'with a raster layer' : 'without one';
-		test(`the fold can be opened by a hand at ${width} x ${height}, ${state}`, async (t) => {
+		test(`at rest the fold can be opened by a hand at ${width} x ${height}, ${state}`, async (t) => {
 			if (!reachable) return t.skip(`no server on ${BASE}`);
 			await aLongColumn(withRaster);
 			await page.setViewportSize({ width, height });
@@ -171,6 +186,48 @@ for (const withRaster of [true, false]) {
 				};
 			});
 			assert.ok(start?.onScreen && start.self, 'the start button is no longer reachable beside the fold');
+		});
+
+		test(`and stays reachable all the way down at ${width} x ${height}, ${state}`, async (t) => {
+			if (!reachable) return t.skip(`no server on ${BASE}`);
+			await aLongColumn(withRaster);
+			await page.setViewportSize({ width, height });
+			await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });
+			await page.waitForTimeout(3000);
+
+			// One scroll position is one measurement, and the position that matters is not
+			// always the one the panel opens at: what buries a control here is a footer
+			// that moves. So the whole range, ten pixels at a time — and only where the
+			// summary is inside the scrollport, because above or below it the answer is
+			// "you have scrolled past it", which is true of every row in the panel.
+			const covered = await page.evaluate(async () => {
+				const column = document.querySelector('.preflight');
+				let scroller: HTMLElement | null = null;
+				for (let el = column?.parentElement as HTMLElement | null; el; el = el.parentElement)
+					if (el.scrollHeight > el.clientHeight + 4) { scroller = el; break; }
+				if (!scroller || !column) return ['no scrolling column'];
+				const found: string[] = [];
+				const max = scroller.scrollHeight - scroller.clientHeight;
+				for (let top = 0; top <= max; top += 10) {
+					scroller.scrollTop = top;
+					await new Promise((r) => requestAnimationFrame(r));
+					const summary = document.querySelector('details.pf-upload > summary');
+					if (!summary) return ['the fold is gone'];
+					const box = summary.getBoundingClientRect();
+					const port = scroller.getBoundingClientRect();
+					if (box.top < port.top || box.bottom > port.bottom) continue;
+					const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+					if (hit !== summary && !summary.contains(hit))
+						found.push(`${top}: ${hit ? hit.tagName + '.' + String(hit.className).split(' ')[0] : 'nothing'}`);
+				}
+				scroller.scrollTop = 0;
+				return found;
+			});
+			assert.deepEqual(
+				covered,
+				[],
+				`the fold is behind something at these scroll offsets: ${covered.slice(0, 8).join(', ')}`
+			);
 		});
 	}
 }
