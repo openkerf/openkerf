@@ -255,17 +255,20 @@ test('the English of a refusal is the sentence the API sends', () => {
 	// written up in `.superpowers/sdd/2026-09-03-ruida-upload/zinnen-uiteen.md`, sentence
 	// beside sentence. **This list may shrink and may never grow**: a new refusal whose
 	// two halves disagree is a mistake being made now, and that is what this test is for.
+	// Three where the API's sentence names something the header does not carry — a
+	// console command, an element id, an engine type — so the catalogue says the same
+	// thing without it ("That combination", "That shape is gone"). Deliberate, and
+	// decided so: the repair would be to let the value travel, and for these three the
+	// value is not a word in either language.
+	//
+	// This list was eight and has just lost its first two, which is the first time it
+	// has shrunk: `stencil.tooMuchBridge` and `library.material.nameTaken` now let
+	// their values travel — the bridge count and width, and the name the user typed a
+	// second ago. It may shrink again and it may never grow.
 	const ALREADY_APART = new Set([
-		// Five where the API's sentence names something the header does not carry — a
-		// command, an element id, an engine type, the user's own material name — so the
-		// catalogue says the same thing without it ("That combination", "That shape is
-		// gone"). Deliberate, and the repair, where there is one, is to let the value
-		// travel rather than to reword either half.
-		'stencil.tooMuchBridge',
 		'draw.booleanEmpty',
 		'edit.staleElement',
 		'nodes.notEditable',
-		'library.material.nameTaken',
 		// The other way round: this one *does* send its numbers and only the catalogue
 		// uses them, so the API's sentence is the half that stayed behind.
 		'library.preset.kerfRange',

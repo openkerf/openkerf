@@ -2374,7 +2374,7 @@ export const nl: Catalogue = {
 		other: '{n} van deze contouren zijn open lijnen en geen omtrekken, dus er kan niets uit vallen. Een stencil heeft een omtreklettertype nodig; een eenlijnslettertype tekent letters met streken en heeft geen binnenkant.'
 	},
 	'api.stencil.noIslands': 'Er valt niets uit deze vorm: er is geen deel dat de snede zou lossnijden. Er zijn geen bruggen nodig.',
-	'api.stencil.tooMuchBridge': 'De gaten zouden {taken} mm van een contour van {length} mm opeten; hooguit de helft mag brug zijn. Neem een smallere brug, of minder per eiland.',
+	'api.stencil.tooMuchBridge': '{gaps} gaten van {width} mm eten {taken} mm van een contour van {length} mm op; hooguit de helft mag brug zijn. Neem een smallere brug, of minder per eiland.',
 	'api.bridges.notSupported': 'Bruggen werken alleen op een rechthoek, een ellips, een polylijn of een pad.',
 	'api.bridges.needsCount': 'Vraag om minstens één brug, of haal ze juist weg.',
 	'api.bridges.needsLength': 'Een brug heeft een lengte groter dan nul nodig.',
@@ -2428,7 +2428,7 @@ export const nl: Catalogue = {
 	'api.library.starter.dismissNoMachine':
 		'Er is geen machine actief, dus er is geen aanbod om weg te leggen.',
 	'api.library.material.nameTaken':
-		'Er bestaat al een materiaal met die naam. Voeg de twee samen in plaats van ze dezelfde naam te geven.',
+		'Er bestaat al een materiaal dat \'{name}\' heet. Voeg de twee samen in plaats van ze dezelfde naam te geven.',
 	'api.library.material.mergeSelf': 'Een materiaal kan niet met zichzelf samengevoegd worden.',
 	'api.library.grid.cutoutNeedsMaterial':
 		'Om de tegel los te snijden is een materiaal nodig, zodat de snijpreset opgezocht kan worden.',

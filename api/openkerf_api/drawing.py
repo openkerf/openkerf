@@ -926,12 +926,22 @@ class Drawing:
             length = path_length(geometry) / UNITS_PER_MM
             taken = gaps * width
             if taken > length * MAX_FRACTION:
+                # `gaps` and `width` travel too. Without them the catalogue could not
+                # say how many bridges of what width, so its sentence opened "The gaps
+                # would take" while the English one counted them — two halves of one
+                # refusal telling the reader different amounts of the same thing, and
+                # which you saw depended on whether your client knew the code.
                 raise DesignError(
                     f"{gaps} gaps of {width:g} mm take {taken:g} mm of a contour that is "
                     f"{length:.1f} mm long; at most half of it may be bridge. Use a "
                     "narrower bridge, or fewer per island.",
                     code="stencil.tooMuchBridge",
-                    values={"taken": taken, "length": round(length, 1)},
+                    values={
+                        "gaps": gaps,
+                        "width": width,
+                        "taken": taken,
+                        "length": round(length, 1),
+                    },
                 )
 
         answer = {

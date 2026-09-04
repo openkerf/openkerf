@@ -2521,7 +2521,7 @@ export const en = {
 		other: '{n} of these contours are open lines rather than outlines, so nothing in them can fall out. A stencil needs an outline typeface; a single-stroke one draws letters with strokes and has no inside.'
 	},
 	'api.stencil.noIslands': 'Nothing in this shape would fall out: there is no part of it that the cut would set loose. It needs no bridges.',
-	'api.stencil.tooMuchBridge': 'The gaps would take {taken} mm of a contour that is {length} mm long; at most half of it may be bridge. Use a narrower bridge, or fewer per island.',
+	'api.stencil.tooMuchBridge': '{gaps} gaps of {width} mm take {taken} mm of a contour that is {length} mm long; at most half of it may be bridge. Use a narrower bridge, or fewer per island.',
 	'api.bridges.notSupported': 'Bridges only work on a rectangle, an ellipse, a polyline or a path.',
 	'api.bridges.needsCount': 'Ask for at least one bridge, or clear them instead.',
 	'api.bridges.needsLength': 'A bridge needs a length greater than zero.',
@@ -2590,7 +2590,7 @@ export const en = {
 	// name is in the field the reader typed it into, one line above the refusal, so a
 	// Dutch sentence without it loses nothing and an English one loses the reader.
 	'api.library.material.nameTaken':
-		'There is already a material of that name. Merge the two instead of giving them the same name.',
+		'There is already a material called \'{name}\'. Merge the two instead of giving them the same name.',
 	'api.library.material.mergeSelf': 'A material cannot be merged into itself.',
 	'api.library.grid.cutoutNeedsMaterial':
 		'Cutting the tile loose needs a material, so its cut preset can be looked up.',

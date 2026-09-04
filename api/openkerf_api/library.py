@@ -1049,10 +1049,19 @@ class Library:
                     (clean, material_id),
                 ).fetchone()
                 if taken is not None:
+                    # The name travels. It is the word the user typed a second ago, and
+                    # the catalogue could not say it — so a Dutch reader was told "a
+                    # material of that name" and had to go and look which. `written()`
+                    # leaves it alone, so it arrives as they wrote it.
+                    #
+                    # `{name}` and not `{clean}`: the placeholder goes into the
+                    # catalogue and a translator has to be able to read it.
+                    name = clean
                     raise LibraryError(
-                        f"There is already a material called '{clean}'. Merge the two "
+                        f"There is already a material called '{name}'. Merge the two "
                         "instead of giving them the same name.",
                         code="library.material.nameTaken",
+                        values={"name": name},
                     )
                 fields["name"] = clean
             if synonyms is not None:
