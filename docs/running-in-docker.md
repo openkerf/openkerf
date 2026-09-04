@@ -113,7 +113,10 @@ docker run --rm -v openkerf-data:/data -v "$PWD":/backup alpine \
 The compose file passes `/dev/video0` into the container. Find the right node on the
 box with `ls /dev/video*`. A USB webcam is usually `video0`; a Pi camera often makes two
 nodes, and the even one carries the picture. Change the line in `compose.yml` to match
-and `docker compose up -d` again.
+and `docker compose up -d` again: a restart alone does not hand a device in, the
+container has to be made anew. Measured on a ThinkCentre under Dockge: after editing
+the line, Restart left the app saying that the device sees no camera at all, and
+Deploy made the camera appear.
 
 Without a camera device the rest of the app runs; measured, the container starts,
 becomes healthy and `/api/health` still answers. The camera panel says that no camera
