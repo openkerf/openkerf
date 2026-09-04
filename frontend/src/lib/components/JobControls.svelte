@@ -640,23 +640,31 @@
 	/**
 	 * Why sending is off, in a sentence.
 	 *
-	 * The first three are the ones that stop starting as well; the fourth is about the
-	 * machine itself and comes from the same check that refuses the route
-	 * (`CommandRunner.keeps_files`), so the button is not offered where it could only
-	 * fail. What is deliberately *not* here: whether the machine is a Ruida that is
-	 * merely busy with somebody else's file. That is not knowable from here, and the
-	 * refusal for it is a whole sentence.
+	 * No server and no token are the two that stop starting as well, and for the same
+	 * reason as there: `/api/machine/upload` is in `WRITE_ROUTES`, so without a token
+	 * it is a guaranteed 401, and a button that cannot succeed is an empty promise.
+	 * That one was missing here while the start button beside it had it — the
+	 * comment that used to stand here said "the first three are the ones that stop
+	 * starting as well", which was three counted off a list that did not include it.
+	 *
+	 * `actions.upload` is about the machine itself and comes from the same check that
+	 * refuses the route (`CommandRunner.keeps_files`), so the button is not offered
+	 * where it could only fail. What is deliberately *not* here: whether the machine
+	 * is a Ruida that is merely busy with somebody else's file. That is not knowable
+	 * from here, and the refusal for it is a whole sentence.
 	 */
 	let uploadOff = $derived(
 		!connection.online
 			? t('transport.noServer')
-			: actions?.upload === false
-				? t('api.upload.notRuida')
-				: busyWithWork
-					? t('job.blocked.duringJob')
-					: empty
-						? t('job.nothing.title')
-						: undefined
+			: control.tokenProbleem
+				? t('job.blocked.token')
+				: actions?.upload === false
+					? t('api.upload.notRuida')
+					: busyWithWork
+						? t('job.blocked.duringJob')
+						: empty
+							? t('job.nothing.title')
+							: undefined
 	);
 	async function sendToMachine() {
 		// The name that comes back, not the one that went in: the machine's copy of the

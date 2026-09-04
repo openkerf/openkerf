@@ -207,11 +207,21 @@ been sent." Two at once interleave into one file made of two jobs.
 And it needs the machine on the other end: "There is no connection to the machine,
 so the file cannot be sent. Connect first; nothing has been sent."
 
-The refusal for a running job is written out as a whole sentence as well — "A job is
-running. Wait until it is done, or stop it: the file would go down the same
-connection the machine is burning from. Nothing has been sent." — but you will meet
-it through the API rather than on this screen, because the button is already grey by
-then. It is the same answer, said to whoever asked.
+The refusal for a job on the machine is written out as a whole sentence as well — "A
+job is on this machine — burning, or waiting in the queue to start. Wait until it is
+done, or stop it: the file would go down the same connection that job uses. Nothing
+has been sent." — but you will meet it through the API rather than on this screen,
+because the button is already grey by then. It is the same answer, said to whoever
+asked. It names the queue as well as the burning, because a job that has been handed
+to the machine and not yet begun is about to use that same connection.
+
+The other direction has a sentence too, and you can meet it on any screen: press
+anything that talks to the machine while a file is going out — a jog arrow, Burn,
+Pause — and you get "A file is being sent to the machine. Wait until it is there and
+then try again: anything sent now lands in the middle of that file, and the machine
+gives no sign of it." Stopping is the one exception and stays available throughout:
+a stop that first argues about the connection is not a stop. It does spoil the file
+that was on its way, so delete that one from the panel before burning it.
 
 One more can only turn up after you have pressed, because nothing on the screen can
 see it coming: "This job holds a single command of 1201 bytes, and a block may be at
@@ -250,9 +260,16 @@ they are two sentences and not one.
 
 Honest about the state of this: the whole conversation was built and measured
 against the engine's own Ruida emulator — the file arrives there byte for byte
-identical to the `.rd` file this app exports, with no parse failures. What nobody
-has measured yet is a **real** Ruida controller: whether it accepts the file the
-same way, and what its panel makes of the name. If you are the first to try it,
+identical to the job OpenKerf built for it, with no parse failures. Two things
+that sentence is careful about. There is no `.rd` file to compare against:
+OpenKerf does not export one, and no button or route here writes one — what is
+compared is the bytes the app builds to send. And "identical" is minus one
+command: `SET_FILE_SUM`, which the emulator answers itself instead of putting in
+the job. Measured on one build: 5462 bytes sent, 5455 kept, the difference
+exactly that one command.
+
+What nobody has measured yet is a **real** Ruida controller: whether it accepts
+the file the same way, and what its panel makes of the name. If you are the first to try it,
 look at the panel before you burn: the name it lists, and whether the file it
 holds is the one you sent.
 

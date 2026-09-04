@@ -7,6 +7,14 @@
  * Skips itself without a reachable server. It never starts a job and never sends one:
  * the fold is opened and looked at, nothing is pressed inside it.
  *
+ * That skip is the weak point and it is worth naming: this is the guard that caught
+ * the worst mistake of this round — a control a hand could not reach — and by default
+ * it is off, because by default there is no server. A skip is at least visible in the
+ * output where a green tick would not be. To make it enforceable, set
+ * `OK_REQUIRE_SERVER=1`: an unreachable server is then a failure rather than a skip,
+ * which is what a run that claims to have checked this should use. Every `*-reach`
+ * test in this directory shares the pattern and could take the same line.
+ *
  * Why it exists. The fold sat in the column just above the sticky footer, which is the
  * one place in that column where a control cannot be seen: the footer floats up over
  * whatever is last in the flow as soon as the column is longer than the panel is high.
@@ -57,6 +65,19 @@ const SIZES: [number, number][] = [
 ];
 
 let reachable = false;
+
+/**
+ * No server: skip, or fail if this run said it would check.
+ *
+ * `OK_REQUIRE_SERVER=1` turns every skip in this file into a failure. Without it the
+ * default stays what the other `*-reach` tests do — silence is better than a false
+ * green, but it is still silence, so there has to be a way to demand the real thing.
+ */
+function noServer(t: { skip: (why: string) => void }) {
+	if (process.env.OK_REQUIRE_SERVER)
+		assert.fail(`no server on ${BASE} and OK_REQUIRE_SERVER is set`);
+	return t.skip(`no server on ${BASE}`);
+}
 let browser: Browser | null = null;
 let page: Page;
 
@@ -144,7 +165,7 @@ for (const withRaster of [true, false]) {
 	for (const [width, height] of SIZES) {
 		const state = withRaster ? 'with a raster layer' : 'without one';
 		test(`at rest the fold can be opened by a hand at ${width} x ${height}, ${state}`, async (t) => {
-			if (!reachable) return t.skip(`no server on ${BASE}`);
+			if (!reachable) return noServer(t);
 			await aLongColumn(withRaster);
 			await page.setViewportSize({ width, height });
 			await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });
@@ -189,7 +210,7 @@ for (const withRaster of [true, false]) {
 		});
 
 		test(`and stays reachable all the way down at ${width} x ${height}, ${state}`, async (t) => {
-			if (!reachable) return t.skip(`no server on ${BASE}`);
+			if (!reachable) return noServer(t);
 			await aLongColumn(withRaster);
 			await page.setViewportSize({ width, height });
 			await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });

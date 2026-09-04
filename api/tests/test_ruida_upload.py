@@ -2128,10 +2128,11 @@ def _an_upload_already_running(server, session, monkeypatch):
     Returned rather than released here, so it happens in the test's `finally`: a
     claim left standing would refuse every upload after it on this kernel.
     """
-    from openkerf_api.busy import claim_the_line, release_the_line
+    from openkerf_api.busy import sending_a_file
 
-    assert claim_the_line(server.kernel), "the line was already claimed"
-    return lambda: release_the_line(server.kernel)
+    holding = sending_a_file(server.kernel)
+    assert holding.__enter__() is True, "the line was already claimed"
+    return lambda: holding.__exit__(None, None, None)
 
 
 def _nothing_on_the_bed(server, session, monkeypatch):
@@ -2394,15 +2395,13 @@ def test_the_realtime_verbs_refuse_while_a_file_is_being_sent(ruida, verb):
     Nothing is spooled, nothing is run: the refusal is the first thing in both
     methods, and if it were not, `_driver_paused()` only reads.
     """
-    from openkerf_api.busy import claim_the_line, release_the_line
+    from openkerf_api.busy import sending_a_file
 
     runner = CommandRunner(ruida)
-    assert claim_the_line(ruida), "the line was already claimed"
-    try:
+    with sending_a_file(ruida) as claimed:
+        assert claimed, "the line was already claimed"
         with pytest.raises(DesignError) as error:
             getattr(runner, verb)()
-    finally:
-        release_the_line(ruida)
 
     assert error.value.code == "machine.sendingAFile"
     assert "wait until it is there" in str(error.value).lower()
@@ -2423,16 +2422,14 @@ def test_stopping_stays_reachable_while_a_file_is_being_sent(ruida, monkeypatch)
     Recorded rather than run: `estop` on a Ruida is realtime and this suite has
     no machine. What is asserted is that it gets through the guard.
     """
-    from openkerf_api.busy import claim_the_line, release_the_line
+    from openkerf_api.busy import sending_a_file
 
     runner = CommandRunner(ruida)
     reached = []
     monkeypatch.setattr(runner, "run", lambda *a, **kw: reached.append(a) or [])
-    assert claim_the_line(ruida), "the line was already claimed"
-    try:
+    with sending_a_file(ruida) as claimed:
+        assert claimed, "the line was already claimed"
         runner.stop()
-    finally:
-        release_the_line(ruida)
 
     assert reached, "stop was blocked by the upload guard"
 
@@ -2453,18 +2450,73 @@ def test_releasing_the_motors_is_refused_while_a_file_is_being_sent(
     burning job. They never were, and that is about burning rather than sending;
     it is written up in the report instead of changed on the way past.
     """
-    from openkerf_api.busy import claim_the_line, release_the_line
+    from openkerf_api.busy import sending_a_file
     from openkerf_api.machine import MachineControl
 
     motion = MachineControl(ruida)
     reached = []
     monkeypatch.setattr(motion.runner, "run", lambda *a, **kw: reached.append(a) or [])
-    assert claim_the_line(ruida), "the line was already claimed"
-    try:
+    with sending_a_file(ruida) as claimed:
+        assert claimed, "the line was already claimed"
         with pytest.raises(DesignError) as error:
             getattr(motion, verb)()
-    finally:
-        release_the_line(ruida)
 
     assert error.value.code == "machine.sendingAFile"
     assert not reached, f"{verb} reached the machine anyway"
+
+
+class _QueuedSpooler:
+    """A spooler holding a job that has not been picked up yet.
+
+    The state `is_running()` cannot see: `LaserJob.__init__` sets `_stopped`
+    `True` and only `execute()` clears it (`core/laserjob.py:34,89`). Measured on
+    the dummy device, one `motion.jog(1, 0)` leaves exactly this — status
+    `Waiting`, `is_running()` `False`, still there a second later.
+    """
+
+    class _Job:
+        status = "Waiting"
+
+        def is_running(self):
+            return False
+
+    def __init__(self):
+        self.queue = [self._Job()]
+
+
+def test_the_line_says_which_of_the_three_things_is_on_it(ruida, monkeypatch):
+    """
+    The one question, and the four answers every caller reads.
+
+    A code and not a sentence, so a jog, a burn and an upload can each say it in
+    their own words — the same shape as `jobPhase` and `offerState`. This is the
+    test that the codes themselves are right; who refuses on which of them is
+    each caller's own test.
+    """
+    from openkerf_api.busy import sending_a_file, the_line_is_in_use
+
+    assert the_line_is_in_use(ruida) is None
+
+    with sending_a_file(ruida) as claimed:
+        assert claimed
+        assert the_line_is_in_use(ruida) == "uploading"
+    assert the_line_is_in_use(ruida) is None, "the claim outlived the block"
+
+    monkeypatch.setattr(ruida.device, "spooler", _QueuedSpooler(), raising=False)
+    assert the_line_is_in_use(ruida) == "queued"
+
+    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+    assert the_line_is_in_use(ruida) == "burning"
+
+
+def test_a_second_claim_on_the_line_is_refused_and_the_first_keeps_it(ruida):
+    """The claim is what makes `upload.busy` safe against two threads at once."""
+    from openkerf_api.busy import a_file_is_being_sent, sending_a_file
+
+    with sending_a_file(ruida) as first:
+        assert first is True
+        with sending_a_file(ruida) as second:
+            assert second is False, "two uploads held the line at once"
+        # Leaving the inner block must not have released the outer claim.
+        assert a_file_is_being_sent(ruida), "the failed claim released the real one"
+    assert not a_file_is_being_sent(ruida)

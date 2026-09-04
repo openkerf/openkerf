@@ -20,11 +20,7 @@ import time
 
 from meerk40t.ruida.rdjob import parse_commands
 
-from .busy import (
-    claim_the_line,
-    release_the_line,
-    the_spooler_has_work,
-)
+from .busy import sending_a_file, the_line_is_in_use
 from .commands import CommandRunner
 from .edits import DesignError
 
@@ -481,19 +477,17 @@ class RuidaUpload:
         # and no claim at all: both returned a result and the line saw
         # `E8 02, E8 02, E7 01, E7 01, <block>, <block>` — one file in the
         # machine's memory made of two jobs. But a lock on `self` answered only
-        # that half. Every mover and every burn went straight through an upload,
-        # because nothing outside this method could ask; see `busy.py` and
+        # that half: every mover and every burn went straight through an upload,
+        # because nothing outside this method could ask. See `busy.py` and
         # `MachineControl._idle()`.
-        if not claim_the_line(self.kernel):
-            raise DesignError(
-                "This machine is already being sent a file. Wait until that one "
-                "is done and press again; nothing has been sent.",
-                code="upload.busy",
-            )
-        try:
+        with sending_a_file(self.kernel) as claimed:
+            if not claimed:
+                raise DesignError(
+                    "This machine is already being sent a file. Wait until that "
+                    "one is done and press again; nothing has been sent.",
+                    code="upload.busy",
+                )
             return self._upload(name)
-        finally:
-            release_the_line(self.kernel)
 
     def _upload(self, name: str) -> dict:
         """The whole of an upload, with `upload()` holding the lock around it.
@@ -530,16 +524,17 @@ class RuidaUpload:
         # receiver we have merges the two streams without a word, and the API is
         # where this is stopped either way.
         #
-        # `the_spooler_has_work` and not `a_job_is_running`, which is the question
-        # the movers ask: a job that has been spooled and not yet picked up
-        # reports `is_running()` `False` (measured — status `Waiting`), and it is
-        # about to be picked up and written down this very line. The sentence
-        # says "or waiting to start" because that is what the check counts.
-        if the_spooler_has_work(self.kernel):
+        # `'queued'` counts here where it does not for the movers: a job that has
+        # been spooled and not yet picked up reports `is_running()` `False`
+        # (measured — status `Waiting`), and it is about to be picked up and
+        # written down this very line. `'uploading'` is not tested for, because by
+        # now that answer is *us* — the claim above is ours, and a second upload
+        # was already refused with its own code.
+        if the_line_is_in_use(self.kernel) in ("burning", "queued"):
             raise DesignError(
                 "A job is on this machine — burning, or waiting in the queue to "
-                "start. Wait until it is done, or stop it: the file would go "
-                "down the same connection that job uses. Nothing has been sent.",
+                "start. Wait until it is done, or stop it: the file would go down "
+                "the same connection that job uses. Nothing has been sent.",
                 code="upload.whileBurning",
             )
         session = self._session()

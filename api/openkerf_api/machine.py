@@ -153,6 +153,11 @@ class MachineControl:
         through `RuidaDriver.move_abs`, the same `send_q` the blocks of an upload are
         going down, and the receiver weaves both into one `RDJob` without a word. That
         file is then started from the panel, on material. See `busy.py`.
+
+        Two questions and not one, and `'queued'` is deliberately not among the answers
+        acted on here: a jog leaves a job in the spooler reporting `is_running()` False
+        for as long as the move takes, so refusing on the queue would make the movers
+        block each other. `busy.py` has that measured.
         """
         refuse_while_a_file_is_being_sent(self.kernel)
         if a_job_is_running(self.kernel):
@@ -160,6 +165,18 @@ class MachineControl:
                 "A job is running. Stop it first; moving while burning "
                 "ruins the job."
             )
+
+    def _refuse_while_sending(self) -> None:
+        """The file half of `_idle()`, for the two verbs that never call it.
+
+        `unlock` and `lock` are in `MOVES` beside `home` and `jog` and are the only
+        members of it that ask `_idle()` nothing at all — so they go through while a
+        job is burning too. That predates this and is a question about burning; it is
+        written up rather than changed here. The line is not in question: they reach
+        the device through the same runner, and during an upload their bytes land in
+        the file.
+        """
+        refuse_while_a_file_is_being_sent(self.kernel)
 
     def _require(self, command: str):
         if not self.runner.supports(command):
@@ -556,11 +573,11 @@ class MachineControl:
         What is not in question is the line: `unlock` goes to the device through the
         same runner as everything else, and during an upload its bytes land in the file.
         """
-        refuse_while_a_file_is_being_sent(self.kernel)
+        self._refuse_while_sending()
         self._require("unlock")
         return {"output": self.runner.run("unlock")}
 
     def lock(self) -> dict:
-        refuse_while_a_file_is_being_sent(self.kernel)
+        self._refuse_while_sending()
         self._require("lock")
         return {"output": self.runner.run("lock")}

@@ -99,12 +99,19 @@ test('the field shows capitals even though it no longer stores them', () => {
 	);
 });
 
-test('the screen and the engine layer cut the name the same way', () => {
+test('the screen and the engine layer cut the name the same way', (t) => {
 	// Not "the code looks the same": the two are run against each other. Without a
 	// Python to run, the comparison is skipped rather than faked — a green tick for a
 	// measurement that never happened is worse than a skip that says so.
 	const python = join(ROOT, 'meerk40t', '.venv-nogui', 'bin', 'python');
-	if (!existsSync(python)) return; // no interpreter here; the first test still holds
+	if (!existsSync(python)) {
+		// `t.skip`, not `return`: a bare return reports this test **green**, which is
+		// the exact thing the comment above forbids. It stood here saying so while
+		// doing the opposite.
+		if (process.env.OK_REQUIRE_PYTHON)
+			assert.fail(`no interpreter at ${python} and OK_REQUIRE_PYTHON is set`);
+		return t.skip(`no interpreter at ${python}; the first test still holds`);
+	}
 	const script =
 		'import json,sys;sys.path.insert(0,"api");' +
 		'from openkerf_api.ruida_upload import machine_name;' +

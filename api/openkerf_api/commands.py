@@ -265,8 +265,9 @@ class CommandRunner:
         """
         # Not while a file is going out: the spooler would pick this up and the
         # driver write it down the line the upload is using. In the runner and not
-        # in the route, so the tile burn and the series burn — the other two callers
-        # of this method — are covered by the same line.
+        # in the route, so the tile burn (`tilerun.py:734`) and the series burn
+        # (`series.py:2278`) — the other two callers of this method — are covered by
+        # the same line.
         refuse_while_a_file_is_being_sent(self.kernel)
         burnable = self._require_something_to_burn()
         output = self._plan_and_spool(mutators)

@@ -2747,12 +2747,20 @@ export const en = {
 		'There is nothing ready to burn. Draw or load something, and put it in a layer that burns — a layer with \'burn along\' off is skipped.',
 	'api.upload.needsName':
 		'Give the file a name of up to eight letters or digits; that is what the machine’s panel shows.',
+	// The other direction of `upload.whileBurning`: a move, a burn, a pause or a resume
+	// while a file is going out. One sentence for all of them — which button was pressed
+	// is already in front of the reader, and the remedy is the same everywhere.
+	'api.machine.sendingAFile':
+		'A file is being sent to the machine. Wait until it is there and then try again: anything sent now lands in the middle of that file, and the machine gives no sign of it.',
 	'api.upload.noMachine': 'There is no active machine to send the file to.',
 	'api.upload.notConnected':
 		'There is no connection to the machine, so the file cannot be sent. Connect first; nothing has been sent.',
 	'api.upload.notRuida': 'This machine does not keep files in memory; that is a Ruida thing.',
+	// "or waiting in the queue to start" because that is what the check counts: a job
+	// that has been spooled and not yet picked up reports `is_running()` false, and it
+	// is about to be written down the very line the file would use.
 	'api.upload.whileBurning':
-		'A job is running. Wait until it is done, or stop it: the file would go down the same connection the machine is burning from. Nothing has been sent.',
+		'A job is on this machine — burning, or waiting in the queue to start. Wait until it is done, or stop it: the file would go down the same connection that job uses. Nothing has been sent.',
 	'api.upload.busy':
 		'This machine is already being sent a file. Wait until that one is done and press again; nothing has been sent.',
 	'api.upload.emptyFile': 'The job came out empty, so there is nothing to send. Nothing has been sent.',

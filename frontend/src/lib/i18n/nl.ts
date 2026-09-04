@@ -2571,12 +2571,14 @@ export const nl: Catalogue = {
 	'api.upload.needsName':
 		'Geef het bestand een naam van hoogstens acht letters of cijfers; dat is wat het paneel van de machine laat zien.',
 	'api.upload.noMachine': 'Er is geen actieve machine om het bestand naartoe te sturen.',
+	'api.machine.sendingAFile':
+		'Er wordt een bestand naar de machine gestuurd. Wacht tot het er staat en probeer het dan opnieuw: wat er nu heen gaat belandt midden in dat bestand, en de machine laat daar niets van merken.',
 	'api.upload.notConnected':
 		'Er is geen verbinding met de machine, dus het bestand kan niet verstuurd worden. Maak eerst verbinding; er is niets verstuurd.',
 	'api.upload.notRuida':
 		'Deze machine bewaart geen bestanden in het geheugen; dat is iets van een Ruida.',
 	'api.upload.whileBurning':
-		'Er loopt een job. Wacht tot die klaar is, of stop hem: het bestand zou over dezelfde verbinding gaan waar de machine nu uit brandt. Er is niets verstuurd.',
+		'Er staat een job op deze machine — hij brandt, of hij wacht in de rij om te beginnen. Wacht tot die klaar is, of stop hem: het bestand zou over dezelfde verbinding gaan die die job gebruikt. Er is niets verstuurd.',
 	'api.upload.busy':
 		'Naar deze machine wordt al een bestand gestuurd. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
 	'api.upload.emptyFile':
