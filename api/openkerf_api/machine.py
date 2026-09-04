@@ -14,6 +14,7 @@ from .edits import DesignError, _finite
 
 MOVES = ("home", "physical_home", "unlock", "lock")
 
+
 # Where saved positions live (gap J6).
 #
 # On the device service, not in our library: a position is a property of *this* machine
@@ -44,6 +45,36 @@ FOCUS = "focusz"
 # does not know it gets no button either.
 CONNECTS = ("ruida_connect", "usb_connect")
 DISCONNECTS = ("ruida_disconnect", "usb_disconnect")
+
+
+def a_job_is_running(kernel) -> bool:
+    """Whether this machine has a job burning right now.
+
+    Two readers, so it is written down once. `MachineControl._idle()` below asks
+    it before the head moves; `RuidaUpload.upload()` asks it before a file goes
+    into the machine's memory, because our blocks travel down the very
+    connection the burning job is streaming through — the same `send_q`. Neither
+    refusal is the same sentence, so the sentences stay with their callers and
+    only the question lives here.
+
+    What it does *not* ask is the send queue. `_data_sender`
+    (`ruida/controller.py:119`) empties that in one go and the machine goes on
+    burning for minutes afterwards, so an empty queue is not a quiet machine.
+
+    A *running* job, not the queue: our own home and jog go through the spooler
+    too, and they would then block each other. A spooler that cannot answer
+    counts as not running — a broken read is not evidence of a burn, and the
+    refusals built on this are not the safety net that keeps a laser from
+    firing; they keep two things off one connection.
+    """
+    device = getattr(kernel, "device", None)
+    spooler = getattr(device, "spooler", None)
+    if spooler is None:
+        return False
+    try:
+        return any(job.is_running() for job in list(spooler.queue))
+    except Exception:  # pragma: no cover - the spooler must not break us
+        return False
 
 
 def _mm(value: float) -> str:
@@ -146,17 +177,7 @@ class MachineControl:
         The UI disables the buttons, but the UI is advice: a second tab, a phone or a curl
         command can go straight through it. Moving the head during a job ruins it at best.
         """
-        device = getattr(self.kernel, "device", None)
-        spooler = getattr(device, "spooler", None)
-        if spooler is None:
-            return
-        try:
-            # Look at a *running* job, not at the queue: our own home and jog also go
-            # through the spooler, and they would then block each other.
-            running = any(job.is_running() for job in list(spooler.queue))
-        except Exception:  # pragma: no cover - the spooler must not break us
-            return
-        if running:
+        if a_job_is_running(self.kernel):
             raise DesignError(
                 "A job is running. Stop it first; moving while burning "
                 "ruins the job."

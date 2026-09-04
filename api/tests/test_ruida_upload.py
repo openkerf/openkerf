@@ -883,6 +883,16 @@ def test_a_transfer_that_stalls_says_how_far_it_got(ruida, monkeypatch):
     A half upload that says nothing is the worse of the two failures: then there
     is half a file in the machine and everybody thinks it went well. So the
     refusal carries the two numbers that say how bad it is.
+
+    With the line busy from the start, this is the *zero* case: the wait that
+    fails is the one in front of the `E8 02` packet, so not a byte has gone out
+    and there is nothing on the panel. The sentence has to say that and not the
+    other one — an earlier version told the reader to "delete the file on the
+    panel" whatever the count, sending them after something that was never
+    announced. The partway case is
+    `test_a_stall_partway_says_the_file_is_incomplete`, the case where
+    everything went out is
+    `test_the_last_block_is_not_reported_sent_until_it_is_acknowledged`.
     """
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
@@ -894,9 +904,11 @@ def test_a_transfer_that_stalls_says_how_far_it_got(ruida, monkeypatch):
 
     said = str(error.value)
     assert "of" in said and any(ch.isdigit() for ch in said), said
-    assert "incomplete" in said.lower()
     assert error.value.code == "upload.stalled"
+    assert error.value.values["sent"] == 0, error.value.values
     assert not session.written, "bytes went out while the line was never free"
+    assert "delete" not in said.lower(), said
+    assert "send it again" in said.lower(), said
 
 
 def test_a_transfer_that_flows_reports_what_went(ruida, monkeypatch):
@@ -1307,9 +1319,22 @@ def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
     two.
 
     Measured on this setup before the final wait existed: the connection dies on
-    the eighth packet (the sixth and last block), and `upload("BORD")` returned
-    `{'chunks': 6}` — six of six sent — with
+    the eighth packet (the sixth and last block), and `upload("BORD")` *returned*
+    `{'chunks': 6}` — six of six, as a success — with
     `session.acknowledged` seven packets long, the last block among the missing.
+    It now refuses instead, and this is also the case that fixes what the two
+    numbers count.
+
+    They count blocks handed to the line, so here they read six of six: every
+    block has been written, including the one holding `SET_FILE_SUM` and
+    `END_OF_FILE`. They used to read five of six at this point, on the reasoning
+    that the sixth was not yet acknowledged — defensible, except that the
+    sentence says "blocks" and not "acknowledged blocks", so it reported a
+    number nothing had measured. The thing that *is* unknown here has a sentence
+    of its own instead: the last block went out and nothing came back to say the
+    machine took it, so the file may be whole and may be missing its end. Which
+    is a different errand for whoever walks to the panel than "this file is
+    incomplete, delete it".
     """
     a_design_over_one_block(ruida)
     upload = RuidaUpload(ruida)
@@ -1335,8 +1360,10 @@ def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
         upload.upload("BORD")
 
     assert error.value.code == "upload.stalled"
-    assert error.value.values == {"sent": blocks - 1, "chunks": blocks}
-    assert f"{blocks - 1} of {blocks}" in str(error.value), str(error.value)
+    assert error.value.values == {"sent": blocks, "chunks": blocks}
+    said = str(error.value)
+    assert f"{blocks} of {blocks}" in said, said
+    assert "not acknowledged" in said, said
     assert len(session.written) == total, "not every packet was handed over"
     assert len(session.acknowledged) == total - 1, (
         "the count of acknowledgements moved"
@@ -1522,10 +1549,12 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
     the wait after the last block catches it. On `usb` there is no
     acknowledgement to be missing: the handshaker takes our last block, the
     transport write fails, and the queue is empty — so a wait that asks only
-    "is anything still out?" sees a clear line and `upload()` reports **6 of 6**
-    on the block that closes the file. Measured before the `connected` check
-    below existed: `{'chunks': 6}` — six of six — with the last block never
-    written through and the session already dropped.
+    "is anything still out?" sees a clear line and `upload()` *returns* on the
+    block that closes the file. Measured before the `connected` check below
+    existed: `{'chunks': 6}`, handed back as a success, with the last block never
+    written through and the session already dropped. What it does now is refuse
+    with those same two numbers — six blocks were handed to the line, which is
+    what they count — and a sentence saying the last one was never acknowledged.
 
     What the engine does have is `_responding`: a failed transport write clears
     it (`ruidasession.py:346`), it is one of the three things `connected` is made
@@ -1564,8 +1593,8 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
         upload.upload("BORD")
 
     assert error.value.code == "upload.interrupted"
-    assert error.value.values == {"sent": blocks - 1, "chunks": blocks}
-    assert f"{blocks - 1} of {blocks}" in str(error.value), str(error.value)
+    assert error.value.values == {"sent": blocks, "chunks": blocks}
+    assert f"{blocks} of {blocks}" in str(error.value), str(error.value)
     assert not session.connected
 
 
@@ -1621,7 +1650,7 @@ def test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it(
     said = str(error.value)
     assert "stopped answering" in said, said
     assert "connection" not in said.lower(), said
-    assert f"{blocks - 1} of {blocks}" in said and "panel" in said, said
+    assert f"{blocks} of {blocks}" in said and "panel" in said, said
 
 
 def a_server_with_a_fake_line(kernel, tmp_path, monkeypatch, **kwargs):
@@ -1641,7 +1670,12 @@ def a_server_with_a_fake_line(kernel, tmp_path, monkeypatch, **kwargs):
 
 
 def test_the_route_refuses_without_a_connection(kernel, tmp_path):
-    """Een route die zwijgt over een ontbrekende verbinding stuurt naar een dood paneel."""
+    """A route that says nothing about a missing connection sends you to a dead panel.
+
+    (The brief's own test, with its sentence in the source language: every other
+    docstring in this file is English, and CLAUDE.md says that is where it
+    starts. Nothing about what the test asserts has changed.)
+    """
     from fastapi.testclient import TestClient
 
     from openkerf_api.server import ApiServer
@@ -1757,3 +1791,172 @@ def test_the_numbers_of_a_half_upload_reach_the_client(
     assert response.headers["X-OpenKerf-Error"] == "upload.stalled"
     values = json.loads(response.headers["X-OpenKerf-Error-Values"])
     assert values == {"sent": 0, "chunks": blocks}
+
+
+class _BurningSpooler:
+    """A spooler with a job that says it is running.
+
+    `is_running()` and a `queue` is the whole of what `a_job_is_running` reads —
+    the same two things `MachineControl._idle()` read before it was the one
+    reader. Nothing here burns, spools or reaches a device: it is a list with an
+    object in it, put where the kernel's device keeps its spooler.
+    """
+
+    class _Job:
+        def is_running(self):
+            return True
+
+    def __init__(self):
+        self.queue = [self._Job()]
+
+
+def test_an_upload_while_a_job_is_burning_is_refused(ruida, monkeypatch):
+    """
+    The same rule as moving the head, for the same reason, one module along.
+
+    `MachineControl._idle()` refuses to move while a job runs because "the UI is
+    advice: a second tab, a phone or a curl command can go straight through it".
+    Our blocks go down `controller.write` -> `active_session.write` -> the very
+    `send_q` the burning job is streaming through, so the argument is not
+    weaker here; it is the same connection.
+
+    `_line_is_busy` does not cover it and cannot: `_data_sender`
+    (`ruida/controller.py:119`) empties that queue in one go, and the machine
+    goes on burning for minutes afterwards. An empty queue is not a quiet
+    machine.
+
+    Checked before `_session()` and therefore before the job is built, so a
+    refusal costs a sentence and not a plan.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    assert error.value.code == "upload.whileBurning"
+    assert "nothing has been sent" in str(error.value).lower()
+    assert not session.written, "blocks went out while the machine was burning"
+
+
+def test_the_route_refuses_an_upload_while_a_job_is_burning(
+    ruida, tmp_path, monkeypatch
+):
+    """
+    And from outside, because that is where the second tab is.
+
+    A greyed-out button is not the guard; this is.
+    """
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    server, session = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch)
+    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+    with TestClient(server.build_app()) as client:
+        response = client.post("/api/machine/upload", json={"name": "BORD"})
+
+    assert response.status_code == 409, response.text
+    assert response.headers["X-OpenKerf-Error"] == "upload.whileBurning"
+    assert not session.written
+
+
+def test_a_second_upload_at_the_same_time_is_refused(ruida, monkeypatch):
+    """
+    Two POSTs at once — a double-click, a second tab — over one session.
+
+    `machine_upload` is a plain `def`, so FastAPI runs it in the threadpool and
+    two calls really do overlap. Building is serialised by `claim_plan()`'s
+    RLock, but the *sending* was not: the blocks of two files would go out
+    interleaved down one session and both calls would answer 200, leaving one
+    file in the machine's memory made of two jobs.
+
+    Held here at the first packet rather than by timing: the first upload's
+    `_write` blocks until this test lets it go, which is the window a second
+    call would otherwise walk into.
+
+    Measured with no lock, two `upload()` calls over one session on this
+    rectangle: both returned a result — `{'name': 'EEN', 'bytes': 433,
+    'chunks': 1}` and the same for `TWEE` — and the line saw six packets in the
+    order `E8 02, E8 02, E7 01, E7 01, D8 10, D8 10`. Two transfers begun, two
+    names, and then both files' blocks: not two files but one, made of two jobs,
+    with two 200s telling the user both went fine.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    at_the_first_packet = threading.Event()
+    let_it_go = threading.Event()
+    straight_to_the_session = upload._write
+
+    def held(data):
+        at_the_first_packet.set()
+        let_it_go.wait(5)
+        straight_to_the_session(data)
+
+    monkeypatch.setattr(upload, "_write", held)
+    first = {}
+
+    def send_the_first():
+        try:
+            first["result"] = upload.upload("EEN")
+        except Exception as e:  # pragma: no cover - reported through `first`
+            first["error"] = e
+
+    sender = threading.Thread(target=send_the_first, daemon=True)
+    sender.start()
+    assert at_the_first_packet.wait(10), "the first upload never reached the line"
+
+    try:
+        with pytest.raises(DesignError) as error:
+            upload.upload("TWEE")
+    finally:
+        let_it_go.set()
+        sender.join(timeout=10)
+
+    assert error.value.code == "upload.busy"
+    assert "nothing has been sent" in str(error.value).lower()
+    assert first.get("result"), first
+    assert len(session.written) == first["result"]["chunks"] + 2, (
+        "packets of a second file went out over the same session"
+    )
+
+
+def test_a_stall_partway_says_the_file_is_incomplete(ruida, monkeypatch, deferring):
+    """
+    The middle case, and the only one where "delete it on the panel" is right.
+
+    Zero blocks out is
+    `test_a_transfer_that_stalls_says_how_far_it_got` (nothing announced,
+    nothing to delete); every block out is
+    `test_the_last_block_is_not_reported_sent_until_it_is_acknowledged` (whole
+    file out, no word back). In between the machine holds a file that stops in
+    the middle of the job, and that is the one somebody has to go and remove
+    before pressing start on it.
+
+    Stopped after three acknowledgements rather than by timing, so which wait
+    fails is fixed: the fourth packet is taken and never acknowledged, and
+    `_line_is_busy` reads the queue first, so it says busy from the moment the
+    block is handed over whether or not the handshaker has got to it yet.
+    Measured on these eight circles: `{"sent": 2, "chunks": 6}` — the two blocks
+    behind the two headers.
+    """
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    payload = upload.runner.build_job_bytes()
+    monkeypatch.setattr(upload.runner, "build_job_bytes", lambda *a, **kw: payload)
+    blocks = len(upload.frames("BORD", payload)) - 2
+    assert blocks > 2, "the design left no room for a stall in the middle"
+    deferring(upload, monkeypatch, stops_before=3)
+    upload.per_chunk_seconds = 0.5
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    said = str(error.value)
+    sent = error.value.values["sent"]
+    assert error.value.code == "upload.stalled"
+    assert 0 < sent < blocks, error.value.values
+    assert f"{sent} of {blocks}" in said, said
+    assert "incomplete" in said.lower() and "delete" in said.lower(), said

@@ -16,12 +16,14 @@ The app stays outside the one handling that burns; there is deliberately no
 route in this module that begins a job.
 """
 
+import threading
 import time
 
 from meerk40t.ruida.rdjob import parse_commands
 
 from .commands import CommandRunner
 from .edits import DesignError
+from .machine import a_job_is_running
 
 #: The way the engine chops its own jobs (`ruida/controller.py:83`,
 #: `divide_data_into_queue`, which fills a block up to 1000 bytes and always cuts
@@ -152,6 +154,23 @@ class RuidaUpload:
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
         self.runner = runner or CommandRunner(kernel)
+        #: One upload at a time down one connection.
+        #:
+        #: The server builds one of these and `machine_upload` is a plain `def`,
+        #: so FastAPI runs it in the threadpool and two calls really do overlap —
+        #: a double-click or a second tab is enough. Building is serialised by
+        #: `claim_plan()`, the sending was not. Measured with two concurrent
+        #: `upload()` calls and no lock: both returned a result, and the line saw
+        #: `E8 02, E8 02, E7 01, E7 01, <block>, <block>` — two transfers begun,
+        #: two names, and the two files' blocks after each other, which is one
+        #: file in the machine's memory made out of two jobs.
+        #:
+        #: Refusing rather than queueing, and that is the choice worth stating.
+        #: A blocking lock would hold a threadpool thread through the whole of
+        #: somebody else's build and send, and then put a second file on the
+        #: panel that nobody asked for twice — which is what a double-click is.
+        #: A sentence costs the user one press.
+        self._sending = threading.Lock()
 
     def frames(self, name: str, payload: bytes) -> list[bytes]:
         """The whole conversation as a list of packets, in order."""
@@ -199,10 +218,37 @@ class RuidaUpload:
         self._device().driver.controller.write(data)
 
     def _interrupted(self, sent: int, chunks: int, why: str, code: str):
+        """The refusal, with the numbers saying what they count.
+
+        `sent` is blocks handed to the line, and the three cases it can be in
+        are three different things to do about it — one sentence for all three
+        was wrong at both ends. At zero it told the reader to delete a file that
+        was never announced (the wait that fails is the one *in front of* the
+        `E8 02`, so not a byte has gone out). At `chunks` it is the closing wait,
+        where every block including the one holding `SET_FILE_SUM` and
+        `END_OF_FILE` has been written and the only thing missing is a word back
+        from the machine — which is not the same as an incomplete file, and
+        saying "after 5 of 6 blocks" there was simply a wrong number.
+        """
+        if sent == 0:
+            what = (
+                "Nothing had gone out, so there is no file on the panel to "
+                "clean up; send it again."
+            )
+        elif sent < chunks:
+            what = (
+                "What is on it now is incomplete: delete the file on the panel "
+                "before you burn anything."
+            )
+        else:
+            what = (
+                "Every block went out, including the one that closes the file, "
+                "but the last one was not acknowledged. The file on the panel "
+                "may be whole and may be missing its end: look at it there, and "
+                "send it again if you are in any doubt."
+            )
         return DesignError(
-            f"The machine {why} after {sent} of {chunks} blocks. What is on it "
-            f"now is incomplete: delete the file on the panel before you burn "
-            f"anything.",
+            f"The machine {why} after {sent} of {chunks} blocks. {what}",
             code=code,
             values={"sent": sent, "chunks": chunks},
         )
@@ -319,8 +365,15 @@ class RuidaUpload:
     def upload(self, name: str) -> dict:
         """The file to the machine, and left standing there.
 
-        Two things are checked before the first byte goes out, because both
-        leave a file on the panel that the user then has to find and delete:
+        Four things are checked before the first byte goes out. Two of them are
+        about the connection and are in `_upload` at the top, ahead of the
+        building: **a job that is burning**, because our blocks share its
+        `send_q`, and **an upload already running**, because two of them
+        interleave into one file made of two jobs (both measured; see
+        `a_job_is_running` and `self._sending`).
+
+        The other two are about the file, and both would otherwise leave
+        something on the panel that the user has to find and delete:
 
         * **An empty payload.** `frames(name, b"")` is two headers and no
           blocks — a name announced with nothing behind it. `build_job_bytes`
@@ -390,6 +443,40 @@ class RuidaUpload:
         are not is a fingerprint of a design, so nothing should compare two
         uploads to decide whether anything changed.
         """
+        if not self._sending.acquire(blocking=False):
+            raise DesignError(
+                "This machine is already being sent a file. Wait until that one "
+                "is done and press again; nothing has been sent.",
+                code="upload.busy",
+            )
+        try:
+            return self._upload(name)
+        finally:
+            self._sending.release()
+
+    def _upload(self, name: str) -> dict:
+        """The whole of an upload, with `upload()` holding the lock around it.
+
+        Split off so the `release()` is a `finally` around one call, rather than
+        something to remember on each of the many ways out of here — every
+        refusal below is one, and a lock left held would refuse every upload
+        after it for the life of the server.
+        """
+        # Before anything else, and before the job is built. Our blocks go down
+        # `controller.write` -> `active_session.write` -> the same `send_q` a
+        # burning job is streaming through, so this is the rule
+        # `MachineControl._idle()` states for moving the head, on the same
+        # connection: the interface is advice, and a second tab or a curl command
+        # goes straight through it. `_line_is_busy` does not stand in for it —
+        # `_data_sender` empties that queue in one go while the machine burns on
+        # for minutes, so a free line says nothing about a free machine.
+        if a_job_is_running(self.kernel):
+            raise DesignError(
+                "A job is running. Wait until it is done, or stop it: the file "
+                "would go down the same connection the machine is burning from. "
+                "Nothing has been sent.",
+                code="upload.whileBurning",
+            )
         session = self._session()
         # Before the job is built, not after: building plans the whole design and
         # runs it through a driver, and the answer to a nameless upload was known
@@ -433,5 +520,11 @@ class RuidaUpload:
         # last one can still be at the transport when this returns. Measured on
         # a session that never acknowledges: 7 or 8 of 8 packets written through
         # at the moment `upload()` returns, run to run.
-        self._wait_for_the_line(session, chunks - 1, chunks)
+        #
+        # `chunks` and not `chunks - 1`: every block has been handed to the line
+        # by now, which is what these two numbers count. The one thing still
+        # unknown here — the last block went out and nothing came back about it —
+        # is what `_interrupted` says in its own sentence for this case, rather
+        # than by quietly shaving one off a count called "blocks".
+        self._wait_for_the_line(session, chunks, chunks)
         return {"name": short, "bytes": len(payload), "chunks": chunks}
