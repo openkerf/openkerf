@@ -620,6 +620,7 @@ export const en = {
 	// Sending the job to the machine's memory instead of burning it: one tap, not two.
 	// VEILIGHEID.md asks for two taps for what burns; this puts a file down and moves
 	// nothing, and a confirmation in front of that only teaches clicking through them.
+	'job.more': 'Other ways to run this job',
 	'job.upload': 'Send to the machine',
 	'job.upload.why':
 		'The file goes into the machine and stays there. You start it on the machine’s own panel — nothing burns from here.',

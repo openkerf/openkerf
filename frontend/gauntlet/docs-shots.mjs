@@ -681,51 +681,50 @@ await scene('11-palette.png', '/?tab=design', { selector: '.palette', pad: 90 })
 await scene('12-job-preflight.png', '/?tab=job', {}, async (page) => {
 	// Wait for the answer, not for a guess at how long it takes. Measured on the first
 	// run after a rebuild: the shutter fell while the footer was still being laid out
-	// and the picture came back without "Send to the machine" in it — a row of white
-	// where the fold belongs — while the next three runs had it. So the fold itself and
-	// the fonts are waited for, and the settle time is what is left over.
-	await page.waitForSelector('.pf-stick .pf-upload summary', { timeout: 20000 });
+	// and the picture came back without the start button's arrow in it — a row of white
+	// where it belongs — while the next three runs had it. So the arrow itself and the
+	// fonts are waited for, and the settle time is what is left over.
+	await page.waitForSelector('.pf-stick .pf-actions .pf-more', { timeout: 20000 });
 	await page.waitForFunction(() => document.fonts?.status === 'loaded', null, { timeout: 20000 });
 	await page.waitForTimeout(3500);
 });
 
 /**
- * Sending the job to the machine's own memory, folded open.
+ * Sending the job to the machine's own memory: the window with the name field.
  *
- * Cropped to the fold rather than a second full-panel shot: it is one corner of the
- * pre-flight, and the page beside it is about that corner. Shot 12 shows where the
- * corner sits — in the footer, above the checklist, folded shut — and this one shows
- * what is inside it.
+ * Cropped to the window rather than a second full-panel shot: it is one thing you can do
+ * with a ready job, and the page beside it is about that one thing. Shot 12 shows where
+ * it starts — the arrow beside the start button, in the footer — and this one shows the
+ * window the arrow's menu opens.
  *
  * The name in the field is not typed here. It comes from the name of the sheet, which
  * the seeding put there, and that is exactly the thing worth photographing: the field
- * fills itself and cuts what the panel of the machine cannot show. Nothing is pressed —
- * **Send** would put a file in a real machine.
+ * fills itself and cuts what the panel of the machine cannot show. Nothing is pressed
+ * inside the window — **Send** would put a file in a real machine.
  *
- * The same wait as shot 12, and for the same measured reason: on a first run after a
- * rebuild the shutter fell while the footer was still being laid out.
+ * The clicks are real clicks on coordinates, not `locator.click()`: that one scrolls the
+ * element into view first, which is how a control under a sticky footer went unnoticed
+ * for a whole round. If the arrow cannot be pressed where it stands, the picture should
+ * fail rather than quietly be taken of something else.
  */
 await scene(
 	'46-job-upload.png',
 	'/?tab=job',
-	{ selector: '.pf-upload', pad: 14 },
+	{ selector: DIALOG, pad: 0 },
 	async (page) => {
-		const fold = page.locator('.pf-stick .pf-upload');
-		await fold.locator('summary').waitFor({ timeout: 20000 });
+		const arrow = page.locator('.pf-stick .pf-actions .pf-more');
+		await arrow.waitFor({ timeout: 20000 });
 		await page.waitForFunction(() => document.fonts?.status === 'loaded', null, { timeout: 20000 });
 		await page.waitForTimeout(3500);
-		// A real click on the coordinates, not `locator.click()`: that one scrolls the
-		// element into view first, which is how a control under a sticky footer went
-		// unnoticed for a whole round. If this cannot open it where it stands, the
-		// picture should fail rather than quietly be taken of something else.
-		const box = await fold.locator('summary').boundingBox();
-		if (!box) throw new Error('46: no "Send to the machine" to open');
+		const box = await arrow.boundingBox();
+		if (!box) throw new Error('46: no arrow beside the start button to press');
 		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-		await page.waitForTimeout(600);
-		if (!(await fold.evaluate((node) => node.open))) {
-			throw new Error('46: a click where the fold stands did not open it');
-		}
 		await page.waitForTimeout(400);
+		const row = await page.locator('.pf-menu [role="menuitem"]').boundingBox();
+		if (!row) throw new Error('46: a click where the arrow stands did not open its menu');
+		await page.mouse.click(row.x + row.width / 2, row.y + row.height / 2);
+		await page.waitForSelector(`${DIALOG} input.mono`, { timeout: 10000 });
+		await page.waitForTimeout(600);
 	}
 );
 

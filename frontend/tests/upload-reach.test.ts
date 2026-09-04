@@ -1,6 +1,12 @@
 /**
  * "Send to the machine" is where a hand can reach it, over the whole scroll.
  *
+ * It used to be a fold in the footer; it is now the arrow beside the start button, which
+ * opens a menu with that one line in it, and the line opens the window with the name
+ * field. What is measured is the arrow: that it lies on top at its own middle at every
+ * scroll offset, and that a real click on it opens the menu — and, at rest, that the
+ * menu's line opens the window.
+ *
  * Running against a live server:
  *   OK_BASE=http://127.0.0.1:8184 node --test frontend/tests/upload-reach.test.ts
  *
@@ -153,39 +159,72 @@ async function whatIsOnTop(selector: string) {
 for (const withRaster of [true, false]) {
 	for (const [width, height] of SIZES) {
 		const state = withRaster ? 'with a raster layer' : 'without one';
-		test(`at rest the fold can be opened by a hand at ${width} x ${height}, ${state}`, async (t) => {
+		test(`at rest the arrow can be pressed by a hand at ${width} x ${height}, ${state}`, async (t) => {
 			if (!reachable) return noServer(t, BASE);
 			await aLongColumn(withRaster);
 			await page.setViewportSize({ width, height });
 			await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });
 			await page.waitForTimeout(3000);
 
-			const summary = await whatIsOnTop('details.pf-upload > summary');
-			assert.ok(summary, 'there is no "Send to the machine" fold on the Job tab');
-			assert.ok(summary.onScreen, 'the fold is not on screen without scrolling');
-			assert.ok(summary.self, `the fold lies behind ${summary.over}`);
+			const summary = await whatIsOnTop('.pf-actions button.pf-more');
+			assert.ok(summary, 'there is no arrow beside the start button on the Job tab');
+			assert.ok(summary.onScreen, 'the arrow is not on screen without scrolling');
+			assert.ok(summary.self, `the arrow lies behind ${summary.over}`);
 
 			// A hand, not a helper: `locator.click()` would scroll it into view first and
 			// report success over a control nobody can reach.
 			await page.mouse.click(summary.at.x, summary.at.y);
 			await page.waitForTimeout(400);
+			// The menu is on top and its one line is there.
+			const row = await whatIsOnTop('.pf-menu [role="menuitem"]');
+			assert.ok(row, 'a click on the middle of the arrow did not open the menu');
+			assert.ok(row.self, `the menu's line lies behind ${row.over}`);
+
+			// Whether the line can be pressed is the machine's to say, and this test does
+			// not choose the machine: a test that switches the active device would do it
+			// on whatever server it is pointed at. So it asks, the way the handbook's
+			// picture script does, and checks the promise that goes with the answer — a
+			// Ruida opens the window; anything else keeps the line grey and says why.
+			// The same route the interface reads, so the test and the button cannot drift.
+			const capabilities = await (await fetch(`${BASE}/api/capabilities`)).json();
+			const keepsFiles = capabilities?.actions?.upload === true;
+			const line = await page.evaluate(() => {
+				const node = document.querySelector('.pf-menu [role="menuitem"]') as HTMLButtonElement;
+				return { disabled: node.disabled, title: node.title };
+			});
+			if (!keepsFiles) {
+				assert.ok(line.disabled, 'the machine keeps no files, but the line is not greyed out');
+				assert.ok(line.title.length > 0, 'the greyed-out line gives no reason');
+				await page.keyboard.press('Escape');
+				return;
+			}
+			assert.ok(!line.disabled, `the machine keeps files, but the line is greyed out: ${line.title}`);
+			await page.mouse.click(row.at.x, row.at.y);
+			await page.waitForTimeout(400);
+
+			// And the window with the name field is there, the field reachable and filled
+			// with the name of the sheet.
+			const field = await whatIsOnTop('[role="dialog"] input.mono');
+			assert.ok(field, 'the menu line did not open the window with the name field');
+			assert.ok(field.self, `the name field lies behind ${field.over}`);
+			assert.notEqual(
+				await page.evaluate(() => (document.querySelector('[role="dialog"] input.mono') as HTMLInputElement).value),
+				'',
+				'the name field opens empty'
+			);
+			await page.keyboard.press('Escape');
+			await page.waitForTimeout(300);
 			assert.equal(
-				await page.evaluate(
-					() => (document.querySelector('details.pf-upload') as HTMLDetailsElement | null)?.open ?? null
-				),
-				true,
-				'a click on the middle of the summary did not open the fold'
+				await page.evaluate(() => document.querySelector('[role="dialog"]') !== null),
+				false,
+				'Escape did not close the window'
 			);
 
-			// And the name field inside it is reachable too, not just the summary.
-			const field = await whatIsOnTop('details.pf-upload input');
-			assert.ok(field?.self, `the name field lies behind ${field?.over}`);
-
-			// The fold may not have pushed the button that burns out of reach: it shares
-			// the footer with it, and a footer that grows takes the primary action with it.
+			// The arrow may not have pushed the button that burns out of reach: it shares
+			// the footer with it.
 			const start = await page.evaluate(() => {
 				const button = [...document.querySelectorAll('.pf-actions button')].find((b) =>
-					/Start job/.test(b.textContent ?? '')
+					/Start job|Job starten/.test(b.textContent ?? '')
 				);
 				if (!button) return null;
 				const box = button.getBoundingClientRect();
@@ -221,8 +260,8 @@ for (const withRaster of [true, false]) {
 				for (let top = 0; top <= max; top += 10) {
 					scroller.scrollTop = top;
 					await new Promise((r) => requestAnimationFrame(r));
-					const summary = document.querySelector('details.pf-upload > summary');
-					if (!summary) return ['the fold is gone'];
+					const summary = document.querySelector('.pf-actions button.pf-more');
+					if (!summary) return ['the arrow is gone'];
 					const box = summary.getBoundingClientRect();
 					const port = scroller.getBoundingClientRect();
 					if (box.top < port.top || box.bottom > port.bottom) continue;

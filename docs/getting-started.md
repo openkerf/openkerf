@@ -276,7 +276,7 @@ again.
 **Start job** in the top bar does not start anything. It switches to that tab and
 arms the job — see "Burning" below.
 
-![The Job tab showing a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, below it the table of layers with mm/s, %, passes and source running on under the foot of the panel, and there the strip that carries a folded-shut "Send to the machine" above the list "Run through this" — Lid closed, Extraction and air assist on, Workpiece is clamped and flat — above the buttons "Show frame" and "Start job 1:19".](images/12-job-preflight.png)
+![The Job tab showing a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, below it the table of layers with mm/s, %, passes and source running on under the foot of the panel, and there the strip that carries the list "Run through this" — Lid closed, Extraction and air assist on, Workpiece is clamped and flat — above a "Show frame" button on its own line and a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
 
 From top to bottom it holds:
 
