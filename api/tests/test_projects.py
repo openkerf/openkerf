@@ -4,11 +4,14 @@ Projects kept on the server: a folder of .openkerf files and the name of the ope
 Every number a docstring here names was measured on this working copy; a test that
 quotes one nobody measured is worse than one that says nothing.
 """
+import errno
 import zipfile
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from openkerf_api import projects as projects_module
 from openkerf_api.edits import DesignError
 from openkerf_api.projects import ProjectError, Projects, clean_name
 from openkerf_api.server import ApiServer
@@ -143,6 +146,41 @@ def test_adopting_an_upload_moves_it_in_under_a_free_name(projects, client, tmp_
     assert entry["name"] == "Board 2" and projects.current == "Board 2"
     assert not stray.exists()
     assert sorted(p.name for p in projects.folder.iterdir()) == ["Board 2.openkerf", "Board.openkerf"]
+
+
+def test_saving_survives_a_filesystem_boundary_between_temp_and_the_folder(projects, client, monkeypatch):
+    """
+    `tempfile.mkdtemp()` (what `export_project` writes into) and `self.folder` both sit
+    under the same filesystem in every test here, so a plain `os.replace` between them
+    never raises. In the real deployment the projects folder is a mounted volume and the
+    system temp directory is the container's own filesystem, so the same move raises
+    `OSError(EXDEV)`. This test makes that boundary real without needing two actual
+    filesystems: it fails `os.replace` whenever source and destination do not share a
+    parent directory, which is exactly the shape of the two directories being different
+    mounts.
+    """
+    _draw_two_rects(client)
+    real_replace = projects_module.os.replace
+
+    def crosses_devices(src, dst):
+        if Path(src).parent != Path(dst).parent:
+            raise OSError(errno.EXDEV, "cross-device link")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(projects_module.os, "replace", crosses_devices)
+
+    entry = projects.save("Across")
+    assert entry["name"] == "Across" and projects.current == "Across"
+    assert (projects.folder / "Across.openkerf").exists()
+    leftovers = [p.name for p in projects.folder.iterdir() if p.name.startswith(".saving-")]
+    assert leftovers == [], leftovers
+
+    client.post("/api/project/new")
+    projects.open("Across")
+    assert len(client.get("/api/design").json()["elements"]) == 2
+
+    names = [e["name"] for e in projects.list()]
+    assert names == ["Across"]
 
 
 def test_forget_clears_the_current_project(projects, client):

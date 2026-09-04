@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,10 +76,23 @@ class Projects:
     def list(self) -> list[dict]:
         if not self.folder.exists():
             return []
-        entries = [self._entry(p) for p in self.folder.iterdir() if p.is_file() and p.suffix == SUFFIX]
+        entries = [
+            self._entry(p)
+            for p in self.folder.iterdir()
+            # A name starting with a dot is never a project of ours: it is the staging
+            # file `save()` writes while a save is in flight (see `save()` below), and a
+            # save that died mid-flight can leave one behind.
+            if p.is_file() and p.suffix == SUFFIX and not p.name.startswith(".")
+        ]
         return sorted(entries, key=lambda e: e["saved_at"], reverse=True)
 
     def state(self) -> dict:
+        """
+        The open project's name and when it was last saved, or both `None` for a new,
+        unsaved project. If the file was removed by hand since, the name is still
+        reported — `save()` recreates it under this same name, which is what makes a
+        deleted-then-saved project reopen as itself rather than as something new.
+        """
         if self.current is None or not self._path(self.current).exists():
             return {"name": self.current, "saved_at": None}
         return {"name": self.current, "saved_at": self._entry(self._path(self.current))["saved_at"]}
@@ -94,13 +109,28 @@ class Projects:
             )
         self.folder.mkdir(parents=True, exist_ok=True)
         # `Drawing.export_project` ignores any directory in the filename it is given —
-        # it keeps only the basename and writes into a temporary directory of its own,
-        # returning the path it actually used. So there is nothing to write "beside the
-        # target" ourselves; we ask for the name we want, then move whatever came back
-        # onto the target in one step, the same way `/api/project/export.openkerf`
-        # hands its result straight to `FileResponse` without touching it further.
+        # it keeps only the basename and writes into a temporary directory of its own
+        # (`tempfile.mkdtemp()`, so under the system temp directory), returning the path
+        # it actually used. That directory is not necessarily on the same filesystem as
+        # `self.folder` — in the deployed image the projects folder is a mounted volume
+        # and the system temp directory is the container's own filesystem — and
+        # `os.replace` only renames, it does not copy, so a move straight across that
+        # boundary raises `OSError(EXDEV)` instead of the whole-sentence refusal a user
+        # would get from anything else going wrong here. So the file is copied into a
+        # staging file *inside* `self.folder` first — a `shutil.copyfile`, which does
+        # cross filesystems — and only the final step, staging file to target, is an
+        # `os.replace`; same directory, so always a rename, never a copy across devices.
         written = Path(self.drawing.export_project(self.library, f"{name}{SUFFIX}", self.sheets))
-        os.replace(written, target)
+        handle, staging = tempfile.mkstemp(prefix=".saving-", suffix=SUFFIX, dir=self.folder)
+        os.close(handle)
+        try:
+            shutil.copyfile(written, staging)
+            os.replace(staging, target)
+        except BaseException:
+            Path(staging).unlink(missing_ok=True)
+            raise
+        finally:
+            shutil.rmtree(written.parent, ignore_errors=True)
         self.current = name
         self.document.clean()
         return self._entry(target)
