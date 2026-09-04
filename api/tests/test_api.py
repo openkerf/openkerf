@@ -90,6 +90,11 @@ def test_write_routes_are_limited_to_the_known_set(client):
         # Starting over. Throws the design and the sheets away, so it belongs behind the same
         # gate as opening; the frontend asks first.
         "/api/project/new",
+        # Projects kept on the server: save under a name, open one by name, rename one.
+        # Deleting is a DELETE and does not appear in this POST list.
+        "/api/projects/{name}",
+        "/api/projects/{name}/open",
+        "/api/projects/{name}/rename",
         "/api/design/elements",
         "/api/design/elements/delete",
         "/api/design/elements/duplicate",

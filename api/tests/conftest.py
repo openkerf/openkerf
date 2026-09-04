@@ -145,6 +145,7 @@ def _projects_of_their_own(tmp_path, monkeypatch):
     original = server_module.ApiServer.__init__
 
     def patched(self, *args, **kwargs):
+        kwargs.setdefault("projects", folder)
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(server_module.ApiServer, "__init__", patched)

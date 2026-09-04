@@ -72,6 +72,12 @@ def plugin(kernel, lifecycle=None):
             help=_("path to the layer list (its own folder for testing)"),
         )
         @kernel.console_option(
+            "projects",
+            "r",
+            type=str,
+            help=_("folder for the projects saved on this server (its own folder for testing)"),
+        )
+        @kernel.console_option(
             "quit",
             "q",
             type=bool,
@@ -91,6 +97,7 @@ def plugin(kernel, lifecycle=None):
             token=None,
             library=None,
             operations=None,
+            projects=None,
             quit=False,
             **kwargs,
         ):
@@ -130,6 +137,7 @@ def plugin(kernel, lifecycle=None):
                 # makes layers — the handbook's pictures do — reads and writes that file
                 # without saying so.
                 operations_path=operations,
+                projects=projects,
             )
             try:
                 server.start()

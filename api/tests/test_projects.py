@@ -188,3 +188,90 @@ def test_forget_clears_the_current_project(projects, client):
     projects.save("X")
     projects.forget()
     assert projects.current is None and projects.state() == {"name": None, "saved_at": None}
+
+
+def _headers(server):
+    return {"X-OpenKerf-Token": server.token}
+
+
+def test_the_routes_save_list_open_rename_and_delete(client, server):
+    _draw_two_rects(client)
+    h = _headers(server)
+    saved = client.post("/api/projects/Kastje", headers=h)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["name"] == "Kastje"
+    assert client.get("/api/design").json()["project"] == {
+        "name": "Kastje",
+        "saved_at": saved.json()["saved_at"],
+    }
+
+    listed = client.get("/api/projects").json()
+    assert [e["name"] for e in listed] == ["Kastje"] and listed[0]["current"] is True
+
+    client.post("/api/project/new", headers=h)
+    assert client.get("/api/design").json()["project"]["name"] is None
+
+    opened = client.post("/api/projects/Kastje/open", headers=h)
+    assert opened.status_code == 200 and opened.json()["project"]["name"] == "Kastje"
+    assert len(client.get("/api/design").json()["elements"]) == 2
+
+    renamed = client.post("/api/projects/Kastje/rename", json={"name": "Doos"}, headers=h)
+    assert renamed.status_code == 200 and renamed.json()["name"] == "Doos"
+    assert client.get("/api/design").json()["project"]["name"] == "Doos"
+
+    gone = client.delete("/api/projects/Doos", headers=h)
+    assert gone.status_code == 200
+    assert client.get("/api/projects").json() == []
+    assert client.get("/api/design").json()["project"]["name"] is None
+
+
+def test_the_routes_refuse_with_a_code_in_the_header(client, server):
+    _draw_two_rects(client)
+    h = _headers(server)
+    client.post("/api/projects/A", headers=h)
+    client.post("/api/projects/B", headers=h)
+    refused = client.post("/api/projects/A", headers=h)
+    assert refused.status_code == 409
+    assert refused.headers["X-OpenKerf-Error"] == "project.exists"
+    assert client.post("/api/projects/A?overwrite=1", headers=h).status_code == 200
+    bad = client.post("/api/projects/..%2Fx", headers=h)
+    assert bad.status_code in (400, 404, 409, 422)
+    missing = client.post("/api/projects/Nobody/open", headers=h)
+    assert missing.status_code == 409 and missing.headers["X-OpenKerf-Error"] == "project.missing"
+
+
+def test_an_upload_becomes_a_project_and_the_export_carries_its_name(client, server, tmp_path):
+    _draw_two_rects(client)
+    h = _headers(server)
+    client.post("/api/projects/Board", headers=h)
+    exported = client.get("/api/project/export.openkerf")
+    assert exported.status_code == 200
+    assert 'filename="Board.openkerf"' in exported.headers["content-disposition"]
+    uploaded = client.post(
+        "/api/project/open",
+        files={"file": ("Board.openkerf", exported.content, "application/zip")},
+        headers=h,
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    assert uploaded.json()["name"] == "Board 2"
+    assert sorted(e["name"] for e in client.get("/api/projects").json()) == ["Board", "Board 2"]
+
+
+def test_every_project_route_that_writes_is_guarded(client):
+    """
+    Structural, not a 401 walk: the `server`/`client` fixtures bind to loopback, so
+    `require_write` never refuses there (see `test_write_actions.py`'s own `local_client`,
+    which is bound the same way and is why that suite's guard test reads the dependency
+    list instead of firing requests). This asks the same question the same way, scoped to
+    the project routes this task adds.
+    """
+    mutating = [
+        route
+        for route in client.app.routes
+        if route.path.startswith("/api/project")
+        and getattr(route, "methods", set()) & {"POST", "PATCH", "PUT", "DELETE"}
+    ]
+    assert mutating, "there are project write routes"
+    for route in mutating:
+        names = [getattr(d.call, "__name__", "") for d in route.dependant.dependencies]
+        assert "require_write" in names, f"{route.path} has no write guard"
