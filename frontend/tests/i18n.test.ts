@@ -171,6 +171,119 @@ test('every api.* key answers to a refusal the API can actually send', () => {
 	assert.deepEqual(orphans, [], `translations for refusals the API no longer sends: ${orphans}`);
 });
 
+/**
+ * The refusals the engine layer raises, by code, with the sentence it sends.
+ *
+ * The message is the first argument of a `DesignError(...)`, and Python writes a long
+ * one as adjacent string literals, so the leading run of them is taken and joined. A
+ * call whose message is a variable has no such run and is skipped: there is nothing to
+ * compare. Every `{placeholder}` — ours and an f-string's own `{why}` — is flattened to
+ * `{}`, because the names differ by necessity (the header calls it `block`, the Python
+ * calls it `oversized`) and this is about the words around them.
+ */
+function refusalsInPython(python: string): Map<string, string> {
+	const found = new Map<string, string>();
+	// Every `…Error(` and not `DesignError(` alone: the library, the corners and the
+	// shared catalogue raise classes of their own that carry the same `code=`, and
+	// anchoring on one class left 26 of them uncompared — a guard that looks at four
+	// fifths of the wall.
+	for (const raised of python.matchAll(/\b[A-Z][A-Za-z]*Error\(/g)) {
+		let rest = python.slice(raised.index + raised[0].length);
+		const parts: string[] = [];
+		for (;;) {
+			// `(?:\s|#[^\n]*)*` and not `\s*`: Python's adjacent string literals are how a
+			// long refusal is written, and a comment about the next half sits between them.
+			const piece = /^(?:\s|#[^\n]*)*f?"((?:[^"\\]|\\.)*)"/.exec(rest);
+			if (!piece) break;
+			parts.push(piece[1]);
+			rest = rest.slice(piece[0].length);
+		}
+		const code = /^[^)]*?code="([a-zA-Z0-9.]+)"/.exec(rest);
+		if (!parts.length || !code) continue;
+		found.set(code[1], parts.join(''));
+	}
+	return found;
+}
+
+/**
+ * One shape to compare in: no line breaks, one kind of apostrophe, bare placeholders, and
+ * the escapes Python writes a quotation mark with resolved — `\u201c` in a `.py` and “ in
+ * a `.ts` are the same character, and a test that says otherwise reports a difference
+ * nobody can see.
+ */
+const asOneSentence = (text: string) =>
+	text
+		.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+		.replace(/\\([\\"'])/g, '$1')
+		.replace(/\{[^}]*\}/g, '{}')
+		.replace(/’/g, "'")
+		.split(/\s+/)
+		.join(' ')
+		.trim();
+
+test('the English of a refusal is the sentence the API sends', () => {
+	// Both halves reach the same reader. `apiError` says the catalogue's sentence when it
+	// knows the code and the API's own when it does not, so where the two differ, one of
+	// them is a version of the message nobody meant to keep — and which one shows depends
+	// on nothing the reader can see. Measured when this was written: 138 refusals could be
+	// read out of the API and 130 of them were word for word.
+	//
+	// Three more have an English key and cannot be read here at all, each for a reason:
+	// two build their code at runtime (`upload.stalled` and `upload.interrupted` come out
+	// of one raise) and one is handed its sentence in a variable
+	// (`rotary.homeWhileActive`).
+	//
+	// The eight below are the ones that already differed, named one by one and not
+	// counted, so that the debt is in the code instead of in somebody's memory. They are
+	// written up in `.superpowers/sdd/2026-09-03-ruida-upload/zinnen-uiteen.md`, sentence
+	// beside sentence. **This list may shrink and may never grow**: a new refusal whose
+	// two halves disagree is a mistake being made now, and that is what this test is for.
+	const ALREADY_APART = new Set([
+		// Five where the API's sentence names something the header does not carry — a
+		// command, an element id, an engine type, the user's own material name — so the
+		// catalogue says the same thing without it ("That combination", "That shape is
+		// gone"). Deliberate, and the repair, where there is one, is to let the value
+		// travel rather than to reword either half.
+		'stencil.tooMuchBridge',
+		'draw.booleanEmpty',
+		'edit.staleElement',
+		'nodes.notEditable',
+		'library.material.nameTaken',
+		// The other way round: this one *does* send its numbers and only the catalogue
+		// uses them, so the API's sentence is the half that stayed behind.
+		'library.preset.kerfRange',
+		// And two where only the quotation marks around a package name differ.
+		'gen.noQrLib',
+		'gen.noBarcodeLib'
+	]);
+	const python = sources(join(here, '..', '..', 'api', 'openkerf_api'), [], /\.py$/)
+		.map((p) => readFileSync(p, 'utf8'))
+		.join('\n');
+	const apart: string[] = [];
+	const together: string[] = [];
+	const fresh: string[] = [];
+	for (const [code, sentence] of refusalsInPython(python)) {
+		const ours = en[`api.${code}`];
+		if (typeof ours !== 'string') continue;
+		const same = asOneSentence(ours) === asOneSentence(sentence);
+		(same ? together : apart).push(code);
+		if (!same && !ALREADY_APART.has(code))
+			fresh.push(
+				`api.${code}\n    API: ${asOneSentence(sentence)}\n    en : ${asOneSentence(ours)}`
+			);
+	}
+	assert.deepEqual(fresh, [], `a refusal and its translation say two different things:\n  ${fresh.join('\n  ')}`);
+	// The extractor reads Python, and Python can be rewritten. 138 were readable when this
+	// was written; a sharp drop means it has stopped finding them and this test is quietly
+	// measuring nothing.
+	const read = together.length + apart.length;
+	assert.ok(read >= 130, `only ${read} refusals could be read out of the API — the reader is losing them`);
+	// And the list stays honest: a code on it that no longer differs has been repaired,
+	// and then it comes off, or the next divergence hides behind it.
+	const mended = [...ALREADY_APART].filter((code) => !apart.includes(code));
+	assert.deepEqual(mended, [], `these no longer differ — take them off the list: ${mended.join(', ')}`);
+});
+
 test('every translation has exactly the keys of the source language', () => {
 	for (const [language, catalogue] of Object.entries(TRANSLATIONS)) {
 		const source = new Set(Object.keys(en));
