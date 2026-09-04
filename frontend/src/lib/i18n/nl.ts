@@ -590,6 +590,7 @@ export const nl: Catalogue = {
 	'job.clearZero': 'Wissen',
 	'job.material': 'Materiaal',
 	'job.frame': 'Kader tonen',
+	'job.more': 'Andere manieren om deze job te draaien',
 	'job.upload': 'Naar de machine sturen',
 	'job.upload.why':
 		'Het bestand komt in de machine te staan en blijft daar. Starten doe je op het paneel van de machine zelf — hiervandaan brandt er niets.',

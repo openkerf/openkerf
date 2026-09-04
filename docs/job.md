@@ -36,7 +36,7 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the layer table with speed, power, passes and a Source column — of which only the first row, Outline, is in view, because the table runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a folded-shut "SEND TO THE MACHINE", the checklist headed "Run through this" with "Lid closed", "Extraction and air assist on" and "Workpiece is clamped and flat", and under it a "Show frame" button beside a green "Start job 1:19".](images/12-job-preflight.png)
+![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the head of the layer table with speed, power, passes and a Source column — its rows run on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: the checklist headed "Run through this" with "Lid closed", "Extraction and air assist on" and "Workpiece is clamped and flat", under it a "Show frame" button on a line of its own, and under that a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end.](images/12-job-preflight.png)
 
 ### The drawing
 
@@ -150,20 +150,25 @@ the start button itself.
 
 ### Sending the job to the machine
 
-In that same strip, above the three lines and folded shut, sits **Send to the
-machine**. It does the other thing you can do with a job that is ready: instead of
-burning it from here, it puts it in the machine's own memory as a file and leaves
-it standing there. The line under the heading says so, and it is also the
-tooltip on the button: "The file goes into the machine and stays there. You start
-it on the machine’s own panel — nothing burns from here."
+The start button has a second part: a narrower button with a downward arrow, joined
+to its right-hand end. It opens a small menu with one line in it, **Send to the
+machine**, and that line does the other thing you can do with a job that is ready:
+instead of burning it from here, it puts it in the machine's own memory as a file and
+leaves it standing there. The arrow itself does nothing to the machine, and the start
+button beside it keeps its two taps.
+
+The line opens a window of the same name. Its first sentence says what will happen,
+and it is also the tooltip on the button that does it: "The file goes into the machine
+and stays there. You start it on the machine’s own panel — nothing burns from here."
 
 That is the point of it. Once the file is in the machine, nothing has to stay
 attached while it burns — no laptop on a stool beside the machine, no cable to
 trip over, no sleeping screen halfway through an hour of engraving. You walk to
 the machine, pick the file on its panel and press start there.
 
-This is a Ruida thing. On any other machine the fold is dead and says why: "This
-machine does not keep files in memory; that is a Ruida thing."
+This is a Ruida thing. On any other machine the line in the menu is greyed out and
+its tooltip says why: "This machine does not keep files in memory; that is a Ruida
+thing."
 
 > **The app sends. The app does not start.** There is no route in OpenKerf that
 > begins a job in the machine's memory, deliberately. Whatever is sent waits until
@@ -172,8 +177,8 @@ machine does not keep files in memory; that is a Ruida thing."
 > motion, so a confirmation in front of it would only teach you to click through
 > confirmations.
 
-**Name on the machine.** The field beside the button is filled with the name of
-the sheet and you can type over it. What the machine keeps of a name is short:
+**Name on the machine.** The field in the window is filled with the name of the
+sheet and you can type over it. What the machine keeps of a name is short:
 **at most eight characters, capitals, letters and digits only**. The field applies
 that rule as you type rather than afterwards, so what stands in the box is exactly
 what will stand on the panel. Type `kastje-groot` and the box reads `KASTJEGR`;
@@ -186,14 +191,14 @@ Press **Send** and it reads *Sending…* while it goes. When it is done a green 
 appears under the field, with the name the machine confirmed rather than the one
 that was typed: "{name} is in the machine. Start it on the panel." That line goes
 as soon as the name in the field changes, because it is about one file under one
-name.
+name. Close the window with its cross or with Escape; the file stays where it is.
 
-![The fold Send to the machine, opened, in the strip at the foot of the pre-flight: the heading with its triangle turned down, under it the line about the file going into the machine and being started on the machine's own panel, and under that the name field holding SHEET1 in a typewriter face, with the send button beside it.](images/46-job-upload.png)
+![The window Send to the machine: its title across the top with a close cross at the right, under it the line about the file going into the machine and being started on the machine's own panel, and under that the field labelled Name on the machine holding SHEET1 in a typewriter face, with the green Send button beside it.](images/46-job-upload.png)
 
 #### When it will not go
 
-Two things stop it before you can press at all, and the fold says which in the
-tooltip on its greyed-out button: **while a job is running** ("Not possible while a
+Two things stop it before you can press at all, and the greyed-out line in the menu
+says which in its tooltip: **while a job is running** ("Not possible while a
 job is running" — the file would go down the same cable the machine is burning
 from), and **on a machine that is not a Ruida** ("This machine does not keep files
 in memory; that is a Ruida thing"). The same for an empty bed and for a server that

@@ -666,6 +666,40 @@
 							? t('job.nothing.title')
 							: undefined
 	);
+	/**
+	 * The arrow beside the start button, and the menu it opens.
+	 *
+	 * "Send to the machine" used to be a fold in the footer, and it was not found there:
+	 * a hand looking for a way to run the job looks at the button that runs it. So the
+	 * other way sits beside that button, behind an arrow, the way the project menu hangs
+	 * off its button in the top bar — same cover, same fixed position, because the panel
+	 * scrolls and would clip an absolute menu. The arrow itself burns nothing and the
+	 * start button keeps its two taps, so nothing about the safety rule changes.
+	 */
+	let moreOpen = $state(false);
+	let morePos = $state({ x: 0, y: 0 });
+	let uploadOpen = $state(false);
+	const MORE_WIDTH = 260;
+	function openMore(button: HTMLElement) {
+		if (moreOpen) {
+			moreOpen = false;
+			return;
+		}
+		const box = button.getBoundingClientRect();
+		// Aligned to the arrow's right edge, but never off screen; above the button when
+		// there is no room below it, which in the footer is the usual case.
+		const x = Math.max(8, Math.min(box.right - MORE_WIDTH, window.innerWidth - MORE_WIDTH - 8));
+		const below = window.innerHeight - box.bottom > 120;
+		morePos = { x, y: below ? box.bottom + 6 : box.top - 6 };
+		moreUpward = !below;
+		moreOpen = true;
+	}
+	let moreUpward = $state(false);
+	function chooseUpload() {
+		moreOpen = false;
+		uploaded = null;
+		uploadOpen = true;
+	}
 	async function sendToMachine() {
 		// The name that comes back, not the one that went in: the machine's copy of the
 		// rule is the one that counts, and reporting our own would be a screen agreeing
@@ -965,82 +999,6 @@
 				same button, so it belongs beside it and not three blocks higher.
 			-->
 			<div class="pf-stick">
-				<!--
-					Sending the job to the machine's memory instead of burning it.
-
-					What LightBurn calls "send": the file goes down the cable, the
-					machine keeps it, and you start it there. The other thing you can do
-					with a job that is ready, so it lives beside the button that burns
-					one — folded shut, because it is not the one you came for.
-
-					In the footer, and that is the whole of this block's history. It sat
-					just above the footer, which is the one place in this column where a
-					control cannot be seen: the footer is sticky, and when the column is
-					longer than the panel it floats up over whatever is last in the
-					flow. Measured at 1440 x 900 with the panel as it opens — the fold at
-					y=738 and the footer's top at y=705, `elementFromPoint` in the middle
-					of the summary answering `LI` (a line of the checklist), and a real
-					mouse click on those coordinates leaving `details.open` false. At
-					1280 x 800 the same click landed on `DIV.pf-actions`; only at
-					1920 x 1080, where the column fits, did it answer `SUMMARY` and open.
-					Scrolling did reach it — the summary is on top from 60 px of scroll
-					onwards, over a band of 600 of the 763 the panel scrolls — but a
-					control you cannot see at rest is one nobody scrolls for. The
-					checklist below learned this same lesson one round earlier and moved
-					here for the same reason.
-
-					No test saw it, and that is worth its own line: `locator.click()`
-					scrolls the element into view first, so Playwright clicks a control
-					under a sticky footer perfectly happily. The measurement has to be a
-					mouse click on coordinates.
-
-					One tap, not two. VEILIGHEID.md asks for two deliberate taps for
-					everything that burns; this puts a file down and moves nothing, and a
-					confirmation in front of something that sets nothing in motion only
-					teaches people to click through confirmations.
-				-->
-				<details class="pf-upload">
-					<summary>{t('job.upload')}</summary>
-					<p class="pf-row">{t('job.upload.why')}</p>
-					<div class="pf-uploadrow">
-						<label class="name">
-							<span>{t('job.upload.name')}</span>
-							<!-- Cut to what the machine keeps while you type, not afterwards:
-							     the panel of the machine shows eight capitals without spaces,
-							     and the first place to find that out is the keyboard, not the
-							     machine. -->
-							<input
-								class="mono"
-								type="text"
-								maxlength="8"
-								value={fieldText}
-								disabled={Boolean(uploadOff)}
-								title={uploadOff ?? t('job.upload.name')}
-								oninput={nameTyped}
-								oncompositionend={nameTyped}
-							/>
-						</label>
-						<button
-							class="btn"
-							disabled={Boolean(uploadOff) || control.busy !== null || uploadName === ''}
-							title={uploadOff ??
-								(control.busy !== null
-									? t('reason.busy')
-									: uploadName === ''
-										? t('reason.needsName')
-										: t('job.upload.why'))}
-							onclick={sendToMachine}
-						>
-							{control.busy === 'upload' ? t('job.upload.sending') : t('job.upload.send')}
-						</button>
-					</div>
-					{#if uploaded}
-						<!-- `role="status"` and not `alert`: this is the answer to something
-						     that went well, and it says where the job is now — on the machine,
-						     waiting for a hand on its own panel. -->
-						<p class="pf-row good" role="status">{t('job.upload.done', { name: uploaded })}</p>
-					{/if}
-				</details>
 				<!-- The checklist travels with the button.
 
 				     It used to stand in the column above this footer, and with four
@@ -1089,20 +1047,59 @@
 							{t('job.frame')}
 						</button>
 					{/if}
-					<button
-						class="btn primary big"
-						disabled={!actions?.start || blocked || seriesRunning}
-						title={seriesRunning ? t('api.series.runGoing') : blockedReason}
-						onclick={() => (preflight = true)}
-					>
-						<!-- The last known time stays while a new one is being worked out.
-						     Hiding it during the recalculation made the button change width
-						     on every edit — a button that jumps under your cursor. -->
-						{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
-							<span class="pf-start-time"
-								>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
-							>{/if}
-					</button>
+					<!-- One control in two parts: the button that arms the burn, and beside it
+					     the arrow with the other thing you can do with a ready job — send it
+					     to the machine's memory. The two are one visual unit, so a hand finds
+					     the second where it looks for the first. -->
+					<div class="pf-split">
+						<button
+							class="btn primary big"
+							disabled={!actions?.start || blocked || seriesRunning}
+							title={seriesRunning ? t('api.series.runGoing') : blockedReason}
+							onclick={() => (preflight = true)}
+						>
+							<!-- The last known time stays while a new one is being worked out.
+							     Hiding it during the recalculation made the button change width
+							     on every edit — a button that jumps under your cursor. -->
+							{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
+								<span class="pf-start-time"
+									>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
+								>{/if}
+						</button>
+						<button
+							class="btn primary big pf-more"
+							aria-haspopup="menu"
+							aria-expanded={moreOpen}
+							aria-label={t('job.more')}
+							title={t('job.more')}
+							onclick={(e) => openMore(e.currentTarget as HTMLElement)}
+						>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+						</button>
+					</div>
+					{#if moreOpen}
+						<!-- `position: fixed`, because the panel scrolls and would clip an
+						     absolute menu. The one line stays put when it cannot be done and
+						     says why in its tooltip, so there is a place to learn where it is. -->
+						<div class="cover" role="presentation" onclick={() => (moreOpen = false)}></div>
+						<div
+							class="pf-menu"
+							role="menu"
+							style="left: {morePos.x}px; {moreUpward ? `bottom: ${window.innerHeight - morePos.y}px` : `top: ${morePos.y}px`}"
+						>
+							<button
+								class="row"
+								role="menuitem"
+								type="button"
+								disabled={Boolean(uploadOff)}
+								title={uploadOff ?? t('job.upload.why')}
+								onclick={chooseUpload}
+							>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/></svg>
+								<span>{t('job.upload')}</span>
+							</button>
+						</div>
+					{/if}
 				{/if}
 				</div>
 			</div>
@@ -1607,6 +1604,54 @@
 	</div>
 </Dialog>
 
+
+<!-- Sending the job to the machine's memory instead of burning it: one tap, not two.
+     VEILIGHEID.md asks for two deliberate taps for everything that burns; this puts a
+     file down and moves nothing, and a confirmation in front of something that sets
+     nothing in motion only teaches people to click through confirmations. The window
+     holds what the fold in the footer used to hold, and it is a window so that it has
+     room on a tablet and cannot be clipped by the panel it came from. -->
+<Dialog title={t('job.upload')} bind:open={uploadOpen} width="420px">
+	<p class="pf-row">{t('job.upload.why')}</p>
+	<div class="pf-uploadrow">
+		<label class="name">
+			<span>{t('job.upload.name')}</span>
+			<!-- Cut to what the machine keeps while you type, not afterwards: the panel of
+			     the machine shows eight capitals without spaces, and the first place to
+			     find that out is the keyboard, not the machine. -->
+			<input
+				class="mono"
+				type="text"
+				maxlength="8"
+				value={fieldText}
+				disabled={Boolean(uploadOff)}
+				title={uploadOff ?? t('job.upload.name')}
+				oninput={nameTyped}
+				oncompositionend={nameTyped}
+			/>
+		</label>
+		<button
+			class="btn primary"
+			disabled={Boolean(uploadOff) || control.busy !== null || uploadName === ''}
+			title={uploadOff ??
+				(control.busy !== null
+					? t('reason.busy')
+					: uploadName === ''
+						? t('reason.needsName')
+						: t('job.upload.why'))}
+			onclick={sendToMachine}
+		>
+			{control.busy === 'upload' ? t('job.upload.sending') : t('job.upload.send')}
+		</button>
+	</div>
+	{#if uploaded}
+		<!-- `role="status"` and not `alert`: this is the answer to something that went
+		     well, and it says where the job is now — on the machine, waiting for a hand
+		     on its own panel. -->
+		<p class="pf-row good" role="status">{t('job.upload.done', { name: uploaded })}</p>
+	{/if}
+</Dialog>
+
 <style>
 	.dialog-text {
 		margin: 0 0 var(--space-4);
@@ -1779,27 +1824,6 @@
 	   start button, so it must not compete with the one on the footer below it. */
 	/* No border and no margin of its own: it sits inside the footer, whose own top
 	   border and gap already separate it from the column above. */
-	.pf-upload {
-		margin: 0;
-	}
-	.pf-upload > summary {
-		cursor: pointer;
-		font-size: var(--text-xs);
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--text-2);
-		list-style: none;
-	}
-	.pf-upload > summary::-webkit-details-marker { display: none; }
-	.pf-upload > summary::before {
-		content: '▸';
-		display: inline-block;
-		width: 1em;
-		color: var(--text-2);
-	}
-	.pf-upload[open] > summary::before { content: '▾'; }
-	.pf-upload > summary:hover { color: var(--text-1); }
 	.pf-uploadrow {
 		display: flex;
 		align-items: flex-end;
@@ -2153,6 +2177,13 @@
 	}
 	.pf-actions {
 		display: flex;
+		/* The row may fold. Measured with the panel as it opens: the row is 221 px wide
+		   and its two buttons need 243 px in English and 264 px in Dutch, so the start
+		   button ran 9 px past the panel in English — unseen — and 30 px in Dutch, which
+		   cut the time off the end of "Job starten". Folding puts the start button on a
+		   line of its own, at the full width of the row, and the time stays on it.
+		   `tests/footer-fit.test.ts` measures this in both languages. */
+		flex-wrap: wrap;
 		gap: var(--space-2);
 	}
 	/* Inside the footer the checklist carries no margin of its own: the footer's gap
@@ -2160,11 +2191,62 @@
 	.pf-stick .pf-check {
 		margin: 0;
 	}
-	/* The secondary button keeps its word on one line; the primary gets the rest. With
-	   `flex: 1` on both, "Show frame" broke over two lines and the row became
-	   twee keer zo high. */
-	.pf-actions .btn { flex: none; white-space: nowrap; }
-	.pf-actions .btn.primary { flex: 1; }
+	/* Neither button breaks its words; both stretch to the line they are on. Measured
+	   after the fold: the row is 221 px and the pair needs 243 px (English) or 264 px
+	   (Dutch), so they always land on two lines here — "Show frame" above, the start
+	   button below, each the full width of the row. */
+	.pf-actions .btn { flex: 1 1 auto; white-space: nowrap; }
+	/* The start button and its arrow are one unit: joined corners, one line. The unit
+	   takes the width the start button had. */
+	.pf-split { display: flex; flex: 1 1 auto; }
+	.pf-split .btn.primary { flex: 1 1 auto; border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	.pf-split .btn.primary.pf-more {
+		/* One width in every language: the arrow does not grow with the words beside
+		   it. Measured before this: 52 px in Dutch and 62 px in English, because the
+		   row's rule lets every button stretch. 48 px is a glove-sized target with the
+		   14 px arrow centred in it. */
+		flex: 0 0 48px;
+		min-width: 48px;
+		padding-left: 0;
+		padding-right: 0;
+		border-left: 1px solid color-mix(in srgb, var(--accent-ink) 35%, transparent);
+		border-radius: 0 var(--radius-field) var(--radius-field) 0;
+	}
+	.cover {
+		position: fixed;
+		inset: 0;
+		z-index: 39;
+	}
+	.pf-menu {
+		position: fixed;
+		width: 260px;
+		padding: var(--space-2);
+		background: var(--surface-1);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-float);
+		z-index: 40;
+	}
+	.pf-menu .row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		/* Reachable with a glove on as well. */
+		min-height: 44px;
+		padding: var(--space-2) var(--space-3);
+		border: 0;
+		border-radius: var(--radius-field);
+		background: none;
+		color: var(--text-1);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.pf-menu .row svg { flex: none; color: var(--text-2); }
+	.pf-menu .row:hover:not(:disabled),
+	.pf-menu .row:focus-visible { background: var(--surface-2); }
+	.pf-menu .row:disabled { color: var(--text-2); opacity: 0.6; cursor: not-allowed; }
 
 	/* The start button says what it is going to do, with the time in it. */
 	.btn.big { min-height: 44px; font-size: var(--text-md); }
