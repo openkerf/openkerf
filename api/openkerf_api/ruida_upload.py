@@ -217,23 +217,44 @@ class RuidaUpload:
         """
         self._device().driver.controller.write(data)
 
-    def _interrupted(self, sent: int, chunks: int, why: str, code: str):
-        """The refusal, with the numbers saying what they count.
+    def _interrupted(
+        self, sent: int, chunks: int, why: str, code: str, announced: bool
+    ):
+        """The refusal, saying what is actually on the machine.
 
-        `sent` is blocks handed to the line, and the three cases it can be in
-        are three different things to do about it — one sentence for all three
-        was wrong at both ends. At zero it told the reader to delete a file that
-        was never announced (the wait that fails is the one *in front of* the
-        `E8 02`, so not a byte has gone out). At `chunks` it is the closing wait,
-        where every block including the one holding `SET_FILE_SUM` and
-        `END_OF_FILE` has been written and the only thing missing is a word back
-        from the machine — which is not the same as an incomplete file, and
-        saying "after 5 of 6 blocks" there was simply a wrong number.
+        Four cases, and they are not four values of one counter — that is what
+        made the last two versions of this wrong. `sent` counts blocks, so
+        `sent == 0` holds at **three** moments: the wait before `E8 02`, the wait
+        before `E7 01 <name>`, and the wait before the first block. At the third
+        of those the name is out, and the receiver opens the file on the name
+        rather than on the first block (`ruida/emulator.py:757`, an `open(...,
+        "wb")` in the `E7 01` branch) — so the panel can be showing an empty file
+        while a refusal branching on the count alone says there is nothing there.
+        Hence `announced`, which is about what went down the line, not about how
+        far a counter got.
+
+        `announced` travels in `values` as well, because the interface has to
+        pick the same four sentences in the reader's language and `sent` and
+        `chunks` cannot tell it which of the two zeroes this is. A translated
+        sentence branching on the number alone would make this exact mistake
+        again, one layer out.
+
+        The other end had the same shape of error: `sent == chunks` is the
+        closing wait, where every block including the one holding `SET_FILE_SUM`
+        and `END_OF_FILE` has been written and only the acknowledgement is
+        missing — not an incomplete file, and "after 5 of 6 blocks" there was
+        simply a wrong number.
         """
-        if sent == 0:
+        if sent == 0 and not announced:
             what = (
                 "Nothing had gone out, so there is no file on the panel to "
                 "clean up; send it again."
+            )
+        elif sent == 0:
+            what = (
+                "The name went out but no part of the job followed it, so the "
+                "panel may be showing an empty file under that name: delete it "
+                "there if it is. None of the job itself was sent."
             )
         elif sent < chunks:
             what = (
@@ -250,7 +271,7 @@ class RuidaUpload:
         return DesignError(
             f"The machine {why} after {sent} of {chunks} blocks. {what}",
             code=code,
-            values={"sent": sent, "chunks": chunks},
+            values={"sent": sent, "chunks": chunks, "announced": announced},
         )
 
     def _line_is_busy(self, session) -> bool:
@@ -290,7 +311,9 @@ class RuidaUpload:
             return True
         return bool(getattr(session, "is_busy", False))
 
-    def _wait_for_the_line(self, session, sent: int, chunks: int) -> None:
+    def _wait_for_the_line(
+        self, session, sent: int, chunks: int, announced: bool
+    ) -> None:
         """Wait until the line is free again, or refuse saying how far it got.
 
         The connection is asked first, and not only for tidiness. On `udp` a
@@ -328,9 +351,10 @@ class RuidaUpload:
         with nothing to tell the user meanwhile. The app the engine's own
         `gross_timeout()` protects is only the one that started the home itself
         (`driver.py:392-403`, its single caller); a home somebody presses on the
-        panel gets the one second. Whichever it was, the file on the machine is
-        incomplete and the advice — look at the panel, delete it — holds, and an
-        upload that was refused can simply be sent again.
+        panel gets the one second. Whichever it was, an upload that was refused
+        can simply be sent again, and what the machine is left holding is what
+        `_interrupted` works out from `sent` and `announced` — which is why the
+        advice is four sentences there and not one here.
 
         The shared queue costs one thing, and it is worth writing down where the
         refusal is raised. Because `_line_is_busy` cannot tell our packets from
@@ -344,21 +368,24 @@ class RuidaUpload:
         The error only ever falls on the safe side, though, and that is why it is
         left standing. A packet that is not ours can only *add* to the queue, so
         the sharing can make this wait longer than it needs to, or refuse a
-        transfer that was fine — never let one through that was not. The
-        refusal's advice, to look at the panel and delete the file before
-        burning, is right either way.
+        transfer that was fine — never let one through that was not. And the
+        advice survives being wrong about the cause: check the file on the panel
+        before burning it is right whether the transfer really stalled or the
+        queue was somebody else's.
         """
         deadline = time.monotonic() + self.per_chunk_seconds
         while True:
             if not getattr(session, "connected", True):
                 raise self._interrupted(
-                    sent, chunks, "stopped answering", "upload.interrupted"
+                    sent, chunks, "stopped answering", "upload.interrupted",
+                    announced,
                 )
             if not self._line_is_busy(session):
                 return
             if time.monotonic() > deadline:
                 raise self._interrupted(
-                    sent, chunks, "stopped taking the file", "upload.stalled"
+                    sent, chunks, "stopped taking the file", "upload.stalled",
+                    announced,
                 )
             time.sleep(self.poll_seconds)
 
@@ -520,12 +547,22 @@ class RuidaUpload:
             )
         for index, packet in enumerate(packets):
             sent = max(0, index - 2)
-            self._wait_for_the_line(session, sent, chunks)
+            # Whether the *name* is out, which is a different question from how
+            # many blocks are: `packets[1]` is `E7 01 <name>`, and the receiver
+            # opens the file there (`ruida/emulator.py:757`), so from index 2
+            # onwards a refusal has to talk about a file that exists even while
+            # `sent` is still 0. Counted off the packets already written rather
+            # than derived from `sent`, because deriving it is what hid the case:
+            # `sent == 0` is true at three different moments and only the first
+            # two of them leave the panel clean.
+            announced = index >= 2
+            self._wait_for_the_line(session, sent, chunks, announced)
             try:
                 self._write(packet)
             except (ConnectionError, OSError) as e:
                 raise self._interrupted(
-                    sent, chunks, "stopped answering", "upload.interrupted"
+                    sent, chunks, "stopped answering", "upload.interrupted",
+                    announced,
                 ) from e
         # And once more after the last one, which is the block holding
         # `SET_FILE_SUM` and `END_OF_FILE`. Every other block is confirmed by the
@@ -544,5 +581,5 @@ class RuidaUpload:
         # unknown here — the last block went out and nothing came back about it —
         # is what `_interrupted` says in its own sentence for this case, rather
         # than by quietly shaving one off a count called "blocks".
-        self._wait_for_the_line(session, chunks, chunks)
+        self._wait_for_the_line(session, chunks, chunks, True)
         return {"name": short, "bytes": len(payload), "chunks": chunks}

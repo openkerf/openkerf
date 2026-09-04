@@ -884,15 +884,22 @@ def test_a_transfer_that_stalls_says_how_far_it_got(ruida, monkeypatch):
     is half a file in the machine and everybody thinks it went well. So the
     refusal carries the two numbers that say how bad it is.
 
-    With the line busy from the start, this is the *zero* case: the wait that
-    fails is the one in front of the `E8 02` packet, so not a byte has gone out
-    and there is nothing on the panel. The sentence has to say that and not the
-    other one — an earlier version told the reader to "delete the file on the
-    panel" whatever the count, sending them after something that was never
-    announced. The partway case is
-    `test_a_stall_partway_says_the_file_is_incomplete`, the case where
-    everything went out is
-    `test_the_last_block_is_not_reported_sent_until_it_is_acknowledged`.
+    With the line busy from the start, this is the *first* of the three moments
+    at which `sent` is 0: the wait that fails is the one in front of the `E8 02`
+    packet, so not a byte has gone out and there really is nothing on the panel.
+    The sentence has to say that and not the incomplete-file one — an earlier
+    version told the reader to "delete the file on the panel" whatever the count,
+    sending them after something that was never announced.
+
+    All four cases, because a counter alone does not separate them:
+
+    * nothing out at all — here;
+    * the name out and no block behind it —
+      `test_the_name_alone_is_out_and_the_refusal_says_what_that_leaves`, which
+      is `sent == 0` as well and *does* leave a file on the panel;
+    * partway — `test_a_stall_partway_says_the_file_is_incomplete`;
+    * everything out, nothing acknowledged —
+      `test_the_last_block_is_not_reported_sent_until_it_is_acknowledged`.
     """
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
@@ -905,7 +912,7 @@ def test_a_transfer_that_stalls_says_how_far_it_got(ruida, monkeypatch):
     said = str(error.value)
     assert "of" in said and any(ch.isdigit() for ch in said), said
     assert error.value.code == "upload.stalled"
-    assert error.value.values["sent"] == 0, error.value.values
+    assert error.value.values == {"sent": 0, "chunks": 1, "announced": False}
     assert not session.written, "bytes went out while the line was never free"
     assert "delete" not in said.lower(), said
     assert "send it again" in said.lower(), said
@@ -1360,7 +1367,11 @@ def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
         upload.upload("BORD")
 
     assert error.value.code == "upload.stalled"
-    assert error.value.values == {"sent": blocks, "chunks": blocks}
+    assert error.value.values == {
+        "sent": blocks,
+        "chunks": blocks,
+        "announced": True,
+    }
     said = str(error.value)
     assert f"{blocks} of {blocks}" in said, said
     assert "not acknowledged" in said, said
@@ -1407,14 +1418,14 @@ def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
         if only_at_the_end:
             real = upload._wait_for_the_line
 
-            def only_after_the_last_write(session_arg, sent, chunks):
+            def only_after_the_last_write(session_arg, sent, chunks, announced):
                 # The wait after the loop is the one that runs when every packet
                 # has already been written — two headers and `chunks` blocks.
                 # Derived from the code under test rather than counted out to a
                 # literal, because the number of blocks is a property of a
                 # drawing (see `a_design_over_one_block`), not a constant.
                 if len(session.written) == chunks + 2:
-                    real(session_arg, sent, chunks)
+                    real(session_arg, sent, chunks, announced)
 
             monkeypatch.setattr(
                 upload, "_wait_for_the_line", only_after_the_last_write
@@ -1512,9 +1523,9 @@ def test_on_usb_the_queue_alone_still_bounds_what_is_in_flight(
         if only_at_the_end:
             real = upload._wait_for_the_line
 
-            def only_after_the_last_write(session_arg, sent, chunks):
+            def only_after_the_last_write(session_arg, sent, chunks, announced):
                 if len(session.written) == chunks + 2:
-                    real(session_arg, sent, chunks)
+                    real(session_arg, sent, chunks, announced)
 
             monkeypatch.setattr(
                 upload, "_wait_for_the_line", only_after_the_last_write
@@ -1593,7 +1604,11 @@ def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
         upload.upload("BORD")
 
     assert error.value.code == "upload.interrupted"
-    assert error.value.values == {"sent": blocks, "chunks": blocks}
+    assert error.value.values == {
+        "sent": blocks,
+        "chunks": blocks,
+        "announced": True,
+    }
     assert f"{blocks} of {blocks}" in str(error.value), str(error.value)
     assert not session.connected
 
@@ -1760,21 +1775,26 @@ def test_the_route_refuses_a_nameless_upload(ruida, tmp_path, monkeypatch):
     assert not session.written, "a nameless upload announced a file anyway"
 
 
-def test_the_numbers_of_a_half_upload_reach_the_client(
+def test_the_numbers_of_a_broken_upload_reach_the_client(
     ruida, tmp_path, monkeypatch
 ):
     """
-    Half a file on the machine has to say how far it got, in the reader's own
-    language — so the two numbers travel beside the code, in
-    `X-OpenKerf-Error-Values`, and not only inside the English sentence.
+    A broken upload has to say how far it got in the reader's own language, so
+    everything the sentence branches on travels beside the code in
+    `X-OpenKerf-Error-Values` — not only inside the English one.
 
-    Measured on this rectangle, whose job is one block: with the line busy for
-    ever, the stall is at the first packet and the answer is
-    `{"sent": 0, "chunks": 1}`. `sent` is 0 and not 1 because the wait that fails
-    is the one *in front of* the first block — nothing has gone out, which is
-    what the sentence says. The block count is read off the frames rather than
-    written down here; how many blocks a drawing makes is a property of the
-    drawing.
+    All three values, and `announced` is not decoration: `sent == 0` holds at
+    three moments and only two of them leave the panel clean, so an interface
+    that branched on the numbers alone would tell somebody there is nothing to
+    delete while an empty file sits on the machine. See
+    `test_the_name_alone_is_out_and_the_refusal_says_what_that_leaves`.
+
+    Measured on this rectangle, whose job is one block: with the line busy from
+    the start, the wait that fails is the one in front of the **`E8 02`** — the
+    very first packet, not the first block — and the answer is
+    `{"sent": 0, "chunks": 1, "announced": False}`, with nothing on the line.
+    The block count is read off the frames rather than written down here; how
+    many blocks a drawing makes is a property of the drawing.
     """
     import json
 
@@ -1793,7 +1813,7 @@ def test_the_numbers_of_a_half_upload_reach_the_client(
     assert response.status_code == 409, response.text
     assert response.headers["X-OpenKerf-Error"] == "upload.stalled"
     values = json.loads(response.headers["X-OpenKerf-Error-Values"])
-    assert values == {"sent": 0, "chunks": blocks}
+    assert values == {"sent": 0, "chunks": blocks, "announced": False}
 
 
 class _BurningSpooler:
@@ -2076,7 +2096,7 @@ def _nothing_on_the_bed(server, session, monkeypatch):
         (
             _a_line_that_breaks_on_the_first_write,
             "upload.interrupted",
-            {"sent": 0, "chunks": 1},
+            {"sent": 0, "chunks": 1, "announced": False},
         ),
         (_an_upload_already_running, "upload.busy", None),
         (_nothing_on_the_bed, "job.nothingToBurn", None),
@@ -2142,3 +2162,45 @@ def test_a_non_ruida_machine_refuses_through_the_route(kernel, tmp_path, monkeyp
     assert response.status_code == 409, response.text
     assert response.headers["X-OpenKerf-Error"] == "upload.notRuida"
     assert not session.written
+
+
+def test_the_name_alone_is_out_and_the_refusal_says_what_that_leaves(
+    ruida, monkeypatch, deferring
+):
+    """
+    The third moment at which `sent` is 0, and the one where "nothing is on the
+    panel" is wrong.
+
+    `sent` counts blocks, so it is 0 at three different moments: the wait before
+    `E8 02`, the wait before `E7 01 <name>`, and the wait before the first
+    block. At the third of those both headers are out — and the receiver opens
+    the file on the name, not on the first block: `emulator.py:757` is
+    `open(f"{self.filename}.rd", "wb")` inside the `E7 01` branch, which
+    `test_the_emulator_receives_the_file_we_built` already pins with a `BORD.rd`
+    that exists and holds nothing.
+
+    So at that third moment the panel can show an empty file called BORD while
+    the refusal says there is nothing there to clean up. No fire risk, the same
+    mistake one boundary along.
+
+    Measured with `stops_before=1`: `{'sent': 0, 'chunks': 1}` with
+    `['e802', 'e701424f524400']` on the line — the name announced, no block
+    behind it. What the numbers could not say, and what the interface therefore
+    could not say either, is which of the two zeroes it was; `announced` is in
+    `values` for exactly that reason.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = deferring(upload, monkeypatch, stops_before=1)
+    upload.per_chunk_seconds = 0.3
+
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+
+    said = str(error.value)
+    assert error.value.values == {"sent": 0, "chunks": 1, "announced": True}
+    assert [bytes(p[:2]).hex() for p in session.written] == ["e802", "e701"], (
+        session.written
+    )
+    assert "delete" in said.lower(), said
+    assert "nothing had gone out" not in said.lower(), said
