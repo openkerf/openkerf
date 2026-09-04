@@ -221,6 +221,22 @@ import { SeriesStore } from '$lib/series.svelte';
 	let unsavedOpen = $state(false);
 	/** What to do once a save started from the question has landed. */
 	let afterSave: (() => Promise<void>) | null = null;
+	/**
+	 * `pending` and `afterSave` live and die together — set only when the
+	 * unsaved-changes question's "Save" is chosen, cleared only here.
+	 *
+	 * Two, and only two, callers: a save that actually landed (`Projects`'s
+	 * `onSaved`), and the Save-as window it opened closing *without* one
+	 * (`Projects`'s `onDismissed` — Escape, the cross, the backdrop). Without the
+	 * second caller, a dismissed Save-as left both set, and the next unrelated,
+	 * successful save ran the stale `pending` — measured: New → the question →
+	 * Save → Escape out of the Save-as window → a later Save as… under another
+	 * name wiped the just-saved work.
+	 */
+	function clearContinuation() {
+		pending = null;
+		afterSave = null;
+	}
 	/** The hidden file field behind Upload…, clicked from the project menu. */
 	let fileInput = $state<HTMLInputElement | null>(null);
 	// Work from a previous session. Never restore it silently: anybody who wants to
@@ -1231,9 +1247,9 @@ import { SeriesStore } from '$lib/series.svelte';
 	});
 
 	/**
-	 * The project menu: New and Open… above a separator, Save through Upload… below —
-	 * the same split the six rows always had, now built from `projectActions` instead
-	 * of being written out by hand in `TopBar.svelte`.
+	 * The project menu: New, Open…, Save and Save as… stand above the separator,
+	 * Download and Upload… below — the same split the six rows always had, now built
+	 * from `projectActions` instead of being written out by hand in `TopBar.svelte`.
 	 */
 	let projectMenu = $derived.by<MenuList>(() => {
 		const rows = projectActions(actionContext, handlers);
@@ -1914,7 +1930,9 @@ import { SeriesStore } from '$lib/series.svelte';
 </Dialog>
 
 <!-- The Projects window: Open… lists what is on the server, Save as… puts the work
-     there under a name. One component, `mode` says which. -->
+     there under a name. One component, `mode` says which. `onDismissed` is the
+     window closing *without* a save (Escape, the cross, the backdrop) — see
+     `clearContinuation` above for why that has to clear `pending`/`afterSave` too. -->
 <Projects
 	{projects}
 	bind:open={projectsOpen}
@@ -1925,8 +1943,9 @@ import { SeriesStore } from '$lib/series.svelte';
 	}}
 	onSaved={async () => {
 		await afterSave?.();
-		afterSave = null;
+		clearContinuation();
 	}}
+	onDismissed={clearContinuation}
 />
 
 <!-- New, Open… and Upload… all replace the whole of the work: this is the question
@@ -1944,8 +1963,9 @@ import { SeriesStore } from '$lib/series.svelte';
 		saveProject();
 	}}
 	onDiscard={() => {
-		if (pending) runIt(pending);
-		pending = null;
+		const action = pending;
+		clearContinuation();
+		if (action) runIt(action);
 	}}
 />
 

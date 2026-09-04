@@ -104,3 +104,44 @@ test('New still asks on untitled, imported work — importing into an empty bed 
 	const after = (await (await fetch(`${BASE}/api/design`)).json()) as { elements: unknown[] };
 	assert.equal(after.elements.length, before.elements.length, 'Cancel changed the design');
 });
+
+test('a dismissed Save-as leaves no stale continuation for a later, unrelated save', async (t) => {
+	if (!reachable) return noServer(t, BASE);
+	// Untitled, dirty work: New asks the unsaved-changes question.
+	await fetch(`${BASE}/api/project/new`, { method: 'POST' });
+	await fetch(`${BASE}/api/design/elements`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ type: 'rect', x_mm: 15, y_mm: 15, width_mm: 15, height_mm: 15 })
+	});
+	await page.goto(`${BASE}/?tab=design`, { waitUntil: 'domcontentloaded' });
+	await page.waitForTimeout(2500);
+	const beforeCount = (await (await fetch(`${BASE}/api/design`)).json()).elements.length;
+
+	await openProjectMenu();
+	await page.getByRole('menuitem', { name: 'New project' }).click();
+	await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
+	// Save on an untitled project falls through to Save as…
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await page.waitForSelector('[role="dialog"] input.project-name', { timeout: 5000 });
+	// Dismiss the Save-as window without saving — Escape, not Cancel: nothing in
+	// this window itself was declined, the window was just closed.
+	await page.keyboard.press('Escape');
+	await page.waitForTimeout(500);
+
+	// A later, unrelated Save as…, under a fresh name, must not fire the dismissed
+	// question's old continuation (which would otherwise run "New" and wipe this).
+	const LATER = `${NAME} later`;
+	await openProjectMenu();
+	await page.getByRole('menuitem', { name: 'Save as…' }).click();
+	await page.locator('[role="dialog"] input.project-name').fill(LATER);
+	await page.locator('[role="dialog"] button.save').click();
+	await page.waitForTimeout(1500);
+
+	const afterCount = (await (await fetch(`${BASE}/api/design`)).json()).elements.length;
+	assert.equal(afterCount, beforeCount, 'the dismissed Save-as continuation changed the design');
+	const listed = (await (await fetch(`${BASE}/api/projects`)).json()) as { name: string; current: boolean }[];
+	const mine = listed.find((e) => e.name === LATER);
+	assert.ok(mine, `${LATER} is not in the list`);
+	assert.equal(mine.current, true, `${LATER} is not the current project`);
+});

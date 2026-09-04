@@ -25,7 +25,8 @@
 		open = $bindable(),
 		mode = 'open',
 		onOpen,
-		onSaved
+		onSaved,
+		onDismissed
 	}: {
 		projects: ProjectsStore;
 		open: boolean;
@@ -33,6 +34,18 @@
 		/** The user chose a row to open; the page asks about unsaved work first. */
 		onOpen?: (name: string) => void;
 		onSaved?: (entry: ProjectEntry) => void;
+		/**
+		 * The window closed *without* a save landing — Escape, the cross, or the
+		 * backdrop. Never fired after `onSaved`.
+		 *
+		 * A caller that set up a continuation to run once a save-as it opened lands
+		 * (the unsaved-changes question does exactly this) must hear about the other
+		 * way this window closes too, or that continuation outlives the window that
+		 * was supposed to settle it and fires on a later, unrelated save instead —
+		 * measured: New → the question → Save → Escape out of this window → a later
+		 * Save as… under another name ran the stale "New" continuation and wiped it.
+		 */
+		onDismissed?: () => void;
 	} = $props();
 
 	let typed = $state('');
@@ -43,14 +56,34 @@
 		| { kind: 'delete'; name: string };
 	let ask = $state<Ask | null>(null);
 	let rowMenu = $state<{ list: MenuList; x: number; y: number } | null>(null);
+	// Plain, not `$state`: read only from inside the `open` effect below, at the
+	// moment that effect itself decides whether this close was a save or not — never
+	// a value anything else needs to react to.
+	let opened = false;
+	/** Closed by a definite action — a landed save, or a row's Open — rather than
+	 *  a plain dismissal (Escape, the cross, the backdrop). */
+	let settled = false;
 
 	$effect(() => {
 		if (open) {
+			opened = true;
+			settled = false;
 			projects.load();
 			typed = projects.current?.name ?? '';
 			ask = null;
+		} else if (opened) {
+			opened = false;
+			if (!settled) onDismissed?.();
 		}
 	});
+
+	/** A row's Open: settles the window the same as a landed save does, so the
+	 *  parent (which closes it by setting `open = false` itself, once it has read
+	 *  the name) is not mistaken for a dismissal. */
+	function chooseOpen(name: string) {
+		settled = true;
+		onOpen?.(name);
+	}
 
 	const saveOff = $derived(
 		projects.busy ? t('reason.busy') : cleanName(typed) === '' ? t('reason.needsProjectName') : undefined
@@ -91,6 +124,10 @@
 		const entry = await projects.save(name, overwrite);
 		if (entry) {
 			ask = null;
+			// Before `open = false`, so the effect above sees it set the moment it
+			// reacts to the close — this is what tells that effect not to call
+			// `onDismissed`.
+			settled = true;
 			open = false;
 			onSaved?.(entry);
 		}
@@ -151,13 +188,13 @@
 					class="row"
 					class:current={entry.current}
 					role="listitem"
-					ondblclick={() => (mode === 'saveAs' ? (typed = entry.name) : onOpen?.(entry.name))}
+					ondblclick={() => (mode === 'saveAs' ? (typed = entry.name) : chooseOpen(entry.name))}
 				>
 					<span class="name">{entry.name}{#if entry.current} <em>{t('projects.current')}</em>{/if}</span>
 					<span class="when">{when(entry.saved_at)}</span>
 					<span class="verbs">
 						{#if mode === 'open'}
-							<button class="btn open" onclick={() => onOpen?.(entry.name)}>{t('projects.open')}</button>
+							<button class="btn open" onclick={() => chooseOpen(entry.name)}>{t('projects.open')}</button>
 						{:else}
 							<button class="btn" onclick={() => (typed = entry.name)}>{t('projects.name')}</button>
 						{/if}
