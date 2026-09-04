@@ -36,11 +36,11 @@ Two stages.
 
 1. **`node:24-alpine`** — `npm ci` and `npm run build` in `frontend/`. Output is the
    static build (adapter-static, `index.html` fallback).
-2. **`python:3.13-slim`** — `pip install ./api[camera]` plus the engine's non-GUI
-   requirements (Pillow, numpy, pyusb, pyserial, ezdxf). MeerK40t arrives as the pinned
-   PyPI dependency from `api/pyproject.toml`; that file remains the only place the
-   engine version is written. No wxPython. The frontend build is copied to
-   `/app/frontend`.
+2. **`python:3.13-slim`** — MeerK40t is installed from upstream git at the
+   `MEERK40T_REV` revision, before `pip install ./api[camera]` plus the engine's
+   non-GUI requirements (Pillow, numpy, pyusb, pyserial, ezdxf), so the version range
+   `api/pyproject.toml` declares is satisfied without ever reaching PyPI for the engine
+   itself. No wxPython. The frontend build is copied to `/app/frontend`.
 
 The final image:
 
