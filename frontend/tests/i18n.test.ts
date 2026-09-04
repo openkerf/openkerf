@@ -206,6 +206,22 @@ function refusalsInPython(python: string): Map<string, string> {
 }
 
 /**
+ * The sentences of a message that say nothing about how many — the part that does not bend
+ * to a count, and that the API therefore says in the same words.
+ *
+ * By sentence and not by "the words the two halves end with in common": measured, the
+ * common tail only catches a change to the *last* words of the singular. Rewriting "needs"
+ * as "wants" halfway through shortens the tail and the rest still matches, so that check
+ * would have passed the very mutation it exists to catch.
+ */
+function sentencesWithoutACount(message: string): string[] {
+	return message
+		.split(/(?<=\.)\s+/)
+		.map((sentence) => sentence.trim())
+		.filter((sentence) => sentence && !/\d|\{/.test(sentence));
+}
+
+/**
  * One shape to compare in: no line breaks, one kind of apostrophe, bare placeholders, and
  * the escapes Python writes a quotation mark with resolved — `\u201c` in a `.py` and “ in
  * a `.ts` are the same character, and a test that says otherwise reports a difference
@@ -271,6 +287,20 @@ test('the English of a refusal is the sentence the API sends', () => {
 		const message = en[`api.${code}`];
 		const ours = typeof message === 'string' ? message : (message as { other?: string })?.other;
 		if (typeof ours !== 'string') continue;
+		// And the `one` half is not left unread. It can never *be* the API's sentence — that
+		// one counts, and this one says "1 of these contours **is** an open line" — but its
+		// sentences that say nothing about how many are the API's own, word for word.
+		//
+		// What that does not cover, and cannot without knowing English grammar: the
+		// counting sentence itself, where singular and plural differ on purpose. A drift
+		// inside *that* sentence of the singular is invisible here, and this is the whole
+		// of what is claimed.
+		if (typeof message !== 'string')
+			for (const said of sentencesWithoutACount(String((message as { one?: string }).one ?? '')))
+				if (!asOneSentence(sentence).includes(asOneSentence(said)))
+					fresh.push(
+						`api.${code} (the singular)\n    API: ${asOneSentence(sentence)}\n    en : ${asOneSentence(said)}`
+					);
 		const same = asOneSentence(ours) === asOneSentence(sentence);
 		(same ? together : apart).push(code);
 		if (!same && !ALREADY_APART.has(code))
@@ -279,11 +309,31 @@ test('the English of a refusal is the sentence the API sends', () => {
 			);
 	}
 	assert.deepEqual(fresh, [], `a refusal and its translation say two different things:\n  ${fresh.join('\n  ')}`);
-	// The extractor reads Python, and Python can be rewritten. 139 were readable when this
-	// was written; a sharp drop means it has stopped finding them and this test is quietly
-	// measuring nothing.
-	const read = together.length + apart.length;
-	assert.ok(read >= 130, `only ${read} refusals could be read out of the API — the reader is losing them`);
+	// And what this cannot read is named, rather than allowed for by a number. A floor —
+	// "at least 130 of them" — is the same rotting kind of guard as a hand-written list of
+	// catalogues: nine refusals could have slipped out of reach before it said a word, and
+	// the number goes stale the moment the API grows. These seven are the whole of what the
+	// reader cannot pair with a key, each for the reason given above; a new one is either a
+	// mistake or a line to add here on purpose.
+	const CANNOT_BE_READ = [
+		'rotary.homeWhileActive',
+		'series.notAWholeNumber.first',
+		'series.notAWholeNumber.last',
+		'series.notAWholeNumber.padding',
+		'series.notAWholeNumber.step',
+		'upload.interrupted',
+		'upload.stalled'
+	];
+	const unread = Object.keys(en)
+		.filter((key) => key.startsWith('api.'))
+		.map((key) => key.slice(4))
+		.filter((code) => !refusalsInPython(python).has(code))
+		.sort();
+	assert.deepEqual(
+		unread,
+		CANNOT_BE_READ,
+		'the refusals this test cannot read have changed — a new one is out of reach, or one of these can be read now'
+	);
 	// And the list stays honest: a code on it that no longer differs has been repaired,
 	// and then it comes off, or the next divergence hides behind it.
 	const mended = [...ALREADY_APART].filter((code) => !apart.includes(code));
