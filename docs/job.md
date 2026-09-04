@@ -204,6 +204,15 @@ Two things it will not do at all, each with a whole sentence and nothing sent:
 And it needs the machine on the other end: "There is no connection to the machine,
 so the file cannot be sent. Connect first; nothing has been sent."
 
+One more can only turn up after you have pressed, because nothing on the screen can
+see it coming: "This job holds a single command of 1201 bytes, and a block may be at
+most 1000. The machine would silently keep only the first part of it, so nothing has
+been sent." The job travels in blocks, and a block is never cut through the middle of
+a command — so one command longer than a whole block cannot be sent without the
+machine quietly keeping the front of it and throwing the rest away. On the designs
+this app makes the longest command is 16 bytes, so this is a guard rather than a
+thing you meet; if you do meet it, the job needs simplifying and nothing was sent.
+
 #### When it stops halfway
 
 The job goes over in blocks, and a machine that stops taking them or stops

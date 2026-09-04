@@ -51,18 +51,35 @@ order or looked up when you need them.
 ## How to update these pages
 
 The screenshots are made by a script, not by hand, so that a picture shows the
-same thing next month. With the app running, from the `frontend` directory:
+same thing next month. It needs an engine of its own — a library and a layer list
+that are not the ones you work in — and it refuses to run without them:
 
 ```bash
-node gauntlet/docs-shots.mjs          # all of them
-node gauntlet/docs-shots.mjs 07       # only the shots whose name contains 07
+meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/library.db \
+                                  -o /tmp/docs/operations.cfg -f frontend/build"
+
+cd frontend
+OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs        # all of them
+OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs 07     # only shot 07
 ```
 
-Each shot puts the state it needs there itself through the API, so nothing
-depends on what happened to be on the bed. That includes the machine: every
-picture has a bed in it and this handbook quotes its size, so a run switches to
-the KH-5030 if some other machine happens to be active. The files land in
-`docs/images/`.
+`-o` is what keeps the run out of your own layer list. That list is keyed to the
+name of the engine and not to the profile, so without it the script reads and
+writes the layers of the app you work in — and photographs them: a run without it
+put a layer of "Engrave, 20 mm/s, 100%" in the pre-flight picture where the script
+seeds "Logo area, 300 mm/s, 30%", with 2:22 on the clock instead of 1:19. Started
+without `-o` the script stops before it touches anything and says so.
+
+Each shot puts the state it needs there itself through the API, so nothing depends
+on what happened to be on the bed. Everything except one thing: **the machine**.
+Every picture has a bed in it and this handbook quotes its size, so the KH-5030 has
+to be the active one — and the script will not make it so. The machine list lives
+in a single `MeerK40t.cfg` for every instance on the computer (CLAUDE.md, the
+`-P/--profile` row), so switching it over here would change which laser your own
+app opens on, and switching back does not undo it: measured, the bed stays behind
+at the other machine's size. So a run against another machine stops with a sentence
+that says which one is active, and activating the KH-5030 is something you do
+yourself. The files land in `docs/images/`.
 
 Two of them are held back on purpose. The pictures of a test board with a code
 and with a cut-out have to *draw* a board, which writes a row into the library and
@@ -70,8 +87,9 @@ needs a cut preset for the material, so they only run against a library that is
 expendable:
 
 ```bash
-# an engine with a library of its own, and a dev server in front of it
-meerk40t/.venv/bin/meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/scratch/openkerf-library.db"
+# an engine with a library and a layer list of its own, and a dev server in front of it
+meerk40t/.venv/bin/meerk40t --no-gui -d -e "openkerf -p 8092 \
+    -l /tmp/scratch/openkerf-library.db -o /tmp/scratch/operations.cfg"
 cd frontend && OPENKERF_API=http://127.0.0.1:8092 npx vite dev --port 5200
 
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 41
@@ -86,12 +104,12 @@ that has a cut setting. Shot 44 writes a board, because it is a picture of the l
 that names one — and it wants an *empty* scratch library, since a name already taken
 is minted afresh (correctly: two planks may never share a name) and the picture then
 shows a different word every run. Without the flag the four shots are skipped and say
-so on the console. Two things
-that scratch engine does *not* get its own copy of, because MeerK40t has none:
-the machine list and the machine's own settings, which live in one
-`MeerK40t.cfg` for every instance (see CLAUDE.md, the `-P/--profile` row). So
-give it the bed and the name the handbook uses before you photograph anything —
-otherwise the pictures show a bed and a machine name that no other page does.
+so on the console. Two things that scratch engine does *not* get its own copy of,
+because MeerK40t has none: the machine list and the machine's own settings, which
+live in one `MeerK40t.cfg` for every instance (see CLAUDE.md, the `-P/--profile`
+row). So give it the bed and the name the handbook uses before you photograph
+anything — otherwise the pictures show a bed and a machine name that no other page
+does, and that is the one thing you have to put right by hand.
 
 What keeps the prose honest is a test:
 

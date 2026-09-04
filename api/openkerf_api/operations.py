@@ -36,19 +36,22 @@ from meerk40t.core.wordlist import Wordlist
 def fence_operations(kernel, path):
     """Point the layer list at `path`, and forget the one the engine booted with.
 
-    Four steps, and the last two are the half that is easy to miss:
+    Three steps, and the last two are the half that is easy to miss:
 
     1. `op_data` is where the list is written at shutdown. Redirected, nothing this
        server does can reach the user's file. `Settings(None, <path>)` keeps the
        name as the whole path (`kernel/settings.py:30-35`), which is how an
        absolute one gets in.
-    2. The wordlist lives in the same directory by construction
-       (`elements.py:770` takes its directory from this file's), so it follows.
-    3. The layers already in memory are the ones read out of the user's file at
-       boot, before any of this could run. They are dropped and the fenced file is
-       read instead — otherwise the fence stops the writing and not the reading,
-       and the pictures stay unreproducible.
-    4. `default_operations` is a *third* reader of the same file and the one that
+    2. The layers already in memory are the ones read out of the user's file at
+       boot, before any of this could run. Reading the fenced file replaces them —
+       otherwise the fence stops the writing and not the reading, and the pictures
+       stay unreproducible. The dropping is the engine's own doing:
+       `load_persistent_operations` clears before it reads (`elements.py:1737`,
+       `clear=True`), and an explicit `clear_operations()` in front of it changed
+       nothing — measured by taking it out, with the test that holds this down
+       staying green. The wordlist follows the same move, because
+       `elements.py:770` takes its directory from this file's.
+    3. `default_operations` is a *third* reader of the same file and the one that
        actually bit: it is what a new shape is filed under when its colour has no
        layer yet. Recomputed here, so it comes from the fenced file — and where
        that file has nothing to say, from the set the engine makes up itself
@@ -62,7 +65,6 @@ def fence_operations(kernel, path):
     elements.op_data = elements_module.Settings(None, str(file), create_backup=True)
     elements.mywordlist = Wordlist(kernel.version, str(file.parent))
     with elements.undofree():
-        elements.clear_operations()
         elements.load_persistent_operations("previous")
     elements.init_default_operations_nodes()
     return file
