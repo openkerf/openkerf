@@ -35,10 +35,13 @@ WRITE_ROUTES = [
     # address. That decides where the head goes.
     ("/api/machines/import", {"json": {}}),
     # A file into the machine's memory. It puts bytes on the open connection, so off this
-    # computer it must never happen without a token. The body is deliberately nameless:
-    # were the guard ever gone, this call refuses at the name (`upload.needsName`) before
-    # a job is built or a byte leaves — a test about a lock has no business being the one
-    # that sends something.
+    # computer it must never happen without a token. Were the guard ever gone, this call
+    # would still send nothing: `upload()` asks for a live session before it looks at the
+    # name or builds anything, and this kernel's device has none, so it refuses with
+    # `upload.notConnected` (or `upload.noMachine` with no device at all) — measured in
+    # `test_a_nameless_body_still_gets_no_further_than_the_connection` in
+    # test_ruida_upload.py. Not the name: `_session()` runs before `_checked_name`, and a
+    # comment naming the wrong guard is one a safety argument gets read out of later.
     ("/api/machine/upload", {"json": {}}),
     # A series. The upload writes a file in the upload directory, attaching decides what
     # fifty plates will say, and the five run verbs keep the bookkeeping of which plates

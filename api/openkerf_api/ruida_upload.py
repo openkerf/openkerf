@@ -470,6 +470,24 @@ class RuidaUpload:
         # goes straight through it. `_line_is_busy` does not stand in for it —
         # `_data_sender` empties that queue in one go while the machine burns on
         # for minutes, so a free line says nothing about a free machine.
+        #
+        # What the two streams do to each other was measured against the engine's
+        # own `RuidaEmulator`, no socket and no hardware: a burning job of 1072
+        # commands (5463 bytes) with the whole upload conversation of a rectangle
+        # (433 bytes) dropped in halfway. They land in **one** `RDJob` — buffer
+        # 5882 bytes against 5456 for the burn alone, the burn's own bytes no
+        # longer contiguous, and `program_mode` already `False` straight after the
+        # upload, in the middle of the burn, because the payload ends in `D7`
+        # (END_OF_FILE) and carries its own `D8 00` (START_PROCESS). All of it
+        # silently: **0** parse failures. Those bytes are not inert.
+        #
+        # What stays an assumption: the receiver the engine ships does not
+        # separate storing from executing — it hangs everything on the same
+        # `RDJob` and spools it (`ruida/emulator.py:157-159`) whatever `saving`
+        # says. What a real Ruida's firmware makes of this seam has **not** been
+        # measured here. Neither half changes the check: the fact is that the
+        # receiver we have merges the two streams without a word, and the API is
+        # where this is stopped either way.
         if a_job_is_running(self.kernel):
             raise DesignError(
                 "A job is running. Wait until it is done, or stop it: the file "

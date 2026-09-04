@@ -294,7 +294,7 @@ class ApiServer:
         # The job as a file in the machine's memory. It builds through the same runner
         # as the burn does, so what is sent is what would have been burned; what it
         # deliberately has not got is a way to start it — that stays on the panel.
-        self.upload = RuidaUpload(kernel, self.commands)
+        self.ruida_upload = RuidaUpload(kernel, self.commands)
         # The rotary. Machine-wide, stored on the device service, and applied while the
         # plan is being built — so the runner needs to know about it, not the routes: a
         # job, a tile run, the preview and the exact estimate all go through there.
@@ -1628,7 +1628,7 @@ class ApiServer:
             puts both in the headers, so an upload that half arrived can say so
             in the reader's own language.
             """
-            return manage(self.upload.upload, str((body or {}).get("name") or ""))
+            return manage(self.ruida_upload.upload, str((body or {}).get("name") or ""))
 
         @app.patch("/api/design/elements/{element_id}/text", dependencies=write)
         def update_text(element_id: str, body: dict):

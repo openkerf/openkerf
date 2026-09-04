@@ -1665,7 +1665,7 @@ def a_server_with_a_fake_line(kernel, tmp_path, monkeypatch, **kwargs):
     from openkerf_api.server import ApiServer
 
     server = ApiServer(kernel, library_path=tmp_path / "u.db")
-    session = a_fake_session(server.upload, monkeypatch, **kwargs)
+    session = a_fake_session(server.ruida_upload, monkeypatch, **kwargs)
     return server, session
 
 
@@ -1728,7 +1728,7 @@ def test_the_route_puts_the_file_there_and_starts_nothing(
     Starting is done on the machine's own panel; nothing this route does may
     reach the queue the live device's thread executes. Measured from outside the
     module, because the route is where a second path to the spooler would be
-    added — `manage(self.upload.upload, ...)` and nothing else beside it.
+    added — `manage(self.ruida_upload.upload, ...)` and nothing else beside it.
     """
     from fastapi.testclient import TestClient
 
@@ -1781,9 +1781,12 @@ def test_the_numbers_of_a_half_upload_reach_the_client(
     from fastapi.testclient import TestClient
 
     a_rectangle(ruida)
-    server, _ = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch, busy_forever=True)
-    server.upload.per_chunk_seconds = 0.2
-    blocks = len(server.upload.frames("BORD", server.upload.runner.build_job_bytes())) - 2
+    server, _ = a_server_with_a_fake_line(
+        ruida, tmp_path, monkeypatch, busy_forever=True
+    )
+    upload = server.ruida_upload
+    upload.per_chunk_seconds = 0.2
+    blocks = len(upload.frames("BORD", upload.runner.build_job_bytes())) - 2
     with TestClient(server.build_app()) as client:
         response = client.post("/api/machine/upload", json={"name": "BORD"})
 
@@ -1824,6 +1827,13 @@ def test_an_upload_while_a_job_is_burning_is_refused(ruida, monkeypatch):
     (`ruida/controller.py:119`) empties that queue in one go, and the machine
     goes on burning for minutes afterwards. An empty queue is not a quiet
     machine.
+
+    What the two streams do to each other was measured against the engine's own
+    emulator — a burn of 5463 bytes with the whole upload conversation dropped in
+    halfway lands in **one** `RDJob`, with `program_mode` already `False` in the
+    middle of the burn and **0** parse failures to show for it. The numbers, and
+    the part of it that stays an assumption, are at the check itself in
+    `ruida_upload.py`.
 
     Checked before `_session()` and therefore before the job is built, so a
     refusal costs a sentence and not a plan.
@@ -1960,3 +1970,175 @@ def test_a_stall_partway_says_the_file_is_incomplete(ruida, monkeypatch, deferri
     assert 0 < sent < blocks, error.value.values
     assert f"{sent} of {blocks}" in said, said
     assert "incomplete" in said.lower() and "delete" in said.lower(), said
+
+
+def test_a_nameless_body_still_gets_no_further_than_the_connection(
+    ruida, tmp_path, monkeypatch
+):
+    """
+    Which guard a body with no name actually meets, measured rather than assumed.
+
+    `test_write_actions.py` calls this route with `{}` to prove the token gate
+    holds, and its comment has to say what would happen if the gate were gone.
+    The answer is not the name: `_upload()` asks for a live session before it
+    looks at the name at all, so on a machine that has never been connected the
+    code is `upload.notConnected`, and with no device `upload.noMachine`. Either
+    way nothing is built and nothing goes out, which is what that comment is
+    really claiming — but a comment that names the wrong guard is one somebody
+    reads a safety argument out of later.
+
+    Deliberately not `a_server_with_a_fake_line`: the point is the *real*
+    `_session()`, on the `-i` service that has no session.
+    """
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(ruida, library_path=tmp_path / "u.db")
+    with TestClient(server.build_app()) as client:
+        response = client.post("/api/machine/upload", json={})
+
+    assert response.status_code == 409, response.text
+    assert response.headers["X-OpenKerf-Error"] == "upload.notConnected"
+
+
+class _NoMachine:
+    """A kernel with no active device, and nothing else about it changed.
+
+    `_device()` reads `kernel.device` and this has none, which is the whole of
+    what `upload.noMachine` is about. Standing a bare object in front of the
+    upload rather than blanking the live kernel's `device`: that attribute is
+    read by the status reader, the event bridge and the engine's own threads, and
+    setting it to `None` under a running service hangs the test run — measured,
+    the case never finished and had to be killed. A test about a missing machine
+    has no business stopping the machinery around it.
+    """
+
+
+def _no_machine(server, session, monkeypatch):
+    upload = server.ruida_upload
+    # The real `_session()` back first, because `_device()` is what raises this
+    # and the fake line replaces the whole path to it — with `_session` patched,
+    # this case would have passed through to a *connected* line and proved
+    # nothing. `_write` stays on the fake, so there is still no way out to a
+    # machine; there is simply nothing here to write to.
+    monkeypatch.setattr(upload, "_session", type(upload)._session.__get__(upload))
+    monkeypatch.setattr(upload, "kernel", _NoMachine())
+
+
+def _an_empty_job(server, session, monkeypatch):
+    monkeypatch.setattr(
+        server.ruida_upload.runner, "build_job_bytes", lambda *a, **kw: b""
+    )
+
+
+def _one_command_over_a_block(server, session, monkeypatch):
+    # A single command of 1201 bytes: one byte >= 0x80 and 1200 that are not, so
+    # `parse_commands` gives one command and `_blocks` cannot cut it. Measured in
+    # `test_a_command_longer_than_a_block_refuses_before_anything_goes_out`.
+    monkeypatch.setattr(
+        server.ruida_upload.runner,
+        "build_job_bytes",
+        lambda *a, **kw: b"\x88" + b"\x11" * 1200,
+    )
+
+
+def _a_line_that_breaks_on_the_first_write(server, session, monkeypatch):
+    session.fail_after = 0
+
+
+def _an_upload_already_running(server, session, monkeypatch):
+    """Hold the lock the way a first upload holds it, and hand back the release.
+
+    Returned rather than released here, so it happens in the test's `finally`: a
+    lock left held would refuse every upload after it for the life of that
+    server.
+    """
+    server.ruida_upload._sending.acquire()
+    return server.ruida_upload._sending.release
+
+
+def _nothing_on_the_bed(server, session, monkeypatch):
+    server.kernel.elements.clear_all()
+
+
+@pytest.mark.parametrize(
+    "arrange, code, values",
+    [
+        (_no_machine, "upload.noMachine", None),
+        (_an_empty_job, "upload.emptyFile", None),
+        (
+            _one_command_over_a_block,
+            "upload.commandTooLong",
+            {"block": 1201, "limit": CHUNK},
+        ),
+        (
+            _a_line_that_breaks_on_the_first_write,
+            "upload.interrupted",
+            {"sent": 0, "chunks": 1},
+        ),
+        (_an_upload_already_running, "upload.busy", None),
+        (_nothing_on_the_bed, "job.nothingToBurn", None),
+    ],
+)
+def test_every_refusal_travels_out_through_the_route(
+    ruida, tmp_path, monkeypatch, arrange, code, values
+):
+    """
+    Every code this route can answer with, seen coming out of the route.
+
+    Four of them already had a test of their own from outside
+    (`notConnected`, `needsName`, `stalled`, `whileBurning`); these are the rest
+    of what `ruida_upload.py` and `build_job_bytes` raise, and each is arranged
+    for real rather than by making `upload()` throw. That matters most for
+    `commandTooLong`, the second code that carries numbers: a refusal whose
+    `values` never leave the module is a sentence the panel cannot say in the
+    reader's language, and nothing until now proved they leave.
+
+    `upload.notRuida` is the one code missing here, because this fixture's
+    machine *is* a Ruida — it has a test beside this one.
+    """
+    import json
+
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    server, session = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch)
+    undo = arrange(server, session, monkeypatch)
+    try:
+        with TestClient(server.build_app()) as client:
+            response = client.post("/api/machine/upload", json={"name": "BORD"})
+    finally:
+        if undo is not None:
+            undo()
+
+    assert response.status_code == 409, response.text
+    assert response.headers["X-OpenKerf-Error"] == code
+    assert response.json()["detail"].endswith("."), response.json()["detail"]
+    if values is None:
+        assert "X-OpenKerf-Error-Values" not in response.headers
+    else:
+        assert json.loads(response.headers["X-OpenKerf-Error-Values"]) == values
+    assert not session.written, "bytes went out on a refusal"
+
+
+def test_a_non_ruida_machine_refuses_through_the_route(kernel, tmp_path, monkeypatch):
+    """
+    The last of the codes, on the only machine that can raise it.
+
+    The plain `kernel` fixture's device is the dummy from `conftest.py`, which
+    keeps no `RDJob`. The fake line gets `upload()` past `_session()` so the
+    refusal comes from `build_job_bytes`, where it belongs, rather than from the
+    connection check in front of it.
+    """
+    from fastapi.testclient import TestClient
+
+    a_rectangle(kernel)
+    server, session = a_server_with_a_fake_line(kernel, tmp_path, monkeypatch)
+    with TestClient(server.build_app()) as client:
+        response = client.post("/api/machine/upload", json={"name": "BORD"})
+
+    assert response.status_code == 409, response.text
+    assert response.headers["X-OpenKerf-Error"] == "upload.notRuida"
+    assert not session.written
