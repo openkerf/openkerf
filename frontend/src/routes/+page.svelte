@@ -16,6 +16,7 @@
 	import { saveFile } from '$lib/saving';
 	import type { Tool } from '$components/ToolRail.svelte';
 	import { LibraryStore } from '$lib/library.svelte';
+	import { ProjectsStore } from '$lib/projects.svelte';
 	import { StatusConnection } from '$lib/status.svelte';
 	import { connection } from '$lib/connection.svelte';
 	import Canvas from '$components/Canvas.svelte';
@@ -25,6 +26,8 @@
 	import StatusBar from '$components/StatusBar.svelte';
 	import ToolRail from '$components/ToolRail.svelte';
 	import Dialog from '$components/Dialog.svelte';
+	import Projects from '$components/Projects.svelte';
+	import UnsavedChanges from '$components/UnsavedChanges.svelte';
 	import MaterialLibrary from '$components/MaterialLibrary.svelte';
 	import Generators from '$components/Generators.svelte';
 	import CameraCalibration from '$components/CameraCalibration.svelte';
@@ -59,6 +62,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		historyActions,
 		arrangeActions,
 		alignActions,
+		projectActions,
 		type Action,
 		type Context as ActionContext,
 		type Handlers,
@@ -85,6 +89,15 @@ import { SeriesStore } from '$lib/series.svelte';
 	const token = () =>
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
 	const library = new LibraryStore(token);
+	const projects = new ProjectsStore();
+	// `DesignStore` does not know about `ProjectsStore` — the two are built
+	// independently here, as `library` and `edits` are — so this is done here rather
+	// than inside `design.load()`. Every snapshot from `/api/design` already carries
+	// `project` and `dirty`; this is the one place that reads them into the store the
+	// top bar, the keyboard and the Projects window all follow.
+	$effect(() => {
+		projects.follow(design.design);
+	});
 	const edits = new EditController(() =>
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '')
 	);
@@ -196,12 +209,20 @@ import { SeriesStore } from '$lib/series.svelte';
 	// and one of them gets it from the status payload rather than from its own load.
 	const series = new SeriesStore(token);
 	/** An action that replaces the current work, awaiting a yes. */
-	type Replacement = { kind: 'project'; file: File } | { kind: 'fresh' };
+	type Replacement =
+		| { kind: 'project'; file: File }
+		| { kind: 'fresh' }
+		| { kind: 'server'; name: string };
 	let pending = $state<Replacement | null>(null);
-	/** Timestamp of the recovery file that would survive this action. */
-	let recoverable = $state<string | null>(null);
-	/** Which question is up now; a late answer to an older one does not count. */
-	let questionCounter = 0;
+	/** The Projects window: open, and in which mode. */
+	let projectsOpen = $state(false);
+	let projectsMode = $state<'open' | 'saveAs'>('open');
+	/** The unsaved-changes question, in front of `pending`. */
+	let unsavedOpen = $state(false);
+	/** What to do once a save started from the question has landed. */
+	let afterSave: (() => Promise<void>) | null = null;
+	/** The hidden file field behind Upload…, clicked from the project menu. */
+	let fileInput = $state<HTMLInputElement | null>(null);
 	// Work from a previous session. Never restore it silently: anybody who wants to
 	// start with an empty canvas must be able to.
 	let recovery = $state<{ exists: boolean; when: string | null } | null>(null);
@@ -295,38 +316,25 @@ import { SeriesStore } from '$lib/series.svelte';
 	}
 
 	/**
-	 * Both actions that replace the current work ask the same question.
+	 * New, Open… and Upload… all replace the whole of the work, so they ask first
+	 * when there is something to lose.
 	 *
-	 * Opening a project file went straight over it without a word — including the
-	 * sheets, because those come along from the file. That is the worst form: throwing
-	 * work away silently. Importing is no longer among these: it adds, so there is
-	 * nothing to lose.
-	 *
-	 * Both of them replace *all* the sheets, so yesterday's box counts too, even when
-	 * the sheet you see now is empty.
+	 * The question used to fire on any work at all, saved or not — reasonable before
+	 * there was a server to save to, since nothing on the bed had a second copy
+	 * anywhere. Now that a project can be saved and reopened, a design that matches
+	 * what is saved (`design.dirty` is false) loses nothing by being replaced: it is
+	 * still there, under its name, in the Projects window. Only unsaved changes are
+	 * worth a question, and the question is the ordinary Save / Discard / Cancel
+	 * triptych every desktop app uses (`UnsavedChanges.svelte`).
 	 */
 	async function maybeAskFirst(action: Replacement) {
 		const thereIsWork = !design.isEmpty || sheets.sheets.length > 1;
-		if (!thereIsWork) {
+		if (!thereIsWork || !design.dirty) {
 			await runIt(action);
 			return;
 		}
-		recoverable = null;
 		pending = action;
-		// What can still be recovered *after* this action changes what you choose — so
-		// it is in the question. Only for a changed design: a design identical to a file
-		// on disk has the recovery file cleaned up (`autosave.forget_if_saved`), so then
-		// the promise would not hold.
-		if (!design.dirty) return;
-		// A counter and not a comparison with `action`: `$state` hands back a proxy, so
-		// `pending === action` is always false and the answer never arrived. Measured:
-		// the autosave existed, the design was dirty, and the line
-		// bleef gone.
-		const number = ++questionCounter;
-		const response = await fetch('/api/design/autosave');
-		if (!response.ok) return;
-		const staat = await response.json();
-		if (questionCounter === number && pending !== null && staat.exists) recoverable = staat.when;
+		unsavedOpen = true;
 	}
 
 	/** Starting over. See `/api/project/new`: the library stays. */
@@ -338,6 +346,13 @@ import { SeriesStore } from '$lib/series.svelte';
 	async function runIt(action: Replacement) {
 		if (action.kind === 'project') {
 			await laadProject(action.file);
+		} else if (action.kind === 'server') {
+			// Same reloads as `laadProject`: a server project carries library and sheets
+			// along too.
+			if (await projects.open(action.name)) {
+				design.select(null);
+				await Promise.all([design.load(), library.load(), sheets.load()]);
+			}
 		} else {
 			const response = await fetch('/api/project/new', {
 				method: 'POST',
@@ -347,6 +362,42 @@ import { SeriesStore } from '$lib/series.svelte';
 			design.select(null);
 			await Promise.all([design.load(), sheets.load()]);
 		}
+	}
+
+	/**
+	 * Save under the name already in use; an untitled project has none, so that
+	 * goes through Save as… instead.
+	 *
+	 * `afterSave` is how the unsaved-changes question chains into the action it was
+	 * guarding: "Save" there sets it to run `pending` once the save has actually
+	 * landed, so a failed save never throws away what it was meant to protect.
+	 */
+	async function saveProject() {
+		if (projects.current?.name) {
+			const entry = await projects.save(projects.current.name);
+			if (entry) await afterSave?.();
+			afterSave = null;
+			return;
+		}
+		saveProjectAs();
+	}
+	function saveProjectAs() {
+		projectsMode = 'saveAs';
+		projectsOpen = true;
+	}
+	function openProjects() {
+		projectsMode = 'open';
+		projectsOpen = true;
+	}
+	/**
+	 * Through `saveFile`, not a bare `<a download>`: the server calls
+	 * `document.clean()` on this route (`saving.ts` carries the measurement), and a
+	 * download that does not also refresh `design` leaves the top bar's dot lit and
+	 * the New/Open/Upload question firing over nothing.
+	 */
+	async function downloadProject() {
+		const name = `${projects.current?.name ?? 'project'}.openkerf`;
+		if (await saveFile('/api/project/export.openkerf', name)) await design.load();
 	}
 
 	function authHeaders(): Record<string, string> {
@@ -392,26 +443,6 @@ import { SeriesStore } from '$lib/series.svelte';
 	async function placeImage(file: File) {
 		if (!canEdit) return;
 		if ((await control.load(file)) !== null) await design.load();
-	}
-
-	async function saveThenOpen() {
-		const action = pending;
-		pending = null;
-		if (!action) return;
-		// Downloading counts as saving: the API marks the design clean. Both actions
-		// that get here replace *all* the sheets, so what is kept is the whole project
-		// and not an SVG of the active sheet — that would be half a rescue.
-		//
-		// Wait until the file really is there, and do not hope for 800 ms: the next
-		// thing that happens empties the bed. If the save fails, the emptying does not
-		// go ahead and the dialog is still up.
-		const saved = await saveFile('/api/project/export.openkerf', 'project.openkerf');
-		if (!saved) {
-			pending = action;
-			return;
-		}
-		await design.load();
-		await runIt(action);
 	}
 
 	async function draw(shape: Record<string, unknown>) {
@@ -1096,16 +1127,15 @@ import { SeriesStore } from '$lib/series.svelte';
 		selectOne: (id) => design.select(id),
 		setLocked: (locked) => lockSelection(locked),
 		duplicates: () => lookForDuplicates(),
-		// The project verbs themselves — the button, the menu and the dialogs behind
-		// them — are built in the next round; `projectActions` is not offered from this
-		// page yet, so these six are unreachable. They exist only so `Handlers` (which
-		// every verb must satisfy) type-checks here too.
-		newProject: () => {},
-		openProjects: () => {},
-		saveProject: () => {},
-		saveProjectAs: () => {},
-		downloadProject: () => {},
-		uploadProject: () => {}
+		// The project verbs: the button in the top bar, its menu and the two dialogs
+		// behind it. `newProject` already existed for the tool rail's own menu; the
+		// other five are defined above, beside it.
+		newProject,
+		openProjects,
+		saveProject,
+		saveProjectAs,
+		downloadProject,
+		uploadProject: () => fileInput?.click()
 	};
 
 	/**
@@ -1192,6 +1222,16 @@ import { SeriesStore } from '$lib/series.svelte';
 				chosen.length > 0 &&
 				chosen.every((e) => Boolean((e as { once?: boolean }).once))
 		};
+	});
+
+	/**
+	 * The project menu: New and Open… above a separator, Save through Upload… below —
+	 * the same split the six rows always had, now built from `projectActions` instead
+	 * of being written out by hand in `TopBar.svelte`.
+	 */
+	let projectMenu = $derived.by<MenuList>(() => {
+		const rows = projectActions(actionContext, handlers);
+		return [{ items: [...rows.slice(0, 4), 'separator', ...rows.slice(4)] }];
 	});
 
 	/**
@@ -1338,7 +1378,19 @@ import { SeriesStore } from '$lib/series.svelte';
 			[KEYS.zoomSelectionLightburn]: () => handlers.zoom('selection'),
 			[KEYS.cutPath]: handlers.cutPath,
 			[KEYS.zoomIn]: () => canvasControl?.step(1.25),
-			[KEYS.zoomOut]: () => canvasControl?.step(1 / 1.25)
+			[KEYS.zoomOut]: () => canvasControl?.step(1 / 1.25),
+			// The project menu's own three shortcuts. `refusedRow` below only searches the
+			// object and canvas menus, so these carry their own refusal — the same one
+			// `projectActions` computes for the rows themselves.
+			[KEYS.open]: () => {
+				if (!writeRefusal(actionContext)) handlers.openProjects();
+			},
+			[KEYS.save]: () => {
+				if (!writeRefusal(actionContext)) handlers.saveProject();
+			},
+			[KEYS.saveAs]: () => {
+				if (!writeRefusal(actionContext)) handlers.saveProjectAs();
+			}
 		};
 		const action = run[combo];
 		if (action) {
@@ -1380,6 +1432,20 @@ import { SeriesStore } from '$lib/series.svelte';
 		const root = document.documentElement;
 		root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
 	}
+
+	/** Closing the tab with unsaved work asks too — the browser's own wording, not
+	 *  ours, but the flag behind it is `design.dirty`, the same one the project
+	 *  button's dot and the New/Open/Upload question read. */
+	$effect(() => {
+		const warn = (e: BeforeUnloadEvent) => {
+			if (design.dirty) {
+				e.preventDefault();
+				e.returnValue = t('unsaved.leave');
+			}
+		};
+		window.addEventListener('beforeunload', warn);
+		return () => window.removeEventListener('beforeunload', warn);
+	});
 </script>
 
 <svelte:window bind:innerWidth={width} onkeydown={sneltoets} />
@@ -1427,8 +1493,6 @@ import { SeriesStore } from '$lib/series.svelte';
 	onStart={requestStart}
 	onStop={() => control.stop()}
 	onOpenFile={openFile}
-	onOpenProject={openProject}
-	onNewProject={newProject}
 	onSaved={() => design.load()}
 	material={sheetMaterial}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
@@ -1442,6 +1506,25 @@ import { SeriesStore } from '$lib/series.svelte';
 		control.frame();
 	}}
 	onToggleTheme={toggleTheme}
+	projectName={projects.current?.name ?? null}
+	dirty={design.dirty}
+	{projectMenu}
+/>
+<!-- Upload…: a local .openkerf/.zip file replaces the work, same as opening one always
+     did — `project.upload`'s handler clicks this. Not visible, and not in TopBar: one
+     hidden field for the one route that needs it. -->
+<input
+	bind:this={fileInput}
+	type="file"
+	style="position: absolute; width: 0; height: 0; opacity: 0;"
+	aria-label={t('topbar.project.pick')}
+	accept=".openkerf,.zip"
+	onchange={(e) => {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (file) openProject(file);
+	}}
 />
 
 <div class="main">
@@ -1824,60 +1907,41 @@ import { SeriesStore } from '$lib/series.svelte';
 	</div>
 </Dialog>
 
-<!-- Opening a project and starting over both throw work away: ask first, with the
-     same words and the same way out. Importing is not among them — that adds. -->
-<Dialog
-	title={pending?.kind === 'fresh'
-		? t('replace.title.new')
-		: design.dirty
-			? t('replace.title.unsaved')
-			: t('replace.title.project')}
-	open={pending !== null}
-	width="510px"
->
-	<!-- Two occasions, two sentences. "Changed since it was last saved" above a
-	     drawing you have just opened is untrue, and a question that claims something
-	     you can contradict yourself is one you learn to click away. -->
-	<p class="ask">
-		{#if design.dirty}
-			{t('replace.changed')}
-		{:else}
-			{t('replace.workInProject')}
-		{/if}
-		{#if pending?.kind === 'project'}
-			{t('replace.opensProject', { n: sheets.sheets.length })}
-		{:else if sheets.sheets.length === 1}
-			{t('replace.emptiesBed')}
-		{:else}
-			{t('replace.emptiesSheets', { n: sheets.sheets.length })}
-		{/if}
-	</p>
-	{#if recoverable}
-		<!-- What can be recovered regardless belongs in the question; it changes what
-		     you choose. Only *this* sheet, because that is as far as the recovery file
-		     reaches — and we name that boundary. -->
-		<p class="ask nuance">{t('replace.recoverable', { when: recoverable })}</p>
-	{/if}
-	<div class="ask-actions">
-		<button class="btn" onclick={() => (pending = null)}>{t('common.cancel')}</button>
-		<button
-			class="btn"
-			onclick={() => {
-				const action = pending;
-				pending = null;
-				if (action) runIt(action);
-			}}
-		>{t('replace.dontSave')}</button>
-		<!-- Cancel / Do not save / Save: the triptych every operating system uses for
-		     this question. "Open without saving" was there first, and then the three
-		     buttons do not fit on one line — measured at 1024: the primary one dropped
-		     to a line of its own. The verbs are already in the title and the sentence
-		     above. -->
-		<button class="btn primary" onclick={saveThenOpen}
-			>{pending?.kind === 'fresh' ? t('replace.saveAndStart') : t('replace.saveAndOpen')}</button
-		>
-	</div>
-</Dialog>
+<!-- The Projects window: Open… lists what is on the server, Save as… puts the work
+     there under a name. One component, `mode` says which. -->
+<Projects
+	{projects}
+	bind:open={projectsOpen}
+	mode={projectsMode}
+	onOpen={(name) => {
+		projectsOpen = false;
+		maybeAskFirst({ kind: 'server', name });
+	}}
+	onSaved={async () => {
+		await afterSave?.();
+		afterSave = null;
+	}}
+/>
+
+<!-- New, Open… and Upload… all replace the whole of the work: this is the question
+     in front of them when it is not saved. Save chains into Save as… by itself when
+     the project is untitled (`saveProject`), and only runs `pending` once that save
+     has actually landed. -->
+<UnsavedChanges
+	bind:open={unsavedOpen}
+	name={projects.current?.name ?? null}
+	onSave={() => {
+		afterSave = async () => {
+			if (pending) await runIt(pending);
+			pending = null;
+		};
+		saveProject();
+	}}
+	onDiscard={() => {
+		if (pending) runIt(pending);
+		pending = null;
+	}}
+/>
 
 <!-- What lies on top of what: the count, why it matters, and one button that does
      it. A confirm and not a straight action, because the drawing looks identical

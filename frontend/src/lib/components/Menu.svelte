@@ -229,11 +229,17 @@
 	.backdrop {
 		position: fixed;
 		inset: 0;
-		z-index: 90;
+		/* Above a dialog's own backdrop (`--z-dialog`, tokens.css): a row inside a
+		 * window can open one of these (the ⋮ menu in Projects and Series, the
+		 * material picker's row menu), and a lower number here put the dialog's
+		 * backdrop on top of the menu's own rows — clickable to the eye, dead to the
+		 * pointer. Measured: `elementFromPoint` on "Rename" in the Projects window
+		 * answered the dialog's `.backdrop`, not the row. */
+		z-index: calc(var(--z-dialog) + 10);
 	}
 	.menu {
 		position: fixed;
-		z-index: 91;
+		z-index: calc(var(--z-dialog) + 11);
 		min-width: 232px;
 		max-width: 320px;
 		padding: 4px;
