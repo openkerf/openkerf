@@ -85,6 +85,16 @@ Two locks keep it off a real library: the flag, and a library that has to be emp
 makes no machine — that list lives in one `MeerK40t.cfg` for every instance, so creating
 one would put a machine in yours — and it expects the handbook's KH-5030 to be there.
 
+`docs-shots.mjs` expects the same machine and, since this round, will not *make* it so
+either: it used to activate the Ruida when it found another machine active, and that is a
+write in the one file neither `-l` nor `-o` can fence off. Measured, with the KH-5030
+already active: a whole run leaves `MeerK40t.cfg` byte for byte identical. Measured with
+`lihuiyu-device` active instead: the run wrote `activated_device = ruida` at once — taking
+a photograph changed which laser the reader's own app opens on. Putting it back is not
+enough either, and that is measured too: after the Ruida was activated again, `[space]`
+still held the K40's 310 × 210 mm bed where the Ruida's 500 × 300 belongs. So the script
+asks and refuses, and activating the right machine is a thing you do yourself.
+
 Three things worth knowing before you run it:
 
 - **A row that says it was measured needs a board behind it.** Give a preset

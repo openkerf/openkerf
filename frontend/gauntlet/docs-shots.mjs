@@ -51,23 +51,48 @@ async function api(method, path, body) {
 }
 
 /**
- * The machine the handbook is written around.
+ * The machine the handbook is written around — asked after, never set.
  *
- * Every picture has a bed in it and half the prose quotes its size, so which machine
- * is active is part of the state a shot needs — as much as the shapes on the bed.
- * Left to chance it goes wrong quietly: a run made while `lihuiyu-device` happened to
- * be active gave a bed of 310 × 210 mm in every picture, and the tiling shot (a plate
- * of 900 × 280 mm) then overhung the bed in *both* directions, so the app refused to
- * divide it and the picture showed no tiles at all — while the page beside it explains
- * the seam. That is the engine's own fallback biting (CLAUDE.md: the chosen machine is
- * only written at a clean shutdown), not somebody's choice, so the script puts it back.
+ * Every picture has a bed in it and half the prose quotes its size, so which machine is
+ * active is part of the state a shot needs, as much as the shapes on the bed. Left to
+ * chance it goes wrong quietly: a run made while `lihuiyu-device` happened to be active
+ * gave a bed of 310 × 210 mm in every picture, and the tiling shot (a plate of 900 × 280
+ * mm) then overhung the bed in *both* directions, so the app refused to divide it and the
+ * picture showed no tiles at all — while the page beside it explains the seam.
+ *
+ * This used to *activate* the Ruida when it found another machine active, and that is a
+ * write in the one file this script cannot fence off: the machine list lives in a single
+ * `MeerK40t.cfg` for every instance on the computer, keyed to the kernel name, and
+ * `-P/--profile` does not reach it (CLAUDE.md). Measured, with the KH-5030 active before
+ * the run: a whole run — seeding, shot, tidy shutdown — leaves that file byte for byte
+ * identical, because this function returns straight away. Measured with `lihuiyu-device`
+ * active instead: the run wrote `activated_device = ruida` at once, so taking a photograph
+ * changed which laser the reader's own app opens on.
+ *
+ * Putting it back afterwards is not the answer, and that too is measured: activating a
+ * machine does not carry the bed with it. After the Ruida had been activated, `[space]`
+ * still held the K40's 310 × 210 (`width = 799836.61`, ratio 1.476) where the Ruida's
+ * 500 × 300 belongs (`1290059.06`, ratio 1.667). A tidy-up that restores one key and
+ * leaves another wrong is worse than not touching either.
+ *
+ * So it asks, and refuses. What a script measures it may press; the reader's choice of
+ * laser is not part of what it measures.
  */
-async function useTheHandbookMachine() {
+async function theHandbookMachineIsActive() {
 	const machines = (await api('GET', '/api/machines')) ?? [];
 	const wanted = machines.find((m) => m.path === 'ruida');
-	if (!wanted || wanted.active) return;
-	console.log(`activating ${wanted.label} — the handbook's machine`);
-	await api('POST', '/api/machines/ruida/activate');
+	if (wanted?.active) return;
+	const active = machines.find((m) => m.active);
+	console.error(
+		`Refusing: the handbook's pictures are of the KH-5030 and a bed of 500 x 300 mm, ` +
+			`and the machine that is active here is ${active ? active.label : 'none'}.\n` +
+			'This script will not switch it over: the machine list lives in one MeerK40t.cfg ' +
+			'for every instance on this computer, so activating another laser here changes ' +
+			'which one your own app opens on — and the bed does not come back with it.\n' +
+			'Activate the KH-5030 yourself, in the app or with `device activate ruida`, and run ' +
+			'this again.'
+	);
+	process.exit(1);
 }
 
 /**
@@ -341,7 +366,7 @@ async function ownLayerList() {
 // ------------------------------------------------------------ the browser side
 
 await ownLayerList();
-await useTheHandbookMachine();
+await theHandbookMachineIsActive();
 
 const browser = await chromium.launch();
 
