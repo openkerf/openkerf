@@ -941,62 +941,83 @@
 				Showing the frame is on the same line: it is the last check before that
 				same button, so it belongs beside it and not three blocks higher.
 			-->
-			<!--
-				Sending the job to the machine's memory instead of burning it.
-
-				What LightBurn calls "send": the file goes down the cable, the machine
-				keeps it, and you start it there. So this is not a second start button
-				and it is not on the sticky footer beside one — it is the other thing
-				you can do with a job that is ready, folded shut until you want it.
-
-				One tap, not two. VEILIGHEID.md asks for two deliberate taps for
-				everything that burns; this puts a file down and moves nothing, and a
-				confirmation in front of something that sets nothing in motion only
-				teaches people to click through confirmations.
-			-->
-			<details class="pf-upload">
-				<summary>{t('job.upload')}</summary>
-				<p class="pf-row">{t('job.upload.why')}</p>
-				<div class="pf-uploadrow">
-					<label class="name">
-						<span>{t('job.upload.name')}</span>
-						<!-- Cut to what the machine keeps while you type, not afterwards:
-						     the panel of the machine shows eight capitals without spaces,
-						     and the first place to find that out is the keyboard, not the
-						     machine. -->
-						<input
-							class="mono"
-							type="text"
-							maxlength="8"
-							value={fieldText}
-							disabled={Boolean(uploadOff)}
-							title={uploadOff ?? t('job.upload.name')}
-							oninput={nameTyped}
-							oncompositionend={nameTyped}
-						/>
-					</label>
-					<button
-						class="btn"
-						disabled={Boolean(uploadOff) || control.busy !== null || uploadName === ''}
-						title={uploadOff ??
-							(control.busy !== null
-								? t('reason.busy')
-								: uploadName === ''
-									? t('reason.needsName')
-									: t('job.upload.why'))}
-						onclick={sendToMachine}
-					>
-						{control.busy === 'upload' ? t('job.upload.sending') : t('job.upload.send')}
-					</button>
-				</div>
-				{#if uploaded}
-					<!-- `role="status"` and not `alert`: this is the answer to something
-					     that went well, and it says where the job is now — on the machine,
-					     waiting for a hand on its own panel. -->
-					<p class="pf-row good" role="status">{t('job.upload.done', { name: uploaded })}</p>
-				{/if}
-			</details>
 			<div class="pf-stick">
+				<!--
+					Sending the job to the machine's memory instead of burning it.
+
+					What LightBurn calls "send": the file goes down the cable, the
+					machine keeps it, and you start it there. The other thing you can do
+					with a job that is ready, so it lives beside the button that burns
+					one — folded shut, because it is not the one you came for.
+
+					In the footer, and that is the whole of this block's history. It sat
+					just above the footer, which is the one place in this column where a
+					control cannot be seen: the footer is sticky, and when the column is
+					longer than the panel it floats up over whatever is last in the
+					flow. Measured at 1440 x 900 with the panel as it opens — the fold at
+					y=738 and the footer's top at y=705, `elementFromPoint` in the middle
+					of the summary answering `LI` (a line of the checklist), and a real
+					mouse click on those coordinates leaving `details.open` false. At
+					1280 x 800 the same click landed on `DIV.pf-actions`; only at
+					1920 x 1080, where the column fits, did it answer `SUMMARY` and open.
+					Scrolling did reach it — the summary is on top from 60 px of scroll
+					onwards, over a band of 600 of the 763 the panel scrolls — but a
+					control you cannot see at rest is one nobody scrolls for. The
+					checklist below learned this same lesson one round earlier and moved
+					here for the same reason.
+
+					No test saw it, and that is worth its own line: `locator.click()`
+					scrolls the element into view first, so Playwright clicks a control
+					under a sticky footer perfectly happily. The measurement has to be a
+					mouse click on coordinates.
+
+					One tap, not two. VEILIGHEID.md asks for two deliberate taps for
+					everything that burns; this puts a file down and moves nothing, and a
+					confirmation in front of something that sets nothing in motion only
+					teaches people to click through confirmations.
+				-->
+				<details class="pf-upload">
+					<summary>{t('job.upload')}</summary>
+					<p class="pf-row">{t('job.upload.why')}</p>
+					<div class="pf-uploadrow">
+						<label class="name">
+							<span>{t('job.upload.name')}</span>
+							<!-- Cut to what the machine keeps while you type, not afterwards:
+							     the panel of the machine shows eight capitals without spaces,
+							     and the first place to find that out is the keyboard, not the
+							     machine. -->
+							<input
+								class="mono"
+								type="text"
+								maxlength="8"
+								value={fieldText}
+								disabled={Boolean(uploadOff)}
+								title={uploadOff ?? t('job.upload.name')}
+								oninput={nameTyped}
+								oncompositionend={nameTyped}
+							/>
+						</label>
+						<button
+							class="btn"
+							disabled={Boolean(uploadOff) || control.busy !== null || uploadName === ''}
+							title={uploadOff ??
+								(control.busy !== null
+									? t('reason.busy')
+									: uploadName === ''
+										? t('reason.needsName')
+										: t('job.upload.why'))}
+							onclick={sendToMachine}
+						>
+							{control.busy === 'upload' ? t('job.upload.sending') : t('job.upload.send')}
+						</button>
+					</div>
+					{#if uploaded}
+						<!-- `role="status"` and not `alert`: this is the answer to something
+						     that went well, and it says where the job is now — on the machine,
+						     waiting for a hand on its own panel. -->
+						<p class="pf-row good" role="status">{t('job.upload.done', { name: uploaded })}</p>
+					{/if}
+				</details>
 				<!-- The checklist travels with the button.
 
 				     It used to stand in the column above this footer, and with four
@@ -1733,10 +1754,10 @@
 	/* ── Sending it to the machine ─────────────────────────────────────────── */
 	/* Folded shut: it is the other thing you can do with a ready job, not a second
 	   start button, so it must not compete with the one on the footer below it. */
+	/* No border and no margin of its own: it sits inside the footer, whose own top
+	   border and gap already separate it from the column above. */
 	.pf-upload {
-		margin: var(--space-3) 0 0;
-		border-top: 1px solid var(--line);
-		padding-top: var(--space-2);
+		margin: 0;
 	}
 	.pf-upload > summary {
 		cursor: pointer;
