@@ -56,6 +56,8 @@ OPENKERF_TOKEN=
 
 # Where the app listens on the host. Host networking: this is the host's port directly.
 OPENKERF_PORT=8080
+# The container's healthcheck talks to 127.0.0.1, so leave this at 0.0.0.0 (or otherwise
+# include loopback) — binding to one LAN address only shows the container as unhealthy.
 OPENKERF_BIND=0.0.0.0
 ```
 
@@ -83,11 +85,18 @@ Make a token with `openssl rand -base64 24`, put it in `.env`, start again. The
 interface asks for the token once and keeps it in the browser; the [Reference](reference.md)
 says where it lives in the settings.
 
+With `restart: unless-stopped` a missing token is not one refusal but a loop: the
+container exits, Compose starts it again, it refuses again, and so on until `.env` is
+fixed. `docker compose ps` shows the container as restarting rather than stopped for as
+long as this continues.
+
 ## Where the data lives
 
-Everything the engine remembers is under `/data` in the container: `MeerK40t.cfg` (the
-chosen machine and its settings), `operations.cfg` (the layer list), `openkerf-library.db`
-(the material library) and `openkerf-photos/` (the test grid photographs). Compose puts
+Everything the engine remembers is on the volume, under `/data/.config/MeerK40t/` in the
+container: `MeerK40t.cfg` (the chosen machine and its settings), `operations.cfg` (the
+layer list), `openkerf-library.db` (the material library) and `openkerf-photos/` (the
+test grid photographs) — the container's `HOME` is `/data`, and the engine writes to
+`~/.config/MeerK40t` as it always does. Compose puts
 that on a named volume, `openkerf-data`, so `docker compose down` and `up` keep it, and
 so does an update. Measured: a Ruida machine created through the API was still the
 active machine after `docker compose restart`, with all four still on the volume.
@@ -146,8 +155,10 @@ architectures and smoke-tests the image took 9 min 2 s.
 OpenKerf finds a Ruida by broadcast and talks to it on UDP 50200 and 40200, and neither
 crosses Docker Desktop's network the way it does on Linux. Measured on the developer's
 Mac: machine discovery does not work there, and the interface itself was not reachable
-from the browser at all, even with a plain nginx container run the same way. The Linux
-box beside the laser is the setup this page is for.
+from the browser at all, even with a plain nginx container run the same way. Because of
+that, every measurement on this page taken on the Mac came from inside the container —
+`docker exec` and the container's own health status — not from a browser talking to it.
+The Linux box beside the laser is the setup this page is for.
 
 **A laser over USB is not covered in this version.** The compose file has the line
 that would hand the USB bus to the container, commented out, and it has not been tested.
