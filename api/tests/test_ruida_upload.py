@@ -2419,6 +2419,14 @@ def test_stopping_stays_reachable_while_a_file_is_being_sent(ruida, monkeypatch)
     file, so that file is spoilt and has to be deleted from the panel. A spoilt
     file you can delete; a button that would not stop the machine you cannot.
 
+    **This test exists to be in the way.** Every other write on this line is
+    refused during an upload, so stop is now the one asymmetry in the family, and
+    an asymmetry is exactly what somebody tidies up a year later "for
+    consistency" — one line added beside the others, every test still green, and
+    the stop button quietly conditional on the state of a connection. If you are
+    here because this test failed after you added that line: the guard is the
+    mistake, not the test.
+
     Recorded rather than run: `estop` on a Ruida is realtime and this suite has
     no machine. What is asserted is that it gets through the guard.
     """
