@@ -375,6 +375,14 @@ These are all of them:
 | Fill in a speed and a power first | A preset by hand needs both numbers |
 | Nothing in this shape would fall out, so there is nothing to bridge | For the stencil window |
 | There is only one material to merge | Merging needs a second material to merge into |
+| Not possible while a job is running | The machine is busy; sending it a file has to wait until the job is done or stopped |
+| This machine does not keep files in memory; that is a Ruida thing. | Sending a job to the machine's memory is something only a Ruida controller does |
+| There is nothing to burn | Nothing is in a layer that burns, so there is no job to start or to send |
+
+A refusal that only shows up after you press is a different thing, and it is a
+whole sentence rather than a tooltip. The ones for sending a job to the machine's
+memory — a transfer that stops halfway, and what is then left on the panel to
+delete — are written out in [Burning](job.md#sending-the-job-to-the-machine).
 
 On the tool rail the same rule applies with its own wording: a tool you cannot
 use reads "{name} — requires a token", and every tool except Select is off

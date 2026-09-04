@@ -3,7 +3,8 @@
 Everything that puts light on material lives on the **Job** tab of the right-hand
 panel, and in the transport buttons at the right of the top bar. This page walks
 that panel from top to bottom: what the pre-flight shows you before anything
-moves, the cut path you can walk through before pressing anything, what the two
+moves, how to send the job to a Ruida's own memory instead of burning it from
+here, the cut path you can walk through before pressing anything, what the two
 taps that start a job do, what you can see and change while the machine is
 burning, and the controls for moving the head when it is not.
 
@@ -141,6 +142,103 @@ stays there while the rest of the panel scrolls. It used to stand higher up in t
 column, and with four layers the column is longer than the panel is high: measured
 at 1440 by 900, two of the three lines lay behind that strip — the last one behind
 the start button itself.
+
+### Sending the job to the machine
+
+Directly above that strip sits a fold headed **Send to the machine**, shut until
+you open it. It does the other thing you can do with a job that is ready: instead
+of burning it from here, it puts it in the machine's own memory as a file and
+leaves it standing there. The line under the heading says so, and it is also the
+tooltip on the button: "The file goes into the machine and stays there. You start
+it on the machine’s own panel — nothing burns from here."
+
+One caveat about finding it, measured rather than promised: the fold sits in the
+part of the panel that scrolls, and the strip with the checklist lies over the
+foot of that. On a full pre-flight — four layers, the note about the machine not
+responding, the note about unverified presets — the fold ends up underneath that
+strip and there is nothing you can scroll to bring it out. Measured on a window of
+1440 × 900: the fold begins at 738 px and the strip at 705, and a click where the
+fold is opens a line of the checklist instead. At 1440 × 1000 and above it stands
+clear and opens normally. So if the heading is not there, make the window taller.
+
+That is the point of it. Once the file is in the machine, nothing has to stay
+attached while it burns — no laptop on a stool beside the machine, no cable to
+trip over, no sleeping screen halfway through an hour of engraving. You walk to
+the machine, pick the file on its panel and press start there.
+
+This is a Ruida thing. On any other machine the fold is dead and says why: "This
+machine does not keep files in memory; that is a Ruida thing."
+
+> **The app sends. The app does not start.** There is no route in OpenKerf that
+> begins a job in the machine's memory, deliberately. Whatever is sent waits until
+> a hand on the machine's own panel starts it — which is also why this is one tap
+> and starting is [two](#starting-two-taps-never-one). Sending sets nothing in
+> motion, so a confirmation in front of it would only teach you to click through
+> confirmations.
+
+**Name on the machine.** The field beside the button is filled with the name of
+the sheet and you can type over it. What the machine keeps of a name is short:
+**at most eight characters, capitals, letters and digits only**. The field applies
+that rule as you type rather than afterwards, so what stands in the box is exactly
+what will stand on the panel. Type `kastje-groot` and the box reads `KASTJEGR`;
+`my box` becomes `MYBOX`. Accented letters, punctuation and spaces do not arrive
+at all — a character that never appears is one keystroke to notice, where a name
+silently changed on the way is not. With the field empty the button is off and
+says "Type a name first".
+
+Press **Send** and it reads *Sending…* while it goes. When it is done a green line
+appears under the field, with the name the machine confirmed rather than the one
+that was typed: "{name} is in the machine. Start it on the panel." That line goes
+as soon as the name in the field changes, because it is about one file under one
+name.
+
+#### When it will not go
+
+Two things it will not do at all, each with a whole sentence and nothing sent:
+
+- while the machine is burning — "A job is running. Wait until it is done, or stop
+  it: the file would go down the same connection the machine is burning from.
+  Nothing has been sent." The file and the job would share one cable.
+- while another file of yours is already on its way — "This machine is already
+  being sent a file. Wait until that one is done and press again; nothing has been
+  sent." Two at once interleave into one file made of two jobs.
+
+And it needs the machine on the other end: "There is no connection to the machine,
+so the file cannot be sent. Connect first; nothing has been sent."
+
+#### When it stops halfway
+
+The job goes over in blocks, and a machine that stops taking them or stops
+answering breaks off the transfer: "The machine stopped taking the file after 3 of
+6 blocks." or "The machine stopped answering after 3 of 6 blocks." Behind that
+number comes the part you act on, and it is not the number that decides which of
+the four you get but what actually went down the line:
+
+- nothing had gone out yet — "Nothing had gone out, so there is no file on the
+  panel to clean up; send it again."
+- the name went out and no more — "The name went out but no part of the job
+  followed it, so the panel may be showing an empty file under that name: delete
+  it there if it is. None of the job itself was sent." The machine opens the file
+  on the name, so there can be an empty one under it.
+- part of the job went out — "What is on it now is incomplete: delete the file on
+  the panel before you burn anything."
+- all of it went out and only the last acknowledgement did not come back — "Every
+  block went out, including the one that closes the file, but the last one was not
+  acknowledged. The file on the panel may be whole and may be missing its end: look
+  at it there, and send it again if you are in any doubt."
+
+The first two both say "0 of 6 blocks" and ask for opposite things, which is why
+they are two sentences and not one.
+
+#### What has not been tried on a real machine yet
+
+Honest about the state of this: the whole conversation was built and measured
+against the engine's own Ruida emulator — the file arrives there byte for byte
+identical to the `.rd` file this app exports, with no parse failures. What nobody
+has measured yet is a **real** Ruida controller: whether it accepts the file the
+same way, and what its panel makes of the name. If you are the first to try it,
+look at the panel before you burn: the name it lists, and whether the file it
+holds is the one you sent.
 
 ### Nothing to burn
 
