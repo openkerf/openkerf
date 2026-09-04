@@ -225,8 +225,7 @@ lost. Import never has to.
 top bar — "Design, sheets, materials and machine profiles in one file." The
 first time, and every time you choose **Save as…**, a window asks for the name;
 after that **Save project** (⌘S) just saves. The top bar reads "Project ·
-{name}", and a dot in front of the name means there are changes that are not
-saved.
+{name}", and a dot after the name means there are changes that are not saved.
 
 **Project → Open…** (⌘O) shows every project on this server, newest first, the
 open one marked "(current)". Open one with its **Open** button or a double
@@ -234,8 +233,8 @@ click. Behind ⋮ on a row sit **Rename** and **Delete**; deleting asks first:
 "Delete "{name}"? This cannot be undone."
 
 ![The Projects window: the title Projects, a Name and Saved column heading, and
-two rows below it — Kastje, marked (current), and Box panels, saved a moment
-earlier — each with an Open button and a ⋮ button.](images/47-projects.png)
+two rows below it — Kastje, marked (current), and Box panels, saved in the same
+minute — each with an Open button and a ⋮ button.](images/47-projects.png)
 
 If the work has changes that are not saved, **New project**, **Open…** and
 **Upload…** ask first, in a window titled "Unsaved changes": "The changes in
@@ -250,9 +249,9 @@ volume's backup.
 another device: the download is the same file the server keeps, and an
 uploaded file becomes a project here under its own name.
 
-![The top bar with the project button reading Project · Kastje, a dot in front
-of the name, and its menu open underneath, over the sheet tab and canvas: New
-project, Open…, Save project, Save as…, a line, Download and Upload….](images/48-topbar-project.png)
+![The top bar with the project button reading Project · Kastje, then a dot and
+a downward arrow, and its menu open underneath, over the sheet tab and canvas:
+New project, Open…, Save project, Save as…, a line, Download and Upload….](images/48-topbar-project.png)
 
 **Export** beside it does something narrower: "Save this sheet as SVG" — one
 sheet, as a drawing, for another program. It does not carry the layers, the
