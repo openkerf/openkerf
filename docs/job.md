@@ -107,10 +107,15 @@ was measured on something else reassures where it should not.
 A layer this server cannot carry out shows *does not burn* across the whole row
 instead of speed and power.
 
+Above the table, in one line, if any layer's numbers were never measured: "3
+layers use presets that were not verified on a test grid. On unknown material:
+try a scrap first." It stands there rather than at the foot of the panel because
+the foot is where the sticky strip with the checklist lies: measured at 1280x800,
+under the table that line sat entirely behind the strip, and a warning you only
+meet by scrolling to it is no warning.
+
 Under the table, the objections. One line per layer, heaviest first, and when the
-top one really outweighs the bottom one it is tagged **First**. Below those, if
-any layer's numbers were never measured: "3 layers use presets that were not
-verified on a test grid. On unknown material: try a scrap first."
+top one really outweighs the bottom one it is tagged **First**.
 
 **When it goes wrong.** Raster layers do not burn on this server. The pre-flight
 says so before you start: "This server cannot burn raster layers." followed by

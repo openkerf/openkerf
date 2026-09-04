@@ -827,6 +827,24 @@
 			     laser cutter checks speed, power and passes before putting anything in
 			     the machine. -->
 			{#if layers.length}
+				<!-- The general warning above the table and not under it.
+				     Not a matter of taste: this is the last thing in the column, and the
+				     footer is sticky, so the last thing in the column is what the footer
+				     lies over. Measured at 1280 x 800 with the panel as it opens, four
+				     layers on unmeasured presets — the line stood at y 662-726 with the
+				     footer's top at 581, `elementFromPoint` on it answering
+				     `DIV.pf-check`: a warning you only meet by scrolling to it, in a
+				     pre-flight, which is the one screen whose whole job is to say
+				     unasked what is wrong. Above the table it is the table that goes
+				     under the footer instead, and a table is something you work down
+				     anyway.
+
+				     The concrete objections stay below the table, beside the rows they
+				     name. So the order is: what is wrong in one line, the settings, then
+				     which layer is wrong and why. -->
+				{#if risky.length}
+					<p class="pf-warn strong">{t('job.risky', { n: risky.length })}</p>
+				{/if}
 				<table class="pf-layers">
 					<thead>
 						<tr><th>{t('job.layer')}</th><th>mm/s</th><th>%</th><th>×</th><th>{t('job.source')}</th></tr>
@@ -910,9 +928,6 @@
 							</li>
 						{/each}
 					</ul>
-				{/if}
-				{#if risky.length}
-					<p class="pf-warn strong">{t('job.risky', { n: risky.length })}</p>
 				{/if}
 			{/if}
 
