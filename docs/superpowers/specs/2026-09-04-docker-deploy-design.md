@@ -96,8 +96,8 @@ Triggers: push to `main`, tags `v*`, pull requests.
 3. **Smoke test**, on the amd64 image loaded locally, before anything is pushed:
    - start with `OPENKERF_TOKEN=smoke`, wait for the container to report healthy
      (bounded at 60 s);
-   - `GET /api/health` is JSON; `GET /` is HTML containing `<div id=`-something
-     SvelteKit emits, proving the frontend build is inside the image;
+   - `GET /api/health` is JSON; `GET /` is HTML that references `_app/immutable/`, the asset path
+     SvelteKit's static adapter emits, proving the frontend build is inside the image;
    - `docker run --rm <image> python -c "import cv2"` succeeds;
    - start once **without** a token and assert exit code 1 and the sentence.
    The arm64 image is verified only for `import cv2`, under QEMU, because starting the
