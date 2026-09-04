@@ -98,6 +98,36 @@ class Projects:
         return {"name": self.current, "saved_at": self._entry(self._path(self.current))["saved_at"]}
 
     # ------------------------------------------------------------------ writing
+    def _place(self, source: Path, target: Path) -> None:
+        """
+        Get `source` to `target` across a filesystem boundary that may or may not exist.
+
+        Both callers hand this a file that was written somewhere outside `self.folder` —
+        `save()`'s from `Drawing.export_project`'s own `tempfile.mkdtemp()`, `adopt()`'s
+        from wherever the route staged the upload — and neither of those directories is
+        necessarily on the same filesystem as `self.folder`. In the deployed image the
+        projects folder is a mounted volume and the system temp directory is the
+        container's own filesystem, and `os.replace` only renames, it does not copy, so a
+        move straight across that boundary raises `OSError(EXDEV)` instead of the
+        whole-sentence refusal a user would get from anything else going wrong here. So
+        the file is copied into a staging file *inside* `self.folder` first — a
+        `shutil.copyfile`, which does cross filesystems — and only the final step,
+        staging file to target, is an `os.replace`; same directory, so always a rename,
+        never a copy across devices. `source` is removed once it has arrived, so a
+        caller need not clean up after itself either way.
+        """
+        self.folder.mkdir(parents=True, exist_ok=True)
+        handle, staging = tempfile.mkstemp(prefix=".saving-", suffix=SUFFIX, dir=self.folder)
+        os.close(handle)
+        try:
+            shutil.copyfile(source, staging)
+            os.replace(staging, target)
+        except BaseException:
+            Path(staging).unlink(missing_ok=True)
+            raise
+        finally:
+            source.unlink(missing_ok=True)
+
     def save(self, raw: str, overwrite: bool = False) -> dict:
         name = self._valid(raw)
         target = self._path(name)
@@ -108,27 +138,9 @@ class Projects:
                 code="project.exists",
             )
         self.folder.mkdir(parents=True, exist_ok=True)
-        # `Drawing.export_project` ignores any directory in the filename it is given —
-        # it keeps only the basename and writes into a temporary directory of its own
-        # (`tempfile.mkdtemp()`, so under the system temp directory), returning the path
-        # it actually used. That directory is not necessarily on the same filesystem as
-        # `self.folder` — in the deployed image the projects folder is a mounted volume
-        # and the system temp directory is the container's own filesystem — and
-        # `os.replace` only renames, it does not copy, so a move straight across that
-        # boundary raises `OSError(EXDEV)` instead of the whole-sentence refusal a user
-        # would get from anything else going wrong here. So the file is copied into a
-        # staging file *inside* `self.folder` first — a `shutil.copyfile`, which does
-        # cross filesystems — and only the final step, staging file to target, is an
-        # `os.replace`; same directory, so always a rename, never a copy across devices.
         written = Path(self.drawing.export_project(self.library, f"{name}{SUFFIX}", self.sheets))
-        handle, staging = tempfile.mkstemp(prefix=".saving-", suffix=SUFFIX, dir=self.folder)
-        os.close(handle)
         try:
-            shutil.copyfile(written, staging)
-            os.replace(staging, target)
-        except BaseException:
-            Path(staging).unlink(missing_ok=True)
-            raise
+            self._place(written, target)
         finally:
             shutil.rmtree(written.parent, ignore_errors=True)
         self.current = name
@@ -171,13 +183,20 @@ class Projects:
             self.current = None
 
     def adopt(self, path: Path, wanted: str) -> dict:
-        """An uploaded file becomes a project: moved in under a free name, then opened."""
+        """
+        An uploaded file becomes a project: moved in under a free name, then opened.
+
+        `path` comes from a route (`POST /api/project/open`), which stages the upload
+        under its own directory — not under `self.folder` — so this crosses the same
+        filesystem boundary `save()` does and `_place()` documents, and stages through it
+        the same way rather than a bare `os.replace`.
+        """
         base = clean_name(Path(wanted).stem) or "Project"
         name, n = base, 2
         self.folder.mkdir(parents=True, exist_ok=True)
         while self._path(name).exists():
             name, n = f"{base} {n}", n + 1
-        os.replace(path, self._path(name))
+        self._place(path, self._path(name))
         self.open(name)
         return self._entry(self._path(name))
 

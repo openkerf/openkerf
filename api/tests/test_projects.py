@@ -183,6 +183,38 @@ def test_saving_survives_a_filesystem_boundary_between_temp_and_the_folder(proje
     assert names == ["Across"]
 
 
+def test_adopting_survives_the_same_filesystem_boundary(projects, client, tmp_path, monkeypatch):
+    """
+    `adopt()` is reached from a live route (`POST /api/project/open`) with a file that
+    `self._upload_path` put under a `tempfile.mkdtemp()` directory of its own — the same
+    boundary `save()` documents and crosses with a stage-then-rename, and in the deployed
+    image just as real here: the upload directory and the projects folder need not share
+    a filesystem. Before this test, `adopt()` did a bare `os.replace(path, ...)`, which
+    `save()`'s own docstring says raises `OSError(EXDEV)` on exactly that boundary.
+    """
+    _draw_two_rects(client)
+    projects.save("Board")
+    real_replace = projects_module.os.replace
+
+    def crosses_devices(src, dst):
+        if Path(src).parent != Path(dst).parent:
+            raise OSError(errno.EXDEV, "cross-device link")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(projects_module.os, "replace", crosses_devices)
+
+    stray = tmp_path / "upload.openkerf"
+    stray.write_bytes((projects.folder / "Board.openkerf").read_bytes())
+
+    entry = projects.adopt(stray, "Board")
+
+    assert entry["name"] == "Board 2" and projects.current == "Board 2"
+    assert not stray.exists()
+    assert len(client.get("/api/design").json()["elements"]) == 2
+    leftovers = [p.name for p in projects.folder.iterdir() if p.name.startswith(".saving-")]
+    assert leftovers == [], leftovers
+
+
 def test_forget_clears_the_current_project(projects, client):
     _draw_two_rects(client)
     projects.save("X")

@@ -1072,18 +1072,22 @@ class ApiServer:
 
         @app.post("/api/projects/{name}", dependencies=write)
         def project_save(name: str, overwrite: bool = False):
+            """Writes the current design under this name; answers the list entry."""
             return manage(self.projects.save, name, overwrite)
 
         @app.post("/api/projects/{name}/open", dependencies=write)
         def project_open(name: str):
+            """Replaces the current design with this named project; answers the import result."""
             return manage(self.projects.open, name)
 
         @app.post("/api/projects/{name}/rename", dependencies=write)
         def project_rename(name: str, body: dict):
+            """Renames a saved project on disk; answers its new list entry."""
             return manage(self.projects.rename, name, str(body.get("name") or ""))
 
         @app.delete("/api/projects/{name}", dependencies=write)
         def project_delete(name: str):
+            """Removes a saved project's file from disk; answers `{"ok": true}`."""
             manage(self.projects.delete, name)
             return {"ok": True}
 
