@@ -688,6 +688,46 @@ await scene('12-job-preflight.png', '/?tab=job', {}, async (page) => {
 	await page.waitForTimeout(3500);
 });
 
+/**
+ * Sending the job to the machine's own memory, folded open.
+ *
+ * Cropped to the fold rather than a second full-panel shot: it is one corner of the
+ * pre-flight, and the page beside it is about that corner. Shot 12 shows where the
+ * corner sits — in the footer, above the checklist, folded shut — and this one shows
+ * what is inside it.
+ *
+ * The name in the field is not typed here. It comes from the name of the sheet, which
+ * the seeding put there, and that is exactly the thing worth photographing: the field
+ * fills itself and cuts what the panel of the machine cannot show. Nothing is pressed —
+ * **Send** would put a file in a real machine.
+ *
+ * The same wait as shot 12, and for the same measured reason: on a first run after a
+ * rebuild the shutter fell while the footer was still being laid out.
+ */
+await scene(
+	'46-job-upload.png',
+	'/?tab=job',
+	{ selector: '.pf-upload', pad: 14 },
+	async (page) => {
+		const fold = page.locator('.pf-stick .pf-upload');
+		await fold.locator('summary').waitFor({ timeout: 20000 });
+		await page.waitForFunction(() => document.fonts?.status === 'loaded', null, { timeout: 20000 });
+		await page.waitForTimeout(3500);
+		// A real click on the coordinates, not `locator.click()`: that one scrolls the
+		// element into view first, which is how a control under a sticky footer went
+		// unnoticed for a whole round. If this cannot open it where it stands, the
+		// picture should fail rather than quietly be taken of something else.
+		const box = await fold.locator('summary').boundingBox();
+		if (!box) throw new Error('46: no "Send to the machine" to open');
+		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+		await page.waitForTimeout(600);
+		if (!(await fold.evaluate((node) => node.open))) {
+			throw new Error('46: a click where the fold stands did not open it');
+		}
+		await page.waitForTimeout(400);
+	}
+);
+
 await scene('14-library.png', '/?tab=design', {}, async (page) => {
 	await page.locator(TOOL.library).click();
 	await page.waitForSelector(DIALOG, { timeout: 10000 });

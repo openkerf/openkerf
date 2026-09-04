@@ -36,7 +36,7 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", "Material — not filled in for this sheet", an amber box saying the machine is not responding, a three-row layer table with speed, power, passes and a Source column reading "not verified" three times, and an amber note that three layers use presets that were not verified. At the foot of the panel the strip that stays put while the rest scrolls: the checklist "RUN THROUGH THIS: Lid closed / Extraction and air assist on / Workpiece is clamped and flat", and under it a "Show frame" button beside a green "Start job 1:19".](images/12-job-preflight.png)
+![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", "Material — not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the layer table with speed, power, passes and a Source column — of which only the first row, Outline, is in view, because the table runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a folded-shut "SEND TO THE MACHINE", the checklist "RUN THROUGH THIS: Lid closed / Extraction and air assist on / Workpiece is clamped and flat", and under it a "Show frame" button beside a green "Start job 1:19".](images/12-job-preflight.png)
 
 ### The drawing
 
@@ -187,6 +187,8 @@ appears under the field, with the name the machine confirmed rather than the one
 that was typed: "{name} is in the machine. Start it on the panel." That line goes
 as soon as the name in the field changes, because it is about one file under one
 name.
+
+![The fold Send to the machine, opened, in the strip at the foot of the pre-flight: the heading SEND TO THE MACHINE with the triangle turned down, under it the line "The file goes into the machine and stays there. You start it on the machine's own panel — nothing burns from here.", and under that a field labelled "Name on the machine" holding SHEET1 in a typewriter face, with a "Send" button beside it.](images/46-job-upload.png)
 
 #### When it will not go
 
