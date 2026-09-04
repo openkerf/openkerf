@@ -133,10 +133,12 @@ docker compose up -d
 The image is rebuilt on every change to `main`; `latest` is only published after the
 build has proved that the interface, the API and OpenCV are inside it. A released
 version is also available by number, `ghcr.io/openkerf/openkerf:0.1.0` and so on, for
-a box that should not move on its own. Locally built, as `docker image ls` reports it
-(uncompressed, so larger than what GHCR shows as a download size), the image is 246 MB
-on amd64 and 910 MB on arm64. A clean build takes about 40 s on the developer's Mac; the
-CI run that builds both architectures and smoke-tests the image took 9 min 2 s.
+a box that should not move on its own. Measured on a local build of the same
+Dockerfile, a pull downloads about 220 MB on arm64 and about 250 MB on amd64; the
+registry's own figure may differ slightly with its compression. Unpacked on disk, once
+the image has run, it takes about 910 MB on arm64 and about 990 MB on amd64. A clean
+build takes about 40 s on the developer's Mac; the CI run that builds both
+architectures and smoke-tests the image took 9 min 2 s.
 
 ## Two limits
 
