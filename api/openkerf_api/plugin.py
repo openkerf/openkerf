@@ -66,6 +66,12 @@ def plugin(kernel, lifecycle=None):
             help=_("path to the library database (its own folder for testing)"),
         )
         @kernel.console_option(
+            "operations",
+            "o",
+            type=str,
+            help=_("path to the layer list (its own folder for testing)"),
+        )
+        @kernel.console_option(
             "quit",
             "q",
             type=bool,
@@ -84,6 +90,7 @@ def plugin(kernel, lifecycle=None):
             frontend=None,
             token=None,
             library=None,
+            operations=None,
             quit=False,
             **kwargs,
         ):
@@ -117,6 +124,12 @@ def plugin(kernel, lifecycle=None):
                 # A database of its own is what a test needs: otherwise trial materials and
                 # sheets run through the user's library.
                 library_path=library,
+                # And a layer list of its own, for the same reason and with a hole of its
+                # own: the list is keyed to the kernel name, so every instance on this
+                # computer shares one file with the app the user works in. A script that
+                # makes layers — the handbook's pictures do — reads and writes that file
+                # without saying so.
+                operations_path=operations,
             )
             try:
                 server.start()

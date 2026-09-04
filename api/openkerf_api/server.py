@@ -72,6 +72,7 @@ from .testgrid import (
 )
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
+from .operations import fence_operations
 from .status import StatusReader
 
 # Kernel signals worth forwarding to connected clients. Every one of these is
@@ -264,6 +265,7 @@ class ApiServer:
         frontend=None,
         token=None,
         library_path=None,
+        operations_path=None,
     ):
         self.kernel = kernel
         self.port = port
@@ -273,6 +275,11 @@ class ApiServer:
         self.document = Document()
         self.commands = CommandRunner(kernel, self.document)
         self.machines = MachineManager(kernel, self.commands)
+        # The layer list in a file of its own, when one is asked for. Before anything
+        # else that touches the engine: the fence drops the layers read out of the
+        # user's file at boot, and a service built on top of them would be built on
+        # layers that are about to go. See `operations.fence_operations`.
+        self.operations_path = fence_operations(kernel, operations_path) if operations_path else None
         self.library = Library(library_path or default_path(kernel))
         self.presetariat = Presetariat(
             self.library,
@@ -822,7 +829,16 @@ class ApiServer:
 
         @app.get("/api/health")
         def health():
-            return {"ok": True, "clients": self.bridge.client_count}
+            # `operations` says whether the layer list is this server's own or the one
+            # every MeerK40t on this computer shares. A script that seeds layers has no
+            # other way to find out, and the one that takes the handbook's pictures
+            # refuses to run without it. Not the path: which file it is is nobody's
+            # business over HTTP, and whether it is fenced is the whole question.
+            return {
+                "ok": True,
+                "clients": self.bridge.client_count,
+                "operations": "own" if self.operations_path else "shared",
+            }
 
         @app.get("/api/status")
         def status():

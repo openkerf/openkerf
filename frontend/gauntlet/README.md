@@ -19,7 +19,7 @@ Every script takes its origin from `OK_BASE` and falls back to
 | `seed.mjs` | puts a design with four layers, work in each of them and two awkward states (no burn along, passes) on the bed. Pure API, so it survives interface changes |
 | `i-shots.mjs` | the screenshot set per language: `node gauntlet/i-shots.mjs en\|nl` → `workshop/screenshots/i18n/<language>/` |
 | `i-overflow.mjs` | measures text that does not fit its box, per language. Elements that clip by design are listed in the script itself. Twelve screens, the material library among them — that is where the offer of starting settings lives, and its sentences are the longest in the app |
-| `docs-shots.mjs` | the pictures for the handbook: `node gauntlet/docs-shots.mjs [name-fragment]` → `docs/images/`. English, light theme, desktop 1440×900 and phone 390×844. Seeds its own drawing through the API, so a rerun gives the same picture; it does not start the laser, so there is no shot of the queue |
+| `docs-shots.mjs` | the pictures for the handbook: `node gauntlet/docs-shots.mjs [name-fragment]` → `docs/images/`. English, light theme, desktop 1440×900 and phone 390×844. Seeds its own drawing through the API, so a rerun gives the same picture; it does not start the laser, so there is no shot of the queue. Refuses to run against an engine that shares the layer list — see below |
 | `preview-check.mjs` | the cut-path window, measured: overlapping numbers, the reachable end of the scrubber, the false "server is away" on the way in, what lies over the drawing, and where Tab goes. What of it fits in a test is in `tests/cutpath-window.test.ts`; the stacking and the focus ring are here |
 | `selftest.mjs` | checks the checker: injects a contrast that is too low and fails if the measurement does not find it |
 | `i-apply.py` | moves a batch of literals out of a component into the catalogues (used for the English conversion; kept for the next language) |
@@ -48,12 +48,38 @@ against whoever ran `docs-shots.mjs` — the pictures showed the author's own ma
 and that only came out when the words in the app changed and they had to be taken again.
 
 ```bash
-# an engine with a library of its own; -P/--profile isolates nothing, the path does
-meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/lib/library.db -f frontend/build"
+# an engine with a library and a layer list of its own; -P/--profile isolates neither,
+# the two paths do
+meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/lib/library.db \
+                                  -o /tmp/docs/lib/operations.cfg -f frontend/build"
 cd frontend
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-library.mjs
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs
 ```
+
+## The layer list is the second file that is not yours
+
+`-l` fences off the library; `-o` fences off the engine's layer list, and until this
+round only the first of the two existed. Both are keyed to the **kernel name** and not
+to the profile, so without them a screenshot run reads and writes the files of the app
+you actually work in.
+
+What that cost, measured: the pre-flight picture came back with a fourth layer reading
+"Engrave, 20 mm/s, 100%" where the seeding asks for "Logo area, 300 mm/s, 30%", and 1:19
+on the clock had become 2:22. Nothing in the script put that layer there — it comes from
+the `[_default …]` sections of the developer's own `operations.cfg`, which is the set
+the engine files a new shape under when its colour has no layer yet.
+
+`docs-shots.mjs` therefore asks `/api/health` first and refuses unless it answers
+`"operations": "own"`. With the fence in place, and measured: the same shot twice differs
+in 41 of 1,296,000 pixels — all of them in the animation in the top bar — and the real
+`operations.cfg` came through a full run and a tidy shutdown byte for byte identical.
+
+The same run also showed the script's own half of the fault. `seed()` took its layers
+from the *positions* in the list after the drawing was done, and the engine makes a layer
+of its own for a colour it has none for — so `ops[3]` was an engine-made engrave layer,
+the QR code went into it, and "Logo area" was pruned away empty. It now keeps the ids the
+four layers came back with.
 
 Two locks keep it off a real library: the flag, and a library that has to be empty. It
 makes no machine — that list lives in one `MeerK40t.cfg` for every instance, so creating

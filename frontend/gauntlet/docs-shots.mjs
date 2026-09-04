@@ -226,7 +226,18 @@ async function seed() {
 		{ type: 'engrave', label: 'Fine lines', speed: 400, power_percent: 15 },
 		{ type: 'raster', label: 'Logo area', speed: 300, power_percent: 30 }
 	];
-	for (const layer of layers) await api('POST', '/api/design/operations', layer);
+	// The ids the layers came back with, and not their place in the list later on.
+	// Measured, and it cost the pre-flight picture: the engine files a fresh shape under
+	// the layer its colour claims and *makes* that layer when there is none, so by the
+	// time the drawing is done the list is longer than this one. Reading `ops[3]` then
+	// gave an engine-made "Engrave, 20 mm/s" instead of "Logo area", the QR code went
+	// into it, "Logo area" stayed empty and was pruned away — and the picture showed a
+	// layer table nobody seeded, with 2:22 under it instead of 1:19.
+	const made = [];
+	for (const layer of layers) {
+		const answer = await api('POST', '/api/design/operations', layer);
+		made.push(answer?.id ?? answer?.operations?.at(-1)?.id);
+	}
 
 	const shapes = [
 		{ type: 'rect', x_mm: 15, y_mm: 15, width_mm: 120, height_mm: 80 },
@@ -251,15 +262,20 @@ async function seed() {
 
 	const design = await api('GET', '/api/design');
 	const elements = design.elements.map((e) => e.id);
-	const ops = design.operations.filter((o) => !o.grid).map((o) => o.id);
+	const ops = made;
 
 	// The engine files a new shape under the layer its colour puts it in, so out of
 	// every layer first and then into the intended one — otherwise a shape sits in
-	// two places and the counts in the layer list do not add up.
+	// two places and the counts in the layer list do not add up. Out of *every* layer,
+	// the ones the engine made for a colour included, which is why this asks the app
+	// again rather than working from the four above.
 	async function put(elementIndex, opIndex) {
 		const id = elements[elementIndex];
 		if (!id || !ops[opIndex]) return;
-		for (const op of ops) await api('POST', '/api/design/unassign', { ids: [id], operation_id: op });
+		const now = await api('GET', '/api/design');
+		for (const op of (now?.operations ?? []).filter((o) => !o.grid)) {
+			await api('POST', '/api/design/unassign', { ids: [id], operation_id: op.id });
+		}
 		await api('POST', '/api/design/assign', { ids: [id], operation_id: ops[opIndex] });
 	}
 	for (const [element, op] of [
@@ -290,8 +306,41 @@ async function seed() {
 	return { elements, ops };
 }
 
+/**
+ * A layer list of its own, or nothing happens.
+ *
+ * This script makes layers, and layers live in a file the engine keys to its **kernel
+ * name** — so `-P/--profile` does not isolate it and every MeerK40t on this computer,
+ * the app the reader works in included, shares one `operations.cfg`. That is the same
+ * hole the library had, and it cost this set a picture: the pre-flight came back with a
+ * fourth layer of "Engrave, 20 mm/s, 100%" where the seeding asks for "Logo area, 300
+ * mm/s, 30%", and 2:22 on the clock instead of 1:19. That layer came out of the
+ * `[_default …]` sections of somebody's own file, which is what the engine files a new
+ * shape under when its colour has no layer yet. So the pictures were of a state this
+ * script had not seeded, and the run wrote its own layers back into the reader's app.
+ *
+ * `openkerf -o <path>` gives the server a layer list of its own; `/api/health` says
+ * which it got. Measured with the fence in place: the same shot twice differs in 41 of
+ * 1,296,000 pixels, all of them in the top bar's own animation, and
+ * `~/Library/Application Support/MeerK40t/operations.cfg` came through a full run and a
+ * tidy shutdown byte for byte identical — same md5, same 34 sections.
+ */
+async function ownLayerList() {
+	const health = await api('GET', '/api/health');
+	if (health?.operations === 'own') return;
+	console.error(
+		'Refusing: this engine writes the layer list every MeerK40t on this computer ' +
+			'shares, so the pictures would be of somebody’s own layers and the run would ' +
+			'leave the handbook’s layers behind in their app.\n' +
+			'Start it with a layer list of its own:\n' +
+			'  meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/lib.db -o /tmp/docs/operations.cfg"'
+	);
+	process.exit(1);
+}
+
 // ------------------------------------------------------------ the browser side
 
+await ownLayerList();
 await useTheHandbookMachine();
 
 const browser = await chromium.launch();
