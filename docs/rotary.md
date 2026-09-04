@@ -149,8 +149,8 @@ consequences and not settings.
 ## What this deliberately does not do
 
 > "Nothing is written into the controller. A Ruida keeps its own rotary page, and
-> on a GRBL machine OpenKerf does not touch $101 at the start of a job — that is
-> firmware, and this machine is a Ruida."
+> on a GRBL machine OpenKerf leaves $101 alone at the start of a job: that is
+> firmware, and it is set where the firmware lives."
 
 There is no rotary opcode in the Ruida job format at all, so this could not be
 written from the engine even if we wanted it. Which is why the order of work below

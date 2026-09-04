@@ -124,7 +124,7 @@ burn straight through your board.
 *test back side*. OpenKerf engraves it with the material, the thickness, the operation,
 which quantity is on which axis, the fixed quantity, the number of passes when it is more
 than one, and the date. What you have already said yourself is not repeated: type
-"3MM Acryl Engrave" and it will not add "Acrylic (extruded) · 3 mm · engrave" behind it.
+"3MM Acryl Engrave" and it will not add *Acrylic (extruded) · 3 mm · engrave* behind it.
 
 The caption never makes the board wider than its squares plus the row labels. It shrinks
 until it fits, and only breaks onto a second line when shrinking further would make it
@@ -303,7 +303,7 @@ border uses, because the engraved border *is* the board's outer box — a cut at
 own padding would run along the frame. Four is also a rim you can hold, and one that survives
 the char of its own cut.
 
-That margin is what "does the board fit on the bed?" is now measured on. It has to be: on the
+That margin is what *does the board fit on the bed?* is now measured on. It has to be: on the
 default form the board's own left edge sits 0.4 mm from the edge of the bed, so a cut-out
 asked for there would run 3.6 mm off the bed while every number on the form said the board
 fitted. Without a cut-out the two rectangles are the same and nothing changes.

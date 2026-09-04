@@ -110,7 +110,7 @@ with the six answers "CO2 with a glass tube", "CO2 with an RF metal tube", "Diod
 
 If you do not know it, say so. The tick box **I am not sure how powerful my tube is**
 is a real answer, not a way of skipping the question, and it says what it costs:
-"Then OpenKerf matches on the kind of laser alone, and says so on every setting it offers
+"Then OpenKerf matches on the kind of laser alone, and says so on every preset it offers
 you." Below 1 W or above 1000 the field is refused: *A tube power between {min} and {max} watt,
 please.* **Lens** in mm is optional.
 
@@ -182,7 +182,7 @@ reads **Choose material** while nothing is filled in; clicking it opens the wind
 project." — and takes a material and a thickness in millimetres.
 
 Fill it in. Without it, "Without a material the library shows everything and the
-preflight cannot see whether a setting belongs to this sheet." If the library has
+preflight cannot see whether a preset belongs to this sheet." If the library has
 nothing for that material yet it says so: "No presets in the library for this
 material yet. A test grid is the shortest way there."
 
@@ -293,7 +293,7 @@ From top to bottom it holds:
   the start button, where it cannot scroll away from it.
 
 Read the source column. A preset that was not measured on a test grid says so,
-and the panel adds it up: "3 layers use presets that were not measured with a
+and the panel adds it up: "3 layers use presets that were not verified on a
 test grid. On unknown material: try a scrap first."
 
 Each part of the panel, and what it does while a job is running, is in

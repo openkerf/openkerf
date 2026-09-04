@@ -110,7 +110,7 @@ instead of speed and power.
 Under the table, the objections. One line per layer, heaviest first, and when the
 top one really outweighs the bottom one it is tagged **First**. Below those, if
 any layer's numbers were never measured: "3 layers use presets that were not
-measured with a test grid. On unknown material: try a scrap first."
+verified on a test grid. On unknown material: try a scrap first."
 
 **When it goes wrong.** Raster layers do not burn on this server. The pre-flight
 says so before you start: "This server cannot burn raster layers." followed by
@@ -492,7 +492,7 @@ designed* until you touch it, then +10 %, −1 % and so on. Buttons: −10 %, �
 +1 %, +10 % and **Reset**.
 
 The note under it: "This scales what the machine is doing right now. The layer
-keeps its own preset — which may come from a preset, and then it is evidence."
+keeps its own setting — which may come from a preset, and then it is evidence."
 
 **When it goes wrong.** Most machines have no realtime channel for this and the
 block is simply absent. Asking anyway is refused with: "This machine cannot adjust
@@ -609,7 +609,7 @@ marks is no longer in the drawing, or you have switched machine — a pose is a 
 machine coordinates, and on another bed it is a shift into nowhere. It is never
 written to disk either, because a pose says where a sheet lies *now*.
 
-Two refusals, and both mean "one of these is not the mark I think it is":
+Two refusals, and both mean *one of these is not the mark I think it is*:
 
 - The distance between the two points must match the distance between the two shapes,
   within 2 mm. "The two points you drove to lie 6.0 mm further apart than the same

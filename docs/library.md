@@ -199,7 +199,7 @@ precedence: **other material** and **other thickness**, spelled out under the ta
 
 The summary underneath counts them:
 
-> {n} layers use presets that were not measured with a test grid. On unknown material: try a scrap first.
+> {n} layers use presets that were not verified on a test grid. On unknown material: try a scrap first.
 
 The note is a snapshot, not a link. Change the speed of that layer by hand and OpenKerf
 stops claiming a source for it — no provenance is better than a wrong one. A layer that

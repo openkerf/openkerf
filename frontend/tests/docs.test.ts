@@ -60,6 +60,9 @@ const ENGINE = join(here, '..', '..', 'api', 'openkerf_api');
 
 const QUOTE_MIN = 30;
 
+/** The longest run a single placeholder is taken to stand for. See `fits`. */
+const FILL = 40;
+
 const pages = readdirSync(DOCS).filter((name) => name.endsWith('.md'));
 const read = (name: string) => readFileSync(join(DOCS, name), 'utf8');
 
@@ -126,18 +129,164 @@ const haystack = [...catalogue, ...engine].map(canonical);
 /**
  * Does this quotation come from that message?
  *
- * A page quotes a fragment of a message and writes out what the app fills in, so
- * neither side is the whole of the other: "outside Sheet 1" stands where the
- * message says "outside {sheet}". The § stands for whatever was filled in, on
- * either side, and matching it as a wildcard in both directions catches a
- * reworded label while letting a faithful quotation through.
+ * A page quotes a *fragment* of a message and writes out what the app *fills in*, so
+ * neither side is the whole of the other and both carry §: the catalogue writes
+ * "outside {sheet}" where the page writes "outside Sheet 1", and `canonical` turns
+ * the number the page filled in back into a § of its own. That is why this is not a
+ * regular expression over one side. A regex can only carry the wildcards of the side
+ * it is built from, and whichever side you build it from, the other side's § then has
+ * to match literal text — which it never does.
+ *
+ * It used to be two unanchored regexes, one each way, and the second of them made the
+ * whole test decorative. `loose(value).test(quotation)` asks whether the *message*
+ * appears somewhere inside the quotation, and the haystack holds every literal in
+ * `en.ts` — keys and one-word labels included. `more` sits inside almost any sentence,
+ * so almost any sentence had a source. Measured on one deliberately broken quotation
+ * ("send it once more" where the app says "send it again"): 1,760 of the values
+ * answered for it and the test stayed green.
+ *
+ * So the alignment is done character by character instead, with § standing on either
+ * side for any run of characters, and the question asked exactly: **is there a stretch
+ * of the message that the whole quotation matches?** Leftovers in the message are what
+ * a fragment leaves behind; leftovers in the quotation are not allowed, because those
+ * are the words nobody wrote.
  */
-function quotes(value: string, quotation: string): boolean {
-	if (value.includes(quotation)) return true;
-	const loose = (text: string) =>
-		new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/§/g, '.*?'));
-	return loose(value).test(quotation) || loose(quotation).test(value);
+function fits(value: string, quotation: string): boolean {
+	// A cheap first pass: a message may answer for a quotation it is at least half the
+	// substance of. A dozen literals in the catalogue are a bare `{name}` and nothing
+	// else, and those are out here rather than in the alignment below.
+	const substance = (text: string) => text.replace(/§/g, '').trim().length;
+	const enough = substance(quotation) / 2;
+	if (substance(value) < enough) return false;
+	// (i, j): how much of the quotation from j on the message from i on can account
+	// for **in its own letters** — not how much of it a placeholder can swallow. That
+	// number is the whole point. Asked as a yes-or-no, this alignment says yes far too
+	// often: a placeholder is a wildcard, a wildcard at the end of a message swallows
+	// whatever is left, and then every message with a `{name}` in it answers for every
+	// sentence. Measured on "does the board fit on the bed?": 789 of the values in the
+	// haystack said it came from them. Counting the letters instead, and asking for
+	// half the quotation, is what makes this a check rather than a formality.
+	//
+	// −1 is "these cannot be lined up at all"; the answer is kept, not the visit,
+	// because the same pair is reached along many paths and what it answers does not
+	// depend on how it was reached.
+	const answered = new Map<number, number>();
+	const width = value.length + 1;
+	const rest = (text: string, at: number) => text.slice(at).replace(/§/g, '').trim() === '';
+	function align(i: number, j: number): number {
+		if (j === quotation.length) return 0;
+		if (i === value.length) return rest(quotation, j) ? 0 : -1;
+		const key = i * width + j;
+		const known = answered.get(key);
+		if (known !== undefined) return known;
+		let best = -1;
+		const better = (deeper: number, own = 0) => {
+			if (deeper >= 0 && deeper + own > best) best = deeper + own;
+		};
+		if (value[i] === '§') {
+			// A placeholder holds a value, not a chapter: a sheet name, a layer name, a
+			// number, a word like "moved". FILL is the longest run one is taken to stand
+			// for, so that a wildcard cannot quietly become the whole sentence.
+			for (let k = j; k <= Math.min(j + FILL, quotation.length); k++) better(align(i + 1, k));
+		} else if (quotation[j] === '§') {
+			for (let k = i; k <= Math.min(i + FILL, value.length); k++) better(align(k, j + 1));
+		} else if (value[i] === quotation[j]) {
+			better(align(i + 1, j + 1), 1);
+		}
+		answered.set(key, best);
+		return best;
+	}
+	// A free start: the quotation may begin anywhere in the message, because a page
+	// quotes the half of a sentence it needs.
+	for (let i = 0; i < value.length; i++) if (align(i, 0) >= enough) return true;
+	return false;
 }
+
+/**
+ * The same question, with the two things a page is allowed to do to a sentence.
+ *
+ * A full stop of its own: the catalogue writes tooltips without one ("The line stays
+ * where it is and gets a handle to pull it with") and a page ends its sentence.
+ *
+ * And a run of messages: the app shows two of them side by side — "No connection to
+ * OpenKerf — this button will not arrive." and "Stopping is only possible with the
+ * emergency stop on the machine now." are two entries under one another on the screen,
+ * and quoting what the screen says means quoting both. So a quotation that no single
+ * message answers for is cut at its full stops, and then **every** part has to come
+ * from somewhere. That is the difference between a quotation built out of the app and
+ * one built out of thin air.
+ */
+function quoted(haystack: string[], quotation: string): boolean {
+	const attempt = (text: string) =>
+		haystack.some((value) => value.includes(text) || fits(value, text));
+	if (attempt(quotation)) return true;
+	const bare = quotation.replace(/\.$/, '').trim();
+	if (bare !== quotation && attempt(bare)) return true;
+	const parts = bare
+		.split(/(?<=\.)\s+/)
+		.map((part) => part.trim())
+		.filter(Boolean);
+	return parts.length > 1 && parts.every((part) => attempt(part) || attempt(part.replace(/\.$/, '')));
+}
+
+/**
+ * The check that checks the check.
+ *
+ * This one exists because the quotation test was green for a year while it could not
+ * tell a faithful quotation from an invented one. Green is not evidence; a guard that
+ * has never been seen to stop something is decoration. So each of the two directions is
+ * measured here against the real catalogue: what a page is allowed to do to a sentence
+ * passes, and what a page must not do to one fails.
+ */
+test('the quotation check stops a reworded sentence and lets a faithful one through', () => {
+	const asks = (text: string) => quoted(haystack, canonical(text));
+
+	// Faithful, in the four shapes a page really uses.
+	assert.ok(
+		asks('Nothing had gone out, so there is no file on the panel to clean up; send it again.'),
+		'a whole message, quoted as it stands'
+	);
+	assert.ok(
+		asks('1 of the 2 shapes you picked are locked, so nothing was moved.'),
+		'a fragment of a message with its placeholders filled in'
+	);
+	assert.ok(
+		asks('The line stays where it is and gets a handle to pull it with.'),
+		'a full stop the catalogue does not write'
+	);
+	assert.ok(
+		asks(
+			'No connection to OpenKerf — this button will not arrive. Stopping is only ' +
+				'possible with the emergency stop on the machine now.'
+		),
+		'two messages the screen shows under one another'
+	);
+
+	// Not faithful. Each of these was green before this round.
+	assert.ok(
+		!asks('Nothing had gone out, so there is no file on the panel to clean up; send it once more.'),
+		'one reworded ending — the hole this test was written for'
+	);
+	assert.ok(
+		!asks('The layer keeps its own preset — which may come from a preset, and then it is evidence.'),
+		'one word swapped for another the app also uses'
+	);
+	assert.ok(
+		!asks('3 layers use presets that were not measured with a test grid. On unknown material: try a scrap first.'),
+		'a rewording that reads as well as the original'
+	);
+	assert.ok(
+		!asks('The extraction fan spins up before the head moves and stops ten seconds after.'),
+		'a sentence the app never said at all'
+	);
+
+	// And the shape of the leak itself: a message that is only a placeholder answers
+	// for nothing, however true its wildcard is.
+	assert.ok(
+		!fits('§', canonical('Every block went out, including the one that closes the file.')),
+		'a bare placeholder is not a source'
+	);
+});
 
 test('every picture a page points at exists', () => {
 	const missing: string[] = [];
@@ -193,9 +342,19 @@ test('every link between the pages resolves', () => {
 	assert.deepEqual(broken, []);
 });
 
-/** The paragraphs of a page, with pictures, links and blockquote marks removed. */
+/**
+ * The paragraphs of a page, with pictures, links, code blocks and blockquote marks
+ * removed.
+ *
+ * The code blocks are the newest of those, and they were a false alarm rather than a
+ * nicety: a fenced command line carries quotation marks of its own — `meerk40t -e
+ * "openkerf -p 8092 -l /tmp/scratch/openkerf-library.db"` — and read as a quotation of
+ * the interface it is a sentence no catalogue will ever hold. What is inside a fence is
+ * something you type, not something the app said.
+ */
 function paragraphs(page: string): string[] {
 	return read(page)
+		.replace(/^```[\s\S]*?^```/gm, '')
 		.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
 		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
 		.split(/\n\s*\n/)
@@ -218,7 +377,7 @@ test('every sentence the pages quote is in the English catalogue', () => {
 			for (const match of block.matchAll(/"([^"]+)"/g)) {
 				const wanted = canonical(match[1]);
 				if (wanted.length < QUOTE_MIN) continue;
-				if (!haystack.some((value) => quotes(value, wanted))) {
+				if (!quoted(haystack, wanted)) {
 					wrong.push(`${page}: "${match[1]}"`);
 				}
 			}
