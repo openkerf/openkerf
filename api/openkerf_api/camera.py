@@ -147,11 +147,12 @@ class Camera:
         if not found:
             return (
                 f"{base} This device sees no camera at all. Is it plugged in "
-                "en aan?"
+                "and switched on? In a container, the camera device has to be handed "
+                "in as well (see the handbook page on Docker)."
             )
         names = ", ".join(found)
         if platform.system() == "Darwin":
-            # Bij Camera in Systeeminstellingen zit géén +-knop: alleen
+            # Under Camera in System Settings there is no + button: only
             # programs that ever asked for permission appear in that list. Our engine
             # cannot ask (the request has to come from the main thread), so the user has to
             # provoke it once themselves.
