@@ -16,14 +16,17 @@ The app stays outside the one handling that burns; there is deliberately no
 route in this module that begins a job.
 """
 
-import threading
 import time
 
 from meerk40t.ruida.rdjob import parse_commands
 
+from .busy import (
+    claim_the_line,
+    release_the_line,
+    the_spooler_has_work,
+)
 from .commands import CommandRunner
 from .edits import DesignError
-from .machine import a_job_is_running
 
 #: The way the engine chops its own jobs (`ruida/controller.py:83`,
 #: `divide_data_into_queue`, which fills a block up to 1000 bytes and always cuts
@@ -168,23 +171,6 @@ class RuidaUpload:
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
         self.runner = runner or CommandRunner(kernel)
-        #: One upload at a time down one connection.
-        #:
-        #: The server builds one of these and `machine_upload` is a plain `def`,
-        #: so FastAPI runs it in the threadpool and two calls really do overlap —
-        #: a double-click or a second tab is enough. Building is serialised by
-        #: `claim_plan()`, the sending was not. Measured with two concurrent
-        #: `upload()` calls and no lock: both returned a result, and the line saw
-        #: `E8 02, E8 02, E7 01, E7 01, <block>, <block>` — two transfers begun,
-        #: two names, and the two files' blocks after each other, which is one
-        #: file in the machine's memory made out of two jobs.
-        #:
-        #: Refusing rather than queueing, and that is the choice worth stating.
-        #: A blocking lock would hold a threadpool thread through the whole of
-        #: somebody else's build and send, and then put a second file on the
-        #: panel that nobody asked for twice — which is what a double-click is.
-        #: A sentence costs the user one press.
-        self._sending = threading.Lock()
 
     def frames(self, name: str, payload: bytes) -> list[bytes]:
         """The whole conversation as a list of packets, in order."""
@@ -490,7 +476,15 @@ class RuidaUpload:
         are not is a fingerprint of a design, so nothing should compare two
         uploads to decide whether anything changed.
         """
-        if not self._sending.acquire(blocking=False):
+        # The claim lives in `busy.py` and not on this object, because it was a
+        # fact only this method could see. Measured, with two concurrent uploads
+        # and no claim at all: both returned a result and the line saw
+        # `E8 02, E8 02, E7 01, E7 01, <block>, <block>` — one file in the
+        # machine's memory made of two jobs. But a lock on `self` answered only
+        # that half. Every mover and every burn went straight through an upload,
+        # because nothing outside this method could ask; see `busy.py` and
+        # `MachineControl._idle()`.
+        if not claim_the_line(self.kernel):
             raise DesignError(
                 "This machine is already being sent a file. Wait until that one "
                 "is done and press again; nothing has been sent.",
@@ -499,7 +493,7 @@ class RuidaUpload:
         try:
             return self._upload(name)
         finally:
-            self._sending.release()
+            release_the_line(self.kernel)
 
     def _upload(self, name: str) -> dict:
         """The whole of an upload, with `upload()` holding the lock around it.
@@ -535,11 +529,17 @@ class RuidaUpload:
         # measured here. Neither half changes the check: the fact is that the
         # receiver we have merges the two streams without a word, and the API is
         # where this is stopped either way.
-        if a_job_is_running(self.kernel):
+        #
+        # `the_spooler_has_work` and not `a_job_is_running`, which is the question
+        # the movers ask: a job that has been spooled and not yet picked up
+        # reports `is_running()` `False` (measured — status `Waiting`), and it is
+        # about to be picked up and written down this very line. The sentence
+        # says "or waiting to start" because that is what the check counts.
+        if the_spooler_has_work(self.kernel):
             raise DesignError(
-                "A job is running. Wait until it is done, or stop it: the file "
-                "would go down the same connection the machine is burning from. "
-                "Nothing has been sent.",
+                "A job is on this machine — burning, or waiting in the queue to "
+                "start. Wait until it is done, or stop it: the file would go "
+                "down the same connection that job uses. Nothing has been sent.",
                 code="upload.whileBurning",
             )
         session = self._session()

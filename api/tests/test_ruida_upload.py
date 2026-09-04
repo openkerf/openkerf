@@ -14,6 +14,7 @@ import pytest
 from openkerf_api.commands import CommandRunner, _AlwaysConnected
 from openkerf_api.edits import DesignError
 from openkerf_api.ruida_upload import CHUNK, RuidaUpload, machine_name
+from openkerf_api.server import ApiServer
 
 
 @pytest.fixture
@@ -2118,14 +2119,19 @@ def _a_line_that_breaks_on_the_first_write(server, session, monkeypatch):
 
 
 def _an_upload_already_running(server, session, monkeypatch):
-    """Hold the lock the way a first upload holds it, and hand back the release.
+    """Hold the line the way a first upload holds it, and hand back the release.
+
+    Through `busy.py`, which is where the claim lives now — not on the
+    `RuidaUpload`, because a fact only `upload()` could see is what let every
+    mover and every burn walk through an upload in progress.
 
     Returned rather than released here, so it happens in the test's `finally`: a
-    lock left held would refuse every upload after it for the life of that
-    server.
+    claim left standing would refuse every upload after it on this kernel.
     """
-    server.ruida_upload._sending.acquire()
-    return server.ruida_upload._sending.release
+    from openkerf_api.busy import claim_the_line, release_the_line
+
+    assert claim_the_line(server.kernel), "the line was already claimed"
+    return lambda: release_the_line(server.kernel)
 
 
 def _nothing_on_the_bed(server, session, monkeypatch):
@@ -2253,3 +2259,212 @@ def test_the_name_alone_is_out_and_the_refusal_says_what_that_leaves(
     )
     assert "delete" in said.lower(), said
     assert "nothing had gone out" not in said.lower(), said
+
+
+class _HeldUpload:
+    """A real upload, stopped at its first packet until the test lets it finish.
+
+    The window a second caller walks into, held open instead of raced for. The
+    upload is genuine — `upload()`, its lock, its packets — but the line under it
+    is a `FakeSession`, so nothing leaves this process.
+    """
+
+    def __init__(self, server, monkeypatch):
+        self.session = a_fake_session(server.ruida_upload, monkeypatch)
+        self.at_the_first_packet = threading.Event()
+        self.let_it_go = threading.Event()
+        straight_to_the_session = server.ruida_upload._write
+
+        def held(data):
+            self.at_the_first_packet.set()
+            self.let_it_go.wait(5)
+            straight_to_the_session(data)
+
+        monkeypatch.setattr(server.ruida_upload, "_write", held)
+        self.result = {}
+        self._thread = threading.Thread(target=self._send, args=(server,), daemon=True)
+
+    def _send(self, server):
+        try:
+            self.result["done"] = server.ruida_upload.upload("BORD")
+        except Exception as e:  # pragma: no cover - reported through `result`
+            self.result["error"] = e
+
+    def __enter__(self):
+        self._thread.start()
+        assert self.at_the_first_packet.wait(10), "the upload never reached the line"
+        return self
+
+    def __exit__(self, *exc):
+        self.let_it_go.set()
+        self._thread.join(timeout=10)
+        return False
+
+
+@pytest.mark.parametrize(
+    "path, body, seam, owner",
+    [
+        # Every one of these puts bytes on `active_session.write` — the same
+        # `send_q` our blocks are going down while this runs.
+        #
+        # A jog reaches it through `RuidaDriver.move_abs` (`ruida/driver.py:305`),
+        # whose `output=` is `self.controller.write`. The other four movers
+        # (`/home`, `/move`, `/frame`, `/focus`) go the same way and share the
+        # same guard, `MachineControl._idle()`.
+        ("/api/machine/jog", {"dx_mm": 5, "dy_mm": 0}, "run", "motion.runner"),
+        # Burning: the spooler picks the job up and the driver writes it out.
+        # The seam is `_plan_and_spool` and not `start_job`, because the guard is
+        # *in* `start_job` — one line there covers the tile burn and the series
+        # burn too, which call it directly — and a recorder over the method would
+        # patch away the very thing under test.
+        ("/api/job/start", None, "_plan_and_spool", "commands"),
+    ],
+)
+def test_nothing_may_write_on_the_line_while_a_file_is_being_sent(
+    ruida, tmp_path, monkeypatch, path, body, seam, owner
+):
+    """
+    The mirror of the burning check, and the sixth path to the machine.
+
+    `upload()` refuses to start while a job is burning, measured: the two streams
+    land in one `RDJob` and the file is spliced into the middle of the burn. This
+    is the same measurement with the streams the other way round — and there was
+    nothing stopping it. Only `upload()` itself ever read its own lock, so
+    `_idle()` and the job routes went straight through an upload in progress, and
+    the upload then reported success for a file with a move command woven into
+    it. That file gets started on the panel, on material.
+
+    Within one tab the interface covers it. The argument this whole branch rests
+    on is in `_idle()`'s own docstring: the UI is advice, and a second tab, a
+    phone or a curl command goes straight through it.
+
+    **Nothing here presses what it does not measure.** The seam each route ends
+    on is recorded rather than run, so what is asserted is that the route got
+    past its guard — not that a head moved. With the guard in place the recorder
+    stays empty; without it, it holds the command that would have gone out.
+    """
+    from fastapi.testclient import TestClient
+
+    a_rectangle(ruida)
+    server = ApiServer(ruida, library_path=tmp_path / "u.db")
+    reached = []
+
+    with TestClient(server.build_app()) as client:
+        with _HeldUpload(server, monkeypatch):
+            # Recorded only now, with the upload already held at its first
+            # packet. `motion.runner` *is* `server.commands`, the very runner
+            # `build_job_bytes` goes through, so a recorder put in earlier stops
+            # the upload from ever reaching the line — measuring the recorder
+            # instead of the guard. Measured: "the upload never reached the
+            # line", on the first version of this test.
+            held = server
+            for step in owner.split("."):
+                held = getattr(held, step)
+            monkeypatch.setattr(
+                held, seam, lambda *a, **kw: reached.append(a) or []
+            )
+            response = client.post(path, json=body)
+
+    assert response.status_code == 409, (
+        f"{path} went through during an upload and reached {seam}: {reached}"
+    )
+    assert response.headers["X-OpenKerf-Error"] == "machine.sendingAFile"
+    assert not reached, f"{path} reached {seam} anyway"
+
+
+@pytest.mark.parametrize("verb", ["pause", "resume"])
+def test_the_realtime_verbs_refuse_while_a_file_is_being_sent(ruida, verb):
+    """
+    Pause and resume, which reach the line without a spooler in between.
+
+    `RuidaController.pause` is `job.pause_process(output=self.write)` and
+    `resume` is `restore_process` beside it (`ruida/controller.py:416-422`) —
+    realtime bytes onto `active_session.write`, the same place our blocks go.
+    During an upload they land inside the file being stored.
+
+    Called directly rather than through the route, and that is a measurement
+    decision rather than a shortcut. The guard lives inside `CommandRunner.pause`
+    and `.resume`, so that every caller is covered and not only the two routes —
+    which means a route test would have to record `run` to keep from executing
+    anything, and `resume` returns `["not paused"]` from `_driver_paused()`
+    before it ever reaches `run` on a machine that is not paused. The recorder
+    would then be empty whether the guard is there or not: a test that passes on
+    the broken code, measuring an early return instead of a refusal.
+
+    Nothing is spooled, nothing is run: the refusal is the first thing in both
+    methods, and if it were not, `_driver_paused()` only reads.
+    """
+    from openkerf_api.busy import claim_the_line, release_the_line
+
+    runner = CommandRunner(ruida)
+    assert claim_the_line(ruida), "the line was already claimed"
+    try:
+        with pytest.raises(DesignError) as error:
+            getattr(runner, verb)()
+    finally:
+        release_the_line(ruida)
+
+    assert error.value.code == "machine.sendingAFile"
+    assert "wait until it is there" in str(error.value).lower()
+
+
+def test_stopping_stays_reachable_while_a_file_is_being_sent(ruida, monkeypatch):
+    """
+    The one write that is deliberately *not* guarded.
+
+    `/api/job/stop` carries the note "Realtime abort. Must stay reachable in one
+    call, always." Everything else in this family is refused during an upload,
+    and stop is the exception on purpose: a stop that first argues about the
+    state of the connection is not a stop. The cost is real and it is the right
+    way round — an abort during an upload puts its bytes in the middle of the
+    file, so that file is spoilt and has to be deleted from the panel. A spoilt
+    file you can delete; a button that would not stop the machine you cannot.
+
+    Recorded rather than run: `estop` on a Ruida is realtime and this suite has
+    no machine. What is asserted is that it gets through the guard.
+    """
+    from openkerf_api.busy import claim_the_line, release_the_line
+
+    runner = CommandRunner(ruida)
+    reached = []
+    monkeypatch.setattr(runner, "run", lambda *a, **kw: reached.append(a) or [])
+    assert claim_the_line(ruida), "the line was already claimed"
+    try:
+        runner.stop()
+    finally:
+        release_the_line(ruida)
+
+    assert reached, "stop was blocked by the upload guard"
+
+
+@pytest.mark.parametrize("verb", ["unlock", "lock"])
+def test_releasing_the_motors_is_refused_while_a_file_is_being_sent(
+    ruida, monkeypatch, verb
+):
+    """
+    The direction neither the review nor I had named: `unlock` and `lock`.
+
+    They are in `MOVES` beside `home` and `jog`, but they are the two members of
+    that tuple that never call `_idle()` — so nothing in front of them asked
+    anything at all. They reach the device through the same runner, and during an
+    upload that is the same line.
+
+    What this test does *not* claim is that they are now guarded against a
+    burning job. They never were, and that is about burning rather than sending;
+    it is written up in the report instead of changed on the way past.
+    """
+    from openkerf_api.busy import claim_the_line, release_the_line
+    from openkerf_api.machine import MachineControl
+
+    motion = MachineControl(ruida)
+    reached = []
+    monkeypatch.setattr(motion.runner, "run", lambda *a, **kw: reached.append(a) or [])
+    assert claim_the_line(ruida), "the line was already claimed"
+    try:
+        with pytest.raises(DesignError) as error:
+            getattr(motion, verb)()
+    finally:
+        release_the_line(ruida)
+
+    assert error.value.code == "machine.sendingAFile"
+    assert not reached, f"{verb} reached the machine anyway"

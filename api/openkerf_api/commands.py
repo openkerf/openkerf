@@ -10,6 +10,8 @@ import re
 import threading
 from contextlib import contextmanager
 
+from .busy import refuse_while_a_file_is_being_sent
+
 ANSI = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 # The console reports failures as plain text on the channel rather than raising,
@@ -261,6 +263,11 @@ class CommandRunner:
 
         `mutators` are operations on the copied plan (tiles, Z steps). See `_plan_and_spool`.
         """
+        # Not while a file is going out: the spooler would pick this up and the
+        # driver write it down the line the upload is using. In the runner and not
+        # in the route, so the tile burn and the series burn — the other two callers
+        # of this method — are covered by the same line.
+        refuse_while_a_file_is_being_sent(self.kernel)
         burnable = self._require_something_to_burn()
         output = self._plan_and_spool(mutators)
         self._name_job(name, burnable)
@@ -1013,6 +1020,11 @@ class CommandRunner:
         ruida/device.py:425, grbl/device.py:982). So pressing Pause twice sets the machine
         burning again, and that is exactly the opposite of what is on the button.
         """
+        # `RuidaController.pause` is `job.pause_process(output=self.write)`
+        # (`ruida/controller.py:416`) — realtime, straight onto the line an upload is
+        # using, with no spooler in between. And there is nothing to pause during an
+        # upload: `start_job` cannot have run.
+        refuse_while_a_file_is_being_sent(self.kernel)
         if self._driver_paused() is True:
             return ["already paused"]
         return self.run("pause")
@@ -1033,6 +1045,7 @@ class CommandRunner:
         paused afterwards, we take it off with the toggle. For ruida and grbl nothing changes;
         there the flag is already gone after the first attempt.
         """
+        refuse_while_a_file_is_being_sent(self.kernel)
         if self._driver_paused() is False:
             return ["not paused"]
         output = self.run("resume")
