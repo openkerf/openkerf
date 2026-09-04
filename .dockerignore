@@ -1,4 +1,5 @@
-# The engine's working copy is for exploration and tests; the image gets MeerK40t from PyPI.
+# The engine's working copy is for exploration and tests; the image installs MeerK40t from
+# upstream git at a pinned revision (see deploy/Dockerfile), not from this checkout.
 meerk40t/
 # The private working record.
 workshop/

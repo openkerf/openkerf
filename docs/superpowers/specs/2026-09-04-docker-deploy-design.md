@@ -23,6 +23,13 @@ Raspberry Pi next to a Ruida-controlled CO₂ laser, with a USB camera over the 
 | State | One named volume on `/data`, with `HOME=/data` | On Linux the engine writes to `~/.config/MeerK40t`; the library, the layer list and the autosave sit beside it. Setting `HOME` moves all of it into the volume without touching the engine. |
 | Runs as | Non-root user `openkerf`, in group `video` | The camera device is `root:video` on every common distribution. |
 
+The engine is installed from upstream git at a pinned revision (`5f68a45` as of this
+writing, the `MEERK40T_REV` build argument), not from PyPI: no PyPI release contains
+modules this code imports, and against PyPI 0.9.9100, 193 of 1625 API tests fail. This
+means the version constraint in `api/pyproject.toml` and the pinned SHA in
+`deploy/Dockerfile` are two places that move together — bumping one without checking the
+other reintroduces the gap.
+
 ## The image (`deploy/Dockerfile`)
 
 Two stages.
@@ -49,11 +56,16 @@ The final image:
 saying which variable is missing and how to make one, and exits 1. With one it runs:
 
 ```
-exec meerk40t --no-gui -d -e "openkerf -p $PORT -b $BIND -f /app/frontend -t $TOKEN"
+exec meerk40t --no-gui -d -e ".openkerf -p $PORT -b $BIND -f /app/frontend -t $TOKEN"
 ```
 
-`exec` so the engine is PID 1 and receives the stop signal, which is what lets the
-Ruida controller go idle before the process dies (see `ApiServer.stop()`).
+`exec` makes the engine PID 1, so Docker's stop signal reaches it directly — a shell in
+between would swallow it and Docker would SIGKILL after its 10 s grace period instead.
+The engine has no handler for that signal, so a stop is still abrupt; nothing runs the
+engine's own quit. Little is lost even so, since the autosave writes every 5 s and
+settings are written at the moment they change. A real handler is follow-up work. The
+leading `.` silences the console echo of the command line, so the token passed with `-t`
+does not end up a second time in `docker logs`.
 
 ## Compose (`deploy/compose.yml`, `deploy/.env.example`)
 

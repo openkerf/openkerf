@@ -3,10 +3,10 @@
 #
 #   deploy/smoke.sh ghcr.io/openkerf/openkerf:latest
 #
-# Four checks, each one a claim the handbook makes: the API answers, the frontend build
-# is inside the image, OpenCV imports, and a start without a token is refused with a
-# sentence. Exits non-zero on the first failure. Uses port 18080 so a running OpenKerf
-# on 8080 is left alone.
+# Five checks, each one a claim the handbook makes: the API answers, the frontend build
+# is inside the image, OpenCV imports, a start without a token is refused with a
+# sentence, and the token given with -t never lands in the container log. Exits non-zero
+# on the first failure. Uses port 18080 so a running OpenKerf on 8080 is left alone.
 set -euo pipefail
 
 IMAGE="${1:?usage: smoke.sh <image>}"
@@ -41,5 +41,10 @@ grep -q "_app/immutable/" <<<"$page" || { echo "   / does not reference _app/imm
 
 echo "4. OpenCV imports"
 docker run --rm --entrypoint python "$IMAGE" -c "import cv2; print('   cv2', cv2.__version__)"
+
+echo "5. the token is not in the container log"
+if docker logs "$NAME" 2>&1 | grep -q smoke; then
+  echo "   the token 'smoke' appears in docker logs"; exit 1
+fi
 
 echo "ok"

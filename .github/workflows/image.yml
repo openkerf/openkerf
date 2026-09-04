@@ -1,7 +1,9 @@
 # Builds the OpenKerf image for amd64 and arm64, proves it with deploy/smoke.sh, and
 # pushes it to GHCR. Pull requests build and prove but never push, so a broken Dockerfile
 # is visible on the PR and `latest` never points at an image without a frontend or
-# without OpenCV.
+# without OpenCV. Honestly: the push step below builds the image again rather than
+# pushing the digest that was just smoke-tested. With a warm cache (cache-from: type=gha)
+# this reproduces the same layers, but it is a second build, not a re-tag of the first.
 name: image
 
 on:

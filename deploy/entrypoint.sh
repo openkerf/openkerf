@@ -12,7 +12,14 @@ if [ -z "${OPENKERF_TOKEN:-}" ]; then
   exit 1
 fi
 
-# `exec` so the engine is PID 1 and receives the stop signal from Docker: ApiServer.stop()
-# then waits for the Ruida controller to go idle before the process ends.
+# `exec` makes the engine PID 1, so Docker's stop signal reaches it directly — a shell
+# left in between would swallow it and Docker would SIGKILL after its 10 s grace period
+# instead. The engine has no handler for that signal, so a stop is still abrupt: nothing
+# runs the engine's own quit. Little is lost even so, since the autosave writes every 5 s
+# and settings are written at the moment they change; a real handler is follow-up work.
+#
+# The leading `.` on the command is the engine's own way of not echoing a command line to
+# its console channel (meerk40t/kernel/kernel.py) — without it the token passed with -t
+# would appear a second time in `docker logs`, in plain text.
 exec meerk40t --no-gui --daemon \
-  --execute "openkerf -p ${PORT} -b ${BIND} -f /app/frontend -t ${OPENKERF_TOKEN}"
+  --execute ".openkerf -p ${PORT} -b ${BIND} -f /app/frontend -t ${OPENKERF_TOKEN}"
