@@ -551,22 +551,27 @@ export function formatMm(value: number | null | undefined): string {
 }
 
 /**
- * The name as the Ruida keeps it: printable ASCII without spaces, capitals, eight long.
+ * The name as the Ruida keeps it: letters and digits, capitals, eight long.
  *
  * The screen does this before the file goes out and not after, so that what you type is
  * what the panel of the machine will say. Otherwise you meet your real file name for the
  * first time on the machine, standing in front of it, with a list of eight-character
  * names that all begin the same way.
  *
+ * Letters and digits and nothing else, because that is what the refusal beside it
+ * promises — "a name of up to eight letters or digits". A filter that let punctuation
+ * through made that sentence untrue: `---` was accepted and stood on the panel as `---`.
+ * A hyphen that falls away while you are typing it is visible and one keystroke to undo.
+ *
  * `ruida_upload.machine_name` does exactly this on the other side and its answer is the
  * one that counts; these two are one rule in two languages, and
  * `tests/upload-name.test.ts` runs them against each other rather than trusting the
- * resemblance. The space goes too — the engine layer explains why: eight characters is
- * little enough without spending them on gaps.
+ * resemblance. The space goes with the rest — the engine layer explains why: eight
+ * characters is little enough without spending them on gaps.
  */
 export function machineName(name: string): string {
 	return [...(name ?? '')]
-		.filter((c) => c.charCodeAt(0) > 32 && c.charCodeAt(0) < 127)
+		.filter((c) => /[A-Za-z0-9]/.test(c))
 		.join('')
 		.toUpperCase()
 		.slice(0, 8);

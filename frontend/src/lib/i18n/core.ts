@@ -251,14 +251,24 @@ export function apiError(response: Response, detail: string | null | undefined):
 	const key = `api.${code}` as MessageKey;
 	if (!code || !(key in en)) return detail ?? t('notice.failed');
 	const carried = brought(response);
-	// A `{what}` in the message is the second sentence of a refusal that broke off
-	// halfway, and it is chosen from the values rather than written in the catalogue.
-	// Without them there is nothing to choose it from, and a sentence with a hole where
-	// its advice was says less than the English one the API sent, so that one wins.
-	if (!String(en[key]).includes('{what}')) return t(key, written(carried));
+	if (!BROKE_OFF.has(code)) return t(key, written(carried));
+	// These two say in a second sentence what is left on the machine, and that sentence
+	// is chosen from the values rather than written in the catalogue. Without them there
+	// is nothing to choose it from, and a message with a hole where its advice was says
+	// less than the English one the API sent, so that one wins.
 	if (typeof carried?.announced !== 'boolean') return detail ?? t('notice.failed');
 	return t(key, { ...written(carried), what: whatIsLeft(carried) });
 }
+
+/**
+ * The refusals that break off in the middle of sending a file.
+ *
+ * By code and not by "does the message hold a `{what}`": the next message that wants a
+ * placeholder of that name would otherwise be given upload advice, or fall back to
+ * English for want of an `announced` it was never going to carry. `ruida_upload.py`
+ * raises exactly these two.
+ */
+const BROKE_OFF = new Set(['upload.stalled', 'upload.interrupted']);
 
 /**
  * What an upload that broke off has left on the machine — one of four sentences.

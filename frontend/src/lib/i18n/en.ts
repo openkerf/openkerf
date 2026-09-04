@@ -2744,13 +2744,13 @@ export const en = {
 	// that route is one a reader can act on standing at the machine, so all of them are
 	// here — including the one it shares with starting a job.
 	'api.job.nothingToBurn':
-		'There is nothing ready to burn. Draw or load something, and put it in a layer that burns — a layer with burn along switched off is skipped.',
+		'There is nothing ready to burn. Draw or load something, and put it in a layer that burns — a layer with \'burn along\' off is skipped.',
 	'api.upload.needsName':
 		'Give the file a name of up to eight letters or digits; that is what the machine’s panel shows.',
 	'api.upload.noMachine': 'There is no active machine to send the file to.',
 	'api.upload.notConnected':
 		'There is no connection to the machine, so the file cannot be sent. Connect first; nothing has been sent.',
-	'api.upload.notRuida': 'This machine does not keep files in its memory; that is a Ruida thing.',
+	'api.upload.notRuida': 'This machine does not keep files in memory; that is a Ruida thing.',
 	'api.upload.whileBurning':
 		'A job is running. Wait until it is done, or stop it: the file would go down the same connection the machine is burning from. Nothing has been sent.',
 	'api.upload.busy':

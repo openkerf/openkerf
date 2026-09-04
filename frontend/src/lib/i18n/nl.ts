@@ -2567,14 +2567,14 @@ export const nl: Catalogue = {
 	'api.sheet.sameSheet': 'Dat is het vel waar je al op werkt.',
 	'api.sheet.tooThick': 'Een vel van meer dan 500 mm dik gaat er niet in.',
 	'api.job.nothingToBurn':
-		'Er staat niets klaar om te branden. Teken of laad iets, en zet het in een laag die brandt — een laag met meebranden uit wordt overgeslagen.',
+		'Er staat niets klaar om te branden. Teken of laad iets, en zet het in een laag die brandt — een laag met \'meebranden\' uit wordt overgeslagen.',
 	'api.upload.needsName':
 		'Geef het bestand een naam van hoogstens acht letters of cijfers; dat is wat het paneel van de machine laat zien.',
 	'api.upload.noMachine': 'Er is geen actieve machine om het bestand naartoe te sturen.',
 	'api.upload.notConnected':
 		'Er is geen verbinding met de machine, dus het bestand kan niet verstuurd worden. Maak eerst verbinding; er is niets verstuurd.',
 	'api.upload.notRuida':
-		'Deze machine bewaart geen bestanden in haar geheugen; dat is iets van een Ruida.',
+		'Deze machine bewaart geen bestanden in het geheugen; dat is iets van een Ruida.',
 	'api.upload.whileBurning':
 		'Er loopt een job. Wacht tot die klaar is, of stop hem: het bestand zou over dezelfde verbinding gaan waar de machine nu uit brandt. Er is niets verstuurd.',
 	'api.upload.busy':

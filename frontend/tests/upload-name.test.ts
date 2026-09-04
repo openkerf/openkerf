@@ -28,7 +28,18 @@ import { machineName } from '../src/lib/api.ts';
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..', '..');
 
-/** The names both sides are asked about. Every rule of the pair has one. */
+/**
+ * The names both sides are asked about: every rule of the pair, and the edges where
+ * two languages are most likely to disagree about what a character is.
+ *
+ * `İstanbul` because Turkish `İ` upper-cases to itself but lower-cases to two code
+ * points; `ǅxy` because it is a title-case letter with three cases; `ﬁne` because the
+ * ligature expands to two letters under `upper()` in Python and `toUpperCase()` in
+ * JavaScript; `straße` because `ß` becomes `SS` and would make a name longer than it
+ * was; `🙂box` because a non-BMP character is two code units in JavaScript and one in
+ * Python. All of those are dropped on both sides now, but they are the cases where a
+ * copy of a rule stops being a copy.
+ */
 const NAMES = [
 	'Sheet 1',
 	'kastje-groot',
@@ -36,18 +47,39 @@ const NAMES = [
 	'vél',
 	'',
 	'   ',
-	'a very long name indeed',
+	'---',
+	'!@#$%^&*',
+	'nine char',
+	'a very long name of twenty+',
 	'lid_2/3',
-	'kist\tA'
+	'kist\tA',
+	'ÉÉÉ',
+	'日本語ボード',
+	'🙂box',
+	'straße',
+	'ﬁne',
+	'İstanbul',
+	'ǅxy'
 ];
 
 test('the name is what the panel will show', () => {
 	assert.equal(machineName('Sheet 1'), 'SHEET1', 'a space is not worth one of the eight');
-	assert.equal(machineName('kastje-groot'), 'KASTJE-G');
+	assert.equal(machineName('kastje-groot'), 'KASTJEGR', 'the hyphen goes before the eight are counted');
 	assert.equal(machineName('  bord  '), 'BORD');
 	assert.equal(machineName('vél'), 'VL', 'a letter the machine cannot show is dropped');
 	assert.equal(machineName(''), '');
 	assert.equal(machineName('   '), '', 'a name of nothing but spaces is no name');
+});
+
+test('a name is letters and digits, because that is what the refusal promises', () => {
+	// `api.upload.needsName` says "a name of up to eight letters or digits; that is what
+	// the machine's panel shows", and until this it was not true: `---` went through and
+	// stood on the panel as `---`. A hyphen that falls away while you are typing it is
+	// visible and one keystroke to undo; a sentence that is wrong is neither.
+	assert.equal(machineName('---'), '');
+	assert.equal(machineName('bord-2'), 'BORD2');
+	assert.equal(machineName('a_b.c'), 'ABC');
+	assert.equal(machineName('日本語'), '', 'not str.isalnum(): the panel has no glyph for it');
 });
 
 test('the field shows capitals even though it no longer stores them', () => {

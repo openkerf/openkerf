@@ -13,7 +13,7 @@ import pytest
 
 from openkerf_api.commands import CommandRunner, _AlwaysConnected
 from openkerf_api.edits import DesignError
-from openkerf_api.ruida_upload import CHUNK, RuidaUpload
+from openkerf_api.ruida_upload import CHUNK, RuidaUpload, machine_name
 
 
 @pytest.fixture
@@ -649,7 +649,9 @@ def test_the_name_goes_over_the_line_in_eight_capitals(ruida):
     The machine keeps eight characters, in capitals — the engine's own emulator
     truncates to eight and upper-cases them itself (`ruida/emulator.py:749-753`
     reads until the NUL; the panel shows what a Ruida keeps). So we send what
-    arrives, and the screen says the same thing the panel does.
+    arrives, and the screen says the same thing the panel does. The hyphen is
+    gone before the eight are counted: `machine_name` keeps letters and digits
+    and nothing else, so this is `kastjegroot` cut to eight.
     """
     upload = RuidaUpload(ruida)
 
@@ -657,7 +659,7 @@ def test_the_name_goes_over_the_line_in_eight_capitals(ruida):
 
     name = frames[1]
     assert name.startswith(b"\xe7\x01")
-    assert name[2:-1] == b"KASTJE-G"
+    assert name[2:-1] == b"KASTJEGR"
     assert name.endswith(b"\x00")
 
 
@@ -951,7 +953,8 @@ def test_a_transfer_that_flows_reports_what_went(ruida, monkeypatch):
 
     result = upload.upload("bord-1")
 
-    assert result["name"] == "BORD-1"
+    # The hyphen is not one of the eight: `machine_name` keeps letters and digits.
+    assert result["name"] == "BORD1"
     assert result["chunks"] == len(session.written) - 2  # without the two headers
     assert result["bytes"] > 100
     assert session.written[0] == b"\xe8\x02"
@@ -1475,6 +1478,26 @@ def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
         f"removing the wait inside the loop left the depth at {without.deepest}, "
         f"so the assertion above would not have caught its removal"
     )
+
+
+def test_the_name_keeps_letters_and_digits_and_nothing_else():
+    """What the refusal promises is what the filter does.
+
+    `upload.needsName` says "a name of up to eight letters or digits; that is what
+    the machine's panel shows", and a name of nothing but punctuation used to go
+    through it — `---` came out as `---` and the sentence was simply not true. A
+    hyphen or an underscore now falls away while you are typing it, which is visible
+    and one keystroke to undo; a sentence that is wrong is not.
+
+    Deliberately ASCII and not `str.isalnum()`, which is true of é, of 日 and of ٣:
+    the machine's panel has no glyph for any of them.
+    """
+    assert machine_name("---") == ""
+    assert machine_name("bord-2") == "BORD2"
+    assert machine_name("my box 12345") == "MYBOX123"
+    assert machine_name("vél") == "VL"
+    assert machine_name("日本語") == ""
+    assert machine_name("a_b.c") == "ABC"
 
 
 def test_a_nameless_upload_says_so_before_it_says_anything_about_the_job(

@@ -36,20 +36,34 @@ CHUNK = 1000
 #: cut and upper-case here, before it goes out, so the screen says the same.
 NAME_LENGTH = 8
 
+#: The characters a name may be made of. Written out rather than asked of
+#: `str.isalnum()`, which is true of é, of 日 and of the Arabic-Indic ٣ — none of
+#: which a panel has a glyph for.
+NAME_CHARACTERS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+)
+
 FILE_TRANSFER = b"\xe8\x02"
 SET_FILENAME = b"\xe7\x01"
 
 
 def machine_name(name: str) -> str:
-    """The name as the machine keeps it: printable ASCII, capitals, eight long.
+    """The name as the machine keeps it: letters and digits, capitals, eight long.
 
-    The space goes too, and not only at the ends: eight characters is little
+    Letters and digits and nothing else, because that is what the refusal beside
+    this promises — "a name of up to eight letters or digits" — and a filter that
+    let `---` through made that sentence untrue: the name went to the panel as
+    `---`. A hyphen that falls away while you are typing it is visible and one
+    keystroke to undo; a sentence that is wrong is neither.
+
+    The space goes with it, and not only at the ends: eight characters is little
     enough without spending them on gaps, and a name is already silently cut to
     fit — `MY BOX` becomes `MYBOX`. One sentence about what is left over reads
-    better than two about what is left out, and the screen (task 5) shows what
-    will actually stand on the panel.
+    better than two about what is left out, and the screen shows what will
+    actually stand on the panel (`machineName` in `frontend/src/lib/api.ts`, run
+    against this function in `frontend/tests/upload-name.test.ts`).
     """
-    kept = "".join(c for c in (name or "") if 32 < ord(c) < 127)
+    kept = "".join(c for c in (name or "") if c in NAME_CHARACTERS)
     return kept.upper()[:NAME_LENGTH]
 
 

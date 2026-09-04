@@ -48,24 +48,51 @@ rmSync(work, { recursive: true, force: true });
 const TRANSLATIONS: Record<string, Record<string, unknown>> = { nl };
 
 /**
+ * A catalogue file in `i18n/`, by shape: `en.ts`, `nl.ts`, `de.ts`, `pt-BR.ts`.
+ *
+ * By shape and not by a list of names, because a list is a guard that goes quiet the
+ * moment somebody does something good. A `de.ts` that a hand-written list does not know
+ * would be read as ordinary source below, and then *every* key in the app counts as
+ * used — `every key is used somewhere` would pass for ever without looking at anything,
+ * and `no message is resolved once and kept` would report the catalogue itself. Measured
+ * by adding a `de.ts` and a key nobody calls: with a list, the guard stayed green.
+ */
+const CATALOGUE_FILE = /^[a-z]{2}(-[A-Z]{2})?\.ts$/;
+
+/**
  * Every file the app is built from, so a key can be looked for in all of them.
  *
- * The two catalogues are left out and nothing else in `i18n/`: a key is written down in
+ * The catalogues are left out and nothing else in `i18n/`: a key is written down in
  * `en.ts` and `nl.ts`, so reading those would let every key count as its own user. The
  * machinery beside them is ordinary app code — `core.ts` picks one of four sentences for
  * an upload that broke off halfway, and those four are as used as anything a component
  * calls. Leaving the whole folder out made them look like keys nobody wanted.
  */
-const CATALOGUES = new Set(['en.ts', 'nl.ts']);
 function sources(dir: string, found: string[] = [], match = /\.(svelte|ts)$/): string[] {
 	for (const entry of readdirSync(dir)) {
 		const path = join(dir, entry);
 		if (statSync(path).isDirectory()) sources(path, found, match);
-		else if (match.test(entry) && !(path.includes(`${'i18n'}/`) && CATALOGUES.has(entry)))
+		else if (match.test(entry) && !(path.includes(`${'i18n'}/`) && CATALOGUE_FILE.test(entry)))
 			found.push(path);
 	}
 	return found;
 }
+
+test('every catalogue on disk is one this file checks', () => {
+	// The other half of the shape rule. `TRANSLATIONS` above is written by hand, so a
+	// language added to the folder and not to that list would be translated by nobody and
+	// checked by nothing — no test here would ever open it. Rather than two hand-written
+	// lists that have to agree, the folder decides and this says so out loud.
+	const onDisk = readdirSync(join(SRC, 'lib', 'i18n'))
+		.filter((entry) => CATALOGUE_FILE.test(entry))
+		.map((entry) => entry.replace(/\.ts$/, ''))
+		.sort();
+	assert.deepEqual(
+		onDisk,
+		['en', ...Object.keys(TRANSLATIONS)].sort(),
+		'a catalogue in i18n/ that this file does not load — add it to TRANSLATIONS'
+	);
+});
 
 const CODE = sources(SRC)
 	.map((p) => readFileSync(p, 'utf8'))
