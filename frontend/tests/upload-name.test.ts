@@ -20,7 +20,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { machineName } from '../src/lib/api.ts';
@@ -48,6 +48,23 @@ test('the name is what the panel will show', () => {
 	assert.equal(machineName('vél'), 'VL', 'a letter the machine cannot show is dropped');
 	assert.equal(machineName(''), '');
 	assert.equal(machineName('   '), '', 'a name of nothing but spaces is no name');
+});
+
+test('the field shows capitals even though it no longer stores them', () => {
+	// The box keeps what you typed, in the case you typed it, so that a keystroke in the
+	// middle of a name does not move the cursor to the end (measured, and written down at
+	// `nameTyped` in the component). What makes it *look* like the panel of the machine is
+	// therefore the style, and nothing else: take `text-transform` away and the field
+	// quietly stops showing the name it will send. That is one line to delete and nothing
+	// else would notice, so it is held here.
+	const source = readFileSync(join(ROOT, 'frontend', 'src', 'lib', 'components', 'JobControls.svelte'), 'utf8');
+	const at = source.indexOf('.pf-uploadrow input {');
+	assert.ok(at > 0, 'the name field has no style block of its own any more');
+	assert.match(
+		source.slice(at, source.indexOf('}', at)),
+		/text-transform:\s*uppercase/,
+		'the name field no longer shows the capitals the machine will keep'
+	);
 });
 
 test('the screen and the engine layer cut the name the same way', () => {

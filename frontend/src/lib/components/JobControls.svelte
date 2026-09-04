@@ -562,12 +562,56 @@
 	 * `typed` and not one `$state` seeded once: this panel is not rebuilt when you
 	 * switch sheets, so a field filled at mount goes on offering the name of the sheet
 	 * you have left. Whoever has typed a name keeps it; whoever has not follows the
-	 * sheet. Either way it goes through `machineName` first, so what stands in the
-	 * field is what will stand on the panel of the machine — eight characters,
-	 * capitals, no spaces — and not something that turns into that on the way.
+	 * sheet. Either way `uploadName` is what the machine will keep — eight characters,
+	 * capitals, no spaces — so the field promises nothing the panel will not show.
+	 *
+	 * What `typed` holds is what stands in the box, in the case it was typed in, and
+	 * the capitals on screen come from `text-transform` in the style below. That
+	 * division is not cosmetic: writing the upper-cased text back into the field on
+	 * every keystroke moves the cursor to the end of it. Measured on `ABCD` with the
+	 * cursor between B and C — an ordinary lower-case `x` gave `ABXCD` with the cursor
+	 * at 5 instead of 3, and a capital `X`, which the filter leaves alone, kept it at
+	 * 3. Nearly every keystroke is a lower-case letter, so in practice you could only
+	 * type at the end: correcting `SHEET1` to `SHEETS1` meant retyping the whole name,
+	 * in the one field this screen is about.
 	 */
 	let typed = $state<string | null>(null);
-	let uploadName = $derived(machineName(typed ?? sheetName));
+	let fieldText = $derived(typed ?? machineName(sheetName));
+	let uploadName = $derived(machineName(fieldText));
+
+	/**
+	 * The characters of a name the machine can keep, in the case they were typed.
+	 *
+	 * Asked of `machineName` per character rather than written out a second time: a
+	 * character survives exactly when the rule keeps it, and the length is the length
+	 * that same rule leaves — so there is no second copy here of which characters are
+	 * printable or of how long a name may be.
+	 */
+	function keepable(raw: string): string {
+		const kept = [...raw].filter((c) => machineName(c) !== '').join('');
+		return kept.slice(0, machineName(kept).length);
+	}
+
+	/**
+	 * A keystroke in the name field: drop what the machine cannot keep, leave the rest
+	 * where it stands.
+	 *
+	 * The field is only written back to when the filter really dropped something —
+	 * a space, an accented letter, a ninth character — and then the cursor is put back
+	 * where it was, minus what fell away in front of it. Measured, cursor between B and
+	 * C of `ABCD`: `x` → `ABxCD` and the cursor at 3, a space → `ABCD` and the cursor
+	 * still at 2 (before this it went to the end, 5 and 4).
+	 */
+	function nameTyped(field: HTMLInputElement) {
+		const raw = field.value;
+		const at = field.selectionStart ?? raw.length;
+		const kept = keepable(raw);
+		typed = kept;
+		if (kept === raw) return;
+		const before = keepable(raw.slice(0, at)).length;
+		field.value = kept;
+		field.setSelectionRange(before, before);
+	}
 	let uploaded = $state<string | null>(null);
 	$effect(() => {
 		// The confirmation is about one name. The moment the field says something else —
@@ -907,13 +951,10 @@
 							class="mono"
 							type="text"
 							maxlength="8"
-							value={uploadName}
+							value={fieldText}
 							disabled={Boolean(uploadOff)}
 							title={uploadOff ?? t('job.upload.name')}
-							oninput={(e) => {
-								typed = machineName(e.currentTarget.value);
-								e.currentTarget.value = typed;
-							}}
+							oninput={(e) => nameTyped(e.currentTarget)}
 						/>
 					</label>
 					<button
