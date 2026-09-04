@@ -2750,6 +2750,8 @@ export const en = {
 	// The other direction of `upload.whileBurning`: a move, a burn, a pause or a resume
 	// while a file is going out. One sentence for all of them — which button was pressed
 	// is already in front of the reader, and the remedy is the same everywhere.
+	'api.machine.motorsWhileBurning':
+		'A job is running. Stop it first: releasing the motors during a burn takes the drive out from under a head that is following a path, and the job is lost.',
 	'api.machine.sendingAFile':
 		'A file is being sent to the machine. Wait until it is there and then try again: anything sent now lands in the middle of that file, and the machine gives no sign of it.',
 	'api.upload.noMachine': 'There is no active machine to send the file to.',

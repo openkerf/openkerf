@@ -119,6 +119,11 @@ the canvas focused the window opens and nothing else moves.
 None of the shortcuts fire while the cursor is in a field: in a measurement box
 a full stop is a decimal point, not an emergency stop.
 
+While a job runs the machine refuses everything that would move the head, and
+releasing the motors is refused with it: letting go mid-burn takes the drive out
+from under a head that is following a path, and the job is lost. Stop the job
+first, then release them. Stopping itself is never refused.
+
 The pen tool has keys of its own while a line is under construction, and they are
 its alone: Enter or a double-click finishes the line, Backspace takes back the
 last point, and Escape throws the line away.

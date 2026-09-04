@@ -2581,3 +2581,38 @@ def test_reading_the_flag_does_not_take_it(ruida):
 
     assert busy.a_file_is_being_sent(ruida) is False
     assert watched.taken == 1
+
+
+@pytest.mark.parametrize("verb", ["unlock", "lock"])
+def test_the_motors_are_not_released_while_a_job_is_burning(ruida, monkeypatch, verb):
+    """
+    The gap this branch found and left open, now closed on the user's ruling.
+
+    `unlock` and `lock` are in `MOVES` beside `home` and `jog`, and they were the
+    only two members of it that asked `_idle()` nothing — so they went through
+    while a job was burning. Measured before this: with a running job in the
+    spooler, `unlock()` reached the runner with `('unlock',)`.
+
+    Why it is not a small thing: releasing the motors mid-burn takes the drive
+    out from under a head that is following a path, and the job is lost.
+    There is no legitimate "let go" in the middle of a job — somebody who wants
+    to move the head by hand stops first. `lock` comes along because it is the
+    counterpart, and half a rule is the one somebody reads wrongly later.
+
+    Its own sentence and code, because this is about burning and not about
+    sending: `machine.sendingAFile` says the line is carrying a file, and that is
+    a different thing to be told.
+    """
+    from openkerf_api.machine import MachineControl
+
+    motion = MachineControl(ruida)
+    reached = []
+    monkeypatch.setattr(motion.runner, "run", lambda *a, **kw: reached.append(a) or [])
+    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+
+    with pytest.raises(DesignError) as error:
+        getattr(motion, verb)()
+
+    assert error.value.code == "machine.motorsWhileBurning"
+    assert "stop" in str(error.value).lower()
+    assert not reached, f"{verb} reached the machine while a job was burning"

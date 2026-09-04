@@ -2571,6 +2571,8 @@ export const nl: Catalogue = {
 	'api.upload.needsName':
 		'Geef het bestand een naam van hoogstens acht letters of cijfers; dat is wat het paneel van de machine laat zien.',
 	'api.upload.noMachine': 'Er is geen actieve machine om het bestand naartoe te sturen.',
+	'api.machine.motorsWhileBurning':
+		'Er loopt een job. Stop die eerst: de motoren loslaten tijdens een brand haalt de aandrijving weg onder een kop die een pad volgt, en de job is verloren.',
 	'api.machine.sendingAFile':
 		'Er wordt een bestand naar de machine gestuurd. Wacht tot het er staat en probeer het dan opnieuw: wat er nu heen gaat belandt midden in dat bestand, en de machine laat daar niets van merken.',
 	'api.upload.notConnected':

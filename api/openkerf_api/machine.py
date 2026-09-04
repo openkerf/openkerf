@@ -47,6 +47,35 @@ FOCUS = "focusz"
 CONNECTS = ("ruida_connect", "usb_connect")
 DISCONNECTS = ("ruida_disconnect", "usb_disconnect")
 
+# What `_idle()` says when a job is running, as a sentence and a code.
+#
+# Two, because releasing the motors is not the same act as moving the head, and the
+# reader is entitled to know which one was refused. Moving during a burn spoils the
+# work; letting go during a burn takes the drive out from under a head that is
+# following a path, and the job is lost outright. Both are about *burning* — the
+# refusal for a file going down the line is `machine.sendingAFile`, one layer down in
+# `busy.py`, and says something else again.
+# Written as two little functions rather than two (sentence, code) pairs, and the
+# sentence guard is why: `i18n.test.ts` reads this package for `DesignError(...)`
+# calls and compares each one's sentence against `en.ts` under its literal code. A
+# pair handed to a `raise` one screen away is invisible to it — measured, the first
+# attempt at this scored twice, once for a catalogue entry "the API no longer sends"
+# and once for a refusal that had become unreadable. Sentence and code belong in the
+# same call.
+def _moving_while_burning() -> DesignError:
+    return DesignError(
+        "A job is running. Stop it first; moving while burning ruins the job."
+    )
+
+
+def _motors_while_burning() -> DesignError:
+    return DesignError(
+        "A job is running. Stop it first: releasing the motors during a burn takes "
+        "the drive out from under a head that is following a path, and the job is "
+        "lost.",
+        code="machine.motorsWhileBurning",
+    )
+
 
 def _mm(value: float) -> str:
     return f"{value:.4f}mm"
@@ -141,7 +170,7 @@ class MachineControl:
             )
         return {"connection": state, "output": output}
 
-    def _idle(self) -> None:
+    def _idle(self, burning=_moving_while_burning) -> None:
         """
         No moving while something is burning.
 
@@ -158,25 +187,14 @@ class MachineControl:
         acted on here: a jog leaves a job in the spooler reporting `is_running()` False
         for as long as the move takes, so refusing on the queue would make the movers
         block each other. `busy.py` has that measured.
+
+        `burning` builds the refusal for the second half, because `unlock` and `lock`
+        are refused for a different reason than a jog is and the reader should be told
+        which. The questions are shared; only the wording is not.
         """
         refuse_while_a_file_is_being_sent(self.kernel)
         if a_job_is_running(self.kernel):
-            raise DesignError(
-                "A job is running. Stop it first; moving while burning "
-                "ruins the job."
-            )
-
-    def _refuse_while_sending(self) -> None:
-        """The file half of `_idle()`, for the two verbs that never call it.
-
-        `unlock` and `lock` are in `MOVES` beside `home` and `jog` and are the only
-        members of it that ask `_idle()` nothing at all — so they go through while a
-        job is burning too. That predates this and is a question about burning; it is
-        written up rather than changed here. The line is not in question: they reach
-        the device through the same runner, and during an upload their bytes land in
-        the file.
-        """
-        refuse_while_a_file_is_being_sent(self.kernel)
+            raise burning()
 
     def _require(self, command: str):
         if not self.runner.supports(command):
@@ -566,18 +584,24 @@ class MachineControl:
     def unlock(self) -> dict:
         """Release the motors, so the head can be moved by hand.
 
-        The file guard and not `_idle()`, and the difference is deliberate. These two
-        are in `MOVES` but have never asked `_idle()`, so today they go through while a
-        job is burning — that predates this and is a question about burning, not about
-        sending, so it is left as it stands and written up rather than changed here.
-        What is not in question is the line: `unlock` goes to the device through the
-        same runner as everything else, and during an upload its bytes land in the file.
+        The full guard, with its own sentence for the burning half. These two were the
+        only members of `MOVES` that asked `_idle()` nothing, so they went through
+        during a burn — measured: with a running job in the spooler, `unlock()` reached
+        the runner with `('unlock',)`. Releasing the motors then takes the drive out
+        from under a head that is following a path and the job is lost, and there is no
+        legitimate "let go" in the middle of one: whoever wants to move the head by
+        hand stops the job first.
         """
-        self._refuse_while_sending()
+        self._idle(_motors_while_burning)
         self._require("unlock")
         return {"output": self.runner.run("unlock")}
 
     def lock(self) -> dict:
-        self._refuse_while_sending()
+        """Hold the motors again.
+
+        The same guard as `unlock`, because it is the counterpart: half a rule is the
+        half somebody reads wrongly later.
+        """
+        self._idle(_motors_while_burning)
         self._require("lock")
         return {"output": self.runner.run("lock")}
