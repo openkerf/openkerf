@@ -60,7 +60,7 @@ def qr_squares(content: str, x_mm: float, y_mm: float, size_mm: float, quiet: in
         import segno
     except ImportError as e:  # pragma: no cover - only on a bare installation
         raise DesignError(
-            "QR codes need the 'segno' package; install it beside the API.",
+            "QR codes need the segno package; install it beside the API.",
             code="gen.noQrLib",
         ) from e
 
@@ -1196,7 +1196,7 @@ class Generators:
             import barcode as barcodes
         except ImportError as e:  # pragma: no cover - only on a bare installation
             raise DesignError(
-                "Barcodes need the 'python-barcode' package.", code="gen.noBarcodeLib"
+                "Barcodes need the python-barcode package.", code="gen.noBarcodeLib"
             ) from e
 
         if kind not in barcodes.PROVIDED_BARCODES:

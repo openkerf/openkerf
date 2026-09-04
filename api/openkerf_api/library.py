@@ -228,6 +228,11 @@ CREATE INDEX IF NOT EXISTS preset_material ON preset(material_id);
 # unversioned days. The gate is only about *when* it runs, not about what it does.
 SCHEMA_VERSION = 1
 
+# The widest kerf the catalogue will hold, in millimetres. A number of ours rather
+# than a measurement, which is exactly the kind that has to travel in `values` so a
+# translated sentence can say it too.
+KERF_MAX_MM = 5
+
 OPERATIONS = ("snijden", "graveren-vector", "graveren-raster", "markeren")
 SOURCES = ("handmatig", "geextrapoleerd", "testraster", "geimporteerd")
 
@@ -2952,11 +2957,16 @@ def _kerf(value):
     row is later used, and finding out at the proposal is finding out too late.
     """
     number = _number(value, "result_kerf_mm", optional=True)
-    if number is not None and not 0 <= number <= 5:
+    if number is not None and not 0 <= number <= KERF_MAX_MM:
+        # The two numbers were already travelling and only the catalogue used them:
+        # whoever met this refusal without a client that knew the code — curl, a
+        # script, a log — got "out of range" and no range. The English half was the
+        # stale one here, not the translation.
         raise LibraryError(
-            "A kerf is measured in millimetres and this one is out of range.",
+            f"The catalogue holds a kerf between 0 and {KERF_MAX_MM} millimetres, "
+            f"and this one is {number}.",
             code="library.preset.kerfRange",
-            values={"kerf": number, "max": 5},
+            values={"kerf": number, "max": KERF_MAX_MM},
         )
     return number
 

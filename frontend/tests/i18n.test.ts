@@ -261,20 +261,17 @@ test('the English of a refusal is the sentence the API sends', () => {
 	// decided so: the repair would be to let the value travel, and for these three the
 	// value is not a word in either language.
 	//
-	// This list was eight and has just lost its first two, which is the first time it
-	// has shrunk: `stencil.tooMuchBridge` and `library.material.nameTaken` now let
-	// their values travel — the bridge count and width, and the name the user typed a
-	// second ago. It may shrink again and it may never grow.
+	// This list was eight and is the first one here ever to shrink. Two went when
+	// `stencil.tooMuchBridge` and `library.material.nameTaken` let their values
+	// travel — the bridge count and width, and the name the user typed a second ago.
+	// Three more went with the halves that had simply drifted: `library.preset.kerfRange`,
+	// where the API was the stale half while its numbers were already being sent, and
+	// `gen.noQrLib` and `gen.noBarcodeLib`, which differed only in quotation marks
+	// around a package name. It may shrink again and it may never grow.
 	const ALREADY_APART = new Set([
 		'draw.booleanEmpty',
 		'edit.staleElement',
-		'nodes.notEditable',
-		// The other way round: this one *does* send its numbers and only the catalogue
-		// uses them, so the API's sentence is the half that stayed behind.
-		'library.preset.kerfRange',
-		// And two where only the quotation marks around a package name differ.
-		'gen.noQrLib',
-		'gen.noBarcodeLib'
+		'nodes.notEditable'
 	]);
 	const python = sources(join(here, '..', '..', 'api', 'openkerf_api'), [], /\.py$/)
 		.map((p) => readFileSync(p, 'utf8'))
