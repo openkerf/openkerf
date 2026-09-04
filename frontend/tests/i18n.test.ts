@@ -225,13 +225,14 @@ test('the English of a refusal is the sentence the API sends', () => {
 	// Both halves reach the same reader. `apiError` says the catalogue's sentence when it
 	// knows the code and the API's own when it does not, so where the two differ, one of
 	// them is a version of the message nobody meant to keep — and which one shows depends
-	// on nothing the reader can see. Measured when this was written: 138 refusals could be
-	// read out of the API and 130 of them were word for word.
+	// on nothing the reader can see. Measured when this was written: of the 146 `api.*`
+	// keys, 139 could be read out of the API and 131 of those were word for word.
 	//
-	// Three more have an English key and cannot be read here at all, each for a reason:
-	// two build their code at runtime (`upload.stalled` and `upload.interrupted` come out
-	// of one raise) and one is handed its sentence in a variable
-	// (`rotary.homeWhileActive`).
+	// The seven that cannot be read here at all, each for a reason: four
+	// `series.notAWholeNumber.*` come out of one raise that builds its code with an
+	// f-string, `upload.stalled` and `upload.interrupted` out of one raise that is handed
+	// its code in a variable, and `rotary.homeWhileActive` is handed its whole sentence in
+	// one. Nothing static can pair those with a key.
 	//
 	// The eight below are the ones that already differed, named one by one and not
 	// counted, so that the debt is in the code instead of in somebody's memory. They are
@@ -263,7 +264,12 @@ test('the English of a refusal is the sentence the API sends', () => {
 	const together: string[] = [];
 	const fresh: string[] = [];
 	for (const [code, sentence] of refusalsInPython(python)) {
-		const ours = en[`api.${code}`];
+		// A plural is compared on its `other`, which is the branch the Python writes: a
+		// refusal that bends to a count is exactly the kind with the most words in it, and
+		// skipping every one of them would have made this guard blind where it is needed
+		// most. `stencil.singleStroke` is one, and it does match.
+		const message = en[`api.${code}`];
+		const ours = typeof message === 'string' ? message : (message as { other?: string })?.other;
 		if (typeof ours !== 'string') continue;
 		const same = asOneSentence(ours) === asOneSentence(sentence);
 		(same ? together : apart).push(code);
@@ -273,7 +279,7 @@ test('the English of a refusal is the sentence the API sends', () => {
 			);
 	}
 	assert.deepEqual(fresh, [], `a refusal and its translation say two different things:\n  ${fresh.join('\n  ')}`);
-	// The extractor reads Python, and Python can be rewritten. 138 were readable when this
+	// The extractor reads Python, and Python can be rewritten. 139 were readable when this
 	// was written; a sharp drop means it has stopped finding them and this test is quietly
 	// measuring nothing.
 	const read = together.length + apart.length;

@@ -601,8 +601,25 @@
 	 * where it was, minus what fell away in front of it. Measured, cursor between B and
 	 * C of `ABCD`: `x` → `ABxCD` and the cursor at 3, a space → `ABCD` and the cursor
 	 * still at 2 (before this it went to the end, 5 and 4).
+	 *
+	 * A composition is left alone until it is finished. Somebody typing Japanese has a
+	 * half-built word in the field — `に` and the `h` of the next syllable — and every
+	 * one of those intermediate steps arrives as an `input` event. Writing to the field
+	 * then takes the composition apart: measured over CDP with `にほん` composed and
+	 * `日本` confirmed, the box went `"n"`, `"ni"`, `"h"`, and stayed `"h"` after the
+	 * confirmation — the Japanese never arrived at all, and what was left was a letter
+	 * from the romaji buffer that nobody typed as a name and that the filter is happy
+	 * to send to the machine as `H`. So the keystrokes are ignored while `isComposing`
+	 * is true and the finished text is filtered once, at `compositionend`. Measured
+	 * again: the box follows the composition and ends up empty, because none of `日本`
+	 * is a character the panel can show — which is the same thing a dead key does.
 	 */
-	function nameTyped(field: HTMLInputElement) {
+	function nameTyped(event: Event & { currentTarget: HTMLInputElement; isComposing?: boolean }) {
+		// Optional, because `isComposing` lives on `InputEvent` and the same handler also
+		// serves `compositionend` — where there is no such field, and the composition is
+		// over by definition.
+		if (event.isComposing) return;
+		const field = event.currentTarget;
 		const raw = field.value;
 		const at = field.selectionStart ?? raw.length;
 		const kept = keepable(raw);
@@ -954,7 +971,8 @@
 							value={fieldText}
 							disabled={Boolean(uploadOff)}
 							title={uploadOff ?? t('job.upload.name')}
-							oninput={(e) => nameTyped(e.currentTarget)}
+							oninput={nameTyped}
+							oncompositionend={nameTyped}
 						/>
 					</label>
 					<button
