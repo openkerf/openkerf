@@ -52,26 +52,29 @@ const post = (path: string, body?: unknown) =>
 		body: JSON.stringify(body ?? {})
 	});
 
-before(async () => {
-	reachable = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(2000) })
-		.then((r) => r.ok)
-		.catch(() => false);
-	if (!reachable) return;
+/**
+ * A design that makes the pre-flight column long, with or without a raster layer.
+ *
+ * Both, because the two states put the fold in different places: a raster layer adds
+ * the "produces nothing headless" warning to the footer, which makes the footer taller
+ * and the column shorter, and without it the fold sat 97 px lower — measured at
+ * 1440 x 900 on the layout before this, footer 219 px tall with the raster layer and
+ * 167 px without, the fold at 694 and at 791. The state that buries a control is the
+ * one nobody seeds on purpose, so it is seeded here on purpose.
+ */
+async function aLongColumn(withRaster: boolean) {
 	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' }).catch(() => {});
 	await post('/api/project/new');
-	// The state in which the footer starts covering what lies above it: four layers with
-	// a shape in each, so the layer table and the "not measured on a test grid" warning
-	// make the column longer than the panel is high. Same seeding as
-	// `checklist-reach.test.ts`, which is the same defect one block lower.
-	for (const layer of [
+	const layers = [
 		{ type: 'cut', label: 'Outline', speed: 12, power_percent: 65 },
 		{ type: 'engrave', label: 'Caption', speed: 250, power_percent: 22 },
 		{ type: 'engrave', label: 'Fine lines', speed: 400, power_percent: 15 },
-		{ type: 'raster', label: 'Logo area', speed: 300, power_percent: 30 }
-	]) {
-		await post('/api/design/operations', layer);
-	}
-	for (let i = 0; i < 4; i++) {
+		withRaster
+			? { type: 'raster', label: 'Logo area', speed: 300, power_percent: 30 }
+			: { type: 'cut', label: 'Tabs', speed: 15, power_percent: 60 }
+	];
+	for (const layer of layers) await post('/api/design/operations', layer);
+	for (let i = 0; i < layers.length; i++) {
 		await post('/api/design/elements', {
 			type: 'rect',
 			x_mm: 20 + i * 40,
@@ -90,6 +93,13 @@ before(async () => {
 		await post('/api/design/assign', { ids: [elements[i].id], operation_id: ops[i].id });
 	}
 	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' }).catch(() => {});
+}
+
+before(async () => {
+	reachable = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(2000) })
+		.then((r) => r.ok)
+		.catch(() => false);
+	if (!reachable) return;
 	browser = await chromium.launch();
 	page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 });
@@ -115,48 +125,52 @@ async function whatIsOnTop(selector: string) {
 	}, selector);
 }
 
-for (const [width, height] of SIZES) {
-	test(`the fold can be opened by a hand at ${width} x ${height}`, async (t) => {
-		if (!reachable) return t.skip(`no server on ${BASE}`);
-		await page.setViewportSize({ width, height });
-		await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });
-		await page.waitForTimeout(3000);
+for (const withRaster of [true, false]) {
+	for (const [width, height] of SIZES) {
+		const state = withRaster ? 'with a raster layer' : 'without one';
+		test(`the fold can be opened by a hand at ${width} x ${height}, ${state}`, async (t) => {
+			if (!reachable) return t.skip(`no server on ${BASE}`);
+			await aLongColumn(withRaster);
+			await page.setViewportSize({ width, height });
+			await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });
+			await page.waitForTimeout(3000);
 
-		const summary = await whatIsOnTop('details.pf-upload > summary');
-		assert.ok(summary, 'there is no "Send to the machine" fold on the Job tab');
-		assert.ok(summary.onScreen, 'the fold is not on screen without scrolling');
-		assert.ok(summary.self, `the fold lies behind ${summary.over}`);
+			const summary = await whatIsOnTop('details.pf-upload > summary');
+			assert.ok(summary, 'there is no "Send to the machine" fold on the Job tab');
+			assert.ok(summary.onScreen, 'the fold is not on screen without scrolling');
+			assert.ok(summary.self, `the fold lies behind ${summary.over}`);
 
-		// A hand, not a helper: `locator.click()` would scroll it into view first and
-		// report success over a control nobody can reach.
-		await page.mouse.click(summary.at.x, summary.at.y);
-		await page.waitForTimeout(400);
-		assert.equal(
-			await page.evaluate(
-				() => (document.querySelector('details.pf-upload') as HTMLDetailsElement | null)?.open ?? null
-			),
-			true,
-			'a click on the middle of the summary did not open the fold'
-		);
-
-		// And the name field inside it is reachable too, not just the summary.
-		const field = await whatIsOnTop('details.pf-upload input');
-		assert.ok(field?.self, `the name field lies behind ${field?.over}`);
-
-		// The fold may not have pushed the button that burns out of reach: it shares the
-		// footer with it, and a footer that grows takes the primary action with it.
-		const start = await page.evaluate(() => {
-			const button = [...document.querySelectorAll('.pf-actions button')].find((b) =>
-				/Start job/.test(b.textContent ?? '')
+			// A hand, not a helper: `locator.click()` would scroll it into view first and
+			// report success over a control nobody can reach.
+			await page.mouse.click(summary.at.x, summary.at.y);
+			await page.waitForTimeout(400);
+			assert.equal(
+				await page.evaluate(
+					() => (document.querySelector('details.pf-upload') as HTMLDetailsElement | null)?.open ?? null
+				),
+				true,
+				'a click on the middle of the summary did not open the fold'
 			);
-			if (!button) return null;
-			const box = button.getBoundingClientRect();
-			const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-			return {
-				onScreen: box.top >= 0 && box.bottom <= window.innerHeight,
-				self: hit === button || button.contains(hit)
-			};
+
+			// And the name field inside it is reachable too, not just the summary.
+			const field = await whatIsOnTop('details.pf-upload input');
+			assert.ok(field?.self, `the name field lies behind ${field?.over}`);
+
+			// The fold may not have pushed the button that burns out of reach: it shares
+			// the footer with it, and a footer that grows takes the primary action with it.
+			const start = await page.evaluate(() => {
+				const button = [...document.querySelectorAll('.pf-actions button')].find((b) =>
+					/Start job/.test(b.textContent ?? '')
+				);
+				if (!button) return null;
+				const box = button.getBoundingClientRect();
+				const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+				return {
+					onScreen: box.top >= 0 && box.bottom <= window.innerHeight,
+					self: hit === button || button.contains(hit)
+				};
+			});
+			assert.ok(start?.onScreen && start.self, 'the start button is no longer reachable beside the fold');
 		});
-		assert.ok(start?.onScreen && start.self, 'the start button is no longer reachable beside the fold');
-	});
+	}
 }

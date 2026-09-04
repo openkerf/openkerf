@@ -653,6 +653,13 @@ await scene('11-palette.png', '/?tab=design', { selector: '.palette', pad: 90 })
 // pre-flight: the drawing, the estimated time and the table of what burns with
 // which settings. The estimate is computed server-side and takes a moment.
 await scene('12-job-preflight.png', '/?tab=job', {}, async (page) => {
+	// Wait for the answer, not for a guess at how long it takes. Measured on the first
+	// run after a rebuild: the shutter fell while the footer was still being laid out
+	// and the picture came back without "Send to the machine" in it — a row of white
+	// where the fold belongs — while the next three runs had it. So the fold itself and
+	// the fonts are waited for, and the settle time is what is left over.
+	await page.waitForSelector('.pf-stick .pf-upload summary', { timeout: 20000 });
+	await page.waitForFunction(() => document.fonts?.status === 'loaded', null, { timeout: 20000 });
 	await page.waitForTimeout(3500);
 });
 

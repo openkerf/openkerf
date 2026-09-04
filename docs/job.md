@@ -145,10 +145,10 @@ the start button itself.
 
 ### Sending the job to the machine
 
-Directly above that strip sits a fold headed **Send to the machine**, shut until
-you open it. It does the other thing you can do with a job that is ready: instead
-of burning it from here, it puts it in the machine's own memory as a file and
-leaves it standing there. The line under the heading says so, and it is also the
+In that same strip, above the three lines and folded shut, sits **Send to the
+machine**. It does the other thing you can do with a job that is ready: instead of
+burning it from here, it puts it in the machine's own memory as a file and leaves
+it standing there. The line under the heading says so, and it is also the
 tooltip on the button: "The file goes into the machine and stays there. You start
 it on the machine’s own panel — nothing burns from here."
 
