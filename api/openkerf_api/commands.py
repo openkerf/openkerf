@@ -185,7 +185,26 @@ class CommandRunner:
             "stop": self.supports("estop") or self.supports("abort"),
             "clear_queue": self.supports("spool"),
             "load": self.supports("load"),
+            # Whether a job can be put in the machine's memory as a file. Reported
+            # rather than left to be found out on the button, because it is the one
+            # refusal of that route that is about the machine standing there: on a K40
+            # the control can be grey with a reason instead of a press that can only
+            # fail.
+            "upload": self.keeps_files(),
         }
+
+    def keeps_files(self) -> bool:
+        """Whether the active machine has a memory to put a file in.
+
+        Which is a Ruida, and is asked as "does its controller hold an `RDJob`" rather
+        than by the name of the driver: that object is what `build_job_bytes` writes
+        into, so this is the same question the refusal below asks, and there is one
+        answer to it instead of a list of driver names kept up to date in two places.
+        """
+        device = getattr(self.kernel, "device", None)
+        live_driver = getattr(device, "driver", None)
+        live_controller = getattr(live_driver, "controller", None)
+        return live_controller is not None and hasattr(live_controller, "job")
 
     # --------------------------------------------------------------- actions
 
@@ -304,9 +323,7 @@ class CommandRunner:
         from meerk40t.core.laserjob import LaserJob
 
         device = getattr(self.kernel, "device", None)
-        live_driver = getattr(device, "driver", None)
-        live_controller = getattr(live_driver, "controller", None)
-        if live_controller is None or not hasattr(live_controller, "job"):
+        if not self.keeps_files():
             raise DesignError(
                 "This machine does not keep files in memory; that is a Ruida thing.",
                 code="upload.notRuida",

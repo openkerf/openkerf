@@ -264,6 +264,32 @@ def test_a_non_ruida_machine_refuses_with_a_sentence(kernel):
     assert "Ruida" in str(error.value)
 
 
+def test_the_capabilities_say_whether_this_machine_keeps_files(kernel, tmp_path):
+    """Whether the button may be offered at all, from the check that refuses it.
+
+    Without this the screen has no way to know: `upload.notRuida` is the one refusal
+    of this route that is about the machine standing there and not about anything the
+    user did, and a control that can only fail is the thing this project calls a
+    feature that does not exist. Asked of both machines through the route the
+    interface uses, so the answer is the one it will really get: the dummy of
+    `conftest.py`, which keeps no `RDJob`, and a Ruida.
+
+    Same source as the refusal (`CommandRunner.keeps_files`), so the two cannot drift
+    into a button that is offered and a route that says no.
+    """
+    from fastapi.testclient import TestClient
+
+    from openkerf_api.server import ApiServer
+
+    server = ApiServer(kernel, library_path=tmp_path / "caps.db")
+    with TestClient(server.build_app()) as client:
+        assert client.get("/api/capabilities").json()["actions"]["upload"] is False
+
+        kernel.console("service device start ruida -i\n")
+
+        assert client.get("/api/capabilities").json()["actions"]["upload"] is True
+
+
 def test_a_z_step_per_pass_reaches_the_job_unfiltered(ruida, monkeypatch):
     """
     `_plan_without_spooling` turns a layer with a Z step per pass into

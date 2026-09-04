@@ -233,6 +233,12 @@ class RuidaUpload:
         Hence `announced`, which is about what went down the line, not about how
         far a counter got.
 
+        The code is passed by keyword at both call sites, and stays that way: the
+        interface pairs a translation with a refusal by searching this package for
+        `code="..."` (`frontend/tests/i18n.test.ts`), and a code handed over
+        positionally is one no such search finds — a sentence in the reader's
+        language that nothing ever reaches.
+
         `announced` travels in `values` as well, because the interface has to
         pick the same four sentences in the reader's language and `sent` and
         `chunks` cannot tell it which of the two zeroes this is. A translated
@@ -377,15 +383,15 @@ class RuidaUpload:
         while True:
             if not getattr(session, "connected", True):
                 raise self._interrupted(
-                    sent, chunks, "stopped answering", "upload.interrupted",
-                    announced,
+                    sent, chunks, "stopped answering",
+                    code="upload.interrupted", announced=announced,
                 )
             if not self._line_is_busy(session):
                 return
             if time.monotonic() > deadline:
                 raise self._interrupted(
-                    sent, chunks, "stopped taking the file", "upload.stalled",
-                    announced,
+                    sent, chunks, "stopped taking the file",
+                    code="upload.stalled", announced=announced,
                 )
             time.sleep(self.poll_seconds)
 
@@ -561,8 +567,8 @@ class RuidaUpload:
                 self._write(packet)
             except (ConnectionError, OSError) as e:
                 raise self._interrupted(
-                    sent, chunks, "stopped answering", "upload.interrupted",
-                    announced,
+                    sent, chunks, "stopped answering",
+                    code="upload.interrupted", announced=announced,
                 ) from e
         # And once more after the last one, which is the block holding
         # `SET_FILE_SUM` and `END_OF_FILE`. Every other block is confirmed by the
