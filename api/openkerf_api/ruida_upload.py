@@ -396,10 +396,22 @@ class RuidaUpload:
 
         Four things are checked before the first byte goes out. Two of them are
         about the connection and are in `_upload` at the top, ahead of the
-        building: **a job that is burning**, because our blocks share its
-        `send_q`, and **an upload already running**, because two of them
-        interleave into one file made of two jobs (both measured; see
-        `a_job_is_running` and `self._sending`).
+        building: **a job on the machine**, and **an upload already running**.
+
+        "A job on the machine" and not "a job that is burning": the check is
+        `the_line_is_in_use`, which counts a job that has been spooled and not
+        yet picked up as well as one already running. A queued job reports
+        `is_running()` False and is about to be written down the very line we
+        want — measured, status `Waiting`, and it clears within about two tenths
+        of a second once the spooler takes it. Our blocks share that `send_q`
+        either way.
+
+        Two uploads at once interleave into one file made of two jobs, also
+        measured. Both questions and the claim behind the second live in
+        `busy.py`, which is where everything else that could write on this line
+        reads them too — there is deliberately no flag on this object any more,
+        because a fact only this method could see is what let every mover and
+        every burn walk straight through an upload.
 
         The other two are about the file, and both would otherwise leave
         something on the panel that the user has to find and delete:

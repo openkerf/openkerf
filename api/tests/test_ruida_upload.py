@@ -2528,3 +2528,56 @@ def test_a_second_claim_on_the_line_is_refused_and_the_first_keeps_it(ruida):
         # Leaving the inner block must not have released the outer claim.
         assert a_file_is_being_sent(ruida), "the failed claim released the real one"
     assert not a_file_is_being_sent(ruida)
+
+
+def test_reading_the_flag_does_not_take_it(ruida):
+    """
+    `a_file_is_being_sent` must not acquire the claim to answer.
+
+    It used to read by taking the lock and giving it back, which makes every
+    reader a writer for the length of that window — and a real `sending_a_file`
+    landing inside it is told the line is busy while nothing is on it. The user
+    then gets `upload.busy` for an upload that is not happening. Safe in
+    direction (it refuses too much, never too little), but it costs a press, and
+    every mover, burn and pause now reads this flag.
+
+    Deterministic on purpose. The race itself is measurable — three readers
+    against one claimer for 3 s gave **389233 refusals out of 1073139 claims**
+    before the change and **0 of 961199** after — but a test built that way
+    passes on the broken code whenever the timing happens to be kind. So this
+    asserts the property instead: seed the registry with a lock that records
+    what is done to it, and require that answering the question touches nothing.
+    """
+    from openkerf_api import busy
+
+    class _WatchedLock:
+        def __init__(self):
+            self.real = threading.Lock()
+            self.taken = 0
+
+        def acquire(self, blocking=True):
+            self.taken += 1
+            return self.real.acquire(blocking)
+
+        def release(self):
+            self.real.release()
+
+        def locked(self):
+            return self.real.locked()
+
+    watched = _WatchedLock()
+    busy._CLAIMS[ruida] = watched
+
+    assert busy.a_file_is_being_sent(ruida) is False
+    assert busy.the_line_is_in_use(ruida) is None
+    assert watched.taken == 0, "reading the flag acquired the claim"
+
+    with busy.sending_a_file(ruida) as claimed:
+        assert claimed
+        assert watched.taken == 1, "the claim itself should be the only acquire"
+        assert busy.a_file_is_being_sent(ruida) is True
+        assert busy.the_line_is_in_use(ruida) == "uploading"
+        assert watched.taken == 1, "reading while held acquired it again"
+
+    assert busy.a_file_is_being_sent(ruida) is False
+    assert watched.taken == 1

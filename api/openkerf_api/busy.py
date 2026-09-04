@@ -116,6 +116,17 @@ def the_line_is_in_use(kernel) -> str | None:
     running is a more definite answer than something merely queued. A caller that
     cares about only one of the three tests for that one; nothing here decides
     for it.
+
+    One thing `'queued'` cannot tell you, written down where the next reader
+    meets it rather than guarded against: the spooler skips a job whose `enabled`
+    is false and goes on to the next one (`core/spoolers.py:544-548`), so such a
+    job sits in the queue for ever and this would say `'queued'` for ever with
+    it — and an upload would be refused for as long as it sat there. No path in
+    OpenKerf makes one today, which is why this is a note and not a gap: nothing
+    here sets `enabled`, and every job that reaches this queue comes from
+    `start_job` or from a mover. A normal queued job is the opposite of stuck —
+    measured, it clears in about two tenths of a second. If a disabled job ever
+    becomes reachable, this is the line that has to learn to skip it too.
     """
     if a_job_is_running(kernel):
         return "burning"
@@ -132,12 +143,20 @@ def the_line_is_in_use(kernel) -> str | None:
 
 
 def a_file_is_being_sent(kernel) -> bool:
-    """Whether an upload is holding this machine's line right now."""
-    claim = _claim_for(kernel)
-    if claim.acquire(blocking=False):
-        claim.release()
-        return False
-    return True
+    """Whether an upload is holding this machine's line right now.
+
+    `locked()` and not "take it and give it back". Reading by acquiring makes the
+    reader a writer for as long as it holds the lock, and a real `sending_a_file`
+    landing in that window is told the line is taken when nothing is on it — the
+    user gets `upload.busy` for an upload that is not happening.
+
+    The direction was safe (it refuses too much, never too little), but a press
+    costs the user a press. Measured before the change, three readers polling
+    against one claimer for 3 s: **389233 of 1073139 claims refused, 36.3%**.
+    After it, on the same probe, 0 of 961199. The window is not theoretical because
+    every mover, every burn and every pause now reads this flag.
+    """
+    return _claim_for(kernel).locked()
 
 
 def refuse_while_a_file_is_being_sent(kernel) -> None:
