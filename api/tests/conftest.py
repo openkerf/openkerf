@@ -125,6 +125,32 @@ def _operations_of_its_own(tmp_path, monkeypatch):
     return tmp_path / "operations.cfg"
 
 
+@pytest.fixture(autouse=True)
+def _projects_of_their_own(tmp_path, monkeypatch):
+    """
+    No test may write into the projects folder of the developer's own app.
+
+    `ApiServer(kernel)` without `projects` falls back to `projects/` beside the library
+    file, and the library's default path is keyed to the kernel name (see the fixture
+    above). So every test server is handed a folder under `tmp_path` here, the way the
+    library and the layer list are.
+
+    `projects` is not yet a keyword `ApiServer.__init__` accepts — the class this fixture
+    fences has no routes yet, only `openkerf_api.projects.Projects` used directly by its
+    own tests. The `kwargs.setdefault("projects", folder)` line that actually hands the
+    folder to `ApiServer` arrives with the routes, in the next round; until then this
+    patch is a no-op that only reserves the shape.
+    """
+    folder = tmp_path / "projects"
+    original = server_module.ApiServer.__init__
+
+    def patched(self, *args, **kwargs):
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(server_module.ApiServer, "__init__", patched)
+    return folder
+
+
 @pytest.fixture
 def kernel():
     k = _bootstrap()
