@@ -320,7 +320,9 @@
 		class="btn project-button"
 		aria-haspopup="menu"
 		aria-expanded={projectOpen}
-		aria-label={t('topbar.project.aria')}
+		aria-label={t(dirty ? 'topbar.project.aria.unsaved' : 'topbar.project.aria', {
+			name: projectName ?? t('topbar.project.untitled')
+		})}
 		title={t('topbar.project.name', { name: projectName ?? t('topbar.project.untitled') })}
 		onclick={(e) => openProjectMenu(e.currentTarget as HTMLElement)}
 	>

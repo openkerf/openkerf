@@ -762,7 +762,7 @@ await scene('47-projects.png', '/?tab=design', { selector: DIALOG, pad: 0 }, asy
  *
  * Saved under its own name first, self-contained the way every other shot is: a run of
  * this scene alone must not depend on scene 47 having left "Kastje" as the open project.
- * One more shape after the save is what puts the dot in front of the name.
+ * One more shape after the save is what puts the dot after the name.
  */
 await scene(
 	'48-topbar-project.png',

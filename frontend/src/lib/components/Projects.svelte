@@ -79,11 +79,20 @@
 
 	/** A row's Open: settles the window the same as a landed save does, so the
 	 *  parent (which closes it by setting `open = false` itself, once it has read
-	 *  the name) is not mistaken for a dismissal. */
+	 *  the name) is not mistaken for a dismissal.
+	 *
+	 *  The parent only closes the window once the open has actually landed — a
+	 *  project can be gone by the time its row is clicked — so `settled` is undone
+	 *  the moment a refusal comes back and the window is still open: from there a
+	 *  real Escape/cross/backdrop is once again a dismissal, not a stray leftover
+	 *  from this click. */
 	function chooseOpen(name: string) {
 		settled = true;
 		onOpen?.(name);
 	}
+	$effect(() => {
+		if (projects.error) settled = false;
+	});
 
 	const saveOff = $derived(
 		projects.busy ? t('reason.busy') : cleanName(typed) === '' ? t('reason.needsProjectName') : undefined
@@ -208,7 +217,16 @@
 		<div class="saveas">
 			<label>
 				<span>{t('projects.name')}</span>
-				<input class="project-name" type="text" maxlength={MAX_NAME} value={typed} oninput={nameTyped} />
+				<input
+					class="project-name"
+					type="text"
+					maxlength={MAX_NAME}
+					value={typed}
+					oninput={nameTyped}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' && !saveOff) save(false);
+					}}
+				/>
 			</label>
 			<button class="btn primary save" disabled={Boolean(saveOff)} title={saveOff} onclick={() => save(false)}>{t('projects.save')}</button>
 		</div>

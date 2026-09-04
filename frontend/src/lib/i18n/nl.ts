@@ -27,7 +27,8 @@ export const nl: Catalogue = {
 	'topbar.material.isThickness': 'Dit vel is {material}, {thickness} — klik om te wijzigen',
 	'topbar.material.noThickness':
 		'Dit vel is {material} (dikte niet ingevuld) — klik om te wijzigen',
-	'topbar.project.aria': 'Project — openen en opslaan',
+	'topbar.project.aria': 'Project · {name} — openen en opslaan',
+	'topbar.project.aria.unsaved': 'Project · {name}, niet-bewaarde wijzigingen — openen en opslaan',
 	'topbar.project.pick': 'Projectbestand kiezen',
 	'topbar.project.new': 'Nieuw project',
 	'topbar.project.open': 'Openen…',

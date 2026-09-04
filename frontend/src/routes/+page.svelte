@@ -347,11 +347,19 @@ import { SeriesStore } from '$lib/series.svelte';
 	 * whenever there is work *and* either it is dirty or it belongs to no project.
 	 * The question itself is the ordinary Save / Discard / Cancel triptych every
 	 * desktop app uses (`UnsavedChanges.svelte`).
+	 *
+	 * `beforeunload` asks the same question, through this same function, rather
+	 * than reading `design.dirty` alone: untitled work that is not `dirty` still
+	 * has no second copy anywhere, and closing the tab on it loses it exactly as
+	 * silently as New or Open would.
 	 */
-	async function maybeAskFirst(action: Replacement) {
+	function hasUnsavedWork(): boolean {
 		const thereIsWork = !design.isEmpty || sheets.sheets.length > 1;
 		const untitled = (projects.current?.name ?? null) === null;
-		if (!thereIsWork || (!design.dirty && !untitled)) {
+		return thereIsWork && (design.dirty || untitled);
+	}
+	async function maybeAskFirst(action: Replacement) {
+		if (!hasUnsavedWork()) {
 			await runIt(action);
 			return;
 		}
@@ -370,10 +378,13 @@ import { SeriesStore } from '$lib/series.svelte';
 			await laadProject(action.file);
 		} else if (action.kind === 'server') {
 			// Same reloads as `laadProject`: a server project carries library and sheets
-			// along too.
+			// along too. Only on success: `projects.open` sets `projects.error` on a
+			// refusal (the project is gone, say), and the Projects window — which the
+			// caller keeps open until this returns true — is what shows it.
 			if (await projects.open(action.name)) {
 				design.select(null);
 				await Promise.all([design.load(), library.load(), sheets.load()]);
+				projectsOpen = false;
 			}
 		} else {
 			const response = await fetch('/api/project/new', {
@@ -397,7 +408,13 @@ import { SeriesStore } from '$lib/series.svelte';
 	async function saveProject() {
 		if (projects.current?.name) {
 			const entry = await projects.save(projects.current.name);
-			if (entry) await afterSave?.();
+			// `design.dirty`, which the top bar's dot, `maybeAskFirst` and
+			// `beforeunload` all read, only changes on a fresh snapshot — the same
+			// reload `downloadProject` already does after its own landed save.
+			if (entry) {
+				await design.load();
+				await afterSave?.();
+			}
 			afterSave = null;
 			return;
 		}
@@ -1341,10 +1358,23 @@ import { SeriesStore } from '$lib/series.svelte';
 	 * `KEYS`.
 	 */
 	function sneltoets(event: KeyboardEvent) {
-		const target = event.target as HTMLElement | null;
-		if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
 		if (menu) return; // the menu handles its own keys
 		const combo = comboOf(event);
+		// ⌘S and ⌘⇧S have to win even with a text field focused — a name field in the
+		// Save-as window, say, or a text shape being edited. Measured without this:
+		// typing in a field and pressing ⌘S ran the browser's own Save Page, because
+		// the field bail-out just below returns before any shortcut is even looked
+		// at. Every other shortcut is safe to leave to the browser from a field, so
+		// only these two jump the queue.
+		if (combo === KEYS.save || combo === KEYS.saveAs) {
+			event.preventDefault();
+			if (writeRefusal(actionContext)) return;
+			if (combo === KEYS.save) handlers.saveProject();
+			else handlers.saveProjectAs();
+			return;
+		}
+		const target = event.target as HTMLElement | null;
+		if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
 		const canvas = canvasControl?.state();
 
 		// While the pen is drawing, Escape and Backspace are its: they stop the line and
@@ -1401,17 +1431,13 @@ import { SeriesStore } from '$lib/series.svelte';
 			[KEYS.cutPath]: handlers.cutPath,
 			[KEYS.zoomIn]: () => canvasControl?.step(1.25),
 			[KEYS.zoomOut]: () => canvasControl?.step(1 / 1.25),
-			// The project menu's own three shortcuts. `refusedRow` below only searches the
-			// object and canvas menus, so these carry their own refusal — the same one
-			// `projectActions` computes for the rows themselves.
+			// The project menu's own shortcut for Open…; `refusedRow` below only
+			// searches the object and canvas menus, so this carries its own refusal —
+			// the same one `projectActions` computes for the row itself. Save and Save
+			// as… are handled above, before the field bail-out, and are not repeated
+			// here.
 			[KEYS.open]: () => {
 				if (!writeRefusal(actionContext)) handlers.openProjects();
-			},
-			[KEYS.save]: () => {
-				if (!writeRefusal(actionContext)) handlers.saveProject();
-			},
-			[KEYS.saveAs]: () => {
-				if (!writeRefusal(actionContext)) handlers.saveProjectAs();
 			}
 		};
 		const action = run[combo];
@@ -1456,11 +1482,11 @@ import { SeriesStore } from '$lib/series.svelte';
 	}
 
 	/** Closing the tab with unsaved work asks too — the browser's own wording, not
-	 *  ours, but the flag behind it is `design.dirty`, the same one the project
-	 *  button's dot and the New/Open/Upload question read. */
+	 *  ours, but the same question `hasUnsavedWork` asks in front of New, Open and
+	 *  Upload: untitled work that is not `dirty` still has nowhere else it lives. */
 	$effect(() => {
 		const warn = (e: BeforeUnloadEvent) => {
-			if (design.dirty) {
+			if (hasUnsavedWork()) {
 				e.preventDefault();
 				e.returnValue = t('unsaved.leave');
 			}
@@ -1564,9 +1590,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		onOpenSeries={() => (seriesOpen = true)}
 		onPlaceImage={placeImage}
 		onOpenFile={openFile}
-		onOpenProject={openProject}
-		onNewProject={newProject}
-		onSaved={() => design.load()}
+		{projectMenu}
 	/>
 	<!-- Sheets above the canvas: every sheet is a document of its own, so this is also
 	     the place where you see which piece of material you are working on. -->
@@ -1932,16 +1956,25 @@ import { SeriesStore } from '$lib/series.svelte';
 <!-- The Projects window: Open… lists what is on the server, Save as… puts the work
      there under a name. One component, `mode` says which. `onDismissed` is the
      window closing *without* a save (Escape, the cross, the backdrop) — see
-     `clearContinuation` above for why that has to clear `pending`/`afterSave` too. -->
+     `clearContinuation` above for why that has to clear `pending`/`afterSave` too.
+
+     `onOpen` does not close the window itself: `runIt`'s `kind: 'server'` branch does,
+     and only once `projects.open` has actually landed. A project can be gone by the
+     time its row is clicked — deleted from elsewhere, or a running series refusing the
+     replace — and closing here first meant that refusal rendered into a window that had
+     already vanished, so nobody saw it (`projects.error` is read by this window alone). -->
 <Projects
 	{projects}
 	bind:open={projectsOpen}
 	mode={projectsMode}
 	onOpen={(name) => {
-		projectsOpen = false;
 		maybeAskFirst({ kind: 'server', name });
 	}}
 	onSaved={async () => {
+		// Same reload `saveProject` does after its own landed save: `design.dirty`
+		// only changes on a fresh snapshot, and this window's Save as… is the other
+		// way a save lands.
+		await design.load();
 		await afterSave?.();
 		clearContinuation();
 	}}

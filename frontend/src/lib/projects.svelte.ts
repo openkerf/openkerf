@@ -5,10 +5,12 @@
  * dot), the menu behind it, the keyboard, and the Projects window. Each of them reads
  * this and none of them keeps a copy of the rule.
  */
-import { apiError } from './i18n/core.ts';
+import { apiError, t } from './i18n/core.ts';
 
 export type ProjectEntry = { name: string; saved_at: string; bytes: number; current: boolean };
-export type CurrentProject = { name: string; saved_at: string };
+/** `saved_at` is `null` when the current project's file was removed since it was
+ *  opened — `Projects.state()` still reports the name then (see its docstring). */
+export type CurrentProject = { name: string; saved_at: string | null };
 
 export const MAX_NAME = 60;
 
@@ -61,7 +63,16 @@ export class ProjectsStore {
 		this.busy = true;
 		this.error = null;
 		try {
-			const response = await fetch(path, init);
+			let response: Response;
+			try {
+				response = await fetch(path, init);
+			} catch {
+				// The connection dropped mid-request — no `Response` at all, so
+				// `describe` has nothing to read. The same sentence the rest of the
+				// app shows for a server that cannot be reached.
+				this.error = t('transport.noServer');
+				return null;
+			}
 			if (!response.ok) {
 				this.error = await describe(response);
 				return null;
