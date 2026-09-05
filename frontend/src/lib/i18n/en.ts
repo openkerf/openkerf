@@ -34,15 +34,50 @@ export const en = {
 	'topbar.material.none': 'No material chosen for this sheet yet — click to fill it in',
 	'topbar.material.isThickness': 'This sheet is {material}, {thickness} — click to change',
 	'topbar.material.noThickness': 'This sheet is {material} (thickness not filled in) — click to change',
-	'topbar.project': 'Project',
-	'topbar.project.aria': 'Project — open and save',
-	'topbar.project.title':
-		'Project — open and save (design, sheets and library in one file)',
+	'topbar.project.aria': 'Project · {name} — open and save',
+	'topbar.project.aria.unsaved': 'Project · {name}, unsaved changes — open and save',
 	'topbar.project.pick': 'Choose project file',
 	'topbar.project.new': 'New project',
-	'topbar.project.open': 'Open project…',
+	'topbar.project.open': 'Open…',
 	'topbar.project.save': 'Save project',
+	'topbar.project.saveAs': 'Save as…',
+	'topbar.project.download': 'Download',
+	'topbar.project.upload': 'Upload…',
 	'topbar.project.hint': 'Design, sheets, materials and machine profiles in one file.',
+	'topbar.project.untitled': 'untitled',
+	'topbar.project.name': 'Project · {name}',
+	'topbar.project.unsaved': 'This project has unsaved changes',
+	'api.project.badName':
+		'A project name may hold letters, digits, spaces, dots, hyphens and underscores, at most 60 of them, and may not start with a dot.',
+	'api.project.exists':
+		'There is already a project with that name. Choose another, or say that it may be replaced.',
+	'api.project.missing': 'There is no project with that name any more.',
+
+	// ── The Projects window ─────────────────────────────────────────────────────
+	'projects.title': 'Projects',
+	'projects.saveAs.title': 'Save as…',
+	'projects.empty': 'Nothing has been saved on this server yet.',
+	'projects.column.name': 'Name',
+	'projects.column.saved': 'Saved',
+	'projects.current': '(current)',
+	'projects.open': 'Open',
+	'projects.name': 'Name',
+	'projects.save': 'Save',
+	'projects.rename': 'Rename',
+	'projects.rename.to': 'Rename “{name}” to',
+	'projects.rename.same': 'This is already its name',
+	'projects.delete': 'Delete',
+	'projects.delete.ask': 'Delete “{name}”? This cannot be undone.',
+	'projects.overwrite': 'Replace',
+	'projects.overwrite.ask': 'A project named “{name}” already exists. Replace it?',
+
+	// ── The question before New, Open… and Upload… throw work away ─────────────
+	'unsaved.title': 'Unsaved changes',
+	'unsaved.body': 'The changes in “{name}” are not saved. What do you want to do with them?',
+	'unsaved.save': 'Save',
+	'unsaved.discard': 'Discard',
+	'unsaved.leave': 'There are unsaved changes. Are you sure you want to leave?',
+
 	'topbar.import': 'Import',
 	'topbar.import.title':
 		'Import a file into this sheet — SVG, DXF, RD, G-code or an image',
@@ -355,6 +390,7 @@ export const en = {
 	'reason.needsToken': 'Requires a token',
 	'reason.busy': 'Another operation is still running',
 	'reason.needsName': 'Type a name first',
+	'reason.needsProjectName': 'Type a project name first',
 	'reason.needsText': 'Type the text first',
 	'reason.needsQuery': 'Type at least two letters to search',
 	'reason.needsMaterial': 'Pick a material first',
@@ -438,6 +474,7 @@ export const en = {
 	'common.close': 'Close',
 	'common.back': 'Back',
 	'common.busy': 'Working…',
+	'common.more': 'More',
 
 	// ── Work from an earlier session ──────────────────────────────────────────
 	'recovery.title': 'Work from an earlier session',
@@ -446,22 +483,6 @@ export const en = {
 	'recovery.later': 'Not now',
 	'recovery.restore': 'Restore',
 
-	// ── Replacing what is on the bed ──────────────────────────────────────────
-	'replace.title.new': 'Start over',
-	'replace.title.unsaved': 'Unsaved changes',
-	'replace.title.project': 'There is already work in this project',
-	'replace.changed': 'This design has changed since it was last saved.',
-	'replace.workInProject': 'There is work in this project.',
-	'replace.opensProject': {
-		one: 'Opening replaces the whole project: the design, the sheet and the material come from the file.',
-		other: 'Opening replaces the whole project: the design, all {n} sheets and the material come from the file.'
-	},
-	'replace.emptiesBed': 'Starting over empties the bed. Your materials and presets stay.',
-	'replace.emptiesSheets': 'Starting over empties the bed and removes all {n} sheets. Your materials and presets stay.',
-	'replace.recoverable': 'An automatically saved version of this sheet from {when} stays; it is offered at the next start. The other sheets are not.',
-	'replace.saveAndStart': 'Save and start',
-	'replace.saveAndOpen': 'Save and open',
-	'replace.dontSave': 'Do not save',
 
 	// ── Window titles ─────────────────────────────────────────────────────────
 	'notifications.title': 'Notifications',

@@ -271,7 +271,12 @@ test('the English of a refusal is the sentence the API sends', () => {
 	const ALREADY_APART = new Set([
 		'draw.booleanEmpty',
 		'edit.staleElement',
-		'nodes.notEditable'
+		'nodes.notEditable',
+		// `project.exists` and `project.missing` (`projects.py`) name the project in the
+		// sentence they raise, and `ProjectError` carries no `values=` for it — so, like
+		// the three above, the catalogue says the same thing without naming it.
+		'project.exists',
+		'project.missing'
 	]);
 	const python = sources(join(here, '..', '..', 'api', 'openkerf_api'), [], /\.py$/)
 		.map((p) => readFileSync(p, 'utf8'))

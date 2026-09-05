@@ -125,6 +125,29 @@ def _operations_of_its_own(tmp_path, monkeypatch):
     return tmp_path / "operations.cfg"
 
 
+@pytest.fixture(autouse=True)
+def _projects_of_their_own(tmp_path, monkeypatch):
+    """
+    No test may write the projects folder the developer's own app keeps.
+
+    `ApiServer` takes a `projects` path the same way it takes `library_path`, defaulting
+    to a folder beside the library — itself keyed to the kernel name, never to the
+    profile (see `_library_of_its_own` above). Every test server therefore needs a folder
+    of its own for the same reason the library and the layer list do. This fixture gives
+    it one under `tmp_path` and patches `ApiServer.__init__` to pass it along whenever a
+    caller has not already given its own `projects` path.
+    """
+    folder = tmp_path / "projects"
+    original = server_module.ApiServer.__init__
+
+    def patched(self, *args, **kwargs):
+        kwargs.setdefault("projects", folder)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(server_module.ApiServer, "__init__", patched)
+    return folder
+
+
 @pytest.fixture
 def kernel():
     k = _bootstrap()

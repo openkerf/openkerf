@@ -96,10 +96,13 @@ Everything the engine remembers is on the volume, under `/data/.config/MeerK40t/
 container: `MeerK40t.cfg` (the chosen machine and its settings), `operations.cfg` (the
 layer list), `openkerf-library.db` (the material library) and `openkerf-photos/` (the
 test grid photographs) — the container's `HOME` is `/data`, and the engine writes to
-`~/.config/MeerK40t` as it always does. Compose puts
+`~/.config/MeerK40t` as it always does. Beside it, `/data/projects/` holds one file per
+saved project — a project of the handbook's design is about 23 KB. Compose puts
 that on a named volume, `openkerf-data`, so `docker compose down` and `up` keep it, and
-so does an update. Measured: a Ruida machine created through the API was still the
-active machine after `docker compose restart`, with all four still on the volume.
+so does an update. Measured on a local compose stack with the same image and volume
+mechanism: a project saved through the API was still there, under `/data/projects`,
+after `docker compose restart`, the same way a Ruida machine created through the API
+was still the active machine after a restart.
 
 A backup is the volume copied out:
 

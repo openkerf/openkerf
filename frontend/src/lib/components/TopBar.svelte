@@ -6,6 +6,8 @@
 	import { saveFile } from '$lib/saving';
 	import { connection } from '$lib/connection.svelte';
 	import Logo from './Logo.svelte';
+	import Menu from './Menu.svelte';
+	import type { Menu as MenuList } from '$lib/actions';
 
 	let {
 		device,
@@ -29,10 +31,11 @@
 		thicknessMm = null,
 		onOpenMaterial,
 		onOpenFile,
-		onOpenProject,
-		onNewProject,
 		onSaved,
-		onToggleTheme
+		onToggleTheme,
+		projectName = null,
+		dirty = false,
+		projectMenu
 	}: {
 		device: Device | null;
 		state: MachineState;
@@ -75,13 +78,18 @@
 		thicknessMm?: number | null;
 		onOpenMaterial?: () => void;
 		onOpenFile?: (file: File) => void;
-		onOpenProject?: (file: File) => void;
-		/** Start over. Asks for confirmation itself when there is work. */
-		onNewProject?: () => void;
 		/** After a successful download: the page has to fetch its "changed" flag again,
 		 *  because the server has declared the design clean. */
 		onSaved?: () => void;
 		onToggleTheme: () => void;
+		/** The open project's name, or `null` for one that has never been saved. */
+		projectName?: string | null;
+		/** Unsaved changes — the dot beside the name. */
+		dirty?: boolean;
+		/** The project menu's rows, built by `projectActions` on the page: New, Open…,
+		 *  Save, Save as…, Download, Upload…, with the reasons and shortcuts that belong
+		 *  to them. */
+		projectMenu: MenuList;
 	} = $props();
 
 	/**
@@ -312,8 +320,10 @@
 		class="btn project-button"
 		aria-haspopup="menu"
 		aria-expanded={projectOpen}
-		aria-label={t('topbar.project.aria')}
-		title={t('topbar.project.title')}
+		aria-label={t(dirty ? 'topbar.project.aria.unsaved' : 'topbar.project.aria', {
+			name: projectName ?? t('topbar.project.untitled')
+		})}
+		title={t('topbar.project.name', { name: projectName ?? t('topbar.project.untitled') })}
 		onclick={(e) => openProjectMenu(e.currentTarget as HTMLElement)}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
@@ -322,62 +332,13 @@
 		     edge at 768 and then the start button slides off the screen. A folder with a
 		     downward arrow is the menu idiom at that width, and the tooltip and the
 		     aria-label carry the word. -->
-		<span class="btn-label">{t('topbar.project')}</span>
+		<span class="btn-label">{t('topbar.project.name', { name: projectName ?? t('topbar.project.untitled') })}</span>
+		{#if dirty}<span class="unsaved-dot" title={t('topbar.project.unsaved')} aria-label={t('topbar.project.unsaved')}>●</span>{/if}
 		<svg class="pijl" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
 	</button>
 
 	{#if projectOpen}
-		<!-- `position: fixed`, because the bar itself scrolls internally (`overflow-x`)
-		     and would clip an absolute menu. -->
-		<div class="cover" role="presentation" onclick={() => (projectOpen = false)}></div>
-		<div class="projectmenu" role="menu" style="left: {projectPos.x}px; top: {projectPos.y}px">
-			<!-- Save and open were already here, starting over was not: the only way to
-			     begin something new was to remove everything by hand. Above the pair,
-			     because it is the first action of a session — and it asks first, just
-			     like opening. -->
-			<button
-				class="row"
-				role="menuitem"
-				type="button"
-				onclick={() => {
-					projectOpen = false;
-					onNewProject?.();
-				}}
-			>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M12 11v6m-3-3h6"/></svg>
-				<span>{t('topbar.project.new')}</span>
-			</button>
-			<span class="menuscheiding" role="separator"></span>
-			<!-- A label with a hidden file field in it: no `menuitem` role, because the
-			     input is already the operable element. -->
-			<label class="row">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
-				<span>{t('topbar.project.open')}</span>
-				<input
-					type="file"
-					aria-label={t('topbar.project.pick')}
-					accept=".openkerf,.zip"
-					onchange={(e) => {
-						const input = e.currentTarget as HTMLInputElement;
-						const file = input.files?.[0];
-						input.value = '';
-						projectOpen = false;
-						if (file) onOpenProject?.(file);
-					}}
-				/>
-			</label>
-			<a
-				class="row"
-				role="menuitem"
-				href="/api/project/export.openkerf"
-				download="project.openkerf"
-				onclick={(e) => save(e, '/api/project/export.openkerf', 'project.openkerf')}
-			>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
-				<span>{t('topbar.project.save')}</span>
-			</a>
-			<p class="hint">{t('topbar.project.hint')}</p>
-		</div>
+		<Menu menu={projectMenu} x={projectPos.x} y={projectPos.y} onClose={() => (projectOpen = false)} />
 	{/if}
 
 	<span class="scheiding docs" aria-hidden="true"></span>
@@ -645,63 +606,13 @@
 	   costs 106px, fits everywhere, and keeps the word on screen. Import and export stay
 	   separate buttons: *that* is what you do while working. */
 	.project-button .pijl { color: var(--text-2); margin-left: -2px; }
-	.cover {
-		position: fixed;
-		inset: 0;
-		z-index: 39;
-	}
-	.projectmenu {
-		position: fixed;
-		width: 250px;
-		padding: var(--space-2);
-		background: var(--surface-1);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-float);
-		z-index: 40;
-	}
-	.projectmenu .row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		width: 100%;
-		/* Reachable with a glove on as well. */
-		min-height: 44px;
-		padding: 0 var(--space-2);
-		border-radius: var(--radius-field);
-		color: var(--text-1);
-		text-align: left;
-		text-decoration: none;
-		cursor: pointer;
-		transition: background var(--transition);
-		/* The row is a label, a link *and* a button; that last one brings its own
-		   background, border and font with it. */
-		background: none;
-		border: 0;
-		font: inherit;
-	}
-	.projectmenu .row svg { flex: none; color: var(--text-2); }
-	.projectmenu .menuscheiding {
-		display: block;
-		height: 1px;
-		margin: var(--space-2) var(--space-2);
-		background: var(--line);
-	}
-	.projectmenu .row:hover,
-	.projectmenu .row:focus-within { background: var(--surface-2); }
-	.projectmenu input[type='file'] {
-		position: absolute;
-		width: 0;
-		height: 0;
-		opacity: 0;
-	}
-	/* What is in that file, once, here — not in a tooltip that does not exist on a
-	   touch screen. */
-	.projectmenu .hint {
-		margin: var(--space-2) 0 0;
-		padding: 0 var(--space-2);
-		font-size: var(--text-xs);
-		color: var(--text-2);
+	/* The unsaved dot rides beside the name, inside the button — not the `.dot` used
+	   for the machine's state, which is sized for a bare colour chip and would clip
+	   this glyph. */
+	.unsaved-dot {
+		color: var(--accent);
+		font-size: 10px;
+		line-height: 1;
 	}
 	/* Below ~950px there is no room left for file actions *beside* the machine
 	   controls. The machine wins; the files then live in the tool rail's menu, one tap

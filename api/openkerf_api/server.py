@@ -266,6 +266,7 @@ class ApiServer:
         token=None,
         library_path=None,
         operations_path=None,
+        projects=None,
     ):
         self.kernel = kernel
         self.port = port
@@ -318,6 +319,15 @@ class ApiServer:
             self.drawing,
             self.document,
             self._beside("openkerf-sheets", "openkerf-vellen"),
+        )
+        from .projects import Projects
+
+        self.projects = Projects(
+            Path(projects).expanduser() if projects else Path(self.library.path).parent / "projects",
+            drawing=self.drawing,
+            library=self.library,
+            sheets=self.sheets,
+            document=self.document,
         )
         self.tiles = TileRun(
             kernel,
@@ -854,6 +864,7 @@ class ApiServer:
             snapshot = self.design.snapshot()
             # So that the frontend knows whether opening would throw work away.
             snapshot["dirty"] = self.document.dirty
+            snapshot["project"] = self.projects.state()
             return snapshot
 
         @app.get("/api/capabilities")
@@ -1049,17 +1060,45 @@ class ApiServer:
                 self.sheets.reset()
                 self.provenance.clear()
                 self.document.clean()
+                self.projects.forget()
                 return {"new": True, **self.sheets.state()}
 
             return manage(run)
 
+        @app.get("/api/projects")
+        def project_list():
+            """Every project in the folder, newest first, the open one marked."""
+            return self.projects.list()
+
+        @app.post("/api/projects/{name}", dependencies=write)
+        def project_save(name: str, overwrite: bool = False):
+            """Writes the current design under this name; answers the list entry."""
+            return manage(self.projects.save, name, overwrite)
+
+        @app.post("/api/projects/{name}/open", dependencies=write)
+        def project_open(name: str):
+            """Replaces the current design with this named project; answers the import result."""
+            return manage(self.projects.open, name)
+
+        @app.post("/api/projects/{name}/rename", dependencies=write)
+        def project_rename(name: str, body: dict):
+            """Renames a saved project on disk; answers its new list entry."""
+            return manage(self.projects.rename, name, str(body.get("name") or ""))
+
+        @app.delete("/api/projects/{name}", dependencies=write)
+        def project_delete(name: str):
+            """Removes a saved project's file from disk; answers `{"ok": true}`."""
+            manage(self.projects.delete, name)
+            return {"ok": True}
+
         @app.get("/api/project/export.openkerf")
-        def export_project(filename: str = "project.openkerf"):
-            """The design plus its library context in one file."""
+        def export_project(filename: str | None = None):
+            """The design plus its library context in one file, named after the project."""
             from fastapi.responses import FileResponse
 
+            wanted = filename or f"{self.projects.current or 'project'}.openkerf"
             path = manage(
-                self.drawing.export_project, self.library, filename, self.sheets
+                self.drawing.export_project, self.library, wanted, self.sheets
             )
             self.document.clean()
             return FileResponse(
@@ -1068,13 +1107,19 @@ class ApiServer:
 
         @app.post("/api/project/open", dependencies=write)
         async def open_project(file: UploadFile):
+            """
+            Import an uploaded `.openkerf` bundle and adopt it as a project of its own.
+
+            The answer is the project's list entry (`name`, `saved_at`, `bytes`,
+            `current`) — not the drawing's own import result — because the one thing a
+            client needs after an upload is what the project is now called: a name
+            already taken becomes "Name 2", and that is the name the export button and
+            the project list have to agree on next.
+            """
             target = self._upload_path(file.filename or "project.openkerf")
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
-            result = manage(
-                self.drawing.import_project, str(target), self.library, self.sheets
-            )
-            self.document.clean()
+            result = manage(self.projects.adopt, target, file.filename or "project.openkerf")
             return result
 
         @app.get("/api/design/elements/{element_id}/image.png")

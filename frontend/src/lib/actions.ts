@@ -114,6 +114,11 @@ export const KEYS: Record<string, string> = {
 	zoomSelectionLightburn: 'mod+shift+a',
 	zoomIn: '+',
 	zoomOut: '-',
+	// The project menu: ⌘O and ⌘S are what every desktop app uses, and ⌘⇧S besides ⌘S
+	// is LightBurn's own pair for "save" versus "save under another name".
+	open: 'mod+o',
+	save: 'mod+s',
+	saveAs: 'mod+shift+s',
 	// Node editing (P1). Shift+L and Shift+U are Inkscape's own keys for "make this
 	// segment straight" and "make it a curve", so whoever comes from there need not
 	// relearn. Inkscape adds a node with Insert; a Mac keyboard has no Insert, so it is
@@ -303,6 +308,12 @@ export type Handlers = {
 	testGrid: () => void;
 	generators: () => void;
 	clipart: () => void;
+	newProject: () => void;
+	openProjects: () => void;
+	saveProject: () => void;
+	saveProjectAs: () => void;
+	downloadProject: () => void;
+	uploadProject: () => void;
 };
 
 const K = (id: string) => keyLabel(KEYS[id]);
@@ -372,6 +383,26 @@ export function bridgesRefusal(
 	}
 	if (!ctx.count) return t('reason.pickShape');
 	return ctx.bridges.carries ? undefined : t('reason.noBridges');
+}
+
+/**
+ * The project menu: what you do with the whole of the work.
+ *
+ * Saving and opening happen on the server since the round of 4 September 2026: the box
+ * beside the laser has the data volume, the tablet in front of it has no file system
+ * worth the name. Download and Upload are the way to another device, and stand below
+ * a separator for that reason. Downloading only reads, so it is never off for a token.
+ */
+export function projectActions(ctx: Context, h: Handlers): Action[] {
+	const off = mayWrite(ctx);
+	return [
+		{ id: 'project.new', label: t('topbar.project.new'), icon: 'new', off, run: h.newProject },
+		{ id: 'project.open', label: t('topbar.project.open'), icon: 'folder', key: K('open'), off, run: h.openProjects },
+		{ id: 'project.save', label: t('topbar.project.save'), icon: 'save', key: K('save'), off, run: h.saveProject },
+		{ id: 'project.saveAs', label: t('topbar.project.saveAs'), icon: 'save', key: K('saveAs'), off, run: h.saveProjectAs },
+		{ id: 'project.download', label: t('topbar.project.download'), icon: 'download', explain: t('topbar.project.hint'), run: h.downloadProject },
+		{ id: 'project.upload', label: t('topbar.project.upload'), icon: 'upload', off, run: h.uploadProject }
+	];
 }
 
 /**

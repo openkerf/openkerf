@@ -12,6 +12,8 @@
 
 	import { saveFile } from '$lib/saving';
 	import { t } from '$lib/i18n/index.svelte';
+	import ArrangeIcon from './ArrangeIcon.svelte';
+	import type { Action, Menu as MenuList } from '$lib/actions';
 
 	let {
 		tool = $bindable(),
@@ -20,13 +22,11 @@
 		compact = false,
 		files = false,
 		projectInRail = false,
+		projectMenu = [],
 		onOpenGrid,
 		onOpenLibrary,
 		onPlaceImage,
 		onOpenFile,
-		onOpenProject,
-		onNewProject,
-		onSaved,
 		onOpenGenerators,
 		onOpenClipart,
 		onOpenSeries
@@ -47,19 +47,25 @@
 		 *  in the bar and does not belong here — two places for the same action only
 		 *  raises the question which one is the real one. */
 		projectInRail?: boolean;
+		/** The same six rows the top bar's project menu shows — New, Open…, Save,
+		 *  Save as…, Download, Upload… — read from `$lib/actions`' `projectActions`
+		 *  so a narrow screen reaches the server the same way the bar does, and not
+		 *  through a second, hand-built copy of the same six verbs. */
+		projectMenu?: MenuList;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
 		onPlaceImage?: (file: File) => void;
 		onOpenFile?: (file: File) => void;
-		onOpenProject?: (file: File) => void;
-		/** Start over. Asks for confirmation itself when there is work. */
-		onNewProject?: () => void;
-		/** After a successful download: the page fetches its "changed" flag. */
-		onSaved?: () => void;
 		onOpenGenerators?: () => void;
 		onOpenClipart?: () => void;
 		onOpenSeries?: () => void;
 	} = $props();
+
+	let projectRows = $derived(
+		projectMenu
+			.flatMap((group) => group.items)
+			.filter((item): item is Action => item !== 'separator' && !('items' in item))
+	);
 
 	// Every tool draws on a click on the bed; selecting is the resting state.
 	// The label comes from the catalogue at read time, not at module load, so it
@@ -127,13 +133,14 @@
 	let moreOpen = $state(false);
 
 	/**
-	 * Saving through `saveFile`, not through a bare `<a download>`: after the
-	 * download the app has to know the design has been saved. See `$lib/saving`.
+	 * Saving through `saveFile`, not through a bare `<a download>`: `design.svg` is
+	 * a read, so nothing here needs to know afterwards — unlike the project rows
+	 * below, which come from `projectMenu` and carry their own reload.
 	 */
 	async function save(event: MouseEvent, url: string, name: string) {
 		event.preventDefault();
 		moreOpen = false;
-		if (await saveFile(url, name)) onSaved?.();
+		await saveFile(url, name);
 	}
 
 	let visible = $derived(compact ? TOOLS.filter((t) => CORE.includes(t.id)) : TOOLS);
@@ -261,22 +268,23 @@
 						onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; moreOpen = false; if (f) onOpenFile?.(f); }} />
 				</label>
 				{#if projectInRail}
-					<!-- Only below 850px: above that "Project" is in the top bar. -->
-					<button class="row" role="menuitem" type="button"
-						onclick={() => { moreOpen = false; onNewProject?.(); }}>
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M12 11v6m-3-3h6"/></svg>
-						<span>{t('topbar.project.new')}</span>
-					</button>
-					<label class="row">
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 18v-5m0 0-2 2m2-2 2 2"/></svg>
-						<span>{t('topbar.project.open')}</span>
-						<input type="file" aria-label={t('topbar.project.pick')} accept=".openkerf,.zip"
-							onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; moreOpen = false; if (f) onOpenProject?.(f); }} />
-					</label>
-					<a class="row" role="menuitem" href="/api/project/export.openkerf" download="project.openkerf" onclick={(e) => save(e, '/api/project/export.openkerf', 'project.openkerf')}>
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v4H3z"/><path d="M5 10v9h14v-9"/><path d="M12 13v5m0 0-2-2m2 2 2-2"/></svg>
-						<span>{t('topbar.project.save')}</span>
-					</a>
+					<!-- Only below 850px: above that "Project" is in the top bar. The same
+					     six rows as the top bar's project menu — New, Open…, Save, Save
+					     as…, Download, Upload… — read from `projectMenu` so a narrow
+					     screen reaches the server the same way the bar does. -->
+					{#each projectRows as row (row.id)}
+						<button
+							class="row"
+							role="menuitem"
+							type="button"
+							title={row.off || row.explain}
+							disabled={Boolean(row.off)}
+							onclick={() => { moreOpen = false; row.run(); }}
+						>
+							{#if row.icon}<ArrangeIcon name={row.icon} size={18} />{/if}
+							<span>{row.label}</span>
+						</button>
+					{/each}
 				{/if}
 				<a class="row" role="menuitem" href="/api/design/export.svg" download="design.svg" onclick={(e) => save(e, '/api/design/export.svg', 'design.svg')}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>

@@ -21,5 +21,8 @@ fi
 # The leading `.` on the command is the engine's own way of not echoing a command line to
 # its console channel (meerk40t/kernel/kernel.py) — without it the token passed with -t
 # would appear a second time in `docker logs`, in plain text.
+#
+# `-r /data/projects` is on the data volume beside the library, so a saved project
+# survives a restart and an image update the same way the library does.
 exec meerk40t --no-gui --daemon \
-  --execute ".openkerf -p ${PORT} -b ${BIND} -f /app/frontend -t ${OPENKERF_TOKEN}"
+  --execute ".openkerf -p ${PORT} -b ${BIND} -f /app/frontend -r /data/projects -t ${OPENKERF_TOKEN}"

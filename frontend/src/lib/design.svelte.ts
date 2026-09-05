@@ -19,6 +19,7 @@
  * What a shape is called here: what it *is*, and for text what it says.
  */
 import { t, type MessageKey } from './i18n/core.ts';
+import type { CurrentProject } from './projects.svelte.ts';
 
 const KINDS: Record<string, MessageKey> = {
 	'elem rect': 'shape.rect',
@@ -155,6 +156,10 @@ export type Design = {
 	units_per_mm: number;
 	/** Are there changes since the last save or open? */
 	dirty: boolean;
+	/** The project this design would save as — `null` for one that has never been
+	 *  saved on this server. See `ProjectsStore.follow` in `$lib/projects.svelte`,
+	 *  which every surface naming the open project reads from. */
+	project?: CurrentProject | null;
 	elements: DesignElement[];
 	operations: DesignOperation[];
 };

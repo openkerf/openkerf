@@ -143,5 +143,26 @@
 		<path d="M3 12a9 9 0 1 0 3-6.7" />
 		<path d="M3 3v5h5" />
 		<path d="M12 8v4.5l3 1.8" />
+		<!-- The project menu: a blank sheet for New, a folder for Open, a tray with an
+		     arrow for Save (down, into the tray) and the same arrow reversed for Download
+		     and Upload, so the two pairs read as opposites at a glance. -->
+	{:else if name === 'new'}
+		<path d="M6 2.5h8l4 4V21a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z" />
+		<path d="M14 2.5V7h4" />
+		<path d="M9 13h6M9 17h6" />
+	{:else if name === 'folder'}
+		<path d="M3 6.5a1 1 0 0 1 1-1h5l2 2.5h9a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
+	{:else if name === 'save'}
+		<path d="M4 4.5a1 1 0 0 1 1-1h13l2 2v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" />
+		<path d="M7 3.5v6h9v-6" />
+		<path d="M7 20v-7h10v7" />
+	{:else if name === 'download'}
+		<path d="M4 20h16" />
+		<path d="M12 3v13" />
+		<path d="m6.5 11 5.5 5.5L17.5 11" />
+	{:else if name === 'upload'}
+		<path d="M4 20h16" />
+		<path d="M12 16V3" />
+		<path d="m6.5 8.5 5.5-5.5 5.5 5.5" />
 	{/if}
 </svg>

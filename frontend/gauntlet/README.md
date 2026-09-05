@@ -51,7 +51,8 @@ and that only came out when the words in the app changed and they had to be take
 # an engine with a library and a layer list of its own; -P/--profile isolates neither,
 # the two paths do
 meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/lib/library.db \
-                                  -o /tmp/docs/lib/operations.cfg -f frontend/build"
+                                  -o /tmp/docs/lib/operations.cfg \
+                                  -r /tmp/docs/lib/projects -f frontend/build"
 cd frontend
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-library.mjs
 OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs

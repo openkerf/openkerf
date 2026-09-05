@@ -27,15 +27,49 @@ export const nl: Catalogue = {
 	'topbar.material.isThickness': 'Dit vel is {material}, {thickness} — klik om te wijzigen',
 	'topbar.material.noThickness':
 		'Dit vel is {material} (dikte niet ingevuld) — klik om te wijzigen',
-	'topbar.project': 'Project',
-	'topbar.project.aria': 'Project — openen en opslaan',
-	'topbar.project.title':
-		'Project — openen en opslaan (ontwerp, vellen en bibliotheek in één bestand)',
+	'topbar.project.aria': 'Project · {name} — openen en opslaan',
+	'topbar.project.aria.unsaved': 'Project · {name}, niet-bewaarde wijzigingen — openen en opslaan',
 	'topbar.project.pick': 'Projectbestand kiezen',
 	'topbar.project.new': 'Nieuw project',
-	'topbar.project.open': 'Project openen…',
+	'topbar.project.open': 'Openen…',
 	'topbar.project.save': 'Project opslaan',
+	'topbar.project.saveAs': 'Opslaan als…',
+	'topbar.project.download': 'Downloaden',
+	'topbar.project.upload': 'Uploaden…',
 	'topbar.project.hint': 'Ontwerp, vellen, materialen en machineprofielen in één bestand.',
+	'topbar.project.untitled': 'naamloos',
+	'topbar.project.name': 'Project · {name}',
+	'topbar.project.unsaved': 'Dit project heeft niet-bewaarde wijzigingen',
+	'api.project.badName':
+		'Een projectnaam mag letters, cijfers, spaties, punten, streepjes en liggende streepjes bevatten, hoogstens 60, en mag niet met een punt beginnen.',
+	'api.project.exists': 'Er is al een project met die naam. Kies een andere, of zeg dat het vervangen mag worden.',
+	'api.project.missing': 'Er is geen project meer met die naam.',
+
+	// ── Het venster Projecten ────────────────────────────────────────────────
+	'projects.title': 'Projecten',
+	'projects.saveAs.title': 'Opslaan als…',
+	'projects.empty': 'Er is nog niets bewaard op deze server.',
+	'projects.column.name': 'Naam',
+	'projects.column.saved': 'Bewaard',
+	'projects.current': '(huidige)',
+	'projects.open': 'Openen',
+	'projects.name': 'Naam',
+	'projects.save': 'Opslaan',
+	'projects.rename': 'Hernoemen',
+	'projects.rename.to': 'Hernoem “{name}” naar',
+	'projects.rename.same': 'Dit is al de naam',
+	'projects.delete': 'Verwijderen',
+	'projects.delete.ask': '“{name}” verwijderen? Dit kan niet ongedaan worden gemaakt.',
+	'projects.overwrite': 'Vervangen',
+	'projects.overwrite.ask': 'Er bestaat al een project met de naam “{name}”. Vervangen?',
+
+	// ── De vraag vóór Nieuw, Openen… en Uploaden… werk weggooien ────────────────
+	'unsaved.title': 'Niet-bewaarde wijzigingen',
+	'unsaved.body': 'De wijzigingen in “{name}” zijn niet bewaard. Wat wil je ermee doen?',
+	'unsaved.save': 'Opslaan',
+	'unsaved.discard': 'Weggooien',
+	'unsaved.leave': 'Er zijn niet-bewaarde wijzigingen. Weet je zeker dat je wilt vertrekken?',
+
 	'topbar.import': 'Importeren',
 	'topbar.import.title':
 		'Bestand in dit vel importeren — SVG, DXF, RD, G-code of een afbeelding',
@@ -336,6 +370,7 @@ export const nl: Catalogue = {
 	'reason.needsToken': 'Vereist een token',
 	'reason.busy': 'Er loopt nog een bewerking',
 	'reason.needsName': 'Typ eerst een naam',
+	'reason.needsProjectName': 'Typ eerst een projectnaam',
 	'reason.needsText': 'Typ eerst de tekst',
 	'reason.needsQuery': 'Typ minstens twee letters om te zoeken',
 	'reason.needsMaterial': 'Kies eerst een materiaal',
@@ -419,6 +454,7 @@ export const nl: Catalogue = {
 	'common.close': 'Sluiten',
 	'common.back': 'Terug',
 	'common.busy': 'Bezig…',
+	'common.more': 'Meer',
 
 	// ── Werk van een vorige sessie ────────────────────────────────────────────
 	'recovery.title': 'Werk van een vorige sessie',
@@ -427,22 +463,6 @@ export const nl: Catalogue = {
 	'recovery.later': 'Niet nu',
 	'recovery.restore': 'Terugzetten',
 
-	// ── Werk vervangen ────────────────────────────────────────────────────────
-	'replace.title.new': 'Opnieuw beginnen',
-	'replace.title.unsaved': 'Niet-opgeslagen wijzigingen',
-	'replace.title.project': 'Er ligt al werk in dit project',
-	'replace.changed': 'Dit ontwerp is gewijzigd sinds de laatste keer opslaan.',
-	'replace.workInProject': 'Er staat werk in dit project.',
-	'replace.opensProject': {
-		one: 'Openen vervangt het hele project: het ontwerp, het vel en het materiaal komen uit het bestand.',
-		other: 'Openen vervangt het hele project: het ontwerp, alle {n} vellen en het materiaal komen uit het bestand.'
-	},
-	'replace.emptiesBed': 'Opnieuw beginnen leegt het bed. Je materialen en presets blijven staan.',
-	'replace.emptiesSheets': 'Opnieuw beginnen leegt het bed en verwijdert alle {n} vellen. Je materialen en presets blijven staan.',
-	'replace.recoverable': 'Van dit vel blijft een automatisch bewaarde versie van {when} staan; die wordt bij de volgende start aangeboden. De andere vellen niet.',
-	'replace.saveAndStart': 'Opslaan en beginnen',
-	'replace.saveAndOpen': 'Opslaan en openen',
-	'replace.dontSave': 'Niet opslaan',
 
 	// ── Venstertitels ─────────────────────────────────────────────────────────
 	'notifications.title': 'Meldingen',

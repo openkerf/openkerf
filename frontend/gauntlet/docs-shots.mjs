@@ -420,8 +420,22 @@ async function shot(name, page, { selector = null, pad = 0, fullPage = false } =
 	await page.locator('.alarm .seen').first().click({ timeout: 500 }).catch(() => {});
 	let clip;
 	if (selector) {
-		const box = await page.locator(selector).first().boundingBox();
-		if (!box) throw new Error(`${name}: nothing at ${selector} to photograph`);
+		// A bar with its own menu open beside it is two elements, not one: the menu is
+		// a fixed-position child that does not enlarge its parent's own box. Passing
+		// an array unions their boxes, so the shot holds both without guessing a pad
+		// deep enough to reach a dropdown that is not there when nothing is open.
+		const selectors = Array.isArray(selector) ? selector : [selector];
+		const boxes = [];
+		for (const sel of selectors) {
+			const box = await page.locator(sel).first().boundingBox();
+			if (!box) throw new Error(`${name}: nothing at ${sel} to photograph`);
+			boxes.push(box);
+		}
+		const left = Math.min(...boxes.map((b) => b.x));
+		const top = Math.min(...boxes.map((b) => b.y));
+		const right = Math.max(...boxes.map((b) => b.x + b.width));
+		const bottom = Math.max(...boxes.map((b) => b.y + b.height));
+		const box = { x: left, y: top, width: right - left, height: bottom - top };
 		const view = page.viewportSize();
 		const x = Math.max(0, box.x - pad);
 		const y = Math.max(0, box.y - pad);
@@ -580,7 +594,7 @@ await scene('16-testgrid.png', '/?tab=design', {}, async (page) => {
 // ══════════════════════════════════════════════════════ 3. the drawing on the bed
 
 if (
-	['06', '07', '08', '09', '10', '11', '12', '14', '15', '18', '19', '20', '21', '24', '25'].some(
+	['06', '07', '08', '09', '10', '11', '12', '14', '15', '18', '19', '20', '21', '24', '25', '47', '48'].some(
 		wanted
 	)
 ) {
@@ -724,6 +738,43 @@ await scene(
 		if (!row) throw new Error('46: a click where the arrow stands did not open its menu');
 		await page.mouse.click(row.x + row.width / 2, row.y + row.height / 2);
 		await page.waitForSelector(`${DIALOG} input.mono`, { timeout: 10000 });
+		await page.waitForTimeout(600);
+	}
+);
+
+/**
+ * The Projects window with two projects in it, the open one marked.
+ *
+ * Seeded through the routes, not the mouse: the design on the bed is saved twice under
+ * two names, so the list has something to show and the second is the open one.
+ */
+await scene('47-projects.png', '/?tab=design', { selector: DIALOG, pad: 0 }, async (page) => {
+	await api('POST', '/api/projects/Box%20panels?overwrite=true');
+	await api('POST', '/api/projects/Kastje?overwrite=true');
+	await page.locator('button.project-button').click();
+	await page.getByRole('menuitem', { name: 'Open…' }).click();
+	await page.waitForSelector(`${DIALOG} .row`, { timeout: 10000 });
+	await page.waitForTimeout(800);
+});
+
+/**
+ * The top bar naming the open project, with the menu open under it.
+ *
+ * Saved under its own name first, self-contained the way every other shot is: a run of
+ * this scene alone must not depend on scene 47 having left "Kastje" as the open project.
+ * One more shape after the save is what puts the dot after the name.
+ */
+await scene(
+	'48-topbar-project.png',
+	'/?tab=design',
+	{ selector: ['.topbar', '[role="menu"]'], pad: 0 },
+	async (page) => {
+		await api('POST', '/api/projects/Kastje?overwrite=true');
+		await api('POST', '/api/design/elements', { type: 'rect', x_mm: 400, y_mm: 250, width_mm: 10, height_mm: 10 });
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await page.waitForTimeout(2000);
+		await page.locator('button.project-button').click();
+		await page.waitForSelector('[role="menu"]', { timeout: 5000 });
 		await page.waitForTimeout(600);
 	}
 );
