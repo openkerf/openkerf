@@ -806,6 +806,20 @@ input[type='radio']:focus-visible::before {
 		min-height: 44px;
 	}
 }
+/*
+ * The one modifier the panel needed: a button whose label is a value.
+ *
+ * The right-hand panel had `Unlock`, `Earlier`, `Later`, `Cancel` and
+ * `Put everything on the bed` in IBM Plex Mono, where the typography table keeps mono
+ * for values — and beside them, in the same card, the saved place you jog to and the
+ * step that adjusts speed by a number, which *are* values and were set in the interface
+ * face. The faces were the wrong way round. So mono is a modifier here, worn by the
+ * buttons whose label is a number or somebody's own name, and by nothing else.
+ */
+.btn.mono {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
 /* The button that starts a burn is bigger than the rest, on purpose. */
 .btn.big {
 	min-height: 44px;

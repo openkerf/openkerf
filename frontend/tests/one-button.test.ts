@@ -73,3 +73,71 @@ test('no component defines a button of its own', () => {
 		`components starting the button over again: ${offenders.join(' | ')}`
 	);
 });
+
+/**
+ * And the same button under another name.
+ *
+ * The first test above matches a literal `.btn {`, so a component that draws the same
+ * face and calls it something else walks straight past it. The right-hand panel did
+ * that nine times: `.rot`, `.listmore`, `.dichtheid`, `.assign`, `.anchor-back`,
+ * `.gone`, `.add` in `DesignPanel.svelte` and `.rot`, `.pf-order`, `.jog` in
+ * `JobControls.svelte`. Measured at 1440 they came out at 15.9, 25.9, 29.9, 33.9, 34
+ * and 36.8 px, in two typefaces, with *Show cut path* (29.9, 11 px, 400) and
+ * *Show frame* (36.8, 13 px, 500) sibling verbs in one card.
+ *
+ * What is refused here is what makes a button face: border, radius, background and
+ * padding in one rule, on a selector that is worn by a `<button>` in that same file.
+ * A component may still say something extra about its own buttons — a colour, a
+ * width, a place in a grid; what it may not do is start the base again.
+ *
+ * The two files are the right-hand panel, the surface this round measured. Scanned
+ * with the same rule, the components still to follow are ActionBar, Clipart,
+ * CornersDialog, Generators, JobPreview, LanguagePicker, MaterialLibrary, Menu,
+ * PhoneView, Series, SheetMaterial, SheetTabs, StatusBar, TestGridResult, ToolRail
+ * and TopBar. Adding a file to the list below is the way to bring one in.
+ */
+const PANEL = ['DesignPanel.svelte', 'JobControls.svelte'];
+
+/**
+ * Two selectors in these files draw a face and are not the button:
+ * `.tag.air` is the pill that reports whether air assist is on — a state, in the
+ * shape the other tags in that row have — and `.pf-menu .row` is a row in a menu,
+ * which the app's menus draw their own way everywhere.
+ */
+const NOT_A_BUTTON = ['.tag.air', '.pf-menu .row'];
+
+test('no button in the right-hand panel is drawn under another name', () => {
+	const FACE = ['border-radius', 'border:', 'background', 'padding'];
+	const offenders: string[] = [];
+	for (const name of PANEL) {
+		const source = readFileSync(join(components, name), 'utf8');
+		const cut = source.indexOf('<style>');
+		const markup = source.slice(0, cut);
+		const style = source.slice(cut);
+		// Every class a `<button>` in this file wears.
+		const worn = new Set<string>();
+		for (const match of markup.matchAll(/<button\b[^>]*?class="([^"{]*)"/g))
+			for (const one of match[1].split(/\s+/).filter(Boolean)) worn.add(one);
+		for (const rule of style.matchAll(/\n\t*([^\n{}]+)\{([^{}]*)\}/g)) {
+			const selector = rule[1].trim();
+			if (selector.startsWith('@') || NOT_A_BUTTON.includes(selector)) continue;
+			const aButton = selector
+				.split(',')
+				.map((one) => one.trim().split(/[\s>]+/).pop() ?? '')
+				.some((tail) =>
+					tail
+						.split(/[.:[]/)
+						.filter(Boolean)
+						.some((one) => worn.has(one))
+				);
+			if (!aButton) continue;
+			const sets = FACE.filter((property) => rule[2].includes(property));
+			if (sets.length === FACE.length) offenders.push(`${name}: ${selector}`);
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		`the panel draws the button again under another name: ${offenders.join(' | ')}`
+	);
+});

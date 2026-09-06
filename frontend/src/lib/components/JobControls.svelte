@@ -907,7 +907,7 @@
 				     off screen, which is the very thing the second usability round
 				     fixed. -->
 				{#if onCutPath}
-					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
+					<button class="btn mini pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
 						{t('cutpath.show')}
 					</button>
 				{/if}
@@ -1327,22 +1327,22 @@
 			     beside them. Home sits next to it and not in the middle, because it is
 			     not a direction. -->
 			<div class="pad" class:metz={control.capabilities?.motion?.focus}>
-				<button class="jog up" aria-label={t('job.jog.up')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
-				<button class="jog left" aria-label={t('job.jog.left')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
-				<button class="jog down" aria-label={t('job.jog.down')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
-				<button class="jog right" aria-label={t('job.jog.right')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
-				<button class="jog home" disabled={movingOff} title={movingBlocked ?? (rotary.active ? t('rotary.safety.home') : undefined)} onclick={home}>{t('job.home')}</button>
+				<button class="btn jog up" aria-label={t('job.jog.up')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
+				<button class="btn jog left" aria-label={t('job.jog.left')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
+				<button class="btn jog down" aria-label={t('job.jog.down')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
+				<button class="btn jog right" aria-label={t('job.jog.right')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
+				<button class="btn jog home" disabled={movingOff} title={movingBlocked ?? (rotary.active ? t('rotary.safety.home') : undefined)} onclick={home}>{t('job.home')}</button>
 				{#if control.capabilities?.motion?.focus}
 					<!-- The Z axis is in the same pad as X and Y: it is the same operation
 					     with a third direction, and it follows the same step size. -->
 					<button
-						class="jog zup"
+						class="btn jog zup"
 						disabled={movingOff}
 						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zUp') })}
 						onclick={() => onFocus?.(-step)}
 					>Z&nbsp;↑</button>
 					<button
-						class="jog zdown"
+						class="btn jog zdown"
 						disabled={movingOff}
 						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zDown') })}
 						onclick={() => onFocus?.(step)}
@@ -1360,7 +1360,7 @@
 				     material down, and until now the only way to make it hold again was to
 				     home the machine. Both hang on the same capability the driver reports. -->
 				<button
-					class="rot"
+					class="btn mini"
 					disabled={movingOff || !control.capabilities?.motion?.unlock}
 					title={movingBlocked ?? t('job.unlock.why')}
 					onclick={() => onUnlock?.()}
@@ -1368,7 +1368,7 @@
 					{t('job.unlock')}
 				</button>
 				<button
-					class="rot"
+					class="btn mini"
 					disabled={movingOff || !control.capabilities?.motion?.lock}
 					title={movingBlocked ?? t('job.lock.why')}
 					onclick={() => onLock?.()}
@@ -1385,7 +1385,7 @@
 					<span class="rot-label">{t('job.toPoint')}</span>
 					<div class="puntrij">
 						<button
-							class="rot"
+							class="btn mini"
 							disabled={movingOff}
 							title={movingBlocked ?? t('job.toOrigin.title')}
 							onclick={() => control.moveTo(0, 0)}
@@ -1395,7 +1395,7 @@
 						{#each posities as place (place.name)}
 							<span class="place">
 								<button
-									class="rot name"
+									class="btn mini mono name"
 									disabled={movingOff}
 									title={movingBlocked ??
 										t('job.toSpot.title', { x: size(place.x_mm), y: size(place.y_mm) })}
@@ -1412,7 +1412,7 @@
 								<!-- Discarding is in the button itself, not in a menu: there are at
 								     most twelve of them and you do it rarely. -->
 								<button
-									class="rot gone"
+									class="btn mini gone"
 									aria-label={t('job.forgetSpotAria', { name: place.name })}
 									title={t('job.forgetSpot')}
 									onclick={() => vergeet(place.name)}
@@ -1434,14 +1434,14 @@
 									if (e.key === 'Escape') saving = false;
 								}}
 							/>
-							<button class="rot" onclick={save} disabled={!newName.trim()} title={t('reason.needsName')}>
+							<button class="btn mini" onclick={save} disabled={!newName.trim()} title={t('reason.needsName')}>
 								{t('job.keep')}
 							</button>
-							<button class="rot" onclick={() => (saving = false)}>{t('common.cancel')}</button>
+							<button class="btn mini" onclick={() => (saving = false)}>{t('common.cancel')}</button>
 						</div>
 					{:else}
 						<button
-							class="rot"
+							class="btn mini"
 							disabled={movingOff || currentMm === null}
 							title={currentMm === null
 								? t('job.noPosition.keep')
@@ -1499,7 +1499,7 @@
 					{/if}
 					<div class="puntrij">
 						<button
-							class="rot"
+							class="btn mini"
 							disabled={movingOff || currentMm === null}
 							title={currentMm === null
 								? t('job.noPosition.origin')
@@ -1510,7 +1510,7 @@
 						</button>
 						{#if control.origin}
 							<button
-								class="rot"
+								class="btn mini"
 								disabled={movingOff}
 								title={movingBlocked ?? t('job.origin.goTitle')}
 								onclick={() =>
@@ -1519,7 +1519,7 @@
 								{t('job.toZero')}
 							</button>
 							<button
-								class="rot"
+								class="btn mini"
 								title={t('job.origin.clearTitle')}
 								onclick={() => control.clearOrigin()}
 							>
@@ -1572,7 +1572,7 @@
 						{#if cutMarks.length === 2}
 							{#each cutMarks as mark, index (mark.id)}
 								<button
-									class="rot"
+									class="btn mini"
 									disabled={movingOff || currentMm === null}
 									title={currentMm === null
 										? t('job.noPosition.printcut')
@@ -1589,7 +1589,7 @@
 								</button>
 							{/each}
 							<button
-								class="rot"
+								class="btn mini"
 								title={t('job.printcut.clearTitle')}
 								onclick={() => control.clearPrintCut()}
 							>
@@ -1597,7 +1597,7 @@
 							</button>
 						{:else}
 							<button
-								class="rot"
+								class="btn mini"
 								disabled={selectedIds.length !== 2}
 								title={selectedIds.length === 2
 									? t('job.printcut.useTitle')
@@ -1653,7 +1653,7 @@
 								<div class="stelknoppen">
 									{#each [-0.1, -0.01, 0.01, 0.1] as step (step)}
 										<button
-											class="rot adjust"
+											class="btn mini mono adjust"
 											disabled={!connection.online}
 											title={t(step > 0 ? 'job.adjust.more' : 'job.adjust.less', {
 												what: t(axis.key).toLowerCase()
@@ -1663,7 +1663,7 @@
 										>
 									{/each}
 									<button
-										class="rot adjust terug"
+										class="btn mini adjust terug"
 										disabled={!connection.online || level === 1}
 										title={t('job.adjust.resetTitle')}
 										onclick={() => control.setAdjustment(axis.what, 1)}
@@ -1815,20 +1815,12 @@
 	/* A way in, not a command: this opens a window, it does not do anything to the
 	   machine. So it is a quiet full-width row heading the layer table rather than a
 	   third button competing with "Start job". */
+	/* The shared small button, across the width of the table it heads. Width is the one
+	   thing it says for itself; the face comes from `.btn.mini` like every other button
+	   in this panel. */
 	.pf-order {
-		display: block;
 		width: 100%;
 		margin: 0 0 var(--space-3);
-		padding: 6px 10px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
-		font-size: var(--text-xs);
-		text-align: center;
-	}
-	.pf-order:hover {
-		background: var(--surface-2);
 	}
 	.preflight {
 		border: 1px solid var(--line);
@@ -2085,7 +2077,10 @@
 		/* Four columns; the fifth exists only when there is a Z axis, otherwise an
 		   empty column sits there taking up room. */
 		grid-template-columns: repeat(4, 40px);
-		grid-template-rows: repeat(2, 34px);
+		/* The rows take the height the shared button has, rather than fixing one of
+		   their own: 34 px here against 36.8 everywhere else was one of the nine sizes
+		   this panel had for the same thing. */
+		grid-template-rows: repeat(2, auto);
 		gap: 4px;
 		margin: var(--space-2) 0;
 	}
@@ -2101,27 +2096,16 @@
 	.pad .zdown { grid-area: 2 / 5; }
 	/* The Z buttons carry a letter *and* an arrow; that does not fit at 15px. */
 	.pad .zup, .pad .zdown { font-size: var(--text-xs); }
+	/* The shared button in a 40 px grid column: only the air beside the arrow comes off,
+	   so that the arrow keeps the column. Disabled is the shared button's own — visibly
+	   off, which these buttons need most: they were blocked and looked identical, so you
+	   kept pressing them and nothing happened. */
 	.jog {
-		padding: 8px 0;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		font-weight: 500;
+		padding-left: 0;
+		padding-right: 0;
 	}
-	.jog:hover:not(:disabled) { background: var(--surface-2); }
-	/* Disabled has to be *visible*. These buttons were blocked but looked identical, so
-	   you kept pressing them and nothing happened. */
-	.jog:disabled { opacity: 0.4; cursor: not-allowed; }
-	.rot:disabled { opacity: 0.4; cursor: not-allowed; }
 	.jog.home { font-size: var(--text-xs); }
 	.steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-	.rot {
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-	}
 	/* The same resting state as in the top bar: recognisable as the stop button (red
 	   border, red square) without raising an alarm all day. */
 	/* The same dead state as in the top bar: dashed border, no red, and readable — here
@@ -2474,14 +2458,14 @@
 	}
 	/* Five buttons on one row in a 280 px panel: each may shrink, but the text stays on
 	   the type scale — only the air around it comes off. */
+	/* Five buttons in a 280 px panel: each may shrink, so the air beside the number comes
+	   off. The number itself is in mono — `.btn.mono`, the modifier the shared button has
+	   for a label that is a value — because +1% and +10% otherwise jump in width. */
 	.adjust {
 		flex: 1;
 		min-width: 0;
-		padding: 4px 2px;
-		/* Numbers in mono: these buttons sit beside each other and otherwise jump in
-		   width as soon as +1% becomes +10%. */
-		font-family: var(--font-mono);
-		font-variant-numeric: tabular-nums;
+		padding-left: 2px;
+		padding-right: 2px;
 	}
 	.adjust.terug { flex: 1.3; }
 	.naamveld {

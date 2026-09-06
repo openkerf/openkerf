@@ -879,7 +879,7 @@
 		     differently makes the reader think there are two problems. -->
 		<p>{t('canvas.outsideBed', { n: strays.length })}</p>
 		{#if canEdit}
-			<button class="rot" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onArrange?.('rescue')}>
+			<button class="btn mini" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onArrange?.('rescue')}>
 				{t('action.rescue')}
 			</button>
 		{/if}
@@ -952,7 +952,7 @@
 					<span class="rot-label">{t('panel.locked')}</span>
 					<p class="hint">{t('panel.locked.body')}</p>
 					<button
-						class="rot"
+						class="btn mini"
 						disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
 						onclick={() => onUnlock?.()}>{t('action.unlock')}</button
 					>
@@ -1118,7 +1118,7 @@
 					</span>
 					{#if moved}
 						<button
-							class="anchor-back"
+							class="btn mini anchor-back"
 							disabled={edits.busy}
 							title={t('panel.anchor.backTitle')}
 							onclick={restore}
@@ -1293,7 +1293,7 @@
 				<div class="imagefx">
 					<div class="fx-head">
 						<button
-							class="rot"
+							class="btn mini"
 							disabled={edits.busy || !image?.adjustments.some((a) => a.enabled)}
 							title={edits.busy ? t('reason.busy') : t('reason.noneYet')}
 							onclick={() => onImageClear?.()}
@@ -1417,7 +1417,7 @@
 			<div class="list-bar">
 				{#if canEdit}
 					<button
-						class="listmore"
+						class="btn mini listmore"
 						aria-haspopup="menu"
 						title={t('panel.list.title')}
 						onclick={(e) => {
@@ -1467,7 +1467,7 @@
 				{/if}
 				<span class="list-stretch"></span>
 				<button
-					class="dichtheid"
+					class="btn mini dichtheid"
 					aria-pressed={compact}
 					title={compact ? t('panel.density.compact') : t('panel.density.roomy')}
 					onclick={compactSchakel}
@@ -1512,8 +1512,8 @@
 						{t('panel.dropAll.gridsStay')}
 					{/if}
 				</span>
-				<button class="rot" onclick={() => (confirmDropAll = false)}>{t('common.cancel')}</button>
-				<button class="rot drop" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={dropAllLayers}>
+				<button class="btn mini" onclick={() => (confirmDropAll = false)}>{t('common.cancel')}</button>
+				<button class="btn mini drop" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={dropAllLayers}>
 					{t('panel.dropAll.confirm')}
 				</button>
 			</div>
@@ -1776,7 +1776,7 @@
 						<!-- Assigning is at the end and not before the name: otherwise the
 						     whole row shifts the moment you select something. -->
 						<button
-							class="assign"
+							class="btn mini assign"
 							class:in={membership(op.id) === 'all'}
 							class:partly={membership(op.id) === 'some'}
 							aria-pressed={membership(op.id) === 'all'}
@@ -2008,13 +2008,13 @@
 					<div class="order wide">
 						<span class="rot-label">{t('panel.order', { kind: typeName(op.type) })}</span>
 						<button
-							class="rot"
+							class="btn mini"
 							disabled={edits.busy || index === 0}
 							title={index === 0 ? t('reason.alreadyFirst') : t('layerMenu.earlier')}
 							onclick={() => moveLayer(op.id, 'up')}
 						>↑ {t('panel.order.earlier')}</button>
 						<button
-							class="rot"
+							class="btn mini"
 							disabled={edits.busy || index === plainLayers.length - 1}
 							title={index === plainLayers.length - 1
 								? t('reason.alreadyLast')
@@ -2026,13 +2026,13 @@
 					{#if confirmDrop === op.id}
 						<div class="confirm wide">
 							<span>{t('panel.drop.ask', { label: op.label })}</span>
-							<button class="rot" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
-							<button class="rot drop" onclick={() => dropLayer(op.id)}
+							<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
+							<button class="btn mini drop" onclick={() => dropLayer(op.id)}
 								>{t('panel.drop.confirm')}</button
 							>
 						</div>
 					{:else}
-						<button class="gone wide" onclick={() => (confirmDrop = op.id)}>
+						<button class="btn mini gone wide" onclick={() => (confirmDrop = op.id)}>
 							{t('panel.drop.layer')}
 						</button>
 					{/if}
@@ -2071,7 +2071,7 @@
 						</label>
 					{/each}
 					{#if canEdit}
-						<button class="gone cells-remove" onclick={() => removeGrid(group.id)}>
+						<button class="btn mini gone cells-remove" onclick={() => removeGrid(group.id)}>
 							{t('panel.grid.remove')}
 						</button>
 					{/if}
@@ -2094,7 +2094,7 @@
 				the kind is in the menu under its name instead of as an abbreviated pill.
 			-->
 			<button
-				class="add"
+				class="btn mini add"
 				aria-haspopup="menu"
 				disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
 				onclick={(e) => {
@@ -2120,6 +2120,10 @@
 				}}
 			>
 				+ {t('panel.addLayer')}
+				<!-- The chevron the list button beside it has: this opens a menu of the four
+				     kinds, and a button that unfolds something has to say so before it is
+				     pressed. It points up because the menu opens upward from here. -->
+				<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
 			</button>
 		{/if}
 		<p class="hint">
@@ -2358,19 +2362,13 @@
 	.list-stretch { flex: 1; }
 	/* The list menu: the same shape as the density switch beside it, because they are in
 	   the same bar and should not fight for attention. */
+	/* The shared `.btn.mini` carries the face; this says only what is its own — a quieter
+	   ink than a verb, because this button opens a list rather than doing something. */
 	.listmore {
-		display: inline-flex;
-		align-items: center;
 		gap: var(--space-1h);
-		padding: var(--space-1) var(--space-2);
-		font: inherit;
-		font-size: var(--text-xs);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
 		color: var(--text-2);
 	}
-	.listmore:hover { background: var(--surface-2); color: var(--text-1); }
+	.listmore:hover { color: var(--text-1); }
 	/* A state with its way out on the same line. */
 	.tidyrow {
 		display: flex;
@@ -2392,19 +2390,11 @@
 	}
 	.alsLink:disabled { opacity: 0.5; text-decoration: none; }
 	.dichtheid {
-		display: inline-flex;
-		align-items: center;
 		gap: var(--space-1h);
 		margin-left: auto;
-		padding: var(--space-1) var(--space-2);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		font-size: var(--text-xs);
 		color: var(--text-2);
-		background: var(--surface-1);
 	}
 	.dichtheid:hover {
-		background: var(--surface-2);
 		color: var(--text-1);
 	}
 	.kind {
@@ -2711,9 +2701,6 @@
 		.layer.compact .grip {
 			display: none;
 		}
-		.dichtheid {
-			min-height: 44px;
-		}
 		.val input {
 			/* 44 px tall, even though this is not a <button> and the global rule does not
 			   catch it. With a glove on you would otherwise bad-aim here. */
@@ -2722,9 +2709,6 @@
 		}
 		.val.narrow input {
 			width: 2.2em;
-		}
-		.assign {
-			min-height: 44px;
 		}
 		/* Three 44 px touch targets beside a name do not fit in 290 px. The number of
 		   shapes goes first: that is also in the chip's tooltip and in the panel below
@@ -2800,6 +2784,12 @@
 		gap: 8px;
 	}
 	.stray p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
+	/* The button under the sentence and no wider than its own words: the card is a grid,
+	   which stretched it to the full 245 px of the panel, and a full-width button in a
+	   warning card reads as a banner rather than as the way out. */
+	.stray .btn { justify-self: end; }
+	.locked-note { display: grid; gap: var(--space-1); }
+	.locked-note .btn { justify-self: end; }
 	/* The read-back line under a text. Wraps rather than clips: it carries somebody's own
 	   name, and half a name is worse than two lines. */
 	.reads {
@@ -2832,21 +2822,6 @@
 		color: var(--text-2);
 		margin-right: var(--space-1);
 	}
-	.rot {
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-	}
-	.rot:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.rot:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
 	.grid-row .grid-chip { background: var(--text-2); }
 	.cells {
 		display: flex;
@@ -2869,28 +2844,24 @@
 		background: var(--surface-2);
 	}
 	.cell input { width: 12px; height: 12px; accent-color: var(--accent); }
+	/* Its own line (a basis of 100% breaks the row) but no wider than its words, for the
+	   same reason as the layer's own remove button above. */
 	.cells-remove {
 		flex-basis: 100%;
-		text-align: left;
-		font-size: var(--text-xs);
-		color: var(--danger);
+		max-width: max-content;
 		margin-top: var(--space-1);
+		color: var(--danger);
+		border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
 	}
 	/* The button names the outcome, not the action — see DESIGN-SYSTEM, "the primary
 	   button says *what* is coming". */
+	/* As wide as its words, not as the panel: a full-width button reads as a banner, and
+	   this one adds a layer. The ink is the accent, because it is the one thing on this
+	   tab that makes something new. */
 	.add {
-		width: 100%;
-		padding: 8px;
-		font: inherit;
-		font-size: var(--text-xs);
-		font-weight: 500;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
+		gap: var(--space-1h);
 		color: var(--accent);
 	}
-	.add:hover:not(:disabled) { background: var(--surface-2); }
-	.add:disabled { opacity: 0.45; cursor: not-allowed; }
 	.layer-edit {
 		display: grid;
 		/* minmax(0, 1fr): a 1fr column does not shrink below the min-content of what is
@@ -2967,9 +2938,6 @@
 		grid-column: 1 / -1;
 		margin: 0;
 	}
-	.order .rot {
-		text-align: center;
-	}
 	/* Deleting stands apart from the rest and asks again: it takes the layer's
 	   assignments with it and that cannot be typed back. */
 	.confirm {
@@ -2986,29 +2954,32 @@
 		color: var(--text-1);
 	}
 	.confirm span { flex-basis: 100%; }
-	.rot.drop { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+	.drop { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 	/* A red text link, not a filled button: which is why the class is not called
 	   `danger` — the safety net in tokens.css fills every `button.danger` solid red on
 	   hover, and that belongs to a button that erases straight away. This one opens a
 	   confirmation. */
+	/* A red-lettered button, not a filled one: which is why the class is not called
+	   `danger` — the safety net in tokens.css fills every `button.danger` solid red on
+	   hover, and that belongs to a button that erases straight away. This one opens a
+	   confirmation. Natural width, at the start of its line: a button as wide as the
+	   panel reads as a banner (forms rule 6), and this one is the last thing you should
+	   press by accident. */
 	.layer-edit .gone {
-		font-size: var(--text-xs);
-		color: var(--danger);
-		text-align: left;
+		justify-self: start;
 		margin-top: var(--space-2);
+		color: var(--danger);
+		border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
 	}
 	/* Assign sits on the values line, not before the name: otherwise the whole row
 	   shifts as soon as you select something. */
+	/* Dashed, because it is a place a shape can go into rather than a verb that does
+	   something now. Everything else about it is the shared button. */
 	.assign {
-		font: inherit;
-		font-size: var(--text-xs);
-		padding: var(--space-1) var(--space-2);
-		border: 1px dashed var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
+		border-style: dashed;
 		color: var(--text-2);
 	}
-	.assign:hover:not(:disabled) { background: var(--surface-2); color: var(--text-1); }
+	.assign:hover:not(:disabled) { color: var(--text-1); }
 	.assign.in {
 		border-style: solid;
 		border-color: var(--accent);
@@ -3154,15 +3125,8 @@
 	   would make the halves untranslatable. */
 	.anchor-what { min-width: 0; color: var(--text-1); }
 	.anchor-back {
-		display: inline-flex;
-		align-items: center;
 		gap: var(--space-1);
 		flex: none;
-		padding: var(--space-1) var(--space-2);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		font-size: var(--text-xs);
 		color: var(--accent-text);
 	}
 	.anchor-back:hover:not(:disabled) { border-color: var(--accent); }
@@ -3225,6 +3189,5 @@
 		}
 		.figures { gap: var(--space-2) var(--space-3); }
 		.fold summary { min-height: 44px; }
-		.anchor-back { min-height: 44px; }
 	}
 </style>
