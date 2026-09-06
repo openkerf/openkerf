@@ -2614,12 +2614,18 @@
 			margin-top: var(--space-6);
 		}
 	}
-	.imagefx { display: grid; gap: 4px; }
+	.imagefx { display: grid; gap: 4px; min-width: 0; }
 	.fx-head { display: flex; align-items: center; gap: var(--space-2); }
+	/* min-width: 0 at every level, the way NumberField does it. `.selected > *` reaches
+	   only the card's own children, so without these the range input keeps its intrinsic
+	   width and pushes the row out: measured at 1440 x 900 with every adjustment on, a
+	   row of 258 px in a card of 245 px, its right edge 8 px past the window, and the
+	   values and the dither picker outside the teal border. */
 	.fx {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		padding: 4px 8px;
+		min-width: 0;
 	}
 	.fx.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 	.fx-toggle {
@@ -2636,10 +2642,12 @@
 		margin-top: 4px;
 		font-size: var(--text-xs);
 		color: var(--text-2);
+		min-width: 0;
 	}
-	.fx-value input[type='range'] { flex: 1; }
+	.fx-value input[type='range'] { flex: 1 1 0; min-width: 0; }
 	.fx-value select {
-		flex: 1;
+		flex: 1 1 0;
+		min-width: 0;
 		font: inherit;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
