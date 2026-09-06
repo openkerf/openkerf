@@ -206,8 +206,8 @@ two reads `{name#+1}`, copy sixteen `{name#+15}`. It is one undo.
 
 ![A plate the app has just laid out: sixteen rounded tags in four rows of four, from the corner
 of the margin, each with a different name cut into it — Anna, Bram, Cees, Daan on the first row,
-then Eva, Fien, Gijs, Hanna, and so on to Pim. The status bar says "32 elements": an outline
-and a name for every place.](images/38-series-plate.png)
+then Eva, Fien, Gijs, Hanna, and so on to Pim. The app counts "32 elements": an outline and a
+name for every place.](images/38-series-plate.png)
 
 When the list is longer than the plate holds, the app says what the rest becomes rather than
 making more sheets:

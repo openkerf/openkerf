@@ -826,4 +826,57 @@ def test_a_generated_shape_says_so_and_an_imported_one_does_not(client, tmp_path
     assert qr["generated"] is True
     assert imported["generated"] is False
     assert "meerk40t:" not in imported["label"]
+    # The panel's second question, the label, must answer the same way as the mark: an
+    # SVG reader writes the element's own id and never a name with an em dash in it.
+    assert " \u2014 " not in imported["label"]
+    assert " \u2014 " in qr["label"]
     assert imported["subpaths"] == 2
+
+
+def test_a_generator_names_its_shape_with_a_name_an_em_dash_and_what_it_holds(client):
+    """
+    Every generator here labels its shape `Name — what it holds`, and an import never does.
+
+    That is a convention, and until now it lived only in the four f-strings that write it.
+    The panel reads it: `madeHere` in `design.svelte.ts` takes a label of this form as a
+    second answer to "did a generator here make this?", because a design saved before the
+    `mkgenerated` mark existed carries no mark. Two encodings of one convention with
+    nothing between them is how a rename in this file silently puts the "loose pieces"
+    diagnosis back under every QR code. So it is asserted where it is written.
+
+    Measured on the four generators that go through `_add_polygon`/`_add_geometry`:
+    `QR — openkerf`, `code128 — 7X4MQB2K`, `Living hinge — in phase`, and six panels
+    `Box — bottom` … `Box — lid`. The imported path arrives as `Path bracket #000000`.
+    """
+    client.post("/api/design/generate/qrcode", json={"text": "openkerf", "size_mm": 30})
+    client.post(
+        "/api/design/generate/barcode",
+        json={"text": "7X4MQB2K", "x_mm": 0, "y_mm": 40, "width_mm": 60, "height_mm": 20},
+    )
+    client.post(
+        "/api/design/generate/hinge",
+        json={
+            "x_mm": 0, "y_mm": 70, "width_mm": 60, "height_mm": 40,
+            "slit_mm": 8, "gap_mm": 3, "row_mm": 2,
+        },
+    )
+    client.post(
+        "/api/design/generate/box",
+        json={
+            "width_mm": 60, "depth_mm": 40, "height_mm": 30,
+            "thickness_mm": 3, "finger_mm": 10,
+        },
+    )
+
+    elements = client.get("/api/design").json()["elements"]
+    made = [e for e in elements if e["generated"] is True]
+    # QR, barcode, hinge and the six panels of the box.
+    assert len(made) == 9
+    for element in made:
+        assert re.match(r"^\S.* — \S", element["label"]), element["label"]
+    assert {label.split(" — ")[0] for label in (e["label"] for e in made)} == {
+        "QR",
+        "code128",
+        "Living hinge",
+        "Box",
+    }
