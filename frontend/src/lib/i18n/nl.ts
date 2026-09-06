@@ -482,6 +482,19 @@ export const nl: Catalogue = {
 	'panel.aria': 'Eigenschappen',
 	'panel.collapse': 'Paneel inklappen',
 	'panel.expand': 'Paneel uitklappen',
+	'panel.rotate.step': '{angle}° draaien',
+	'panel.rotate.stepAria': '{angle} graden draaien',
+	'panel.textValue': '“{text}”',
+	'panel.bridges.offSome': {
+		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden. 1 van deze {shapes} vormen zit niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.',
+		other: 'Geen bruggen — kleine openingen die het deel in de plaat houden. {n} van deze {shapes} vormen zitten niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.'
+	},
+	'panel.bridges.notCutSome': {
+		one: '1 van deze {shapes} vormen zit niet in een snijlaag, dus daar doen de bruggen niets.',
+		other: '{n} van deze {shapes} vormen zitten niet in een snijlaag, dus daar doen de bruggen niets.'
+	},
+	'panel.size.widthPositive': 'Een breedte moet meer zijn dan 0 mm.',
+	'panel.size.heightPositive': 'Een hoogte moet meer zijn dan 0 mm.',
 	// ── Canvas ────────────────────────────────────────────────────────────────────
 	'canvas.headUnknown': 'Positie van de laserkop onbekend',
 	'canvas.headAt': 'Laserkop op {x} bij {y} millimeter',
@@ -824,7 +837,6 @@ export const nl: Catalogue = {
 	'jobStart.title': 'Job gestart',
 
 	// ── Design panel ──────────────────────────────────────────────────────────────
-	'panel.design': 'Ontwerp',
 	'panel.selection': 'Selectie',
 	'panel.elements': {
 		one: '1 element',
@@ -851,24 +863,28 @@ export const nl: Catalogue = {
 	'panel.angle.mixed': 'Deze vormen staan onder verschillende hoeken — draai ze met de stapjes',
 	'panel.angle.title': 'De huidige hoek. Tik een getal om er precies naartoe te draaien.',
 	'panel.angle.mixedNote': 'Deze vormen staan onder verschillende hoeken. De stapjes werken; een hoek intikken zou ze allemaal gelijk zetten en dat is zelden wat je bedoelt.',
-	'panel.rotate.step': '{angle}° draaien',
-	'panel.rotate.stepAria': '{angle} graden draaien',
 	'panel.anchor.since': 'Sinds je hem pakte: {what}',
 	'panel.anchor.mirrored': 'Gespiegeld ten opzichte van het origineel',
 	'panel.anchor.back': 'Terugzetten',
 	'panel.anchor.backTitle': 'Terug naar de stand van toen je deze selectie aanklikte',
 	'panel.inEffect': 'Zit in effect: {label}',
 	'panel.bridges': 'Bruggen',
-	'panel.bridges.on': 'Openingen in de snede laten',
+	'panel.bridges.on': 'Bruggen in de snede laten',
 	'panel.bridges.count': 'Aantal',
 	'panel.bridges.length': 'Lengte per brug',
-	'panel.bridges.off': 'Geen bruggen: deze vorm komt los zodra de snede rond is.',
-	'panel.bridges.explain': '{count} openingen van {length} mm, verdeeld over een omtrek van {total} mm. Er blijft {cut} mm te snijden over.',
-	'panel.bridges.explainTightest': 'Elk van deze {n} vormen krijgt {count} openingen van {length} mm. De kortste omtrek erbij is {total} mm lang; daar blijft {cut} mm te snijden over.',
+	'panel.bridges.off': {
+		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden — dus deze vorm komt los zodra de snede rond is.',
+		other: 'Geen bruggen — kleine openingen die het deel in de plaat houden — dus deze {n} vormen komen los zodra de snede rond is.'
+	},
+	'panel.bridges.explain': '{count} bruggen van {length} mm, verdeeld over een omtrek van {total} mm. Er blijft {cut} mm te snijden over.',
+	'panel.bridges.explainTightest': 'Elk van deze {n} vormen krijgt {count} bruggen van {length} mm. De kortste omtrek erbij is {total} mm lang; daar blijft {cut} mm te snijden over.',
 	'panel.bridges.places': 'Op {places} procent van de omtrek, elk {length} mm lang.',
 	'panel.bridges.notSupported': 'Deze vorm draagt geen bruggen. Ze werken op een rechthoek, een ellips, een polylijn of een pad — niet op een lijn, tekst of een afbeelding.',
 	'panel.bridges.mixed': 'Deze vormen hebben verschillende bruggen. Een aantal invullen geeft ze allemaal hetzelfde.',
-	'panel.bridges.notCut': 'Deze vorm zit niet in een snijlaag, dus de openingen veranderen nog niets. Ze doen alleen iets bij snijden.',
+	'panel.bridges.notCut': {
+		one: 'Deze vorm zit niet in een snijlaag, dus bruggen veranderen nog niets. Ze doen alleen iets bij snijden.',
+		other: 'Deze {n} vormen zitten niet in een snijlaag, dus bruggen veranderen nog niets. Ze doen alleen iets bij snijden.'
+	},
 	'panel.splittable': {
 		one: 'Deze vorm bestaat uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.',
 		other: 'Deze {n} vormen bestaan uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.'
@@ -1560,8 +1576,8 @@ export const nl: Catalogue = {
 		other: '{n} vormen hebben {count} bruggen van {length} mm gekregen; {skipped} zijn overgeslagen, want dat soort vorm draagt geen bruggen.'
 	},
 	'notice.bridges.cleared': {
-		one: 'De bruggen zijn weg bij één vorm; de snede sluit weer.',
-		other: 'De bruggen zijn weg bij {n} vormen; de snede sluit weer.'
+		one: 'De bruggen zijn weg bij één vorm.',
+		other: 'De bruggen zijn weg bij {n} vormen.'
 	},
 	'notice.fill.skipped': {
 		one: 'Eén overgeslagen: een lijn heeft geen binnenkant.',

@@ -4,6 +4,9 @@
 		LAYER_COLORS,
 		bridgeSummary,
 		elementName,
+		madeHere,
+		elementCuts,
+		nameShowsWholeText,
 		inkOn,
 		type DesignOperation,
 		type DesignStore
@@ -16,7 +19,7 @@
 	import { en } from '$lib/i18n/en';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { screen } from '$lib/screen.svelte';
-	import { bridgesRefusal, layerMenu, type Menu as MenuList } from '$lib/actions';
+	import { bridgesRefusal, lockRefusal, layerMenu, type Menu as MenuList } from '$lib/actions';
 	import { placeholders, resolve } from '$lib/series';
 	import type { SeriesStore } from '$lib/series.svelte';
 	import { untrack } from 'svelte';
@@ -139,15 +142,57 @@
 	// and you only notice once it is burned.
 	let linked = $state(true);
 
+	/**
+	 * A size or a position the app would not take, as one sentence.
+	 *
+	 * A field that keeps a refused number is the panel telling a lie about the shape:
+	 * measured, typing 0 in W left "0" standing while the canvas label under the same
+	 * rectangle read 120.0 x 80.0 mm, with no request, no notice and no sentence. So a
+	 * refusal puts the shape's own measure back and says why, beside the field and in
+	 * the colour this app refuses in.
+	 */
+	let sizeNote = $state<string | null>(null);
+	$effect(() => {
+		// Any real measure takes the refusal away again: another selection, a drag, or a
+		// number that was accepted. A refused write changes none of these, so the sentence
+		// stays until something true happens.
+		void live?.width;
+		void live?.height;
+		void live?.x;
+		void live?.y;
+		void selectedIds;
+		sizeNote = null;
+	});
+
+	/**
+	 * X and Y take any number, so the only thing they can refuse is not-a-number.
+	 *
+	 * That is deliberately silent where W and H say a sentence: "a width has to be more
+	 * than 0 mm" is a rule about the shape, and there is no such rule to state about an
+	 * empty box — a browser hands `<input type=number>` an empty string for anything it
+	 * cannot read, and the honest answer to nothing typed is the shape's own position
+	 * back. What both halves of the grid do share is the part that mattered: no field
+	 * keeps a number the shape does not have.
+	 */
 	function commitPosition(axis: 'x' | 'y', raw: string) {
-		const value = Number(raw);
-		if (!live || !Number.isFinite(value)) return;
+		if (!live) return;
+		const value = raw.trim() === '' ? Number.NaN : Number(raw.replace(',', '.'));
+		if (!Number.isFinite(value)) {
+			sizeFields[axis] = live[axis].toFixed(1);
+			return;
+		}
 		onSetPosition?.(axis === 'x' ? value : live.x, axis === 'y' ? value : live.y);
 	}
 
 	function commitSize(axis: 'width' | 'height', raw: string) {
-		const value = Number(raw);
-		if (!live || !Number.isFinite(value) || value <= 0) return;
+		const value = Number(raw.replace(',', '.'));
+		if (!live) return;
+		if (!Number.isFinite(value) || value <= 0) {
+			sizeFields[axis] = live[axis].toFixed(1);
+			sizeNote = t(axis === 'width' ? 'panel.size.widthPositive' : 'panel.size.heightPositive');
+			return;
+		}
+		sizeNote = null;
 		if (linked && live.width > 0 && live.height > 0) {
 			const factor = value / (axis === 'width' ? live.width : live.height);
 			onSetSize?.(live.width * factor, live.height * factor);
@@ -158,6 +203,26 @@
 			axis === 'height' ? value : live.height
 		);
 	}
+
+	/**
+	 * The four measures as typed, so a half-typed "1." does not jump away.
+	 *
+	 * They follow the shape and not the typing: whenever the selection moves, is dragged
+	 * or is resized, the boxes show what is really on the bed again. A refusal does not
+	 * change the shape and so does not run this — `commitSize` and `commitPosition` put
+	 * the shape's own measure back themselves.
+	 */
+	let sizeFields = $state({ width: '', height: '', x: '', y: '' });
+	$effect(() => {
+		const now = live;
+		if (!now) return;
+		sizeFields = {
+			width: now.width.toFixed(1),
+			height: now.height.toFixed(1),
+			x: now.x.toFixed(1),
+			y: now.y.toFixed(1)
+		};
+	});
 	let chosen = $derived(design.selectedElements);
 
 	/** The layers the selection is in, with their colour and burn number. */
@@ -189,6 +254,24 @@
 	/** Is everything selected locked? Then the panel says so and offers the way out. */
 	let lockedHere = $derived(
 		chosen.length > 0 && chosen.every((element) => element.locked)
+	);
+
+	/**
+	 * Why W/H/X/Y and the angle cannot be typed into.
+	 *
+	 * They used to carry `disabled={!canEdit}` and nothing else, while the bridges
+	 * checkbox eight rows below was already off with "This shape is locked". So a locked
+	 * shape took 50 in W, answered with a red toast, and left the 50 standing over a
+	 * shape of 60.0 mm. One verb, one reason: `lockRefusal` in `$lib/actions` says it for
+	 * the menu row and for the field alike.
+	 */
+	let sizeOff = $derived(
+		!canEdit
+			? t('reason.needsToken')
+			: lockRefusal({
+					count: chosen.length,
+					lockedCount: chosen.filter((element) => element.locked).length
+				})
 	);
 
 	/**
@@ -263,7 +346,7 @@
 		// And on `bridgeRevision` too, which the page bumps on a refusal. A refused write
 		// changes nothing on the shapes, so the summary is the same object and this would
 		// not run — measured: after typing 999 in Number and 9 in Length the two fields kept
-		// 999 and 9 while the sentence six pixels below still read "12 gaps of 2 mm", and
+		// 999 and 9 while the sentence six pixels below still read "12 bridges of 2 mm", and
 		// only clicking another shape and back brought the true numbers back.
 		void bridgeRevision;
 		bridgeFields = {
@@ -277,13 +360,23 @@
 	 *
 	 * Bridges only do something on a cut, and hiding the field on anything else would hide
 	 * the reason too. So the field stays and says where it is true — the same rule as the
-	 * angle: show the state, do not guess for the user.
+	 * angle: show the state, do not guess for the user. `elementCuts` in
+	 * `$lib/design.svelte` is where that answer lives, and `bridge-summary.test.ts` pins
+	 * down what it says about a shape in no layer at all.
+	 *
+	 * Asked about the carriers only, because that is what the sentence beneath counts
+	 * (`bridges.shapes`). A text or a line carries no bridge; with a text in the cut layer
+	 * beside a rectangle in an engrave layer, asking about both answers "cut" while the
+	 * sentence is about the rectangle alone — the false claim all over again.
+	 *
+	 * And counted rather than answered yes or no, because a selection can disagree with
+	 * itself: one shape in Outline beside one in Fine lines gave "these 2 shapes come loose
+	 * the moment the cut closes", true of one of the two. Three states, three sentences.
 	 */
-	let bridgesCut = $derived.by(() => {
-		const ids = new Set(chosen.flatMap((e) => e.operation_ids ?? []));
-		const own = design.operations.filter((op) => ids.has(op.id));
-		return own.length === 0 || own.some((op) => op.type === 'op cut');
-	});
+	let bridgeCarriers = $derived(chosen.filter((element) => element.bridges));
+	let bridgesNotCut = $derived(
+		bridgeCarriers.filter((element) => !elementCuts(element, design.operations)).length
+	);
 
 	function applyBridges(fields: { count?: number; length_mm?: number }) {
 		if (!canEdit || !selectedIds.length) return;
@@ -306,6 +399,14 @@
 			mirrored: poses.some((p) => p.mirrored),
 			mixed
 		};
+	});
+
+	/** The angle as it stands in its box: whole where it is whole, one decimal else. */
+	let angleField = $state('');
+	$effect(() => {
+		const angle = pose.angle;
+		angleField =
+			angle === null ? '' : Number.isInteger(angle) ? String(angle) : angle.toFixed(1);
 	});
 
 	/**
@@ -481,7 +582,22 @@
 	 * the number here is the number of shapes the button promises.
 	 */
 	const toSplit = $derived.by(() => {
-		const samengesteld = chosen.filter((e) => (e.subpaths ?? 1) > 1);
+		// Not rendered text and not a shape a generator here made. A caption of 18
+		// glyph outlines and a QR of 232 modules are both "more than one subpath",
+		// and for both the sentence below was wrong twice over: neither came out of a
+		// CAD program, and splitting them is not the thing to do next. The count
+		// itself is not lost — the right-click menu still offers *Split into 232
+		// shapes* for anything with more than one piece, from its own context in
+		// `+page.svelte`.
+		//
+		// Both exemptions are positive evidence: `text` is the source the glyphs were
+		// rendered from, `madeHere` is our own mark on what we made. Asking instead
+		// whether the label looks unnamed reads an import wrong — MeerK40t's SVG
+		// reader puts the element's own `id` in the label, so a CAD export arrives as
+		// `Path bracket` and would fall out of the very case this sentence is for.
+		const samengesteld = chosen.filter(
+			(e) => (e.subpaths ?? 1) > 1 && !e.text && !madeHere(e)
+		);
 		return {
 			shapes: samengesteld.length,
 			stukken: samengesteld.reduce((n, e) => n + (e.subpaths ?? 1), 0)
@@ -770,28 +886,24 @@
 	</div>
 {/if}
 
-<div class="section">
-	<!-- Heading, count and history on one line. They used to be on three, and
-	     three lines above the selection are three lines pushing the selection
-	     down. -->
-	<div class="section-head">
-		<h2 class="section-title">{t('panel.design')}</h2>
-		{#if elements.length}
-			<span class="muted mono tally">{t('panel.elements', { n: elements.length })}</span>
-		{/if}
-		<!-- Undo and redo used to be here. They moved to the action bar above the
-		     canvas: they were the only two buttons in the app that disappeared the
-		     moment you were on the Job tab, while that is precisely where you
-		     sometimes want to take something back. Since the move they have ⌘Z and
-		     ⌘⇧Z as well. -->
-	</div>
-	<!-- A refused edit used to be here. It has gone to the notice at the top right
-	     (Message.svelte), because you draw from the tool rail, the right-click menu and
-	     the text window, and none of those needs this panel to be open — from the Job tab
-	     the shape stayed away and this line explained it to nobody. It was also 700 px
-	     above the fields it was often about, and the panel scrolls. One place, on every
-	     tab; not two. -->
-	{#if elements.length === 0}
+<!-- A "Design" heading with the element count beside it used to stand here, on the
+     Edit tab and on the Layers tab both. It headed nothing: the tab strip two lines
+     above already says which tab you are on, and everything under it is the
+     selection or the layers, not "the design". What it did do was push the card that
+     *is* the tab down to y 164, and on a 1024-wide tablet that was the row that put
+     the bridges block under the fold. The count is a fact about the whole document,
+     so it went to the status bar, which is the one strip that holds for every tab.
+
+     Undo and redo used to be in that row as well. They moved to the action bar above
+     the canvas: they were the only two buttons in the app that disappeared the moment
+     you were on the Job tab, while that is precisely where you sometimes want to take
+     something back. Since the move they have ⌘Z and ⌘⇧Z as well.
+
+     A refused edit used to be here too. It has gone to the notice at the top right
+     (Message.svelte), because you draw from the tool rail, the right-click menu and
+     the text window, and none of those needs this panel to be open. -->
+{#if elements.length === 0}
+	<div class="section">
 		<!-- This used to say "Use 'Load design…' in the Job tab". That button does
 		     not exist and never has (repo-wide grep: this line was the only place
 		     that name appeared). An empty state pointing at an invented button is
@@ -800,8 +912,8 @@
 		     rail's More menu. Same choice, and same reason, as the bed's own empty text in
 		     `Canvas.svelte`. Gauntlet P33. -->
 		<p class="empty">{t(screen.tablet ? 'panel.empty.tablet' : 'panel.empty')}</p>
-	{/if}
-</div>
+	</div>
+{/if}
 
 {#if show === 'selection' && selected && size}
 	<div class="section">
@@ -832,36 +944,62 @@
 				</span>
 				<button class="clear" onclick={() => design.select(null)}>{t('panel.clear')}</button>
 			</div>
-			<!-- Sizes, position and angle as one grid of three lines: two columns of
-			     numbers with the unit once on the right. They used to be freely
-			     wrapping pills beside each other, so X ended up on the first line and Y
-			     on its own on the second — and then two pairs no longer read as two
-			     pairs. -->
-			<div class="figures mono">
+			<!-- A locked shape looks the same apart from its handles, so the panel says it
+			     in words and offers the way out in the same place. Above the values,
+			     because it explains why they are switched off. -->
+			{#if lockedHere}
+				<div class="locked-note">
+					<span class="rot-label">{t('panel.locked')}</span>
+					<p class="hint">{t('panel.locked.body')}</p>
+					<button
+						class="rot"
+						disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
+						onclick={() => onUnlock?.()}>{t('action.unlock')}</button
+					>
+				</div>
+			{/if}
+			<!-- Sizes, position and angle as one column of one kind of field. They used to
+			     be two columns of bare `<input type=number>` — 27.9 px and 11 px mono, no
+			     − and no + — with the unit once on the right, above a row of five grid
+			     columns holding one angle field and two buttons; and twelve lines lower,
+			     in the same card, the bridge fields stood as 36.8 px steppers in 13 px.
+			     Three kinds of number in one card, and the angle clipped to "∠137." in
+			     23 px of a 221 px row while two of its columns were empty. One component
+			     now, in its narrow form: the letter beside the box, the unit behind the
+			     number, the same two steps every other number in the app has.
+			     See DESIGN-SYSTEM, "Number input is a stepper everywhere". -->
+			<!-- "Drag the box to move" is about these numbers and about the frame on the
+			     canvas, so it hangs on them as a title — the way the Layers tab hangs
+			     `panel.layer.dragTitle` on the rows it is about. As a paragraph it stood
+			     in every selected state at every width: 17 words the reader had already
+			     read. Not under a lock: dragging is exactly what a lock refuses, and the
+			     note above already says what can and cannot be done. -->
+			<div class="figures" title={canEdit && !lockedHere ? t('panel.dragHint') : undefined}>
 				<!-- The one-letter labels are translated too: "B" is Breedte in Dutch and
-				     means nothing in English, where the same column reads "W". -->
+				     means nothing in English, where the same column reads "W". The whole
+				     word goes to the screen reader, which cannot see the column. -->
 				{#each [
 					[t('panel.widthShort'), 'width', t('panel.width')],
 					[t('panel.heightShort'), 'height', t('panel.height')]
 				] as [label, key, name] (key)}
-					<label class="f">
-						<span>{label}</span>
-						<input
-							type="number"
-							step="0.1"
-							min="0.1"
-							aria-label={t('panel.inMillimetres', { what: name })}
-							disabled={!canEdit}
-							value={(live ?? size)[key as 'width' | 'height'].toFixed(1)}
-							onchange={(e) => commitSize(key as 'width' | 'height', e.currentTarget.value)}
-						/>
-					</label>
+					<NumberField
+						compact
+						{label}
+						ariaLabel={t('panel.inMillimetres', { what: name })}
+						unit="mm"
+						bind:value={sizeFields[key as 'width' | 'height']}
+						step={0.1}
+						min={0.1}
+						disabled={Boolean(sizeOff)}
+						why={sizeOff}
+						onchange={(v) => commitSize(key as 'width' | 'height', v)}
+					/>
 				{/each}
 				<button
 					class="link"
 					aria-pressed={linked}
-					disabled={!canEdit}
-					title={linked ? t('panel.ratio.locked') : t('panel.ratio.free')}
+					disabled={Boolean(sizeOff)}
+					title={sizeOff ?? (linked ? t('panel.ratio.locked') : t('panel.ratio.free'))}
 					aria-label={linked ? t('panel.ratio.lockedShort') : t('panel.ratio.freeShort')}
 					onclick={() => (linked = !linked)}
 				>
@@ -875,83 +1013,79 @@
 					</svg>
 				</button>
 				{#each [['X', 'x', t('panel.positionX')], ['Y', 'y', t('panel.positionY')]] as [label, key, name] (key)}
-					<label class="f">
-						<span>{label}</span>
-						<input
-							type="number"
-							step="0.1"
-							aria-label={t('panel.inMillimetres', { what: name })}
-							disabled={!canEdit}
-							value={(live ?? size)[key as 'x' | 'y'].toFixed(1)}
-							onchange={(e) => commitPosition(key as 'x' | 'y', e.currentTarget.value)}
-						/>
-					</label>
+					<NumberField
+						compact
+						{label}
+						ariaLabel={t('panel.inMillimetres', { what: name })}
+						unit="mm"
+						bind:value={sizeFields[key as 'x' | 'y']}
+						step={0.1}
+						disabled={Boolean(sizeOff)}
+						why={sizeOff}
+						onchange={(v) => commitPosition(key as 'x' | 'y', v)}
+					/>
 				{/each}
-				<span class="unit">mm</span>
-			</div>
-
-			{#if canEdit}
-				<!-- The angle was nowhere. You could rotate by 1° and by 90° but not see
-				     where you were, so every click was a guess on top of the previous
-				     one. Now the angle is a value from the engine: typeable, and the
-				     steps move it instead of stacking something up. -->
-				<div class="figures mono rotrow">
-					<label class="f angle" class:mixed={pose.mixed}>
-						<span aria-hidden="true">∠</span>
-						<input
-							type="number"
-							step="1"
-							inputmode="decimal"
-							aria-label={t('panel.angle')}
-							title={pose.mixed ? t('panel.angle.mixed') : t('panel.angle.title')}
-							disabled={edits.busy || pose.mixed || pose.angle === null}
-							value={pose.angle === null
-								? ''
-								: Number.isInteger(pose.angle)
-									? pose.angle
-									: pose.angle.toFixed(1)}
-							placeholder={pose.mixed ? '—' : ''}
-							onchange={(e) => setAngle(e.currentTarget.value)}
-						/>
-						<!-- The degree sign belongs *in* the field. As a column of its own it
-						     sat three columns away on a tablet, apart from the number it
-						     belongs to. -->
-						<span class="suffix" aria-hidden="true">°</span>
-					</label>
-					<!-- Only the one-degree steps are left: that is the spinner belonging to
-					     this field. Rotating by 90° is an operation and lives in the
-					     right-click menu under "Rotate" (with , and . as shortcuts). -->
-					{#each [[-1, ''], [1, '']] as [angle, icon] (angle)}
-						<button
-							class="icon step"
-							disabled={edits.busy}
-							title={t('panel.rotate.step', {
-								angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
-							})}
-							aria-label={t('panel.rotate.stepAria', {
-								angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
-							})}
-							onclick={() => onRotate?.(Number(angle))}
-						>
-							{#if icon}
-								<ArrangeIcon name={String(icon)} size={18} />
-							{:else}
-								<span class="stepnum">{Number(angle) > 0 ? '+' : '−'}1</span>
-							{/if}
-						</button>
-					{/each}
-				</div>
-				{#if pose.mixed}
-					<p class="tip">{t('panel.angle.mixedNote')}</p>
+				{#if canEdit}
+					<!-- The angle was nowhere. You could rotate by 1° and by 90° but not see
+					     where you were, so every click was a guess on top of the previous
+					     one. Now it is a value from the engine: typeable, and its own two
+					     steps move it instead of stacking something up. They used to stand
+					     loose beside the field as −1 and +1; that is what a stepper is, so
+					     the field carries them. Rotating by 90° is an operation and lives
+					     in the right-click menu under "Rotate" (with , and . as shortcuts).
+					     The steps stay live where the field is off: shapes at different
+					     angles can each be turned a degree, which is not the same as
+					     writing one angle over all of them. -->
+					<NumberField
+						compact
+						label="∠"
+						ariaLabel={t('panel.angle')}
+						unit="°"
+						bind:value={angleField}
+						step={1}
+						disabled={Boolean(sizeOff) || edits.busy || pose.mixed || pose.angle === null}
+						why={sizeOff ?? (pose.mixed ? t('panel.angle.mixed') : t('reason.busy'))}
+						note={t('panel.angle.title')}
+						placeholder={pose.mixed ? '—' : ''}
+						stepsDisabled={Boolean(sizeOff) || edits.busy}
+						stepLabel={(direction) => {
+							// Not "increase the angle": on a selection whose shapes disagree the
+							// field is empty and shows "—", and the button turns each shape by a
+							// degree. The two loose buttons that stood here said so, and the
+							// field says it in their words.
+							const angle = direction > 0 ? '+1' : '-1';
+							return {
+								title: t('panel.rotate.step', { angle }),
+								aria: t('panel.rotate.stepAria', { angle })
+							};
+						}}
+						onstep={(direction) => onRotate?.(direction)}
+						onchange={(v) => setAngle(v)}
+					/>
 				{/if}
+			</div>
+			{#if sizeNote}
+				<p class="tip refused" role="status">{sizeNote}</p>
+			{/if}
+
+			{#if canEdit && pose.mixed}
+				<p class="tip">{t('panel.angle.mixedNote')}</p>
 			{/if}
 
 			{#if selected.text}
 				<!-- The content of the text is a value and belongs here; editing it is an
 				     operation and lives in the right-click menu. This used to be one
 				     button doing both, and then the text is only readable once you have
-				     already clicked it. -->
-				<p class="tekstwaarde" title={selected.text.text}>“{selected.text.text}”</p>
+				     already clicked it.
+
+				     Only when the name above could not carry it: up to 22 characters the
+				     head already reads Text “OpenKerf 5030”, and the same words again
+				     forty pixels lower are not a second fact. `nameShowsWholeText` is the
+				     one place that knows where the head cuts off, and the quotation marks
+				     now come from one key instead of one key and one hard-coded pair. -->
+				{#if !nameShowsWholeText(selected)}
+					<p class="tekstwaarde" title={selected.text.text}>{t('panel.textValue', { text: selected.text.text })}</p>
+				{/if}
 				{#if readsNow !== null}
 					<!-- And what that template comes out as. Under the quote and not instead of
 					     it: the two are different facts, and a panel that showed only the name
@@ -1014,20 +1148,6 @@
 				<p class="tip" role="status">{cornerNote}</p>
 			{/if}
 
-			<!-- A locked shape looks the same apart from its handles, so the panel says it
-			     in words and offers the way out in the same place. Above the values,
-			     because it explains why half of them cannot be typed into. -->
-			{#if lockedHere}
-				<div class="locked-note">
-					<span class="rot-label">{t('panel.locked')}</span>
-					<p class="hint">{t('panel.locked.body')}</p>
-					<button
-						class="rot"
-						disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
-						onclick={() => onUnlock?.()}>{t('action.unlock')}</button
-					>
-				</div>
-			{/if}
 			<!-- Bridges (tabs): the gaps that keep a cut part in the sheet. A value you set
 			     and read back, so it lives here and not in the menu; the menu carries the
 			     one-click default (four of 2 mm) because a panel field nobody finds is not a
@@ -1112,11 +1232,30 @@
 							)}
 						</p>
 					{/if}
-					{#if !bridgesCut}
-						<p class="tip">{t('panel.bridges.notCut')}</p>
-					{/if}
-				{:else}
-					<p class="hint">{t('panel.bridges.off')}</p>
+				{/if}
+				{#if bridges.carries && bridgesNotCut === bridges.shapes}
+					<!-- Whether they are on or not. This used to hang inside the branch above,
+					     so a shape without bridges in an engrave layer got the sentence for a
+					     cut instead: measured on the seeded design at 1440 px, "No bridges:
+					     this shape comes loose the moment the cut closes" under a rectangle in
+					     Caption, under the QR in Engrave and under a shape in no layer at all —
+					     three readings, none of them true. -->
+					<p class="tip">{t('panel.bridges.notCut', { n: bridges.shapes })}</p>
+				{:else if bridges.carries && bridgesNotCut > 0}
+					<!-- Some of them cut and some do not, so neither sentence above is true of
+					     the selection. Measured on the seeded design at 1440 px with the
+					     rectangle in Outline and the rectangle in Fine lines: "so these 2 shapes
+					     come loose the moment the cut closes", said of a pair of which one is
+					     engraved. The count is the number that is not cut — the verb follows
+					     that one. -->
+					<p class="tip">
+						{t(bridges.has ? 'panel.bridges.notCutSome' : 'panel.bridges.offSome', {
+							n: bridgesNotCut,
+							shapes: bridges.shapes
+						})}
+					</p>
+				{:else if bridges.carries && !bridges.has}
+					<p class="hint">{t('panel.bridges.off', { n: bridges.shapes })}</p>
 				{/if}
 				{#if bridgeNote}
 					<p class="tip" role="status">{bridgeNote}</p>
@@ -1214,18 +1353,20 @@
 						<!-- Vectorise, crop and undo the crop used to be here. They are
 						     actions, so they live in the image's context menu. What stays is
 						     DPI: that is a property of this image and belongs with the rest of
-						     the recipe. -->
-						<label class="dpi mono">
-							DPI
-							<input
-								type="number"
-								min="10"
-								max="2000"
-								step="10"
-								value={selected.image.dpi ?? 96}
-								onchange={(e) => onImageDpi?.(Number(e.currentTarget.value))}
-							/>
-						</label>
+						     the recipe. In the same field as every other number in this card —
+						     it stood here as a bare box of 4.5em with its label to the left,
+						     the third kind of number field in one panel. -->
+						<NumberField
+							compact
+							label="DPI"
+							value={String(selected.image.dpi ?? 96)}
+							step={10}
+							min={10}
+							max={2000}
+							disabled={!canEdit || edits.busy}
+							why={!canEdit ? t('reason.needsToken') : t('reason.busy')}
+							onchange={(v) => onImageDpi?.(Number(v))}
+						/>
 					</div>
 				</div>
 				</details>
@@ -1235,15 +1376,11 @@
 			     It is an action and now lives in the context menu under "To another
 			     sheet" — with the same sheet names, without unfolding first. -->
 
-			<!-- Not under a locked selection: "drag the box to move" is exactly what a lock
-			     refuses, and the note above already says what can and cannot be done. -->
-			<p class="hint">
-				{#if !canEdit}
-					{t('panel.needsToken')}
-				{:else if !lockedHere}
-					{t('panel.dragHint')}
-				{/if}
-			</p>
+			<!-- The drag hint moved up, onto the size grid it is about. What is left here
+			     is the refusal, which is a whole sentence and has to be read. -->
+			{#if !canEdit}
+				<p class="hint">{t('panel.needsToken')}</p>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -2076,17 +2213,26 @@
 		align-items: center;
 		flex-wrap: wrap;
 		gap: var(--space-1);
-		padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + 10px);
+		/* The same air left as right. The roomy row keeps ten pixels extra on the left
+		   because the grip is meant to hang in that margin; in this row it does not —
+		   measured, the grip's left edge *is* the content edge — so those ten pixels were
+		   air. The name is what needs them: it is the only thing in the row that is
+		   nowhere else. Measured at 1440: the ten pixels take the shortest name on the
+		   five rows from 37 to 47 px. */
+		padding: var(--space-1) var(--space-2);
 	}
-	/* The two switches may be tight in the compact state: they sit beside each other and
-	   you aim at a 16 px icon, not at the edge of the surface. On a touch screen they
-	   stay 44 px — that is handled by the media query at the bottom, which outweighs this
-	   rule. */
-	.layer.compact .out,
+	/* Only the identity block grows. The burn switch stood in this selector too, and a
+	   `.layer.compact .out` outweighs the `flex: none` on `.out` itself, so the switch
+	   took the room meant for the name — in both directions. Measured on five layers with
+	   the old rule: at 1440 the switch was 65 to 78.2 px wide where the roomy list gives
+	   it 28, and at 1024, where the media query below demands 44 px for a finger, it was
+	   squeezed to 23 to 38.6 px. The name got 0 px on all ten rows. */
 	.layer.compact .ident {
 		flex: 1 1 12ch;
-		min-width: 0;
-		/* Four touch targets and a name in 247 px: every pixel goes to the name, because
+		/* min-content and not 0: with 0 the block shrinks under its own contents and the
+		   ⋯ is painted over the values instead of the row admitting it is full. */
+		min-width: min-content;
+		/* Three touch targets and a name in 247 px: every pixel goes to the name, because
 		   that is the only thing in the row that is nowhere else. Measured: with the roomy
 		   spacing the name kept 10 px and read "E". */
 		gap: var(--space-1);
@@ -2095,6 +2241,31 @@
 		flex: 0 1 auto;
 	}
 	.layer.compact .layer-name {
+		/* A floor, not a wish: the name may be cut — it stands in full in the roomy list
+		   and in the tooltip — but never squeezed away again. Five characters and not the
+		   six that first suggested itself: with 6ch the row at 1024 whose values are
+		   widest ("1000 · 30%") could no longer keep everything on one line and wrapped
+		   its values underneath, 102 px against 54 for its neighbours — one ragged row in
+		   a list you are meant to scan. At 5ch nothing wraps and the narrowest name still
+		   measures 47 px, above the floor either way; the floor is the guard for a panel
+		   or a value string narrower than any we have.
+		   `contain: inline-size` is what keeps the floor from becoming a demand: without
+		   it the identity block counts the whole name as its minimum and every row wraps.
+		   Contained, the name asks for the floor and takes what is left — and if even the
+		   floor does not fit, the row wraps rather than letting the ⋯ paint over the
+		   values, which is what it did (3 px) while the name had no floor at all. That
+		   wrap is the price, and it is paid by exactly the two rows that carry a fourth
+		   value: the one that does not burn (which wrapped before this change too, 61 px
+		   at 1440) and the one with passes, 38 px before and 58 after. Both were only
+		   one line high while the name was 0 px and the switch was a sliver — measured at
+		   1024, the switch on the passes row was 2 px wide. There is no arrangement that
+		   keeps "12 · 65% · 3×", three touch targets and a readable name on one line in
+		   this panel; tightening the gaps to 2 px was tried and moved nothing. */
+		min-width: 5ch;
+		contain: inline-size;
+		/* A block, and not the two-line clamp box of the roomy list: text-overflow only
+		   draws its ellipsis on a block, and on one line there is nothing to clamp. */
+		display: block;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -2498,11 +2669,6 @@
 		gap: var(--space-2);
 	}
 	.section-head .section-title { margin-bottom: 0; }
-	.tally {
-		flex: 1;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
 	/* No nowrap: on a tablet this line is wider than the panel, and then it pushes the
 	   whole list sideways off screen instead of breaking. */
 	.order-note {
@@ -2527,12 +2693,23 @@
 			height: 44px;
 			min-height: 44px;
 		}
-		/* With a finger the grip is wider, so the margin it hangs in is too. */
+		/* With a finger the grip is wider, so the margin it hangs in is too. The compact
+		   row hangs it in nothing — see its padding above — and below it has no grip at
+		   all, so that row is not given the margin. */
 		.layer {
 			padding-left: calc(var(--space-2) + 20px);
 		}
-		.layer.compact {
-			padding-left: calc(var(--space-2) + 20px);
+		/* No grip in the compact row with a finger, for the same reason the count goes a
+		   few rules down: it does not fit, and of everything in the row it is the one
+		   that is also somewhere else. Measured at 1024, where every target is 44 px:
+		   grip, chip, switch and ⋯ with their gaps ask 192 px of the 187 the row has, so
+		   the name got 0 px and the row still overflowed by 5. Without it, and with the
+		   ten pixels of padding back, the name measures 47 to 62.6 px on the same five
+		   rows and every row stays one line high. Dragging is what is lost; the ⋯ menu still
+		   holds "Burn earlier" and "Burn later", which is the same reordering with words
+		   on it. */
+		.layer.compact .grip {
+			display: none;
 		}
 		.dichtheid {
 			min-height: 44px;
@@ -2573,12 +2750,18 @@
 			margin-top: var(--space-6);
 		}
 	}
-	.imagefx { display: grid; gap: 4px; }
+	.imagefx { display: grid; gap: 4px; min-width: 0; }
 	.fx-head { display: flex; align-items: center; gap: var(--space-2); }
+	/* min-width: 0 at every level, the way NumberField does it. `.selected > *` reaches
+	   only the card's own children, so without these the range input keeps its intrinsic
+	   width and pushes the row out: measured at 1440 x 900 with every adjustment on, a
+	   row of 258 px in a card of 245 px, its right edge 8 px past the window, and the
+	   values and the dither picker outside the teal border. */
 	.fx {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		padding: 4px 8px;
+		min-width: 0;
 	}
 	.fx.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 	.fx-toggle {
@@ -2595,10 +2778,12 @@
 		margin-top: 4px;
 		font-size: var(--text-xs);
 		color: var(--text-2);
+		min-width: 0;
 	}
-	.fx-value input[type='range'] { flex: 1; }
+	.fx-value input[type='range'] { flex: 1 1 0; min-width: 0; }
 	.fx-value select {
-		flex: 1;
+		flex: 1 1 0;
+		min-width: 0;
 		font: inherit;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
@@ -2606,17 +2791,7 @@
 		color: var(--text-1);
 	}
 	.fx-num { min-width: 3em; text-align: right; }
-	.fx-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
-	.dpi { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--text-2); }
-	.dpi input {
-		width: 4.5em;
-		font: inherit;
-		padding: 2px 4px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
+	.fx-actions { display: grid; gap: 4px; margin-top: 4px; }
 	.stray {
 		border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line));
 		border-radius: var(--radius-card);
@@ -2640,6 +2815,12 @@
 		line-height: 1.45;
 		color: var(--text-2);
 	}
+	/* A refusal has a colour. Grey is what the panel says about the normal state; the
+	   sentence that says a number was not taken wears the same warn as the pre-flight's
+	   notices and the Generators window's refusals — and only that, because the window's
+	   refusal hint is `--warn` at this size with no weight of its own, and one refused
+	   value should not read heavier in the panel than in the window. */
+	.tip.refused { color: var(--warn); }
 	/* No margin of its own any more: the selection card is a grid with one gap, and a
 	   group that added its own spacing on top of it made the rhythm erratic *and* the
 	   panel longer. */
@@ -2723,7 +2904,20 @@
 		border-top: 0;
 		border-radius: 0 0 var(--radius-field) var(--radius-field);
 	}
-	.layer-edit label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
+	/* Not the `.val` labels the compact fold takes over from the row: this rule (0,1,1)
+	   outranks `.val` (0,1,0), and with them in it the number and its unit broke in two,
+	   "12" over "mm/s", in the one place that promised the same fields one line lower.
+	   Measured before: the unit sat 2 px under its number and the three fields were
+	   43.9 px tall at 1440 x 900 (65.7 at 1024 x 768) against 25.9 (44.8) for the same
+	   fields in the roomy row. Excluded rather than overruled, so how a `.val` lays out
+	   is decided in one place only — the `.val` rule itself. Its number and unit carry
+	   their own font-size and colour, so they lose nothing here. */
+	.layer-edit label:not(.val) {
+		display: grid;
+		gap: 2px;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
 	.layer-edit .wide { grid-column: 1 / -1; }
 	.steppers { display: grid; gap: var(--space-2); }
 	.layer-edit label.check {
@@ -2899,74 +3093,21 @@
 		margin-left: auto;
 	}
 
-	/* Two columns of numbers with the unit once on the right. A fixed grid rather than
-	   wrapping pills: only that way is W above X and H above Y, and that is what makes the
-	   four fields read as two pairs. */
+	/* One column of one kind of field, with the chain bracketing the two it links.
+	   Two columns of 86 px cells was what forced the bare boxes: a stepper is two 38 px
+	   buttons plus a number, and "1000.0" does not fit in the 30 px that leaves. So the
+	   measures stand under each other — W above H above X above Y above the angle — and
+	   the chain sits beside the pair it holds together, where it says what it does. */
 	.figures {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-		align-items: end;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
 		gap: var(--space-1) var(--space-2);
 	}
-	.figures .f {
-		display: flex;
-		align-items: stretch;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		overflow: hidden;
-		min-width: 0;
-	}
-	.figures .f:focus-within {
-		border-color: var(--accent);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
-	}
-	/* The label sits *in* the field and not above it: a separate label row above four
-	   fields costs two lines of height for two characters of information. */
-	.figures .f > span {
-		display: grid;
-		place-items: center;
-		padding: 0 var(--space-1) 0 var(--space-2);
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		flex: none;
-	}
-	.figures input {
-		font: inherit;
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		font-variant-numeric: tabular-nums;
-		/* min-width: 0 and flex: 1 — without that a number input keeps its own minimum
-		   width and "145.0" was truncated to "145.". That
-		   stond zo op de tablet in beeld. */
-		flex: 1;
-		width: 100%;
-		min-width: 0;
-		text-align: right;
-		padding: var(--space-1h) var(--space-2) var(--space-1h) 0;
-		border: 0;
-		background: transparent;
-		color: var(--text-1);
-		outline: none;
-	}
-	.figures input::-webkit-outer-spin-button,
-	.figures input::-webkit-inner-spin-button {
-		appearance: none;
-		margin: 0;
-	}
-	.figures input[type='number'] {
-		appearance: textfield;
-		-moz-appearance: textfield;
-	}
-	.figures input:disabled { opacity: 0.6; }
-	.figures .unit {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		padding-bottom: var(--space-1h);
-		text-align: center;
-		min-width: 1.6em;
-	}
+	.figures > :global(.field) { grid-column: 1; }
 	.figures .link {
+		grid-column: 2;
+		grid-row: 1 / span 2;
 		display: grid;
 		place-items: center;
 		width: 100%;
@@ -2976,62 +3117,22 @@
 		border-radius: var(--radius-field);
 		color: var(--text-2);
 	}
-	.figures .link[aria-pressed='true'] {
+	.figures .link[aria-pressed='true']:not(:disabled) {
 		color: var(--accent);
 		border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 	.figures .link:hover:not(:disabled) { background: var(--surface-2); }
-
-	/* Angle plus four steps on one row. The angle field deliberately gets more room than
-	   a button: "337.5" has to fit in it, and a truncated number is worse than no number —
-	   then you believe what is there. */
-	.rotrow {
-		grid-template-columns: minmax(4.6em, 1.6fr) repeat(4, minmax(0, 1fr));
-		align-items: center;
-	}
-	.rotrow .f.angle > span:first-child {
-		padding-right: 0;
-		font-size: var(--text-sm);
-	}
-	.rotrow .f.angle input { padding-right: 0; }
-	.figures .suffix {
-		display: grid;
-		place-items: center;
-		flex: none;
-		padding: 0 var(--space-2) 0 2px;
-		font-size: var(--text-xs);
+	/* Off is off, and it has to look it. The chain kept its teal pressed background and
+	   opacity 1 while the number fields beside it dropped — controls switched off by one
+	   lock, one of them still looking live. Same treatment as `.icon:disabled` below. */
+	.figures .link:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 		color: var(--text-2);
+		border-color: transparent;
+		background: none;
 	}
-	.figures .f.mixed input { color: var(--text-2); }
-	.icon.step {
-		width: 100%;
-		height: 30px;
-	}
-	.stepnum {
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		font-variant-numeric: tabular-nums;
-	}
-
-	/* The icon rows. Four per row, because four of 44 px fit with spacing in a 279 px
-	   panel and six do not — and four also makes the layout coincide with the meaning: row
-	   one horizontal, row two vertical. */
-	/* Buttons without a border for the history and the rotation steps: those belong with
-	   the field beside them, not with the grid below them. */
-	.icon {
-		display: grid;
-		place-items: center;
-		width: 30px;
-		height: 30px;
-		border-radius: var(--radius-field);
-		color: var(--text-2);
-	}
-	.icon:hover:not(:disabled) {
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
-	.icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
 	/* The anchor: where you came from, and the way back. Neutral in colour — this is not
 	   a warning but a note. */
@@ -3111,35 +3212,18 @@
 	.fold > :not(summary) { margin-top: var(--space-2); }
 
 	/* Beside the machine with a finger. This block is deliberately right at the bottom:
-	   the rules above have the same specificity, so whoever comes first loses — and when
-	   this block was halfway up, the rotation row kept its six desktop columns and the card
-	   ran out of the panel on the right. */
+	   the rules above have the same specificity, so whoever comes first loses. */
 	@media (max-width: 1199px), (pointer: coarse) {
 		/* Thick fingers: every target in the selection card makes 44 px, with at least
 		   12 px between them. Since the icon grids moved to the action bar and the context
-		   menu, this is only about the fields and their steps. */
-		.icon,
-		.icon.step,
+		   menu and the rotation steps became the angle field's own, this is only about the
+		   chain and the folds — the number fields bring their 44 px with them, from the one
+		   component they are all made of. */
 		.figures .link {
 			height: 44px;
 			min-height: 44px;
 		}
-		.icon { width: 44px; }
 		.figures { gap: var(--space-2) var(--space-3); }
-		.figures input {
-			/* 44 and not 43: the field just missed it because the wrapper's border eats two
-			   pixels. */
-			min-height: 44px;
-			padding-top: var(--space-3);
-			padding-bottom: var(--space-3);
-		}
-		.rotrow {
-			/* The angle field and four 44 px buttons do not fit beside each other on a
-			   tablet. So the field gets the full width; the steps keep their full touch area
-			   on the row below. */
-			grid-template-columns: repeat(4, minmax(0, 1fr));
-		}
-		.rotrow .f.angle { grid-column: 1 / -1; }
 		.fold summary { min-height: 44px; }
 		.anchor-back { min-height: 44px; }
 	}

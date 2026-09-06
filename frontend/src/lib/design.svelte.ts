@@ -34,6 +34,46 @@ const KINDS: Record<string, MessageKey> = {
 	group: 'shape.group'
 };
 
+/** How much of a caption the shape's name carries before it is cut short. */
+export const NAME_TEXT_LIMIT = 22;
+
+/**
+ * Does the name above the card already say the whole caption?
+ *
+ * The panel used to quote the text twice — `Text “OpenKerf 5030”` in the head and
+ * `“OpenKerf 5030”` again forty pixels below it. The quote below only earns its
+ * place when the head could not fit it, so both readers ask this one question.
+ *
+ * A caption of nothing but spaces counts as shown: `elementName` renders it as
+ * `Text “”`, and an empty pair of quotation marks a second time forty pixels lower
+ * is the very repetition this exists to stop.
+ */
+export function nameShowsWholeText(element: { text: { text: string } | null }): boolean {
+	const short = element.text?.text.trim() ?? '';
+	return short.length <= NAME_TEXT_LIMIT;
+}
+
+/**
+ * Did this shape come out of a generator here rather than out of a file?
+ *
+ * Two questions in one, and both are positive evidence. `generated` is the API's
+ * reading of our own `mkgenerated` mark, set the moment a generator lays a shape down
+ * (`generators._mark_generated`). A design saved before that mark existed carries no
+ * such attribute, so the label is asked as well: every generator here writes
+ * `QR — openkerf`, `Living hinge — staggered`, `Box — front`, `code128 — 7X4MQB2K` —
+ * a name and an em dash. MeerK40t's SVG reader writes the element's own `id` into the
+ * label instead (`Path bracket`, `Path path1234 #000000`), so an import never carries
+ * one.
+ *
+ * The other way round is what must not be asked. An earlier version of this exempted
+ * every shape whose label did *not* hold the engine's internal id `meerk40t:12` — and
+ * an imported path never holds one, so the one shape the "loose pieces" diagnosis
+ * exists for was the one shape that stopped getting it.
+ */
+export function madeHere(element: { generated?: boolean; label?: string }): boolean {
+	return element.generated === true || / — /.test(element.label ?? '');
+}
+
 export function elementName(element: {
 	type: string;
 	text: { text: string } | null;
@@ -43,7 +83,7 @@ export function elementName(element: {
 	if (element.text?.text) {
 		const short = element.text.text.trim();
 		return t('shape.textNamed', {
-			text: short.length > 22 ? short.slice(0, 21) + '…' : short
+			text: short.length > NAME_TEXT_LIMIT ? short.slice(0, NAME_TEXT_LIMIT - 1) + '…' : short
 		});
 	}
 	if (element.image) return t('shape.image');
@@ -73,6 +113,12 @@ export type DesignElement = {
 	 * with dozens of panels in it; more than 1 means splitting does something.
 	 */
 	subpaths: number;
+	/**
+	 * Did a generator here make this shape? Set by the API from our own `mkgenerated`
+	 * mark. A QR of 232 modules and a hinge of 160 slits have many pieces and did not
+	 * come out of a CAD program, so the panel's diagnosis is not about them.
+	 */
+	generated?: boolean;
 	/** The group this element is in; a grid is one group. */
 	group_id: string | null;
 	/** Set for vector text: the source the path was rendered from. */
@@ -494,6 +540,41 @@ export function bridgeSummary(elements: DesignElement[]): BridgeSummary {
 		),
 		places
 	};
+}
+
+/**
+ * Do the bridges on this selection do anything — is it in a layer that cuts?
+ *
+ * Bridges are gaps in a cut, so in an engrave or a raster layer, and on a shape in no
+ * layer at all, they change nothing that comes out of the machine. The panel keeps the
+ * fields and says that instead of hiding them: hiding the control would hide the reason
+ * with it, and then somebody looks for bridges on an engraving and concludes the app
+ * cannot do them.
+ *
+ * One shape of the selection in a cut layer is enough — then the gaps do something
+ * somewhere. A layer a shape names that is not in `operations` is answered `true`: the
+ * panel only says "not in a cut layer" about layers it has actually looked at, because a
+ * sentence about a layer nobody could read would be the false one all over again.
+ */
+export function inCutLayer(elements: DesignElement[], operations: DesignOperation[]): boolean {
+	return elements.some((element) => elementCuts(element, operations));
+}
+
+/**
+ * The same question about one shape, because a selection can disagree with itself.
+ *
+ * A selection where one shape cuts and another engraves has no single true answer, and
+ * `inCutLayer` gives the optimistic half of it. The panel counts instead: how many of the
+ * shapes it is talking about are not in a cut layer. Measured on the seeded design with
+ * the rectangle in Outline and the rectangle in Fine lines selected, the sentence read
+ * "so these 2 shapes come loose the moment the cut closes" — true of one of the two.
+ */
+export function elementCuts(element: DesignElement, operations: DesignOperation[]): boolean {
+	const ids = element.operation_ids ?? [];
+	if (!ids.length) return false;
+	const own = operations.filter((operation) => ids.includes(operation.id));
+	if (!own.length) return true;
+	return own.some((operation) => operation.type === 'op cut');
 }
 
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);

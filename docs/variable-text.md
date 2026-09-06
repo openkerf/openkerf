@@ -112,10 +112,11 @@ every plate. Use it for something that is the same on all of them and still come
 list.
 
 **What the panel tells you.** Select a text with a placeholder in it and the panel on the
-right shows two lines: the text as you typed it, in quotation marks, and under it what it
-comes out as — "For the burn now on the bed this reads “Anna”." Two facts, not one. Without
-the first you cannot see which column the tag reads; without the second you cannot see what
-is about to be burned.
+right shows two facts, not one: the name of the shape is the text as you typed it, in
+quotation marks — `Text “{name}”` — and under it stands what it comes out as, "For the burn
+now on the bed this reads “Anna”." Without the first you cannot see which column the tag
+reads; without the second you cannot see what is about to be burned. A text too long for the
+name is cut short there and then repeated in full on a line of its own.
 
 Which column to put in is a *verb*, so it is in the right-click menu; what the text says now
 is a *value*, so it is in the panel. That split is the app's rule and not a whim of this
@@ -205,7 +206,7 @@ two reads `{name#+1}`, copy sixteen `{name#+15}`. It is one undo.
 
 ![A plate the app has just laid out: sixteen rounded tags in four rows of four, from the corner
 of the margin, each with a different name cut into it — Anna, Bram, Cees, Daan on the first row,
-then Eva, Fien, Gijs, Hanna, and so on to Pim. The panel says "32 elements": an outline and a
+then Eva, Fien, Gijs, Hanna, and so on to Pim. The app counts "32 elements": an outline and a
 name for every place.](images/38-series-plate.png)
 
 When the list is longer than the plate holds, the app says what the rest becomes rather than

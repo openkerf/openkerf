@@ -149,6 +149,8 @@ lettering is on it.
 Three ways to change it:
 
 - drag the grip at the left of the row, or put focus on it and use the arrow keys;
+  the grip is not in the compact list on a narrow or a touch screen, where the row
+  has no room for it beside the name;
 - **Burn earlier** / **Burn later** in the row menu;
 - **↑ Earlier** and **↓ Later** in the open layer's fold.
 

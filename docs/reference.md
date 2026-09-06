@@ -160,7 +160,7 @@ separated by thin dividers, with a "More" button at the end and, on the right,
 what is selected — "Pick a shape on the bed", "1 shape selected" or
 "{n} shapes selected".
 
-![The OpenKerf window with a circle selected. Above the canvas the action bar shows undo and redo, then two groups of four alignment icons, then group, ungroup and the two mirror buttons, a More button, and on the right the words "1 shape selected". The right-hand panel is on the Edit tab and gives width, height, X, Y and angle of the ellipse, and under Bridges the unticked "Leave gaps in the cut".](images/07-selection.png)
+![The OpenKerf window with a circle selected. Above the canvas the action bar shows undo and redo, then two groups of four alignment icons, then group, ungroup and the two mirror buttons, a More button, and on the right the words "1 shape selected". The right-hand panel is on the Edit tab and gives width, height, X, Y and angle of the ellipse, and under Bridges the unticked "Leave bridges in the cut".](images/07-selection.png)
 
 | Button | What it does | |
 |---|---|---|

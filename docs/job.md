@@ -23,9 +23,9 @@ Three surfaces, and each keeps the same job all the time.
 - **The Job tab** in the right-hand panel: the pre-flight before, the progress
   during, and the machine controls under both.
 - **The status bar** at the bottom: the head position, your pointer position, how
-  much time is left, whether the machine is on the line, and whether this page is
-  still talking to OpenKerf. It is the same on every tab, so you never have to
-  switch tabs to read the progress.
+  many elements the design holds, how much time is left, whether the machine is on
+  the line, and whether this page is still talking to OpenKerf. It is the same on
+  every tab, so you never have to switch tabs to read the progress or the count.
 
 **Start job** does not open a window. It switches the right-hand panel to the Job
 tab and arms the pre-flight that was standing there anyway.
