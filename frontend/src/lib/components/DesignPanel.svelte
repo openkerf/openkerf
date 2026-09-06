@@ -3235,16 +3235,21 @@
 		content: ',';
 		margin-right: 2px;
 	}
+	/* The same badge the layer list draws, at the size the type scale gives it: on a
+	   tablet the tokens lift --text-xs and the badge grows with it, where a literal
+	   would have stayed put on the screen you read at arm's length. The box is sized
+	   from the letters (em, so of this element's own font-size), not the letters from
+	   the box. */
 	.stip {
 		flex: none;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 14px;
-		height: 14px;
-		padding: 0 2px;
-		border-radius: 4px;
-		font-size: 9px;
+		min-width: 1.5em;
+		height: 1.5em;
+		padding: 0 0.25em;
+		border-radius: var(--radius-field);
+		font-size: var(--text-xs);
 		line-height: 1;
 		border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
 	}

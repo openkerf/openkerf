@@ -350,3 +350,58 @@ test('the chip in the selection card says which layer, by number', async (t) => 
 		`the chip reads "${head.chips[0]}" — the number is in the tooltip only`
 	);
 });
+
+/**
+ * The badge and the layer list's chip, measured side by side at one width.
+ *
+ * Both carry the same thing — a burn order on its layer's colour — so both are
+ * read at the same size. The type scale shifts at 1200 px and only the tokens
+ * know that, so the assertion is against `--text-xs` rather than a number.
+ */
+async function badgeAndChip(id: string, width: number) {
+	const context_ = await browser!.newContext({ viewport: { width, height: 900 } });
+	const page = await context_.newPage();
+	try {
+		await page.goto(`${BASE}/?tab=design&select=${id}`, { waitUntil: 'domcontentloaded' });
+		await page.waitForSelector('.selected .stip', { timeout: 20000 });
+		await page.waitForTimeout(1200);
+		return await page.evaluate(() => {
+			const root = getComputedStyle(document.documentElement);
+			const badge = document.querySelector('.selected .stip')!;
+			const b = getComputedStyle(badge);
+			const box = badge.getBoundingClientRect();
+			return {
+				textXs: root.getPropertyValue('--text-xs').trim(),
+				radiusField: root.getPropertyValue('--radius-field').trim(),
+				size: b.fontSize,
+				radius: b.borderTopLeftRadius,
+				w: +box.width.toFixed(1),
+				h: +box.height.toFixed(1)
+			};
+		});
+	} finally {
+		await context_.close();
+	}
+}
+
+for (const width of [1440, 1024]) {
+	test(`the layer badge beside the selection is on the type scale at ${width}`, async (t) => {
+		if (!reachable || !browser) return noServer(t, BASE);
+		const seen = await badgeAndChip(scene.qr, width);
+		assert.equal(
+			seen.size,
+			seen.textXs,
+			`the badge is ${seen.size} where the smallest size the app has is ${seen.textXs}`
+		);
+		assert.equal(
+			seen.radius,
+			seen.radiusField,
+			`the badge is rounded ${seen.radius} where a field is ${seen.radiusField}`
+		);
+		const floor = parseFloat(seen.textXs);
+		assert.ok(
+			seen.h >= floor && seen.w >= floor,
+			`the badge is ${seen.w} x ${seen.h} px around ${seen.textXs} of type`
+		);
+	});
+}
