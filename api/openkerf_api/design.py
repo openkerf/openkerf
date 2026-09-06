@@ -68,17 +68,32 @@ LAYER_NAMES = {
 
 def operation_label(op) -> str:
     """
-    A layer's name: the user's, or the kind of operation.
+    A layer's name: the one somebody gave it, or else the kind of operation.
 
-    The hallmark of an engine name is the colour code in it ("Engrave 20.0mm/s @1000
-    #0000ff"). A test grid cell is deliberately called "5.0mm/s @40.0%" — that *is*
-    information, and we leave it.
+    A layer only has a name if somebody wrote one. Everything else the engine can
+    produce here is its own formatter — "Engrave 20.0mm/s @1000 #0000ff",
+    "Image=B2T 250.0mm/s @1000" — and that is settings crammed into a name, beside
+    the fields that already show them. Every one of our own layers is labelled the
+    moment it is made (`Drawing.create_operation`), a test grid cell is deliberately
+    called "5 mm/s · 30%" — that *is* information — and the layers with nothing are
+    exactly the ones the engine classified into on an import.
+
+    That last case used to be filtered by looking for a colour code in the rendered
+    name, and an image layer has none: measured on a PNG import, "Image=B2T 250mm/s
+    @1000" reached the chip, the layer list and the pre-flight table — three
+    truncations of engine syntax (P12).
+
+    A name somebody wrote is a plain string. The engine's defaults are not: they are
+    either a template (`opnode_label` writes "Image ({percent}, {speed}mm/s)" onto
+    every operation in the default list) or the node's own formatter, rendered
+    ("Engrave 20.0mm/s @1000 #0000ff"). So the question is whether the label holds
+    placeholders or a colour code, and neither is rendered here — rendering a
+    template only turns "Image ({percent}, {speed}mm/s)" into "Image (100%,
+    250mm/s)", which is the same settings in the same wrong place.
     """
-    # Have it rendered first: the raw name is a template with placeholders like "{percent}",
-    # and those do not belong in the layer list.
-    rendered = _label(op, str(op.type).replace("op ", ""))
-    if rendered and not re.search(r"#[0-9a-fA-F]{6}", rendered):
-        return rendered
+    label = str(_attr_or_none(op, "label") or "")
+    if label and "{" not in label and not re.search(r"#[0-9a-fA-F]{6}", label):
+        return label
     return LAYER_NAMES.get(str(op.type), str(op.type).replace("op ", "").title())
 
 

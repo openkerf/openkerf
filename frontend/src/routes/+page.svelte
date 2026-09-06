@@ -8,6 +8,7 @@
 		DEFAULT_BRIDGES,
 		DesignStore,
 		bridgeSummary,
+		drawnLayers,
 		elementName,
 		isDesignSignal,
 		type DesignElement
@@ -1225,13 +1226,13 @@ import { SeriesStore } from '$lib/series.svelte';
 			// No server outranks no token: with the engine gone nothing arrives, whatever
 			// the token says. `writeRefusal` puts them in that order.
 			offline: !connection.online,
-			layers: design.operations
-				.filter((op) => !op.grid)
-				.map((op) => ({
-					id: op.id,
-					label: op.label,
-					inside: design.selectedIds.every((id) => op.element_ids.includes(id))
-				})),
+			layers: drawnLayers(design.operations).map((op, index) => ({
+				id: op.id,
+				// The number the panel's chip carries, from the same list it counts over.
+				number: index + 1,
+				label: op.label,
+				inside: design.selectedIds.every((id) => op.element_ids.includes(id))
+			})),
 			sheets: sheets.sheets
 				.filter((sheet) => !sheet.active)
 				.map((sheet) => ({ id: sheet.id, name: sheet.name })),

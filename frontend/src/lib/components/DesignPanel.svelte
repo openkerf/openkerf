@@ -4,7 +4,10 @@
 		LAYER_COLORS,
 		bridgeSummary,
 		burnVerdict,
+		drawnLayers,
 		elementName,
+		selectionName,
+		layerNamed,
 		madeHere,
 		elementCuts,
 		nameShowsWholeText,
@@ -229,7 +232,7 @@
 	/** The layers the selection is in, with their colour and burn number. */
 	let inLayers = $derived.by(() => {
 		const ids = new Set(chosen.flatMap((e) => e.operation_ids ?? []));
-		const gewoon = design.operations.filter((op) => !op.grid);
+		const gewoon = drawnLayers(design.operations);
 		return gewoon
 			.map((op, index) => ({ ...op, number: index + 1 }))
 			.filter((op) => ids.has(op.id));
@@ -662,7 +665,7 @@
 		new Set(chosen.flatMap((e) => e.operation_ids ?? [])).size
 	);
 
-	let plainLayers = $derived(operations.filter((o) => !o.grid));
+	let plainLayers = $derived(drawnLayers(operations));
 	/** Layers without work: what 'tidy up the empty layers' removes. */
 	const emptyLayers = $derived(plainLayers.filter((op) => !op.element_ids.length));
 
@@ -961,7 +964,7 @@
 		<div class="selected">
 			<div class="head">
 				<span class="name" title={chosen.length > 1 ? undefined : selected.label}>
-					{chosen.length > 1 ? t('panel.shapes', { n: chosen.length }) : elementName(selected)}
+					{selectionName(chosen)}
 				</span>
 				<!-- How many layers the selection is in used to be a paragraph of its own
 				     at the bottom of the panel, out of sight. It belongs to the identity
@@ -981,14 +984,23 @@
 							<span class="geenlaag" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
 						{:else}
 							{#each inLayers as layer (layer.id)}
+								<!-- The dot carries the number, as the chip in the layer list does:
+								     a coloured square with the burn order in it and the name beside
+								     it. It used to be a bare 8 px dot, and then the one thing that
+								     tells two layers called "Engrave" apart stood in a tooltip
+								     (P12) — on a touch screen, nowhere. -->
 								<span
 									class="laagchip"
 									class:off={!layer.output}
 									title={layer.output
-										? t('panel.layerChip', { n: layer.number, label: layer.label })
+										? layerNamed(layer.number, layer.label)
 										: t('panel.layerChip.off', { n: layer.number, label: layer.label })}
 								>
-									<span class="stip" style="background: {layer.color}"></span>
+									<span
+										class="stip mono"
+										style="background: {layer.color}; color: {inkOn(layer.color ?? '')}"
+										>{layer.number}</span
+									>
 									{layer.label}
 								</span>
 							{/each}
@@ -1968,10 +1980,22 @@
 					{#if open}
 						<label class="wide">
 							<span>{t('panel.name')}</span>
+							<!-- Trimmed, and a name of nothing but spaces is put back rather
+							     than sent: the API refuses it (`layer.needsName`) the way the
+							     library refuses a material without a name, and a refusal for
+							     something the field could have caught is a refusal too many. -->
 							<input
 								type="text"
 								value={op.label}
-								onchange={(e) => patchLayer(op.id, { label: e.currentTarget.value })}
+								onchange={(e) => {
+									const name = e.currentTarget.value.trim();
+									if (!name) {
+										e.currentTarget.value = op.label;
+										return;
+									}
+									e.currentTarget.value = name;
+									if (name !== op.label) patchLayer(op.id, { label: name });
+								}}
 							/>
 						</label>
 
@@ -3177,9 +3201,15 @@
 	}
 	.stip {
 		flex: none;
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 14px;
+		height: 14px;
+		padding: 0 2px;
+		border-radius: 4px;
+		font-size: 9px;
+		line-height: 1;
 		border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
 	}
 	/* No layer means: this shape does not go into the machine. That is not an error, but

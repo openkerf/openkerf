@@ -113,6 +113,11 @@ At the top right of the window, **Apply to** names the layer the preset will lan
 **Layer {n} · {label}** — with a dropdown when there is more than one. Every row then
 has an **Apply** button that puts the speed and the power on that layer.
 
+The list holds the layers you draw in, numbered exactly as the Layers tab numbers
+them. A test grid's cells are layers to the engine but not layers you draw in, so
+they are not offered here and they do not count towards the number either: on a bed
+with a 4 × 4 board the layer the panel calls **Layer 5** is **Layer 5** here too.
+
 OpenKerf does not stop you putting a cut preset on an engrave layer, but it does say
 so. The row grows a small tag **other kind**, with the reason in its tooltip:
 

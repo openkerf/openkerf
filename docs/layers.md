@@ -115,7 +115,8 @@ After one of those moves a short line appears above the canvas, for example
 **3 shapes into a new layer “Cut”, taken out of 2 assignments.**
 
 The Edit tab always shows which layers the current selection sits in, as coloured
-chips with the layer name, so it matches what you see on the bed.
+chips carrying the layer's number and its name, so it matches both the number beside
+the shape on the bed and the chip in the row here.
 
 ## The colour strip and its memory
 

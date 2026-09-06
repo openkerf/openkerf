@@ -582,7 +582,6 @@ export const en = {
 	'canvas.burnInTiles': 'Burn in tiles?',
 
 	// ── Layer palette ─────────────────────────────────────────────────────────────
-	'palette.layerNamed': 'layer {n} · {label}',
 	'palette.noLayerYetRemembered': 'no layer yet — starts from what this colour did before',
 	'palette.noLayerYetBlank': 'no layer yet — starts blank',
 	'palette.noLayerYet': 'no layer yet',
@@ -902,8 +901,7 @@ export const en = {
 	'panel.shapes': '{n} shapes',
 	'panel.noLayer': 'in no layer',
 	'panel.noLayer.title': 'This shape does not burn',
-	'panel.layerChip': 'Layer {n}: {label}',
-	'panel.layerChip.off': 'Layer {n}: {label} — this layer is switched off, so it does not burn.',
+	'panel.layerChip.off': 'Layer {n} · {label} — this layer is switched off, so it does not burn.',
 	'panel.clear': 'Clear',
 	'panel.widthShort': 'W',
 	'panel.heightShort': 'H',
@@ -984,6 +982,10 @@ export const en = {
 	'panel.noLayers': 'No layers yet. A layer is an operation — cut, engrave or raster — with a speed and power of its own. Make one below; then select a shape to put into it.',
 	'panel.layer.dragAria': 'Order of {label} — drag, or use the arrow keys',
 	'panel.layer.dragTitle': 'Drag to reorder (or arrow up/down). Right-click for burning earlier or later.',
+	// How a layer is named where it does not stand in its own row: the library's
+	// "Apply to", the Layer submenu, the palette's tooltip and the chip's title. Two
+	// layers called "Engrave" are told apart by that number and by nothing else.
+	'layer.named': 'Layer {n} · {label}',
 	'panel.layer.chipTitle': 'Layer {n} of {total} — click for the colour of this layer',
 	'panel.layer.chipAria': 'Colour of layer {label}',
 	'panel.layer.openTitle': 'The settings of this layer: colour, name, kind of operation and burn order',
@@ -1180,7 +1182,6 @@ export const en = {
 	'library.onlyMaterial.why': '— from this sheet',
 	'library.onlyMachine': 'Only {machine}',
 	'library.applyTo': 'Apply to',
-	'library.layerOption': 'Layer {n} · {label}',
 	'library.noLayer': 'There is no layer to put a preset on yet. Make one in the Layers tab; after that one tap puts the speed and power on it.',
 	'library.material.placeholder': 'e.g. birch plywood',
 	'library.welcome.title': 'No materials yet',
@@ -1998,6 +1999,7 @@ export const en = {
 	'shape.text': 'Text',
 	'shape.image': 'Image',
 	'shape.group': 'Group',
+	'shape.groupOf': 'Group of {n} shapes',
 	'error.searchFailed': 'The search failed.',
 	'error.insertFailed': 'Inserting it failed.',
 	'error.importFailed': 'Importing it failed.',

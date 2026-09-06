@@ -20,6 +20,8 @@
  * message catalogue (`$lib/i18n`).
  */
 import { t } from './i18n/core.ts';
+// One wording for naming a layer away from its own row; see `layerNamed`.
+import { layerNamed } from './design.svelte.ts';
 
 /** A single operation. */
 export type Action = {
@@ -210,8 +212,14 @@ export type Context = {
 	offline?: boolean;
 	/** May this session write (token)? */
 	may: boolean;
-	/** The layers the selection can be put into. */
-	layers: { id: string; label: string; inside: boolean }[];
+	/**
+	 * The layers the selection can be put into, with the number the panel gives them.
+	 *
+	 * The number travels with the name because it is half of the name: draw in a colour
+	 * that has no layer yet and you have two layers called "Engrave", and this submenu
+	 * showed both as "Engrave" (P12).
+	 */
+	layers: { id: string; number: number; label: string; inside: boolean }[];
 	/** The other sheets. */
 	sheets: { id: string; name: string }[];
 	/** Is snapping on? */
@@ -588,7 +596,7 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 	const layers: Action[] = [
 		...ctx.layers.map((layer) => ({
 			id: `layer-${layer.id}`,
-			label: layer.label,
+			label: layerNamed(layer.number, layer.label),
 			on: layer.inside,
 			off: needsOne,
 			run: () => h.assignLayer(layer.id, !layer.inside)

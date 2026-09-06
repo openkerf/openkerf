@@ -74,6 +74,34 @@ export function madeHere(element: { generated?: boolean; label?: string }): bool
 	return element.generated === true || / — /.test(element.label ?? '');
 }
 
+/**
+ * The engine's own bookkeeping, taken off a name: the internal id and the colour.
+ *
+ * The two things a label gives away that nobody at a laser needs, and the two that
+ * make a name unreadable in a 247 px card.
+ */
+function withoutBookkeeping(label: string): string {
+	return label.replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '').trim();
+}
+
+/**
+ * Is this name one this app wrote, rather than one the engine composed?
+ *
+ * The same evidence `madeHere` reads, and for the same reason: every generator here
+ * writes `QR — openkerf`, `Living hinge — staggered`, `Box — front`,
+ * `code128 — 7X4MQB2K` — a name and an em dash. MeerK40t's own labels are the type
+ * plus its internal id plus a colour (`Rect meerk40t:5 #0000ff`), and its SVG reader
+ * writes the element's `id` into the label (`Path bracket`); neither carries a dash
+ * between spaces.
+ *
+ * Asked *before* the kind, because a QR is not "a path": a generated shape has a name
+ * somebody chose to give it and the kind is the thing you can already see.
+ */
+function ownName(label: string | undefined): string {
+	const written = (label ?? '').trim();
+	return / — /.test(written) ? withoutBookkeeping(written) : '';
+}
+
 export function elementName(element: {
 	type: string;
 	text: { text: string } | null;
@@ -87,14 +115,42 @@ export function elementName(element: {
 		});
 	}
 	if (element.image) return t('shape.image');
+	const own = ownName(element.label);
+	if (own) return own;
 	const kind = KINDS[element.type];
 	if (kind) return t(kind);
 	// Unknown type: the engine's label is better than nothing then, but without the
 	// internal id and the colour code behind it.
-	const clean = (element.label ?? element.type)
-		.replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '')
-		.trim();
-	return clean || element.type;
+	return withoutBookkeeping(element.label ?? element.type) || element.type;
+}
+
+/**
+ * What the panel calls the whole selection.
+ *
+ * Three answers and one place that gives them, because the header used to ask only
+ * how many: `chosen.length > 1 ? '2 shapes' : elementName(...)`. A group therefore
+ * read "2 shapes" while the menu over it offered *Ungroup* — the one word that says
+ * what you are holding was the word the header could not reach, and `shape.group`
+ * was reached by nothing at all.
+ *
+ * A group is the case worth naming because clicking one member selects the whole
+ * group (`idsFor`): the ordinary way to hold a group is to have `count > 1` with one
+ * `group_id` under all of it.
+ */
+export function selectionName(
+	chosen: {
+		type: string;
+		text: { text: string } | null;
+		image?: unknown;
+		label?: string;
+		group_id?: string | null;
+	}[]
+): string {
+	if (chosen.length === 1) return elementName(chosen[0]);
+	const group = chosen[0]?.group_id ?? null;
+	if (group && chosen.every((e) => e.group_id === group))
+		return t('shape.groupOf', { n: chosen.length });
+	return t('panel.shapes', { n: chosen.length });
 }
 
 export type DesignElement = {
@@ -462,8 +518,37 @@ export function layerNumber(
 	operationId: string | null | undefined
 ): number | null {
 	if (!design?.operations || !operationId) return null;
-	const index = design.operations.filter((o) => !o.grid).findIndex((o) => o.id === operationId);
+	const index = drawnLayers(design.operations).findIndex((o) => o.id === operationId);
 	return index < 0 ? null : index + 1;
+}
+
+/**
+ * The layers you draw in — the list the number above counts over.
+ *
+ * A test grid's cells are layers in the engine and not layers you draw in: the panel
+ * folds them away under the board's own row, the pre-flight counts past them and the
+ * palette leaves them out of the strip. The library's "Apply to" counted over the raw
+ * list instead, and then a 4 x 4 board made the same layer "5" in the panel and
+ * "21" here — sixteen apart, two clicks from each other.
+ *
+ * So the list itself is the shared thing, not the filter written out again: every
+ * surface that numbers, offers or counts layers takes it from here.
+ */
+export function drawnLayers<T extends { grid?: unknown }>(operations: T[]): T[] {
+	return operations.filter((o) => !o.grid);
+}
+
+/**
+ * How a layer is named where it is not standing in its own row.
+ *
+ * In the layer list the number is on the chip and the name beside it, so the row
+ * needs no wording. Everywhere else — the library's "Apply to", the Layer submenu,
+ * the palette's tooltip — the two have to travel together in one string, because a
+ * bare name does not tell two layers called "Engrave" apart, and that is the
+ * first-time user's ordinary case: draw in a colour that has no layer yet.
+ */
+export function layerNamed(number: number, label: string): string {
+	return t('layer.named', { n: number, label });
 }
 
 /** Does this bounding box (in mm) stick out of a frame of `width × height`? */

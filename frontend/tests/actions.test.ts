@@ -310,13 +310,15 @@ test('the action bar and the menu share the same operations', () => {
 test('an existing layer can be ticked, and "only in" sits below it', () => {
 	const ctx = context({
 		layers: [
-			{ id: 'op1', label: 'Cut', inside: true },
-			{ id: 'op2', label: 'Engrave', inside: false }
+			{ id: 'op1', number: 1, label: 'Cut', inside: true },
+			{ id: 'op2', number: 2, label: 'Engrave', inside: false }
 		]
 	});
 	const layer = rows(objectMenu(ctx, HANDLERS)).find((r) => r.id === 'layer');
 	const names = layer.items.map((i: any) => i.label);
-	assert.deepEqual(names.slice(0, 2), ['Cut', 'Engrave']);
+	// The number travels with the name, from `layerNamed` (P12): draw in a colour
+	// without a layer and there are two rows called "Engrave".
+	assert.deepEqual(names.slice(0, 2), ['Layer 1 · Cut', 'Layer 2 · Engrave']);
 	assert.equal(layer.items[0].on, true);
 	assert.equal(layer.items[1].on, false);
 	assert.ok(names.some((n: string) => /Only in the cut layer/.test(n)));
