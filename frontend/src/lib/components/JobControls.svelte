@@ -1200,13 +1200,16 @@
 							     is the ellipsis after it, which is in the button whether or not
 							     anything is being worked out and only turns visible: the number
 							     itself keeps the contrast it has at rest, and the width does not
-							     move either. The sentence beside it is for a reader who cannot
-							     see the ellipsis; `aria-busy` alone is a state without words. -->
+							     move either. The sentence stands outside that branch, because the
+							     first estimate of a fresh design is worked out while there is no
+							     number yet — the ellipsis has nothing to follow then, but the
+							     state is the same state, and `aria-busy` alone is a state without
+							     words. -->
 							{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
 								<span class="pf-start-time"
 									>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
 								><span class="pf-start-busy" class:rekent={estimating} aria-hidden="true">…</span
-								>{#if estimating}<span class="pf-start-word">{t('job.estimating')}</span>{/if}{/if}
+								>{/if}{#if estimating}<span class="pf-start-word">{t('job.estimating')}</span>{/if}
 						</button>
 						<button
 							class="btn primary big pf-more"

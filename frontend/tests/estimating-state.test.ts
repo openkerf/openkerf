@@ -188,3 +188,75 @@ for (const theme of ['light', 'dark'] as const)
 		);
 		assert.ok(lowestBusy >= 4.5, `${lowestBusy.toFixed(2)} : 1 while busy`);
 	});
+
+/**
+ * The very first estimate of a fresh design: there is no number on the button yet, so
+ * there is nothing for the ellipsis to follow — but the state is the same state, and
+ * before this it was carried by `aria-busy` alone. Measured on the build of 8b9ca28:
+ * the button went `busy=false "Start job"` → `busy=true "Start job"` → `busy=false
+ * "Start job 0:33…"`, so the busy moment said nothing a reader could hear.
+ */
+test('the first estimate of a fresh design is announced as well', async (t) => {
+	const up = await fetch(BASE, { signal: AbortSignal.timeout(2000) }).then(
+		() => true,
+		() => false
+	);
+	if (!up) return noServer(t, BASE);
+	const browser: Browser = await chromium.launch();
+	try {
+		await post('/api/project/new');
+		await post('/api/design/operations', {
+			type: 'cut',
+			label: 'Outline',
+			speed: 12,
+			power_percent: 65
+		});
+		await post('/api/design/elements', { type: 'rect', x_mm: 15, y_mm: 15, width_mm: 120, height_mm: 80 });
+		const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+		// The sampler is installed before the page runs: the state being measured is the
+		// one that is over before the first number lands, so watching from after the load
+		// would arrive too late.
+		await page.addInitScript(() => {
+			const w = window as unknown as { rows: { busy: string | null; text: string }[]; tick: number };
+			w.rows = [];
+			w.tick = setInterval(() => {
+				const button = document.querySelector('.pf-split button');
+				if (!button) return;
+				const row = {
+					busy: button.getAttribute('aria-busy'),
+					text: (button.textContent ?? '').replace(/\s+/g, ' ').trim()
+				};
+				const last = w.rows[w.rows.length - 1];
+				if (!last || JSON.stringify(last) !== JSON.stringify(row)) w.rows.push(row);
+			}, 20) as unknown as number;
+		});
+		await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+		await page.waitForFunction(
+			() => (window as unknown as { rows: { text: string }[] }).rows.some((r) => /\d:\d\d/.test(r.text)),
+			undefined,
+			{ timeout: 30000 }
+		);
+		const rows = await page.evaluate(() => {
+			const w = window as unknown as { rows: { busy: string | null; text: string }[]; tick: number };
+			clearInterval(w.tick);
+			return w.rows;
+		});
+		const busy = rows.filter((r) => r.busy === 'true');
+		assert.ok(
+			busy.length > 0,
+			`the button never said it was busy over the first estimate: ${JSON.stringify(rows)}`
+		);
+		assert.ok(
+			busy.some((r) => !/\d:\d\d/.test(r.text)),
+			`the first estimate was already on the button before it was watched: ${JSON.stringify(rows)}`
+		);
+		const spoken = busy.filter((r) => r.text.includes('A new estimated time is being worked out.'));
+		assert.equal(
+			spoken.length,
+			busy.length,
+			`the button was busy without saying so: ${JSON.stringify(busy)}`
+		);
+	} finally {
+		await browser.close();
+	}
+});

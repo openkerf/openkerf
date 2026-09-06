@@ -44,9 +44,12 @@ about half a second later.
 
 **How long it takes** stands on the start button at the foot of the panel, and
 nowhere else: "Start job 1:19". The engine works it out by building the whole cut
-plan, and while it does that the last known time stays where it is and dims —
-hiding it made the button change width on every edit, and a second copy of the
-number higher up the panel put the same minutes on the screen twice, 400 px apart.
+plan, and while it does that the last known time stays where it is, at the contrast
+it always has, with a small ellipsis after it: "Start job 1:19…". The button keeps
+its width through that, so nothing moves under your cursor, and a screen reader
+hears the sentence "A new estimated time is being worked out." Hiding the number
+made the button change width on every edit, and a second copy of it higher up the
+panel put the same minutes on the screen twice, 400 px apart.
 
 **With a series attached** the time on the button is one plate, and a line above it counts
 the afternoon: "This is the plate now on the bed; the 3 burns still to go take about
