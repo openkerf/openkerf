@@ -1295,7 +1295,8 @@
 			     panel's most expensive place, under two buttons that already carried
 			     it. What only the second line can say is that the keys stop working
 			     outside this window, and that is the part you discover at the wrong
-			     moment. -->
+			     moment — so where there is no pointer to read a second line with, the
+			     same sentence stands under the row. -->
 			<div class="now-actions">
 				<!-- Stop stands at the start of the row and pause at the end, and that is
 				     the same rule the ask row in tokens.css follows: the button that
@@ -1343,6 +1344,9 @@
 					>{t('transport.pause')}</button>
 				{/if}
 			</div>
+			{#if screen.noHover}
+				<p class="toetsen">{t('job.keysHere')}</p>
+			{/if}
 
 			<!-- As soon as there is anything in the queue. This used to say
 			     `queued > 1`, and then with exactly one job in the row the queue could
@@ -1537,22 +1541,20 @@
 						</p>
 					{:else}
 						<!-- Not set: a value, the way the layer table says a number, with the
-						     sentence behind it. It used to be that whole sentence on the
-						     screen — 54 characters, 31.9 px — under a label that already says
+						     sentence behind it. It used to be that whole sentence at every
+						     width — 54 characters, 31.9 px — under a label that already says
 						     what a zero point is, and beside a print-and-cut card saying
 						     "Off." for the same state in different words.
 
-						     The sentence stays a title even at `screen.noHover`, where the
-						     dead button's reason below does become a line — and that is a
-						     difference on purpose. A reason why a button will not work is
-						     the only way to get past it; "Off" under a heading that already
-						     says "Zero point of the work" is the whole state. Measured: put
-						     both sentences on the screen at 1100 px and this fold goes from
-						     694.3 px to 776.8 px, taller than the 1440 px column it started
-						     from — the pattern back, on the screen with the least room. The
-						     dotted cue is dropped there instead, so nothing promises a hover
-						     that a touch screen cannot give. -->
-						<p class="hint" class:off={!screen.noHover} title={t('job.origin.off')}>{t('job.state.off')}</p>
+						     Where a pointer can hover, that is all: the dotted underline says a
+						     sentence is behind it. Where one cannot — `screen.noHover`, the
+						     rule this branch wrote down itself — the sentence is the line,
+						     because a finger has no way to open a title. Not a second line
+						     under the value: both these sentences open with the state word,
+						     so "Off" above "Off: the work burns…" says it twice and measured
+						     144.4 px of fold at 1024 against 119.5 px for the sentence
+						     alone. -->
+						<p class="hint" class:off={!screen.noHover} title={t('job.origin.off')}>{screen.noHover ? t('job.origin.off') : t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						<button
@@ -1622,8 +1624,11 @@
 						<!-- The same value in the same words as the zero point above: both
 						     answer "where does the work go", and both were off in prose of
 						     their own — this one 171 characters over 63.8 px, explaining at
-						     length a feature whose only button was dead. -->
-						<p class="hint" class:off={!screen.noHover} title={t('job.printcut.off')}>{t('job.state.off')}</p>
+						     length a feature whose only button was dead. And the same rule as
+						     the zero point above: the value where a pointer can hover and
+						     read the sentence behind it, the sentence itself where one
+						     cannot. -->
+						<p class="hint" class:off={!screen.noHover} title={t('job.printcut.off')}>{screen.noHover ? t('job.printcut.off') : t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						{#if cutMarks.length === 2}
@@ -2173,12 +2178,21 @@
 	/* The state of a feature nobody has switched on: a word, in the same grey as the
 	   coordinates that stand there when it *is* on. The dotted underline — currentColor,
 	   the same idiom as `.afwachtend` in StatusBar — says the sentence behind it can be
-	   read, so it is only worn where a pointer can hover; at `screen.noHover` the
-	   sentence itself stands underneath and the cue would promise nothing. */
+	   read, so it is only worn where a pointer can hover; at `screen.noHover` this same
+	   paragraph *is* the sentence, and a cue pointing at a hover would promise
+	   nothing. */
 	.hint.off {
 		text-decoration: underline dotted;
 		text-underline-offset: 3px;
 		cursor: help;
+	}
+	/* The keys under the two transport buttons, where their tooltips cannot be read.
+	   Not in the row itself: it is about both buttons, not about one of them. */
+	.toetsen {
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		line-height: 1.5;
+		color: var(--text-2);
 	}
 	/* Why a button in this block is dead — only where a tooltip cannot be read. */
 	.reason {

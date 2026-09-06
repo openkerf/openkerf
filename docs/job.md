@@ -538,7 +538,8 @@ and stop stands where it stands in the top bar, not on the spot the green
 keyboard shortcuts are on the buttons themselves, as the second line of their
 tooltip: "The key works anywhere in the app, as long as this window is in front —
 outside it a browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of
-Ctrl + .)
+Ctrl + .) At 1199 px and below the same sentence stands as a line under the two
+buttons, because there is no hover to read a tooltip with.
 
 **Clear queue (2)** appears as soon as there is anything in the queue.
 
@@ -638,9 +639,10 @@ where the head is now as 0,0 for your drawing: "what you draw at 0,0 burns here.
 The sheet moves along: the zero point is the corner of the material lying in it."
 When one is set, **To zero point** goes there and **Clear** puts it back to the
 machine's own zero. With none set the line reads **Off**, underlined with dots to say
-there is more: "the work burns at the coordinates you drew it on." is its tooltip. At
-1199 px and below, where a touch screen cannot hover, the dots go — the heading and the
-word together are the whole state. Print and cut says its own **Off** the same way.
+there is more: "Off: the work burns at the coordinates you drew it on." is its tooltip.
+At 1199 px and below, where a touch screen cannot hover, the dots go and the line is
+that whole sentence instead — a title is not reachable with a finger. Print and cut
+says its own **Off** the same way.
 
 ### Print and cut
 

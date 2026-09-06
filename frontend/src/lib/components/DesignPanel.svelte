@@ -1141,6 +1141,14 @@
 					/>
 				{/if}
 			</div>
+			<!-- And on a screen that cannot hover, the same sentence as a line: there is no
+			     way to open a title with a finger, and this is the only place in the
+			     interface that names what an arrow key moves. The same rule the print-and-cut
+			     block and the two "Off" values in `JobControls` follow. It costs the card
+			     one line where it had 92.4 px of empty panel under it at 1024. -->
+			{#if screen.noHover && canEdit && !lockedHere}
+				<p class="tip">{t('panel.dragHint')}</p>
+			{/if}
 			{#if sizeNote}
 				<p class="tip refused" role="status">{sizeNote}</p>
 			{/if}
