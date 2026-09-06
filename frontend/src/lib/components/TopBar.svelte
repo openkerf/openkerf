@@ -492,14 +492,20 @@
 	   aria-label, so no meaning is lost. The bound is at 1200px, not at 900: on a 1024
 	   tablet the labels otherwise break over two lines and the bar grows with them. */
 	@media (max-width: 1199px) {
-		.frame .short { display: inline; }
+		/* `.topbar .frame .short`, three classes and not two: the `.btn-label.short
+		   { display: none }` default further down this file has two, and at equal
+		   specificity the later rule wins — so with two the frame lost its word on
+		   every tablet (measured at 1024 and 800: both labels `none`, a 50 x 44 dashed
+		   square) while the comment right below promised the opposite.
+		   `tests/frame-word.test.ts` holds this. */
+		.topbar .frame .short { display: inline; }
 		/* The buttons that drive the machine keep their word: a little red square
 		   without text is not an emergency stop. */
 		.topbar :global(.btn-label:not(.stays)) { display: none; }
 		/* The frame keeps its word — on a tablet this is a first-class action and a
 		   thin dashed square says nothing — but only the short form: "Frame" next to
 		   that square is unambiguous. */
-		.frame .lang { display: none; }
+		.topbar .frame .lang { display: none; }
 		/* The whole brand goes, word *and* image.
 		   The wordmark already cost 100px; the logo costs another 108 with its gap
 		   (measured), and those are worth more here than a logo. On a tablet you know
