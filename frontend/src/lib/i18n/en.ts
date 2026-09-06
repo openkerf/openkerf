@@ -703,6 +703,7 @@ export const en = {
 	'job.origin.set': 'Zero point here',
 	'job.origin.reset': 'Zero point here again',
 	'job.notResponding': 'The machine is not responding. This job goes into the queue and only starts once the connection is there — switch it on or check the cable.',
+	'job.estimating': 'A new estimated time is being worked out.',
 	'job.estimateSlow': 'The engine builds the whole cut plan to estimate this; on a heavy design that takes a moment. Starting works regardless — the machine does not wait for it.',
 	'job.queueAhead': {
 		one: 'There is already 1 job in the queue; this one goes behind it.',

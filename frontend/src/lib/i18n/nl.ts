@@ -654,6 +654,7 @@ export const nl: Catalogue = {
 	'job.origin.set': 'Hier het nulpunt',
 	'job.origin.reset': 'Hier opnieuw',
 	'job.notResponding': 'De machine meldt zich niet. Deze job gaat de wachtrij in en begint pas zodra de verbinding er is — zet hem aan of controleer de kabel.',
+	'job.estimating': 'Er wordt een nieuwe geschatte tijd berekend.',
 	'job.estimateSlow': 'De engine bouwt het hele snijplan om dit te schatten; op een zwaar ontwerp duurt dat even. Starten kan gewoon — de machine wacht er niet op.',
 	'job.queueAhead': {
 		one: 'Er staat al 1 job in de wachtrij; deze komt erachteraan.',

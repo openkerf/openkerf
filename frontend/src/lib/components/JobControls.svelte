@@ -835,8 +835,8 @@
 				     "Start job 2:31" at y 816 at 1440 x 900. One of them had to go, and
 				     the one to keep is the one on the thing you press: it is never
 				     scrolled away, and the number is read at the moment it is acted on.
-				     While a new time is worked out the number on the button dims rather
-				     than saying so in words — see `.pf-start-time.rekent`. -->
+				     While a new time is worked out the button says so on itself — see
+				     `.pf-start-busy`. -->
 				{#if seriesLeft}
 					<!-- The clock on the start button is one plate; a series of fifty must
 					     never show the time of one. Both numbers come off the estimate
@@ -1190,16 +1190,23 @@
 						<button
 							class="btn primary big"
 							disabled={!actions?.start || blocked || seriesRunning}
+							aria-busy={estimating}
 							title={seriesRunning ? t('api.series.runGoing') : blockedReason}
 							onclick={() => (preflight = true)}
 						>
 							<!-- The last known time stays while a new one is being worked out.
 							     Hiding it during the recalculation made the button change width
-							     on every edit — a button that jumps under your cursor. -->
+							     on every edit — a button that jumps under your cursor. The state
+							     is the ellipsis after it, which is in the button whether or not
+							     anything is being worked out and only turns visible: the number
+							     itself keeps the contrast it has at rest, and the width does not
+							     move either. The sentence beside it is for a reader who cannot
+							     see the ellipsis; `aria-busy` alone is a state without words. -->
 							{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
-								<span class="pf-start-time" class:rekent={estimating}
+								<span class="pf-start-time"
 									>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
-								>{/if}
+								><span class="pf-start-busy" class:rekent={estimating} aria-hidden="true">…</span
+								>{#if estimating}<span class="pf-start-word">{t('job.estimating')}</span>{/if}{/if}
 						</button>
 						<button
 							class="btn primary big pf-more"
@@ -2410,11 +2417,27 @@
 		font-weight: 400;
 		opacity: 0.85;
 	}
-	/* A new time is being worked out. The last one stays where it is — hiding it made
-	   the button change width on every edit — and it dims to say it is not the answer
-	   yet. A word ("calculating…") in this spot would push the button wider still. */
-	.pf-start-time.rekent {
-		opacity: 0.5;
+	/* A new time is being worked out. The last one stays where it is, at the contrast
+	   it has at rest — dimming the one number on the button was the state carried by
+	   nothing but colour. The ellipsis stands in the button at every moment and only
+	   becomes visible, so the button cannot change width on an edit. */
+	.pf-start-busy {
+		margin-left: 2px;
+		font-size: var(--text-xs);
+		font-weight: 400;
+		opacity: 0.85;
+		visibility: hidden;
+	}
+	.pf-start-busy.rekent {
+		visibility: visible;
+	}
+	/* The same state in words, for a reader who has no ellipsis to see. */
+	.pf-start-word {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
 	}
 
 	/* Jumping to a point, beside the direction buttons above. */
