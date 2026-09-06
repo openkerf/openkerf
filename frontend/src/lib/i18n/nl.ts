@@ -482,6 +482,7 @@ export const nl: Catalogue = {
 	'panel.aria': 'Eigenschappen',
 	'panel.collapse': 'Paneel inklappen',
 	'panel.expand': 'Paneel uitklappen',
+	'panel.textValue': '“{text}”',
 	'panel.bridges.offSome': {
 		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden. 1 van deze {shapes} vormen zit niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.',
 		other: 'Geen bruggen — kleine openingen die het deel in de plaat houden. {n} van deze {shapes} vormen zitten niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.'
@@ -834,7 +835,6 @@ export const nl: Catalogue = {
 	'jobStart.title': 'Job gestart',
 
 	// ── Design panel ──────────────────────────────────────────────────────────────
-	'panel.design': 'Ontwerp',
 	'panel.selection': 'Selectie',
 	'panel.elements': {
 		one: '1 element',

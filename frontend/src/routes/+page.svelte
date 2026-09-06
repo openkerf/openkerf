@@ -1897,6 +1897,7 @@ import { SeriesStore } from '$lib/series.svelte';
 
 <StatusBar
 	pointerMm={pointerMm}
+	elementCount={design.elements.length}
 	{device}
 	machineState={machine}
 	job={status.activeJob}

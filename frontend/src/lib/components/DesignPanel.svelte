@@ -5,6 +5,8 @@
 		bridgeSummary,
 		elementName,
 		elementCuts,
+		engineNamed,
+		nameShowsWholeText,
 		inkOn,
 		type DesignOperation,
 		type DesignStore
@@ -551,7 +553,16 @@
 	 * the number here is the number of shapes the button promises.
 	 */
 	const toSplit = $derived.by(() => {
-		const samengesteld = chosen.filter((e) => (e.subpaths ?? 1) > 1);
+		// Only a shape nobody named and that is not rendered text. A caption of 18
+		// glyph outlines and a QR of 232 modules are both "more than one subpath",
+		// and for both the sentence below was wrong twice over: neither came out of a
+		// CAD program, and splitting them is not the thing to do next. The count
+		// itself is not lost — the right-click menu still offers *Split into 232
+		// shapes* for anything with more than one piece, from its own context in
+		// `+page.svelte`.
+		const samengesteld = chosen.filter(
+			(e) => (e.subpaths ?? 1) > 1 && !e.text && engineNamed(e)
+		);
 		return {
 			shapes: samengesteld.length,
 			stukken: samengesteld.reduce((n, e) => n + (e.subpaths ?? 1), 0)
@@ -840,35 +851,31 @@
 	</div>
 {/if}
 
-<div class="section">
-	<!-- Heading, count and history on one line. They used to be on three, and
-	     three lines above the selection are three lines pushing the selection
-	     down. -->
-	<div class="section-head">
-		<h2 class="section-title">{t('panel.design')}</h2>
-		{#if elements.length}
-			<span class="muted mono tally">{t('panel.elements', { n: elements.length })}</span>
-		{/if}
-		<!-- Undo and redo used to be here. They moved to the action bar above the
-		     canvas: they were the only two buttons in the app that disappeared the
-		     moment you were on the Job tab, while that is precisely where you
-		     sometimes want to take something back. Since the move they have ⌘Z and
-		     ⌘⇧Z as well. -->
-	</div>
-	<!-- A refused edit used to be here. It has gone to the notice at the top right
-	     (Message.svelte), because you draw from the tool rail, the right-click menu and
-	     the text window, and none of those needs this panel to be open — from the Job tab
-	     the shape stayed away and this line explained it to nobody. It was also 700 px
-	     above the fields it was often about, and the panel scrolls. One place, on every
-	     tab; not two. -->
-	{#if elements.length === 0}
+<!-- A "Design" heading with the element count beside it used to stand here, on the
+     Edit tab and on the Layers tab both. It headed nothing: the tab strip two lines
+     above already says which tab you are on, and everything under it is the
+     selection or the layers, not "the design". What it did do was push the card that
+     *is* the tab down to y 164, and on a 1024-wide tablet that was the row that put
+     the bridges block under the fold. The count is a fact about the whole document,
+     so it went to the status bar, which is the one strip that holds for every tab.
+
+     Undo and redo used to be in that row as well. They moved to the action bar above
+     the canvas: they were the only two buttons in the app that disappeared the moment
+     you were on the Job tab, while that is precisely where you sometimes want to take
+     something back. Since the move they have ⌘Z and ⌘⇧Z as well.
+
+     A refused edit used to be here too. It has gone to the notice at the top right
+     (Message.svelte), because you draw from the tool rail, the right-click menu and
+     the text window, and none of those needs this panel to be open. -->
+{#if elements.length === 0}
+	<div class="section">
 		<!-- This used to say "Use 'Load design…' in the Job tab". That button does
 		     not exist and never has (repo-wide grep: this line was the only place
 		     that name appeared). An empty state pointing at an invented button is
 		     worse than one that keeps quiet: you go looking. -->
 		<p class="empty">{t('panel.empty')}</p>
-	{/if}
-</div>
+	</div>
+{/if}
 
 {#if show === 'selection' && selected && size}
 	<div class="section">
@@ -918,7 +925,13 @@
 			     wrapping pills beside each other, so X ended up on the first line and Y
 			     on its own on the second — and then two pairs no longer read as two
 			     pairs. -->
-			<div class="figures mono">
+			<!-- "Drag the box to move" is about these numbers and about the frame on the
+			     canvas, so it hangs on them as a title — the way the Layers tab hangs
+			     `panel.layer.dragTitle` on the rows it is about. As a paragraph it stood
+			     in every selected state at every width: 17 words the reader had already
+			     read. Not under a lock: dragging is exactly what a lock refuses, and the
+			     note above already says what can and cannot be done. -->
+			<div class="figures mono" title={canEdit && !lockedHere ? t('panel.dragHint') : undefined}>
 				<!-- The one-letter labels are translated too: "B" is Breedte in Dutch and
 				     means nothing in English, where the same column reads "W". -->
 				{#each [
@@ -1039,8 +1052,16 @@
 				<!-- The content of the text is a value and belongs here; editing it is an
 				     operation and lives in the right-click menu. This used to be one
 				     button doing both, and then the text is only readable once you have
-				     already clicked it. -->
-				<p class="tekstwaarde" title={selected.text.text}>“{selected.text.text}”</p>
+				     already clicked it.
+
+				     Only when the name above could not carry it: up to 22 characters the
+				     head already reads Text “OpenKerf 5030”, and the same words again
+				     forty pixels lower are not a second fact. `nameShowsWholeText` is the
+				     one place that knows where the head cuts off, and the quotation marks
+				     now come from one key instead of one key and one hard-coded pair. -->
+				{#if !nameShowsWholeText(selected)}
+					<p class="tekstwaarde" title={selected.text.text}>{t('panel.textValue', { text: selected.text.text })}</p>
+				{/if}
 				{#if readsNow !== null}
 					<!-- And what that template comes out as. Under the quote and not instead of
 					     it: the two are different facts, and a panel that showed only the name
@@ -1329,15 +1350,11 @@
 			     It is an action and now lives in the context menu under "To another
 			     sheet" — with the same sheet names, without unfolding first. -->
 
-			<!-- Not under a locked selection: "drag the box to move" is exactly what a lock
-			     refuses, and the note above already says what can and cannot be done. -->
-			<p class="hint">
-				{#if !canEdit}
-					{t('panel.needsToken')}
-				{:else if !lockedHere}
-					{t('panel.dragHint')}
-				{/if}
-			</p>
+			<!-- The drag hint moved up, onto the size grid it is about. What is left here
+			     is the refusal, which is a whole sentence and has to be read. -->
+			{#if !canEdit}
+				<p class="hint">{t('panel.needsToken')}</p>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -2626,11 +2643,6 @@
 		gap: var(--space-2);
 	}
 	.section-head .section-title { margin-bottom: 0; }
-	.tally {
-		flex: 1;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
 	/* No nowrap: on a tablet this line is wider than the panel, and then it pushes the
 	   whole list sideways off screen instead of breaking. */
 	.order-note {

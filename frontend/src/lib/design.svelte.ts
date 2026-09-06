@@ -34,6 +34,34 @@ const KINDS: Record<string, MessageKey> = {
 	group: 'shape.group'
 };
 
+/** How much of a caption the shape's name carries before it is cut short. */
+export const NAME_TEXT_LIMIT = 22;
+
+/**
+ * Does the name above the card already say the whole caption?
+ *
+ * The panel used to quote the text twice — `Text “OpenKerf 5030”` in the head and
+ * `“OpenKerf 5030”` again forty pixels below it. The quote below only earns its
+ * place when the head could not fit it, so both readers ask this one question.
+ */
+export function nameShowsWholeText(element: { text: { text: string } | null }): boolean {
+	const short = element.text?.text.trim() ?? '';
+	return short.length > 0 && short.length <= NAME_TEXT_LIMIT;
+}
+
+/**
+ * Is this the engine's own automatic name, or one something gave it?
+ *
+ * MeerK40t labels a node it made itself with its internal id — `Path meerk40t:18`,
+ * `Ellipse:meerk40t:12`. Our generators pass a name of their own — `QR — openkerf`,
+ * `Living hinge — …` — and nothing else in the app renames an element. So the id in
+ * the label is the one reliable mark of a shape nobody named, which is exactly the
+ * shape the "loose pieces" diagnosis is about.
+ */
+export function engineNamed(element: { label?: string }): boolean {
+	return /meerk40t:\d+/i.test(element.label ?? '');
+}
+
 export function elementName(element: {
 	type: string;
 	text: { text: string } | null;
@@ -43,7 +71,7 @@ export function elementName(element: {
 	if (element.text?.text) {
 		const short = element.text.text.trim();
 		return t('shape.textNamed', {
-			text: short.length > 22 ? short.slice(0, 21) + '…' : short
+			text: short.length > NAME_TEXT_LIMIT ? short.slice(0, NAME_TEXT_LIMIT - 1) + '…' : short
 		});
 	}
 	if (element.image) return t('shape.image');

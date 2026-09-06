@@ -23,6 +23,7 @@
 		control,
 		edits = null,
 		pointerMm = null,
+		elementCount = 0,
 		actions = true
 	}: {
 		device: Device | null;
@@ -34,6 +35,16 @@
 		edits?: { error: string | null } | null;
 		/** Pointer position on the bed; sits beside the machine position. */
 		pointerMm?: { x: number; y: number } | null;
+		/**
+		 * How many elements the document holds.
+		 *
+		 * It used to be a `Design · 6 elements` row heading the Edit tab and the
+		 * Layers tab, above the card that is the tab. It headed nothing and it pushed
+		 * that card down. The count is a fact about the whole document, like the
+		 * position and the time beside it, so it belongs on the one strip that is
+		 * there on every tab.
+		 */
+		elementCount?: number;
 		/** Does this bar carry the pause and stop buttons? Not on a tablet: there
 		 *  the machine controls are in the top bar, and two places for the same stop
 		 *  makes it unclear at the deciding moment which one is the real one. At 768
@@ -195,6 +206,12 @@
 			—
 		{/if}
 	</span>
+	<!-- No word in front of it: "6 elements" says what it is, and the word in front
+	     of it was exactly the "Design" heading that headed nothing. Off on a tablet,
+	     with the pointer: there the bar has to make room for the machine controls, and
+	     a count is the first thing that can go. -->
+	<span class="sep docpart" aria-hidden="true"></span>
+	<span class="docpart">{t('panel.elements', { n: elementCount })}</span>
 	<span class="sep" aria-hidden="true"></span>
 	<!-- During a job "how much longer" is the only number that counts; the total
 	     estimate was there, but you had to subtract it from the clock yourself. -->
@@ -325,7 +342,8 @@
 	   the control buttons do need the room: without this the bar broke over two
 	   lines as soon as a job was running. */
 	@media (max-width: 1199px) {
-		.pointerpart { display: none; }
+		.pointerpart,
+		.docpart { display: none; }
 	}
 	.statusbar > span { white-space: nowrap; }
 

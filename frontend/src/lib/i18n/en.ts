@@ -502,6 +502,10 @@ export const en = {
 	'panel.aria': 'Properties',
 	'panel.collapse': 'Collapse panel',
 	'panel.expand': 'Expand panel',
+	// The caption of a text, quoted, for when the name above it had to cut it short.
+	// The quotation marks live here and only here — they used to be hard-coded in the
+	// markup as well, and a language that quotes differently could only fix one of them.
+	'panel.textValue': '“{text}”',
 	// A selection whose shapes are in different kinds of layer: the sentence that would
 	// otherwise be said is true of some of them. `{n}` is how many are not cut, because
 	// that is the number the verb follows; `{shapes}` is the whole selection.
@@ -870,7 +874,6 @@ export const en = {
 	'jobStart.title': 'Job started',
 
 	// ── Design panel ──────────────────────────────────────────────────────────────
-	'panel.design': 'Design',
 	'panel.selection': 'Selection',
 	'panel.elements': {
 		one: '1 element',
