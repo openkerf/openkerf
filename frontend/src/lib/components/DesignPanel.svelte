@@ -2072,17 +2072,26 @@
 		align-items: center;
 		flex-wrap: wrap;
 		gap: var(--space-1);
-		padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + 10px);
+		/* The same air left as right. The roomy row keeps ten pixels extra on the left
+		   because the grip is meant to hang in that margin; in this row it does not —
+		   measured, the grip's left edge *is* the content edge — so those ten pixels were
+		   air. The name is what needs them: it is the only thing in the row that is
+		   nowhere else. Measured at 1440: the ten pixels take the shortest name on the
+		   five rows from 37 to 47 px. */
+		padding: var(--space-1) var(--space-2);
 	}
-	/* The two switches may be tight in the compact state: they sit beside each other and
-	   you aim at a 16 px icon, not at the edge of the surface. On a touch screen they
-	   stay 44 px — that is handled by the media query at the bottom, which outweighs this
-	   rule. */
-	.layer.compact .out,
+	/* Only the identity block grows. The burn switch stood in this selector too, and a
+	   `.layer.compact .out` outweighs the `flex: none` on `.out` itself, so the switch
+	   took the room meant for the name — in both directions. Measured on five layers with
+	   the old rule: at 1440 the switch was 65 to 78.2 px wide where the roomy list gives
+	   it 28, and at 1024, where the media query below demands 44 px for a finger, it was
+	   squeezed to 23 to 38.6 px. The name got 0 px on all ten rows. */
 	.layer.compact .ident {
 		flex: 1 1 12ch;
-		min-width: 0;
-		/* Four touch targets and a name in 247 px: every pixel goes to the name, because
+		/* min-content and not 0: with 0 the block shrinks under its own contents and the
+		   ⋯ is painted over the values instead of the row admitting it is full. */
+		min-width: min-content;
+		/* Three touch targets and a name in 247 px: every pixel goes to the name, because
 		   that is the only thing in the row that is nowhere else. Measured: with the roomy
 		   spacing the name kept 10 px and read "E". */
 		gap: var(--space-1);
@@ -2091,6 +2100,31 @@
 		flex: 0 1 auto;
 	}
 	.layer.compact .layer-name {
+		/* A floor, not a wish: the name may be cut — it stands in full in the roomy list
+		   and in the tooltip — but never squeezed away again. Five characters and not the
+		   six that first suggested itself: with 6ch the row at 1024 whose values are
+		   widest ("1000 · 30%") could no longer keep everything on one line and wrapped
+		   its values underneath, 102 px against 54 for its neighbours — one ragged row in
+		   a list you are meant to scan. At 5ch nothing wraps and the narrowest name still
+		   measures 47 px, above the floor either way; the floor is the guard for a panel
+		   or a value string narrower than any we have.
+		   `contain: inline-size` is what keeps the floor from becoming a demand: without
+		   it the identity block counts the whole name as its minimum and every row wraps.
+		   Contained, the name asks for the floor and takes what is left — and if even the
+		   floor does not fit, the row wraps rather than letting the ⋯ paint over the
+		   values, which is what it did (3 px) while the name had no floor at all. That
+		   wrap is the price, and it is paid by exactly the two rows that carry a fourth
+		   value: the one that does not burn (which wrapped before this change too, 61 px
+		   at 1440) and the one with passes, 38 px before and 58 after. Both were only
+		   one line high while the name was 0 px and the switch was a sliver — measured at
+		   1024, the switch on the passes row was 2 px wide. There is no arrangement that
+		   keeps "12 · 65% · 3×", three touch targets and a readable name on one line in
+		   this panel; tightening the gaps to 2 px was tried and moved nothing. */
+		min-width: 5ch;
+		contain: inline-size;
+		/* A block, and not the two-line clamp box of the roomy list: text-overflow only
+		   draws its ellipsis on a block, and on one line there is nothing to clamp. */
+		display: block;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -2523,12 +2557,23 @@
 			height: 44px;
 			min-height: 44px;
 		}
-		/* With a finger the grip is wider, so the margin it hangs in is too. */
+		/* With a finger the grip is wider, so the margin it hangs in is too. The compact
+		   row hangs it in nothing — see its padding above — and below it has no grip at
+		   all, so that row is not given the margin. */
 		.layer {
 			padding-left: calc(var(--space-2) + 20px);
 		}
-		.layer.compact {
-			padding-left: calc(var(--space-2) + 20px);
+		/* No grip in the compact row with a finger, for the same reason the count goes a
+		   few rules down: it does not fit, and of everything in the row it is the one
+		   that is also somewhere else. Measured at 1024, where every target is 44 px:
+		   grip, chip, switch and ⋯ with their gaps ask 192 px of the 187 the row has, so
+		   the name got 0 px and the row still overflowed by 5. Without it, and with the
+		   ten pixels of padding back, the name measures 47 to 62.6 px on the same five
+		   rows and every row stays one line high. Dragging is what is lost; the ⋯ menu still
+		   holds "Burn earlier" and "Burn later", which is the same reordering with words
+		   on it. */
+		.layer.compact .grip {
+			display: none;
 		}
 		.dichtheid {
 			min-height: 44px;
