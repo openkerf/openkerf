@@ -978,7 +978,9 @@ export const en = {
 	'panel.noLayers': 'No layers yet. A layer is an operation — cut, engrave or raster — with a speed and power of its own. Make one below; then select a shape to put into it.',
 	'panel.layer.dragAria': 'Order of {label} — drag, or use the arrow keys',
 	'panel.layer.dragTitle': 'Drag to reorder (or arrow up/down). Right-click for burning earlier or later.',
-	'panel.layer.chipTitle': 'Layer {n} of {total} — settings and colour',
+	'panel.layer.chipTitle': 'Layer {n} of {total} — click for the colour of this layer',
+	'panel.layer.chipAria': 'Colour of layer {label}',
+	'panel.layer.openTitle': 'The settings of this layer: colour, name, kind of operation and burn order',
 	'panel.layer.openAria': 'Open layer {label}',
 	'panel.layer.count': {
 		one: '1 shape in this layer',

@@ -42,8 +42,8 @@ Before you have made any layer, the Layers tab says:
 ![The Layers tab with several layers, each a numbered coloured chip, a name, the number of shapes in it, a burn switch and fields for speed, power and passes.](images/09-layers.png)
 
 Every layer is one row. From left to right: a grip for the order, a coloured chip
-with a number, the layer's name, how many shapes are in it, a switch for burning
-along, and a **⋯** button for the row menu. Under or beside that sit the three
+with a number, the layer's name behind a fold marker, how many shapes are in it, a
+switch for burning along, and a **⋯** button for the row menu. Under or beside that sit the three
 fields: speed in mm/s, power in per cent, and the number of passes.
 
 The number on the chip is the burn order, and above the list it says so once:
@@ -53,7 +53,10 @@ The number after the name is the count of shapes in that layer; its tooltip read
 **1 shape in this layer** or **{n} shapes in this layer**. A zero there means the
 layer will do nothing.
 
-Clicking the coloured chip unfolds the layer's settings. Right-clicking the row,
+Clicking the layer's name unfolds its settings — the same marker, in front of the
+name, as every other fold in OpenKerf. The coloured chip beside it opens the ten
+colour swatches and what this colour has remembered, and nothing else.
+Right-clicking the row,
 or clicking **⋯**, opens the row menu: **Select the shape in this layer**, **Put
 selection in this layer**, **Burns along**, **Visible on the canvas**, **Burn
 earlier**, **Burn later**, **Settings…**, **Choose a material setting…** and

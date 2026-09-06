@@ -205,17 +205,17 @@
 	<!-- This was "Engine signals" with raw codes: developer language in the place
 	     a new user looks first. Now collapsed, and named after what it is
 	     about. -->
-	<button class="section-title collapse" aria-expanded={showEvents} onclick={() => (showEvents = !showEvents)}>
-		{t('queue.messages')}
-		<span class="mono">{events.length ? events.length : ''}</span>
-	</button>
-	<!-- Shut, the fold is its title and nothing else, the way the folds in the Edit tab
-	     are. It used to explain underneath, while closed, what it would contain if it
-	     were open: 95 characters over 56.5 px, at 13 px where every other hint in this
-	     column is 11 — the longest paragraph in the panel, about the block you are least
-	     likely to want. Opened and empty it says both: that nothing has come in, and
-	     what would come in if it did. -->
-	{#if showEvents}
+	<details class="fold" bind:open={showEvents}>
+		<summary>
+			{t('queue.messages')}
+			<span class="mono count">{events.length ? events.length : ''}</span>
+		</summary>
+		<!-- Shut, the fold is its title and nothing else, the way the folds in the Edit
+		     tab are. It used to explain underneath, while closed, what it would contain
+		     if it were open: 95 characters over 56.5 px, at 13 px where every other hint
+		     in this column is 11 — the longest paragraph in the panel, about the block
+		     you are least likely to want. Opened and empty it says both: that nothing has
+		     come in, and what would come in if it did. -->
 		{#if events.length === 0}
 			<p class="empty">{t('queue.messages.none')}</p>
 			<p class="empty hint">{t('queue.messages.hint')}</p>
@@ -226,7 +226,7 @@
 				{/each}
 			</ul>
 		{/if}
-	{/if}
+	</details>
 </div>
 
 <style>
@@ -241,23 +241,14 @@
 		color: var(--text-2);
 		margin: 0 0 var(--space-2);
 	}
-	.collapse {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		text-align: left;
-	}
-	.collapse::after {
-		content: '';
+	/* The fold's own face — marker, case, weight — is the shared fold in tokens.css.
+	   This one used to draw a chevron of its own on the right, in the uppercase of a
+	   section title, a few hundred pixels from the fold above it, which used a '▸' on
+	   the left. Only the count stays: how many messages there are, without opening. */
+	.fold .count {
 		margin-left: auto;
-		width: 6px;
-		height: 6px;
-		border-right: 1px solid var(--text-2);
-		border-bottom: 1px solid var(--text-2);
-		transform: rotate(45deg);
+		color: var(--text-2);
 	}
-	.collapse[aria-expanded='true']::after { transform: rotate(-135deg); }
 	.empty {
 		color: var(--text-2);
 		margin: 0;

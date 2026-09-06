@@ -47,14 +47,22 @@ test('the closed messages fold says nothing but its own title', () => {
 	const at = source.indexOf(`t('queue.messages.hint')`);
 	assert.notEqual(at, -1, 'JobPanel no longer says what the messages are');
 	// Nothing at all is rendered while the fold is shut, and the hint stands inside the
-	// branch that runs when it is open.
+	// fold rather than under its shut title. Since P19 the fold is a `details` — the one
+	// fold this app draws — so what used to be `{#if showEvents}` is now the element
+	// itself: everything after the `</summary>` is what opening shows.
 	assert.ok(
 		!/\{#if !showEvents\}/.test(source),
 		'there is a branch again for what the shut fold says — a shut fold says its title'
 	);
-	const open = source.indexOf('{#if showEvents}');
-	assert.notEqual(open, -1, 'the messages fold no longer branches on being open');
-	assert.ok(at > open, 'the hint stands before the fold is opened');
+	const open = source.indexOf('bind:open={showEvents}');
+	assert.notEqual(open, -1, 'the messages fold is no longer a fold that knows whether it is open');
+	const summaryEnds = source.indexOf('</summary>', open);
+	assert.notEqual(summaryEnds, -1, 'the messages fold has no summary');
+	assert.ok(at > summaryEnds, 'the hint stands outside the fold, where a shut fold would say it');
+	assert.ok(
+		at < source.indexOf('</details>', summaryEnds),
+		'the hint stands after the fold closes'
+	);
 });
 
 test('a job waiting its turn shows no bar and no counters about not having started', () => {

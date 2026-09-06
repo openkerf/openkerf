@@ -2110,7 +2110,7 @@
 {/if}
 
 {#if canEdit && library.materials.length}
-	<details class="vouw">
+	<details class="fold vouw">
 		<summary>{t('library.manual')}</summary>
 		<div class="grid">
 			<label class="wide">
@@ -2175,7 +2175,7 @@
 		</button>
 	</details>
 
-	<details class="vouw">
+	<details class="fold vouw">
 		<summary>{t('library.profiles', { n: library.machines.length })}</summary>
 		<p class="fine">{t('library.profiles.why')}</p>
 		{#if library.machines.length}
@@ -2907,13 +2907,10 @@
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--line);
 	}
-	.vouw summary {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-2);
-		cursor: pointer;
+	/* A sixth face for a fold, found by `tests/one-fold.test.ts` when it walked the
+	   sources: uppercase, 600, --text-2, no marker at all. The line is the shared fold
+	   in tokens.css now; this only keeps the air under it. */
+	.vouw > summary {
 		margin-bottom: var(--space-2);
 	}
 	.profiles { list-style: none; margin: var(--space-2) 0; padding: 0; }

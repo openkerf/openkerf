@@ -1316,7 +1316,7 @@
 			Shut and not gone: it has to be there the moment you need it again, and a
 			block that disappears is not one you learn to find back.
 		-->
-		<details class="machinevouw" open={!busyWithWork}>
+		<details class="fold machinevouw" open={!busyWithWork}>
 			<summary>
 				{t('job.machineControls')}
 				{#if busyWithWork}<span class="why">— {t('job.machineControls.notNow')}</span>{/if}
@@ -2240,28 +2240,12 @@
 		border-top: 1px solid var(--line);
 		padding-top: var(--space-3);
 	}
-	.machinevouw > summary {
-		cursor: pointer;
-		font-size: var(--text-xs);
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--text-2);
-		list-style: none;
-	}
-	.machinevouw > summary::-webkit-details-marker { display: none; }
-	.machinevouw > summary::before {
-		content: '▸';
-		display: inline-block;
-		width: 1em;
-		color: var(--text-2);
-	}
-	.machinevouw[open] > summary::before { content: '▾'; }
-	.machinevouw > summary:hover { color: var(--text-1); }
+	/* The summary line itself is the shared fold in tokens.css — marker, case, weight,
+	   and 44 px under a glove, which this fold did not have: measured 18.8 px at 1024,
+	   in the block you reach for to move the head. */
 	.machinevouw .why {
-		text-transform: none;
-		letter-spacing: 0;
 		font-weight: 400;
+		color: var(--text-2);
 	}
 
 	/* The button bar sticks to the bottom of the panel: the column is longer than the

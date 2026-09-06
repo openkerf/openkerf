@@ -825,3 +825,92 @@ input[type='radio']:focus-visible::before {
 	min-height: 44px;
 	font-size: var(--text-md);
 }
+
+/*
+ * The fold.
+ *
+ * One definition, after five. A fold is the same kind of thing everywhere — a line you
+ * press to see more — and the app drew it five ways, two of them in one tab a few
+ * hundred pixels apart. Measured at 1440, and again at 1024:
+ *
+ *   Edit "Image"                    triangle left, sentence, 500, --text-1   24 / 44 px
+ *   Job "Operate machine"           glyph ▸ ▾ left, UPPERCASE .44px, 600     15.9 / 18.8
+ *   Job "Messages from the machine" border chevron right, UPPERCASE .66px    15.9 / 44
+ *   Cut path "The order, in words"  no marker, sentence, 400, --text-2       15.9 / 18.8
+ *   Setup "More of this machine"    no marker, sentence, 500, in a card      32 / 44
+ *
+ * Two of those five stay under 44 px on a tablet — and one of them, the cut order, is
+ * in a window meant to be read beside the machine.
+ *
+ * The Edit tab's fold is the one that survived: a marker on the left that you can find
+ * without knowing it is there, one case, one weight, the reading colour. Uppercase and
+ * letter-spacing belong to a section title; a fold is a control and looks like the
+ * control it is.
+ *
+ * `.foldline` is the same line for the one place that cannot be a `details`: the layer
+ * row, whose fold hangs under the row rather than inside it and whose opener line
+ * carries switches of its own. It says `aria-expanded` where the `details` says `open`.
+ *
+ * A component may still say where its fold sits, how wide it is and what size its text
+ * is; what it may not do is draw its own marker, case or weight.
+ * `tests/one-fold.test.ts` refuses a sixth.
+ */
+details.fold > summary,
+.foldline {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	cursor: pointer;
+	font-size: var(--text-xs);
+	font-weight: 500;
+	text-transform: none;
+	letter-spacing: normal;
+	color: var(--text-1);
+	min-height: 24px;
+	/* `display: flex` already drops the browser's own marker in Chromium; these two say
+	   the same thing where it does not, and `list-style` covers Firefox. */
+	list-style: none;
+}
+details.fold > summary::-webkit-details-marker {
+	display: none;
+}
+details.fold > summary::marker {
+	content: '';
+}
+/* Our own triangle. Without a marker a fold cannot be told apart from a heading —
+   precisely the reason you must not hide one. */
+details.fold > summary::before,
+.foldline::before {
+	content: '';
+	flex: none;
+	width: 0;
+	height: 0;
+	border-left: 5px solid currentColor;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	transition: transform var(--transition);
+}
+details.fold[open] > summary::before,
+.foldline[aria-expanded='true']::before {
+	transform: rotate(90deg);
+}
+details.fold > summary:hover,
+.foldline:hover {
+	color: var(--accent);
+}
+details.fold > :not(summary) {
+	margin-top: var(--space-2);
+}
+/* Beside a machine, with a glove on: the line you press is a target like any other. */
+@media (max-width: 1199px), (pointer: coarse) {
+	details.fold > summary,
+	.foldline {
+		min-height: 44px;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	details.fold > summary::before,
+	.foldline::before {
+		transition: none;
+	}
+}

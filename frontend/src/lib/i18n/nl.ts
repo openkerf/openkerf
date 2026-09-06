@@ -925,7 +925,9 @@ export const nl: Catalogue = {
 	'panel.noLayers': 'Nog geen lagen. Een laag is een bewerking — snijden, graveren of rasteren — met een eigen snelheid en vermogen. Maak er hieronder een aan; selecteer daarna een vorm om hem erin te zetten.',
 	'panel.layer.dragAria': 'Volgorde van {label} — sleep, of gebruik de pijltjestoetsen',
 	'panel.layer.dragTitle': 'Sleep om te herordenen (of pijltje omhoog/omlaag). Rechterklik voor eerder of later branden.',
-	'panel.layer.chipTitle': 'Laag {n} van {total} — instellingen en kleur',
+	'panel.layer.chipTitle': 'Laag {n} van {total} — klik voor de kleur van deze laag',
+	'panel.layer.chipAria': 'Kleur van laag {label}',
+	'panel.layer.openTitle': 'De instellingen van deze laag: kleur, naam, soort bewerking en brandvolgorde',
 	'panel.layer.openAria': 'Laag {label} openen',
 	'panel.layer.count': {
 		one: '1 vorm in deze laag',

@@ -526,7 +526,29 @@
 	// The corner operation lives in `CornersDialog.svelte`; the style, the size and the
 	// sample drawing moved along with it.
 
+	/**
+	 * Which layer has its settings open, and which has its colours open.
+	 *
+	 * Two states and not one because the row now has two openers where it had one:
+	 * the name opens the settings (P19 — a 26 px colour chip that opens a settings
+	 * card says so in a tooltip only, and a glove does not hover), the chip opens the
+	 * ten swatches and nothing else. They hang in the same place under the row, so
+	 * opening one closes the other.
+	 */
 	let editingLayer = $state<string | null>(null);
+	let colourLayer = $state<string | null>(null);
+
+	/** Open the settings of a layer, and put the colour swatches away. */
+	function openSettings(id: string | null) {
+		editingLayer = id;
+		colourLayer = null;
+	}
+
+	/** Open the colour swatches of a layer, and put the settings away. */
+	function openColours(id: string | null) {
+		colourLayer = id;
+		editingLayer = null;
+	}
 	/**
 	 * The menu on a layer row, from one place.
 	 *
@@ -558,7 +580,7 @@
 					toggleVisible: () => design.toggleLayer(op.id),
 					up: () => moveLayer(op.id, 'up'),
 					down: () => moveLayer(op.id, 'down'),
-					openSettings: () => (editingLayer = op.id),
+					openSettings: () => openSettings(op.id),
 					chooseMaterial: () => onChooseMaterial?.(op.id),
 					remove: () => (confirmDrop = op.id)
 				}
@@ -691,7 +713,7 @@
 	async function retypeLayer(id: string, type: string) {
 		const off = await edits.retypeLayer(id, type);
 		if (!off.ok) return;
-		editingLayer = null;
+		openSettings(null);
 		onLayerChange?.();
 	}
 
@@ -1523,13 +1545,14 @@
 		{/if}
 		{#each plainLayers as op, index (op.id)}
 			{@const open = editingLayer === op.id}
+			{@const colourOpen = colourLayer === op.id}
 			{@const percent = powerPercent(op)}
 			<div
 				class="layer"
 				class:compact
 				class:off={!op.output}
 				class:is-hidden={design.isLayerHidden(op.id)}
-				class:open
+				class:open={open || colourOpen}
 				class:sleept={dragging?.id === op.id}
 				class:sleep-modus={dragging != null}
 				class:target-above={dragging != null && dragging.id !== op.id && dragging.to === index && index < dragging.from}
@@ -1583,8 +1606,13 @@
 						</svg>
 					</button>
 					{/if}
-					<!-- The number on the chip *is* the burn order. Clicking opens the
-					     layer, so the colour is also the way to its settings. -->
+					<!-- The number on the chip *is* the burn order; the colour is the layer's
+					     colour. So the chip opens the ten swatches, and nothing else.
+
+					     It used to open the whole settings card — a 26 px square whose only
+					     announcement was a tooltip, in an app you operate with a glove on.
+					     What opens the settings is now the name beside it, with a marker in
+					     front of it, like every other fold in the app. -->
 					<button
 						class="chip mono"
 						style="background: {design.colorFor(op.id)}; color: {inkOn(
@@ -1592,14 +1620,29 @@
 						)}"
 						disabled={!canEdit}
 						title={t('panel.layer.chipTitle', { n: index + 1, total: plainLayers.length })}
-						aria-expanded={open}
-						aria-label={t('panel.layer.openAria', { label: op.label })}
-						onclick={() => (editingLayer = open ? null : op.id)}
+						aria-expanded={colourOpen}
+						aria-label={t('panel.layer.chipAria', { label: op.label })}
+						onclick={() => openColours(colourOpen ? null : op.id)}
 					>{index + 1}</button>
 					<!-- One line for the identity. The element count went to the value line:
 					     with name and count stacked, a row is 186 px tall on a tablet and
-					     three layers fit on a screen. -->
-					<div class="layer-name">{op.label}</div>
+					     three layers fit on a screen.
+
+					     And it is the opener: the settings of a layer hang under its name,
+					     behind the same marker as every other fold in the app (P19). Without
+					     a token the row cannot be edited and there is nothing to open, so
+					     the name stays what it was — a line of text. -->
+					{#if canEdit}
+						<button
+							class="foldline layer-open"
+							aria-expanded={open}
+							title={t('panel.layer.openTitle', { label: op.label })}
+							aria-label={t('panel.layer.openAria', { label: op.label })}
+							onclick={() => openSettings(open ? null : op.id)}
+						><span class="layer-name">{op.label}</span></button>
+					{:else}
+						<div class="layer-name">{op.label}</div>
+					{/if}
 					<!-- Only the number, next to the name. Put on the value line the row
 					     became 96 px: that line is genuinely full with three fields (215 of
 					     218 px, as the note there already said). What the number means is in
@@ -1679,7 +1722,7 @@
 							title={t('panel.layer.valuesTitle')}
 							aria-expanded={open}
 							aria-label={t('panel.layer.valuesAria', { label: op.label, values: short(op) })}
-							onclick={() => (editingLayer = open ? null : op.id)}
+							onclick={() => openSettings(open ? null : op.id)}
 						>{short(op)}</button>
 					{:else if canEdit}
 						<label class="val">
@@ -1789,10 +1832,14 @@
 				</div>
 			</div>
 
-			{#if canEdit && open}
+			{#if canEdit && (open || colourOpen)}
 				{@const onthouden = design.memoryFor(design.colorFor(op.id))}
-				<div class="layer-edit">
-					{#if compact}
+				<!-- One card in one place, with two ways in. From the chip it is the layer's
+				     colour: the ten swatches and what this colour has remembered. From the
+				     name it is everything — colour included, because you are as likely to
+				     want it there. -->
+				<div class="layer-edit" class:colour-only={!open}>
+					{#if compact && open}
 						<!-- In compact mode the fields are here, because there is no room in
 						     the row. Same fields, same behaviour — just one line lower. -->
 						<div class="vals wide">
@@ -1873,168 +1920,170 @@
 						{/if}
 					</p>
 
-					<label class="wide">
-						<span>{t('panel.name')}</span>
-						<input
-							type="text"
-							value={op.label}
-							onchange={(e) => patchLayer(op.id, { label: e.currentTarget.value })}
-						/>
-					</label>
-
-					<!-- What this layer does, changeable after creating it (gap L3). Making a
-					     cut layer into an engrave layer could only be done by throwing it away
-					     and redoing every assignment; LightBurn has a dropdown for it in the
-					     row. The shapes and the settings come along. -->
-					<div class="kind wide">
-						<span class="rot-label">{t('panel.kind')}</span>
-						<Segmented
-							label={t('panel.kindOf', { label: op.label })}
-							options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
-							disabled={edits.busy}
-							why={t('reason.busy')}
-							bind:value={() => kindOf(op.type), (value) => retypeLayer(op.id, value)}
-						/>
-						<p class="hint">{t('panel.kind.hint')}</p>
-					</div>
-
-					{#if compact}
-						<!-- The way-of-looking switch from the row, here as a checkbox (see the
-						     note about the eye in the row). Same behaviour, same explanation:
-						     this changes nothing about what gets burned. -->
-						<label class="check wide">
+					{#if open}
+						<label class="wide">
+							<span>{t('panel.name')}</span>
 							<input
-								type="checkbox"
-								checked={!design.isLayerHidden(op.id)}
-								onchange={() => design.toggleLayer(op.id)}
+								type="text"
+								value={op.label}
+								onchange={(e) => patchLayer(op.id, { label: e.currentTarget.value })}
 							/>
-							<span>{t('panel.visibleOnCanvas')}</span>
 						</label>
-					{/if}
 
-					{#if design.layerCapabilities.air_assist}
-						<!-- Decision B11: only visible when the driver has a command for it. The
-						     same rule as with the Z axis — what the machine *can* do decides
-						     what you see. If the switch is not there, this machine has no
-						     method set up to drive the blower. -->
-						<label class="check wide">
-							<input
-								type="checkbox"
-								checked={op.air_assist}
-								disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
-								onchange={(e) => patchLayer(op.id, { air_assist: e.currentTarget.checked })}
-							/>
-							<span>{t('panel.airDuring')}</span>
-						</label>
-					{/if}
-
-					{#if design.layerCapabilities.z_step}
-						<!-- Dropping per pass, the same rule as with air assist (B11): only
-						     visible when the driver has a Z axis that it really moves. So on a
-						     Ruida this field is not there, because it would do nothing. The
-						     engine does not know this by itself — to it a pass is a counter on
-						     one cutcode object — so we build it up in the plan, with a
-						     `z_move` between the passes and a move back to the starting height
-						     after the last one. -->
-						<div class="zstep wide">
-							<NumberField
-								label={t('panel.zStep')}
-								unit="mm"
-								value={String(op.z_step_mm ?? 0)}
-								step={0.1}
-								min={-20}
-								max={20}
+						<!-- What this layer does, changeable after creating it (gap L3). Making a
+						     cut layer into an engrave layer could only be done by throwing it away
+						     and redoing every assignment; LightBurn has a dropdown for it in the
+						     row. The shapes and the settings come along. -->
+						<div class="kind wide">
+							<span class="rot-label">{t('panel.kind')}</span>
+							<Segmented
+								label={t('panel.kindOf', { label: op.label })}
+								options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
 								disabled={edits.busy}
 								why={t('reason.busy')}
-								onchange={(v) => patchLayer(op.id, { z_step_mm: Number(v) })}
+								bind:value={() => kindOf(op.type), (value) => retypeLayer(op.id, value)}
 							/>
-							<p class="hint">
-								{#if !op.z_step_mm}
-									{t('panel.zStep.off')}
-								{:else if (op.passes ?? 1) < 2}
-									{t('panel.zStep.onePass')}
-								{:else}
-									{t('panel.zStep.explain', {
-										passes: op.passes,
-										step: i18n.number(Math.abs(op.z_step_mm)),
-										direction: t(op.z_step_mm > 0 ? 'panel.zStep.lower' : 'panel.zStep.higher')
-									})}
-								{/if}
-							</p>
+							<p class="hint">{t('panel.kind.hint')}</p>
 						</div>
-					{/if}
 
-					{#if op.type === 'op raster' || op.type === 'op image'}
-						<!-- Only rastering uses these; on a cut they are meaningless. -->
-						<!-- Each over the full width: a stepper is two 38 px buttons plus a
-						     field, and in a half column of 112 px there is nothing left for
-						     "2000". -->
-						<div class="steppers wide">
-						<NumberField
-							label="DPI"
-							value={String(op.dpi ?? 500)}
-							step={10}
-							min={10}
-							max={2000}
-							disabled={edits.busy}
-							why={t('reason.busy')}
-							onchange={(v) => patchLayer(op.id, { dpi: Number(v) })}
-						/>
-						<NumberField
-							label={t('panel.overscan')}
-							unit="mm"
-							value={String(parseFloat(op.overscan ?? '0.5') || 0)}
-							step={0.5}
-							min={0}
-							max={50}
-							disabled={edits.busy}
-							why={t('reason.busy')}
-							onchange={(v) => patchLayer(op.id, { overscan_mm: Number(v) })}
-						/>
-						</div>
-						<label class="check wide">
-							<input
-								type="checkbox"
-								checked={op.bidirectional}
-								onchange={(e) =>
-									patchLayer(op.id, { bidirectional: e.currentTarget.checked })}
+						{#if compact}
+							<!-- The way-of-looking switch from the row, here as a checkbox (see the
+							     note about the eye in the row). Same behaviour, same explanation:
+							     this changes nothing about what gets burned. -->
+							<label class="check wide">
+								<input
+									type="checkbox"
+									checked={!design.isLayerHidden(op.id)}
+									onchange={() => design.toggleLayer(op.id)}
+								/>
+								<span>{t('panel.visibleOnCanvas')}</span>
+							</label>
+						{/if}
+
+						{#if design.layerCapabilities.air_assist}
+							<!-- Decision B11: only visible when the driver has a command for it. The
+							     same rule as with the Z axis — what the machine *can* do decides
+							     what you see. If the switch is not there, this machine has no
+							     method set up to drive the blower. -->
+							<label class="check wide">
+								<input
+									type="checkbox"
+									checked={op.air_assist}
+									disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
+									onchange={(e) => patchLayer(op.id, { air_assist: e.currentTarget.checked })}
+								/>
+								<span>{t('panel.airDuring')}</span>
+							</label>
+						{/if}
+
+						{#if design.layerCapabilities.z_step}
+							<!-- Dropping per pass, the same rule as with air assist (B11): only
+							     visible when the driver has a Z axis that it really moves. So on a
+							     Ruida this field is not there, because it would do nothing. The
+							     engine does not know this by itself — to it a pass is a counter on
+							     one cutcode object — so we build it up in the plan, with a
+							     `z_move` between the passes and a move back to the starting height
+							     after the last one. -->
+							<div class="zstep wide">
+								<NumberField
+									label={t('panel.zStep')}
+									unit="mm"
+									value={String(op.z_step_mm ?? 0)}
+									step={0.1}
+									min={-20}
+									max={20}
+									disabled={edits.busy}
+									why={t('reason.busy')}
+									onchange={(v) => patchLayer(op.id, { z_step_mm: Number(v) })}
+								/>
+								<p class="hint">
+									{#if !op.z_step_mm}
+										{t('panel.zStep.off')}
+									{:else if (op.passes ?? 1) < 2}
+										{t('panel.zStep.onePass')}
+									{:else}
+										{t('panel.zStep.explain', {
+											passes: op.passes,
+											step: i18n.number(Math.abs(op.z_step_mm)),
+											direction: t(op.z_step_mm > 0 ? 'panel.zStep.lower' : 'panel.zStep.higher')
+										})}
+									{/if}
+								</p>
+							</div>
+						{/if}
+
+						{#if op.type === 'op raster' || op.type === 'op image'}
+							<!-- Only rastering uses these; on a cut they are meaningless. -->
+							<!-- Each over the full width: a stepper is two 38 px buttons plus a
+							     field, and in a half column of 112 px there is nothing left for
+							     "2000". -->
+							<div class="steppers wide">
+							<NumberField
+								label="DPI"
+								value={String(op.dpi ?? 500)}
+								step={10}
+								min={10}
+								max={2000}
+								disabled={edits.busy}
+								why={t('reason.busy')}
+								onchange={(v) => patchLayer(op.id, { dpi: Number(v) })}
 							/>
-							<span>{t('panel.bidirectional')}</span>
-						</label>
-					{/if}
+							<NumberField
+								label={t('panel.overscan')}
+								unit="mm"
+								value={String(parseFloat(op.overscan ?? '0.5') || 0)}
+								step={0.5}
+								min={0}
+								max={50}
+								disabled={edits.busy}
+								why={t('reason.busy')}
+								onchange={(v) => patchLayer(op.id, { overscan_mm: Number(v) })}
+							/>
+							</div>
+							<label class="check wide">
+								<input
+									type="checkbox"
+									checked={op.bidirectional}
+									onchange={(e) =>
+										patchLayer(op.id, { bidirectional: e.currentTarget.checked })}
+								/>
+								<span>{t('panel.bidirectional')}</span>
+							</label>
+						{/if}
 
-					<!-- Order is burn order: engrave first, only then cut, otherwise the
-					     workpiece falls out of the sheet before the lettering is on it. -->
-					<div class="order wide">
-						<span class="rot-label">{t('panel.order', { kind: typeName(op.type) })}</span>
-						<button
-							class="btn mini"
-							disabled={edits.busy || index === 0}
-							title={index === 0 ? t('reason.alreadyFirst') : t('layerMenu.earlier')}
-							onclick={() => moveLayer(op.id, 'up')}
-						>↑ {t('panel.order.earlier')}</button>
-						<button
-							class="btn mini"
-							disabled={edits.busy || index === plainLayers.length - 1}
-							title={index === plainLayers.length - 1
-								? t('reason.alreadyLast')
-								: t('layerMenu.later')}
-							onclick={() => moveLayer(op.id, 'down')}
-						>↓ {t('panel.order.later')}</button>
-					</div>
-
-					{#if confirmDrop === op.id}
-						<div class="confirm wide">
-							<span>{t('panel.drop.ask', { label: op.label })}</span>
-							<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
-							<button class="btn mini drop" onclick={() => dropLayer(op.id)}
-								>{t('panel.drop.confirm')}</button
-							>
+						<!-- Order is burn order: engrave first, only then cut, otherwise the
+						     workpiece falls out of the sheet before the lettering is on it. -->
+						<div class="order wide">
+							<span class="rot-label">{t('panel.order', { kind: typeName(op.type) })}</span>
+							<button
+								class="btn mini"
+								disabled={edits.busy || index === 0}
+								title={index === 0 ? t('reason.alreadyFirst') : t('layerMenu.earlier')}
+								onclick={() => moveLayer(op.id, 'up')}
+							>↑ {t('panel.order.earlier')}</button>
+							<button
+								class="btn mini"
+								disabled={edits.busy || index === plainLayers.length - 1}
+								title={index === plainLayers.length - 1
+									? t('reason.alreadyLast')
+									: t('layerMenu.later')}
+								onclick={() => moveLayer(op.id, 'down')}
+							>↓ {t('panel.order.later')}</button>
 						</div>
-					{:else}
-						<button class="btn mini gone wide" onclick={() => (confirmDrop = op.id)}>
-							{t('panel.drop.layer')}
-						</button>
+
+						{#if confirmDrop === op.id}
+							<div class="confirm wide">
+								<span>{t('panel.drop.ask', { label: op.label })}</span>
+								<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
+								<button class="btn mini drop" onclick={() => dropLayer(op.id)}
+									>{t('panel.drop.confirm')}</button
+								>
+							</div>
+						{:else}
+							<button class="btn mini gone wide" onclick={() => (confirmDrop = op.id)}>
+								{t('panel.drop.layer')}
+							</button>
+						{/if}
 					{/if}
 				</div>
 			{/if}
@@ -2600,6 +2649,25 @@
 		font-weight: 500;
 	}
 
+	/* The opener. Its face — marker, case, weight, 44 px under a glove — is the shared
+	   fold in tokens.css; here it only takes the room the name had and keeps the name's
+	   own size, because this line is the row's identity and not a section title. */
+	.layer-open {
+		flex: 1;
+		min-width: 0;
+		padding: 0;
+		font-size: inherit;
+		text-align: left;
+	}
+	.layer-open .layer-name {
+		flex: 1;
+	}
+	/* The colour swatches on their own, opened from the chip: no top border above them
+	   and no room for a block that is not there. */
+	.layer-edit.colour-only {
+		gap: var(--space-2);
+	}
+
 	/* The name may run over two lines: "Outer cut 3…" and "Contour engra…" cannot be
 	   told apart, and the tail is precisely what the user typed themselves. A row that
 	   grows for a name is honest; a row that clips a name to stay the same height is
@@ -3131,40 +3199,13 @@
 	}
 	.anchor-back:hover:not(:disabled) { border-color: var(--accent); }
 
-	/* Collapsed groups. The summary stays an ordinary readable line with a triangle —
-	   you can find it without knowing it is there. */
+	/* Collapsed groups. How the summary line looks — marker, case, weight, 44 px under a
+	   glove — is the shared fold in tokens.css; this only says where it sits. */
 	.fold {
 		border-top: 1px solid var(--line);
 		padding-top: var(--space-2);
 		margin-top: calc(var(--space-1) * -1);
 	}
-	.fold summary {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		cursor: pointer;
-		font-size: var(--text-xs);
-		font-weight: 500;
-		color: var(--text-1);
-		min-height: 24px;
-	}
-	/* Our own triangle. `display: flex` on a summary drops the browser's default marker,
-	   and then a collapsed group cannot be told apart from a heading — precisely the reason
-	   you must not hide such a group. */
-	.fold summary::-webkit-details-marker { display: none; }
-	.fold summary::marker { content: ''; }
-	.fold summary::before {
-		content: '';
-		flex: none;
-		width: 0;
-		height: 0;
-		border-left: 5px solid currentColor;
-		border-top: 4px solid transparent;
-		border-bottom: 4px solid transparent;
-		transition: transform 120ms ease;
-	}
-	.fold[open] summary::before { transform: rotate(90deg); }
-	.fold summary:hover { color: var(--accent); }
 	.fold-note {
 		font-weight: 400;
 		color: var(--text-2);
@@ -3173,7 +3214,6 @@
 		color: var(--accent-text);
 		font-variant-numeric: tabular-nums;
 	}
-	.fold > :not(summary) { margin-top: var(--space-2); }
 
 	/* Beside the machine with a finger. This block is deliberately right at the bottom:
 	   the rules above have the same specificity, so whoever comes first loses. */
@@ -3188,6 +3228,5 @@
 			min-height: 44px;
 		}
 		.figures { gap: var(--space-2) var(--space-3); }
-		.fold summary { min-height: 44px; }
 	}
 </style>

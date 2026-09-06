@@ -677,10 +677,11 @@ await scene('08-under-pointer.png', '/?tab=design', {}, async (page) => {
 
 await scene('09-layers.png', '/?tab=layers');
 
-// The number chip on a layer row is also its handle: clicking it folds the layer
-// open on the speed, power and passes it burns with.
+// The layer's name is its opener: clicking it folds the layer open on the settings —
+// colour, name, kind of operation and burn order. (The chip beside it opens the ten
+// colour swatches and nothing else.)
 await scene('10-layer-detail.png', '/?tab=layers', {}, async (page) => {
-	await page.locator('.layer .chip').first().click();
+	await page.locator('.layer .layer-open').first().click();
 	await page.waitForTimeout(500);
 });
 
