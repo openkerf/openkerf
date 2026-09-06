@@ -18,8 +18,9 @@
  * (`BUTTON.btn`), the "machine is not responding" warning at 1024 x 768 (`LI`), and the
  * layer table at every size but 1440, where only its header row was clear.
  *
- * What is measured: at four viewports the material row, every warning in the column and
- * the first two rows of the layer table are each the topmost element at their own middle
+ * What is measured: at four viewports the material row, every warning in the column, the
+ * first two rows of the layer table and the "Show cut path" button (`.pf-order`) are each
+ * the topmost element at their own middle
  * and lie wholly above the footer's top edge. The place they are in is not pinned — only
  * that the one screen you read before you burn does not hide what it has to say.
  */
@@ -122,6 +123,10 @@ for (const [width, height] of SIZES) {
 				rows.forEach((row, i) =>
 					wanted.push({ what: i === 0 ? 'the table header' : `table row ${i}`, node: row })
 				);
+				// A button behind the footer is the harder half of this: prose you can
+				// scroll to, a control you cannot press at all.
+				const order = document.querySelector('.pf-order');
+				if (order) wanted.push({ what: 'the "Show cut path" button', node: order });
 				return {
 					stickTop: Math.round(stick.top),
 					stickHeight: Math.round(stick.height),

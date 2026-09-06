@@ -819,7 +819,11 @@
 						     of what the rotary changes. It used to hang in the tooltip of a
 						     "Show frame" in the footer, and that button is gone: the top bar
 						     carries the one frame there is. A tooltip is no place for it on a
-						     tablet either. -->
+						     tablet either. The sentence names the top bar itself, because the
+						     button it is about is three surfaces away from this line. Two
+						     whole sentences beside each other, not two halves of one: the
+						     rotary's own line comes from `job.rotary.chuck` or
+						     `job.rotary.roller` and reads on its own in any word order. -->
 						<p class="pf-warn strong">{rotaryText} {t('job.rotary.frame')}</p>
 						{#if overview?.rotary?.overlap}
 							<p class="pf-warn">
@@ -976,6 +980,27 @@
 			     the shape they are about (gaps J5 and C2); at 1024 x 768 the tail of
 			     that block is the one thing left under the footer. -->
 			{#if !empty}
+				<!-- The button stays with the numbers, at the foot of the table: it
+				     reads as "and in what order do these layers burn". It travelled
+				     with the drawing once, to the end of the column, and the sticky
+				     footer then lay over it — measured on the seed of
+				     `tests/preflight-fold.test.ts`, 687 to 717 against a footer top of
+				     671 at 1366 x 768, and 771 to 815 against 654 at 1024 x 768, with
+				     `elementFromPoint` at its middle answering the footer's own button.
+				     Prose under the footer you can still scroll to; a control under it
+				     cannot be pressed at all. `tests/preflight-fold.test.ts` now holds
+				     `.pf-order` to the same edge as the table.
+
+				     Deliberately *not* in the sticky row with the start button either:
+				     measured at 1440 px with three buttons in that row, "Start job 1:26"
+				     was clipped at the right edge of the panel — the primary action half
+				     off screen, which is the very thing the second usability round
+				     fixed. -->
+				{#if onCutPath}
+					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
+						{t('cutpath.show')}
+					</button>
+				{/if}
 				<!-- The messages about bed and sheet belong to the drawing and so
 				     live in it, right under the shape they are about (gaps J5 and C2).
 				     They used to be here as two equally red cards in a row; that made
@@ -987,17 +1012,6 @@
 					bounds={bounds}
 					{colorFor}
 				/>
-				<!-- Under the drawing, because it is the same drawing with the order in
-				     it (gap S1). Deliberately *not* in the sticky row with the start
-				     button: measured at 1440 px with three buttons in that row,
-				     "Start job 1:26" was clipped at the right edge of the panel — the
-				     primary action half off screen, which is the very thing the second
-				     usability round fixed. -->
-				{#if onCutPath}
-					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
-						{t('cutpath.show')}
-					</button>
-				{/if}
 			{/if}
 
 			{#if empty}
@@ -1017,12 +1031,15 @@
 			<!--
 				The buttons stick to the bottom of the panel.
 
-				Since the preparation is always open, the column is taller than the
-				panel is high (measured on the seed of `tests/preflight-fold.test.ts`:
-				804 px of content in 788 px at 1440 x 900, 906 in 574 at 1024 x 768).
-				Without this sticky footer the start button sat below the fold — the
-				primary action out of sight, which is exactly what this round had to
-				solve, not cause.
+				Since the preparation is always open, the scroller it sits in is taller
+				than the panel is high. Measured on this build, on the seed of
+				`tests/preflight-fold.test.ts`: `.panel-scroll` holds 1,407 px of
+				content in 788 px at 1440 x 900 and 1,668 px in 630 px at 1024 x 768.
+				The pre-flight block itself now fits (`.preflight` is 673 px and 759 px
+				at those two sizes, against 804 and 906 before this repair), but the
+				scroller around it does not, so without this sticky footer the start
+				button would still scroll away — the primary action out of sight, which
+				is exactly what this round had to solve, not cause.
 
 				What sticks is only what you press. The footer was 211.6 px at 1440 and
 				230.5 px at 1024 — a quarter to a third of the panel — and it spent that
@@ -1739,8 +1756,8 @@
 	   that the pause button sits nowhere or twice. Both now read
 	   `screen.controlsInBar`; the class below is the consequence, not the rule. */
 	/* A way in, not a command: this opens a window, it does not do anything to the
-	   machine. So it is a quiet full-width row under the drawing rather than a third
-	   button competing with "Start job". */
+	   machine. So it is a quiet full-width row at the foot of the layer table rather
+	   than a third button competing with "Start job". */
 	.pf-order {
 		display: block;
 		width: 100%;

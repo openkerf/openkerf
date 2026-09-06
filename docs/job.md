@@ -37,7 +37,7 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: at the top "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that the whole layer table with speed, power, passes and a Source column, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns and a "Show cut path" button — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
+![The OpenKerf window with the Job tab open on the pre-flight: at the top "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that the whole layer table with speed, power, passes and a Source column, at its foot a "Show cut path" button, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes sit in no layer that burns — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
 
 ### Time, material and zero point
 
@@ -304,8 +304,9 @@ at and compare in, so it opens in a window of its own, headed **Cut path**.
 
 Three ways in, and they are the same window:
 
-- **Show cut path** under the drawing in the pre-flight — the moment you actually
-  want it, just before pressing start.
+- **Show cut path** at the foot of the layer table in the pre-flight — beside the
+  layers whose order it is about, and the moment you actually want it, just before
+  pressing start.
 - The same row in the right-click menu on the empty bed, for while you are still
   drawing.
 - **⌥P** (Alt+P on Windows and Linux), from anywhere on the bed.
@@ -444,8 +445,9 @@ No single click burns anything.
 **Show frame** is in the top bar, armed or not: it sends the head round the
 outline of your work with the laser off. That is the last check that the work is on
 the board and the clamp is not in the way. With a rotary fitted it means something
-else, and the pre-flight says so on the line about the rotary: "On a rotary the
-frame turns the object; the head hardly crosses the bed."
+else, and the pre-flight says so on the line about the rotary, naming where the
+button is: "Show frame, in the top bar, turns the object rather than crossing the
+bed."
 
 **When it goes wrong.**
 

@@ -2243,7 +2243,7 @@ export const nl: Catalogue = {
 	'job.rotary.chuck': 'De rotary staat aan: een klauwplaat van {diameter} mm, Y maal {factor}.',
 	'job.rotary.roller': 'De rotary staat aan: {circumference} mm rond, Y maal {factor}.',
 	'job.rotary.frame':
-		'Op een rotary draait het kader het object; de kop komt bijna niet over het bed.',
+		'Kader tonen, in de bovenbalk, draait het object in plaats van over het bed te gaan.',
 	'job.home.rotary.title': 'Homen met de rotary erin?',
 	'job.home.rotary.body':
 		'Homen stuurt de kop over het bed en de rotary in. Ga alleen door als de rotary eruit is of de kop de hoek vrij kan bereiken.',

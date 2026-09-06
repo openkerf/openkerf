@@ -2348,7 +2348,7 @@ export const en = {
 	'job.rotary.chuck': 'The rotary is on: a chuck of {diameter} mm, Y scaled by {factor}.',
 	'job.rotary.roller': 'The rotary is on: {circumference} mm round, Y scaled by {factor}.',
 	'job.rotary.frame':
-		'On a rotary the frame turns the object; the head hardly crosses the bed.',
+		'Show frame, in the top bar, turns the object rather than crossing the bed.',
 	'job.home.rotary.title': 'Home with the rotary fitted?',
 	'job.home.rotary.body':
 		'Homing drives the head across the bed and into the rotary. Only continue if the rotary is out or the head can reach the corner freely.',
