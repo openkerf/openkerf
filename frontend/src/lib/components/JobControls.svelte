@@ -754,9 +754,10 @@
 			nothing disappears from view on that first tap.
 		-->
 		<div class="preflight" class:none={empty}>
-			<!-- "Estimated time 0:00" above an empty bed reads as a job of zero
-			     seconds instead of as no job. With nothing to do the clock keeps
-			     quiet and the message below it speaks. -->
+			<!-- A clock reading 0:00 above an empty bed reads as a job of zero seconds
+			     instead of as no job. With nothing to do the clock on the start button
+			     stays away — the guard on `estimate?.seconds` at the foot of this panel
+			     — and the message below speaks instead. -->
 			<!-- The numbers first and the drawing under them, against decision B8's
 			     order: see the block further down for the measurement that turned it
 			     round. On tablet and phone the canvas is not beside this panel, so the
@@ -1482,8 +1483,19 @@
 						     sentence behind it. It used to be that whole sentence on the
 						     screen — 54 characters, 31.9 px — under a label that already says
 						     what a zero point is, and beside a print-and-cut card saying
-						     "Off." for the same state in different words. -->
-						<p class="hint off" title={t('job.origin.off')}>{t('job.state.off')}</p>
+						     "Off." for the same state in different words.
+
+						     The sentence stays a title even at `screen.noHover`, where the
+						     dead button's reason below does become a line — and that is a
+						     difference on purpose. A reason why a button will not work is
+						     the only way to get past it; "Off" under a heading that already
+						     says "Zero point of the work" is the whole state. Measured: put
+						     both sentences on the screen at 1100 px and this fold goes from
+						     694.3 px to 776.8 px, taller than the 1440 px column it started
+						     from — the pattern back, on the screen with the least room. The
+						     dotted cue is dropped there instead, so nothing promises a hover
+						     that a touch screen cannot give. -->
+						<p class="hint" class:off={!screen.noHover} title={t('job.origin.off')}>{t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						<button
@@ -1554,7 +1566,7 @@
 						     answer "where does the work go", and both were off in prose of
 						     their own — this one 171 characters over 63.8 px, explaining at
 						     length a feature whose only button was dead. -->
-						<p class="hint off" title={t('job.printcut.off')}>{t('job.state.off')}</p>
+						<p class="hint" class:off={!screen.noHover} title={t('job.printcut.off')}>{t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						{#if cutMarks.length === 2}
@@ -2127,10 +2139,12 @@
 		color: var(--text-2);
 	}
 	/* The state of a feature nobody has switched on: a word, in the same grey as the
-	   coordinates that stand there when it *is* on, with a dotted underline to say the
-	   sentence behind it can be read. */
+	   coordinates that stand there when it *is* on. The dotted underline — currentColor,
+	   the same idiom as `.afwachtend` in StatusBar — says the sentence behind it can be
+	   read, so it is only worn where a pointer can hover; at `screen.noHover` the
+	   sentence itself stands underneath and the cue would promise nothing. */
 	.hint.off {
-		text-decoration: underline dotted var(--line-1);
+		text-decoration: underline dotted;
 		text-underline-offset: 3px;
 		cursor: help;
 	}

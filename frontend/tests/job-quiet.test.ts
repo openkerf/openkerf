@@ -59,13 +59,18 @@ test('the closed messages fold says nothing but its own title', () => {
 
 test('a job waiting its turn shows no bar and no counters about not having started', () => {
 	const source = code('JobPanel.svelte');
+	// The rule has one name in this file; the guards read it rather than spelling it out.
+	assert.ok(
+		/\{@const live = job\.running \|\| quiet\}/.test(source),
+		'`live` — running, or the one job that can stall — is no longer named once in JobPanel'
+	);
 	for (const marker of ['class="progress"', 'class="figures mono"', 'class="meta mono"']) {
 		const at = source.indexOf(marker);
 		assert.notEqual(at, -1, `JobPanel no longer has ${marker}`);
 		const guard = source.lastIndexOf('{#if', at);
 		const condition = source.slice(guard, source.indexOf('}', guard));
 		assert.ok(
-			/job\.running/.test(condition),
+			/\blive\b|job\.running/.test(condition),
 			`${marker} stands under \`${condition.trim()}\` — a waiting job has no progress to show`
 		);
 	}
@@ -169,4 +174,83 @@ test('the panel as it opens holds no paragraph about a feature that is off', asy
 	assert.equal(seen.clocks, 1, `the estimate ${seen.clock} stands ${seen.clocks} times`);
 	// Layers, with the same seed on the bed, held 267 characters over 46 nodes.
 	assert.ok(seen.chars < 850, `the Job tab holds ${seen.chars} characters over ${seen.nodes} nodes`);
+});
+
+/**
+ * The two "Off" values in `Operate machine`, at one width: what they say, whether the
+ * dotted underline that promises a sentence actually computes, and whether the sentence
+ * itself is on the screen. The fold is open by rule, so no click is needed beyond the tab.
+ */
+async function offValues(width: number) {
+	browser = await chromium.launch();
+	const page = await browser.newPage({ viewport: { width, height: 1000 } });
+	await page.goto(BASE, { waitUntil: 'networkidle' });
+	await page.click('.panel .tab:has-text("Job")');
+	await page.waitForSelector('.origin p.hint[title]', { timeout: 20000 });
+	await page.waitForTimeout(500);
+	return page.evaluate(() =>
+		[...document.querySelectorAll('.origin')].map((block) => {
+			const value = block.querySelector('p.hint[title]') as HTMLElement | null;
+			return {
+				value: value ? (value.textContent ?? '').trim() : null,
+				decoration: value ? getComputedStyle(value).textDecorationLine : null,
+				sentence: value?.getAttribute('title') ?? null,
+				visible: (block as HTMLElement).innerText.replace(/\s+/g, ' ')
+			};
+		})
+	);
+}
+
+test('a value that hides a sentence behind a hover carries a underline you can see', async (t) => {
+	reachable = await fetch(BASE, { signal: AbortSignal.timeout(2000) }).then(
+		() => true,
+		() => false
+	);
+	if (!reachable) return noServer(t, BASE);
+	const blocks = await offValues(1440);
+	await browser?.close();
+	const off = blocks.filter((b) => b.value === 'Off');
+	assert.equal(off.length, 2, `${off.length} of the two "where does the work go" cards say Off`);
+	for (const block of off) {
+		// `text-decoration: underline dotted var(--line-1)` computed to `none`: the token
+		// does not exist, so the whole shorthand was thrown away and the only cue that a
+		// sentence was there was the cursor.
+		assert.equal(
+			block.decoration,
+			'underline',
+			`"Off" computes text-decoration-line: ${block.decoration} — nothing says a sentence is behind it`
+		);
+		assert.ok(
+			!block.visible.includes(block.sentence ?? ''),
+			'the sentence stands on the screen as well as in the title, where a pointer can hover'
+		);
+	}
+});
+
+test('where a pointer cannot hover, the value promises nothing it cannot give', async (t) => {
+	reachable = await fetch(BASE, { signal: AbortSignal.timeout(2000) }).then(
+		() => true,
+		() => false
+	);
+	if (!reachable) return noServer(t, BASE);
+	// 1100 px is a tablet by `screen.noHover`. "Off" under a heading that names the
+	// feature is the whole state, so the sentence stays a title — but the dotted cue
+	// goes, because it would say "hover me" to a finger. The reason a *button* is dead
+	// does become a line here; that is checked above, and the difference is deliberate:
+	// putting both sentences on screen as well measured 776.8 px of fold against 694.3.
+	const blocks = await offValues(1100);
+	await browser?.close();
+	const off = blocks.filter((b) => b.value === 'Off');
+	assert.equal(off.length, 2, `${off.length} of the two cards say Off at 1100 px`);
+	for (const block of off) {
+		assert.equal(
+			block.decoration,
+			'none',
+			'the underline still hints at a hover a touch screen cannot give'
+		);
+		assert.ok(
+			!block.visible.includes(block.sentence ?? ''),
+			'the paragraph the pattern counted is back on the screen with the least room'
+		);
+	}
 });

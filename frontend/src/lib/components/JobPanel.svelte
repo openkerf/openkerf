@@ -123,7 +123,11 @@
 			     waiting their turn. Without that distinction every waiting job got
 			     the paused look. -->
 			{@const quiet = job === activeJob && isStalled(job)}
-			<article class="job" class:running={job.running || quiet} class:paused={quiet}>
+			<!-- Running or stalled: either way the job is on the machine now, and the
+			     card may speak in figures. One name for the rule the four blocks below
+			     read. -->
+			{@const live = job.running || quiet}
+			<article class="job" class:running={live} class:paused={quiet}>
 				<header>
 					<!-- "Spooler:3 items" is the engine's internal tally, not a name
 					     (gap P4). The wording lives in api.ts, so the Job panel, the
@@ -137,7 +141,7 @@
 					>
 				</header>
 
-				{#if job.running || quiet}
+				{#if live}
 					<!-- "How much longer" is the only number someone standing next to
 					     the machine wants; elapsed and total sit below it so the sum can
 					     be checked. -->
@@ -152,7 +156,7 @@
 				     five figures, of which the only one a waiting job can honestly give is
 				     how long it will take. The pre-flight, for the same job before it
 				     starts, shows exactly that one number. -->
-				{#if (job.running || quiet) && job.progress !== null}
+				{#if live && job.progress !== null}
 					<!-- Kerf line as progress: the outline "cuts" itself away. At 2px it
 					     did not read as progress; now it carries the card. -->
 					<svg class="progress" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
@@ -172,7 +176,7 @@
 					</div>
 				{/if}
 
-				{#if job.running || quiet}
+				{#if live}
 					<dl class="meta mono">
 						<div><dt>{t('queue.elapsed')}</dt><dd>{formatDuration(job.elapsed_seconds)}</dd></div>
 						<!-- From the same source as "remaining" above; see gap B1. Two

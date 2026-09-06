@@ -628,8 +628,10 @@ session. The × on a chip forgets it.
 where the head is now as 0,0 for your drawing: "what you draw at 0,0 burns here.
 The sheet moves along: the zero point is the corner of the material lying in it."
 When one is set, **To zero point** goes there and **Clear** puts it back to the
-machine's own zero. With none set the line reads **Off**, with "the work burns at
-the coordinates you drew it on." behind it as a tooltip.
+machine's own zero. With none set the line reads **Off**, underlined with dots to say
+there is more: "the work burns at the coordinates you drew it on." is its tooltip. At
+1199 px and below, where a touch screen cannot hover, the dots go — the heading and the
+word together are the whole state. Print and cut says its own **Off** the same way.
 
 ### Print and cut
 
