@@ -2772,7 +2772,20 @@
 		border-top: 0;
 		border-radius: 0 0 var(--radius-field) var(--radius-field);
 	}
-	.layer-edit label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
+	/* Not the `.val` labels the compact fold takes over from the row: this rule (0,1,1)
+	   outranks `.val` (0,1,0), and with them in it the number and its unit broke in two,
+	   "12" over "mm/s", in the one place that promised the same fields one line lower.
+	   Measured before: the unit sat 2 px under its number and the three fields were
+	   43.9 px tall at 1440 x 900 (65.7 at 1024 x 768) against 25.9 (44.8) for the same
+	   fields in the roomy row. Excluded rather than overruled, so how a `.val` lays out
+	   is decided in one place only — the `.val` rule itself. Its number and unit carry
+	   their own font-size and colour, so they lose nothing here. */
+	.layer-edit label:not(.val) {
+		display: grid;
+		gap: 2px;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
 	.layer-edit .wide { grid-column: 1 / -1; }
 	.steppers { display: grid; gap: var(--space-2); }
 	.layer-edit label.check {
