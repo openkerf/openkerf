@@ -493,7 +493,7 @@ The field is in the Job tab, at the top, labelled "Token for write actions",
 with the hint "The engine logs the token when the API starts." Paste it, press
 Save, and the tools come to life.
 
-![The Job tab with the job getting ready: "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", two amber warnings, the layer table with its speed, power and passes, a "Show cut path" button and, under those, a thumbnail of the sheet. At the foot of the panel the strip that stays put while the rest scrolls: a green "Start job 1:19" with a narrower arrow button joined to its right, and nothing else.](images/12-job-preflight.png)
+![The Job tab with the job getting ready: "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", two amber warnings, a "Show cut path" button, the layer table with its speed, power and passes and, under those, a thumbnail of the sheet. At the foot of the panel the strip that stays put while the rest scrolls: a green "Start job 1:19" with a narrower arrow button joined to its right, and nothing else.](images/12-job-preflight.png)
 
 **When it goes wrong.** A token the server does not accept turns the label into
 "This token is being refused" and the hint into "Look in the window the engine

@@ -860,23 +860,54 @@
 			     laser cutter checks speed, power and passes before putting anything in
 			     the machine. -->
 			{#if layers.length}
-				<!-- The general warning above the table and not under it.
-				     Not a matter of taste: this is the last thing in the column, and the
-				     footer is sticky, so the last thing in the column is what the footer
-				     lies over. Measured at 1280 x 800 with the panel as it opens, four
-				     layers on unmeasured presets — the line stood at y 662-726 with the
-				     footer's top at 581, `elementFromPoint` on it answering
-				     `DIV.pf-check`: a warning you only meet by scrolling to it, in a
-				     pre-flight, which is the one screen whose whole job is to say
-				     unasked what is wrong. Above the table it is the table that goes
-				     under the footer instead, and a table is something you work down
-				     anyway.
+				<!-- The general warning above the table because it is read before the
+				     rows, not because it would otherwise be last: what is last in this
+				     column now is the drawing. One line saying that something is wrong
+				     with these settings is the sentence you want before you start
+				     reading numbers, and it is the only one of the three that says
+				     anything if you read nothing else.
+
+				     Measured on this build in the state the app opens in — four layers
+				     on unverified presets, no machine attached, so the "not responding"
+				     card stands above this line: the warning runs 202-282 at
+				     1440 x 900, 1366 x 768 and 1280 x 800 and 222-313 at 1024 x 768,
+				     against footer tops of 729, 671, 703 and 654, and
+				     `elementFromPoint` on its middle answers the paragraph itself at all
+				     four. (Before this round it stood under the footer: at 1024 x 768 its
+				     middle answered `BUTTON.btn` and at 1366 x 768 `SPAN.pf-head`.)
 
 				     The concrete objections stay below the table, beside the rows they
 				     name. So the order is: what is wrong in one line, the settings, then
 				     which layer is wrong and why. -->
 				{#if risky.length}
 					<p class="pf-warn strong">{t('job.risky', { n: risky.length })}</p>
+				{/if}
+				<!-- The button heads the table, as its caption: these are the layers,
+				     and this is the order they burn in. It stood under the drawing once
+				     and travelled to the end of the column with it, where the sticky
+				     footer lay over it (687-717 against a footer top of 671 at
+				     1366 x 768, 771-815 against 654 at 1024 x 768, `elementFromPoint`
+				     answering the footer's own button); then at the foot of the table,
+				     which held everywhere except the state with the most to say — with a
+				     rotary fitted the two extra sentences pushed it to 714-758 at
+				     1024 x 768, again under the footer at 654. Above the table it clears
+				     at every size in both states, because nothing that grows stands
+				     between it and the top of the column.
+
+				     It costs the table: at 1024 x 768 with a rotary the header row now
+				     sits where the first body row did. Prose under the footer you can
+				     still scroll to; a control under it cannot be pressed at all, so the
+				     button goes first. `tests/preflight-fold.test.ts` measures both.
+
+				     Deliberately *not* in the sticky row with the start button either:
+				     measured at 1440 px with three buttons in that row, "Start job 1:26"
+				     was clipped at the right edge of the panel — the primary action half
+				     off screen, which is the very thing the second usability round
+				     fixed. -->
+				{#if onCutPath}
+					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
+						{t('cutpath.show')}
+					</button>
 				{/if}
 				<table class="pf-layers">
 					<thead>
@@ -977,30 +1008,26 @@
 			     are read where they stand. `tests/preflight-fold.test.ts` measures it.
 
 			     The bed and sheet messages travel with it, because they belong under
-			     the shape they are about (gaps J5 and C2); at 1024 x 768 the tail of
-			     that block is the one thing left under the footer. -->
-			{#if !empty}
-				<!-- The button stays with the numbers, at the foot of the table: it
-				     reads as "and in what order do these layers burn". It travelled
-				     with the drawing once, to the end of the column, and the sticky
-				     footer then lay over it — measured on the seed of
-				     `tests/preflight-fold.test.ts`, 687 to 717 against a footer top of
-				     671 at 1366 x 768, and 771 to 815 against 654 at 1024 x 768, with
-				     `elementFromPoint` at its middle answering the footer's own button.
-				     Prose under the footer you can still scroll to; a control under it
-				     cannot be pressed at all. `tests/preflight-fold.test.ts` now holds
-				     `.pf-order` to the same edge as the table.
+			     the shape they are about (gaps J5 and C2), and the block's tail is what
+			     the footer lies over now. Measured on this build, as the panel opens:
+			     `.pf-beeld` runs 520-717 against a footer top of 671 at 1366 x 768 (46
+			     px under) and against 703 at 1280 x 800 (14 px under), and 580-814
+			     against 654 at 1024 x 768 (160 px under); at 1440 x 900 it is clear
+			     (520-717 against 729). The picture is itself the button that enlarges
+			     it, so at 1024 x 768 112 of its 186 px are covered and its middle
+			     answers `BUTTON.btn`.
 
-				     Deliberately *not* in the sticky row with the start button either:
-				     measured at 1440 px with three buttons in that row, "Start job 1:26"
-				     was clipped at the right edge of the panel — the primary action half
-				     off screen, which is the very thing the second usability round
-				     fixed. -->
-				{#if onCutPath}
-					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
-						{t('cutpath.show')}
-					</button>
-				{/if}
+			     That is a covering and not a hiding. `.preflight` is not the last block
+			     in `.panel-scroll`, so the sticky footer lets go at its foot: scrolled
+			     until the pre-flight's bottom edge meets the bottom of the scroller, the
+			     drawing and the button in it stand clear and answer for themselves at
+			     all four sizes and with a rotary fitted too — measured 597-794 (1440),
+			     465-662 (1366), 497-694 (1280) and 411-644 (1024), footer tops 803, 671,
+			     703 and 654. A bottom padding the height of the footer was tried here
+			     and changes none of those numbers: it only makes the scroller 69 px
+			     longer, because the footer is already out of the way by then.
+			     `tests/preflight-fold.test.ts` measures both halves. -->
+			{#if !empty}
 				<!-- The messages about bed and sheet belong to the drawing and so
 				     live in it, right under the shape they are about (gaps J5 and C2).
 				     They used to be here as two equally red cards in a row; that made
@@ -1756,8 +1783,8 @@
 	   that the pause button sits nowhere or twice. Both now read
 	   `screen.controlsInBar`; the class below is the consequence, not the rule. */
 	/* A way in, not a command: this opens a window, it does not do anything to the
-	   machine. So it is a quiet full-width row at the foot of the layer table rather
-	   than a third button competing with "Start job". */
+	   machine. So it is a quiet full-width row heading the layer table rather than a
+	   third button competing with "Start job". */
 	.pf-order {
 		display: block;
 		width: 100%;
