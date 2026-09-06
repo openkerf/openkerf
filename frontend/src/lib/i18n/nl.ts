@@ -861,16 +861,22 @@ export const nl: Catalogue = {
 	'panel.anchor.backTitle': 'Terug naar de stand van toen je deze selectie aanklikte',
 	'panel.inEffect': 'Zit in effect: {label}',
 	'panel.bridges': 'Bruggen',
-	'panel.bridges.on': 'Openingen in de snede laten',
+	'panel.bridges.on': 'Bruggen in de snede laten',
 	'panel.bridges.count': 'Aantal',
 	'panel.bridges.length': 'Lengte per brug',
-	'panel.bridges.off': 'Geen bruggen: deze vorm komt los zodra de snede rond is.',
-	'panel.bridges.explain': '{count} openingen van {length} mm, verdeeld over een omtrek van {total} mm. Er blijft {cut} mm te snijden over.',
-	'panel.bridges.explainTightest': 'Elk van deze {n} vormen krijgt {count} openingen van {length} mm. De kortste omtrek erbij is {total} mm lang; daar blijft {cut} mm te snijden over.',
+	'panel.bridges.off': {
+		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden — dus deze vorm komt los zodra de snede rond is.',
+		other: 'Geen bruggen — kleine openingen die het deel in de plaat houden — dus deze {n} vormen komen los zodra de snede rond is.'
+	},
+	'panel.bridges.explain': '{count} bruggen van {length} mm, verdeeld over een omtrek van {total} mm. Er blijft {cut} mm te snijden over.',
+	'panel.bridges.explainTightest': 'Elk van deze {n} vormen krijgt {count} bruggen van {length} mm. De kortste omtrek erbij is {total} mm lang; daar blijft {cut} mm te snijden over.',
 	'panel.bridges.places': 'Op {places} procent van de omtrek, elk {length} mm lang.',
 	'panel.bridges.notSupported': 'Deze vorm draagt geen bruggen. Ze werken op een rechthoek, een ellips, een polylijn of een pad — niet op een lijn, tekst of een afbeelding.',
 	'panel.bridges.mixed': 'Deze vormen hebben verschillende bruggen. Een aantal invullen geeft ze allemaal hetzelfde.',
-	'panel.bridges.notCut': 'Deze vorm zit niet in een snijlaag, dus de openingen veranderen nog niets. Ze doen alleen iets bij snijden.',
+	'panel.bridges.notCut': {
+		one: 'Deze vorm zit niet in een snijlaag, dus bruggen veranderen nog niets. Ze doen alleen iets bij snijden.',
+		other: 'Deze {n} vormen zitten niet in een snijlaag, dus bruggen veranderen nog niets. Ze doen alleen iets bij snijden.'
+	},
 	'panel.splittable': {
 		one: 'Deze vorm bestaat uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.',
 		other: 'Deze {n} vormen bestaan uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.'
@@ -1562,8 +1568,8 @@ export const nl: Catalogue = {
 		other: '{n} vormen hebben {count} bruggen van {length} mm gekregen; {skipped} zijn overgeslagen, want dat soort vorm draagt geen bruggen.'
 	},
 	'notice.bridges.cleared': {
-		one: 'De bruggen zijn weg bij één vorm; de snede sluit weer.',
-		other: 'De bruggen zijn weg bij {n} vormen; de snede sluit weer.'
+		one: 'De bruggen zijn weg bij één vorm.',
+		other: 'De bruggen zijn weg bij {n} vormen.'
 	},
 	'notice.fill.skipped': {
 		one: 'Eén overgeslagen: een lijn heeft geen binnenkant.',

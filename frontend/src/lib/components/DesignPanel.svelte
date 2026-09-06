@@ -4,6 +4,7 @@
 		LAYER_COLORS,
 		bridgeSummary,
 		elementName,
+		inCutLayer,
 		inkOn,
 		type DesignOperation,
 		type DesignStore
@@ -322,7 +323,7 @@
 		// And on `bridgeRevision` too, which the page bumps on a refusal. A refused write
 		// changes nothing on the shapes, so the summary is the same object and this would
 		// not run — measured: after typing 999 in Number and 9 in Length the two fields kept
-		// 999 and 9 while the sentence six pixels below still read "12 gaps of 2 mm", and
+		// 999 and 9 while the sentence six pixels below still read "12 bridges of 2 mm", and
 		// only clicking another shape and back brought the true numbers back.
 		void bridgeRevision;
 		bridgeFields = {
@@ -336,13 +337,21 @@
 	 *
 	 * Bridges only do something on a cut, and hiding the field on anything else would hide
 	 * the reason too. So the field stays and says where it is true — the same rule as the
-	 * angle: show the state, do not guess for the user.
+	 * angle: show the state, do not guess for the user. `inCutLayer` in
+	 * `$lib/design.svelte` is where that answer lives, and `bridge-summary.test.ts` pins
+	 * down what it says about a shape in no layer at all.
+	 *
+	 * Asked about the carriers only, because that is what the sentence beneath counts
+	 * (`bridges.shapes`). A text or a line carries no bridge; with a text in the cut layer
+	 * beside a rectangle in an engrave layer, asking about both answers "cut" while the
+	 * sentence is about the rectangle alone — the false claim all over again.
 	 */
-	let bridgesCut = $derived.by(() => {
-		const ids = new Set(chosen.flatMap((e) => e.operation_ids ?? []));
-		const own = design.operations.filter((op) => ids.has(op.id));
-		return own.length === 0 || own.some((op) => op.type === 'op cut');
-	});
+	let bridgesCut = $derived(
+		inCutLayer(
+			chosen.filter((element) => element.bridges),
+			design.operations
+		)
+	);
 
 	function applyBridges(fields: { count?: number; length_mm?: number }) {
 		if (!canEdit || !selectedIds.length) return;
@@ -1176,11 +1185,17 @@
 							)}
 						</p>
 					{/if}
-					{#if !bridgesCut}
-						<p class="tip">{t('panel.bridges.notCut')}</p>
-					{/if}
-				{:else}
-					<p class="hint">{t('panel.bridges.off')}</p>
+				{/if}
+				{#if bridges.carries && !bridgesCut}
+					<!-- Whether they are on or not. This used to hang inside the branch above,
+					     so a shape without bridges in an engrave layer got the sentence for a
+					     cut instead: measured on the seeded design at 1440 px, "No bridges:
+					     this shape comes loose the moment the cut closes" under a rectangle in
+					     Caption, under the QR in Engrave and under a shape in no layer at all —
+					     three readings, none of them true. -->
+					<p class="tip">{t('panel.bridges.notCut', { n: bridges.shapes })}</p>
+				{:else if bridges.carries && !bridges.has}
+					<p class="hint">{t('panel.bridges.off', { n: bridges.shapes })}</p>
 				{/if}
 				{#if bridgeNote}
 					<p class="tip" role="status">{bridgeNote}</p>

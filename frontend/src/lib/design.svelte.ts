@@ -496,6 +496,28 @@ export function bridgeSummary(elements: DesignElement[]): BridgeSummary {
 	};
 }
 
+/**
+ * Do the bridges on this selection do anything — is it in a layer that cuts?
+ *
+ * Bridges are gaps in a cut, so in an engrave or a raster layer, and on a shape in no
+ * layer at all, they change nothing that comes out of the machine. The panel keeps the
+ * fields and says that instead of hiding them: hiding the control would hide the reason
+ * with it, and then somebody looks for bridges on an engraving and concludes the app
+ * cannot do them.
+ *
+ * One shape of the selection in a cut layer is enough — then the gaps do something
+ * somewhere. A layer a shape names that is not in `operations` is answered `true`: the
+ * panel only says "not in a cut layer" about layers it has actually looked at, because a
+ * sentence about a layer nobody could read would be the false one all over again.
+ */
+export function inCutLayer(elements: DesignElement[], operations: DesignOperation[]): boolean {
+	const ids = new Set(elements.flatMap((element) => element.operation_ids ?? []));
+	if (!ids.size) return false;
+	const own = operations.filter((operation) => ids.has(operation.id));
+	if (!own.length) return true;
+	return own.some((operation) => operation.type === 'op cut');
+}
+
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);
 
 export function isDesignSignal(code: string) {

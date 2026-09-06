@@ -322,7 +322,7 @@ the machine. Every cutter therefore leaves a few **bridges** — small gaps in t
 hold the part in the sheet until you push it out by hand.
 
 ![A rectangle on the bed with four visible gaps in its outline, and the Edit panel on the
-right open on Bridges: the tick "Leave gaps in the cut", a Number of 4 and a Length per
+right open on Bridges: the tick "Leave bridges in the cut", a Number of 4 and a Length per
 bridge of 2 mm, with the read-back sentence underneath.](images/26-bridges.png)
 
 The quick way is the right-click menu: **Add bridges (4 × 2 mm)** — "Small gaps in the cut,
@@ -334,7 +334,7 @@ part comes loose". The keyboard shortcut is in [Reference](reference.md#bridges)
 The two numbers are in the panel on the right, under **Bridges**, because they are values
 you set and read back:
 
-- the tick **Leave gaps in the cut**;
+- the tick **Leave bridges in the cut**;
 - **Number** — how many, spread evenly along the contour. They stay spread when you resize
   the shape.
 - **Length per bridge** — in millimetres.
@@ -342,8 +342,8 @@ you set and read back:
 The two fields are independent: typing a length leaves the number as it was, and the other
 way round.
 
-Underneath stands what you have actually asked for, in millimetres of contour: "4 gaps of 2
-mm, spread over a contour of 200 mm. What is left to cut is 192 mm." With several shapes
+Underneath stands what you have actually asked for, in millimetres of contour: "4 bridges of
+2 mm, spread over a contour of 200 mm. What is left to cut is 192 mm." With several shapes
 selected that are not all the same size, the sentence quotes the tightest of them, because
 that is the one that runs out of contour first. And when the bridges sit at places of their
 own rather than evenly: "At 10, 40 and 70 percent along the contour, each 2 mm long."
@@ -359,9 +359,12 @@ notches in its outline is not what happens.
   "This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path
   — not on a line, text or an image." The menu row is greyed with the short version, "A line,
   text or an image carries no bridges".
-- Bridges only mean something to a cut. In an engrave or raster layer the panel keeps the
-  fields but adds: "This shape is not in a cut layer, so the gaps change nothing yet. They
-  only matter to a cut."
+- Bridges only mean something to a cut. In an engrave or raster layer — and on a shape in
+  no layer at all — the panel keeps the fields and says so instead of promising a cut:
+  "This shape is not in a cut layer, so bridges change nothing yet. They only matter to a
+  cut." That sentence stands whether the tick is on or off; with it off in a cut layer the
+  line reads "No bridges — small gaps that hold the part in the sheet — so this shape comes
+  loose the moment the cut closes."
 - Too much bridge for the contour is refused, with the arithmetic in the sentence. Measured
   on a 60 × 40 mm rectangle, four bridges of 30 mm came back as "4 bridges of 30 mm take 120
   mm of the contour of meerk40t:7, and that contour is 200.0 mm long; at most half of it may

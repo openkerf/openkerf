@@ -894,16 +894,24 @@ export const en = {
 	'panel.anchor.backTitle': 'Back to how it was when you clicked this selection',
 	'panel.inEffect': 'Part of effect: {label}',
 	'panel.bridges': 'Bridges',
-	'panel.bridges.on': 'Leave gaps in the cut',
+	'panel.bridges.on': 'Leave bridges in the cut',
 	'panel.bridges.count': 'Number',
 	'panel.bridges.length': 'Length per bridge',
-	'panel.bridges.off': 'No bridges: this shape comes loose the moment the cut closes.',
-	'panel.bridges.explain': '{count} gaps of {length} mm, spread over a contour of {total} mm. What is left to cut is {cut} mm.',
-	'panel.bridges.explainTightest': 'Each of these {n} shapes gets {count} gaps of {length} mm. The tightest contour among them is {total} mm long, which leaves {cut} mm to cut there.',
+	// One noun for the whole block — bridges, not gaps — and this is the sentence that says
+	// once what one is, because it is the one you read before you have any.
+	'panel.bridges.off': {
+		one: 'No bridges — small gaps that hold the part in the sheet — so this shape comes loose the moment the cut closes.',
+		other: 'No bridges — small gaps that hold the part in the sheet — so these {n} shapes come loose the moment the cut closes.'
+	},
+	'panel.bridges.explain': '{count} bridges of {length} mm, spread over a contour of {total} mm. What is left to cut is {cut} mm.',
+	'panel.bridges.explainTightest': 'Each of these {n} shapes gets {count} bridges of {length} mm. The tightest contour among them is {total} mm long, which leaves {cut} mm to cut there.',
 	'panel.bridges.places': 'At {places} percent along the contour, each {length} mm long.',
 	'panel.bridges.notSupported': 'This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path — not on a line, text or an image.',
 	'panel.bridges.mixed': 'These shapes have different bridges. Setting a number here gives them all the same.',
-	'panel.bridges.notCut': 'This shape is not in a cut layer, so the gaps change nothing yet. They only matter to a cut.',
+	'panel.bridges.notCut': {
+		one: 'This shape is not in a cut layer, so bridges change nothing yet. They only matter to a cut.',
+		other: 'These {n} shapes are not in a cut layer, so bridges change nothing yet. They only matter to a cut.'
+	},
 	'panel.splittable': {
 		one: 'This shape consists of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.',
 		other: 'These {n} shapes consist of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.'
@@ -1626,8 +1634,8 @@ export const en = {
 		other: '{n} shapes got {count} bridges of {length} mm; {skipped} were skipped, because their type carries no bridges.'
 	},
 	'notice.bridges.cleared': {
-		one: 'The bridges are gone from one shape; the cut closes again.',
-		other: 'The bridges are gone from {n} shapes; the cut closes again.'
+		one: 'The bridges are gone from one shape.',
+		other: 'The bridges are gone from {n} shapes.'
 	},
 	'notice.fill.skipped': {
 		one: 'One was skipped: a line has no inside.',
