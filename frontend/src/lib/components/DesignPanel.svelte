@@ -173,21 +173,21 @@
 	 * back. What both halves of the grid do share is the part that mattered: no field
 	 * keeps a number the shape does not have.
 	 */
-	function commitPosition(axis: 'x' | 'y', raw: string, field?: HTMLInputElement) {
+	function commitPosition(axis: 'x' | 'y', raw: string) {
 		if (!live) return;
-		const value = raw.trim() === '' ? Number.NaN : Number(raw);
+		const value = raw.trim() === '' ? Number.NaN : Number(raw.replace(',', '.'));
 		if (!Number.isFinite(value)) {
-			if (field) field.value = live[axis].toFixed(1);
+			sizeFields[axis] = live[axis].toFixed(1);
 			return;
 		}
 		onSetPosition?.(axis === 'x' ? value : live.x, axis === 'y' ? value : live.y);
 	}
 
-	function commitSize(axis: 'width' | 'height', raw: string, field?: HTMLInputElement) {
-		const value = Number(raw);
+	function commitSize(axis: 'width' | 'height', raw: string) {
+		const value = Number(raw.replace(',', '.'));
 		if (!live) return;
 		if (!Number.isFinite(value) || value <= 0) {
-			if (field) field.value = live[axis].toFixed(1);
+			sizeFields[axis] = live[axis].toFixed(1);
 			sizeNote = t(axis === 'width' ? 'panel.size.widthPositive' : 'panel.size.heightPositive');
 			return;
 		}
@@ -202,6 +202,26 @@
 			axis === 'height' ? value : live.height
 		);
 	}
+
+	/**
+	 * The four measures as typed, so a half-typed "1." does not jump away.
+	 *
+	 * They follow the shape and not the typing: whenever the selection moves, is dragged
+	 * or is resized, the boxes show what is really on the bed again. A refusal does not
+	 * change the shape and so does not run this — `commitSize` and `commitPosition` put
+	 * the shape's own measure back themselves.
+	 */
+	let sizeFields = $state({ width: '', height: '', x: '', y: '' });
+	$effect(() => {
+		const now = live;
+		if (!now) return;
+		sizeFields = {
+			width: now.width.toFixed(1),
+			height: now.height.toFixed(1),
+			x: now.x.toFixed(1),
+			y: now.y.toFixed(1)
+		};
+	});
 	let chosen = $derived(design.selectedElements);
 
 	/** The layers the selection is in, with their colour and burn number. */
@@ -378,6 +398,14 @@
 			mirrored: poses.some((p) => p.mirrored),
 			mixed
 		};
+	});
+
+	/** The angle as it stands in its box: whole where it is whole, one decimal else. */
+	let angleField = $state('');
+	$effect(() => {
+		const angle = pose.angle;
+		angleField =
+			angle === null ? '' : Number.isInteger(angle) ? String(angle) : angle.toFixed(1);
 	});
 
 	/**
@@ -926,38 +954,42 @@
 					>
 				</div>
 			{/if}
-			<!-- Sizes, position and angle as one grid of three lines: two columns of
-			     numbers with the unit once on the right. They used to be freely
-			     wrapping pills beside each other, so X ended up on the first line and Y
-			     on its own on the second — and then two pairs no longer read as two
-			     pairs. -->
+			<!-- Sizes, position and angle as one column of one kind of field. They used to
+			     be two columns of bare `<input type=number>` — 27.9 px and 11 px mono, no
+			     − and no + — with the unit once on the right, above a row of five grid
+			     columns holding one angle field and two buttons; and twelve lines lower,
+			     in the same card, the bridge fields stood as 36.8 px steppers in 13 px.
+			     Three kinds of number in one card, and the angle clipped to "∠137." in
+			     23 px of a 221 px row while two of its columns were empty. One component
+			     now, in its narrow form: the letter beside the box, the unit behind the
+			     number, the same two steps every other number in the app has.
+			     See DESIGN-SYSTEM, "Number input is a stepper everywhere". -->
 			<!-- "Drag the box to move" is about these numbers and about the frame on the
 			     canvas, so it hangs on them as a title — the way the Layers tab hangs
 			     `panel.layer.dragTitle` on the rows it is about. As a paragraph it stood
 			     in every selected state at every width: 17 words the reader had already
 			     read. Not under a lock: dragging is exactly what a lock refuses, and the
 			     note above already says what can and cannot be done. -->
-			<div class="figures mono" title={canEdit && !lockedHere ? t('panel.dragHint') : undefined}>
+			<div class="figures" title={canEdit && !lockedHere ? t('panel.dragHint') : undefined}>
 				<!-- The one-letter labels are translated too: "B" is Breedte in Dutch and
-				     means nothing in English, where the same column reads "W". -->
+				     means nothing in English, where the same column reads "W". The whole
+				     word goes to the screen reader, which cannot see the column. -->
 				{#each [
 					[t('panel.widthShort'), 'width', t('panel.width')],
 					[t('panel.heightShort'), 'height', t('panel.height')]
 				] as [label, key, name] (key)}
-					<label class="f">
-						<span>{label}</span>
-						<input
-							type="number"
-							step="0.1"
-							min="0.1"
-							aria-label={t('panel.inMillimetres', { what: name })}
-							disabled={Boolean(sizeOff)}
-							title={sizeOff}
-							value={(live ?? size)[key as 'width' | 'height'].toFixed(1)}
-							onchange={(e) =>
-								commitSize(key as 'width' | 'height', e.currentTarget.value, e.currentTarget)}
-						/>
-					</label>
+					<NumberField
+						compact
+						{label}
+						ariaLabel={t('panel.inMillimetres', { what: name })}
+						unit="mm"
+						bind:value={sizeFields[key as 'width' | 'height']}
+						step={0.1}
+						min={0.1}
+						disabled={Boolean(sizeOff)}
+						why={sizeOff}
+						onchange={(v) => commitSize(key as 'width' | 'height', v)}
+					/>
 				{/each}
 				<button
 					class="link"
@@ -977,81 +1009,52 @@
 					</svg>
 				</button>
 				{#each [['X', 'x', t('panel.positionX')], ['Y', 'y', t('panel.positionY')]] as [label, key, name] (key)}
-					<label class="f">
-						<span>{label}</span>
-						<input
-							type="number"
-							step="0.1"
-							aria-label={t('panel.inMillimetres', { what: name })}
-							disabled={Boolean(sizeOff)}
-							title={sizeOff}
-							value={(live ?? size)[key as 'x' | 'y'].toFixed(1)}
-							onchange={(e) =>
-								commitPosition(key as 'x' | 'y', e.currentTarget.value, e.currentTarget)}
-						/>
-					</label>
+					<NumberField
+						compact
+						{label}
+						ariaLabel={t('panel.inMillimetres', { what: name })}
+						unit="mm"
+						bind:value={sizeFields[key as 'x' | 'y']}
+						step={0.1}
+						disabled={Boolean(sizeOff)}
+						why={sizeOff}
+						onchange={(v) => commitPosition(key as 'x' | 'y', v)}
+					/>
 				{/each}
-				<span class="unit">mm</span>
+				{#if canEdit}
+					<!-- The angle was nowhere. You could rotate by 1° and by 90° but not see
+					     where you were, so every click was a guess on top of the previous
+					     one. Now it is a value from the engine: typeable, and its own two
+					     steps move it instead of stacking something up. They used to stand
+					     loose beside the field as −1 and +1; that is what a stepper is, so
+					     the field carries them. Rotating by 90° is an operation and lives
+					     in the right-click menu under "Rotate" (with , and . as shortcuts).
+					     The steps stay live where the field is off: shapes at different
+					     angles can each be turned a degree, which is not the same as
+					     writing one angle over all of them. -->
+					<NumberField
+						compact
+						label="∠"
+						ariaLabel={t('panel.angle')}
+						unit="°"
+						bind:value={angleField}
+						step={1}
+						disabled={Boolean(sizeOff) || edits.busy || pose.mixed || pose.angle === null}
+						why={sizeOff ?? (pose.mixed ? t('panel.angle.mixed') : t('reason.busy'))}
+						note={t('panel.angle.title')}
+						placeholder={pose.mixed ? '—' : ''}
+						stepsDisabled={Boolean(sizeOff) || edits.busy}
+						onstep={(direction) => onRotate?.(direction)}
+						onchange={(v) => setAngle(v)}
+					/>
+				{/if}
 			</div>
 			{#if sizeNote}
 				<p class="tip refused" role="status">{sizeNote}</p>
 			{/if}
 
-			{#if canEdit}
-				<!-- The angle was nowhere. You could rotate by 1° and by 90° but not see
-				     where you were, so every click was a guess on top of the previous
-				     one. Now the angle is a value from the engine: typeable, and the
-				     steps move it instead of stacking something up. -->
-				<div class="figures mono rotrow">
-					<label class="f angle" class:mixed={pose.mixed}>
-						<span aria-hidden="true">∠</span>
-						<input
-							type="number"
-							step="1"
-							inputmode="decimal"
-							aria-label={t('panel.angle')}
-							title={sizeOff ?? (pose.mixed ? t('panel.angle.mixed') : t('panel.angle.title'))}
-							disabled={Boolean(sizeOff) || edits.busy || pose.mixed || pose.angle === null}
-							value={pose.angle === null
-								? ''
-								: Number.isInteger(pose.angle)
-									? pose.angle
-									: pose.angle.toFixed(1)}
-							placeholder={pose.mixed ? '—' : ''}
-							onchange={(e) => setAngle(e.currentTarget.value)}
-						/>
-						<!-- The degree sign belongs *in* the field. As a column of its own it
-						     sat three columns away on a tablet, apart from the number it
-						     belongs to. -->
-						<span class="suffix" aria-hidden="true">°</span>
-					</label>
-					<!-- Only the one-degree steps are left: that is the spinner belonging to
-					     this field. Rotating by 90° is an operation and lives in the
-					     right-click menu under "Rotate" (with , and . as shortcuts). -->
-					{#each [[-1, ''], [1, '']] as [angle, icon] (angle)}
-						<button
-							class="icon step"
-							disabled={Boolean(sizeOff) || edits.busy}
-							title={sizeOff ??
-								t('panel.rotate.step', {
-									angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
-								})}
-							aria-label={t('panel.rotate.stepAria', {
-								angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
-							})}
-							onclick={() => onRotate?.(Number(angle))}
-						>
-							{#if icon}
-								<ArrangeIcon name={String(icon)} size={18} />
-							{:else}
-								<span class="stepnum">{Number(angle) > 0 ? '+' : '−'}1</span>
-							{/if}
-						</button>
-					{/each}
-				</div>
-				{#if pose.mixed}
-					<p class="tip">{t('panel.angle.mixedNote')}</p>
-				{/if}
+			{#if canEdit && pose.mixed}
+				<p class="tip">{t('panel.angle.mixedNote')}</p>
 			{/if}
 
 			{#if selected.text}
@@ -1335,18 +1338,20 @@
 						<!-- Vectorise, crop and undo the crop used to be here. They are
 						     actions, so they live in the image's context menu. What stays is
 						     DPI: that is a property of this image and belongs with the rest of
-						     the recipe. -->
-						<label class="dpi mono">
-							DPI
-							<input
-								type="number"
-								min="10"
-								max="2000"
-								step="10"
-								value={selected.image.dpi ?? 96}
-								onchange={(e) => onImageDpi?.(Number(e.currentTarget.value))}
-							/>
-						</label>
+						     the recipe. In the same field as every other number in this card —
+						     it stood here as a bare box of 4.5em with its label to the left,
+						     the third kind of number field in one panel. -->
+						<NumberField
+							compact
+							label="DPI"
+							value={String(selected.image.dpi ?? 96)}
+							step={10}
+							min={10}
+							max={2000}
+							disabled={!canEdit || edits.busy}
+							why={!canEdit ? t('reason.needsToken') : t('reason.busy')}
+							onchange={(v) => onImageDpi?.(Number(v))}
+						/>
 					</div>
 				</div>
 				</details>
@@ -2771,17 +2776,7 @@
 		color: var(--text-1);
 	}
 	.fx-num { min-width: 3em; text-align: right; }
-	.fx-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
-	.dpi { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--text-2); }
-	.dpi input {
-		width: 4.5em;
-		font: inherit;
-		padding: 2px 4px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
+	.fx-actions { display: grid; gap: 4px; margin-top: 4px; }
 	.stray {
 		border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line));
 		border-radius: var(--radius-card);
@@ -3083,74 +3078,21 @@
 		margin-left: auto;
 	}
 
-	/* Two columns of numbers with the unit once on the right. A fixed grid rather than
-	   wrapping pills: only that way is W above X and H above Y, and that is what makes the
-	   four fields read as two pairs. */
+	/* One column of one kind of field, with the chain bracketing the two it links.
+	   Two columns of 86 px cells was what forced the bare boxes: a stepper is two 38 px
+	   buttons plus a number, and "1000.0" does not fit in the 30 px that leaves. So the
+	   measures stand under each other — W above H above X above Y above the angle — and
+	   the chain sits beside the pair it holds together, where it says what it does. */
 	.figures {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-		align-items: end;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
 		gap: var(--space-1) var(--space-2);
 	}
-	.figures .f {
-		display: flex;
-		align-items: stretch;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		overflow: hidden;
-		min-width: 0;
-	}
-	.figures .f:focus-within {
-		border-color: var(--accent);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
-	}
-	/* The label sits *in* the field and not above it: a separate label row above four
-	   fields costs two lines of height for two characters of information. */
-	.figures .f > span {
-		display: grid;
-		place-items: center;
-		padding: 0 var(--space-1) 0 var(--space-2);
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		flex: none;
-	}
-	.figures input {
-		font: inherit;
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		font-variant-numeric: tabular-nums;
-		/* min-width: 0 and flex: 1 — without that a number input keeps its own minimum
-		   width and "145.0" was truncated to "145.". That
-		   stond zo op de tablet in beeld. */
-		flex: 1;
-		width: 100%;
-		min-width: 0;
-		text-align: right;
-		padding: var(--space-1h) var(--space-2) var(--space-1h) 0;
-		border: 0;
-		background: transparent;
-		color: var(--text-1);
-		outline: none;
-	}
-	.figures input::-webkit-outer-spin-button,
-	.figures input::-webkit-inner-spin-button {
-		appearance: none;
-		margin: 0;
-	}
-	.figures input[type='number'] {
-		appearance: textfield;
-		-moz-appearance: textfield;
-	}
-	.figures input:disabled { opacity: 0.6; }
-	.figures .unit {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		padding-bottom: var(--space-1h);
-		text-align: center;
-		min-width: 1.6em;
-	}
+	.figures > :global(.field) { grid-column: 1; }
 	.figures .link {
+		grid-column: 2;
+		grid-row: 1 / span 2;
 		display: grid;
 		place-items: center;
 		width: 100%;
@@ -3167,9 +3109,8 @@
 	}
 	.figures .link:hover:not(:disabled) { background: var(--surface-2); }
 	/* Off is off, and it has to look it. The chain kept its teal pressed background and
-	   opacity 1 while the five number fields beside it dropped to 0.6 and the rotate
-	   steps to 0.4 — six controls switched off by one lock, one of them still looking
-	   live. Same treatment as `.icon:disabled` below. */
+	   opacity 1 while the number fields beside it dropped — controls switched off by one
+	   lock, one of them still looking live. Same treatment as `.icon:disabled` below. */
 	.figures .link:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
@@ -3177,56 +3118,6 @@
 		border-color: transparent;
 		background: none;
 	}
-
-	/* Angle plus four steps on one row. The angle field deliberately gets more room than
-	   a button: "337.5" has to fit in it, and a truncated number is worse than no number —
-	   then you believe what is there. */
-	.rotrow {
-		grid-template-columns: minmax(4.6em, 1.6fr) repeat(4, minmax(0, 1fr));
-		align-items: center;
-	}
-	.rotrow .f.angle > span:first-child {
-		padding-right: 0;
-		font-size: var(--text-sm);
-	}
-	.rotrow .f.angle input { padding-right: 0; }
-	.figures .suffix {
-		display: grid;
-		place-items: center;
-		flex: none;
-		padding: 0 var(--space-2) 0 2px;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.figures .f.mixed input { color: var(--text-2); }
-	.icon.step {
-		width: 100%;
-		height: 30px;
-	}
-	.stepnum {
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		font-variant-numeric: tabular-nums;
-	}
-
-	/* The icon rows. Four per row, because four of 44 px fit with spacing in a 279 px
-	   panel and six do not — and four also makes the layout coincide with the meaning: row
-	   one horizontal, row two vertical. */
-	/* Buttons without a border for the history and the rotation steps: those belong with
-	   the field beside them, not with the grid below them. */
-	.icon {
-		display: grid;
-		place-items: center;
-		width: 30px;
-		height: 30px;
-		border-radius: var(--radius-field);
-		color: var(--text-2);
-	}
-	.icon:hover:not(:disabled) {
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
-	.icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
 	/* The anchor: where you came from, and the way back. Neutral in colour — this is not
 	   a warning but a note. */
@@ -3306,35 +3197,18 @@
 	.fold > :not(summary) { margin-top: var(--space-2); }
 
 	/* Beside the machine with a finger. This block is deliberately right at the bottom:
-	   the rules above have the same specificity, so whoever comes first loses — and when
-	   this block was halfway up, the rotation row kept its six desktop columns and the card
-	   ran out of the panel on the right. */
+	   the rules above have the same specificity, so whoever comes first loses. */
 	@media (max-width: 1199px), (pointer: coarse) {
 		/* Thick fingers: every target in the selection card makes 44 px, with at least
 		   12 px between them. Since the icon grids moved to the action bar and the context
-		   menu, this is only about the fields and their steps. */
-		.icon,
-		.icon.step,
+		   menu and the rotation steps became the angle field's own, this is only about the
+		   chain and the folds — the number fields bring their 44 px with them, from the one
+		   component they are all made of. */
 		.figures .link {
 			height: 44px;
 			min-height: 44px;
 		}
-		.icon { width: 44px; }
 		.figures { gap: var(--space-2) var(--space-3); }
-		.figures input {
-			/* 44 and not 43: the field just missed it because the wrapper's border eats two
-			   pixels. */
-			min-height: 44px;
-			padding-top: var(--space-3);
-			padding-bottom: var(--space-3);
-		}
-		.rotrow {
-			/* The angle field and four 44 px buttons do not fit beside each other on a
-			   tablet. So the field gets the full width; the steps keep their full touch area
-			   on the row below. */
-			grid-template-columns: repeat(4, minmax(0, 1fr));
-		}
-		.rotrow .f.angle { grid-column: 1 / -1; }
 		.fold summary { min-height: 44px; }
 		.anchor-back { min-height: 44px; }
 	}

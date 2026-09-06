@@ -153,7 +153,7 @@ it afterwards and go on showing what you typed over a shape that was still its o
 ![A locked rectangle selected on the bed: the dashed selection frame with its measure
 underneath, no corner handles and no rotation stem, and in the panel on the right the heading
 LOCKED with the sentence about what a lock protects and an Unlock button, above a greyed-out
-row of W, H, X, Y and the angle.](images/31-lock.png)
+column of W, H, X, Y and the angle, each with its own − and +.](images/31-lock.png)
 
 That line is the whole rule, and the second half is deliberate. A lock protects **geometry
 and existence** — moving, scaling, rotating, mirroring, aligning, combining, offsetting,

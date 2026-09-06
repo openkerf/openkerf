@@ -861,8 +861,6 @@ export const nl: Catalogue = {
 	'panel.angle.mixed': 'Deze vormen staan onder verschillende hoeken — draai ze met de stapjes',
 	'panel.angle.title': 'De huidige hoek. Tik een getal om er precies naartoe te draaien.',
 	'panel.angle.mixedNote': 'Deze vormen staan onder verschillende hoeken. De stapjes werken; een hoek intikken zou ze allemaal gelijk zetten en dat is zelden wat je bedoelt.',
-	'panel.rotate.step': '{angle}° draaien',
-	'panel.rotate.stepAria': '{angle} graden draaien',
 	'panel.anchor.since': 'Sinds je hem pakte: {what}',
 	'panel.anchor.mirrored': 'Gespiegeld ten opzichte van het origineel',
 	'panel.anchor.back': 'Terugzetten',

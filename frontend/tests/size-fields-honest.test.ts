@@ -94,13 +94,13 @@ async function aRectangle() {
 	// The selection really happened before anything is read off the panel: a card over
 	// the canvas or a slow first paint used to look exactly like the fields being absent.
 	await page.waitForSelector('.selected', { timeout: 20000 });
-	await page.waitForSelector('.selected .figures input[type=number]', { timeout: 20000 });
+	await page.waitForSelector('.selected .figures .field input', { timeout: 20000 });
 	await page.waitForTimeout(900);
 }
 
 /** The five number fields of the selection card, in the order they stand. */
 const fields = () =>
-	page.$$eval('.selected .figures input[type=number]', (nodes) =>
+	page.$$eval('.selected .figures .field input', (nodes) =>
 		nodes.map((node) => {
 			const input = node as HTMLInputElement;
 			return {
@@ -207,10 +207,11 @@ test('an X that is not a number puts the shape\u2019s own position back', async 
 	if (!reachable) return noServer(t, BASE);
 	await aRectangle();
 
-	// A browser hands `<input type=number>` an empty string for anything it cannot read,
-	// and `Number('')` is 0 — measured on the baseline, emptying X moved the rectangle
-	// from 15.0 to 0.0 mm. X and Y take any number, so there is no rule to say out loud
-	// here; what they owe is the same as W and H: never a number the shape does not have.
+	// An empty box is anything the field cannot read — the number lives in a text input
+	// with `inputmode="decimal"`, and `Number('')` is 0. Measured on the baseline,
+	// emptying X moved the rectangle from 15.0 to 0.0 mm. X and Y take any number, so
+	// there is no rule to say out loud here; what they owe is the same as W and H: never
+	// a number the shape does not have.
 	const x = page.locator('.selected .figures input[aria-label*="X"]');
 	await x.fill('');
 	await x.press('Enter');

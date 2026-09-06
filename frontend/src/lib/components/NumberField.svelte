@@ -17,6 +17,12 @@
 		unit = null,
 		disabled = false,
 		why = undefined,
+		compact = false,
+		ariaLabel = undefined,
+		placeholder = undefined,
+		note = undefined,
+		stepsDisabled = undefined,
+		onstep = undefined,
 		onchange
 	}: {
 		label: string;
@@ -30,10 +36,41 @@
 		/** Why it is off. A stepper that greys without a word is the same riddle as a
 		 *  grey button, and there is more of it here: three controls go dead at once. */
 		why?: string;
+		/**
+		 * The narrow form: the label stands beside the field instead of above it, and the
+		 * unit moves into the box behind the number.
+		 *
+		 * For a label that is one letter — W, H, X, Y, ∠ — a label row of its own costs a
+		 * whole line for two characters. Everything else stays the same as the roomy form:
+		 * one type size, one field height, the same two buttons. That is the point: the
+		 * card used to hold three unrelated number fields, and now it holds one component
+		 * whose label sits where the label's own length puts it.
+		 */
+		compact?: boolean;
+		/** The name a screen reader hears where the visible label is a letter. */
+		ariaLabel?: string;
+		/** What stands in the box when there is no one value to show. */
+		placeholder?: string;
+		/** The title while the field is live; `why` takes over as soon as it is off. */
+		note?: string;
+		/** The buttons on while the field itself is off — the angle of a selection whose
+		 *  shapes disagree can be stepped, but not typed. Defaults to `disabled`. */
+		stepsDisabled?: boolean;
+		/**
+		 * The step, handed to the caller instead of applied here.
+		 *
+		 * For a value that is not simply this field's own number: stepping the angle of
+		 * several shapes turns each of them by a degree, which is not the same as writing
+		 * one angle over all of them.
+		 */
+		onstep?: (direction: number) => void;
 		/** For fields that have to go straight to the machine rather than to a form that
 		 *  is saved later. Does not fire while typing. */
 		onchange?: (value: string) => void;
 	} = $props();
+
+	let stepsOff = $derived(stepsDisabled ?? disabled);
+	let named = $derived(ariaLabel ?? label);
 
 	// The label has to hang off the input explicitly. A <label> that wraps its controls
 	// picks the *first* labelable descendant — and here that is the − button, not the
@@ -43,6 +80,10 @@
 	const id = $props.id();
 
 	function set(direction: number) {
+		if (onstep) {
+			onstep(direction);
+			return;
+		}
 		const now = Number(value);
 		const basis = Number.isFinite(now) ? now : 0;
 		let fresh = basis + direction * step;
@@ -81,14 +122,17 @@
 	}
 </script>
 
-<div class="field" title={disabled ? why : undefined}>
-	<label class="name" for={id}>{label}{#if unit}{' '}<span class="eenheid">({unit})</span>{/if}</label>
+<div class="field" class:compact class:off={disabled} title={disabled ? why : note}>
+	<label class="name" for={id}
+		>{label}{#if unit && !compact}{' '}<span class="eenheid">({unit})</span>{/if}</label
+	>
 	<span class="stepper">
 		<button
 			type="button"
 			tabindex="-1"
-			{disabled}
-			aria-label={t('field.decrease', { label })}
+			disabled={stepsOff}
+			title={stepsOff ? why : undefined}
+			aria-label={t('field.decrease', { label: named })}
 			onclick={() => set(-1)}>−</button
 		>
 		<input
@@ -98,15 +142,21 @@
 			inputmode="decimal"
 			bind:value
 			{disabled}
-			title={disabled ? why : undefined}
+			{placeholder}
+			aria-label={ariaLabel}
+			title={disabled ? why : note}
 			onkeydown={onKey}
 			onchange={() => onchange?.(value)}
 		/>
+		{#if unit && compact}
+			<span class="suffix" aria-hidden="true">{unit}</span>
+		{/if}
 		<button
 			type="button"
 			tabindex="-1"
-			{disabled}
-			aria-label={t('field.increase', { label })}
+			disabled={stepsOff}
+			title={stepsOff ? why : undefined}
+			aria-label={t('field.increase', { label: named })}
 			onclick={() => set(1)}>+</button
 		>
 	</span>
@@ -148,4 +198,38 @@
 	.stepper button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
 	.stepper button:hover:not(:disabled) { background: var(--surface-1); }
 	.stepper button:disabled, .stepper input:disabled { opacity: 0.5; }
+
+	/* ── The narrow form ──────────────────────────────────────────────────────
+	   Label beside the field, unit behind the number, and nothing else different:
+	   same type size, same padding, same buttons, so a card that holds both forms
+	   still holds one kind of number field. */
+	.field.compact {
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.field.compact .name {
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		text-align: center;
+		min-width: 1.1em;
+	}
+	.field.compact.off .name { opacity: 0.5; }
+	/* The unit belongs *in* the box. As a column of its own beside the grid it stood
+	   three columns from the number it belongs to, and it stood in four forms at once —
+	   an "mm" column, a "°" inside the box, a "(mm)" in a label and a DPI with none. */
+	.stepper .suffix {
+		display: grid;
+		place-items: center;
+		flex: none;
+		padding: 0 var(--space-2) 0 2px;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+		border: 1px solid var(--line);
+		border-left: 0;
+		border-right: 0;
+		background: var(--surface-2);
+	}
+	.field.off .suffix { opacity: 0.5; }
+	.field.compact .stepper input { padding-right: 2px; }
 </style>

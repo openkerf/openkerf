@@ -900,8 +900,6 @@ export const en = {
 	'panel.angle.mixed': 'These shapes sit at different angles — turn them with the steps',
 	'panel.angle.title': 'The current angle. Type a number to turn exactly to it.',
 	'panel.angle.mixedNote': 'These shapes sit at different angles. The steps work; typing an angle would set them all the same, and that is rarely what you mean.',
-	'panel.rotate.step': 'Rotate {angle}°',
-	'panel.rotate.stepAria': 'Rotate {angle} degrees',
 	'panel.anchor.since': 'Since you grabbed it: {what}',
 	'panel.anchor.mirrored': 'Mirrored with respect to the original',
 	'panel.anchor.back': 'Put back',
