@@ -854,8 +854,11 @@ import { SeriesStore } from '$lib/series.svelte';
 				// and the right-click menu comes up empty.
 				const here = new Set(design.elements.map((element) => element.id));
 				const ids = wanted.split(',').filter((id) => here.has(id));
-				design.select(ids[0] ?? null);
-				ids.slice(1).forEach((id) => design.toggle(id));
+				// selectMany, not select() followed by toggle(): the first call expands a
+				// group member to the whole group, so the toggle then found every member
+				// already inside and took them all away again. Measured on a group of
+				// two: two shapes selected before the reload, none after.
+				design.selectMany(ids);
 			}
 		});
 		// Only hook up after mount: replaceState before the router is ready breaks the
