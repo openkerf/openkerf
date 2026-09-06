@@ -1049,7 +1049,6 @@
 							// field is empty and shows "—", and the button turns each shape by a
 							// degree. The two loose buttons that stood here said so, and the
 							// field says it in their words.
-							// The words the two removed buttons carried, character for character.
 							const angle = direction > 0 ? '+1' : '-1';
 							return {
 								title: t('panel.rotate.step', { angle }),
