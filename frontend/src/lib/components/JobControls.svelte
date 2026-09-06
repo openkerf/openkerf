@@ -129,7 +129,7 @@
 		material_name?: string | null;
 		thickness_mm?: number | null;
 		warnings?: Warning[];
-		/** Does this engine actually execute the layer? See `gridOff`. */
+		/** Does this engine actually execute the layer? See `rasterOff`. */
 		burns?: boolean;
 	};
 	type Bounds = {
@@ -178,7 +178,7 @@
 		sheet?: SheetInfo | null;
 		layers?: Layer[];
 		bounds?: Bounds | null;
-		engine?: { grid: boolean } | null;
+		engine?: { raster: boolean } | null;
 		/** Machine-wide, and it changes what burns — so the pre-flight says it out loud
 		 *  rather than leaving it on a settings page nobody opens twice. */
 		rotary?: RotaryState | null;
@@ -241,12 +241,17 @@
 	/**
 	 * Does this engine burn raster layers?
 	 *
-	 * No, headless: the converter from grid area to laser lines sits in the wxPython
+	 * No, headless: the converter from raster area to laser lines sits in the wxPython
 	 * GUI. During planning the layer throws its own shapes away and produces no
 	 * cutcode. That must not be a surprise *after* burning, and the time estimate must
 	 * not promise seconds for it.
+	 *
+	 * The key is `raster` — the name `engine_report` (drawing.py) and the test-grid
+	 * preview both write. It was read here as `grid`, which the API never sends, so this
+	 * block could not appear on any server; `tests/no-raster.test.ts` holds the two names
+	 * together now.
 	 */
-	let gridOff = $derived(overview?.engine?.grid === false);
+	let rasterOff = $derived(overview?.engine?.raster === false);
 	/**
 	 * The rotary, from the pre-flight's own answer.
 	 *
@@ -787,7 +792,7 @@
 				     of the machine. The same words as the block in the test-grid
 				     wizard: whoever read them there recognises them here — and the
 				     other way round. -->
-				{#if gridOff && blindLayers.length}
+				{#if rasterOff && blindLayers.length}
 					<p class="pf-no-raster" role="alert">
 						<strong>{t('job.noRaster.title')}</strong>
 						{blindLayers.length === 1
