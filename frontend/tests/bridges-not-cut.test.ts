@@ -201,6 +201,8 @@ for (const [language, catalogue] of [
 			// minus the connective ("so", "dus"). That is word for word what the baseline
 			// said under all three shapes, so this assertion fails on the old build too.
 			const loose = off.one.split('—').pop()!.trim().split(' ').slice(1).join(' ');
+			/** The same claim in the plural, filled in for two shapes. */
+			const loosePlural = off.other.replace('{n}', '2').split('—').pop()!.trim();
 
 			const inCut = await read(0);
 			assert.ok(inCut.includes(loose), `in a cut layer the panel says "${inCut}"`);
@@ -224,6 +226,27 @@ for (const [language, catalogue] of [
 			assert.ok(
 				two.includes(notCut.other.replace('{n}', '2')),
 				`two shapes selected, the panel says "${two}"`
+			);
+
+			// A selection that disagrees with itself: the rectangle in the cut layer beside
+			// the one in the engrave layer. Saying "these 2 shapes come loose" is the false
+			// half of a mixed state, and so is saying neither of them is cut; the panel
+			// counts instead. Measured on the build before this: "No bridges — small gaps
+			// that hold the part in the sheet — so these 2 shapes come loose the moment the
+			// cut closes."
+			const mixed = await read(0, 1);
+			const offSome = catalogue['panel.bridges.offSome'] as { one: string; other: string };
+			assert.ok(
+				!mixed.includes(loosePlural),
+				`one cut and one engraved, the panel promises a cut for both: "${mixed}"`
+			);
+			assert.ok(
+				!mixed.includes(notCut.other.replace('{n}', '2')),
+				`one cut and one engraved, the panel denies the cut there is: "${mixed}"`
+			);
+			assert.ok(
+				mixed.includes(offSome.one.replace('{shapes}', '2')),
+				`one cut and one engraved, the panel says "${mixed}"`
 			);
 		} finally {
 			await context.close();

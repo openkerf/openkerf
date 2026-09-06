@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
 	DEFAULT_BRIDGES,
 	bridgeSummary,
+	elementCuts,
 	inCutLayer,
 	type DesignElement,
 	type DesignOperation
@@ -215,4 +216,31 @@ test('the question is asked about the shapes the sentence counts', () => {
 		),
 		false
 	);
+});
+
+test('a mixed selection is counted, not flattened into one of its halves', () => {
+	// Why: `inCutLayer` answers true as soon as one shape of the selection cuts, and the
+	// panel used the answer for a plural sentence about all of them. Measured on the
+	// seeded design at 1440 px with the rectangle in Outline and the rectangle in Fine
+	// lines selected: "No bridges — small gaps that hold the part in the sheet — so these
+	// 2 shapes come loose the moment the cut closes", while one of the two is engraved and
+	// comes loose from nothing. So the panel asks the question per shape and counts the
+	// answers.
+	const cut = layer('c', 'op cut');
+	const engrave = layer('e', 'op engrave');
+	const inCut = { ...shape({}, 'a'), operation_ids: ['c'] } as DesignElement;
+	const inEngrave = { ...shape({}, 'b'), operation_ids: ['e'] } as DesignElement;
+	const noLayer = { ...shape({}, 'c'), operation_ids: [] } as DesignElement;
+
+	assert.equal(elementCuts(inCut, [cut, engrave]), true);
+	assert.equal(elementCuts(inEngrave, [cut, engrave]), false);
+	assert.equal(elementCuts(noLayer, [cut, engrave]), false);
+	// A layer the panel does not hold stays unjudged, the same as `inCutLayer` says.
+	assert.equal(elementCuts({ operation_ids: ['gone'] } as DesignElement, []), true);
+
+	const notCut = (elements: DesignElement[]) =>
+		elements.filter((element) => !elementCuts(element, [cut, engrave])).length;
+	assert.equal(notCut([inCut, inEngrave]), 1);
+	assert.equal(notCut([inCut]), 0);
+	assert.equal(notCut([inEngrave, noLayer]), 2);
 });

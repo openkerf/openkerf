@@ -502,6 +502,17 @@ export const en = {
 	'panel.aria': 'Properties',
 	'panel.collapse': 'Collapse panel',
 	'panel.expand': 'Expand panel',
+	// A selection whose shapes are in different kinds of layer: the sentence that would
+	// otherwise be said is true of some of them. `{n}` is how many are not cut, because
+	// that is the number the verb follows; `{shapes}` is the whole selection.
+	'panel.bridges.offSome': {
+		one: 'No bridges — small gaps that hold the part in the sheet. 1 of these {shapes} shapes is not in a cut layer, so there they change nothing; where the cut does close, the part comes loose.',
+		other: 'No bridges — small gaps that hold the part in the sheet. {n} of these {shapes} shapes are not in a cut layer, so there they change nothing; where the cut does close, the part comes loose.'
+	},
+	'panel.bridges.notCutSome': {
+		one: '1 of these {shapes} shapes is not in a cut layer, so the bridges do nothing there.',
+		other: '{n} of these {shapes} shapes are not in a cut layer, so the bridges do nothing there.'
+	},
 	'panel.size.widthPositive': 'A width has to be more than 0 mm.',
 	'panel.size.heightPositive': 'A height has to be more than 0 mm.',
 	// ── Canvas ────────────────────────────────────────────────────────────────────

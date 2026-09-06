@@ -511,9 +511,22 @@ export function bridgeSummary(elements: DesignElement[]): BridgeSummary {
  * sentence about a layer nobody could read would be the false one all over again.
  */
 export function inCutLayer(elements: DesignElement[], operations: DesignOperation[]): boolean {
-	const ids = new Set(elements.flatMap((element) => element.operation_ids ?? []));
-	if (!ids.size) return false;
-	const own = operations.filter((operation) => ids.has(operation.id));
+	return elements.some((element) => elementCuts(element, operations));
+}
+
+/**
+ * The same question about one shape, because a selection can disagree with itself.
+ *
+ * A selection where one shape cuts and another engraves has no single true answer, and
+ * `inCutLayer` gives the optimistic half of it. The panel counts instead: how many of the
+ * shapes it is talking about are not in a cut layer. Measured on the seeded design with
+ * the rectangle in Outline and the rectangle in Fine lines selected, the sentence read
+ * "so these 2 shapes come loose the moment the cut closes" — true of one of the two.
+ */
+export function elementCuts(element: DesignElement, operations: DesignOperation[]): boolean {
+	const ids = element.operation_ids ?? [];
+	if (!ids.length) return false;
+	const own = operations.filter((operation) => ids.includes(operation.id));
 	if (!own.length) return true;
 	return own.some((operation) => operation.type === 'op cut');
 }

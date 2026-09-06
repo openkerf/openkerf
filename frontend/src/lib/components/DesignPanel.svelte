@@ -4,7 +4,7 @@
 		LAYER_COLORS,
 		bridgeSummary,
 		elementName,
-		inCutLayer,
+		elementCuts,
 		inkOn,
 		type DesignOperation,
 		type DesignStore
@@ -337,7 +337,7 @@
 	 *
 	 * Bridges only do something on a cut, and hiding the field on anything else would hide
 	 * the reason too. So the field stays and says where it is true — the same rule as the
-	 * angle: show the state, do not guess for the user. `inCutLayer` in
+	 * angle: show the state, do not guess for the user. `elementCuts` in
 	 * `$lib/design.svelte` is where that answer lives, and `bridge-summary.test.ts` pins
 	 * down what it says about a shape in no layer at all.
 	 *
@@ -345,12 +345,14 @@
 	 * (`bridges.shapes`). A text or a line carries no bridge; with a text in the cut layer
 	 * beside a rectangle in an engrave layer, asking about both answers "cut" while the
 	 * sentence is about the rectangle alone — the false claim all over again.
+	 *
+	 * And counted rather than answered yes or no, because a selection can disagree with
+	 * itself: one shape in Outline beside one in Fine lines gave "these 2 shapes come loose
+	 * the moment the cut closes", true of one of the two. Three states, three sentences.
 	 */
-	let bridgesCut = $derived(
-		inCutLayer(
-			chosen.filter((element) => element.bridges),
-			design.operations
-		)
+	let bridgeCarriers = $derived(chosen.filter((element) => element.bridges));
+	let bridgesNotCut = $derived(
+		bridgeCarriers.filter((element) => !elementCuts(element, design.operations)).length
 	);
 
 	function applyBridges(fields: { count?: number; length_mm?: number }) {
@@ -1186,7 +1188,7 @@
 						</p>
 					{/if}
 				{/if}
-				{#if bridges.carries && !bridgesCut}
+				{#if bridges.carries && bridgesNotCut === bridges.shapes}
 					<!-- Whether they are on or not. This used to hang inside the branch above,
 					     so a shape without bridges in an engrave layer got the sentence for a
 					     cut instead: measured on the seeded design at 1440 px, "No bridges:
@@ -1194,6 +1196,19 @@
 					     Caption, under the QR in Engrave and under a shape in no layer at all —
 					     three readings, none of them true. -->
 					<p class="tip">{t('panel.bridges.notCut', { n: bridges.shapes })}</p>
+				{:else if bridges.carries && bridgesNotCut > 0}
+					<!-- Some of them cut and some do not, so neither sentence above is true of
+					     the selection. Measured on the seeded design at 1440 px with the
+					     rectangle in Outline and the rectangle in Fine lines: "so these 2 shapes
+					     come loose the moment the cut closes", said of a pair of which one is
+					     engraved. The count is the number that is not cut — the verb follows
+					     that one. -->
+					<p class="tip">
+						{t(bridges.has ? 'panel.bridges.notCutSome' : 'panel.bridges.offSome', {
+							n: bridgesNotCut,
+							shapes: bridges.shapes
+						})}
+					</p>
 				{:else if bridges.carries && !bridges.has}
 					<p class="hint">{t('panel.bridges.off', { n: bridges.shapes })}</p>
 				{/if}

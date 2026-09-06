@@ -482,6 +482,14 @@ export const nl: Catalogue = {
 	'panel.aria': 'Eigenschappen',
 	'panel.collapse': 'Paneel inklappen',
 	'panel.expand': 'Paneel uitklappen',
+	'panel.bridges.offSome': {
+		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden. 1 van deze {shapes} vormen zit niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.',
+		other: 'Geen bruggen — kleine openingen die het deel in de plaat houden. {n} van deze {shapes} vormen zitten niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.'
+	},
+	'panel.bridges.notCutSome': {
+		one: '1 van deze {shapes} vormen zit niet in een snijlaag, dus daar doen de bruggen niets.',
+		other: '{n} van deze {shapes} vormen zitten niet in een snijlaag, dus daar doen de bruggen niets.'
+	},
 	'panel.size.widthPositive': 'Een breedte moet meer zijn dan 0 mm.',
 	'panel.size.heightPositive': 'Een hoogte moet meer zijn dan 0 mm.',
 	// ── Canvas ────────────────────────────────────────────────────────────────────
