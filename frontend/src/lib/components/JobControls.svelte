@@ -777,18 +777,19 @@
 							: t('job.noRaster.many', { n: blindLayers.length })}
 					</p>
 				{/if}
-				<div class="pf-time">
-					<span class="muted">{t('job.estimatedTime')}</span>
-					<span class="v mono">
-						{#if estimating}
-							<span class="rekent">{t('job.calculating')}</span>
-						{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
-					</span>
-				</div>
+				<!-- No "Estimated time" row here. The same minutes stand on the start
+				     button at the foot of the panel, and both were on screen at once,
+				     400 px apart — measured "Estimated time 2:31" at y 415 and
+				     "Start job 2:31" at y 816 at 1440 x 900. One of them had to go, and
+				     the one to keep is the one on the thing you press: it is never
+				     scrolled away, and the number is read at the moment it is acted on.
+				     While a new time is worked out the number on the button dims rather
+				     than saying so in words — see `.pf-start-time.rekent`. -->
 				{#if seriesLeft}
-					<!-- The clock above is one plate; a series of fifty must never show the
-					     time of one. Both numbers come off the estimate itself — see
-					     `seriesLeft` — so this line and that one cannot disagree. -->
+					<!-- The clock on the start button is one plate; a series of fifty must
+					     never show the time of one. Both numbers come off the estimate
+					     itself — see `seriesLeft` — so this line and that one cannot
+					     disagree. -->
 					<p class="pf-row series">{seriesLeft}</p>
 				{/if}
 				<!-- *What* is being burned, right above the settings it is burned
@@ -1144,7 +1145,7 @@
 							     Hiding it during the recalculation made the button change width
 							     on every edit — a button that jumps under your cursor. -->
 							{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
-								<span class="pf-start-time"
+								<span class="pf-start-time" class:rekent={estimating}
 									>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
 								>{/if}
 						</button>
@@ -1235,12 +1236,20 @@
 
 			<p class="now-hint">{phaseBody(phase)}</p>
 
+			<!-- Gap J4, finished. The keys sit in the tooltips of the buttons they work,
+			     as a second line: what a key does is read on the thing it does it to.
+			     The paragraph that used to stand under this row said both keys again,
+			     in burning, paused, queued and done alike — 49.5 px of advice in the
+			     panel's most expensive place, under two buttons that already carried
+			     it. What only the second line can say is that the keys stop working
+			     outside this window, and that is the part you discover at the wrong
+			     moment. -->
 			<div class="now-actions">
 				{#if paused}
 					<button
 						class="btn primary"
 						disabled={!transportAllowed('resume', { able: actions, phase, blocked })}
-						title="{blockedReason ?? t('job.pause.keepGoing')} · {PAUSE_KEY}"
+						title={`${blockedReason ?? t('job.pause.keepGoing')} · ${PAUSE_KEY}\n${t('job.keysHere')}`}
 						onclick={() => control.resume()}
 					>{t('transport.resume')}</button>
 				{:else}
@@ -1252,7 +1261,7 @@
 						class="btn"
 						disabled={!transportAllowed('pause', { able: actions, phase, blocked })}
 						title={busyWithWork
-							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}`
+							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}\n${t('job.keysHere')}`
 							: t('transport.pause.nothing')}
 						onclick={() => control.pause()}
 					>{t('transport.pause')}</button>
@@ -1267,7 +1276,7 @@
 					disabled={!actions?.stop || control.tokenProbleem || !connection.online}
 					title={!connection.online
 						? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
-						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}`}
+						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}\n${t('job.keysHere')}`}
 					onclick={() => control.stop()}
 				>
 					<!-- One key, not two glued together: "Stop" plus "on the machine" only
@@ -1291,16 +1300,6 @@
 				</button>
 			{/if}
 
-			<!-- Gap J4, shortened. The keys are in the tooltips of the buttons above
-			     now; what a tooltip cannot say is that they do not work outside this
-			     window, and that is exactly the part you discover at the wrong
-			     moment. -->
-			<p class="toetsen">
-				{t('job.keysWork', {
-					pause: PAUSE_KEY,
-					stop: STOP_KEY
-				})}
-			</p>
 		</div>
 
 	{/if}
@@ -1479,7 +1478,12 @@
 							— {t('job.origin.here')}
 						</p>
 					{:else}
-						<p class="hint">{t('job.origin.off')}</p>
+						<!-- Not set: a value, the way the layer table says a number, with the
+						     sentence behind it. It used to be that whole sentence on the
+						     screen — 54 characters, 31.9 px — under a label that already says
+						     what a zero point is, and beside a print-and-cut card saying
+						     "Off." for the same state in different words. -->
+						<p class="hint off" title={t('job.origin.off')}>{t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						<button
@@ -1546,7 +1550,11 @@
 							})}
 						</p>
 					{:else}
-						<p class="hint">{t('job.printcut.off')}</p>
+						<!-- The same value in the same words as the zero point above: both
+						     answer "where does the work go", and both were off in prose of
+						     their own — this one 171 characters over 63.8 px, explaining at
+						     length a feature whose only button was dead. -->
+						<p class="hint off" title={t('job.printcut.off')}>{t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						{#if cutMarks.length === 2}
@@ -1586,6 +1594,16 @@
 							>
 								{t('job.printcut.use')}
 							</button>
+							<!-- Why the button is dead, on the screen and not only in its
+							     tooltip. On a touch screen there is no hover, and this fold is
+							     the one you use standing at the machine with a tablet — the
+							     same reason the saved positions carry their coordinates in the
+							     chip. On a desk the tooltip is enough and the line stays off,
+							     because a reason nobody needs is the prose this panel has too
+							     much of. -->
+							{#if screen.noHover && selectedIds.length !== 2}
+								<p class="reason">{t('job.printcut.needsTwo')}</p>
+							{/if}
 						{/if}
 					</div>
 				</div>
@@ -1885,11 +1903,6 @@
 	.pf-time .v {
 		font-size: var(--text-md);
 	}
-	.rekent {
-		font-family: var(--font-ui);
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
 	.pf-row {
 		color: var(--text-2);
 		font-size: var(--text-xs);
@@ -2110,6 +2123,21 @@
 	.btn.danger.dood strong { color: var(--text-1); }
 	.hint {
 		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* The state of a feature nobody has switched on: a word, in the same grey as the
+	   coordinates that stand there when it *is* on, with a dotted underline to say the
+	   sentence behind it can be read. */
+	.hint.off {
+		text-decoration: underline dotted var(--line-1);
+		text-underline-offset: 3px;
+		cursor: help;
+	}
+	/* Why a button in this block is dead — only where a tooltip cannot be read. */
+	.reason {
+		flex-basis: 100%;
+		margin: var(--space-1h) 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
@@ -2338,22 +2366,13 @@
 		font-weight: 400;
 		opacity: 0.85;
 	}
+	/* A new time is being worked out. The last one stays where it is — hiding it made
+	   the button change width on every edit — and it dims to say it is not the answer
+	   yet. A word ("calculating…") in this spot would push the button wider still. */
+	.pf-start-time.rekent {
+		opacity: 0.5;
+	}
 
-	.toetsen {
-		grid-column: 1 / -1;
-		margin: var(--space-3) 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		line-height: 1.5;
-	}
-	/* Four lines about keys on a screen without a keyboard is filling the app's most
-	   expensive space with something you cannot do there. On a tablet the controls are
-	   in the bar as well and this panel is already mostly prose. A tablet with a
-	   separate keyboard keeps the shortcut — it is still in the button's tooltip, and
-	   it simply works. */
-	@media (pointer: coarse) {
-		.toetsen { display: none; }
-	}
 	/* Jumping to a point, beside the direction buttons above. */
 	.points { margin-top: var(--space-3); }
 	.puntrij {

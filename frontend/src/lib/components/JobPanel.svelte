@@ -147,7 +147,12 @@
 					</p>
 				{/if}
 
-				{#if job.progress !== null}
+				<!-- Only while it runs. A job waiting its turn used to show a bar at 0 %,
+				     "0%", "0 / 412 steps", "ELAPSED 0:00" and "PASSES 0 / 1" — 105 px and
+				     five figures, of which the only one a waiting job can honestly give is
+				     how long it will take. The pre-flight, for the same job before it
+				     starts, shows exactly that one number. -->
+				{#if (job.running || quiet) && job.progress !== null}
 					<!-- Kerf line as progress: the outline "cuts" itself away. At 2px it
 					     did not read as progress; now it carries the card. -->
 					<svg class="progress" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
@@ -167,16 +172,25 @@
 					</div>
 				{/if}
 
-				<dl class="meta mono">
-					<div><dt>{t('queue.elapsed')}</dt><dd>{formatDuration(job.elapsed_seconds)}</dd></div>
-					<!-- From the same source as "remaining" above; see gap B1. Two
-					     sources side by side gave "0:00 left" under "Total 13:45:04". -->
-					<div><dt>{t('queue.total')}</dt><dd>{formatDuration(totalSeconds(job))}</dd></div>
-					<div>
-						<dt>{t('queue.passes')}</dt>
-						<dd>{job.loops_executed ?? 0} / {job.loops ?? '∞'}</dd>
-					</div>
-				</dl>
+				{#if job.running || quiet}
+					<dl class="meta mono">
+						<div><dt>{t('queue.elapsed')}</dt><dd>{formatDuration(job.elapsed_seconds)}</dd></div>
+						<!-- From the same source as "remaining" above; see gap B1. Two
+						     sources side by side gave "0:00 left" under "Total 13:45:04". -->
+						<div><dt>{t('queue.total')}</dt><dd>{formatDuration(totalSeconds(job))}</dd></div>
+						<div>
+							<dt>{t('queue.passes')}</dt>
+							<dd>{job.loops_executed ?? 0} / {job.loops ?? '∞'}</dd>
+						</div>
+					</dl>
+				{:else}
+					<!-- Waiting: the name, "In the queue" beside it, and how long it will
+					     take. Elapsed and passes have nothing to say yet, and a bar at nought
+					     under a job that has not begun reads as a job that is stuck. -->
+					<dl class="meta mono one">
+						<div><dt>{t('queue.total')}</dt><dd>{formatDuration(totalSeconds(job))}</dd></div>
+					</dl>
+				{/if}
 			</article>
 		{/each}
 	{/if}
@@ -191,16 +205,23 @@
 		{t('queue.messages')}
 		<span class="mono">{events.length ? events.length : ''}</span>
 	</button>
-	{#if !showEvents}
-		<p class="empty">{t('queue.messages.hint')}</p>
-	{:else if events.length === 0}
-		<p class="empty">{t('queue.messages.none')}</p>
-	{:else}
-		<ul class="events mono">
-			{#each events.slice(0, 12) as event (event.time + event.code)}
-				<li><span class="code">{event.code}</span><span class="args">{JSON.stringify(event.args)}</span></li>
-			{/each}
-		</ul>
+	<!-- Shut, the fold is its title and nothing else, the way the folds in the Edit tab
+	     are. It used to explain underneath, while closed, what it would contain if it
+	     were open: 95 characters over 56.5 px, at 13 px where every other hint in this
+	     column is 11 — the longest paragraph in the panel, about the block you are least
+	     likely to want. Opened and empty it says both: that nothing has come in, and
+	     what would come in if it did. -->
+	{#if showEvents}
+		{#if events.length === 0}
+			<p class="empty">{t('queue.messages.none')}</p>
+			<p class="empty hint">{t('queue.messages.hint')}</p>
+		{:else}
+			<ul class="events mono">
+				{#each events.slice(0, 12) as event (event.time + event.code)}
+					<li><span class="code">{event.code}</span><span class="args">{JSON.stringify(event.args)}</span></li>
+				{/each}
+			</ul>
+		{/if}
 	{/if}
 </div>
 
@@ -330,6 +351,18 @@
 	.meta dd {
 		margin: 2px 0 0;
 		font-size: var(--text-sm);
+	}
+	/* One figure does not want a third of the card's width; it sits where the first
+	   column was, beside empty space rather than in the middle of it. */
+	.meta.one {
+		grid-template-columns: 1fr;
+		justify-items: start;
+	}
+	/* What the messages are, under the line that says there are none. Quieter than
+	   that line: it is background, not state. */
+	.empty.hint {
+		margin-top: var(--space-1);
+		font-size: var(--text-xs);
 	}
 	.events {
 		list-style: none;

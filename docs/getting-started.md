@@ -304,11 +304,10 @@ again.
 **Start job** in the top bar does not start anything. It switches to that tab and
 arms the job — see "Burning" below.
 
-![The Job tab showing "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, under those a "Show cut path" button and the whole table of layers with mm/s, %, passes and source, and under that a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes sit in no layer that burns — the foot of that picture running on under the strip at the bottom of the panel, which carries a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
+![The Job tab showing the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, under those a "Show cut path" button and the whole table of layers with mm/s, %, passes and source, and under that a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes sit in no layer that burns — the foot of that picture running on under the strip at the bottom of the panel, which carries a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
 
 From top to bottom it holds:
 
-- **Estimated time**;
 - **Material** — the sheet's material, or "not filled in for this sheet";
 - the zero point, when you have set one;
 - a table of the layers with their speed, power, passes and where those numbers

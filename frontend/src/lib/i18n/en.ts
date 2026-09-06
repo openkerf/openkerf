@@ -619,7 +619,6 @@ export const en = {
 	'job.jog.left': 'Move left',
 	'job.keepSpot': 'Keep this spot',
 	'job.checklist.title': 'Run through this',
-	'job.estimatedTime': 'Estimated time',
 	// A series is one plate on the bed and an afternoon in front of you, and the clock
 	// above this line is about the plate. The count and the total both come from
 	// `/api/job/estimate` (`burns_left`, `seconds_total`), so the panel never
@@ -648,9 +647,17 @@ export const en = {
 	'job.upload.send': 'Send',
 	'job.upload.sending': 'Sending…',
 	'job.upload.done': '{name} is in the machine. Start it on the panel.',
+	// The state of a feature that is set up elsewhere, as a value beside its name — the
+	// way the layer table says a number. What "off" means is behind the label; a
+	// paragraph about a feature nobody has switched on is the panel's most expensive
+	// space spent on the one thing that is not happening.
+	'job.state.off': 'Off',
+	// On the buttons the keys work, as the second line of their tooltip. It used to be a
+	// paragraph under them, in burning, paused, queued and done alike, while both keys
+	// were already on the buttons themselves.
+	'job.keysHere': 'The key works anywhere in the app, as long as this window is in front — outside it a browser cannot receive keystrokes.',
 	'job.adjust.reset': 'Reset',
 	'job.checklist.lid': 'Lid closed',
-	'job.calculating': 'calculating…',
 	'job.origin': 'Zero point',
 	'job.move': 'Move',
 	'job.home': 'Home',
@@ -690,7 +697,6 @@ export const en = {
 	'job.elapsed': '{time} elapsed',
 	'job.clearQueue': 'Clear queue ({n})',
 	'job.queueEmpty': 'The queue is already empty',
-	'job.keysWork': '{pause} and {stop} work everywhere in the app, as long as this window is in front — outside it a browser cannot receive keystrokes.',
 	'job.machineControls': 'Operate machine',
 	'job.machineControls.notNow': 'not during a job',
 	'job.jog.z': 'Head {step} mm {direction}',

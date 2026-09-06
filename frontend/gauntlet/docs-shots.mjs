@@ -1457,7 +1457,7 @@ async function seedSeries() {
 	});
 
 	// 11.5 mm/s and not a round 14: the page quotes the clock this design comes out at
-	// — "Estimated time 0:24", and three of those in the line under it — so the speed is
+	// — "Start job 0:24", and three of those in the line above it — so the speed is
 	// picked to give that, the way shot 26 sizes its rectangle and shot 28 leaves the
 	// hinge on its defaults. Measured through `/api/job/estimate`: 14 gives 19.9 s, 12
 	// gives 23.1 s, 11.5 gives 24.0 s. A cut of 11.5 mm/s at 70 % is an ordinary setting

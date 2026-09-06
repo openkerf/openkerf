@@ -37,15 +37,17 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: at the top "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that a "Show cut path" button heading the whole layer table with speed, power, passes and a Source column, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes sit in no layer that burns — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
+![The OpenKerf window with the Job tab open on the pre-flight: at the top the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that a "Show cut path" button heading the whole layer table with speed, power, passes and a Source column, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes sit in no layer that burns — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
 
 ### Time, material and zero point
 
-**Estimated time** is worked out by the engine, which builds the whole cut plan
-to get it. While it does, the field reads *calculating…*, and the last known time
-stays on the start button so the button does not change width under your cursor.
+**How long it takes** stands on the start button at the foot of the panel, and
+nowhere else: "Start job 1:19". The engine works it out by building the whole cut
+plan, and while it does that the last known time stays where it is and dims —
+hiding it made the button change width on every edit, and a second copy of the
+number higher up the panel put the same minutes on the screen twice, 400 px apart.
 
-**With a series attached** the clock above is one plate, and a line under it counts
+**With a series attached** the time on the button is one plate, and a line above it counts
 the afternoon: "This is the plate now on the bed; the 3 burns still to go take about
 1:12 together." Both numbers come off the same estimate, so the two cannot drift
 apart, and the line only appears when there is more than one plate to go — with one
@@ -524,9 +526,10 @@ remaining time is in the status bar on every tab, next to the total.
 
 Two buttons: **Pause** and, well away from it on the other side of the row,
 **Stop**. The distance is on purpose; a bad tap here costs the workpiece. Their
-keyboard shortcuts are on the buttons and repeated under them: "Pause and Ctrl + .
-work everywhere in the app, as long as this window is in front — outside it a
-browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of Ctrl + .)
+keyboard shortcuts are on the buttons themselves, as the second line of their
+tooltip: "The key works anywhere in the app, as long as this window is in front —
+outside it a browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of
+Ctrl + .)
 
 **Clear queue (2)** appears as soon as there is anything in the queue.
 
@@ -561,8 +564,10 @@ job, change the layer and start again."
 
 Below the job block, **Queue** — but only when there is something to say. Each
 job waiting shows its name, its state (**In the queue**, **Busy**, **Paused**,
-**Done**), and, once running, **Elapsed**, **Total** and **Passes**. Above the
-list: "2 more jobs after this one. They start in this order."
+**Done**) and **Total** — how long it will take. The bar, the percentage, the step
+count, **Elapsed** and **Passes** appear when it starts running: five figures about
+not having started read as a job that is stuck. Above the list: "2 more jobs after
+this one. They start in this order."
 
 Three kinds of emptiness get three different sentences, because they do not mean
 the same thing:
@@ -573,9 +578,11 @@ the same thing:
   progress."
 - Nothing at all — then the block is not there.
 
-At the bottom of the tab, collapsed, sits **Messages from the machine**: "Technical
-messages from the engine. Handy when hunting a fault; otherwise you do not need
-them." Open it and it lists what the engine reported, or "Nothing reported yet."
+At the bottom of the tab, collapsed, sits **Messages from the machine** with the
+number of them beside its title, and shut it says nothing else. Open it and it
+lists what the engine reported, or, with nothing to list, "Nothing reported yet."
+and "Technical messages from the engine. Handy when hunting a fault; otherwise you
+do not need them."
 
 ## Operate machine
 
@@ -621,8 +628,8 @@ session. The × on a chip forgets it.
 where the head is now as 0,0 for your drawing: "what you draw at 0,0 burns here.
 The sheet moves along: the zero point is the corner of the material lying in it."
 When one is set, **To zero point** goes there and **Clear** puts it back to the
-machine's own zero. With none set the line reads "Off: the work burns at the
-coordinates you drew it on."
+machine's own zero. With none set the line reads **Off**, with "the work burns at
+the coordinates you drew it on." behind it as a tooltip.
 
 ### Print and cut
 
@@ -639,7 +646,8 @@ It works in three steps.
    corner — and press **Use the two selected shapes**. Exactly two: with one there is
    no angle, and with three there is no agreement. The button stays dead with
    anything else selected and says why: "Select exactly two shapes on the canvas
-   first".
+   first". On a desk that reason is the button's tooltip; at 1199 px and below,
+   where a touch screen cannot hover, it stands under the button as a line.
 2. **Drive to them.** Jog the head over the first mark and press **The head is on
    mark 1**; then over the second and **The head is on mark 2**. After the first, the
    line reads "One of the two marks has been measured. Drive the head over the other

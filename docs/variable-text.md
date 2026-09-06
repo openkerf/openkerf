@@ -311,7 +311,7 @@ Nothing goes to the machine until you press Burn this one."
 
 Once it is going, the block is the run.
 
-![The Job tab with a series running. At the top the block headed "Burn 3 of 5" with a "Stop the series" link on its right, the line "This one engraves Cees.", a progress bar with "2 of 5 burns have been made." under it, and the two buttons "Burn this one" and "Burned, next one". Below the block the ordinary pre-flight, in that order: "Estimated time 0:24", the line "This is the plate now on the bed; the 3 burns still to go take about 1:12 together.", a "Show cut path" button, the layer table and the sheet drawing, with the green "Start job 0:24" strip at the foot of the panel.](images/37-series-run.png)
+![The Job tab with a series running. At the top the block headed "Burn 3 of 5" with a "Stop the series" link on its right, the line "This one engraves Cees.", a progress bar with "2 of 5 burns have been made." under it, and the two buttons "Burn this one" and "Burned, next one". Below the block the ordinary pre-flight, in that order: the line "This is the plate now on the bed; the 3 burns still to go take about 1:12 together.", a "Show cut path" button, the layer table and the sheet drawing, with the green "Start job 0:24" strip at the foot of the panel.](images/37-series-run.png)
 
 - The heading counts the plates: "Burn 3 of 5".
 - Under it, what this one puts on the material — "This one engraves Cees." — or, on a plate
