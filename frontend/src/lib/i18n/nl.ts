@@ -482,6 +482,8 @@ export const nl: Catalogue = {
 	'panel.aria': 'Eigenschappen',
 	'panel.collapse': 'Paneel inklappen',
 	'panel.expand': 'Paneel uitklappen',
+	'panel.rotate.step': '{angle}° draaien',
+	'panel.rotate.stepAria': '{angle} graden draaien',
 	'panel.textValue': '“{text}”',
 	'panel.bridges.offSome': {
 		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden. 1 van deze {shapes} vormen zit niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.',

@@ -314,3 +314,119 @@ test('a value in a Layers row reads as text until you point at it', async (t) =>
 		await context.close();
 	}
 });
+
+/**
+ * Home and End belong to the caret, not to the shape.
+ *
+ * The field is `type="text"` with `inputmode="decimal"`, so Home is what it is in every
+ * other text box on the machine: put the caret before the first digit — which is exactly
+ * what you press to correct the 1 of "142.5". The component answered it by writing its
+ * own minimum into the field and committing it. Measured at 1440 on a 60 x 40 mm
+ * rectangle, before this fix: one Home in the width left the field at 0.1 and the shape
+ * really 0.1 x 0.067 mm, with no refusal and no sentence. There is no undo of a
+ * keystroke you did not know you had given.
+ *
+ * So the two keys write nothing any more. The arrows still step, which is all an
+ * `<input type=number>` ever gave them.
+ */
+test('Home in the width leaves the shape the size it was', async (t) => {
+	if (!reachable || !browser) return noServer(t, BASE);
+	const made = await (
+		await post('/api/design/elements', {
+			type: 'rect',
+			x_mm: 200,
+			y_mm: 150,
+			width_mm: 60,
+			height_mm: 40
+		})
+	).json();
+	const id: string = made?.ids?.[0] ?? '';
+	assert.ok(id, 'the rectangle was not made');
+
+	const size = async () => {
+		const snapshot = await (await fetch(`${BASE}/api/design`)).json();
+		const element = snapshot.elements.find((e: { id: string }) => e.id === id);
+		assert.ok(element, 'the rectangle is gone');
+		const [x0, y0, x1, y1] = element.bounds as number[];
+		const perMm = snapshot.units_per_mm as number;
+		return {
+			width: Math.round(((x1 - x0) / perMm) * 100) / 100,
+			height: Math.round(((y1 - y0) / perMm) * 100) / 100
+		};
+	};
+
+	const before = await size();
+	assert.deepEqual(before, { width: 60, height: 40 });
+
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	try {
+		await page.goto(`${BASE}/?tab=design&select=${encodeURIComponent(id)}`, {
+			waitUntil: 'domcontentloaded'
+		});
+		await page.waitForSelector('.selected', { timeout: 20000 });
+		const width = page.locator('.selected input[aria-label*="Width" i]').first();
+		await width.click();
+		await page.keyboard.press('Home');
+		await page.keyboard.press('End');
+		await page.keyboard.press('Tab');
+		// The commit goes over the API and comes back into the card; wait for the answer,
+		// not for a guess about how long it takes.
+		await page.waitForTimeout(3000);
+		assert.equal(await width.inputValue(), '60.0', 'the field itself changed');
+	} finally {
+		await context.close();
+	}
+	assert.deepEqual(await size(), before, 'Home resized the shape');
+});
+
+/**
+ * The unit stands with the label, and nowhere else.
+ *
+ * It used to stand in four places at once in this one card: an "mm" column three columns
+ * from the number it belonged to, a "°" inside the box, a "(mm)" in a label and a DPI
+ * with nothing at all. Two remain, and one rule decides which: where the label is a
+ * letter (W, H, X, Y, ∠) there is no room beside it and the unit is a cap in the box;
+ * where the label is a word it stands in the label. What may not come back is a unit
+ * loose in the grid, away from its number.
+ */
+test('every unit in the card stands with its own number', async (t) => {
+	if (!reachable || !browser) return noServer(t, BASE);
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	try {
+		await page.goto(`${BASE}/?tab=design&select=${encodeURIComponent(rectangleId)}`, {
+			waitUntil: 'domcontentloaded'
+		});
+		await page.waitForSelector('.selected', { timeout: 20000 });
+		await page.waitForTimeout(500);
+		const fields = await page.$$eval('.selected .field', (nodes) =>
+			nodes.map((node) => ({
+				label: (node.querySelector('label')?.textContent ?? '').trim(),
+				compact: node.classList.contains('compact'),
+				cap: (node.querySelector('.suffix')?.textContent ?? '').trim()
+			}))
+		);
+		assert.ok(fields.length >= 7, `only ${fields.length} fields in the card`);
+		for (const field of fields) {
+			const inLabel = /\((.+)\)/.exec(field.label)?.[1] ?? '';
+			assert.ok(
+				!(inLabel && field.cap),
+				`"${field.label}" writes its unit twice: "(${inLabel})" and a cap "${field.cap}"`
+			);
+			if (field.compact)
+				assert.equal(inLabel, '', `the narrow field "${field.label}" keeps its unit in the label`);
+			else
+				assert.equal(field.cap, '', `the roomy field "${field.label}" keeps a cap "${field.cap}"`);
+		}
+		// Nothing that looks like a unit stands loose in the block of measures.
+		const loose = await page.$$eval('.selected .figures > *', (nodes) =>
+			nodes
+				.filter((n) => !n.classList.contains('field') && n.tagName !== 'BUTTON')
+				.map((n) => (n.textContent ?? '').trim())
+		);
+		assert.deepEqual(loose, [], `something else stands between the measures: ${loose.join(' · ')}`);
+	} finally {
+		await context.close();
+	}
+});

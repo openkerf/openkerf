@@ -22,6 +22,7 @@
 		placeholder = undefined,
 		note = undefined,
 		stepsDisabled = undefined,
+		stepLabel = undefined,
 		onstep = undefined,
 		onchange
 	}: {
@@ -31,6 +32,16 @@
 		step?: number;
 		min?: number | null;
 		max?: number | null;
+		/**
+		 * The unit, which stands with the label and never in a column of its own.
+		 *
+		 * Where the label is a word it stands in the label — "Length per bridge (mm)"; where
+		 * the label is a letter the label has no room for it and it stands in the box,
+		 * behind the number, as a cap — "W [ 120.0 |mm ]". Two placements, one rule, and the
+		 * form of the field decides which: `compact` is the letter case. What it replaced
+		 * was four placements with no rule at all — an "mm" column three columns from its
+		 * number, a "°" in the box, a "(mm)" in a label and a DPI with nothing.
+		 */
 		unit?: string | null;
 		disabled?: boolean;
 		/** Why it is off. A stepper that greys without a word is the same riddle as a
@@ -56,6 +67,16 @@
 		/** The buttons on while the field itself is off — the angle of a selection whose
 		 *  shapes disagree can be stepped, but not typed. Defaults to `disabled`. */
 		stepsDisabled?: boolean;
+		/**
+		 * What the two buttons are called, where "increase this value" is not what they do.
+		 *
+		 * Stepping the angle of several shapes turns each of them by a degree; the field
+		 * beside it is then empty and shows "—", so "Increase Angle in degrees" names a
+		 * value that is not there. A caller that hands the step on (see `onstep`) says in
+		 * its own words what the button does, and the words stand in the tooltip as well as
+		 * in the screen reader.
+		 */
+		stepLabel?: (direction: number) => { title: string; aria: string };
 		/**
 		 * The step, handed to the caller instead of applied here.
 		 *
@@ -104,21 +125,24 @@
 	 *
 	 * Taking them out is only allowed because their work can be done here: an ordinary
 	 * `<input type=number>` does exactly this — its spinner is not focusable and the arrows
-	 * step. So anybody not using a mouse loses nothing: Home and End jump to the bounds
-	 * where there are any, and the buttons keep their names and stay operable with a screen
-	 * reader or pointer — just not with Tab any more.
+	 * step. The buttons keep their names and stay operable with a screen reader or
+	 * pointer — just not with Tab any more.
+	 *
+	 * Home and End do *not* jump to the bounds, and that is deliberate. This is a text box
+	 * with `inputmode="decimal"`, so Home is what it is everywhere else on the machine:
+	 * the caret before the first digit — what you press to correct the 1 of "142.5".
+	 * Measured while it wrote `min`: one Home in the width of a 60 × 40 mm rectangle left
+	 * the shape 0.1 × 0.067 mm, committed, with no refusal and no sentence; End in the
+	 * image DPI set 2000. A keystroke that resizes the work has no undo you knew to reach
+	 * for.
 	 */
 	function onKey(event: KeyboardEvent) {
 		if (disabled) return;
 		if (event.key === 'ArrowUp') set(1);
 		else if (event.key === 'ArrowDown') set(-1);
-		else if (event.key === 'Home' && min !== null) value = String(min);
-		else if (event.key === 'End' && max !== null) value = String(max);
 		else return;
-		// Otherwise the caret also jumps to the start or end of the text, and on Arrow Up
-		// the window below scrolls along.
+		// Otherwise the window below scrolls along with Arrow Up.
 		event.preventDefault();
-		if (event.key === 'Home' || event.key === 'End') onchange?.(value);
 	}
 </script>
 
@@ -131,8 +155,8 @@
 			type="button"
 			tabindex="-1"
 			disabled={stepsOff}
-			title={stepsOff ? why : undefined}
-			aria-label={t('field.decrease', { label: named })}
+			title={stepsOff ? why : stepLabel?.(-1).title}
+			aria-label={stepLabel?.(-1).aria ?? t('field.decrease', { label: named })}
 			onclick={() => set(-1)}>−</button
 		>
 		<input
@@ -155,8 +179,8 @@
 			type="button"
 			tabindex="-1"
 			disabled={stepsOff}
-			title={stepsOff ? why : undefined}
-			aria-label={t('field.increase', { label: named })}
+			title={stepsOff ? why : stepLabel?.(1).title}
+			aria-label={stepLabel?.(1).aria ?? t('field.increase', { label: named })}
 			onclick={() => set(1)}>+</button
 		>
 	</span>
@@ -215,9 +239,10 @@
 		min-width: 1.1em;
 	}
 	.field.compact.off .name { opacity: 0.5; }
-	/* The unit belongs *in* the box. As a column of its own beside the grid it stood
-	   three columns from the number it belongs to, and it stood in four forms at once —
-	   an "mm" column, a "°" inside the box, a "(mm)" in a label and a DPI with none. */
+	/* Where the label is a letter the unit belongs *in* the box, behind the number. As a
+	   column of its own beside the grid it stood three columns from the number it belongs
+	   to. The roomy form writes it in its label instead, because there it fits and a cap
+	   would repeat the box's own edge; see the `unit` prop for the rule. */
 	.stepper .suffix {
 		display: grid;
 		place-items: center;

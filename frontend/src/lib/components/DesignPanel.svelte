@@ -1044,6 +1044,18 @@
 						note={t('panel.angle.title')}
 						placeholder={pose.mixed ? '—' : ''}
 						stepsDisabled={Boolean(sizeOff) || edits.busy}
+						stepLabel={(direction) => {
+							// Not "increase the angle": on a selection whose shapes disagree the
+							// field is empty and shows "—", and the button turns each shape by a
+							// degree. The two loose buttons that stood here said so, and the
+							// field says it in their words.
+							// The words the two removed buttons carried, character for character.
+							const angle = direction > 0 ? '+1' : '-1';
+							return {
+								title: t('panel.rotate.step', { angle }),
+								aria: t('panel.rotate.stepAria', { angle })
+							};
+						}}
 						onstep={(direction) => onRotate?.(direction)}
 						onchange={(v) => setAngle(v)}
 					/>

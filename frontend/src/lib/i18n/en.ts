@@ -502,6 +502,8 @@ export const en = {
 	'panel.aria': 'Properties',
 	'panel.collapse': 'Collapse panel',
 	'panel.expand': 'Expand panel',
+	'panel.rotate.step': 'Rotate {angle}°',
+	'panel.rotate.stepAria': 'Rotate {angle} degrees',
 	// The caption of a text, quoted, for when the name above it had to cut it short.
 	// The quotation marks live here and only here — they used to be hard-coded in the
 	// markup as well, and a language that quotes differently could only fix one of them.
