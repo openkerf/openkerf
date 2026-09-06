@@ -15,8 +15,18 @@
  * under the thing you press.
  *
  * They are in the footer now, above the buttons, so they cannot be scrolled away from
- * the button they belong to. What this test pins is the property, not the place: every
- * item of the checklist is the topmost thing at its own middle.
+ * the button they belong to — and they come up on the tap that arms the burn, which is
+ * the moment between "Start job" and "Start now" when you walk round the machine. That
+ * tap sets a flag in the component and sends nothing: no request, no movement, no laser.
+ * Standing in the resting footer the list cost 90 px of a 211.6 px footer for eleven
+ * words that never change, and the layer table and both warnings lay under it.
+ *
+ * Measured after the move, at 1440 x 900 on the seed below: armed, the footer's top is
+ * at 705 and all three lines answer for themselves under `elementFromPoint`; at rest the
+ * footer is 69 px instead of 211.6.
+ *
+ * What this test pins is the property, not the place: at the moment the checklist is
+ * shown, every item of it is the topmost thing at its own middle.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -81,14 +91,20 @@ before(async () => {
 	browser = await chromium.launch();
 	page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 	await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });
-	await page.waitForTimeout(3000);
+	await page.waitForSelector('.pf-actions .pf-start-time', { timeout: 20000 });
+	await page.waitForTimeout(1000);
+	// Arming, the first of the two deliberate taps. It flips `preflight` in the
+	// component and asks the server nothing; "Start now" is never pressed here.
+	await page.click('.pf-split .btn.primary:not(.pf-more)');
+	await page.waitForSelector('.pf-check li', { timeout: 5000 });
+	await page.waitForTimeout(500);
 });
 
 after(async () => {
 	await browser?.close();
 });
 
-test('every line of the checklist is readable where it stands', async (t) => {
+test('every line of the checklist is readable where the arming step shows it', async (t) => {
 	if (!reachable) return noServer(t, BASE);
 
 	const items = await page.evaluate(() => {

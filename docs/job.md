@@ -18,7 +18,8 @@ Three surfaces, and each keeps the same job all the time.
 - **The top bar**, on the right: **Pause** / **Resume**, **Stop**, **Start job**
   (**Start** on a narrow bar). These four never move, so the stop button is in
   the same place whether something is running or not. **Show frame** sits with
-  them.
+  them, and only there: the pre-flight used to carry a second copy of it and no
+  longer does.
 - **The Job tab** in the right-hand panel: the pre-flight before, the progress
   during, and the machine controls under both.
 - **The status bar** at the bottom: the head position, your pointer position, how
@@ -36,33 +37,7 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block; below it "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, a "Show cut path" button, "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the head of the layer table with speed, power, passes and a Source column — its rows run on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: the checklist headed "Run through this" with "Lid closed", "Extraction and air assist on" and "Workpiece is clamped and flat", under it a "Show frame" button on a line of its own, and under that a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end.](images/12-job-preflight.png)
-
-### The drawing
-
-At the top: what is going to be burned, drawn on the sheet. The sheet is the
-plain rectangle; everything beyond its edge is hatched, because there is no
-material there. Each shape is drawn in the colour of its layer. A shape in no
-burning layer is dotted grey — the machine will skip it.
-
-Tap the drawing to open it large in a window headed **What gets burned**.
-
-Under it are two sizes: the sheet with its measurements, and **work** with the
-measurements of everything on it. That second number is the one you hold against
-your offcut.
-
-Then, in words, what the picture says. There are three of these, and the order is
-deliberate:
-
-- **Outside the bed.** followed by, for one shape, "One shape lies outside the
-  reach of the machine, which reaches to 500 × 300 mm. The head does not go
-  there: move or scale it." Red, and it is the worst of the three: the machine
-  cannot get there at all.
-- "One shape falls outside Sheet 1. There is no material there — whatever sticks
-  out burns into your honeycomb or your bench." Amber. You lose the workpiece,
-  not the machine.
-- "One shape sits in no layer that burns — dashed grey above. The machine skips
-  it." Grey; a statement, not a warning.
+![The OpenKerf window with the Job tab open on the pre-flight: at the top "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that the whole layer table with speed, power, passes and a Source column, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns and a "Show cut path" button — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
 
 ### Time, material and zero point
 
@@ -136,17 +111,53 @@ the beginning."
 Everything about setting one up, calibrating it and the order to do it in is on
 its own page: [The rotary](rotary.md).
 
+### The drawing
+
+At the foot of the column, under the numbers: what is going to be burned, drawn
+on the sheet. It stands there and not at the top because the strip with the start
+button lies over whatever is last, and a picture is the one thing here you can
+scroll to — measured at 1440 by 900, the material row, both warnings and the whole
+table now stand clear of that strip, where the table used to run on under it. The sheet is the
+plain rectangle; everything beyond its edge is hatched, because there is no
+material there. Each shape is drawn in the colour of its layer. A shape in no
+burning layer is dotted grey — the machine will skip it.
+
+Tap the drawing to open it large in a window headed **What gets burned**.
+
+Under it are two sizes: the sheet with its measurements, and **work** with the
+measurements of everything on it. That second number is the one you hold against
+your offcut.
+
+Then, in words, what the picture says. There are three of these, and the order is
+deliberate:
+
+- **Outside the bed.** followed by, for one shape, "One shape lies outside the
+  reach of the machine, which reaches to 500 × 300 mm. The head does not go
+  there: move or scale it." Red, and it is the worst of the three: the machine
+  cannot get there at all.
+- "One shape falls outside Sheet 1. There is no material there — whatever sticks
+  out burns into your honeycomb or your bench." Amber. You lose the workpiece,
+  not the machine.
+- "One shape sits in no layer that burns — dashed grey above. The machine skips
+  it." Grey; a statement, not a warning.
+
 ### The checklist
 
 Three lines under the heading **Run through this**: *Lid closed*, *Extraction and
 air assist on*, *Workpiece is clamped and flat*. There is nothing to tick. A
 checklist you get used to ticking off protects nobody.
 
-It sits in the strip at the bottom of the panel, directly above **Start job**, and
-stays there while the rest of the panel scrolls. It used to stand higher up in the
-column, and with four layers the column is longer than the panel is high: measured
-at 1440 by 900, two of the three lines lay behind that strip — the last one behind
-the start button itself.
+You meet it on the tap that arms the burn. Press **Start job** and the strip at
+the foot of the panel grows the three lines, directly above the **Start now** that
+fires — the moment between the two taps is the moment you walk round the machine.
+Cancel, and the strip is the two buttons again.
+
+It used to stand higher up in the column, and with four layers the column is
+longer than the panel is high: measured at 1440 by 900, two of the three lines lay
+behind that strip — the last one behind the start button itself. Then it stood in
+the strip the whole time, and there it cost 90 pixels of a 211.6-pixel foot for
+eleven words that never change, with the layer table underneath it. Resting, that
+foot is 69 pixels now.
 
 ### Sending the job to the machine
 
@@ -430,13 +441,11 @@ No single click burns anything.
 2. The button pair changes to **Cancel** and **Start now**. **Start now** sends
    the job. While it goes it reads *Working…*.
 
-**Show frame** sits beside **Start job** while the job is not yet armed: it sends
-the head round the outline of your work with the laser off. That is the last check
-that the work is on the board and the clamp is not in the way. With a rotary
-fitted it means something else, and the button's tooltip says so: "On a rotary the
-frame turns the object; the head hardly crosses the bed." Arming replaces
-that pair with Cancel and Start now, so from then on the frame button to use is
-the one in the top bar, which is always there.
+**Show frame** is in the top bar, armed or not: it sends the head round the
+outline of your work with the laser off. That is the last check that the work is on
+the board and the clamp is not in the way. With a rotary fitted it means something
+else, and the pre-flight says so on the line about the rotary: "On a rotary the
+frame turns the object; the head hardly crosses the bed."
 
 **When it goes wrong.**
 

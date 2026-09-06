@@ -580,7 +580,6 @@ export const en = {
 	'palette.newWork': 'new work',
 
 	// ── Job panel ─────────────────────────────────────────────────────────────────
-	'job.frame.title': 'Send the head around the outline of your work — the laser stays off',
 	'job.origin.clearTitle': 'Back to the machine\'s own zero',
 	'job.noRaster.title': 'This server cannot burn raster layers.',
 	'job.autofocus': 'Autofocus is started on the machine itself.',

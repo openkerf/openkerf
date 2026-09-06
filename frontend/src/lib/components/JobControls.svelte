@@ -40,7 +40,6 @@
 		onUnlock,
 		onLock,
 		onFocus,
-		onFrame,
 		onCutPath,
 		colorFor,
 		profile = null,
@@ -80,11 +79,9 @@
 		 *  the app offered only half the pair. */
 		onLock?: () => void;
 		onFocus?: (distanceMm: number) => void;
-		/** Sending the head around the outline, without burning. */
-		onFrame?: () => void;
-		/** Opening the cut-path window (gap S1). Beside "Show frame", because this is
-		 *  the moment you want to know in what order it burns — and unlike the frame
-		 *  it costs no movement of the machine. */
+		/** Opening the cut-path window (gap S1). The frame itself lives in the top bar;
+		 *  this is the moment you want to know in what order it burns — and unlike the
+		 *  frame it costs no movement of the machine. */
 		onCutPath?: () => void;
 		/** The same layer colour the canvas and the layer list show. */
 		colorFor?: (operationId: string | null) => string;
@@ -760,32 +757,12 @@
 			<!-- "Estimated time 0:00" above an empty bed reads as a job of zero
 			     seconds instead of as no job. With nothing to do the clock keeps
 			     quiet and the message below it speaks. -->
-			<!-- The workpiece first, the numbers about it after (decision B8).
-			     Whoever sees something hanging off the sheet need not read the time
-			     any more — and on tablet and phone the canvas is not beside it. -->
+			<!-- The numbers first and the drawing under them, against decision B8's
+			     order: see the block further down for the measurement that turned it
+			     round. On tablet and phone the canvas is not beside this panel, so the
+			     drawing has to be in the column — but at the end of it, where the
+			     sticky footer may cover it. -->
 			{#if !empty}
-				<!-- The messages about bed and sheet belong to the drawing and so
-				     live in it, right under the shape they are about (gaps J5 and C2).
-				     They used to be here as two equally red cards in a row; that made
-				     "there is no material there" as serious as "the head does not get
-				     there", and then neither carries any weight. -->
-				<JobPreview
-					design={design}
-					sheet={overview?.sheet ?? null}
-					bounds={bounds}
-					{colorFor}
-				/>
-				<!-- Under the drawing, because it is the same drawing with the order in
-				     it (gap S1). Deliberately *not* in the sticky row with the frame and
-				     the start button: measured at 1440 px with three buttons in that row,
-				     "Start job 1:26" was clipped at the right edge of the panel — the
-				     primary action half off screen, which is the very thing the second
-				     usability round fixed. -->
-				{#if onCutPath}
-					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
-						{t('cutpath.show')}
-					</button>
-				{/if}
 				<!-- The converter that turns a grid area into laser lines lives in
 				     the wxPython version of the engine. When it is missing, the layer
 				     throws its own shapes away during planning and nothing comes out
@@ -838,7 +815,12 @@
 						<!-- The rotary changes the shape of what comes out, so it belongs on
 						     the one screen you read before burning. A job that silently comes
 						     out stretched costs the workpiece, and you have one of those. -->
-						<p class="pf-warn strong">{rotaryText}</p>
+						<!-- What the rotary does to the frame is said here, with the rest
+						     of what the rotary changes. It used to hang in the tooltip of a
+						     "Show frame" in the footer, and that button is gone: the top bar
+						     carries the one frame there is. A tooltip is no place for it on a
+						     tablet either. -->
+						<p class="pf-warn strong">{rotaryText} {t('job.rotary.frame')}</p>
 						{#if overview?.rotary?.overlap}
 							<p class="pf-warn">
 								{t('rotary.overlap', {
@@ -978,6 +960,46 @@
 				{/if}
 			{/if}
 
+			<!-- The drawing comes after the numbers about it, and not before them
+			     (which is what decision B8 laid down). The reason is the footer: it is
+			     sticky, so whatever stands last in the column is what it lies over, and
+			     with the picture first the numbers stood last. Measured on this seed —
+			     four layers on unverified presets, no machine attached, which is the
+			     state the app opens in — the footer's top was at 660 (1440 x 900), 528
+			     (1366 x 768), 560 (1280 x 800) and 493 (1024 x 768), while the picture
+			     alone took 181 px at 1440 and 215 px at 1024 and the material row, both
+			     warnings and the table ran from 411 to 705 (1440) and 475 to 800
+			     (1024). So the picture is what the footer covers now, and the numbers
+			     are read where they stand. `tests/preflight-fold.test.ts` measures it.
+
+			     The bed and sheet messages travel with it, because they belong under
+			     the shape they are about (gaps J5 and C2); at 1024 x 768 the tail of
+			     that block is the one thing left under the footer. -->
+			{#if !empty}
+				<!-- The messages about bed and sheet belong to the drawing and so
+				     live in it, right under the shape they are about (gaps J5 and C2).
+				     They used to be here as two equally red cards in a row; that made
+				     "there is no material there" as serious as "the head does not get
+				     there", and then neither carries any weight. -->
+				<JobPreview
+					design={design}
+					sheet={overview?.sheet ?? null}
+					bounds={bounds}
+					{colorFor}
+				/>
+				<!-- Under the drawing, because it is the same drawing with the order in
+				     it (gap S1). Deliberately *not* in the sticky row with the start
+				     button: measured at 1440 px with three buttons in that row,
+				     "Start job 1:26" was clipped at the right edge of the panel — the
+				     primary action half off screen, which is the very thing the second
+				     usability round fixed. -->
+				{#if onCutPath}
+					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
+						{t('cutpath.show')}
+					</button>
+				{/if}
+			{/if}
+
 			{#if empty}
 				<!-- No checklist, no start button: there is nothing to run through. -->
 				<div class="pf-empty">
@@ -996,31 +1018,48 @@
 				The buttons stick to the bottom of the panel.
 
 				Since the preparation is always open, the column is taller than the
-				panel is high (measured: 1,427 px of content in 788 px). Without this
-				sticky footer the start button sat below the fold — the primary action
-				out of sight, which is exactly what this round had to solve, not cause.
+				panel is high (measured on the seed of `tests/preflight-fold.test.ts`:
+				804 px of content in 788 px at 1440 x 900, 906 in 574 at 1024 x 768).
+				Without this sticky footer the start button sat below the fold — the
+				primary action out of sight, which is exactly what this round had to
+				solve, not cause.
 
-				Showing the frame is on the same line: it is the last check before that
-				same button, so it belongs beside it and not three blocks higher.
+				What sticks is only what you press. The footer was 211.6 px at 1440 and
+				230.5 px at 1024 — a quarter to a third of the panel — and it spent that
+				on a checklist whose eleven words never change and on a "Show frame" the
+				top bar carries as well. Both are gone from the resting state: the frame
+				stays in the bar (`topbar.frame`, always in reach and never scrolled
+				away), and the checklist appears on the arming step below, which is the
+				moment between the two taps when you actually walk round the machine.
 			-->
 			<div class="pf-stick">
-				<!-- The checklist travels with the button.
+				<!-- The checklist travels with the button, and it comes up on the tap
+				     that arms the burn.
 
 				     It used to stand in the column above this footer, and with four
 				     layers the column is longer than the panel is high: measured at
 				     1440 x 900, "Extraction and air assist on" answered `DIV.pf-stick`
 				     under `elementFromPoint` and "Workpiece is clamped and flat"
 				     answered the start button itself. Three lines to work down, two of
-				     them under the thing you press. Here they cannot be scrolled away
-				     from the button they belong to. -->
-				<div class="pf-check">
-					<span class="pf-head">{t('job.checklist.title')}</span>
-					<ul>
-						<li>{t('job.checklist.lid')}</li>
-						<li>{t('job.checklist.air')}</li>
-						<li>{t('job.checklist.workpiece')}</li>
-					</ul>
-				</div>
+				     them under the thing you press. So it moved in here — and then it
+				     stood permanently over the table and the warnings instead, 90 px of
+				     a 211.6 px footer for eleven words that never change.
+
+				     Between "Start job" and "Start now" is where those words are read:
+				     the lid, the extraction, the clamp are things you get up for, and
+				     that is what the second tap waits for. Resting, the footer is the
+				     buttons alone; armed, the list stands directly above the button
+				     that fires — never scrolled away from it. -->
+				{#if preflight}
+					<div class="pf-check">
+						<span class="pf-head">{t('job.checklist.title')}</span>
+						<ul>
+							<li>{t('job.checklist.lid')}</li>
+							<li>{t('job.checklist.air')}</li>
+							<li>{t('job.checklist.workpiece')}</li>
+						</ul>
+					</div>
+				{/if}
 				<div class="pf-actions">
 				{#if preflight}
 					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
@@ -1040,18 +1079,12 @@
 						{control.busy === 'start' ? t('job.starting') : t('job.startNow')}
 					</button>
 				{:else}
-					{#if onFrame}
-						<button
-							class="btn"
-							disabled={control.busy !== null || running}
-							title={rotary.active
-								? `${t('job.frame.title')} ${t('job.rotary.frame')}`
-								: t('job.frame.title')}
-							onclick={() => onFrame?.()}
-						>
-							{t('job.frame')}
-						</button>
-					{/if}
+					<!-- No "Show frame" here. The top bar has the same button, on every
+					     tab and never scrolled away, and a second copy of it cost this
+					     footer a 44 px line of its own: measured, 211.6 px of footer at
+					     1440 x 900 with the table's rows underneath it. What the rotary
+					     changes about the frame is said with the rest of the rotary,
+					     above. -->
 					<!-- One control in two parts: the button that arms the burn, and beside it
 					     the arrow with the other thing you can do with a ready job — send it
 					     to the machine's memory. The two are one visual unit, so a hand finds

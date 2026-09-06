@@ -557,7 +557,6 @@ export const nl: Catalogue = {
 	'palette.newWork': 'nieuw werk',
 
 	// ── Job panel ─────────────────────────────────────────────────────────────────
-	'job.frame.title': 'De kop langs de omtrek van je werk sturen — de laser blijft uit',
 	'job.origin.clearTitle': 'Terug naar het nulpunt van de machine zelf',
 	'job.noRaster.title': 'Deze server kan rasterlagen niet branden.',
 	'job.autofocus': 'Autofocus start je op de machine zelf.',
