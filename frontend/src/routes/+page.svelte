@@ -1848,7 +1848,6 @@ import { SeriesStore } from '$lib/series.svelte';
 						await edits.lock();
 					}}
 					profile={library.activeMachine}
-					onFrame={() => control.frame()}
 					onCutPath={() => (cutPathOpen = true)}
 					colorFor={(id) => design.colorFor(id)}
 		onFocus={async (mm) => {

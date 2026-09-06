@@ -195,7 +195,7 @@ precedence: **other material** and **other thickness**, spelled out under the ta
 *This preset is for {material}; this sheet is {material}.* and *This preset is for
 {n} mm; this sheet is {n} mm.*
 
-![The Job panel in the pre-flight. Under Estimated time 1:19 and the row "Material" reading "not filled in for this sheet" stands the warning "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the table of layers with their speed, power and passes and a Source column reading "not verified". Below it, in the strip at the foot of the panel, a folded-shut "Send to the machine" and a checklist headed RUN THROUGH THIS: lid closed, extraction and air assist on, workpiece clamped and flat.](images/12-job-preflight.png)
+![The Job panel in the pre-flight. Under the row "Material" reading "not filled in for this sheet" stands the warning "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that a "Show cut path" button and the table of layers with their speed, power and passes and a Source column reading "not verified". Below the table a thumbnail of the sheet; at the foot of the panel the strip that stays put while the rest scrolls, holding a green "Start job 1:19" with a narrower arrow button joined to its right, and nothing else.](images/12-job-preflight.png)
 
 The summary underneath counts them:
 

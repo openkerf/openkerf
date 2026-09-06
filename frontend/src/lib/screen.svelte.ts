@@ -51,6 +51,21 @@ class Screen {
 		return this.desktop;
 	}
 
+	/**
+	 * Is there no pointer that can hover here?
+	 *
+	 * A `title` is the app's usual place for the reason a button is dead, and on a
+	 * touch screen there is no way to read one. Where that reason is the difference
+	 * between "this is broken" and "select two shapes first", it has to be on the
+	 * screen instead — see the print-and-cut block in `JobControls`. Bound to the same
+	 * two widths as the rule above rather than to `pointer: coarse`, so that one number
+	 * still decides what a tablet is; a trackpad at 1100 px gets a line it did not need,
+	 * which costs less than a tablet getting no reason at all.
+	 */
+	get noHover() {
+		return this.phone || this.tablet;
+	}
+
 	/** Follow along; returns a cleanup function. Call it inside an `$effect`. */
 	follow(): () => void {
 		if (typeof window === 'undefined' || !window.matchMedia) return () => {};

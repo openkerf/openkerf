@@ -133,7 +133,7 @@
 	let preview = $state<{
 		plan: Plan;
 		cells: Cell[];
-		engine?: { grid?: boolean };
+		engine?: { raster?: boolean };
 	} | null>(null);
 
 	let form = $state({
@@ -226,7 +226,7 @@
 	);
 	/** Raster chosen on an engine that cannot convert it into laser lines. */
 	let rasterImpossible = $derived(
-		form.operation === 'graveren-raster' && preview?.engine?.grid === false
+		form.operation === 'graveren-raster' && preview?.engine?.raster === false
 	);
 	let assen = $derived([form.row_axis, form.column_axis] as As[]);
 	let vasteAs = $derived(

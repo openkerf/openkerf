@@ -559,7 +559,6 @@ export const nl: Catalogue = {
 	'palette.newWork': 'nieuw werk',
 
 	// ── Job panel ─────────────────────────────────────────────────────────────────
-	'job.frame.title': 'De kop langs de omtrek van je werk sturen — de laser blijft uit',
 	'job.origin.clearTitle': 'Terug naar het nulpunt van de machine zelf',
 	'job.noRaster.title': 'Deze server kan rasterlagen niet branden.',
 	'job.autofocus': 'Autofocus start je op de machine zelf.',
@@ -599,7 +598,6 @@ export const nl: Catalogue = {
 	'job.jog.left': 'Naar links',
 	'job.keepSpot': 'Deze plek bewaren',
 	'job.checklist.title': 'Loop dit even na',
-	'job.estimatedTime': 'Geschatte tijd',
 	'job.seriesLeft': 'Dit is de plaat die nu op het bed ligt; de {burns} die nog moeten duren samen ongeveer {time}.',
 	'job.toOrigin': 'Naar oorsprong',
 	'job.toPoint': 'Naar een punt',
@@ -620,9 +618,10 @@ export const nl: Catalogue = {
 	'job.upload.send': 'Versturen',
 	'job.upload.sending': 'Bezig met versturen…',
 	'job.upload.done': '{name} staat in de machine. Start hem op het paneel.',
+	'job.state.off': 'Uit',
+	'job.keysHere': 'De toets werkt overal in de app, zolang dit venster voorop staat — daarbuiten kan een browser geen toetsen ontvangen.',
 	'job.adjust.reset': 'Terug',
 	'job.checklist.lid': 'Deksel dicht',
-	'job.calculating': 'rekent…',
 	'job.origin': 'Nulpunt',
 	'job.move': 'Bewegen',
 	'job.home': 'Home',
@@ -662,7 +661,6 @@ export const nl: Catalogue = {
 	'job.elapsed': '{time} verstreken',
 	'job.clearQueue': 'Wachtrij legen ({n})',
 	'job.queueEmpty': 'De wachtrij is al leeg',
-	'job.keysWork': '{pause} en {stop} werken overal in de app, zolang dit venster voorop staat — daarbuiten kan een browser geen toetsen ontvangen.',
 	'job.machineControls': 'Machine bedienen',
 	'job.machineControls.notNow': 'niet tijdens een job',
 	'job.jog.z': 'Kop {step} mm {direction}',
@@ -2246,7 +2244,7 @@ export const nl: Catalogue = {
 	'job.rotary.chuck': 'De rotary staat aan: een klauwplaat van {diameter} mm, Y maal {factor}.',
 	'job.rotary.roller': 'De rotary staat aan: {circumference} mm rond, Y maal {factor}.',
 	'job.rotary.frame':
-		'Op een rotary draait het kader het object; de kop komt bijna niet over het bed.',
+		'Kader tonen, in de bovenbalk, draait het object in plaats van over het bed te gaan.',
 	'job.home.rotary.title': 'Homen met de rotary erin?',
 	'job.home.rotary.body':
 		'Homen stuurt de kop over het bed en de rotary in. Ga alleen door als de rotary eruit is of de kop de hoek vrij kan bereiken.',

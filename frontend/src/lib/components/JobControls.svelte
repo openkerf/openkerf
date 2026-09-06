@@ -40,7 +40,6 @@
 		onUnlock,
 		onLock,
 		onFocus,
-		onFrame,
 		onCutPath,
 		colorFor,
 		profile = null,
@@ -80,11 +79,9 @@
 		 *  the app offered only half the pair. */
 		onLock?: () => void;
 		onFocus?: (distanceMm: number) => void;
-		/** Sending the head around the outline, without burning. */
-		onFrame?: () => void;
-		/** Opening the cut-path window (gap S1). Beside "Show frame", because this is
-		 *  the moment you want to know in what order it burns — and unlike the frame
-		 *  it costs no movement of the machine. */
+		/** Opening the cut-path window (gap S1). The frame itself lives in the top bar;
+		 *  this is the moment you want to know in what order it burns — and unlike the
+		 *  frame it costs no movement of the machine. */
 		onCutPath?: () => void;
 		/** The same layer colour the canvas and the layer list show. */
 		colorFor?: (operationId: string | null) => string;
@@ -129,7 +126,7 @@
 		material_name?: string | null;
 		thickness_mm?: number | null;
 		warnings?: Warning[];
-		/** Does this engine actually execute the layer? See `gridOff`. */
+		/** Does this engine actually execute the layer? See `rasterOff`. */
 		burns?: boolean;
 	};
 	type Bounds = {
@@ -178,7 +175,7 @@
 		sheet?: SheetInfo | null;
 		layers?: Layer[];
 		bounds?: Bounds | null;
-		engine?: { grid: boolean } | null;
+		engine?: { raster: boolean } | null;
 		/** Machine-wide, and it changes what burns — so the pre-flight says it out loud
 		 *  rather than leaving it on a settings page nobody opens twice. */
 		rotary?: RotaryState | null;
@@ -241,12 +238,17 @@
 	/**
 	 * Does this engine burn raster layers?
 	 *
-	 * No, headless: the converter from grid area to laser lines sits in the wxPython
+	 * No, headless: the converter from raster area to laser lines sits in the wxPython
 	 * GUI. During planning the layer throws its own shapes away and produces no
 	 * cutcode. That must not be a surprise *after* burning, and the time estimate must
 	 * not promise seconds for it.
+	 *
+	 * The key is `raster` — the name `engine_report` (drawing.py) and the test-grid
+	 * preview both write. It was read here as `grid`, which the API never sends, so this
+	 * block could not appear on any server; `tests/no-raster.test.ts` holds the two names
+	 * together now.
 	 */
-	let gridOff = $derived(overview?.engine?.grid === false);
+	let rasterOff = $derived(overview?.engine?.raster === false);
 	/**
 	 * The rotary, from the pre-flight's own answer.
 	 *
@@ -752,42 +754,23 @@
 			nothing disappears from view on that first tap.
 		-->
 		<div class="preflight" class:none={empty}>
-			<!-- "Estimated time 0:00" above an empty bed reads as a job of zero
-			     seconds instead of as no job. With nothing to do the clock keeps
-			     quiet and the message below it speaks. -->
-			<!-- The workpiece first, the numbers about it after (decision B8).
-			     Whoever sees something hanging off the sheet need not read the time
-			     any more — and on tablet and phone the canvas is not beside it. -->
+			<!-- A clock reading 0:00 above an empty bed reads as a job of zero seconds
+			     instead of as no job. With nothing to do the clock on the start button
+			     stays away — the guard on `estimate?.seconds` at the foot of this panel
+			     — and the message below speaks instead. -->
+			<!-- The numbers first and the drawing under them, against decision B8's
+			     order: see the block further down for the measurement that turned it
+			     round. On tablet and phone the canvas is not beside this panel, so the
+			     drawing has to be in the column — but at the end of it, where the
+			     sticky footer may cover it. -->
 			{#if !empty}
-				<!-- The messages about bed and sheet belong to the drawing and so
-				     live in it, right under the shape they are about (gaps J5 and C2).
-				     They used to be here as two equally red cards in a row; that made
-				     "there is no material there" as serious as "the head does not get
-				     there", and then neither carries any weight. -->
-				<JobPreview
-					design={design}
-					sheet={overview?.sheet ?? null}
-					bounds={bounds}
-					{colorFor}
-				/>
-				<!-- Under the drawing, because it is the same drawing with the order in
-				     it (gap S1). Deliberately *not* in the sticky row with the frame and
-				     the start button: measured at 1440 px with three buttons in that row,
-				     "Start job 1:26" was clipped at the right edge of the panel — the
-				     primary action half off screen, which is the very thing the second
-				     usability round fixed. -->
-				{#if onCutPath}
-					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
-						{t('cutpath.show')}
-					</button>
-				{/if}
 				<!-- The converter that turns a grid area into laser lines lives in
 				     the wxPython version of the engine. When it is missing, the layer
 				     throws its own shapes away during planning and nothing comes out
 				     of the machine. The same words as the block in the test-grid
 				     wizard: whoever read them there recognises them here — and the
 				     other way round. -->
-				{#if gridOff && blindLayers.length}
+				{#if rasterOff && blindLayers.length}
 					<p class="pf-no-raster" role="alert">
 						<strong>{t('job.noRaster.title')}</strong>
 						{blindLayers.length === 1
@@ -795,18 +778,19 @@
 							: t('job.noRaster.many', { n: blindLayers.length })}
 					</p>
 				{/if}
-				<div class="pf-time">
-					<span class="muted">{t('job.estimatedTime')}</span>
-					<span class="v mono">
-						{#if estimating}
-							<span class="rekent">{t('job.calculating')}</span>
-						{:else}{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}{/if}
-					</span>
-				</div>
+				<!-- No "Estimated time" row here. The same minutes stand on the start
+				     button at the foot of the panel, and both were on screen at once,
+				     400 px apart — measured "Estimated time 2:31" at y 415 and
+				     "Start job 2:31" at y 816 at 1440 x 900. One of them had to go, and
+				     the one to keep is the one on the thing you press: it is never
+				     scrolled away, and the number is read at the moment it is acted on.
+				     While a new time is worked out the number on the button dims rather
+				     than saying so in words — see `.pf-start-time.rekent`. -->
 				{#if seriesLeft}
-					<!-- The clock above is one plate; a series of fifty must never show the
-					     time of one. Both numbers come off the estimate itself — see
-					     `seriesLeft` — so this line and that one cannot disagree. -->
+					<!-- The clock on the start button is one plate; a series of fifty must
+					     never show the time of one. Both numbers come off the estimate
+					     itself — see `seriesLeft` — so this line and that one cannot
+					     disagree. -->
 					<p class="pf-row series">{seriesLeft}</p>
 				{/if}
 				<!-- *What* is being burned, right above the settings it is burned
@@ -833,7 +817,16 @@
 						<!-- The rotary changes the shape of what comes out, so it belongs on
 						     the one screen you read before burning. A job that silently comes
 						     out stretched costs the workpiece, and you have one of those. -->
-						<p class="pf-warn strong">{rotaryText}</p>
+						<!-- What the rotary does to the frame is said here, with the rest
+						     of what the rotary changes. It used to hang in the tooltip of a
+						     "Show frame" in the footer, and that button is gone: the top bar
+						     carries the one frame there is. A tooltip is no place for it on a
+						     tablet either. The sentence names the top bar itself, because the
+						     button it is about is three surfaces away from this line. Two
+						     whole sentences beside each other, not two halves of one: the
+						     rotary's own line comes from `job.rotary.chuck` or
+						     `job.rotary.roller` and reads on its own in any word order. -->
+						<p class="pf-warn strong">{rotaryText} {t('job.rotary.frame')}</p>
 						{#if overview?.rotary?.overlap}
 							<p class="pf-warn">
 								{t('rotary.overlap', {
@@ -869,23 +862,54 @@
 			     laser cutter checks speed, power and passes before putting anything in
 			     the machine. -->
 			{#if layers.length}
-				<!-- The general warning above the table and not under it.
-				     Not a matter of taste: this is the last thing in the column, and the
-				     footer is sticky, so the last thing in the column is what the footer
-				     lies over. Measured at 1280 x 800 with the panel as it opens, four
-				     layers on unmeasured presets — the line stood at y 662-726 with the
-				     footer's top at 581, `elementFromPoint` on it answering
-				     `DIV.pf-check`: a warning you only meet by scrolling to it, in a
-				     pre-flight, which is the one screen whose whole job is to say
-				     unasked what is wrong. Above the table it is the table that goes
-				     under the footer instead, and a table is something you work down
-				     anyway.
+				<!-- The general warning above the table because it is read before the
+				     rows, not because it would otherwise be last: what is last in this
+				     column now is the drawing. One line saying that something is wrong
+				     with these settings is the sentence you want before you start
+				     reading numbers, and it is the only one of the three that says
+				     anything if you read nothing else.
+
+				     Measured on this build in the state the app opens in — four layers
+				     on unverified presets, no machine attached, so the "not responding"
+				     card stands above this line: the warning runs 202-282 at
+				     1440 x 900, 1366 x 768 and 1280 x 800 and 222-313 at 1024 x 768,
+				     against footer tops of 729, 671, 703 and 654, and
+				     `elementFromPoint` on its middle answers the paragraph itself at all
+				     four. (Before this round it stood under the footer: at 1024 x 768 its
+				     middle answered `BUTTON.btn` and at 1366 x 768 `SPAN.pf-head`.)
 
 				     The concrete objections stay below the table, beside the rows they
 				     name. So the order is: what is wrong in one line, the settings, then
 				     which layer is wrong and why. -->
 				{#if risky.length}
 					<p class="pf-warn strong">{t('job.risky', { n: risky.length })}</p>
+				{/if}
+				<!-- The button heads the table, as its caption: these are the layers,
+				     and this is the order they burn in. It stood under the drawing once
+				     and travelled to the end of the column with it, where the sticky
+				     footer lay over it (687-717 against a footer top of 671 at
+				     1366 x 768, 771-815 against 654 at 1024 x 768, `elementFromPoint`
+				     answering the footer's own button); then at the foot of the table,
+				     which held everywhere except the state with the most to say — with a
+				     rotary fitted the two extra sentences pushed it to 714-758 at
+				     1024 x 768, again under the footer at 654. Above the table it clears
+				     at every size in both states, because nothing that grows stands
+				     between it and the top of the column.
+
+				     It costs the table: at 1024 x 768 with a rotary the header row now
+				     sits where the first body row did. Prose under the footer you can
+				     still scroll to; a control under it cannot be pressed at all, so the
+				     button goes first. `tests/preflight-fold.test.ts` measures both.
+
+				     Deliberately *not* in the sticky row with the start button either:
+				     measured at 1440 px with three buttons in that row, "Start job 1:26"
+				     was clipped at the right edge of the panel — the primary action half
+				     off screen, which is the very thing the second usability round
+				     fixed. -->
+				{#if onCutPath}
+					<button class="pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
+						{t('cutpath.show')}
+					</button>
 				{/if}
 				<table class="pf-layers">
 					<thead>
@@ -973,6 +997,52 @@
 				{/if}
 			{/if}
 
+			<!-- The drawing comes after the numbers about it, and not before them
+			     (which is what decision B8 laid down). The reason is the footer: it is
+			     sticky, so whatever stands last in the column is what it lies over, and
+			     with the picture first the numbers stood last. Measured on this seed —
+			     four layers on unverified presets, no machine attached, which is the
+			     state the app opens in — the footer's top was at 660 (1440 x 900), 528
+			     (1366 x 768), 560 (1280 x 800) and 493 (1024 x 768), while the picture
+			     alone took 181 px at 1440 and 215 px at 1024 and the material row, both
+			     warnings and the table ran from 411 to 705 (1440) and 475 to 800
+			     (1024). So the picture is what the footer covers now, and the numbers
+			     are read where they stand. `tests/preflight-fold.test.ts` measures it.
+
+			     The bed and sheet messages travel with it, because they belong under
+			     the shape they are about (gaps J5 and C2), and the block's tail is what
+			     the footer lies over now. Measured on this build, as the panel opens:
+			     `.pf-beeld` runs 520-717 against a footer top of 671 at 1366 x 768 (46
+			     px under) and against 703 at 1280 x 800 (14 px under), and 580-814
+			     against 654 at 1024 x 768 (160 px under); at 1440 x 900 it is clear
+			     (520-717 against 729). The picture is itself the button that enlarges
+			     it, so at 1024 x 768 112 of its 186 px are covered and its middle
+			     answers `BUTTON.btn`.
+
+			     That is a covering and not a hiding. `.preflight` is not the last block
+			     in `.panel-scroll`, so the sticky footer lets go at its foot: scrolled
+			     until the pre-flight's bottom edge meets the bottom of the scroller, the
+			     drawing and the button in it stand clear and answer for themselves at
+			     all four sizes and with a rotary fitted too — measured 597-794 (1440),
+			     465-662 (1366), 497-694 (1280) and 411-644 (1024), footer tops 803, 671,
+			     703 and 654. A bottom padding the height of the footer was tried here
+			     and changes none of those numbers: it only makes the scroller 69 px
+			     longer, because the footer is already out of the way by then.
+			     `tests/preflight-fold.test.ts` measures both halves. -->
+			{#if !empty}
+				<!-- The messages about bed and sheet belong to the drawing and so
+				     live in it, right under the shape they are about (gaps J5 and C2).
+				     They used to be here as two equally red cards in a row; that made
+				     "there is no material there" as serious as "the head does not get
+				     there", and then neither carries any weight. -->
+				<JobPreview
+					design={design}
+					sheet={overview?.sheet ?? null}
+					bounds={bounds}
+					{colorFor}
+				/>
+			{/if}
+
 			{#if empty}
 				<!-- No checklist, no start button: there is nothing to run through. -->
 				<div class="pf-empty">
@@ -990,32 +1060,52 @@
 			<!--
 				The buttons stick to the bottom of the panel.
 
-				Since the preparation is always open, the column is taller than the
-				panel is high (measured: 1,427 px of content in 788 px). Without this
-				sticky footer the start button sat below the fold — the primary action
-				out of sight, which is exactly what this round had to solve, not cause.
+				Since the preparation is always open, the scroller it sits in is taller
+				than the panel is high. Measured on this build, on the seed of
+				`tests/preflight-fold.test.ts`: `.panel-scroll` holds 1,407 px of
+				content in 788 px at 1440 x 900 and 1,668 px in 630 px at 1024 x 768.
+				The pre-flight block itself now fits (`.preflight` is 673 px and 759 px
+				at those two sizes, against 804 and 906 before this repair), but the
+				scroller around it does not, so without this sticky footer the start
+				button would still scroll away — the primary action out of sight, which
+				is exactly what this round had to solve, not cause.
 
-				Showing the frame is on the same line: it is the last check before that
-				same button, so it belongs beside it and not three blocks higher.
+				What sticks is only what you press. The footer was 211.6 px at 1440 and
+				230.5 px at 1024 — a quarter to a third of the panel — and it spent that
+				on a checklist whose eleven words never change and on a "Show frame" the
+				top bar carries as well. Both are gone from the resting state: the frame
+				stays in the bar (`topbar.frame`, always in reach and never scrolled
+				away), and the checklist appears on the arming step below, which is the
+				moment between the two taps when you actually walk round the machine.
 			-->
 			<div class="pf-stick">
-				<!-- The checklist travels with the button.
+				<!-- The checklist travels with the button, and it comes up on the tap
+				     that arms the burn.
 
 				     It used to stand in the column above this footer, and with four
 				     layers the column is longer than the panel is high: measured at
 				     1440 x 900, "Extraction and air assist on" answered `DIV.pf-stick`
 				     under `elementFromPoint` and "Workpiece is clamped and flat"
 				     answered the start button itself. Three lines to work down, two of
-				     them under the thing you press. Here they cannot be scrolled away
-				     from the button they belong to. -->
-				<div class="pf-check">
-					<span class="pf-head">{t('job.checklist.title')}</span>
-					<ul>
-						<li>{t('job.checklist.lid')}</li>
-						<li>{t('job.checklist.air')}</li>
-						<li>{t('job.checklist.workpiece')}</li>
-					</ul>
-				</div>
+				     them under the thing you press. So it moved in here — and then it
+				     stood permanently over the table and the warnings instead, 90 px of
+				     a 211.6 px footer for eleven words that never change.
+
+				     Between "Start job" and "Start now" is where those words are read:
+				     the lid, the extraction, the clamp are things you get up for, and
+				     that is what the second tap waits for. Resting, the footer is the
+				     buttons alone; armed, the list stands directly above the button
+				     that fires — never scrolled away from it. -->
+				{#if preflight}
+					<div class="pf-check">
+						<span class="pf-head">{t('job.checklist.title')}</span>
+						<ul>
+							<li>{t('job.checklist.lid')}</li>
+							<li>{t('job.checklist.air')}</li>
+							<li>{t('job.checklist.workpiece')}</li>
+						</ul>
+					</div>
+				{/if}
 				<div class="pf-actions">
 				{#if preflight}
 					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
@@ -1035,18 +1125,12 @@
 						{control.busy === 'start' ? t('job.starting') : t('job.startNow')}
 					</button>
 				{:else}
-					{#if onFrame}
-						<button
-							class="btn"
-							disabled={control.busy !== null || running}
-							title={rotary.active
-								? `${t('job.frame.title')} ${t('job.rotary.frame')}`
-								: t('job.frame.title')}
-							onclick={() => onFrame?.()}
-						>
-							{t('job.frame')}
-						</button>
-					{/if}
+					<!-- No "Show frame" here. The top bar has the same button, on every
+					     tab and never scrolled away, and a second copy of it cost this
+					     footer a 44 px line of its own: measured, 211.6 px of footer at
+					     1440 x 900 with the table's rows underneath it. What the rotary
+					     changes about the frame is said with the rest of the rotary,
+					     above. -->
 					<!-- One control in two parts: the button that arms the burn, and beside it
 					     the arrow with the other thing you can do with a ready job — send it
 					     to the machine's memory. The two are one visual unit, so a hand finds
@@ -1062,7 +1146,7 @@
 							     Hiding it during the recalculation made the button change width
 							     on every edit — a button that jumps under your cursor. -->
 							{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
-								<span class="pf-start-time"
+								<span class="pf-start-time" class:rekent={estimating}
 									>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
 								>{/if}
 						</button>
@@ -1153,12 +1237,20 @@
 
 			<p class="now-hint">{phaseBody(phase)}</p>
 
+			<!-- Gap J4, finished. The keys sit in the tooltips of the buttons they work,
+			     as a second line: what a key does is read on the thing it does it to.
+			     The paragraph that used to stand under this row said both keys again,
+			     in burning, paused, queued and done alike — 49.5 px of advice in the
+			     panel's most expensive place, under two buttons that already carried
+			     it. What only the second line can say is that the keys stop working
+			     outside this window, and that is the part you discover at the wrong
+			     moment. -->
 			<div class="now-actions">
 				{#if paused}
 					<button
 						class="btn primary"
 						disabled={!transportAllowed('resume', { able: actions, phase, blocked })}
-						title="{blockedReason ?? t('job.pause.keepGoing')} · {PAUSE_KEY}"
+						title={`${blockedReason ?? t('job.pause.keepGoing')} · ${PAUSE_KEY}\n${t('job.keysHere')}`}
 						onclick={() => control.resume()}
 					>{t('transport.resume')}</button>
 				{:else}
@@ -1170,7 +1262,7 @@
 						class="btn"
 						disabled={!transportAllowed('pause', { able: actions, phase, blocked })}
 						title={busyWithWork
-							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}`
+							? `${blockedReason ?? t('job.pause.stopHead')} · ${PAUSE_KEY}\n${t('job.keysHere')}`
 							: t('transport.pause.nothing')}
 						onclick={() => control.pause()}
 					>{t('transport.pause')}</button>
@@ -1185,7 +1277,7 @@
 					disabled={!actions?.stop || control.tokenProbleem || !connection.online}
 					title={!connection.online
 						? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
-						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}`}
+						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}\n${t('job.keysHere')}`}
 					onclick={() => control.stop()}
 				>
 					<!-- One key, not two glued together: "Stop" plus "on the machine" only
@@ -1209,16 +1301,6 @@
 				</button>
 			{/if}
 
-			<!-- Gap J4, shortened. The keys are in the tooltips of the buttons above
-			     now; what a tooltip cannot say is that they do not work outside this
-			     window, and that is exactly the part you discover at the wrong
-			     moment. -->
-			<p class="toetsen">
-				{t('job.keysWork', {
-					pause: PAUSE_KEY,
-					stop: STOP_KEY
-				})}
-			</p>
 		</div>
 
 	{/if}
@@ -1397,7 +1479,23 @@
 							— {t('job.origin.here')}
 						</p>
 					{:else}
-						<p class="hint">{t('job.origin.off')}</p>
+						<!-- Not set: a value, the way the layer table says a number, with the
+						     sentence behind it. It used to be that whole sentence on the
+						     screen — 54 characters, 31.9 px — under a label that already says
+						     what a zero point is, and beside a print-and-cut card saying
+						     "Off." for the same state in different words.
+
+						     The sentence stays a title even at `screen.noHover`, where the
+						     dead button's reason below does become a line — and that is a
+						     difference on purpose. A reason why a button will not work is
+						     the only way to get past it; "Off" under a heading that already
+						     says "Zero point of the work" is the whole state. Measured: put
+						     both sentences on the screen at 1100 px and this fold goes from
+						     694.3 px to 776.8 px, taller than the 1440 px column it started
+						     from — the pattern back, on the screen with the least room. The
+						     dotted cue is dropped there instead, so nothing promises a hover
+						     that a touch screen cannot give. -->
+						<p class="hint" class:off={!screen.noHover} title={t('job.origin.off')}>{t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						<button
@@ -1464,7 +1562,11 @@
 							})}
 						</p>
 					{:else}
-						<p class="hint">{t('job.printcut.off')}</p>
+						<!-- The same value in the same words as the zero point above: both
+						     answer "where does the work go", and both were off in prose of
+						     their own — this one 171 characters over 63.8 px, explaining at
+						     length a feature whose only button was dead. -->
+						<p class="hint" class:off={!screen.noHover} title={t('job.printcut.off')}>{t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						{#if cutMarks.length === 2}
@@ -1504,6 +1606,16 @@
 							>
 								{t('job.printcut.use')}
 							</button>
+							<!-- Why the button is dead, on the screen and not only in its
+							     tooltip. On a touch screen there is no hover, and this fold is
+							     the one you use standing at the machine with a tablet — the
+							     same reason the saved positions carry their coordinates in the
+							     chip. On a desk the tooltip is enough and the line stays off,
+							     because a reason nobody needs is the prose this panel has too
+							     much of. -->
+							{#if screen.noHover && selectedIds.length !== 2}
+								<p class="reason">{t('job.printcut.needsTwo')}</p>
+							{/if}
 						{/if}
 					</div>
 				</div>
@@ -1701,8 +1813,8 @@
 	   that the pause button sits nowhere or twice. Both now read
 	   `screen.controlsInBar`; the class below is the consequence, not the rule. */
 	/* A way in, not a command: this opens a window, it does not do anything to the
-	   machine. So it is a quiet full-width row under the drawing rather than a third
-	   button competing with "Start job". */
+	   machine. So it is a quiet full-width row heading the layer table rather than a
+	   third button competing with "Start job". */
 	.pf-order {
 		display: block;
 		width: 100%;
@@ -1802,11 +1914,6 @@
 	}
 	.pf-time .v {
 		font-size: var(--text-md);
-	}
-	.rekent {
-		font-family: var(--font-ui);
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 	.pf-row {
 		color: var(--text-2);
@@ -2028,6 +2135,23 @@
 	.btn.danger.dood strong { color: var(--text-1); }
 	.hint {
 		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* The state of a feature nobody has switched on: a word, in the same grey as the
+	   coordinates that stand there when it *is* on. The dotted underline — currentColor,
+	   the same idiom as `.afwachtend` in StatusBar — says the sentence behind it can be
+	   read, so it is only worn where a pointer can hover; at `screen.noHover` the
+	   sentence itself stands underneath and the cue would promise nothing. */
+	.hint.off {
+		text-decoration: underline dotted;
+		text-underline-offset: 3px;
+		cursor: help;
+	}
+	/* Why a button in this block is dead — only where a tooltip cannot be read. */
+	.reason {
+		flex-basis: 100%;
+		margin: var(--space-1h) 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
@@ -2256,22 +2380,13 @@
 		font-weight: 400;
 		opacity: 0.85;
 	}
+	/* A new time is being worked out. The last one stays where it is — hiding it made
+	   the button change width on every edit — and it dims to say it is not the answer
+	   yet. A word ("calculating…") in this spot would push the button wider still. */
+	.pf-start-time.rekent {
+		opacity: 0.5;
+	}
 
-	.toetsen {
-		grid-column: 1 / -1;
-		margin: var(--space-3) 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		line-height: 1.5;
-	}
-	/* Four lines about keys on a screen without a keyboard is filling the app's most
-	   expensive space with something you cannot do there. On a tablet the controls are
-	   in the bar as well and this panel is already mostly prose. A tablet with a
-	   separate keyboard keeps the shortcut — it is still in the button's tooltip, and
-	   it simply works. */
-	@media (pointer: coarse) {
-		.toetsen { display: none; }
-	}
 	/* Jumping to a point, beside the direction buttons above. */
 	.points { margin-top: var(--space-3); }
 	.puntrij {
