@@ -1784,7 +1784,7 @@
 					{#if canEdit && compact}
 						<button
 							class="short mono"
-							title={t('panel.layer.valuesTitle')}
+							title={t('panel.layer.valuesTitle', { values: short(op) })}
 							aria-expanded={open}
 							aria-label={t('panel.layer.valuesAria', { label: op.label, values: short(op) })}
 							onclick={() => openSettings(open ? null : op.id)}
@@ -2373,26 +2373,27 @@
 		flex: 0 1 auto;
 	}
 	.layer.compact .layer-name {
-		/* A floor, not a wish: the name may be cut — it stands in full in the roomy list
-		   and in the tooltip — but never squeezed away again. Five characters and not the
-		   six that first suggested itself: with 6ch the row at 1024 whose values are
-		   widest ("1000 · 30%") could no longer keep everything on one line and wrapped
-		   its values underneath, 102 px against 54 for its neighbours — one ragged row in
-		   a list you are meant to scan. At 5ch nothing wraps and the narrowest name still
-		   measures 47 px, above the floor either way; the floor is the guard for a panel
-		   or a value string narrower than any we have.
+		/* A floor, not a wish: the name may be cut — it stands in full in the roomy list,
+		   in the row's aria-label and in the tooltip of the name itself, which names the
+		   layer (`panel.layer.openTitle`) — but never squeezed away again. Five
+		   characters and not six: measured on the five layers of
+		   `compact-layer-names.test.ts`, a 6ch floor takes a second row at 1440 into two
+		   lines (Caption, 38 → 57.9 px; the five rows together 252.6 → 272.5 px) and the
+		   row that does not burn at 1024 from 101.5 to 123.3 px. What 5ch buys, measured
+		   on those rows: at 1440 the floor is 39 px and no name stands on it — 47.2, 40.6
+		   and three times 104 — with one of them (Caption, 40.6) cut just above it. At
+		   1024 the floor is 45 px and four of the five sit exactly on it and are cut;
+		   only Outline, at 49.6, is whole.
 		   `contain: inline-size` is what keeps the floor from becoming a demand: without
 		   it the identity block counts the whole name as its minimum and every row wraps.
 		   Contained, the name asks for the floor and takes what is left — and if even the
 		   floor does not fit, the row wraps rather than letting the ⋯ paint over the
-		   values, which is what it did (3 px) while the name had no floor at all. That
-		   wrap is the price, and it is paid by exactly the two rows that carry a fourth
-		   value: the one that does not burn (which wrapped before this change too, 61 px
-		   at 1440) and the one with passes, 38 px before and 58 after. Both were only
-		   one line high while the name was 0 px and the switch was a sliver — measured at
-		   1024, the switch on the passes row was 2 px wide. There is no arrangement that
-		   keeps "12 · 65% · 3×", three touch targets and a readable name on one line in
-		   this panel; tightening the gaps to 2 px was tried and moved nothing. */
+		   values, which is what it did (3 px) while the name had no floor at all.
+		   Where that wrap falls, measured on those five rows: at 1440 on the three whose
+		   name does not fit beside the values (Fine lines 60.8 px, Logo area and Inner
+		   cuts 57.9, against 38 for the other two) — there it buys the whole name, 104 px
+		   instead of the floor. At the tablet width it is not affordable and the value
+		   line gives way instead; see the media query at the foot of this file. */
 		min-width: 5ch;
 		contain: inline-size;
 		/* A block, and not the two-line clamp box of the roomy list: text-overflow only
@@ -2840,13 +2841,40 @@
 		   few rules down: it does not fit, and of everything in the row it is the one
 		   that is also somewhere else. Measured at 1024, where every target is 44 px:
 		   grip, chip, switch and ⋯ with their gaps ask 192 px of the 187 the row has, so
-		   the name got 0 px and the row still overflowed by 5. Without it, and with the
-		   ten pixels of padding back, the name measures 47 to 62.6 px on the same five
-		   rows and every row stays one line high. Dragging is what is lost; the ⋯ menu still
-		   holds "Burn earlier" and "Burn later", which is the same reordering with words
-		   on it. */
+		   the name got 0 px and the row still overflowed by 5. Without it the name
+		   measures 45 to 49.6 px on the same five rows — the 5ch floor on four of them,
+		   so those four are cut, and the name's own tooltip carries it whole. Dragging
+		   is what is lost; the ⋯
+		   menu still holds "Burn earlier" and "Burn later", which is the same reordering
+		   with words on it. */
 		.layer.compact .grip {
 			display: none;
+		}
+		/* And here the value line gives way rather than the row. Even without the grip
+		   the minima do not fit at this width: chip, switch and ⋯ are 44 px each and the
+		   name has its 5ch floor, so the row wrapped its values underneath. Measured at
+		   1024 with the five layers of `compact-layer-names.test.ts`: four of the five
+		   rows 102 px tall, the five together 462 px where the roomy list takes 579.8 —
+		   a density switch saving a fifth, with a compact row taller than a roomy row at
+		   1440 (75.9 px). So the value string is cut instead of the row growing: it is a
+		   button that opens the fields themselves, and its aria-label reads the values
+		   whole. Measured after: four rows of 54 px, the fifth (the one that does not
+		   burn, whose value line carries a word as well as numbers) 101.5, and the five
+		   together 317.5 px — 45 % under the roomy list. The values are cut on four of
+		   the five: "12 · 65% · 3×" gets 67 px of the 101 it wants, "250 · 22%" 67 of 70.
+		   A cut that falls inside a figure reads as another figure, so the button's own
+		   tooltip carries the string whole (`panel.layer.valuesTitle` takes the values):
+		   the ⋯ has somewhere to point without opening the fold. */
+		.layer.compact {
+			flex-wrap: nowrap;
+		}
+		.layer.compact .vals,
+		.layer.compact .short {
+			min-width: 0;
+		}
+		.layer.compact .short {
+			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 		.val input {
 			/* 44 px tall, even though this is not a <button> and the global rule does not

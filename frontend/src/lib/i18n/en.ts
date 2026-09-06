@@ -988,7 +988,7 @@ export const en = {
 	'layer.named': 'Layer {n} · {label}',
 	'panel.layer.chipTitle': 'Layer {n} of {total} — click for the colour of this layer',
 	'panel.layer.chipAria': 'Colour of layer {label}',
-	'panel.layer.openTitle': 'The settings of this layer: colour, name, kind of operation and burn order',
+	'panel.layer.openTitle': 'The settings of {label}: colour, name, kind of operation and burn order',
 	'panel.layer.openAria': 'Open layer {label}',
 	'panel.layer.count': {
 		one: '1 shape in this layer',
@@ -999,7 +999,7 @@ export const en = {
 	'panel.layer.burnsAria': 'Burn along for {label}',
 	'panel.layer.moreTitle': 'More for {label} — or right-click the row',
 	'panel.layer.moreAria': 'More for {label}',
-	'panel.layer.valuesTitle': 'Speed, power and passes — click to adjust them',
+	'panel.layer.valuesTitle': 'Speed, power and passes: {values} — click to adjust them',
 	'panel.layer.valuesAria': 'Settings of {label}: {values}',
 	'panel.layer.speedAria': 'Speed of {label} in mm per second',
 	'panel.layer.powerAria': 'Power of {label} in per cent',
