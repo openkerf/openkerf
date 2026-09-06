@@ -15,6 +15,7 @@
 	import Menu from './Menu.svelte';
 	import { en } from '$lib/i18n/en';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
+	import { screen } from '$lib/screen.svelte';
 	import { bridgesRefusal, layerMenu, type Menu as MenuList } from '$lib/actions';
 	import { placeholders, resolve } from '$lib/series';
 	import type { SeriesStore } from '$lib/series.svelte';
@@ -795,7 +796,10 @@
 		     not exist and never has (repo-wide grep: this line was the only place
 		     that name appeared). An empty state pointing at an invented button is
 		     worse than one that keeps quiet: you go looking. -->
-		<p class="empty">{t('panel.empty')}</p>
+		<!-- Below 1200px the bar has no Import (`.topbar.narrow .docs`); it is a row in the
+		     rail's More menu. Same choice, and same reason, as the bed's own empty text in
+		     `Canvas.svelte`. Gauntlet P33. -->
+		<p class="empty">{t(screen.tablet ? 'panel.empty.tablet' : 'panel.empty')}</p>
 	{/if}
 </div>
 

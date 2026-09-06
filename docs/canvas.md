@@ -8,8 +8,11 @@ how the view moves, and how sheets work.
 ![An empty bed with rulers in millimetres along the top and left, the tool rail on the left, and the words "Empty bed" in the middle](images/05-canvas-empty.png)
 
 A fresh bed says **Empty bed**, with "Use Import in the top bar for an existing design, or
-pick a shape on the left and click the bed." That block disappears as soon as there is
-work on the bed, and also while a job is running.
+pick a shape on the left and click the bed." On a narrower window, where the top bar has
+no Import and importing lives in the tool rail's **More** menu, the same block reads "Use
+More on the left for an existing design, or pick a shape above it and click the bed."
+That block disappears as soon as there is work on the bed, and also while a job is
+running.
 
 ## What is drawn on the bed
 

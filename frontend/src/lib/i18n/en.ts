@@ -517,6 +517,13 @@ export const en = {
 	'canvas.snap.off': 'Snapping is off — hold Alt to use it for one move',
 	'canvas.bedSize': 'bed {width} × {height} mm',
 	'canvas.empty.body': 'Use Import in the top bar for an existing design, or pick a shape on the left and click the bed.',
+	// Below 1200px the bar has no Import — it is a row in the rail's More menu — so the
+	// sentence names the door that is on the screen it is shown on. A whole second
+	// sentence, not two glued halves. Gauntlet P33.
+	'canvas.empty.body.tablet': 'Use More on the left for an existing design, or pick a shape above it and click the bed.',
+	// The Edit panel's own empty text sent the reader to the same absent button; kept
+	// beside its twin so the pair is read together.
+	'panel.empty.tablet': 'Nothing on the bed yet. More on the left brings in an SVG, DXF or image; with the tools above it you draw your own.',
 	// Alt+click walks down a pile of shapes; this says where you are in it.
 	'canvas.deeper': 'Shape {index} of {total} under the pointer — Alt+click for the next.',
 	'canvas.under': 'Under the pointer',

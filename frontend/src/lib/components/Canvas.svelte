@@ -5,6 +5,7 @@
 	import { origin } from '$lib/control.svelte';
 	import { elementName, type DesignStore } from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
+	import { screen } from '$lib/screen.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import type { TilingStore, Tile } from '$lib/tiling.svelte';
 	import LayerPalette from './LayerPalette.svelte';
@@ -1881,7 +1882,12 @@
 				     Catches no pointer, because you have to be able to draw through it. -->
 				<div class="blank">
 					<h2>{t('canvas.empty.title')}</h2>
-					<p>{t('canvas.empty.body')}</p>
+					<!-- The sentence names the door that is on *this* screen. Below 1200px the
+					     bar drops its file buttons (`.topbar.narrow .docs`) and Import is a row
+					     in the rail's More menu, so the desk sentence sent a tablet user to a
+					     button that was not there. Same `screen.tablet` the bar itself reads.
+					     `tests/empty-bed-sentence.test.ts` holds this. -->
+					<p>{t(screen.tablet ? 'canvas.empty.body.tablet' : 'canvas.empty.body')}</p>
 				</div>
 			{/if}
 

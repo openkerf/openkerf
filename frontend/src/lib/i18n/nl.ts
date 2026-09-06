@@ -497,6 +497,8 @@ export const nl: Catalogue = {
 	'canvas.snap.off': 'Vastklikken staat uit — houd Alt ingedrukt om het even te gebruiken',
 	'canvas.bedSize': 'bed {width} × {height} mm',
 	'canvas.empty.body': 'Gebruik Importeren bovenin voor een bestaand ontwerp, of pak links een vorm en klik op het bed.',
+	'canvas.empty.body.tablet': 'Gebruik Meer linksonder voor een bestaand ontwerp, of pak daarboven een vorm en klik op het bed.',
+	'panel.empty.tablet': 'Nog niets op het bed. Meer linksonder haalt een SVG, DXF of afbeelding binnen; met het gereedschap daarboven teken je zelf.',
 	'canvas.deeper': 'Vorm {index} van {total} onder de aanwijzer — Alt+klik voor de volgende.',
 	'canvas.under': 'Onder de aanwijzer',
 	'canvas.under.item': '{index}. {name} · {width} × {height} mm',
