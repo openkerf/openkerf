@@ -32,6 +32,11 @@ A shape in no layer at all is drawn as a dotted grey outline, and the Edit tab
 says **in no layer**, with the tooltip **This shape does not burn**. Nothing
 happens to it during a job.
 
+A shape whose layers are all switched off is a different case with a different way
+out: switch the layer back on. The Edit tab keeps the layer chip, colours it amber
+and puts **does not burn** under the name — the same three words the layer's own
+row carries, and the same three the pre-flight puts across that layer's row.
+
 Before you have made any layer, the Layers tab says:
 
 > No layers yet. A layer is an operation — cut, engrave or raster — with a speed

@@ -3,6 +3,7 @@
 		DEFAULT_BRIDGES,
 		LAYER_COLORS,
 		bridgeSummary,
+		burnVerdict,
 		elementName,
 		madeHere,
 		elementCuts,
@@ -232,6 +233,23 @@
 		return gewoon
 			.map((op, index) => ({ ...op, number: index + 1 }))
 			.filter((op) => ids.has(op.id));
+	});
+	/**
+	 * Does what you are holding burn? (P11)
+	 *
+	 * Through `burnVerdict`, the same decision the drawing in the Job tab makes about
+	 * every shape on the bed — so the chip here and the sentence there cannot say two
+	 * different things about one shape. `layerOff` only when *none* of the selection
+	 * burns: a selection half of which is in a live layer is not "does not burn".
+	 */
+	let burns = $derived.by(() => {
+		if (!chosen.length) return 'burns';
+		const verdicts = chosen.map((element) =>
+			burnVerdict(element.operation_ids, design.operations)
+		);
+		if (verdicts.every((v) => v === 'layerOff')) return 'layerOff';
+		if (verdicts.every((v) => v === 'noLayer')) return 'noLayer';
+		return verdicts.every((v) => v !== 'burns') ? 'layerOff' : 'burns';
 	});
 	let selectedIds = $derived(design.selectedIds);
 
@@ -952,20 +970,45 @@
 				     the shape is in something is not the question, the question is what.
 				     And this is exactly what you check before starting — with the layer
 				     colour, so it matches what you see on the canvas. -->
+				<!-- And whether it burns, in the Layers row's own word. The chip named
+				     the layer and said nothing about it being switched off, while the row
+				     for that same layer two tabs away was dashed and tagged "does not
+				     burn" and the pre-flight left it out altogether. `burnVerdict` decides
+				     it for all three (P11); this is the word. -->
 				<span class="in-layers">
-					{#if inLayers.length === 0}
-						<span class="geenlaag" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
-					{:else}
-						{#each inLayers as layer (layer.id)}
-							<span class="laagchip" title={t('panel.layerChip', { n: layer.number, label: layer.label })}>
-								<span class="stip" style="background: {layer.color}"></span>
-								{layer.label}
-							</span>
-						{/each}
-					{/if}
+					<span class="chips">
+						{#if inLayers.length === 0}
+							<span class="geenlaag" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
+						{:else}
+							{#each inLayers as layer (layer.id)}
+								<span
+									class="laagchip"
+									class:off={!layer.output}
+									title={layer.output
+										? t('panel.layerChip', { n: layer.number, label: layer.label })
+										: t('panel.layerChip.off', { n: layer.number, label: layer.label })}
+								>
+									<span class="stip" style="background: {layer.color}"></span>
+									{layer.label}
+								</span>
+							{/each}
+						{/if}
+					</span>
 				</span>
 				<button class="clear" onclick={() => design.select(null)}>{t('panel.clear')}</button>
 			</div>
+			<!-- And the word itself under the name, where the Layers row puts it too:
+			     under the layer's name, in the same colour, in the same three words. In
+			     the header there was no room for it — measured at 1440, "Rectangle"
+			     came out as "Recta…" — and the name of what you are holding may not pay
+			     for it.
+
+			     Not for a mixed selection: with one shape in a live layer and one in a
+			     switched-off one the tag would be false for half of what you are
+			     holding, and the warm-coloured chip already says which half. -->
+			{#if burns === 'layerOff'}
+				<p class="burn-off"><span class="tag">{t('panel.tag.doesNotBurn')}</span></p>
+			{/if}
 			<!-- A locked shape looks the same apart from its handles, so the panel says it
 			     in words and offers the way out in the same place. Above the values,
 			     because it explains why they are switched off. -->
@@ -3093,8 +3136,25 @@
 	   and is what you are holding; "3 sha…" beside two full layer names is the
 	   wrong half to lose. Measured in English, where the same header truncated and
 	   the Dutch one did not — a language should not decide which half survives. */
-	.selected .head .name { flex: 0 0 auto; }
-	.selected .head .in-layers { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+	/* And it may give way no further than six characters: with a long text in the
+	   card the name took the whole header and the chip beside it measured 0 px
+	   (`scrollWidth` 59) at 1440 and at 1024, so the one place that says which layer
+	   the shape is in — and now whether that layer burns — was not on the screen.
+	   The name shrinks first because it is the longer of the two and is also on the
+	   canvas; the chips shrink only after that, and the word "does not burn" not at
+	   all. */
+	.selected .head .name { flex: 0 1 auto; min-width: 6ch; }
+	/* The chips keep their width and the name gives way, down to six characters —
+	   with a cap, so that two long layer names cannot push "Clear" off the panel
+	   the way the name used to push the chip off. Measured at 1440: the header is
+	   221 px, the six characters take 40, the cap 144 and "Clear" 34. */
+	.selected .head .in-layers { flex: 0 0 auto; min-width: 0; max-width: 65%; }
+	.selected .head .chips {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.selected .name {
 		font-weight: 600;
 		min-width: 0;
@@ -3126,10 +3186,20 @@
 	   it is the only case here where you have to do something. */
 	.geenlaag { color: var(--warn); }
 	.in-layers {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-1);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		white-space: nowrap;
 	}
+	.burn-off {
+		margin: 0;
+		font-size: var(--text-xs);
+	}
+	/* The same colour the Layers row gives the layer it is about: a layer that does
+	   not burn is the one thing in this header you may have to act on. */
+	.laagchip.off { color: var(--warn); }
 	.clear {
 		font-size: var(--text-xs);
 		color: var(--accent);

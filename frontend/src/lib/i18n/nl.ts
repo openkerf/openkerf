@@ -731,6 +731,7 @@ export const nl: Catalogue = {
 	'preview.countOutsideBed': '{n} liggen buiten het bed',
 	'preview.countOutsideSheet': '{n} vallen buiten het vel',
 	'preview.countNoLayer': '{n} zitten in geen laag',
+	'preview.countLayerOff': '{n} zitten in een laag die niet meebrandt',
 	'preview.sheetFallback': 'het vel',
 	'preview.whatBurns': 'Wat er gebrand wordt',
 	'preview.bigger': 'Groter bekijken',
@@ -754,6 +755,10 @@ export const nl: Catalogue = {
 	'preview.silent': {
 		one: 'Eén vorm zit in geen enkele laag die meebrandt — grijs gestippeld hierboven. De machine slaat hem over.',
 		other: '{n} vormen zitten in geen enkele laag die meebrandt — grijs gestippeld hierboven. De machine slaat ze over.'
+	},
+	'preview.silentOff': {
+		one: 'Eén vorm zit in een laag die uitstaat ({layers}) — grijs gestippeld hierboven. De machine slaat hem over.',
+		other: '{n} vormen zitten in een laag die uitstaat ({layers}) — grijs gestippeld hierboven. De machine slaat ze over.'
 	},
 
 	// ── The cut path (gap S1 / L1) ────────────────────────────────────────────────
@@ -847,6 +852,7 @@ export const nl: Catalogue = {
 	'panel.noLayer': 'in geen laag',
 	'panel.noLayer.title': 'Deze vorm brandt niet mee',
 	'panel.layerChip': 'Laag {n}: {label}',
+	'panel.layerChip.off': 'Laag {n}: {label} — deze laag staat uit, dus hij brandt niet mee.',
 	'panel.clear': 'Wissen',
 	'panel.widthShort': 'B',
 	'panel.heightShort': 'H',
@@ -1930,14 +1936,14 @@ export const nl: Catalogue = {
 	'field.increase': '{label} verhogen',
 	'phone.bedAria.size': 'Bed {width} bij {height} millimeter',
 	'phone.bedAria.empty': 'leeg',
-	'phone.bedAria.noLayer': '{n} in geen laag',
+	'phone.bedAria.silent': '{n} branden niet mee',
 	'phone.bedAria.offBed': '{n} buiten het bed',
 	'phone.bedAria.offSheet': '{n} buiten het vel',
 	'phone.bedAria.head': 'kop op {position}',
 	'phone.head': 'Kop',
 	'phone.onTheBed': 'Op het bed',
 	'phone.nothing': 'niets',
-	'phone.noLayer': ', {n} in geen laag',
+	'phone.silent': ', {n} branden niet mee',
 	'phone.lastSeen': 'Dit is de laatste stand die we gezien hebben.',
 	'phone.unplugged': 'Er hangt geen machine aan de server. Controleer of hij aanstaat en of de kabel erin zit.',
 	'phone.idle': 'Niets aan het branden. Een job start je op de desktop.',

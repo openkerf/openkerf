@@ -288,8 +288,9 @@ layer" and "Click a colour: those 4 shapes move to that layer".
 
 If you do not know what speed and power your material wants, do not guess: the
 wizard's own advice is "Not sure of the material? Burn a test grid first." A layer
-switched off shows the tag "does not burn", and a shape in no layer at all is
-labelled "This shape does not burn".
+switched off shows the tag "does not burn", and so does the Edit tab under the
+name of a shape that sits in it; a shape in no layer at all is labelled "This
+shape does not burn".
 
 Every setting a layer carries, and the four ways of getting a shape into one, are
 in [Layers](layers.md). Burning a board of test squares to find those numbers is
@@ -306,7 +307,7 @@ again.
 **Start job** in the top bar does not start anything. It switches to that tab and
 arms the job — see "Burning" below.
 
-![The Job tab showing the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, under those a "Show cut path" button and the whole table of layers with mm/s, %, passes and source, and under that a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes sit in no layer that burns — the foot of that picture running on under the strip at the bottom of the panel, which carries a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
+![The Job tab showing the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, under those a "Show cut path" button and the whole table of layers with mm/s, %, passes and source, and under that a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes are in a layer that is switched off — the foot of that picture running on under the strip at the bottom of the panel, which carries a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
 
 From top to bottom it holds:
 
@@ -316,7 +317,8 @@ From top to bottom it holds:
   came from;
 - a picture of the sheet with your work on it, its size, and the size of the work
   itself — plus a note about anything that will be skipped, for example "2 shapes
-  sit in no layer that burns — dashed grey above. The machine skips them.".
+  are in a layer that is switched off (Fine lines) — dashed grey above. The
+  machine skips them.".
 
 The numbers stand above the picture because the strip at the foot of the panel
 stays put while the rest scrolls, and it lies over whatever is last in the column.

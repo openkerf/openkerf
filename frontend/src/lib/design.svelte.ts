@@ -381,6 +381,39 @@ export function burnsNothing(
 }
 
 /**
+ * Why a shape burns, or why it does not.
+ *
+ * Three surfaces answer this question about the same shape: the chip in the
+ * selection card, the drawing in the Job tab and the pre-flight's layer table. They
+ * answered it three ways and the middle one answered it wrongly — a shape in a
+ * layer with "burn along" off was reported as "in no layer that burns", which is
+ * what the app calls a shape nobody assigned. Two different mistakes with two
+ * different repairs, said in one sentence.
+ *
+ * So the decision is taken here, once, and every surface words the answer it gets:
+ *
+ * - `noLayer`   — in no layer at all (or only in layers that no longer exist).
+ * - `layerOff`  — in layers, and every one of them has "burn along" off.
+ * - `burns`     — in at least one layer that burns.
+ *
+ * A layer the design no longer has does not count: an element can keep an id of a
+ * deleted operation, and a shape in nothing but such ids is loose, not switched off.
+ * That is the same rule `strokeFor` uses to draw it dotted grey.
+ */
+export type BurnVerdict = 'burns' | 'noLayer' | 'layerOff';
+
+export function burnVerdict(
+	operationIds: string[] | null | undefined,
+	operations: { id: string; output: boolean }[]
+): BurnVerdict {
+	const known = (operationIds ?? [])
+		.map((id) => operations.find((op) => op.id === id))
+		.filter((op): op is { id: string; output: boolean } => Boolean(op));
+	if (!known.length) return 'noLayer';
+	return known.some((op) => op.output) ? 'burns' : 'layerOff';
+}
+
+/**
  * The colours the strip under the canvas shows.
  *
  * The palette first, in its own order — those ten are what you draw in — and behind

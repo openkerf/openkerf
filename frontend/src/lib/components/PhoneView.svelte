@@ -431,7 +431,9 @@
 					visible: streek.visible,
 					// "Does not burn" covers two cases: in no layer at all, or in a layer
 					// set to "does not burn". To somebody standing beside the machine that
-					// is the same message.
+					// is the same message — but it used to be *named* after the first of
+					// the two ("2 in no layer"), which is a different mistake with a
+					// different repair. So the merged case gets the merged word (P11).
 					quiet: streek.dashed || streek.dimmed
 				};
 			})
@@ -510,7 +512,7 @@
 		if (shapes.length === 0) parts.push(t('phone.bedAria.empty'));
 		else {
 			parts.push(t('preview.shapesBurn', { n: burns }));
-			if (silentcount) parts.push(t('phone.bedAria.noLayer', { n: silentcount }));
+			if (silentcount) parts.push(t('phone.bedAria.silent', { n: silentcount }));
 		}
 		if (outsiders.bed) parts.push(t('phone.bedAria.offBed', { n: outsiders.bed }));
 		if (outsiders.sheet) parts.push(t('phone.bedAria.offSheet', { n: outsiders.sheet }));
@@ -642,7 +644,7 @@
 							{t('phone.nothing')}
 						{:else}
 							{t('preview.shapesBurn', { n: burns })}{#if silentcount}<span class="stilnoot"
-									>{t('phone.noLayer', { n: silentcount })}</span
+									>{t('phone.silent', { n: silentcount })}</span
 								>{/if}
 						{/if}
 					</dd>

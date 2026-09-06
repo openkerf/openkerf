@@ -128,6 +128,9 @@
 		warnings?: Warning[];
 		/** Does this engine actually execute the layer? See `rasterOff`. */
 		burns?: boolean;
+		/** Is "burn along" on for this layer? A layer with it off is in this table
+		 *  and marked, rather than left out of it (P11). */
+		output?: boolean;
 	};
 	type Bounds = {
 		bed: { width_mm: number; height_mm: number } | null;
@@ -181,6 +184,51 @@
 		rotary?: RotaryState | null;
 	} | null>(null);
 	let layers = $derived(overview?.layers ?? []);
+	/**
+	 * The rows of the layer table: what the server lists, plus what it leaves out.
+	 *
+	 * `/api/job/layers` only reports layers that burn, which is right for the clock
+	 * and wrong for the reader. Measured with three layers, the third switched off and
+	 * holding two shapes: the table had two rows, and the drawing under it said "2
+	 * shapes sit in no layer that burns" — so the pre-flight named neither the layer
+	 * nor the switch, while the Layers tab two clicks away showed that same layer
+	 * dashed and tagged "does not burn". The layer belongs in the table, marked with
+	 * the tag it already carries there (P11).
+	 *
+	 * From the design snapshot this panel fetches anyway, in the design's own order,
+	 * and only for a layer that actually holds something: an empty switched-off layer
+	 * is not a shape that will not burn.
+	 */
+	let pfLayers = $derived.by<Layer[]>(() => {
+		const operations = design?.operations ?? [];
+		if (!operations.length) return layers;
+		const left = new Map(layers.filter((l) => l.id).map((l) => [l.id as string, l]));
+		const rows: Layer[] = [];
+		for (const op of operations) {
+			const known = op.id ? left.get(op.id) : undefined;
+			if (known) {
+				rows.push(known);
+				left.delete(op.id);
+				continue;
+			}
+			if (op.output || !op.element_ids.length) continue;
+			rows.push({
+				id: op.id,
+				label: op.label,
+				speed_mm_s: op.speed,
+				power_percent: op.power === null ? null : Math.round(op.power) / 10,
+				passes: op.passes ?? 1,
+				elements: op.element_ids.length,
+				source: null,
+				burns: false,
+				output: false
+			});
+		}
+		// A row the design does not know by id keeps its place at the end rather than
+		// falling out of the table: the table may lose nothing the server said.
+		rows.push(...layers.filter((l) => !l.id || left.has(l.id)));
+		return rows;
+	});
 	/**
 	 * The design for the drawing above (decision B8).
 	 *
@@ -268,7 +316,10 @@
 				})
 			: t('job.rotary.chuck', { diameter: i18n.number(state.diameter_mm), factor });
 	});
-	let blindLayers = $derived(layers.filter((l) => l.burns === false));
+	/** The layers *this engine* cannot carry out — not the ones the user switched
+	 *  off. Both read `burns === false`, and only the first is a fault of the
+	 *  server the sentence beside it is about. */
+	let blindLayers = $derived(layers.filter((l) => l.burns === false && l.output !== false));
 	/**
 	 * The afternoon behind the plate: what is still to come, in one sentence.
 	 *
@@ -861,7 +912,7 @@
 			<!-- What the machine is going to *do*. Time and count alone is theatre: a
 			     laser cutter checks speed, power and passes before putting anything in
 			     the machine. -->
-			{#if layers.length}
+			{#if pfLayers.length}
 				<!-- The general warning above the table because it is read before the
 				     rows, not because it would otherwise be last: what is last in this
 				     column now is the drawing. One line saying that something is wrong
@@ -919,7 +970,7 @@
 						<!-- Keyed on the index, not on the label: two operations of the same
 						     type are both called "Engrave", and a duplicate key makes Svelte
 						     update the table wrongly. -->
-						{#each layers as layer, i (i)}
+						{#each pfLayers as layer, i (i)}
 							<tr>
 								<td class="pf-name" title={layer.label}>
 										<!-- Two cut layers are both called "Cut"; the chip is the only

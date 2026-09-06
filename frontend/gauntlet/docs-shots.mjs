@@ -315,7 +315,8 @@ async function seed() {
 		await put(element, op);
 	}
 	// One layer that does not burn along: the list has to be able to show that, and
-	// the job table has to leave it out.
+	// the job table has to show it as a row saying "does not burn" (P11) — it used
+	// to leave the layer out altogether.
 	if (ops[2]) {
 		await fetch(BASE + `/api/design/operations/${encodeURIComponent(ops[2])}`, {
 			method: 'PATCH',

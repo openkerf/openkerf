@@ -38,7 +38,7 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: at the top the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that a "Show cut path" button heading the whole layer table with speed, power, passes and a Source column, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes sit in no layer that burns — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
+![The OpenKerf window with the Job tab open on the pre-flight: at the top the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that a "Show cut path" button heading the whole layer table with speed, power, passes and a Source column, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes are in a layer that is switched off — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
 
 ### Time, material and zero point
 
@@ -83,7 +83,10 @@ material* or *other thickness* instead — because "measured" above a number tha
 was measured on something else reassures where it should not.
 
 A layer this server cannot carry out shows *does not burn* across the whole row
-instead of speed and power.
+instead of speed and power. So does a layer you switched off yourself: it is in
+the table, with its number and colour, and with those same three words where its
+speed and power would be. It used to be left out of the table altogether, which
+made a layer full of shapes look like no layer at all.
 
 Above the table, in one line, if any layer's numbers were never measured: "3
 layers use presets that were not verified on a test grid. On unknown material:
@@ -143,6 +146,9 @@ deliberate:
   not the machine.
 - "One shape sits in no layer that burns — dashed grey above. The machine skips
   it." Grey; a statement, not a warning.
+- "2 shapes are in a layer that is switched off (Fine lines) — dashed grey above.
+  The machine skips them." Grey as well, and a separate sentence because the way
+  out of it is another one: the shapes have a layer, the layer has its switch off.
 
 ### The checklist
 
@@ -784,7 +790,7 @@ progress bar under it instead.
 
 **When the machine is idle** you get the bed drawn to scale: the sheet inside it,
 the work in its layer colours, and a cross where the head is. Under it **Bed**,
-**Head** and **On the bed** ("5 shapes burn, 2 in no layer"), and one line saying
+**Head** and **On the bed** ("5 shapes burn, 2 do not burn"), and one line saying
 why it is quiet — "Nothing is burning. You start a job on the desktop." Captions
 too small to read at this size are left out of the drawing, but never out of the
 counts.
@@ -794,7 +800,7 @@ goes first, because it is the one job in the whole app you need a phone in your
 hand for. The machine state shrinks to a single tappable line, **Nothing is
 burning**, with the head position beside it.
 
-![A phone screen. At the top an amber dot with "Not connected" and KH-5030 on the right. Then the heading 1 TEST GRID IS WAITING FOR A PHOTO and one card — Berkentriplex 3 mm · cut, 4×4 · 8–20 mm/s · 40–90 % · 3 Sept 09:28 — with a "Take a photo" button. Below it a drawing of the bed with the work on it, then Bed 500 × 300 mm, Head 0.0, 0.0 mm, and On the bed "5 shapes burn, 2 in no layer". Under that the line about no machine being attached to the server, a "Switch the camera on" button, a Notifications row reading Blocked, and the note "You design on the desktop — this screen keeps an eye on the machine." Fixed at the bottom of the screen a red-outlined "Stop" and a greyed-out "Pause".](images/24-phone.png)
+![A phone screen. At the top an amber dot with "Not connected" and KH-5030 on the right. Then the heading 1 TEST GRID IS WAITING FOR A PHOTO and one card — Berkentriplex 3 mm · cut, 4×4 · 8–20 mm/s · 40–90 % · 3 Sept 09:28 — with a "Take a photo" button. Below it a drawing of the bed with the work on it, then Bed 500 × 300 mm, Head 0.0, 0.0 mm, and On the bed "5 shapes burn, 2 do not burn". Under that the line about no machine being attached to the server, a "Switch the camera on" button, a Notifications row reading Blocked, and the note "You design on the desktop — this screen keeps an eye on the machine." Fixed at the bottom of the screen a red-outlined "Stop" and a greyed-out "Pause".](images/24-phone.png)
 
 Each card carries the material, the operation, the range the board sweeps and
 when it was made. **Take a photo** opens the camera straight away. After the

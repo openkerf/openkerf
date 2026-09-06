@@ -780,6 +780,7 @@ export const en = {
 	'preview.countOutsideBed': '{n} lie outside the bed',
 	'preview.countOutsideSheet': '{n} fall outside the sheet',
 	'preview.countNoLayer': '{n} sit in no layer',
+	'preview.countLayerOff': '{n} sit in a layer that does not burn',
 	'preview.sheetFallback': 'the sheet',
 	'preview.whatBurns': 'What gets burned',
 	'preview.bigger': 'View larger',
@@ -803,6 +804,10 @@ export const en = {
 	'preview.silent': {
 		one: 'One shape sits in no layer that burns — dashed grey above. The machine skips it.',
 		other: '{n} shapes sit in no layer that burns — dashed grey above. The machine skips them.'
+	},
+	'preview.silentOff': {
+		one: 'One shape is in a layer that is switched off ({layers}) — dashed grey above. The machine skips it.',
+		other: '{n} shapes are in a layer that is switched off ({layers}) — dashed grey above. The machine skips them.'
 	},
 
 	// ── The cut path (gap S1 / L1) ────────────────────────────────────────────────
@@ -898,6 +903,7 @@ export const en = {
 	'panel.noLayer': 'in no layer',
 	'panel.noLayer.title': 'This shape does not burn',
 	'panel.layerChip': 'Layer {n}: {label}',
+	'panel.layerChip.off': 'Layer {n}: {label} — this layer is switched off, so it does not burn.',
 	'panel.clear': 'Clear',
 	'panel.widthShort': 'W',
 	'panel.heightShort': 'H',
@@ -2048,14 +2054,14 @@ export const en = {
 	'field.increase': 'Increase {label}',
 	'phone.bedAria.size': 'Bed {width} by {height} millimetres',
 	'phone.bedAria.empty': 'empty',
-	'phone.bedAria.noLayer': '{n} in no layer',
+	'phone.bedAria.silent': '{n} do not burn',
 	'phone.bedAria.offBed': '{n} off the bed',
 	'phone.bedAria.offSheet': '{n} off the sheet',
 	'phone.bedAria.head': 'head at {position}',
 	'phone.head': 'Head',
 	'phone.onTheBed': 'On the bed',
 	'phone.nothing': 'nothing',
-	'phone.noLayer': ', {n} in no layer',
+	'phone.silent': ', {n} do not burn',
 	'phone.lastSeen': 'This is the last state we saw.',
 	'phone.unplugged': 'There is no machine attached to the server. Check whether it is on and the cable is in.',
 	'phone.idle': 'Nothing is burning. You start a job on the desktop.',
