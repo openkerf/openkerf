@@ -360,6 +360,20 @@ function mayWrite(ctx: Context): string | undefined {
 }
 
 /**
+ * Why a lock refuses something, in the words every surface uses for it.
+ *
+ * Three readers: the rows of the right-click menu, the bridges control, and the
+ * W/H/X/Y and angle fields in the panel — those last ones used to ask nothing and
+ * accept a number the shape then refused. One rule, one sentence.
+ */
+export function lockRefusal(ctx: Pick<Context, 'count' | 'lockedCount'>): string | undefined {
+	if (ctx.lockedCount === 0) return undefined;
+	return ctx.lockedCount === ctx.count && ctx.count === 1
+		? t('reason.locked')
+		: t('reason.someLocked', { n: ctx.lockedCount });
+}
+
+/**
  * Why bridges cannot be placed or taken away right now.
  *
  * Two surfaces ask this: the row in the right-click menu and the control in the
@@ -376,11 +390,8 @@ export function bridgesRefusal(
 ): string | undefined {
 	const cannot = writeRefusal(ctx);
 	if (cannot) return cannot;
-	if (ctx.lockedCount > 0) {
-		return ctx.lockedCount === ctx.count && ctx.count === 1
-			? t('reason.locked')
-			: t('reason.someLocked', { n: ctx.lockedCount });
-	}
+	const locked = lockRefusal(ctx);
+	if (locked) return locked;
 	if (!ctx.count) return t('reason.pickShape');
 	return ctx.bridges.carries ? undefined : t('reason.noBridges');
 }
@@ -516,12 +527,7 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 	// A locked shape refuses geometry in the API, so the row says why before you
 	// press it. Without this the menu offers "Mirror" and the app answers 409 — the
 	// reason arrives after the click instead of on it.
-	const locked =
-		ctx.lockedCount === 0
-			? undefined
-			: ctx.lockedCount === ctx.count && ctx.count === 1
-				? t('reason.locked')
-				: t('reason.someLocked', { n: ctx.lockedCount });
+	const locked = lockRefusal(ctx);
 	const needsOne = cannot ?? locked ?? (ctx.count ? undefined : t('reason.pickShape'));
 
 	const combine: Action[] = (

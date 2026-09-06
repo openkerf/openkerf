@@ -502,6 +502,8 @@ export const en = {
 	'panel.aria': 'Properties',
 	'panel.collapse': 'Collapse panel',
 	'panel.expand': 'Expand panel',
+	'panel.size.widthPositive': 'A width has to be more than 0 mm.',
+	'panel.size.heightPositive': 'A height has to be more than 0 mm.',
 	// ── Canvas ────────────────────────────────────────────────────────────────────
 	'canvas.headUnknown': 'Position of the laser head unknown',
 	'canvas.headAt': 'Laser head at {x} by {y} millimetres',

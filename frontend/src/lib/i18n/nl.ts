@@ -482,6 +482,8 @@ export const nl: Catalogue = {
 	'panel.aria': 'Eigenschappen',
 	'panel.collapse': 'Paneel inklappen',
 	'panel.expand': 'Paneel uitklappen',
+	'panel.size.widthPositive': 'Een breedte moet meer zijn dan 0 mm.',
+	'panel.size.heightPositive': 'Een hoogte moet meer zijn dan 0 mm.',
 	// ── Canvas ────────────────────────────────────────────────────────────────────
 	'canvas.headUnknown': 'Positie van de laserkop onbekend',
 	'canvas.headAt': 'Laserkop op {x} bij {y} millimeter',

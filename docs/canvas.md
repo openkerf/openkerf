@@ -145,6 +145,11 @@ says so, with the way back in it:
 > **LOCKED** — Protected from moving, sizing and deleting. Its layer, colour and bridges can
 > still be changed.
 
+That block stands above the numbers, because the five fields under it are switched off with
+it: W, H, X, Y and the angle each carry "This shape is locked" and cannot be typed into
+while the lock is on. They used to take a number, refuse it afterwards and go on showing
+what you typed over a shape that was still its old size.
+
 ![A locked rectangle selected on the bed: the dashed selection frame with its measure
 underneath, no corner handles and no rotation stem, and in the panel on the right the heading
 LOCKED with the sentence about what a lock protects and an Unlock button.](images/31-lock.png)

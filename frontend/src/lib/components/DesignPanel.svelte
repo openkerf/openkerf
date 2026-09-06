@@ -15,7 +15,7 @@
 	import Menu from './Menu.svelte';
 	import { en } from '$lib/i18n/en';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
-	import { bridgesRefusal, layerMenu, type Menu as MenuList } from '$lib/actions';
+	import { bridgesRefusal, lockRefusal, layerMenu, type Menu as MenuList } from '$lib/actions';
 	import { placeholders, resolve } from '$lib/series';
 	import type { SeriesStore } from '$lib/series.svelte';
 	import { untrack } from 'svelte';
@@ -138,15 +138,47 @@
 	// and you only notice once it is burned.
 	let linked = $state(true);
 
-	function commitPosition(axis: 'x' | 'y', raw: string) {
+	/**
+	 * A size or a position the app would not take, as one sentence.
+	 *
+	 * A field that keeps a refused number is the panel telling a lie about the shape:
+	 * measured, typing 0 in W left "0" standing while the canvas label under the same
+	 * rectangle read 120.0 x 80.0 mm, with no request, no notice and no sentence. So a
+	 * refusal puts the shape's own measure back and says why, beside the field and in
+	 * the colour this app refuses in.
+	 */
+	let sizeNote = $state<string | null>(null);
+	$effect(() => {
+		// Any real measure takes the refusal away again: another selection, a drag, or a
+		// number that was accepted. A refused write changes none of these, so the sentence
+		// stays until something true happens.
+		void live?.width;
+		void live?.height;
+		void live?.x;
+		void live?.y;
+		void selectedIds;
+		sizeNote = null;
+	});
+
+	function commitPosition(axis: 'x' | 'y', raw: string, field?: HTMLInputElement) {
 		const value = Number(raw);
-		if (!live || !Number.isFinite(value)) return;
+		if (!live) return;
+		if (!Number.isFinite(value)) {
+			if (field) field.value = live[axis].toFixed(1);
+			return;
+		}
 		onSetPosition?.(axis === 'x' ? value : live.x, axis === 'y' ? value : live.y);
 	}
 
-	function commitSize(axis: 'width' | 'height', raw: string) {
+	function commitSize(axis: 'width' | 'height', raw: string, field?: HTMLInputElement) {
 		const value = Number(raw);
-		if (!live || !Number.isFinite(value) || value <= 0) return;
+		if (!live) return;
+		if (!Number.isFinite(value) || value <= 0) {
+			if (field) field.value = live[axis].toFixed(1);
+			sizeNote = t(axis === 'width' ? 'panel.size.widthPositive' : 'panel.size.heightPositive');
+			return;
+		}
+		sizeNote = null;
 		if (linked && live.width > 0 && live.height > 0) {
 			const factor = value / (axis === 'width' ? live.width : live.height);
 			onSetSize?.(live.width * factor, live.height * factor);
@@ -188,6 +220,24 @@
 	/** Is everything selected locked? Then the panel says so and offers the way out. */
 	let lockedHere = $derived(
 		chosen.length > 0 && chosen.every((element) => element.locked)
+	);
+
+	/**
+	 * Why W/H/X/Y and the angle cannot be typed into.
+	 *
+	 * They used to carry `disabled={!canEdit}` and nothing else, while the bridges
+	 * checkbox eight rows below was already off with "This shape is locked". So a locked
+	 * shape took 50 in W, answered with a red toast, and left the 50 standing over a
+	 * shape of 60.0 mm. One verb, one reason: `lockRefusal` in `$lib/actions` says it for
+	 * the menu row and for the field alike.
+	 */
+	let sizeOff = $derived(
+		!canEdit
+			? t('reason.needsToken')
+			: lockRefusal({
+					count: chosen.length,
+					lockedCount: chosen.filter((element) => element.locked).length
+				})
 	);
 
 	/**
@@ -828,6 +878,20 @@
 				</span>
 				<button class="clear" onclick={() => design.select(null)}>{t('panel.clear')}</button>
 			</div>
+			<!-- A locked shape looks the same apart from its handles, so the panel says it
+			     in words and offers the way out in the same place. Above the values,
+			     because it explains why they are switched off. -->
+			{#if lockedHere}
+				<div class="locked-note">
+					<span class="rot-label">{t('panel.locked')}</span>
+					<p class="hint">{t('panel.locked.body')}</p>
+					<button
+						class="rot"
+						disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
+						onclick={() => onUnlock?.()}>{t('action.unlock')}</button
+					>
+				</div>
+			{/if}
 			<!-- Sizes, position and angle as one grid of three lines: two columns of
 			     numbers with the unit once on the right. They used to be freely
 			     wrapping pills beside each other, so X ended up on the first line and Y
@@ -847,17 +911,19 @@
 							step="0.1"
 							min="0.1"
 							aria-label={t('panel.inMillimetres', { what: name })}
-							disabled={!canEdit}
+							disabled={Boolean(sizeOff)}
+							title={sizeOff}
 							value={(live ?? size)[key as 'width' | 'height'].toFixed(1)}
-							onchange={(e) => commitSize(key as 'width' | 'height', e.currentTarget.value)}
+							onchange={(e) =>
+								commitSize(key as 'width' | 'height', e.currentTarget.value, e.currentTarget)}
 						/>
 					</label>
 				{/each}
 				<button
 					class="link"
 					aria-pressed={linked}
-					disabled={!canEdit}
-					title={linked ? t('panel.ratio.locked') : t('panel.ratio.free')}
+					disabled={Boolean(sizeOff)}
+					title={sizeOff ?? (linked ? t('panel.ratio.locked') : t('panel.ratio.free'))}
 					aria-label={linked ? t('panel.ratio.lockedShort') : t('panel.ratio.freeShort')}
 					onclick={() => (linked = !linked)}
 				>
@@ -877,14 +943,19 @@
 							type="number"
 							step="0.1"
 							aria-label={t('panel.inMillimetres', { what: name })}
-							disabled={!canEdit}
+							disabled={Boolean(sizeOff)}
+							title={sizeOff}
 							value={(live ?? size)[key as 'x' | 'y'].toFixed(1)}
-							onchange={(e) => commitPosition(key as 'x' | 'y', e.currentTarget.value)}
+							onchange={(e) =>
+								commitPosition(key as 'x' | 'y', e.currentTarget.value, e.currentTarget)}
 						/>
 					</label>
 				{/each}
 				<span class="unit">mm</span>
 			</div>
+			{#if sizeNote}
+				<p class="tip refused" role="status">{sizeNote}</p>
+			{/if}
 
 			{#if canEdit}
 				<!-- The angle was nowhere. You could rotate by 1° and by 90° but not see
@@ -899,8 +970,8 @@
 							step="1"
 							inputmode="decimal"
 							aria-label={t('panel.angle')}
-							title={pose.mixed ? t('panel.angle.mixed') : t('panel.angle.title')}
-							disabled={edits.busy || pose.mixed || pose.angle === null}
+							title={sizeOff ?? (pose.mixed ? t('panel.angle.mixed') : t('panel.angle.title'))}
+							disabled={Boolean(sizeOff) || edits.busy || pose.mixed || pose.angle === null}
 							value={pose.angle === null
 								? ''
 								: Number.isInteger(pose.angle)
@@ -920,10 +991,11 @@
 					{#each [[-1, ''], [1, '']] as [angle, icon] (angle)}
 						<button
 							class="icon step"
-							disabled={edits.busy}
-							title={t('panel.rotate.step', {
-								angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
-							})}
+							disabled={Boolean(sizeOff) || edits.busy}
+							title={sizeOff ??
+								t('panel.rotate.step', {
+									angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
+								})}
 							aria-label={t('panel.rotate.stepAria', {
 								angle: `${Number(angle) > 0 ? '+' : ''}${angle}`
 							})}
@@ -1010,20 +1082,6 @@
 				<p class="tip" role="status">{cornerNote}</p>
 			{/if}
 
-			<!-- A locked shape looks the same apart from its handles, so the panel says it
-			     in words and offers the way out in the same place. Above the values,
-			     because it explains why half of them cannot be typed into. -->
-			{#if lockedHere}
-				<div class="locked-note">
-					<span class="rot-label">{t('panel.locked')}</span>
-					<p class="hint">{t('panel.locked.body')}</p>
-					<button
-						class="rot"
-						disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
-						onclick={() => onUnlock?.()}>{t('action.unlock')}</button
-					>
-				</div>
-			{/if}
 			<!-- Bridges (tabs): the gaps that keep a cut part in the sheet. A value you set
 			     and read back, so it lives here and not in the menu; the menu carries the
 			     one-click default (four of 2 mm) because a panel field nobody finds is not a
@@ -2688,6 +2746,13 @@
 		font-size: var(--text-xs);
 		line-height: 1.45;
 		color: var(--text-2);
+	}
+	/* A refusal has a colour. Grey is what the panel says about the normal state; the
+	   sentence that says a number was not taken wears the same warn as the pre-flight's
+	   notices and the Generators window's refusals. */
+	.tip.refused {
+		color: var(--warn);
+		font-weight: 500;
 	}
 	/* No margin of its own any more: the selection card is a grid with one gap, and a
 	   group that added its own spacing on top of it made the rhythm erratic *and* the
