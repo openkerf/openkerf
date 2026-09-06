@@ -248,9 +248,9 @@
 		     elements" is the difference between a formality and a warning. -->
 		<div class="confirm" role="alertdialog" aria-label={t('sheets.removeSheet')}>
 			<p>{t('sheets.removeAsk', { sheet: sheet.name, what: telling(toRemove) })}</p>
-			<div class="buttons">
-				<button class="annuleer" onclick={() => (bevestigen = null)}>{t('common.cancel')}</button>
-				<button class="gone" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={() => verwijder(sheet.id)}>
+			<div class="ask-actions">
+				<button class="btn mini" onclick={() => (bevestigen = null)}>{t('common.cancel')}</button>
+				<button class="btn mini gone" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={() => verwijder(sheet.id)}>
 					{sheets.busy
 						? t('common.busy')
 						: t('sheets.removeConfirm', { what: telling(toRemove) })}
@@ -376,23 +376,10 @@
 		border-left: 3px solid var(--danger-solid);
 	}
 	.confirm p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
-	.buttons {
-		display: flex;
-		/* Two outcomes that exclude each other, and one of them is irreversible: far
-		   enough apart not to bad-aim. */
-		gap: var(--space-6);
-		margin-left: auto;
-	}
-	.annuleer,
-	.gone {
-		font-size: var(--text-xs);
-		min-height: 32px;
-		padding: 4px 12px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-	}
-	.annuleer:hover { background: var(--hover); }
+	/* The row itself is the shared ask row in tokens.css, which also keeps the two
+	   outcomes 24 px apart — they exclude each other and one of them is irreversible.
+	   All this says is that it hangs at the end of the line the question is on. */
+	.ask-actions { margin-left: auto; }
 	.gone {
 		background: var(--danger-solid);
 		border-color: var(--danger-solid);
@@ -400,11 +387,6 @@
 		font-weight: 600;
 	}
 	.gone:hover:not(:disabled) { filter: brightness(1.06); }
-	.gone:disabled { opacity: 0.45; cursor: not-allowed; }
-	@media (pointer: coarse) {
-		.annuleer,
-		.gone { min-height: 44px; }
-	}
 	.drop:disabled { opacity: 0.45; cursor: not-allowed; }
 	.close { margin-left: auto; }
 </style>

@@ -890,6 +890,21 @@
 			<p class="failure" role="alert">{control.error}</p>
 		{/if}
 		<div class="buttons">
+			<!-- Stop stands on the left here as it does in the top bar and in the panel's
+			     running block: one place for the button that cannot be undone, on every
+			     screen that carries it.
+			     Without a connection this tap arrives nowhere. A red button that looks
+			     pressable and does nothing is the most dangerous thing on this screen:
+			     you press, you walk away, and you believe it stops. -->
+			<button
+				class="brake stop"
+				class:scherp={Boolean(current) && connected}
+				disabled={control.needsToken || !connected}
+				title={control.needsToken ? t('reason.needsToken') : t('transport.noServer.stop')}
+				onclick={() => control.stop()}
+			>
+				{t('transport.stop')}
+			</button>
 			{#if quiet}
 				<button
 					class="brake resume"
@@ -924,18 +939,6 @@
 					{pauzeGevraagd ? t('phone.pausing') : t('transport.pause')}
 				</button>
 			{/if}
-			<!-- Without a connection this tap arrives nowhere. A red button that looks
-			     pressable and does nothing is the most dangerous thing on this screen:
-			     you press, you walk away, and you believe it stops. -->
-			<button
-				class="brake stop"
-				class:scherp={Boolean(current) && connected}
-				disabled={control.needsToken || !connected}
-				title={control.needsToken ? t('reason.needsToken') : t('transport.noServer.stop')}
-				onclick={() => control.stop()}
-			>
-				{t('transport.stop')}
-			</button>
 		</div>
 	</div>
 </div>

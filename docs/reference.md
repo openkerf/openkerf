@@ -50,7 +50,7 @@ line after the first four:
 
 **New project**, **Open…** and **Upload…** all replace the whole project, so each
 one asks first when there are changes that are not saved: a window titled
-"Unsaved changes", with **Save**, **Discard** and **Cancel**.
+"Unsaved changes", with **Cancel**, **Discard** and **Save**.
 
 ### Selecting
 
@@ -544,8 +544,8 @@ still that refreshes every two seconds rather than to a broken picture.
 Calibrating opens the window "Calibrate the camera" over the raw picture:
 "Drag the four points to the corners of the bed, starting top left and going
 clockwise. After that the app knows where every point in the image lies on the
-bed, and your design lands in the right place." Buttons: "Clear the
-calibration", "Cancel" and "Save".
+bed, and your design lands in the right place." Buttons: "Cancel", "Clear the
+calibration" and "Save".
 
 The camera needs a token like every other write action; without one the pill is
 off and its tooltip reads "Requires a token". A camera that will not start

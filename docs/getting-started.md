@@ -238,8 +238,10 @@ minute — each with an Open button and a ⋮ button.](images/47-projects.png)
 
 If the work has changes that are not saved, **New project**, **Open…** and
 **Upload…** ask first, in a window titled "Unsaved changes": "The changes in
-"{name}" are not saved. What do you want to do with them?", with **Save**,
-**Discard** and **Cancel**. Closing the browser tab asks too.
+"{name}" are not saved. What do you want to do with them?", with **Cancel**,
+**Discard** and **Save** — the way out first, the answer that throws the changes
+away in the middle, and the button that keeps them last, as in every other window.
+Closing the browser tab asks too.
 
 Projects live in a folder on the server; in Docker that is `/data/projects` on
 the data volume, so they survive a restart and an update and go with the
@@ -259,7 +261,7 @@ material or the machine.
 
 If you leave a design behind, OpenKerf offers it at the next start under **Work
 from an earlier session**: "There is an automatically saved design from {when}.
-Restore it?", with **Restore**, **Not now** and **Discard**. It is a safety net,
+Restore it?", with **Not now**, **Discard** and **Restore**. It is a safety net,
 not a substitute for saving.
 
 ## Giving the shapes a layer

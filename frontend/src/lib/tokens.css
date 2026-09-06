@@ -827,6 +827,59 @@ input[type='radio']:focus-visible::before {
 }
 
 /*
+ * The ask row: the buttons that end a question.
+ *
+ * One row, after five. A question was drawn five ways, measured at 1440 on the
+ * untouched build:
+ *
+ *   Unsaved changes      Save | Discard | Cancel   right-aligned, primary at x 680.9
+ *   Layer, remove        Cancel | Remove           left-aligned, 101.8 px of panel left over
+ *   Sheet, remove        Cancel | Remove the sheet right-aligned, 12 px
+ *   Status bar, unplug   Disconnect | Leave it     the confirming verb on the left
+ *   Recovery             Discard | Not now | Restore
+ *
+ * Four orders and two alignments for one kind of row — and the first of them is the
+ * dialog where the wrong reflex costs the work.
+ *
+ * So: one order, and it holds everywhere a question is answered by buttons.
+ *
+ *   the way out first, the answer that destroys in the middle, the primary last.
+ *
+ * The primary is last because that is where the eye and the thumb end, and the way out
+ * is first so it is never what you hit by aiming at the primary and missing. The one
+ * that destroys stands between them, with `--space-6` on either side rather than the
+ * row's own `--space-2`: the sheet's confirmation already kept that distance at every
+ * width, and the recovery window kept it on a touch screen only.
+ *
+ * `Dialog.svelte` renders this row as its `footer` snippet — under a rule, outside the
+ * body that scrolls, so it is on screen no matter how long the question is. A
+ * component that sits *inside* somebody else's dialog cannot reach that footer and
+ * wears the class on a row of its own; it may say where its row sits and whether it
+ * sticks, not how it is laid out.
+ *
+ * `tests/one-ask.test.ts` refuses a sixth order; `tests/ask-rows.test.ts` measures the
+ * rows on screen.
+ */
+.ask-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-2);
+}
+/* `--space-4` on top of the row's `--space-2` makes 24 px on either side of the
+   answer that cannot be undone — and no margin at the end of the row, so the last
+   button still lines up with the edge. */
+.ask-actions .btn.danger,
+.ask-actions .btn.drop,
+.ask-actions .btn.gone,
+.ask-actions .btn.danger + .btn,
+.ask-actions .btn.drop + .btn,
+.ask-actions .btn.gone + .btn {
+	margin-left: var(--space-4);
+}
+
+/*
  * The fold.
  *
  * One definition, after five. A fold is the same kind of thing everywhere — a line you

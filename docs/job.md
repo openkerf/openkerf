@@ -15,9 +15,10 @@ standing at the machine rather than at the keyboard.
 
 Three surfaces, and each keeps the same job all the time.
 
-- **The top bar**, on the right: **Pause** / **Resume**, **Stop**, **Start job**
+- **The top bar**, on the right: **Stop**, **Pause** / **Resume**, **Start job**
   (**Start** on a narrow bar). These four never move, so the stop button is in
-  the same place whether something is running or not. **Show frame** sits with
+  the same place whether something is running or not — and it is on the far side
+  of the row from **Start job**, on every screen that carries both. **Show frame** sits with
   them, and only there: the pre-flight used to carry a second copy of it and no
   longer does.
 - **The Job tab** in the right-hand panel: the pre-flight before, the progress
@@ -524,8 +525,10 @@ Under the phase: a bar, the percentage in large figures, the step count
 two times — "1:04 elapsed" on the left and "0:15 left" on the right. The same
 remaining time is in the status bar on every tab, next to the total.
 
-Two buttons: **Pause** and, well away from it on the other side of the row,
-**Stop**. The distance is on purpose; a bad tap here costs the workpiece. Their
+Two buttons: **Stop** on the left and, well away from it on the other side of the
+row, **Pause**. The distance is on purpose; a bad tap here costs the workpiece —
+and stop stands where it stands in the top bar, not on the spot the green
+**Start job** had a moment earlier. Their
 keyboard shortcuts are on the buttons themselves, as the second line of their
 tooltip: "The key works anywhere in the app, as long as this window is in front —
 outside it a browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of
@@ -738,8 +741,8 @@ promise:
 Beside it, when the driver has a command for it, a button. **Connect** ("Open the
 connection to the machine. This moves nothing.") goes straight through.
 **Disconnect** asks first: "Disconnect? Reconnecting afterwards does not always
-work; sometimes only a restart of the server helps." — with **Disconnect** and
-**Leave it**.
+work; sometimes only a restart of the server helps." — with **Leave it** and
+**Disconnect**, the way out first as in every other question.
 
 That warning is measured, not cautious wording. On a real machine, reconnecting
 after a disconnect sometimes works and sometimes does not.
@@ -791,7 +794,7 @@ goes first, because it is the one job in the whole app you need a phone in your
 hand for. The machine state shrinks to a single tappable line, **Nothing is
 burning**, with the head position beside it.
 
-![A phone screen. At the top an amber dot with "Not connected" and KH-5030 on the right. Then the heading 1 TEST GRID IS WAITING FOR A PHOTO and one card — Berkentriplex 3 mm · cut, 4×4 · 8–20 mm/s · 40–90 % · 3 Sept 09:28 — with a "Take a photo" button. Below it a drawing of the bed with the work on it, then Bed 500 × 300 mm, Head 0.0, 0.0 mm, and On the bed "5 shapes burn, 2 in no layer". Under that the line about no machine being attached to the server, a "Switch the camera on" button, a Notifications row reading Blocked, and the note "You design on the desktop — this screen keeps an eye on the machine." Fixed at the bottom of the screen a greyed-out "Pause" and a red-outlined "Stop".](images/24-phone.png)
+![A phone screen. At the top an amber dot with "Not connected" and KH-5030 on the right. Then the heading 1 TEST GRID IS WAITING FOR A PHOTO and one card — Berkentriplex 3 mm · cut, 4×4 · 8–20 mm/s · 40–90 % · 3 Sept 09:28 — with a "Take a photo" button. Below it a drawing of the bed with the work on it, then Bed 500 × 300 mm, Head 0.0, 0.0 mm, and On the bed "5 shapes burn, 2 in no layer". Under that the line about no machine being attached to the server, a "Switch the camera on" button, a Notifications row reading Blocked, and the note "You design on the desktop — this screen keeps an eye on the machine." Fixed at the bottom of the screen a red-outlined "Stop" and a greyed-out "Pause".](images/24-phone.png)
 
 Each card carries the material, the operation, the range the board sweeps and
 when it was made. **Take a photo** opens the camera straight away. After the
@@ -806,8 +809,8 @@ actually burning.
 
 ### The emergency stop
 
-**Pause** (or **Resume**) and **Stop** are fixed at the bottom of the phone
-screen. They never scroll away, however long the list above them gets, and they
+**Stop** and, beside it, **Pause** (or **Resume**) are fixed at the bottom of the
+phone screen, in the order the top bar has them. They never scroll away, however long the list above them gets, and they
 are far apart. **Stop** turns fully red only while there is really a job and a
 connection.
 

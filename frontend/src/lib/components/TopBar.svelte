@@ -392,8 +392,30 @@
 		<span class="btn-label stays lang">{t('topbar.frame')}</span>
 		<span class="btn-label stays short">{t('topbar.frame.short')}</span>
 	</button>
+	<!-- Stopping is always possible, anywhere, in one tap. Full red only when something
+	     is really running: a button raising an alarm for hours a day without a reason
+	     teaches the user to ignore it, and then they miss it when it counts. -->
+	<!-- Server dropped out: no red, no fill, and the word says where the stop is
+	     *then*. A tooltip is no answer here — on a tablet, where this is the only stop
+	     button, hover does not exist. -->
+	<button
+		class="btn danger"
+		class:sluimer={!stopArmed && !gone}
+		class:dood={gone}
+		disabled={!canStop || gone}
+		onclick={onStop}
+		title={stopTitle}
+	>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+		<span class="btn-label stays"
+			>{gone ? t('transport.stop.onMachine') : t('transport.stop')}</span
+		>
+	</button>
 	<!--
-		Pausing belongs beside starting and stopping, at every width.
+		Pausing belongs beside starting and stopping, at every width. It stands between
+		stop and start, and stop stands at the start of the row: the button that cannot
+		be undone is never next to the one you reach for most, and the running block in
+		the right-hand panel reads the same way round (`JobControls`, `.now-actions`).
 
 		This sat behind `barCarries`, so on the desktop the top bar carried start and
 		stop but *not* pause — that lived in the status bar, at the bottom of the screen.
@@ -426,25 +448,6 @@
 				<span class="btn-label stays">{t('transport.pause')}</span>
 			</button>
 		{/if}
-	<!-- Stopping is always possible, anywhere, in one tap. Full red only when something
-	     is really running: a button raising an alarm for hours a day without a reason
-	     teaches the user to ignore it, and then they miss it when it counts. -->
-	<!-- Server dropped out: no red, no fill, and the word says where the stop is
-	     *then*. A tooltip is no answer here — on a tablet, where this is the only stop
-	     button, hover does not exist. -->
-	<button
-		class="btn danger"
-		class:sluimer={!stopArmed && !gone}
-		class:dood={gone}
-		disabled={!canStop || gone}
-		onclick={onStop}
-		title={stopTitle}
-	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-		<span class="btn-label stays"
-			>{gone ? t('transport.stop.onMachine') : t('transport.stop')}</span
-		>
-	</button>
 	<!-- Opens no dialog but the pre-flight in the right-hand panel. -->
 	<button
 		class="btn primary"

@@ -16,12 +16,22 @@
 		title,
 		open = $bindable(),
 		width = '560px',
-		children
+		children,
+		footer
 	}: {
 		title: string;
 		open: boolean;
 		width?: string;
 		children: import('svelte').Snippet;
+		/**
+		 * The buttons that answer the question, if there are any.
+		 *
+		 * They stand here rather than at the end of the body: under a rule, outside the
+		 * part that scrolls, so the answer is on screen however long the question is.
+		 * The row itself is `.ask-actions` in `tokens.css` — the way out first, the
+		 * answer that destroys in the middle, the primary last.
+		 */
+		footer?: import('svelte').Snippet;
 	} = $props();
 
 	let panel = $state<HTMLElement | null>(null);
@@ -132,6 +142,11 @@
 			<div class="body">
 				{@render children()}
 			</div>
+			{#if footer}
+				<footer class="ask-actions">
+					{@render footer()}
+				</footer>
+			{/if}
 		</section>
 	</div>
 {/if}
@@ -192,5 +207,13 @@
 	.body {
 		overflow-y: auto;
 		padding: var(--space-4);
+	}
+	/* The layout is `.ask-actions` in tokens.css; what the window says for itself is
+	   that the row is the foot of the window — a rule above it and the same padding as
+	   the body beside it. */
+	footer {
+		flex: none;
+		padding: var(--space-3) var(--space-4);
+		border-top: 1px solid var(--line);
 	}
 </style>

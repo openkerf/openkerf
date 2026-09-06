@@ -99,12 +99,12 @@
 
 	<FontPicker bind:font sample={text} current={initial?.font ?? null} />
 
-	<div class="actions">
+	{#snippet footer()}
 		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button class="btn primary" disabled={!text.trim()} title={t('reason.needsName')} onclick={confirm}>
 			{initial ? t('text.update') : t('text.place')}
 		</button>
-	</div>
+	{/snippet}
 </Dialog>
 
 <style>
@@ -129,11 +129,5 @@
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
 		color: var(--text-1);
-	}
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-2);
-		margin-top: var(--space-4);
 	}
 </style>

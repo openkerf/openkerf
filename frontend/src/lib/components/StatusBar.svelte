@@ -245,16 +245,21 @@
 		{#if zekerVerbreken}
 			<span class="verbreek-ask">
 				{t('status.disconnect.ask')}
-				<button
-					class="verbind"
-					disabled={control.busy === 'disconnect'}
-					title={control.busy === 'disconnect' ? t('reason.busy') : undefined}
-					onclick={() => {
-						zekerVerbreken = false;
-						control.disconnect();
-					}}
-				>{t('status.disconnect')}</button>
-				<button class="verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
+				<!-- The shared ask row (`.ask-actions` in tokens.css). It stood the other way
+				     round — the verb that pulls the plug on the left and *Leave it* on the
+				     right — which is the reverse of every other question in the app. -->
+				<span class="ask-actions">
+					<button class="verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
+					<button
+						class="verbind"
+						disabled={control.busy === 'disconnect'}
+						title={control.busy === 'disconnect' ? t('reason.busy') : undefined}
+						onclick={() => {
+							zekerVerbreken = false;
+							control.disconnect();
+						}}
+					>{t('status.disconnect')}</button>
+				</span>
 			</span>
 		{:else}
 			<button
@@ -385,6 +390,9 @@
 		margin-left: var(--space-1);
 		color: var(--text-1);
 	}
+	/* The bar is one line of small type; the row keeps its order and its alignment from
+	   tokens.css and only its gap is the bar's own. */
+	.verbreek-ask .ask-actions { gap: var(--space-1); }
 
 	/* Not yet connected is neither a fault nor a promise. The same muted tone as
 	   the rest of the bar, with an underline saying there is an explanation behind

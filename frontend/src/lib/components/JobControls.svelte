@@ -1246,6 +1246,30 @@
 			     outside this window, and that is the part you discover at the wrong
 			     moment. -->
 			<div class="now-actions">
+				<!-- Stop stands at the start of the row and pause at the end, and that is
+				     the same rule the ask row in tokens.css follows: the button that
+				     cannot be undone is never on the spot the eye and the thumb end at.
+				     It sat on the right — where the green "Start job" stood a moment
+				     earlier, at the same edge of the same panel — while the comment here
+				     claimed it was "away to the left". `.btn.stop` also still carried
+				     `grid-column: 1 / -1` and `margin-top: var(--space-6)` from the
+				     four-button grid this block replaced, and in a centred flex row that
+				     put stop 12 px below pause in every phase (measured at 1440). -->
+				<button
+					class="btn danger stop"
+					class:dood={!connection.online}
+					disabled={!actions?.stop || control.tokenProbleem || !connection.online}
+					title={!connection.online
+						? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
+						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}\n${t('job.keysHere')}`}
+					onclick={() => control.stop()}
+				>
+					<!-- One key, not two glued together: "Stop" plus "on the machine" only
+					     works in a language with this word order, and the top bar has had
+					     the whole sentence all along. -->
+					{connection.online ? t('transport.stop') : t('transport.stop.onMachine')}
+				</button>
+				<span class="now-stretch"></span>
 				{#if paused}
 					<button
 						class="btn primary"
@@ -1267,24 +1291,6 @@
 						onclick={() => control.pause()}
 					>{t('transport.pause')}</button>
 				{/if}
-				<span class="now-stretch"></span>
-				<!-- Stop keeps its own space, away to the left of pause: a bad-tap here
-				     costs the workpiece. See DESIGN-SYSTEM v2, "Touch as first-class
-				     input". -->
-				<button
-					class="btn danger stop"
-					class:dood={!connection.online}
-					disabled={!actions?.stop || control.tokenProbleem || !connection.online}
-					title={!connection.online
-						? `${t('transport.noServer')} ${t('transport.noServer.stop')}`
-						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}\n${t('job.keysHere')}`}
-					onclick={() => control.stop()}
-				>
-					<!-- One key, not two glued together: "Stop" plus "on the machine" only
-					     works in a language with this word order, and the top bar has had
-					     the whole sentence all along. -->
-					{connection.online ? t('transport.stop') : t('transport.stop.onMachine')}
-				</button>
 			</div>
 
 			<!-- As soon as there is anything in the queue. This used to say
@@ -1704,7 +1710,7 @@
      the rotary stands, so this is a question and not a confirmation of a click. -->
 <Dialog title={t('job.home.rotary.title')} bind:open={askHome} width="440px">
 	<p class="dialog-text">{t('job.home.rotary.body')}</p>
-	<div class="dialog-buttons">
+	{#snippet footer()}
 		<button class="btn" onclick={() => (askHome = false)}>{t('job.home.rotary.cancel')}</button>
 		<button
 			class="btn primary"
@@ -1713,7 +1719,7 @@
 				onHome?.(true);
 			}}>{t('job.home.rotary.confirm')}</button
 		>
-	</div>
+	{/snippet}
 </Dialog>
 
 
@@ -1769,11 +1775,6 @@
 		margin: 0 0 var(--space-4);
 		font-size: var(--text-sm);
 	}
-	.dialog-buttons {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-2);
-	}
 	.section-title {
 		font-size: var(--text-xs);
 		font-weight: 600;
@@ -1802,10 +1803,6 @@
 	}
 	.btn.subtle {
 		grid-column: 1 / -1;
-	}
-	.btn.stop {
-		grid-column: 1 / -1;
-		margin-top: var(--space-6);
 	}
 	/* The reference exists only on tablet; on the desktop the buttons are here. */
 	/* Gap J9. This was `@media (max-width: 1199px)` here and a JS prop in TopBar: two

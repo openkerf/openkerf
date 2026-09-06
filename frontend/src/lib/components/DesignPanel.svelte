@@ -1534,10 +1534,12 @@
 						{t('panel.dropAll.gridsStay')}
 					{/if}
 				</span>
-				<button class="btn mini" onclick={() => (confirmDropAll = false)}>{t('common.cancel')}</button>
-				<button class="btn mini drop" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={dropAllLayers}>
-					{t('panel.dropAll.confirm')}
-				</button>
+				<div class="ask-actions">
+					<button class="btn mini" onclick={() => (confirmDropAll = false)}>{t('common.cancel')}</button>
+					<button class="btn mini drop" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={dropAllLayers}>
+						{t('panel.dropAll.confirm')}
+					</button>
+				</div>
 			</div>
 		{/if}
 		{#if !operations.length}
@@ -2074,10 +2076,12 @@
 						{#if confirmDrop === op.id}
 							<div class="confirm wide">
 								<span>{t('panel.drop.ask', { label: op.label })}</span>
-								<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
-								<button class="btn mini drop" onclick={() => dropLayer(op.id)}
-									>{t('panel.drop.confirm')}</button
-								>
+								<div class="ask-actions">
+									<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
+									<button class="btn mini drop" onclick={() => dropLayer(op.id)}
+										>{t('panel.drop.confirm')}</button
+									>
+								</div>
 							</div>
 						{:else}
 							<button class="btn mini gone wide" onclick={() => (confirmDrop = op.id)}>
@@ -2794,10 +2798,6 @@
 		}
 		/* Order and delete must not touch each other: one bad-aimed tap further along
 		   costs you a layer with all its assignments. */
-		.layer-edit .gone,
-		.confirm .drop {
-			margin-left: var(--space-6);
-		}
 		.layer-edit .gone {
 			margin-top: var(--space-6);
 		}
@@ -3022,6 +3022,11 @@
 		color: var(--text-1);
 	}
 	.confirm span { flex-basis: 100%; }
+	/* The buttons stand in the shared ask row (`.ask-actions` in tokens.css): at the
+	   end of the line, the way out first. They sat at the start of it, with 101.8 px of
+	   empty panel to their right — measured at 1440 — while the same question about a
+	   sheet, a few hundred pixels away, was answered at the right-hand edge. */
+	.confirm .ask-actions { flex: 1; }
 	.drop { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 	/* A red text link, not a filled button: which is why the class is not called
 	   `danger` — the safety net in tokens.css fills every `button.danger` solid red on

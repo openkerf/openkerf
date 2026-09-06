@@ -1717,7 +1717,7 @@
 			</div>
 		{/if}
 
-		<div class="actions">
+		<div class="actions ask-actions">
 			<button class="btn" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={suggest}>{t('grid.suggestRange')}</button>
 			<!-- Form rule v4: the primary button is on the right, the helper on the left.
 			     They used to sit next to each other on the left, and then the button that
@@ -2098,13 +2098,13 @@
 	   fields above it, it disappeared below the fold, and then the wizard looks like a
 	   dead end. */
 	.actions .stretch { flex: 1; }
+	/* The layout is the shared ask row (`.ask-actions` in tokens.css). This wizard sits
+	   inside somebody else's dialog and cannot use the window's footer slot, so what it
+	   says here is only that its row sticks to the bottom of the body it scrolls in. */
 	.actions {
 		position: sticky;
 		bottom: 0;
 		z-index: 1;
-		display: flex;
-		gap: var(--space-2);
-		flex-wrap: wrap;
 		margin: 0 calc(-1 * var(--space-4));
 		padding: var(--space-3) var(--space-4);
 		background: var(--surface-1);
