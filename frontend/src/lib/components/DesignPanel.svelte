@@ -4,8 +4,8 @@
 		LAYER_COLORS,
 		bridgeSummary,
 		elementName,
+		madeHere,
 		elementCuts,
-		engineNamed,
 		nameShowsWholeText,
 		inkOn,
 		type DesignOperation,
@@ -553,15 +553,21 @@
 	 * the number here is the number of shapes the button promises.
 	 */
 	const toSplit = $derived.by(() => {
-		// Only a shape nobody named and that is not rendered text. A caption of 18
+		// Not rendered text and not a shape a generator here made. A caption of 18
 		// glyph outlines and a QR of 232 modules are both "more than one subpath",
 		// and for both the sentence below was wrong twice over: neither came out of a
 		// CAD program, and splitting them is not the thing to do next. The count
 		// itself is not lost — the right-click menu still offers *Split into 232
 		// shapes* for anything with more than one piece, from its own context in
 		// `+page.svelte`.
+		//
+		// Both exemptions are positive evidence: `text` is the source the glyphs were
+		// rendered from, `madeHere` is our own mark on what we made. Asking instead
+		// whether the label looks unnamed reads an import wrong — MeerK40t's SVG
+		// reader puts the element's own `id` in the label, so a CAD export arrives as
+		// `Path bracket` and would fall out of the very case this sentence is for.
 		const samengesteld = chosen.filter(
-			(e) => (e.subpaths ?? 1) > 1 && !e.text && engineNamed(e)
+			(e) => (e.subpaths ?? 1) > 1 && !e.text && !madeHere(e)
 		);
 		return {
 			shapes: samengesteld.length,

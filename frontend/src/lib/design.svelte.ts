@@ -43,23 +43,35 @@ export const NAME_TEXT_LIMIT = 22;
  * The panel used to quote the text twice — `Text “OpenKerf 5030”` in the head and
  * `“OpenKerf 5030”` again forty pixels below it. The quote below only earns its
  * place when the head could not fit it, so both readers ask this one question.
+ *
+ * A caption of nothing but spaces counts as shown: `elementName` renders it as
+ * `Text “”`, and an empty pair of quotation marks a second time forty pixels lower
+ * is the very repetition this exists to stop.
  */
 export function nameShowsWholeText(element: { text: { text: string } | null }): boolean {
 	const short = element.text?.text.trim() ?? '';
-	return short.length > 0 && short.length <= NAME_TEXT_LIMIT;
+	return short.length <= NAME_TEXT_LIMIT;
 }
 
 /**
- * Is this the engine's own automatic name, or one something gave it?
+ * Did this shape come out of a generator here rather than out of a file?
  *
- * MeerK40t labels a node it made itself with its internal id — `Path meerk40t:18`,
- * `Ellipse:meerk40t:12`. Our generators pass a name of their own — `QR — openkerf`,
- * `Living hinge — …` — and nothing else in the app renames an element. So the id in
- * the label is the one reliable mark of a shape nobody named, which is exactly the
- * shape the "loose pieces" diagnosis is about.
+ * Two questions in one, and both are positive evidence. `generated` is the API's
+ * reading of our own `mkgenerated` mark, set the moment a generator lays a shape down
+ * (`generators._mark_generated`). A design saved before that mark existed carries no
+ * such attribute, so the label is asked as well: every generator here writes
+ * `QR — openkerf`, `Living hinge — staggered`, `Box — front`, `code128 — 7X4MQB2K` —
+ * a name and an em dash. MeerK40t's SVG reader writes the element's own `id` into the
+ * label instead (`Path bracket`, `Path path1234 #000000`), so an import never carries
+ * one.
+ *
+ * The other way round is what must not be asked. An earlier version of this exempted
+ * every shape whose label did *not* hold the engine's internal id `meerk40t:12` — and
+ * an imported path never holds one, so the one shape the "loose pieces" diagnosis
+ * exists for was the one shape that stopped getting it.
  */
-export function engineNamed(element: { label?: string }): boolean {
-	return /meerk40t:\d+/i.test(element.label ?? '');
+export function madeHere(element: { generated?: boolean; label?: string }): boolean {
+	return element.generated === true || / — /.test(element.label ?? '');
 }
 
 export function elementName(element: {
@@ -101,6 +113,12 @@ export type DesignElement = {
 	 * with dozens of panels in it; more than 1 means splitting does something.
 	 */
 	subpaths: number;
+	/**
+	 * Did a generator here make this shape? Set by the API from our own `mkgenerated`
+	 * mark. A QR of 232 modules and a hinge of 160 slits have many pieces and did not
+	 * come out of a CAD program, so the panel's diagnosis is not about them.
+	 */
+	generated?: boolean;
 	/** The group this element is in; a grid is one group. */
 	group_id: string | null;
 	/** Set for vector text: the source the path was rendered from. */

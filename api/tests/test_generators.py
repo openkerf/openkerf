@@ -793,3 +793,37 @@ def test_a_box_with_a_lid_still_fits_on_the_sheet(client):
         "right",
         "lid",
     ]
+
+
+def test_a_generated_shape_says_so_and_an_imported_one_does_not(client, tmp_path):
+    """
+    A shape a generator laid down carries a mark; a shape out of a file does not.
+
+    The panel decides one sentence on it — "This shape consists of 232 loose pieces. An
+    export from a CAD program…" — and that is a diagnosis about an import. Asking the
+    question the other way round, "does the label look like one nobody chose?", reads an
+    import wrong: MeerK40t's SVG reader puts the element's own `id` in the label, so this
+    file's path arrives as `Path bracket #000000` and never as `Path meerk40t:12`.
+    Measured here on both.
+    """
+    client.post(
+        "/api/design/generate/qrcode",
+        json={"text": "openkerf", "size_mm": 30},
+    )
+    drawing = tmp_path / "bracket.svg"
+    drawing.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="60mm" height="40mm" '
+        'viewBox="0 0 60 40"><path id="bracket" fill="none" stroke="#000000" '
+        'd="M 4 4 L 26 4 L 26 20 L 4 20 Z M 34 4 L 56 4 L 56 20 L 34 20 Z"/></svg>',
+        encoding="utf-8",
+    )
+    with drawing.open("rb") as handle:
+        client.post("/api/job/load", files={"file": ("bracket.svg", handle, "image/svg+xml")})
+
+    elements = client.get("/api/design").json()["elements"]
+    qr = next(e for e in elements if e["label"].startswith("QR"))
+    imported = next(e for e in elements if "bracket" in e["label"])
+    assert qr["generated"] is True
+    assert imported["generated"] is False
+    assert "meerk40t:" not in imported["label"]
+    assert imported["subpaths"] == 2

@@ -207,9 +207,10 @@
 		{/if}
 	</span>
 	<!-- No word in front of it: "6 elements" says what it is, and the word in front
-	     of it was exactly the "Design" heading that headed nothing. Off on a tablet,
-	     with the pointer: there the bar has to make room for the machine controls, and
-	     a count is the first thing that can go. -->
+	     of it was exactly the "Design" heading that headed nothing. It stays on a
+	     tablet, where the pointer position goes: the count is one short token against
+	     the pointer's two, and the count is a fact about the document that used to be
+	     on the Edit and Layers tabs — it moved here, it did not leave the screen. -->
 	<span class="sep docpart" aria-hidden="true"></span>
 	<span class="docpart">{t('panel.elements', { n: elementCount })}</span>
 	<span class="sep" aria-hidden="true"></span>
@@ -342,8 +343,7 @@
 	   the control buttons do need the room: without this the bar broke over two
 	   lines as soon as a job was running. */
 	@media (max-width: 1199px) {
-		.pointerpart,
-		.docpart { display: none; }
+		.pointerpart { display: none; }
 	}
 	.statusbar > span { white-space: nowrap; }
 

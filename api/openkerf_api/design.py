@@ -512,6 +512,12 @@ class DesignReader:
             # splitting produces. Free to read off: in the path data every piece starts with
             # an `M`.
             "subpaths": (path or "").count("M"),
+            # Did a generator here make this shape, or did it come out of a file? Our
+            # own `mkgenerated` (see `generators._mark_generated`), which rides the SVG
+            # because of the `mk` prefix. The panel only says "an export from a CAD
+            # program often puts every panel in one path" about a shape that could have
+            # come from one; a QR of 232 modules did not.
+            "generated": bool(getattr(node, "mkgenerated", None)),
             "path": path or "",
         }
 
