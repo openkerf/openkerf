@@ -160,9 +160,19 @@
 		sizeNote = null;
 	});
 
+	/**
+	 * X and Y take any number, so the only thing they can refuse is not-a-number.
+	 *
+	 * That is deliberately silent where W and H say a sentence: "a width has to be more
+	 * than 0 mm" is a rule about the shape, and there is no such rule to state about an
+	 * empty box — a browser hands `<input type=number>` an empty string for anything it
+	 * cannot read, and the honest answer to nothing typed is the shape's own position
+	 * back. What both halves of the grid do share is the part that mattered: no field
+	 * keeps a number the shape does not have.
+	 */
 	function commitPosition(axis: 'x' | 'y', raw: string, field?: HTMLInputElement) {
-		const value = Number(raw);
 		if (!live) return;
+		const value = raw.trim() === '' ? Number.NaN : Number(raw);
 		if (!Number.isFinite(value)) {
 			if (field) field.value = live[axis].toFixed(1);
 			return;
@@ -2749,11 +2759,10 @@
 	}
 	/* A refusal has a colour. Grey is what the panel says about the normal state; the
 	   sentence that says a number was not taken wears the same warn as the pre-flight's
-	   notices and the Generators window's refusals. */
-	.tip.refused {
-		color: var(--warn);
-		font-weight: 500;
-	}
+	   notices and the Generators window's refusals — and only that, because the window's
+	   refusal hint is `--warn` at this size with no weight of its own, and one refused
+	   value should not read heavier in the panel than in the window. */
+	.tip.refused { color: var(--warn); }
 	/* No margin of its own any more: the selection card is a grid with one gap, and a
 	   group that added its own spacing on top of it made the rhythm erratic *and* the
 	   panel longer. */
@@ -3103,12 +3112,23 @@
 		border-radius: var(--radius-field);
 		color: var(--text-2);
 	}
-	.figures .link[aria-pressed='true'] {
+	.figures .link[aria-pressed='true']:not(:disabled) {
 		color: var(--accent);
 		border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 	.figures .link:hover:not(:disabled) { background: var(--surface-2); }
+	/* Off is off, and it has to look it. The chain kept its teal pressed background and
+	   opacity 1 while the five number fields beside it dropped to 0.6 and the rotate
+	   steps to 0.4 — six controls switched off by one lock, one of them still looking
+	   live. Same treatment as `.icon:disabled` below. */
+	.figures .link:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+		color: var(--text-2);
+		border-color: transparent;
+		background: none;
+	}
 
 	/* Angle plus four steps on one row. The angle field deliberately gets more room than
 	   a button: "337.5" has to fit in it, and a truncated number is worse than no number —

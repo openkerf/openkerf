@@ -33,7 +33,6 @@ const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8121';
 let reachable = false;
 let browser: Browser | null = null;
 let page: Page;
-let bed = { x: 0, y: 0, w: 0, h: 0, wideMm: 1, highMm: 1 };
 
 const post = (path: string, body: unknown) =>
 	fetch(`${BASE}${path}`, {
@@ -52,38 +51,50 @@ async function sizeMm() {
 	return { width: x1 - x0, height: y1 - y0 };
 }
 
-/** A point on the bed given in millimetres, as screen coordinates. */
-const at = (xMm: number, yMm: number) => ({
-	x: bed.x + (bed.w * xMm) / bed.wideMm,
-	y: bed.y + (bed.h * yMm) / bed.highMm
-});
-
-async function measureBed() {
-	const box = await page.$eval('.bed > svg', (node) => {
-		const rect = node.getBoundingClientRect();
-		return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
-	});
-	bed = { ...bed, ...box };
+/**
+ * Every notice card out of the way.
+ *
+ * The fenced server carries a standing "No connection to the machine" alarm — it has no
+ * machine on the other end — and that card hangs under the top bar over the first
+ * 244 px of the page. An earlier version of this file picked the rectangle up by
+ * clicking its top edge at (75, 15) mm, which lands at y 137: the click went to the
+ * card, nothing was selected, and the test reported the pattern absent because it never
+ * got to look. The selection now comes through the URL, and the card is dismissed
+ * anyway so it cannot sit over what is measured.
+ */
+async function dismissNotices() {
+	for (let i = 0; i < 3; i++) {
+		const seen = page.getByRole('button', { name: 'Seen', exact: true });
+		if ((await seen.count()) === 0) return;
+		await seen.first().click().catch(() => {});
+		await page.waitForTimeout(200);
+	}
 }
 
 /** One rectangle of 120 x 80 mm on an otherwise empty bed, selected. */
 async function aRectangle() {
 	await fetch(`${BASE}/api/design/clear`, { method: 'POST' });
 	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' }).catch(() => {});
-	await post('/api/design/elements', {
-		type: 'rect',
-		x_mm: 15,
-		y_mm: 15,
-		width_mm: 120,
-		height_mm: 80
+	const made = await (
+		await post('/api/design/elements', {
+			type: 'rect',
+			x_mm: 15,
+			y_mm: 15,
+			width_mm: 120,
+			height_mm: 80
+		})
+	).json();
+	const id = made?.ids?.[0];
+	assert.ok(id, 'the rectangle was not made');
+	await page.goto(`${BASE}/?tab=design&select=${encodeURIComponent(id)}`, {
+		waitUntil: 'domcontentloaded'
 	});
-	await page.goto(`${BASE}/?tab=design`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(2500);
-	await measureBed();
-	// Pick it up by its top edge, not by the empty middle.
-	const onEdge = at(75, 15);
-	await page.mouse.click(onEdge.x, onEdge.y);
-	await page.waitForSelector('.figures input[type=number]', { timeout: 20000 });
+	await dismissNotices();
+	// The selection really happened before anything is read off the panel: a card over
+	// the canvas or a slow first paint used to look exactly like the fields being absent.
+	await page.waitForSelector('.selected', { timeout: 20000 });
+	await page.waitForSelector('.selected .figures input[type=number]', { timeout: 20000 });
 	await page.waitForTimeout(900);
 }
 
@@ -110,11 +121,6 @@ before(async () => {
 	page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 	await page.goto(`${BASE}/?tab=design`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(3000);
-	const devices: { active: boolean; bed: { width_mm: number; height_mm: number } }[] = await (
-		await fetch(`${BASE}/api/devices`)
-	).json();
-	const size = devices.find((d) => d.active)!.bed;
-	bed = { ...bed, wideMm: size.width_mm, highMm: size.height_mm };
 });
 
 after(async () => {
@@ -169,4 +175,49 @@ test('a locked shape has its five number fields switched off, with the reason on
 	const own = await sizeMm();
 	assert.equal(five[0].value, own.width.toFixed(1));
 	assert.equal(five[1].value, own.height.toFixed(1));
+
+	// The sixth control in the grid, the ratio chain, is off with them — and looks it.
+	// Measured before: disabled with the reason on it, but opacity 1, rgb(12, 112, 121)
+	// on its teal pressed background and cursor: pointer, beside five fields at 0.6.
+	const chain = await page.$eval('.selected .figures .link', (node) => {
+		const style = getComputedStyle(node);
+		return {
+			disabled: (node as HTMLButtonElement).disabled,
+			title: node.getAttribute('title') ?? '',
+			opacity: Number(style.opacity),
+			cursor: style.cursor,
+			background: style.backgroundColor
+		};
+	});
+	assert.ok(chain.disabled, 'the ratio chain is still pressable on a locked shape');
+	assert.match(chain.title, /locked/i, 'the ratio chain is off without saying why');
+	assert.ok(
+		chain.opacity <= 0.6,
+		`the ratio chain is off but reads as live: opacity ${chain.opacity}`
+	);
+	assert.equal(chain.cursor, 'not-allowed', 'the ratio chain still invites a click');
+	assert.match(
+		chain.background,
+		/rgba\(0, 0, 0, 0\)|transparent/,
+		`the ratio chain keeps its pressed background while off: ${chain.background}`
+	);
+});
+
+test('an X that is not a number puts the shape\u2019s own position back', async (t) => {
+	if (!reachable) return noServer(t, BASE);
+	await aRectangle();
+
+	// A browser hands `<input type=number>` an empty string for anything it cannot read,
+	// and `Number('')` is 0 — measured on the baseline, emptying X moved the rectangle
+	// from 15.0 to 0.0 mm. X and Y take any number, so there is no rule to say out loud
+	// here; what they owe is the same as W and H: never a number the shape does not have.
+	const x = page.locator('.selected .figures input[aria-label*="X"]');
+	await x.fill('');
+	await x.press('Enter');
+	await page.waitForTimeout(900);
+
+	const where = await design();
+	const leftMm = (where.elements[0].bounds as number[])[0] / (where.units_per_mm as number);
+	assert.equal(leftMm.toFixed(1), '15.0', 'an unreadable X moved the shape');
+	assert.equal(await x.inputValue(), '15.0', 'the field kept a position the shape has not');
 });
