@@ -230,6 +230,9 @@
 
 	--topbar-height: 48px;
 	--statusbar-height: 28px;
+	/* The band under the top bar. Its own height, like the two above it, because it is
+	   a frame band and not a card: what it holds is one row of small buttons. */
+	--actionbar-height: 38px;
 	--rail-width: 56px;
 	/* The drag corners on a grid photo. Big enough for a finger, and half of it shifts
 	   them back so that they sit on their point. */
