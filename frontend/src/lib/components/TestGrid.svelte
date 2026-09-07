@@ -2099,11 +2099,18 @@
 	   dead end. */
 	.actions .stretch { flex: 1; }
 	/* The layout is the shared ask row (`.ask-actions` in tokens.css). This wizard sits
-	   inside somebody else's dialog and cannot use the window's footer slot, so what it
-	   says here is only that its row sticks to the bottom of the body it scrolls in. */
+	   inside somebody else's dialog and cannot use the window's footer slot: the
+	   read-back half (steps 3 and 4) is a second component under this one in the same
+	   body, so this row is the end of step 2 and not the window's foot. What it says
+	   here is only where it stays while the form above it scrolls.
+
+	   The offset is the body's own padding, as the series' row has it. With `bottom: 0`
+	   the row stopped one `--space-4` short: measured at 1440 x 900 with the form at
+	   1,647 px in a body of 665, row bottom 793 against body bottom 809, and the form
+	   went on scrolling through that 16 px slit under an opaque row. */
 	.actions {
 		position: sticky;
-		bottom: 0;
+		bottom: calc(-1 * var(--space-4));
 		z-index: 1;
 		margin: 0 calc(-1 * var(--space-4));
 		padding: var(--space-3) var(--space-4);
