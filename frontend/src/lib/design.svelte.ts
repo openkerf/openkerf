@@ -736,6 +736,20 @@ export class DesignStore {
 		return this.design?.dirty ?? false;
 	}
 
+	/**
+	 * Has the first `/api/design` answered?
+	 *
+	 * Until it has, `design` is `null` and every question below answers as if the bed
+	 * were empty — `isEmpty` true, `burnsNothing` true, no elements, no operations.
+	 * Four surfaces stated that as a fact about a document they had not read yet
+	 * (`tests/design-not-loaded.test.ts` holds the measurement), so each of them asks
+	 * this first and says nothing until it is true. Showing nothing is honest; a
+	 * count of zero over a full bed is not.
+	 */
+	get loaded() {
+		return this.design !== null;
+	}
+
 	get isEmpty() {
 		return this.elements.length === 0;
 	}

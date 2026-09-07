@@ -32,6 +32,7 @@
 		series,
 		job,
 		nothingBurns = false,
+		designLoaded = true,
 		sheetName = '',
 		revision = 0,
 		preflight = $bindable(),
@@ -60,6 +61,16 @@
 		/** Nothing on the bed that will burn. Comes from the page, from the same
 		 *  `burnsNothing` the top bar reads. */
 		nothingBurns?: boolean;
+		/**
+		 * Has the first `/api/design` answered? (`design.loaded` on the page.)
+		 *
+		 * `nothingBurns` cannot tell "no layer burns" from "not read yet", and both
+		 * arrive here as `true`. The buttons may stay off on either — a job that
+		 * cannot be described must not be startable — but the card says nothing at
+		 * all until the design has been read, rather than stating that the bed is
+		 * empty over a document still on its way.
+		 */
+		designLoaded?: boolean;
 		/**
 		 * The name of the sheet on the bed, as the name to put on the machine.
 		 *
@@ -1094,7 +1105,7 @@
 				/>
 			{/if}
 
-			{#if empty}
+			{#if empty && designLoaded}
 				<!-- No checklist, no start button: there is nothing to run through. -->
 				<div class="pf-empty">
 					<strong>{t('job.nothing.title')}</strong>
@@ -1103,7 +1114,7 @@
 				<!-- This used to say "Back to the design", which was the only way out
 				     of an overview that had taken over the panel. The panel takes
 				     nothing over now, so there is nothing to return from. -->
-			{:else}
+			{:else if designLoaded}
 			<!-- This used to be a second yellow block under the risk warning. Two
 			     warnings in a row of the same colour devalue each other: the routine
 			     check made the real message invisible. Neutral now, and as a list,

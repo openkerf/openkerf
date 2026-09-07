@@ -1877,7 +1877,10 @@
 			     bed while it said "Empty bed" underneath; that can happen as soon as the
 			     design is cleared while the machine is still working on what had already
 			     been spooled. -->
-			{#if design.isEmpty && !cameraSrc && !job}
+			<!-- `design.loaded`: until the first `/api/design` answers there are no
+			     elements *yet*, which is not the same as none. Without it this block
+			     invited a user who had just imported to import. -->
+			{#if design.loaded && design.isEmpty && !cameraSrc && !job}
 				<!-- An empty bed is a blank page: without text nobody knows where to start.
 				     Catches no pointer, because you have to be able to draw through it. -->
 				<div class="blank">
