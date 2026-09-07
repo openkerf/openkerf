@@ -1,5 +1,6 @@
 <script lang="ts">
 	import NumberField from './NumberField.svelte';
+	import { whenNumber } from '$lib/numbers';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { SheetStore } from '$lib/sheets.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
@@ -204,21 +205,21 @@
 				step={1}
 				min={0}
 				max={100}
-				onchange={(v) => sheets.update(sheet.id, { tiling: { margin_mm: Number(v) } })}
+				onchange={(v) => whenNumber(v, (margin_mm) => sheets.update(sheet.id, { tiling: { margin_mm } }))}
 			/>
 			<NumberField
 				label={t('sheets.tiling.overlap')}
 				value={String(sheet.tiling?.overlap_mm ?? 25)}
 				step={1}
 				min={0}
-				onchange={(v) => sheets.update(sheet.id, { tiling: { overlap_mm: Number(v) } })}
+				onchange={(v) => whenNumber(v, (overlap_mm) => sheets.update(sheet.id, { tiling: { overlap_mm } }))}
 			/>
 			<NumberField
 				label={t('sheets.tiling.marker')}
 				value={String(sheet.tiling?.marker_size_mm ?? 8)}
 				step={1}
 				min={1}
-				onchange={(v) => sheets.update(sheet.id, { tiling: { marker_size_mm: Number(v) } })}
+				onchange={(v) => whenNumber(v, (marker_size_mm) => sheets.update(sheet.id, { tiling: { marker_size_mm } }))}
 			/>
 		</div>
 

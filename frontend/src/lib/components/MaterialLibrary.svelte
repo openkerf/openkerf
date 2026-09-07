@@ -2,6 +2,7 @@
 	import { tick, untrack } from 'svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import NumberField from './NumberField.svelte';
+	import { whenNumber, whenNumberOrBlank } from '$lib/numbers';
 	import Menu from './Menu.svelte';
 	import StarterOffer from './StarterOffer.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
@@ -1336,7 +1337,7 @@
 					step={1}
 					min={0.1}
 					value={String(preset.speed_mm_s)}
-					onchange={(v) => saveEdit(preset, { speed_mm_s: Number(v) })}
+					onchange={(v) => whenNumber(v, (speed_mm_s) => saveEdit(preset, { speed_mm_s }))}
 				/>
 				<NumberField
 					label={t('library.power')}
@@ -1345,7 +1346,7 @@
 					min={1}
 					max={100}
 					value={String(preset.power_percent)}
-					onchange={(v) => saveEdit(preset, { power_percent: Number(v) })}
+					onchange={(v) => whenNumber(v, (power_percent) => saveEdit(preset, { power_percent }))}
 				/>
 				{#if preset.operation === 'graveren-raster'}
 					<NumberField
@@ -1354,7 +1355,7 @@
 						step={0.01}
 						min={0.01}
 						value={String(preset.interval_mm ?? '')}
-						onchange={(v) => saveEdit(preset, { interval_mm: Number(v) })}
+						onchange={(v) => whenNumber(v, (interval_mm) => saveEdit(preset, { interval_mm }))}
 					/>
 				{/if}
 				<NumberField
@@ -1362,7 +1363,7 @@
 					step={1}
 					min={1}
 					value={String(preset.passes)}
-					onchange={(v) => saveEdit(preset, { passes: Number(v) })}
+					onchange={(v) => whenNumber(v, (passes) => saveEdit(preset, { passes }))}
 				/>
 				<NumberField
 					label={t('library.thickness')}
@@ -1370,7 +1371,7 @@
 					step={0.5}
 					min={0}
 					value={String(preset.thickness_mm ?? '')}
-					onchange={(v) => saveEdit(preset, { thickness_mm: Number(v) })}
+					onchange={(v) => whenNumber(v, (thickness_mm) => saveEdit(preset, { thickness_mm }))}
 				/>
 				<label class="wide"
 					><span>{t('library.note')}</span>
@@ -2279,7 +2280,9 @@
 										max={1000}
 										value={machine.power_watt === null ? '' : String(machine.power_watt)}
 										onchange={(v) =>
-											saveMachine(machine.id, { power_watt: v === '' ? null : Number(v) })}
+											whenNumberOrBlank(v, (power_watt) =>
+												saveMachine(machine.id, { power_watt })
+											)}
 									/>
 								</div>
 								<!-- On its own line, and half a line wide: one field over the full width
@@ -2292,7 +2295,7 @@
 										min={0}
 										value={machine.lens_mm === null ? '' : String(machine.lens_mm)}
 										onchange={(v) =>
-											saveMachine(machine.id, { lens_mm: v === '' ? null : Number(v) })}
+											whenNumberOrBlank(v, (lens_mm) => saveMachine(machine.id, { lens_mm }))}
 									/>
 								</div>
 								<p class="fine">{t('setup.laser.watt.why')}</p>

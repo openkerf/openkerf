@@ -17,6 +17,7 @@
 	} from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import NumberField from './NumberField.svelte';
+	import { whenNumber } from '$lib/numbers';
 	import Segmented from './Segmented.svelte';
 	import ArrangeIcon from './ArrangeIcon.svelte';
 	import Menu from './Menu.svelte';
@@ -1272,7 +1273,7 @@
 							max={200}
 							disabled={!canEdit || edits.busy}
 							why={bridgeOff}
-							onchange={(v) => applyBridges({ count: Number(v) })}
+							onchange={(v) => whenNumber(v, (count) => applyBridges({ count }))}
 						/>
 						<NumberField
 							label={t('panel.bridges.length')}
@@ -1282,7 +1283,7 @@
 							min={0.1}
 							disabled={!canEdit || edits.busy}
 							why={bridgeOff}
-							onchange={(v) => applyBridges({ length_mm: Number(v) })}
+							onchange={(v) => whenNumber(v, (length_mm) => applyBridges({ length_mm }))}
 						/>
 					</div>
 					{#if bridges.mixed}
@@ -1450,7 +1451,7 @@
 							max={2000}
 							disabled={!canEdit || edits.busy}
 							why={!canEdit ? t('reason.needsToken') : t('reason.busy')}
-							onchange={(v) => onImageDpi?.(Number(v))}
+							onchange={(v) => whenNumber(v, (dpi) => onImageDpi?.(dpi))}
 						/>
 					</div>
 				</div>
@@ -2071,7 +2072,7 @@
 									max={20}
 									disabled={edits.busy}
 									why={t('reason.busy')}
-									onchange={(v) => patchLayer(op.id, { z_step_mm: Number(v) })}
+									onchange={(v) => whenNumber(v, (z_step_mm) => patchLayer(op.id, { z_step_mm }))}
 								/>
 								<p class="hint">
 									{#if !op.z_step_mm}
@@ -2103,7 +2104,7 @@
 								max={2000}
 								disabled={edits.busy}
 								why={t('reason.busy')}
-								onchange={(v) => patchLayer(op.id, { dpi: Number(v) })}
+								onchange={(v) => whenNumber(v, (dpi) => patchLayer(op.id, { dpi }))}
 							/>
 							<NumberField
 								label={t('panel.overscan')}
@@ -2114,7 +2115,7 @@
 								max={50}
 								disabled={edits.busy}
 								why={t('reason.busy')}
-								onchange={(v) => patchLayer(op.id, { overscan_mm: Number(v) })}
+								onchange={(v) => whenNumber(v, (overscan_mm) => patchLayer(op.id, { overscan_mm }))}
 							/>
 							</div>
 							<label class="check wide">

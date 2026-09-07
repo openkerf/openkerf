@@ -100,14 +100,36 @@
 	// 609.6").
 	const id = $props.id();
 
+	/**
+	 * The last value in the box that was a number.
+	 *
+	 * The box holds a string so that a half-typed number does not jump away, and a string
+	 * can be `abc`. Stepping from that used to fall back to 0 and clamp to `min`:
+	 * measured, a raster layer at 500 dpi went to 10 on one click of `+`, committed, with
+	 * no refusal and no notice. So nonsense stays in this component and the number that
+	 * was there comes back.
+	 */
+	let lastGood = $state(value);
+	$effect(() => {
+		if (Number.isFinite(Number(value))) lastGood = value;
+	});
+
+	/** Nothing to step from, and nothing to send on: put the last number back. */
+	function refuse() {
+		value = lastGood;
+	}
+
 	function set(direction: number) {
 		if (onstep) {
 			onstep(direction);
 			return;
 		}
 		const now = Number(value);
-		const basis = Number.isFinite(now) ? now : 0;
-		let fresh = basis + direction * step;
+		if (!Number.isFinite(now)) {
+			refuse();
+			return;
+		}
+		let fresh = now + direction * step;
 		if (min !== null) fresh = Math.max(min, fresh);
 		if (max !== null) fresh = Math.min(max, fresh);
 		// Floating point leaves 0.1 + 0.2 as 0.30000000000000004.
@@ -136,6 +158,14 @@
 	 * image DPI set 2000. A keystroke that resizes the work has no undo you knew to reach
 	 * for.
 	 */
+	function commit() {
+		if (!Number.isFinite(Number(value))) {
+			refuse();
+			return;
+		}
+		onchange?.(value);
+	}
+
 	function onKey(event: KeyboardEvent) {
 		if (disabled) return;
 		if (event.key === 'ArrowUp') set(1);
@@ -170,7 +200,7 @@
 			aria-label={ariaLabel}
 			title={disabled ? why : note}
 			onkeydown={onKey}
-			onchange={() => onchange?.(value)}
+			onchange={commit}
 		/>
 		{#if unit && compact}
 			<span class="suffix" aria-hidden="true">{unit}</span>
