@@ -18,10 +18,10 @@
  * drawings for one class, and the invisible one stood in the two questions a user meets
  * most.
  *
- * What is measured: in both windows, in both themes, the destroying answer differs from
- * the way out beside it in letter and in border, its letter is the danger colour of the
- * theme it stands in, and that letter is at least 4.5:1 against everything painted behind
- * it — because colour is the whole of the difference, it has to be readable.
+ * What is measured: in all three windows, in both themes, the destroying answer differs
+ * from the way out beside it in letter and in border, its letter is the danger colour of
+ * the theme it stands in, and that letter is at least 4.5:1 against everything painted
+ * behind it — because colour is the whole of the difference, it has to be readable.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,6 +42,12 @@ const post = (path: string, body?: unknown) =>
 
 /** A project on disk to ask the delete question about, and a shape to be unsaved about. */
 const PROJECT = 'Danger rest';
+/**
+ * A second project, saved last, so it is the current one. `ProjectsStore.taken` calls a
+ * name taken only when it is not the project you are already in, so Save as… only asks
+ * the overwrite question about a name that is not the open document's.
+ */
+const OTHER = 'Danger rest current';
 
 async function aDesign() {
 	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' }).catch(() => {});
@@ -54,6 +60,7 @@ async function aDesign() {
 		height_mm: 30
 	});
 	await post(`/api/projects/${encodeURIComponent(PROJECT)}`);
+	await post(`/api/projects/${encodeURIComponent(OTHER)}`);
 	// One more shape, so the document is dirty again and the unsaved question is asked.
 	await post('/api/design/elements', {
 		type: 'rect',
@@ -133,7 +140,7 @@ const dangerInk = (): string => {
 /** Held against one question: the two answers are not the same drawing. */
 function apart(paints: Paint[], danger: string, where: string) {
 	const wayOut = paints.find((p) => /^Cancel/.test(p.label));
-	const destroys = paints.find((p) => /^(Discard|Delete)/.test(p.label));
+	const destroys = paints.find((p) => /^(Discard|Delete|Replace)/.test(p.label));
 	assert.ok(wayOut, `${where}: no way out in the row (${paints.map((p) => p.label).join(' | ')})`);
 	assert.ok(destroys, `${where}: no destroying answer in the row`);
 	assert.notEqual(destroys.color, wayOut.color, `${where}: the letter is the way out's letter`);
@@ -182,9 +189,10 @@ before(async () => {
 after(async () => {
 	await browser?.close();
 	if (reachable)
-		await fetch(`${BASE}/api/projects/${encodeURIComponent(PROJECT)}`, { method: 'DELETE' }).catch(
-			() => {}
-		);
+		for (const name of [PROJECT, OTHER])
+			await fetch(`${BASE}/api/projects/${encodeURIComponent(name)}`, { method: 'DELETE' }).catch(
+				() => {}
+			);
 });
 
 for (const theme of ['light', 'dark'] as const) {
@@ -227,6 +235,39 @@ for (const theme of ['light', 'dark'] as const) {
 			const danger = await page.evaluate(dangerInk);
 			apart(paints, danger, `the Projects window (${theme})`);
 			// The project stays: the question is answered with the way out.
+			await page.getByRole('button', { name: /^Cancel$/ }).first().click({ force: true });
+		} finally {
+			await page.context().close();
+		}
+	});
+
+	test(`Replace is not Cancel in the overwrite question (${theme})`, async (t) => {
+		if (!reachable || !browser) return noServer(t, BASE);
+		const page = await fresh(theme);
+		try {
+			await loaded(page);
+			await page.locator('.project-button').first().click({ timeout: 10000 });
+			await page.waitForTimeout(300);
+			// Dispatched rather than clicked: with no machine connected the alarm card lies
+			// over this row of the menu, and even a forced click lands on the card (N1).
+			await page
+				.getByRole('menuitem', { name: /Save as…/ })
+				.first()
+				.dispatchEvent('click');
+			await page.waitForSelector('[role=dialog] input.project-name', { timeout: 10000 });
+			// The window fills its list after it opens, and `taken` reads that list.
+			await page.waitForSelector(`[role=dialog] .row:has-text("${PROJECT}")`, { timeout: 10000 });
+			// The name of another project on the server, so Save asks before it replaces.
+			await page.locator('[role=dialog] input.project-name').fill(PROJECT);
+			await page.waitForTimeout(300);
+			await page.locator('[role=dialog] button.save').dispatchEvent('click');
+			// The whole question, not its `.ask-actions`: the untouched build words this
+			// one row without that class, and this test has to be able to fail on it.
+			await page.waitForSelector('[role=dialog] .ask button.danger', { timeout: 10000 });
+			const paints = await page.evaluate(paintRow, '[role=dialog] .ask');
+			const danger = await page.evaluate(dangerInk);
+			apart(paints, danger, `the overwrite question (${theme})`);
+			// Nothing is overwritten: the question is answered with the way out.
 			await page.getByRole('button', { name: /^Cancel$/ }).first().click({ force: true });
 		} finally {
 			await page.context().close();

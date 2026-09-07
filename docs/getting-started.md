@@ -243,8 +243,8 @@ If the work has changes that are not saved, **New project**, **Open…** and
 away in the middle, and the button that keeps them last, as in every other window.
 **Discard** is the only red one of the three: in a question like this one, the
 answer that cannot be undone is lettered and bordered in red — the same drawing
-as **Remove layer…** in the layers panel. (The two emergency **Stop** buttons are
-red as well, but filled: they are meant to be the loudest thing on the screen.)
+as **Remove layer…** in the layers panel. (The two emergency **Stop** buttons
+wear red too, and they turn fully red while a job is running.)
 Closing the browser tab asks too.
 
 Projects live in a folder on the server; in Docker that is `/data/projects` on

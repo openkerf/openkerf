@@ -759,8 +759,9 @@
 		background: var(--surface-1);
 		border-color: var(--danger-solid);
 		/* The word in ordinary text colour, the icon in red: --danger on --surface-1
-		   reaches 4.4:1 in the dark theme and that is too little for text. The red border
-		   plus the little red square carry the meaning. */
+		   measures 5.32:1 in the light theme and 4.78:1 in the dark one, so the same word
+		   would not read the same in the two themes. The red border plus the little red
+		   square carry the meaning instead. */
 		color: var(--text-1);
 	}
 	.btn.danger.sluimer svg { color: var(--danger); }
