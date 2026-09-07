@@ -544,7 +544,7 @@
 			     without this the answer to "what comes first" is graphics only — and on a
 			     caption of eighteen letters the numbers are folded together anyway. -->
 			{#if orderLines.length}
-				<details class="order-list">
+				<details class="fold order-list">
 					<summary>{t('cutpath.order.title', { n: i18n.number(orderLines.length, 0) })}</summary>
 					<ol>
 						{#each orderLines as line (line.n)}
@@ -775,9 +775,6 @@
 		margin-top: var(--space-3);
 		font-size: var(--text-xs);
 		color: var(--text-2);
-	}
-	.order-list summary {
-		cursor: pointer;
 	}
 	.order-list ol {
 		/* The number is in the sentence itself — the contour's place in the cut order,

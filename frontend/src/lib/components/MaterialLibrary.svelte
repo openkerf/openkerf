@@ -21,7 +21,7 @@
 		type Preset
 	} from '$lib/library.svelte';
 	import { LASER_KINDS, laserKindLabel, type LaserKind } from '$lib/machines.svelte';
-	import type { DesignOperation } from '$lib/design.svelte';
+	import { drawnLayers, layerNamed, type DesignOperation } from '$lib/design.svelte';
 
 	let {
 		library,
@@ -75,7 +75,7 @@
 	// this window outlives the drawing it was opened over — delete the layer while the
 	// library is open and the target would name nothing.
 	$effect(() => {
-		if (targetLayer && operations.some((o) => o.id === targetLayer)) {
+		if (targetLayer && layers.some((o) => o.id === targetLayer)) {
 			targetOperation = targetLayer;
 		}
 	});
@@ -410,11 +410,17 @@
 		usage = null;
 	}
 
+	// The layers you draw in, and only those. A test grid's sixteen cells are layers in
+	// the engine; the panel folds them under the board's own row and this window used to
+	// offer every one of them by name. Counting over the raw list on top of that gave the
+	// same layer two numbers: what the panel calls 5 · Board labels was offered here as
+	// "Layer 21 · Board labels" (P12). `drawnLayers` is the list the panel counts over.
+	let layers = $derived(drawnLayers(operations));
 	let chosenOperation = $derived(
-		operations.find((o) => o.id === targetOperation) ?? operations[0] ?? null
+		layers.find((o) => o.id === targetOperation) ?? layers[0] ?? null
 	);
 	let layerNumber = $derived(
-		chosenOperation ? operations.findIndex((o) => o.id === chosenOperation.id) + 1 : 0
+		chosenOperation ? layers.findIndex((o) => o.id === chosenOperation.id) + 1 : 0
 	);
 	$effect(() => {
 		const chosen = chosenOperation;
@@ -1745,17 +1751,17 @@
 	     always say *onto what*, even with one layer: otherwise the button is a
 	     promise without an address, and then the warning that the operation does not
 	     match has nowhere to land either. -->
-	{#if operations.length}
+	{#if layers.length}
 		<label class="target">
 			<span>{t('library.applyTo')}</span>
-			{#if operations.length > 1}
+			{#if layers.length > 1}
 				<select bind:value={targetOperation}>
-					{#each operations as op, index (op.id)}
-						<option value={op.id}>{t('library.layerOption', { n: index + 1, label: op.label })}</option>
+					{#each layers as op, index (op.id)}
+						<option value={op.id}>{layerNamed(index + 1, op.label)}</option>
 					{/each}
 				</select>
 			{:else}
-				<strong>{t('library.layerOption', { n: 1, label: operations[0].label })}</strong>
+				<strong>{layerNamed(1, layers[0].label)}</strong>
 			{/if}
 		</label>
 	{/if}
@@ -1767,7 +1773,7 @@
      explanation about layers sat *above* the message that there are no materials
      yet: "you have nothing" twice, in the wrong order, and the answer to a question
      you had not asked yet. -->
-{#if canEdit && operations.length === 0 && library.materials.length > 0}
+{#if canEdit && layers.length === 0 && library.materials.length > 0}
 	<!-- Say once why "Apply" cannot work, not on every card again. -->
 	<p class="notice">{t('library.noLayer')}</p>
 {/if}
@@ -2110,7 +2116,7 @@
 {/if}
 
 {#if canEdit && library.materials.length}
-	<details class="vouw">
+	<details class="fold vouw">
 		<summary>{t('library.manual')}</summary>
 		<div class="grid">
 			<label class="wide">
@@ -2175,7 +2181,7 @@
 		</button>
 	</details>
 
-	<details class="vouw">
+	<details class="fold vouw">
 		<summary>{t('library.profiles', { n: library.machines.length })}</summary>
 		<p class="fine">{t('library.profiles.why')}</p>
 		{#if library.machines.length}
@@ -2907,13 +2913,10 @@
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--line);
 	}
-	.vouw summary {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-2);
-		cursor: pointer;
+	/* A sixth face for a fold, found by `tests/one-fold.test.ts` when it walked the
+	   sources: uppercase, 600, --text-2, no marker at all. The line is the shared fold
+	   in tokens.css now; this only keeps the air under it. */
+	.vouw > summary {
 		margin-bottom: var(--space-2);
 	}
 	.profiles { list-style: none; margin: var(--space-2) 0; padding: 0; }

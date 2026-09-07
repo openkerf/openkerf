@@ -34,6 +34,74 @@ const KINDS: Record<string, MessageKey> = {
 	group: 'shape.group'
 };
 
+/** How much of a caption the shape's name carries before it is cut short. */
+export const NAME_TEXT_LIMIT = 22;
+
+/**
+ * Does the name above the card already say the whole caption?
+ *
+ * The panel used to quote the text twice — `Text “OpenKerf 5030”` in the head and
+ * `“OpenKerf 5030”` again forty pixels below it. The quote below only earns its
+ * place when the head could not fit it, so both readers ask this one question.
+ *
+ * A caption of nothing but spaces counts as shown: `elementName` renders it as
+ * `Text “”`, and an empty pair of quotation marks a second time forty pixels lower
+ * is the very repetition this exists to stop.
+ */
+export function nameShowsWholeText(element: { text: { text: string } | null }): boolean {
+	const short = element.text?.text.trim() ?? '';
+	return short.length <= NAME_TEXT_LIMIT;
+}
+
+/**
+ * Did this shape come out of a generator here rather than out of a file?
+ *
+ * Two questions in one, and both are positive evidence. `generated` is the API's
+ * reading of our own `mkgenerated` mark, set the moment a generator lays a shape down
+ * (`generators._mark_generated`). A design saved before that mark existed carries no
+ * such attribute, so the label is asked as well: every generator here writes
+ * `QR — openkerf`, `Living hinge — staggered`, `Box — front`, `code128 — 7X4MQB2K` —
+ * a name and an em dash. MeerK40t's SVG reader writes the element's own `id` into the
+ * label instead (`Path bracket`, `Path path1234 #000000`), so an import never carries
+ * one.
+ *
+ * The other way round is what must not be asked. An earlier version of this exempted
+ * every shape whose label did *not* hold the engine's internal id `meerk40t:12` — and
+ * an imported path never holds one, so the one shape the "loose pieces" diagnosis
+ * exists for was the one shape that stopped getting it.
+ */
+export function madeHere(element: { generated?: boolean; label?: string }): boolean {
+	return element.generated === true || / — /.test(element.label ?? '');
+}
+
+/**
+ * The engine's own bookkeeping, taken off a name: the internal id and the colour.
+ *
+ * The two things a label gives away that nobody at a laser needs, and the two that
+ * make a name unreadable in a 247 px card.
+ */
+function withoutBookkeeping(label: string): string {
+	return label.replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '').trim();
+}
+
+/**
+ * Is this name one this app wrote, rather than one the engine composed?
+ *
+ * The same evidence `madeHere` reads, and for the same reason: every generator here
+ * writes `QR — openkerf`, `Living hinge — staggered`, `Box — front`,
+ * `code128 — 7X4MQB2K` — a name and an em dash. MeerK40t's own labels are the type
+ * plus its internal id plus a colour (`Rect meerk40t:5 #0000ff`), and its SVG reader
+ * writes the element's `id` into the label (`Path bracket`); neither carries a dash
+ * between spaces.
+ *
+ * Asked *before* the kind, because a QR is not "a path": a generated shape has a name
+ * somebody chose to give it and the kind is the thing you can already see.
+ */
+function ownName(label: string | undefined): string {
+	const written = (label ?? '').trim();
+	return / — /.test(written) ? withoutBookkeeping(written) : '';
+}
+
 export function elementName(element: {
 	type: string;
 	text: { text: string } | null;
@@ -43,18 +111,46 @@ export function elementName(element: {
 	if (element.text?.text) {
 		const short = element.text.text.trim();
 		return t('shape.textNamed', {
-			text: short.length > 22 ? short.slice(0, 21) + '…' : short
+			text: short.length > NAME_TEXT_LIMIT ? short.slice(0, NAME_TEXT_LIMIT - 1) + '…' : short
 		});
 	}
 	if (element.image) return t('shape.image');
+	const own = ownName(element.label);
+	if (own) return own;
 	const kind = KINDS[element.type];
 	if (kind) return t(kind);
 	// Unknown type: the engine's label is better than nothing then, but without the
 	// internal id and the colour code behind it.
-	const clean = (element.label ?? element.type)
-		.replace(/\s*(meerk40t:\d+|#[0-9a-f]{3,8})/gi, '')
-		.trim();
-	return clean || element.type;
+	return withoutBookkeeping(element.label ?? element.type) || element.type;
+}
+
+/**
+ * What the panel calls the whole selection.
+ *
+ * Three answers and one place that gives them, because the header used to ask only
+ * how many: `chosen.length > 1 ? '2 shapes' : elementName(...)`. A group therefore
+ * read "2 shapes" while the menu over it offered *Ungroup* — the one word that says
+ * what you are holding was the word the header could not reach, and `shape.group`
+ * was reached by nothing at all.
+ *
+ * A group is the case worth naming because clicking one member selects the whole
+ * group (`idsFor`): the ordinary way to hold a group is to have `count > 1` with one
+ * `group_id` under all of it.
+ */
+export function selectionName(
+	chosen: {
+		type: string;
+		text: { text: string } | null;
+		image?: unknown;
+		label?: string;
+		group_id?: string | null;
+	}[]
+): string {
+	if (chosen.length === 1) return elementName(chosen[0]);
+	const group = chosen[0]?.group_id ?? null;
+	if (group && chosen.every((e) => e.group_id === group))
+		return t('shape.groupOf', { n: chosen.length });
+	return t('panel.shapes', { n: chosen.length });
 }
 
 export type DesignElement = {
@@ -73,6 +169,12 @@ export type DesignElement = {
 	 * with dozens of panels in it; more than 1 means splitting does something.
 	 */
 	subpaths: number;
+	/**
+	 * Did a generator here make this shape? Set by the API from our own `mkgenerated`
+	 * mark. A QR of 232 modules and a hinge of 160 slits have many pieces and did not
+	 * come out of a CAD program, so the panel's diagnosis is not about them.
+	 */
+	generated?: boolean;
 	/** The group this element is in; a grid is one group. */
 	group_id: string | null;
 	/** Set for vector text: the source the path was rendered from. */
@@ -335,6 +437,39 @@ export function burnsNothing(
 }
 
 /**
+ * Why a shape burns, or why it does not.
+ *
+ * Three surfaces answer this question about the same shape: the chip in the
+ * selection card, the drawing in the Job tab and the pre-flight's layer table. They
+ * answered it three ways and the middle one answered it wrongly — a shape in a
+ * layer with "burn along" off was reported as "in no layer that burns", which is
+ * what the app calls a shape nobody assigned. Two different mistakes with two
+ * different repairs, said in one sentence.
+ *
+ * So the decision is taken here, once, and every surface words the answer it gets:
+ *
+ * - `noLayer`   — in no layer at all (or only in layers that no longer exist).
+ * - `layerOff`  — in layers, and every one of them has "burn along" off.
+ * - `burns`     — in at least one layer that burns.
+ *
+ * A layer the design no longer has does not count: an element can keep an id of a
+ * deleted operation, and a shape in nothing but such ids is loose, not switched off.
+ * That is the same rule `strokeFor` uses to draw it dotted grey.
+ */
+export type BurnVerdict = 'burns' | 'noLayer' | 'layerOff';
+
+export function burnVerdict(
+	operationIds: string[] | null | undefined,
+	operations: { id: string; output: boolean }[]
+): BurnVerdict {
+	const known = (operationIds ?? [])
+		.map((id) => operations.find((op) => op.id === id))
+		.filter((op): op is { id: string; output: boolean } => Boolean(op));
+	if (!known.length) return 'noLayer';
+	return known.some((op) => op.output) ? 'burns' : 'layerOff';
+}
+
+/**
  * The colours the strip under the canvas shows.
  *
  * The palette first, in its own order — those ten are what you draw in — and behind
@@ -383,8 +518,37 @@ export function layerNumber(
 	operationId: string | null | undefined
 ): number | null {
 	if (!design?.operations || !operationId) return null;
-	const index = design.operations.filter((o) => !o.grid).findIndex((o) => o.id === operationId);
+	const index = drawnLayers(design.operations).findIndex((o) => o.id === operationId);
 	return index < 0 ? null : index + 1;
+}
+
+/**
+ * The layers you draw in — the list the number above counts over.
+ *
+ * A test grid's cells are layers in the engine and not layers you draw in: the panel
+ * folds them away under the board's own row, the pre-flight counts past them and the
+ * palette leaves them out of the strip. The library's "Apply to" counted over the raw
+ * list instead, and then a 4 x 4 board made the same layer "5" in the panel and
+ * "21" here — sixteen apart, two clicks from each other.
+ *
+ * So the list itself is the shared thing, not the filter written out again: every
+ * surface that numbers, offers or counts layers takes it from here.
+ */
+export function drawnLayers<T extends { grid?: unknown }>(operations: T[]): T[] {
+	return operations.filter((o) => !o.grid);
+}
+
+/**
+ * How a layer is named where it is not standing in its own row.
+ *
+ * In the layer list the number is on the chip and the name beside it, so the row
+ * needs no wording. Everywhere else — the library's "Apply to", the Layer submenu,
+ * the palette's tooltip — the two have to travel together in one string, because a
+ * bare name does not tell two layers called "Engrave" apart, and that is the
+ * first-time user's ordinary case: draw in a colour that has no layer yet.
+ */
+export function layerNamed(number: number, label: string): string {
+	return t('layer.named', { n: number, label });
 }
 
 /** Does this bounding box (in mm) stick out of a frame of `width × height`? */
@@ -496,6 +660,33 @@ export function bridgeSummary(elements: DesignElement[]): BridgeSummary {
 	};
 }
 
+/**
+ * Do the bridges on this shape do anything — is it in a layer that cuts?
+ *
+ * Bridges are gaps in a cut, so in an engrave or a raster layer, and on a shape in no
+ * layer at all, they change nothing that comes out of the machine. The panel keeps the
+ * fields and says that instead of hiding them: hiding the control would hide the reason
+ * with it, and then somebody looks for bridges on an engraving and concludes the app
+ * cannot do them.
+ *
+ * The question is asked per shape, because a selection can disagree with itself: with the
+ * rectangle in Outline and the rectangle in Fine lines both selected, one answer for the
+ * pair read "so these 2 shapes come loose the moment the cut closes", true of one of the
+ * two. A caller that speaks about several shapes counts the answers rather than folding
+ * them into one.
+ *
+ * A layer a shape names that is not in `operations` is answered `true`: the panel only
+ * says "not in a cut layer" about layers it has actually looked at, because a sentence
+ * about a layer nobody could read would be the false one all over again.
+ */
+export function elementCuts(element: DesignElement, operations: DesignOperation[]): boolean {
+	const ids = element.operation_ids ?? [];
+	if (!ids.length) return false;
+	const own = operations.filter((operation) => ids.includes(operation.id));
+	if (!own.length) return true;
+	return own.some((operation) => operation.type === 'op cut');
+}
+
 const REFRESH_SIGNALS = new Set(['tree_changed', 'rebuild_tree', 'element_property_update']);
 
 export function isDesignSignal(code: string) {
@@ -543,6 +734,20 @@ export class DesignStore {
 	/** Are there unsaved changes? */
 	get dirty() {
 		return this.design?.dirty ?? false;
+	}
+
+	/**
+	 * Has the first `/api/design` answered?
+	 *
+	 * Until it has, `design` is `null` and every question below answers as if the bed
+	 * were empty — `isEmpty` true, `burnsNothing` true, no elements, no operations.
+	 * Four surfaces stated that as a fact about a document they had not read yet
+	 * (`tests/design-not-loaded.test.ts` holds the measurement), so each of them asks
+	 * this first and says nothing until it is true. Showing nothing is honest; a
+	 * count of zero over a full bed is not.
+	 */
+	get loaded() {
+		return this.design !== null;
 	}
 
 	get isEmpty() {

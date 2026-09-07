@@ -8,8 +8,11 @@ how the view moves, and how sheets work.
 ![An empty bed with rulers in millimetres along the top and left, the tool rail on the left, and the words "Empty bed" in the middle](images/05-canvas-empty.png)
 
 A fresh bed says **Empty bed**, with "Use Import in the top bar for an existing design, or
-pick a shape on the left and click the bed." That block disappears as soon as there is
-work on the bed, and also while a job is running.
+pick a shape on the left and click the bed." On a narrower window, where the top bar has
+no Import and importing lives in the tool rail's **More** menu, the same block reads "Use
+More on the left for an existing design, or pick a shape above it and click the bed."
+That block disappears as soon as there is work on the bed, and also while a job is
+running.
 
 ## What is drawn on the bed
 
@@ -108,7 +111,9 @@ The selection is a dashed frame, drawn a few pixels clear of the shape so the la
 underneath stays readable. Its measure stands underneath it, live: `60.0 × 40.0 mm`.
 
 - **Move**: drag anywhere inside the frame. Or use the arrow keys — 0.1 mm a press, 1 mm
-  with shift held.
+  with shift held. The panel says the same over its column of numbers, as a tooltip:
+  "Drag the box to move, the corners to scale. Arrow keys: 0.1 mm, with shift 1 mm." At
+  1199 px and below, where nothing can hover, it stands under the column as a line.
 - **Scale**: drag one of the four corner handles. The opposite corner stays put.
 - **Rotate**: drag the round handle on the stem above the frame. Hold shift and it locks to
   steps of 15 degrees. A turn of less than half a degree is treated as a tremble and
@@ -145,9 +150,15 @@ says so, with the way back in it:
 > **LOCKED** — Protected from moving, sizing and deleting. Its layer, colour and bridges can
 > still be changed.
 
+That block stands above the numbers, because the six controls under it are switched off with
+it: W, H, X, Y, the angle and the chain between W and H each carry "This shape is locked",
+and all six are greyed out for as long as the lock is on. They used to take a number, refuse
+it afterwards and go on showing what you typed over a shape that was still its old size.
+
 ![A locked rectangle selected on the bed: the dashed selection frame with its measure
 underneath, no corner handles and no rotation stem, and in the panel on the right the heading
-LOCKED with the sentence about what a lock protects and an Unlock button.](images/31-lock.png)
+LOCKED with the sentence about what a lock protects and an Unlock button, above a greyed-out
+column of W, H, X, Y and the angle, each with its own − and +.](images/31-lock.png)
 
 That line is the whole rule, and the second half is deliberate. A lock protects **geometry
 and existence** — moving, scaling, rotating, mirroring, aligning, combining, offsetting,
@@ -316,7 +327,7 @@ the machine. Every cutter therefore leaves a few **bridges** — small gaps in t
 hold the part in the sheet until you push it out by hand.
 
 ![A rectangle on the bed with four visible gaps in its outline, and the Edit panel on the
-right open on Bridges: the tick "Leave gaps in the cut", a Number of 4 and a Length per
+right open on Bridges: the tick "Leave bridges in the cut", a Number of 4 and a Length per
 bridge of 2 mm, with the read-back sentence underneath.](images/26-bridges.png)
 
 The quick way is the right-click menu: **Add bridges (4 × 2 mm)** — "Small gaps in the cut,
@@ -328,7 +339,7 @@ part comes loose". The keyboard shortcut is in [Reference](reference.md#bridges)
 The two numbers are in the panel on the right, under **Bridges**, because they are values
 you set and read back:
 
-- the tick **Leave gaps in the cut**;
+- the tick **Leave bridges in the cut**;
 - **Number** — how many, spread evenly along the contour. They stay spread when you resize
   the shape.
 - **Length per bridge** — in millimetres.
@@ -336,8 +347,8 @@ you set and read back:
 The two fields are independent: typing a length leaves the number as it was, and the other
 way round.
 
-Underneath stands what you have actually asked for, in millimetres of contour: "4 gaps of 2
-mm, spread over a contour of 200 mm. What is left to cut is 192 mm." With several shapes
+Underneath stands what you have actually asked for, in millimetres of contour: "4 bridges of
+2 mm, spread over a contour of 200 mm. What is left to cut is 192 mm." With several shapes
 selected that are not all the same size, the sentence quotes the tightest of them, because
 that is the one that runs out of contour first. And when the bridges sit at places of their
 own rather than evenly: "At 10, 40 and 70 percent along the contour, each 2 mm long."
@@ -353,9 +364,12 @@ notches in its outline is not what happens.
   "This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path
   — not on a line, text or an image." The menu row is greyed with the short version, "A line,
   text or an image carries no bridges".
-- Bridges only mean something to a cut. In an engrave or raster layer the panel keeps the
-  fields but adds: "This shape is not in a cut layer, so the gaps change nothing yet. They
-  only matter to a cut."
+- Bridges only mean something to a cut. In an engrave or raster layer — and on a shape in
+  no layer at all — the panel keeps the fields and says so instead of promising a cut:
+  "This shape is not in a cut layer, so bridges change nothing yet. They only matter to a
+  cut." That sentence stands whether the tick is on or off; with it off in a cut layer the
+  line reads "No bridges — small gaps that hold the part in the sheet — so this shape comes
+  loose the moment the cut closes."
 - Too much bridge for the contour is refused, with the arithmetic in the sentence. Measured
   on a 60 × 40 mm rectangle, four bridges of 30 mm came back as "4 bridges of 30 mm take 120
   mm of the contour of meerk40t:7, and that contour is 200.0 mm long; at most half of it may

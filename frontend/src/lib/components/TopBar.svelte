@@ -27,6 +27,7 @@
 		onStop,
 		onFrame,
 		canFrame = false,
+		designLoaded = true,
 		material = null,
 		thicknessMm = null,
 		onOpenMaterial,
@@ -71,6 +72,9 @@
 		onFrame?: () => void;
 		/** There is something on the bed *and* this machine can move. */
 		canFrame?: boolean;
+		/** Has the design been read? Until it has, the frame button stays off but
+		 *  gives no reason: "Nothing is on the bed" was said over a full one. */
+		designLoaded?: boolean;
 		/** The current sheet's material — what is being burned *into*. Belongs beside
 		 *  the machine: together those two decide every setting downstream. Empty is a
 		 *  valid state and says so. */
@@ -380,7 +384,9 @@
 			? `${t('transport.noServer')} ${t('topbar.frame.noServer')}`
 			: canFrame
 				? t('topbar.frame.title')
-				: t('topbar.frame.off')}
+				: designLoaded
+					? t('topbar.frame.off')
+					: undefined}
 		onclick={onFrame}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
@@ -392,8 +398,30 @@
 		<span class="btn-label stays lang">{t('topbar.frame')}</span>
 		<span class="btn-label stays short">{t('topbar.frame.short')}</span>
 	</button>
+	<!-- Stopping is always possible, anywhere, in one tap. Full red only when something
+	     is really running: a button raising an alarm for hours a day without a reason
+	     teaches the user to ignore it, and then they miss it when it counts. -->
+	<!-- Server dropped out: no red, no fill, and the word says where the stop is
+	     *then*. A tooltip is no answer here — on a tablet, where this is the only stop
+	     button, hover does not exist. -->
+	<button
+		class="btn danger"
+		class:sluimer={!stopArmed && !gone}
+		class:dood={gone}
+		disabled={!canStop || gone}
+		onclick={onStop}
+		title={stopTitle}
+	>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+		<span class="btn-label stays"
+			>{gone ? t('transport.stop.onMachine') : t('transport.stop')}</span
+		>
+	</button>
 	<!--
-		Pausing belongs beside starting and stopping, at every width.
+		Pausing belongs beside starting and stopping, at every width. It stands between
+		stop and start, and stop stands at the start of the row: the button that cannot
+		be undone is never next to the one you reach for most, and the running block in
+		the right-hand panel reads the same way round (`JobControls`, `.now-actions`).
 
 		This sat behind `barCarries`, so on the desktop the top bar carried start and
 		stop but *not* pause — that lived in the status bar, at the bottom of the screen.
@@ -426,25 +454,6 @@
 				<span class="btn-label stays">{t('transport.pause')}</span>
 			</button>
 		{/if}
-	<!-- Stopping is always possible, anywhere, in one tap. Full red only when something
-	     is really running: a button raising an alarm for hours a day without a reason
-	     teaches the user to ignore it, and then they miss it when it counts. -->
-	<!-- Server dropped out: no red, no fill, and the word says where the stop is
-	     *then*. A tooltip is no answer here — on a tablet, where this is the only stop
-	     button, hover does not exist. -->
-	<button
-		class="btn danger"
-		class:sluimer={!stopArmed && !gone}
-		class:dood={gone}
-		disabled={!canStop || gone}
-		onclick={onStop}
-		title={stopTitle}
-	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-		<span class="btn-label stays"
-			>{gone ? t('transport.stop.onMachine') : t('transport.stop')}</span
-		>
-	</button>
 	<!-- Opens no dialog but the pre-flight in the right-hand panel. -->
 	<button
 		class="btn primary"
@@ -492,14 +501,20 @@
 	   aria-label, so no meaning is lost. The bound is at 1200px, not at 900: on a 1024
 	   tablet the labels otherwise break over two lines and the bar grows with them. */
 	@media (max-width: 1199px) {
-		.frame .short { display: inline; }
+		/* `.topbar .frame .short`, three classes and not two: the `.btn-label.short
+		   { display: none }` default further down this file has two, and at equal
+		   specificity the later rule wins — so with two the frame lost its word on
+		   every tablet (measured at 1024 and 800: both labels `none`, a 50 x 44 dashed
+		   square) while the comment right below promised the opposite.
+		   `tests/frame-word.test.ts` holds this. */
+		.topbar .frame .short { display: inline; }
 		/* The buttons that drive the machine keep their word: a little red square
 		   without text is not an emergency stop. */
 		.topbar :global(.btn-label:not(.stays)) { display: none; }
 		/* The frame keeps its word — on a tablet this is a first-class action and a
 		   thin dashed square says nothing — but only the short form: "Frame" next to
 		   that square is unambiguous. */
-		.frame .lang { display: none; }
+		.topbar .frame .lang { display: none; }
 		/* The whole brand goes, word *and* image.
 		   The wordmark already cost 100px; the logo costs another 108 with its gap
 		   (measured), and those are worth more here than a logo. On a tablet you know
@@ -744,8 +759,9 @@
 		background: var(--surface-1);
 		border-color: var(--danger-solid);
 		/* The word in ordinary text colour, the icon in red: --danger on --surface-1
-		   reaches 4.4:1 in the dark theme and that is too little for text. The red border
-		   plus the little red square carry the meaning. */
+		   measures 5.32:1 in the light theme and 4.78:1 in the dark one, so the same word
+		   would not read the same in the two themes. The red border plus the little red
+		   square carry the meaning instead. */
 		color: var(--text-1);
 	}
 	.btn.danger.sluimer svg { color: var(--danger); }

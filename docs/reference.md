@@ -50,7 +50,7 @@ line after the first four:
 
 **New project**, **Open…** and **Upload…** all replace the whole project, so each
 one asks first when there are changes that are not saved: a window titled
-"Unsaved changes", with **Save**, **Discard** and **Cancel**.
+"Unsaved changes", with **Cancel**, **Discard** and **Save**.
 
 ### Selecting
 
@@ -160,7 +160,7 @@ separated by thin dividers, with a "More" button at the end and, on the right,
 what is selected — "Pick a shape on the bed", "1 shape selected" or
 "{n} shapes selected".
 
-![The OpenKerf window with a circle selected. Above the canvas the action bar shows undo and redo, then two groups of four alignment icons, then group, ungroup and the two mirror buttons, a More button, and on the right the words "1 shape selected". The right-hand panel is on the Edit tab and gives width, height, X, Y and angle of the ellipse, and under Bridges the unticked "Leave gaps in the cut".](images/07-selection.png)
+![The OpenKerf window with a circle selected. Above the canvas the action bar shows undo and redo, then two groups of four alignment icons, then group, ungroup and the two mirror buttons, a More button, and on the right the words "1 shape selected". The right-hand panel is on the Edit tab and gives width, height, X, Y and angle of the ellipse, and under Bridges the unticked "Leave bridges in the cut".](images/07-selection.png)
 
 | Button | What it does | |
 |---|---|---|
@@ -493,7 +493,7 @@ The field is in the Job tab, at the top, labelled "Token for write actions",
 with the hint "The engine logs the token when the API starts." Paste it, press
 Save, and the tools come to life.
 
-![The Job tab with the job getting ready: a thumbnail of the sheet, "Estimated time 1:19", the first row of the layer table with its speed, power and passes, and the checklist "Lid closed", "Extraction and air assist on", "Workpiece is clamped and flat".](images/12-job-preflight.png)
+![The Job tab with the job getting ready: the row "Material" reading "not filled in for this sheet", two amber warnings, a "Show cut path" button, the layer table with its speed, power and passes and, under those, a thumbnail of the sheet. At the foot of the panel the strip that stays put while the rest scrolls: a green "Start job 1:19" with a narrower arrow button joined to its right, and nothing else.](images/12-job-preflight.png)
 
 **When it goes wrong.** A token the server does not accept turns the label into
 "This token is being refused" and the hint into "Look in the window the engine
@@ -544,8 +544,8 @@ still that refreshes every two seconds rather than to a broken picture.
 Calibrating opens the window "Calibrate the camera" over the raw picture:
 "Drag the four points to the corners of the bed, starting top left and going
 clockwise. After that the app knows where every point in the image lies on the
-bed, and your design lands in the right place." Buttons: "Clear the
-calibration", "Cancel" and "Save".
+bed, and your design lands in the right place." Buttons: "Cancel", "Clear the
+calibration" and "Save".
 
 The camera needs a token like every other write action; without one the pill is
 off and its tooltip reads "Requires a token". A camera that will not start

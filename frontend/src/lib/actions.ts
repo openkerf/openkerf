@@ -20,6 +20,8 @@
  * message catalogue (`$lib/i18n`).
  */
 import { t } from './i18n/core.ts';
+// One wording for naming a layer away from its own row; see `layerNamed`.
+import { layerNamed } from './design.svelte.ts';
 
 /** A single operation. */
 export type Action = {
@@ -210,8 +212,14 @@ export type Context = {
 	offline?: boolean;
 	/** May this session write (token)? */
 	may: boolean;
-	/** The layers the selection can be put into. */
-	layers: { id: string; label: string; inside: boolean }[];
+	/**
+	 * The layers the selection can be put into, with the number the panel gives them.
+	 *
+	 * The number travels with the name because it is half of the name: draw in a colour
+	 * that has no layer yet and you have two layers called "Engrave", and this submenu
+	 * showed both as "Engrave" (P12).
+	 */
+	layers: { id: string; number: number; label: string; inside: boolean }[];
 	/** The other sheets. */
 	sheets: { id: string; name: string }[];
 	/** Is snapping on? */
@@ -360,6 +368,20 @@ function mayWrite(ctx: Context): string | undefined {
 }
 
 /**
+ * Why a lock refuses something, in the words every surface uses for it.
+ *
+ * Three readers: the rows of the right-click menu, the bridges control, and the
+ * W/H/X/Y and angle fields in the panel — those last ones used to ask nothing and
+ * accept a number the shape then refused. One rule, one sentence.
+ */
+export function lockRefusal(ctx: Pick<Context, 'count' | 'lockedCount'>): string | undefined {
+	if (ctx.lockedCount === 0) return undefined;
+	return ctx.lockedCount === ctx.count && ctx.count === 1
+		? t('reason.locked')
+		: t('reason.someLocked', { n: ctx.lockedCount });
+}
+
+/**
  * Why bridges cannot be placed or taken away right now.
  *
  * Two surfaces ask this: the row in the right-click menu and the control in the
@@ -376,11 +398,8 @@ export function bridgesRefusal(
 ): string | undefined {
 	const cannot = writeRefusal(ctx);
 	if (cannot) return cannot;
-	if (ctx.lockedCount > 0) {
-		return ctx.lockedCount === ctx.count && ctx.count === 1
-			? t('reason.locked')
-			: t('reason.someLocked', { n: ctx.lockedCount });
-	}
+	const locked = lockRefusal(ctx);
+	if (locked) return locked;
 	if (!ctx.count) return t('reason.pickShape');
 	return ctx.bridges.carries ? undefined : t('reason.noBridges');
 }
@@ -516,12 +535,7 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 	// A locked shape refuses geometry in the API, so the row says why before you
 	// press it. Without this the menu offers "Mirror" and the app answers 409 — the
 	// reason arrives after the click instead of on it.
-	const locked =
-		ctx.lockedCount === 0
-			? undefined
-			: ctx.lockedCount === ctx.count && ctx.count === 1
-				? t('reason.locked')
-				: t('reason.someLocked', { n: ctx.lockedCount });
+	const locked = lockRefusal(ctx);
 	const needsOne = cannot ?? locked ?? (ctx.count ? undefined : t('reason.pickShape'));
 
 	const combine: Action[] = (
@@ -582,7 +596,7 @@ export function objectMenu(ctx: Context, h: Handlers): Menu {
 	const layers: Action[] = [
 		...ctx.layers.map((layer) => ({
 			id: `layer-${layer.id}`,
-			label: layer.label,
+			label: layerNamed(layer.number, layer.label),
 			on: layer.inside,
 			off: needsOne,
 			run: () => h.assignLayer(layer.id, !layer.inside)

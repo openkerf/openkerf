@@ -490,7 +490,7 @@ const WIDE: Context = {
 	clipboard: 2,
 	busy: false,
 	may: true,
-	layers: [{ id: 'DATA', label: 'A layer of the reader', inside: true }],
+	layers: [{ id: 'DATA', number: 1, label: 'A layer of the reader', inside: true }],
 	sheets: [{ id: 'DATA', name: 'A sheet of the reader' }],
 	snap: true,
 	layerNumbers: true,

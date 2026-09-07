@@ -23,6 +23,7 @@
 		control,
 		edits = null,
 		pointerMm = null,
+		elementCount = null,
 		actions = true
 	}: {
 		device: Device | null;
@@ -34,6 +35,20 @@
 		edits?: { error: string | null } | null;
 		/** Pointer position on the bed; sits beside the machine position. */
 		pointerMm?: { x: number; y: number } | null;
+		/**
+		 * How many elements the document holds.
+		 *
+		 * It used to be a `Design · 6 elements` row heading the Edit tab and the
+		 * Layers tab, above the card that is the tab. It headed nothing and it pushed
+		 * that card down. The count is a fact about the whole document, like the
+		 * position and the time beside it, so it belongs on the one strip that is
+		 * there on every tab.
+		 *
+		 * `null` while the design has not been read yet (`design.loaded`): a count is
+		 * a statement of fact, and "0 elements" over a document still on its way is a
+		 * wrong one. Then the strip shows no count at all.
+		 */
+		elementCount?: number | null;
 		/** Does this bar carry the pause and stop buttons? Not on a tablet: there
 		 *  the machine controls are in the top bar, and two places for the same stop
 		 *  makes it unclear at the deciding moment which one is the real one. At 768
@@ -195,6 +210,15 @@
 			—
 		{/if}
 	</span>
+	<!-- No word in front of it: "6 elements" says what it is, and the word in front
+	     of it was exactly the "Design" heading that headed nothing. It stays on a
+	     tablet, where the pointer position goes: the count is one short token against
+	     the pointer's two, and the count is a fact about the document that used to be
+	     on the Edit and Layers tabs — it moved here, it did not leave the screen. -->
+	{#if elementCount !== null}
+		<span class="sep docpart" aria-hidden="true"></span>
+		<span class="docpart">{t('panel.elements', { n: elementCount })}</span>
+	{/if}
 	<span class="sep" aria-hidden="true"></span>
 	<!-- During a job "how much longer" is the only number that counts; the total
 	     estimate was there, but you had to subtract it from the clock yourself. -->
@@ -227,16 +251,21 @@
 		{#if zekerVerbreken}
 			<span class="verbreek-ask">
 				{t('status.disconnect.ask')}
-				<button
-					class="verbind"
-					disabled={control.busy === 'disconnect'}
-					title={control.busy === 'disconnect' ? t('reason.busy') : undefined}
-					onclick={() => {
-						zekerVerbreken = false;
-						control.disconnect();
-					}}
-				>{t('status.disconnect')}</button>
-				<button class="verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
+				<!-- The shared ask row (`.ask-actions` in tokens.css). It stood the other way
+				     round — the verb that pulls the plug on the left and *Leave it* on the
+				     right — which is the reverse of every other question in the app. -->
+				<span class="ask-actions">
+					<button class="verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
+					<button
+						class="verbind"
+						disabled={control.busy === 'disconnect'}
+						title={control.busy === 'disconnect' ? t('reason.busy') : undefined}
+						onclick={() => {
+							zekerVerbreken = false;
+							control.disconnect();
+						}}
+					>{t('status.disconnect')}</button>
+				</span>
 			</span>
 		{:else}
 			<button
@@ -367,6 +396,9 @@
 		margin-left: var(--space-1);
 		color: var(--text-1);
 	}
+	/* The bar is one line of small type; the row keeps its order and its alignment from
+	   tokens.css and only its gap is the bar's own. */
+	.verbreek-ask .ask-actions { gap: var(--space-1); }
 
 	/* Not yet connected is neither a fault nor a promise. The same muted tone as
 	   the rest of the bar, with an underline saying there is an explanation behind

@@ -52,7 +52,7 @@
 		<p class="row">{t('offset.explain')}</p>
 	</div>
 
-	<div class="ask-actions">
+	{#snippet footer()}
 		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button
 			class="btn primary"
@@ -70,7 +70,7 @@
 				})}
 			{/if}
 		</button>
-	</div>
+	{/snippet}
 </Dialog>
 
 <style>

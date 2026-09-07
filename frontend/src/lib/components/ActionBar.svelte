@@ -121,7 +121,7 @@
 
 	<!-- The way to the rest. A bar cannot carry everything, but it must say that
 	     there is more — otherwise the context menu is a secret. -->
-	<button class="more" title={t('bar.more.title')} onclick={onMore}>
+	<button class="btn mini more" title={t('bar.more.title')} onclick={onMore}>
 		{t('bar.more')}
 		<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
 	</button>
@@ -146,8 +146,8 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 3px var(--space-3);
-		min-height: 38px;
+		padding: 0 var(--space-3);
+		min-height: var(--actionbar-height);
 		background: var(--surface-1);
 		border-bottom: 1px solid var(--line);
 	}
@@ -159,8 +159,8 @@
 	.button {
 		display: grid;
 		place-items: center;
-		width: 30px;
-		height: 30px;
+		width: var(--space-8);
+		height: var(--space-8);
 		border-radius: var(--radius-field);
 		color: var(--text-1);
 		background: none;
@@ -178,21 +178,17 @@
 		width: 1px;
 		height: 20px;
 		background: var(--line);
-		margin: 0 2px;
 	}
+	/* The same button as the layer list's *List*, which it is the twin of: both are a
+	   small text button with a chevron that opens a menu. What is its own is that it
+	   stands in a row of ghost icon buttons, so it carries no face of its own. */
 	.more {
-		display: flex;
-		align-items: center;
-		gap: 3px;
-		padding: 5px 8px;
-		border-radius: var(--radius-field);
-		font-size: var(--text-xs);
+		gap: var(--space-1h);
 		color: var(--text-2);
 		background: none;
 		border: none;
 	}
 	.more:hover {
-		background: var(--surface-2);
 		color: var(--text-1);
 	}
 	.stretch {

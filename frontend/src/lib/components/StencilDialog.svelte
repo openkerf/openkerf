@@ -118,12 +118,11 @@
 
 	<p class="hint">{t('stencil.untried')}</p>
 
-	<!-- `ask-actions` and not a wrapper of our own: that class is what gives a dialog's
-	     buttons their padding, border and radius, and it carries the extra spacing on a
-	     touch screen. Written locally the button came out flat and unbordered beside every
-	     other dialog in the app. And a way out beside the way on: every other dialog here
-	     offers Cancel first, so the primary button is never the only thing to press. -->
-	<div class="ask-actions">
+	<!-- The window's own footer, not a row in the body: `Dialog` puts the ask row under
+	     a rule and outside the part that scrolls, and `.ask-actions` in tokens.css lays
+	     it out — the way out first, the primary last. Written locally the buttons came
+	     out flat and unbordered beside every other dialog in the app. -->
+	{#snippet footer()}
 		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>
 		<button
 			class="btn primary"
@@ -148,7 +147,7 @@
 					})
 				: t('stencil.apply.plain', { n: count })}
 		</button>
-	</div>
+	{/snippet}
 </Dialog>
 
 <style>

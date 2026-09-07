@@ -133,7 +133,7 @@
 	let preview = $state<{
 		plan: Plan;
 		cells: Cell[];
-		engine?: { grid?: boolean };
+		engine?: { raster?: boolean };
 	} | null>(null);
 
 	let form = $state({
@@ -226,7 +226,7 @@
 	);
 	/** Raster chosen on an engine that cannot convert it into laser lines. */
 	let rasterImpossible = $derived(
-		form.operation === 'graveren-raster' && preview?.engine?.grid === false
+		form.operation === 'graveren-raster' && preview?.engine?.raster === false
 	);
 	let assen = $derived([form.row_axis, form.column_axis] as As[]);
 	let vasteAs = $derived(
@@ -1717,7 +1717,7 @@
 			</div>
 		{/if}
 
-		<div class="actions">
+		<div class="actions ask-actions">
 			<button class="btn" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={suggest}>{t('grid.suggestRange')}</button>
 			<!-- Form rule v4: the primary button is on the right, the helper on the left.
 			     They used to sit next to each other on the left, and then the button that
@@ -2098,13 +2098,20 @@
 	   fields above it, it disappeared below the fold, and then the wizard looks like a
 	   dead end. */
 	.actions .stretch { flex: 1; }
+	/* The layout is the shared ask row (`.ask-actions` in tokens.css). This wizard sits
+	   inside somebody else's dialog and cannot use the window's footer slot: the
+	   read-back half (steps 3 and 4) is a second component under this one in the same
+	   body, so this row is the end of step 2 and not the window's foot. What it says
+	   here is only where it stays while the form above it scrolls.
+
+	   The offset is the body's own padding, as the series' row has it. With `bottom: 0`
+	   the row stopped one `--space-4` short: measured at 1440 x 900 with the form at
+	   1,647 px in a body of 665, row bottom 793 against body bottom 809, and the form
+	   went on scrolling through that 16 px slit under an opaque row. */
 	.actions {
 		position: sticky;
-		bottom: 0;
+		bottom: calc(-1 * var(--space-4));
 		z-index: 1;
-		display: flex;
-		gap: var(--space-2);
-		flex-wrap: wrap;
 		margin: 0 calc(-1 * var(--space-4));
 		padding: var(--space-3) var(--space-4);
 		background: var(--surface-1);

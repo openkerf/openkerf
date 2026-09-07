@@ -155,11 +155,11 @@
 		{/each}
 	</div>
 
-	<div class="actions">
-		<button class="btn" onclick={() => camera.resetCalibration()}>{t('calibrate.clear')}</button>
+	{#snippet footer()}
 		<button class="btn" onclick={cancel}>{t('common.cancel')}</button>
+		<button class="btn" onclick={() => camera.resetCalibration()}>{t('calibrate.clear')}</button>
 		<button class="btn primary" disabled={camera.busy} title={camera.busy ? t('reason.busy') : undefined} onclick={save}>{t('common.save')}</button>
-	</div>
+	{/snippet}
 </Dialog>
 
 <style>
@@ -221,10 +221,4 @@
 		color: var(--text-2);
 	}
 	.numbers div { display: grid; gap: 1px; }
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-2);
-		margin-top: var(--space-4);
-	}
 </style>
