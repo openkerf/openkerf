@@ -17,7 +17,7 @@
 	} from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import NumberField from './NumberField.svelte';
-	import { whenNumber } from '$lib/numbers';
+	import { typedNumber, whenNumber } from '$lib/numbers';
 	import Segmented from './Segmented.svelte';
 	import ArrangeIcon from './ArrangeIcon.svelte';
 	import Menu from './Menu.svelte';
@@ -181,7 +181,7 @@
 	 */
 	function commitPosition(axis: 'x' | 'y', raw: string) {
 		if (!live) return;
-		const value = raw.trim() === '' ? Number.NaN : Number(raw.replace(',', '.'));
+		const value = typedNumber(raw);
 		if (!Number.isFinite(value)) {
 			sizeFields[axis] = live[axis].toFixed(1);
 			return;
@@ -190,7 +190,7 @@
 	}
 
 	function commitSize(axis: 'width' | 'height', raw: string) {
-		const value = Number(raw.replace(',', '.'));
+		const value = typedNumber(raw);
 		if (!live) return;
 		if (!Number.isFinite(value) || value <= 0) {
 			sizeFields[axis] = live[axis].toFixed(1);
@@ -521,7 +521,7 @@
 	}
 
 	async function setAngle(raw: string) {
-		const value = Number(raw.replace(',', '.'));
+		const value = typedNumber(raw);
 		if (!Number.isFinite(value) || !selectedIds.length) return;
 		if ((await edits.rotate(selectedIds, ((value % 360) + 360) % 360, true)).ok)
 			await design.load();

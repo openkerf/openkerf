@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
+	import { typedNumber } from '$lib/numbers';
 
 	/**
 	 * A number with − and +.
@@ -104,17 +105,19 @@
 	 * The last value in the box that was a number.
 	 *
 	 * The box holds a string so that a half-typed number does not jump away, and a string
-	 * can be `abc`. Stepping from that used to fall back to 0 and clamp to `min`:
-	 * measured, a raster layer at 500 dpi went to 10 on one click of `+`, committed, with
-	 * no refusal and no notice. So nonsense stays in this component and the number that
-	 * was there comes back.
+	 * can be `abc` or nothing at all. Stepping from that used to fall back to 0 and clamp
+	 * to `min`: measured, a raster layer at 500 dpi went to 10 on one click of `+`,
+	 * committed, with no refusal and no notice — once from `abc`, and once from an empty
+	 * box, because `Number('')` is 0 and 0 passes `Number.isFinite`. `typedNumber` is the
+	 * one rule for both (and for the decimal comma), so the number that was there comes
+	 * back rather than the field's own minimum.
 	 */
 	let lastGood = $state(value);
 	$effect(() => {
-		if (Number.isFinite(Number(value))) lastGood = value;
+		if (Number.isFinite(typedNumber(value))) lastGood = value;
 	});
 
-	/** Nothing to step from, and nothing to send on: put the last number back. */
+	/** Nothing to step from: put the last number back. */
 	function refuse() {
 		value = lastGood;
 	}
@@ -124,7 +127,7 @@
 			onstep(direction);
 			return;
 		}
-		const now = Number(value);
+		const now = typedNumber(value);
 		if (!Number.isFinite(now)) {
 			refuse();
 			return;
@@ -135,6 +138,26 @@
 		// Floating point leaves 0.1 + 0.2 as 0.30000000000000004.
 		value = String(Math.round(fresh * 1000) / 1000);
 		onchange?.(value);
+	}
+
+	/**
+	 * What the caller gets, and what the box is left standing on.
+	 *
+	 * The caller is asked first and with the text as typed: `12,5` is a width to
+	 * `commitSize`, an empty box is a cleared value to `whenNumberOrBlank`, and `abc` is
+	 * what makes the Edit card say "a width has to be more than 0 mm". A component that
+	 * judged the string first took all three of those away.
+	 *
+	 * Afterwards the box has to tell the truth about the value behind it. Measured: `abc`
+	 * typed in a raster layer's DPI left `abc` standing while the layer still said 500 —
+	 * and the next click of `+` stepped from that. A caller that took the entry has
+	 * already written its own number into the box by now, so what is left here is an entry
+	 * nobody took, and the last number goes back. An empty box is left empty: nothing is
+	 * not a lie about the value, and clearing a machine's power is done that way.
+	 */
+	function commit() {
+		onchange?.(value);
+		if (value.trim() !== '' && !Number.isFinite(typedNumber(value))) refuse();
 	}
 
 	/**
@@ -158,14 +181,6 @@
 	 * image DPI set 2000. A keystroke that resizes the work has no undo you knew to reach
 	 * for.
 	 */
-	function commit() {
-		if (!Number.isFinite(Number(value))) {
-			refuse();
-			return;
-		}
-		onchange?.(value);
-	}
-
 	function onKey(event: KeyboardEvent) {
 		if (disabled) return;
 		if (event.key === 'ArrowUp') set(1);

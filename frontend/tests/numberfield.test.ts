@@ -38,6 +38,12 @@ export function t(key, vars = {}) {
 }
 `;
 
+/** The two `$lib` aliases the component imports, pointed at real files. */
+const resolved = (code: string) =>
+	code
+		.replace(/'\$lib\/i18n\/index\.svelte'/g, "'./i18n-stub.js'")
+		.replace(/'\$lib\/numbers'/g, "'../../src/lib/numbers.ts'");
+
 let html = '';
 
 before(async () => {
@@ -45,7 +51,7 @@ before(async () => {
 	mkdirSync(work, { recursive: true });
 	writeFileSync(join(work, 'i18n-stub.js'), STUB);
 	const file = join(work, 'NumberField.js');
-	writeFileSync(file, out.js.code.replace(/'\$lib\/i18n\/index\.svelte'/g, "'./i18n-stub.js'"));
+	writeFileSync(file, resolved(out.js.code));
 	const mod = await import(file + '?t=' + Date.now());
 	html = render(mod.default, { props: { label: 'Width', unit: 'mm', value: '500' } }).body;
 	rmSync(work, { recursive: true, force: true });
@@ -137,7 +143,7 @@ test('a step label from the caller reaches both buttons', async () => {
 	mkdirSync(work, { recursive: true });
 	writeFileSync(join(work, 'i18n-stub.js'), STUB);
 	const file = join(work, 'Named.js');
-	writeFileSync(file, out.js.code.replace(/'\$lib\/i18n\/index\.svelte'/g, "'./i18n-stub.js'"));
+	writeFileSync(file, resolved(out.js.code));
 	const mod = await import(file + '?t=' + Date.now());
 	const named = render(mod.default, {
 		props: {

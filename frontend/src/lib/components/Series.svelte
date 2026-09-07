@@ -53,6 +53,7 @@
 	import Dialog from './Dialog.svelte';
 	import Menu from './Menu.svelte';
 	import NumberField from './NumberField.svelte';
+	import { whenNumber } from '$lib/numbers';
 	import Segmented from './Segmented.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
 	import { findColumn, columnsUsed, reservedColumn } from '$lib/series';
@@ -877,7 +878,7 @@
 								step={10}
 								min={5}
 								value={String(sheets.active?.width_mm ?? '')}
-								onchange={(value) => void resize({ width_mm: Number(value) })}
+								onchange={(value) => whenNumber(value, (width_mm) => void resize({ width_mm }))}
 							/>
 							<NumberField
 								label={t('series.plate.height')}
@@ -885,7 +886,7 @@
 								step={10}
 								min={5}
 								value={String(sheets.active?.height_mm ?? '')}
-								onchange={(value) => void resize({ height_mm: Number(value) })}
+								onchange={(value) => whenNumber(value, (height_mm) => void resize({ height_mm }))}
 							/>
 						</div>
 						<button class="btn subtle" type="button" onclick={() => onEditMaterial?.()}>
