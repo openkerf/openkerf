@@ -19,8 +19,9 @@
  * most.
  *
  * What is measured: in both windows, in both themes, the destroying answer differs from
- * the way out beside it in letter, fill and border, and its letter is the danger colour
- * of the theme it stands in.
+ * the way out beside it in letter and in border, its letter is the danger colour of the
+ * theme it stands in, and that letter is at least 4.5:1 against everything painted behind
+ * it — because colour is the whole of the difference, it has to be readable.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -63,19 +64,58 @@ async function aDesign() {
 	});
 }
 
-type Paint = { label: string; color: string; background: string; border: string };
+type Paint = {
+	label: string;
+	color: string;
+	background: string;
+	border: string;
+	/** The letter against the colour actually painted behind it, composited up the tree. */
+	contrast: number;
+};
 
-/** What the buttons of one row are painted, at rest. */
+/** What the buttons of one row are painted, at rest, and what their letter is worth on it. */
 const paintRow = (selector: string): Paint[] => {
 	const row = document.querySelector(selector);
 	if (!row) return [];
+	const channels = (value: string): number[] => {
+		const n = (value.match(/[\d.]+/g) ?? []).map(Number);
+		// `color(srgb r g b / a)`, which is what color-mix() resolves to, is 0..1 per channel.
+		if (value.startsWith('color(')) return [n[0] * 255, n[1] * 255, n[2] * 255, n.length > 3 ? n[3] : 1];
+		return n;
+	};
+	const luminance = (c: number[]): number => {
+		const f = c.slice(0, 3).map((v) => {
+			const s = v / 255;
+			return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+		});
+		return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2];
+	};
+	const ratio = (a: number[], b: number[]): number => {
+		const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+		return (hi + 0.05) / (lo + 0.05);
+	};
+	/** Everything painted behind this node, from the page down to the node itself. */
+	const behind = (node: Element): number[] => {
+		const chain: number[][] = [];
+		for (let el: Element | null = node; el; el = el.parentElement)
+			chain.push(channels(getComputedStyle(el).backgroundColor));
+		let base = [255, 255, 255];
+		for (let i = chain.length - 1; i >= 0; i--) {
+			const c = chain[i];
+			if (!c.length) continue;
+			const a = c.length > 3 ? c[3] : 1;
+			base = [0, 1, 2].map((k) => c[k] * a + base[k] * (1 - a));
+		}
+		return base;
+	};
 	return [...row.querySelectorAll('button')].map((node) => {
 		const s = getComputedStyle(node);
 		return {
 			label: (node.textContent ?? '').trim().replace(/\s+/g, ' '),
 			color: s.color,
 			background: s.backgroundColor,
-			border: s.borderTopColor
+			border: s.borderTopColor,
+			contrast: Math.round(ratio(channels(s.color), behind(node)) * 100) / 100
 		};
 	});
 };
@@ -97,9 +137,15 @@ function apart(paints: Paint[], danger: string, where: string) {
 	assert.ok(wayOut, `${where}: no way out in the row (${paints.map((p) => p.label).join(' | ')})`);
 	assert.ok(destroys, `${where}: no destroying answer in the row`);
 	assert.notEqual(destroys.color, wayOut.color, `${where}: the letter is the way out's letter`);
-	assert.notEqual(destroys.background, wayOut.background, `${where}: the fill is the way out's fill`);
 	assert.notEqual(destroys.border, wayOut.border, `${where}: the border is the way out's border`);
 	assert.equal(destroys.color, danger, `${where}: the letter is not the theme's danger colour`);
+	// The two signals are colour, so the red has to be readable where it stands: AA for
+	// normal text. Measured, the drawing gives 5.32 light and 4.78 dark; a fill behind it
+	// would take the dark one to 4.34.
+	assert.ok(
+		destroys.contrast >= 4.5,
+		`${where}: the letter is ${destroys.contrast}:1 on what is painted behind it, under 4.5`
+	);
 }
 
 async function fresh(theme: 'light' | 'dark'): Promise<Page> {

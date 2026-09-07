@@ -619,18 +619,22 @@ input[type='radio']:focus-visible::before {
  * window that did not draw one itself the answer that erases was painted by the plain
  * `.btn` of its own component. Measured at 1440 in the Unsaved changes window: Discard
  * `color rgb(27,31,36)` on `rgb(255,255,255)` with a `rgb(214,218,222)` border — the same
- * three values as the Cancel beside it, in both themes; the Projects delete question the
- * same. The row already spends 24 px of air on this button *because* it destroys, and
- * colour was the only other signal it had.
+ * three values as the Cancel beside it, in both themes; the Projects delete question and
+ * its overwrite question the same. The row already spends 24 px of air on this button
+ * *because* it destroys, and colour was the only other signal it had.
  *
- * The drawing is the material library's: the danger colour as the letter, the same colour
- * at 8% as the fill and at 45% in the border. Loud enough to be seen beside a plain
- * button, quiet enough that it is not mistaken for the primary.
+ * The drawing is the panel's, byte for byte: the danger colour as the letter and that
+ * colour at 45% mixed into `--line` for the border, exactly as `.gone` and `.drop` in
+ * DesignPanel. Measured on those two, at 1440: letter `rgb(201,49,36)` on `rgb(255,255,255)`
+ * light and `rgb(236,96,85)` on `rgb(32,35,41)` dark — 5.32:1 and 4.78:1. The library's
+ * *Remove* adds a fill (`--danger` at 8%) to the same idea; measured at these questions
+ * that fill costs the letter 0.61 light and 0.44 dark, and in dark it lands at 4.34:1,
+ * under AA, where the letter beside it is at 13.3:1. So the fill is left out and the
+ * letter and the border carry the difference.
  *
  * `.btn.danger` and not `button.danger`, unlike the two safety nets around it: `.mini danger`
- * in the library and the series, and the danger row in the menu, are text buttons with no
- * fill and no border of their own, and a tint on those would be a second thing this rule
- * does not know about.
+ * in the library and the series, and the danger row in the menu, draw their own red and
+ * would be a second thing this rule does not know about.
  *
  * Weight (0,3,0) on purpose, without `:not(:disabled)` — that would make it (0,4,0) and
  * beat the components that draw a danger button of their own for a measured reason: the
@@ -643,7 +647,6 @@ input[type='radio']:focus-visible::before {
 :root .btn.danger {
 	color: var(--danger);
 	border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
-	background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 /*
