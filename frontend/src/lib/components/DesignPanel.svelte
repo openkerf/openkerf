@@ -17,7 +17,6 @@
 	} from '$lib/design.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 	import NumberField from './NumberField.svelte';
-	import { typedNumber, whenNumber } from '$lib/numbers';
 	import Segmented from './Segmented.svelte';
 	import ArrangeIcon from './ArrangeIcon.svelte';
 	import Menu from './Menu.svelte';
@@ -79,7 +78,7 @@
 		/** What the last tidy-up action has to report. */
 		tidyNote?: string | null;
 		onImage?: (adjustment: string) => void;
-		onImageDpi?: (dpi: number) => unknown;
+		onImageDpi?: (dpi: number) => void;
 		/** Live measures while dragging; falls back on the selection itself. */
 		box?: { x: number; y: number; width: number; height: number } | null;
 		onSetPosition?: (x: number, y: number) => void;
@@ -181,7 +180,7 @@
 	 */
 	function commitPosition(axis: 'x' | 'y', raw: string) {
 		if (!live) return;
-		const value = typedNumber(raw);
+		const value = raw.trim() === '' ? Number.NaN : Number(raw.replace(',', '.'));
 		if (!Number.isFinite(value)) {
 			sizeFields[axis] = live[axis].toFixed(1);
 			return;
@@ -190,7 +189,7 @@
 	}
 
 	function commitSize(axis: 'width' | 'height', raw: string) {
-		const value = typedNumber(raw);
+		const value = Number(raw.replace(',', '.'));
 		if (!live) return;
 		if (!Number.isFinite(value) || value <= 0) {
 			sizeFields[axis] = live[axis].toFixed(1);
@@ -521,7 +520,7 @@
 	}
 
 	async function setAngle(raw: string) {
-		const value = typedNumber(raw);
+		const value = Number(raw.replace(',', '.'));
 		if (!Number.isFinite(value) || !selectedIds.length) return;
 		if ((await edits.rotate(selectedIds, ((value % 360) + 360) % 360, true)).ok)
 			await design.load();
@@ -712,19 +711,8 @@
 		if (await edits.addLayer(newLayerType)) onLayerChange?.();
 	}
 
-	/**
-	 * A change to a layer, and the answer to whether the engine took it.
-	 *
-	 * The answer is what a number field needs to stand on the truth: `1,000` in a DPI box
-	 * is the number 1, the engine refuses it ("dpi has to be between 10 and 2000."), and
-	 * a box that keeps it standing steps from 1. `updateLayer` answers with an object, so
-	 * the `if` that stood here was true either way; `onLayerChange` is called exactly as
-	 * often as before.
-	 */
 	async function patchLayer(id: string, fields: Record<string, unknown>) {
-		const done = await edits.updateLayer(id, fields);
-		onLayerChange?.();
-		return done.ok;
+		if (await edits.updateLayer(id, fields)) onLayerChange?.();
 	}
 
 	async function moveLayer(id: string, direction: 'up' | 'down') {
@@ -1284,7 +1272,7 @@
 							max={200}
 							disabled={!canEdit || edits.busy}
 							why={bridgeOff}
-							onchange={(v) => whenNumber(v, (count) => applyBridges({ count }))}
+							onchange={(v) => applyBridges({ count: Number(v) })}
 						/>
 						<NumberField
 							label={t('panel.bridges.length')}
@@ -1294,7 +1282,7 @@
 							min={0.1}
 							disabled={!canEdit || edits.busy}
 							why={bridgeOff}
-							onchange={(v) => whenNumber(v, (length_mm) => applyBridges({ length_mm }))}
+							onchange={(v) => applyBridges({ length_mm: Number(v) })}
 						/>
 					</div>
 					{#if bridges.mixed}
@@ -1462,7 +1450,7 @@
 							max={2000}
 							disabled={!canEdit || edits.busy}
 							why={!canEdit ? t('reason.needsToken') : t('reason.busy')}
-							onchange={(v) => whenNumber(v, (dpi) => onImageDpi?.(dpi))}
+							onchange={(v) => onImageDpi?.(Number(v))}
 						/>
 					</div>
 				</div>
@@ -2083,7 +2071,7 @@
 									max={20}
 									disabled={edits.busy}
 									why={t('reason.busy')}
-									onchange={(v) => whenNumber(v, (z_step_mm) => patchLayer(op.id, { z_step_mm }))}
+									onchange={(v) => patchLayer(op.id, { z_step_mm: Number(v) })}
 								/>
 								<p class="hint">
 									{#if !op.z_step_mm}
@@ -2115,7 +2103,7 @@
 								max={2000}
 								disabled={edits.busy}
 								why={t('reason.busy')}
-								onchange={(v) => whenNumber(v, (dpi) => patchLayer(op.id, { dpi }))}
+								onchange={(v) => patchLayer(op.id, { dpi: Number(v) })}
 							/>
 							<NumberField
 								label={t('panel.overscan')}
@@ -2126,7 +2114,7 @@
 								max={50}
 								disabled={edits.busy}
 								why={t('reason.busy')}
-								onchange={(v) => whenNumber(v, (overscan_mm) => patchLayer(op.id, { overscan_mm }))}
+								onchange={(v) => patchLayer(op.id, { overscan_mm: Number(v) })}
 							/>
 							</div>
 							<label class="check wide">

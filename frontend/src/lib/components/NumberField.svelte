@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
-	import { typedNumber } from '$lib/numbers';
 
 	/**
 	 * A number with − and +.
@@ -86,17 +85,9 @@
 		 * one angle over all of them.
 		 */
 		onstep?: (direction: number) => void;
-		/**
-		 * For fields that have to go straight to the machine rather than to a form that
-		 * is saved later. Does not fire while typing.
-		 *
-		 * A caller that answers `false` — `whenNumber` does, and so does anything that
-		 * hands on what the engine said — is telling the field that the entry was not
-		 * taken, and the field then puts the value back that was there. Answering
-		 * nothing leaves the box as it is, which is what a caller wants that writes the
-		 * box itself (`commitSize` puts the shape's own width back with a sentence).
-		 */
-		onchange?: (value: string) => unknown;
+		/** For fields that have to go straight to the machine rather than to a form that
+		 *  is saved later. Does not fire while typing. */
+		onchange?: (value: string) => void;
 	} = $props();
 
 	let stepsOff = $derived(stepsDisabled ?? disabled);
@@ -109,84 +100,19 @@
 	// 609.6").
 	const id = $props.id();
 
-	/**
-	 * The value behind the field: the last one that came from anywhere but the keyboard.
-	 *
-	 * The box holds a string so that a half-typed number does not jump away, and a string
-	 * can be `abc` or nothing at all. Stepping from that used to fall back to 0 and clamp
-	 * to `min`: measured, a raster layer at 500 dpi went to 10 on one click of `+`,
-	 * committed, with no refusal and no notice — once from `abc`, and once from an empty
-	 * box, because `Number('')` is 0 and 0 passes `Number.isFinite`.
-	 *
-	 * Remembering every string that *parses* is not enough, and measuring that is what
-	 * this line cost: with `1,000` typed into the same 500 dpi field, the number 1 is
-	 * finite, so the memory became `"1,000"` — a value the layer never had, and the one
-	 * the field would have put back. What is worth remembering is what the caller or the
-	 * parent put here, so a keystroke is skipped. That is also why the box below is bound
-	 * by hand: with `bind:value` and a separate `oninput` to raise the flag, this effect
-	 * had already run by the time the flag was up, and the measurement was unchanged —
-	 * `abc` typed over 500 dpi still left `abc` standing in the box.
-	 */
-	let lastGood = $state(value);
-	let fromKeyboard = false;
-	$effect(() => {
-		const now = value;
-		if (fromKeyboard) {
-			fromKeyboard = false;
-			return;
-		}
-		lastGood = now;
-	});
-
-	/** Nothing to step from: put the value back that is behind the field. */
-	function refuse() {
-		value = lastGood;
-	}
-
-	async function set(direction: number) {
+	function set(direction: number) {
 		if (onstep) {
 			onstep(direction);
 			return;
 		}
-		const now = typedNumber(value);
-		if (!Number.isFinite(now)) {
-			refuse();
-			return;
-		}
-		let fresh = now + direction * step;
+		const now = Number(value);
+		const basis = Number.isFinite(now) ? now : 0;
+		let fresh = basis + direction * step;
 		if (min !== null) fresh = Math.max(min, fresh);
 		if (max !== null) fresh = Math.min(max, fresh);
 		// Floating point leaves 0.1 + 0.2 as 0.30000000000000004.
-		const before = value;
 		value = String(Math.round(fresh * 1000) / 1000);
-		// A step the caller does not take goes back too — `min` and `max` are what this
-		// field knows, and the engine knows more.
-		if ((await onchange?.(value)) === false) value = before;
-	}
-
-	/**
-	 * What the caller gets, and what the box is left standing on.
-	 *
-	 * The caller is asked first and with the text as typed: `12,5` is a width to
-	 * `commitSize`, an empty box is a cleared value to `whenNumberOrBlank`, and `abc` is
-	 * what makes the Edit card say "a width has to be more than 0 mm". A component that
-	 * judged the string first took all three of those away.
-	 *
-	 * Afterwards the box has to tell the truth about the value behind it, and only the
-	 * caller knows what that is. Measured on a raster layer at 500 dpi: `abc` left `abc`
-	 * standing while the layer still said 500, and the next click of `+` stepped from
-	 * that; `1,000` is the number 1, which the engine refuses, and the box that kept it
-	 * standing stepped to **dpi 11**; plain `5` did the same and gave **dpi 15**. Being a
-	 * number is therefore not the question. The question is whether it was taken, the
-	 * caller answers it, and an entry nobody took makes way for the value that is there.
-	 *
-	 * An empty box is left empty: nothing is not a lie about the value, and clearing a
-	 * machine's power is done that way.
-	 */
-	async function commit() {
-		const taken = await onchange?.(value);
-		if (value.trim() === '') return;
-		if (taken === false || !Number.isFinite(typedNumber(value))) refuse();
+		onchange?.(value);
 	}
 
 	/**
@@ -238,18 +164,13 @@
 			class="mono"
 			type="text"
 			inputmode="decimal"
-			value={value}
-			oninput={(event) => {
-				// Bound by hand: the flag and the write belong in one handler (see `lastGood`).
-				fromKeyboard = true;
-				value = event.currentTarget.value;
-			}}
+			bind:value
 			{disabled}
 			{placeholder}
 			aria-label={ariaLabel}
 			title={disabled ? why : note}
 			onkeydown={onKey}
-			onchange={commit}
+			onchange={() => onchange?.(value)}
 		/>
 		{#if unit && compact}
 			<span class="suffix" aria-hidden="true">{unit}</span>
