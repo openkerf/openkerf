@@ -27,6 +27,7 @@
 		onStop,
 		onFrame,
 		canFrame = false,
+		designLoaded = true,
 		material = null,
 		thicknessMm = null,
 		onOpenMaterial,
@@ -71,6 +72,9 @@
 		onFrame?: () => void;
 		/** There is something on the bed *and* this machine can move. */
 		canFrame?: boolean;
+		/** Has the design been read? Until it has, the frame button stays off but
+		 *  gives no reason: "Nothing is on the bed" was said over a full one. */
+		designLoaded?: boolean;
 		/** The current sheet's material — what is being burned *into*. Belongs beside
 		 *  the machine: together those two decide every setting downstream. Empty is a
 		 *  valid state and says so. */
@@ -380,7 +384,9 @@
 			? `${t('transport.noServer')} ${t('topbar.frame.noServer')}`
 			: canFrame
 				? t('topbar.frame.title')
-				: t('topbar.frame.off')}
+				: designLoaded
+					? t('topbar.frame.off')
+					: undefined}
 		onclick={onFrame}
 	>
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
@@ -753,8 +759,9 @@
 		background: var(--surface-1);
 		border-color: var(--danger-solid);
 		/* The word in ordinary text colour, the icon in red: --danger on --surface-1
-		   reaches 4.4:1 in the dark theme and that is too little for text. The red border
-		   plus the little red square carry the meaning. */
+		   measures 5.32:1 in the light theme and 4.78:1 in the dark one, so the same word
+		   would not read the same in the two themes. The red border plus the little red
+		   square carry the meaning instead. */
 		color: var(--text-1);
 	}
 	.btn.danger.sluimer svg { color: var(--danger); }

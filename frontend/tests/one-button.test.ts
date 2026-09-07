@@ -90,13 +90,17 @@ test('no component defines a button of its own', () => {
  * A component may still say something extra about its own buttons — a colour, a
  * width, a place in a grid; what it may not do is start the base again.
  *
- * The two files are the right-hand panel, the surface this round measured. Scanned
- * with the same rule, the components still to follow are ActionBar, Clipart,
- * CornersDialog, Generators, JobPreview, LanguagePicker, MaterialLibrary, Menu,
- * PhoneView, Series, SheetMaterial, SheetTabs, StatusBar, TestGridResult, ToolRail
- * and TopBar. Adding a file to the list below is the way to bring one in.
+ * The two files were the right-hand panel, the surface that round measured. The action
+ * bar came in after it, because its `.more` and the panel's `.listmore` are the same
+ * thing — a small text button that opens a menu — and the panel's repair did not reach
+ * it: measured at 1440 on the Layers tab they stood 595.6 px apart on one screen, at
+ * 25.9 px / weight 400 against 32 px / weight 500. Scanned with the same rule, the
+ * components still to follow are Clipart, CornersDialog, Generators, JobPreview,
+ * LanguagePicker, MaterialLibrary, Menu, PhoneView, Series, SheetMaterial, SheetTabs,
+ * StatusBar, TestGridResult, ToolRail and TopBar. Adding a file to the list below is
+ * the way to bring one in.
  */
-const PANEL = ['DesignPanel.svelte', 'JobControls.svelte'];
+const PANEL = ['DesignPanel.svelte', 'JobControls.svelte', 'ActionBar.svelte'];
 
 /**
  * Two selectors in these files draw a face and are not the button:
@@ -106,7 +110,7 @@ const PANEL = ['DesignPanel.svelte', 'JobControls.svelte'];
  */
 const NOT_A_BUTTON = ['.tag.air', '.pf-menu .row'];
 
-test('no button in the right-hand panel is drawn under another name', () => {
+test('no button in the panel or the action bar is drawn under another name', () => {
 	const FACE = ['border-radius', 'border:', 'background', 'padding'];
 	const offenders: string[] = [];
 	for (const name of PANEL) {

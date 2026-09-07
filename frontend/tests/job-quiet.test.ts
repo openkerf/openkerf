@@ -88,10 +88,19 @@ test('the keys are on the buttons they work, not in a paragraph under them', () 
 	const source = code('JobControls.svelte');
 	const uses = [...source.matchAll(/t\('job\.keysHere'\)/g)].length;
 	assert.ok(uses >= 2, `the keys sentence is on ${uses} button(s); pause and stop both need it`);
+	// The paragraph came back, but only where a tooltip cannot be read: at
+	// `screen.noHover` a title has no route at all, and the part of this sentence that
+	// only it can carry — the keys stop working outside this window — is the part you
+	// discover at the wrong moment. On a desk it stays off the screen.
+	const paragraph = /\{#if screen\.noHover\}\s*<p class="toetsen">/.test(source);
+	assert.ok(
+		paragraph,
+		'the key advice is a tooltip at every width, and a touch screen cannot open one'
+	);
 	assert.equal(
-		/class="toetsen"/.test(source),
+		/class="toetsen"/.test(source.replace(/\{#if screen\.noHover\}[\s\S]{0,120}?\{\/if\}/g, '')),
 		false,
-		'the paragraph of key advice is back under the transport buttons'
+		'the paragraph of key advice stands under the transport buttons at every width'
 	);
 	// Both tooltips carry it, and each on its own line: a title with a newline is two
 	// lines in every browser this app runs in.
@@ -241,24 +250,25 @@ test('where a pointer cannot hover, the value promises nothing it cannot give', 
 		() => false
 	);
 	if (!reachable) return noServer(t, BASE);
-	// 1100 px is a tablet by `screen.noHover`. "Off" under a heading that names the
-	// feature is the whole state, so the sentence stays a title — but the dotted cue
-	// goes, because it would say "hover me" to a finger. The reason a *button* is dead
-	// does become a line here; that is checked above, and the difference is deliberate:
-	// putting both sentences on screen as well measured 776.8 px of fold against 694.3.
+	// 1100 px is a tablet by `screen.noHover`, and there a title has no route: no hover,
+	// no focus, no gesture. So the same paragraph carries the sentence instead of the
+	// word, and the dotted cue goes with it — it would say "hover me" to a finger.
+	// Not the word *and* the sentence under it: both sentences open with "Off", and
+	// saying it twice measured 144.4 px of the zero-point fold at 1024 against 119.5 px
+	// for the sentence alone, which is what main showed there.
 	const blocks = await offValues(1100);
 	await browser?.close();
-	const off = blocks.filter((b) => b.value === 'Off');
-	assert.equal(off.length, 2, `${off.length} of the two cards say Off at 1100 px`);
-	for (const block of off) {
+	assert.equal(blocks.length, 2, `${blocks.length} of the two "where does the work go" cards`);
+	for (const block of blocks) {
 		assert.equal(
 			block.decoration,
 			'none',
 			'the underline still hints at a hover a touch screen cannot give'
 		);
-		assert.ok(
-			!block.visible.includes(block.sentence ?? ''),
-			'the paragraph the pattern counted is back on the screen with the least room'
+		assert.equal(
+			block.value,
+			block.sentence,
+			`the card reads "${block.value}" and keeps its sentence in a title a finger cannot open`
 		);
 	}
 });

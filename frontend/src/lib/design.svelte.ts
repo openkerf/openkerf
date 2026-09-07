@@ -661,7 +661,7 @@ export function bridgeSummary(elements: DesignElement[]): BridgeSummary {
 }
 
 /**
- * Do the bridges on this selection do anything — is it in a layer that cuts?
+ * Do the bridges on this shape do anything — is it in a layer that cuts?
  *
  * Bridges are gaps in a cut, so in an engrave or a raster layer, and on a shape in no
  * layer at all, they change nothing that comes out of the machine. The panel keeps the
@@ -669,23 +669,15 @@ export function bridgeSummary(elements: DesignElement[]): BridgeSummary {
  * with it, and then somebody looks for bridges on an engraving and concludes the app
  * cannot do them.
  *
- * One shape of the selection in a cut layer is enough — then the gaps do something
- * somewhere. A layer a shape names that is not in `operations` is answered `true`: the
- * panel only says "not in a cut layer" about layers it has actually looked at, because a
- * sentence about a layer nobody could read would be the false one all over again.
- */
-export function inCutLayer(elements: DesignElement[], operations: DesignOperation[]): boolean {
-	return elements.some((element) => elementCuts(element, operations));
-}
-
-/**
- * The same question about one shape, because a selection can disagree with itself.
+ * The question is asked per shape, because a selection can disagree with itself: with the
+ * rectangle in Outline and the rectangle in Fine lines both selected, one answer for the
+ * pair read "so these 2 shapes come loose the moment the cut closes", true of one of the
+ * two. A caller that speaks about several shapes counts the answers rather than folding
+ * them into one.
  *
- * A selection where one shape cuts and another engraves has no single true answer, and
- * `inCutLayer` gives the optimistic half of it. The panel counts instead: how many of the
- * shapes it is talking about are not in a cut layer. Measured on the seeded design with
- * the rectangle in Outline and the rectangle in Fine lines selected, the sentence read
- * "so these 2 shapes come loose the moment the cut closes" — true of one of the two.
+ * A layer a shape names that is not in `operations` is answered `true`: the panel only
+ * says "not in a cut layer" about layers it has actually looked at, because a sentence
+ * about a layer nobody could read would be the false one all over again.
  */
 export function elementCuts(element: DesignElement, operations: DesignOperation[]): boolean {
 	const ids = element.operation_ids ?? [];
@@ -742,6 +734,20 @@ export class DesignStore {
 	/** Are there unsaved changes? */
 	get dirty() {
 		return this.design?.dirty ?? false;
+	}
+
+	/**
+	 * Has the first `/api/design` answered?
+	 *
+	 * Until it has, `design` is `null` and every question below answers as if the bed
+	 * were empty — `isEmpty` true, `burnsNothing` true, no elements, no operations.
+	 * Four surfaces stated that as a fact about a document they had not read yet
+	 * (`tests/design-not-loaded.test.ts` holds the measurement), so each of them asks
+	 * this first and says nothing until it is true. Showing nothing is honest; a
+	 * count of zero over a full bed is not.
+	 */
+	get loaded() {
+		return this.design !== null;
 	}
 
 	get isEmpty() {

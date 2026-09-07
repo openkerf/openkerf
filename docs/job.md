@@ -44,9 +44,12 @@ about half a second later.
 
 **How long it takes** stands on the start button at the foot of the panel, and
 nowhere else: "Start job 1:19". The engine works it out by building the whole cut
-plan, and while it does that the last known time stays where it is and dims —
-hiding it made the button change width on every edit, and a second copy of the
-number higher up the panel put the same minutes on the screen twice, 400 px apart.
+plan, and while it does that the last known time stays where it is, at the contrast
+it always has, with a small ellipsis after it: "Start job 1:19…". The button keeps
+its width through that, so nothing moves under your cursor, and a screen reader
+hears the sentence "A new estimated time is being worked out." Hiding the number
+made the button change width on every edit, and a second copy of it higher up the
+panel put the same minutes on the screen twice, 400 px apart.
 
 **With a series attached** the time on the button is one plate, and a line above it counts
 the afternoon: "This is the plate now on the bed; the 3 burns still to go take about
@@ -538,7 +541,8 @@ and stop stands where it stands in the top bar, not on the spot the green
 keyboard shortcuts are on the buttons themselves, as the second line of their
 tooltip: "The key works anywhere in the app, as long as this window is in front —
 outside it a browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of
-Ctrl + .)
+Ctrl + .) At 1199 px and below the same sentence stands as a line under the two
+buttons, because there is no hover to read a tooltip with.
 
 **Clear queue (2)** appears as soon as there is anything in the queue.
 
@@ -638,9 +642,10 @@ where the head is now as 0,0 for your drawing: "what you draw at 0,0 burns here.
 The sheet moves along: the zero point is the corner of the material lying in it."
 When one is set, **To zero point** goes there and **Clear** puts it back to the
 machine's own zero. With none set the line reads **Off**, underlined with dots to say
-there is more: "the work burns at the coordinates you drew it on." is its tooltip. At
-1199 px and below, where a touch screen cannot hover, the dots go — the heading and the
-word together are the whole state. Print and cut says its own **Off** the same way.
+there is more: "Off: the work burns at the coordinates you drew it on." is its tooltip.
+At 1199 px and below, where a touch screen cannot hover, the dots go and the line is
+that whole sentence instead — a title is not reachable with a finger. Print and cut
+says its own **Off** the same way.
 
 ### Print and cut
 

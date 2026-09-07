@@ -703,6 +703,7 @@ export const en = {
 	'job.origin.set': 'Zero point here',
 	'job.origin.reset': 'Zero point here again',
 	'job.notResponding': 'The machine is not responding. This job goes into the queue and only starts once the connection is there — switch it on or check the cable.',
+	'job.estimating': 'A new estimated time is being worked out.',
 	'job.estimateSlow': 'The engine builds the whole cut plan to estimate this; on a heavy design that takes a moment. Starting works regardless — the machine does not wait for it.',
 	'job.queueAhead': {
 		one: 'There is already 1 job in the queue; this one goes behind it.',
@@ -988,7 +989,7 @@ export const en = {
 	'layer.named': 'Layer {n} · {label}',
 	'panel.layer.chipTitle': 'Layer {n} of {total} — click for the colour of this layer',
 	'panel.layer.chipAria': 'Colour of layer {label}',
-	'panel.layer.openTitle': 'The settings of this layer: colour, name, kind of operation and burn order',
+	'panel.layer.openTitle': 'The settings of {label}: colour, name, kind of operation and burn order',
 	'panel.layer.openAria': 'Open layer {label}',
 	'panel.layer.count': {
 		one: '1 shape in this layer',
@@ -999,7 +1000,7 @@ export const en = {
 	'panel.layer.burnsAria': 'Burn along for {label}',
 	'panel.layer.moreTitle': 'More for {label} — or right-click the row',
 	'panel.layer.moreAria': 'More for {label}',
-	'panel.layer.valuesTitle': 'Speed, power and passes — click to adjust them',
+	'panel.layer.valuesTitle': 'Speed, power and passes: {values} — click to adjust them',
 	'panel.layer.valuesAria': 'Settings of {label}: {values}',
 	'panel.layer.speedAria': 'Speed of {label} in mm per second',
 	'panel.layer.powerAria': 'Power of {label} in per cent',

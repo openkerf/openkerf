@@ -111,7 +111,9 @@ The selection is a dashed frame, drawn a few pixels clear of the shape so the la
 underneath stays readable. Its measure stands underneath it, live: `60.0 × 40.0 mm`.
 
 - **Move**: drag anywhere inside the frame. Or use the arrow keys — 0.1 mm a press, 1 mm
-  with shift held.
+  with shift held. The panel says the same over its column of numbers, as a tooltip:
+  "Drag the box to move, the corners to scale. Arrow keys: 0.1 mm, with shift 1 mm." At
+  1199 px and below, where nothing can hover, it stands under the column as a line.
 - **Scale**: drag one of the four corner handles. The opposite corner stays put.
 - **Rotate**: drag the round handle on the stem above the frame. Hold shift and it locks to
   steps of 15 degrees. A turn of less than half a degree is treated as a tremble and

@@ -178,7 +178,11 @@ The three fields sit in the row itself, deliberately: adjusting a value next to 
 running machine should not cost a submenu. Speed is in mm/s and goes down to
 0.1; power is a percentage between 1 and 100; passes is a whole number from 1.
 In compact mode the row shows the three as one readable line and the fields move
-into the fold.
+into the fold. On a narrow or a touch screen that line is cut off at the end when
+the row is too narrow for both it and the layer's name — the row stays one line
+high instead of growing. Hovering the line shows the three values whole, and
+clicking them opens the fold, where they stand as fields. The layer name is cut
+the same way at that width; its own tooltip carries it in full.
 
 Changing speed or power also writes the memory for that layer's colour, so the
 strip under the bed reports the new figures at once.

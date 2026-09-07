@@ -654,6 +654,7 @@ export const nl: Catalogue = {
 	'job.origin.set': 'Hier het nulpunt',
 	'job.origin.reset': 'Hier opnieuw',
 	'job.notResponding': 'De machine meldt zich niet. Deze job gaat de wachtrij in en begint pas zodra de verbinding er is — zet hem aan of controleer de kabel.',
+	'job.estimating': 'Er wordt een nieuwe geschatte tijd berekend.',
 	'job.estimateSlow': 'De engine bouwt het hele snijplan om dit te schatten; op een zwaar ontwerp duurt dat even. Starten kan gewoon — de machine wacht er niet op.',
 	'job.queueAhead': {
 		one: 'Er staat al 1 job in de wachtrij; deze komt erachteraan.',
@@ -932,7 +933,7 @@ export const nl: Catalogue = {
 	'layer.named': 'Laag {n} · {label}',
 	'panel.layer.chipTitle': 'Laag {n} van {total} — klik voor de kleur van deze laag',
 	'panel.layer.chipAria': 'Kleur van laag {label}',
-	'panel.layer.openTitle': 'De instellingen van deze laag: kleur, naam, soort bewerking en brandvolgorde',
+	'panel.layer.openTitle': 'De instellingen van {label}: kleur, naam, soort bewerking en brandvolgorde',
 	'panel.layer.openAria': 'Laag {label} openen',
 	'panel.layer.count': {
 		one: '1 vorm in deze laag',
@@ -943,7 +944,7 @@ export const nl: Catalogue = {
 	'panel.layer.burnsAria': 'Meebranden voor {label}',
 	'panel.layer.moreTitle': 'Meer voor {label} — of rechterklik op de rij',
 	'panel.layer.moreAria': 'Meer voor {label}',
-	'panel.layer.valuesTitle': 'Snelheid, vermogen en passes — klik om ze bij te stellen',
+	'panel.layer.valuesTitle': 'Snelheid, vermogen en passes: {values} — klik om ze bij te stellen',
 	'panel.layer.valuesAria': 'Instellingen van {label}: {values}',
 	'panel.layer.speedAria': 'Snelheid van {label} in mm per seconde',
 	'panel.layer.powerAria': 'Vermogen van {label} in procent',

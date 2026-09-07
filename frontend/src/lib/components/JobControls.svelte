@@ -32,6 +32,7 @@
 		series,
 		job,
 		nothingBurns = false,
+		designLoaded = true,
 		sheetName = '',
 		revision = 0,
 		preflight = $bindable(),
@@ -60,6 +61,16 @@
 		/** Nothing on the bed that will burn. Comes from the page, from the same
 		 *  `burnsNothing` the top bar reads. */
 		nothingBurns?: boolean;
+		/**
+		 * Has the first `/api/design` answered? (`design.loaded` on the page.)
+		 *
+		 * `nothingBurns` cannot tell "no layer burns" from "not read yet", and both
+		 * arrive here as `true`. The buttons may stay off on either — a job that
+		 * cannot be described must not be startable — but the card says nothing at
+		 * all until the design has been read, rather than stating that the bed is
+		 * empty over a document still on its way.
+		 */
+		designLoaded?: boolean;
 		/**
 		 * The name of the sheet on the bed, as the name to put on the machine.
 		 *
@@ -835,8 +846,8 @@
 				     "Start job 2:31" at y 816 at 1440 x 900. One of them had to go, and
 				     the one to keep is the one on the thing you press: it is never
 				     scrolled away, and the number is read at the moment it is acted on.
-				     While a new time is worked out the number on the button dims rather
-				     than saying so in words — see `.pf-start-time.rekent`. -->
+				     While a new time is worked out the button says so on itself — see
+				     `.pf-start-busy`. -->
 				{#if seriesLeft}
 					<!-- The clock on the start button is one plate; a series of fifty must
 					     never show the time of one. Both numbers come off the estimate
@@ -1094,7 +1105,7 @@
 				/>
 			{/if}
 
-			{#if empty}
+			{#if empty && designLoaded}
 				<!-- No checklist, no start button: there is nothing to run through. -->
 				<div class="pf-empty">
 					<strong>{t('job.nothing.title')}</strong>
@@ -1103,7 +1114,7 @@
 				<!-- This used to say "Back to the design", which was the only way out
 				     of an overview that had taken over the panel. The panel takes
 				     nothing over now, so there is nothing to return from. -->
-			{:else}
+			{:else if designLoaded}
 			<!-- This used to be a second yellow block under the risk warning. Two
 			     warnings in a row of the same colour devalue each other: the routine
 			     check made the real message invisible. Neutral now, and as a list,
@@ -1190,16 +1201,26 @@
 						<button
 							class="btn primary big"
 							disabled={!actions?.start || blocked || seriesRunning}
+							aria-busy={estimating}
 							title={seriesRunning ? t('api.series.runGoing') : blockedReason}
 							onclick={() => (preflight = true)}
 						>
 							<!-- The last known time stays while a new one is being worked out.
 							     Hiding it during the recalculation made the button change width
-							     on every edit — a button that jumps under your cursor. -->
+							     on every edit — a button that jumps under your cursor. The state
+							     is the ellipsis after it, which is in the button whether or not
+							     anything is being worked out and only turns visible: the number
+							     itself keeps the contrast it has at rest, and the width does not
+							     move either. The sentence stands outside that branch, because the
+							     first estimate of a fresh design is worked out while there is no
+							     number yet — the ellipsis has nothing to follow then, but the
+							     state is the same state, and `aria-busy` alone is a state without
+							     words. -->
 							{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
-								<span class="pf-start-time" class:rekent={estimating}
+								<span class="pf-start-time"
 									>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
-								>{/if}
+								><span class="pf-start-busy" class:rekent={estimating} aria-hidden="true">…</span
+								>{/if}{#if estimating}<span class="pf-start-word">{t('job.estimating')}</span>{/if}
 						</button>
 						<button
 							class="btn primary big pf-more"
@@ -1295,7 +1316,8 @@
 			     panel's most expensive place, under two buttons that already carried
 			     it. What only the second line can say is that the keys stop working
 			     outside this window, and that is the part you discover at the wrong
-			     moment. -->
+			     moment — so where there is no pointer to read a second line with, the
+			     same sentence stands under the row. -->
 			<div class="now-actions">
 				<!-- Stop stands at the start of the row and pause at the end, and that is
 				     the same rule the ask row in tokens.css follows: the button that
@@ -1343,6 +1365,9 @@
 					>{t('transport.pause')}</button>
 				{/if}
 			</div>
+			{#if screen.noHover}
+				<p class="toetsen">{t('job.keysHere')}</p>
+			{/if}
 
 			<!-- As soon as there is anything in the queue. This used to say
 			     `queued > 1`, and then with exactly one job in the row the queue could
@@ -1537,22 +1562,20 @@
 						</p>
 					{:else}
 						<!-- Not set: a value, the way the layer table says a number, with the
-						     sentence behind it. It used to be that whole sentence on the
-						     screen — 54 characters, 31.9 px — under a label that already says
+						     sentence behind it. It used to be that whole sentence at every
+						     width — 54 characters, 31.9 px — under a label that already says
 						     what a zero point is, and beside a print-and-cut card saying
 						     "Off." for the same state in different words.
 
-						     The sentence stays a title even at `screen.noHover`, where the
-						     dead button's reason below does become a line — and that is a
-						     difference on purpose. A reason why a button will not work is
-						     the only way to get past it; "Off" under a heading that already
-						     says "Zero point of the work" is the whole state. Measured: put
-						     both sentences on the screen at 1100 px and this fold goes from
-						     694.3 px to 776.8 px, taller than the 1440 px column it started
-						     from — the pattern back, on the screen with the least room. The
-						     dotted cue is dropped there instead, so nothing promises a hover
-						     that a touch screen cannot give. -->
-						<p class="hint" class:off={!screen.noHover} title={t('job.origin.off')}>{t('job.state.off')}</p>
+						     Where a pointer can hover, that is all: the dotted underline says a
+						     sentence is behind it. Where one cannot — `screen.noHover`, the
+						     rule this branch wrote down itself — the sentence is the line,
+						     because a finger has no way to open a title. Not a second line
+						     under the value: both these sentences open with the state word,
+						     so "Off" above "Off: the work burns…" says it twice and measured
+						     144.4 px of fold at 1024 against 119.5 px for the sentence
+						     alone. -->
+						<p class="hint" class:off={!screen.noHover} title={t('job.origin.off')}>{screen.noHover ? t('job.origin.off') : t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						<button
@@ -1622,8 +1645,11 @@
 						<!-- The same value in the same words as the zero point above: both
 						     answer "where does the work go", and both were off in prose of
 						     their own — this one 171 characters over 63.8 px, explaining at
-						     length a feature whose only button was dead. -->
-						<p class="hint" class:off={!screen.noHover} title={t('job.printcut.off')}>{t('job.state.off')}</p>
+						     length a feature whose only button was dead. And the same rule as
+						     the zero point above: the value where a pointer can hover and
+						     read the sentence behind it, the sentence itself where one
+						     cannot. -->
+						<p class="hint" class:off={!screen.noHover} title={t('job.printcut.off')}>{screen.noHover ? t('job.printcut.off') : t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						{#if cutMarks.length === 2}
@@ -2173,12 +2199,21 @@
 	/* The state of a feature nobody has switched on: a word, in the same grey as the
 	   coordinates that stand there when it *is* on. The dotted underline — currentColor,
 	   the same idiom as `.afwachtend` in StatusBar — says the sentence behind it can be
-	   read, so it is only worn where a pointer can hover; at `screen.noHover` the
-	   sentence itself stands underneath and the cue would promise nothing. */
+	   read, so it is only worn where a pointer can hover; at `screen.noHover` this same
+	   paragraph *is* the sentence, and a cue pointing at a hover would promise
+	   nothing. */
 	.hint.off {
 		text-decoration: underline dotted;
 		text-underline-offset: 3px;
 		cursor: help;
+	}
+	/* The keys under the two transport buttons, where their tooltips cannot be read.
+	   Not in the row itself: it is about both buttons, not about one of them. */
+	.toetsen {
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		line-height: 1.5;
+		color: var(--text-2);
 	}
 	/* Why a button in this block is dead — only where a tooltip cannot be read. */
 	.reason {
@@ -2396,11 +2431,27 @@
 		font-weight: 400;
 		opacity: 0.85;
 	}
-	/* A new time is being worked out. The last one stays where it is — hiding it made
-	   the button change width on every edit — and it dims to say it is not the answer
-	   yet. A word ("calculating…") in this spot would push the button wider still. */
-	.pf-start-time.rekent {
-		opacity: 0.5;
+	/* A new time is being worked out. The last one stays where it is, at the contrast
+	   it has at rest — dimming the one number on the button was the state carried by
+	   nothing but colour. The ellipsis stands in the button at every moment and only
+	   becomes visible, so the button cannot change width on an edit. */
+	.pf-start-busy {
+		margin-left: 2px;
+		font-size: var(--text-xs);
+		font-weight: 400;
+		opacity: 0.85;
+		visibility: hidden;
+	}
+	.pf-start-busy.rekent {
+		visibility: visible;
+	}
+	/* The same state in words, for a reader who has no ellipsis to see. */
+	.pf-start-word {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
 	}
 
 	/* Jumping to a point, beside the direction buttons above. */

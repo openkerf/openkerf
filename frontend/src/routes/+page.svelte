@@ -1549,6 +1549,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	material={sheetMaterial}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
 	onOpenMaterial={() => (materialOpen = true)}
+	designLoaded={design.loaded}
 	canFrame={(design.elements?.length ?? 0) > 0 &&
 		(control.capabilities?.motion?.move ?? false) &&
 		!control.needsToken}
@@ -1830,6 +1831,7 @@ import { SeriesStore } from '$lib/series.svelte';
 					{control}
 					activeJob={status.activeJob}
 					nothingBurns={design.burnsNothing}
+					designLoaded={design.loaded}
 					sheetName={sheets.active?.name ?? ''}
 					revision={design.revision}
 					selectedIds={design.selectedIds}
@@ -1900,7 +1902,7 @@ import { SeriesStore } from '$lib/series.svelte';
 
 <StatusBar
 	pointerMm={pointerMm}
-	elementCount={design.elements.length}
+	elementCount={design.loaded ? design.elements.length : null}
 	{device}
 	machineState={machine}
 	job={status.activeJob}

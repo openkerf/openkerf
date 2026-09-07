@@ -23,7 +23,7 @@
 		control,
 		edits = null,
 		pointerMm = null,
-		elementCount = 0,
+		elementCount = null,
 		actions = true
 	}: {
 		device: Device | null;
@@ -43,8 +43,12 @@
 		 * that card down. The count is a fact about the whole document, like the
 		 * position and the time beside it, so it belongs on the one strip that is
 		 * there on every tab.
+		 *
+		 * `null` while the design has not been read yet (`design.loaded`): a count is
+		 * a statement of fact, and "0 elements" over a document still on its way is a
+		 * wrong one. Then the strip shows no count at all.
 		 */
-		elementCount?: number;
+		elementCount?: number | null;
 		/** Does this bar carry the pause and stop buttons? Not on a tablet: there
 		 *  the machine controls are in the top bar, and two places for the same stop
 		 *  makes it unclear at the deciding moment which one is the real one. At 768
@@ -211,8 +215,10 @@
 	     tablet, where the pointer position goes: the count is one short token against
 	     the pointer's two, and the count is a fact about the document that used to be
 	     on the Edit and Layers tabs — it moved here, it did not leave the screen. -->
-	<span class="sep docpart" aria-hidden="true"></span>
-	<span class="docpart">{t('panel.elements', { n: elementCount })}</span>
+	{#if elementCount !== null}
+		<span class="sep docpart" aria-hidden="true"></span>
+		<span class="docpart">{t('panel.elements', { n: elementCount })}</span>
+	{/if}
 	<span class="sep" aria-hidden="true"></span>
 	<!-- During a job "how much longer" is the only number that counts; the total
 	     estimate was there, but you had to subtract it from the clock yourself. -->
