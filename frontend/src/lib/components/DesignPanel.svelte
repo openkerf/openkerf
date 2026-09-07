@@ -79,7 +79,7 @@
 		/** What the last tidy-up action has to report. */
 		tidyNote?: string | null;
 		onImage?: (adjustment: string) => void;
-		onImageDpi?: (dpi: number) => void;
+		onImageDpi?: (dpi: number) => unknown;
 		/** Live measures while dragging; falls back on the selection itself. */
 		box?: { x: number; y: number; width: number; height: number } | null;
 		onSetPosition?: (x: number, y: number) => void;
@@ -712,8 +712,19 @@
 		if (await edits.addLayer(newLayerType)) onLayerChange?.();
 	}
 
+	/**
+	 * A change to a layer, and the answer to whether the engine took it.
+	 *
+	 * The answer is what a number field needs to stand on the truth: `1,000` in a DPI box
+	 * is the number 1, the engine refuses it ("dpi has to be between 10 and 2000."), and
+	 * a box that keeps it standing steps from 1. `updateLayer` answers with an object, so
+	 * the `if` that stood here was true either way; `onLayerChange` is called exactly as
+	 * often as before.
+	 */
 	async function patchLayer(id: string, fields: Record<string, unknown>) {
-		if (await edits.updateLayer(id, fields)) onLayerChange?.();
+		const done = await edits.updateLayer(id, fields);
+		onLayerChange?.();
+		return done.ok;
 	}
 
 	async function moveLayer(id: string, direction: 'up' | 'down') {

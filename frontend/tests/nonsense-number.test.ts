@@ -176,6 +176,76 @@ test("nonsense in the DPI field neither stands nor becomes the minimum", async (
 });
 
 /**
+ * A number the engine refuses does not stay in the box for the stepper to climb from.
+ *
+ * The same harm as above by a third door, and this one needs no nonsense at all: every
+ * entry that is a number the engine will not have. Measured on a raster layer at 500 dpi,
+ * with the field's own `min` of 10 typed straight past:
+ *
+ *   - `1,000` — an everyday way of writing a thousand — is the number 1 to a box whose
+ *     comma is a decimal point. The layer refuses dpi 1 ("dpi has to be between 10 and
+ *     2000."), the box kept `"1,000"` standing, and one click of `+` stepped from 1 and
+ *     committed **dpi 11**, with no refusal at all.
+ *   - `5` is the same route without the comma: refused, left standing, and one click of
+ *     `+` committed **dpi 15**.
+ *
+ * Both are engravings you find ruined on the material. What the field owes is the value
+ * behind it: a caller that did not take the entry says so, and the last number comes back,
+ * so `+` steps from 500 to 510 either way.
+ */
+test("a DPI the engine refuses does not stay in the box", async (t) => {
+  if (!reachable || !browser) return noServer(t, BASE);
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(`${BASE}/?tab=layers`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".statusbar", { timeout: 20000 });
+    await page
+      .locator(".foldline.layer-open", { hasText: "Logo area" })
+      .first()
+      .click();
+    const field = page
+      .locator(".layer-edit .field")
+      .filter({ hasText: "DPI" })
+      .first();
+    const box = field.locator("input");
+    await box.waitFor({ timeout: 20000 });
+
+    for (const entry of ["1,000", "5"]) {
+      await fetch(`${BASE}/api/design/operations/${rasterId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dpi: 500 }),
+      });
+      await page.waitForTimeout(800);
+      assert.equal(await layerDpi(), 500, "the layer did not start at 500");
+
+      await box.fill(entry);
+      await box.press("Enter");
+      await page.waitForTimeout(1200);
+      assert.equal(
+        await box.inputValue(),
+        "500",
+        `the box kept ${entry}, which the layer refused`,
+      );
+      assert.equal(await layerDpi(), 500, `${entry} reached the layer`);
+
+      await field.locator("button").last().click();
+      await page.waitForTimeout(1400);
+      assert.equal(
+        await layerDpi(),
+        510,
+        `after ${entry}, one click of + did not step from the layer's own dpi`,
+      );
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+/**
  * A decimal comma is a number, in the fields that were made to take one.
  *
  * The Edit card's W is `type="text" inputmode="decimal"` for exactly this reader, and

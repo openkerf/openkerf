@@ -2,7 +2,7 @@
 	import NumberField from './NumberField.svelte';
 	import { whenNumber } from '$lib/numbers';
 	import { i18n, t } from '$lib/i18n/index.svelte';
-	import type { SheetStore } from '$lib/sheets.svelte';
+	import type { Sheet, SheetStore } from '$lib/sheets.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
 
 	let {
@@ -26,6 +26,20 @@
 		 *  this choice belongs (decision B1). */
 		onEditMaterial?: () => void;
 	} = $props();
+
+	/**
+	 * A plate measure, which never leaves the box as a number nobody typed.
+	 *
+	 * These two are native `<input type="number">` boxes, and a browser hands back `""`
+	 * for a box that was cleared. `Number("")` is 0, and a plate of 0 mm is refused by
+	 * the seam with a sentence — measured, `PATCH /api/sheets/sheet-1 {width_mm: 0}`
+	 * answers 409. So nothing typed sends nothing, and whatever the seam did not take
+	 * puts the plate's own measure back in the box.
+	 */
+	async function plateSize(box: HTMLInputElement, sheet: Sheet, field: 'width_mm' | 'height_mm') {
+		const taken = await whenNumber(box.value, (mm) => sheets.update(sheet.id, { [field]: mm }));
+		if (!taken) box.value = String(sheet[field]);
+	}
 
 	let editing = $state<string | null>(null);
 	/**
@@ -171,7 +185,7 @@
 				step="10"
 				min="5"
 				value={sheet.width_mm}
-				onchange={(e) => sheets.update(sheet.id, { width_mm: Number(e.currentTarget.value) })}
+				onchange={(e) => plateSize(e.currentTarget, sheet, 'width_mm')}
 			/>
 		</label>
 		<label>
@@ -182,7 +196,7 @@
 				step="10"
 				min="5"
 				value={sheet.height_mm}
-				onchange={(e) => sheets.update(sheet.id, { height_mm: Number(e.currentTarget.value) })}
+				onchange={(e) => plateSize(e.currentTarget, sheet, 'height_mm')}
 			/>
 		</label>
 		<!--

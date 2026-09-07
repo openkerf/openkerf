@@ -1817,9 +1817,15 @@ import { SeriesStore } from '$lib/series.svelte';
 					bridgeRevision={bridgeRevision}
 					onImageDpi={async (dpi) => {
 						const id = design.selectedId;
-						if (!id) return;
-						await post(`/api/design/elements/${encodeURIComponent(id)}/image`, { dpi });
+						if (!id) return false;
+						// The answer goes back to the field: this endpoint refuses a dpi outside
+						// 10 to 2000, and a box that keeps a refused number is a box the next
+						// click of + steps from.
+						const answer = await post(`/api/design/elements/${encodeURIComponent(id)}/image`, {
+							dpi
+						});
 						await design.load();
+						return answer.ok;
 					}}
 				/>
 			{:else}
