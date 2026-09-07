@@ -219,7 +219,7 @@ test('the first estimate of a fresh design is announced as well', async (t) => {
 		await page.addInitScript(() => {
 			const w = window as unknown as { rows: { busy: string | null; text: string }[]; tick: number };
 			w.rows = [];
-			w.tick = setInterval(() => {
+			const snap = () => {
 				const button = document.querySelector('.pf-split button');
 				if (!button) return;
 				const row = {
@@ -228,7 +228,18 @@ test('the first estimate of a fresh design is announced as well', async (t) => {
 				};
 				const last = w.rows[w.rows.length - 1];
 				if (!last || JSON.stringify(last) !== JSON.stringify(row)) w.rows.push(row);
-			}, 20) as unknown as number;
+			};
+			// The busy window of the first estimate is narrower than the sampler's tick:
+			// measured ten times on a warm server, 14 to 21 ms, and a bare setInterval(20)
+			// missed it in one run of ten. The observer catches the change itself; the
+			// interval stays for a state no mutation announces.
+			new MutationObserver(snap).observe(document, {
+				subtree: true,
+				childList: true,
+				attributes: true,
+				characterData: true
+			});
+			w.tick = setInterval(snap, 20) as unknown as number;
 		});
 		await page.goto(BASE, { waitUntil: 'domcontentloaded' });
 		await page.waitForFunction(
