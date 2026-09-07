@@ -613,6 +613,40 @@ input[type='radio']:focus-visible::before {
 }
 
 /*
+ * The button that destroys, at rest.
+ *
+ * `.danger` had a hover state and a disabled state here and no rest state, so in every
+ * window that did not draw one itself the answer that erases was painted by the plain
+ * `.btn` of its own component. Measured at 1440 in the Unsaved changes window: Discard
+ * `color rgb(27,31,36)` on `rgb(255,255,255)` with a `rgb(214,218,222)` border — the same
+ * three values as the Cancel beside it, in both themes; the Projects delete question the
+ * same. The row already spends 24 px of air on this button *because* it destroys, and
+ * colour was the only other signal it had.
+ *
+ * The drawing is the material library's: the danger colour as the letter, the same colour
+ * at 8% as the fill and at 45% in the border. Loud enough to be seen beside a plain
+ * button, quiet enough that it is not mistaken for the primary.
+ *
+ * `.btn.danger` and not `button.danger`, unlike the two safety nets around it: `.mini danger`
+ * in the library and the series, and the danger row in the menu, are text buttons with no
+ * fill and no border of their own, and a tint on those would be a second thing this rule
+ * does not know about.
+ *
+ * Weight (0,3,0) on purpose, without `:not(:disabled)` — that would make it (0,4,0) and
+ * beat the components that draw a danger button of their own for a measured reason: the
+ * Stop in the top bar and in the job block is solid red and must stay so. Those rules are
+ * (0,3,0) as well and stand in a stylesheet that is loaded after this one, so they keep
+ * winning — measured on the built app, all three are the same red as before this rule.
+ * The hover above (0,5,0) and the disabled below (0,4,0) are heavier and remain the two
+ * states that follow this one.
+ */
+:root .btn.danger {
+	color: var(--danger);
+	border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+	background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+/*
  * v3.3 (X2): a disabled button is off, not muted on.
  *
  * Nine components set `.btn:disabled { opacity: .45 }`. On a filled button that leaves the

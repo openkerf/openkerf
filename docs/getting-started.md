@@ -241,6 +241,8 @@ If the work has changes that are not saved, **New project**, **Open…** and
 "{name}" are not saved. What do you want to do with them?", with **Cancel**,
 **Discard** and **Save** — the way out first, the answer that throws the changes
 away in the middle, and the button that keeps them last, as in every other window.
+**Discard** is the only red one of the three: everywhere in OpenKerf the answer
+that cannot be undone is lettered and bordered in red.
 Closing the browser tab asks too.
 
 Projects live in a folder on the server; in Docker that is `/data/projects` on
