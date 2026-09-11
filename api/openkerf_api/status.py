@@ -73,6 +73,7 @@ class StatusReader:
             "laser_status": _attr(device, "laser_status"),
             "paused": self.paused(device),
             "connection": self.connection(device),
+            "line": self.line(device),
             "bed": self.bed(device),
             "position": self.position(device),
             "spooler": self.spooler_snapshot(device),
@@ -185,6 +186,39 @@ class StatusReader:
         _CONNECTION_SINCE[key] = (reading["state"], since)
         reading["held_ms"] = int((now - since) * 1000)
         return reading
+
+    def line(self, device) -> dict | None:
+        """
+        What the flow control sees on the line. `None` where there is no session.
+
+        A stalled upload says "the machine stopped taking the file" after ten
+        seconds of a line that never read free, and that one sentence covers two
+        different faults: packets still queued, or a flag left standing. From
+        outside the process they are indistinguishable — twice in one afternoon a
+        cause was reasoned out from the symptom here and twice it was wrong. These
+        are the exact fields `RuidaUpload._line_is_busy` decides on, plus the
+        counters the engine already keeps and calls "Stats for test and debug"
+        (`ruida/ruidasession.py:64`), so a measurement can replace the reasoning.
+
+        Reading only, and defensively: this is a live object of the engine's, on a
+        thread of its own, and a snapshot may never raise.
+        """
+        session = _attr(device, "active_session")
+        if session is None:
+            return None
+        queue = _attr(session, "send_q")
+        return {
+            "busy": _attr(session, "is_busy"),
+            "queued": _safe(queue.qsize) if queue is not None else None,
+            "ack_pending": _attr(session, "_ack_pending"),
+            "reply_pending": _attr(session, "_reply_pending"),
+            "sends": _attr(session, "sends"),
+            "acks": _attr(session, "acks"),
+            "naks": _attr(session, "naks"),
+            "replies": _attr(session, "replies"),
+            "enqs": _attr(session, "enqs"),
+            "dropped": _attr(session, "dropped_packets"),
+        }
 
     def bed(self, device) -> dict:
         """Bed size in mm. Devices store these as strings like "320mm"."""

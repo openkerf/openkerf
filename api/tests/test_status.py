@@ -37,12 +37,14 @@ def test_device_snapshot_shape(kernel):
         "laser_status",
         "paused",
         "connection",
+        "line",
         "bed",
         "position",
         "spooler",
     }
     assert snap["active"] is True
     assert set(snap["connection"]) == {"state", "detail", "held_ms"}
+    assert snap["line"] is None, "a dummy device has no Ruida session"
     assert set(snap["position"]) == {"native", "mm", "state"}
     assert snap["spooler"]["present"] is True
     assert snap["spooler"]["queue_length"] == 0
@@ -146,6 +148,84 @@ def test_two_machines_keep_their_own_stopwatch(kernel):
 
     assert StatusReader(None).connection(one)["held_ms"] >= 50
     assert StatusReader(None).connection(two)["held_ms"] < 50
+
+
+def test_the_line_reports_what_the_flow_control_reads():
+    """
+    Why this exists. An upload refuses with "the machine stopped taking the file"
+    when `_line_is_busy` has been true for ten seconds — and that is two different
+    faults wearing one sentence: packets of somebody else's still in the queue, or
+    a flag left standing. Twice today a diagnosis was reasoned out from the
+    outside and twice it was wrong, because from the outside those two look
+    identical.
+
+    The engine keeps the numbers already and calls them "Stats for test and debug"
+    (`ruida/ruidasession.py:64`); nothing exposed them. These are the same fields
+    `RuidaUpload._line_is_busy` decides on, so what is read here is what it sees.
+    """
+    class Session:
+        is_busy = True
+        _ack_pending = False
+        _reply_pending = True
+        sends = 12
+        acks = 11
+        naks = 0
+        replies = 0
+        enqs = 7
+        dropped_packets = 0
+
+        class send_q:
+            @staticmethod
+            def qsize():
+                return 3
+
+            @staticmethod
+            def empty():
+                return False
+
+    class Device:
+        path = "ruida"
+        active_session = Session()
+
+    line = StatusReader(None).line(Device())
+
+    assert line == {
+        "busy": True,
+        "queued": 3,
+        "ack_pending": False,
+        "reply_pending": True,
+        "sends": 12,
+        "acks": 11,
+        "naks": 0,
+        "replies": 0,
+        "enqs": 7,
+        "dropped": 0,
+    }
+
+
+def test_a_machine_without_a_session_has_no_line():
+    class Device:
+        path = "lhystudios"
+
+    assert StatusReader(None).line(Device()) is None
+
+
+def test_the_line_survives_a_session_that_answers_nothing():
+    """
+    Status must never raise: every field here is probed on an engine object that a
+    version change can empty out.
+    """
+    class Session:
+        pass
+
+    class Device:
+        path = "ruida"
+        active_session = Session()
+
+    line = StatusReader(None).line(Device())
+
+    assert line["queued"] is None
+    assert line["sends"] is None
 
 
 def test_bed_size_is_reported_in_mm(kernel):
