@@ -1137,6 +1137,116 @@ def test_a_session_that_is_open_but_not_connected_refuses_too(ruida, monkeypatch
     assert not session.written
 
 
+class GappySession(FakeSession):
+    """A connection that is away for the first few reads and then answers again.
+
+    The gap this imitates was measured on the real KH-5030 on 11 September 2026,
+    on the wire: over three minutes the controller fell silent four times, for
+    3.9, 4.5 and 4.6 seconds (and once for less than one poll). During such a
+    gap our side keeps asking — seven ENQ packets went out in one of them with
+    nothing coming back — and the engine sets `_responding` to `False`, which is
+    one of the three things `RuidaSession.connected` is made of
+    (`ruida/ruidasession.py:154`). Nothing about the machine changed; it simply
+    answers again afterwards.
+
+    `connected` is a property here and a plain attribute on `FakeSession`, so
+    the tests that switch it off by assignment keep working unchanged.
+
+    The gap is measured in seconds and not in reads of the flag, because the
+    reads are not ours alone: the device the `ruida` fixture starts runs the
+    engine's status monitor, which asks `service.connected` five times a second
+    on a thread of its own (`ruida/controller.py:172`). A counter would be
+    shared with it and the test would pass or fail by timing.
+    """
+
+    def __init__(self, away_seconds, **kwargs):
+        super().__init__(**kwargs)
+        self.away_seconds = away_seconds
+        self.opened = time.monotonic()
+
+    @property
+    def connected(self):
+        return time.monotonic() - self.opened > self.away_seconds
+
+
+def test_a_gap_in_the_line_before_the_first_byte_is_waited_out(ruida, monkeypatch):
+    """
+    A Ruida goes quiet for a few seconds at a time and comes back by itself, and
+    an upload started in such a gap used to be refused on the spot with "there is
+    no connection". Measured on the machine: the gaps last around four seconds,
+    so the answer to one is to wait, not to send the user away.
+
+    The gap here is 50 ms rather than four seconds — the shape of the thing, not
+    its duration.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = GappySession(away_seconds=0.05)
+    monkeypatch.setattr(ruida.device, "active_session", session, raising=False)
+    monkeypatch.setattr(upload, "_write", session.write)
+    upload.poll_seconds = 0.001
+
+    started = time.monotonic()
+    result = upload.upload("BORD")
+    took = time.monotonic() - started
+
+    assert result["chunks"] == len(session.written) - 2
+    assert took >= 0.05, f"the gap was not waited out, only {took:.3f} s passed"
+
+
+def test_a_line_that_stays_away_still_refuses_and_does_not_hang(ruida, monkeypatch):
+    """
+    Waiting out a gap may not turn into waiting for ever. The bound is
+    `line_gap_seconds`; past it the refusal is the same sentence as before, so a
+    machine that is off still says so instead of leaving the user watching a
+    spinner.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = FakeSession()
+    session.connected = False
+    monkeypatch.setattr(ruida.device, "active_session", session, raising=False)
+    monkeypatch.setattr(upload, "_write", session.write)
+    upload.line_gap_seconds = 0.05
+    upload.poll_seconds = 0.001
+
+    started = time.monotonic()
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+    took = time.monotonic() - started
+
+    assert error.value.code == "upload.notConnected"
+    assert not session.written
+    assert took < 2.0, f"refusing took {took:.2f} s"
+
+
+def test_a_gap_partway_through_the_file_does_not_abandon_it(ruida, monkeypatch):
+    """
+    The worse half of the same story: a gap that falls between two blocks used to
+    end the transfer with "the machine stopped answering", leaving an incomplete
+    file on the panel over something that heals itself in four seconds. The
+    blocks resume instead.
+
+    `_session` is handed the session directly here, so the pre-flight wait is out
+    of the way and the gap falls where the blocks are: on the first
+    `_wait_for_the_line`, before the `E8 02` packet.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = GappySession(away_seconds=0.05)
+    monkeypatch.setattr(upload, "_session", lambda: session)
+    monkeypatch.setattr(upload, "_write", session.write)
+    upload.poll_seconds = 0.001
+
+    started = time.monotonic()
+    result = upload.upload("BORD")
+    took = time.monotonic() - started
+
+    assert result["chunks"] == len(session.written) - 2
+    assert session.written[0] == b"\xe8\x02"
+    assert took >= 0.05, f"the gap was not waited out, only {took:.3f} s passed"
+
+
 def test_uploading_leaves_the_live_spooler_empty(ruida, monkeypatch):
     """
     Sending a file is not starting one. Whatever else an upload does, nothing may

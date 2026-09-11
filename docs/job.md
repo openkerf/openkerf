@@ -212,6 +212,16 @@ been sent." Two at once interleave into one file made of two jobs.
 And it needs the machine on the other end: "There is no connection to the machine,
 so the file cannot be sent. Connect first; nothing has been sent."
 
+That one waits before it says so. A Ruida falls silent for a few seconds at a time
+and comes back on its own with nothing having changed — measured on a KH-5030 over
+three minutes of an idle connection: four gaps, of 3.9, 4.5 and 4.6 seconds and one
+too short to see. The wire says the machine simply stops answering, and then answers
+again. So a press that lands in such a gap is not sent away: the line is given eight
+seconds to come back, and only a machine that is still quiet after that gets the
+refusal. A gap that falls between two blocks does not abandon the file either — the
+blocks carry on where they stopped, and the silence is not counted against the ten
+seconds a block is allowed to take.
+
 The refusal for a job on the machine is written out as a whole sentence as well — "A
 job is on this machine — burning, or waiting in the queue to start. Wait until it is
 done, or stop it: the file would go down the same connection that job uses. Nothing
