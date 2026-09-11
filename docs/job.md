@@ -232,6 +232,19 @@ another file of yours is already on its way to the same machine. "This machine i
 already being sent a file. Wait until that one is done and press again; nothing has
 been sent." Two at once interleave into one file made of two jobs.
 
+A second one of the same kind, and this one is about the engine rather than about
+you: "This machine is already being sent something on this line. Wait until that is
+done and press again; nothing has been sent." Sending takes the line for itself for
+as long as it lasts, because it has to. A Ruida that has been running for a while
+has a queue of status questions standing in front of your file — measured on a
+KH-5030: fifty of them, growing, because the machine acknowledges every question and
+answers none of them, and each unanswered one costs the engine a second and a half of
+waiting. Left alone, your first block would be behind all of them and the transfer
+would be refused before it began. So the questions are dropped and the asking is held
+off until the file is through; nobody was waiting for those answers. If the line will
+not come free within two seconds, that is the engine sending a file of its own, and
+then you get the sentence above instead of a wait without end.
+
 And it needs the machine on the other end: "There is no connection to the machine,
 so the file cannot be sent. Connect first; nothing has been sent."
 

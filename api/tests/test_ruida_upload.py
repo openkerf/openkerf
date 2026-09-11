@@ -863,7 +863,13 @@ class FakeSession:
 
     connected = True
 
-    def __init__(self, busy_forever=False, busy_for=0, fail_after=None):
+    def __init__(self, busy_forever=False, busy_for=0, fail_after=None, queued=0):
+        # A real queue, because `_line_is_busy` asks it and the clearing before an
+        # upload empties it. Filled with bytes that stand for the status monitor's
+        # `GET_SETTING` packets — the only other writer on this line.
+        self.send_q = queue.Queue()
+        for _ in range(queued):
+            self.send_q.put(b"\xda\x00\x04\x05")
         self.written = []
         self.busy_forever = busy_forever
         self.busy_for = busy_for
@@ -1245,6 +1251,81 @@ def test_a_gap_partway_through_the_file_does_not_abandon_it(ruida, monkeypatch):
     assert result["chunks"] == len(session.written) - 2
     assert session.written[0] == b"\xe8\x02"
     assert took >= 0.05, f"the gap was not waited out, only {took:.3f} s passed"
+
+
+def _the_lock(device):
+    """The controller's job lock — the one the engine's own file sender holds."""
+    return device.driver.controller._job_lock
+
+
+def test_the_status_monitor_is_held_off_while_the_file_goes_down(ruida, monkeypatch):
+    """
+    Measured on the machine on 11 September 2026, with `/api/status`'s `line`
+    block sampled 59 times a second: `send_q` stood at 48 packets and climbed to
+    51 while `replies` did not move at all. The machine acknowledges every status
+    query and returns the data for none, so the handshaker spends 1.5 s of
+    timeouts on each one (six reads of 0.25 s) while the status monitor enqueues a
+    new one every time the flags go clear. More goes in than comes out — 8 in
+    against 5 out over 5.6 s — so after the first minute the queue is never empty
+    again, `_line_is_busy` is true for ever, and every upload refuses with
+    "stopped taking the file" without a byte going out.
+
+    So the line is taken for the duration, the way the engine takes it for its own
+    sends: `_data_sender` acquires this very lock at `ruida/controller.py:129` and
+    `_status_monitor` waits on it at `:173`.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    held = []
+    original = session.write
+    monkeypatch.setattr(upload, "_write", lambda data: (held.append(_the_lock(ruida.device).locked()), original(data))[1])
+
+    upload.upload("BORD")
+
+    assert held and all(held), "the monitor was free to queue while we were sending"
+    assert not _the_lock(ruida.device).locked(), "the lock was not given back"
+
+
+def test_the_queue_is_emptied_of_the_status_packets_first(ruida, monkeypatch):
+    """
+    Holding the line off is half of it. What is already queued still has to drain
+    before our first block, and at 1.5 s of timeout apiece fifty of them is over a
+    minute — longer than the whole upload is allowed. They are `GET_SETTING`
+    reads whose answers nobody wants any more, so they go.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch, queued=50)
+
+    result = upload.upload("BORD")
+
+    assert session.send_q.empty(), "the monitor's packets were still in front of ours"
+    assert result["chunks"] == len(session.written) - 2
+
+
+def test_a_line_the_engine_is_already_sending_on_is_refused(ruida, monkeypatch):
+    """
+    The lock is how `_data_sender` says "a file of mine is going down this line".
+    If it will not come free, the answer is a sentence and not a wait without end:
+    `pause_monitor()` is a bare `acquire()` with no timeout (`controller.py:132`)
+    and four places release it, so a plain call there can hang the request for
+    ever.
+    """
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    upload.line_claim_seconds = 0.05
+    lock = _the_lock(ruida.device)
+    lock.acquire()
+    try:
+        with pytest.raises(DesignError) as error:
+            upload.upload("BORD")
+    finally:
+        lock.release()
+
+    assert error.value.code == "upload.lineInUse"
+    assert not session.written
 
 
 def test_uploading_leaves_the_live_spooler_empty(ruida, monkeypatch):
