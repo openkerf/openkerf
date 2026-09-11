@@ -713,16 +713,31 @@ a series is going. See [Variable text](variable-text.md#a-series-with-print-and-
 ## Connect and disconnect
 
 The connection to the laser lives in the status bar at the bottom left, beside
-the machine state. It reads one of four things, and only the third one is a
+the machine state. It reads one of five things, and only the last one is a
 promise:
 
 - **Machine unknown** — this page is not talking to OpenKerf, so nobody can say.
 - **Machine not connected** — the engine is running, no machine attached.
+- **The line is faltering** — the machine has gone quiet for a moment. Hover the
+  text: "The machine has gone quiet for a moment. A Ruida does that by itself and
+  answers again within a few seconds; there is nothing to do."
 - **Connection unknown** — the driver does not say. Hover the text and it explains
   itself: "The engine is running, but this driver does not report whether a machine
   is attached. You will notice on the first job: it stays in the queue if nothing
   is listening."
 - **Connected to the laser**.
+
+The faltering one is worth a paragraph, because it looks like a fault and is not.
+A Ruida stops answering for a few seconds at a time and then carries on as if
+nothing happened. Measured on a KH-5030 over three minutes of an idle connection:
+four such gaps, holding for 3.9, 4.5 and 4.6 seconds and once for less than a
+sample. On the wire our side keeps asking straight through them — seven packets
+went out in one gap with no answer at all — and then the replies resume with
+nothing in between to explain it. Nothing is unplugged and nothing needs doing.
+The bar used to read "Machine not connected" at each of those, twice a minute,
+which is how a warning stops being read. It only says that now when the silence
+has lasted more than eight seconds; under that it says the line is faltering, and
+the dot stays the working colour because the machine is working.
 
 Beside it, when the driver has a command for it, a button. **Connect** ("Open the
 connection to the machine. This moves nothing.") goes straight through.
@@ -757,7 +772,8 @@ layers. It monitors and it stops. At the bottom: "You design on the desktop — 
 screen keeps an eye on the machine."
 
 The top line never scrolls: a coloured dot, the machine state (**Ready**,
-**Busy**, **Paused**, **Alarm**, **Not connected**, or **No connection** when the
+**Busy**, **Paused**, **Alarm**, **Not connected**, **Line faltering**, or **No
+connection** when the
 server is away) and the machine's name.
 
 What comes below depends on what there is to do.

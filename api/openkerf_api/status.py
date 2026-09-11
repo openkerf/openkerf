@@ -7,7 +7,22 @@ engine internals is defensive: the driver interface only guarantees `status()`,
 other attribute is probed with getattr/try.
 """
 
+import time
+
 from meerk40t.core.units import UNITS_PER_MM, Length
+
+#: Per machine, the reading last seen and the moment we first saw it.
+#:
+#: Keyed on the device's path, because `StatusReader` is built fresh for every
+#: request and there is more than one machine in the list. A device without a
+#: path — which in practice is a test double — gets its object identity instead,
+#: so two of them in one test do not share a stopwatch.
+_CONNECTION_SINCE: dict = {}
+
+
+def forget_connection_history() -> None:
+    """Drop the how-long-has-it-held memory. For tests."""
+    _CONNECTION_SINCE.clear()
 
 
 def _safe(fn, default=None):
@@ -102,15 +117,35 @@ class StatusReader:
         guessing. A guess at "connected" is the very fault we are repairing.
 
         `state` is er één van: "connected", "disconnected", "unknown".
+
+        And it says how long it has read that way, because one reading is not
+        enough to tell a machine that is off from one that is between two
+        breaths. Measured on a KH-5030 over three minutes of an idle connection:
+        four gaps in which the controller answered nothing, of 3.9, 4.5 and
+        4.6 s and one shorter than a single poll — with, on the wire, seven of
+        our ENQ packets going out in one of them and not one answer coming back,
+        and then replies again with nothing in between to explain it. The flag
+        alone therefore makes the bar flash "not connected" at a machine that is
+        standing there; `held_ms` is what lets one rule decide the difference,
+        in `machineState`, instead of every surface guessing.
+
+        The age is of *our readings*, not of the machine's own state: it starts
+        at the first snapshot after a change we saw. Between two snapshots the
+        flag can go and come back unseen, and then the age carries on counting.
+        That is the honest thing it can say from here, and it is enough for the
+        question it is asked.
         """
         # Ruida (our target machine) has an explicit property; it is bound to the session
         # layer and therefore the most reliable source there is.
         ruida = _attr(device, "connected")
         if isinstance(ruida, bool):
-            return {
-                "state": "connected" if ruida else "disconnected",
-                "detail": None,
-            }
+            return self._aged(
+                device,
+                {
+                    "state": "connected" if ruida else "disconnected",
+                    "detail": None,
+                },
+            )
 
         # Lihuiyu (K40 boards): the controller keeps a connection and a readable state
         # ("connected", "Not Connected", "Unknown"...).
@@ -120,18 +155,36 @@ class StatusReader:
             if link is not None and hasattr(link, "is_connected"):
                 open_ = _safe(link.is_connected)
                 if isinstance(open_, bool):
-                    return {
-                        "state": "connected" if open_ else "disconnected",
-                        "detail": _attr(controller, "state"),
-                    }
+                    return self._aged(
+                        device,
+                        {
+                            "state": "connected" if open_ else "disconnected",
+                            "detail": _attr(controller, "state"),
+                        },
+                    )
             # Geen verbindingsobject = nog nooit geopend.
             if hasattr(controller, "connection"):
-                return {
-                    "state": "disconnected",
-                    "detail": _attr(controller, "state"),
-                }
+                return self._aged(
+                    device,
+                    {
+                        "state": "disconnected",
+                        "detail": _attr(controller, "state"),
+                    },
+                )
 
-        return {"state": "unknown", "detail": None}
+        return self._aged(device, {"state": "unknown", "detail": None})
+
+    @staticmethod
+    def _aged(device, reading: dict) -> dict:
+        """Stamp a reading with how long it has read that way."""
+        key = _attr(device, "path", None) or id(device)
+        now = time.monotonic()
+        seen, since = _CONNECTION_SINCE.get(key, (None, now))
+        if seen != reading["state"]:
+            since = now
+        _CONNECTION_SINCE[key] = (reading["state"], since)
+        reading["held_ms"] = int((now - since) * 1000)
+        return reading
 
     def bed(self, device) -> dict:
         """Bed size in mm. Devices store these as strings like "320mm"."""
