@@ -158,7 +158,7 @@ test('the right-click menu puts sensible bridges on in one go', async (t) => {
 	const rect = (await snapshot()).elements.find((e) => e.id === shapes[0])!;
 	assert.equal(rect.bridges?.count, 4);
 	assert.ok(Math.abs((rect.bridges?.length_mm ?? 0) - 2) < 0.01);
-	assert.match((await panel()) ?? '', /4 gaps of 2 mm/);
+	assert.match((await panel()) ?? '', /4 bridges of 2 mm/);
 });
 
 test('the canvas draws the gaps, and keeps the whole contour for clicking', async (t) => {
@@ -247,7 +247,7 @@ test('after a refusal the two fields show the shape again, not the refused numbe
 	const text = (await panel()) ?? '';
 	assert.match(text, /More than 200 bridges/, `the panel says "${text}"`);
 	// Measured before this fix: the fields kept 999 and 9 while the sentence six pixels
-	// below still read "12 gaps of 2 mm", so the panel read back a state that was nowhere.
+	// below still read "12 bridges of 2 mm", so the panel read back a state that was nowhere.
 	assert.deepEqual(await fields(), ['12', '2'], 'the refused number stayed in the field');
 	assert.equal((await snapshot()).elements.find((e) => e.id === shapes[0])!.bridges?.count, 12);
 });

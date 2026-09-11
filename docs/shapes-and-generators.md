@@ -258,7 +258,9 @@ This is the operation for kerf compensation and for a border round a shape. An e
 
 ### Split
 
-**Edit path → Split into separate shapes** takes a path made of several loose pieces apart. When there is something to split the row counts it — `Split into {n} shapes` — and the panel on the right says the same thing in full: `This shape consists of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.`
+**Edit path → Split into separate shapes** takes a path made of several loose pieces apart. When there is something to split the row counts it — `Split into {n} shapes` — and for an imported path the panel on the right says the same thing in full: `This shape consists of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.`
+
+The panel keeps quiet about a typed text and about a shape a generator made, because for those the count is not news: a caption is one outline per letter and a QR code is one square per module, and neither came out of a CAD program. The menu row still counts them and still splits them if that is really what you want.
 
 Afterwards you get `{n} shapes — clickable separately.` A single-piece shape refuses with `This shape is a single piece`, and if you get that far anyway: `This shape consists of one piece; there is nothing to split.`
 

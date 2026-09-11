@@ -8,6 +8,7 @@
 		DEFAULT_BRIDGES,
 		DesignStore,
 		bridgeSummary,
+		drawnLayers,
 		elementName,
 		isDesignSignal,
 		type DesignElement
@@ -854,8 +855,11 @@ import { SeriesStore } from '$lib/series.svelte';
 				// and the right-click menu comes up empty.
 				const here = new Set(design.elements.map((element) => element.id));
 				const ids = wanted.split(',').filter((id) => here.has(id));
-				design.select(ids[0] ?? null);
-				ids.slice(1).forEach((id) => design.toggle(id));
+				// selectMany, not select() followed by toggle(): the first call expands a
+				// group member to the whole group, so the toggle then found every member
+				// already inside and took them all away again. Measured on a group of
+				// two: two shapes selected before the reload, none after.
+				design.selectMany(ids);
 			}
 		});
 		// Only hook up after mount: replaceState before the router is ready breaks the
@@ -1222,13 +1226,13 @@ import { SeriesStore } from '$lib/series.svelte';
 			// No server outranks no token: with the engine gone nothing arrives, whatever
 			// the token says. `writeRefusal` puts them in that order.
 			offline: !connection.online,
-			layers: design.operations
-				.filter((op) => !op.grid)
-				.map((op) => ({
-					id: op.id,
-					label: op.label,
-					inside: design.selectedIds.every((id) => op.element_ids.includes(id))
-				})),
+			layers: drawnLayers(design.operations).map((op, index) => ({
+				id: op.id,
+				// The number the panel's chip carries, from the same list it counts over.
+				number: index + 1,
+				label: op.label,
+				inside: design.selectedIds.every((id) => op.element_ids.includes(id))
+			})),
 			sheets: sheets.sheets
 				.filter((sheet) => !sheet.active)
 				.map((sheet) => ({ id: sheet.id, name: sheet.name })),
@@ -1545,6 +1549,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	material={sheetMaterial}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
 	onOpenMaterial={() => (materialOpen = true)}
+	designLoaded={design.loaded}
 	canFrame={(design.elements?.length ?? 0) > 0 &&
 		(control.capabilities?.motion?.move ?? false) &&
 		!control.needsToken}
@@ -1826,6 +1831,7 @@ import { SeriesStore } from '$lib/series.svelte';
 					{control}
 					activeJob={status.activeJob}
 					nothingBurns={design.burnsNothing}
+					designLoaded={design.loaded}
 					sheetName={sheets.active?.name ?? ''}
 					revision={design.revision}
 					selectedIds={design.selectedIds}
@@ -1845,7 +1851,6 @@ import { SeriesStore } from '$lib/series.svelte';
 						await edits.lock();
 					}}
 					profile={library.activeMachine}
-					onFrame={() => control.frame()}
 					onCutPath={() => (cutPathOpen = true)}
 					colorFor={(id) => design.colorFor(id)}
 		onFocus={async (mm) => {
@@ -1897,6 +1902,7 @@ import { SeriesStore } from '$lib/series.svelte';
 
 <StatusBar
 	pointerMm={pointerMm}
+	elementCount={design.loaded ? design.elements.length : null}
 	{device}
 	machineState={machine}
 	job={status.activeJob}
@@ -1933,7 +1939,10 @@ import { SeriesStore } from '$lib/series.svelte';
 	<p class="ask">
 		{t('recovery.body', { when: i18n.dateTime(recovery?.when) })}
 	</p>
-	<div class="ask-actions">
+	<!-- The window's footer: the way out first, the answer that throws the recovered
+	     work away in the middle with 24 px on either side, the primary last. -->
+	{#snippet footer()}
+		<button class="btn" onclick={() => (recovery = null)}>{t('recovery.later')}</button>
 		<button
 			class="btn gone"
 			onclick={async () => {
@@ -1941,7 +1950,6 @@ import { SeriesStore } from '$lib/series.svelte';
 				recovery = null;
 			}}
 		>{t('recovery.discard')}</button>
-		<button class="btn" onclick={() => (recovery = null)}>{t('recovery.later')}</button>
 		<button
 			class="btn primary"
 			onclick={async () => {
@@ -1950,7 +1958,7 @@ import { SeriesStore } from '$lib/series.svelte';
 				await design.load();
 			}}
 		>{t('recovery.restore')}</button>
-	</div>
+	{/snippet}
 </Dialog>
 
 <!-- The Projects window: Open… lists what is on the server, Save as… puts the work
@@ -2020,17 +2028,17 @@ import { SeriesStore } from '$lib/series.svelte';
 		{#if duplicates.skipped}
 			<p class="ask nuance">{t('duplicates.skipped', { n: duplicates.skipped })}</p>
 		{/if}
-		<div class="ask-actions">
-			{#if duplicates.stacks}
-				<button class="btn" onclick={() => (duplicates = null)}>{t('common.cancel')}</button>
-				<button class="btn primary" onclick={removeDuplicates}
-					>{t('duplicates.remove', { n: duplicates.extra })}</button
-				>
-			{:else}
-				<button class="btn primary" onclick={() => (duplicates = null)}>{t('common.close')}</button>
-			{/if}
-		</div>
 	{/if}
+	{#snippet footer()}
+		{#if duplicates?.stacks}
+			<button class="btn" onclick={() => (duplicates = null)}>{t('common.cancel')}</button>
+			<button class="btn primary" onclick={removeDuplicates}
+				>{t('duplicates.remove', { n: duplicates.extra })}</button
+			>
+		{:else}
+			<button class="btn primary" onclick={() => (duplicates = null)}>{t('common.close')}</button>
+		{/if}
+	{/snippet}
 </Dialog>
 
 <!-- The prompt card floats and does not block: a job has just started, and that
@@ -2453,33 +2461,11 @@ import { SeriesStore } from '$lib/series.svelte';
 		font-size: var(--text-sm);
 		color: var(--text-2);
 	}
-	:global(.ask-actions) {
-		display: flex;
-		gap: var(--space-2);
-		justify-content: flex-end;
-		flex-wrap: wrap;
-	}
-	:global(.ask-actions .btn) {
-		padding: 8px 16px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-	}
-	:global(.ask-actions .btn:hover) { background: var(--surface-2); }
-	/* "Discard" removes the automatically saved design for good and sat 8px from
-	   "Later". This dialog appears unasked on opening — precisely when you are not
-	   looking yet — and with a glove on you do not hit the middle of a target. 24px
-	   between them, on touch screens only; the mouse layout on the desktop stays as it
-	   was. See DESIGN-SYSTEM, "Touch as a first-class input". */
-	@media (max-width: 1199px), (pointer: coarse) {
-		:global(.ask-actions .btn.gone) { margin-right: var(--space-4); }
-	}
-	:global(.ask-actions .btn.primary) {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
+	/* The ask row and its buttons are both in tokens.css now: the row said here what
+	   `.ask-actions` says there, and the three rules under it restarted the shared
+	   button (padding, border, radius, hover, the primary's fill) that P20 had already
+	   moved. The 24 px around "Discard" is the row's own rule now, and at every width
+	   rather than on a touch screen alone. */
 	.panel-scroll {
 		flex: 1;
 		overflow-y: auto;

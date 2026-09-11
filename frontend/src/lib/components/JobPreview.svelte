@@ -11,7 +11,7 @@
 	 * plan is precisely why the preflight used to stall for minutes (gap J1).
 	 * See BESLISSINGEN.md, B8.
 	 */
-	import type { Design } from '$lib/design.svelte';
+	import { burnVerdict, type BurnVerdict, type Design } from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 
@@ -59,14 +59,29 @@
 	let burning = $derived(
 		new Set((design?.operations ?? []).filter((o) => o.output).map((o) => o.id))
 	);
+	/** The layers themselves, for `burnVerdict` and for naming the one that is off. */
+	let allLayers = $derived(design?.operations ?? []);
 
 	type Shape = {
 		id: string;
 		path: string;
 		image: { x: number; y: number; w: number; h: number } | null;
 		colour: string;
-		/** Sits in no burning layer: will not be burned. */
+		/**
+		 * Why this shape does not burn — `noLayer`, `layerOff` — or that it does.
+		 *
+		 * It used to be a boolean, and the sentence under the drawing then had to
+		 * word two different situations in one: a shape nobody put in a layer, and a
+		 * shape in a layer with "burn along" off. Both were reported as "sits in no
+		 * layer that burns" while the Layers tab calls the first one of those
+		 * *empty* — so the sentence sent the reader looking for the wrong mistake.
+		 * `burnVerdict` is the same decider the selection card reads (P11).
+		 */
+		burns: BurnVerdict;
+		/** Whichever of the two it is: it does not burn, and is drawn dotted grey. */
 		silent: boolean;
+		/** The layers this shape is in that are switched off, by name. */
+		offLayers: string[];
 		/** Sticks out beyond the sheet: there is no material there. */
 		offSheet: boolean;
 		/** Lies outside the bed: the head does not even reach it. */
@@ -87,6 +102,7 @@
 			.filter((element) => !element.hidden)
 			.map((element) => {
 				const layers = (element.operation_ids ?? []).filter((id) => burning.has(id));
+				const verdict = burnVerdict(element.operation_ids, allLayers);
 				const box = element.bounds;
 				const seenOffSheet = Boolean(
 					sheet &&
@@ -109,7 +125,16 @@
 							}
 						: null,
 					colour: layers.length ? (colorFor?.(layers[0]) ?? GREY) : GREY,
-					silent: layers.length === 0,
+					burns: verdict,
+					silent: verdict !== 'burns',
+					offLayers:
+						verdict === 'layerOff'
+							? allLayers
+									.filter(
+										(op) => !op.output && (element.operation_ids ?? []).includes(op.id)
+									)
+									.map((op) => op.label)
+							: [],
 					// Outside the bed is the heavier of the two, so it wins: a shape
 					// that falls outside both is one the machine cannot reach. Two
 					// marks over one shape say nothing extra.
@@ -123,6 +148,14 @@
 	let offBedCount = $derived(shapes.filter((s) => s.offBed).length);
 	let silentCount = $derived(shapes.filter((s) => s.silent).length);
 	let burningCount = $derived(shapes.filter((s) => !s.silent).length);
+	/** The two silences apart, because the way out of them is not the same one:
+	 *  one shape needs a layer, the other needs its layer switched back on. */
+	let looseCount = $derived(shapes.filter((s) => s.burns === 'noLayer').length);
+	let offCount = $derived(shapes.filter((s) => s.burns === 'layerOff').length);
+	/** The switched-off layers those shapes are in, by name and each name once. */
+	let offLayerNames = $derived(
+		i18n.list([...new Set(shapes.flatMap((s) => s.offLayers))])
+	);
 
 	/**
 	 * The frame the view looks into, in millimetres.
@@ -193,7 +226,8 @@
 			);
 		if (offBedCount) parts.push(t('preview.countOutsideBed', { n: offBedCount }));
 		if (offSheetCount) parts.push(t('preview.countOutsideSheet', { n: offSheetCount }));
-		if (silentCount) parts.push(t('preview.countNoLayer', { n: silentCount }));
+		if (looseCount) parts.push(t('preview.countNoLayer', { n: looseCount }));
+		if (offCount) parts.push(t('preview.countLayerOff', { n: offCount }));
 		return parts.join('; ') + '.';
 	});
 
@@ -372,8 +406,15 @@
 				})}
 			</p>
 		{/if}
-		{#if silentCount}
-			<p class="notice silent">{t('preview.silent', { n: silentCount })}</p>
+		{#if looseCount}
+			<p class="notice silent">{t('preview.silent', { n: looseCount })}</p>
+		{/if}
+		<!-- The other silence, in its own words and with the layer named: what you do
+		     about it is switch that layer back on, not give the shape a layer. -->
+		{#if offCount}
+			<p class="notice silent">
+				{t('preview.silentOff', { n: offCount, layers: offLayerNames })}
+			</p>
 		{/if}
 	</div>
 

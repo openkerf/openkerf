@@ -1384,6 +1384,7 @@ class Generators:
             stroke_width=self.elements.default_strokewidth,
             label=label,
         )
+        _mark_generated(node)
         # Put it in one layer explicitly, not through colour classification: that puts a
         # box panel in an *engrave* layer *and* straight away in a second layer claiming the
         # same colour. Then the same panel burns twice, and you only notice that on
@@ -1412,6 +1413,7 @@ class Generators:
             stroke_width=self.elements.default_strokewidth,
             label=label,
         )
+        _mark_generated(node)
         if intent:
             self._file_under(node, intent)
         return node
@@ -1527,6 +1529,26 @@ def _outline_polygons(geometry):
         current.append(point)
     if len(current) >= 3:
         yield current
+
+
+def _mark_generated(node) -> None:
+    """
+    The mark that says this shape came out of a generator here, not out of a file.
+
+    The panel needs it to decide one sentence. "This shape consists of 232 loose
+    pieces. An export from a CAD program often puts every panel in one path" is a
+    diagnosis about an *import*; under a QR of 232 modules or a hinge of 160 slits it
+    is simply untrue. Asking it the other way round — "does the label look like one
+    nobody chose?" — reads an imported path wrong, because MeerK40t's SVG reader puts
+    the element's own `id` in the label (`core/svg_io.py`), so a CAD export arrives as
+    `Path bracket` and would be exempted too. So the shapes we make say so themselves.
+
+    The `mk` prefix is load-bearing, for the reason `Drawing.once` sets out at length:
+    MeerK40t's SVG writer emits every scalar attribute and its reader restores only the
+    ones beginning with `mk`. So the mark rides `design.svg`, the recovery file and the
+    project bundle. It is only ever set, never cleared to a falsy string.
+    """
+    node.mkgenerated = "1"
 
 
 def _subpaths(geometry) -> int:

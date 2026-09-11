@@ -238,8 +238,14 @@ minute — each with an Open button and a ⋮ button.](images/47-projects.png)
 
 If the work has changes that are not saved, **New project**, **Open…** and
 **Upload…** ask first, in a window titled "Unsaved changes": "The changes in
-"{name}" are not saved. What do you want to do with them?", with **Save**,
-**Discard** and **Cancel**. Closing the browser tab asks too.
+"{name}" are not saved. What do you want to do with them?", with **Cancel**,
+**Discard** and **Save** — the way out first, the answer that throws the changes
+away in the middle, and the button that keeps them last, as in every other window.
+**Discard** is the only red one of the three: in a question like this one, the
+answer that cannot be undone is lettered and bordered in red — the same drawing
+as **Remove layer…** in the layers panel. (The two emergency **Stop** buttons
+wear red too, and they turn fully red while a job is running.)
+Closing the browser tab asks too.
 
 Projects live in a folder on the server; in Docker that is `/data/projects` on
 the data volume, so they survive a restart and an update and go with the
@@ -259,7 +265,7 @@ material or the machine.
 
 If you leave a design behind, OpenKerf offers it at the next start under **Work
 from an earlier session**: "There is an automatically saved design from {when}.
-Restore it?", with **Restore**, **Not now** and **Discard**. It is a safety net,
+Restore it?", with **Not now**, **Discard** and **Restore**. It is a safety net,
 not a substitute for saving.
 
 ## Giving the shapes a layer
@@ -286,8 +292,9 @@ layer" and "Click a colour: those 4 shapes move to that layer".
 
 If you do not know what speed and power your material wants, do not guess: the
 wizard's own advice is "Not sure of the material? Burn a test grid first." A layer
-switched off shows the tag "does not burn", and a shape in no layer at all is
-labelled "This shape does not burn".
+switched off shows the tag "does not burn", and so does the Edit tab under the
+name of a shape that sits in it; a shape in no layer at all is labelled "This
+shape does not burn".
 
 Every setting a layer carries, and the four ways of getting a shape into one, are
 in [Layers](layers.md). Burning a board of test squares to find those numbers is
@@ -304,21 +311,26 @@ again.
 **Start job** in the top bar does not start anything. It switches to that tab and
 arms the job — see "Burning" below.
 
-![The Job tab showing a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm", a note that two shapes sit in no layer that burns, "Estimated time 1:19", the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, below it the table of layers with mm/s, %, passes and source running on under the foot of the panel, and there the strip that carries the list "Run through this" — Lid closed, Extraction and air assist on, Workpiece is clamped and flat — above a "Show frame" button on its own line and a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
+![The Job tab showing the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, under those a "Show cut path" button and the whole table of layers with mm/s, %, passes and source, and under that a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes are in a layer that is switched off — the foot of that picture running on under the strip at the bottom of the panel, which carries a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
 
 From top to bottom it holds:
 
-- a picture of the sheet with your work on it, its size, and the size of the work
-  itself — plus a note about anything that will be skipped, for example "2 shapes
-  sit in no layer that burns — dashed grey above. The machine skips them.";
-- **Estimated time**;
 - **Material** — the sheet's material, or "not filled in for this sheet";
 - the zero point, when you have set one;
 - a table of the layers with their speed, power, passes and where those numbers
   came from;
-- the list **Run through this**: "Lid closed", "Extraction and air assist on",
-  "Workpiece is clamped and flat" — in the strip at the bottom of the panel, above
-  the start button, where it cannot scroll away from it.
+- a picture of the sheet with your work on it, its size, and the size of the work
+  itself — plus a note about anything that will be skipped, for example "2 shapes
+  are in a layer that is switched off (Fine lines) — dashed grey above. The
+  machine skips them.".
+
+The numbers stand above the picture because the strip at the foot of the panel
+stays put while the rest scrolls, and it lies over whatever is last in the column.
+A picture you can scroll to; a warning you cannot afford to scroll to.
+
+The list **Run through this** — "Lid closed", "Extraction and air assist on",
+"Workpiece is clamped and flat" — comes up in that strip the moment you press
+**Start job**, directly above the **Start now** that fires.
 
 Read the source column. A preset that was not measured on a test grid says so,
 and the panel adds it up: "3 layers use presets that were not verified on a
@@ -341,16 +353,14 @@ Each part of the panel, and what it does while a job is running, is in
 Three buttons, and the order matters.
 
 **Show frame** sends the head around the outline of your work with the laser off.
-Its own tooltip says what it does: "Send the head around the outline of your work
-— the laser stays off". Use it every time; it costs seconds and it is the only
+Its own tooltip says what it does: "Send the head around the outline of your work,
+without burning". Use it every time; it costs seconds and it is the only
 check that compares your drawing with the actual plank. The wizard's last screen
 puts the reason plainly: "The head traces the outline without burning. That is how
 you see whether your workpiece is in the right place."
 
-The button sits in two places — in the top bar, where it is always within reach,
-and in the footer of the un-armed pre-flight, beside **Start job**. Once the job
-is armed the footer shows **Cancel** and **Start now** instead, so if you want to
-frame after arming, use the one in the top bar.
+The button sits in the top bar, where it is always within reach and never scrolls
+away — armed or not, running or not.
 
 > **When the frame is refused.** The tooltip says "Nothing is on the bed, or this
 > machine cannot move", or, when the server is unreachable, "Running the frame has

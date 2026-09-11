@@ -713,7 +713,6 @@ test('one English word does not quietly become two Dutch ones', () => {
 	const DELIBERATE: Record<string, string> = {
 		Cut: 'the clipboard (Knippen) and the operation (Snijden) — English is the ambiguous one',
 		Group: 'a verb (Groeperen) and a thing (Groep)',
-		Design: 'a verb (Ontwerpen) and a thing (Ontwerp)',
 		Burning: 'a phase you are in (Aan het branden) and a column heading (Branden)',
 		'Leave it': 'a connection you leave hanging, a sheet you leave standing',
 		Size: 'the format of a generated shape (Formaat) and the measure of a corner (Maat)',

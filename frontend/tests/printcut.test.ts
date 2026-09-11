@@ -135,6 +135,13 @@ test('forgetting the alignment gives the ordinary job back', async (t) => {
 	await page.getByRole('button', { name: 'Forget the alignment' }).click();
 	await page.waitForTimeout(1000);
 
-	assert.match(await block(), /Off\. The work burns where you drew it/);
+	// "Off" as a value, the way the zero point above it says the same state; the
+	// sentence that used to stand here in full is behind it as a title. See
+	// `job-quiet.test.ts` for why the panel stopped explaining what is switched off.
+	assert.match(await block(), /PRINT AND CUT Off /);
+	assert.equal(
+		await page.locator('p.hint.off[title]').last().getAttribute('title'),
+		'Off. The work burns where you drew it. Pick the two marks that are on your material as well — printed crosses, drilled holes, an engraved corner — and point them out here.'
+	);
 	assert.equal((await (await fetch(`${BASE}/api/printcut`)).json()).aligned, false);
 });

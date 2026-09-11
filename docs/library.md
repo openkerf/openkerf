@@ -113,6 +113,11 @@ At the top right of the window, **Apply to** names the layer the preset will lan
 **Layer {n} · {label}** — with a dropdown when there is more than one. Every row then
 has an **Apply** button that puts the speed and the power on that layer.
 
+The list holds the layers you draw in, numbered exactly as the Layers tab numbers
+them. A test grid's cells are layers to the engine but not layers you draw in, so
+they are not offered here and they do not count towards the number either: on a bed
+with a 4 × 4 board the layer the panel calls **Layer 5** is **Layer 5** here too.
+
 OpenKerf does not stop you putting a cut preset on an engrave layer, but it does say
 so. The row grows a small tag **other kind**, with the reason in its tooltip:
 
@@ -195,7 +200,7 @@ precedence: **other material** and **other thickness**, spelled out under the ta
 *This preset is for {material}; this sheet is {material}.* and *This preset is for
 {n} mm; this sheet is {n} mm.*
 
-![The Job panel in the pre-flight. Under Estimated time 1:19 and the row "Material" reading "not filled in for this sheet" stands the warning "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that the table of layers with their speed, power and passes and a Source column reading "not verified". Below it, in the strip at the foot of the panel, a folded-shut "Send to the machine" and a checklist headed RUN THROUGH THIS: lid closed, extraction and air assist on, workpiece clamped and flat.](images/12-job-preflight.png)
+![The Job panel in the pre-flight. Under the row "Material" reading "not filled in for this sheet" stands the warning "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that a "Show cut path" button and the table of layers with their speed, power and passes and a Source column reading "not verified". Below the table a thumbnail of the sheet; at the foot of the panel the strip that stays put while the rest scrolls, holding a green "Start job 1:19" with a narrower arrow button joined to its right, and nothing else.](images/12-job-preflight.png)
 
 The summary underneath counts them:
 

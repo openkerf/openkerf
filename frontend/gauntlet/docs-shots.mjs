@@ -315,7 +315,8 @@ async function seed() {
 		await put(element, op);
 	}
 	// One layer that does not burn along: the list has to be able to show that, and
-	// the job table has to leave it out.
+	// the job table has to show it as a row saying "does not burn" (P11) — it used
+	// to leave the layer out altogether.
 	if (ops[2]) {
 		await fetch(BASE + `/api/design/operations/${encodeURIComponent(ops[2])}`, {
 			method: 'PATCH',
@@ -677,10 +678,11 @@ await scene('08-under-pointer.png', '/?tab=design', {}, async (page) => {
 
 await scene('09-layers.png', '/?tab=layers');
 
-// The number chip on a layer row is also its handle: clicking it folds the layer
-// open on the speed, power and passes it burns with.
+// The layer's name is its opener: clicking it folds the layer open on the settings —
+// colour, name, kind of operation and burn order. (The chip beside it opens the ten
+// colour swatches and nothing else.)
 await scene('10-layer-detail.png', '/?tab=layers', {}, async (page) => {
-	await page.locator('.layer .chip').first().click();
+	await page.locator('.layer .layer-open').first().click();
 	await page.waitForTimeout(500);
 });
 
@@ -1457,7 +1459,7 @@ async function seedSeries() {
 	});
 
 	// 11.5 mm/s and not a round 14: the page quotes the clock this design comes out at
-	// — "Estimated time 0:24", and three of those in the line under it — so the speed is
+	// — "Start job 0:24", and three of those in the line above it — so the speed is
 	// picked to give that, the way shot 26 sizes its rectangle and shot 28 leaves the
 	// hinge on its defaults. Measured through `/api/job/estimate`: 14 gives 19.9 s, 12
 	// gives 23.1 s, 11.5 gives 24.0 s. A cut of 11.5 mm/s at 70 % is an ordinary setting

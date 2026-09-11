@@ -442,7 +442,7 @@
 		</fieldset>
 
 		{#if otherFields.length}
-			<details class="rest" bind:open={restOpen}>
+			<details class="fold rest" bind:open={restOpen}>
 				<summary>
 					{t('setup.more')}
 					<span class="muted">{t('setup.more.what')}</span>
@@ -604,14 +604,11 @@
 		border-radius: var(--radius-card);
 		padding: var(--space-3);
 	}
-	.rest summary {
-		cursor: pointer;
-		font-weight: 500;
-		/* A collapse row is a touch target, gloved as well. */
-		min-height: 32px;
-		display: flex;
-		align-items: center;
-		gap: var(--space-1h);
+	/* The line you press is the shared fold in tokens.css — the same marker, case and
+	   weight as the folds in the panel, and 44 px under a glove where this one was 32.
+	   Its text is a step larger than the panel's folds because the whole wizard is. */
+	.rest > summary {
+		font-size: inherit;
 		flex-wrap: wrap;
 	}
 	.rest .warning {
@@ -634,7 +631,6 @@
 	/* Touch targets hold on tablet *and* phone; this was at 767px and so left the
 	   tablet at 40px (measured: select 40, expander row 32). */
 	@media (max-width: 1199px) {
-		.rest summary,
 		.choice select {
 			min-height: 44px;
 		}

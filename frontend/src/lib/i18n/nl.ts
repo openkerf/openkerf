@@ -486,6 +486,19 @@ export const nl: Catalogue = {
 	'panel.aria': 'Eigenschappen',
 	'panel.collapse': 'Paneel inklappen',
 	'panel.expand': 'Paneel uitklappen',
+	'panel.rotate.step': '{angle}° draaien',
+	'panel.rotate.stepAria': '{angle} graden draaien',
+	'panel.textValue': '“{text}”',
+	'panel.bridges.offSome': {
+		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden. 1 van deze {shapes} vormen zit niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.',
+		other: 'Geen bruggen — kleine openingen die het deel in de plaat houden. {n} van deze {shapes} vormen zitten niet in een snijlaag, dus daar veranderen ze niets; waar de snede wel rond gaat, komt het deel los.'
+	},
+	'panel.bridges.notCutSome': {
+		one: '1 van deze {shapes} vormen zit niet in een snijlaag, dus daar doen de bruggen niets.',
+		other: '{n} van deze {shapes} vormen zitten niet in een snijlaag, dus daar doen de bruggen niets.'
+	},
+	'panel.size.widthPositive': 'Een breedte moet meer zijn dan 0 mm.',
+	'panel.size.heightPositive': 'Een hoogte moet meer zijn dan 0 mm.',
 	// ── Canvas ────────────────────────────────────────────────────────────────────
 	'canvas.headUnknown': 'Positie van de laserkop onbekend',
 	'canvas.headAt': 'Laserkop op {x} bij {y} millimeter',
@@ -501,6 +514,8 @@ export const nl: Catalogue = {
 	'canvas.snap.off': 'Vastklikken staat uit — houd Alt ingedrukt om het even te gebruiken',
 	'canvas.bedSize': 'bed {width} × {height} mm',
 	'canvas.empty.body': 'Gebruik Importeren bovenin voor een bestaand ontwerp, of pak links een vorm en klik op het bed.',
+	'canvas.empty.body.tablet': 'Gebruik Meer linksonder voor een bestaand ontwerp, of pak daarboven een vorm en klik op het bed.',
+	'panel.empty.tablet': 'Nog niets op het bed. Meer linksonder haalt een SVG, DXF of afbeelding binnen; met het gereedschap daarboven teken je zelf.',
 	'canvas.deeper': 'Vorm {index} van {total} onder de aanwijzer — Alt+klik voor de volgende.',
 	'canvas.under': 'Onder de aanwijzer',
 	'canvas.under.item': '{index}. {name} · {width} × {height} mm',
@@ -537,7 +552,6 @@ export const nl: Catalogue = {
 	'canvas.burnInTiles': 'In tegels branden?',
 
 	// ── Layer palette ─────────────────────────────────────────────────────────────
-	'palette.layerNamed': 'laag {n} · {label}',
 	'palette.noLayerYetRemembered': 'nog geen laag — begint op wat deze kleur eerder deed',
 	'palette.noLayerYetBlank': 'nog geen laag — begint blanco',
 	'palette.noLayerYet': 'nog geen laag',
@@ -561,7 +575,6 @@ export const nl: Catalogue = {
 	'palette.newWork': 'nieuw werk',
 
 	// ── Job panel ─────────────────────────────────────────────────────────────────
-	'job.frame.title': 'De kop langs de omtrek van je werk sturen — de laser blijft uit',
 	'job.origin.clearTitle': 'Terug naar het nulpunt van de machine zelf',
 	'job.noRaster.title': 'Deze server kan rasterlagen niet branden.',
 	'job.autofocus': 'Autofocus start je op de machine zelf.',
@@ -601,7 +614,6 @@ export const nl: Catalogue = {
 	'job.jog.left': 'Naar links',
 	'job.keepSpot': 'Deze plek bewaren',
 	'job.checklist.title': 'Loop dit even na',
-	'job.estimatedTime': 'Geschatte tijd',
 	'job.seriesLeft': 'Dit is de plaat die nu op het bed ligt; de {burns} die nog moeten duren samen ongeveer {time}.',
 	'job.toOrigin': 'Naar oorsprong',
 	'job.toPoint': 'Naar een punt',
@@ -622,9 +634,10 @@ export const nl: Catalogue = {
 	'job.upload.send': 'Versturen',
 	'job.upload.sending': 'Bezig met versturen…',
 	'job.upload.done': '{name} staat in de machine. Start hem op het paneel.',
+	'job.state.off': 'Uit',
+	'job.keysHere': 'De toets werkt overal in de app, zolang dit venster voorop staat — daarbuiten kan een browser geen toetsen ontvangen.',
 	'job.adjust.reset': 'Terug',
 	'job.checklist.lid': 'Deksel dicht',
-	'job.calculating': 'rekent…',
 	'job.origin': 'Nulpunt',
 	'job.move': 'Bewegen',
 	'job.home': 'Home',
@@ -645,6 +658,7 @@ export const nl: Catalogue = {
 	'job.origin.set': 'Hier het nulpunt',
 	'job.origin.reset': 'Hier opnieuw',
 	'job.notResponding': 'De machine meldt zich niet. Deze job gaat de wachtrij in en begint pas zodra de verbinding er is — zet hem aan of controleer de kabel.',
+	'job.estimating': 'Er wordt een nieuwe geschatte tijd berekend.',
 	'job.estimateSlow': 'De engine bouwt het hele snijplan om dit te schatten; op een zwaar ontwerp duurt dat even. Starten kan gewoon — de machine wacht er niet op.',
 	'job.queueAhead': {
 		one: 'Er staat al 1 job in de wachtrij; deze komt erachteraan.',
@@ -664,7 +678,6 @@ export const nl: Catalogue = {
 	'job.elapsed': '{time} verstreken',
 	'job.clearQueue': 'Wachtrij legen ({n})',
 	'job.queueEmpty': 'De wachtrij is al leeg',
-	'job.keysWork': '{pause} en {stop} werken overal in de app, zolang dit venster voorop staat — daarbuiten kan een browser geen toetsen ontvangen.',
 	'job.machineControls': 'Machine bedienen',
 	'job.machineControls.notNow': 'niet tijdens een job',
 	'job.jog.z': 'Kop {step} mm {direction}',
@@ -722,6 +735,7 @@ export const nl: Catalogue = {
 	'preview.countOutsideBed': '{n} liggen buiten het bed',
 	'preview.countOutsideSheet': '{n} vallen buiten het vel',
 	'preview.countNoLayer': '{n} zitten in geen laag',
+	'preview.countLayerOff': '{n} zitten in een laag die niet meebrandt',
 	'preview.sheetFallback': 'het vel',
 	'preview.whatBurns': 'Wat er gebrand wordt',
 	'preview.bigger': 'Groter bekijken',
@@ -745,6 +759,10 @@ export const nl: Catalogue = {
 	'preview.silent': {
 		one: 'Eén vorm zit in geen enkele laag die meebrandt — grijs gestippeld hierboven. De machine slaat hem over.',
 		other: '{n} vormen zitten in geen enkele laag die meebrandt — grijs gestippeld hierboven. De machine slaat ze over.'
+	},
+	'preview.silentOff': {
+		one: 'Eén vorm zit in een laag die uitstaat ({layers}) — grijs gestippeld hierboven. De machine slaat hem over.',
+		other: '{n} vormen zitten in een laag die uitstaat ({layers}) — grijs gestippeld hierboven. De machine slaat ze over.'
 	},
 
 	// ── The cut path (gap S1 / L1) ────────────────────────────────────────────────
@@ -828,7 +846,6 @@ export const nl: Catalogue = {
 	'jobStart.title': 'Job gestart',
 
 	// ── Design panel ──────────────────────────────────────────────────────────────
-	'panel.design': 'Ontwerp',
 	'panel.selection': 'Selectie',
 	'panel.elements': {
 		one: '1 element',
@@ -838,7 +855,7 @@ export const nl: Catalogue = {
 	'panel.shapes': '{n} vormen',
 	'panel.noLayer': 'in geen laag',
 	'panel.noLayer.title': 'Deze vorm brandt niet mee',
-	'panel.layerChip': 'Laag {n}: {label}',
+	'panel.layerChip.off': 'Laag {n} · {label} — deze laag staat uit, dus hij brandt niet mee.',
 	'panel.clear': 'Wissen',
 	'panel.widthShort': 'B',
 	'panel.heightShort': 'H',
@@ -855,24 +872,28 @@ export const nl: Catalogue = {
 	'panel.angle.mixed': 'Deze vormen staan onder verschillende hoeken — draai ze met de stapjes',
 	'panel.angle.title': 'De huidige hoek. Tik een getal om er precies naartoe te draaien.',
 	'panel.angle.mixedNote': 'Deze vormen staan onder verschillende hoeken. De stapjes werken; een hoek intikken zou ze allemaal gelijk zetten en dat is zelden wat je bedoelt.',
-	'panel.rotate.step': '{angle}° draaien',
-	'panel.rotate.stepAria': '{angle} graden draaien',
 	'panel.anchor.since': 'Sinds je hem pakte: {what}',
 	'panel.anchor.mirrored': 'Gespiegeld ten opzichte van het origineel',
 	'panel.anchor.back': 'Terugzetten',
 	'panel.anchor.backTitle': 'Terug naar de stand van toen je deze selectie aanklikte',
 	'panel.inEffect': 'Zit in effect: {label}',
 	'panel.bridges': 'Bruggen',
-	'panel.bridges.on': 'Openingen in de snede laten',
+	'panel.bridges.on': 'Bruggen in de snede laten',
 	'panel.bridges.count': 'Aantal',
 	'panel.bridges.length': 'Lengte per brug',
-	'panel.bridges.off': 'Geen bruggen: deze vorm komt los zodra de snede rond is.',
-	'panel.bridges.explain': '{count} openingen van {length} mm, verdeeld over een omtrek van {total} mm. Er blijft {cut} mm te snijden over.',
-	'panel.bridges.explainTightest': 'Elk van deze {n} vormen krijgt {count} openingen van {length} mm. De kortste omtrek erbij is {total} mm lang; daar blijft {cut} mm te snijden over.',
+	'panel.bridges.off': {
+		one: 'Geen bruggen — kleine openingen die het deel in de plaat houden — dus deze vorm komt los zodra de snede rond is.',
+		other: 'Geen bruggen — kleine openingen die het deel in de plaat houden — dus deze {n} vormen komen los zodra de snede rond is.'
+	},
+	'panel.bridges.explain': '{count} bruggen van {length} mm, verdeeld over een omtrek van {total} mm. Er blijft {cut} mm te snijden over.',
+	'panel.bridges.explainTightest': 'Elk van deze {n} vormen krijgt {count} bruggen van {length} mm. De kortste omtrek erbij is {total} mm lang; daar blijft {cut} mm te snijden over.',
 	'panel.bridges.places': 'Op {places} procent van de omtrek, elk {length} mm lang.',
 	'panel.bridges.notSupported': 'Deze vorm draagt geen bruggen. Ze werken op een rechthoek, een ellips, een polylijn of een pad — niet op een lijn, tekst of een afbeelding.',
 	'panel.bridges.mixed': 'Deze vormen hebben verschillende bruggen. Een aantal invullen geeft ze allemaal hetzelfde.',
-	'panel.bridges.notCut': 'Deze vorm zit niet in een snijlaag, dus de openingen veranderen nog niets. Ze doen alleen iets bij snijden.',
+	'panel.bridges.notCut': {
+		one: 'Deze vorm zit niet in een snijlaag, dus bruggen veranderen nog niets. Ze doen alleen iets bij snijden.',
+		other: 'Deze {n} vormen zitten niet in een snijlaag, dus bruggen veranderen nog niets. Ze doen alleen iets bij snijden.'
+	},
 	'panel.splittable': {
 		one: 'Deze vorm bestaat uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.',
 		other: 'Deze {n} vormen bestaan uit {pieces} losse stukken. Een export uit een CAD-programma is vaak één pad; los aan te klikken zijn de stukken pas na het splitsen.'
@@ -913,7 +934,10 @@ export const nl: Catalogue = {
 	'panel.noLayers': 'Nog geen lagen. Een laag is een bewerking — snijden, graveren of rasteren — met een eigen snelheid en vermogen. Maak er hieronder een aan; selecteer daarna een vorm om hem erin te zetten.',
 	'panel.layer.dragAria': 'Volgorde van {label} — sleep, of gebruik de pijltjestoetsen',
 	'panel.layer.dragTitle': 'Sleep om te herordenen (of pijltje omhoog/omlaag). Rechterklik voor eerder of later branden.',
-	'panel.layer.chipTitle': 'Laag {n} van {total} — instellingen en kleur',
+	'layer.named': 'Laag {n} · {label}',
+	'panel.layer.chipTitle': 'Laag {n} van {total} — klik voor de kleur van deze laag',
+	'panel.layer.chipAria': 'Kleur van laag {label}',
+	'panel.layer.openTitle': 'De instellingen van {label}: kleur, naam, soort bewerking en brandvolgorde',
 	'panel.layer.openAria': 'Laag {label} openen',
 	'panel.layer.count': {
 		one: '1 vorm in deze laag',
@@ -924,7 +948,7 @@ export const nl: Catalogue = {
 	'panel.layer.burnsAria': 'Meebranden voor {label}',
 	'panel.layer.moreTitle': 'Meer voor {label} — of rechterklik op de rij',
 	'panel.layer.moreAria': 'Meer voor {label}',
-	'panel.layer.valuesTitle': 'Snelheid, vermogen en passes — klik om ze bij te stellen',
+	'panel.layer.valuesTitle': 'Snelheid, vermogen en passes: {values} — klik om ze bij te stellen',
 	'panel.layer.valuesAria': 'Instellingen van {label}: {values}',
 	'panel.layer.speedAria': 'Snelheid van {label} in mm per seconde',
 	'panel.layer.powerAria': 'Vermogen van {label} in procent',
@@ -1105,7 +1129,6 @@ export const nl: Catalogue = {
 	'library.onlyMaterial.why': '— van dit vel',
 	'library.onlyMachine': 'Alleen {machine}',
 	'library.applyTo': 'Toepassen op',
-	'library.layerOption': 'Laag {n} · {label}',
 	'library.noLayer': 'Er is nog geen laag om een preset op te zetten. Maak er een aan in de tab Lagen; daarna zet één tik de snelheid en het vermogen erop.',
 	'library.material.placeholder': 'bijv. Multiplex berken',
 	'library.welcome.title': 'Nog geen materialen',
@@ -1564,8 +1587,8 @@ export const nl: Catalogue = {
 		other: '{n} vormen hebben {count} bruggen van {length} mm gekregen; {skipped} zijn overgeslagen, want dat soort vorm draagt geen bruggen.'
 	},
 	'notice.bridges.cleared': {
-		one: 'De bruggen zijn weg bij één vorm; de snede sluit weer.',
-		other: 'De bruggen zijn weg bij {n} vormen; de snede sluit weer.'
+		one: 'De bruggen zijn weg bij één vorm.',
+		other: 'De bruggen zijn weg bij {n} vormen.'
 	},
 	'notice.fill.skipped': {
 		one: 'Eén overgeslagen: een lijn heeft geen binnenkant.',
@@ -1865,6 +1888,7 @@ export const nl: Catalogue = {
 	'shape.text': 'Tekst',
 	'shape.image': 'Afbeelding',
 	'shape.group': 'Groep',
+	'shape.groupOf': 'Groep van {n} vormen',
 	'error.searchFailed': 'Zoeken mislukte.',
 	'error.insertFailed': 'Invoegen mislukte.',
 	'error.importFailed': 'Importeren mislukte.',
@@ -1916,14 +1940,14 @@ export const nl: Catalogue = {
 	'field.increase': '{label} verhogen',
 	'phone.bedAria.size': 'Bed {width} bij {height} millimeter',
 	'phone.bedAria.empty': 'leeg',
-	'phone.bedAria.noLayer': '{n} in geen laag',
+	'phone.bedAria.silent': '{n} branden niet mee',
 	'phone.bedAria.offBed': '{n} buiten het bed',
 	'phone.bedAria.offSheet': '{n} buiten het vel',
 	'phone.bedAria.head': 'kop op {position}',
 	'phone.head': 'Kop',
 	'phone.onTheBed': 'Op het bed',
 	'phone.nothing': 'niets',
-	'phone.noLayer': ', {n} in geen laag',
+	'phone.silent': ', {n} branden niet mee',
 	'phone.lastSeen': 'Dit is de laatste stand die we gezien hebben.',
 	'phone.unplugged': 'Er hangt geen machine aan de server. Controleer of hij aanstaat en of de kabel erin zit.',
 	'phone.idle': 'Niets aan het branden. Een job start je op de desktop.',
@@ -2248,7 +2272,7 @@ export const nl: Catalogue = {
 	'job.rotary.chuck': 'De rotary staat aan: een klauwplaat van {diameter} mm, Y maal {factor}.',
 	'job.rotary.roller': 'De rotary staat aan: {circumference} mm rond, Y maal {factor}.',
 	'job.rotary.frame':
-		'Op een rotary draait het kader het object; de kop komt bijna niet over het bed.',
+		'Kader tonen, in de bovenbalk, draait het object in plaats van over het bed te gaan.',
 	'job.home.rotary.title': 'Homen met de rotary erin?',
 	'job.home.rotary.body':
 		'Homen stuurt de kop over het bed en de rotary in. Ga alleen door als de rotary eruit is of de kop de hoek vrij kan bereiken.',

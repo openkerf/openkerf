@@ -95,6 +95,7 @@
 				placeholder={t('library.material.placeholder')}
 				aria-label={t('gen.text')}
 			/>
+			<button class="btn" onclick={() => (adding = false)}>{t('common.cancel')}</button>
 			<button
 				class="btn primary"
 				disabled={!fresh.trim() || library.busy}
@@ -103,7 +104,6 @@
 			>
 				{t('sheetMat.add')}
 			</button>
-			<button class="btn" onclick={() => (adding = false)}>{t('common.cancel')}</button>
 		</div>
 	{:else}
 		<button class="link" onclick={() => (adding = true)}>{t('sheetMat.notListed')}</button>
@@ -158,7 +158,9 @@
 		{/if}
 	</p>
 
-	<div class="actions">
+	<!-- This lives inside somebody else's dialog, so it cannot use the window's footer
+	     slot; it wears the shared row on a row of its own. -->
+	<div class="ask-actions">
 		<button class="btn primary" onclick={() => onDone?.()}>{t('common.done')}</button>
 	</div>
 </div>
@@ -233,8 +235,5 @@
 		color: var(--text-2);
 	}
 	.error { margin: 0; color: var(--danger); font-size: var(--text-sm); }
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-	}
+
 </style>

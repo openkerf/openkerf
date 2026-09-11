@@ -234,8 +234,11 @@
 	{#if ask?.kind === 'overwrite'}
 		<p class="ask" role="alert">
 			{t('projects.overwrite.ask', { name: ask.name })}
-			<button class="btn danger" onclick={() => save(true)}>{t('projects.overwrite')}</button>
-			<button class="btn" onclick={() => (ask = null)}>{t('common.cancel')}</button>
+			<!-- The shared ask row: the way out first, the answer that overwrites last. -->
+			<span class="ask-actions">
+				<button class="btn" onclick={() => (ask = null)}>{t('common.cancel')}</button>
+				<button class="btn danger" onclick={() => save(true)}>{t('projects.overwrite')}</button>
+			</span>
 		</p>
 	{:else if ask?.kind === 'rename'}
 		<div class="ask rename" role="alert">
@@ -243,19 +246,23 @@
 				<span>{t('projects.rename.to', { name: ask.from })}</span>
 				<input class="rename-name" type="text" maxlength={MAX_NAME} value={ask.typed} oninput={renameTyped} />
 			</label>
-			<button
-				class="btn primary"
-				disabled={!ask.typed || ask.typed === ask.from}
-				title={!ask.typed ? t('reason.needsProjectName') : ask.typed === ask.from ? t('projects.rename.same') : undefined}
-				onclick={applyRename}
-			>{t('projects.rename')}</button>
-			<button class="btn" onclick={() => (ask = null)}>{t('common.cancel')}</button>
+			<span class="ask-actions">
+				<button class="btn" onclick={() => (ask = null)}>{t('common.cancel')}</button>
+				<button
+					class="btn primary"
+					disabled={!ask.typed || ask.typed === ask.from}
+					title={!ask.typed ? t('reason.needsProjectName') : ask.typed === ask.from ? t('projects.rename.same') : undefined}
+					onclick={applyRename}
+				>{t('projects.rename')}</button>
+			</span>
 		</div>
 	{:else if ask?.kind === 'delete'}
 		<p class="ask" role="alert">
 			{t('projects.delete.ask', { name: ask.name })}
-			<button class="btn danger" onclick={applyDelete}>{t('projects.delete')}</button>
-			<button class="btn" onclick={() => (ask = null)}>{t('common.cancel')}</button>
+			<span class="ask-actions">
+				<button class="btn" onclick={() => (ask = null)}>{t('common.cancel')}</button>
+				<button class="btn danger" onclick={applyDelete}>{t('projects.delete')}</button>
+			</span>
 		</p>
 	{/if}
 </Dialog>
@@ -277,6 +284,9 @@
 	.saveas label { display: grid; gap: 4px; flex: 1; }
 	.saveas input { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-field); font: inherit; }
 	.ask { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-top: var(--space-3); }
+	/* The question takes the room it needs and the answers hang at the end of the
+	   line — the same row as in every other window (`.ask-actions` in tokens.css). */
+	.ask .ask-actions { flex: 1; }
 	.ask.rename label { display: grid; gap: 4px; flex: 1; min-width: 180px; }
 	.ask.rename input { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-field); font: inherit; width: 100%; }
 	.hint, .error { color: var(--text-2); }

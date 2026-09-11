@@ -431,7 +431,9 @@
 					visible: streek.visible,
 					// "Does not burn" covers two cases: in no layer at all, or in a layer
 					// set to "does not burn". To somebody standing beside the machine that
-					// is the same message.
+					// is the same message — but it used to be *named* after the first of
+					// the two ("2 in no layer"), which is a different mistake with a
+					// different repair. So the merged case gets the merged word (P11).
 					quiet: streek.dashed || streek.dimmed
 				};
 			})
@@ -510,7 +512,7 @@
 		if (shapes.length === 0) parts.push(t('phone.bedAria.empty'));
 		else {
 			parts.push(t('preview.shapesBurn', { n: burns }));
-			if (silentcount) parts.push(t('phone.bedAria.noLayer', { n: silentcount }));
+			if (silentcount) parts.push(t('phone.bedAria.silent', { n: silentcount }));
 		}
 		if (outsiders.bed) parts.push(t('phone.bedAria.offBed', { n: outsiders.bed }));
 		if (outsiders.sheet) parts.push(t('phone.bedAria.offSheet', { n: outsiders.sheet }));
@@ -642,7 +644,7 @@
 							{t('phone.nothing')}
 						{:else}
 							{t('preview.shapesBurn', { n: burns })}{#if silentcount}<span class="stilnoot"
-									>{t('phone.noLayer', { n: silentcount })}</span
+									>{t('phone.silent', { n: silentcount })}</span
 								>{/if}
 						{/if}
 					</dd>
@@ -890,6 +892,21 @@
 			<p class="failure" role="alert">{control.error}</p>
 		{/if}
 		<div class="buttons">
+			<!-- Stop stands on the left here as it does in the top bar and in the panel's
+			     running block: one place for the button that cannot be undone, on every
+			     screen that carries it.
+			     Without a connection this tap arrives nowhere. A red button that looks
+			     pressable and does nothing is the most dangerous thing on this screen:
+			     you press, you walk away, and you believe it stops. -->
+			<button
+				class="brake stop"
+				class:scherp={Boolean(current) && connected}
+				disabled={control.needsToken || !connected}
+				title={control.needsToken ? t('reason.needsToken') : t('transport.noServer.stop')}
+				onclick={() => control.stop()}
+			>
+				{t('transport.stop')}
+			</button>
 			{#if quiet}
 				<button
 					class="brake resume"
@@ -924,18 +941,6 @@
 					{pauzeGevraagd ? t('phone.pausing') : t('transport.pause')}
 				</button>
 			{/if}
-			<!-- Without a connection this tap arrives nowhere. A red button that looks
-			     pressable and does nothing is the most dangerous thing on this screen:
-			     you press, you walk away, and you believe it stops. -->
-			<button
-				class="brake stop"
-				class:scherp={Boolean(current) && connected}
-				disabled={control.needsToken || !connected}
-				title={control.needsToken ? t('reason.needsToken') : t('transport.noServer.stop')}
-				onclick={() => control.stop()}
-			>
-				{t('transport.stop')}
-			</button>
 		</div>
 	</div>
 </div>

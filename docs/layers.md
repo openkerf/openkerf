@@ -32,6 +32,11 @@ A shape in no layer at all is drawn as a dotted grey outline, and the Edit tab
 says **in no layer**, with the tooltip **This shape does not burn**. Nothing
 happens to it during a job.
 
+A shape whose layers are all switched off is a different case with a different way
+out: switch the layer back on. The Edit tab keeps the layer chip, colours it amber
+and puts **does not burn** under the name — the same three words the layer's own
+row carries, and the same three the pre-flight puts across that layer's row.
+
 Before you have made any layer, the Layers tab says:
 
 > No layers yet. A layer is an operation — cut, engrave or raster — with a speed
@@ -42,8 +47,8 @@ Before you have made any layer, the Layers tab says:
 ![The Layers tab with several layers, each a numbered coloured chip, a name, the number of shapes in it, a burn switch and fields for speed, power and passes.](images/09-layers.png)
 
 Every layer is one row. From left to right: a grip for the order, a coloured chip
-with a number, the layer's name, how many shapes are in it, a switch for burning
-along, and a **⋯** button for the row menu. Under or beside that sit the three
+with a number, the layer's name behind a fold marker, how many shapes are in it, a
+switch for burning along, and a **⋯** button for the row menu. Under or beside that sit the three
 fields: speed in mm/s, power in per cent, and the number of passes.
 
 The number on the chip is the burn order, and above the list it says so once:
@@ -53,7 +58,10 @@ The number after the name is the count of shapes in that layer; its tooltip read
 **1 shape in this layer** or **{n} shapes in this layer**. A zero there means the
 layer will do nothing.
 
-Clicking the coloured chip unfolds the layer's settings. Right-clicking the row,
+Clicking the layer's name unfolds its settings — the same marker, in front of the
+name, as every other fold in OpenKerf. The coloured chip beside it opens the ten
+colour swatches and what this colour has remembered, and nothing else.
+Right-clicking the row,
 or clicking **⋯**, opens the row menu: **Select the shape in this layer**, **Put
 selection in this layer**, **Burns along**, **Visible on the canvas**, **Burn
 earlier**, **Burn later**, **Settings…**, **Choose a material setting…** and
@@ -107,7 +115,8 @@ After one of those moves a short line appears above the canvas, for example
 **3 shapes into a new layer “Cut”, taken out of 2 assignments.**
 
 The Edit tab always shows which layers the current selection sits in, as coloured
-chips with the layer name, so it matches what you see on the bed.
+chips carrying the layer's number and its name, so it matches both the number beside
+the shape on the bed and the chip in the row here.
 
 ## The colour strip and its memory
 
@@ -149,6 +158,8 @@ lettering is on it.
 Three ways to change it:
 
 - drag the grip at the left of the row, or put focus on it and use the arrow keys;
+  the grip is not in the compact list on a narrow or a touch screen, where the row
+  has no room for it beside the name;
 - **Burn earlier** / **Burn later** in the row menu;
 - **↑ Earlier** and **↓ Later** in the open layer's fold.
 
@@ -167,7 +178,11 @@ The three fields sit in the row itself, deliberately: adjusting a value next to 
 running machine should not cost a submenu. Speed is in mm/s and goes down to
 0.1; power is a percentage between 1 and 100; passes is a whole number from 1.
 In compact mode the row shows the three as one readable line and the fields move
-into the fold.
+into the fold. On a narrow or a touch screen that line is cut off at the end when
+the row is too narrow for both it and the layer's name — the row stays one line
+high instead of growing. Hovering the line shows the three values whole, and
+clicking them opens the fold, where they stand as fields. The layer name is cut
+the same way at that width; its own tooltip carries it in full.
 
 Changing speed or power also writes the memory for that layer's colour, so the
 strip under the bed reports the new figures at once.

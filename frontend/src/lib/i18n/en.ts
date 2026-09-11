@@ -506,6 +506,25 @@ export const en = {
 	'panel.aria': 'Properties',
 	'panel.collapse': 'Collapse panel',
 	'panel.expand': 'Expand panel',
+	'panel.rotate.step': 'Rotate {angle}°',
+	'panel.rotate.stepAria': 'Rotate {angle} degrees',
+	// The caption of a text, quoted, for when the name above it had to cut it short.
+	// The quotation marks live here and only here — they used to be hard-coded in the
+	// markup as well, and a language that quotes differently could only fix one of them.
+	'panel.textValue': '“{text}”',
+	// A selection whose shapes are in different kinds of layer: the sentence that would
+	// otherwise be said is true of some of them. `{n}` is how many are not cut, because
+	// that is the number the verb follows; `{shapes}` is the whole selection.
+	'panel.bridges.offSome': {
+		one: 'No bridges — small gaps that hold the part in the sheet. 1 of these {shapes} shapes is not in a cut layer, so there they change nothing; where the cut does close, the part comes loose.',
+		other: 'No bridges — small gaps that hold the part in the sheet. {n} of these {shapes} shapes are not in a cut layer, so there they change nothing; where the cut does close, the part comes loose.'
+	},
+	'panel.bridges.notCutSome': {
+		one: '1 of these {shapes} shapes is not in a cut layer, so the bridges do nothing there.',
+		other: '{n} of these {shapes} shapes are not in a cut layer, so the bridges do nothing there.'
+	},
+	'panel.size.widthPositive': 'A width has to be more than 0 mm.',
+	'panel.size.heightPositive': 'A height has to be more than 0 mm.',
 	// ── Canvas ────────────────────────────────────────────────────────────────────
 	'canvas.headUnknown': 'Position of the laser head unknown',
 	'canvas.headAt': 'Laser head at {x} by {y} millimetres',
@@ -521,6 +540,13 @@ export const en = {
 	'canvas.snap.off': 'Snapping is off — hold Alt to use it for one move',
 	'canvas.bedSize': 'bed {width} × {height} mm',
 	'canvas.empty.body': 'Use Import in the top bar for an existing design, or pick a shape on the left and click the bed.',
+	// Below 1200px the bar has no Import — it is a row in the rail's More menu — so the
+	// sentence names the door that is on the screen it is shown on. A whole second
+	// sentence, not two glued halves. Gauntlet P33.
+	'canvas.empty.body.tablet': 'Use More on the left for an existing design, or pick a shape above it and click the bed.',
+	// The Edit panel's own empty text sent the reader to the same absent button; kept
+	// beside its twin so the pair is read together.
+	'panel.empty.tablet': 'Nothing on the bed yet. More on the left brings in an SVG, DXF or image; with the tools above it you draw your own.',
 	// Alt+click walks down a pile of shapes; this says where you are in it.
 	'canvas.deeper': 'Shape {index} of {total} under the pointer — Alt+click for the next.',
 	'canvas.under': 'Under the pointer',
@@ -560,7 +586,6 @@ export const en = {
 	'canvas.burnInTiles': 'Burn in tiles?',
 
 	// ── Layer palette ─────────────────────────────────────────────────────────────
-	'palette.layerNamed': 'layer {n} · {label}',
 	'palette.noLayerYetRemembered': 'no layer yet — starts from what this colour did before',
 	'palette.noLayerYetBlank': 'no layer yet — starts blank',
 	'palette.noLayerYet': 'no layer yet',
@@ -584,7 +609,6 @@ export const en = {
 	'palette.newWork': 'new work',
 
 	// ── Job panel ─────────────────────────────────────────────────────────────────
-	'job.frame.title': 'Send the head around the outline of your work — the laser stays off',
 	'job.origin.clearTitle': 'Back to the machine\'s own zero',
 	'job.noRaster.title': 'This server cannot burn raster layers.',
 	'job.autofocus': 'Autofocus is started on the machine itself.',
@@ -624,7 +648,6 @@ export const en = {
 	'job.jog.left': 'Move left',
 	'job.keepSpot': 'Keep this spot',
 	'job.checklist.title': 'Run through this',
-	'job.estimatedTime': 'Estimated time',
 	// A series is one plate on the bed and an afternoon in front of you, and the clock
 	// above this line is about the plate. The count and the total both come from
 	// `/api/job/estimate` (`burns_left`, `seconds_total`), so the panel never
@@ -653,9 +676,17 @@ export const en = {
 	'job.upload.send': 'Send',
 	'job.upload.sending': 'Sending…',
 	'job.upload.done': '{name} is in the machine. Start it on the panel.',
+	// The state of a feature that is set up elsewhere, as a value beside its name — the
+	// way the layer table says a number. What "off" means is behind the label; a
+	// paragraph about a feature nobody has switched on is the panel's most expensive
+	// space spent on the one thing that is not happening.
+	'job.state.off': 'Off',
+	// On the buttons the keys work, as the second line of their tooltip. It used to be a
+	// paragraph under them, in burning, paused, queued and done alike, while both keys
+	// were already on the buttons themselves.
+	'job.keysHere': 'The key works anywhere in the app, as long as this window is in front — outside it a browser cannot receive keystrokes.',
 	'job.adjust.reset': 'Reset',
 	'job.checklist.lid': 'Lid closed',
-	'job.calculating': 'calculating…',
 	'job.origin': 'Zero point',
 	'job.move': 'Move',
 	'job.home': 'Home',
@@ -676,6 +707,7 @@ export const en = {
 	'job.origin.set': 'Zero point here',
 	'job.origin.reset': 'Zero point here again',
 	'job.notResponding': 'The machine is not responding. This job goes into the queue and only starts once the connection is there — switch it on or check the cable.',
+	'job.estimating': 'A new estimated time is being worked out.',
 	'job.estimateSlow': 'The engine builds the whole cut plan to estimate this; on a heavy design that takes a moment. Starting works regardless — the machine does not wait for it.',
 	'job.queueAhead': {
 		one: 'There is already 1 job in the queue; this one goes behind it.',
@@ -695,7 +727,6 @@ export const en = {
 	'job.elapsed': '{time} elapsed',
 	'job.clearQueue': 'Clear queue ({n})',
 	'job.queueEmpty': 'The queue is already empty',
-	'job.keysWork': '{pause} and {stop} work everywhere in the app, as long as this window is in front — outside it a browser cannot receive keystrokes.',
 	'job.machineControls': 'Operate machine',
 	'job.machineControls.notNow': 'not during a job',
 	'job.jog.z': 'Head {step} mm {direction}',
@@ -753,6 +784,7 @@ export const en = {
 	'preview.countOutsideBed': '{n} lie outside the bed',
 	'preview.countOutsideSheet': '{n} fall outside the sheet',
 	'preview.countNoLayer': '{n} sit in no layer',
+	'preview.countLayerOff': '{n} sit in a layer that does not burn',
 	'preview.sheetFallback': 'the sheet',
 	'preview.whatBurns': 'What gets burned',
 	'preview.bigger': 'View larger',
@@ -776,6 +808,10 @@ export const en = {
 	'preview.silent': {
 		one: 'One shape sits in no layer that burns — dashed grey above. The machine skips it.',
 		other: '{n} shapes sit in no layer that burns — dashed grey above. The machine skips them.'
+	},
+	'preview.silentOff': {
+		one: 'One shape is in a layer that is switched off ({layers}) — dashed grey above. The machine skips it.',
+		other: '{n} shapes are in a layer that is switched off ({layers}) — dashed grey above. The machine skips them.'
 	},
 
 	// ── The cut path (gap S1 / L1) ────────────────────────────────────────────────
@@ -861,7 +897,6 @@ export const en = {
 	'jobStart.title': 'Job started',
 
 	// ── Design panel ──────────────────────────────────────────────────────────────
-	'panel.design': 'Design',
 	'panel.selection': 'Selection',
 	'panel.elements': {
 		one: '1 element',
@@ -871,7 +906,7 @@ export const en = {
 	'panel.shapes': '{n} shapes',
 	'panel.noLayer': 'in no layer',
 	'panel.noLayer.title': 'This shape does not burn',
-	'panel.layerChip': 'Layer {n}: {label}',
+	'panel.layerChip.off': 'Layer {n} · {label} — this layer is switched off, so it does not burn.',
 	'panel.clear': 'Clear',
 	'panel.widthShort': 'W',
 	'panel.heightShort': 'H',
@@ -888,24 +923,30 @@ export const en = {
 	'panel.angle.mixed': 'These shapes sit at different angles — turn them with the steps',
 	'panel.angle.title': 'The current angle. Type a number to turn exactly to it.',
 	'panel.angle.mixedNote': 'These shapes sit at different angles. The steps work; typing an angle would set them all the same, and that is rarely what you mean.',
-	'panel.rotate.step': 'Rotate {angle}°',
-	'panel.rotate.stepAria': 'Rotate {angle} degrees',
 	'panel.anchor.since': 'Since you grabbed it: {what}',
 	'panel.anchor.mirrored': 'Mirrored with respect to the original',
 	'panel.anchor.back': 'Put back',
 	'panel.anchor.backTitle': 'Back to how it was when you clicked this selection',
 	'panel.inEffect': 'Part of effect: {label}',
 	'panel.bridges': 'Bridges',
-	'panel.bridges.on': 'Leave gaps in the cut',
+	'panel.bridges.on': 'Leave bridges in the cut',
 	'panel.bridges.count': 'Number',
 	'panel.bridges.length': 'Length per bridge',
-	'panel.bridges.off': 'No bridges: this shape comes loose the moment the cut closes.',
-	'panel.bridges.explain': '{count} gaps of {length} mm, spread over a contour of {total} mm. What is left to cut is {cut} mm.',
-	'panel.bridges.explainTightest': 'Each of these {n} shapes gets {count} gaps of {length} mm. The tightest contour among them is {total} mm long, which leaves {cut} mm to cut there.',
+	// One noun for the whole block — bridges, not gaps — and this is the sentence that says
+	// once what one is, because it is the one you read before you have any.
+	'panel.bridges.off': {
+		one: 'No bridges — small gaps that hold the part in the sheet — so this shape comes loose the moment the cut closes.',
+		other: 'No bridges — small gaps that hold the part in the sheet — so these {n} shapes come loose the moment the cut closes.'
+	},
+	'panel.bridges.explain': '{count} bridges of {length} mm, spread over a contour of {total} mm. What is left to cut is {cut} mm.',
+	'panel.bridges.explainTightest': 'Each of these {n} shapes gets {count} bridges of {length} mm. The tightest contour among them is {total} mm long, which leaves {cut} mm to cut there.',
 	'panel.bridges.places': 'At {places} percent along the contour, each {length} mm long.',
 	'panel.bridges.notSupported': 'This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path — not on a line, text or an image.',
 	'panel.bridges.mixed': 'These shapes have different bridges. Setting a number here gives them all the same.',
-	'panel.bridges.notCut': 'This shape is not in a cut layer, so the gaps change nothing yet. They only matter to a cut.',
+	'panel.bridges.notCut': {
+		one: 'This shape is not in a cut layer, so bridges change nothing yet. They only matter to a cut.',
+		other: 'These {n} shapes are not in a cut layer, so bridges change nothing yet. They only matter to a cut.'
+	},
 	'panel.splittable': {
 		one: 'This shape consists of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.',
 		other: 'These {n} shapes consist of {pieces} loose pieces. An export from a CAD program is often one path; the pieces can only be clicked separately after splitting.'
@@ -946,7 +987,13 @@ export const en = {
 	'panel.noLayers': 'No layers yet. A layer is an operation — cut, engrave or raster — with a speed and power of its own. Make one below; then select a shape to put into it.',
 	'panel.layer.dragAria': 'Order of {label} — drag, or use the arrow keys',
 	'panel.layer.dragTitle': 'Drag to reorder (or arrow up/down). Right-click for burning earlier or later.',
-	'panel.layer.chipTitle': 'Layer {n} of {total} — settings and colour',
+	// How a layer is named where it does not stand in its own row: the library's
+	// "Apply to", the Layer submenu, the palette's tooltip and the chip's title. Two
+	// layers called "Engrave" are told apart by that number and by nothing else.
+	'layer.named': 'Layer {n} · {label}',
+	'panel.layer.chipTitle': 'Layer {n} of {total} — click for the colour of this layer',
+	'panel.layer.chipAria': 'Colour of layer {label}',
+	'panel.layer.openTitle': 'The settings of {label}: colour, name, kind of operation and burn order',
 	'panel.layer.openAria': 'Open layer {label}',
 	'panel.layer.count': {
 		one: '1 shape in this layer',
@@ -957,7 +1004,7 @@ export const en = {
 	'panel.layer.burnsAria': 'Burn along for {label}',
 	'panel.layer.moreTitle': 'More for {label} — or right-click the row',
 	'panel.layer.moreAria': 'More for {label}',
-	'panel.layer.valuesTitle': 'Speed, power and passes — click to adjust them',
+	'panel.layer.valuesTitle': 'Speed, power and passes: {values} — click to adjust them',
 	'panel.layer.valuesAria': 'Settings of {label}: {values}',
 	'panel.layer.speedAria': 'Speed of {label} in mm per second',
 	'panel.layer.powerAria': 'Power of {label} in per cent',
@@ -1140,7 +1187,6 @@ export const en = {
 	'library.onlyMaterial.why': '— from this sheet',
 	'library.onlyMachine': 'Only {machine}',
 	'library.applyTo': 'Apply to',
-	'library.layerOption': 'Layer {n} · {label}',
 	'library.noLayer': 'There is no layer to put a preset on yet. Make one in the Layers tab; after that one tap puts the speed and power on it.',
 	'library.material.placeholder': 'e.g. birch plywood',
 	'library.welcome.title': 'No materials yet',
@@ -1628,8 +1674,8 @@ export const en = {
 		other: '{n} shapes got {count} bridges of {length} mm; {skipped} were skipped, because their type carries no bridges.'
 	},
 	'notice.bridges.cleared': {
-		one: 'The bridges are gone from one shape; the cut closes again.',
-		other: 'The bridges are gone from {n} shapes; the cut closes again.'
+		one: 'The bridges are gone from one shape.',
+		other: 'The bridges are gone from {n} shapes.'
 	},
 	'notice.fill.skipped': {
 		one: 'One was skipped: a line has no inside.',
@@ -1958,6 +2004,7 @@ export const en = {
 	'shape.text': 'Text',
 	'shape.image': 'Image',
 	'shape.group': 'Group',
+	'shape.groupOf': 'Group of {n} shapes',
 	'error.searchFailed': 'The search failed.',
 	'error.insertFailed': 'Inserting it failed.',
 	'error.importFailed': 'Importing it failed.',
@@ -2014,14 +2061,14 @@ export const en = {
 	'field.increase': 'Increase {label}',
 	'phone.bedAria.size': 'Bed {width} by {height} millimetres',
 	'phone.bedAria.empty': 'empty',
-	'phone.bedAria.noLayer': '{n} in no layer',
+	'phone.bedAria.silent': '{n} do not burn',
 	'phone.bedAria.offBed': '{n} off the bed',
 	'phone.bedAria.offSheet': '{n} off the sheet',
 	'phone.bedAria.head': 'head at {position}',
 	'phone.head': 'Head',
 	'phone.onTheBed': 'On the bed',
 	'phone.nothing': 'nothing',
-	'phone.noLayer': ', {n} in no layer',
+	'phone.silent': ', {n} do not burn',
 	'phone.lastSeen': 'This is the last state we saw.',
 	'phone.unplugged': 'There is no machine attached to the server. Check whether it is on and the cable is in.',
 	'phone.idle': 'Nothing is burning. You start a job on the desktop.',
@@ -2353,7 +2400,7 @@ export const en = {
 	'job.rotary.chuck': 'The rotary is on: a chuck of {diameter} mm, Y scaled by {factor}.',
 	'job.rotary.roller': 'The rotary is on: {circumference} mm round, Y scaled by {factor}.',
 	'job.rotary.frame':
-		'On a rotary the frame turns the object; the head hardly crosses the bed.',
+		'Show frame, in the top bar, turns the object rather than crossing the bed.',
 	'job.home.rotary.title': 'Home with the rotary fitted?',
 	'job.home.rotary.body':
 		'Homing drives the head across the bed and into the rotary. Only continue if the rotary is out or the head can reach the corner freely.',

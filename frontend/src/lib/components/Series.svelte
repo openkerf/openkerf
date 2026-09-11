@@ -1000,9 +1000,11 @@
 				</div>
 				<p class="fine">{t('series.startAt.hint')}</p>
 
-				<!-- Buttons at the bottom, primary on the right, helper on the same line
-				     to the left of it — and never across the full width. -->
-				<div class="knoppen">
+				<!-- The shared ask row (`.ask-actions` in tokens.css): the way out — here
+				     the button that detaches the list — first, the primary last. It sticks
+				     to the bottom of the column it scrolls in, which is the one thing said
+				     locally. -->
+				<div class="knoppen ask-actions">
 					{#if attached}
 						<button
 							class="btn"
@@ -1311,9 +1313,6 @@
 		position: sticky;
 		bottom: calc(-1 * var(--space-4));
 		z-index: 2;
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-2);
 		margin: var(--space-2) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
 		padding: var(--space-2) var(--space-4) var(--space-4);
 		background: var(--surface-1);

@@ -12,7 +12,14 @@
 	 * palette knows what you last did, a preset knows what has been burned. Hence
 	 * it says "remembered", never "verified".
 	 */
-	import { inkOn, LAYER_COLORS, stripColours, type DesignStore } from '$lib/design.svelte';
+	import {
+		inkOn,
+		LAYER_COLORS,
+		layerNamed,
+		layerNumber,
+		stripColours,
+		type DesignStore
+	} from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { EditController } from '$lib/edits.svelte';
 
@@ -45,8 +52,7 @@
 	function layerOf(colour: string) {
 		const op = design.layerWithColor(colour);
 		if (!op) return null;
-		const number = design.operations.filter((o) => !o.grid).findIndex((o) => o.id === op.id);
-		return { op, number: number < 0 ? null : number + 1 };
+		return { op, number: layerNumber(design, op.id) };
 	}
 
 	function values(colour: string): string | null {
@@ -67,7 +73,7 @@
 		const found = layerOf(colour);
 		const figures = values(colour);
 		const where = found
-			? t('palette.layerNamed', { n: found.number, label: found.op.label })
+			? layerNamed(found.number ?? 0, found.op.label)
 			: figures
 				? t('palette.noLayerYetRemembered')
 				: t('palette.noLayerYetBlank');
@@ -137,7 +143,7 @@
 			<span class="dot" style="background: {shown}"></span>
 			<span class="who">
 				{#if found}
-					{t('palette.layerNamed', { n: found.number, label: found.op.label })}
+					{layerNamed(found.number ?? 0, found.op.label)}
 				{:else if shown === active}
 					{t('palette.newWork')}
 				{:else}

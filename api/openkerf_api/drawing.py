@@ -1979,7 +1979,17 @@ class Drawing:
         applied = {}
         with self.elements.undoscope("Change layer"):
             if "label" in fields and fields["label"] is not None:
-                operation.label = str(fields["label"])
+                # A layer with no name is a layer you cannot point at. The library
+                # refuses the same act for a material (`library.add_material`), and the
+                # panel's own list would show a nameless row you can only tell from its
+                # neighbour by the number on its chip. Measured before this: PATCH with
+                # "   " answered 200 and left the layer without a name (P12).
+                name = str(fields["label"]).strip()
+                if not name:
+                    raise DesignError(
+                        "A layer needs a name.", code="layer.needsName"
+                    )
+                operation.label = name
                 applied["label"] = operation.label
             if fields.get("speed") is not None:
                 operation.speed = _positive(fields["speed"], "speed")
