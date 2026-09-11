@@ -16,13 +16,16 @@ The app stays outside the one handling that burns; there is deliberately no
 route in this module that begins a job.
 """
 
+import queue
 import time
+from contextlib import contextmanager
 
 from meerk40t.ruida.rdjob import parse_commands
 
 from .busy import sending_a_file, the_line_is_in_use
 from .commands import CommandRunner
 from .edits import DesignError
+from .status import _attr
 
 #: The way the engine chops its own jobs (`ruida/controller.py:83`,
 #: `divide_data_into_queue`, which fills a block up to 1000 bytes and always cuts
@@ -177,6 +180,15 @@ class RuidaUpload:
     #: measured and well under the time in which somebody decides the app has
     #: hung — and past it the refusal is the same sentence it always was.
     line_gap_seconds = 8.0
+
+    #: How long to wait for the line to come free before refusing it outright.
+    #:
+    #: Short on purpose. The only other holder is the engine's own `_data_sender`
+    #: (`ruida/controller.py:129`), and that holds it for a whole file — waiting
+    #: that out is not what somebody pressing a button wants, and the refusal that
+    #: says so is more use than a spinner. The status monitor takes it for the
+    #: length of one `put` (`:173-183`), which is microseconds.
+    line_claim_seconds = 2.0
 
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
@@ -337,6 +349,67 @@ class RuidaUpload:
         if pending is not None and not pending.empty():
             return True
         return bool(getattr(session, "is_busy", False))
+
+    @contextmanager
+    def _the_line_to_ourselves(self, session):
+        """Hold the status monitor off, and clear what it left in the way.
+
+        Why this is needed, measured on the machine on 11 September 2026 with the
+        `line` block of `/api/status` sampled 59 times a second: `send_q` stood at
+        48 packets and climbed to 51 over six seconds while `replies` did not move
+        once. This machine acknowledges every `GET_SETTING` and returns the data
+        for none, so the handshaker spends six reads of 0.25 s — 1.5 s — on each
+        one before giving up (`ruida/ruidasession.py:398-411`), while
+        `_status_monitor` puts a new one in every time the flags go clear
+        (`ruida/controller.py:172-184`). Over that window: 8 in, 5 out. So from
+        about a minute after the server starts the queue is never empty again,
+        `_line_is_busy` is true for ever, and every upload refuses with "stopped
+        taking the file" without one byte having gone out. Which is exactly the
+        report this came from, and why sending worked right after a restart and
+        never again.
+
+        The lock is the engine's own answer to the same problem: `_data_sender`
+        acquires it for the length of a file (`controller.py:129`) and the monitor
+        waits on it (`:173`). Taken with a timeout rather than through
+        `pause_monitor()`, which is a bare `acquire()` — four places release that
+        lock, and a call that cannot time out can hang the request for ever.
+
+        What is dropped are `GET_SETTING` reads whose answers nobody is waiting
+        for any more; nothing in the queue changes anything on the machine. The
+        count comes back so the caller can say how many, and because a number here
+        is the first sign that the machine has stopped answering at all.
+        """
+        controller = _attr(_attr(self._device(), "driver"), "controller")
+        lock = _attr(controller, "_job_lock")
+        if lock is None:
+            # A device the engine drives without this controller. Nothing to hold
+            # off, and nothing here may turn that into a refusal.
+            yield 0
+            return
+        if not lock.acquire(timeout=self.line_claim_seconds):
+            raise DesignError(
+                "This machine is already being sent something on this line. Wait "
+                "until that is done and press again; nothing has been sent.",
+                code="upload.lineInUse",
+            )
+        try:
+            yield self._clear_the_line(session)
+        finally:
+            lock.release()
+
+    @staticmethod
+    def _clear_the_line(session) -> int:
+        """Throw away what is queued ahead of us. Returns how many."""
+        pending = getattr(session, "send_q", None)
+        if pending is None:
+            return 0
+        dropped = 0
+        while True:
+            try:
+                pending.get_nowait()
+            except queue.Empty:
+                return dropped
+            dropped += 1
 
     def _wait_for_the_line(
         self, session, sent: int, chunks: int, announced: bool
@@ -611,6 +684,11 @@ class RuidaUpload:
                 code="upload.commandTooLong",
                 values={"block": oversized, "limit": CHUNK},
             )
+        with self._the_line_to_ourselves(session):
+            return self._send(session, packets, chunks, short, payload)
+
+    def _send(self, session, packets, chunks, short, payload) -> dict:
+        """The packets down the line, with the line already ours."""
         for index, packet in enumerate(packets):
             sent = max(0, index - 2)
             # Whether the *name* is out, which is a different question from how

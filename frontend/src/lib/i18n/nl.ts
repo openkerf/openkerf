@@ -2637,6 +2637,8 @@ export const nl: Catalogue = {
 		'Er staat een job op deze machine — hij brandt, of hij wacht in de rij om te beginnen. Wacht tot die klaar is, of stop hem: het bestand zou over dezelfde verbinding gaan die die job gebruikt. Er is niets verstuurd.',
 	'api.upload.busy':
 		'Naar deze machine wordt al een bestand gestuurd. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
+	'api.upload.lineInUse':
+		'Naar deze machine gaat al iets over deze lijn. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
 	'api.upload.emptyFile':
 		'De job kwam leeg uit, dus er is niets om te versturen. Er is niets verstuurd.',
 	'api.upload.commandTooLong':

@@ -2844,6 +2844,8 @@ export const en = {
 		'A job is on this machine — burning, or waiting in the queue to start. Wait until it is done, or stop it: the file would go down the same connection that job uses. Nothing has been sent.',
 	'api.upload.busy':
 		'This machine is already being sent a file. Wait until that one is done and press again; nothing has been sent.',
+	'api.upload.lineInUse':
+		'This machine is already being sent something on this line. Wait until that is done and press again; nothing has been sent.',
 	'api.upload.emptyFile': 'The job came out empty, so there is nothing to send. Nothing has been sent.',
 	'api.upload.commandTooLong':
 		'This job holds a single command of {block} bytes, and a block may be at most {limit}. The machine would silently keep only the first part of it, so nothing has been sent.',
