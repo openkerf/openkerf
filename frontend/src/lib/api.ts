@@ -63,6 +63,27 @@ export type Device = {
 	/** Pause pressed? `null` when this driver does not say. */
 	paused?: boolean | null;
 	connection?: Connection;
+	/**
+	 * What the flow control sees on the line to a Ruida, or `null` without a session.
+	 *
+	 * Instrumentation, and deliberately without a screen: a stalled upload says "the
+	 * machine stopped taking the file" for two different faults — packets still
+	 * queued, or a flag left standing — and from outside the engine's process they
+	 * look the same. These are the fields `RuidaUpload._line_is_busy` decides on. If
+	 * this ever grows a reader, it belongs in the job window beside that refusal.
+	 */
+	line?: {
+		busy: boolean | null;
+		queued: number | null;
+		ack_pending: boolean | null;
+		reply_pending: boolean | null;
+		sends: number | null;
+		acks: number | null;
+		naks: number | null;
+		replies: number | null;
+		enqs: number | null;
+		dropped: number | null;
+	} | null;
 	bed: Bed;
 	position: Position;
 	spooler: Spooler;
