@@ -95,7 +95,10 @@
 	 * a machine; it is therefore not a handshake.
 	 */
 	let unknown = $derived(
-		connected && machineState !== 'unplugged' && device?.connection?.state !== 'connected'
+		connected &&
+			machineState !== 'unplugged' &&
+			machineState !== 'faltering' &&
+			device?.connection?.state !== 'connected'
 	);
 	/**
 	 * Twee indicatoren, twee onderwerpen.
@@ -114,9 +117,14 @@
 			? t('status.machine.unknown')
 			: machineState === 'unplugged'
 				? t('status.machine.notConnected')
-				: unknown
-					? t('status.machine.connectionUnknown')
-					: t('status.machine.connected')
+				: // A machine that has just gone quiet is not an unknown one: it answered a
+					// moment ago and will answer again. Saying "unknown" about it is the
+					// vaguest of the four sentences here and the least true.
+					machineState === 'faltering'
+					? t('status.machine.faltering')
+					: unknown
+						? t('status.machine.connectionUnknown')
+						: t('status.machine.connected')
 	);
 	/**
 	 * The button beside the state.

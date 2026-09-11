@@ -164,6 +164,20 @@ class RuidaUpload:
     #: How often the line is asked whether it is free again while we wait.
     poll_seconds = 0.02
 
+    #: How long a machine may be silent before we call it gone.
+    #:
+    #: A Ruida stops answering for seconds at a time and comes back without
+    #: anything having changed. Measured on the KH-5030 on 11 September 2026,
+    #: over three minutes of an idle connection: four gaps, of 3.9, 4.5 and
+    #: 4.6 s and one shorter than a single poll. The wire says what happens in
+    #: them — seven ENQ packets out of `192.168.0.159:40200` in one gap, not one
+    #: answer back, then replies again with nothing in between to explain it.
+    #: The engine's own recovery is the same order (`CLAUDE.md`, the Ruida
+    #: lifecycle row: about 6 s). Eight seconds therefore sits above every gap
+    #: measured and well under the time in which somebody decides the app has
+    #: hung — and past it the refusal is the same sentence it always was.
+    line_gap_seconds = 8.0
+
     def __init__(self, kernel, runner: CommandRunner | None = None):
         self.kernel = kernel
         self.runner = runner or CommandRunner(kernel)
@@ -193,14 +207,25 @@ class RuidaUpload:
         is asked here, before a file is announced on the panel, rather than found
         out halfway through one.
         """
-        session = getattr(self._device(), "active_session", None)
-        if session is None or not getattr(session, "connected", False):
-            raise DesignError(
-                "There is no connection to the machine, so the file cannot be "
-                "sent. Connect first; nothing has been sent.",
-                code="upload.notConnected",
-            )
-        return session
+        device = self._device()
+        deadline = time.monotonic() + self.line_gap_seconds
+        while True:
+            session = getattr(device, "active_session", None)
+            if session is None:
+                # Never opened at all. Waiting changes nothing here: no thread is
+                # trying, and the user is in front of a machine they have not
+                # connected yet.
+                break
+            if getattr(session, "connected", False):
+                return session
+            if time.monotonic() > deadline:
+                break
+            time.sleep(self.poll_seconds)
+        raise DesignError(
+            "There is no connection to the machine, so the file cannot be "
+            "sent. Connect first; nothing has been sent.",
+            code="upload.notConnected",
+        )
 
     def _write(self, data: bytes) -> None:
         """Out along the way the engine uses itself: `controller.write`.
@@ -376,15 +401,29 @@ class RuidaUpload:
         queue was somebody else's.
         """
         deadline = time.monotonic() + self.per_chunk_seconds
+        gap_started = None
         while True:
+            now = time.monotonic()
             if not getattr(session, "connected", True):
-                raise self._interrupted(
-                    sent, chunks, "stopped answering",
-                    code="upload.interrupted", announced=announced,
-                )
+                if gap_started is None:
+                    gap_started = now
+                elif now - gap_started > self.line_gap_seconds:
+                    raise self._interrupted(
+                        sent, chunks, "stopped answering",
+                        code="upload.interrupted", announced=announced,
+                    )
+                time.sleep(self.poll_seconds)
+                continue
+            if gap_started is not None:
+                # The silence is given back to the stall deadline rather than
+                # spent out of it: "stopped taking the file" is a complaint
+                # about a line that is up and not moving, and a machine that
+                # was away for four seconds has not earned it.
+                deadline += now - gap_started
+                gap_started = None
             if not self._line_is_busy(session):
                 return
-            if time.monotonic() > deadline:
+            if now > deadline:
                 raise self._interrupted(
                     sent, chunks, "stopped taking the file",
                     code="upload.stalled", announced=announced,

@@ -1,6 +1,21 @@
 """Snapshot shape and defensiveness of the read-only status layer."""
 
-from openkerf_api.status import StatusReader
+import time
+
+import pytest
+
+from openkerf_api.status import StatusReader, forget_connection_history
+
+
+@pytest.fixture(autouse=True)
+def _a_clean_connection_history():
+    """
+    The how-long-has-it-held memory is per process, so one test must not be able
+    to read another one's stopwatch.
+    """
+    forget_connection_history()
+    yield
+    forget_connection_history()
 
 
 def test_snapshot_has_kernel_and_devices(kernel):
@@ -27,7 +42,7 @@ def test_device_snapshot_shape(kernel):
         "spooler",
     }
     assert snap["active"] is True
-    assert set(snap["connection"]) == {"state", "detail"}
+    assert set(snap["connection"]) == {"state", "detail", "held_ms"}
     assert set(snap["position"]) == {"native", "mm", "state"}
     assert snap["spooler"]["present"] is True
     assert snap["spooler"]["queue_length"] == 0
@@ -59,6 +74,7 @@ def test_connection_reads_a_lihuiyu_style_controller():
     assert StatusReader(None).connection(Device()) == {
         "state": "disconnected",
         "detail": "unknown",
+        "held_ms": 0,
     }
 
 
@@ -67,6 +83,69 @@ def test_connection_reads_a_ruida_style_property():
         connected = True
 
     assert StatusReader(None).connection(Device())["state"] == "connected"
+
+
+def test_how_long_the_connection_has_read_the_same_starts_at_nothing():
+    """
+    A Ruida falls silent for seconds at a time and comes back with nothing having
+    changed — measured on a KH-5030, four gaps of up to 4.6 s in three minutes.
+    The bar must be able to tell that apart from a machine that is off, and the
+    only thing that separates them is how long it has lasted. So the reading
+    carries its own age.
+    """
+    class Device:
+        connected = True
+
+    device = Device()
+
+    assert StatusReader(None).connection(device)["held_ms"] == 0
+
+
+def test_a_reading_that_stays_the_same_gets_older():
+    class Device:
+        connected = True
+
+    device = Device()
+    reader = StatusReader(None)
+    reader.connection(device)
+    time.sleep(0.05)
+
+    assert reader.connection(device)["held_ms"] >= 50
+
+
+def test_a_reading_that_changes_starts_counting_again():
+    class Device:
+        connected = True
+
+    device = Device()
+    reader = StatusReader(None)
+    reader.connection(device)
+    time.sleep(0.05)
+    device.connected = False
+
+    second = reader.connection(device)
+
+    assert second["state"] == "disconnected"
+    assert second["held_ms"] < 50, second
+
+
+def test_two_machines_keep_their_own_stopwatch(kernel):
+    """
+    Keyed on the device, not on the reader: `StatusReader` is built fresh for
+    every request, and there is more than one machine in the list.
+    """
+    class Device:
+        def __init__(self, path, connected):
+            self.path = path
+            self.connected = connected
+
+    one, two = Device("ruida", True), Device("lhystudios", False)
+    StatusReader(None).connection(one)
+    time.sleep(0.05)
+    StatusReader(None).connection(two)
+
+    assert StatusReader(None).connection(one)["held_ms"] >= 50
+    assert StatusReader(None).connection(two)["held_ms"] < 50
 
 
 def test_bed_size_is_reported_in_mm(kernel):

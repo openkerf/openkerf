@@ -50,6 +50,9 @@ export type Bed = { width_mm: number | null; height_mm: number | null };
 export type Connection = {
 	state: 'connected' | 'disconnected' | 'unknown';
 	detail: string | null;
+	/** How long this reading has read the same, in milliseconds. Absent from a server
+	 *  older than the field; see `machineState`, which then keeps the old meaning. */
+	held_ms?: number;
 };
 
 export type Device = {
@@ -155,7 +158,32 @@ export type ApiEvent = SignalEvent | SnapshotEvent | HelloEvent;
  * half the people to the
  * verkeerde kabel.
  */
-export type MachineState = 'offline' | 'unplugged' | 'ready' | 'busy' | 'paused' | 'alarm';
+export type MachineState =
+	| 'offline'
+	| 'unplugged'
+	| 'faltering'
+	| 'ready'
+	| 'busy'
+	| 'paused'
+	| 'alarm';
+
+/**
+ * How long a machine may be silent before it counts as gone.
+ *
+ * A Ruida stops answering for seconds at a time and comes back with nothing having
+ * changed. Measured on a KH-5030 over UDP on 11 September 2026, three minutes of an
+ * idle connection sampled every 0.3 s: four gaps, holding "disconnected" for 3.9,
+ * 4.5 and 4.6 s and once for less than a sample. The wire says the controller simply
+ * goes quiet — seven of our ENQ packets went out in one gap with no answer at all —
+ * and then answers again.
+ *
+ * Eight seconds therefore sits above every gap measured and below the point where a
+ * person standing at the laser would rather be told. Under it the bar says the line
+ * is faltering; over it, that the machine is not connected. The same number the
+ * upload waits out (`RuidaUpload.line_gap_seconds`), because they are answering one
+ * question.
+ */
+export const LINE_GAP_MS = 8000;
 
 /**
  * What the machine is doing.
@@ -186,7 +214,16 @@ export function machineState(device: Device | null, connected: boolean): Machine
 	// definition, and a driver that does not report its connection must not write off a
 	// running job as "not connected". But a quiet machine without a cable is *not*
 	// "Ready" — that was a green dot above a dead port.
-	if (device.connection?.state === 'disconnected') return 'unplugged';
+	if (device.connection?.state === 'disconnected') {
+		// How long it has said so decides which of the two it is. A machine that is off
+		// and a machine between two breaths report the identical flag, and the age is
+		// the only thing that separates them — see `LINE_GAP_MS`. Without the field, an
+		// older server, the old reading stands: say not connected rather than invent a
+		// gap that is about to end.
+		const held = device.connection.held_ms;
+		if (typeof held === 'number' && held < LINE_GAP_MS) return 'faltering';
+		return 'unplugged';
+	}
 	return 'ready';
 }
 
@@ -532,7 +569,7 @@ export function machineStateLabel(state: MachineState): string {
  * sentence that belongs underneath it.
  */
 export function machineStateHint(state: MachineState): string | undefined {
-	if (state === 'offline' || state === 'unplugged' || state === 'alarm')
+	if (state === 'offline' || state === 'unplugged' || state === 'alarm' || state === 'faltering')
 		return t(`machine.hint.${state}` as never);
 	return undefined;
 }

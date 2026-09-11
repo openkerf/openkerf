@@ -151,6 +151,7 @@ export const nl: Catalogue = {
 	'status.machine.notConnected': 'Machine niet verbonden',
 	'status.machine.connectionUnknown': 'Verbinding onbekend',
 	'status.machine.connected': 'Verbonden met de laser',
+	'status.machine.faltering': 'De lijn hapert',
 	'status.machine.connectionUnknown.hint':
 		'De engine draait, maar deze driver meldt niet of er een machine aan hangt. Bij de eerste job merk je het: die blijft in de wachtrij staan als er niets luistert.',
 	'status.connect': 'Verbinden',
@@ -172,12 +173,15 @@ export const nl: Catalogue = {
 	// ── Machinetoestand ────────────────────────────────────────────────────────
 	'machine.state.offline': 'Offline',
 	'machine.state.unplugged': 'Niet verbonden',
+	'machine.state.faltering': 'Lijn hapert',
 	'machine.state.ready': 'Gereed',
 	'machine.state.busy': 'Bezig',
 	'machine.state.paused': 'Gepauzeerd',
 	'machine.state.alarm': 'Alarm',
 	'machine.hint.offline': 'Geen verbinding met OpenKerf. Kijk of de engine nog draait.',
 	'machine.hint.unplugged': 'De engine draait, maar er hangt geen machine aan.',
+	'machine.hint.faltering':
+		'De machine is even stil. Een Ruida doet dat uit zichzelf en antwoordt binnen een paar seconden weer; er hoeft niets te gebeuren.',
 	'machine.hint.alarm': 'De machine meldt een alarm. Ontgrendel hem voor je iets start.',
 
 	// ── De job ─────────────────────────────────────────────────────────────────

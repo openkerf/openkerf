@@ -158,6 +158,7 @@ export const en = {
 	'status.machine.notConnected': 'Machine not connected',
 	'status.machine.connectionUnknown': 'Connection unknown',
 	'status.machine.connected': 'Connected to the laser',
+	'status.machine.faltering': 'The line is faltering',
 	'status.machine.connectionUnknown.hint':
 		'The engine is running, but this driver does not report whether a machine is attached. You will notice on the first job: it stays in the queue if nothing is listening.',
 	'status.connect': 'Connect',
@@ -179,12 +180,15 @@ export const en = {
 	// ── Machine state ──────────────────────────────────────────────────────────
 	'machine.state.offline': 'Offline',
 	'machine.state.unplugged': 'Not connected',
+	'machine.state.faltering': 'Line faltering',
 	'machine.state.ready': 'Ready',
 	'machine.state.busy': 'Busy',
 	'machine.state.paused': 'Paused',
 	'machine.state.alarm': 'Alarm',
 	'machine.hint.offline': 'No connection to OpenKerf. Check whether the engine is running.',
 	'machine.hint.unplugged': 'The engine is running, but no machine is attached.',
+	'machine.hint.faltering':
+		'The machine has gone quiet for a moment. A Ruida does that by itself and answers again within a few seconds; there is nothing to do.',
 	'machine.hint.alarm': 'The machine reports an alarm. Unlock it before starting anything.',
 
 	// ── The job ────────────────────────────────────────────────────────────────

@@ -383,16 +383,18 @@ This is normal on the first day, and the app is explicit about it rather than
 silent.
 
 The strip at the bottom of the window is where the truth lives, and it is where
-the connection is written out in words. It reads one of four things: **Machine
+the connection is written out in words. It reads one of five things: **Machine
 unknown** (this page is not talking to OpenKerf, so nobody can say), **Machine not
-connected**, **Connection unknown** or **Connected to the laser**. Where the
+connected**, **The line is faltering** (the machine has gone quiet for a moment and
+will answer again — see the handbook page on the job), **Connection unknown** or
+**Connected to the laser**. Where the
 driver has a command for it, a **Connect** button stands next to that text, and
 its tooltip promises "Open the connection to the machine. This moves nothing."
 
 The machine chip at the far left of the top bar carries the state as a coloured
 dot beside the machine's name; the word itself is in the chip's tooltip, together
-with the bed size — **Offline**, **Not connected**, **Ready**, **Busy**,
-**Paused** or **Alarm**. Hover the chip to read it.
+with the bed size — **Offline**, **Not connected**, **Line faltering**, **Ready**,
+**Busy**, **Paused** or **Alarm**. Hover the chip to read it.
 
 Clicking the chip takes you to the machine setup — except while a job is under
 way. Then it is not a link, and says so: "The machine is burning. The setup opens

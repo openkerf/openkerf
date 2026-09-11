@@ -711,6 +711,13 @@ input[type='radio']:focus-visible::before {
 }
 .machinedot.offline { background: var(--text-2); }
 .machinedot.unplugged { background: var(--warn-solid); }
+/* Faltering keeps the working colour and not the warning one, deliberately: the
+   machine is there and doing what it should, and the four seconds it is silent are
+   the machine's own habit — measured on a KH-5030, four gaps of up to 4.6 s in three
+   minutes, with nothing switched off. The word beside the dot is what says the line
+   is stuttering; a second amber dot twice a minute would train the reader to ignore
+   the one that matters. */
+.machinedot.faltering { background: var(--ok); }
 .machinedot.ready { background: var(--ok); }
 .machinedot.busy { background: var(--accent); }
 .machinedot.paused { background: var(--warn-solid); }
